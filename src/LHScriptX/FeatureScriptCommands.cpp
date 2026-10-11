@@ -48,6 +48,7 @@
 #include "ECS/Components/Stream.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -118,6 +119,12 @@ PlayerNames GetPlayerName(const std::string& name)
 		std::throw_with_nested(std::runtime_error(fmt::format("Could not recognize player name: {}", name)));
 	}
 	return player;
+}
+
+/// The object the land's script made last
+entt::entity& LastObject()
+{
+	return Locator::entitiesRegistry::value().Context().mapScriptGlobals.lastObject;
 }
 
 } // namespace
@@ -518,7 +525,7 @@ void FeatureScriptCommands::CreateDeadTree(glm::vec3 position, [[maybe_unused]] 
                                            float scale, [[maybe_unused]] float roll, float yaw, [[maybe_unused]] float pitch)
 {
 	// TODO: tilt the tree by its roll and pitch
-	DeadTreeArchetype::Create(position, treeType, yaw, scale);
+	LastObject() = DeadTreeArchetype::Create(position, treeType, yaw, scale);
 }
 
 void FeatureScriptCommands::CreateNewTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t isNonScenic,
@@ -531,7 +538,8 @@ void FeatureScriptCommands::CreateNewTree(int32_t forestId, glm::vec3 position, 
 	{
 		forest = static_cast<uint32_t>(forestId);
 	}
-	TreeArchetype::Create(forest, position, treeType, static_cast<bool>(isNonScenic), rotation, maxSize, currentSize);
+	LastObject() =
+	    TreeArchetype::Create(forest, position, treeType, static_cast<bool>(isNonScenic), rotation, maxSize, currentSize);
 }
 
 void FeatureScriptCommands::CreateField(glm::vec3 position, FieldTypeInfo type)
@@ -563,7 +571,7 @@ void FeatureScriptCommands::CreateTownFishFarm(int32_t townId, glm::vec3 positio
 
 void FeatureScriptCommands::CreateFeature(glm::vec3 position, FeatureInfo type, int32_t rotation, int32_t scale, int32_t)
 {
-	FeatureArchetype::Create(position, type, rotation * 0.001f, scale * 0.001f);
+	LastObject() = FeatureArchetype::Create(position, type, rotation * 0.001f, scale * 0.001f);
 }
 
 void FeatureScriptCommands::CreateFlowers(glm::vec3 position, FlowersInfo type, float rotation, float scale)
@@ -602,7 +610,7 @@ void FeatureScriptCommands::CreateTownTemporaryPots(int32_t, int32_t, int32_t)
 
 void FeatureScriptCommands::CreateMobileObject(glm::vec3 position, MobileObjectInfo type, int32_t rotation, int32_t scale)
 {
-	MobileObjectArchetype::Create(position, type, rotation * 0.001f, scale * 0.001f);
+	LastObject() = MobileObjectArchetype::Create(position, type, rotation * 0.001f, scale * 0.001f);
 }
 
 void FeatureScriptCommands::CreateMobileStatic(glm::vec3 position, MobileStaticInfo type, float yRotation, float scale)
@@ -613,7 +621,7 @@ void FeatureScriptCommands::CreateMobileStatic(glm::vec3 position, MobileStaticI
 void FeatureScriptCommands::CreateMobileUStatic(glm::vec3 position, MobileStaticInfo type, float verticalOffset,
                                                 float xRotation, float yRotation, float zRotation, float scale)
 {
-	MobileStaticArchetype::Create(position, type, verticalOffset, xRotation, yRotation, zRotation, scale);
+	LastObject() = MobileStaticArchetype::Create(position, type, verticalOffset, xRotation, yRotation, zRotation, scale);
 }
 
 void FeatureScriptCommands::CreateScaffold(int32_t, [[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)
@@ -1000,11 +1008,13 @@ void FeatureScriptCommands::SetGlobalLandBalance(int32_t index, float value)
 	{
 		balances.at(static_cast<size_t>(index)) = value;
 	}
-	// The land's balance of how impressive miracles are goes to the reactions
-	constexpr int32_t k_ImpressivenessBalance = 2;
-	if (index == k_ImpressivenessBalance && Locator::reactionSystem::has_value())
+	// The land's balances of how impressive things in the world and miracles are go to the reactions
+	using Balance = ecs::systems::ReactionSystemInterface::Balance;
+	constexpr int32_t k_ThingsBalance = 1;
+	constexpr int32_t k_MiraclesBalance = 2;
+	if ((index == k_ThingsBalance || index == k_MiraclesBalance) && Locator::reactionSystem::has_value())
 	{
-		Locator::reactionSystem::value().SetLandBalance(value);
+		Locator::reactionSystem::value().SetLandBalance(index == k_ThingsBalance ? Balance::Things : Balance::Miracles, value);
 	}
 }
 
@@ -1059,10 +1069,19 @@ void FeatureScriptCommands::SetNighttime(float duration, float night, float chan
 	Locator::skySystem::value().GetClock().SetCycleFromLand(duration, night, change);
 }
 
-void FeatureScriptCommands::MakeLastObjectArtifact(int32_t, const std::string&, float)
+void FeatureScriptCommands::MakeLastObjectArtifact(int32_t townId, const std::string& player, float worth)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The object made last becomes an artefact of a player, worth so much, in the town with the number (-1 for none)
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto object = LastObject();
+	if (object == entt::null || !registry.Valid(object) || !Locator::artefactSystem::has_value())
+	{
+		return;
+	}
+	const auto& towns = registry.Context().towns;
+	const auto town = townId >= 0 ? towns.find(static_cast<uint32_t>(townId)) : towns.end();
+	Locator::artefactSystem::value().MakeArtefact(object, town != towns.end() ? std::optional(town->second) : std::nullopt,
+	                                              GetPlayerName(player), worth);
 }
 
 void FeatureScriptCommands::SetLostTownScale(float scale)

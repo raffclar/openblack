@@ -2,8 +2,6 @@ $input v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord, 
 
 #include <bgfx_shader.sh>
 
-#include "creature_shadow.sh"
-#include "ground_shadow.sh"
 #include "snow.sh"
 #include "vortex_ground.sh"
 
@@ -15,9 +13,15 @@ SAMPLER2DARRAY(s0_blockTextures, 0);
 SAMPLER2D(s1_smallBumpAlpha, 1);
 SAMPLER2D(s2_smallBump, 2);
 SAMPLER2D(s3_footprints, 3);
-SAMPLER2D(s4_handShadow, 4);
-// Where the shadows of trees, rocks and buildings cover the island, laid out as the footprints are
+// The moving shadows' data (see ground_shadow.sh)
+SAMPLER2D(s4_groundShadowData, 4);
+#define GROUND_SHADOW_DATA s4_groundShadowData
+#include "ground_shadow.sh"
+// Where the shadows of rocks and buildings (and of trees drawn moving) cover the island, laid out as the footprints are
 SAMPLER2D(s5_objectShadows, 5);
+// The trees' and big forests' shadows baked into the land: what each texel's 4-bit colour is scaled by, over 256, laid
+// out as the footprints are
+SAMPLER2D(s14_treeShadows, 14);
 // What of the land's alpha the rivers' channels leave, laid out as the footprints are
 SAMPLER2D(s8_landAlpha, 8);
 
@@ -59,11 +63,8 @@ uniform vec4 u_block;
 // w: 1 to draw the land's textures alone, unlit and with no sea, as the temple's map is textured with
 uniform vec4 u_skyAndBump;
 // x: darkness of the objects' shadows where they fully cover a texel, 0 without them
-// yz: size of a texel of s5_objectShadows
+// yz: size of a texel of s5_objectShadows, w: 1 when the land takes the trees' baked shadows (s14_treeShadows)
 uniform vec4 u_objectShadows;
-// x: darkness of the hand's shadow where its silhouette fully covers a texel, 0 without a shadow
-// y: how far before the hand along the light the shadow starts
-uniform vec4 u_handShadow;
 // zw: the block's size in units
 uniform vec4 u_blockPositionAndSize;
 // xy: the island's lowest corner, zw: its highest, in units
@@ -82,8 +83,15 @@ vec4 PaintedTexel(vec2 blockTexel, vec2 islandUv)
 	vec4 footprints = texture2DLod(s3_footprints, islandUv, 0.0f);
 	// The mix's exact result is a whole number of 255ths of a level: a thousandth of a level absorbs the rounding of
 	// what is stored without lifting any result to the next level
-	vec3 painted = floor((land.rgb * (1.0f - footprints.a) + footprints.rgb) * 15.0f + 0.001f) / 15.0f;
-	return vec4(painted, land.a);
+	vec3 levels = floor((land.rgb * (1.0f - footprints.a) + footprints.rgb) * 15.0f + 0.001f);
+	// The trees' shadows are baked into each texel: its 4-bit colour scaled and rounded down. Where an object's shadow
+	// drawn this frame covers the texel, that shadow (darker than any tree's) stands for both.
+	if (u_objectShadows.w > 0.5f && texture2DLod(s5_objectShadows, islandUv, 0.0f).r < 0.5f)
+	{
+		float shade = floor(texture2DLod(s14_treeShadows, islandUv, 0.0f).r * 255.0f + 0.5f);
+		levels = floor(levels * shade / 256.0f + 0.001f);
+	}
+	return vec4(levels / 15.0f, land.a);
 }
 
 // The block's painted texture filtered across its texels: the four nearest texels, each painted, blended by distance
@@ -162,20 +170,6 @@ void main()
 
 	col.rgb = col.rgb * v_lightColour * v_haze.a;
 
-	// the hand's shadow, projected along the sunlight onto the land beyond it
-	vec3 shadowCoord = v_shadowCoord.xyz;
-	if (u_handShadow.x > 0.0f && shadowCoord.z > u_handShadow.y && shadowCoord.x > 0.0f && shadowCoord.x < 1.0f &&
-	    shadowCoord.y > 0.0f && shadowCoord.y < 1.0f)
-	{
-		float coverage = texture2D(s4_handShadow, shadowCoord.xy).r;
-		col.rgb = col.rgb * (1.0f - coverage * v_shadowCoord.w * u_handShadow.x);
-	}
-	// The creatures' shadows, which fade out towards the water's edge as the hand's does
-	if (u_creatureShadowInfo.x > 0.0f && v_shadowCoord.w > 0.0f)
-	{
-		col.rgb = col.rgb * CreatureShadowLight(v_world);
-	}
-
 	// The small bump detail is a second layer over the lit land, its colour unlit, blended by its alpha whatever the
 	// coast alpha. The distance haze is added to both. The land is blended over the sea by its coast alpha, and writes
 	// its depth even where it is clear. Both layers are drawn at once, premultiplied: what of the sea shows through is
@@ -197,10 +191,11 @@ void main()
 		premultiplied = vec4(ringColour * ring.a + premultiplied.rgb * (1.0f - ring.a),
 		                     1.0f - (1.0f - premultiplied.a) * (1.0f - ring.a));
 	}
-	// The high-detail villagers' shadows are laid over all of it in black, after the land is drawn
-	if (u_groundShadowInfo.x > 0.0f && v_shadowCoord.w > 0.0f)
+	// The moving shadows of the creatures, the hand and the high-detail villagers are laid over all of it in black,
+	// after the land is drawn
+	if (u_groundShadowBlock.y > 0.0f && v_shadowCoord.w > 0.0f)
 	{
-		premultiplied.rgb = premultiplied.rgb * GroundShadowsLight(v_world, v_shadowCoord.w);
+		premultiplied.rgb = premultiplied.rgb * GroundShadowsOnLand(v_world, v_shadowCoord.w);
 	}
 	gl_FragColor = premultiplied;
 }

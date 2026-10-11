@@ -667,6 +667,7 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	    .offsetWeight = atom.drawWeight,
 	    .fragment = atom.fragment,
 	    .player = atom.player,
+	    .objectGlow = atom.objectGlow,
 	};
 }
 
@@ -682,7 +683,13 @@ void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out
 			continue;
 		}
 		const auto kind = drawn->creator->kind;
-		if (kind == Creator::Kind::Chain)
+		// An atom that lays a shell over an object's model is drawn as that shell, whatever its creator
+		if (drawn->objectGlow.has_value())
+		{
+			out.steps.push_back({.chain = false, .index = static_cast<uint32_t>(out.atoms.size())});
+			out.atoms.push_back(*drawn);
+		}
+		else if (kind == Creator::Kind::Chain)
 		{
 			chainCreator = drawn->creator;
 		}

@@ -35,10 +35,12 @@ using creature_desires::k_DesireCount;
 
 /// Feedback weaker than this counts as this strong, either way
 constexpr float k_MinFeedback = 0.5f;
-/// How a desire lesson moves its source's threshold, its maximum, and its decay, at full feedback
+/// How a desire lesson moves its source's threshold, its maximum, and its decay, at full feedback, and how far from
+/// where it started the maximum may go either way
 constexpr float k_ThresholdStep = 0.12f;
 constexpr float k_MaxStep = 0.1f;
 constexpr float k_DecayStep = 0.001f;
+constexpr float k_MaxReach = 0.2f;
 /// The bounds of a desire's growing time, in seconds, of its sources' thresholds, its weight, and its maximum
 constexpr float k_MinIncreaseSeconds = 1.0f;
 constexpr float k_MaxIncreaseSeconds = 1200.0f;
@@ -54,7 +56,7 @@ constexpr float k_OpposedSuppressSeconds = 240.0f;
 /// After a slap, the desire is made this much weaker than the weakest other
 constexpr float k_LeastDominantFactor = 1.3f;
 /// The most recent actions remembered for feedback
-constexpr size_t k_MaxContexts = 8;
+constexpr size_t k_MaxContexts = 5;
 
 /// How a species' desire starts and what feedback can do to it, from the game's tables
 struct DesireRules
@@ -114,7 +116,7 @@ struct Context
 /// How much feedback now counts for a context: fully while running, then less until its window closes; nothing for an
 /// action that can't be learnt from
 [[nodiscard]] float LearningPriority(const Context& context);
-/// The context feedback is credited to, if any counts
+/// The context feedback is credited to, if any counts; of two that count the same, the newer
 [[nodiscard]] std::optional<size_t> BestContext(std::span<const Context> contexts);
 /// Remembers a new action, the newest last, forgetting the oldest beyond the most kept
 void Remember(std::vector<Context>& contexts, Context context);

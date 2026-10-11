@@ -137,7 +137,7 @@ TEST(CreatureDecisionTree, UsefulnessFromUtility)
 	EXPECT_FLOAT_EQ(creature_tree::Usefulness(-2.0f), 0.0f);
 }
 
-TEST(CreatureDecisionTree, KeepsTheNewestSixteenExamples)
+TEST(CreatureDecisionTree, KeepsTheOldestFifteenExamplesAndTheLatest)
 {
 	std::vector<creature_tree::Episode> episodes;
 	for (int i = 0; i < 20; ++i)
@@ -145,8 +145,10 @@ TEST(CreatureDecisionTree, KeepsTheNewestSixteenExamples)
 		creature_tree::AddEpisode(episodes, {.belief = Thing(k_Food, 0), .feedback = static_cast<float>(i) / 20.0f});
 	}
 	ASSERT_EQ(episodes.size(), creature_tree::k_MaxEpisodes);
+	// Once full, each new example takes the place of the one before it
 	EXPECT_FLOAT_EQ(episodes.back().feedback, 19.0f / 20.0f);
-	EXPECT_FLOAT_EQ(episodes.front().feedback, 4.0f / 20.0f);
+	EXPECT_FLOAT_EQ(episodes.front().feedback, 0.0f);
+	EXPECT_FLOAT_EQ(episodes.at(creature_tree::k_MaxEpisodes - 2).feedback, 14.0f / 20.0f);
 }
 
 TEST(CreatureDecisionTree, SlotsFollowTheKindOfThing)
@@ -185,9 +187,13 @@ TEST(CreaturePlanner, ActionPriorityAndNovelty)
 
 TEST(CreaturePlanner, PriorityAndSwitching)
 {
-	EXPECT_FLOAT_EQ(creature_planner::Priority(1.0f, std::nullopt, 0.5f, 0.1f, std::nullopt), 50.0f);
-	EXPECT_FLOAT_EQ(creature_planner::Priority(1.0f, 1.0f, 0.5f, 0.1f, std::nullopt), 500.0f);
-	EXPECT_FLOAT_EQ(creature_planner::Priority(1.0f, std::nullopt, 0.0f, 0.1f, std::nullopt), 1.0f);
+	// An action's priority counts for at most 0.01, so every action that can be taken counts the same
+	EXPECT_FLOAT_EQ(creature_planner::Priority(1.0f, std::nullopt, 0.5f, 0.1f, std::nullopt), 1.0f);
+	EXPECT_FLOAT_EQ(creature_planner::Priority(1.0f, std::nullopt, 0.505f, 0.1f, std::nullopt), 1.0f);
+	EXPECT_FLOAT_EQ(creature_planner::Priority(1.0f, 1.0f, 0.5f, 0.1f, std::nullopt), 10.0f);
+	EXPECT_FLOAT_EQ(creature_planner::Priority(0.5f, 0.8f, 0.5f, 0.1f, std::nullopt), 4.0f);
+	EXPECT_FLOAT_EQ(creature_planner::Priority(1.0f, std::nullopt, 0.005f, 0.1f, std::nullopt), 0.5f);
+	EXPECT_FLOAT_EQ(creature_planner::Priority(1.0f, std::nullopt, 0.0f, 0.1f, std::nullopt), 0.0f);
 	EXPECT_TRUE(creature_planner::ShouldSwitch(21.0f, 10.0f));
 	EXPECT_FALSE(creature_planner::ShouldSwitch(20.0f, 10.0f));
 	EXPECT_TRUE(creature_planner::ShouldSwitch(1.0f, 0.0f));
@@ -235,6 +241,31 @@ TEST(CreaturePlanner, GoesRoundTheEligibleDesires)
 	const auto second = creature_planner::NextGoals(state, eligible);
 	EXPECT_EQ(second[0], Desire::Rest);
 	EXPECT_EQ(second[1], Desire::Hunger);
+	// With three or more creatures in the world each plans one desire a turn
+	const auto third = creature_planner::NextGoals(state, eligible, creature_planner::GoalsPerTurn(3));
+	ASSERT_EQ(third.size(), 1u);
+	EXPECT_EQ(third[0], Desire::Tiredness);
+}
+
+TEST(CreaturePlanner, FewerGoalsWithMoreCreatures)
+{
+	EXPECT_EQ(creature_planner::GoalsPerTurn(0), 2u);
+	EXPECT_EQ(creature_planner::GoalsPerTurn(1), 2u);
+	EXPECT_EQ(creature_planner::GoalsPerTurn(2), 2u);
+	EXPECT_EQ(creature_planner::GoalsPerTurn(3), 1u);
+	EXPECT_EQ(creature_planner::GoalsPerTurn(7), 1u);
+}
+
+TEST(CreaturePlanner, AnyPlanWorthMoreThanNothingIsChosen)
+{
+	creature_planner::PlannerState state;
+	state.best.at(static_cast<size_t>(Desire::Hunger)) =
+	    creature_planner::Plan {.desire = Desire::Hunger, .action = 1, .priority = 0.001f};
+	const auto chosen = creature_planner::Choose(state);
+	ASSERT_TRUE(chosen.has_value());
+	EXPECT_EQ(chosen->desire, Desire::Hunger);
+	state.best.at(static_cast<size_t>(Desire::Hunger))->priority = 0.0f;
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
 }
 
 TEST(CreaturePlanner, NothingReplacesAForcedPlan)
@@ -246,19 +277,18 @@ TEST(CreaturePlanner, NothingReplacesAForcedPlan)
 	                                        .goalUsefulness = creature_planner::k_ForcedScore,
 	                                        .actionPriority = creature_planner::k_ForcedScore,
 	                                        .priority = creature_planner::k_ForcedScore};
-	EXPECT_FALSE(creature_planner::Choose(state, 15.0f).has_value());
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
 }
 
 TEST(CreaturePlanner, ChoosesOnlyWhatIsPressingEnough)
 {
 	creature_planner::PlannerState state;
 	state.best.at(0) = creature_planner::Plan {.desire = Desire::Impress, .action = 1, .priority = 30.0f};
-	EXPECT_FALSE(creature_planner::Choose(state, 40.0f).has_value());
-	EXPECT_TRUE(creature_planner::Choose(state, 15.0f).has_value());
+	EXPECT_TRUE(creature_planner::Choose(state).has_value());
 	state.current = creature_planner::Plan {.desire = Desire::Hunger, .action = 2, .priority = 20.0f};
-	EXPECT_FALSE(creature_planner::Choose(state, 15.0f).has_value());
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
 	state.best.at(0)->priority = 41.0f;
-	EXPECT_TRUE(creature_planner::Choose(state, 15.0f).has_value());
+	EXPECT_TRUE(creature_planner::Choose(state).has_value());
 }
 
 // Learning from feedback
@@ -291,6 +321,30 @@ TEST(CreatureLearning, DesireLessonAndDependencies)
 	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies);
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].max, 1.9f);
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].increaseSeconds, 15.0f);
+	// The maximum goes at most 0.2 below where it started
+	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].max, 1.8f);
+	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].max, 1.8f);
+}
+
+TEST(CreatureLearning, DesireMaximumReachesTwoTenthsEitherWay)
+{
+	auto desires = TwoDesires();
+	desires[Desire::Anger].max = 0.8f;
+	creature_learning::AllDesireRules rules {};
+	rules.at(static_cast<size_t>(Desire::Anger)) = {.initialMax = 0.8f, .lessonDivisor = 200.0f, .learnable = true};
+	const creature_learning::Dependencies dependencies {};
+	for (int i = 0; i < 5; ++i)
+	{
+		creature_learning::LearnDesireLesson(desires, Desire::Anger, std::nullopt, 1.0f, rules, dependencies);
+	}
+	EXPECT_FLOAT_EQ(desires[Desire::Anger].max, 1.0f);
+	for (int i = 0; i < 10; ++i)
+	{
+		creature_learning::LearnDesireLesson(desires, Desire::Anger, std::nullopt, -1.0f, rules, dependencies);
+	}
+	EXPECT_FLOAT_EQ(desires[Desire::Anger].max, 0.6f);
 }
 
 TEST(CreatureLearning, OpinionsAndFeedbackStrength)
@@ -339,7 +393,13 @@ TEST(CreatureLearning, CreditGoesToRecentActions)
 	{
 		creature_learning::Remember(contexts, {.action = i});
 	}
-	EXPECT_EQ(contexts.size(), creature_learning::k_MaxContexts);
+	EXPECT_EQ(contexts.size(), 5u);
+	EXPECT_EQ(contexts.back().action, 19u);
+	EXPECT_EQ(contexts.front().action, 15u);
+	// Of two that count the same, the newer takes the credit
+	contexts.front().running = true;
+	contexts.back().running = true;
+	EXPECT_EQ(creature_learning::BestContext(contexts), 4u);
 }
 
 TEST(CreatureLearning, DecidingSuppressesOpposedDesires)
@@ -484,15 +544,12 @@ TEST(CreatureWatching, MimicryStages)
 	    {.name = "Steal", .chance = 0.9f, .needsLearningLeash = true, .stageSteps = 1},
 	};
 	std::optional<creature_watching::Mimicry> mimicry;
-	const auto never = [] { return 0.99f; };
-	const auto always = [] { return 0.0f; };
 	const auto noExtra = [](uint32_t) { return 0u; };
 	creature_watching::MimicConditions grown {.phase = 13};
-	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt, never));
-	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 1, rules, grown, std::nullopt, always));
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 1, rules, grown, std::nullopt));
 	creature_watching::MimicConditions young {.phase = 2};
-	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, young, std::nullopt, always));
-	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 0, rules, grown, 5u, always));
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, young, std::nullopt));
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 0, rules, grown, 5u));
 	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::Notice);
 	creature_watching::StepMimicry(mimicry, rules, noExtra);
 	creature_watching::StepMimicry(mimicry, rules, noExtra);
@@ -503,6 +560,33 @@ TEST(CreatureWatching, MimicryStages)
 	creature_watching::StepMimicry(mimicry, rules, noExtra);
 	creature_watching::StepMimicry(mimicry, rules, noExtra);
 	EXPECT_FALSE(mimicry.has_value());
+}
+
+TEST(CreatureWatching, MimicChanceIsARankNotARoll)
+{
+	const std::vector<creature_watching::MimicRule> rules {
+	    {.name = "Low", .chance = 0.1f, .needsLearningLeash = false, .stageSteps = 1, .copiesDesire = true},
+	    {.name = "High", .chance = 0.5f, .needsLearningLeash = false, .stageSteps = 1},
+	    {.name = "Never", .chance = 0.0f, .needsLearningLeash = false, .stageSteps = 1},
+	    {.name = "AlsoLow", .chance = 0.1f, .needsLearningLeash = false, .stageSteps = 1},
+	};
+	const creature_watching::MimicConditions grown {.phase = 13};
+	std::optional<creature_watching::Mimicry> mimicry;
+	// Copying nothing, even the lowest rank above 0 is always copied, and nothing at 0
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 2, rules, grown, std::nullopt));
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt));
+	// The same deed again doesn't restart it; a deed of the same rank or higher replaces it, a lower one doesn't
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt));
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 3, rules, grown, std::nullopt));
+	EXPECT_EQ(mimicry->rule, 3u);
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 1, rules, grown, std::nullopt));
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt));
+	EXPECT_EQ(mimicry->rule, 1u);
+	// Once it copies a desire, any deed starts it copying anew
+	mimicry = creature_watching::Mimicry {.rule = 0, .stage = creature_watching::MimicStage::CopyDesire};
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 2, rules, grown, std::nullopt));
+	EXPECT_EQ(mimicry->rule, 2u);
+	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::Notice);
 }
 
 // Carrying out plans

@@ -219,6 +219,13 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromPackTag, const std:
 	texture2D->Create(static_cast<uint16_t>(g3dTexture.ddsHeader.width), static_cast<uint16_t>(g3dTexture.ddsHeader.height), 1,
 	                  internalFormat, graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                  bgfx::copy(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
+	// Its alpha as the game reads it into 4 bits a channel, which trees' shadows are cut out by
+	const auto compression =
+	    internalFormat == graphics::TextureFormat::BlockCompression1   ? graphics::tree_shadows::Compression::Dxt1
+	    : internalFormat == graphics::TextureFormat::BlockCompression2 ? graphics::tree_shadows::Compression::Dxt3
+	                                                                   : graphics::tree_shadows::Compression::Dxt5;
+	texture2D->SetAlphaMask(graphics::tree_shadows::MaskOfCompressed(g3dTexture.ddsData, g3dTexture.ddsHeader.width,
+	                                                                 g3dTexture.ddsHeader.height, compression));
 	return texture2D;
 }
 

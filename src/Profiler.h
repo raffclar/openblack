@@ -70,7 +70,6 @@ public:
 		SceneDraw,
 		FootprintPass,
 		ObjectShadowPass,
-		CreatureShadowPass,
 		GroundShadowPass,
 		ParticlesGather,
 		ReflectionPass,
@@ -141,7 +140,6 @@ public:
 	    "Encode Draw Scene",    //
 	    "Footprint Pass",       //
 	    "Object Shadow Pass",   //
-	    "Creature Shadow Pass", //
 	    "Ground Shadow Pass",   //
 	    "Gather Particles",     //
 	    "Reflection Pass",      //

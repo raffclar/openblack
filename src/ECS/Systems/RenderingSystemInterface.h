@@ -171,6 +171,9 @@ struct RenderContext
 		glm::mat4 castModel;
 	};
 	std::vector<HighDetailDraw> highDetailDraws;
+	/// The things held in a hand this frame, with the model each is drawn with and its matrix (as castModel too): each
+	/// joins the shadow of the hand holding it
+	std::vector<HighDetailDraw> inHandDraws;
 	/// The rivers' stretches, whose beds and channels are laid into the land (see components::StreamSegment)
 	std::vector<glm::mat4> streamSegments;
 	/// The hand is scaled by a negative factor to mirror it, which turns its faces round
@@ -212,6 +215,22 @@ struct RenderContext
 	std::vector<ObjectInstance> partialBuildInstances;
 	graphics::DynamicVertexBufferHandle partialBuildInstanceBuffer;
 	uint32_t partialBuildCapacity {0};
+
+	/// What the villagers drawn this frame hold in their hands, a draw for each model: those fading out blend by their
+	/// alpha, and only those of villagers flying in the physics are seen in the sea's reflection. Their instances are in
+	/// heldInstanceBuffer.
+	struct HeldDraw
+	{
+		entt::id_type meshId {0};
+		uint32_t first {0};
+		uint32_t count {0};
+		bool fading {false};
+		bool reflected {false};
+	};
+	std::vector<HeldDraw> heldDraws;
+	std::vector<ObjectInstance> heldInstances;
+	graphics::DynamicVertexBufferHandle heldInstanceBuffer;
+	uint32_t heldCapacity {0};
 
 	/// Kept for backward compatibility, will be removed once shader is updated
 	std::vector<glm::mat4> treeInstanceUniforms;

@@ -146,6 +146,22 @@ struct FragmentDraw
 	float alpha;
 };
 
+/// The glowing shell laid over an object's model (see volume_glow), drawn by the object as it is drawn this frame
+struct ShellDraw
+{
+	entt::entity object;
+	/// How far out it reaches, in parts of the model's half diagonal
+	float zoom;
+	/// 0xAARRGGBB
+	uint32_t argb;
+	/// Its texture and that texture's alpha
+	entt::id_type texture;
+	entt::id_type alphaTexture;
+	/// How far its texture has slid
+	glm::vec2 uvOffset;
+	glm::vec2 textureFraction;
+};
+
 /// A light map frame stamped on the land's colours, centred on a point
 struct LightStamp
 {
@@ -167,6 +183,7 @@ enum class ItemKind : uint8_t
 	Mist,
 	Surface,
 	Fragment,
+	Shell,
 };
 
 /// One thing drawn, by its index in the frame's list of its kind
@@ -205,6 +222,7 @@ struct Frame
 	std::vector<glm::vec3> surfaceNormals;
 	std::vector<SurfaceDraw> surfaces;
 	std::vector<FragmentDraw> fragments;
+	std::vector<ShellDraw> shells;
 	std::vector<LightStamp> lightStamps;
 	std::vector<Item> items;
 	std::vector<Group> groups;
@@ -226,6 +244,10 @@ struct Sources
 	std::function<float(float)> random;
 	/// The height of the land at a point of the ground, for the surfaces laid over it; level land without
 	std::function<float(glm::vec2)> landHeight;
+	/// Where an object stands, which a shell over its model takes its place among what blends by; none once it has gone
+	std::function<std::optional<glm::vec3>(entt::entity)> objectPosition;
+	/// The game's milliseconds now, by which the glowing shells' textures slide
+	uint64_t gameMilliseconds {0};
 };
 
 /// The player whose symbol and colour an effect without one shows

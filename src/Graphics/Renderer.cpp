@@ -148,6 +148,7 @@
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
+#include "Graphics/TreeShadowBake.h"
 #include "Graphics/VertexBuffer.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
@@ -231,6 +232,8 @@ namespace
 {
 /// A creature frozen or fizzed this far casts no shadow
 constexpr float k_NoShadowSpellLook = 0.2f;
+/// The moving shadows' data comes in rows of this many texels (see ground_shadow.sh)
+constexpr uint16_t k_GroundShadowDataWidth = 64;
 /// How many buffers the frames are drawn into in turn
 constexpr uint8_t k_BackBuffers = 3;
 /// How deep the snow lies over the island, as a texture the shaders read point by point, refreshed when the snow
@@ -481,18 +484,10 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 		                                               bgfx::copy(&k_White, sizeof(k_White))));
 		bgfx::setName(toBgfx(*_whiteTexture), "White");
 	}
-	// The game rasterises shadows with eight coverage samples per texel, multisampling gives the same soft edges
-	_handShadowFrameBuffer =
-	    std::make_unique<FrameBuffer>("Hand Shadow", HandShadow::k_TextureSize, HandShadow::k_TextureSize, TextureFormat::R8,
-	                                  std::nullopt, static_cast<uint8_t>(8), Wrapping::ClampEdge);
-	// The creatures' silhouettes side by side, with the same soft edges
-	_creatureShadowFrameBuffer = std::make_unique<FrameBuffer>(
-	    "Creature Shadows", static_cast<uint16_t>(CreatureShadow::k_CellSize * CreatureShadow::k_MaxShadows),
-	    CreatureShadow::k_CellSize, TextureFormat::R8, std::nullopt, static_cast<uint8_t>(8), Wrapping::ClampEdge);
-	// The high-detail villagers' coverage samples side by side, a texel each, so each is counted on its own
-	_groundShadowFrameBuffer = std::make_unique<FrameBuffer>(
-	    "Ground Shadows", static_cast<uint16_t>(GroundShadow::k_SampleColumns * GroundShadow::k_MaxShadows),
-	    GroundShadow::k_SampleRows, TextureFormat::R8, std::nullopt, static_cast<uint8_t>(1), Wrapping::ClampEdge);
+	// The moving shadows' data, grown as more are cast
+	_groundShadowData = std::make_unique<Texture2D>("Ground Shadow Data");
+	_groundShadowData->Create(k_GroundShadowDataWidth, 1, 1, TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest,
+	                          nullptr);
 
 	// give debug names to views
 	// TODO (#749) use std::views::enumerate
@@ -511,14 +506,14 @@ Renderer::~Renderer() noexcept
 	_handSkins.clear();
 	_handSkinTextures.clear();
 	_particleLightMaps.clear();
+	_glowShells.clear();
 	_snowDepth.reset();
 	_plane.reset();
 	_morphStreamLayouts.reset();
-	_handShadowFrameBuffer.reset();
 	_handFlowTexture.reset();
-	_creatureShadowFrameBuffer.reset();
-	_groundShadowFrameBuffer.reset();
+	_groundShadowData.reset();
 	_objectShadowFrameBuffer.reset();
+	_treeShadowBake.reset();
 	_templeMapFrameBuffer.reset();
 	if (_landLightTexture)
 	{
@@ -1173,7 +1168,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// Objects in the world take the colour of the land's light where they stand; the sky and the temple's
 				// insides have lights of their own
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				const bool landLit = !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
+				const bool landLit =
+				    desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
 				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, desc.unlit ? 1.0f : 0.0f, 0.0f};
 				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
@@ -1185,7 +1181,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// The distance haze is the world's, not the sky's or the temple's
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				const bool hazed = !desc.isSky && !desc.drawAll && !inTemple;
+				const bool hazed = desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple;
 				const auto u_haze = hazed ? _haze[0] : glm::vec4(0.0f);
 				setUniform(MeshUniform::Haze, &u_haze);
 				setUniform(MeshUniform::HazeColour, &_haze[1]);
@@ -1194,13 +1190,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				setUniform(MeshUniform::ModelLight, &_modelLight);
 			}
-			if (has(MeshUniform::CreatureShadowInfo))
+			if (has(MeshUniform::GroundShadowInfo))
 			{
-				// They fall on what stands on the land, not on the creatures, nor in the reflection
+				// The creatures' and the hand's shadows fall on what stands on the land, not on the creatures, nor in
+				// the reflection
 				const bool mainView = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Translucent;
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				SetCreatureShadowUniforms(*program, desc.creatureShadows && mainView && !inTemple && !desc.isSky &&
-				                                        !desc.drawAll && desc.morphTargets == nullptr);
+				SetObjectGroundShadowUniforms(*program, desc.groundShadows && mainView && !inTemple && !desc.isSky &&
+				                                            !desc.drawAll && desc.morphTargets == nullptr);
 			}
 			if (has(MeshUniform::ObjectLook))
 			{
@@ -1494,36 +1491,21 @@ void Renderer::DrawTempleMapPass() const
 	auto smallBump = Locator::resources::value().GetTextures().Handle(LandIslandInterface::k_SmallBumpTextureId);
 	// The land's own textures, bumped, with the footprints and the objects' shadows on them
 	const glm::vec4 u_skyAndBump = {0.0f, 0.0f, 0.0f, 1.0f};
-	auto u_objectShadows = glm::vec4(0.0f);
-	if (_objectShadowFrameBuffer)
-	{
-		uint16_t width = 0;
-		uint16_t height = 0;
-		_objectShadowFrameBuffer->GetSize(width, height);
-		u_objectShadows = glm::vec4(ObjectShadows::k_MaxDarkness, 1.0f / static_cast<float>(std::max<uint16_t>(width, 1)),
-		                            1.0f / static_cast<float>(std::max<uint16_t>(height, 1)), 0.0f);
-	}
-	const auto noHandShadow = glm::mat4(0.0f);
-	const auto noHand = glm::vec4(0.0f);
 	terrainShader->SetTextureSampler("s0_blockTextures", 0, island.GetBlockTextures());
 	terrainShader->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
 	terrainShader->SetTextureSampler("s10_landColour", 10, GetLandColour());
 	terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
 	terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
-	terrainShader->SetTextureSampler("s4_handShadow", 4, _handShadowFrameBuffer->GetColorAttachment());
-	terrainShader->SetTextureSampler("s5_objectShadows", 5,
-	                                 _objectShadowFrameBuffer ? _objectShadowFrameBuffer->GetColorAttachment()
-	                                                          : island.GetFootprintFramebuffer().GetColorAttachment());
+	SetObjectShadowUniforms(*terrainShader);
 	terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
+	// Nor any moving shadow
+	SetGroundShadowUniforms(*terrainShader, false);
 	// The temple's map of the land has no haze
 	const auto noHaze = glm::vec4(0.0f);
 	terrainShader->SetUniformValue("u_haze", &noHaze);
 	terrainShader->SetUniformValue("u_hazeColour", &noHaze);
 	terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
-	terrainShader->SetUniformValue("u_objectShadows", &u_objectShadows);
 	terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
-	terrainShader->SetUniformValue("u_handShadowMatrix", &noHandShadow);
-	terrainShader->SetUniformValue("u_handShadow", &noHand);
 	// The map shows no vortex's hole
 	const glm::vec4 noVortex {0.0f, 0.0f, 0.0f, -1.0f};
 	terrainShader->SetUniformValue("u_vortexGround", &noVortex);
@@ -1805,7 +1787,7 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, 
 	submitDesc.lightAdd = bodyDesc.lightAdd;
 	submitDesc.landLightScale = bodyDesc.landLightScale;
 	submitDesc.mirrored = bodyDesc.mirrored;
-	submitDesc.creatureShadows = false;
+	submitDesc.groundShadows = false;
 	submitDesc.sortDepth = bodyDesc.sortDepth;
 	auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
 	// Frozen, each piece takes the body's freeze: its light tinted towards the icy colour and a sheen of ice over it
@@ -4339,6 +4321,7 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 	bgfx::setViewRect(viewId, 0, 0, width, height);
 	bgfx::setViewClear(viewId, BGFX_CLEAR_COLOR, 0x00000000);
 	bgfx::touch(viewId);
+	_treeShadowsBaked = false;
 	if (!drawDesc.drawEntities)
 	{
 		return;
@@ -4386,10 +4369,51 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 		}
 	};
 	drawCasters(renderCtx.instancedDrawDescs, renderCtx.instanceUniformBuffer);
-	if (drawDesc.drawVegetation)
+	if (!drawDesc.drawVegetation)
 	{
-		drawCasters(renderCtx.treeInstancedDrawDescs, renderCtx.treeInstanceUniformBuffer);
+		return;
 	}
+	if (Locator::config::value().dynamicTreeShadows)
+	{
+		// The trees' shadows drawn as they are this frame, swaying with them and bent away from the hand
+		drawCasters(renderCtx.treeInstancedDrawDescs, renderCtx.treeInstanceUniformBuffer);
+		return;
+	}
+	// The game bakes the trees' and big forests' shadows into the land as it paints it
+	if (!_treeShadowBake)
+	{
+		_treeShadowBake = std::make_unique<TreeShadowBake>();
+	}
+	_treeShadowBake->Update(!bgfx::getCaps()->originBottomLeft);
+	_treeShadowsBaked = _treeShadowBake->GetTexture() != nullptr;
+}
+
+void Renderer::SetObjectShadowUniforms(const ShaderProgram& program) const
+{
+	const auto& island = Locator::terrainSystem::value();
+	auto u_objectShadows = glm::vec4(0.0f);
+	if (_objectShadowFrameBuffer)
+	{
+		uint16_t width = 0;
+		uint16_t height = 0;
+		_objectShadowFrameBuffer->GetSize(width, height);
+		u_objectShadows = glm::vec4(ObjectShadows::k_MaxDarkness, 1.0f / static_cast<float>(std::max<uint16_t>(width, 1)),
+		                            1.0f / static_cast<float>(std::max<uint16_t>(height, 1)), 0.0f);
+	}
+	program.SetTextureSampler("s5_objectShadows", 5,
+	                          _objectShadowFrameBuffer ? _objectShadowFrameBuffer->GetColorAttachment()
+	                                                   : island.GetFootprintFramebuffer().GetColorAttachment());
+	const auto* baked = _treeShadowsBaked && _treeShadowBake ? _treeShadowBake->GetTexture() : nullptr;
+	if (baked != nullptr && _objectShadowFrameBuffer)
+	{
+		u_objectShadows.w = 1.0f;
+		program.SetTextureSampler("s14_treeShadows", 14, *baked);
+	}
+	else
+	{
+		program.SetTextureSampler("s14_treeShadows", 14, island.GetFootprintFramebuffer().GetColorAttachment());
+	}
+	program.SetUniformValue("u_objectShadows", &u_objectShadows);
 }
 
 TextureHandle Renderer::UpdateLandLight() const
@@ -4455,192 +4479,7 @@ glm::vec4 Renderer::GetModelLight() const
 
 TextureHandle Renderer::GetLandLightTexture() const
 {
-	return _landLightTexture.value_or(_handShadowFrameBuffer->GetColorAttachment().GetNativeHandle());
-}
-
-void Renderer::DrawHandShadowPass(const DrawSceneDesc& drawDesc) const
-{
-	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::HandShadow);
-	_handShadow.reset();
-
-	_handShadowFrameBuffer->Bind(RenderPass::HandShadow);
-	bgfx::setViewRect(viewId, 0, 0, HandShadow::k_TextureSize, HandShadow::k_TextureSize);
-	bgfx::setViewClear(viewId, BGFX_CLEAR_COLOR, 0x00000000);
-	bgfx::touch(viewId);
-
-	if (!drawDesc.drawEntities || !drawDesc.drawIsland || !Locator::handSystem::has_value() ||
-	    !Locator::skySystem::has_value() || !Locator::terrainSystem::has_value())
-	{
-		return;
-	}
-	const auto handEntity =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto [hand, mesh, transform] =
-	    registry.TryGet<ecs::components::Hand, ecs::components::Mesh, ecs::components::Transform>(handEntity);
-	if (hand == nullptr || mesh == nullptr || transform == nullptr)
-	{
-		return;
-	}
-	const auto& meshManager = Locator::resources::value().GetMeshes();
-	if (!meshManager.Contains(mesh->id))
-	{
-		return;
-	}
-	const auto handMesh = meshManager.Handle(mesh->id);
-	const auto& modelBones = hand->boneMatrices.empty() ? handMesh->GetBoneMatrices() : hand->boneMatrices;
-
-	// The hand's bones in the world, as the instanced draw of the main pass places them
-	const auto model = glm::translate(transform->position) * glm::mat4(transform->rotation) * glm::scale(transform->scale);
-	std::vector<glm::mat4> bones;
-	bones.reserve(modelBones.size());
-	for (const auto& bone : modelBones)
-	{
-		bones.push_back(model * bone);
-	}
-
-	const auto& sky = Locator::skySystem::value();
-	const auto groundHeight =
-	    Locator::terrainSystem::value().GetHeightAt(glm::vec2(transform->position.x, transform->position.z));
-	const auto* caps = bgfx::getCaps();
-	_handShadow = HandShadow::Compute(bones, drawDesc.camera->GetOrigin(), groundHeight, sky.GetTime(), sky.GetDayNightTimes(),
-	                                  caps->originBottomLeft, caps->homogeneousDepth);
-	if (!_handShadow)
-	{
-		return;
-	}
-
-	bgfx::setViewTransform(viewId, &_handShadow->view, &_handShadow->projection);
-	L3DMeshSubmitDesc submitDesc = {};
-	submitDesc.viewId = RenderPass::HandShadow;
-	submitDesc.program = _shaderManager->GetShader("ShadowCaster");
-	// Only the silhouette matters: no depth and both sides
-	submitDesc.state = BGFX_STATE_WRITE_R;
-	submitDesc.modelMatrices = bones.data();
-	submitDesc.matrixCount = static_cast<uint8_t>(bones.size());
-	// The shadow takes the hand's shape as its player's alignment has it
-	const auto handMorph = HandMorphTargets();
-	if (handMorph)
-	{
-		submitDesc.program = _shaderManager->GetShader("ShadowCasterMorph");
-		submitDesc.morphTargets = &*handMorph;
-	}
-	DrawMesh(*handMesh, submitDesc, std::numeric_limits<uint8_t>::max());
-}
-
-void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
-{
-	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::CreatureShadowPass);
-	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::CreatureShadow);
-	_creatureShadowCount = 0;
-	uint16_t width = 0;
-	uint16_t height = 0;
-	_creatureShadowFrameBuffer->GetSize(width, height);
-	_creatureShadowFrameBuffer->Bind(RenderPass::CreatureShadow);
-	bgfx::setViewRect(viewId, 0, 0, width, height);
-	bgfx::setViewClear(viewId, BGFX_CLEAR_COLOR, 0x00000000);
-	bgfx::touch(viewId);
-
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	if (!Locator::config::value().drawCreatureShadows || !drawDesc.drawEntities || !drawDesc.drawIsland || inTemple ||
-	    !Locator::terrainSystem::has_value())
-	{
-		return;
-	}
-	// Each silhouette's matrices are folded into its bones, so the view itself places nothing
-	const auto identity = glm::mat4(1.0f);
-	bgfx::setViewTransform(viewId, &identity, &identity);
-
-	const auto& meshManager = Locator::resources::value().GetMeshes();
-	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
-	const auto& land = Locator::terrainSystem::value();
-	const auto camera = drawDesc.camera->GetOrigin();
-	struct Caster
-	{
-		entt::entity entity;
-		const L3DMesh* mesh;
-		glm::mat4 model;
-		glm::vec3 centre;
-		float radius;
-		float distance;
-	};
-	std::vector<Caster> casters;
-	for (const auto& [entity, instance] : renderCtx.entityDraws)
-	{
-		const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(entity);
-		if (mesh == nullptr || !drawDesc.entities.AnyOf<ecs::components::Creature>(entity) || !meshManager.Contains(mesh->id) ||
-		    instance >= renderCtx.instanceUniforms.size())
-		{
-			continue;
-		}
-		// A creature frozen or fizzed a fifth of the way or more casts no shadow
-		if (const auto* spells = drawDesc.entities.TryGet<const ecs::components::CreatureSpells>(entity);
-		    spells != nullptr && (spells->freeze >= k_NoShadowSpellLook || spells->fizz >= k_NoShadowSpellLook))
-		{
-			continue;
-		}
-		const auto* body = &*meshManager.Handle(mesh->id);
-		const auto& model = renderCtx.instanceUniforms[instance].model;
-		const auto box = body->GetBoundingBox();
-		const auto scale =
-		    std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
-		const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
-		casters.push_back({.entity = entity,
-		                   .mesh = body,
-		                   .model = model,
-		                   .centre = centre,
-		                   .radius = glm::length(box.Size()) * 0.5f * scale,
-		                   .distance = glm::distance(camera, centre)});
-	}
-	std::ranges::sort(casters, {}, &Caster::distance);
-
-	// Cast from the scene's light, as the bodies are lit
-	const auto light = glm::vec3(GetModelLight());
-	const auto* caps = bgfx::getCaps();
-	L3DMeshSubmitDesc submitDesc = {};
-	submitDesc.viewId = RenderPass::CreatureShadow;
-	submitDesc.program = _shaderManager->GetShader("ShadowCaster");
-	// Only the silhouette matters: no depth and both sides
-	submitDesc.state = BGFX_STATE_WRITE_R;
-	std::vector<glm::mat4> bones;
-	for (const auto& caster : casters)
-	{
-		if (_creatureShadowCount >= CreatureShadow::k_MaxShadows)
-		{
-			break;
-		}
-		const auto ground = land.GetHeightAt(glm::vec2(caster.centre.x, caster.centre.z));
-		const auto shadow =
-		    CreatureShadow::Compute(caster.centre, caster.radius, ground, light, camera, _creatureShadowCount,
-		                            CreatureShadow::k_MaxShadows, caps->originBottomLeft, caps->homogeneousDepth);
-		if (!shadow)
-		{
-			continue;
-		}
-		const auto* animation = drawDesc.entities.TryGet<const ecs::components::CreatureAnimation>(caster.entity);
-		const auto& pose = animation != nullptr && animation->boneMatrices.size() == caster.mesh->GetBoneMatrices().size()
-		                       ? animation->boneMatrices
-		                       : caster.mesh->GetBoneMatrices();
-		if (pose.empty())
-		{
-			continue;
-		}
-		const auto toCell = CreatureShadow::CellMatrix(_creatureShadowCount, CreatureShadow::k_MaxShadows) *
-		                    shadow->projection * shadow->view * caster.model;
-		bones.clear();
-		for (const auto& bone : pose)
-		{
-			bones.push_back(toCell * bone);
-		}
-		submitDesc.modelMatrices = bones.data();
-		submitDesc.matrixCount = static_cast<uint8_t>(bones.size());
-		DrawMesh(*caster.mesh, submitDesc, std::numeric_limits<uint8_t>::max());
-
-		_creatureShadowMatrices.at(_creatureShadowCount) = shadow->receiverMatrix;
-		_creatureShadowParameters.at(_creatureShadowCount) =
-		    glm::vec4(shadow->strength * HandShadow::k_MaxDarkness, shadow->startDepth, 0.0f, 0.0f);
-		++_creatureShadowCount;
-	}
+	return _landLightTexture.value_or(_groundShadowData->GetNativeHandle());
 }
 
 void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
@@ -4706,247 +4545,407 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 	});
 }
 
-void Renderer::SetCreatureShadowUniforms(const ShaderProgram& program, bool receives) const
+void Renderer::AddGroundShadowBody(const GroundShadowBody& body) const
 {
-	uint16_t width = 0;
-	uint16_t height = 0;
-	_creatureShadowFrameBuffer->GetSize(width, height);
-	const auto count = receives ? _creatureShadowCount : uint8_t {0};
-	const glm::vec4 u_creatureShadowInfo {static_cast<float>(count), static_cast<float>(CreatureShadow::k_MaxShadows),
-	                                      1.0f / static_cast<float>(std::max<uint16_t>(width, 1)),
-	                                      1.0f / static_cast<float>(std::max<uint16_t>(height, 1))};
-	// By the handles the program's draws of meshes keep, as this is set for every primitive of them
-	const auto& uniforms = MeshUniformsOf(program);
-	const auto handle = [&uniforms](MeshUniform uniform) { return uniforms[static_cast<size_t>(uniform)]; };
-	const auto name = [](MeshUniform uniform) { return k_MeshUniformNames[static_cast<size_t>(uniform)].data(); };
-	if (const auto info = handle(MeshUniform::CreatureShadowInfo))
+	// Each bone's matrix in the world, once
+	_groundShadowBones.resize(body.pose.size());
+	std::ranges::transform(body.pose, _groundShadowBones.begin(), [&body](const glm::mat4& bone) { return body.model * bone; });
+	const auto& subMeshes = body.mesh->GetSubMeshes();
+	for (size_t index = 0; index < subMeshes.size(); ++index)
 	{
-		program.SetUniformValue(*info, &u_creatureShadowInfo);
-	}
-	else
-	{
-		program.SetUniformValue(name(MeshUniform::CreatureShadowInfo), &u_creatureShadowInfo);
-	}
-	if (const auto shadows = handle(MeshUniform::CreatureShadows))
-	{
-		program.SetTextureSampler(*shadows, 14, _creatureShadowFrameBuffer->GetColorAttachment());
-	}
-	else
-	{
-		program.SetTextureSampler(name(MeshUniform::CreatureShadows), 14, _creatureShadowFrameBuffer->GetColorAttachment());
-	}
-	if (count > 0)
-	{
-		program.SetUniformArray(name(MeshUniform::CreatureShadowMatrix), _creatureShadowMatrices.data(), count);
-		program.SetUniformArray(name(MeshUniform::CreatureShadow), _creatureShadowParameters.data(), count);
+		const auto& subMesh = *subMeshes[index];
+		// Only the parts drawn in the most detail
+		if ((subMesh.GetFlags().lodMask & 1U) == 0)
+		{
+			continue;
+		}
+		const auto& geometry = subMesh.GetBodyGeometry();
+		// The matching parts of the meshes the body is blended towards, and how far
+		std::array<const std::vector<glm::vec3>*, 3> targets {};
+		std::array<float, 3> weights {};
+		if (body.morph != nullptr)
+		{
+			for (size_t axis = 0; axis < targets.size(); ++axis)
+			{
+				const auto* target = body.morph->meshes.at(axis);
+				const auto weight = body.morph->weights[static_cast<glm::length_t>(axis)];
+				if (target == nullptr || weight == 0.0f || index >= target->GetSubMeshes().size())
+				{
+					continue;
+				}
+				const auto& positions = target->GetSubMeshes()[index]->GetBodyGeometry().positions;
+				if (positions.size() == geometry.positions.size())
+				{
+					targets.at(axis) = &positions;
+					weights.at(axis) = weight;
+				}
+			}
+		}
+		// A part moved by bones may dip below the level; one moved with the body whole is kept above it
+		const bool boned = subMesh.GetFlags().hasBones != 0U;
+		_groundShadowParts.push_back({.subMesh = &subMesh,
+		                              .first = static_cast<uint32_t>(_groundShadowPoints.size()),
+		                              .secondRowsOnly = body.secondRowsOnly});
+		for (size_t i = 0; i < geometry.positions.size(); ++i)
+		{
+			auto local = geometry.positions[i];
+			for (size_t axis = 0; axis < targets.size(); ++axis)
+			{
+				if (targets.at(axis) != nullptr)
+				{
+					local += weights.at(axis) * ((*targets.at(axis))[i] - geometry.positions[i]);
+				}
+			}
+			// Every vertex moved by its own bone alone
+			const auto bone = i < geometry.bones.size() ? geometry.bones[i] : L3DSubMesh::k_NoBone;
+			const auto world =
+			    (bone < _groundShadowBones.size() ? _groundShadowBones[bone] : body.model) * glm::vec4(local, 1.0f);
+			_groundShadowPoints.push_back({.position = glm::vec3(world), .keptAboveLevel = !boned});
+		}
 	}
 }
 
 void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::GroundShadowPass);
-	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::GroundShadow);
 	_groundShadowCount = 0;
-	uint16_t width = 0;
-	uint16_t height = 0;
-	_groundShadowFrameBuffer->GetSize(width, height);
-	_groundShadowFrameBuffer->Bind(RenderPass::GroundShadow);
-	bgfx::setViewRect(viewId, 0, 0, width, height);
-	bgfx::setViewClear(viewId, BGFX_CLEAR_COLOR, 0x00000000);
-	bgfx::touch(viewId);
+	_groundShadowsOnObjects = 0;
+	_groundShadowTexels.clear();
+	std::ranges::fill(_groundShadowBlocks, glm::vec2(0.0f));
 
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	if (renderCtx.highDetailDraws.empty() || !Locator::config::value().drawCreatureShadows || !drawDesc.drawEntities ||
-	    !drawDesc.drawIsland || inTemple || !Locator::terrainSystem::has_value())
-	{
-		return;
-	}
-	// The corners are placed in the target's clip space already
-	const auto identity = glm::mat4(1.0f);
-	bgfx::setViewTransform(viewId, &identity, &identity);
+	const bool casts = Locator::config::value().drawCreatureShadows && drawDesc.drawEntities && drawDesc.drawIsland &&
+	                   !inTemple && Locator::terrainSystem::has_value();
 
 	const auto& meshManager = Locator::resources::value().GetMeshes();
-	const auto& land = Locator::terrainSystem::value();
 	const auto camera = drawDesc.camera->GetOrigin();
+	const auto scaleOf = [](const glm::mat4& model) {
+		return std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
+	};
+	/// A shadow to cast: its bodies, where it stands, where it is cast from and laid, its opacity and whether it falls
+	/// on objects too
 	struct Caster
 	{
-		entt::entity entity;
-		const L3DMesh* mesh;
-		glm::mat4 model;
+		std::array<GroundShadowBody, 2> bodies;
+		uint8_t bodyCount;
 		glm::vec3 standsAt;
-		float ground;
+		GroundShadow::Cast cast;
 		uint8_t alpha;
-		float distance;
+		bool onObjects;
 	};
 	std::vector<Caster> casters;
-	for (const auto& draw : renderCtx.highDetailDraws)
-	{
-		if (!meshManager.Contains(draw.mesh))
-		{
-			continue;
-		}
-		const auto* mesh = &*meshManager.Handle(draw.mesh);
-		const auto& model = draw.castModel;
-		const auto standsAt = glm::vec3(model[3]);
-		const auto ground = land.GetHeightAt(glm::vec2(standsAt.x, standsAt.z));
-		const auto scale =
-		    std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
-		const auto radius = glm::length(mesh->GetBoundingBox().Size()) * 0.5f * scale;
-		const auto distance = glm::distance(camera, glm::vec3(standsAt.x, ground, standsAt.z));
-		const auto alpha = GroundShadow::Alpha(distance, radius);
-		if (alpha == 0)
-		{
-			continue;
-		}
-		casters.push_back({.entity = draw.entity,
-		                   .mesh = mesh,
-		                   .model = model,
-		                   .standsAt = standsAt,
-		                   .ground = ground,
-		                   .alpha = alpha,
-		                   .distance = distance});
-	}
-	std::ranges::sort(casters, {}, &Caster::distance);
+	// Kept for the bodies that are blended, in place: made room for first
+	std::vector<L3DMeshSubmitDesc::MorphTargets> morphs;
+	morphs.reserve(renderCtx.entityDraws.size() + 1);
 
-	bgfx::VertexLayout layout;
-	layout.begin()
-	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-	    .end();
-	struct Vertex
+	if (casts)
 	{
-		glm::vec3 position;
-		uint32_t colour;
-	};
-	const auto* program = _shaderManager->GetShader("Silhouette");
-	const auto* caps = bgfx::getCaps();
-	for (const auto& caster : casters)
-	{
-		if (_groundShadowCount >= GroundShadow::k_MaxShadows)
+		const auto& land = Locator::terrainSystem::value();
+		// The hand's, cast from the sun and laid on the ground beneath it, with what it holds
+		if (drawDesc.drawHand && Locator::handSystem::has_value() && Locator::skySystem::has_value())
 		{
-			break;
-		}
-		// The body in the pose of the clip it plays, every vertex moved by its own bone alone
-		const auto& rest = caster.mesh->GetBoneMatrices();
-		std::span<const glm::mat4> pose = rest;
-		if (const auto* villagerPose = drawDesc.entities.TryGet<const ecs::components::VillagerPose>(caster.entity))
-		{
-			if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
+			const auto handEntity = Locator::handSystem::value()
+			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto& registry = Locator::entitiesRegistry::value();
+			const auto [hand, mesh, transform] =
+			    registry.TryGet<ecs::components::Hand, ecs::components::Mesh, ecs::components::Transform>(handEntity);
+			if (hand != nullptr && mesh != nullptr && transform != nullptr && meshManager.Contains(mesh->id))
 			{
-				pose = villagerPose->clipBones;
-			}
-			else if (villagerPose->bones.size() == rest.size())
-			{
-				pose = villagerPose->bones;
+				const auto* handMesh = &*meshManager.Handle(mesh->id);
+				const auto model =
+				    glm::translate(transform->position) * glm::mat4(transform->rotation) * glm::scale(transform->scale);
+				const auto ground = land.GetHeightAt(glm::vec2(transform->position.x, transform->position.z));
+				const auto radius = glm::length(handMesh->GetBoundingBox().Size()) * 0.5f * scaleOf(model);
+				const auto& sky = Locator::skySystem::value();
+				const auto fade =
+				    GroundShadow::Fade(glm::distance(camera, glm::vec3(transform->position.x, ground, transform->position.z)),
+				                       radius) *
+				    HandShadow::Daylight(sky.GetTime(), sky.GetDayNightTimes());
+				const auto alpha = GroundShadow::ScaledAlpha(fade);
+				if (alpha > 0)
+				{
+					const L3DMeshSubmitDesc::MorphTargets* handMorph = nullptr;
+					if (const auto targets = HandMorphTargets())
+					{
+						handMorph = &morphs.emplace_back(*targets);
+					}
+					Caster caster {
+					    .bodies = {},
+					    .bodyCount = 1,
+					    .standsAt = transform->position,
+					    .cast = {.light =
+					                 HandShadow::LightPoint(glm::vec3(transform->position.x, ground, transform->position.z),
+					                                        sky.GetTime(), sky.GetDayNightTimes()),
+					             .level = ground,
+					             .ground = ground},
+					    .alpha = alpha,
+					    .onObjects = true,
+					};
+					caster.bodies.at(0) = {
+					    .mesh = handMesh,
+					    .model = model,
+					    .pose = hand->boneMatrices.empty() ? std::span<const glm::mat4>(handMesh->GetBoneMatrices())
+					                                       : std::span<const glm::mat4>(hand->boneMatrices),
+					    .morph = handMorph,
+					    .secondRowsOnly = true,
+					};
+					// What the hand holds counts every sample
+					const auto held = std::ranges::find_if(renderCtx.inHandDraws, [&registry, handEntity](const auto& draw) {
+						const auto* inHand = registry.TryGet<const ecs::components::InHand>(draw.entity);
+						return inHand != nullptr && inHand->hand == handEntity;
+					});
+					if (held != renderCtx.inHandDraws.end() && meshManager.Contains(held->mesh))
+					{
+						const auto* heldMesh = &*meshManager.Handle(held->mesh);
+						std::span<const glm::mat4> pose = heldMesh->GetBoneMatrices();
+						if (const auto* villagerPose = registry.TryGet<const ecs::components::VillagerPose>(held->entity);
+						    villagerPose != nullptr && villagerPose->bones.size() == pose.size())
+						{
+							pose = villagerPose->bones;
+						}
+						caster.bodies.at(1) = {
+						    .mesh = heldMesh, .model = held->model, .pose = pose, .morph = nullptr, .secondRowsOnly = false};
+						caster.bodyCount = 2;
+					}
+					casters.push_back(caster);
+				}
 			}
 		}
-		_groundShadowPoints.clear();
-		for (const auto& subMesh : caster.mesh->GetSubMeshes())
+
+		// The creatures', cast from the scene's light brought round above each, and laid straight down
+		const auto light = glm::vec3(GetModelLight());
+		for (const auto& [entity, instance] : renderCtx.entityDraws)
 		{
-			if ((subMesh->GetFlags().lodMask & 1U) == 0)
+			const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(entity);
+			if (mesh == nullptr || !drawDesc.entities.AnyOf<ecs::components::Creature>(entity) ||
+			    !meshManager.Contains(mesh->id) || instance >= renderCtx.instanceUniforms.size())
 			{
 				continue;
 			}
-			const auto& body = subMesh->GetBodyGeometry();
-			for (size_t i = 0; i < body.positions.size(); ++i)
+			// A creature frozen or fizzed a fifth of the way or more casts no shadow
+			if (const auto* spells = drawDesc.entities.TryGet<const ecs::components::CreatureSpells>(entity);
+			    spells != nullptr && (spells->freeze >= k_NoShadowSpellLook || spells->fizz >= k_NoShadowSpellLook))
 			{
-				const auto bone = i < body.bones.size() ? body.bones[i] : L3DSubMesh::k_NoBone;
-				const auto local = glm::vec4(body.positions[i], 1.0f);
-				const auto world = bone < pose.size() ? caster.model * (pose[bone] * local) : caster.model * local;
-				_groundShadowPoints.emplace_back(world);
+				continue;
 			}
+			const auto* body = &*meshManager.Handle(mesh->id);
+			const auto& model = renderCtx.instanceUniforms[instance].model;
+			const auto standsAt = glm::vec3(model[3]);
+			const auto radius = glm::length(body->GetBoundingBox().Size()) * 0.5f * scaleOf(model);
+			const auto ground = land.GetHeightAt(glm::vec2(standsAt.x, standsAt.z));
+			const auto alpha = GroundShadow::ScaledAlpha(
+			    GroundShadow::Fade(glm::distance(camera, glm::vec3(standsAt.x, ground, standsAt.z)), radius));
+			if (alpha == 0)
+			{
+				continue;
+			}
+			const auto* animation = drawDesc.entities.TryGet<const ecs::components::CreatureAnimation>(entity);
+			const auto pose = animation != nullptr && animation->boneMatrices.size() == body->GetBoneMatrices().size()
+			                      ? std::span<const glm::mat4>(animation->boneMatrices)
+			                      : std::span<const glm::mat4>(body->GetBoneMatrices());
+			const auto* creature = drawDesc.entities.TryGet<const ecs::components::Creature>(entity);
+			const auto* morph = drawDesc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
+			const L3DMeshSubmitDesc::MorphTargets* bodyMorph = nullptr;
+			if (creature != nullptr && morph != nullptr)
+			{
+				const auto ids = creature_morph::MeshesOf(
+				    creature->species, morph->drawn, [&meshManager](entt::id_type id) { return meshManager.Contains(id); });
+				bodyMorph = &morphs.emplace_back(L3DMeshSubmitDesc::MorphTargets {
+				    .meshes = {&*meshManager.Handle(ids.evilGood), &*meshManager.Handle(ids.thinFat),
+				               &*meshManager.Handle(ids.weakStrong)},
+				    .weights = glm::abs(glm::vec3(morph->drawn.evilGood, morph->drawn.thinFat, morph->drawn.weakStrong)),
+				    .skins = {},
+				    .blendSeams = false,
+				});
+			}
+			Caster caster {
+			    .bodies = {},
+			    .bodyCount = 1,
+			    .standsAt = standsAt,
+			    .cast = {.light = GroundShadow::CreatureLight(light, standsAt, radius),
+			             .level = standsAt.y,
+			             .ground = standsAt.y},
+			    .alpha = alpha,
+			    .onObjects = true,
+			};
+			caster.bodies.at(0) = {.mesh = body, .model = model, .pose = pose, .morph = bodyMorph, .secondRowsOnly = false};
+			casters.push_back(caster);
 		}
-		const auto footprint = GroundShadow::Measure(_groundShadowPoints, caster.standsAt);
+
+		// The high-detail villagers', cast from the fixed far sun onto the ground beneath them, on the land only
+		for (const auto& draw : renderCtx.highDetailDraws)
+		{
+			if (!meshManager.Contains(draw.mesh))
+			{
+				continue;
+			}
+			const auto* mesh = &*meshManager.Handle(draw.mesh);
+			const auto& model = draw.castModel;
+			const auto standsAt = glm::vec3(model[3]);
+			const auto ground = land.GetHeightAt(glm::vec2(standsAt.x, standsAt.z));
+			const auto radius = glm::length(mesh->GetBoundingBox().Size()) * 0.5f * scaleOf(model);
+			const auto alpha = GroundShadow::Alpha(glm::distance(camera, glm::vec3(standsAt.x, ground, standsAt.z)), radius);
+			if (alpha == 0)
+			{
+				continue;
+			}
+			// The body in the pose of the clip it plays
+			const auto& rest = mesh->GetBoneMatrices();
+			std::span<const glm::mat4> pose = rest;
+			if (const auto* villagerPose = drawDesc.entities.TryGet<const ecs::components::VillagerPose>(draw.entity))
+			{
+				if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
+				{
+					pose = villagerPose->clipBones;
+				}
+				else if (villagerPose->bones.size() == rest.size())
+				{
+					pose = villagerPose->bones;
+				}
+			}
+			Caster caster {
+			    .bodies = {},
+			    .bodyCount = 1,
+			    .standsAt = standsAt,
+			    .cast = {.light = GroundShadow::k_Sun, .level = standsAt.y, .ground = ground},
+			    .alpha = alpha,
+			    .onObjects = false,
+			};
+			caster.bodies.at(0) = {.mesh = mesh, .model = model, .pose = pose, .morph = nullptr, .secondRowsOnly = false};
+			casters.push_back(caster);
+		}
+	}
+
+	// Each shadow's texture counted from its bodies' triangles, as the game counts them, and handed over with where it
+	// lies; what is laid on objects goes first
+	std::ranges::stable_partition(casters, &Caster::onObjects);
+	std::vector<GroundShadow::Footprint> footprints;
+	footprints.reserve(casters.size());
+	for (const auto& caster : casters)
+	{
+		_groundShadowPoints.clear();
+		_groundShadowParts.clear();
+		for (uint8_t i = 0; i < caster.bodyCount; ++i)
+		{
+			AddGroundShadowBody(caster.bodies.at(i));
+		}
+		_groundShadowFlattened.resize(_groundShadowPoints.size());
+		const auto footprint = GroundShadow::Measure(_groundShadowPoints, caster.standsAt, caster.cast, _groundShadowFlattened);
 		if (!footprint)
 		{
 			continue;
 		}
 		_groundShadowSamples.clear();
-		for (const auto& point : _groundShadowPoints)
+		for (const auto& flat : _groundShadowFlattened)
 		{
-			_groundShadowSamples.push_back(GroundShadow::Sample(GroundShadow::OnGround(point, caster.standsAt.y), *footprint));
+			_groundShadowSamples.push_back(GroundShadow::Sample(flat, *footprint));
 		}
-		// The triangles counted: those facing the counted way, and all of those drawn from both sides
-		_groundShadowIndices.clear();
-		size_t first = 0;
-		for (const auto& subMesh : caster.mesh->GetSubMeshes())
+		_groundShadowCoverage = {};
+		for (const auto& part : _groundShadowParts)
 		{
-			if ((subMesh->GetFlags().lodMask & 1U) == 0)
+			const auto& geometry = part.subMesh->GetBodyGeometry();
+			for (const auto& primitive : part.subMesh->GetPrimitives())
 			{
-				continue;
-			}
-			const auto& body = subMesh->GetBodyGeometry();
-			for (const auto& primitive : subMesh->GetPrimitives())
-			{
-				const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, body.indices.size());
+				const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, geometry.indices.size());
 				for (size_t i = primitive.indicesOffset; i + 2 < end; i += 3)
 				{
-					const std::array<size_t, 3> corners {first + body.indices[i], first + body.indices[i + 1],
-					                                     first + body.indices[i + 2]};
+					const std::array<size_t, 3> corners {part.first + geometry.indices[i], part.first + geometry.indices[i + 1],
+					                                     part.first + geometry.indices[i + 2]};
 					if (std::ranges::any_of(corners, [this](size_t corner) { return corner >= _groundShadowSamples.size(); }))
 					{
 						continue;
 					}
-					if (!primitive.twoSided &&
-					    !GroundShadow::Counted({_groundShadowSamples[corners[0]], _groundShadowSamples[corners[1]],
-					                            _groundShadowSamples[corners[2]]}))
-					{
-						continue;
-					}
-					for (const auto corner : corners)
-					{
-						_groundShadowIndices.push_back(static_cast<uint16_t>(corner));
-					}
+					GroundShadow::Cover(
+					    _groundShadowCoverage,
+					    {_groundShadowSamples[corners[0]], _groundShadowSamples[corners[1]], _groundShadowSamples[corners[2]]},
+					    primitive.twoSided, part.secondRowsOnly);
 				}
 			}
-			first += body.positions.size();
 		}
-		const auto vertexCount = static_cast<uint32_t>(_groundShadowSamples.size());
-		const auto indexCount = static_cast<uint32_t>(_groundShadowIndices.size());
-		if (indexCount == 0 || vertexCount > std::numeric_limits<uint16_t>::max() ||
-		    bgfx::getAvailTransientVertexBuffer(vertexCount, layout) < vertexCount ||
-		    bgfx::getAvailTransientIndexBuffer(indexCount) < indexCount)
-		{
-			continue;
-		}
-		const auto slot = _groundShadowCount;
-		bgfx::TransientVertexBuffer vertices;
-		bgfx::allocTransientVertexBuffer(&vertices, vertexCount, layout);
-		std::span<Vertex> written(reinterpret_cast<Vertex*>(vertices.data), vertexCount);
-		std::ranges::transform(_groundShadowSamples, written.begin(), [slot, caps](const glm::vec2& sample) {
-			const auto clip = GroundShadow::SlotClip(sample, slot, GroundShadow::k_MaxShadows, caps->originBottomLeft);
-			return Vertex {.position = glm::vec3(clip, 0.5f), .colour = 0xFFFFFFFF};
-		});
-		bgfx::TransientIndexBuffer indices;
-		bgfx::allocTransientIndexBuffer(&indices, indexCount);
-		std::ranges::copy(_groundShadowIndices, reinterpret_cast<uint16_t*>(indices.data));
-		bgfx::setTransform(&identity);
-		bgfx::setVertexBuffer(0, &vertices);
-		bgfx::setIndexBuffer(&indices);
-		// Every covered sample counts once, whichever way the triangle faces on the target
-		bgfx::setState(BGFX_STATE_WRITE_R);
-		bgfx::submit(viewId, toBgfx(program->GetRawHandle()));
+		const auto levels = GroundShadow::Levels(_groundShadowCoverage, caster.alpha);
 
-		_groundShadowMatrices.at(slot) = GroundShadow::ReceiverMatrix(*footprint, caster.standsAt, caster.ground);
-		_groundShadowParameters.at(slot) =
-		    glm::vec4(static_cast<float>(caster.alpha), footprint->nearest, static_cast<float>(slot), 0.0f);
-		_groundShadowBounds.at(slot) = glm::vec4(footprint->low, footprint->high);
+		const auto way = GroundShadow::LightWay(caster.standsAt, caster.cast.light);
+		_groundShadowTexels.push_back(GroundShadow::Receiver(*footprint, caster.cast));
+		_groundShadowTexels.emplace_back(way, footprint->nearest, 0.0f);
+		_groundShadowTexels.emplace_back(footprint->low, footprint->high);
+		_groundShadowTexels.emplace_back(0.0f);
+		for (size_t texel = 0; texel < levels.size(); texel += 4)
+		{
+			_groundShadowTexels.emplace_back(levels.at(texel), levels.at(texel + 1), levels.at(texel + 2),
+			                                 levels.at(texel + 3));
+		}
+		footprints.push_back(*footprint);
 		++_groundShadowCount;
+		if (caster.onObjects)
+		{
+			++_groundShadowsOnObjects;
+		}
 	}
+
+	// Each land block's list of the shadows reaching it, after the shadows themselves
+	if (Locator::terrainSystem::has_value())
+	{
+		const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+		_groundShadowBlocks.assign(blocks.size(), glm::vec2(0.0f));
+		for (size_t block = 0; _groundShadowCount > 0 && block < blocks.size(); ++block)
+		{
+			const auto first = static_cast<float>(_groundShadowTexels.size());
+			for (uint32_t shadow = 0; shadow < _groundShadowCount; ++shadow)
+			{
+				if (GroundShadow::ReachesBlock(footprints[shadow], blocks[block].GetMapPosition()))
+				{
+					_groundShadowTexels.emplace_back(static_cast<float>(shadow), 0.0f, 0.0f, 0.0f);
+				}
+			}
+			_groundShadowBlocks[block] = {first, static_cast<float>(_groundShadowTexels.size()) - first};
+		}
+	}
+
+	// Handed over in a texture of whole rows, grown as needed
+	const auto rows = std::max<uint32_t>(
+	    1, static_cast<uint32_t>((_groundShadowTexels.size() + k_GroundShadowDataWidth - 1) / k_GroundShadowDataWidth));
+	if (!_groundShadowData || _groundShadowData->GetResolution().y < rows)
+	{
+		auto capacity = std::max<uint32_t>(_groundShadowData ? _groundShadowData->GetResolution().y : 1U, 1U);
+		while (capacity < rows)
+		{
+			capacity *= 2;
+		}
+		_groundShadowData = std::make_unique<Texture2D>("Ground Shadow Data");
+		_groundShadowData->Create(k_GroundShadowDataWidth, static_cast<uint16_t>(capacity), 1, TextureFormat::RGBA32F,
+		                          Wrapping::ClampEdge, Filter::Nearest, nullptr);
+	}
+	_groundShadowTexels.resize(static_cast<size_t>(_groundShadowData->GetResolution().y) * k_GroundShadowDataWidth,
+	                           glm::vec4(0.0f));
+	_groundShadowData->Update(_groundShadowTexels.data(),
+	                          static_cast<uint32_t>(_groundShadowTexels.size() * sizeof(glm::vec4)));
 }
 
 void Renderer::SetGroundShadowUniforms(const ShaderProgram& program, bool receives) const
 {
-	const auto count = receives ? _groundShadowCount : uint8_t {0};
-	const glm::vec4 info {static_cast<float>(count), static_cast<float>(GroundShadow::k_MaxShadows), 0.0f, 0.0f};
+	const auto count = receives ? _groundShadowCount : 0U;
+	const glm::vec4 info {static_cast<float>(receives ? _groundShadowsOnObjects : 0U), static_cast<float>(count), 0.0f, 0.0f};
 	program.SetUniformValue("u_groundShadowInfo", &info);
-	program.SetTextureSampler("s15_groundShadows", 15, _groundShadowFrameBuffer->GetColorAttachment());
-	if (count > 0)
+	program.SetTextureSampler("s4_groundShadowData", 4, *_groundShadowData);
+	// No block takes any until it says which
+	const auto none = glm::vec4(0.0f);
+	program.SetUniformValue("u_groundShadowBlock", &none);
+}
+
+void Renderer::SetObjectGroundShadowUniforms(const ShaderProgram& program, bool receives) const
+{
+	const glm::vec4 info {static_cast<float>(receives ? _groundShadowsOnObjects : 0U), 0.0f, 0.0f, 0.0f};
+	// By the handles the program's draws of meshes keep, as this is set for every primitive of them
+	const auto& uniforms = MeshUniformsOf(program);
+	const auto handle = [&uniforms](MeshUniform uniform) { return uniforms[static_cast<size_t>(uniform)]; };
+	if (const auto uniform = handle(MeshUniform::GroundShadowInfo))
 	{
-		program.SetUniformArray("u_groundShadowMatrix", _groundShadowMatrices.data(), count);
-		program.SetUniformArray("u_groundShadow", _groundShadowParameters.data(), count);
-		program.SetUniformArray("u_groundShadowBounds", _groundShadowBounds.data(), count);
+		program.SetUniformValue(*uniform, &info);
+	}
+	if (const auto uniform = handle(MeshUniform::GroundShadowData))
+	{
+		program.SetTextureSampler(*uniform, 14, *_groundShadowData);
 	}
 }
 
@@ -5024,18 +5023,6 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	UpdateLandLight();
 	DrawObjectShadowPass(drawDesc);
 	DrawTempleMapPass();
-	{
-		auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::MainPassDrawModels);
-		if (drawDesc.drawHand)
-		{
-			DrawHandShadowPass(drawDesc);
-		}
-		else
-		{
-			_handShadow.reset();
-		}
-	}
-	DrawCreatureShadowPass(drawDesc);
 	DrawGroundShadowPass(drawDesc);
 	// Reflection Pass
 	{
@@ -5265,23 +5252,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			    forwardLength;
 			const glm::vec4 u_smallBumpLine {cameraOrigin.x, cameraOrigin.z, forwardAlongGround / forwardLength};
 			const glm::vec4 u_smallBump {lineDistance, 0.0f, 0.0f, 0.0f};
-			auto u_objectShadows = glm::vec4(0.0f);
-			if (_objectShadowFrameBuffer)
-			{
-				uint16_t width = 0;
-				uint16_t height = 0;
-				_objectShadowFrameBuffer->GetSize(width, height);
-				u_objectShadows =
-				    glm::vec4(ObjectShadows::k_MaxDarkness, 1.0f / static_cast<float>(std::max<uint16_t>(width, 1)),
-				              1.0f / static_cast<float>(std::max<uint16_t>(height, 1)), 0.0f);
-			}
-
-			// The hand's shadow falls on the land, not on its reflection
-			const auto& handShadow = desc.viewId == RenderPass::Main ? _handShadow : std::nullopt;
-			const auto handShadowMatrix = handShadow ? handShadow->receiverMatrix : glm::mat4(0.0f);
-			const auto u_handShadow =
-			    handShadow ? glm::vec4(handShadow->strength * HandShadow::k_MaxDarkness, handShadow->startDepth, 0.0f, 0.0f)
-			               : glm::vec4(0.0f);
 
 			// The hand's light is in the land's own lighting, so the reflection shows it too
 
@@ -5332,22 +5302,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetUniformValue("u_smallBumpLine", &u_smallBumpLine);
 				terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
 				terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
-				terrainShader->SetTextureSampler("s5_objectShadows", 5,
-				                                 _objectShadowFrameBuffer
-				                                     ? _objectShadowFrameBuffer->GetColorAttachment()
-				                                     : island.GetFootprintFramebuffer().GetColorAttachment());
+				SetObjectShadowUniforms(*terrainShader);
 				terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
 				terrainShader->SetUniformValue("u_haze", &_haze[0]);
 				terrainShader->SetUniformValue("u_hazeColour", &_haze[1]);
 				terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
-				terrainShader->SetUniformValue("u_objectShadows", &u_objectShadows);
 				terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
-				terrainShader->SetTextureSampler("s4_handShadow", 4, _handShadowFrameBuffer->GetColorAttachment());
-				terrainShader->SetUniformValue("u_handShadowMatrix", &handShadowMatrix);
-				terrainShader->SetUniformValue("u_handShadow", &u_handShadow);
-				// The creatures' shadows fall on the land, not on its reflection
-				SetCreatureShadowUniforms(*terrainShader, desc.viewId == RenderPass::Main);
-				// So do the high-detail villagers'
+				// The moving shadows fall on the land, not on its reflection
 				SetGroundShadowUniforms(*terrainShader, desc.viewId == RenderPass::Main);
 				setTerrainSnow();
 			};
@@ -5361,6 +5322,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const ProgramUniform blockPositionUniform {*terrainShader, "u_blockPositionAndSize"};
 			const ProgramUniform blockUniform {*terrainShader, "u_block"};
 			const ProgramUniform vortexGroundUniform {*terrainShader, "u_vortexGround"};
+			const ProgramUniform groundShadowBlockUniform {*terrainShader, "u_groundShadowBlock"};
+			const bool groundShadowed = desc.viewId == RenderPass::Main;
 			// An open vortex opens a hole in the land block under its middle and lays a ring on it; the last vortex on a
 			// block is the one it shows
 			const std::span<const ecs::systems::VortexSystemInterface::GroundMark> groundMarks =
@@ -5387,6 +5350,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 				vortexGroundUniform.Set(&vortexGround);
+				// The moving shadows reaching the block
+				const auto shadows =
+				    groundShadowed && index < _groundShadowBlocks.size() ? _groundShadowBlocks[index] : glm::vec2(0.0f);
+				const glm::vec4 u_groundShadowBlock {shadows, 0.0f, 0.0f};
+				groundShadowBlockUniform.Set(&u_groundShadowBlock);
 				block.BindVertices();
 				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
 				terrainShader->Submit(static_cast<bgfx::ViewId>(desc.viewId), blockDepth(block), discard);
@@ -5463,7 +5431,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    light.add + (meshId == ecs::components::Hand::k_MeshId ? HandGlowColour() : glm::vec3(0.0f));
 				submitDesc.landLightScale = meshId == ecs::components::Hand::k_MeshId ? 1.5f : 1.0f;
 				submitDesc.snow = !inTemple && meshId != ecs::components::Hand::k_MeshId;
-				submitDesc.creatureShadows = meshId != ecs::components::Hand::k_MeshId;
+				// The villagers a script draws in high detail take no moving shadows, nor does the hand
+				submitDesc.groundShadows =
+				    meshId != ecs::components::Hand::k_MeshId &&
+				    std::ranges::none_of(renderCtx.highDetailDraws, [meshId](const auto& draw) { return draw.mesh == meshId; });
 				submitDesc.unlit = placers.unlit;
 				submitDesc.instanceDesc =
 				    std::make_unique<graphics::InstanceDesc>(instances.value_or(renderCtx.instanceUniformBuffer), first, count);
@@ -5899,6 +5870,28 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 			}
+			// What the villagers hold in their hands, a draw for each model: the opaque ones here, those fading out with
+			// the blended things. The sea reflects only what the villagers flying in the physics hold.
+			const auto drawHeld = [&](bool fading) {
+				for (const auto& held : renderCtx.heldDraws)
+				{
+					if (held.fading != fading || (desc.viewId == RenderPass::Reflection && !held.reflected) ||
+					    !meshManager.Contains(held.meshId))
+					{
+						continue;
+					}
+					RenderContext::InstancedDrawDesc placers {held.first, held.count, false, false};
+					placers.instanceAlpha = fading;
+					if (fading)
+					{
+						submitDesc.sortDepth =
+						    zsort::Depth(glm::vec3(renderCtx.heldInstances.at(held.first).model[3]), cameraOrigin);
+					}
+					drawInstances(held.meshId, placers, false, held.first, held.count, nullptr, nullptr,
+					              renderCtx.heldInstanceBuffer);
+				}
+			};
+			drawHeld(false);
 			DrawTempleUnderside(desc);
 			// In the temple, whose draws keep their order, the sun's glare comes after its solid parts, which hide it, and
 			// before its glass, which blends over it
@@ -5923,6 +5916,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 			}
+			drawHeld(true);
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
 				if (placers.translucent && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))

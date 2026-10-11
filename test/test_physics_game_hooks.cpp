@@ -232,6 +232,12 @@ public:
 	[[nodiscard]] bool CanPickUp(entt::entity /*object*/) const override { return true; }
 	void Catch(entt::entity /*creature*/, entt::entity /*object*/) override {}
 	void StopCreature(entt::entity /*creature*/) override {}
+	void DropCarriedLog(systems::DynamicsSystemInterface& /*dynamics*/, entt::entity villager,
+	                    const systems::DroppedLogStart& start) override
+	{
+		droppedLogs.emplace_back(villager, start);
+	}
+	std::vector<std::pair<entt::entity, systems::DroppedLogStart>> droppedLogs;
 
 	Registry registry;
 	uint32_t turn {0};

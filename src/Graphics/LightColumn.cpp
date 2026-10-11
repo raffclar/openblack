@@ -47,9 +47,9 @@ glm::mat4 Model(const glm::vec3& position, const glm::vec3& eye)
 	const float cosine = std::cos(angle);
 	const float sine = std::sin(angle);
 	glm::mat4 model(1.0f);
-	model[0] = glm::vec4(cosine, 0.0f, sine, 0.0f) * k_Scale;
-	model[1] = glm::vec4(0.0f, k_UprightStretch, 0.0f, 0.0f) * k_Scale;
-	model[2] = glm::vec4(-sine, 0.0f, cosine, 0.0f) * k_Scale;
+	model[0] = glm::vec4(cosine, 0.0f, sine, 0.0f);
+	model[1] = glm::vec4(0.0f, k_UprightStretch, 0.0f, 0.0f);
+	model[2] = glm::vec4(-sine, 0.0f, cosine, 0.0f);
 	model[3] = glm::vec4(position, 1.0f);
 	return model;
 }

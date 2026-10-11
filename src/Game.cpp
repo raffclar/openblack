@@ -441,6 +441,7 @@ Game::Game(Arguments&& args) noexcept
 	config.numFramesToSimulate = args.numFramesToSimulate;
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
+	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.resolution = {args.windowWidth, args.windowHeight};
 	config.displayMode = args.displayMode;
 	config.graphicsBackend = args.graphicsBackend;
@@ -3809,28 +3810,31 @@ void Game::StartStoryScripts()
 
 bool Game::AskNewGameChoice()
 {
-	// Every new game starts with nothing skipped, and only a returning player is asked
+	// Every new game starts with nothing skipped, and every player is asked
 	auto& skip = Locator::tutorialSkipSystem::value();
 	skip.Set({});
+	const bool hasCreature = Locator::playerProfileSystem::value().CurrentProfileHasCreature();
 	// For developers and agents: the question answered at once, as though the player had answered it before the
-	// story's first turn
-	if (_newGameStart.has_value() && _newGameStart->answer.has_value())
+	// story's first turn. Keeping the old creature without one is an answer the box doesn't offer.
+	if (const auto answer = new_game_choice::AnswerAtOnce(_newGameStart, hasCreature); answer.has_value())
 	{
-		skip.Set(new_game_choice::SkipFor(*_newGameStart->answer));
+		if (*answer != _newGameStart->answer)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"),
+			                   "The current profile has no creature to keep: skipping all of the creature tutorial instead");
+		}
+		skip.Set(new_game_choice::SkipFor(*answer));
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "New game started with the start-of-game question answered {}",
-		                   static_cast<int>(*_newGameStart->answer));
+		                   static_cast<int>(*answer));
 		return true;
 	}
-	const auto& profiles = Locator::playerProfileSystem::value();
-	const bool forced = _newGameStart.has_value() && _newGameStart->ask;
-	if ((!forced && !new_game_choice::AsksAtNewGame(profiles.GetProfileCount(), profiles.CurrentProfileHasCreature())) ||
-	    !_interface)
+	if (!_interface)
 	{
 		return false;
 	}
 	// The game waits, paused, for the answer
 	Locator::time::value().SetPaused(true);
-	_interface->ShowSkipBox();
+	_interface->ShowSkipBox(hasCreature);
 	return true;
 }
 

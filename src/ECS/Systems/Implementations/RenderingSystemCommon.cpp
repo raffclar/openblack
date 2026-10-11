@@ -36,11 +36,13 @@ RenderContext::RenderContext()
     : instanceUniformBuffer(BGFX_INVALID_HANDLE)
     , treeInstanceUniformBuffer(BGFX_INVALID_HANDLE)
     , partialBuildInstanceBuffer(BGFX_INVALID_HANDLE)
+    , heldInstanceBuffer(BGFX_INVALID_HANDLE)
 {
 }
 RenderContext::~RenderContext()
 {
-	for (const auto& handle : {instanceUniformBuffer, treeInstanceUniformBuffer, partialBuildInstanceBuffer})
+	for (const auto& handle :
+	     {instanceUniformBuffer, treeInstanceUniformBuffer, partialBuildInstanceBuffer, heldInstanceBuffer})
 	{
 		if (bgfx::isValid(toBgfx(handle)))
 		{

@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <tuple>
 #include <unordered_map>
 
 #include <glm/gtx/transform.hpp>
@@ -58,6 +59,7 @@
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Unlit.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
@@ -68,6 +70,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TownDesireFlags.h"
+#include "ECS/VillagerHeldObject.h"
 #include "Game.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
@@ -395,7 +398,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.entityDraws.clear();
 	_renderContext.drawnObjects.clear();
 	_renderContext.highDetailDraws.clear();
+	_renderContext.inHandDraws.clear();
 	_renderContext.bonePalette.clear();
+	_heldThings.clear();
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
@@ -653,6 +658,54 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    graphics::bone_palette::SetFirstBone(_renderContext.instanceUniforms[idx].model,
 			                                         graphics::bone_palette::Append(_renderContext.bonePalette, bones));
 		    }
+		    // What a villager holds is drawn on the bone at the end of its arm, as its clip poses it, with the villager's
+		    // look; not while a hand holds it
+		    if (const auto* person = registry.TryGet<const Villager>(entity); person != nullptr && villagerPose != nullptr &&
+		                                                                      look.z != 1.0f && placed.has_value() &&
+		                                                                      !registry.AllOf<InHand>(entity))
+		    {
+			    const auto heldMesh = openblack::ecs::villager_held::MeshOf(person->carried);
+			    const auto& rest = meshes.Handle(slots->first)->GetBoneMatrices();
+			    const auto& bones =
+			        villagerPose->bones.size() > openblack::ecs::villager_held::k_GripBone ? villagerPose->bones : rest;
+			    if (heldMesh.has_value() && bones.size() > openblack::ecs::villager_held::k_GripBone)
+			    {
+				    const auto heldId = resources::HashIdentifier(*heldMesh);
+				    if (meshes.Contains(heldId))
+				    {
+					    const auto held = openblack::ecs::villager_held::HeldMatrix(
+					        modelMatrix, bones[openblack::ecs::villager_held::k_GripBone]);
+					    // It fades out in the distance as any small thing does, by its own size
+					    std::optional<uint8_t> ownFade;
+					    if (camera != nullptr)
+					    {
+						    const auto box = meshes.Handle(heldId)->GetBoundingBox();
+						    const auto centre = glm::vec3(held * glm::vec4(box.Center(), 1.0f));
+						    const float depth =
+						        graphics::mesh_detail::ViewDepth(centre, camera->GetOrigin(), camera->GetForward());
+						    const float reach = graphics::mesh_detail::Reach(
+						        0.0f, graphics::mesh_detail::ScaledRadius(box.Size(), glm::length(glm::vec3(held[0]))),
+						        modelDetail);
+						    const auto choice = graphics::mesh_detail::Choose(depth, reach, true);
+						    ownFade = choice.alpha;
+						    if (!choice.mesh.has_value())
+						    {
+							    ownFade = 0;
+						    }
+					    }
+					    const auto alpha = openblack::ecs::villager_held::HeldAlpha(ownFade, fade);
+					    if (alpha != std::optional<uint8_t>(0))
+					    {
+						    auto heldLook = look;
+						    heldLook.z = alpha.has_value() ? -(1.0f - (static_cast<float>(*alpha) / 255.0f)) : 0.0f;
+						    _heldThings.push_back({.meshId = heldId,
+						                           .fading = alpha.has_value(),
+						                           .reflected = registry.AllOf<InPhysics>(entity),
+						                           .instance = {.model = held, .look = heldLook}});
+					    }
+				    }
+			    }
+		    }
 		    if (look.z != 1.0f || (goingUp && progress->built > 0.0f))
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
@@ -671,6 +724,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 			    _renderContext.highDetailDraws.push_back(
 			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = castModel});
+		    }
+		    if (registry.AllOf<InHand>(entity) && look.z != 1.0f)
+		    {
+			    // What a hand holds joins the hand's shadow
+			    _renderContext.inHandDraws.push_back(
+			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = modelMatrix});
 		    }
 		    if (slots->second.perEntity && placed.has_value())
 		    {
@@ -743,7 +802,60 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.farSmudgeScale = _farSmudgeScale.value_or(1.0f);
 	UploadBonePalette();
 	UploadPartialBuilds();
+	UploadHeldObjects();
 	return fits;
+}
+
+void RenderingSystem::UploadHeldObjects()
+{
+	_renderContext.heldDraws.clear();
+	_renderContext.heldInstances.clear();
+	// Those of a model together, so that each model is drawn at once: the opaque ones, then those fading out; and of
+	// each the ones the sea reflects together
+	std::ranges::sort(_heldThings, {},
+	                  [](const HeldThing& thing) { return std::tuple(thing.fading, thing.reflected, thing.meshId); });
+	for (const auto& thing : _heldThings)
+	{
+		auto& draws = _renderContext.heldDraws;
+		if (draws.empty() || draws.back().meshId != thing.meshId || draws.back().fading != thing.fading ||
+		    draws.back().reflected != thing.reflected)
+		{
+			draws.push_back({.meshId = thing.meshId,
+			                 .first = static_cast<uint32_t>(_renderContext.heldInstances.size()),
+			                 .count = 0,
+			                 .fading = thing.fading,
+			                 .reflected = thing.reflected});
+		}
+		++draws.back().count;
+		_renderContext.heldInstances.push_back(thing.instance);
+	}
+	const auto count = static_cast<uint32_t>(_renderContext.heldInstances.size());
+	if (count == 0)
+	{
+		return;
+	}
+	if (_renderContext.heldCapacity < count)
+	{
+		if (bgfx::isValid(toBgfx(_renderContext.heldInstanceBuffer)))
+		{
+			bgfx::destroy(toBgfx(_renderContext.heldInstanceBuffer));
+		}
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::TexCoord7, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord6, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord5, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord4, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
+		    .end();
+		// Room to grow, so that a few more villagers picking things up don't make it again
+		const uint32_t capacity = count + (count / 2) + 16;
+		_renderContext.heldInstanceBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(capacity, layout));
+		_renderContext.heldCapacity = capacity;
+	}
+	bgfx::update(
+	    toBgfx(_renderContext.heldInstanceBuffer), 0,
+	    bgfx::copy(_renderContext.heldInstances.data(), static_cast<uint32_t>(count * sizeof(RenderContext::ObjectInstance))));
 }
 
 void RenderingSystem::UploadPartialBuilds()
