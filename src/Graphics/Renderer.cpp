@@ -2761,7 +2761,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	};
 	// Every villager out of doors and out of the sea casts one from each foot, on the land beneath it; one too far away
 	// to be drawn a wider one from where it stands, as if the land there were flat
-	// A villager a script draws in high detail casts none
+	// A villager a script draws in high detail casts a projected shadow instead (high_detail_rules::ShadowOf)
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
 	        const ecs::components::Mesh& mesh) {
@@ -4507,6 +4507,7 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 	const auto camera = drawDesc.camera->GetOrigin();
 	struct Caster
 	{
+		CreatureShadow::Caster kind;
 		entt::entity entity;
 		const L3DMesh* mesh;
 		glm::mat4 model;
@@ -4515,6 +4516,20 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 		float distance;
 	};
 	std::vector<Caster> casters;
+	const auto addCaster = [&casters, &camera](CreatureShadow::Caster kind, entt::entity entity, const L3DMesh& body,
+	                                           const glm::mat4& model) {
+		const auto box = body.GetBoundingBox();
+		const auto scale =
+		    std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
+		const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+		casters.push_back({.kind = kind,
+		                   .entity = entity,
+		                   .mesh = &body,
+		                   .model = model,
+		                   .centre = centre,
+		                   .radius = glm::length(box.Size()) * 0.5f * scale,
+		                   .distance = glm::distance(camera, centre)});
+	};
 	for (const auto& [entity, instance] : renderCtx.entityDraws)
 	{
 		const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(entity);
@@ -4529,18 +4544,16 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 		{
 			continue;
 		}
-		const auto* body = &*meshManager.Handle(mesh->id);
-		const auto& model = renderCtx.instanceUniforms[instance].model;
-		const auto box = body->GetBoundingBox();
-		const auto scale =
-		    std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
-		const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
-		casters.push_back({.entity = entity,
-		                   .mesh = body,
-		                   .model = model,
-		                   .centre = centre,
-		                   .radius = glm::length(box.Size()) * 0.5f * scale,
-		                   .distance = glm::distance(camera, centre)});
+		addCaster(CreatureShadow::Caster::Creature, entity, *meshManager.Handle(mesh->id),
+		          renderCtx.instanceUniforms[instance].model);
+	}
+	// A villager a script draws in high detail casts one too, in the model it wears for it
+	for (const auto& draw : renderCtx.highDetailDraws)
+	{
+		if (meshManager.Contains(draw.mesh))
+		{
+			addCaster(CreatureShadow::Caster::HighDetailVillager, draw.entity, *meshManager.Handle(draw.mesh), draw.model);
+		}
 	}
 	std::ranges::sort(casters, {}, &Caster::distance);
 
@@ -4561,16 +4574,25 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 		}
 		const auto ground = land.GetHeightAt(glm::vec2(caster.centre.x, caster.centre.z));
 		const auto shadow =
-		    CreatureShadow::Compute(caster.centre, caster.radius, ground, light, camera, _creatureShadowCount,
+		    CreatureShadow::Compute(caster.kind, caster.centre, caster.radius, ground, light, camera, _creatureShadowCount,
 		                            CreatureShadow::k_MaxShadows, caps->originBottomLeft, caps->homogeneousDepth);
 		if (!shadow)
 		{
 			continue;
 		}
-		const auto* animation = drawDesc.entities.TryGet<const ecs::components::CreatureAnimation>(caster.entity);
-		const auto& pose = animation != nullptr && animation->boneMatrices.size() == caster.mesh->GetBoneMatrices().size()
-		                       ? animation->boneMatrices
-		                       : caster.mesh->GetBoneMatrices();
+		// In the pose it is drawn in this frame
+		const auto& rest = caster.mesh->GetBoneMatrices();
+		std::span<const glm::mat4> pose = rest;
+		if (const auto* animation = drawDesc.entities.TryGet<const ecs::components::CreatureAnimation>(caster.entity);
+		    animation != nullptr && animation->boneMatrices.size() == rest.size())
+		{
+			pose = animation->boneMatrices;
+		}
+		else if (const auto* villagerPose = drawDesc.entities.TryGet<const ecs::components::VillagerPose>(caster.entity);
+		         villagerPose != nullptr && villagerPose->bones.size() == rest.size())
+		{
+			pose = villagerPose->bones;
+		}
 		if (pose.empty())
 		{
 			continue;
@@ -4588,7 +4610,7 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 
 		_creatureShadowMatrices.at(_creatureShadowCount) = shadow->receiverMatrix;
 		_creatureShadowParameters.at(_creatureShadowCount) =
-		    glm::vec4(shadow->strength * HandShadow::k_MaxDarkness, shadow->startDepth, 0.0f, 0.0f);
+		    glm::vec4(shadow->strength * HandShadow::k_MaxDarkness, shadow->startDepth, shadow->onObjects ? 1.0f : 0.0f, 0.0f);
 		++_creatureShadowCount;
 	}
 }
