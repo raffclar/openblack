@@ -13,6 +13,7 @@
 
 #include <deque>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -176,7 +177,9 @@ private:
 ///   input.replay  {events, timing?}                   makes recorded input again from the next frame on
 /// All of it is made at the frame's start, before the game reads its input. The pointer's moves and buttons have a real
 /// mouse's timing unless timing "immediate" is asked for (see InputEvent::Timing); keys, the wheel, actions and gestures
-/// act that same frame.
+/// act that same frame. Input reaches the game in the order it was asked for: a request made while earlier input is
+/// still to come (a click's letting go, a drag's steps) starts the frame after the last of it, so that a move asked for
+/// right after a click never comes before the click is let go of. input.release alone cuts in, forgetting what waits.
 class InputProvider final: public ProviderInterface
 {
 public:
@@ -195,12 +198,23 @@ public:
 
 	[[nodiscard]] const InputTimeline& Timeline() const { return _timeline; }
 
+	/// Input made for other requests (gui.press clicking a control of the game's dialogs), all at the frame they start
+	/// at, behind any input still to come. Empty when it was made or scheduled, else why not
+	std::string Send(std::span<const InputEvent> events);
+
 private:
 	/// Where a request's point is in the window: a pixel, or a point of the land as it is on the screen
 	[[nodiscard]] std::optional<glm::ivec2> ScreenPoint(const Json& params, std::string_view key, std::string& error) const;
-	/// Makes an event at once, recording it; the error if it couldn't be made
+	/// The frame a request's input starts at: the coming frame, or the frame after the last input still to come, so
+	/// that input reaches the game in the order it was asked for
+	[[nodiscard]] uint64_t StartFrame() const;
+	/// Makes an event of a request at a frame: at once when that is the coming frame and nothing waits before it,
+	/// recording it, else scheduled; the error if it couldn't be made
+	std::string At(uint64_t frame, const InputEvent& event);
+	/// Makes an event at once, cutting in before anything still to come
 	std::string Now(const InputEvent& event);
-	[[nodiscard]] Json Answer(Json made) const;
+	/// The answer with the input still to come and the frame the request's input started at
+	[[nodiscard]] Json Answer(Json made, uint64_t start) const;
 
 	InputTargetInterface& _target;
 	InputTimeline _timeline;

@@ -618,6 +618,11 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_control inspector/test_inspector_control.cpp
   )
   target_link_libraries(test_inspector_control PRIVATE inspector)
+  # gui.press on the game's own dialogs, as the start-of-game question
+  openblack_setup_and_add_test(
+    test_inspector_dialogs inspector/test_inspector_dialogs.cpp
+  )
+  target_link_libraries(test_inspector_dialogs PRIVATE inspector)
   # The inspector's pointer with a real mouse's timing, through the action map and the window's event queue
   openblack_setup_and_add_test(
     test_scripted_mouse input/test_scripted_mouse.cpp

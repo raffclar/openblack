@@ -617,7 +617,7 @@
   "writes": true
  },
  {
-  "description": "The debug windows and the game's own (its menu, the Creature Cave): name, kind, open; the menu's page (or question) and the controls on it that can be pressed by name",
+  "description": "The debug windows and the game's own (its menu, the start-of-game question skip_box, the tattoo_editor, the Creature Cave): name, kind, open; the menu's page (or question), the controls of the game's dialogs that can be pressed by name, and the skip box's answer picked",
   "kind": "list",
   "parameters": [],
   "query": "gui.windows"
@@ -651,7 +651,7 @@
   "writes": true
  },
  {
-  "description": "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows lists them; path [n] for the n-th of a name. A debug window's button inside a table row or another scope its window pushed needs path: the labels and numbers leading to it. The press is made at the window's next frame; read what it changed after",
+  "description": "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's radio button by its answer or by normal, creature, story or old. The tattoo_editor: OK or Cancel. The game's dialogs are clicked through the game's input, in order behind any input still to come. A debug window's button inside a table row or another scope its window pushed needs path: the labels and numbers leading to it. The press is made at the window's next frame; read what it changed after",
   "kind": "object",
   "parameters": [
    {
@@ -1595,7 +1595,7 @@
   "query": "input.names"
  },
  {
-  "description": "Moves the pointer, as the mouse would, to a pixel or to where a point of the world is on the screen. With the mouse's timing (the default) the move's event reaches the game this frame and the action map reads the pointer there from the next, as with a real mouse",
+  "description": "Moves the pointer, as the mouse would, to a pixel or to where a point of the world is on the screen. With the mouse's timing (the default) the move's event reaches the game this frame and the action map reads the pointer there from the next, as with a real mouse. Asked for while earlier input is still to come (a click's letting go, a drag), it waits for the frame after the last of it",
   "kind": "object",
   "parameters": [
    {
@@ -1618,7 +1618,7 @@
   "writes": true
  },
  {
-  "description": "A mouse button where the pointer is: press, release, click (pressed now, let go of the next frame) or double_click (a click, then pressed and let go of again as the second click of a double click, a frame apart)",
+  "description": "A mouse button where the pointer is: press, release, click (pressed now, let go of the next frame) or double_click (a click, then pressed and let go of again as the second click of a double click, a frame apart). Like all input, it waits behind input asked for earlier that is still to come",
   "kind": "object",
   "parameters": [
    {

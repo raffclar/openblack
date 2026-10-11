@@ -41,6 +41,7 @@
 #include "Camera/ScriptCameraModel.h"
 #include "Camera/TempleCameraModel.h"
 #include "Debug/DebugGuiInterface.h"
+#include "DialogControls.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
@@ -63,23 +64,14 @@ namespace
 
 constexpr std::string_view k_Menu = "menu";
 constexpr std::string_view k_Cave = "cave";
+constexpr std::string_view k_SkipBox = "skip_box";
+constexpr std::string_view k_TattooEditor = "tattoo_editor";
 
 std::string Lower(std::string_view text)
 {
 	std::string lower(text);
 	std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 	return lower;
-}
-
-/// The menu's labels are the game's own text; the inspector names them in plain letters
-std::string Plain(std::u16string_view text)
-{
-	std::string plain;
-	for (const auto c : text)
-	{
-		plain.push_back(c < 0x80 ? static_cast<char>(c) : '?');
-	}
-	return plain;
 }
 
 std::string_view ModelName(const CameraModel& model)
@@ -387,11 +379,35 @@ std::vector<WindowInfo> GameGui::Windows() const
 		                 .page = menu.IsAskingToQuit() ? "question" : std::string(PageName(menu.GetPage())),
 		                 .buttons = {}};
 		// Every page's buttons, check boxes, sliders and tabs, or the question's answers while it is asked
-		for (const auto& control : menu.GetNamedControls())
+		for (const auto& control : DialogControls(menu.GetNamedControls()))
 		{
-			info.buttons.push_back(Plain(control.name));
+			info.buttons.push_back(control.name);
 		}
 		windows.push_back(std::move(info));
+
+		// The start-of-game question: OK and its answers' radio buttons, and the answer picked
+		const auto& skipBox = game->GetInterface()->GetSkipBox();
+		WindowInfo skip {.name = std::string(k_SkipBox), .kind = "game", .open = skipBox.IsActive()};
+		const auto skipControls = SkipBoxControls(skipBox);
+		for (const auto& control : skipControls)
+		{
+			skip.buttons.push_back(control.name);
+		}
+		const auto picked = static_cast<size_t>(skipBox.GetSelection());
+		const auto radio = std::ranges::find(skipControls, std::string("radio"), &DialogControl::kind);
+		if (radio != skipControls.end() && static_cast<size_t>(std::distance(radio, skipControls.end())) > picked)
+		{
+			skip.selected = std::next(radio, static_cast<std::ptrdiff_t>(picked))->name;
+		}
+		windows.push_back(std::move(skip));
+
+		const auto& tattoo = game->GetInterface()->GetTattooEditor();
+		WindowInfo editor {.name = std::string(k_TattooEditor), .kind = "game", .open = tattoo.IsOpen()};
+		for (const auto& control : DialogControls(tattoo.GetNamedControls()))
+		{
+			editor.buttons.push_back(control.name);
+		}
+		windows.push_back(std::move(editor));
 	}
 	if (Locator::creatureCaveSystem::has_value())
 	{
@@ -423,8 +439,9 @@ std::string GameGui::Open(std::string_view window)
 		// Opened as the player opens it, with the Escape key
 		if (!game->GetInterface()->GetMenu().IsOpen())
 		{
-			_input.Apply({.kind = InputEvent::Kind::KeyDown, .key = "Escape"});
-			_input.Apply({.kind = InputEvent::Kind::KeyUp, .key = "Escape"});
+			const std::array escape {InputEvent {.kind = InputEvent::Kind::KeyDown, .key = "Escape"},
+			                         InputEvent {.kind = InputEvent::Kind::KeyUp, .key = "Escape"}};
+			return Send(escape);
 		}
 		return {};
 	}
@@ -436,6 +453,11 @@ std::string GameGui::Open(std::string_view window)
 		}
 		Locator::creatureCaveSystem::value().Open();
 		return {};
+	}
+	if (Lower(window) == k_SkipBox || Lower(window) == k_TattooEditor)
+	{
+		return "the game brings that dialog up itself: the start-of-game question as a new game starts (level.new_game "
+		       "with skip ask), the tattoo editor from the Creature Cave";
 	}
 	const auto name = DebugWindowNamed(window);
 	if (!name.has_value())
@@ -453,8 +475,9 @@ std::string GameGui::Close(std::string_view window)
 		auto* game = Game::Instance();
 		if (game != nullptr && game->GetInterface() != nullptr && game->GetInterface()->GetMenu().IsOpen())
 		{
-			_input.Apply({.kind = InputEvent::Kind::KeyDown, .key = "Escape"});
-			_input.Apply({.kind = InputEvent::Kind::KeyUp, .key = "Escape"});
+			const std::array escape {InputEvent {.kind = InputEvent::Kind::KeyDown, .key = "Escape"},
+			                         InputEvent {.kind = InputEvent::Kind::KeyUp, .key = "Escape"}};
+			return Send(escape);
 		}
 		return {};
 	}
@@ -466,6 +489,10 @@ std::string GameGui::Close(std::string_view window)
 		}
 		return {};
 	}
+	if (Lower(window) == k_SkipBox || Lower(window) == k_TattooEditor)
+	{
+		return "that dialog closes as it is answered: gui.press its OK (or the tattoo editor's Cancel)";
+	}
 	const auto name = DebugWindowNamed(window);
 	if (!name.has_value())
 	{
@@ -475,47 +502,71 @@ std::string GameGui::Close(std::string_view window)
 	return {};
 }
 
+std::string GameGui::Send(std::span<const InputEvent> events)
+{
+	if (_send)
+	{
+		return _send(events);
+	}
+	for (const auto& event : events)
+	{
+		if (auto why = _input.Apply(event); !why.empty())
+		{
+			return why;
+		}
+	}
+	return {};
+}
+
 std::string GameGui::Press(std::string_view window, const std::vector<ButtonPathStep>& path)
 {
-	if (Lower(window) == k_Menu)
+	const auto lower = Lower(window);
+	if (lower == k_Menu || lower == k_SkipBox || lower == k_TattooEditor)
 	{
 		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetMenu().IsOpen())
+		if (game == nullptr || game->GetInterface() == nullptr)
 		{
-			return "the game's menu isn't open: gui.open it first";
+			return "the game's dialogs aren't made yet";
 		}
-		const auto& menu = game->GetInterface()->GetMenu();
-		// A control by its name on the page shown, and which of those of the same name if there are several
-		if (path.empty() || path.size() > 2 || !std::holds_alternative<std::string>(path.back()) ||
-		    (path.size() == 2 && !std::holds_alternative<int32_t>(path.front())))
+		auto& interface = *game->GetInterface();
+		std::vector<DialogControl> controls;
+		std::string where;
+		if (lower == k_Menu)
 		{
-			return "press a control of the menu's page by its name, with path [n] for the n-th of that name from 0; "
-			       "gui.windows lists them";
-		}
-		const auto label = Lower(std::get<std::string>(path.back()));
-		auto which = path.size() == 2 ? std::get<int32_t>(path.front()) : 0;
-		for (const auto& control : menu.GetNamedControls())
-		{
-			if (Lower(Plain(control.name)) != label || which-- > 0)
+			const auto& menu = interface.GetMenu();
+			if (!menu.IsOpen())
 			{
-				continue;
+				return "the game's menu isn't open: gui.open it first";
 			}
-			// Clicked in the middle of the control, through the game's input as the player clicks it
-			const auto& rect = control.rect;
-			const auto at = game->GetInterface()->DialogToScreen((rect.min + rect.max) / 2);
-			for (const auto& event : {InputEvent {.kind = InputEvent::Kind::PointerTo, .position = at},
-			                          InputEvent {.kind = InputEvent::Kind::ButtonDown, .button = 1},
-			                          InputEvent {.kind = InputEvent::Kind::ButtonUp, .button = 1}})
-			{
-				if (auto why = _input.Apply(event); !why.empty())
-				{
-					return why;
-				}
-			}
-			return {};
+			controls = DialogControls(menu.GetNamedControls());
+			where = "the menu's " + std::string(menu.IsAskingToQuit() ? "question" : PageName(menu.GetPage()));
 		}
-		return "the menu's " + std::string(menu.IsAskingToQuit() ? "question" : PageName(menu.GetPage())) + " has no control " +
-		       std::get<std::string>(path.back()) + "; gui.windows lists them";
+		else if (lower == k_SkipBox)
+		{
+			if (!interface.GetSkipBox().IsActive())
+			{
+				return "the start-of-game question isn't up: it comes as a new game starts (level.new_game with skip "
+				       "ask)";
+			}
+			controls = SkipBoxControls(interface.GetSkipBox());
+			where = "the start-of-game question";
+		}
+		else
+		{
+			if (!interface.GetTattooEditor().IsOpen())
+			{
+				return "the tattoo editor isn't open";
+			}
+			controls = DialogControls(interface.GetTattooEditor().GetNamedControls());
+			where = "the tattoo editor";
+		}
+		// Clicked in the middle of the control, through the game's input as the player clicks it
+		const auto found = FindDialogControl(controls, path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return where + ": " + *why + "; gui.windows lists them";
+		}
+		return Send(ClickAt(interface.DialogToScreen(std::get<glm::ivec2>(found))));
 	}
 	const auto name = DebugWindowNamed(window);
 	if (!name.has_value())
