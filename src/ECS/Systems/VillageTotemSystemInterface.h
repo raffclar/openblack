@@ -29,6 +29,9 @@ public:
 	/// A totem joins its town's player, when it is made and when the town changes hands: the player's icon goes on
 	/// top, it turns to face the town's worship site, and the town's worship share is set to none
 	virtual void AddToPlayer(entt::entity totem) = 0;
+	/// The player's primary creature changed: the player's own totems put the new icon on top, leaving their shares as
+	/// they are
+	virtual void RefreshIcons(PlayerNames player) = 0;
 	/// A town's share of its people at worship is set: always none without a worship site; otherwise its totem eases
 	/// there
 	virtual void SetTownShare(entt::entity town, float share) = 0;
