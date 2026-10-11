@@ -37,6 +37,8 @@ private:
 	entt::entity _barrel {entt::null};
 	/// The game's clock at the last frame, none before the first
 	std::optional<uint32_t> _drawTime;
+	/// The worm's place in its clip, in milliseconds: one worm for the whole game, so it carries on from land to land
+	uint32_t _wormPlace {0};
 };
 
 } // namespace openblack::ecs::systems

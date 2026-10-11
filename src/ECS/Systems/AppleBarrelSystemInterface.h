@@ -29,7 +29,7 @@ public:
 	/// The barrel drawn now, none while no pit carries it
 	[[nodiscard]] virtual entt::entity GetBarrel() const = 0;
 
-	/// The barrel goes with the land
+	/// The barrel goes with the land; its worm carries on in its clip where it was
 	virtual void Reset() = 0;
 };
 

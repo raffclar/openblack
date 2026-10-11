@@ -200,7 +200,8 @@ void AppleBarrelSystem::Update(uint32_t turn, float turnFraction)
 	if (animations.Contains(k_WormClip))
 	{
 		const auto clip = animations.Handle(k_WormClip);
-		worm.place = apple_barrel::StepWorm(worm.place, elapsed, clip->GetPlayTime(), clip->IsLooping());
+		_wormPlace = apple_barrel::StepWorm(_wormPlace, elapsed, clip->GetPlayTime(), clip->IsLooping());
+		worm.place = _wormPlace;
 		pose.place = worm.place;
 		PoseWorm(*clip, *meshes.Handle(k_WormModel), worm.place, pose.bones);
 	}
