@@ -24,6 +24,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "InjectedInput.h"
 #include "Locator.h"
+#include "ScriptedMouse.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack::input;
@@ -218,6 +219,11 @@ void GameActionMap::SetScriptedPointer(std::optional<ScriptedPointer> pointer)
 std::optional<GameActionMap::ScriptedPointer> GameActionMap::GetScriptedPointer() const
 {
 	return _scriptedPointer;
+}
+
+void GameActionMap::PumpScriptedPointer()
+{
+	PumpQueued(_scriptedPointer, Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(1, 1));
 }
 
 uint32_t GameActionMap::PointerState(glm::ivec2* position) const

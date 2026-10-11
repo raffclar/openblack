@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <optional>
 #include <string>
+#include <tuple>
 
 #include <SDL_events.h>
 #include <SDL_keyboard.h>
@@ -32,6 +33,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
 #include "Input/KeyBindings.h"
+#include "Input/ScriptedMouse.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -141,11 +143,45 @@ std::string GameInput::Apply(const InputEvent& event)
 		actions.SetScriptedPointer(pointer);
 		KeepDebugWindowsOffTheMouse(true);
 	};
+	const bool mouseTiming = event.timing == InputEvent::Timing::Mouse;
+	// With a real mouse's timing, the scripted mouse is taken where the pointer is, and its moves and buttons are sent as
+	// events whose state the game takes as they are pumped, after the action map has read the pointer for the frame
+	const auto sendAsMouse = [&actions, &pointer, this](SDL_Event sent) {
+		if (!actions.GetScriptedPointer().has_value())
+		{
+			actions.SetScriptedPointer(pointer);
+		}
+		KeepDebugWindowsOffTheMouse(true);
+		// Written as the window would report it, should the scripted mouse be handed back before it is pumped
+		pointer = input::QueuedAhead(*actions.GetScriptedPointer(), ScreenSize());
+		std::ignore = input::Pump(pointer, sent, ScreenSize());
+		SDL_PushEvent(&sent);
+	};
 
 	switch (event.kind)
 	{
 	case InputEvent::Kind::PointerTo:
 	{
+		if (mouseTiming)
+		{
+			// A step of a drag or a path moves the mouse on by the step, wherever the game has put the cursor meanwhile;
+			// a move to a pixel goes there from where the pointer will be once what was sent before is pumped
+			const auto ahead = actions.GetScriptedPointer().has_value()
+			                       ? input::QueuedAhead(*actions.GetScriptedPointer(), ScreenSize()).position
+			                       : pointer.position;
+			const auto by = event.stepFrom.has_value() ? event.position - *event.stepFrom : event.position - ahead;
+			// The window reports no move that doesn't move the pointer, but the mouse is still the inspector's
+			if (by == glm::ivec2(0))
+			{
+				if (!actions.GetScriptedPointer().has_value())
+				{
+					takeMouse();
+				}
+				return {};
+			}
+			sendAsMouse(input::PumpedMotion(by, WindowId()));
+			return {};
+		}
 		const auto moved = event.position - pointer.position;
 		pointer.position = event.position;
 		takeMouse();
@@ -166,6 +202,11 @@ std::string GameInput::Apply(const InputEvent& event)
 	case InputEvent::Kind::ButtonUp:
 	{
 		const bool down = event.kind == InputEvent::Kind::ButtonDown;
+		if (mouseTiming)
+		{
+			sendAsMouse(input::PumpedButton(event.button, down, event.clicks, WindowId()));
+			return {};
+		}
 		pointer.buttons = down ? (pointer.buttons | SDL_BUTTON(event.button)) : (pointer.buttons & ~SDL_BUTTON(event.button));
 		takeMouse();
 		SDL_Event button {};
@@ -284,8 +325,10 @@ void GameInput::Release()
 		SDL_PushEvent(&up);
 	}
 	SDL_SetModState(KMOD_NONE);
-	if (const auto pointer = actions.GetScriptedPointer(); pointer.has_value())
+	// The buttons held once what was sent is pumped, which the mouse's timing may not have yet
+	if (const auto applied = actions.GetScriptedPointer(); applied.has_value())
 	{
+		const auto pointer = std::optional(input::QueuedAhead(*applied, ScreenSize()));
 		for (uint8_t button = SDL_BUTTON_LEFT; button <= SDL_BUTTON_X2; ++button)
 		{
 			if ((pointer->buttons & SDL_BUTTON(button)) == 0)
@@ -411,6 +454,15 @@ Json GameInput::State() const
 		const auto pointer = actions.GetPointerPosition();
 		state["pointer"] = {pointer.x, pointer.y};
 		state["scripted"] = scripted.has_value();
+		// With a real mouse's timing, where the pointer goes and the buttons it holds once what was sent is pumped
+		if (scripted.has_value())
+		{
+			const auto ahead = input::QueuedAhead(*scripted, ScreenSize());
+			if (ahead.position != scripted->position || ahead.buttons != scripted->buttons)
+			{
+				state["queued"] = {{"pointer", {ahead.position.x, ahead.position.y}}, {"buttons", ahead.buttons}};
+			}
+		}
 		state["buttons"] = actions.GetPointerButtons();
 		// A double click waits here until the camera takes it
 		state["double_click"] = actions.GetUnbindable(input::UnbindableActionMap::DOUBLE_CLICK);
