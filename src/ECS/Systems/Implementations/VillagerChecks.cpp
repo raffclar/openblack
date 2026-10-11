@@ -25,6 +25,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "VillagerBreeding.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
 #include "VillagerHome.h"
@@ -111,7 +112,8 @@ void CheckChildGrownUp(LivingAction& action, uint32_t turn)
 	villager_age::SetBirthTurnForAge(person, grownUpAge);
 	SetScale(villager,
 	         GrownScaleFor(person, grownUpAge, villager_age::StartScale(grownUpAge, info.grownUpAge, info.ageToScale.values)));
-	// TODO(villager-life-cycle): it stops following its mother here, once villagers have mothers (births)
+	// It stops following its mother
+	person.mother = entt::null;
 	ecs::villager_home::LookForBetterHome(action);
 	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top, VillagerStates::GoHomeAndChange,
 	                                                      false);
@@ -182,6 +184,10 @@ void ecs::villager_checks::CheckEveryTime(LivingAction& action)
 	{
 		CheckChildGrownUp(action, turn);
 	}
-	// TODO(villager-life-cycle): a grown woman not with child may become so, and one with child comes nearer her time
+	// A woman with child comes nearer her time; a girl grown up in this check is a woman already
+	if (person.sex == Villager::Sex::FEMALE && person.lifeStage != Villager::LifeStage::Child)
+	{
+		ecs::villager_breeding::WomanSpecial(action);
+	}
 	ecs::villager_food::CheckHungry(action);
 }

@@ -63,6 +63,7 @@
 #include "Magic/VillagerReactionRules.h"
 #include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
+#include "VillagerBreeding.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
 #include "VillagerForester.h"
@@ -424,6 +425,13 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 	{
 		return registry.AllOf<Villager>(living)
 		           ? villager_reactions::ReactToVillagerInHandPriority(living, reaction.source.initiator)
+		           : 0;
+	}
+	// Only a villager of an age and of the other sex heeds a breeder's call, wherever it is in its reach
+	if (reaction.source.type == Reaction::ReactToBreeder)
+	{
+		return registry.AllOf<Villager>(living)
+		           ? ecs::villager_breeding::ReactToBreederPriority(living, reaction.source.initiator)
 		           : 0;
 	}
 	// A villager heeds food lying about only when it catches its eye

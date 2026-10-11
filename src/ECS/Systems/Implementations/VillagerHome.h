@@ -67,6 +67,8 @@ void HomeDeleted(entt::entity villager);
 uint32_t CheckSatisfySleep(components::LivingAction& action);
 /// Whether the villager is wanted for something: a home if it has none, its town's desires, its own needs
 uint32_t CheckNeededForSomething(components::LivingAction& action);
+/// Offers the villager to what its town wants most that it can serve. 1 when it took something up.
+uint32_t OfferToTownDesires(components::LivingAction& action);
 /// What the villager is needed for besides a home: worship, its town's desires, then its own hunger and rest. 1 when it
 /// took something up.
 uint32_t CheckNeededForSpecial(components::LivingAction& action);

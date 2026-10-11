@@ -35,6 +35,9 @@ public:
 	/// A desire of a town as the villagers see it, and as the town feels it; none without a town
 	[[nodiscard]] virtual float GetDesire(entt::entity town, TownDesireInfo desire) const = 0;
 	[[nodiscard]] virtual float GetRawDesire(entt::entity town, TownDesireInfo desire) const = 0;
+	/// How much a desire of a town is wanted past the point at which its villagers act on it, none or more; none
+	/// without a town
+	[[nodiscard]] virtual float GetSignificanceToVillager(entt::entity town, TownDesireInfo desire) const = 0;
 	/// The town works out one desire afresh from how it is now, as it does when a store is given or loses a resource. The
 	/// desire it then has.
 	virtual float RecomputeDesire(entt::entity town, TownDesireInfo desire) = 0;
