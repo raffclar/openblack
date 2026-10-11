@@ -103,8 +103,8 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 				note.note = "sample not loaded";
 				break;
 			case AnimEffectPlay::Outcome::TooFar:
-				note.note =
-				    fmt::format("too far ({:.0f})", glm::distance(Locator::camera::value().GetOrigin(), transform.position));
+				note.note = fmt::format("too far ({:.0f})",
+				                        glm::distance(Locator::audio::value().GetListener().origin, transform.position));
 				break;
 			case AnimEffectPlay::Outcome::AlreadyPlaying:
 				note.note = "already playing";

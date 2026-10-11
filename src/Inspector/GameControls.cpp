@@ -31,6 +31,7 @@
 #include <bgfx/bgfx.h>
 #include <glm/trigonometric.hpp>
 
+#include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -226,6 +227,16 @@ std::string GameCamera::Set(const CameraPose& pose)
 	}
 	Locator::camera::value().SetOrigin(pose.origin).SetFocus(pose.focus);
 	return {};
+}
+
+void GameCamera::SetOverride(std::optional<CameraPose> pose)
+{
+	_override = pose;
+	if (Locator::audio::has_value())
+	{
+		Locator::audio::value().SetListenerOverride(
+		    pose.has_value() ? std::optional(audio::ListenerLookingAt(pose->origin, pose->focus)) : std::nullopt);
+	}
 }
 
 std::string GameCamera::Pin(const CameraPose& pose)

@@ -57,3 +57,27 @@ TEST(ListenerFrame, WhatIsOnTheRightOfTheScreenIsHeardOnTheRight)
 		}
 	}
 }
+
+// The listener put at a view shown over the camera hears as the camera would from there
+TEST(ListenerFrame, AListenerLookingAtAPointIsPlacedAsTheCameraWouldBe)
+{
+	for (const auto& [origin, focus] : {std::pair {glm::vec3 {1000.0f, 200.0f, 1000.0f}, glm::vec3 {1300.0f, 0.0f, 1400.0f}},
+	                                    std::pair {glm::vec3 {500.0f, 80.0f, 900.0f}, glm::vec3 {300.0f, 10.0f, 600.0f}}})
+	{
+		Camera camera;
+		camera.SetOrigin(origin);
+		camera.SetFocus(focus);
+		const auto listener = audio::ListenerLookingAt(origin, focus);
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			EXPECT_NEAR(listener.origin[axis], camera.GetOrigin()[axis], 1e-3f);
+			EXPECT_NEAR(listener.forward[axis], camera.GetForward()[axis], 1e-5f);
+			EXPECT_NEAR(listener.up[axis], camera.GetUp()[axis], 1e-5f);
+		}
+		// What it looks at is straight ahead
+		const auto heard = audio::ToListenerFrame(focus, listener.origin, listener.forward, listener.up);
+		EXPECT_NEAR(heard.x, 0.0f, 1e-2f);
+		EXPECT_NEAR(heard.y, glm::distance(origin, focus), 1e-2f);
+		EXPECT_NEAR(heard.z, 0.0f, 1e-2f);
+	}
+}

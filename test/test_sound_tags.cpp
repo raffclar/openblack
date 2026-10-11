@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -124,6 +125,8 @@ public:
 	void AtmosSetGroup(uint32_t, uint32_t) override {}
 	void AtmosProcess(bool) override {}
 	[[nodiscard]] const audio::AtmosPlayer* GetAtmos() const override { return nullptr; }
+	[[nodiscard]] audio::Listener GetListener() const override { return {}; }
+	void SetListenerOverride(std::optional<audio::Listener>) override {}
 
 private:
 	audio::Sound _sound;

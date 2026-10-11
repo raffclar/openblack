@@ -742,7 +742,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeInfluenceProvider(I
 std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(AudioSources sources)
 {
 	auto provider = std::make_unique<FunctionProvider>("audio");
-	provider->Add(Query("state", "The volumes, whether music plays, and how many sounds play"),
+	provider->Add(Query("state", "The volumes, whether music plays, how many sounds play, and where the placed sounds are "
+	                             "heard from (listener: the camera, or a camera.set override while it is shown)"),
 	              [sources](const QueryContext& /*context*/) {
 		              const auto state = sources.state ? sources.state() : std::nullopt;
 		              if (!state.has_value())
@@ -781,7 +782,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 		                                         {"alignment_music", state->alignmentMusic},
 		                                         {"attached_music", std::move(attached)},
 		                                         {"music_channels", std::move(channels)},
-		                                         {"sounds_playing", playing}});
+		                                         {"sounds_playing", playing},
+		                                         {"listener", {state->listener.x, state->listener.y, state->listener.z}}});
 	              });
 	provider->Add(Query("sounds", "The sounds about a point, nearest first (sounds without a place are left out)", {},
 	                    ResultKind::List, true),

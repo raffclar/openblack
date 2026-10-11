@@ -21,6 +21,7 @@
 #include "AudioDecoderInterface.h"
 #include "AudioPlayerInterface.h"
 #include "ECS/Components/AudioEmitter.h"
+#include "ListenerFrame.h"
 #include "MusicPlayer.h"
 #include "ScriptSoundEffect.h"
 #include "Sound.h"
@@ -188,6 +189,16 @@ public:
 	virtual void AtmosProcess(bool active) = 0;
 	/// Null when there is no audio device
 	[[nodiscard]] virtual const AtmosPlayer* GetAtmos() const = 0;
+
+	/// Where the placed sounds are heard from, which decides where they sound and whether they start: the camera, or
+	/// the place the listener is put while it is put elsewhere
+	[[nodiscard]] virtual Listener GetListener() const = 0;
+	/// Puts the listener somewhere other than the camera (the inspector's view shown over the camera), or gives it back
+	/// to the camera with none
+	virtual void SetListenerOverride(std::optional<Listener> listener) = 0;
 };
+
+/// The listener at the camera, as the camera is now; a listener at the world's origin when there is no camera
+[[nodiscard]] Listener CameraListener();
 } // namespace audio
 } // namespace openblack

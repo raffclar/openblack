@@ -111,8 +111,8 @@ void LogEmitterStart([[maybe_unused]] entt::entity entity, [[maybe_unused]] cons
 		{
 			return std::string();
 		}
-		const auto& camera = Locator::camera::value();
-		const auto at = audio::ToListenerFrame(emitter.position, camera.GetOrigin(), camera.GetForward(), camera.GetUp());
+		const auto listener = Locator::audio::value().GetListener();
+		const auto at = audio::ToListenerFrame(emitter.position, listener.origin, listener.forward, listener.up);
 		return fmt::format(", heard {:.1f} m {}, {:.1f} m ahead, {:.1f} m up", std::abs(at.x), at.x < 0.0f ? "left" : "right",
 		                   at.y, at.z);
 	};
@@ -127,16 +127,26 @@ void LogNotStarted([[maybe_unused]] const Sound& sound, [[maybe_unused]] const g
 	                    position.z, why);
 }
 
-float CameraDistance(const glm::vec3& position)
+float ListenerDistance(const glm::vec3& position)
 {
-	return glm::distance(Locator::camera::value().GetOrigin(), position);
+	return glm::distance(Locator::audio::value().GetListener().origin, position);
 }
 
 std::string TooFar(const glm::vec3& position, float range)
 {
-	return fmt::format("{:.1f} m from the camera, beyond its {} m", CameraDistance(position), range);
+	return fmt::format("{:.1f} m from the listener, beyond its {} m", ListenerDistance(position), range);
 }
 } // namespace
+
+Listener openblack::audio::CameraListener()
+{
+	if (!Locator::camera::has_value())
+	{
+		return {};
+	}
+	const auto& camera = Locator::camera::value();
+	return {.origin = camera.GetOrigin(), .forward = camera.GetForward(), .up = camera.GetUp()};
+}
 
 void AudioManager::Stop()
 {
@@ -148,8 +158,8 @@ void AudioManager::Stop()
 
 void AudioManager::Update()
 {
-	auto& camera = Locator::camera::value();
-	_audioPlayer->UpdateListener(camera.GetOrigin(), camera.GetForward(), camera.GetUp());
+	const auto listener = GetListener();
+	_audioPlayer->UpdateListener(listener.origin, listener.forward, listener.up);
 
 	// 3D emitters follow the listener, finished emitters are released
 	auto& registry = Locator::entitiesRegistry::value();
@@ -392,7 +402,7 @@ void AudioManager::PlaySoundEffect(entt::id_type id, std::optional<glm::vec3> wo
 		const auto sound = sounds.Handle(id);
 		// A sound with a place doesn't start further from the camera than its maximum distance
 		const auto range = SoundEffectStartRange(sound->maxDistance, k_DefaultMaxDistance);
-		if (worldPosition.has_value() && !IsWithinStartRange(CameraDistance(*worldPosition), range))
+		if (worldPosition.has_value() && !IsWithinStartRange(ListenerDistance(*worldPosition), range))
 		{
 			LogNotStarted(*sound, *worldPosition, TooFar(*worldPosition, range));
 			return;
@@ -438,7 +448,7 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	}
 	auto sound = sounds.Handle(id);
 	const auto range = SoundEffectStartRange(sound->maxDistance, options.maxDistance.value_or(k_DefaultMaxDistance));
-	if (options.position.has_value() && !IsWithinStartRange(CameraDistance(*options.position), range))
+	if (options.position.has_value() && !IsWithinStartRange(ListenerDistance(*options.position), range))
 	{
 		LogNotStarted(*sound, *options.position, TooFar(*options.position, range));
 		return entt::null;
@@ -614,7 +624,7 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 
 	// The sample doesn't start further from the camera than its bank's maximum distance, applied to the voice or not
 	const auto range = AnimEffectStartRange(sound->maxDistance);
-	if (!IsWithinStartRange(CameraDistance(position), range))
+	if (!IsWithinStartRange(ListenerDistance(position), range))
 	{
 		LogNotStarted(*sound, position, TooFar(position, range));
 		return {.outcome = AnimEffectPlay::Outcome::TooFar, .emitter = entt::null, .sample = sample};
@@ -956,8 +966,8 @@ void AudioManager::PositionSource(SourceId source, std::optional<glm::vec3> list
 
 glm::vec3 AudioManager::ToListenerFrame(glm::vec3 worldPosition)
 {
-	const auto& camera = Locator::camera::value();
-	return audio::ToListenerFrame(worldPosition, camera.GetOrigin(), camera.GetForward(), camera.GetUp());
+	const auto listener = Locator::audio::value().GetListener();
+	return audio::ToListenerFrame(worldPosition, listener.origin, listener.forward, listener.up);
 }
 
 bool AudioManager::IsPlaying(Handle handle) const

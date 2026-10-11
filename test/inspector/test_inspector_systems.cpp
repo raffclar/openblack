@@ -303,15 +303,18 @@ TEST(InspectorAudio, SoundsNearAPoint)
 	registry.Get<AudioEmitter>(near).state = audio::AudioStatus::Playing;
 
 	Inspector inspector;
-	inspector.Add(
-	    MakeAudioProvider({.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
-	                                 .info = []() -> const InfoConstants* { return nullptr; }},
-	                       .state = []() -> std::optional<AudioState> { return AudioState {.globalVolume = 1.0f}; }}));
+	inspector.Add(MakeAudioProvider({.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	                                           .info = []() -> const InfoConstants* { return nullptr; }},
+	                                 .state = []() -> std::optional<AudioState> {
+		                                 return AudioState {.globalVolume = 1.0f, .listener = glm::vec3(1.0f, 2.0f, 3.0f)};
+	                                 }}));
 	const auto sounds = Ask(inspector, R"({"query": "audio.sounds", "near": [0, 0, 0], "radius": 50})");
 	ASSERT_EQ(sounds["total"], 1);
 	EXPECT_EQ(sounds["items"][0]["id"], entt::to_integral(near));
 	EXPECT_EQ(sounds["items"][0]["state"], "playing");
-	EXPECT_EQ(Ask(inspector, R"({"query": "audio.state"})")["sounds_playing"], 1);
+	const auto state = Ask(inspector, R"({"query": "audio.state"})");
+	EXPECT_EQ(state["sounds_playing"], 1);
+	EXPECT_EQ(state["listener"], Json::array({1.0, 2.0, 3.0}));
 }
 
 TEST(InspectorParticles, EmittersByOwner)

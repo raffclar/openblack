@@ -223,9 +223,9 @@ void GameParticleWorld::StartSound(const particles::Effect& /*effect*/,
 		playing.owner = Locator::entitiesRegistry::value().Create();
 	}
 	// Thunder is heard once it has come from the cloud
-	if (sound->sound.travelsAtSoundSpeed && Locator::camera::has_value())
+	if (sound->sound.travelsAtSoundSpeed && Locator::audio::has_value())
 	{
-		playing.wait = glm::distance(Locator::camera::value().GetOrigin(), sound->position) / k_SpeedOfSound;
+		playing.wait = glm::distance(Locator::audio::value().GetListener().origin, sound->position) / k_SpeedOfSound;
 		if (playing.wait > 0.0f)
 		{
 			return;

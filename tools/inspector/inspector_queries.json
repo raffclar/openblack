@@ -727,7 +727,7 @@
   "writes": true
  },
  {
-  "description": "The volumes, whether music plays, and how many sounds play",
+  "description": "The volumes, whether music plays, how many sounds play, and where the placed sounds are heard from (listener: the camera, or a camera.set override while it is shown)",
   "kind": "object",
   "parameters": [],
   "query": "audio.state"
