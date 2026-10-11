@@ -674,6 +674,11 @@ std::vector<glm::vec3> GameParticleWorld::TargetExtraPoints(entt::entity target)
 	return points;
 }
 
+uint64_t GameParticleWorld::RealMilliseconds() const
+{
+	return Locator::time::has_value() ? static_cast<uint64_t>(Locator::time::value().GetElapsedTime().count()) : 0;
+}
+
 std::optional<glm::vec3> GameParticleWorld::ObjectPosition(entt::entity object) const
 {
 	if (!Locator::entitiesRegistry::has_value())
@@ -1333,6 +1338,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	        },
 	    .landHeight = [this](glm::vec2 xz) { return _world.LandHeight(xz); },
 	    .objectPosition = [this](entt::entity object) { return _world.ObjectPosition(object); },
+	    .realMilliseconds = _world.RealMilliseconds(),
 	};
 	for (const auto& running : _effects)
 	{

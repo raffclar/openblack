@@ -60,8 +60,11 @@ struct Settings
 /// collection's alpha of the shell's
 [[nodiscard]] uint32_t Argb(const Settings& settings, uint32_t alpha, uint8_t collectionAlpha,
                             std::optional<uint32_t> playerRgb);
-/// How far the texture has slid after some seconds: 0 to 1 the way it moves
-[[nodiscard]] glm::vec2 UvOffset(glm::vec2 animSpeed, float seconds);
+/// How far the texture has slid after some real milliseconds of frames: 0 to 1 the way it moves. It slides by the
+/// frames' real time, so it slides as fast whatever the game's speed, and on while the game is paused.
+[[nodiscard]] glm::vec2 UvOffset(glm::vec2 animSpeed, uint64_t milliseconds);
+/// The real milliseconds of frames since a shell was made, none before it
+[[nodiscard]] uint64_t SinceStarted(uint64_t now, uint64_t startedAt);
 
 /// A corner's normal in the camera's frame as the shell measures it: the model's axes in the camera's frame (x right,
 /// y up, z ahead), widened across and up by the projection's scales, each then made one long, and summed by the normal

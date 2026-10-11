@@ -63,9 +63,15 @@ uint32_t volume_glow::Argb(const Settings& settings, uint32_t alpha, uint8_t col
 	return (a << 24u) | rgb;
 }
 
-glm::vec2 volume_glow::UvOffset(glm::vec2 animSpeed, float seconds)
+glm::vec2 volume_glow::UvOffset(glm::vec2 animSpeed, uint64_t milliseconds)
 {
+	const float seconds = static_cast<float>(milliseconds) * 0.001f;
 	return {std::fmod(animSpeed.x * seconds, 1.0f), std::fmod(animSpeed.y * seconds, 1.0f)};
+}
+
+uint64_t volume_glow::SinceStarted(uint64_t now, uint64_t startedAt)
+{
+	return now > startedAt ? now - startedAt : 0;
 }
 
 glm::vec3 volume_glow::ViewNormal(glm::vec3 normal, const std::array<glm::vec3, 3>& axes, glm::vec2 projectionScale)

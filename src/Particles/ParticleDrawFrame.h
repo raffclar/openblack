@@ -246,6 +246,8 @@ struct Sources
 	std::function<float(glm::vec2)> landHeight;
 	/// Where an object stands, which a shell over its model takes its place among what blends by; none once it has gone
 	std::function<std::optional<glm::vec3>(entt::entity)> objectPosition;
+	/// The real milliseconds the game's frames have taken so far, by which the glowing shells' textures slide
+	uint64_t realMilliseconds {0};
 };
 
 /// The player whose symbol and colour an effect without one shows

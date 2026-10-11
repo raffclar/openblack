@@ -64,6 +64,8 @@ public:
 			}
 			auto& atom = effect.NewAtom(collection, creator, _nextGroups);
 			atom.data[this].object = *target;
+			// Its texture slides from now, by the frames' real time
+			atom.objectGlow = ObjectGlow {.object = *target, .startedAt = world.RealMilliseconds()};
 		}
 
 		const float power = effect.GetProcessInfo().power;
@@ -83,6 +85,7 @@ public:
 				collection.atoms.erase(collection.atoms.begin() + static_cast<std::ptrdiff_t>(i));
 				continue;
 			}
+			const auto startedAt = atom.objectGlow.has_value() ? atom.objectGlow->startedAt : world.RealMilliseconds();
 			atom.objectGlow = ObjectGlow {
 			    .object = object,
 			    .zoom = volume_glow::Zoom(_settings, power, atom.baseScale * atom.ruleScale),
@@ -90,6 +93,7 @@ public:
 			    .texture = _settings.texture,
 			    .animSpeed = _settings.animSpeed,
 			    .textureFraction = _settings.textureFraction,
+			    .startedAt = startedAt,
 			};
 			++i;
 		}
