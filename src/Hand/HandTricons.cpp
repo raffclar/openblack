@@ -31,6 +31,8 @@ constexpr float k_BusyAlpha = 0.9f;
 /// The demonstration's mouse: its size, how far it sits from the icons, the gap to its word
 constexpr int k_MouseSize = 32;
 constexpr int k_MouseOffset = 32;
+/// The width of the original's default screen, which those sizes are for
+constexpr int k_ReferenceWidth = 800;
 constexpr float k_Gap = 2.0f;
 /// mousehelp.raw is 4 by 4 pictures; the wheel mouse's row
 constexpr float k_MouseCell = 0.25f;
@@ -320,32 +322,41 @@ bool LabelOnLeft(int x, int screenWidth, bool wasOnLeft)
 	return wasOnLeft;
 }
 
-int DemoLabelSize(bool biggerText)
+float DemoScale(glm::ivec2 screenSize)
 {
-	return biggerText ? (4 * k_MouseSize) / 5 : (2 * k_MouseSize) / 3;
+	const auto width = std::min(static_cast<float>(screenSize.x), static_cast<float>(screenSize.y) * 4.0f / 3.0f);
+	return width / static_cast<float>(k_ReferenceWidth);
+}
+
+int DemoLabelSize(bool biggerText, float scale)
+{
+	const auto mouse = static_cast<float>(k_MouseSize) * scale;
+	return static_cast<int>(biggerText ? 4.0f * mouse / 5.0f : 2.0f * mouse / 3.0f);
 }
 
 DemoMouse LayoutDemoMouse(glm::ivec2 centre, bool labelOnLeft, float labelWidth, bool biggerText, bool moveHeld,
-                          bool actionHeld)
+                          bool actionHeld, float scale)
 {
-	const int labelSize = DemoLabelSize(biggerText);
-	const auto size = static_cast<float>(k_MouseSize);
-	const auto top = static_cast<float>(centre.y - (k_MouseSize / 2));
+	const int labelSize = DemoLabelSize(biggerText, scale);
+	const auto size = std::trunc(static_cast<float>(k_MouseSize) * scale);
+	const auto offset = std::trunc(static_cast<float>(k_MouseOffset) * scale);
+	const auto gap = k_Gap * scale;
+	const auto top = static_cast<float>(centre.y) - std::trunc(size * 0.5f);
 	float mouseX = 0.0f;
 	float labelX = 0.0f;
 	if (labelOnLeft)
 	{
 		// Right-aligned left of the icons, the word first
-		const float fullWidth = labelWidth + size + k_Gap;
-		labelX = std::trunc(static_cast<float>(centre.x - k_MouseOffset) - fullWidth);
-		mouseX = std::trunc(labelX + labelWidth + k_Gap);
+		const float fullWidth = labelWidth + size + gap;
+		labelX = std::trunc(static_cast<float>(centre.x) - offset - fullWidth);
+		mouseX = std::trunc(labelX + labelWidth + gap);
 	}
 	else
 	{
-		mouseX = static_cast<float>(centre.x + k_MouseOffset);
-		labelX = std::trunc(mouseX + size + k_Gap);
+		mouseX = static_cast<float>(centre.x) + offset;
+		labelX = std::trunc(mouseX + size + gap);
 	}
-	const float pad = static_cast<float>(k_MouseSize - labelSize) * 0.5f;
+	const float pad = (size - static_cast<float>(labelSize)) * 0.5f;
 
 	// No button lit, the left one (the right one's picture mirrored), the right one, or both
 	float column = 0.0f;
@@ -372,6 +383,7 @@ DemoMouse LayoutDemoMouse(glm::ivec2 centre, bool labelOnLeft, float labelWidth,
 	mouse.labelSize = static_cast<float>(labelSize);
 	mouse.labelColour = {1.0f, 0.0f, 0.0f, 1.0f};
 	mouse.shadowColour = {0.0f, 0.0f, 0.0f, 1.0f};
+	mouse.shadowOffset = scale;
 	return mouse;
 }
 

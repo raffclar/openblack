@@ -193,13 +193,19 @@ struct DemoMouse
 	float labelSize {0.0f};
 	glm::vec4 labelColour {0.0f};
 	glm::vec4 shadowColour {0.0f};
+	/// The two shadows sit this far up-left and down-right of the word
+	float shadowOffset {1.0f};
 };
 /// The help text of the word: "Demo"
 constexpr uint32_t k_DemoText = 5127;
+/// The scale of the demonstration's mouse and word, sized in pixels for the original's default 800x600 screen: the
+/// width a 4:3 screen as tall as this one would have, when narrower, over 800. One on an 800x600 screen.
+[[nodiscard]] float DemoScale(glm::ivec2 screenSize);
 /// The word's size, two thirds of the mouse (four fifths for the languages that need bigger text)
-[[nodiscard]] int DemoLabelSize(bool biggerText);
-/// The demonstration's mouse beside the icons at `centre`, `labelWidth` the word's width at its size
+[[nodiscard]] int DemoLabelSize(bool biggerText, float scale = 1.0f);
+/// The demonstration's mouse beside the icons at `centre`, `labelWidth` the word's width at its size, its sizes and
+/// spacing scaled by `scale`
 [[nodiscard]] DemoMouse LayoutDemoMouse(glm::ivec2 centre, bool labelOnLeft, float labelWidth, bool biggerText, bool moveHeld,
-                                        bool actionHeld);
+                                        bool actionHeld, float scale = 1.0f);
 
 } // namespace openblack::hand_tricons

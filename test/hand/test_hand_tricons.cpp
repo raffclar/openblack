@@ -359,3 +359,29 @@ TEST(HandTricons, TheIconsAreAPartOfTheFocalLengthAcrossA4By3Screen)
 		EXPECT_NEAR(share, IconHalfSize(scale, {800, 600}) / 600.0f, 1e-6f) << screen.x << "x" << screen.y;
 	}
 }
+
+TEST(HandTricons, TheDemonstrationsMouseIsSizedForTheDefaultScreen)
+{
+	// On the original's 800x600 screen, and any 4:3 one as wide, exactly as it was: a 32 pixel mouse and a 21 pixel word
+	EXPECT_FLOAT_EQ(DemoScale({800, 600}), 1.0f);
+	EXPECT_EQ(DemoLabelSize(false, DemoScale({800, 600})), 21);
+	const auto plain = LayoutDemoMouse({400, 300}, false, 50.0f, false, false, false);
+	const auto scaledOne = LayoutDemoMouse({400, 300}, false, 50.0f, false, false, false, DemoScale({800, 600}));
+	EXPECT_EQ(plain.mouseMin, scaledOne.mouseMin);
+	EXPECT_EQ(plain.mouseMax, scaledOne.mouseMax);
+	EXPECT_EQ(plain.labelAt, scaledOne.labelAt);
+	EXPECT_EQ(plain.mouseMax - plain.mouseMin, glm::vec2(32.0f));
+	EXPECT_FLOAT_EQ(plain.shadowOffset, 1.0f);
+
+	// Bigger screens scale it with the width a 4:3 screen as tall would have
+	EXPECT_FLOAT_EQ(DemoScale({1600, 1200}), 2.0f);
+	EXPECT_FLOAT_EQ(DemoScale({1920, 1080}), 1.8f);
+	EXPECT_FLOAT_EQ(DemoScale({2560, 1440}), 2.4f);
+	EXPECT_FLOAT_EQ(DemoScale({3440, 1440}), 2.4f);
+	EXPECT_FLOAT_EQ(DemoScale({1280, 1024}), 1.6f);
+	const auto wide = LayoutDemoMouse({1280, 720}, false, 120.0f, false, false, false, DemoScale({2560, 1440}));
+	EXPECT_NEAR((wide.mouseMax - wide.mouseMin).x, 32.0f * 2.4f, 1.0f);
+	EXPECT_NEAR(wide.mouseMin.x - 1280.0f, 32.0f * 2.4f, 1.0f);
+	EXPECT_EQ(DemoLabelSize(false, 2.4f), 51);
+	EXPECT_FLOAT_EQ(wide.shadowOffset, 2.4f);
+}
