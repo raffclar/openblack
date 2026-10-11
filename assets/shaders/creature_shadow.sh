@@ -2,22 +2,23 @@
 #define CREATURE_SHADOW_SH
 
 // The creatures' shadows (src/Graphics/CreatureShadow.h): each creature's silhouette from the light, in a cell of a
-// shared texture, projected onto what is drawn here.
+// shared texture, projected onto what is drawn here. High-detail villagers cast them too, onto the land alone.
 
 #define CREATURE_SHADOWS 8
 
 SAMPLER2D(s_creatureShadows, 14);
 // World position to the shadow's texture coordinates in xy and distance past the creature's centre along the light in z
 uniform mat4 u_creatureShadowMatrix[CREATURE_SHADOWS];
-// x: how much a fully covered texel darkens, y: how far before the creature's centre along the light the shadow starts
+// x: how much a fully covered texel darkens, y: how far before the creature's centre along the light the shadow starts,
+// z: 1 when it falls on objects as well as the land, 0 when on the land alone
 uniform vec4 u_creatureShadow[CREATURE_SHADOWS];
 // x: how many shadows there are, y: the cells across the texture, zw: half a texel of the texture
 uniform vec4 u_creatureShadowInfo;
 
-// What of the light one creature's shadow leaves at a point, 0 to 1
-float CreatureShadowCellLight(int i, vec3 world)
+// What of the light one creature's shadow leaves at a point of an object (onObject 1) or the land (0), 0 to 1
+float CreatureShadowCellLight(int i, vec3 world, float onObject)
 {
-	if (float(i) >= u_creatureShadowInfo.x)
+	if (float(i) >= u_creatureShadowInfo.x || onObject > u_creatureShadow[i].z)
 	{
 		return 1.0f;
 	}
@@ -37,15 +38,16 @@ float CreatureShadowCellLight(int i, vec3 world)
 	return 1.0f - coverage * u_creatureShadow[i].x;
 }
 
-// What of the light the creatures' shadows leave at a point, 0 to 1.
+// What of the light the creatures' shadows leave at a point of an object (onObject 1) or the land (0), 0 to 1.
 // Each shadow is read with a constant index rather than in a loop: a loop indexes the uniform arrays by a register,
 // which Direct3D 12's bgfx renderer mis-patches when it moves a fragment shader's uniforms past the vertex shader's,
 // leaving a corrupt shader that fails to create a pipeline.
-float CreatureShadowLight(vec3 world)
+float CreatureShadowLight(vec3 world, float onObject)
 {
-	return CreatureShadowCellLight(0, world) * CreatureShadowCellLight(1, world) * CreatureShadowCellLight(2, world) *
-	       CreatureShadowCellLight(3, world) * CreatureShadowCellLight(4, world) * CreatureShadowCellLight(5, world) *
-	       CreatureShadowCellLight(6, world) * CreatureShadowCellLight(7, world);
+	return CreatureShadowCellLight(0, world, onObject) * CreatureShadowCellLight(1, world, onObject) *
+	       CreatureShadowCellLight(2, world, onObject) * CreatureShadowCellLight(3, world, onObject) *
+	       CreatureShadowCellLight(4, world, onObject) * CreatureShadowCellLight(5, world, onObject) *
+	       CreatureShadowCellLight(6, world, onObject) * CreatureShadowCellLight(7, world, onObject);
 }
 
 #endif // CREATURE_SHADOW_SH
