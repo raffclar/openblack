@@ -505,7 +505,7 @@
   "query": "camera.state"
  },
  {
-  "description": "Puts the camera somewhere at once, as the scripts place it; what isn't given is kept. Refused while a camera path holds the camera, unless override, which shows it there every frame over any camera until camera.release",
+  "description": "Puts the camera somewhere at once, still, as the scripts place it; what isn't given is kept. It stays there until the player or a script moves it: a flight, a drag or easing under way is forgotten (the world camera's own rules still apply: what it looks at slides onto the land ahead, it keeps its height over the land, the fence and the self-tilting camera). Refused while a script or a camera path holds the camera, unless override, which shows it there every frame over any camera until camera.release",
   "kind": "object",
   "parameters": [
    {

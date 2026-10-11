@@ -416,6 +416,15 @@ Camera& Camera::SetFocus(const glm::vec3& position)
 	return *this;
 }
 
+Camera& Camera::Place(const glm::vec3& origin, const glm::vec3& focus)
+{
+	SetOrigin(origin).SetFocus(focus);
+	_interpolatorTime = std::chrono::microseconds::zero();
+	_interpolatorDuration = std::chrono::microseconds::zero();
+	_model->PlaceAt(origin, focus);
+	return *this;
+}
+
 Camera& Camera::SetOriginInterpolator(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& m0, const glm::vec3& m1)
 {
 	_originInterpolators = ZoomInterpolator3f(p0, p1, m0, m1);

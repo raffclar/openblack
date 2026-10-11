@@ -35,6 +35,8 @@ struct CameraState
 	std::string model;
 	/// A miracle's or a script's camera path has it, and the player's controls do nothing meanwhile
 	bool heldByPath {false};
+	/// A script has taken the camera (a cinematic) and moves it itself: putting it somewhere would last a frame at most
+	bool heldByScript {false};
 };
 
 /// Where a camera is put: where it is and what it looks at
@@ -129,8 +131,10 @@ struct FrameRequest
                                                           const CameraControlInterface& camera, std::string& error);
 
 ///   camera.state                                  where the camera is, what it looks at, its angles and what moves it
-///   camera.set {position?, focus?, yaw?, pitch?, distance?, override?}   puts it there at once; with override, shows
-///                                                 it there every frame over a script's camera until camera.release
+///   camera.set {position?, focus?, yaw?, pitch?, distance?, override?}   puts it there at once, still, and it stays
+///                                                 until the player or a script moves it (refused while a script or a
+///                                                 camera path holds it); with override, shows it there every frame
+///                                                 over a script's camera until camera.release
 ///   camera.release                                gives the view back to what holds the camera
 ///   camera.fly {position?, focus?, yaw?, pitch?, distance?}   flies it there
 ///   camera.frame {id, yaw?, pitch?, distance?}                puts it to look at an entity, where it is now

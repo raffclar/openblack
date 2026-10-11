@@ -62,7 +62,12 @@ public:
 		{
 			focus = pose.origin + forward * ((10.0f - pose.origin.y) / forward.y);
 		}
-		return CameraState {.origin = pose.origin, .focus = focus, .forward = forward, .model = "world", .heldByPath = held};
+		return CameraState {.origin = pose.origin,
+		                    .focus = focus,
+		                    .forward = forward,
+		                    .model = scriptHolds ? "script" : "world",
+		                    .heldByPath = held,
+		                    .heldByScript = scriptHolds};
 	}
 	std::string Set(const CameraPose& to) override
 	{
@@ -121,6 +126,8 @@ public:
 	glm::vec3 walker {50.0f, 10.0f, 50.0f};
 	std::optional<CameraPose> flewTo;
 	bool held {false};
+	/// A script has taken the camera and moves it itself
+	bool scriptHolds {false};
 	bool focusOnLand {false};
 	float lowest {-1000.0f};
 	int sets {0};
@@ -194,6 +201,33 @@ TEST(InspectorCamera, FlyGoesThroughTheFlightAndAPathRefusesASet)
 	camera.held = true;
 	EXPECT_EQ(Refused(inspector, R"({"query": "camera.set", "params": {"yaw": 10}})"),
 	          "held; override: true shows the camera there over it");
+}
+
+// A script moving the camera itself would carry it off at once: a plain set, frame or flight is refused, saying so, and
+// an override still shows the camera there over the script's
+TEST(InspectorCamera, AScriptHoldingTheCameraRefusesAPlainSet)
+{
+	FakeCamera camera;
+	camera.scriptHolds = true;
+	Inspector inspector;
+	inspector.Add(MakeCameraProvider(camera));
+
+	EXPECT_EQ(Refused(inspector, R"({"query": "camera.set", "params": {"focus": [50, 20], "yaw": 10}})"),
+	          "a script holds the camera and moves it itself; override: true shows the camera there over it");
+	EXPECT_EQ(Refused(inspector, R"({"query": "camera.frame", "params": {"id": 7, "distance": 20}})"),
+	          "a script holds the camera and moves it itself; override: true shows the camera there over it");
+	EXPECT_EQ(Refused(inspector, R"({"query": "camera.fly", "params": {"focus": [100, 0, 100]}})"),
+	          "a script holds the camera and moves it itself");
+	EXPECT_EQ(camera.sets, 0);
+	EXPECT_FALSE(camera.flewTo.has_value());
+
+	const auto state = Ask(inspector, R"({"query": "camera.state"})");
+	EXPECT_EQ(state["held_by_script"], true);
+	EXPECT_EQ(state["model"], "script");
+
+	Ask(inspector, R"({"query": "camera.set", "params": {"position": [1, 2, 3], "focus": [4, 5, 6], "override": true}})");
+	ASSERT_TRUE(camera.overridden.has_value());
+	EXPECT_EQ(camera.overridden->origin, glm::vec3(1.0f, 2.0f, 3.0f));
 }
 
 TEST(InspectorCamera, AnglesRoundTrip)

@@ -149,7 +149,19 @@ Json StateJson(const CameraState& state)
 	    {"near_clip", state.nearClip},
 	    {"model", state.model},
 	    {"held_by_path", state.heldByPath},
+	    {"held_by_script", state.heldByScript},
 	};
+}
+
+/// Puts or flies the camera there unless a script holds it, moving it itself every frame; why not, if it can't (a camera
+/// path holding it is the camera's own answer)
+std::string MoveUnlessHeld(CameraControlInterface& camera, const CameraState& now, const CameraPose& pose, bool fly)
+{
+	if (now.heldByScript)
+	{
+		return "a script holds the camera and moves it itself";
+	}
+	return fly ? camera.Fly(pose) : camera.Set(pose);
 }
 
 ParameterDescription Optional(std::string name, std::string type, std::string description)
@@ -300,7 +312,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 			{
 				camera.SetOverride(*pose);
 			}
-			else if (auto why = fly ? camera.Fly(*pose) : camera.Set(*pose); !why.empty())
+			else if (auto why = MoveUnlessHeld(camera, *now, *pose, fly); !why.empty())
 			{
 				return QueryResult::Error(why + (fly ? "" : "; override: true shows the camera there over it"));
 			}
@@ -318,9 +330,12 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 		};
 	};
 	provider->Add({.name = "set",
-	               .description = "Puts the camera somewhere at once, as the scripts place it; what isn't given is kept. "
-	                              "Refused while a camera path holds the camera, unless override, which shows it there "
-	                              "every frame over any camera until camera.release",
+	               .description = "Puts the camera somewhere at once, still, as the scripts place it; what isn't given is "
+	                              "kept. It stays there until the player or a script moves it: a flight, a drag or easing "
+	                              "under way is forgotten (the world camera's own rules still apply: what it looks at "
+	                              "slides onto the land ahead, it keeps its height over the land, the fence and the "
+	                              "self-tilting camera). Refused while a script or a camera path holds the camera, "
+	                              "unless override, which shows it there every frame over any camera until camera.release",
 	               .parameters = setParameters,
 	               .kind = ResultKind::Object,
 	               .needsNear = false,
@@ -362,7 +377,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 		    {
 			    camera.SetOverride(pose);
 		    }
-		    else if (auto why = camera.Set(pose); !why.empty())
+		    else if (auto why = MoveUnlessHeld(camera, *now, pose, false); !why.empty())
 		    {
 			    return QueryResult::Error(why + "; override: true shows the camera there over it");
 		    }
