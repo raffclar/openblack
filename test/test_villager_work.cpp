@@ -111,6 +111,22 @@ TEST(VillagerWork, OtherwiseItsTownsWantOfWoodMovesIt)
 	EXPECT_FALSE(work::IsInterestedInWood(in));
 }
 
+TEST(VillagerWork, ASitesPileDrawsAFreeVillagerWhereAPileTheHandMadeNeedsItsTownToWantWood)
+{
+	// Its town wants no wood: a pile the hand let go of is passed by
+	auto in = Interested();
+	EXPECT_FALSE(work::IsInterestedInWood(in));
+	// A site's pile, even one left over when its temple is finished, is gone for while the villager is free
+	in.siteWood = true;
+	EXPECT_TRUE(work::IsInterestedInWood(in));
+	in.free = false;
+	EXPECT_FALSE(work::IsInterestedInWood(in));
+	// Nor by a builder whose own site already has the wood it needs
+	in.free = true;
+	in.siteHasEnough = true;
+	EXPECT_FALSE(work::IsInterestedInWood(in));
+}
+
 TEST(VillagerWork, TakingWoodFromAFallenTrunkShrinksItOrUsesItUp)
 {
 	const auto part = work::TakeFromFallenTree(350, 250, 350, 1.0f);

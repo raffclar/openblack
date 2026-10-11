@@ -477,6 +477,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::BuildingSite::workerCount>("workerCount")
 	    .Field<&components::BuildingSite::places>("places")
 	    .Field<&components::BuildingSite::piles>("piles");
+	Reflect<components::SitePile> {context};
 	Reflect<components::Creature>(context)
 	    .Field<&components::Creature::owner>("owner")
 	    .Field<&components::Creature::leashable>("leashable")

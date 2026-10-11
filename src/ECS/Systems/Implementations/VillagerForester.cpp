@@ -327,12 +327,10 @@ void TurnBy(entt::entity villager, int32_t gameAngle)
 }
 
 /// Whether a pile is one a building site keeps its wood in
+/// A pile made for a building site's wood, whether or not its building is finished
 bool IsSitePile(entt::entity pile)
 {
-	bool found = false;
-	Entities().Each<const BuildingSite>(
-	    [&found, pile](const BuildingSite& site) { found = found || std::ranges::find(site.piles, pile) != site.piles.end(); });
-	return found;
+	return Entities().AllOf<SitePile>(pile);
 }
 
 /// Where the villager's town keeps its wood, and how much it has
