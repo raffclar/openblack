@@ -48,6 +48,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -545,6 +546,8 @@ void world_objects::Remove(entt::entity object)
 			}
 		}
 	}
+	// A graveyard going hands its town's dead over to another of the town's graveyards
+	graveyards::Lost(object);
 	// A building's people are made homeless as it goes, the newest first
 	if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && Locator::townSystem::has_value())
 	{

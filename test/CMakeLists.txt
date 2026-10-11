@@ -718,3 +718,4 @@ openblack_setup_and_add_test(
   test_camera_edge_turn camera/test_camera_edge_turn.cpp
 )
 openblack_setup_and_add_test(test_mouse_motion input/test_mouse_motion.cpp)
+openblack_setup_and_add_test(test_graveyard_rules test_graveyard_rules.cpp)

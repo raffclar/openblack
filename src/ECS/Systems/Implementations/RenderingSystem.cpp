@@ -35,6 +35,7 @@
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Graveyard.h"
 #include "ECS/Components/GroundMark.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HiddenByState.h"
@@ -57,6 +58,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Unlit.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
@@ -800,6 +802,25 @@ void RenderingSystem::UploadPartialBuilds()
 		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix});
 		_renderContext.partialBuilds.push_back(draw);
 	});
+	// A standing graveyard shows the graves of its burials over its model drawn with the others; one going up or broken
+	// shows none
+	registry.Each<const Graveyard, const Mesh, const Transform>(
+	    [&](entt::entity entity, const Graveyard&, const Mesh& mesh, const Transform& transform) {
+		    const auto graves = graveyards::GravesShown(entity);
+		    if (graves == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id))
+		    {
+			    return;
+		    }
+		    _renderContext.partialBuilds.push_back({
+		        .meshId = mesh.id,
+		        .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
+		        .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
+		        .gravesShown = graves,
+		    });
+		    _renderContext.partialBuildInstances.push_back(
+		        {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
+		                  glm::scale(glm::mat4(1.0f), transform.scale)});
+	    });
 	const auto count = static_cast<uint32_t>(_renderContext.partialBuildInstances.size());
 	if (count == 0)
 	{

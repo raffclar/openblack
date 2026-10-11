@@ -1,0 +1,93 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#include <array>
+#include <vector>
+
+#include <gtest/gtest.h>
+
+#include "ECS/GraveyardRules.h"
+
+using namespace openblack::graveyard;
+
+TEST(GraveyardRules, EachDeathCountsOneMoreBurialUntilTheGraveyardIsFull)
+{
+	EXPECT_EQ(BurialsAfterDeath(0), 1u);
+	EXPECT_EQ(BurialsAfterDeath(1), 2u);
+	EXPECT_EQ(BurialsAfterDeath(49), 50u);
+	EXPECT_EQ(BurialsAfterDeath(50), 50u);
+	EXPECT_EQ(BurialsAfterDeath(k_MostBurials), k_MostBurials);
+}
+
+TEST(GraveyardRules, ANewGraveyardShowsNoGraveBeforeItsFirstBurialAndOneAfter)
+{
+	EXPECT_EQ(GravesShown(0), 0u);
+	for (uint32_t burials = 1; burials <= 11; ++burials)
+	{
+		EXPECT_EQ(GravesShown(burials), 1u) << burials;
+	}
+}
+
+TEST(GraveyardRules, AGraveAppearsForEachWholeGraveTheBurialsMakeUp)
+{
+	// The burials at which each grave from the second to the ninth first shows
+	const std::array<uint32_t, 8> firstShown {12, 17, 23, 28, 34, 39, 45, 50};
+	for (size_t i = 0; i < firstShown.size(); ++i)
+	{
+		const auto graves = static_cast<uint32_t>(i + 2);
+		EXPECT_EQ(GravesShown(firstShown.at(i)), graves) << firstShown.at(i);
+		EXPECT_EQ(GravesShown(firstShown.at(i) - 1), graves - 1) << firstShown.at(i) - 1;
+	}
+}
+
+TEST(GraveyardRules, AFullGraveyardShowsNineGravesAndNeverItsScaffold)
+{
+	EXPECT_EQ(GravesShown(k_MostBurials), 9u);
+	uint32_t burials = 0;
+	for (int death = 0; death < 200; ++death)
+	{
+		burials = BurialsAfterDeath(burials);
+		EXPECT_LE(GravesShown(burials), 9u);
+	}
+}
+
+TEST(GraveyardRules, ABodyLiesLessLongWhenItsTownHadAWorkingGraveyard)
+{
+	EXPECT_EQ(CorpseTurns(true, 120, 600), 120u);
+	EXPECT_EQ(CorpseTurns(false, 120, 600), 600u);
+}
+
+TEST(GraveyardRules, TheFirstOtherWorkingGraveyardTakesOverFromTheTownsOwn)
+{
+	const std::vector<OtherBuilding> others {
+	    {.workingGraveyard = false}, {.workingGraveyard = true}, {.workingGraveyard = true}};
+	const auto takesOver = GraveyardAfterLoss(true, others);
+	ASSERT_TRUE(takesOver.has_value());
+	EXPECT_EQ(*takesOver, 1u);
+}
+
+TEST(GraveyardRules, NoOtherWorkingGraveyardLeavesTheTownWithoutOne)
+{
+	const std::vector<OtherBuilding> others {{.workingGraveyard = false}, {.workingGraveyard = false}};
+	EXPECT_FALSE(GraveyardAfterLoss(true, others).has_value());
+	EXPECT_FALSE(GraveyardAfterLoss(true, {}).has_value());
+}
+
+TEST(GraveyardRules, LosingASpareGraveyardLeavesTheTownWithoutOneAsInTheOriginal)
+{
+	const std::vector<OtherBuilding> others {{.workingGraveyard = true}};
+	EXPECT_FALSE(GraveyardAfterLoss(false, others).has_value());
+}
+
+TEST(GraveyardRules, ASkeletonWearsTheSkeletonAtEveryDistance)
+{
+	const std::array own {1, 2, 3};
+	EXPECT_EQ(ModelsWorn(true, 9, own), (std::array {9, 9, 9}));
+	EXPECT_EQ(ModelsWorn(false, 9, own), own);
+}
