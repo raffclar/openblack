@@ -702,3 +702,4 @@ openblack_setup_and_add_test(test_heartbeat test_heartbeat.cpp)
 openblack_setup_and_add_test(
   test_town_belief_symbols test_town_belief_symbols.cpp
 )
+openblack_setup_and_add_test(test_camera_place camera/test_camera_place.cpp)
