@@ -14,6 +14,7 @@
 #include <glm/vec2.hpp>
 
 #include "CameraHelpEvents.h"
+#include "CameraLimits.h"
 #include "CameraModel.h"
 #include "CameraPan.h"
 #include "Common/Zoomer.h"
@@ -92,17 +93,16 @@ private:
 	[[nodiscard]] float GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera) const;
 
 	void ComputeDistanceFromBoundY();
-	bool ConstrainCamera(std::chrono::microseconds dt, float mouseMovementDistance, glm::vec3 eulerAngles,
-	                     const Camera& camera);
-	/// Corrects altitude of the camera
-	/// @return If a modification to the camera position was applied.
-	bool ConstrainAltitude();
-	/// Corrects distance of the camera from the island
-	/// @return If a modification to the camera position was applied.
-	bool ConstrainDisc();
-	/// The land's camera zones: the camera is put back inside the fence, raised off the land, and slid down under its
-	/// height limit; whether it was moved. Put back inside, the fence answers the hit, heard at `listener`.
-	bool ConstrainZones(glm::vec3 originAtFrameStart, glm::vec3 listener);
+	/// The zones the land's scripts have set, or none
+	[[nodiscard]] static camera_zones::Zones CurrentZones();
+	/// Keeps the camera where it may go, in the game's order: out of the zones' cylinders, off the land and the domes,
+	/// inside the fence, above the floor and under the ceiling over where it started the frame, within the disc round the
+	/// island, and no further from where it started than a frame allows. Whether it was moved; a fence hit is heard at
+	/// `listener`.
+	bool ApplyLimits(glm::vec3 originAtFrameStart, glm::vec3 listener, std::chrono::microseconds dt, float zoomDelta,
+	                 glm::vec3 eulerAngles, const Camera& camera);
+	/// Puts the camera back inside the zones' fence; whether it was outside
+	bool KeepInsideFence(const camera_zones::Zones& zones, glm::vec3 originAtFrameStart, glm::vec3 listener);
 	/// Whether the player is using any of the camera's controls this frame
 	[[nodiscard]] bool AnyControlHeld() const;
 

@@ -15,8 +15,9 @@ namespace openblack::ecs::components
 struct BigForest
 {
 	int type;
-	/// What its wood is worth at full life, fixed as it is planted
-	uint32_t worth {0};
+	/// The wood it holds, which its life scales into what it is worth: at first its size times its kind's wood, then less
+	/// as wood is taken from it
+	float wood {0.0f};
 };
 
 struct Forest

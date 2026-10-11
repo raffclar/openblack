@@ -707,9 +707,11 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	constexpr bool k_BiggerText = false;
 	_demoMouseOnLeft = tricons::LabelOnLeft(centre.x, screen.x, _demoMouseOnLeft);
 	const auto& label = _texts.GetHelpText(tricons::k_DemoText).text;
-	const auto labelSize = static_cast<float>(tricons::DemoLabelSize(k_BiggerText));
+	// Sized for the original's default screen, and scaled with the screen's height on wide screens
+	const auto scale = tricons::DemoScale(glm::ivec2(screen));
+	const auto labelSize = static_cast<float>(tricons::DemoLabelSize(k_BiggerText, scale));
 	const auto mouse = tricons::LayoutDemoMouse(centre, _demoMouseOnLeft, _font.GetWidth(label, labelSize), k_BiggerText,
-	                                            in.moveHeld, in.actionHeld);
+	                                            in.moveHeld, in.actionHeld, scale);
 	DrawGlow(mouse.mouseMin, mouse.mouseMax, mouse.mouseGlow);
 	if (!label.empty())
 	{
@@ -719,8 +721,9 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	{
 		_canvas.DrawQuad(mouse.mouseMin, mouse.mouseMax, mouse.uvMin, mouse.uvMax, glm::vec4(1.0f), _mice.get());
 	}
-	_painter.DrawString({mouse.labelAt.x - 1.0f, mouse.labelAt.y - 1.0f}, label, mouse.labelSize, mouse.shadowColour);
-	_painter.DrawString({mouse.labelAt.x + 1.0f, mouse.labelAt.y + 1.0f}, label, mouse.labelSize, mouse.shadowColour);
+	const auto shadow = glm::vec2(mouse.shadowOffset);
+	_painter.DrawString(mouse.labelAt - shadow, label, mouse.labelSize, mouse.shadowColour);
+	_painter.DrawString(mouse.labelAt + shadow, label, mouse.labelSize, mouse.shadowColour);
 	_painter.DrawString(mouse.labelAt, label, mouse.labelSize, mouse.labelColour);
 }
 

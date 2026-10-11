@@ -900,8 +900,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::FootpathLink>(context)
 	    .Field<&components::FootpathLink::position>("position")
 	    .Field<&components::FootpathLink::footpaths>("footpaths");
-	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::worth>(
-	    "worth");
+	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::wood>(
+	    "wood");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");
 	Reflect<components::ForestMember>(context)
 	    .Field<&components::ForestMember::forest>("forest")

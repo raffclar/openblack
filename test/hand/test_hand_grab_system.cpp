@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Animals/FishFarmRules.h"
+#include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mobile.h"
@@ -63,6 +64,15 @@ public:
 		sizes[tree] = {.radius = 1.0f, .height = 10.0f};
 		weights[tree] = weight;
 		return tree;
+	}
+
+	entt::entity AddBigForest(glm::vec3 position)
+	{
+		const auto forest = registry.Create();
+		registry.Assign<Transform>(forest, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<BigForest>(forest);
+		sizes[forest] = {.radius = 10.0f, .height = 12.0f};
+		return forest;
 	}
 
 	Registry& Entities() override { return registry; }
@@ -115,6 +125,12 @@ public:
 	void VillagerIntoHand(entt::entity villager) override { villagersInHand.push_back(villager); }
 	void AnimalIntoOwnFlock(entt::entity) override {}
 	void TreeUprooted(PlayerNames, entt::entity tree) override { uprooted.push_back(tree); }
+	std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) override
+	{
+		const auto tree = AddTree(registry.Get<const Transform>(bigForest).position, 10.0f);
+		treesGiven.emplace_back(bigForest, tree);
+		return tree;
+	}
 	void LeaveRootsHole(entt::entity tree) override { holes.push_back(tree); }
 	void RemovePotReaction(entt::entity) override {}
 	void SetUpPotReaction(entt::entity pot, PlayerNames) override { potReactionsSetUp.push_back(pot); }
@@ -306,6 +322,7 @@ public:
 	std::vector<entt::entity> tapped;
 	std::vector<entt::entity> villagersInHand;
 	std::vector<entt::entity> uprooted;
+	std::vector<std::pair<entt::entity, entt::entity>> treesGiven;
 	std::vector<entt::entity> holes;
 	std::vector<entt::entity> poured;
 	std::vector<entt::entity> potReactionsSetUp;
@@ -593,6 +610,45 @@ TEST_F(HandGrabSystemWithWorld, ALightTreeIsUprootedAndCreaks)
 	// A tree pulled out of the ground creaks rather than making the pick-up sound
 	ASSERT_EQ(world->samples.size(), 1u);
 	EXPECT_EQ(world->samples.front(), 32u);
+}
+
+TEST_F(HandGrabSystemWithWorld, ABigForestGivesATreeOnceTheButtonHasBeenHeldAWhile)
+{
+	const auto forest = world->AddBigForest({0.0f, 0.0f, 0.0f});
+	world->underCursor = forest;
+	EXPECT_TRUE(Press());
+	// It isn't pulled at: the hand waits, as for a thing in flight
+	EXPECT_FALSE(system->GetPullPose().has_value());
+	Frame(100);
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->treesGiven.empty());
+	Frame(130);
+	ASSERT_EQ(world->treesGiven.size(), 1u);
+	const auto tree = world->treesGiven.front().second;
+	EXPECT_EQ(world->treesGiven.front().first, forest);
+	// The hand holds the tree, never the forest, and took it as it takes a standing tree: it creaks and costs alignment,
+	// but leaves no hole
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(*system->GetHeld(), tree);
+	EXPECT_TRUE(world->registry.AllOf<InHand>(tree));
+	EXPECT_FALSE(world->registry.AllOf<InHand>(forest));
+	EXPECT_EQ(world->leftWorld, std::vector<entt::entity> {tree});
+	EXPECT_EQ(world->uprooted, std::vector<entt::entity> {tree});
+	EXPECT_EQ(world->samples, std::vector<uint32_t> {32u});
+	EXPECT_TRUE(world->holes.empty());
+	ASSERT_EQ(world->reactions.size(), 1u);
+	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
+}
+
+TEST_F(HandGrabSystemWithWorld, AShortPressOnABigForestGivesNoTree)
+{
+	const auto forest = world->AddBigForest({0.0f, 0.0f, 0.0f});
+	world->underCursor = forest;
+	EXPECT_TRUE(Press());
+	Frame(100);
+	EXPECT_EQ(Release(), std::optional(forest));
+	EXPECT_TRUE(world->treesGiven.empty());
+	EXPECT_EQ(world->tapped, std::vector<entt::entity> {forest});
 }
 
 TEST_F(HandGrabSystemWithWorld, TheSpringTakesHoldTheFrameAfterThePressAndThrows)

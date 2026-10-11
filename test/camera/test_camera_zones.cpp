@@ -175,7 +175,11 @@ TEST(CameraZones, TheCameraIsHeldUnderItsHeightAboveTheLandOrItsHighest)
 	ASSERT_TRUE(slide.has_value());
 	EXPECT_FLOAT_EQ(slide->y, -10.0f);
 	EXPECT_FLOAT_EQ(slide->z, 10.0f);
-	// Looking all but level, it can't slide down
-	EXPECT_FALSE(SlideUnderLimit({0.0f, 50.0f, 0.0f}, {0.0f, 49.0f, 40.0f}, 40.0f).has_value());
+	// Looking all but level (the line falling no more than a hundredth), it can't slide down; a little more and it does
+	EXPECT_FALSE(SlideUnderLimit({0.0f, 50.0f, 0.0f}, {0.0f, 49.995f, 40.0f}, 40.0f).has_value());
+	const auto shallow = SlideUnderLimit({0.0f, 50.0f, 0.0f}, {0.0f, 49.0f, 40.0f}, 40.0f);
+	ASSERT_TRUE(shallow.has_value());
+	EXPECT_FLOAT_EQ(shallow->y, -10.0f);
+	EXPECT_FLOAT_EQ(shallow->z, 400.0f);
 	EXPECT_FALSE(SlideUnderLimit({0.0f, 30.0f, 0.0f}, {0.0f, 10.0f, 40.0f}, 40.0f).has_value());
 }

@@ -43,6 +43,7 @@
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "Editor/EditorEntities.h"
 #include "EntityDescription.h"
@@ -332,6 +333,23 @@ std::string GameCamera::Fly(const CameraPose& pose)
 float GameCamera::GroundHeight(glm::vec2 point) const
 {
 	return editor::LandHeight(point);
+}
+
+std::optional<CameraKeepers> GameCamera::Keepers(const CameraPose& pose) const
+{
+	if (!Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	CameraKeepers keepers {.model = std::string(ModelName(Locator::camera::value().GetModel())),
+	                       .groundUnderOrigin = GroundHeight({pose.origin.x, pose.origin.z})};
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		const auto& zoneSystem = Locator::cameraZoneSystem::value();
+		keepers.zones = zoneSystem.GetZones();
+		keepers.zoneFile = zoneSystem.GetFileName();
+	}
+	return keepers;
 }
 
 std::optional<glm::vec3> GameCamera::EntityPosition(uint32_t id) const

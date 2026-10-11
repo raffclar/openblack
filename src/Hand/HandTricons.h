@@ -53,6 +53,12 @@ constexpr float k_UsedAlpha = 1.0f;
 constexpr int k_EdgeMargin = 16;
 /// An icon's half-width on the screen is the horizontal focal length in pixels divided by this
 constexpr float k_FocalDivisor = 22.0f;
+
+/// An icon's half-width on the screen, in pixels, from the projection's horizontal scale (one over the tangent of half
+/// the field of view across). The focal length is measured across the width a 4:3 screen of the same height would
+/// have, so on a wide screen the icons take the same share of the screen's height as on 4:3 rather than growing with
+/// its width; on 4:3 and taller screens this is the focal length across the screen itself.
+[[nodiscard]] float IconHalfSize(float horizontalProjectionScale, glm::ivec2 screenSize);
 /// The icons are frames 12 to 15 of atmos.raw's 4 by 4 frames
 constexpr int k_AtlasColumns = 4;
 constexpr int k_FirstFrame = 12;
@@ -187,13 +193,19 @@ struct DemoMouse
 	float labelSize {0.0f};
 	glm::vec4 labelColour {0.0f};
 	glm::vec4 shadowColour {0.0f};
+	/// The two shadows sit this far up-left and down-right of the word
+	float shadowOffset {1.0f};
 };
 /// The help text of the word: "Demo"
 constexpr uint32_t k_DemoText = 5127;
+/// The scale of the demonstration's mouse and word, sized in pixels for the original's default 800x600 screen: the
+/// width a 4:3 screen as tall as this one would have, when narrower, over 800. One on an 800x600 screen.
+[[nodiscard]] float DemoScale(glm::ivec2 screenSize);
 /// The word's size, two thirds of the mouse (four fifths for the languages that need bigger text)
-[[nodiscard]] int DemoLabelSize(bool biggerText);
-/// The demonstration's mouse beside the icons at `centre`, `labelWidth` the word's width at its size
+[[nodiscard]] int DemoLabelSize(bool biggerText, float scale = 1.0f);
+/// The demonstration's mouse beside the icons at `centre`, `labelWidth` the word's width at its size, its sizes and
+/// spacing scaled by `scale`
 [[nodiscard]] DemoMouse LayoutDemoMouse(glm::ivec2 centre, bool labelOnLeft, float labelWidth, bool biggerText, bool moveHeld,
-                                        bool actionHeld);
+                                        bool actionHeld, float scale = 1.0f);
 
 } // namespace openblack::hand_tricons

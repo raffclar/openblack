@@ -109,6 +109,8 @@ enum class GrabKind : uint8_t
 	Poo,
 	Tree,
 	DeadTree,
+	/// A big forest, which is never held itself: the hand takes one of its trees
+	BigForest,
 };
 
 /// What deciding whether the hand may take a thing needs to know of it
@@ -133,6 +135,9 @@ struct Holdable
 
 /// Whether a thing of its kind says the hand may hold it
 [[nodiscard]] bool ValidForPlaceInHand(const Holdable& thing);
+/// Whether the hand pulls at a thing of its kind until it comes free. One it can't pull at (a big forest) is taken
+/// once the button has been held a while, as a thing in flight is caught.
+[[nodiscard]] bool Tuggable(GrabKind kind);
 
 /// The checks a press goes through, in the game's order, before the hand takes a thing
 struct Gate
