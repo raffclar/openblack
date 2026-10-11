@@ -43,6 +43,7 @@
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/ArtefactRules.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AppleBarrel.h"
@@ -71,6 +72,7 @@
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
@@ -87,6 +89,7 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -318,6 +321,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
     LocatorCoverage {"villageTotemSystem", "living.totems"},
+    LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
@@ -813,6 +817,48 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			    items.push_back(std::move(item));
 		    });
 		    return items;
+	    }));
+	provider->Add(
+	    Query("artefacts",
+	          "The artefacts: the town and worship site each last joined and whether it is among their artefacts now, its "
+	          "owner and worth, its dance (started or not, its state, dancers and turns since it started), whether it "
+	          "glows and shows its owner's symbol, and how many each player owns",
+	          {}, ResultKind::Object),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    Json items = Json::array();
+		    registry.Each<const TownArtefact>([&items, &registry](entt::entity entity, const TownArtefact& artefact) {
+			    auto item = Listed(registry, entity);
+			    item["town"] = Id(artefact.town);
+			    item["site"] = Id(artefact.site);
+			    item["in_town"] = artefact.inTown;
+			    item["in_site"] = artefact.inSite;
+			    item["player"] = artefact.player.has_value() ? Json(static_cast<int>(*artefact.player)) : Json(nullptr);
+			    item["value"] = artefact.value;
+			    item["dance"] = Id(artefact.dance);
+			    item["dancing"] = artefact.dancing;
+			    item["dance_started"] = artefact.danceStarted;
+			    if (const auto* dance = registry.Valid(artefact.dance) ? registry.TryGet<const Dance>(artefact.dance) : nullptr)
+			    {
+				    item["dance_type"] = static_cast<int>(dance->type);
+				    item["dance_state"] = dance->state == Dance::State::Dancing ? "dancing" : "stopped";
+				    item["dancers"] = dance->dancers;
+				    item["dance_duration"] = dance->duration;
+				    item["dance_start_turn"] = dance->startTurn;
+			    }
+			    item["effect"] = artefact.effect;
+			    item["glows"] = ecs::artefact_rules::Glows(artefact.value);
+			    item["symbol"] = artefact.symbol && ecs::artefact_rules::ShowsSymbol(artefact.value);
+			    items.push_back(std::move(item));
+		    });
+		    Json counts = Json::object();
+		    if (Locator::artefactSystem::has_value())
+		    {
+			    for (int p = 0; p < static_cast<int>(PlayerNames::_COUNT); ++p)
+			    {
+				    counts[std::to_string(p)] = Locator::artefactSystem::value().CountFor(static_cast<PlayerNames>(p));
+			    }
+		    }
+		    return QueryResult::Value(Json {{"artefacts", std::move(items)}, {"count_by_player", std::move(counts)}});
 	    }));
 	provider->Add(Query("action", "A villager's or animal's action states: top, final, previous, and turns in them",
 	                    {IdParameter("The living thing's entity id")}),
@@ -2109,6 +2155,48 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    {"fighting", {fights.IsFighting(*creature), fights.IsFighting(*opponent)}},
 		    {"opponent_of_id", Id(fights.OpponentOf(*creature))},
 		});
+	});
+	auto move = Query("move",
+	                  "Sends a creature walking or running to a point by its own legs (turning and stepping off as it "
+	                  "does), or turning on the spot to face it",
+	                  {IdParameter("The creature"),
+	                   {.name = "point", .type = "array", .description = "[x, z] on the land", .required = true},
+	                   {.name = "pace",
+	                    .type = "string",
+	                    .description = "walk (the default), run, or face to turn on the spot towards the point",
+	                    .required = false}});
+	move.writes = true;
+	provider->Add(std::move(move), [](const QueryContext& context) {
+		const auto* registry = Registry();
+		if (registry == nullptr || !Locator::creatureLocomotionSystem::has_value())
+		{
+			return QueryResult::Error("no creatures move without a land");
+		}
+		const auto creature = EntityParam(context.params);
+		const auto point = context.params.find("point");
+		if (!creature.has_value() || !registry->AllOf<Creature>(*creature) || point == context.params.end() ||
+		    !point->is_array() || point->size() != 2 || !(*point)[0].is_number() || !(*point)[1].is_number())
+		{
+			return QueryResult::Error("creatures.move needs a creature's id and a point [x, z]");
+		}
+		const glm::vec2 target((*point)[0].get<float>(), (*point)[1].get<float>());
+		const auto paceParam = context.params.find("pace");
+		const auto pace =
+		    paceParam != context.params.end() && paceParam->is_string() ? paceParam->get<std::string>() : std::string("walk");
+		auto& locomotion = Locator::creatureLocomotionSystem::value();
+		if (pace == "face")
+		{
+			return QueryResult::Value({{"result", locomotion.TurnToFace(*creature, target) ? "started" : "refused"}});
+		}
+		if (pace != "walk" && pace != "run")
+		{
+			return QueryResult::Error("pace is walk, run or face");
+		}
+		using Locomotion = ecs::systems::CreatureLocomotionSystemInterface;
+		constexpr std::array<std::string_view, 3> k_Results {"invalid_destination", "busy", "started"};
+		const auto result =
+		    locomotion.MoveTo(*creature, target, pace == "run" ? Locomotion::Pace::Run : Locomotion::Pace::Walk, 0.0f, 1.0f);
+		return QueryResult::Value({{"result", k_Results.at(static_cast<size_t>(result))}});
 	});
 	return provider;
 }

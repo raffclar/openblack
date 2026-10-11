@@ -11,10 +11,13 @@
 
 #include "Sdl2WindowingSystem.h"
 
+#include <optional>
+
 #include <SDL_syswm.h>
 #include <spdlog/spdlog.h>
 
 #include "WindowFit.h"
+#include "WindowState.h"
 
 #if defined(SDL_VIDEO_DRIVER_WAYLAND)
 #include <wayland-egl.h>
@@ -343,7 +346,16 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::SetSize(glm::ivec2 size)
 
 bool Sdl2WindowingSystem::IsMinimised() const
 {
-	return (SDL_GetWindowFlags(_window.get()) & SDL_WINDOW_MINIMIZED) != 0;
+	std::optional<bool> systemMinimised;
+#if defined(SDL_VIDEO_DRIVER_WINDOWS)
+	SDL_SysWMinfo wmi;
+	SDL_VERSION(&wmi.version);
+	if (SDL_GetWindowWMInfo(_window.get(), &wmi) != SDL_FALSE && wmi.subsystem == SDL_SYSWM_WINDOWS)
+	{
+		systemMinimised = IsIconic(wmi.info.win.window) != FALSE;
+	}
+#endif // defined(SDL_VIDEO_DRIVER_WINDOWS)
+	return WindowMinimised((SDL_GetWindowFlags(_window.get()) & SDL_WINDOW_MINIMIZED) != 0, systemMinimised);
 }
 
 bool Sdl2WindowingSystem::IsWindowed() const

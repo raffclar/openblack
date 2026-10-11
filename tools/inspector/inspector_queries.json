@@ -850,6 +850,12 @@
   "query": "living.totems"
  },
  {
+  "description": "The artefacts: the town and worship site each last joined and whether it is among their artefacts now, its owner and worth, its dance (started or not, its state, dancers and turns since it started), whether it glows and shows its owner's symbol, and how many each player owns",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.artefacts"
+ },
+ {
   "description": "A villager's or animal's action states: top, final, previous, and turns in them",
   "kind": "object",
   "parameters": [
@@ -1198,6 +1204,31 @@
    }
   ],
   "query": "creatures.fight",
+  "writes": true
+ },
+ {
+  "description": "Sends a creature walking or running to a point by its own legs (turning and stepping off as it does), or turning on the spot to face it",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] on the land",
+    "name": "point",
+    "required": true,
+    "type": "array"
+   },
+   {
+    "description": "walk (the default), run, or face to turn on the spot towards the point",
+    "name": "pace",
+    "type": "string"
+   }
+  ],
+  "query": "creatures.move",
   "writes": true
  },
  {

@@ -84,6 +84,7 @@
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
+#include "ECS/Systems/Implementations/ArtefactSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
@@ -157,6 +158,7 @@ using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::AnimatedStaticSystem;
 using openblack::ecs::systems::AppleBarrelSystem;
+using openblack::ecs::systems::ArtefactSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
@@ -314,6 +316,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
 	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
+	Locator::artefactSystem::emplace<ArtefactSystem>();
 	Locator::heartbeatSystem::emplace<HeartbeatSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
@@ -530,6 +533,7 @@ void openblack::ShutDownServices()
 	Locator::animalSystem::reset();
 	Locator::soundTagSystem::reset();
 	Locator::villageTotemSystem::reset();
+	Locator::artefactSystem::reset();
 	Locator::heartbeatSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();

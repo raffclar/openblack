@@ -65,8 +65,9 @@ private:
 	static void SendHelpEvents(camera_help::events::EventSet events);
 	/// Notes what the helper icons by the hand are picked from, once the controls are handled
 	void UpdateIconFrame(bool onFight);
-	/// The height the mouse controls measure by, the cinema bars' picture's while they are in
-	[[nodiscard]] static int ViewHeight(glm::ivec2 screenSize);
+	/// The part of the screen the edge controls are laid out on: a 4:3 screen's worth, measured by the cinema bars'
+	/// picture while they are in
+	[[nodiscard]] static camera_drag::EdgeArea EdgeArea(glm::ivec2 screenSize);
 
 	void UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent);
 	void UpdateModeCartesian();
