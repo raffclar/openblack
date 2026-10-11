@@ -542,6 +542,8 @@ target_include_directories(
 openblack_setup_and_add_test(
   test_loading_screen_rules gui/test_loading_screen_rules.cpp
 )
+# Full-screen pictures kept to their own shape on any screen
+openblack_setup_and_add_test(test_screen_fit gui/test_screen_fit.cpp)
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
 openblack_setup_and_add_test(test_dance_file test_dance_file.cpp)
 target_link_libraries(test_dance_file PRIVATE dance)
