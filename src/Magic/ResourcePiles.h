@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 
 #include <glm/vec2.hpp>
 
@@ -62,6 +63,9 @@ void RiseTo(Rise& rise, float target);
 void StepRise(Rise& rise, float seconds);
 /// Whether any of it shows above the ground
 [[nodiscard]] bool Shown(const Rise& rise, float height);
+/// How far below its place a pile is drawn: as far as it has sunk into the ground, and not at all once wholly under
+/// it. A pile in the hand (a handful) is drawn whole where the hand holds it, as it only rises out of the ground.
+[[nodiscard]] std::optional<float> DrawnSink(const Rise& rise, float height, bool held);
 
 /// How far the texture of a pile of grain has flowed down it, by how far the pile is sunk: a quarter of the texture
 /// when fully under the ground, none when fully up

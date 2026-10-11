@@ -36,6 +36,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/GroundMark.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Mesh.h"
@@ -512,20 +513,21 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 
 		    // A pile of food or wood is drawn as far under the ground as it has sunk, not at all once wholly under, and the
-		    // grain of a pile of food flows down it as it rises
+		    // grain of a pile of food flows down it as it rises. A handful in the hand is drawn whole where it is held.
 		    if (const auto* pile = registry.TryGet<const ResourcePile>(entity); pile != nullptr && pile->height > 0.0f)
 		    {
-			    if (!magic::piles::Shown(pile->rise, pile->height))
+			    const auto sink = magic::piles::DrawnSink(pile->rise, pile->height, registry.AllOf<InHand>(entity));
+			    if (!sink.has_value())
 			    {
 				    look.z = 1.0f;
 			    }
 			    else
 			    {
-				    modelMatrix[3].y += pile->rise.offset;
+				    modelMatrix[3].y += *sink;
 				    const auto* pot = registry.TryGet<const Pot>(entity);
 				    if (pot != nullptr && magic::piles::GrainFlows(pot->type))
 				    {
-					    look.x = -magic::piles::GrainFlow(pile->rise.offset, pile->height);
+					    look.x = -magic::piles::GrainFlow(*sink, pile->height);
 				    }
 			    }
 		    }
