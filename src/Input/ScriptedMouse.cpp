@@ -39,6 +39,11 @@ std::vector<SDL_Event> PeekQueue()
 
 } // namespace
 
+glm::ivec2 openblack::input::RestingPointer(glm::ivec2 windowSize)
+{
+	return glm::max(windowSize, glm::ivec2(1)) / 2;
+}
+
 SDL_Event openblack::input::PumpedMotion(glm::ivec2 by, uint32_t windowId)
 {
 	SDL_Event motion {};

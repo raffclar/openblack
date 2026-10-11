@@ -120,6 +120,8 @@ private:
 	std::optional<glm::ivec2> _cursorPinnedAt;
 	bool _cursorPinned {false};
 	std::optional<ScriptedPointer> _scriptedPointer;
+	/// Whether the window has had the player's cursor over it: until then SDL knows nothing of where it is
+	bool _playerCursorSeen {false};
 	bool _playerMouseBlocked {false};
 	std::optional<glm::ivec2> _cursorWarp;
 	BindableActionMap _blocked = BindableActionMap::NONE;
@@ -127,6 +129,10 @@ private:
 	InputLock _lock;
 	/// Logs the lock opening or closing
 	void LogLock(bool wasLocked) const;
+	/// Once the lock has changed: an agent taking the game finds the pointer in the middle of the window
+	void LockChanged(bool wasLocked);
+	/// Until the window has had the player's cursor over it, the pointer rests in the middle of the window
+	void RestPointerUntilCursorSeen();
 	/// Puts the player's own cursor somewhere in the window, noting the jump so it isn't taken for the mouse moving
 	void WarpPlayerCursor(glm::ivec2 position);
 };
