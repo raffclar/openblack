@@ -90,6 +90,7 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/DetailMeshes.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -104,6 +105,7 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/ForestMember.h"
+#include "ECS/Components/Graveyard.h"
 #include "ECS/Components/GripLandscapeParticle.h"
 #include "ECS/Components/GroundMark.h"
 #include "ECS/Components/Hand.h"
@@ -784,6 +786,15 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::DetailMeshes>(context)
 	    .Field<&components::DetailMeshes::meshes>("meshes")
 	    .Field<&components::DetailMeshes::importance>("importance");
+	Reflect<components::Disciple>(context).Field<&components::Disciple::type>("type").Field<&components::Disciple::tradeTown>(
+	    "tradeTown");
+	Reflect<components::DiscipleHeld>(context)
+	    .Field<&components::DiscipleHeld::atPickUp>("atPickUp")
+	    .Field<&components::DiscipleHeld::touchedDown>("touchedDown");
+	Reflect<components::DiscipleInspect>(context).Field<&components::DiscipleInspect::thing>("thing");
+	Reflect<components::DiscipleMark>(context)
+	    .Field<&components::DiscipleMark::villager>("villager")
+	    .Field<&components::DiscipleMark::symbol>("symbol");
 	Reflect<components::DropsRoots> {context};
 	Reflect<components::FallingRoots>(context)
 	    .Field<&components::FallingRoots::seconds>("seconds")
@@ -895,6 +906,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ForestMember::forest>("forest")
 	    .Field<&components::ForestMember::growing>("growing")
 	    .Field<&components::ForestMember::listed>("listed");
+	Reflect<components::Graveyard>(context).Field<&components::Graveyard::burials>("burials");
+	Reflect<components::WalkingSkeleton> {context};
 	Reflect<components::GripLandscapeParticle>(context)
 	    .Field<&components::GripLandscapeParticle::centre>("centre")
 	    .Field<&components::GripLandscapeParticle::offset>("offset")
@@ -1394,7 +1407,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::worshipSite>("worshipSite")
 	    .Field<&components::Town::cannotHaveWorshipSite>("cannotHaveWorshipSite")
 	    .Field<&components::Town::congregationPos>("congregationPos")
-	    .Field<&components::Town::emergencyTurn>("emergencyTurn");
+	    .Field<&components::Town::emergencyTurn>("emergencyTurn")
+	    .Field<&components::Town::graveyard>("graveyard");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")

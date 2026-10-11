@@ -508,35 +508,38 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	{
 		_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
 	}
-	DrawVideo(resolution);
+	// A video on a screen wider than its picture has black bars at its sides, which go with the cinema bars
+	const auto sides = static_cast<float>(DrawVideo(resolution));
 	// The scripts' fade covers the picture between the cinema bars, which are black
 	const auto& director = Locator::cinematicDirectorSystem::value();
 	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, director.GetWideScreenFraction()));
 	const auto screen = glm::vec2(resolution);
-	const auto drawBars = [&screen, bars](Canvas& canvas) {
+	const auto drawBars = [&screen, bars, sides](Canvas& canvas) {
 		const auto black = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-		canvas.DrawQuad(glm::vec2(0.0f), {screen.x, bars}, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
-		canvas.DrawQuad({0.0f, screen.y - bars}, screen, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+		if (bars > 0.0f)
+		{
+			canvas.DrawQuad(glm::vec2(0.0f), {screen.x, bars}, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+			canvas.DrawQuad({0.0f, screen.y - bars}, screen, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+		}
+		if (sides > 0.0f)
+		{
+			canvas.DrawQuad(glm::vec2(0.0f), {sides, screen.y}, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+			canvas.DrawQuad({screen.x - sides, 0.0f}, screen, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+		}
 	};
 	// The bars cover the scene in a view of their own, which the advisors near the screen are drawn over: clinging to
 	// the bottom of the screen during a cut scene, an advisor shows over the bottom bar
 	_cinemaBarsCanvas.Begin(resolution);
-	if (bars > 0.0f)
-	{
-		drawBars(_cinemaBarsCanvas);
-	}
+	drawBars(_cinemaBarsCanvas);
 	_cinemaBarsCanvas.End();
 	if (const auto fade = director.GetFadeColour(); (fade >> 24u) != 0)
 	{
 		const auto colour = glm::vec4(static_cast<float>((fade >> 16u) & 0xFFu), static_cast<float>((fade >> 8u) & 0xFFu),
 		                              static_cast<float>(fade & 0xFFu), static_cast<float>(fade >> 24u)) /
 		                    255.0f;
-		_canvas.DrawQuad({0.0f, bars}, {screen.x, screen.y - bars}, glm::vec2(0.0f), glm::vec2(1.0f), colour, nullptr);
+		_canvas.DrawQuad({sides, bars}, {screen.x - sides, screen.y - bars}, glm::vec2(0.0f), glm::vec2(1.0f), colour, nullptr);
 		// While a fade shows, the bars are drawn again over it and over the advisors
-		if (bars > 0.0f)
-		{
-			drawBars(_canvas);
-		}
+		drawBars(_canvas);
 	}
 	DrawDialogue(resolution, static_cast<int>(bars));
 	// The game covers the frame with the fade's colour last of all
@@ -548,18 +551,19 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_pointerCanvas.End();
 }
 
-void GameInterface::DrawVideo(glm::u16vec2 resolution)
+int GameInterface::DrawVideo(glm::u16vec2 resolution)
 {
 	if (!Locator::videoSystem::has_value())
 	{
-		return;
+		return 0;
 	}
 	const auto& videos = Locator::videoSystem::value();
 	const auto picture = videos.GetPicture();
 	if (!picture.has_value())
 	{
-		return;
+		return 0;
 	}
+	const auto rect = video::LetterboxRect(resolution.x, resolution.y);
 	// Over the interface, under the scripts' fade and the cinema bars: what has been drawn so far goes first
 	_canvas.End();
 	if (!_video)
@@ -577,8 +581,9 @@ void GameInterface::DrawVideo(glm::u16vec2 resolution)
 	                 .height = picture->height,
 	                 .serial = picture->serial,
 	             },
-	             video::LetterboxRect(resolution.x, resolution.y), picture->alpha, videos.IsSixteenBitColour());
+	             rect, picture->alpha, videos.IsSixteenBitColour());
 	_canvas.Begin(resolution);
+	return rect.x;
 }
 
 void GameInterface::DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour)

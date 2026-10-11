@@ -35,6 +35,42 @@ constexpr std::array<std::pair<InputEvent::Kind, std::string_view>, 9> k_KindNam
     {InputEvent::Kind::Release, "release"},
 }};
 
+constexpr std::array<std::pair<InputEvent::Timing, std::string_view>, 2> k_TimingNames {{
+    {InputEvent::Timing::Mouse, "mouse"},
+    {InputEvent::Timing::Immediate, "immediate"},
+}};
+
+/// Whether an event is the pointer's, which has a timing
+bool HasTiming(InputEvent::Kind kind)
+{
+	return kind == InputEvent::Kind::PointerTo || kind == InputEvent::Kind::ButtonDown || kind == InputEvent::Kind::ButtonUp;
+}
+
+/// A timing by its name; none when there is no such timing
+std::optional<InputEvent::Timing> TimingNamed(std::string_view name)
+{
+	const auto found =
+	    std::find_if(k_TimingNames.begin(), k_TimingNames.end(), [name](const auto& t) { return t.second == name; });
+	return found != k_TimingNames.end() ? std::optional(found->first) : std::nullopt;
+}
+
+/// A request's timing, the mouse's when it asks for none
+std::optional<InputEvent::Timing> TimingParam(const Json& params, std::string& error)
+{
+	const auto name = StringMember(params, "timing");
+	if (!name.has_value())
+	{
+		return InputEvent::Timing::Mouse;
+	}
+	const auto timing = TimingNamed(*name);
+	if (!timing.has_value())
+	{
+		error = "timing is mouse (the default: as a real mouse, seen by the action map the frame after) or immediate "
+		        "(seen the same frame, as recordings made before the mouse's timing)";
+	}
+	return timing;
+}
+
 constexpr std::array<std::pair<std::string_view, uint8_t>, 3> k_Buttons {{
     {"left", 1},
     {"middle", 2},
@@ -96,13 +132,28 @@ std::string_view openblack::inspector::KindName(InputEvent::Kind kind)
 	return found != k_KindNames.end() ? found->second : "unknown";
 }
 
+std::string_view openblack::inspector::TimingName(InputEvent::Timing timing)
+{
+	const auto found =
+	    std::find_if(k_TimingNames.begin(), k_TimingNames.end(), [timing](const auto& t) { return t.first == timing; });
+	return found != k_TimingNames.end() ? found->second : "unknown";
+}
+
 Json openblack::inspector::ToJson(const InputEvent& event)
 {
 	Json json = {{"kind", KindName(event.kind)}};
+	if (HasTiming(event.kind))
+	{
+		json["timing"] = TimingName(event.timing);
+	}
 	switch (event.kind)
 	{
 	case InputEvent::Kind::PointerTo:
 		json["position"] = Point(event.position);
+		if (event.stepFrom.has_value())
+		{
+			json["from"] = Point(*event.stepFrom);
+		}
 		break;
 	case InputEvent::Kind::ButtonDown:
 	case InputEvent::Kind::ButtonUp:
@@ -143,17 +194,44 @@ std::optional<InputEvent> openblack::inspector::InputEventFromJson(const Json& j
 		return std::nullopt;
 	}
 	InputEvent event {.kind = kind->first};
+	if (const auto timing = StringMember(json, "timing"); timing.has_value())
+	{
+		const auto named = TimingNamed(*timing);
+		if (!named.has_value())
+		{
+			error = "an event's timing is mouse or immediate";
+			return std::nullopt;
+		}
+		event.timing = *named;
+	}
+	const auto pixel = [&json](std::string_view key) -> std::optional<glm::ivec2> {
+		const auto it = json.find(key);
+		if (it == json.end() || !it->is_array() || it->size() != 2 || !(*it)[0].is_number() || !(*it)[1].is_number())
+		{
+			return std::nullopt;
+		}
+		return glm::ivec2(static_cast<int>((*it)[0].get<double>()), static_cast<int>((*it)[1].get<double>()));
+	};
 	switch (event.kind)
 	{
 	case InputEvent::Kind::PointerTo:
 	{
-		const auto it = json.find("position");
-		if (it == json.end() || !it->is_array() || it->size() != 2 || !(*it)[0].is_number() || !(*it)[1].is_number())
+		const auto position = pixel("position");
+		if (!position.has_value())
 		{
 			error = "a pointer event needs a position [x, y] in pixels";
 			return std::nullopt;
 		}
-		event.position = {static_cast<int>((*it)[0].get<double>()), static_cast<int>((*it)[1].get<double>())};
+		event.position = *position;
+		if (json.contains("from"))
+		{
+			event.stepFrom = pixel("from");
+			if (!event.stepFrom.has_value())
+			{
+				error = "a pointer event's from is a pixel [x, y]";
+				return std::nullopt;
+			}
+		}
 		break;
 	}
 	case InputEvent::Kind::ButtonDown:
@@ -280,6 +358,10 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	                                                 "one is shown)",
 	                                  .required = false};
 	const auto button = Optional("button", "string", "left (the default), middle or right");
+	const auto timing = Optional("timing", "string",
+	                             "mouse (the default): a real mouse's timing, the move's event this frame and the "
+	                             "pointer read there by the action map the next, steps of a drag or path going on from "
+	                             "wherever the game put the cursor; immediate: seen the same frame, as before");
 	return {
 	    {.name = "state",
 	     .description = "The pointer, the buttons held, the hand, what the cursor picks, and the input still to come",
@@ -293,13 +375,14 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	     .needsNear = false},
 	    Write("pointer",
 	          "Moves the pointer, as the mouse would, to a pixel or to where a point of the world is on the "
-	          "screen. The hand follows it this frame.",
-	          {screen, world}),
+	          "screen. With the mouse's timing (the default) the move's event reaches the game this frame and the "
+	          "action map reads the pointer there from the next, as with a real mouse",
+	          {screen, world, timing}),
 	    Write("button",
 	          "A mouse button where the pointer is: press, release, click (pressed now, let go of the next "
 	          "frame) or double_click (a click, then pressed and let go of again as the second click of a double "
 	          "click, a frame apart)",
-	          {button, Optional("action", "string", "press, release, click (the default) or double_click")}),
+	          {button, Optional("action", "string", "press, release, click (the default) or double_click"), timing}),
 	    Write("key",
 	          "A key by its name (\"L\", \"Space\", \"Left Shift\"), or an action by the options screen's name, "
 	          "pressed for a frame",
@@ -314,11 +397,13 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	          {{.name = "to", .type = "point", .description = "{\"screen\": [x, y]} or {\"world\": [x, z]}", .required = true},
 	           button,
 	           Optional("frames", "integer", "Frames the move takes (30 by default)"),
-	           Optional("from", "point", "Where it starts, as to; the pointer's place by default")}),
+	           Optional("from", "point", "Where it starts, as to; the pointer's place by default"),
+	           timing}),
 	    Write("path", "Moves the pointer through pixels, a frame or more each, with a button held throughout or none",
 	          {{.name = "points", .type = "array", .description = "[[x, y], ...] in pixels", .required = true},
 	           Optional("button", "string", "left, middle, right, or none (the default)"),
-	           Optional("frames", "integer", "Frames for each point (1 by default)")}),
+	           Optional("frames", "integer", "Frames for each point (1 by default)"),
+	           timing}),
 	    Write("gesture", "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen",
 	          {{.name = "name", .type = "string", .description = "The gesture's name, from input.names", .required = true},
 	           Optional("hold_action", "boolean", "The Action button held throughout, as a circle readying a miracle")}),
@@ -335,7 +420,10 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	          {{.name = "events",
 	            .type = "array",
 	            .description = "The recording: [{\"frame\": n, \"event\": {...}}, ...] as input.record answers it",
-	            .required = true}}),
+	            .required = true},
+	           Optional("timing", "string",
+	                    "The timing of the pointer's events that don't say theirs, as recordings made before the "
+	                    "mouse's timing: immediate for those, else mouse (the default)")}),
 	};
 }
 
@@ -433,40 +521,45 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		const auto at = params.contains("screen")  ? ScreenPoint(Json {{"at", {{"screen", params["screen"]}}}}, "at", error)
 		                : params.contains("world") ? ScreenPoint(Json {{"at", {{"world", params["world"]}}}}, "at", error)
 		                                           : std::nullopt;
-		if (!at.has_value())
+		const auto timing = TimingParam(params, error);
+		if (!at.has_value() || !timing.has_value())
 		{
 			return failed(error.empty() ? "input.pointer needs screen [x, y] or world [x, z]" : error);
 		}
-		if (auto why = Now({.kind = InputEvent::Kind::PointerTo, .position = *at}); !why.empty())
+		if (auto why = Now({.kind = InputEvent::Kind::PointerTo, .position = *at, .timing = *timing}); !why.empty())
 		{
 			return failed(why);
 		}
-		return QueryResult::Value(Answer({{"pointer", Point(*at)}}));
+		return QueryResult::Value(Answer({{"pointer", Point(*at)}, {"timing", TimingName(*timing)}}));
 	}
 	if (query == "button")
 	{
 		const auto button = ButtonParam(params, error);
 		const auto action = StringMember(params, "action").value_or("click");
-		if (!button.has_value() || (action != "press" && action != "release" && action != "click" && action != "double_click"))
+		const auto timing = TimingParam(params, error);
+		if (!button.has_value() || !timing.has_value() ||
+		    (action != "press" && action != "release" && action != "click" && action != "double_click"))
 		{
 			return failed(error.empty() ? "action is press, release, click or double_click" : error);
 		}
 		const auto kind = action == "release" ? InputEvent::Kind::ButtonUp : InputEvent::Kind::ButtonDown;
-		if (auto why = Now({.kind = kind, .button = *button}); !why.empty())
+		if (auto why = Now({.kind = kind, .button = *button, .timing = *timing}); !why.empty())
 		{
 			return failed(why);
 		}
 		if (action == "click" || action == "double_click")
 		{
-			_timeline.Schedule(_frame + 2, {.kind = InputEvent::Kind::ButtonUp, .button = *button});
+			_timeline.Schedule(_frame + 2, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
 		}
 		if (action == "double_click")
 		{
 			// The second press and its letting go count two clicks, as the mouse tells a double click
-			_timeline.Schedule(_frame + 3, {.kind = InputEvent::Kind::ButtonDown, .button = *button, .clicks = 2});
-			_timeline.Schedule(_frame + 4, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .clicks = 2});
+			_timeline.Schedule(_frame + 3,
+			                   {.kind = InputEvent::Kind::ButtonDown, .button = *button, .clicks = 2, .timing = *timing});
+			_timeline.Schedule(_frame + 4,
+			                   {.kind = InputEvent::Kind::ButtonUp, .button = *button, .clicks = 2, .timing = *timing});
 		}
-		auto answer = Answer({{"button", *button}, {"action", action}});
+		auto answer = Answer({{"button", *button}, {"action", action}, {"timing", TimingName(*timing)}});
 		if (action != "release" && StringMember(params, "button").value_or("left") == "left")
 		{
 			// The commonest surprise: the left button never picks things up
@@ -533,30 +626,35 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		const auto to = ScreenPoint(params, "to", error);
 		const auto button = ButtonParam(params, error);
 		const auto frames = FramesParam(params, 30, error);
+		const auto timing = TimingParam(params, error);
 		auto from = params.contains("from") ? ScreenPoint(params, "from", error) : _pointer;
 		if (!from.has_value() && error.empty())
 		{
 			from = _target.ScreenSize() / 2;
 		}
-		if (!to.has_value() || !button.has_value() || !frames.has_value() || !from.has_value())
+		if (!to.has_value() || !button.has_value() || !frames.has_value() || !from.has_value() || !timing.has_value())
 		{
 			return failed(error.empty() ? "input.drag needs to: {screen} or {world}" : error);
 		}
 		// Down where it starts, then evenly to the end a step a frame, and let go there the frame after
-		if (auto why = Now({.kind = InputEvent::Kind::PointerTo, .position = *from}); !why.empty())
+		if (auto why = Now({.kind = InputEvent::Kind::PointerTo, .position = *from, .timing = *timing}); !why.empty())
 		{
 			return failed(why);
 		}
-		Now({.kind = InputEvent::Kind::ButtonDown, .button = *button});
+		Now({.kind = InputEvent::Kind::ButtonDown, .button = *button, .timing = *timing});
+		auto last = *from;
 		for (uint32_t step = 1; step <= *frames; ++step)
 		{
 			const auto t = static_cast<float>(step) / static_cast<float>(*frames);
 			const auto at = glm::ivec2(glm::round(glm::mix(glm::vec2(*from), glm::vec2(*to), t)));
-			_timeline.Schedule(_frame + 1 + step, {.kind = InputEvent::Kind::PointerTo, .position = at});
+			_timeline.Schedule(_frame + 1 + step,
+			                   {.kind = InputEvent::Kind::PointerTo, .position = at, .stepFrom = last, .timing = *timing});
+			last = at;
 		}
-		_timeline.Schedule(_frame + 2 + *frames, {.kind = InputEvent::Kind::ButtonUp, .button = *button});
+		_timeline.Schedule(_frame + 2 + *frames, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
 		_pointer = to;
-		return QueryResult::Value(Answer({{"from", Point(*from)}, {"to", Point(*to)}, {"frames", *frames}}));
+		return QueryResult::Value(
+		    Answer({{"from", Point(*from)}, {"to", Point(*to)}, {"frames", *frames}, {"timing", TimingName(*timing)}}));
 	}
 	if (query == "path")
 	{
@@ -576,30 +674,34 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			pixels.push_back(*pixel);
 		}
 		const auto frames = FramesParam(params, 1, error);
+		const auto timing = TimingParam(params, error);
 		const bool held = StringMember(params, "button").value_or("none") != "none";
 		const auto button = held ? ButtonParam(params, error) : std::optional<uint8_t>(0);
-		if (!frames.has_value() || !button.has_value() ||
+		if (!frames.has_value() || !button.has_value() || !timing.has_value() ||
 		    static_cast<uint64_t>(*frames) * pixels.size() > static_cast<uint64_t>(k_LongestFrames))
 		{
 			return failed(error.empty() ? "the path would take too many frames" : error);
 		}
-		Now({.kind = InputEvent::Kind::PointerTo, .position = pixels.front()});
+		Now({.kind = InputEvent::Kind::PointerTo, .position = pixels.front(), .timing = *timing});
 		if (held)
 		{
-			Now({.kind = InputEvent::Kind::ButtonDown, .button = *button});
+			Now({.kind = InputEvent::Kind::ButtonDown, .button = *button, .timing = *timing});
 		}
 		uint64_t due = _frame + 1;
 		for (size_t i = 1; i < pixels.size(); ++i)
 		{
 			due += *frames;
-			_timeline.Schedule(due, {.kind = InputEvent::Kind::PointerTo, .position = pixels[i]});
+			_timeline.Schedule(
+			    due,
+			    {.kind = InputEvent::Kind::PointerTo, .position = pixels[i], .stepFrom = pixels[i - 1], .timing = *timing});
 		}
 		if (held)
 		{
-			_timeline.Schedule(due + 1, {.kind = InputEvent::Kind::ButtonUp, .button = *button});
+			_timeline.Schedule(due + 1, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
 		}
 		_pointer = pixels.back();
-		return QueryResult::Value(Answer({{"points", pixels.size()}, {"frames", due + (held ? 1 : 0) - _frame}}));
+		return QueryResult::Value(
+		    Answer({{"points", pixels.size()}, {"frames", due + (held ? 1 : 0) - _frame}, {"timing", TimingName(*timing)}}));
 	}
 	if (query == "gesture")
 	{
@@ -659,15 +761,24 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		{
 			return failed("events is a recording, as input.record answers it");
 		}
+		// Recordings made before the mouse's timing don't say theirs: the request's timing is theirs
+		const auto timing = TimingParam(params, error);
+		if (!timing.has_value())
+		{
+			return failed(error);
+		}
 		std::vector<RecordedInput> recording;
 		for (const auto& each : *events)
 		{
 			const auto frame = NumberMember(each, "frame");
-			const auto event =
-			    each.is_object() && each.contains("event") ? InputEventFromJson(each["event"], error) : std::nullopt;
+			auto event = each.is_object() && each.contains("event") ? InputEventFromJson(each["event"], error) : std::nullopt;
 			if (!frame.has_value() || *frame < 0.0 || *frame > k_LongestFrames * 10.0 || !event.has_value())
 			{
 				return failed(error.empty() ? "each event is {\"frame\": n, \"event\": {...}}" : error);
+			}
+			if (!each["event"].contains("timing"))
+			{
+				event->timing = *timing;
 			}
 			recording.push_back({.frame = static_cast<uint64_t>(*frame), .event = *event});
 		}

@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -248,6 +249,8 @@ TEST(InspectorInput, EventsReadBackAsTheyAreWritten)
 {
 	const std::vector<InputEvent> events {
 	    {.kind = InputEvent::Kind::PointerTo, .position = {3, 4}},
+	    {.kind = InputEvent::Kind::PointerTo, .position = {5, 4}, .stepFrom = glm::ivec2(3, 4)},
+	    {.kind = InputEvent::Kind::PointerTo, .position = {3, 4}, .timing = InputEvent::Timing::Immediate},
 	    {.kind = InputEvent::Kind::ButtonUp, .button = 2},
 	    {.kind = InputEvent::Kind::ButtonDown, .button = 1, .clicks = 2},
 	    {.kind = InputEvent::Kind::KeyDown, .key = "Left Shift"},
@@ -269,6 +272,42 @@ TEST(InspectorInput, EventsReadBackAsTheyAreWritten)
 	// A single click's count isn't written, so recordings made before read back the same
 	EXPECT_FALSE(ToJson({.kind = InputEvent::Kind::ButtonDown, .button = 1}).contains("clicks"));
 	EXPECT_FALSE(InputEventFromJson(Json {{"kind", "button_down"}, {"button", 1}, {"clicks", 3}}, error).has_value());
+}
+
+// The pointer's moves and buttons have a real mouse's timing unless asked otherwise; a drag's and a path's steps say
+// where each step starts, so they go on from wherever the game has put the cursor
+TEST(InspectorInput, ThePointersTimingIsTheMousesUnlessImmediateIsAskedFor)
+{
+	Rig rig;
+	EXPECT_EQ(rig.Ask(R"({"query": "input.pointer", "params": {"screen": [0, 0]}})")["timing"], "mouse");
+	EXPECT_EQ(rig.target.made.back().event.timing, InputEvent::Timing::Mouse);
+	rig.Ask(R"({"query": "input.drag", "params": {"to": {"screen": [20, 0]}, "frames": 2, "timing": "immediate"}})");
+	// Down now, then a step a frame from the frame after
+	rig.Frame();
+	rig.Frame();
+	rig.Frame();
+	const auto& step = rig.target.made.back().event;
+	EXPECT_EQ(step.timing, InputEvent::Timing::Immediate);
+	EXPECT_EQ(step.stepFrom, glm::ivec2(10, 0));
+	EXPECT_EQ(step.position, glm::ivec2(20, 0));
+	EXPECT_NE(rig.Refused(R"({"query": "input.pointer", "params": {"screen": [1, 1], "timing": "soon"}})").find("timing"),
+	          std::string::npos);
+	// Keys have no timing to write
+	EXPECT_FALSE(ToJson({.kind = InputEvent::Kind::KeyDown, .key = "L"}).contains("timing"));
+}
+
+// A recording made before the mouse's timing came in says no timing: replayed, it takes the replay's, immediate for
+// the same frames as when it was made; events that say theirs keep it
+TEST(InspectorInput, OldRecordingsReplayWithTheTimingAskedFor)
+{
+	Rig rig;
+	rig.Ask(R"({"query": "input.replay", "params": {"timing": "immediate", "events": [
+	    {"frame": 0, "event": {"kind": "pointer", "position": [5, 5]}},
+	    {"frame": 0, "event": {"kind": "button_down", "button": 1, "timing": "mouse"}}]}})");
+	rig.Frame();
+	ASSERT_EQ(rig.target.made.size(), 2);
+	EXPECT_EQ(rig.target.made[0].event.timing, InputEvent::Timing::Immediate);
+	EXPECT_EQ(rig.target.made[1].event.timing, InputEvent::Timing::Mouse);
 }
 
 // Deterministic replay: input recorded over frames and replayed from the same start is made at the same frames in the

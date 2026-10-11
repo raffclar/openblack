@@ -183,6 +183,9 @@ public:
 	virtual void SetPlayerMouseBlocked([[maybe_unused]] bool blocked) {}
 	[[nodiscard]] virtual bool IsPlayerMouseBlocked() const { return false; }
 	[[nodiscard]] virtual std::optional<ScriptedPointer> GetScriptedPointer() const { return std::nullopt; }
+	/// Just before the frame takes its events from the window's queue: the scripted pointer takes its moves and buttons
+	/// sent as pumped events (see ScriptedMouse), as SDL takes a real mouse's as it pumps them
+	virtual void PumpScriptedPointer() {}
 	/// While an agent drives the game through the debug inspector, the player's mouse and keyboard are kept out (see
 	/// InputLock): their events are dropped before the game, the debug windows and the camera see them, and the pointer
 	/// stays where the game's own input last put it

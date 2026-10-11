@@ -159,6 +159,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -1545,6 +1546,9 @@ bool Game::Update() noexcept
 		{
 			Locator::handDemoSystem::value().Update();
 		}
+		// The scripted mouse's moves and buttons take effect as they are pumped, as a real mouse's do in SDL: after the
+		// action map's frame has read the pointer
+		actions.PumpScriptedPointer();
 		SDL_Event e;
 		while (SDL_PollEvent(&e) != 0)
 		{
@@ -1814,6 +1818,8 @@ bool Game::Update() noexcept
 	}
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
+	// The disciples glow, and the one in or under the hand shows the symbol of its work
+	ecs::villager_disciple::UpdateMarks();
 	// The town totems ease to their shares
 	Locator::villageTotemSystem::value().Update(gameTime.count());
 	// The players' symbols of belief over the village centres move on

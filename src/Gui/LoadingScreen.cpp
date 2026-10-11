@@ -19,6 +19,7 @@
 #include "Graphics/RenderPass.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
+#include "Gui/ScreenFit.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -314,25 +315,35 @@ void LoadingScreen::DrawTips(glm::u16vec2 resolution, float fade, float progress
 	{
 		MakePicture();
 	}
-	_resolution = resolution;
-	const int32_t width = resolution.x;
-	const int32_t height = resolution.y;
+	// The screen is laid out for 4:3: on any other shape it is laid out in the biggest 4:3 box in the middle of the
+	// window, black round it
+	const auto frame = FitInside(k_FourByThree, resolution.x, resolution.y);
+	const glm::vec2 origin(static_cast<float>(frame.x), static_cast<float>(frame.y));
+	const glm::u16vec2 screen(static_cast<uint16_t>(frame.width), static_cast<uint16_t>(frame.height));
+	_resolution = screen;
+	const int32_t width = screen.x;
+	const int32_t height = screen.y;
 	const auto layout = loading::LayoutFor(width, height);
 	const auto levels = loading::FadeOf(fade);
 	const float alpha = AlphaOf(levels.alpha);
 	const auto& tip = *_picture;
 	const auto& picture = layout.picture;
-	const video::ScreenRect pictureRect {
-	    .x = picture.left, .y = picture.top, .width = picture.right - picture.left, .height = picture.bottom - picture.top};
+	const video::ScreenRect pictureRect {.x = frame.x + picture.left,
+	                                     .y = frame.y + picture.top,
+	                                     .width = picture.right - picture.left,
+	                                     .height = picture.bottom - picture.top};
+	const auto begin = [this, resolution, origin]() {
+		_canvas.Begin(resolution);
+		_canvas.SetOrigin(origin);
+	};
 
-	_canvas.Begin(resolution);
+	begin();
 	if (tip.blur)
 	{
 		const glm::vec2 blurMin(k_BlurInset);
 		const glm::vec2 blurMax = glm::vec2(tip.blurSize) / 256.0f - k_BlurInset;
 		// The blurred picture over the whole screen, darkening to black down its lower half
-		_canvas.DrawQuad({0.0f, 0.0f}, glm::vec2(resolution), blurMin, blurMax, glm::vec4(k_BackdropColour, alpha),
-		                 tip.blur.get());
+		_canvas.DrawQuad({0.0f, 0.0f}, glm::vec2(screen), blurMin, blurMax, glm::vec4(k_BackdropColour, alpha), tip.blur.get());
 		DrawColourBox({.left = 0, .top = height / 2, .right = width, .bottom = height}, {0, 0, k_ShadeColour, k_ShadeColour},
 		              levels.alpha);
 		// The picture blurred, then sharp over it
@@ -346,14 +357,14 @@ void LoadingScreen::DrawTips(glm::u16vec2 resolution, float fade, float progress
 			_canvas.End();
 			_overlay->Draw(graphics::RenderPass::Interface, resolution, tip.still->GetPlanes(), pictureRect, levels.sharpAlpha,
 			               true);
-			_canvas.Begin(resolution);
+			begin();
 		}
 	}
 	else if (tip.still)
 	{
 		_canvas.End();
 		_overlay->Draw(graphics::RenderPass::Interface, resolution, tip.still->GetPlanes(), pictureRect, levels.alpha, true);
-		_canvas.Begin(resolution);
+		begin();
 	}
 
 	// The band behind the text, fading in from the left and out to the right

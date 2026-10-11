@@ -26,6 +26,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/LoadingScreenRules.h"
+#include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Locator.h"
 #include "Video/StillPicture.h"
@@ -161,9 +162,11 @@ void Game::PlayLogoScreens()
 			PresentStartupFrame([this, &picture, alpha](glm::u16vec2 resolution) {
 				if (picture)
 				{
-					// Over the whole screen from a pixel before its top left corner
+					// Over the screen's 4:3 box from a pixel before its top left corner, black round it
+					const auto box = gui::FitInside(gui::k_FourByThree, resolution.x, resolution.y);
 					_loadingScreen->DrawPicture(resolution, picture->GetPlanes(),
-					                            {.x = -1, .y = -1, .width = resolution.x, .height = resolution.y}, alpha);
+					                            {.x = box.x - 1, .y = box.y - 1, .width = box.width, .height = box.height},
+					                            alpha);
 				}
 			});
 		}
@@ -205,8 +208,9 @@ void Game::PlayPreIntro()
 		film->Decode(static_cast<uint32_t>(shown));
 		++shown;
 		PresentStartupFrame([this, &film](glm::u16vec2 resolution) {
+			// Over the screen's 4:3 box, black round it
 			_loadingScreen->DrawPicture(resolution, film->GetPlanes(),
-			                            {.x = 0, .y = 0, .width = resolution.x, .height = resolution.y}, 255);
+			                            gui::FitInside(gui::k_FourByThree, resolution.x, resolution.y), 255);
 		});
 		keyPressed = TakeStartupInput(*this).key || keyPressed;
 	} while (startup::PreIntroGoesOn(shown, frameCount, keyPressed) && !_quitRequested);

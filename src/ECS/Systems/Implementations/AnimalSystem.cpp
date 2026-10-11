@@ -38,6 +38,7 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/Graveyard.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
@@ -1205,7 +1206,11 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		cells[{cell.x, cell.y}].emplace_back(entity, facts);
 	};
 	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& villager, const Transform& t) {
-		add(entity, t, {.isVillager = true, .helpless = villager.life <= 0.0f || registry.AllOf<BeingEaten>(entity)});
+		// A walking skeleton has no meat for it
+		add(entity, t,
+		    {.isVillager = true,
+		     .skeleton = registry.AllOf<WalkingSkeleton>(entity),
+		     .helpless = villager.life <= 0.0f || registry.AllOf<BeingEaten>(entity)});
 	});
 	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& other, const Transform& t) {
 		if (entity != wolf)

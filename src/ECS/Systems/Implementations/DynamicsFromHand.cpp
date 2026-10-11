@@ -84,6 +84,10 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 		return {};
 	}
 	const bool byCreature = release.creature != entt::null;
+	if (!byCreature)
+	{
+		Hooks().LetGoByHand(object, release.player, release.dontReplant);
+	}
 	LetGoOfLeashesTiedTo(object);
 	registry.AssignOrReplace<InPhysics>(object);
 	// Out of the map's cells while it moves
@@ -133,7 +137,10 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 
 	if (landed)
 	{
-		// TODO(physics): a villager put down by the player's own hand whose job changed plays the advisor's line for it
+		if (!byCreature)
+		{
+			Hooks().PutDownByHand(object, release.player);
+		}
 		entry->flags |= PhysicsEntry::k_Landed;
 		Hooks().ConsiderMimickingLanding(object, release.player);
 		float tiltX = 0.0f;
