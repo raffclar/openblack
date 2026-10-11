@@ -103,6 +103,10 @@ struct Request
 	QueryOptions options;
 };
 
+/// The point to search around and its radius from an object's near and radius members, none when it has neither; why
+/// not when they don't read
+[[nodiscard]] std::variant<std::optional<Near>, std::string> ReadNear(const Json& object);
+
 /// A request read from a line of text, or why it couldn't be read
 [[nodiscard]] std::variant<Request, std::string> DecodeRequest(std::string_view line);
 

@@ -249,23 +249,44 @@ QueryResult Inspector::Answer(const Request& request) const
 	std::vector<std::string> known;
 	known.reserve(description->parameters.size());
 	std::ranges::transform(description->parameters, std::back_inserter(known), &ParameterDescription::name);
-	if (auto unknown = UnknownParameters(request.query, request.params, known); unknown.has_value())
+	// near and radius go beside params, but given inside them, as tools put every parameter, they are taken the same
+	// for a query that has no parameters of those names
+	auto params = request.params;
+	auto options = request.options;
+	if (const bool ownNear = std::ranges::any_of(known, [](const auto& name) { return name == "near" || name == "radius"; });
+	    !ownNear && (params.contains("near") || params.contains("radius")))
+	{
+		if (options.near.has_value())
+		{
+			return error(request.query + ": near and radius are given twice, beside params and inside them");
+		}
+		auto near = ReadNear(params);
+		if (auto* why = std::get_if<std::string>(&near))
+		{
+			return error(*why + " (near and radius go beside params: {\"query\": ..., \"near\": [x, y, z], "
+			                    "\"radius\": r})");
+		}
+		options.near = std::get<std::optional<Near>>(near);
+		params.erase("near");
+		params.erase("radius");
+	}
+	if (auto unknown = UnknownParameters(request.query, params, known); unknown.has_value())
 	{
 		return error(*std::move(unknown));
 	}
 	for (const auto& parameter : description->parameters)
 	{
-		if (parameter.required && !request.params.contains(parameter.name))
+		if (parameter.required && !params.contains(parameter.name))
 		{
 			return error(request.query + " needs the parameter " + parameter.name + " (" + parameter.type + ")");
 		}
 	}
-	if (description->needsNear && !request.options.near.has_value())
+	if (description->needsNear && !options.near.has_value())
 	{
-		return error(request.query + " searches around a point: give near and radius");
+		return error(request.query + " searches around a point: give near and radius beside params");
 	}
 
-	auto answered = provider->Run(queryName, QueryContext {.params = request.params, .options = request.options});
+	auto answered = provider->Run(queryName, QueryContext {.params = params, .options = options});
 	if (description->writes)
 	{
 		Remember(request, answered);
@@ -276,9 +297,9 @@ QueryResult Inspector::Answer(const Request& request) const
 	}
 	if (description->kind == ResultKind::List)
 	{
-		return QueryResult::Value(ShapeList(std::move(answered.value), request.options));
+		return QueryResult::Value(ShapeList(std::move(answered.value), options));
 	}
-	return QueryResult::Value(ShapeObject(answered.value, request.options));
+	return QueryResult::Value(ShapeObject(answered.value, options));
 }
 
 QueryResult Inspector::Writes(const Request& request) const
