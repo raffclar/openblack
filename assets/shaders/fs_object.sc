@@ -2,8 +2,12 @@ $input v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 
 #include <bgfx_shader.sh>
 
-#include "creature_shadow.sh"
 #include "snow_object.sh"
+
+// The creatures' and the hand's moving shadows' data (see ground_shadow.sh)
+SAMPLER2D(s_groundShadowData, 14);
+#define GROUND_SHADOW_DATA s_groundShadowData
+#include "ground_shadow.sh"
 
 SAMPLER2D(s_diffuse, 0);
 #ifdef USE_ENVIRONMENT
@@ -91,11 +95,6 @@ void main()
 	{
 		diffuseTex.rgb = texture2D(s_snow, v_snow.xy).rgb * (tinted ? vec3_splat(1.0f) : v_snowLight) * u_tint.rgb;
 	}
-	// The creatures' shadows fall on it, under the haze
-	if (u_creatureShadowInfo.x > 0.0f)
-	{
-		diffuseTex.rgb = diffuseTex.rgb * CreatureShadowLight(v_position.xyz);
-	}
 #ifdef USE_ENVIRONMENT
 	// The second texture stage adds the environment map, which saturates
 	diffuseTex.rgb = min(diffuseTex.rgb + texture2D(s_environment, v_texcoord0.zw).rgb, vec3_splat(1.0f));
@@ -128,4 +127,9 @@ void main()
 		glow += vec3(floor(glowColour / 65536.0f), mod(floor(glowColour / 256.0f), 256.0f), mod(glowColour, 256.0f)) / 255.0f;
 	}
 	gl_FragColor = vec4(min(diffuseTex.rgb + glow + v_haze.rgb, vec3_splat(1.0f)), diffuseTex.a);
+	// The creatures' and the hand's shadows are laid over it in black, straight down
+	if (u_groundShadowInfo.x > 0.0f)
+	{
+		gl_FragColor.rgb = gl_FragColor.rgb * GroundShadowsOnObject(v_position.xyz);
+	}
 }

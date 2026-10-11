@@ -955,6 +955,12 @@ static_assert(offsetof(GCreatureInfo, pooPerEnergy) == 0x370);
 static_assert(offsetof(GCreatureInfo, slowSpeed) == 0x240);
 static_assert(offsetof(GCreatureInfo, runAwayDistance) == 0x2d8);
 static_assert(offsetof(GCreatureInfo, alignmentChangePerTurn) == 0x338);
+static_assert(offsetof(GCreatureInfo, strength) == 0x11c);
+static_assert(offsetof(GCreatureInfo, defenceMultiplierBurn) == 0x80);
+static_assert(offsetof(GCreatureInfo, secondsPerAgeTick) == 0x200);
+static_assert(offsetof(GCreatureInfo, field0x24c) == 0x24c);
+static_assert(offsetof(GCreatureInfo, field0x36c) == 0x36c);
+static_assert(offsetof(GCreatureInfo, field0x374) == 0x374);
 
 struct GMagicRadiusSpellInfo: GMagicInfo
 {
@@ -1497,32 +1503,41 @@ struct GTreeInfo: GSingleMapFixedInfo
 	uint16_t maxNumTreesCanProduce;
 };
 
+/// A species' balance row. When the tables load, it overrides the matching fields of the species' creature row, so
+/// these are the values the game plays with (the creature row's own copies are only defaults).
 struct DifferentCreatureInfo
 {
-	float field0x0;
-	float field0x4;
-	float field0x8;
-	float field0xc;
-	float field0x10;
-	float field0x14;
-	float field0x18;
-	float field0x1c;
-	float field0x20;
-	float field0x24;
-	float field0x28;
-	float field0x2c;
+	float startScale;
+	float growUpMinutes;
+	float energyDrain;
+	float startFatness;
+	float fatBurn;
+	float overeatFatFactor;
+	float strength;
+	float strengthDecay;
+	float carryStrengthMinutes;
+	float slowSpeed;
+	float walkSpeed;
+	float runSpeed;
+	/// Overrides the creature row's field0x24c (its first four bytes)
 	float field0x30;
-	float field0x34;
-	float field0x38;
-	float field0x3c;
-	float field0x40;
-	float field0x44;
-	float field0x48;
-	uint32_t field0x4c;
-	float field0x50;
+	float exhaustionRate;
+	float sleepRecover;
+	float defenceMultiplierBurn;
+	float defenceMultiplierCrush;
+	float defenceMultiplierHit;
+	float sleepHeal;
+	uint32_t secondsPerAgeTick;
+	float pooPerEnergy;
+	/// Overrides the creature row's field0x36c
 	float field0x54;
+	/// Overrides the creature row's field0x374 (its first four bytes)
 	float field0x58;
 };
+static_assert(sizeof(DifferentCreatureInfo) == 0x5c);
+
+/// Copies a species' balance row over the fields of its creature row that it overrides
+void ApplyCreatureBalance(GCreatureInfo& creature, const DifferentCreatureInfo& balance);
 
 struct GEffectInfo
 {
@@ -2172,6 +2187,8 @@ using InfoConstants = v120::InfoConstants;
 
 void UpdateInfo(CreatureActionInfo& info, const v100::CreatureActionInfo& old);
 void UpdateInfo(InfoConstants& info, const v100::InfoConstants& old);
+/// Every species' balance row overrides its creature row, as the game does once its tables are loaded
+void ApplyCreatureBalance(InfoConstants& info);
 
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop

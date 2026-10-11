@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include <functional>
 #include <optional>
+#include <span>
 
 #include "Camera/Camera.h"
 #include "CameraControl.h"
@@ -44,11 +46,14 @@ private:
 	std::optional<CameraPose> _override;
 };
 
-/// The debug windows, and the game's own menu and Creature Cave. The menu's buttons are clicked through the game's
-/// input, as the player clicks them.
+/// The debug windows, and the game's own: its menu, the start-of-game question, the tattoo editor and the Creature
+/// Cave. The game's dialogs are clicked through the game's input, as the player clicks them.
 class GameGui final: public GuiTargetInterface
 {
 public:
+	/// Makes input for the game's dialogs: in order, behind any input still to come; empty when made, else why not
+	using InputSender = std::function<std::string(std::span<const InputEvent>)>;
+
 	explicit GameGui(InputTargetInterface& input);
 
 	[[nodiscard]] std::vector<WindowInfo> Windows() const override;
@@ -56,8 +61,15 @@ public:
 	std::string Close(std::string_view window) override;
 	std::string Press(std::string_view window, const std::vector<ButtonPathStep>& path) override;
 
+	/// The input's queue, so that what the dialogs are sent waits behind input asked for before; without one, it is
+	/// made at once
+	void SetInputSender(InputSender send) { _send = std::move(send); }
+
 private:
+	std::string Send(std::span<const InputEvent> events);
+
 	InputTargetInterface& _input;
+	InputSender _send;
 };
 
 /// The land's scripts through the game's script machine

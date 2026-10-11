@@ -42,6 +42,10 @@ Json WindowJson(const WindowInfo& window)
 	{
 		json["buttons"] = window.buttons;
 	}
+	if (!window.selected.empty())
+	{
+		json["selected"] = window.selected;
+	}
 	return json;
 }
 
@@ -64,8 +68,10 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 {
 	auto provider = std::make_unique<FunctionProvider>("gui");
 	provider->Add({.name = "windows",
-	               .description = "The debug windows and the game's own (its menu, the Creature Cave): name, kind, open; "
-	                              "the menu's page (or question) and the controls on it that can be pressed by name",
+	               .description = "The debug windows and the game's own (its menu, the start-of-game question skip_box, "
+	                              "the tattoo_editor, the Creature Cave): name, kind, open; the menu's page (or question), "
+	                              "the controls of the game's dialogs that can be pressed by name, and the skip box's "
+	                              "answer picked",
 	               .parameters = {},
 	               .kind = ResultKind::List,
 	               .needsNear = false},
@@ -96,9 +102,11 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 	    Write("press",
 	          "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page "
 	          "it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows "
-	          "lists them; path [n] for the n-th of a name. A debug window's button inside a table row or another scope "
-	          "its window pushed needs path: the labels and numbers leading to it. The press is made at the window's "
-	          "next frame; read what it changed after",
+	          "lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's "
+	          "radio button by its answer or by normal, creature, story or old. The tattoo_editor: OK or Cancel. The "
+	          "game's dialogs are clicked through the game's input, in order behind any input still to come. A debug "
+	          "window's button inside a table row or another scope its window pushed needs path: the labels and numbers "
+	          "leading to it. The press is made at the window's next frame; read what it changed after",
 	          {Required("window", "string", "The window's name"),
 	           Required("button", "string", "The button's label"),
 	           {.name = "path",

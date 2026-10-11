@@ -201,8 +201,7 @@ const char* creature_watching::Name(MimicStage stage)
 }
 
 bool creature_watching::StartMimicry(std::optional<Mimicry>& mimicry, size_t rule, std::span<const MimicRule> rules,
-                                     const MimicConditions& conditions, std::optional<uint32_t> object,
-                                     const std::function<float()>& random)
+                                     const MimicConditions& conditions, std::optional<uint32_t> object)
 {
 	if (rule >= rules.size())
 	{
@@ -210,15 +209,19 @@ bool creature_watching::StartMimicry(std::optional<Mimicry>& mimicry, size_t rul
 	}
 	const auto& wanted = rules[rule];
 	if (conditions.phase < k_MinMimicPhase || (wanted.needsLearningLeash && !conditions.learningLeashInHand) ||
-	    conditions.reactionPriority >= k_MaxReactionPriorityToMimic || !conditions.canSee || wanted.chance <= 0.0f)
+	    conditions.reactionPriority >= k_MaxReactionPriorityToMimic || !conditions.canSee)
 	{
 		return false;
 	}
-	if (mimicry.has_value() && (mimicry->rule == rule || rules[mimicry->rule].chance > wanted.chance))
+	if (!mimicry.has_value())
 	{
-		return false;
+		if (wanted.chance <= 0.0f)
+		{
+			return false;
+		}
 	}
-	if (random() >= wanted.chance)
+	else if (mimicry->stage != MimicStage::CopyDesire && mimicry->rule < rules.size() &&
+	         (mimicry->rule == rule || wanted.chance < rules[mimicry->rule].chance))
 	{
 		return false;
 	}

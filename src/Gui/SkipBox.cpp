@@ -10,6 +10,7 @@
 #include "SkipBox.h"
 
 #include <algorithm>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -72,10 +73,11 @@ SkipBox::SkipBox(const TextDatabase& texts, const GameFont& font, int textSize)
 		_radios.at(i) = &radio;
 
 		const auto top = k_FirstAnswer + glm::ivec2(0, k_RadioStep * static_cast<int>(i));
-		auto& answer = _dialog.Add<StaticText>(DialogRect {.min = top, .max = top + k_AnswerSize},
-		                                       Text(texts, k_AnswerTexts.at(i), k_MissingPatchText),
+		_answers.at(i) = Text(texts, k_AnswerTexts.at(i), k_MissingPatchText);
+		auto& answer = _dialog.Add<StaticText>(DialogRect {.min = top, .max = top + k_AnswerSize}, _answers.at(i),
 		                                       StaticText::Layout::WrappedLeft, textSize);
 		answer.takesClicks = true;
+		_answerTexts.at(i) = &answer;
 	}
 }
 
@@ -83,6 +85,23 @@ DialogRect SkipBox::GetRadioRect(size_t index)
 {
 	const auto min = k_FirstRadio + glm::ivec2(0, k_RadioStep * static_cast<int>(index));
 	return {.min = min, .max = min + k_RadioSize};
+}
+
+std::vector<Dialog::NamedControl> SkipBox::GetNamedControls() const
+{
+	// The radio buttons' own label is a single space: they go by their answers instead
+	std::vector<Dialog::NamedControl> named;
+	std::ranges::copy_if(_dialog.GetNamedControls(), std::back_inserter(named),
+	                     [](const Dialog::NamedControl& control) { return control.name != k_RadioLabel; });
+	for (size_t i = 0; i < _answers.size(); ++i)
+	{
+		// A hidden choice can't be pressed by tools either
+		if (_radios.at(i)->visible)
+		{
+			named.push_back({.name = _answers.at(i), .kind = "radio", .rect = GetRadioRect(i)});
+		}
+	}
+	return named;
 }
 
 void SkipBox::ShowSelection()
@@ -93,8 +112,21 @@ void SkipBox::ShowSelection()
 	}
 }
 
-void SkipBox::Show()
+bool SkipBox::IsOffered(Choice choice) const noexcept
 {
+	return _radios.at(static_cast<size_t>(choice))->visible;
+}
+
+void SkipBox::Show(bool currentProfileHasCreature)
+{
+	// A choice that can't be taken is hidden, the others keeping their places
+	for (size_t i = 0; i < new_game_choice::k_ChoiceCount; ++i)
+	{
+		const bool offered = new_game_choice::IsAvailable(static_cast<Choice>(i), currentProfileHasCreature);
+		_radios.at(i)->visible = offered;
+		_answerTexts.at(i)->visible = offered;
+	}
+	_selection = new_game_choice::AvailableChoice(_selection, currentProfileHasCreature);
 	_active = true;
 	_answer.reset();
 	_dialog.Reset();
