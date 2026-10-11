@@ -225,6 +225,7 @@
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
 #include "Serializer/FotFile.h"
+#include "Temple/TempleHelp.h"
 
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>
@@ -1068,13 +1069,16 @@ bool Game::GameLogicLoop() noexcept
 	const auto delta = std::chrono::milliseconds(currentTime - _lastGameLoopTime);
 	auto& clock = Locator::time::value();
 
-	// The game pauses the world while the player is in the temple, whose own turns keep the audio going
+	// The game pauses the world while the player is in the temple. The temple's own turns, by real time whatever the
+	// game's speed, run the temple's scripts and its help scripts, keep the audio going and have the advisors follow
+	// what they point at.
 	if (Locator::temple::has_value() && Locator::temple::value().Active())
 	{
-		// NOLINTNEXTLINE(modernize-use-nullptr): clang-tidy bug
-		if (delta >= k_TurnDuration * GetGameSpeed())
+		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
 		{
+			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
 			ProcessTempleAudioTurn();
+			Locator::advisorSystem::value().ProcessTurn();
 			_lastGameLoopTime = currentTime;
 		}
 		return false;
@@ -1092,6 +1096,8 @@ bool Game::GameLogicLoop() noexcept
 		return false;
 	}
 	clock.StartTurn();
+	// The villagers are drawn gliding through the turn from where they stand as it begins
+	Locator::livingActionSystem::value().StartTurnPlaces();
 	// The influence asked during the turn is measured from where the hands were at it
 	Locator::influenceSystem::value().SetInGameTurn(true);
 	ProcessHandToolTipTurn();
@@ -1819,6 +1825,8 @@ bool Game::Update() noexcept
 	{
 		auto profilerScopedUpdateUniforms = profiler.BeginScoped(Profiler::Stage::UpdateUniforms);
 
+		// The hand follows the pointer through the view that is seen: an inspector's override while one is shown
+		ShowInspectorOverride(true);
 		// Update Hand and intersection point
 		// Upright where nothing is under the cursor
 		ecs::components::Transform intersectionTransform {
@@ -2347,6 +2355,8 @@ bool Game::Update() noexcept
 			vegetation.Rustle(gameTime);
 		}
 
+		ShowInspectorOverride(false);
+
 		// Update Entities
 		{
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
@@ -2363,8 +2373,11 @@ bool Game::Update() noexcept
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				ShowInspectorCamera(false);
-				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by
+				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by: through
+				// an inspector's override while one is shown, as the frame is seen
+				ShowInspectorOverride(true);
 				PickUnderCursor(std::chrono::duration<float>(deltaTime).count());
+				ShowInspectorOverride(false);
 			}
 		}
 	} // Update Uniforms
@@ -3908,6 +3921,24 @@ void Game::ShowInspectorCamera(bool shown)
 	if (shown)
 	{
 		inspector.PlaceCamera();
+	}
+	else
+	{
+		inspector.GiveCameraBack();
+	}
+	FitNearClip();
+}
+
+void Game::ShowInspectorOverride(bool shown)
+{
+	if (!Locator::inspector::has_value())
+	{
+		return;
+	}
+	auto& inspector = Locator::inspector::value();
+	if (shown)
+	{
+		inspector.ShowOverrideToPointer();
 	}
 	else
 	{

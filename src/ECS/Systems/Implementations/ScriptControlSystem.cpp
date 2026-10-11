@@ -17,9 +17,11 @@
 
 #include <spdlog/spdlog.h>
 
+#include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -80,7 +82,9 @@ void ScriptControlSystem::ReleaseCamera(Camera& camera)
 		// The player gets a camera of their own, starting from where the script left it and looking the same way
 		camera.SetModel(std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus()));
 	}
-	else
+	// Inside the temple, the script's camera the player came in from gives way all the same
+	else if (!Locator::temple::has_value() || !Locator::temple::value().Active() ||
+	         !Locator::temple::value().ReleaseOutsideScriptCamera())
 	{
 		ScriptMessage("We are in the wrong camera mode! - exception happened?");
 	}

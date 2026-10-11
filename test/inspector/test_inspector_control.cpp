@@ -23,6 +23,7 @@
 #include <Inspector.h>
 #include <Inspector/CameraControl.h>
 #include <Inspector/GuiControl.h>
+#include <Inspector/InputControl.h>
 #include <Inspector/LevelControl.h>
 #include <Inspector/RunControl.h>
 #include <Inspector/ScriptControl.h>
@@ -100,6 +101,7 @@ public:
 		}
 		own.reset();
 	}
+	[[nodiscard]] bool Pinned() const override { return own.has_value(); }
 	void SetOverride(std::optional<CameraPose> to) override { overridden = to; }
 	/// A frame's update: the camera moves itself somewhere, then the inspector puts a picture's camera back
 	void PlaceCameraLikeTheGame(ScreenshotProvider& provider)
@@ -572,6 +574,8 @@ struct HeldThingFrames
 	uint64_t frame {100};
 	/// Where the hand holds the thing this frame, and where the frame was drawn from
 	glm::vec3 held {0.0f};
+	/// What the interface picked under the pointer this frame
+	glm::vec3 picked {0.0f};
 	CameraPose drawnFrom;
 
 	void Run()
@@ -582,13 +586,22 @@ struct HeldThingFrames
 		// The player's camera eases along on its own
 		camera.pose.origin.z += 0.5f;
 		camera.pose.focus.z += 0.5f;
-		// The hand carries what it holds to where the pointer meets the land, by the camera as the game has it
-		held = UnderThePointer(camera.pose);
-		camera.walker = held;
+		// The hand carries what it holds to where the pointer meets the land, through the view seen: an override's while
+		// one is shown, else the camera as the game has it (never a picture's)
+		{
+			const OverrideForPointer pointer(camera);
+			held = UnderThePointer(camera.pose);
+			camera.walker = held;
+		}
 		// Drawn from where the inspector shows the camera, then the camera's own given back
 		ShowCameraForDrawing(camera, screenshots);
 		drawnFrom = camera.pose;
 		camera.Unpin();
+		// The interface picks under the pointer as the frame is drawn, through the view seen too
+		{
+			const OverrideForPointer pointer(camera);
+			picked = UnderThePointer(camera.pose);
+		}
 	}
 };
 
@@ -1145,9 +1158,9 @@ TEST(InspectorCamera, FrameLooksAtAnEntity)
 }
 
 // With the hand holding a thing and the player's input locked, an override and held pictures are what each frame is drawn
-// from for as long as they last, paused or running, while the hand, which follows the pointer through the game's own
-// camera, never chases the camera shown: shown from in front of the thing, it stays where the game's camera puts it.
-// Released, the frames are drawn from the game's own camera, which carried on beneath.
+// from for as long as they last, paused or running. The hand follows the pointer through the view seen: an override's,
+// which stays put, so the thing stays under the pointer as seen; never a picture's, whose framing would chase the thing
+// it frames. Released, the frames are drawn from the game's own camera, which carried on beneath.
 TEST(InspectorCamera, AnOverrideAndHeldPicturesWinWhileTheHandHoldsAThing)
 {
 	FakeScreenshots screenshots;
@@ -1168,10 +1181,10 @@ TEST(InspectorCamera, AnOverrideAndHeldPicturesWinWhileTheHandHoldsAThing)
 		const auto own = camera.pose;
 		frames.Run();
 		EXPECT_EQ(frames.drawnFrom.origin, glm::vec3(0.0f, 16.0f, 8.0f)) << frames.frame;
-		// The hand went by the game's camera, as it moved on this frame, not by the override
-		const auto expected = UnderThePointer(
-		    {.origin = own.origin + glm::vec3(0.0f, 0.0f, 0.5f), .focus = own.focus + glm::vec3(0.0f, 0.0f, 0.5f)});
+		// The hand and the pick went by the override, the view seen, which stays put
+		const auto expected = UnderThePointer({.origin = {0.0f, 16.0f, 8.0f}, .focus = {0.0f, 10.0f, 20.0f}});
 		EXPECT_NEAR(glm::distance(frames.held, expected), 0.0f, 1e-3f) << frames.frame;
+		EXPECT_NEAR(glm::distance(frames.picked, expected), 0.0f, 1e-3f) << frames.frame;
 		// Between frames, as requests are answered, the camera is the game's own
 		EXPECT_EQ(camera.pose.origin, own.origin + glm::vec3(0.0f, 0.0f, 0.5f));
 	}
@@ -1214,11 +1227,146 @@ TEST(InspectorCamera, AnOverrideAndHeldPicturesWinWhileTheHandHoldsAThing)
 		camera.Unpin();
 	}
 
-	// Released: drawn from the game's own camera again, which carried on beneath
+	// Released: drawn from the game's own camera again, which carried on beneath, and the hand and the pick go by it
 	Ask(inspector, R"({"query": "camera.release"})");
 	const auto own = camera.pose;
 	frames.Run();
-	EXPECT_EQ(frames.drawnFrom.origin, own.origin + glm::vec3(0.0f, 0.0f, 0.5f));
+	const CameraPose moved {.origin = own.origin + glm::vec3(0.0f, 0.0f, 0.5f),
+	                        .focus = own.focus + glm::vec3(0.0f, 0.0f, 0.5f)};
+	EXPECT_EQ(frames.drawnFrom.origin, moved.origin);
+	EXPECT_NEAR(glm::distance(frames.held, UnderThePointer(moved)), 0.0f, 1e-3f);
+	EXPECT_NEAR(glm::distance(frames.picked, UnderThePointer(moved)), 0.0f, 1e-3f);
+}
+
+// The pointer's work goes through the override while one is shown, and gives the camera its own state back after;
+// without one, or with the camera already shown elsewhere (a held picture's), it moves nothing and gives nothing back
+TEST(InspectorCamera, TheOverrideIsShownToThePointer)
+{
+	FakeCamera camera;
+	const auto own = camera.pose;
+	{
+		const OverrideForPointer pointer(camera);
+		EXPECT_FALSE(pointer.Shown());
+		EXPECT_EQ(camera.pose.origin, own.origin);
+	}
+	EXPECT_EQ(camera.pins, 0);
+
+	const CameraPose shown {.origin = {5.0f, 40.0f, 5.0f}, .focus = {5.0f, 10.0f, 30.0f}};
+	camera.SetOverride(shown);
+	{
+		const OverrideForPointer pointer(camera);
+		EXPECT_TRUE(pointer.Shown());
+		EXPECT_EQ(camera.pose.origin, shown.origin);
+		EXPECT_EQ(camera.pose.focus, shown.focus);
+	}
+	// Its own state back, untouched
+	EXPECT_FALSE(camera.Pinned());
+	EXPECT_EQ(camera.pose.origin, own.origin);
+	EXPECT_EQ(camera.pose.focus, own.focus);
+
+	// Already shown elsewhere for a picture: left as it is, and still shown there afterwards
+	const CameraPose picture {.origin = {0.0f, 60.0f, 0.0f}, .focus = {0.0f, 10.0f, 10.0f}};
+	static_cast<void>(camera.Pin(picture));
+	{
+		const OverrideForPointer pointer(camera);
+		EXPECT_FALSE(pointer.Shown());
+		EXPECT_EQ(camera.pose.origin, picture.origin);
+	}
+	EXPECT_TRUE(camera.Pinned());
+	EXPECT_EQ(camera.pose.origin, picture.origin);
+	camera.Unpin();
+	EXPECT_EQ(camera.pose.origin, own.origin);
+
+	// The game's own way: shown to the pointer, then given back
+	EXPECT_TRUE(ShowOverrideToPointer(camera));
+	EXPECT_EQ(camera.pose.origin, shown.origin);
+	EXPECT_FALSE(ShowOverrideToPointer(camera));
+	camera.Unpin();
+	EXPECT_EQ(camera.pose.origin, own.origin);
+}
+
+namespace
+{
+
+/// A window of 800 by 600 seen through a camera, finding points of the world on the screen through the view seen as
+/// the game does: the override's while one is shown
+class CameraInput final: public InputTargetInterface
+{
+public:
+	explicit CameraInput(FakeCamera& camera)
+	    : _camera(camera)
+	{
+	}
+	std::string Apply(const InputEvent& /*event*/) override { return {}; }
+	[[nodiscard]] glm::ivec2 ScreenSize() const override { return {800, 600}; }
+	[[nodiscard]] std::optional<glm::ivec2> WorldToScreen(glm::vec3 point) const override
+	{
+		const OverrideForPointer pointer(_camera);
+		// Seeing 45 degrees about the middle each way, level from side to side
+		const auto& pose = _camera.pose;
+		const auto forward = glm::normalize(pose.focus - pose.origin);
+		const auto right = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
+		const auto up = glm::cross(forward, right);
+		const auto to = point - pose.origin;
+		const float ahead = glm::dot(to, forward);
+		if (ahead <= 0.0f)
+		{
+			return std::nullopt;
+		}
+		const auto screen =
+		    glm::vec2(400.0f + 400.0f * glm::dot(to, right) / ahead, 300.0f - 400.0f * glm::dot(to, up) / ahead);
+		if (screen.x < 0.0f || screen.y < 0.0f || screen.x >= 800.0f || screen.y >= 600.0f)
+		{
+			return std::nullopt;
+		}
+		return glm::ivec2(glm::round(screen));
+	}
+	[[nodiscard]] float GroundHeight(glm::vec2 /*point*/) const override { return 10.0f; }
+	[[nodiscard]] bool HasKey(std::string_view /*name*/) const override { return false; }
+	[[nodiscard]] bool HasAction(std::string_view /*name*/) const override { return false; }
+	[[nodiscard]] bool HasGesture(std::string_view /*name*/) const override { return false; }
+	[[nodiscard]] std::vector<std::string> ActionNames() const override { return {}; }
+	[[nodiscard]] std::vector<std::string> GestureNames() const override { return {}; }
+	[[nodiscard]] Json State() const override { return Json::object(); }
+	void SetLockMode(std::string_view /*mode*/) override {}
+	[[nodiscard]] Json LockState() const override { return Json::object(); }
+
+private:
+	FakeCamera& _camera;
+};
+
+} // namespace
+
+// While a script's camera holds the view and an override shows another, a point of the world is found on the screen
+// where the override shows it, and the camera is the script's own again after; released, it is found through the
+// script's camera again
+TEST(InspectorCamera, APointerToTheWorldGoesThroughTheOverride)
+{
+	FakeCamera camera;
+	camera.held = true;
+	// The script's camera looks along +z from the start of the land; the thing is far behind it
+	camera.pose = {.origin = {0.0f, 20.0f, 0.0f}, .focus = {0.0f, 10.0f, 20.0f}};
+	CameraInput target(camera);
+	Inspector inspector;
+	inspector.Add(MakeCameraProvider(camera));
+	inspector.Add(std::make_unique<InputProvider>(target));
+
+	EXPECT_NE(
+	    Refused(inspector, R"({"query": "input.pointer", "params": {"world": [500, 10, -400]}})").find("isn't on the screen"),
+	    std::string::npos);
+
+	Ask(inspector, R"({"query": "camera.set", "params": {"position": [500, 40, -440], "focus": [500, 10, -400],
+	                  "override": true}})");
+	const auto pointed = Ask(inspector, R"({"query": "input.pointer", "params": {"world": [500, 10, -400]}})");
+	// In the middle of the view the override shows
+	EXPECT_EQ(pointed["pointer"], Json({400, 300}));
+	EXPECT_FALSE(camera.Pinned());
+	EXPECT_EQ(camera.pose.origin, glm::vec3(0.0f, 20.0f, 0.0f));
+
+	Ask(inspector, R"({"query": "camera.release"})");
+	EXPECT_NE(
+	    Refused(inspector, R"({"query": "input.pointer", "params": {"world": [500, 10, -400]}})").find("isn't on the screen"),
+	    std::string::npos);
 }
 
 // A picture asked to be written over a file there from before isn't taken as written at once: the old file is removed

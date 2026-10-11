@@ -44,11 +44,13 @@
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -58,6 +60,7 @@
 #include "Game.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptingBindingUtils.h"
 
@@ -280,14 +283,24 @@ void FeatureScriptCommands::SetTownBelief(int32_t townId, const std::string& pla
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& registryContext = registry.Context();
 
-	Town& town = registry.Get<Town>(registryContext.towns.at(townId));
-	town.beliefs.insert({playerOwner, belief});
+	const auto town = registryContext.towns.at(townId);
+	auto& impression =
+	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
+	magic::town_belief::SetInPlayer(impression.belief, GetPlayerName(playerOwner), belief);
 }
 
 void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& playerOwner, float belief)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, townId, playerOwner, belief);
+	// TODO(town-ownership): in a multiplayer game the cap of a player in a town of one tribe is raised to 2 on one map
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Context().towns.at(townId);
+	auto& impression =
+	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
+	const auto player = static_cast<size_t>(GetPlayerName(playerOwner));
+	if (player < impression.belief.cap.size())
+	{
+		impression.belief.cap.at(player) = belief;
+	}
 }
 
 void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)
@@ -873,16 +886,33 @@ void FeatureScriptCommands::SetLandNumber(int32_t number)
 	Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = number;
 }
 
-void FeatureScriptCommands::CreateOneShotSpell([[maybe_unused]] glm::vec3 position, const std::string&)
+void FeatureScriptCommands::CreateOneShotSpell(glm::vec3 position, const std::string& seedName)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A globe of the seed of that name, at its plain miracle, on the ground; nothing for a name no seed has
+	const auto seed = magic::FindSpellSeedByName(Locator::infoConstants::value(), seedName);
+	if (!seed.has_value() || !Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	Locator::magicSystem::value().CreateOneOffSeed(position, *seed, magic::k_BasePowerUpLevel, 1.0f);
 }
 
-void FeatureScriptCommands::CreateOneShotSpellPu([[maybe_unused]] glm::vec3 position, const std::string&)
+void FeatureScriptCommands::CreateOneShotSpellPu(glm::vec3 position, const std::string& magicName)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A globe of the miracle of that name, held by the first seed that casts it at the power-up that casts it
+	const auto& info = Locator::infoConstants::value();
+	const auto type = magic::FindMagicTypeByName(info, magicName);
+	if (!type.has_value() || *type == MagicType::None || !Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	const auto seed = magic::FindFirstSpellSeedForMagicType(info, *type);
+	if (!seed.has_value())
+	{
+		return;
+	}
+	const auto powerUp = magic::GetPowerUpFromMagicType(magic::GetSpellSeedInfo(info, *seed), *type);
+	Locator::magicSystem::value().CreateOneOffSeed(position, *seed, powerUp, 1.0f);
 }
 
 void FeatureScriptCommands::CreateFireFly(glm::vec3 position)
@@ -925,11 +955,30 @@ void FeatureScriptCommands::CreateNewTownField(int32_t townId, glm::vec3 positio
 	FieldArchetype::Create(townId, position, townFieldType, rotation);
 }
 
-void FeatureScriptCommands::CreateSpellDispenser(int32_t, [[maybe_unused]] glm::vec3 position, const std::string&,
-                                                 const std::string&, float, float, float)
+void FeatureScriptCommands::CreateSpellDispenser(int32_t, glm::vec3 position, const std::string& building,
+                                                 const std::string& magicName, float rotation, float scale, float turns)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A dispenser building of that name holding the miracle of that name, turned on at once so it floats its first
+	// bubble now, then one every so many turns after each is taken; with no turns it floats only the first.
+	// TODO(script-create-objects): the game also gives it to the town of the number, or the nearest town
+	const auto type = GAbodeInfo::Find(building);
+	if (type == AbodeInfo::None || !Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	auto& magicSystem = Locator::magicSystem::value();
+	const auto dispenser = magicSystem.CreateScriptDispenser(position, type, rotation, scale);
+	if (dispenser == entt::null)
+	{
+		return;
+	}
+	const auto magicType = magic::FindMagicTypeByName(Locator::infoConstants::value(), magicName).value_or(MagicType::None);
+	magicSystem.SetDispenserMagic(dispenser, magicType, static_cast<uint32_t>(turns));
+	magicSystem.SetDispenserActive(dispenser, true);
+	if (static_cast<uint32_t>(turns) == 0)
+	{
+		magicSystem.SetDispenserActive(dispenser, false);
+	}
 }
 
 void FeatureScriptCommands::LoadComputerPlayerPersonality(int32_t, glm::vec3)

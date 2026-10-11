@@ -80,6 +80,9 @@ struct CreatureFightRecord
 	/// Who chose its moves when its last fight ended, or as a script last set it; nobody before its first fight. Each
 	/// fight starts it afresh.
 	creature_fight::Control control {creature_fight::Control::None};
+	/// Its fight health, from 0 to 1, as its last fight left it or a script last set it outside a fight; full before its
+	/// first fight. Each fight starts it afresh from the creature's life.
+	float health {1.0f};
 };
 
 /// A creature knocked out: lying where it fell, then taken home, resting there until better, and getting up again

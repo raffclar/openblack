@@ -45,6 +45,7 @@
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureTownCompassion.h"
+#include "Creature/CreatureTraining.h"
 #include "Creature/CreatureWatching.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashRules.h"
@@ -778,6 +779,11 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		// lessens it or one of its steps saw to the desire.
 		const auto plan = *mind.planner.current;
 		const bool carriedOut = idle.serial == mind.planSerial && !idle.gaveUp;
+		if (carriedOut)
+		{
+			creature_training::CountCarriedOut(mind.actionCounts, plan.action,
+			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+		}
 		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
 		{
 			const auto& action = tables->actions[plan.action];
@@ -801,7 +807,20 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		Abandon(mind);
 		mind.planner.best.at(static_cast<size_t>(plan.desire)).reset();
 	}
-	// What the idle mind started is over once its agenda runs out
+	// What the idle mind started is over once its agenda runs out: carried out to its end, its action counts
+	if (mind.underway.has_value() && (mind.planActive || mind.underway->serial != idle.serial))
+	{
+		mind.underway.reset();
+	}
+	if (mind.underway.has_value() && idle.step >= idle.agenda.size())
+	{
+		if (!idle.gaveUp)
+		{
+			creature_training::CountCarriedOut(mind.actionCounts, mind.underway->action,
+			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+		}
+		mind.underway.reset();
+	}
 	if (!mind.planActive && idle.serial == mind.agendaSeen && idle.step >= idle.agenda.size() && !mind.learnt->contexts.empty())
 	{
 		mind.learnt->contexts.back().running = false;
@@ -863,6 +882,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	        .windowSeconds = info.learningWindowSeconds,
 	    });
 	mind.learnt->turnsSinceDone.at(*action) = 0;
+	mind.underway = CreatureMindState::ActionUnderway {.serial = idle.serial, .action = *action};
 }
 
 bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, const creature_planner::Plan& plan,
@@ -953,7 +973,12 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	const auto cast = creature_plan_actions::IsCast(*executor) ? CastInfoFor(creature, action) : std::nullopt;
 	// Only what varies by chance draws one
 	auto situated = situation;
-	if (executor->build == creature_plan_actions::Build::LookButDontApproach)
+	if (object.has_value())
+	{
+		situated.thingHeight = object_measures::Height(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
+	}
+	if (executor->build == creature_plan_actions::Build::LookButDontApproach ||
+	    executor->build == creature_plan_actions::Build::SmileAt)
 	{
 		situated.chance = Chance();
 	}
@@ -1276,11 +1301,24 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.instrument = entt::to_integral(*plan.instrument);
 			}
+			situation.handFull = registry.AllOf<CreatureHeldObject>(creature);
+			if (plan.object.has_value() && registry.Valid(*plan.object))
+			{
+				situation.thingHeight = object_measures::Height(registry, *plan.object);
+			}
+			if (const auto home = ecs::creature_home::HomeOf(registry, creature))
+			{
+				situation.home = glm::vec2(home->x, home->z);
+			}
 			const auto point =
 			    plan.object.has_value() ? PointOf(registry, *plan.object).value_or(position) : plan.point.value_or(position);
+			const auto actionIndex = creature_mind_tables::FindAction(*tables, plan.action);
+			const auto cast = creature_plan_actions::IsCast(*executor) && actionIndex.has_value()
+			                      ? CastInfoFor(creature, *actionIndex)
+			                      : std::nullopt;
 			agenda = creature_plan_actions::Agenda(
 			    *executor, plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt, point,
-			    situation, random);
+			    situation, random, cast);
 			activity = executor->activity;
 		}
 	}
@@ -1351,22 +1389,6 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	return true;
 }
 
-bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target,
-                                        std::optional<entt::entity> with)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* tables = GetTables();
-	if (tables == nullptr || action >= tables->actions.size() || !registry.Valid(creature) ||
-	    !registry.AllOf<CreatureMindState>(creature))
-	{
-		return false;
-	}
-	// The script takes control of it first, so the action's agenda is made for a creature under a script's control
-	registry.AssignOrReplace<ScriptControlled>(creature);
-	return ForcePlan(
-	    creature, {.desire = Desire::ObeyPlayer, .action = tables->actions[action].name, .object = target, .instrument = with});
-}
-
 void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::Situation& situation)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -1378,6 +1400,11 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	situation.hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL;
 	situation.controlledByScript = registry.AllOf<ScriptControlled>(creature);
 	situation.radius = object_measures::TwoDRadius(registry, creature);
+	situation.height = body != nullptr ? k_HeightOfSizeOne * ShownSize(*body) : 0.0f;
+	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
+	{
+		situation.eyeDistance = glm::distance(*situation.eye, transform->position);
+	}
 }
 
 bool CreatureMindSystem::HasPlayed(entt::entity creature) const

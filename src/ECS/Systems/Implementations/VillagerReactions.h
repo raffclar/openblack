@@ -26,7 +26,9 @@ struct TownImpression;
 // What villagers do about the reactions they take up. A villager fleeing a miracle runs ten metres straight away from
 // it, or across its way if it moves, at its fleeing speed; once fifty metres away from what isn't coming at it, it turns
 // to watch it, and beyond a hundred it gives up. A villager watching a nice miracle turns to face it, an eighth of a
-// half turn a turn. Stopping, it goes back to what it was doing.
+// half turn a turn. When the hand picks up one of a town's people of an age to make love, those of the other sex and of
+// age stand and watch it as a mate to be, until it is put down or carried out of reach. Stopping, it goes back to what it
+// was doing.
 
 namespace openblack::ecs::systems::villager_reactions
 {
@@ -43,6 +45,13 @@ void LookAt(entt::entity villager, const glm::vec3& point);
 /// The states of fleeing, and of watching (after fleeing, or a nice miracle)
 uint32_t Fleeing(components::LivingAction& action);
 uint32_t Watching(components::LivingAction& action);
+
+/// How urgently a villager heeds one of its people the hand holds, the one held being the reaction's initiator: only one
+/// that might become its mate heeds it
+[[nodiscard]] uint32_t ReactToVillagerInHandPriority(entt::entity villager, entt::entity held);
+/// The state of waiting for the one held in the hand as a mate: it stands facing that one while it stays within the
+/// reaction's reach, and stops reacting once it is further
+uint32_t WaitForMate(components::LivingAction& action);
 
 /// The share of an impression a villager's town takes: its population for unchanged belief over its people
 [[nodiscard]] float TownShare(entt::entity town);

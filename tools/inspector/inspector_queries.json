@@ -431,6 +431,19 @@
   "query": "town.homes"
  },
  {
+  "description": "A town's owner and its belief in each player",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The town's entity id (town.list)",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "town.belief"
+ },
+ {
   "description": "A town's people without a home, newest first",
   "kind": "list",
   "parameters": [
@@ -1548,7 +1561,7 @@
     "type": "array"
    },
    {
-    "description": "A point of the world, [x, z] on the land or [x, y, z]; it must be on the screen",
+    "description": "A point of the world, [x, z] on the land or [x, y, z]; it must be on the screen, as drawn (through camera.set's override while one is shown)",
     "name": "world",
     "type": "point"
    }

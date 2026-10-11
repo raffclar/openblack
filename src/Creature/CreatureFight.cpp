@@ -434,6 +434,12 @@ bool creature_fight::HealthyEnoughToFight(float life)
 	return life > k_MinLifeToFight;
 }
 
+bool creature_fight::AgreesToFight(float height, float askerHeight, bool dead, bool scripted, bool askerScripted)
+{
+	const float share = height / askerHeight;
+	return share >= k_SmallestOpponentShare && share <= k_BiggestOpponentShare && !dead && scripted == askerScripted;
+}
+
 float creature_fight::FaintSeconds(float size)
 {
 	return (k_FaintSecondsPerSize * size) + k_FaintBaseSeconds;
