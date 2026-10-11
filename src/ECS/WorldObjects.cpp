@@ -685,6 +685,10 @@ std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)
 	{
 		return creature->owner;
 	}
+	if (const auto* town = registry.TryGet<const Town>(object))
+	{
+		return town->owner;
+	}
 	if (const auto* ball = registry.TryGet<const MagicFireBall>(object))
 	{
 		return ball->hasPlayer ? ball->player : PlayerNames::NEUTRAL;
