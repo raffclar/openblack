@@ -13,6 +13,8 @@
 
 #include <numbers>
 
+#include <glm/gtx/euler_angles.hpp>
+
 using namespace openblack;
 using namespace openblack::ecs;
 
@@ -20,6 +22,8 @@ namespace
 {
 constexpr float k_WakeGrowth = 10.0f;
 constexpr float k_WakeRate = 0.5f;
+/// Half as deep as wide, its width along the way the shark swims
+constexpr float k_WakeAspect = 0.5f;
 constexpr uint8_t k_WakeCell = 0x31;
 constexpr uint32_t k_WakeColour = 0x90FFFFFFu;
 } // namespace
@@ -34,12 +38,22 @@ float shark_rules::Heading(const glm::vec3& turnStart, const glm::vec3& position
 	return angle < 0.0f ? angle + (2.0f * std::numbers::pi_v<float>) : angle;
 }
 
+glm::mat3 shark_rules::Facing(float heading)
+{
+	return glm::mat3(glm::eulerAngleY(-heading));
+}
+
 glm::vec3 shark_rules::Drawn(const glm::vec3& turnStart, float startHeight, const glm::vec3& position, float endHeight,
                              float turnFraction)
 {
 	const float before = 1.0f - turnFraction;
 	return {turnStart.x * before + position.x * turnFraction, startHeight * before + endHeight * turnFraction,
 	        turnStart.z * before + position.z * turnFraction};
+}
+
+shark_rules::Look shark_rules::LookOf(bool walkingAPath)
+{
+	return {.aboveSea = walkingAPath, .underSea = k_Colour};
 }
 
 std::optional<water_rings::Ring> shark_rules::WakeRing(int32_t& timer, const glm::vec3& point, float heading,
@@ -54,6 +68,7 @@ std::optional<water_rings::Ring> shark_rules::WakeRing(int32_t& timer, const glm
 	return water_rings::Ring {.position = glm::vec3(point.x, 0.0f, point.z),
 	                          .growth = k_WakeGrowth,
 	                          .angle = heading,
+	                          .aspect = k_WakeAspect,
 	                          .rate = k_WakeRate,
 	                          .cell = k_WakeCell,
 	                          .argb = k_WakeColour};
