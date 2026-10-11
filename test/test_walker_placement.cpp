@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/WalkerPlacement.h"
@@ -153,4 +154,14 @@ TEST(WalkerPlacement, StoppingAThingThatDoesntWalkDoesNothing)
 	registry.Assign<Transform>(thing, k_Old, glm::mat3(1.0f), glm::vec3(1.0f));
 	ecs::walker_placement::Stop(registry, thing);
 	EXPECT_EQ(registry.Get<const Transform>(thing).position, k_Old);
+}
+
+// A villager put somewhere at once is drawn there at once, not gliding from where it was through the turn
+TEST(WalkerPlacement, AVillagerPutSomewhereIsDrawnThereAtOnce)
+{
+	ecs::Registry registry;
+	const auto walker = Walker<MoveStateLinearTag>(registry);
+	registry.Assign<VillagerPose>(walker).turnStart = k_Old;
+	ecs::walker_placement::Place(registry, walker, k_New);
+	EXPECT_EQ(registry.Get<const VillagerPose>(walker).turnStart, k_New);
 }

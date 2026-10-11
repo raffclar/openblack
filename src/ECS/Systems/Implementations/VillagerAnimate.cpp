@@ -31,6 +31,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "VillagerBuild.h"
 #include "VillagerDance.h"
 #include "VillagerScript.h"
 
@@ -89,19 +90,22 @@ bool IsWomanOrChild(const Villager& villager)
 }
 
 /// Works out what it carries for its states and load, as the game does whenever it looks at its clip
-void SetStateCarriedObject(entt::entity entity, const LivingAction& action, Villager& villager)
+void ChooseCarriedObject(entt::entity entity, const LivingAction& action, Villager& villager)
 {
 	const auto top = TopOf(action);
 	const auto final = FinalStateOf(action);
 	const auto& info = InfoOf(villager);
-	// TODO(villagers): wood and food carried come with the jobs' carrying
 	const animation::CarryInputs in {
 	    .scriptHeld = final == VillagerStates::InScript || top == VillagerStates::ScriptPlayAnim,
 	    .life = world_objects::LifeOf(entity),
 	    .lifeWhenCrawlsWounded = info.lifeWhenCrawlsWounded,
+	    // The loads are compared unsigned, as the game compares them
+	    .wood = static_cast<uint32_t>(static_cast<int32_t>(villager.woodHeld)),
+	    .food = static_cast<uint32_t>(static_cast<int32_t>(villager.foodHeld)),
 	    .minWoodToShowGraphic = info.minWoodToShowGraphic,
 	    .minFoodToShowGraphic = info.minFoodToShowGraphic,
-	    .building = final == VillagerStates::Building,
+	    .woodKind = villager.woodGraphic,
+	    .building = villager_build::IsBuildingState(final),
 	    .finalStateCarries = StateInfo(final).carriedObject,
 	    .topStateCarries = StateInfo(top).carriedObject,
 	};
@@ -155,6 +159,12 @@ int32_t Clip(AnimId clip)
 }
 } // namespace
 
+void villager_animate::SetStateCarriedObject(entt::entity villager)
+{
+	auto& registry = Entities();
+	ChooseCarriedObject(villager, registry.Get<const LivingAction>(villager), registry.Get<Villager>(villager));
+}
+
 int32_t villager_animate::StateClip(entt::entity entity)
 {
 	auto& registry = Entities();
@@ -165,7 +175,7 @@ int32_t villager_animate::StateClip(entt::entity entity)
 	{
 		return Clip(AnimId::PStand);
 	}
-	SetStateCarriedObject(entity, action, villager);
+	ChooseCarriedObject(entity, action, villager);
 	const auto random = GameRandom();
 	switch (animation::ClipChoiceOf(state))
 	{

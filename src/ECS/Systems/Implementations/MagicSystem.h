@@ -152,6 +152,8 @@ public:
 	void PayForSpell(entt::entity spell, float cost) override;
 
 	entt::entity CreateDispenser(glm::vec3 position, MagicType type, float yAngleRadians) override;
+	entt::entity CreateScriptDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale) override;
+	void SetDispenserMagic(entt::entity dispenser, MagicType type, uint32_t turns) override;
 	void SetDispenserPeriod(entt::entity dispenser, float seconds) override;
 	void ChargeDispenser(entt::entity dispenser) override;
 	void SetDispenserActive(entt::entity dispenser, bool active) override;

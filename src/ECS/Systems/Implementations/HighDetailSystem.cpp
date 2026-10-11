@@ -208,9 +208,11 @@ void HighDetailSystem::PlaceEyes(uint32_t drawTime, const glm::mat4& viewProject
 			return;
 		}
 		// Placed as its body is drawn, by its bones as posed or as its model rests, in the opening hand's grip while held
-		const auto drawnAt = rules::DrawnAt(detail.heldAt, transform.position);
-		auto standing = glm::mat4(transform.rotation);
-		standing = glm::translate(standing, drawnAt * transform.rotation);
+		const auto* pose = registry.TryGet<const VillagerPose>(entity);
+		const auto drawnAt = rules::DrawnAt(detail.heldAt, DrawnPosition(transform.position, pose));
+		const auto rotation = DrawnRotation(transform.rotation, pose);
+		auto standing = glm::mat4(rotation);
+		standing = glm::translate(standing, drawnAt * rotation);
 		standing = glm::scale(standing, transform.scale);
 		const auto model = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(entity));
 		const auto detailed = meshes.Handle(mesh.id);
@@ -228,7 +230,6 @@ void HighDetailSystem::PlaceEyes(uint32_t drawTime, const glm::mat4& viewProject
 			return;
 		}
 		const auto& rest = detailed->GetBoneMatrices();
-		const auto* pose = registry.TryGet<const VillagerPose>(entity);
 		const auto& bones = pose != nullptr && pose->bones.size() == rest.size() ? pose->bones : rest;
 		if (frames[0].bone >= bones.size() || frames[1].bone >= bones.size())
 		{

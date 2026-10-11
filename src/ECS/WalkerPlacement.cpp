@@ -12,6 +12,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/WallHugRules.h"
@@ -27,6 +28,11 @@ void walker_placement::Place(Registry& registry, entt::entity entity, glm::vec3 
 		return;
 	}
 	transform->position = position;
+	// Put somewhere at once, it is drawn there at once rather than gliding from where it was
+	if (auto* pose = registry.TryGet<VillagerPose>(entity); pose != nullptr)
+	{
+		pose->turnStart = position;
+	}
 	auto* wallHug = registry.TryGet<WallHug>(entity);
 	if (wallHug == nullptr)
 	{

@@ -550,3 +550,15 @@ TEST(CreatureFight, OnlyBlowsAtABandCountAsQueuedHits)
 	ASSERT_TRUE(queue.Push({.kind = Move::Kind::Spell, .value = 3}, false));
 	EXPECT_EQ(QueuedBlows(queue.Moves()), 2u);
 }
+
+TEST(CreatureFight, ACreatureAgreesToFightOnlyOneOfASizeAndControlledAsItIs)
+{
+	EXPECT_TRUE(AgreesToFight(10.0f, 10.0f, false, false, false));
+	EXPECT_TRUE(AgreesToFight(5.0f, 10.0f, false, true, true));
+	EXPECT_TRUE(AgreesToFight(20.0f, 10.0f, false, false, false));
+	EXPECT_FALSE(AgreesToFight(4.9f, 10.0f, false, false, false));
+	EXPECT_FALSE(AgreesToFight(20.1f, 10.0f, false, false, false));
+	EXPECT_FALSE(AgreesToFight(10.0f, 10.0f, true, false, false));
+	EXPECT_FALSE(AgreesToFight(10.0f, 10.0f, false, true, false));
+	EXPECT_FALSE(AgreesToFight(10.0f, 10.0f, false, false, true));
+}

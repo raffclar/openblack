@@ -42,6 +42,7 @@ entt::entity TownArchetype::Create(int id, const glm::vec3& position, PlayerName
 	{
 		impression.belief.neutral = Locator::infoConstants::value().town.beliefInNeutralPlayer;
 	}
+	registry.Assign<TownResourceTally>(entity);
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	auto& registryContext = registry.Context();
 	registryContext.towns.insert({id, entity});

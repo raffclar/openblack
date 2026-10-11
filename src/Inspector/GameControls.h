@@ -30,6 +30,7 @@ public:
 	std::string Fly(const CameraPose& pose) override;
 	std::string Pin(const CameraPose& pose) override;
 	void Unpin() override;
+	[[nodiscard]] bool Pinned() const override { return _own.has_value(); }
 	void SetOverride(std::optional<CameraPose> pose) override { _override = pose; }
 	[[nodiscard]] std::optional<CameraPose> Override() const override { return _override; }
 	[[nodiscard]] float GroundHeight(glm::vec2 point) const override;

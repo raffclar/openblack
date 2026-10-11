@@ -72,12 +72,40 @@ public:
 	virtual std::string Pin(const CameraPose& pose) = 0;
 	/// Gives the camera back its own state if it was pinned; once a frame, before anything moves it
 	virtual void Unpin() = 0;
+	/// Whether the camera is shown elsewhere now (pinned), its own state kept aside
+	[[nodiscard]] virtual bool Pinned() const = 0;
 	/// Where the camera is shown every frame, over whatever holds it, until released (none)
 	virtual void SetOverride(std::optional<CameraPose> pose) = 0;
 	[[nodiscard]] virtual std::optional<CameraPose> Override() const = 0;
 	[[nodiscard]] virtual float GroundHeight(glm::vec2 point) const = 0;
 	/// Where an entity is drawn now, for the camera to frame it; none if there is no such entity or it has no place
 	[[nodiscard]] virtual std::optional<glm::vec3> EntityPosition(uint32_t id) const = 0;
+};
+
+/// The game's pointer (the hand's ray, picking under the cursor, where a point of the world is on the screen) goes
+/// through the view that is drawn: while an override is shown, the camera is put there (pinned), so that a click lands
+/// on what is seen. Without an override, or with the camera already shown elsewhere, nothing is moved. A held picture's
+/// camera is never shown to the pointer: it is only for its picture, and the hand would chase a thing it holds along a
+/// view that lasts a few frames. True if it put the camera there, to be given back with Unpin.
+[[nodiscard]] bool ShowOverrideToPointer(CameraControlInterface& camera);
+
+/// The override shown to the pointer for as long as this lives, the camera given its own state back after
+class OverrideForPointer
+{
+public:
+	explicit OverrideForPointer(CameraControlInterface& camera);
+	~OverrideForPointer();
+	OverrideForPointer(const OverrideForPointer&) = delete;
+	OverrideForPointer& operator=(const OverrideForPointer&) = delete;
+	OverrideForPointer(OverrideForPointer&&) = delete;
+	OverrideForPointer& operator=(OverrideForPointer&&) = delete;
+
+	/// Whether it put the camera at the override, and so gives it back
+	[[nodiscard]] bool Shown() const { return _shown; }
+
+private:
+	CameraControlInterface& _camera;
+	bool _shown {false};
 };
 
 /// An entity for the camera to look at, and from where: the angles and distance not given are the camera's own

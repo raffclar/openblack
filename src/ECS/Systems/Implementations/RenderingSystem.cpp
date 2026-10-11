@@ -395,13 +395,16 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	registry.Each<const Mesh, const Transform>(
 	    [this, &registry, &vegetation, &meshes, &fits, drawBoundingBox, camera,
 	     modelDetail](entt::entity entity, const Mesh& mesh, const Transform& transform) {
-		    // One held by the opening's hand is drawn in its grip, facing as it does
+		    // A villager is drawn gliding between its turns and turning after the way it faces; one held by the opening's
+		    // hand is drawn in its grip
+		    const auto* villagerPose = registry.TryGet<const VillagerPose>(entity);
+		    const auto standsAt = DrawnPosition(transform.position, villagerPose);
+		    const auto rotation = DrawnRotation(transform.rotation, villagerPose);
 		    const auto* highDetail = registry.TryGet<const HighDetail>(entity);
-		    const auto drawnAt = highDetail != nullptr
-		                             ? openblack::ecs::high_detail_rules::DrawnAt(highDetail->heldAt, transform.position)
-		                             : transform.position;
-		    auto modelMatrix = glm::mat4(transform.rotation);
-		    modelMatrix = glm::translate(modelMatrix, drawnAt * transform.rotation);
+		    const auto drawnAt =
+		        highDetail != nullptr ? openblack::ecs::high_detail_rules::DrawnAt(highDetail->heldAt, standsAt) : standsAt;
+		    auto modelMatrix = glm::mat4(rotation);
+		    modelMatrix = glm::translate(modelMatrix, drawnAt * rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
 		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);

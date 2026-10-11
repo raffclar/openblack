@@ -479,3 +479,13 @@ TEST(CreaturePhysiology, LeftAloneItsBodyDrivesItsHungerThirstAndPoo)
 	EXPECT_TRUE(wantsToPoo);
 	EXPECT_FLOAT_EQ(needs.poo, 0.6f);
 }
+
+TEST(CreaturePhysiology, AScriptScalesACreatureHalfwayToItsShareOfThePlayersCreatureEachTurn)
+{
+	// A guide at 1.2 times a creature of size 1 grows from 1 to 1.1, then 1.15
+	EXPECT_FLOAT_EQ(AutoScaledSize(1.0f, 1.0f, 1.2f), 1.1f);
+	EXPECT_FLOAT_EQ(AutoScaledSize(1.1f, 1.0f, 1.2f), 1.15f);
+	// It shrinks as readily, and never goes above 2
+	EXPECT_FLOAT_EQ(AutoScaledSize(2.0f, 1.0f, 1.0f), 1.5f);
+	EXPECT_FLOAT_EQ(AutoScaledSize(1.9f, 2.0f, 1.5f), 2.0f);
+}

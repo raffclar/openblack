@@ -34,6 +34,8 @@ namespace openblack::ecs::villager_animate
 [[nodiscard]] int32_t StateClip(entt::entity villager);
 /// Plays its top state's clip, from the start when it is a new one
 void SetStateAnim(entt::entity villager);
+/// Works out again what it shows in its hands, for its states and what it carries
+void SetStateCarriedObject(entt::entity villager);
 /// Plays a clip, from the start when it is a new one or when asked to, unless it dances in time with others
 void SetAnim(entt::entity villager, int32_t clip, bool restart);
 /// The clip it plays now

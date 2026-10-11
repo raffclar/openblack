@@ -40,6 +40,8 @@ public:
 	[[nodiscard]] bool IsAutoFighting(entt::entity creature) const override;
 	[[nodiscard]] creature_fight::FightAction CurrentFightAction(entt::entity creature) const override;
 	[[nodiscard]] uint32_t QueuedBlows(entt::entity creature) const override;
+	[[nodiscard]] float GetFightHealth(entt::entity creature) const override;
+	void SetFightHealth(entt::entity creature, float health) override;
 	[[nodiscard]] std::optional<FoundArena> FindOrMakeArena(const glm::vec3& point, entt::entity creature, entt::entity other,
 	                                                        float within) override;
 

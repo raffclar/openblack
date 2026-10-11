@@ -1561,7 +1561,7 @@
     "type": "array"
    },
    {
-    "description": "A point of the world, [x, z] on the land or [x, y, z]; it must be on the screen",
+    "description": "A point of the world, [x, z] on the land or [x, y, z]; it must be on the screen, as drawn (through camera.set's override while one is shown)",
     "name": "world",
     "type": "point"
    }
