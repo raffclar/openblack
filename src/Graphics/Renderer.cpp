@@ -1165,7 +1165,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// Objects in the world take the colour of the land's light where they stand; the sky and the temple's
 				// insides have lights of their own
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				const bool landLit = !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
+				const bool landLit =
+				    desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
 				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, desc.unlit ? 1.0f : 0.0f, 0.0f};
 				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
@@ -1177,7 +1178,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// The distance haze is the world's, not the sky's or the temple's
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				const bool hazed = !desc.isSky && !desc.drawAll && !inTemple;
+				const bool hazed = desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple;
 				const auto u_haze = hazed ? _haze[0] : glm::vec4(0.0f);
 				setUniform(MeshUniform::Haze, &u_haze);
 				setUniform(MeshUniform::HazeColour, &_haze[1]);

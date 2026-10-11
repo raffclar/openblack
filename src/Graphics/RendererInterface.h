@@ -155,6 +155,10 @@ public:
 		float landLightScale {1.0f};
 		/// The mesh isn't shaded by the sun, only coloured by the land's light where it stands
 		bool unlit {false};
+		/// The land's light and colour where the mesh stands and the world's distance haze reach it. Off for a mesh drawn
+		/// in a colour of its own alone, with nothing added over it, as the columns of light over the temples and the
+		/// village centres are
+		bool landLightAndHaze {true};
 		/// Nothing of the mesh is drawn below this height, when given, where its program takes it
 		std::optional<float> cutBelow;
 		/// Nothing of the mesh is drawn above this height, when given, where its program takes it: a building drawn as far
