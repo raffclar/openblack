@@ -71,6 +71,7 @@
 #include "Locator.h"
 #include "Magic/ForestRules.h"
 #include "Magic/MagicTables.h"
+#include "Nature/BigForestRules.h"
 #include "Nature/ForestGrowth.h"
 #include "ObjectMeasures.h"
 
@@ -751,7 +752,7 @@ float ForestSystem::WoodOf(entt::entity forest) const
 	{
 		if (const auto* big = registry.TryGet<const BigForest>(record->bigForest))
 		{
-			wood += ecs::store_rules::BigForestWood(ecs::world_objects::LifeOf(record->bigForest), big->worth);
+			wood += big_forest::WoodValue(ecs::world_objects::LifeOf(record->bigForest), big->wood);
 		}
 	}
 	const float balance = registry.Context().mapScriptGlobals.landBalance.at(5);
@@ -784,6 +785,130 @@ glm::vec3 ForestSystem::NearestPointOf(entt::entity forest, glm::vec3 to) const
 		return {at.x + edge.x, at.y, at.z + edge.y};
 	}
 	return registry.Get<const Transform>(forest).position;
+}
+
+uint32_t ForestSystem::ForestNumberOf(entt::entity bigForest) const
+{
+	uint32_t number = 0;
+	EntityRegistry().Each<const LandForest>([&number, bigForest](const LandForest& record) {
+		if (number == 0 && record.bigForest == bigForest)
+		{
+			number = record.id;
+		}
+	});
+	return number;
+}
+
+uint32_t ForestSystem::TakeBigForestWood(entt::entity bigForest, uint32_t amount)
+{
+	auto& registry = EntityRegistry();
+	auto* big = registry.Valid(bigForest) ? registry.TryGet<BigForest>(bigForest) : nullptr;
+	if (big == nullptr || !Locator::infoConstants::has_value())
+	{
+		return 0;
+	}
+	const auto& kind = Locator::infoConstants::value().bigForest.at(static_cast<size_t>(big->type));
+	auto& transform = registry.Get<Transform>(bigForest);
+	const auto taken =
+	    big_forest::TakeWood(ecs::world_objects::LifeOf(bigForest), big->wood, transform.scale.x, kind.woodValue, amount);
+	big->wood = taken.woodLeft;
+	if (taken.usedUp)
+	{
+		// Used up, it goes from the land and leaves nothing behind. Its forest stays, an ordinary forest now, with the
+		// trees it planted; empty, it goes some while later.
+		registry.Each<LandForest>([bigForest](LandForest& record) {
+			if (record.bigForest == bigForest)
+			{
+				record.bigForest = entt::null;
+			}
+		});
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: big forest #{} used up", entt::to_integral(bigForest));
+		ecs::world_objects::Remove(bigForest);
+		registry.SetLayoutDirty();
+		return taken.taken;
+	}
+	if (taken.shrinksTo.has_value())
+	{
+		// Drawn and walked round at its new size, then a young pine is planted round its new edge
+		transform.scale = glm::vec3(*taken.shrinksTo);
+		const auto [centre, radius] = ecs::archetypes::GetFixedObstacleBoundingCircle(kind.meshId, transform);
+		registry.AssignOrReplace<Fixed>(bigForest, centre, radius);
+		if (Locator::entitiesMap::has_value())
+		{
+			Locator::entitiesMap::value().Refile(bigForest);
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: big forest #{} shrinks to {:.3f} with {:.1f} wood left",
+		                    entt::to_integral(bigForest), *taken.shrinksTo, taken.woodLeft);
+		PlantPineAround(bigForest);
+		registry.SetLayoutDirty();
+	}
+	registry.SetDirty();
+	return taken.taken;
+}
+
+std::optional<entt::entity> ForestSystem::PlantPineAround(entt::entity bigForest)
+{
+	auto& registry = EntityRegistry();
+	if (!Locator::gameRandom::has_value() || !Locator::terrainSystem::has_value() || !Locator::entitiesMap::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& random = Locator::gameRandom::value();
+	const auto& land = Locator::terrainSystem::value();
+	const auto& map = Locator::entitiesMap::value();
+	// Its edge at its size now, about its own place
+	const float edge = ecs::world_objects::SizeOf(bigForest).radius;
+	const glm::vec3 from = registry.Get<const Transform>(bigForest).position;
+	auto base = map_coords::FromMetres({from.x, from.z});
+	base.altitude = from.y - land.GetHeightAt({from.x, from.z});
+	for (uint32_t attempt = 0; attempt < big_forest::k_PineTries; ++attempt)
+	{
+		const auto spot = base + gutils::GetPosFromAngle(random.GameFloatRand(k_TwoPi), edge);
+		const glm::vec2 xz = map_coords::ToMetres(spot);
+		const glm::vec3 point(xz.x, land.GetHeightAt(xz) + spot.altitude, xz.y);
+		if (!IsLand(point))
+		{
+			continue;
+		}
+		// Anything in the spot's cell standing near enough keeps the pine away
+		const auto cell = glm::ivec2(ecs::MapInterface::GetGridCell(point));
+		const auto inCell = map.GetAllInCell(cell);
+		const bool blocked = std::ranges::any_of(inCell, [&registry, point](entt::entity thing) {
+			const auto* at = registry.TryGet<const Transform>(thing);
+			return at != nullptr && big_forest::BlocksPine(glm::distance(glm::xz(at->position), glm::xz(point)),
+			                                               ecs::world_objects::SizeOf(thing).radius);
+		});
+		if (blocked)
+		{
+			continue;
+		}
+		// Its full size is drawn before the way it faces
+		const float fullSize = big_forest::k_PineFullSize + random.GameFloatRand(big_forest::k_PineFullSizeMore);
+		const float yaw = random.GameFloatRand(k_TwoPi);
+		const auto pine = ecs::archetypes::TreeArchetype::Create(ForestNumberOf(bigForest), point, TreeInfo::Pine, false, yaw,
+		                                                         fullSize, big_forest::k_PineStartSize);
+		registry.SetLayoutDirty();
+		return pine;
+	}
+	return std::nullopt;
+}
+
+std::optional<entt::entity> ForestSystem::TreeFromBigForest(entt::entity bigForest)
+{
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(bigForest) || !registry.AllOf<BigForest>(bigForest) || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	// Known before the wood is taken, which may use the big forest up
+	const uint32_t forest = ForestNumberOf(bigForest);
+	const glm::vec3 place = registry.Get<const Transform>(bigForest).position;
+	TakeBigForestWood(bigForest, TreeInfoOf(TreeInfo::Conifer).woodValue);
+	const auto tree =
+	    ecs::archetypes::TreeArchetype::Create(forest, place, TreeInfo::Conifer, false, big_forest::k_GivenTreeFacing,
+	                                           big_forest::k_GivenTreeSize, big_forest::k_GivenTreeSize);
+	registry.SetLayoutDirty();
+	return tree;
 }
 
 void ForestSystem::AssignForestsToTowns()
