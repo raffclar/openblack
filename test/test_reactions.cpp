@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
@@ -26,7 +27,9 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ReactionRules.h"
@@ -53,6 +56,29 @@ void ReactToEverything(GLivingInfo& info)
 
 /// Where the miracles are cast, well inside the land's map
 const glm::vec3 k_Here(500.0f, 0.0f, 500.0f);
+
+/// One thing flying, its body a small cube, at a speed
+class FlyingThing final: public ecs::systems::DynamicsSystemInterface
+{
+public:
+	FlyingThing(entt::entity object, glm::vec3 velocity)
+	{
+		entry.entity = object;
+		physics::Shape cube;
+		for (int i = 0; i < 8; ++i)
+		{
+			cube.points.emplace_back((i & 1) != 0 ? 0.5f : -0.5f, (i & 2) != 0 ? 0.5f : -0.5f, (i & 4) != 0 ? 0.5f : -0.5f);
+		}
+		cube.faces = {{0, 1, 3}};
+		cube.radius = glm::length(glm::vec3(0.5f));
+		entry.body =
+		    std::make_unique<physics::Body>(physics::BodySetup {.scale = 1.0f, .halfHeight = 0.5f, .mass = 1.0f}, cube);
+		entry.body->velocity = velocity;
+	}
+	[[nodiscard]] PhysicsEntry* Find(entt::entity object) override { return object == entry.entity ? &entry : nullptr; }
+
+	PhysicsEntry entry;
+};
 } // namespace
 
 /// Villagers of a town and a creature about a miracle, with made-up reaction tables
@@ -342,6 +368,41 @@ TEST_F(Reactions, AThingInTheWorldIsScaledByTheThingsBalanceNotTheMiracles)
 	_reactions.Create(thing);
 	EXPECT_FLOAT_EQ(Locator::entitiesRegistry::value().Get<const CreatureImpression>(_creature).byOwnPlayer,
 	                3.0f * 2.0f * 4.0f);
+}
+
+TEST_F(Reactions, ADancingVillagerNoticesAFlyingThingOnlyWhenItComesAtIt)
+{
+	auto& reaction = _info->reaction.at(static_cast<size_t>(Reaction::ReactToFlyingObject));
+	reaction.priority = 120;
+	reaction.whetherItImpresses = 1;
+	reaction.maxReactionDistance = 60.0f;
+	reaction.numGameTurnsForNormalThingsToReact = 80;
+	reaction.numGameTurnsForNormalThingsBeforeReactingAgain = 15;
+	reaction.defaultReactionImpressiveMultiplier = 1.0f;
+	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::PointAtFlyingObjectReaction)).isReactionState = 1;
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	// Every villager dances; the thing flies away from the first and at the second
+	for (auto* villager : {&_villagers[0], &_villagers[1], &_villagers[2]})
+	{
+		registry.Assign<Dancer>(*villager);
+	}
+	const auto rock = registry.Create();
+	registry.Assign<Transform>(rock, k_Here + glm::vec3(2.5f, 3.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	Locator::dynamicsSystem::emplace<FlyingThing>(rock, glm::vec3(1.0f, -1.0f, 0.0f));
+	_reactions.Create({.initiator = rock,
+	                   .type = Reaction::ReactToFlyingObject,
+	                   .player = PlayerNames::PLAYER_ONE,
+	                   .position = k_Here + glm::vec3(2.5f, 3.0f, 0.0f),
+	                   .impressiveValue = 1.0f});
+	const auto reactingTo = [&registry](entt::entity villager) {
+		const auto* state = registry.TryGet<const LivingReaction>(villager);
+		return state != nullptr ? state->reaction : 0u;
+	};
+	_reactions.ProcessTurn();
+	EXPECT_EQ(reactingTo(_villagers[0]), 0u);
+	EXPECT_NE(reactingTo(_villagers[1]), 0u);
+	Locator::dynamicsSystem::reset();
 }
 
 TEST_F(Reactions, AShieldIsLeftToTheShieldsForVillagersButACreatureTakesItUp)

@@ -29,6 +29,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
@@ -387,8 +388,19 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 	{
 		return 0;
 	}
-	// TODO(physics): a dancing villager (one in a dance group) notices a flying thing only when it comes at it
-	// (living::FlyingAt); openblack's villagers don't dance in groups yet
+	// A dancing villager notices a flying thing only when it comes at it
+	if (reaction.source.type == Reaction::ReactToFlyingObject && registry.AllOf<Villager, Dancer>(living))
+	{
+		const auto* entry =
+		    Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(reaction.source.initiator) : nullptr;
+		const auto* object =
+		    registry.Valid(reaction.source.initiator) ? registry.TryGet<const Transform>(reaction.source.initiator) : nullptr;
+		if (entry == nullptr || entry->body == nullptr || object == nullptr ||
+		    !physics::living::FlyingAt(registry.Get<const Transform>(living).position, object->position, entry->body->velocity))
+		{
+			return 0;
+		}
+	}
 	// A villager sheltering under a magic shield takes no notice of what flies outside the shield
 	if (reaction.source.type == Reaction::ReactToFlyingObject && registry.AllOf<Villager>(living))
 	{
