@@ -16,6 +16,7 @@
 #include <optional>
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -25,7 +26,8 @@
 ///
 /// The land is a grid of 512 by 512 cells of 10 units, sorted once a land is loaded: cells steeper than about 45
 /// degrees and deep sea are blocked, shallow water can be waded through, and land cut off from the main part of the
-/// land is out of reach. Things in the way are circles to walk round. Routes are planned over a finer lattice across
+/// land is out of reach. Things in the way are circles to walk round, gathered from the cells the planning comes
+/// across. Routes are planned over a finer lattice across
 /// as many game turns as they take, straightened where nothing is in the way, and their corners rounded so the
 /// creature can walk round them without stopping.
 namespace openblack::creature_route
@@ -83,33 +85,13 @@ private:
 	std::vector<Ground> _cells;
 };
 
-/// Something in the way, walked round at its radius, which includes the creature's own
+/// Something in the way, walked round at its radius, which includes as much of the creature's own as it keeps clear of
+/// it by (see CreatureObstacles.h)
 struct Circle
 {
 	glm::vec2 centre;
 	float radius;
 };
-
-/// What kind of thing might be in a creature's way
-enum class Obstacle : uint8_t
-{
-	Tree,
-	Building,
-	/// Anything else fixed to the land, such as rocks and fences
-	Object,
-	/// Villagers and animals, which are never walked round
-	Living,
-	StandingCreature,
-	MovingCreature,
-};
-/// A tree at least this many times the creature's height is walked round, a smaller one through
-constexpr float k_TreeAvoidHeight = 1.5f;
-/// Anything else at least this many times the creature's height is walked round
-constexpr float k_ObjectAvoidHeight = 0.1f;
-/// Whether a creature walks round something, or through or over it: big creatures walk through small trees and step
-/// over low things, never round villagers and animals, and round other creatures only while they stand still.
-/// Anything burning is walked round.
-[[nodiscard]] bool MustAvoid(Obstacle kind, float height, float creatureHeight, bool burning);
 
 /// The shortest distance from a point to a segment
 [[nodiscard]] float DistanceToSegment(glm::vec2 point, glm::vec2 from, glm::vec2 to);
@@ -129,6 +111,13 @@ constexpr float k_StepBlockSize = 80.0f;
 /// Whether a point lies strictly inside any of the circles
 [[nodiscard]] bool InsideAny(glm::vec2 point, const std::vector<Circle>& circles);
 
+/// The circles of what stands in one of the land's cells, asked for the first time a route being planned comes into the
+/// cell
+using CellObstacles = std::function<void(glm::ivec2 cell, std::vector<Circle>& circles)>;
+
+/// A circle about a point this close to where the creature stands is left out
+constexpr float k_TooCloseToCentre = 0.1f;
+
 /// Where to go and what is in the way
 struct Request
 {
@@ -137,7 +126,10 @@ struct Request
 	/// Arriving is anywhere from min to max away from the destination
 	float minDistance;
 	float maxDistance;
+	/// What is in the way from the start
 	std::vector<Circle> obstacles;
+	/// What else is in the way, cell by cell as the planning comes across it
+	CellObstacles cellObstacles {};
 	/// Walking to a point, the route ends on the point itself rather than at the near edge of the ring
 	bool ontoDestination {false};
 	/// Corners are rounded at this radius
@@ -146,9 +138,10 @@ struct Request
 	size_t searchLimit {200000};
 };
 
-/// Plans a route over the lattice by A*, a budget of lattice points a turn, then straightens and rounds it. Circles
-/// around the start or the destination are left out, so a creature can walk out of something it stands in and up to
-/// something it walks to.
+/// Plans a route over the lattice by A*, a budget of lattice points a turn, then straightens and rounds it. What is in the
+/// way is gathered from the cells the planning comes across. A circle the creature stands in is shrunk to reach just to
+/// it, so it can walk out of it, and one about a point right under it is left out. A destination whose whole arrival
+/// ring lies inside a circle can't be reached: the planning gives up as soon as it comes across that circle.
 class Planner
 {
 public:
@@ -167,6 +160,8 @@ public:
 	/// The route found, from the start to the arrival point
 	[[nodiscard]] const std::vector<glm::vec2>& GetRoute() const { return _route; }
 	[[nodiscard]] size_t GetSearched() const { return _searched; }
+	/// What it found in the way, as the route was planned round it
+	[[nodiscard]] const std::vector<Circle>& GetCircles() const { return _circles; }
 
 private:
 	struct Node
@@ -184,14 +179,24 @@ private:
 
 	[[nodiscard]] glm::vec2 PointOf(int64_t key) const;
 	[[nodiscard]] int64_t KeyOf(int32_t i, int32_t j) const;
-	[[nodiscard]] bool Passable(const WalkableLand& land, glm::vec2 point) const;
+	[[nodiscard]] bool Passable(const WalkableLand& land, glm::vec2 point);
 	[[nodiscard]] bool IsGoal(glm::vec2 point) const;
 	[[nodiscard]] float Estimate(glm::vec2 point) const;
-	[[nodiscard]] bool Clear(const WalkableLand& land, glm::vec2 from, glm::vec2 to) const;
+	[[nodiscard]] bool Clear(const WalkableLand& land, glm::vec2 from, glm::vec2 to);
+	/// Takes in the circles of the cell a point is in, the first time it is asked
+	void Gather(glm::vec2 point);
+	void Add(Circle circle);
+	[[nodiscard]] bool InsideAnyNear(glm::vec2 point) const;
 	[[nodiscard]] glm::vec2 ArrivalFrom(glm::vec2 from) const;
 	void Finish(const WalkableLand& land, int64_t goal);
 
 	Request _request;
+	/// What is in the way so far, and which circles reach into each block of the land
+	std::vector<Circle> _circles;
+	std::unordered_map<int32_t, std::vector<uint32_t>> _blocks;
+	std::unordered_set<int32_t> _cellsGathered;
+	/// The destination's whole arrival ring lies inside one of the circles
+	bool _unreachable {false};
 	Status _status {Status::Planning};
 	bool _started {false};
 	std::unordered_map<int64_t, Node> _nodes;
