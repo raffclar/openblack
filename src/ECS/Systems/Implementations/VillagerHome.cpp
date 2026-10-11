@@ -28,6 +28,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
@@ -40,6 +41,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/DiscipleRules.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
@@ -59,6 +61,7 @@
 #include "VillagerBuild.h"
 #include "VillagerDisciples.h"
 #include "VillagerFire.h"
+#include "VillagerFood.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -71,24 +74,13 @@ namespace world_objects = openblack::ecs::world_objects;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_build = openblack::ecs::villager_build;
 namespace villager_disciple = openblack::ecs::villager_disciple;
+namespace villager_food = openblack::ecs::villager_food;
 namespace wall_hug = openblack::ecs::wall_hug;
 namespace walk_arrival = openblack::ecs::walk_arrival;
 using ClearAreaFilter = openblack::ecs::systems::TownSystemInterface::ClearAreaFilter;
 
 namespace
 {
-// TODO(villagers): hunger and eating come with the food phase (food.md); until then no villager is hungry
-namespace villager_food
-{
-bool CheckHungry(const LivingAction&)
-{
-	return false;
-}
-bool CheckSatisfyOwnFoodDesire(const LivingAction&)
-{
-	return false;
-}
-} // namespace villager_food
 
 /// At home a villager sees to its needs when they come to this share of the more pressing of: rest at the life it
 /// sleeps on to, and food at the hungry mark
@@ -425,10 +417,15 @@ bool CheckNeedsAtHome(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
 	// TODO(villagers): a woman's own business at home and a pregnancy come first, and a child has its own (breeding
-	// phase); a breeding disciple weighs its needs at the go-home and starving marks
+	// phase)
 	const auto& info = InfoOf(villager);
-	const float pressing = std::max(needs::LifeDesireFromLife(info.damageThresholdToSleepUntil, info.damageThresholdToGoHome),
-	                                needs::DesireForFood(info.hungryForFood));
+	// A disciple at work weighs its needs only at the life it goes home hurt and the food it starves at
+	const auto* role = WorldRegistry().TryGet<const Disciple>(villager);
+	const bool working = role != nullptr && openblack::disciple::KindOf(role->type).waitsWhenIdle;
+	const float restLife = working ? info.damageThresholdToGoHome : info.damageThresholdToSleepUntil;
+	const float hungerMark = working ? info.starvingForFood : info.hungryForFood;
+	const float pressing =
+	    std::max(needs::LifeDesireFromLife(restLife, info.damageThresholdToGoHome), needs::DesireForFood(hungerMark));
 	return CheckSatisfyOwnDesire(action, k_AtHomeNeedShare * pressing);
 }
 
@@ -493,8 +490,20 @@ std::optional<glm::vec2> TreeTentPos(entt::entity tree)
 	return routine::Polar(at, angle, routine::k_TentTreeGap);
 }
 
-/// Whether a point is somewhere a villager can't lie: off the map's edge, in water or in something fixed
-bool Collides(glm::vec2 point)
+} // namespace
+
+std::optional<glm::vec2> villager_home::PosOutsideAbode(entt::entity villager)
+{
+	const auto abode = AbodeOf(villager);
+	if (abode == entt::null)
+	{
+		return std::nullopt;
+	}
+	// Out from its door, about an eighth of a half turn either side, a step or two from it
+	return routine::PosOutsideDoor(PositionOf(abode), ArrivePosition(abode), FloatRandom());
+}
+
+bool villager_home::Collides(glm::vec2 point)
 {
 	if (!map_coords::InBounds(map_coords::CellOf(point)))
 	{
@@ -517,6 +526,9 @@ bool Collides(glm::vec2 point)
 	}
 	return false;
 }
+
+namespace
+{
 
 /// Whether a villager lies down in the open within reach of a spiral point
 bool SleeperNear(glm::ivec2 cell, glm::vec2 point)
@@ -565,7 +577,7 @@ std::optional<glm::vec2> GetTentPos(entt::entity villager, glm::vec2 spot)
 	}
 	for (uint32_t tries = 0; tries < routine::k_TentTries; ++tries)
 	{
-		if (!Collides(spot))
+		if (!villager_home::Collides(spot))
 		{
 			// The spot is taken if a sleeper lies near any point of a spiral walked from it; it ends where the walk does
 			bool free = true;
@@ -843,11 +855,16 @@ uint32_t villager_home::CheckSatisfySleep(LivingAction& action)
 
 uint32_t villager_home::CheckNeededForSomething(LivingAction& action)
 {
-	const auto villager = EntityOf(action);
-	if (AbodeOf(villager) == entt::null && CheckHomelessMoveIntoAbode(action))
+	if (AbodeOf(EntityOf(action)) == entt::null && CheckHomelessMoveIntoAbode(action))
 	{
 		return 1;
 	}
+	return CheckNeededForSpecial(action);
+}
+
+uint32_t villager_home::CheckNeededForSpecial(LivingAction& action)
+{
+	const auto villager = EntityOf(action);
 	// TODO(villagers): worshippers are wanted at the worship site first (the jobs phase)
 	if (TownOf(villager) != entt::null && CheckNeededForTownDesire(action) == 1)
 	{

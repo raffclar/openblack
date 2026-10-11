@@ -94,5 +94,7 @@ struct Villager
 	/// The building site it works for, if any, and which of the site's places round the building it makes for
 	entt::entity buildingSite {entt::null};
 	int32_t buildPlace {0};
+	/// Ticks left of the speed-up magic food gave it, none when it isn't sped up
+	uint8_t foodSpeedUp {0};
 };
 } // namespace openblack::ecs::components

@@ -49,6 +49,7 @@
 #include "Locator.h"
 #include "ObjectMeasures.h"
 #include "VillagerAnimate.h"
+#include "VillagerFood.h"
 #include "VillagerHome.h"
 
 using namespace openblack;
@@ -416,19 +417,13 @@ uint32_t AtStoreRemoveResource(LivingAction& action, entt::entity store, Resourc
 		MoveTo(action, edge, TopState(action));
 		return k_StillBusy;
 	}
-	auto& person = VillagerOf(action);
-	const auto taken =
-	    static_cast<int16_t>(Locator::resourceStoreSystem::value().RemoveResource(store, type, static_cast<int16_t>(amount)));
+	// Taken from sped-up or poisoned food it is sped up or poisoned
+	const auto taken = static_cast<int16_t>(
+	    villager_food::GetResourceFrom(villager, store, type, static_cast<uint16_t>(static_cast<int16_t>(amount))));
 	if (taken == 0)
 	{
 		return 0;
 	}
-	villager_carry::PickUp(person, type, taken, 0);
-	if (auto* tally = Entities().TryGet<TownResourceTally>(TownOf(person)))
-	{
-		(type == ResourceType::Food ? tally->foodCarried : tally->woodCarried) += static_cast<float>(taken);
-	}
-	// TODO(temple-builders): a sped-up or poisoned store speeds up or poisons who takes from it
 	return static_cast<uint32_t>(static_cast<int32_t>(taken)) < amount ? k_StillBusy : 1u;
 }
 
@@ -465,6 +460,12 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 	return 0;
 }
 } // namespace
+
+uint32_t villager_build::ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type, uint32_t amount,
+                                                        VillagerStates arrive, VillagerStates fail)
+{
+	return ::ArrivesAtStoragePitForResource(action, type, amount, arrive, fail);
+}
 
 bool villager_build::FaceTowards(entt::entity villager, glm::vec2 point, int32_t step)
 {

@@ -747,3 +747,4 @@ openblack_setup_and_add_test(
   test_size_follower windowing/test_size_follower.cpp
   test_camera_edge_area camera/test_camera_edge_area.cpp
 )
+openblack_setup_and_add_test(test_villager_food_rules test_villager_food_rules.cpp)

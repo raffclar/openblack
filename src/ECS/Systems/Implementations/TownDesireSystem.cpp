@@ -275,6 +275,30 @@ float TownDesireSystem::RecomputeDesire(entt::entity town, TownDesireInfo desire
 	return town_desire::CallDesireFunction(*townDesire, context, Index(desire));
 }
 
+float TownDesireSystem::FoodShortage(entt::entity town) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* townDesire = registry.TryGet<const TownDesire>(town);
+	const auto* data = registry.TryGet<const Town>(town);
+	const auto* tribe = registry.TryGet<const Tribe>(town);
+	if (townDesire == nullptr || data == nullptr || tribe == nullptr)
+	{
+		return 0.0f;
+	}
+	// TODO(villager-hunger-health): a town of the player's running this low (0.95 or more) shows the low-on-food help
+	const auto& info = Locator::infoConstants::value();
+	const auto& farmer = info.villager.at(10);
+	const auto inputs = GatherInputs(town, *data, *tribe);
+	return town_desire::DesireForFood({
+	    .desire = *townDesire,
+	    .in = inputs,
+	    .town = info.town,
+	    .info = info.townDesire,
+	    .farmerMaxFood = farmer.maxFoodCarried,
+	    .farmerMaxWood = farmer.maxWoodCarried,
+	});
+}
+
 TownDesireInfo TownDesireSystem::GetMostWanted(entt::entity town) const
 {
 	const auto* townDesire = Locator::entitiesRegistry::value().TryGet<const TownDesire>(town);

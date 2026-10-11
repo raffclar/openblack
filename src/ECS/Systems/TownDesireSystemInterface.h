@@ -38,6 +38,8 @@ public:
 	/// The town works out one desire afresh from how it is now, as it does when a store is given or loses a resource. The
 	/// desire it then has.
 	virtual float RecomputeDesire(entt::entity town, TownDesireInfo desire) = 0;
+	/// How short of food a town is, from 0 to 1: as its people judge whether to carry food they found to its store
+	[[nodiscard]] virtual float FoodShortage(entt::entity town) const = 0;
 	/// The desire a town wants most this turn, None without a town
 	[[nodiscard]] virtual TownDesireInfo GetMostWanted(entt::entity town) const = 0;
 	/// The scripts' boost to a desire; `resort` puts the town's order right at once
