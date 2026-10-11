@@ -101,6 +101,7 @@ public:
 	std::optional<glm::mat3> Carry(const std::shared_ptr<particles::CarriedObject>& carried) override;
 	[[nodiscard]] std::vector<glm::vec3> TargetExtraPoints(entt::entity target) const override;
 	[[nodiscard]] std::optional<glm::vec3> ObjectPosition(entt::entity object) const override;
+	[[nodiscard]] uint64_t GameMilliseconds() const override;
 	[[nodiscard]] SurfacePoint RandomSurfacePoint(entt::entity object, particles::Effect& effect) const override;
 	[[nodiscard]] float PlayerAlignment(int player) const override;
 	[[nodiscard]] std::optional<particles::CreatureSpellBody> CreatureBody(entt::entity creature) const override;

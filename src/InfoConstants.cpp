@@ -134,6 +134,41 @@ AnimatedStaticInfo GAnimatedStaticInfo::Find(const std::string& name)
 	return AnimatedStaticInfo::None;
 }
 
+void openblack::ApplyCreatureBalance(GCreatureInfo& creature, const DifferentCreatureInfo& balance)
+{
+	creature.startScale = balance.startScale;
+	creature.growUpMinutes = balance.growUpMinutes;
+	creature.energyDrain = balance.energyDrain;
+	creature.startFatness = balance.startFatness;
+	creature.fatBurn = balance.fatBurn;
+	creature.overeatFatFactor = balance.overeatFatFactor;
+	creature.strength = balance.strength;
+	creature.strengthDecay = balance.strengthDecay;
+	creature.carryStrengthMinutes = balance.carryStrengthMinutes;
+	creature.slowSpeed = balance.slowSpeed;
+	creature.walkSpeed = balance.walkSpeed;
+	creature.runSpeed = balance.runSpeed;
+	std::memcpy(creature.field0x24c.data(), &balance.field0x30, sizeof(balance.field0x30));
+	creature.exhaustionRate = balance.exhaustionRate;
+	creature.sleepRecover = balance.sleepRecover;
+	creature.defenceMultiplierBurn = balance.defenceMultiplierBurn;
+	creature.defenceMultiplierCrush = balance.defenceMultiplierCrush;
+	creature.defenceMultiplierHit = balance.defenceMultiplierHit;
+	creature.sleepHeal = balance.sleepHeal;
+	creature.secondsPerAgeTick = balance.secondsPerAgeTick;
+	creature.pooPerEnergy = balance.pooPerEnergy;
+	creature.field0x36c = balance.field0x54;
+	std::memcpy(creature.field0x374.data(), &balance.field0x58, sizeof(balance.field0x58));
+}
+
+void openblack::ApplyCreatureBalance(InfoConstants& info)
+{
+	for (size_t i = 0; i < info.creature.size(); ++i)
+	{
+		ApplyCreatureBalance(info.creature.at(i), info.differentCreature.at(i));
+	}
+}
+
 void openblack::UpdateInfo(CreatureActionInfo& info, const v100::CreatureActionInfo& old)
 {
 	memcpy(&info, &old, sizeof(old));

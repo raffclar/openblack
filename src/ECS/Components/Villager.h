@@ -96,5 +96,7 @@ struct Villager
 	int32_t buildPlace {0};
 	/// Ticks left of the speed-up magic food gave it, none when it isn't sped up
 	uint8_t foodSpeedUp {0};
+	/// Its place in the order things were made in the game, which gives it its own small difference in speed
+	uint32_t creationIndex {0};
 };
 } // namespace openblack::ecs::components

@@ -155,6 +155,10 @@ public:
 		float landLightScale {1.0f};
 		/// The mesh isn't shaded by the sun, only coloured by the land's light where it stands
 		bool unlit {false};
+		/// The land's light and colour where the mesh stands and the world's distance haze reach it. Off for a mesh drawn
+		/// in a colour of its own alone, with nothing added over it, as the columns of light over the temples and the
+		/// village centres are
+		bool landLightAndHaze {true};
 		/// Nothing of the mesh is drawn below this height, when given, where its program takes it
 		std::optional<float> cutBelow;
 		/// Nothing of the mesh is drawn above this height, when given, where its program takes it: a building drawn as far
@@ -188,8 +192,9 @@ public:
 		std::optional<ObjectLook> objectLook;
 		/// The snow lying where the mesh stands shows on it
 		bool snow {false};
-		/// The creatures' shadows fall on the mesh, where its program takes them: not on the creatures themselves
-		bool creatureShadows {true};
+		/// The creatures' and the hand's moving shadows fall on the mesh, where its program takes them: not on the
+		/// creatures themselves, the hand or the villagers a script draws in high detail
+		bool groundShadows {true};
 		glm::vec3 lightAdd {0.0f};
 		/// A creature's body, blended from its base mesh, which is drawn, towards other meshes of the same shape: the
 		/// mesh each of the evil to good, thin to fat and weak to strong axes pulls towards, and how far

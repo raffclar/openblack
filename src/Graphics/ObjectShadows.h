@@ -14,12 +14,12 @@
 namespace openblack::graphics
 {
 
-/// The shadows of trees, rocks, buildings and the island's other features on the land. Black & White bakes them into
-/// its land textures: it casts each object's triangles from a fixed sun onto the
-/// flat plane through the object's origin, wherever the land under it lies, through its textures' masks. The shadows
-/// cover a texel's eight coverage samples together, so where shadows overlap the land is no darker, and a fully
-/// covered texel is half as bright. Here the objects are cast the same way into a texture over the whole island, which
-/// the land is darkened by.
+/// The shadows of rocks, buildings and the island's other features on the land (trees and big forests are baked through
+/// their textures' alpha instead, see tree_shadows, unless they are drawn moving with the dynamic tree shadows option). Black &
+/// White bakes them into its land textures: it casts each object's triangles from a fixed sun onto the flat plane through the
+/// object's origin, wherever the land under it lies, through its textures' masks. The shadows cover a texel's eight coverage
+/// samples together, so where shadows overlap the land is no darker, and a fully covered texel is half as bright. Here the
+/// objects are cast the same way into a texture over the whole island, which the land is darkened by.
 struct ObjectShadows
 {
 	/// The game's default sun, from the object's origin: so far away that its shadows all fall the same way, as long

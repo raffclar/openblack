@@ -13,8 +13,10 @@
 #include <cmath>
 
 #include <algorithm>
+#include <span>
 #include <utility>
 
+#include "Common/RuntimeQsort.h"
 #include "InfoConstants.h"
 
 namespace openblack::ecs::town_desire
@@ -156,23 +158,6 @@ int Compare(const DesireSort& a, const DesireSort& b)
 	return -1;
 }
 
-/// The runtime's sort of a short stretch: the last of [lo, hi] each time goes to hi
-void ShortSort(std::array<DesireSort, k_Count>& a, int lo, int hi)
-{
-	while (hi > lo)
-	{
-		int max = lo;
-		for (int p = lo + 1; p <= hi; ++p)
-		{
-			if (Compare(a.at(static_cast<size_t>(p)), a.at(static_cast<size_t>(max))) > 0)
-			{
-				max = p;
-			}
-		}
-		std::swap(a.at(static_cast<size_t>(max)), a.at(static_cast<size_t>(hi)));
-		--hi;
-	}
-}
 } // namespace
 
 const std::array<DesireFunctions, k_Count>& Table()
@@ -522,82 +507,7 @@ void ProcessDesire(TownDesire& desire, const DesireContext& c, size_t d)
 
 void MsvcQsort(std::array<DesireSort, k_Count>& entries)
 {
-	// Short stretches are sorted directly; longer ones split about their middle, the smaller side first
-	constexpr int k_Cutoff = 8;
-	std::array<int, 30> loStack {};
-	std::array<int, 30> hiStack {};
-	int stack = 0;
-	int lo = 0;
-	int hi = static_cast<int>(k_Count) - 1;
-	for (;;)
-	{
-		const int size = hi - lo + 1;
-		if (size <= k_Cutoff)
-		{
-			ShortSort(entries, lo, hi);
-		}
-		else
-		{
-			const int mid = lo + (size / 2);
-			std::swap(entries.at(static_cast<size_t>(mid)), entries.at(static_cast<size_t>(lo)));
-			int loGuy = lo;
-			int hiGuy = hi + 1;
-			for (;;)
-			{
-				do
-				{
-					++loGuy;
-				} while (loGuy <= hi &&
-				         Compare(entries.at(static_cast<size_t>(loGuy)), entries.at(static_cast<size_t>(lo))) <= 0);
-				do
-				{
-					--hiGuy;
-				} while (hiGuy > lo &&
-				         Compare(entries.at(static_cast<size_t>(hiGuy)), entries.at(static_cast<size_t>(lo))) >= 0);
-				if (hiGuy < loGuy)
-				{
-					break;
-				}
-				std::swap(entries.at(static_cast<size_t>(loGuy)), entries.at(static_cast<size_t>(hiGuy)));
-			}
-			std::swap(entries.at(static_cast<size_t>(lo)), entries.at(static_cast<size_t>(hiGuy)));
-			if (hiGuy - lo > hi - loGuy)
-			{
-				if (lo + 1 < hiGuy)
-				{
-					loStack.at(static_cast<size_t>(stack)) = lo;
-					hiStack.at(static_cast<size_t>(stack)) = hiGuy - 1;
-					++stack;
-				}
-				if (loGuy < hi)
-				{
-					lo = loGuy;
-					continue;
-				}
-			}
-			else
-			{
-				if (loGuy < hi)
-				{
-					loStack.at(static_cast<size_t>(stack)) = loGuy;
-					hiStack.at(static_cast<size_t>(stack)) = hi;
-					++stack;
-				}
-				if (lo + 1 < hiGuy)
-				{
-					hi = hiGuy - 1;
-					continue;
-				}
-			}
-		}
-		--stack;
-		if (stack < 0)
-		{
-			return;
-		}
-		lo = loStack.at(static_cast<size_t>(stack));
-		hi = hiStack.at(static_cast<size_t>(stack));
-	}
+	RuntimeQsort(std::span<DesireSort>(entries), Compare);
 }
 
 bool ValidScriptBoost(int32_t desire, float boost)

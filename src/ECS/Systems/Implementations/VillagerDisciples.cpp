@@ -56,6 +56,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Texture2D.h"
@@ -269,41 +270,11 @@ bool HasRoomForAdults(entt::entity abode)
 	return static_cast<float>(AdultsIn(abode)) / static_cast<float>(info->maxVillagersInAbode) < 1.0f;
 }
 
-/// Room in a town for another villager: room for adults left in its homes, or below the size a town without homes is
-/// allowed when it has none
+/// Room in a town for another villager: room for adults left in its built homes, or below the size a town without
+/// homes is allowed when it has none
 bool TownHasRoom(entt::entity town)
 {
-	if (!Locator::infoConstants::has_value())
-	{
-		return false;
-	}
-	const auto& registry = Entities();
-	int64_t places = 0;
-	int64_t room = 0;
-	for (const auto abode : registry.Get<const Town>(town).abodes)
-	{
-		if (!registry.Valid(abode) || !registry.AllOf<Abode>(abode))
-		{
-			continue;
-		}
-		if (const auto* info = world_objects::AbodeInfoOf(abode); info != nullptr)
-		{
-			places += info->maxVillagersInAbode;
-			room += static_cast<int64_t>(info->maxVillagersInAbode) - AdultsIn(abode);
-		}
-	}
-	if (places == 0)
-	{
-		int64_t people = 0;
-		registry.Each<const Villager>([&people, town](const Villager& villager) {
-			if (villager.town == town)
-			{
-				++people;
-			}
-		});
-		return static_cast<int64_t>(Locator::infoConstants::value().town.emptyTownAllowedThisManyVillagers) - people > 0;
-	}
-	return room > 0;
+	return Locator::townSystem::has_value() && Locator::townSystem::value().HasRoomForNewcomer(town);
 }
 
 /// What the choice reads of a thing held near
@@ -558,11 +529,21 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 	case Builder:
 		return villager_build::CheckNeededForBuilding(action) == 1;
 	case ChangeHouse:
-		// It stops being a disciple as it sets about moving
-		villager_disciple::SetType(EntityOf(action), None);
-		// TODO(disciples): it moves into the nearest home, or that home's town when the home is full, and goes to it;
-		// villagers don't move house or change towns yet
-		return false;
+	{
+		// It stops being a disciple as it sets about moving into the building nearest it, or failing that the
+		// building's town, then goes to its new home
+		const auto villager = EntityOf(action);
+		villager_disciple::SetType(villager, None);
+		auto& towns = Locator::townSystem::value();
+		if (!towns.MoveInByBuilding(towns.NearestBuilding(glm::xz(PositionOf(villager))), villager))
+		{
+			return false;
+		}
+		// TODO(disciples): moved to another player's town, the new player counts a villager converted (a multiplayer
+		// win condition)
+		SetTopState(action, VillagerStates::GoHomeAndChange);
+		return true;
+	}
 	case FromVortex:
 		SetTopState(action, VillagerStates::ScriptInCrowd);
 		villager_disciple::SetType(EntityOf(action), None);

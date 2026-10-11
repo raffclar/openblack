@@ -96,8 +96,13 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 
 	const entt::entity town = Locator::townSystem::value().FindClosestTown(abodePosition);
 
-	registry.Assign<Villager>(entity, life, villager_age::BirthTurnFor(turn, born.age), born.food, lifeStage, sex,
-	                          info.tribeType, info.villagerNumber, task, entt::null, entt::null, born.lastCheckTurn);
+	auto& person =
+	    registry.Assign<Villager>(entity, life, villager_age::BirthTurnFor(turn, born.age), born.food, lifeStage, sex,
+	                              info.tribeType, info.villagerNumber, task, entt::null, entt::null, born.lastCheckTurn);
+	// TODO(villager-ageing): the game counts every thing it makes (trees, buildings, animals and the rest) in one order;
+	// only villagers are counted yet, so each villager's own speed difference is drawn from the same spread but not the
+	// same one as the game gives that villager
+	person.creationIndex = registry.Context().thingsMade++;
 	registry.Assign<WallHug>(
 	    entity, WallHug {.goal = glm::vec2(), .yAngle = 0.0f, .speed = GetSpeedStateSpeed(info.speedGroup.speedDefault)});
 	// A child made as a child wears its kind's child model; the rest their job's

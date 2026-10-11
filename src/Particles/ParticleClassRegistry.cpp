@@ -112,6 +112,7 @@ ParticleClassRegistry ParticleClassRegistry::WithAllClasses(CreatorResourcesInte
 	RegisterPlasmaRules(registry);
 	RegisterManaPathRules(registry);
 	RegisterBlastRules(registry);
+	RegisterVolumeGlowRules(registry);
 	return registry;
 }
 

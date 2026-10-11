@@ -49,7 +49,9 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/VillagerCarry.h"
+#include "ECS/VillagerCheckRules.h"
 #include "ECS/VillagerClips.h"
 #include "ECS/VillagerDroppedLog.h"
 #include "ECS/VillagerMemory.h"
@@ -61,6 +63,7 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerHome.h"
+#include "VillagerReactions.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -692,7 +695,8 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 		target = ToCoords(state.walkTarget);
 	}
 	villager_home::SetupMoveTo(action, CoordsToMetres(target), VillagerStates::MoveAroundFire);
-	SetStateSpeed(villager, State(action, LivingAction::Index::Previous));
+	// The full speed of its state, wounds, town and its own way of going included
+	ecs::systems::villager_reactions::SetStateSpeed(villager, State(action, LivingAction::Index::Previous));
 	return 1;
 }
 
@@ -1093,6 +1097,11 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 		                                         .player = ownTown != nullptr ? ownTown->owner : PlayerNames::NEUTRAL,
 		                                         .position = PositionOf(villager)});
 	}
+	// Dying, it leaves its home, ending the couple it was one of, and its town
+	if (Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().RemoveDeadVillager(villager);
+	}
 }
 
 uint32_t villager_fire::Dying(LivingAction& action)
@@ -1109,6 +1118,11 @@ uint32_t villager_fire::Dying(LivingAction& action)
 		SetTopState(action, VillagerStates::Dead);
 	}
 	return 1;
+}
+
+bool villager_fire::ExitDead(LivingAction&, VillagerStates next)
+{
+	return !ecs::villager_check_rules::BodyMayLeaveDeath(next);
 }
 
 uint32_t villager_fire::Dead(LivingAction& action)

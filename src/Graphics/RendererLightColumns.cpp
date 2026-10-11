@@ -42,9 +42,10 @@ using namespace openblack::graphics;
 
 namespace
 {
-/// Added over what is behind by its texture's alpha times its strength, tested against the depth but leaving none
+/// Added over what is behind by its texture's alpha times its strength, tested against the depth but leaving none, and
+/// only from the front: the game draws the column's faces one-sided, whatever its model's material says
 constexpr uint64_t k_AddedState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
-                                  BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
+                                  BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | BGFX_STATE_CULL_CCW;
 
 uint32_t ColourOf(PlayerNames player)
 {
@@ -81,6 +82,10 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 		submitDesc.state = k_AddedState;
 		submitDesc.alphaThreshold = 0.0f;
 		submitDesc.tint = light_column::Tint(ColourOf(owner), alpha);
+		// The column is its owner's colour alone: neither the land's light and colour nor the distance haze are added to
+		// it, and the creatures' and the hand's shadows don't fall on it
+		submitDesc.landLightAndHaze = false;
+		submitDesc.groundShadows = false;
 		submitDesc.sortDepth = zsort::Depth(position, eye);
 		DrawMesh(column, submitDesc, std::numeric_limits<uint8_t>::max());
 	};

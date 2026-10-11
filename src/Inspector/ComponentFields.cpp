@@ -316,6 +316,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Abode::foodAmount>("foodAmount")
 	    .Field<&components::Abode::woodAmount>("woodAmount")
 	    .Field<&components::Abode::inhabitants>("inhabitants")
+	    .Field<&components::Abode::couple>("couple")
 	    .Field<&components::Abode::presentAtHome>("presentAtHome")
 	    .Field<&components::Abode::info>("info");
 	Reflect<components::Alignment>(context)
@@ -1450,10 +1451,14 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::TownStats>(context)
 	    .Field<&components::TownStats::adults>("adults")
 	    .Field<&components::TownStats::children>("children")
+	    .Field<&components::TownStats::men>("men")
+	    .Field<&components::TownStats::women>("women")
 	    .Field<&components::TownStats::abodesWithPlaces>("abodesWithPlaces")
 	    .Field<&components::TownStats::adultPlaces>("adultPlaces")
 	    .Field<&components::TownStats::childPlaces>("childPlaces")
 	    .Field<&components::TownStats::totalPlaces>("totalPlaces")
+	    .Field<&components::TownStats::adultRoom>("adultRoom")
+	    .Field<&components::TownStats::childRoom>("childRoom")
 	    .Field<&components::TownStats::civicBuildings>("civicBuildings")
 	    .Field<&components::TownStats::disciples>("disciples")
 	    .Field<&components::TownStats::foodForDinner>("foodForDinner")
@@ -1539,7 +1544,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Villager::woodGraphic>("woodGraphic")
 	    .Field<&components::Villager::buildingSite>("buildingSite")
 	    .Field<&components::Villager::buildPlace>("buildPlace")
-	    .Field<&components::Villager::foodSpeedUp>("foodSpeedUp");
+	    .Field<&components::Villager::foodSpeedUp>("foodSpeedUp")
+	    .Field<&components::Villager::creationIndex>("creationIndex");
 	Reflect<components::VillagerDeath>(context)
 	    .Field<&components::VillagerDeath::turnsLeft>("turnsLeft")
 	    .Field<&components::VillagerDeath::skeleton>("skeleton")

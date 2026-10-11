@@ -27,8 +27,8 @@ namespace openblack::graphics::light_column
 inline constexpr uint8_t k_TownAlpha = 20;
 /// The temple's column beats between these strengths, of 255
 inline constexpr float k_TempleAlphaLow = 55.0f;
-/// The column is drawn this many times its model's size, and stretched this much again upright
-inline constexpr float k_Scale = 3.0f;
+/// The column keeps its model's width and is stretched this much upright. The game also gives the column's object a
+/// size of 3, but its model is drawn by the turn and stretch alone, so that size changes nothing on screen.
 inline constexpr float k_UprightStretch = 3.0f;
 /// A temple being destroyed keeps its column for this long into its destruction
 inline constexpr float k_DestructionSeconds = 21.8f;
@@ -48,8 +48,8 @@ inline constexpr float k_DestructionSeconds = 21.8f;
 /// The column's colour: the owner's colour (0xRRGGBB, any alpha above it ignored) at a strength of 255
 [[nodiscard]] glm::vec4 Tint(uint32_t colour, uint8_t alpha);
 
-/// Where the column's model is drawn: standing at a point, turned about the upright so that it faces the eye, at three
-/// times its size and stretched three times upright
+/// Where the column's model is drawn: standing at a point, turned about the upright so that it faces the eye, as wide
+/// as its model and stretched three times upright
 [[nodiscard]] glm::mat4 Model(const glm::vec3& position, const glm::vec3& eye);
 
 } // namespace openblack::graphics::light_column

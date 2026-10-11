@@ -408,7 +408,7 @@ void Renderer::DrawHandGlow(const DrawSceneDesc& desc, uint32_t handDepth) const
 	submitDesc.skinTexture = &flow->GetNativeHandle();
 	submitDesc.uvScale = visuals::k_GlowCellSize;
 	submitDesc.uvOffset = visuals::GlowUvOffset(pose->fx->glowFrame);
-	submitDesc.creatureShadows = false;
+	submitDesc.groundShadows = false;
 	// Just after the hand
 	submitDesc.sortDepth = handDepth > 0 ? handDepth - 1 : 0;
 	DrawMesh(*Locator::resources::value().GetMeshes().Handle(Hand::k_MeshId), submitDesc, std::numeric_limits<uint8_t>::max());

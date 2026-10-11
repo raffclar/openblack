@@ -13,10 +13,11 @@
 
 #include <algorithm>
 
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
+#include <glm/trigonometric.hpp>
+
+#include "GroundShadow.h"
 
 namespace openblack::graphics
 {
@@ -28,8 +29,6 @@ constexpr float k_HorizonElevation = glm::radians(10.0f);
 constexpr float k_MiddayElevation = glm::radians(60.0f);
 /// Black & White's light sits at (-500000, 500000, -500000): the midday sun comes from that side
 const glm::vec3 k_MiddaySunSide = glm::normalize(glm::vec3(-1.0f, 0.0f, -1.0f));
-/// The bones are joints, the fingertips reach past the outermost ones
-constexpr float k_BoneSpreadToRadius = 1.4f;
 } // namespace
 
 glm::vec3 HandShadow::SunlightDirection(float hours, const DayNightTimes& times)
@@ -54,84 +53,9 @@ float HandShadow::Daylight(float hours, const DayNightTimes& times)
 	return std::clamp((morning - times.duskStart) / std::max(times.dayFull - times.duskStart, 0.001f), 0.0f, 1.0f);
 }
 
-float HandShadow::DistanceFade(float cameraDistance, float handRadius)
+glm::vec3 HandShadow::LightPoint(const glm::vec3& groundBelow, float hours, const DayNightTimes& times)
 {
-	if (handRadius <= 0.0f)
-	{
-		return 0.0f;
-	}
-	const auto radii = cameraDistance / handRadius;
-	if (radii < k_FadeStart)
-	{
-		return 1.0f;
-	}
-	if (radii <= k_FadeEnd)
-	{
-		return 1.0f - ((radii - k_FadeStart) / (k_FadeEnd - k_FadeStart));
-	}
-	return 0.0f;
-}
-
-std::optional<HandShadow> HandShadow::Compute(const std::vector<glm::mat4>& handBones, glm::vec3 cameraPosition,
-                                              float groundHeight, float hours, const DayNightTimes& times,
-                                              bool originBottomLeft, bool homogeneousDepth)
-{
-	if (handBones.empty())
-	{
-		return std::nullopt;
-	}
-
-	// Bounding sphere of the hand
-	auto minimum = glm::vec3(handBones.front()[3]);
-	auto maximum = minimum;
-	for (const auto& bone : handBones)
-	{
-		minimum = glm::min(minimum, glm::vec3(bone[3]));
-		maximum = glm::max(maximum, glm::vec3(bone[3]));
-	}
-	const auto centre = (minimum + maximum) * 0.5f;
-	float spread = 0.0f;
-	for (const auto& bone : handBones)
-	{
-		spread = std::max(spread, glm::distance(centre, glm::vec3(bone[3])));
-	}
-	const auto radius = std::max(spread * k_BoneSpreadToRadius, 0.001f);
-
-	const auto ground = glm::vec3(centre.x, groundHeight, centre.z);
-	const auto strength = Daylight(hours, times) * DistanceFade(glm::distance(cameraPosition, ground), radius);
-	if (strength <= 0.0f)
-	{
-		return std::nullopt;
-	}
-
-	HandShadow shadow {};
-	shadow.lightDirection = SunlightDirection(hours, times);
-	shadow.centre = centre;
-	shadow.radius = radius;
-	shadow.strength = strength;
-	shadow.startDepth = -0.5f * radius;
-
-	// Look down the sunlight at the hand, fitting it in the silhouette texture
-	const auto up = std::abs(shadow.lightDirection.y) > 0.99f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
-	const auto eye = centre - shadow.lightDirection * (radius * 2.0f);
-	shadow.view = glm::lookAtRH(eye, centre, up);
-	shadow.projection = homogeneousDepth ? glm::orthoRH_NO(-radius, radius, -radius, radius, 0.0f, radius * 4.0f)
-	                                     : glm::orthoRH_ZO(-radius, radius, -radius, radius, 0.0f, radius * 4.0f);
-
-	// From clip space to texture coordinates, which run downwards on some renderers
-	auto bias = glm::mat4(1.0f);
-	bias[0][0] = 0.5f;
-	bias[1][1] = originBottomLeft ? 0.5f : -0.5f;
-	bias[3][0] = 0.5f;
-	bias[3][1] = 0.5f;
-	shadow.receiverMatrix = bias * shadow.projection * shadow.view;
-	// Distance past the hand's centre along the light
-	for (glm::length_t column = 0; column < 3; ++column)
-	{
-		shadow.receiverMatrix[column][2] = shadow.lightDirection[column];
-	}
-	shadow.receiverMatrix[3][2] = -glm::dot(centre, shadow.lightDirection);
-	return shadow;
+	return groundBelow - (SunlightDirection(hours, times) * glm::length(GroundShadow::k_Sun));
 }
 
 } // namespace openblack::graphics
