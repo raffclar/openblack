@@ -518,3 +518,47 @@ TEST_F(TownHomesTest, ShufflingSwapsOnlyThoseOutOfDoors)
 	EXPECT_EQ(registry.Get<Abode>(men).inhabitants, (std::vector<entt::entity> {people[3], people[0]}));
 	EXPECT_EQ(registry.Get<Abode>(women).inhabitants, (std::vector<entt::entity> {people[1], people[2]}));
 }
+
+TEST_F(TownHomesTest, AMothersChildrenAreFoundBuildingByBuildingThenAmongTheHomeless)
+{
+	const glm::vec3 here(0.0f);
+	const auto older = MakeAbode(here, k_Hut);
+	const auto newer = MakeAbode(here, k_Hut);
+	const auto mother = MakeVillager(here, Villager::Sex::FEMALE);
+	const auto other = MakeVillager(here, Villager::Sex::FEMALE);
+	const auto inOlder = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
+	const auto firstInNewer = MakeVillager(here, Villager::Sex::FEMALE, Villager::LifeStage::Child);
+	const auto secondInNewer = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
+	const auto homeless = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
+	const auto someoneElses = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
+	for (const auto child : {inOlder, firstInNewer, secondInNewer, homeless})
+	{
+		registry.Get<Villager>(child).mother = mother;
+	}
+	registry.Get<Villager>(someoneElses).mother = other;
+	registry.Get<Abode>(older).inhabitants = {inOlder, someoneElses};
+	// Each building keeps its people newest first
+	registry.Get<Abode>(newer).inhabitants = {secondInNewer, firstInNewer};
+	registry.Get<Town>(town).homelessVillagers = {homeless};
+
+	EXPECT_EQ(town_homes::ChildrenOf(registry, town, mother),
+	          (std::vector<entt::entity> {secondInNewer, firstInNewer, inOlder, homeless}));
+	EXPECT_EQ(town_homes::ChildrenOf(registry, town, other), std::vector<entt::entity> {someoneElses});
+	EXPECT_TRUE(town_homes::ChildrenOf(registry, entt::null, mother).empty());
+}
+
+TEST_F(TwoTownsTest, AMotherLeavingHerTownAliveIsToldFirstWithTheTownSheLeaves)
+{
+	const glm::vec3 here(0.0f);
+	MakeAbode(here, k_Hut);
+	const auto mother = MakeVillager(here, Villager::Sex::FEMALE);
+	town_homes::AddVillagerToTown(registry, Rooms(), town, mother);
+	const auto hut = MakeOtherAbode(here, k_Hut);
+
+	std::vector<std::pair<entt::entity, entt::entity>> told;
+	auto homes = Rooms();
+	homes.leavingTown = [&told](entt::entity villager, entt::entity from) { told.emplace_back(villager, from); };
+	town_homes::MoveInAnyway(registry, homes, hut, mother);
+	EXPECT_EQ(told, (std::vector<std::pair<entt::entity, entt::entity>> {{mother, town}}));
+	EXPECT_EQ(registry.Get<Villager>(mother).town, other);
+}

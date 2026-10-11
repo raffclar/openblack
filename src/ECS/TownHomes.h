@@ -50,6 +50,8 @@ struct Homes
 	std::function<void(entt::entity villager)> leaving;
 	/// Whether a villager is inside its home
 	std::function<bool(entt::entity villager)> atHome;
+	/// A villager is about to leave its town alive: the children of the town whose mother it is lose her
+	std::function<void(entt::entity villager, entt::entity town)> leavingTown;
 };
 
 /// The people living in a building, by age, and the men among its adults
@@ -164,7 +166,12 @@ bool MakeHomeless(Registry& registry, const Homes& homes, entt::entity villager)
 /// places, or always for a building with no places for adults
 [[nodiscard]] bool IsTooCrowded(uint32_t adults, uint32_t maxAdults, float tooCrowded);
 
-/// A villager leaves its town, alive: its home or the homeless, then the town itself
+/// The people of a town whose mother a villager is, in the town's order: those of each of its buildings in turn (the
+/// newest building first, each building's people newest first), then its homeless
+[[nodiscard]] std::vector<entt::entity> ChildrenOf(const Registry& registry, entt::entity town, entt::entity mother);
+
+/// A villager leaves its town, alive: the town's children whose mother it is lose her, then it leaves its home or the
+/// homeless, then the town itself
 void RemoveVillagerFromTown(Registry& registry, const Homes& homes, entt::entity villager);
 
 /// A villager has died: it leaves its home (ending the couple it was one of) and its town, with no one told

@@ -57,6 +57,9 @@ struct Town
 	uint32_t emergencyTurn {0};
 	/// Its own graveyard, where its dead are counted: the first of its graveyards to work, none until then
 	entt::entity graveyard {entt::null};
+	/// Its crèche, where its children spend their days: the first of its crèches to work, none until then. When it goes
+	/// another of the town's working civic buildings may stand in for it.
+	entt::entity creche {entt::null};
 };
 
 } // namespace openblack::ecs::components
