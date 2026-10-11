@@ -11,10 +11,12 @@
 
 #include <optional>
 #include <random>
+#include <unordered_map>
 
 #include "Common/RandomNumberManager.h"
 #include "Creature/CreatureRoute.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "Enums.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -46,13 +48,16 @@ public:
 	[[nodiscard]] const creature_route::WalkableLand& GetWalkableLand() override;
 
 private:
-	/// Starts a move for a fraction of top speed, the creature's state already gathered
+	/// Starts a move for a fraction of top speed, the creature's state already gathered, to a point or up to a thing
 	MoveResult StartMove(entt::entity creature, components::CreatureLocomotion& locomotion, glm::vec2 point, float fraction,
-	                     float minDistance, float maxDistance, bool ontoDestination);
+	                     float minDistance, float maxDistance, bool ontoDestination, entt::entity target);
+	/// How far round its middle a species' body reaches at a drawn scale of one, worked out once
+	float BodyRadius(CreatureType species);
 
 	/// Where creatures can walk, sorted from the land the first time it is wanted. The system is made anew with each
 	/// land.
 	std::optional<creature_route::WalkableLand> _land;
+	std::unordered_map<CreatureType, float> _bodyRadii;
 	/// Fidgets and running away distances are chosen at random, apart from the game's own random numbers
 	RandomStreamSource _random {RandomStream::CreatureLocomotion};
 };

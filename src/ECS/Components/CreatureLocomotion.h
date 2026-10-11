@@ -53,9 +53,12 @@ struct CreatureLocomotion
 	/// The fraction of its top speed it is asked to go at
 	float fraction {0.0f};
 	creature_locomotion::Speeds speeds {};
-	/// The scale its body is drawn at, mesh units to the world's, and how far round it keeps clear of things
+	/// The scale its body is drawn at, mesh units to the world's
 	float scale {1.0f};
+	/// How far round its middle its body reaches by its own size, which it keeps clear of things by, and as drawn,
+	/// which others keep clear of it by
 	float radius {5.0f};
+	float shownRadius {5.0f};
 
 	/// Where it is going, and how close counts as arriving
 	std::optional<glm::vec2> destination;
@@ -65,6 +68,8 @@ struct CreatureLocomotion
 	/// The route being planned, and the route it follows
 	std::optional<creature_route::Planner> planner;
 	creature_route::Route route;
+	/// What the route it follows was planned round
+	std::vector<creature_route::Circle> plannedRound;
 	bool routeReady {false};
 	/// Milliseconds left for planning before it gives up
 	float planningMs {0.0f};

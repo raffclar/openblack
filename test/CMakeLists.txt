@@ -289,6 +289,9 @@ openblack_setup_and_add_test(test_upload_pacer test_upload_pacer.cpp)
 openblack_setup_and_add_test(test_map_cells test_map_cells.cpp)
 openblack_setup_and_add_test(test_script_cast test_script_cast.cpp)
 openblack_setup_and_add_test(test_creature_route test_creature_route.cpp)
+openblack_setup_and_add_test(
+  test_creature_obstacles test_creature_obstacles.cpp
+)
 openblack_setup_and_add_test(test_creature_audio test_creature_audio.cpp)
 openblack_setup_and_add_test(
   test_creature_interaction test_creature_interaction.cpp
