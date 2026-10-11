@@ -93,10 +93,10 @@ constexpr std::array<Level, 16> k_Levels {{
     {.known = true, .features = 0x3F, .autoPitch = false, .cameraKeys = true, .placeKeys = false, .handReach = std::nullopt},
 }};
 
-/// Nothing tilts within this of the way there; the tilt is a tenth of the way, at most the frame's seconds, and
+/// Nothing tilts within this of the way there; the tilt is a fifth of the way, at most the frame's seconds, and
 /// becomes pitch input at this rate
 constexpr float k_CloseEnough = 0.01f;
-constexpr float k_ShareOfTheWay = 0.1f;
+constexpr float k_ShareOfTheWay = 0.2f;
 constexpr float k_InputPerTilt = -150.0f;
 } // namespace
 
