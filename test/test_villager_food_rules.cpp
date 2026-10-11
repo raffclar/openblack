@@ -162,8 +162,9 @@ TEST(VillagerFoodRules, AMealComesFromHandsHomePitOrNowhere)
 	// Home has enough with what it carries
 	EXPECT_EQ(PlanMeal({.required = 50, .homeFood = 50u}), MealPlan::GoHome);
 	EXPECT_EQ(PlanMeal({.required = 50, .atHome = true, .homeFood = 50u}), MealPlan::EatAtHome);
-	// What it carries counts twice against its home's food, as in the game
-	EXPECT_EQ(PlanMeal({.required = 50, .carried = 20, .homeFood = 30u}), MealPlan::GoHome);
+	// What it carries is already off what it needs and counts only once: home must hold the rest
+	EXPECT_EQ(PlanMeal({.required = 50, .carried = 20, .homeFood = 30u, .pitFood = 100u}), MealPlan::GoToStoragePit);
+	EXPECT_EQ(PlanMeal({.required = 50, .carried = 20, .homeFood = 50u}), MealPlan::GoHome);
 	// Else the storage pit
 	EXPECT_EQ(PlanMeal({.required = 50, .homeFood = 10u, .pitFood = 60u}), MealPlan::GoToStoragePit);
 	// The pit short: what it carries, if anything
@@ -174,6 +175,20 @@ TEST(VillagerFoodRules, AMealComesFromHandsHomePitOrNowhere)
 	EXPECT_EQ(PlanMeal({.required = 50}), MealPlan::None);
 }
 
+TEST(VillagerFoodRules, AMealAtHomeTakesWhatItNeedsOnce)
+{
+	EXPECT_EQ(TakenFromHome(50, 200), 50u);
+	EXPECT_EQ(TakenFromHome(50, 30), 30u);
+	EXPECT_EQ(TakenFromHome(0, 30), 0u);
+	// Eating what it then holds uses exactly the meal: nothing left over in its hands
+	const uint32_t meal = 70;
+	const int16_t carried = 20;
+	const auto taken = TakenFromHome(RequiredForMeal(meal, carried), 500);
+	const auto eaten = EatHeld(meal, static_cast<int16_t>(carried + static_cast<int16_t>(taken)), 0.3f, 1.0f);
+	EXPECT_EQ(eaten.eaten, meal);
+	EXPECT_EQ(static_cast<int32_t>(carried) + static_cast<int32_t>(taken) - eaten.eaten, 0);
+}
+
 TEST(VillagerFoodRules, EatingFillsByTheShareOfTheMealEaten)
 {
 	auto meal = EatHeld(80, 40, 0.2f, 1.2f);
@@ -182,10 +197,10 @@ TEST(VillagerFoodRules, EatingFillsByTheShareOfTheMealEaten)
 	meal = EatHeld(80, 100, 0.4f, 1.2f);
 	EXPECT_EQ(meal.eaten, 80);
 	EXPECT_FLOAT_EQ(meal.food, 1.0f);
-	// A meal of nothing empties the belly
+	// A meal of nothing leaves the belly as it is
 	meal = EatHeld(0, 30, 0.9f, 1.0f);
 	EXPECT_EQ(meal.eaten, 0);
-	EXPECT_FLOAT_EQ(meal.food, 0.0f);
+	EXPECT_FLOAT_EQ(meal.food, 0.9f);
 }
 
 TEST(VillagerFoodRules, AHouseholdsDinnerIsEachOfItsPeoplesDinner)
