@@ -47,8 +47,8 @@ uint32_t StopReacting(components::LivingAction& action);
 /// What the villager reacts to: the reaction's thing, while it is there
 [[nodiscard]] std::optional<entt::entity> ReactingTo(entt::entity villager);
 
-/// A villager turns towards a point, a step a turn, as one watching something does
-void LookAt(entt::entity villager, const glm::vec3& point);
+/// A villager turns towards a point, a step a turn, as one watching something does: whether it now faces it
+bool LookAt(entt::entity villager, const glm::vec3& point);
 /// The states of fleeing, and of watching (after fleeing, or a nice miracle)
 uint32_t Fleeing(components::LivingAction& action);
 uint32_t Watching(components::LivingAction& action);

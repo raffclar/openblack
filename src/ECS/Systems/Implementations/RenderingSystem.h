@@ -43,6 +43,8 @@ private:
 	void UploadPartialBuilds();
 	/// What the villagers drawn this frame hold, a draw for each model, from the held things gathered with the instances
 	void UploadHeldObjects();
+	/// The souls of the dead rising, each with its own bones
+	void UploadSouls();
 	bool UploadTreeInstances(bool drawBoundingBox);
 
 	/// Where the next instance of a mesh goes in the instance buffer

@@ -1280,9 +1280,12 @@ void AnimalSystem::ProcessEaten()
 		if (registry.AllOf<Villager>(entity))
 		{
 			// Eaten, the villager dies as any villager dies: it falls, its town and the people about it hear of it, and
-			// its body lies until it goes
+			// its body lies until it goes. Its death is put down to its own player, weighing with its town the life it
+			// had left.
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: villager #{} eaten, dies", static_cast<uint32_t>(entity));
-			villager_fire::DieByEffect(entity);
+			villager_fire::DieByEffect(entity, villager_fire::DeathCause {.reason = DeathReason::Animal,
+			                                                              .killer = ecs::world_objects::PlayerOf(entity),
+			                                                              .weight = ecs::world_objects::LifeOf(entity)});
 		}
 		else
 		{

@@ -5866,6 +5866,26 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 			}
 			drawHeld(true);
+			// The souls of the dead rising or sinking, each white and see-through, posed by its own clip; the sea doesn't
+			// reflect them
+			if (desc.viewId != RenderPass::Reflection)
+			{
+				for (const auto& soul : renderCtx.soulDraws)
+				{
+					if (!meshManager.Contains(soul.meshId) || soul.instance >= renderCtx.soulInstances.size())
+					{
+						continue;
+					}
+					RenderContext::InstancedDrawDesc placers {soul.instance, 1, false, false};
+					const EntityPose soulPose {.bones = soul.bones, .morphTargets = nullptr};
+					submitDesc.sortDepth =
+					    zsort::Depth(glm::vec3(renderCtx.soulInstances.at(soul.instance).model[3]), cameraOrigin);
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(255.0f), .alpha = soul.alpha};
+					drawInstances(soul.meshId, placers, true, soul.instance, 1, &soulPose, nullptr,
+					              renderCtx.soulInstanceBuffer);
+					submitDesc.objectLook.reset();
+				}
+			}
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
 				if (placers.translucent && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))

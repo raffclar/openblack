@@ -27,6 +27,10 @@ struct VillagerDeath
 	/// What killed it, and the player put down for it, when its death says
 	std::optional<DeathReason> reason;
 	std::optional<PlayerNames> killer;
+	/// It died of a fall that left it on its back: it falls and lies dead in its own clip for that
+	bool onBack {false};
+	/// The people about it have been told of the death, once, as it began to fall; never for a death at home
+	bool noticed {false};
 };
 
 } // namespace openblack::ecs::components
