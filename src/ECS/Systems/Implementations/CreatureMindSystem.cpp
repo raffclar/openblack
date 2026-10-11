@@ -1596,10 +1596,11 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 		return entity.has_value() ? std::optional(entt::to_integral(*entity)) : std::nullopt;
 	};
 	const auto actionObject = forced.actionObject != entt::null ? toNumber(forced.actionObject) : std::nullopt;
-	const creature_plan_actions::Situation situation {
+	creature_plan_actions::Situation situation {
 	    .instrument = toNumber(forced.instrument),
 	    .handFull = registry.AllOf<CreatureHeldObject>(creature),
 	};
+	Situate(creature, situation);
 	auto built = PlanAgenda(creature, *action, actionObject, situation);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} is made to {} on {}: {}", entt::to_integral(creature), forced.action,
 	                    actionObject.value_or(0), built.has_value() ? "planned" : "can't be planned");

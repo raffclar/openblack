@@ -139,8 +139,8 @@ bool CreatureMindSystem::PointOutHighlight(entt::entity creature)
 	if (!action.has_value() ||
 	    !ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = "PointOutHighlight", .object = *highlight}))
 	{
-		// TODO(creature-do-action-2): openblack's creature can't carry out pointing a highlight out yet
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} can't point out highlight {} yet", entt::to_integral(creature),
+		// The tables lack the action, or the creature can't plan it from where it is
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} can't point out highlight {}", entt::to_integral(creature),
 		                    entt::to_integral(*highlight));
 	}
 	return true;

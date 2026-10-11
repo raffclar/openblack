@@ -682,3 +682,6 @@ openblack_setup_and_add_test(test_creature_training test_creature_training.cpp)
 openblack_setup_and_add_test(
   test_building_site_rules test_building_site_rules.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_action_agendas test_creature_action_agendas.cpp
+)

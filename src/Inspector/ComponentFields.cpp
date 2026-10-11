@@ -442,6 +442,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Creature::strength>("strength")
 	    .Field<&components::Creature::size>("size")
 	    .Field<&components::Creature::penSize>("penSize")
+	    .Field<&components::Creature::autoScale>("autoScale")
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")
 	    .Field<&components::Creature::canDie>("canDie");
 	Reflect<components::CreatureArena>(context)
@@ -521,7 +522,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFightRecord::fights>("fights")
 	    .Field<&components::CreatureFightRecord::wins>("wins")
 	    .Field<&components::CreatureFightRecord::secondsSinceFight>("secondsSinceFight")
-	    .Field<&components::CreatureFightRecord::control>("control");
+	    .Field<&components::CreatureFightRecord::control>("control")
+	    .Field<&components::CreatureFightRecord::health>("health");
 	Reflect<components::CreatureKnockedOut>(context)
 	    .Field<&components::CreatureKnockedOut::stage>("stage")
 	    .Field<&components::CreatureKnockedOut::seconds>("seconds")

@@ -1510,6 +1510,15 @@ void GetProperty() // 021 GET_PROPERTY
 	}
 	switch (prop)
 	{
+	case script::ObjectPropertyType::CreatureFightHealth:
+		if (!registry.AllOf<ecs::components::Creature>(object))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+			Pushf(0.0f);
+			return;
+		}
+		Pushf(Locator::creatureFightSystem::has_value() ? Locator::creatureFightSystem::value().GetFightHealth(object) : 1.0f);
+		return;
 	case script::ObjectPropertyType::Flying:
 		// In the physics, thrown, dropped or knocked and not yet at rest
 		Pushb(registry.AllOf<ecs::components::InPhysics>(object));
@@ -1785,6 +1794,19 @@ void SetProperty() // 022 SET_PROPERTY
 	}
 	switch (prop)
 	{
+	case script::ObjectPropertyType::CreatureFightHealth:
+		// Kept as given, even outside 0 to 1, until a fight starts it afresh
+		if (!registry.AllOf<ecs::components::Creature>(object))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+			CannotSetProperty(prop);
+			return;
+		}
+		if (Locator::creatureFightSystem::has_value())
+		{
+			Locator::creatureFightSystem::value().SetFightHealth(object, value);
+		}
+		return;
 	case script::ObjectPropertyType::Health:
 		if (!IsWorldObject(object))
 		{
@@ -7799,11 +7821,19 @@ void GetTemplePosition() // 451 GET_TEMPLE_POSITION
 
 void CreatureAutoscale() // 452 CREATURE_AUTOSCALE
 {
-	// const auto size = Popf();
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Keeps a creature growing or shrinking towards a share of the player's creature's size, or stops it
+	const auto share = Popf();
+	const auto creature = PopObject();
+	const auto enable = Pop().intVal != 0;
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* body =
+	    creature != entt::null && registry.Valid(creature) ? registry.TryGet<ecs::components::Creature>(creature) : nullptr;
+	if (body == nullptr)
+	{
+		ScriptMessage("Thing should be valid!");
+		return;
+	}
+	body->autoScale = enable ? std::optional(share) : std::nullopt;
 }
 
 void GetSpellIconInTemple() // 453 GET_SPELL_ICON_IN_TEMPLE
