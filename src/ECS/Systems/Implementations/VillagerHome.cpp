@@ -684,7 +684,7 @@ void villager_home::SetupMoveTo(LivingAction& action, glm::vec2 goal, VillagerSt
 	SetTopState(action, VillagerStates::MoveToPos);
 }
 
-void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
+void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final, WalkWay way)
 {
 	auto& registry = WorldRegistry();
 	const auto villager = EntityOf(action);
@@ -695,7 +695,16 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, Vill
 	registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
 	                MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
 	registry.Remove<WallHugObjectReference>(villager);
-	registry.Assign<MoveStateLinearTag>(villager);
+	if (way == WalkWay::StraightThrough)
+	{
+		// Aimed at the goal on its first step, then again only now and then
+		wallHug.turnsUntilStepRebuild = 1;
+		registry.Assign<MoveStateStepThroughTag>(villager);
+	}
+	else
+	{
+		registry.Assign<MoveStateLinearTag>(villager);
+	}
 	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Final, final, true);
 }
 

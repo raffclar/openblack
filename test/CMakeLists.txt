@@ -688,3 +688,7 @@ openblack_setup_and_add_test(
   test_creature_action_agendas test_creature_action_agendas.cpp
 )
 openblack_setup_and_add_test(test_villager_draw test_villager_draw.cpp)
+openblack_setup_and_add_test(
+  test_script_hit_natives test_script_hit_natives.cpp
+)
+target_link_libraries(test_script_hit_natives PRIVATE ScriptLibrary)

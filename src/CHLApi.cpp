@@ -4958,10 +4958,15 @@ void ClearHitObject() // 193 CLEAR_HIT_OBJECT
 
 void GameThingHit() // 194 GAME_THING_HIT
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushb(false);
+		return;
+	}
+	// Whether it is the thing the physics last saw hit, until a script clears it
+	Pushb(Locator::dynamicsSystem::value().GetHitObject() == object);
 }
 
 void SpellAtThing() // 195 SPELL_AT_THING

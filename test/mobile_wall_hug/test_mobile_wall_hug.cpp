@@ -22,6 +22,7 @@
 #include <ECS/Components/WallHug.h>
 #include <ECS/Map.h>
 #include <ECS/Registry.h>
+#include <ECS/Systems/LivingActionSystemInterface.h>
 #include <ECS/Systems/PathfindingSystemInterface.h>
 #include <ECS/WallHugRules.h>
 #include <Game.h>
@@ -514,6 +515,38 @@ protected:
 		return walk;
 	}
 
+	/// Sends the walker from a point to a goal as a script does, until it takes its last step, for at most some turns;
+	/// the walk's straight line is noted as how far it ever strayed from it
+	Walk ScriptWalkTo(glm::vec2 from, glm::vec2 goal, uint32_t mostTurns, float& furthestOffLine)
+	{
+		using namespace openblack::ecs::components;
+		auto& registry = Locator::entitiesRegistry::value();
+		Locator::entitiesMap::value().Sync();
+		registry.Get<Transform>(_walker).position = glm::vec3(from.x, 0.0f, from.y);
+		registry.Get<WallHug>(_walker).position = ecs::wall_hug::ToWhole(from);
+		Locator::livingActionSystem::value().VillagerScriptMoveTo(_walker, goal);
+		// The test land's villagers have no walking pace of their own: two metres a second
+		registry.Get<WallHug>(_walker).speed = 2.0f;
+		Walk walk {.turns = mostTurns, .wentRound = false, .leftCircle = false};
+		const glm::vec2 along = glm::normalize(goal - from);
+		furthestOffLine = 0.0f;
+		for (uint32_t turn = 1; turn <= mostTurns; ++turn)
+		{
+			Locator::pathfindingSystem::value().Update();
+			const auto at = ecs::wall_hug::ToPoint(registry.Get<const WallHug>(_walker).position);
+			const glm::vec2 offset = at - from;
+			furthestOffLine = std::max(furthestOffLine, std::abs((offset.x * along.y) - (offset.y * along.x)));
+			walk.wentRound = walk.wentRound || registry.AllOf<MoveStateOrbitTag>(_walker);
+			walk.leftCircle = walk.leftCircle || registry.AllOf<MoveStateExitCircleTag>(_walker);
+			if (registry.AnyOf<MoveStateFinalStepTag, MoveStateArrivedTag>(_walker))
+			{
+				walk.turns = turn;
+				break;
+			}
+		}
+		return walk;
+	}
+
 	static constexpr std::string_view k_ScenarioPath = TEST_BINARY_DIR "/mobile_wall_hug/scenarios";
 	std::unique_ptr<openblack::Game> _game;
 	entt::entity _walker;
@@ -542,4 +575,25 @@ TEST_F(WalkerToGoal, AGoalAmongTreesIsReachedStraight)
 	EXPECT_FALSE(walk.wentRound);
 	// Its 29.2 m at a fifth of a metre a turn
 	EXPECT_EQ(walk.turns, 147);
+}
+
+// A script sends a villager to a point inside a thing's circle, as the creature trainer is sent through her hut's door:
+// the walk goes straight there through the thing rather than round it, while the villager's own walk to the same
+// point goes round the circle first
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, AScriptsWalkGoesStraightThroughThingsInTheWay)
+{
+	Load("goal_beside_circle.txt");
+	constexpr glm::vec2 k_From {2149.5f, 2235.0f};
+	constexpr glm::vec2 k_InsideTheCircle {2150.0f, 2251.0f};
+	const auto ownWalk = WalkTo(k_From, k_InsideTheCircle, 2.0f, 2000);
+	EXPECT_TRUE(ownWalk.wentRound);
+
+	float furthestOffLine = 0.0f;
+	const auto walk = ScriptWalkTo(k_From, k_InsideTheCircle, 2000, furthestOffLine);
+	EXPECT_FALSE(walk.wentRound);
+	EXPECT_FALSE(walk.leftCircle);
+	EXPECT_LT(furthestOffLine, 0.05f);
+	// Its 16 m at a fifth of a metre a turn, in a straight line
+	EXPECT_EQ(walk.turns, 80u);
 }
