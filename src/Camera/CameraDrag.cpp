@@ -51,6 +51,41 @@ constexpr float k_WideScreen = 0.5625f;
 /// Both buttons turn the camera once the mouse has moved this share of the screen's width across
 constexpr float k_TwoButtonTurnShare = 0.025f;
 
+/// The ring's elliptical place, measured round from the right as a share of the screen's half width and the view's
+/// half height, so that the same place on two screens of different shapes has the same value
+float RingPlace(glm::ivec2 point, glm::ivec2 screenSize, int viewHeight)
+{
+	const auto x = static_cast<float>(point.x - screenSize.x / 2) / (static_cast<float>(screenSize.x) * 0.5f);
+	const auto y = static_cast<float>(point.y - (screenSize.y >> 1)) / (static_cast<float>(viewHeight) * 0.5f);
+	return std::atan2(y, x);
+}
+
+/// The ring of a screen in pixels, the ellipse's half axes
+glm::vec2 RingAxes(glm::ivec2 screenSize, int viewHeight)
+{
+	return k_RingRadius * 0.5f * glm::vec2(static_cast<float>(screenSize.x), static_cast<float>(viewHeight));
+}
+
+/// How fast the cursor moves along the ring, in pixels, as its place goes round
+float RingSpeed(glm::vec2 axes, float place)
+{
+	const auto s = std::sin(place);
+	const auto c = std::cos(place);
+	return std::sqrt(axes.x * axes.x * s * s + axes.y * axes.y * c * c);
+}
+
+/// The angle round the middle of the screen swept for each pixel the cursor moves along the ring
+float AnglePerPixel(glm::vec2 axes, float place)
+{
+	const auto s = std::sin(place);
+	const auto c = std::cos(place);
+	const auto squaredDistance = axes.x * axes.x * c * c + axes.y * axes.y * s * s;
+	return axes.x * axes.y / (squaredDistance * RingSpeed(axes, place));
+}
+
+/// The ring is measured in this many pieces between two places
+constexpr int k_RingPieces = 16;
+
 glm::vec2 Direction(glm::vec2 vector)
 {
 	const auto length = std::sqrt(vector.x * vector.x + vector.y * vector.y);
@@ -227,7 +262,37 @@ RingStep EdgeRotate(glm::ivec2 cursor, glm::ivec2 previousOnRing, glm::ivec2 scr
 	{
 		angle += glm::two_pi<float>();
 	}
-	return {.cursor = onRing, .angle = angle};
+	return {
+	    .cursor = onRing, .angle = angle, .turn = angle * ReferenceTurnScale(previousOnRing, onRing, screenSize, viewHeight)};
+}
+
+float ReferenceTurnScale(glm::ivec2 from, glm::ivec2 to, glm::ivec2 screenSize, int viewHeight)
+{
+	const auto start = RingPlace(from, screenSize, viewHeight);
+	auto swept = RingPlace(to, screenSize, viewHeight) - start;
+	if (swept > glm::pi<float>())
+	{
+		swept -= glm::two_pi<float>();
+	}
+	if (swept < -glm::pi<float>())
+	{
+		swept += glm::two_pi<float>();
+	}
+	const auto axes = RingAxes(screenSize, viewHeight);
+	const auto referenceAxes = RingAxes(k_ReferenceScreen, ViewHeight(k_ReferenceScreen, viewHeight != screenSize.y));
+	// Along the way, the pixels moved at each place turn the camera as they would at that place on the default
+	// screen's ring, against the angle they sweep on this one. Both are added the same way, so on the default screen
+	// the scale is exactly one.
+	float reference = 0.0f;
+	float here = 0.0f;
+	for (int piece = 0; piece < k_RingPieces; ++piece)
+	{
+		const auto place = start + swept * (static_cast<float>(piece) + 0.5f) / static_cast<float>(k_RingPieces);
+		const auto pixels = RingSpeed(axes, place);
+		reference += AnglePerPixel(referenceAxes, place) * pixels;
+		here += AnglePerPixel(axes, place) * pixels;
+	}
+	return here > 0.0f ? reference / here : 1.0f;
 }
 
 float PitchStep(int deltaY, int screenHeight, float horizontalFieldOfView)

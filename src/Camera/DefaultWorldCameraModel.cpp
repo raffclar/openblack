@@ -1091,10 +1091,11 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		const auto pointer = actionSystem.GetPointerPosition();
 		const auto step = camera_drag::EdgeRotate(pointer, _ringCursor, screenSize, ViewHeight(screenSize));
 		_ringCursor = step.cursor;
-		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, step.angle));
+		// The turn feels as it did on the original's default screen, whatever the resolution
+		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, step.turn));
 		if ((_features & camera_help::feature::k_Rotate) != 0)
 		{
-			_rotateAroundDelta.y += step.angle * static_cast<float>(screenSize.x) / glm::pi<float>();
+			_rotateAroundDelta.y += step.turn * static_cast<float>(screenSize.x) / glm::pi<float>();
 		}
 		actionSystem.WarpCursor(step.cursor);
 		return Mode::Polar;
