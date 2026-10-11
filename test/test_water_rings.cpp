@@ -63,6 +63,18 @@ TEST(WaterRings, AFlatSquareTurnedAboutItsMiddle)
 	EXPECT_NEAR(glm::distance((corners[0] + corners[2]) * 0.5f, ring.position), 0.0f, 1e-5f);
 }
 
+TEST(WaterRings, ItsWidthLiesAlongItsAngle)
+{
+	// Turned a quarter from +x towards +z, half as deep as wide
+	water_rings::Ring ring {.age = 700, .growth = 4.0f, .angle = 1.5707964f, .aspect = 0.5f};
+	const auto corners = water_rings::Corners(ring);
+	// From the first corner to the second runs along +z, its width; from the second to the third runs across it, -x
+	EXPECT_NEAR(corners[1].z - corners[0].z, 8.0f, 1e-5f);
+	EXPECT_NEAR(corners[1].x - corners[0].x, 0.0f, 1e-5f);
+	EXPECT_NEAR(corners[2].x - corners[1].x, -4.0f, 1e-5f);
+	EXPECT_NEAR(corners[2].z - corners[1].z, 0.0f, 1e-5f);
+}
+
 TEST(WaterRings, CellsOfTheSmokeTexture)
 {
 	const auto uvs = water_rings::CellUvs(0x30);

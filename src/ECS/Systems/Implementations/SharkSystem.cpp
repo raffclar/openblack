@@ -29,6 +29,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WalkPath.h"
 #include "ECS/Registry.h"
 #include "ECS/SharkRules.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -92,8 +93,13 @@ void SharkSystem::Update(std::chrono::duration<float, std::milli> gameTime, floa
 	// The frame's whole milliseconds of game time
 	const auto frameMilliseconds = static_cast<int32_t>(gameTime.count());
 	const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(k_SwimClip));
-	registry.Each<Shark, Transform, const Mesh, AnimalPose>([&](Shark& shark, Transform& transform, const Mesh& mesh,
-	                                                            AnimalPose& pose) {
+	registry.Each<Shark, Transform, const Mesh, AnimalPose>([&](entt::entity entity, Shark& shark, Transform& transform,
+	                                                            const Mesh& mesh, AnimalPose& pose) {
+		// Its fins show only while a script walks it
+		const auto look = ecs::shark_rules::LookOf(registry.AllOf<WalkPath>(entity));
+		pose.aboveCutShown = look.aboveSea;
+		pose.underSea = look.underSea;
+
 		// It swims on through its clip
 		std::optional<animals::ClipTiming> timing;
 		if (animations.Contains(clipId))
@@ -109,7 +115,7 @@ void SharkSystem::Update(std::chrono::duration<float, std::milli> gameTime, floa
 		const auto startHeight = land.GetHeightAt(glm::vec2(shark.turnStart.x, shark.turnStart.z));
 		const auto endHeight = land.GetHeightAt(glm::vec2(shark.position.x, shark.position.z));
 		transform.position = ecs::shark_rules::Drawn(shark.turnStart, startHeight, shark.position, endHeight, turnFraction);
-		transform.rotation = animals::Orientation(shark.heading, 0.0f);
+		transform.rotation = ecs::shark_rules::Facing(shark.heading);
 
 		if (!timing.has_value() || !meshes.Contains(mesh.id))
 		{
