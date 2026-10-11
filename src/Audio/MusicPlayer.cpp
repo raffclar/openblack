@@ -46,6 +46,11 @@ bool MusicPlayer::Play(const MusicPlayOptions& options)
 		channel.fadeIn = options.fadeIn;
 		channel.targetVolume = options.volume;
 		channel.sync = options.sync;
+		if (channel.placement && options.position)
+		{
+			channel.placement->position = *options.position;
+			_backend.SetPlacement(channel.stream, channel.placement);
+		}
 		_current = static_cast<int>(i);
 		return true;
 	}
@@ -67,8 +72,36 @@ bool MusicPlayer::Play(const MusicPlayOptions& options)
 	channel.sync = options.sync;
 	channel.pitchPercent = options.pitchPercent;
 	channel.onFinished = options.onFinished;
+	if (options.position)
+	{
+		const auto& bank = *options.bank;
+		channel.placement = MusicPlacement {
+		    .position = *options.position,
+		    .minDistance = bank.minDistance.value_or(options.minDistance),
+		    .maxDistance = bank.maxDistance.value_or(options.maxDistance),
+		    .distanceScale = bank.distanceScale.value_or(options.distanceScale),
+		};
+	}
 	Start(static_cast<size_t>(free - _channels.begin()), options.startChunk);
 	return true;
+}
+
+void MusicPlayer::StopBank(const std::shared_ptr<const MusicBank>& bank, bool fadeOut)
+{
+	const auto found = std::ranges::find_if(_channels, [&bank](const Channel& c) { return c.active && c.bank == bank; });
+	if (found == _channels.end())
+	{
+		return;
+	}
+	const auto index = static_cast<size_t>(found - _channels.begin());
+	if (std::cmp_equal(_current, index))
+	{
+		Stop(fadeOut);
+	}
+	else if (!fadeOut)
+	{
+		Release(index);
+	}
 }
 
 // The music thread starting a channel: from the requested chunk, or where a channel of the same music group has got
@@ -108,6 +141,10 @@ void MusicPlayer::Start(size_t index, uint32_t startChunk)
 		                    channel.groupId, chunk, chunkCount, skipFrames);
 	}
 	channel.stream = _backend.CreateStream(channel.pitchPercent);
+	if (channel.placement && channel.stream != MusicBackend::k_InvalidStream)
+	{
+		_backend.SetPlacement(channel.stream, channel.placement);
+	}
 	channel.nextChunk = chunk - 1;
 	channel.playingChunk = chunk;
 	if (channel.stream != MusicBackend::k_InvalidStream &&

@@ -173,6 +173,37 @@ void MusicStreamBackend::SetVolume(Stream stream, float volume)
 	}
 }
 
+void MusicStreamBackend::SetPlacement(Stream stream, const std::optional<MusicPlacement>& placement)
+{
+	const auto found = _streams.find(stream);
+	if (found == _streams.end())
+	{
+		return;
+	}
+	found->second.placement = placement;
+	if (placement)
+	{
+		// QSound's distance mapping is OpenAL's inverse clamped model on positions stretched by the distance scale
+		_player.SetDistanceAttenuation(found->second.source, placement->minDistance, placement->maxDistance, 1.0f);
+	}
+	else
+	{
+		_player.SetDistanceAttenuation(found->second.source, 1.0f, 1.0f, 0.0f);
+		_player.SetPosition(found->second.source, glm::vec3(0.0f));
+	}
+}
+
+void MusicStreamBackend::ForEachPlaced(const std::function<void(SourceId source, const MusicPlacement& placement)>& place) const
+{
+	for (const auto& [stream, state] : _streams)
+	{
+		if (state.placement)
+		{
+			place(state.source, *state.placement);
+		}
+	}
+}
+
 void MusicStreamBackend::Destroy(Stream stream)
 {
 	const auto found = _streams.find(stream);

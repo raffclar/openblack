@@ -51,6 +51,7 @@ public:
 		return false;
 	}
 	void MusicStop([[maybe_unused]] bool fadeOut) override {}
+	void MusicStopBank([[maybe_unused]] const std::string& bankPath, [[maybe_unused]] bool fadeOut) override {}
 	[[nodiscard]] bool MusicIsActive() const override { return false; }
 	[[nodiscard]] std::optional<MusicBankInfo> GetMusicBankInfo([[maybe_unused]] const std::string& bankPath) override
 	{

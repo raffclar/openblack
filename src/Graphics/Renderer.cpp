@@ -4006,7 +4006,8 @@ void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 		_animalBoneGroups.emplace(meshId,
 		                          AnimalBoneGroup {.firstMatrix = first,
 		                                           .bones = bones,
-		                                           .brightestLand = light == ecs::components::AnimalLight::BrightestLand});
+		                                           .brightestLand = light == ecs::components::AnimalLight::BrightestLand,
+		                                           .landWhereItStands = light == ecs::components::AnimalLight::Land});
 	}
 	if (_animalBones.empty())
 	{
@@ -5464,8 +5465,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					colour = pose->colour;
 				}
-				submitDesc.objectLook =
-				    L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = static_cast<float>(pose->alpha) / 255.0f};
+				// One lit by the land where it stands takes no colour of its own, only its alpha when it fades
+				if (pose->light != ecs::components::AnimalLight::Land || pose->alpha < 255)
+				{
+					submitDesc.objectLook =
+					    L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = static_cast<float>(pose->alpha) / 255.0f};
+				}
 				// An animal cut by a plane shows nothing below it
 				submitDesc.cutBelow = pose->cutBelow;
 				const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
@@ -5566,7 +5571,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					colour = glm::vec3(static_cast<float>(texel & 0xFFu), static_cast<float>((texel >> 8) & 0xFFu),
 					                   static_cast<float>((texel >> 16) & 0xFFu));
 				}
-				submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
+				// Lit by the land where each stands, as other things are, they take no colour of their own
+				if (!group.landWhereItStands)
+				{
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
+				}
 				drawInstances(meshId, placers->second, placers->second.materialBlending, placers->second.offset,
 				              placers->second.count, nullptr, nullptr, std::nullopt, &group);
 				submitDesc.objectLook.reset();

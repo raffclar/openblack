@@ -805,7 +805,9 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              }));
-	provider->Add(Query("animal", "An animal: its kind's radius, where it moves to and whether a creature fears it",
+	provider->Add(Query("animal",
+	                    "An animal: its kind, state, clip, flock and town, its kind's radius, where it moves to, whether "
+	                    "a creature fears it, and a grazer's needs",
 	                    {IdParameter("The animal's entity id")}),
 	              Serve<Locator::animalSystem>(
 	                  "the animals", [](const ecs::systems::AnimalSystemInterface& animals, const QueryContext& context) {
@@ -815,12 +817,30 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  {
 			                  return QueryResult::Error("no animal with that id");
 		                  }
-		                  return QueryResult::Value({{"id", ToId(*entity)},
-		                                             {"radius", animals.RadiusOf(*entity)},
-		                                             {"movement", Point(animals.MovementOf(*entity))},
-		                                             {"goal", Point(animals.GoalOf(*entity))},
-		                                             {"frightening_to_creature", animals.IsFrighteningToCreature(*entity)},
-		                                             {"player_can_pick_up", animals.CanPlayerPickUp(*entity)}});
+		                  const auto& animal = registry->Get<const Animal>(*entity);
+		                  Json result = {{"id", ToId(*entity)},
+		                                 {"kind", static_cast<int>(animal.type)},
+		                                 {"state", static_cast<int>(animal.state)},
+		                                 {"turns_in_state", animal.turnsInState},
+		                                 {"clip", static_cast<int>(animal.animation)},
+		                                 {"speed", animal.move.speed},
+		                                 {"flock", Id(animal.flock)},
+		                                 {"town", Id(animal.town)},
+		                                 {"radius", animals.RadiusOf(*entity)},
+		                                 {"movement", Point(animals.MovementOf(*entity))},
+		                                 {"goal", Point(animals.GoalOf(*entity))},
+		                                 {"frightening_to_creature", animals.IsFrighteningToCreature(*entity)},
+		                                 {"player_can_pick_up", animals.CanPlayerPickUp(*entity)}};
+		                  // A grazer's needs and meal
+		                  if (const auto* grazer = registry->TryGet<const Grazer>(*entity))
+		                  {
+			                  result["grazer"] = {{"hunger", grazer->needs.hunger},
+			                                      {"sleep", grazer->needs.sleep},
+			                                      {"breed", grazer->needs.breed},
+			                                      {"meals", grazer->meals},
+			                                      {"birth_turn", grazer->birthTurn}};
+		                  }
+		                  return QueryResult::Value(std::move(result));
 	                  }));
 	provider->Add(
 	    Query("villages", "Whether it is dark enough for the village lights, and how many there are"),
@@ -2398,6 +2418,24 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
 			    state.scriptMusic = audio::GetMusicTypeName(music.GetScriptType());
 			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
+			    for (const auto& attached : music.GetAttachedMusic())
+			    {
+				    state.attachedMusic.emplace_back(audio::GetMusicTypeName(attached.type), attached.thing);
+			    }
+		    }
+		    if (const auto* player = audio.GetMusic(); player != nullptr)
+		    {
+			    for (const auto& channel : player->GetChannels())
+			    {
+				    if (channel.active && channel.bank)
+				    {
+					    state.musicChannels.push_back({
+					        .bank = channel.bank->path,
+					        .volume = channel.volume,
+					        .position = channel.placement ? std::optional(channel.placement->position) : std::nullopt,
+					    });
+				    }
+			    }
 		    }
 		    return state;
 	    },

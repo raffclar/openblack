@@ -93,6 +93,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
@@ -202,6 +203,7 @@
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
+#include "Magic/TownBelief.h"
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
@@ -647,7 +649,7 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		                                                           scale);
 	case ObjectType::Animal:
 	case ObjectType::Bird:
-		// Made on its own and held still for the script; openblack makes only the land's birds so far
+		// Made on its own and held still for the script: the land's birds and grazers (not yet the hunters)
 		if (Locator::animalSystem::has_value())
 		{
 			const auto animal = Locator::animalSystem::value().CreateScriptAnimal(static_cast<AnimalInfo>(subtype),
@@ -3009,19 +3011,40 @@ void StopMusic() // 045 STOP_MUSIC
 	}
 }
 
+/// The object a music native is given, if it is still in the world
+std::optional<uint32_t> PopMusicObject(std::string_view native)
+{
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "{}: thing not valid", native);
+		return std::nullopt;
+	}
+	return entt::to_integral(object);
+}
+
 void AttachMusic() // 046 ATTACH_MUSIC
 {
-	// const auto target = Pop().uintVal;
-	// const auto music = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopMusicObject("ATTACH_MUSIC");
+	const auto music = Pop().intVal;
+	if (music < 1 || music >= static_cast<int32_t>(audio::MusicType::_COUNT))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "ATTACH_MUSIC: no music type {}", music);
+	}
+	auto* gameMusic = Game::Instance()->GetGameMusic();
+	if (object && gameMusic != nullptr)
+	{
+		gameMusic->AttachMusic(*object, static_cast<audio::MusicType>(music));
+	}
 }
 
 void DetachMusic() // 047 DETACH_MUSIC
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopMusicObject("DETACH_MUSIC");
+	if (auto* gameMusic = Game::Instance()->GetGameMusic(); object && gameMusic != nullptr)
+	{
+		gameMusic->DetachMusic(*object);
+	}
 }
 
 /// A thing a script deletes goes at once: a creature leaves the game, a dance's dancers go back to deciding what to do,
@@ -4396,10 +4419,12 @@ void GetTimerTimeSinceSet() // 148 GET_TIMER_TIME_SINCE_SET
 
 void MoveMusic() // 149 MOVE_MUSIC
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto to = PopMusicObject("MOVE_MUSIC");
+	const auto from = PopMusicObject("MOVE_MUSIC");
+	if (auto* gameMusic = Game::Instance()->GetGameMusic(); from && to && gameMusic != nullptr)
+	{
+		gameMusic->MoveMusic(*from, *to);
+	}
 }
 
 void GetInclusionDistance() // 150 GET_INCLUSION_DISTANCE
@@ -5655,6 +5680,24 @@ void SpiritSpeaks() // 246 SPIRIT_SPEAKS
 	Pushb(help::script_spirits::SpiritWhoTalks(narrator) == spirit);
 }
 
+/// The belief of a town a script names, reporting an object that is gone or isn't a town as the game does
+ecs::components::TownImpression* ScriptTownImpression(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		return nullptr;
+	}
+	if (!registry.AllOf<ecs::components::Town>(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Not town!");
+		return nullptr;
+	}
+	return registry.AnyOf<ecs::components::TownImpression>(object) ? &registry.Get<ecs::components::TownImpression>(object)
+	                                                               : &registry.Assign<ecs::components::TownImpression>(object);
+}
+
 void BeliefForPlayer() // 247 BELIEF_FOR_PLAYER
 {
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
@@ -5668,13 +5711,10 @@ void BeliefForPlayer() // 247 BELIEF_FOR_PLAYER
 	}
 	const auto* town = registry.TryGet<const ecs::components::Town>(object);
 	std::optional<float> townBelief;
-	if (town != nullptr)
+	if (const auto* impression = registry.TryGet<const ecs::components::TownImpression>(object);
+	    town != nullptr && impression != nullptr)
 	{
-		const auto belief = town->beliefs.find(std::string(k_PlayerNamesStrs.at(static_cast<size_t>(player))));
-		if (belief != town->beliefs.end())
-		{
-			townBelief = belief->second;
-		}
+		townBelief = impression->belief.belief.at(static_cast<size_t>(player));
 	}
 	Pushf(script::property_rules::BeliefForPlayer(town != nullptr, townBelief, ecs::world_objects::PlayerOf(object), player));
 }
@@ -5708,11 +5748,25 @@ void LoadMyCreature() // 250 LOAD_MY_CREATURE
 
 void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 {
-	// const auto belief = Popf();
-	// const auto player = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The player takes the town: the player it believes in most is halved, and the taker believes that most and the amount
+	const auto amount = Popf();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	auto* impression = ScriptTownImpression(PopObject());
+	if (impression == nullptr || player >= PlayerNames::_COUNT)
+	{
+		return;
+	}
+	std::vector<PlayerNames> inGame;
+	for (size_t p = 0; p < static_cast<size_t>(PlayerNames::_COUNT); ++p)
+	{
+		const auto name = static_cast<PlayerNames>(p);
+		if (name == PlayerNames::NEUTRAL ||
+		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPlayer(name) != entt::null))
+		{
+			inGame.push_back(name);
+		}
+	}
+	magic::town_belief::TakeTown(impression->belief, player, amount, inGame);
 }
 
 void CreateWithAngleAndScale() // 252 CREATE_WITH_ANGLE_AND_SCALE
@@ -6519,11 +6573,17 @@ void GetObjectFlock() // 324 GET_OBJECT_FLOCK
 
 void SetPlayerBelief() // 325 SET_PLAYER_BELIEF
 {
-	// const auto belief = Popf();
-	// const auto player = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The town's belief in the player becomes a share of its belief in its owner
+	const auto share = Popf();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto object = PopObject();
+	auto* impression = ScriptTownImpression(object);
+	if (impression == nullptr || player >= PlayerNames::_COUNT)
+	{
+		return;
+	}
+	const auto& town = Locator::entitiesRegistry::value().Get<const ecs::components::Town>(object);
+	magic::town_belief::SetRelativeToOwner(impression->belief, town.owner, player, share);
 }
 
 void PlayJcSpecial() // 326 PLAY_JC_SPECIAL

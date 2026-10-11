@@ -28,6 +28,7 @@
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -576,6 +577,37 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 		    }
 		    return QueryResult::Value(std::move(items));
 	    });
+	provider->Add(Query("belief", "A town's owner and its belief in each player", {id}),
+	              [sources](const QueryContext& context) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              const auto town = TownParam(*registry, context.params);
+		              if (const auto* problem = std::get_if<std::string>(&town); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto [entity, component] = std::get<0>(town);
+		              Json result = Json::object();
+		              result["id"] = ToId(entity);
+		              result["number"] = component->id;
+		              result["owner"] = static_cast<int>(component->owner);
+		              result["gained"] = component->gained;
+		              result["worship_site"] = Id(component->worshipSite);
+		              if (const auto* impression = registry->TryGet<const ecs::components::TownImpression>(entity))
+		              {
+			              const auto& belief = impression->belief;
+			              result["belief"] = belief.belief;
+			              result["pending"] = belief.pending;
+			              result["recent"] = belief.recent;
+			              result["cap"] = belief.cap;
+			              result["neutral"] = belief.neutral;
+			              result["scale"] = belief.scale;
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("homeless", "A town's people without a home, newest first", {id}, ResultKind::List),
 	              [sources](const QueryContext& context) {
 		              const auto* registry = Registry(sources);
@@ -724,6 +756,21 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 				              playing += emitter.state == audio::AudioStatus::Playing ? 1 : 0;
 			              });
 		              }
+		              Json attached = Json::array();
+		              for (const auto& [music, thing] : state->attachedMusic)
+		              {
+			              attached.push_back({{"music", music}, {"thing", thing}});
+		              }
+		              Json channels = Json::array();
+		              for (const auto& channel : state->musicChannels)
+		              {
+			              Json item = {{"bank", channel.bank}, {"volume", channel.volume}};
+			              if (channel.position)
+			              {
+				              item["position"] = {channel.position->x, channel.position->y, channel.position->z};
+			              }
+			              channels.push_back(std::move(item));
+		              }
 		              return QueryResult::Value({{"global_volume", state->globalVolume},
 		                                         {"sfx_volume", state->sfxVolume},
 		                                         {"music_volume", state->musicVolume},
@@ -732,6 +779,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 		                                         {"land_music", state->landMusic},
 		                                         {"script_music", state->scriptMusic},
 		                                         {"alignment_music", state->alignmentMusic},
+		                                         {"attached_music", std::move(attached)},
+		                                         {"music_channels", std::move(channels)},
 		                                         {"sounds_playing", playing}});
 	              });
 	provider->Add(Query("sounds", "The sounds about a point, nearest first (sounds without a place are left out)", {},
