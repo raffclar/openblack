@@ -188,6 +188,7 @@
 #include "ECS/TownPlaythings.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerScriptRules.h"
+#include "ECS/VillagerSkeletons.h"
 #include "ECS/WalkerPlacement.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
@@ -6228,18 +6229,38 @@ void SetHighGraphicsDetail() // 290 SET_HIGH_GRAPHICS_DETAIL
 
 void SetSkeleton() // 291 SET_SKELETON
 {
-	// const auto object = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto enable = Pop().intVal != 0;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		return;
+	}
+	// A group makes each of its villagers a skeleton, or themselves again; anything but a villager is left as it is
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			villager_skeleton::Set(member, enable);
+		}
+		return;
+	}
+	villager_skeleton::Set(object, enable);
 }
 
 void IsSkeleton() // 292 IS_SKELETON
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		Pushb(false);
+		return;
+	}
+	// Only a villager a script made a skeleton is one; a body lying as bones is not
+	Pushb(villager_skeleton::Is(object));
 }
 
 void PlayerSpellCastTime() // 293 PLAYER_SPELL_CAST_TIME

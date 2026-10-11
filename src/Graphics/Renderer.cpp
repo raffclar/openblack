@@ -842,8 +842,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	// A lit window is a faint glow, blended by its texture's alpha as its material says, over the wall behind it
 	const bool materialBlending = desc.useMaterialBlending || window;
 	const auto viewId = window ? TranslucentView(desc.viewId) : desc.viewId;
-	if (!desc.drawAll && (subMesh.IsPhysics() || subMesh.GetFlags().status != desc.onlyStatus.value_or(0) ||
-	                      (!window && (subMesh.GetFlags().lodMask & 1) != 1)))
+	const auto status = subMesh.GetFlags().status;
+	const bool statusDrawn =
+	    desc.statusesUpTo.has_value() ? status >= 1 && status <= *desc.statusesUpTo : status == desc.onlyStatus.value_or(0);
+	if (!desc.drawAll && (subMesh.IsPhysics() || !statusDrawn || (!window && (subMesh.GetFlags().lodMask & 1) != 1)))
 	{
 		return;
 	}
@@ -5387,6 +5389,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				if (build.scaffoldStatus.has_value())
 				{
 					drawPart(build.scaffoldInstance, build.scaffoldCut, build.scaffoldStatus, false);
+				}
+				// A graveyard's graves, as many as its burials show, over its model drawn with the others
+				if (build.gravesShown.has_value())
+				{
+					submitDesc.statusesUpTo = build.gravesShown;
+					drawInstances(build.meshId, placers, false, build.instance, 1, nullptr, nullptr,
+					              renderCtx.partialBuildInstanceBuffer);
+					submitDesc.statusesUpTo.reset();
 				}
 			}
 			// The creatures, each posed and shaped as it is, then its eyes

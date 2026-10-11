@@ -28,6 +28,7 @@
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -204,6 +205,10 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	case AbodeType::TownCentre:
 		// A town centre standing built carries its town's totem
 		VillageTotemArchetype::Create(entity, info);
+		break;
+	case AbodeType::Graveyard:
+		// A graveyard standing built works at once, its first grave shown
+		graveyards::Made(entity);
 		break;
 	default:
 		break;
