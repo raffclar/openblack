@@ -2356,7 +2356,9 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 		                        static_cast<float>((texel >> 16) & 0xFFu), 255.0f) /
 		              255.0f;
 	}
-	const glm::vec4 u_seaCamera {camera.GetOrigin(), 0.0f};
+	// The eye of the view the sea is drawn with, a shake included, so that each pixel's line of sight meets the sea where
+	// the view shows it
+	const glm::vec4 u_seaCamera {glm::vec3(glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current))[3]), 0.0f};
 	waterShader.SetUniformValue("u_seaParams", &u_seaParams);
 	waterShader.SetUniformValue("u_seaRows", &u_seaRows);
 	waterShader.SetUniformValue("u_seaMode", &u_seaMode);
@@ -5104,7 +5106,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		                                                                          : Profiler::Stage::MainPassDrawSky);
 		if (desc.drawSky && _skyDomeFrameBuffer)
 		{
-			const auto modelMatrix = glm::mat4(1.0f);
+			const auto modelMatrix = sky_dome::Placement();
 			// The sky's alignment from 0, evil, to 2, good, mixes two of the alignments' domes
 			const auto alignments = sky_dome::AlignmentPair(Locator::alignmentSystem::value().GetSkyAlignment() + 1.0f);
 			const glm::vec4 u_skyAlignment {alignments.lower, alignments.upper, alignments.weight, 0.0f};
@@ -5150,8 +5152,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			mesh.GetIndexBuffer().Bind(mesh.GetIndexBuffer().GetCount(), 0);
 			mesh.GetVertexBuffer().Bind();
 			// The sea is a backdrop, as the game draws it: over whatever was there and leaving no depth, so the land under
-			// the water, blended by its coast alpha, and a vortex's funnel down through a hole in the land show over it
-			constexpr auto k_SeaState = k_BgfxDefaultStateInvertedZ & ~(BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_MASK);
+			// the water, blended by its coast alpha, and a vortex's funnel down through a hole in the land show over it. It
+			// is one triangle over the screen, the sea's plane worked out to the horizon for each pixel.
+			constexpr auto k_SeaState =
+			    k_BgfxDefaultStateInvertedZ & ~(BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_MASK | BGFX_STATE_CULL_MASK);
 			bgfx::setState(k_SeaState);
 			auto diffuse = Locator::resources::value().GetTextures().Handle(ocean.GetDiffuseTexture());
 			auto alpha = Locator::resources::value().GetTextures().Handle(ocean.GetAlphaTexture());
