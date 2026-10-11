@@ -71,6 +71,7 @@ public:
 		FootprintPass,
 		ObjectShadowPass,
 		CreatureShadowPass,
+		GroundShadowPass,
 		ParticlesGather,
 		ReflectionPass,
 		ReflectionDrawSky,
@@ -141,6 +142,7 @@ public:
 	    "Footprint Pass",       //
 	    "Object Shadow Pass",   //
 	    "Creature Shadow Pass", //
+	    "Ground Shadow Pass",   //
 	    "Gather Particles",     //
 	    "Reflection Pass",      //
 	    "Draw Sky",             //

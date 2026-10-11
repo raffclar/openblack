@@ -838,10 +838,22 @@
   "query": "living.animated_statics"
  },
  {
+  "description": "The apple barrel beside the local player's storage pit nearest their temple: the pit, the barrel and its worm, where they stand and the worm's place in its clip; none while no pit carries it",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.apple_barrel"
+ },
+ {
   "description": "The village centres' totems: their town centre and icon, the share they stand at, ease to and are held at, how fast they move, whether the hand grips one, and their see-through second totem",
   "kind": "list",
   "parameters": [],
   "query": "living.totems"
+ },
+ {
+  "description": "The artefacts: the town and worship site each last joined and whether it is among their artefacts now, its owner and worth, its dance (started or not, its state, dancers and turns since it started), whether it glows and shows its owner's symbol, and how many each player owns",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.artefacts"
  },
  {
   "description": "A villager's or animal's action states: top, final, previous, and turns in them",

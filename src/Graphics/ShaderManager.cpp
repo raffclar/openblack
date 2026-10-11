@@ -329,6 +329,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"VegetationHeightMapInstanced", "vs_vegetation_hm_instanced", "fs_vegetation"},
     ShaderDefinition {"ShadowCaster", "vs_object", "fs_shadow_caster"},
     ShaderDefinition {"ShadowCasterMorph", "vs_object_morph", "fs_shadow_caster"},
+    ShaderDefinition {"Silhouette", "vs_line", "fs_line"},
     ShaderDefinition {"ObjectShadowInstanced", "vs_object_shadow_instanced", "fs_object_shadow"},
     ShaderDefinition {"ObjectShadowStaticInstanced", "vs_object_shadow_static_instanced", "fs_object_shadow"},
     ShaderDefinition {"Beam", "vs_beam", "fs_beam"},

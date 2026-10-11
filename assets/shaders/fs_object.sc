@@ -94,7 +94,7 @@ void main()
 	// The creatures' shadows fall on it, under the haze
 	if (u_creatureShadowInfo.x > 0.0f)
 	{
-		diffuseTex.rgb = diffuseTex.rgb * CreatureShadowLight(v_position.xyz, 1.0f);
+		diffuseTex.rgb = diffuseTex.rgb * CreatureShadowLight(v_position.xyz);
 	}
 #ifdef USE_ENVIRONMENT
 	// The second texture stage adds the environment map, which saturates

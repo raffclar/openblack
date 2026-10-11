@@ -62,6 +62,7 @@
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
@@ -174,6 +175,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
@@ -389,6 +391,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlinthStone>(context)
 	    .Field<&components::PlinthStone::plinth>("plinth")
 	    .Field<&components::PlinthStone::pickable>("pickable");
+	Reflect<components::AppleBarrel>(context)
+	    .Field<&components::AppleBarrel::store>("store")
+	    .Field<&components::AppleBarrel::worm>("worm");
+	Reflect<components::AppleBarrelWorm>(context).Field<&components::AppleBarrelWorm::place>("place");
 	Reflect<components::AtHome>(context).Field<&components::AtHome::beenToBed>("beenToBed");
 	Reflect<components::AudioEmitter>(context)
 	    .Field<&components::AudioEmitter::sourceId>("sourceId")
@@ -1414,8 +1420,20 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")
+	    .Field<&components::TownArtefact::site>("site")
+	    .Field<&components::TownArtefact::inTown>("inTown")
+	    .Field<&components::TownArtefact::inSite>("inSite")
+	    .Field<&components::TownArtefact::joined>("joined")
 	    .Field<&components::TownArtefact::player>("player")
-	    .Field<&components::TownArtefact::value>("value");
+	    .Field<&components::TownArtefact::value>("value")
+	    .Field<&components::TownArtefact::dance>("dance")
+	    .Field<&components::TownArtefact::dancing>("dancing")
+	    .Field<&components::TownArtefact::danceStarted>("danceStarted")
+	    .Field<&components::TownArtefact::effect>("effect")
+	    .Field<&components::TownArtefact::symbol>("symbol")
+	    .Field<&components::TownArtefact::symbolMilliseconds>("symbolMilliseconds");
+	Reflect<components::TownArtefactGifts>(context).Field<&components::TownArtefactGifts::lastGift>("lastGift",
+	                                                                                                {k_PlayerNamesNames});
 	Reflect<components::DesireSort>(context)
 	    .Field<&components::DesireSort::boosts>("boosts")
 	    .Field<&components::DesireSort::value>("value")
@@ -1451,6 +1469,17 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TownDesire::doingNowCount>("doingNowCount")
 	    .Field<&components::TownDesire::doingNowAtStart>("doingNowAtStart")
 	    .Field<&components::TownDesire::doingNowCountAtStart>("doingNowCountAtStart");
+	Reflect<components::TownDesireFlag>(context)
+	    .Field<&components::TownDesireFlag::town>("town")
+	    .Field<&components::TownDesireFlag::desire>("desire")
+	    .Field<&components::TownDesireFlag::point>("point")
+	    .Field<&components::TownDesireFlag::store>("store")
+	    .Field<&components::TownDesireFlag::place>("place")
+	    .Field<&components::TownDesireFlag::overGround>("overGround")
+	    .Field<&components::TownDesireFlag::level>("level")
+	    .Field<&components::TownDesireFlag::speed>("speed")
+	    .Field<&components::TownDesireFlag::shown>("shown");
+	Reflect<components::TownDesireFlags>(context).Field<&components::TownDesireFlags::flags>("flags");
 	Reflect<components::Transform>(context)
 	    .Field<&components::Transform::position>("position")
 	    .Field<&components::Transform::rotation>("rotation")
@@ -1518,6 +1547,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
 	    .Field<&components::VillagerPose::bones>("bones")
+	    .Field<&components::VillagerPose::clipBones>("clipBones")
 	    .Field<&components::VillagerPose::turnStart>("turnStart")
 	    .Field<&components::VillagerPose::drawnAt>("drawnAt")
 	    .Field<&components::VillagerPose::drawnHeading>("drawnHeading")

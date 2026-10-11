@@ -263,6 +263,8 @@ void WorshipSiteSystem::ProcessChants()
 			// Spell icons are not made at the sites yet, so none charges
 			const float drawn =
 			    magic::ProcessWorshipTurn(chants, _world->ChantRules(component.tribe, component.player), Dancers(site), {});
+			// The artefacts put down by it are powered up as its turn ends, every thousand turns
+			_world->PowerUpArtefacts(site, Dancers(site));
 			CountChantsUsed(site, drawn);
 			// The dance goes as hard as its dancers chant, stopping when they don't
 			if (auto* dance = DanceOf(site); dance != nullptr)

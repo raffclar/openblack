@@ -35,6 +35,7 @@
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
+#include "ECS/Systems/Implementations/AppleBarrelSystem.h"
 #include "ECS/Systems/Implementations/BuildingDamageSystem.h"
 #include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
@@ -83,6 +84,7 @@
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
+#include "ECS/Systems/Implementations/ArtefactSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
@@ -155,6 +157,8 @@ using openblack::ecs::systems::AdvisorSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::AnimatedStaticSystem;
+using openblack::ecs::systems::AppleBarrelSystem;
+using openblack::ecs::systems::ArtefactSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
@@ -312,6 +316,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
 	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
+	Locator::artefactSystem::emplace<ArtefactSystem>();
 	Locator::heartbeatSystem::emplace<HeartbeatSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
@@ -413,6 +418,8 @@ void InitializeLevelWith(const LandSource& land)
 	Locator::worshipSiteSystem::emplace<WorshipSiteSystem>();
 	Locator::resourceStoreSystem::emplace<ResourceStoreSystem>();
 	Locator::animatedStaticSystem::emplace<AnimatedStaticSystem>();
+	// The apple barrel with its worm beside the local player's storage pit
+	Locator::appleBarrelSystem::emplace<AppleBarrelSystem>();
 	Locator::weatherSystem::emplace<WeatherSystem>();
 	Locator::pathfindingSystem::emplace<PathfindingSystem>();
 	// Where creatures can walk is sorted anew for each land
@@ -479,6 +486,7 @@ void openblack::ShutDownServices()
 	Locator::worshipSiteSystem::reset();
 	Locator::resourceStoreSystem::reset();
 	Locator::animatedStaticSystem::reset();
+	Locator::appleBarrelSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
 	Locator::handSystem::reset();
@@ -525,6 +533,7 @@ void openblack::ShutDownServices()
 	Locator::animalSystem::reset();
 	Locator::soundTagSystem::reset();
 	Locator::villageTotemSystem::reset();
+	Locator::artefactSystem::reset();
 	Locator::heartbeatSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();

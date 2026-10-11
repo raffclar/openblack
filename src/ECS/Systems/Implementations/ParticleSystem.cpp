@@ -1067,6 +1067,21 @@ void ParticleSystem::SetPlayer(EffectId id, int player)
 	}
 }
 
+void ParticleSystem::SetPower(EffectId id, float power)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		auto info = it->effect->GetProcessInfo();
+		info.power = power;
+		it->effect->SetProcessInfo(info);
+	}
+}
+
+void ParticleSystem::SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> symbols)
+{
+	_playerSymbols = std::move(symbols);
+}
+
 void ParticleSystem::SetDrawPath(EffectId id, particles::draw::DrawPath path)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
@@ -1238,6 +1253,7 @@ void ParticleSystem::ProcessTurn()
 
 void ParticleSystem::Reset()
 {
+	_playerSymbols.clear();
 	_effects.clear();
 	_explodeObject = k_NoEffect;
 	_gestureTrails = k_NoEffect;
@@ -1339,10 +1355,14 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 		particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(),
 		                           sources);
 	}
-	// The land's light sheets are the world's
+	// The land's light sheets and the players' symbols over their artefacts are the world's
 	if (!inTemple)
 	{
 		AddLightSheets(frame);
+		for (const auto& symbol : _playerSymbols)
+		{
+			particles::draw::AddPlayerSymbol(frame, symbol, sources);
+		}
 	}
 	_drawStats = {
 	    .sprites = frame.sprites.size(),
