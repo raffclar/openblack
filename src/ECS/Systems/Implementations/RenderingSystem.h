@@ -41,6 +41,8 @@ private:
 	bool UploadInstances(bool drawBoundingBox);
 	/// The broken and unfinished buildings drawn as far up as they stand
 	void UploadPartialBuilds();
+	/// What the villagers drawn this frame hold, a draw for each model, from the held things gathered with the instances
+	void UploadHeldObjects();
 	bool UploadTreeInstances(bool drawBoundingBox);
 
 	/// Where the next instance of a mesh goes in the instance buffer
@@ -61,5 +63,14 @@ private:
 	std::unordered_map<entt::id_type, InstanceSlots> _fadingSlots;
 	/// The first villager ever seen too far away to be drawn sets the size of every far villager's smudge
 	std::optional<float> _farSmudgeScale;
+	/// A thing a villager drawn this frame holds, gathered with the instances and drawn with the others of its model
+	struct HeldThing
+	{
+		entt::id_type meshId;
+		bool fading;
+		bool reflected;
+		RenderContext::ObjectInstance instance;
+	};
+	std::vector<HeldThing> _heldThings;
 };
 } // namespace openblack::ecs::systems

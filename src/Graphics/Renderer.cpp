@@ -5899,6 +5899,28 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 			}
+			// What the villagers hold in their hands, a draw for each model: the opaque ones here, those fading out with
+			// the blended things. The sea reflects only what the villagers flying in the physics hold.
+			const auto drawHeld = [&](bool fading) {
+				for (const auto& held : renderCtx.heldDraws)
+				{
+					if (held.fading != fading || (desc.viewId == RenderPass::Reflection && !held.reflected) ||
+					    !meshManager.Contains(held.meshId))
+					{
+						continue;
+					}
+					RenderContext::InstancedDrawDesc placers {held.first, held.count, false, false};
+					placers.instanceAlpha = fading;
+					if (fading)
+					{
+						submitDesc.sortDepth =
+						    zsort::Depth(glm::vec3(renderCtx.heldInstances.at(held.first).model[3]), cameraOrigin);
+					}
+					drawInstances(held.meshId, placers, false, held.first, held.count, nullptr, nullptr,
+					              renderCtx.heldInstanceBuffer);
+				}
+			};
+			drawHeld(false);
 			DrawTempleUnderside(desc);
 			// In the temple, whose draws keep their order, the sun's glare comes after its solid parts, which hide it, and
 			// before its glass, which blends over it
@@ -5923,6 +5945,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 			}
+			drawHeld(true);
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
 				if (placers.translucent && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))

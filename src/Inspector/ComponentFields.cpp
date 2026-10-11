@@ -785,7 +785,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::DeadTree>(context)
 	    .Field<&components::DeadTree::type>("type")
 	    .Field<&components::DeadTree::woodMultiplier>("woodMultiplier")
-	    .Field<&components::DeadTree::felled>("felled");
+	    .Field<&components::DeadTree::felled>("felled")
+	    .Field<&components::DeadTree::model>("model");
 	Reflect<components::DestructionGhost>(context)
 	    .Field<&components::DestructionGhost::mesh>("mesh")
 	    .Field<&components::DestructionGhost::model>("model")

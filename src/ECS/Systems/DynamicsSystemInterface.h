@@ -59,6 +59,17 @@ struct PhysicsStart
 	bool fromHand {false};
 };
 
+/// How the log a villager lets fall starts to fly: as the villager starts, and, let go by a hand, turning with the hand's
+/// spin
+struct DroppedLogStart
+{
+	glm::vec3 velocity {0.0f};
+	/// Its spin, about its own axes, as a body is started with
+	glm::vec3 spin {0.0f};
+	/// The spin it takes from the hand that let the villager go, as the bodies count turning
+	std::optional<glm::vec3> angularMomentum;
+};
+
 /// How a hand, or a creature's hand, lets go of what it held
 struct FromHand
 {
@@ -124,8 +135,9 @@ public:
 	[[nodiscard]] virtual bool RaisesObjects(entt::entity object) const;
 	/// The kind's part of a thing let go by a hand that didn't land: a person or an animal starts to fly
 	virtual void StartFlyingFromHand(DynamicsSystemInterface& dynamics, PhysicsEntry& entry);
-	/// A villager let go by a hand that didn't land drops what it carried, which flies on with it
-	virtual void DropCarriedResource(DynamicsSystemInterface& dynamics, entt::entity villager, glm::vec3 velocity);
+	/// A villager let go by a hand that didn't land, or launched, lets the wood it shows fall as a log, which flies on with
+	/// it
+	virtual void DropCarriedResource(DynamicsSystemInterface& dynamics, entt::entity villager, const DroppedLogStart& start);
 	/// A thing a player's hand put down: the player's creature may copy what the player did with it
 	virtual void ConsiderMimickingLanding(entt::entity object, std::optional<PlayerNames> player);
 	/// A thing a hand lets go, before it is put down or thrown; `forced` when the hand dropped it by force

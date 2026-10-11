@@ -28,19 +28,25 @@ using namespace openblack::ecs::components;
 
 entt::entity DeadTreeArchetype::Create(const glm::vec3& position, TreeInfo type, float yAngleRadians, float scale)
 {
+	// An uprooted tree keeps the mesh of the tree it was
+	const auto& info = Locator::infoConstants::value().tree.at(static_cast<size_t>(type));
+	const auto entity = Create(position, type, glm::mat3(glm::eulerAngleY(-yAngleRadians)), scale, info.normal);
+	Locator::entitiesRegistry::value().Get<DeadTree>(entity).model.reset();
+	return entity;
+}
+
+entt::entity DeadTreeArchetype::Create(const glm::vec3& position, TreeInfo type, const glm::mat3& rotation, float scale,
+                                       MeshId model)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 
-	// An uprooted tree keeps the mesh of the tree it was
-	const auto& info = Locator::infoConstants::value().tree.at(static_cast<size_t>(type));
-
-	const auto& transform = registry.Assign<Transform>(entity, position, glm::eulerAngleY(-yAngleRadians), glm::vec3(scale));
-	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.normal, transform);
+	const auto& transform = registry.Assign<Transform>(entity, position, rotation, glm::vec3(scale));
+	const auto [point, radius] = GetFixedObstacleBoundingCircle(model, transform);
 	registry.Assign<Fixed>(entity, point, radius);
-	registry.Assign<DeadTree>(entity, type);
+	registry.Assign<DeadTree>(entity, DeadTree {.type = type, .model = model});
 	registry.Assign<Unlit>(entity);
-	const auto resourceId = resources::HashIdentifier(info.normal);
-	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(-1));
+	registry.Assign<Mesh>(entity, resources::HashIdentifier(model), static_cast<int8_t>(0), static_cast<int8_t>(-1));
 
 	return entity;
 }
@@ -48,8 +54,9 @@ entt::entity DeadTreeArchetype::Create(const glm::vec3& position, TreeInfo type,
 void DeadTreeArchetype::FitObstacle(entt::entity deadTree)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto& info =
-	    Locator::infoConstants::value().tree.at(static_cast<size_t>(registry.Get<const DeadTree>(deadTree).type));
-	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.normal, registry.Get<const Transform>(deadTree));
+	const auto& dead = registry.Get<const DeadTree>(deadTree);
+	const auto& info = Locator::infoConstants::value().tree.at(static_cast<size_t>(dead.type));
+	const auto [point, radius] =
+	    GetFixedObstacleBoundingCircle(dead.model.value_or(info.normal), registry.Get<const Transform>(deadTree));
 	registry.AssignOrReplace<Fixed>(deadTree, point, radius);
 }

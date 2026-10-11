@@ -213,6 +213,22 @@ struct RenderContext
 	graphics::DynamicVertexBufferHandle partialBuildInstanceBuffer;
 	uint32_t partialBuildCapacity {0};
 
+	/// What the villagers drawn this frame hold in their hands, a draw for each model: those fading out blend by their
+	/// alpha, and only those of villagers flying in the physics are seen in the sea's reflection. Their instances are in
+	/// heldInstanceBuffer.
+	struct HeldDraw
+	{
+		entt::id_type meshId {0};
+		uint32_t first {0};
+		uint32_t count {0};
+		bool fading {false};
+		bool reflected {false};
+	};
+	std::vector<HeldDraw> heldDraws;
+	std::vector<ObjectInstance> heldInstances;
+	graphics::DynamicVertexBufferHandle heldInstanceBuffer;
+	uint32_t heldCapacity {0};
+
 	/// Kept for backward compatibility, will be removed once shader is updated
 	std::vector<glm::mat4> treeInstanceUniforms;
 	std::vector<glm::vec4> treeSwayParams;

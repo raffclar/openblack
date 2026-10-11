@@ -552,6 +552,12 @@ PhysicsGameHooks::PhysicsGameHooks(std::unique_ptr<physics_hooks::World> world)
 
 PhysicsGameHooks::~PhysicsGameHooks() = default;
 
+void PhysicsGameHooks::DropCarriedResource(DynamicsSystemInterface& dynamics, entt::entity villager,
+                                           const DroppedLogStart& start)
+{
+	_world->DropCarriedLog(dynamics, villager, start);
+}
+
 PhysicsStarted PhysicsGameHooks::InitialisePhysics(DynamicsSystemInterface& dynamics, entt::entity object,
                                                    const PhysicsStart& start)
 {
@@ -559,7 +565,8 @@ PhysicsStarted PhysicsGameHooks::InitialisePhysics(DynamicsSystemInterface& dyna
 	// A villager drops what it carries before it starts to fly
 	if (registry.AllOf<Villager>(object))
 	{
-		DropCarriedResource(dynamics, object, start.velocity);
+		DropCarriedResource(dynamics, object,
+		                    {.velocity = start.velocity, .spin = start.spin, .angularMomentum = std::nullopt});
 	}
 	// A villager takes to the air first; a state it can't leave keeps it on the ground, and its body is not started
 	if (registry.AllOf<Villager>(object) && !villager_physics::StartFlying(object))
