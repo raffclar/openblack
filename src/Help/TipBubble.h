@@ -80,11 +80,15 @@ struct Placement
 	bool tailFlipped {false};
 	float depth {0.0f};
 	float distanceAlpha {1.0f};
+	/// How many pixels a pixel of the default screen covers (gui::ReferenceScale): the game's sizes are in pixels
+	float pixelScale {1.0f};
 };
 /// The bubble over a sign seen at a pixel (y down) and a depth on a screen so wide; none when too close. Its box
 /// stands a margin above the sign, its tail ten pixels to the sign's middle-of-the-screen side, and reaches further
-/// left of the tail the closer the sign is to either edge. Nothing keeps it on the screen.
-[[nodiscard]] std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth);
+/// left of the tail the closer the sign is to either edge. Nothing keeps it on the screen. The game's sizes are
+/// pixels of its default screen: every size (the box, margin, line, tail offset, words' shadow) is multiplied by
+/// `pixelScale` so the bubble takes the same share of the screen as there.
+[[nodiscard]] std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth, float pixelScale);
 
 /// A corner of the box's shape: a pixel, a place on the bubble's texture and an alpha from 0 to 1
 struct Corner

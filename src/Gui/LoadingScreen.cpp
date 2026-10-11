@@ -13,12 +13,14 @@
 #include <utility>
 
 #include <bgfx/bgfx.h>
+#include <glm/common.hpp>
 #include <spdlog/spdlog.h>
 
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
+#include "Gui/GlyphTexture.h"
 #include "Gui/ScreenFit.h"
 #include "Locator.h"
 
@@ -127,25 +129,15 @@ LoadingScreen::LoadingScreen(TextDatabase texts, GameFont font, std::vector<uint
     , _font(std::move(font))
     , _atlasPixels(std::move(atlasPixels))
     , _atlas(std::make_unique<graphics::Texture2D>("LoadingScreenButtons"))
-    , _fontTexture(std::make_unique<graphics::Texture2D>("LoadingScreenFont"))
     , _overlay(std::make_unique<graphics::VideoOverlay>())
     , _version(loading::VersionText(k_DefaultVersion, 0))
 {
 	_atlas->Create(k_AtlasSize, k_AtlasSize, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge,
 	               graphics::Filter::Linear, bgfx::copy(_atlasPixels.data(), static_cast<uint32_t>(_atlasPixels.size())));
-	// White glyphs, their coverage in alpha
-	const auto& coverage = _font.GetAtlas();
-	const auto* glyphs = bgfx::alloc(static_cast<uint32_t>(coverage.size() * 4));
-	for (size_t i = 0; i < coverage.size(); ++i)
-	{
-		glyphs->data[i * 4] = 0xFF;
-		glyphs->data[(i * 4) + 1] = 0xFF;
-		glyphs->data[(i * 4) + 2] = 0xFF;
-		glyphs->data[(i * 4) + 3] = coverage[i];
-	}
-	_fontTexture->Create(_font.GetAtlasSize().x, _font.GetAtlasSize().y, 1, graphics::TextureFormat::RGBA8,
-	                     graphics::Wrapping::ClampEdge, graphics::Filter::Linear, glyphs);
+	_fontTexture = MakeGlyphTexture(_font.GetAtlas(), _font.GetAtlasSize(), "LoadingScreenFont");
+	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "LoadingScreenFontFull");
 	_painter = std::make_unique<DialogPainter>(_canvas, _font, *_atlas, *_fontTexture);
+	_painter->SetFullGlyphs(_fullFontTexture.get());
 }
 
 LoadingScreen::~LoadingScreen() = default;
@@ -212,7 +204,7 @@ void LoadingScreen::DrawColourBox(loading::Rect rect, const std::array<uint32_t,
 }
 
 float LoadingScreen::DrawText(std::u16string_view text, const loading::Rect& box, float top, float size, glm::vec4 colour,
-                              bool draw)
+                              bool draw, bool sharp)
 {
 	const auto fontSize = size;
 	const auto width = static_cast<float>(box.right - box.left);
@@ -228,7 +220,7 @@ float LoadingScreen::DrawText(std::u16string_view text, const loading::Rect& box
 				break;
 			}
 			const float x = static_cast<float>(box.left) + (width - _font.GetWidth(line, fontSize)) * 0.5f;
-			_painter->DrawString({x, y}, line, fontSize, colour);
+			_painter->DrawString({x, y}, line, fontSize, colour, sharp);
 			y += fontSize;
 		}
 	}
@@ -237,9 +229,19 @@ float LoadingScreen::DrawText(std::u16string_view text, const loading::Rect& box
 
 void LoadingScreen::DrawLayoutLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour)
 {
-	const auto a = loading::Adjust({from.x, from.y}, _resolution.x, _resolution.y);
-	const auto b = loading::Adjust({to.x, to.y}, _resolution.x, _resolution.y);
-	_canvas.DrawLine({a[0], a[1]}, {b[0], b[1]}, colour);
+	// A line covers whole pixels of the layout, which grow with it on a screen bigger than the default one
+	const auto min = glm::min(from, to);
+	const auto max = glm::max(from, to);
+	const auto a = loading::Adjust({min.x, min.y}, _resolution.x, _resolution.y);
+	if (gui::ReferenceScale(_resolution.x, _resolution.y) <= 1.0f)
+	{
+		const auto b = loading::Adjust({max.x, max.y}, _resolution.x, _resolution.y);
+		_canvas.DrawLine({a[0], a[1]}, {b[0], b[1]}, colour);
+		return;
+	}
+	const auto b = loading::Adjust({max.x + 1, max.y + 1}, _resolution.x, _resolution.y);
+	_canvas.DrawQuad({a[0], a[1]}, {std::max(b[0], a[0] + 1), std::max(b[1], a[1] + 1)}, {0.0f, 0.0f}, {1.0f, 1.0f}, colour,
+	                 nullptr);
 }
 
 void LoadingScreen::DrawBar(const loading::Layout& layout, float progress, uint8_t alpha)
@@ -414,7 +416,9 @@ void LoadingScreen::DrawLayoutText(std::u16string_view text, loading::Rect layou
 	{
 		start = static_cast<int32_t>((static_cast<float>(box.bottom - box.top) - height) * 0.5f + static_cast<float>(box.top));
 	}
-	DrawText(text, box, static_cast<float>(start), placed.size, colour, true);
+	// Scaled up with the layout past the default screen's size: drawn from the sharp glyphs
+	DrawText(text, box, static_cast<float>(start), placed.size, colour, true,
+	         gui::ReferenceScale(_resolution.x, _resolution.y) > 1.0f);
 }
 
 void LoadingScreen::DrawPleaseWait(glm::u16vec2 resolution, uint8_t alpha)
@@ -436,10 +440,15 @@ void LoadingScreen::DrawPleaseWait(glm::u16vec2 resolution, uint8_t alpha)
 	              {k_Body, k_Body, k_Body, k_Body}, alpha);
 	DrawColourBox({.left = width - banner.edge, .top = band.top, .right = width, .bottom = band.bottom},
 	              {k_Body, k_Edge, k_Edge, k_Body}, alpha);
-	// The lines along it take the banner's alpha
+	// The lines along it take the banner's alpha, a pixel thick on the default screen
 	const auto line = ColourOf(k_Line, alpha);
-	_canvas.DrawLine({band.left, band.top}, {band.right, band.top}, line);
-	_canvas.DrawLine({band.left, band.bottom}, {band.right, band.bottom}, line);
+	const auto thickness = static_cast<float>(gui::ScaledPixels(1, gui::ReferenceScale(resolution.x, resolution.y)));
+	for (const auto y : {band.top, band.bottom})
+	{
+		_canvas.DrawQuad({static_cast<float>(band.left), static_cast<float>(y)},
+		                 {static_cast<float>(band.right + 1), static_cast<float>(y) + thickness}, {0.0f, 0.0f}, {1.0f, 1.0f},
+		                 line, nullptr);
+	}
 	// "Loading...", with its shadow, both at the banner's alpha
 	const auto text = _texts.Get(loading::k_PleaseWaitTextName);
 	DrawLayoutText(text, loading::k_PleaseWaitShadow, glm::vec4(0.0f, 0.0f, 0.0f, AlphaOf(alpha)));

@@ -7,11 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
 #include <bit>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -47,10 +49,10 @@ std::vector<std::u16string> Words(const TextFrame& frame)
 
 TEST(HelpTextDisplay, Region)
 {
-	const TextRegion full = ComputeTextRegion(1920, 1080, 0);
+	const TextRegion full = ComputeTextRegion(1440, 1080, 0);
 	EXPECT_EQ(full.left, 0);
 	EXPECT_EQ(full.top, 916);
-	EXPECT_EQ(full.right, 1920);
+	EXPECT_EQ(full.right, 1440);
 	EXPECT_EQ(full.bottom, 1052);
 
 	const TextRegion bars = ComputeTextRegion(640, 480, 60);
@@ -62,6 +64,36 @@ TEST(HelpTextDisplay, Region)
 	// the click cue: (boxH + 1) / 3 = 137 / 3 = 45; y = 1052 - 22 + 1
 	EXPECT_EQ(ClickCueHeight(full), 45);
 	EXPECT_EQ(ClickCueY(full), 1031);
+}
+
+TEST(HelpTextDisplay, OnAWideScreenTheStripRunsAcrossThe4By3Middle)
+{
+	// As tall as on 4:3, across the 4:3 screen as tall in the middle
+	for (const auto [width, left] : {std::pair {1920, 240}, std::pair {2560, 560}, std::pair {5120, 1840}})
+	{
+		const TextRegion wide = ComputeTextRegion(width, 1080, 0);
+		EXPECT_EQ(wide.left, left) << width;
+		EXPECT_EQ(wide.right, left + 1440) << width;
+		EXPECT_EQ(wide.top, 916) << width;
+		EXPECT_EQ(wide.bottom, 1052) << width;
+	}
+	// Taller than 4:3 it runs across the screen as in the game
+	const TextRegion tall = ComputeTextRegion(1280, 1024, 0);
+	EXPECT_EQ(tall.left, 0);
+	EXPECT_EQ(tall.right, 1280);
+}
+
+TEST(HelpTextDisplay, TheLinesFollowTheScreensHeight)
+{
+	// Made for 1080 lines, laid out for 1440 (the window grew): the line height is 1440's
+	HelpTextDisplay display = Settled(1080);
+	display.Add(u"Hello", 0.0f, 1, true);
+	display.Advance(1000.0f);
+	const TextFrame frame = display.Layout(2560, 1440, 0, 1, false, k_Fixed);
+	ASSERT_FALSE(frame.runs.empty());
+	EXPECT_FLOAT_EQ(frame.runs.front().size, 48.0f);
+	// and the words are centred in the 4:3 middle, 320 to 2240
+	EXPECT_FLOAT_EQ(frame.runs.front().x, 320.0f + std::floor((1921.0f - 50.0f) * 0.5f));
 }
 
 TEST(HelpTextDisplay, LineHeight)

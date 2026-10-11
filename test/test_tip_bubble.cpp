@@ -9,6 +9,11 @@
 
 #include <cmath>
 
+#include <array>
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "Help/TipBubble.h"
@@ -61,14 +66,14 @@ TEST(TipBubble, FadesInCloseAndOutFarAway)
 
 TEST(TipBubble, NotDrawnTooClose)
 {
-	EXPECT_FALSE(Place({100.0f, 100.0f}, 0.5f, 640.0f).has_value());
-	EXPECT_TRUE(Place({100.0f, 100.0f}, 1.0f, 640.0f).has_value());
+	EXPECT_FALSE(Place({100.0f, 100.0f}, 0.5f, 640.0f, 1.0f).has_value());
+	EXPECT_TRUE(Place({100.0f, 100.0f}, 1.0f, 640.0f, 1.0f).has_value());
 }
 
 TEST(TipBubble, StandsAMarginAboveTheSignTailTowardsTheMiddle)
 {
 	// In the middle of the screen: the tail ten pixels right, a fifth of the box left of it
-	const auto middle = Place({320.0f, 400.0f}, 2.0f, 640.0f);
+	const auto middle = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
 	ASSERT_TRUE(middle.has_value());
 	EXPECT_FLOAT_EQ(middle->tailX, 330.0f);
 	EXPECT_FLOAT_EQ(middle->min.x, 330.0f - 80.0f);
@@ -76,13 +81,13 @@ TEST(TipBubble, StandsAMarginAboveTheSignTailTowardsTheMiddle)
 	EXPECT_FLOAT_EQ(middle->min.y, 400.0f - 40.0f - 250.0f);
 	EXPECT_FALSE(middle->tailFlipped);
 	// At the right edge: the tail ten pixels left, flipped, eight tenths of the box left of it
-	const auto right = Place({640.0f, 400.0f}, 2.0f, 640.0f);
+	const auto right = Place({640.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
 	ASSERT_TRUE(right.has_value());
 	EXPECT_FLOAT_EQ(right->tailX, 630.0f);
 	EXPECT_FLOAT_EQ(right->min.x, 630.0f - 320.0f);
 	EXPECT_TRUE(right->tailFlipped);
 	// At the left edge it still reaches left of the tail, off the screen: nothing keeps it on
-	const auto left = Place({0.0f, 400.0f}, 2.0f, 640.0f);
+	const auto left = Place({0.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
 	ASSERT_TRUE(left.has_value());
 	EXPECT_FLOAT_EQ(left->tailX, 10.0f);
 	EXPECT_FLOAT_EQ(left->min.x, 10.0f - 320.0f);
@@ -90,7 +95,7 @@ TEST(TipBubble, StandsAMarginAboveTheSignTailTowardsTheMiddle)
 
 TEST(TipBubble, TheBoxIsNinePiecesAndATailSeeThroughAtTheTop)
 {
-	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f);
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
 	ASSERT_TRUE(placement.has_value());
 	const auto quads = BoxShape(*placement, 1.0f);
 	ASSERT_EQ(quads.size(), 10u);
@@ -114,7 +119,7 @@ TEST(TipBubble, TheBoxIsNinePiecesAndATailSeeThroughAtTheTop)
 
 TEST(TipBubble, TheFlippedTailMirrorsAndLeansTheOtherWay)
 {
-	const auto placement = Place({600.0f, 400.0f}, 2.0f, 640.0f);
+	const auto placement = Place({600.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
 	ASSERT_TRUE(placement.has_value());
 	const auto quads = BoxShape(*placement, 1.0f);
 	const auto& tail = quads.back();
@@ -137,7 +142,7 @@ TEST(TipBubble, TheTailKeepsAwayFromTheBoxsEnds)
 
 TEST(TipBubble, WordsStackFromTheBottomUp)
 {
-	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f);
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
 	ASSERT_TRUE(placement.has_value());
 	// The tip, a blank line and the title: one line each
 	const std::array<std::u16string_view, 3> items {u"T", u" ", u"D"};
@@ -163,7 +168,7 @@ TEST(TipBubble, WordsStackFromTheBottomUp)
 
 TEST(TipBubble, WordsFadeInOverTheTopThird)
 {
-	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f);
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
 	ASSERT_TRUE(placement.has_value());
 	// Enough lines to reach the top: the stack stops at the item that gets there
 	const std::u16string tall(20, u'x');
@@ -185,7 +190,7 @@ TEST(TipBubble, WordsFadeInOverTheTopThird)
 
 TEST(TipBubble, TheScrollHoldsToTheWords)
 {
-	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f);
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
 	ASSERT_TRUE(placement.has_value());
 	Scroll scroll;
 	// Before the words were laid out nothing holds it
@@ -292,4 +297,32 @@ TEST(TipBubble, WrapEndsLinesAtLineBreaks)
 	// The blank that adds no space is a place to break too
 	const std::u16string tilde = u"aaaaaa" + std::u16string(1, char16_t {0xF8FE}) + u"bbbbbbbbb";
 	EXPECT_EQ(Wrap(tilde, 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"aaaaaa", u"bbbbbbbbb"}));
+}
+
+TEST(TipBubble, ItsPixelSizesTakeTheDefaultScreensShare)
+{
+	// At 2.4 times the default screen's pixels (2560 by 1440 and wider) every size is 2.4 times the game's
+	const auto base = Place({1280.0f, 800.0f}, 2.0f, 2560.0f, 1.0f);
+	const auto scaled = Place({1280.0f, 800.0f}, 2.0f, 2560.0f, 2.4f);
+	ASSERT_TRUE(base.has_value());
+	ASSERT_TRUE(scaled.has_value());
+	EXPECT_FLOAT_EQ(scaled->sizes.width, 400.0f * 2.4f);
+	EXPECT_FLOAT_EQ(scaled->sizes.height, 250.0f * 2.4f);
+	EXPECT_FLOAT_EQ(scaled->sizes.margin, base->sizes.margin * 2.4f);
+	EXPECT_FLOAT_EQ(scaled->sizes.lineHeight, base->sizes.lineHeight * 2.4f);
+	EXPECT_FLOAT_EQ(scaled->pixelScale, 2.4f);
+	// The tail's point keeps its place by the sign, ten default pixels to the middle's side
+	EXPECT_FLOAT_EQ(scaled->tailX - 1280.0f, (base->tailX - 1280.0f) * 2.4f);
+	EXPECT_FLOAT_EQ(scaled->max.y, 800.0f - scaled->sizes.margin);
+	// The words' shadows sit two default pixels down and right
+	const std::array<std::u16string_view, 1> items {u"Hi"};
+	const WidthFn width = [](std::u16string_view text, float size) { return static_cast<float>(text.size()) * size; };
+	const WrapFn wrap = [](std::u16string_view text, float, float) {
+		return std::vector<std::u16string> {std::u16string(text)};
+	};
+	const auto words = LayOutWords(*scaled, items, 0.0f, 1.0f, wrap, width);
+	ASSERT_EQ(words.lines.size(), 1);
+	ASSERT_EQ(words.shadows.size(), 1);
+	EXPECT_NEAR(words.shadows.front().at.x - words.lines.front().at.x, 2.0f * 2.4f, 1e-3f);
+	EXPECT_NEAR(words.shadows.front().at.y - words.lines.front().at.y, 2.0f * 2.4f, 1e-3f);
 }

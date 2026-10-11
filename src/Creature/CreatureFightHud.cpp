@@ -32,7 +32,9 @@ constexpr std::array<std::u16string_view, static_cast<size_t>(CreatureType::_COU
 Layout creature_fight_hud::Compute(glm::u16vec2 resolution)
 {
 	const auto screen = glm::vec2(resolution);
-	const auto size = glm::vec2(screen.x * k_WidthShare, screen.y * k_HeightShare);
+	// A share of a 4:3 screen's width, as tall as this one (of its own width when narrower): on a wider screen the box
+	// keeps its 4:3 size in the corner
+	const auto size = glm::vec2(std::min(screen.x, screen.y * 4.0f / 3.0f) * k_WidthShare, screen.y * k_HeightShare);
 	const auto rowHeight = size.y / 2.0f;
 	const auto margin = rowHeight * k_MarginShare;
 	const auto padding = rowHeight * k_PaddingShare;

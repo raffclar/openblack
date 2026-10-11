@@ -203,7 +203,7 @@ float DistanceAlpha(float depth)
 	return alpha;
 }
 
-std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth)
+std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth, float pixelScale)
 {
 	if (depth < k_TooClose)
 	{
@@ -211,17 +211,23 @@ std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth)
 	}
 	// How far across the screen the sign is, -1 at the left edge and 1 at the right
 	const float across = std::clamp((anchor.x / screenWidth) * 2.0f - 1.0f, -1.0f, 1.0f);
-	const float side = across <= 0.0f ? k_TailOffset : -k_TailOffset;
+	const float tailOffset = k_TailOffset * pixelScale;
+	const float side = across <= 0.0f ? tailOffset : -tailOffset;
 	const float share = (std::abs(across) * k_TailShareToEdge) + k_TailShareAtMiddle;
 	Placement placement;
-	placement.sizes = SizesAt(depth);
+	const auto sizes0 = SizesAt(depth);
+	placement.sizes = {.width = sizes0.width * pixelScale,
+	                   .height = sizes0.height * pixelScale,
+	                   .margin = sizes0.margin * pixelScale,
+	                   .lineHeight = sizes0.lineHeight * pixelScale};
+	placement.pixelScale = pixelScale;
 	placement.depth = depth;
 	placement.distanceAlpha = DistanceAlpha(depth);
 	const auto& sizes = placement.sizes;
 	placement.min = {anchor.x + side - (share * sizes.width), anchor.y - sizes.margin - sizes.height};
 	placement.max = placement.min + glm::vec2(sizes.width, sizes.height);
 	placement.tailX = placement.min.x + (sizes.width * share);
-	placement.tailFlipped = side < -0.1f;
+	placement.tailFlipped = side < 0.0f;
 	return placement;
 }
 
@@ -391,13 +397,15 @@ Words LayOutWords(const Placement& placement, std::span<const std::u16string_vie
 	    .fadeBottomStart = bottomLine,
 	    .clipBottom = bottomLine + (inset * 0.25f),
 	};
+	// The shadow's offset is in the default screen's pixels
+	const float shadow = k_ShadowOffset * placement.pixelScale;
 	const WordBounds shadowBounds {
-	    .left = bounds.left + k_ShadowOffset,
-	    .right = bounds.right + k_ShadowOffset,
-	    .clipTop = bounds.clipTop + k_ShadowOffset,
-	    .fadeTopEnd = bounds.fadeTopEnd + k_ShadowOffset,
-	    .fadeBottomStart = bounds.fadeBottomStart + k_ShadowOffset,
-	    .clipBottom = bounds.clipBottom + k_ShadowOffset,
+	    .left = bounds.left + shadow,
+	    .right = bounds.right + shadow,
+	    .clipTop = bounds.clipTop + shadow,
+	    .fadeTopEnd = bounds.fadeTopEnd + shadow,
+	    .fadeBottomStart = bounds.fadeBottomStart + shadow,
+	    .clipBottom = bounds.clipBottom + shadow,
 	};
 	const auto shadowAlpha = static_cast<int>(k_ShadowAlpha * alpha);
 	const auto wordsAlpha = static_cast<int>(255.0f * alpha);
@@ -410,7 +418,7 @@ Words LayOutWords(const Placement& placement, std::span<const std::u16string_vie
 		const float itemHeight = static_cast<float>(lines.size()) * size;
 		y -= itemHeight;
 		words.contentHeight += itemHeight;
-		AddLines(words.shadows, lines, y + k_ShadowOffset, size, shadowAlpha, shadowBounds, widthOf);
+		AddLines(words.shadows, lines, y + shadow, size, shadowAlpha, shadowBounds, widthOf);
 		AddLines(words.lines, lines, y, size, wordsAlpha, bounds, widthOf);
 		if (y < y0)
 		{
