@@ -60,6 +60,8 @@ public:
 	std::string Open(std::string_view window) override;
 	std::string Close(std::string_view window) override;
 	std::string Press(std::string_view window, const std::vector<ButtonPathStep>& path) override;
+	[[nodiscard]] OverlayInfo Overlays() const override;
+	std::string SetOverlays(std::optional<bool> names, std::optional<bool> details) override;
 
 	/// The input's queue, so that what the dialogs are sent waits behind input asked for before; without one, it is
 	/// made at once

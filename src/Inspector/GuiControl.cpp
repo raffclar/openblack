@@ -49,6 +49,14 @@ Json WindowJson(const WindowInfo& window)
 	return json;
 }
 
+Json OverlaysJson(const OverlayInfo& overlays)
+{
+	return {{"names", overlays.names},        {"details", overlays.details},
+	        {"name_fade", overlays.nameFade}, {"details_for_one", overlays.detailsForOne},
+	        {"labels", overlays.labels},      {"keys_act", overlays.keysAct},
+	        {"hidden_by", overlays.hiddenBy}};
+}
+
 /// The window's state after a change, by its name
 Json After(const GuiTargetInterface& gui, std::string_view name)
 {
@@ -149,6 +157,36 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 			    return QueryResult::Error(why);
 		    }
 		    return QueryResult::Value({{"window", window}, {"pressed", *button}});
+	    });
+	provider->Add({.name = "overlays",
+	               .description = "The labels over the villagers' heads: names (the N key's named villagers' names), "
+	                              "details (the S key's details of every villager), name_fade (the names' size, 0 to 1), "
+	                              "details_for_one (villagers whose details S put up on their own), labels (how many were "
+	                              "drawn last frame), keys_act (whether N and S act now) and hidden_by (what keeps every "
+	                              "label off the screen now: cinema bars, temple)",
+	               .parameters = {},
+	               .kind = ResultKind::Object,
+	               .needsNear = false},
+	              [&gui](const QueryContext& /*context*/) { return QueryResult::Value(OverlaysJson(gui.Overlays())); });
+	provider->Add(
+	    Write("set_overlays",
+	          "Puts the villagers' names (N) or every villager's details (S) up or down directly, even while "
+	          "the keys don't act; they show once nothing hides them (gui.overlays hidden_by). Answers as "
+	          "gui.overlays; labels counts the next drawn frame's",
+	          {{.name = "names", .type = "boolean", .description = "The named villagers' names up", .required = false},
+	           {.name = "details", .type = "boolean", .description = "Every villager's details up", .required = false}}),
+	    [&gui](const QueryContext& context) {
+		    const auto names = BoolMember(context.params, "names");
+		    const auto details = BoolMember(context.params, "details");
+		    if (!names.has_value() && !details.has_value())
+		    {
+			    return QueryResult::Error("gui.set_overlays needs names or details (true or false)");
+		    }
+		    if (auto why = gui.SetOverlays(names, details); !why.empty())
+		    {
+			    return QueryResult::Error(why);
+		    }
+		    return QueryResult::Value(OverlaysJson(gui.Overlays()));
 	    });
 	return provider;
 }
