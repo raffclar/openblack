@@ -162,7 +162,10 @@ uint32_t MagicShieldSystem::CreateReaction(entt::entity object, Reaction type, g
 		     .power = 1.0f,
 		     .magicType = MagicType::None,
 		     .casterCreature = entt::null,
-		     .reach = std::nullopt});
+		     .reach = std::nullopt,
+		     // The spell shield is a miracle; the physical shield is a thing in the world
+		     .balance = shieldObject.kind == MagicShield::Kind::Physical ? ReactionSystemInterface::Balance::Things
+		                                                                 : ReactionSystemInterface::Balance::Miracles});
 	}
 	_reactions.insert_or_assign(
 	    id, ShieldReaction {

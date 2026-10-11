@@ -98,7 +98,8 @@ void PhysicsClassHooks::StartFlyingFromHand([[maybe_unused]] DynamicsSystemInter
 }
 
 void PhysicsClassHooks::DropCarriedResource([[maybe_unused]] DynamicsSystemInterface& dynamics,
-                                            [[maybe_unused]] entt::entity villager, [[maybe_unused]] glm::vec3 velocity)
+                                            [[maybe_unused]] entt::entity villager,
+                                            [[maybe_unused]] const DroppedLogStart& start)
 {
 }
 

@@ -34,6 +34,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/VillagerDroppedLog.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -416,4 +417,10 @@ void GamePhysicsHooksWorld::StopCreature(entt::entity creature)
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
+}
+
+void GamePhysicsHooksWorld::DropCarriedLog(DynamicsSystemInterface& dynamics, entt::entity villager,
+                                           const DroppedLogStart& start)
+{
+	villager_dropped_log::Drop(dynamics, villager, start);
 }

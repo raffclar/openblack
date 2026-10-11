@@ -506,6 +506,7 @@ Renderer::~Renderer() noexcept
 	_handSkins.clear();
 	_handSkinTextures.clear();
 	_particleLightMaps.clear();
+	_glowShells.clear();
 	_snowDepth.reset();
 	_plane.reset();
 	_morphStreamLayouts.reset();
@@ -1167,7 +1168,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// Objects in the world take the colour of the land's light where they stand; the sky and the temple's
 				// insides have lights of their own
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				const bool landLit = !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
+				const bool landLit =
+				    desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
 				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, desc.unlit ? 1.0f : 0.0f, 0.0f};
 				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
@@ -1179,7 +1181,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// The distance haze is the world's, not the sky's or the temple's
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				const bool hazed = !desc.isSky && !desc.drawAll && !inTemple;
+				const bool hazed = desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple;
 				const auto u_haze = hazed ? _haze[0] : glm::vec4(0.0f);
 				setUniform(MeshUniform::Haze, &u_haze);
 				setUniform(MeshUniform::HazeColour, &_haze[1]);
@@ -5868,6 +5870,28 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 			}
+			// What the villagers hold in their hands, a draw for each model: the opaque ones here, those fading out with
+			// the blended things. The sea reflects only what the villagers flying in the physics hold.
+			const auto drawHeld = [&](bool fading) {
+				for (const auto& held : renderCtx.heldDraws)
+				{
+					if (held.fading != fading || (desc.viewId == RenderPass::Reflection && !held.reflected) ||
+					    !meshManager.Contains(held.meshId))
+					{
+						continue;
+					}
+					RenderContext::InstancedDrawDesc placers {held.first, held.count, false, false};
+					placers.instanceAlpha = fading;
+					if (fading)
+					{
+						submitDesc.sortDepth =
+						    zsort::Depth(glm::vec3(renderCtx.heldInstances.at(held.first).model[3]), cameraOrigin);
+					}
+					drawInstances(held.meshId, placers, false, held.first, held.count, nullptr, nullptr,
+					              renderCtx.heldInstanceBuffer);
+				}
+			};
+			drawHeld(false);
 			DrawTempleUnderside(desc);
 			// In the temple, whose draws keep their order, the sun's glare comes after its solid parts, which hide it, and
 			// before its glass, which blends over it
@@ -5892,6 +5916,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 			}
+			drawHeld(true);
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
 				if (placers.translucent && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))

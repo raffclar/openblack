@@ -169,4 +169,16 @@ struct WonderNeighbour
 /// A planned wonder's scale from its power: its power (5 at most) times one less a tenth of it
 [[nodiscard]] float WonderScale(float power);
 
+/// A town as an artefact made by a land's script, or brought across to a new land, looks for one: its place in the
+/// towns' list, its owner and its distance from the artefact
+struct NearbyTown
+{
+	size_t index {0};
+	PlayerNames owner {PlayerNames::NEUTRAL};
+	float distance {0.0f};
+};
+/// The town such an artefact joins: none with a town given (the given one is used); else the nearest, the first of
+/// those as near, when it is the player's; else none
+[[nodiscard]] std::optional<size_t> TownForMadeArtefact(std::span<const NearbyTown> towns, PlayerNames player);
+
 } // namespace openblack::ecs::artefact_rules

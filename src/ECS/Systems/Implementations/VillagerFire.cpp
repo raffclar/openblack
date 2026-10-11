@@ -37,6 +37,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
@@ -48,7 +49,10 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/VillagerCarry.h"
 #include "ECS/VillagerClips.h"
+#include "ECS/VillagerDroppedLog.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WalkerPlacement.h"
 #include "ECS/WorldObjects.h"
@@ -1031,6 +1035,22 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	{
 		return;
 	}
+	// The wood it shows falls where it dies as a log; the rest of what it carries, food and wood, is lost
+	if (Locator::dynamicsSystem::has_value())
+	{
+		villager_dropped_log::Drop(Locator::dynamicsSystem::value(), villager, {});
+	}
+	if (auto* person = registry.TryGet<Villager>(villager))
+	{
+		const auto wood = villager_carry::PutDown(*person, ResourceType::Wood, 0);
+		const auto food = villager_carry::PutDown(*person, ResourceType::Food, 0);
+		if (auto* tally = registry.Valid(person->town) ? registry.TryGet<TownResourceTally>(person->town) : nullptr;
+		    tally != nullptr)
+		{
+			tally->woodCarried -= static_cast<float>(wood);
+			tally->foodCarried -= static_cast<float>(food);
+		}
+	}
 	// It dies: no life left, falling, then lying dead as long as its town has no graveyard to take it to
 	if (auto* person = registry.TryGet<Villager>(villager))
 	{
@@ -1073,6 +1093,11 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 		                                         .type = Reaction::ReactToDeath,
 		                                         .player = ownTown != nullptr ? ownTown->owner : PlayerNames::NEUTRAL,
 		                                         .position = PositionOf(villager)});
+	}
+	// Dying, it leaves its home, ending the couple it was one of, and its town
+	if (Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().RemoveDeadVillager(villager);
 	}
 }
 

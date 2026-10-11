@@ -13,15 +13,22 @@
 
 #include <algorithm>
 #include <optional>
+#include <tuple>
+#include <utility>
 #include <vector>
+
+#include <glm/geometric.hpp>
+#include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/MapCoords.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -88,31 +95,52 @@ void TownSystem::OnVillagerGone(entt::registry& registry, entt::entity villager)
 	{
 		std::erase(town.homelessVillagers, villager);
 	}
+	// One taken from the world without dying leaves its home too, ending the couple it was one of
+	for (auto [entity, abode] : registry.view<Abode>().each())
+	{
+		if (std::ranges::find(abode.couple, villager) != abode.couple.end())
+		{
+			abode.couple = {entt::null, entt::null};
+		}
+		std::erase(abode.inhabitants, villager);
+	}
 }
 
 namespace
 {
 /// The room of the game's buildings, from their rows in the buildings' table, and their people coming out
+/// Whether a building has been built: one never under construction always has
+bool IsBuilt(entt::entity abode)
+{
+	const auto* progress = Locator::entitiesRegistry::value().TryGet<const BuildProgress>(abode);
+	return progress == nullptr || progress->built >= 1.0f;
+}
+
 town_homes::Homes GameHomes()
 {
 	return {.room = [](entt::entity abode) -> std::optional<town_homes::AbodeRoom> {
-		        const auto& registry = Locator::entitiesRegistry::value();
-		        const auto* building = registry.TryGet<const Abode>(abode);
-		        if (building == nullptr || !Locator::infoConstants::has_value())
+		        const auto* info = world_objects::AbodeInfoOf(abode);
+		        if (info == nullptr)
 		        {
 			        return std::nullopt;
 		        }
-		        const auto& rows = Locator::infoConstants::value().abode;
-		        const auto row = static_cast<size_t>(building->type);
-		        if (row >= rows.size())
-		        {
-			        return std::nullopt;
-		        }
-		        return town_homes::AbodeRoom {.maxAdults = rows.at(row).maxVillagersInAbode,
-		                                      .maxChildren = rows.at(row).maxChildrenInAbode,
-		                                      .functional = villager_home::IsFunctional(abode)};
+		        return town_homes::AbodeRoom {.maxAdults = info->maxVillagersInAbode,
+		                                      .maxChildren = info->maxChildrenInAbode,
+		                                      .functional = villager_home::IsFunctional(abode),
+		                                      .built = IsBuilt(abode),
+		                                      .tooCrowded = info->percentTooCrowded};
 	        },
-	        .leaving = [](entt::entity villager) { villager_home::LeavingHome(villager); }};
+	        .leaving = [](entt::entity villager) { villager_home::LeavingHome(villager); },
+	        .atHome = [](entt::entity villager) { return Locator::entitiesRegistry::value().AllOf<AtHome>(villager); }};
+}
+
+/// Buildings further off than this are never the nearest
+constexpr float k_FarthestAbode = 1e12f;
+
+/// A town with no homes built lets in this many people
+uint32_t EmptyTownAllows()
+{
+	return Locator::infoConstants::value().town.emptyTownAllowedThisManyVillagers;
 }
 } // namespace
 
@@ -142,6 +170,40 @@ entt::entity TownSystem::FindClosestTown(const glm::vec3& point) const
 	return result;
 }
 
+entt::entity TownSystem::NearestBuilding(glm::vec2 point) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	// The players' towns in turn, in the order each gained them, then the neutral towns
+	std::vector<std::pair<entt::entity, const Town*>> towns;
+	registry.Each<const Town>([&towns](entt::entity entity, const Town& town) { towns.emplace_back(entity, &town); });
+	std::ranges::stable_sort(towns, [](const auto& a, const auto& b) {
+		const auto rank = [](const Town& town) {
+			return std::tuple(town.owner == PlayerNames::NEUTRAL, static_cast<uint8_t>(town.owner), town.gained, town.id);
+		};
+		return rank(*a.second) < rank(*b.second);
+	});
+	entt::entity closest = entt::null;
+	float nearest = k_FarthestAbode;
+	for (const auto& [entity, town] : towns)
+	{
+		for (const auto abode : town->abodes)
+		{
+			const auto* transform = registry.Valid(abode) ? registry.TryGet<const Transform>(abode) : nullptr;
+			if (transform == nullptr)
+			{
+				continue;
+			}
+			const float distance = glm::distance(glm::xz(transform->position), point);
+			if (distance < nearest)
+			{
+				nearest = distance;
+				closest = abode;
+			}
+		}
+	}
+	return closest;
+}
+
 bool TownSystem::AddVillagerToTown(entt::entity town, entt::entity villager)
 {
 	return town_homes::AddVillagerToTown(Locator::entitiesRegistry::value(), GameHomes(), town, villager);
@@ -155,6 +217,36 @@ void TownSystem::AddVillagerToAbode(entt::entity abode, entt::entity villager)
 bool TownSystem::MakeHomeless(entt::entity villager)
 {
 	return town_homes::MakeHomeless(Locator::entitiesRegistry::value(), GameHomes(), villager);
+}
+
+void TownSystem::MoveInAnyway(entt::entity abode, entt::entity villager)
+{
+	town_homes::MoveInAnyway(Locator::entitiesRegistry::value(), GameHomes(), abode, villager);
+}
+
+bool TownSystem::MoveInByBuilding(entt::entity abode, entt::entity villager)
+{
+	return town_homes::MoveInByBuilding(Locator::entitiesRegistry::value(), GameHomes(), abode, villager, EmptyTownAllows());
+}
+
+bool TownSystem::MoveIntoTown(entt::entity town, entt::entity villager)
+{
+	return town_homes::MoveIntoTown(Locator::entitiesRegistry::value(), GameHomes(), town, villager, EmptyTownAllows());
+}
+
+town_homes::NewHome TownSystem::LookForBetterHome(entt::entity villager)
+{
+	return town_homes::LookForBetterHome(Locator::entitiesRegistry::value(), GameHomes(), villager);
+}
+
+bool TownSystem::HasRoomForNewcomer(entt::entity town) const
+{
+	return town_homes::HasRoomForNewcomer(Locator::entitiesRegistry::value(), GameHomes(), town, EmptyTownAllows());
+}
+
+void TownSystem::RemoveDeadVillager(entt::entity villager)
+{
+	town_homes::RemoveDeadVillager(Locator::entitiesRegistry::value(), villager);
 }
 
 namespace
@@ -379,6 +471,17 @@ void TownSystem::ProcessTurn()
 			continue;
 		}
 		registry.Get<Town>(townEntity).emergencyTurn = 0;
+	}
+	// Now and then each town evens out its homes, moving a man for a woman between two, or one villager
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	const auto every = Locator::infoConstants::value().town.shuffleVillagersEvery;
+	const auto homes = GameHomes();
+	for (const auto townEntity : towns)
+	{
+		if (registry.Valid(townEntity) && town_homes::EvenOutDue(registry.Get<const Town>(townEntity).id, turn, every))
+		{
+			town_homes::EvenOutHomes(registry, homes, townEntity);
+		}
 	}
 }
 

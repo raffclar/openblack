@@ -42,6 +42,8 @@ public:
 	bool HasSunk(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry) override;
 	void DropSound(entt::entity object) override;
 	void OfferToCatchingCreatures(entt::entity object, PhysicsEntry& entry) override;
+	void DropCarriedResource(systems::DynamicsSystemInterface& dynamics, entt::entity villager,
+	                         const systems::DroppedLogStart& start) override;
 
 private:
 	std::unique_ptr<physics_hooks::World> _world;

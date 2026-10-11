@@ -176,7 +176,8 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 	// catch it
 	if (registry.AllOf<Villager>(object))
 	{
-		Hooks().DropCarriedResource(*this, object, release.velocity);
+		Hooks().DropCarriedResource(
+		    *this, object, {.velocity = release.velocity, .spin = glm::vec3(0.0f), .angularMomentum = release.angularMomentum});
 	}
 	// Those who watch it fly are impressed by the thing's own impressiveness
 	const auto* info = _world->InfoOf(object);
