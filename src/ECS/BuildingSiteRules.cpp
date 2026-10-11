@@ -300,6 +300,11 @@ float building_site::TemplePileAngle(float heartYAngle, size_t pile)
 	return heartYAngle + static_cast<float>(static_cast<int32_t>(pile)) * k_SeventhTurn - k_PileAngleOffset;
 }
 
+LeftoverPile building_site::WhenSiteCloses(uint32_t woodInPile)
+{
+	return woodInPile == 0 ? LeftoverPile::Remove : LeftoverPile::CallForWood;
+}
+
 std::optional<size_t> building_site::BestSite(std::span<const SiteCandidate> sites, bool anyway)
 {
 	std::optional<size_t> best;
