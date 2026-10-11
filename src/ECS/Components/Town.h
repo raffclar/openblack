@@ -55,6 +55,8 @@ struct Town
 	std::optional<glm::vec2> congregationPos;
 	/// The turn its latest emergency was called, 0 when it is in none
 	uint32_t emergencyTurn {0};
+	/// Its own graveyard, where its dead are counted: the first of its graveyards to work, none until then
+	entt::entity graveyard {entt::null};
 };
 
 } // namespace openblack::ecs::components

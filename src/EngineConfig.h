@@ -35,9 +35,9 @@ static const std::map<std::string_view, GraphicsBackend> k_GraphicsBackendString
 struct EngineConfig
 {
 	bool wireframe {false};
-	/// The villagers' names over their heads, as the Show Villager Names key toggles
+	/// The debug overlay labelling the villagers with their numbers (the game's own labels come with its keys)
 	bool showVillagerNames {false};
-	/// What the villagers are doing, their age, health and hunger, as the Show Villager Details key toggles
+	/// The debug overlay's details of what the villagers are doing, their age, health and hunger
 	bool showVillagerDetails {false};
 	bool debugVillagerNames {false};
 	bool debugVillagerStates {false};
