@@ -102,3 +102,10 @@ TEST(CinemaBars, BarsMakeThePictureSixteenByNine)
 	EXPECT_EQ(CinemaBars::BarHeight(1280, 720, 1.0f), 0);
 	EXPECT_EQ(CinemaBars::BarHeight(2560, 1080, 1.0f), 0);
 }
+
+// The default 800x600 screen shows the whole 4:3 picture until a script brings the bars in, which then leave 450 rows
+TEST(CinemaBars, TheDefaultScreenHasNoneUntilAScriptBringsThemIn)
+{
+	EXPECT_EQ(CinemaBars::BarHeight(800, 600, 0.0f), 0);
+	EXPECT_EQ(CinemaBars::BarHeight(800, 600, 1.0f), 75);
+}
