@@ -1195,6 +1195,12 @@ bool Game::GameLogicLoop() noexcept
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();
 
+	// A script's two-thing camera lets go of a thing that has gone
+	if (auto* scriptCamera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	    scriptCamera != nullptr)
+	{
+		scriptCamera->LetGoOfGoneThings();
+	}
 	// The players' temples take their turn first: one whose heart lost all its life moves on through its destruction
 	if (Locator::templeDestructionSystem::has_value())
 	{
@@ -1707,6 +1713,11 @@ bool Game::Update() noexcept
 			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
 		}
 		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
+	}
+	// The lens glides on the game's time, and holds while the player is in the temple, whose own lens it has
+	if (!(Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		camera.UpdateLens(std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
 	}
 	if (demoCamera.has_value())
 	{
