@@ -39,6 +39,7 @@ struct Fixture
 	std::vector<uint32_t> started;
 	std::vector<uint32_t> stopped;
 	std::vector<int32_t> rands;
+	uint32_t randResult = 0;
 	int64_t positionMs {-1};
 	std::optional<AdvisorVoices::Recording> recording;
 	/// The advisor and the tags each line started with
@@ -80,7 +81,7 @@ struct Fixture
 		audio.tickMs = [this]() { return now; };
 		audio.localRand = [this](int32_t n) {
 			rands.push_back(n);
-			return 0u;
+			return randResult;
 		};
 		audio.recording = [this](uint32_t) { return recording; };
 		audio.playPositionMs = [this](uint32_t) { return positionMs; };
@@ -237,6 +238,26 @@ TEST(AdvisorVoices, InterruptDrawsOneLineAndStops)
 	// A silent advisor is not interrupted
 	f.voices.Interrupt(k_Good);
 	EXPECT_EQ(f.rands.size(), 1u);
+}
+
+TEST(AdvisorVoices, EscapePicksAmongEightOtherLinesHalfTheTime)
+{
+	Fixture f;
+	f.voices.Say(k_Good, 7, false, 0.0f);
+	f.voices.Interrupt(k_Good, openblack::help::AdvisorVoices::InterruptedBy::Escape);
+	EXPECT_EQ(f.rands, (std::vector<int32_t> {2, 8}));
+	EXPECT_FALSE(f.voices.IsActive(k_Good));
+	EXPECT_EQ(f.started, (std::vector<uint32_t> {7}));
+}
+
+TEST(AdvisorVoices, EscapeOtherwisePicksAmongTheFiveLines)
+{
+	Fixture f;
+	f.randResult = 1;
+	f.voices.Say(k_Evil, 9, false, 0.0f);
+	f.voices.Interrupt(k_Evil, openblack::help::AdvisorVoices::InterruptedBy::Escape);
+	EXPECT_EQ(f.rands, (std::vector<int32_t> {2, 5}));
+	EXPECT_FALSE(f.voices.IsActive(k_Evil));
 }
 
 TEST(AdvisorVoices, NoLipSyncUnlessSayingALine)

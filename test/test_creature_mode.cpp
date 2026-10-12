@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <array>
 #include <numbers>
 #include <string_view>
 #include <vector>
@@ -390,6 +391,9 @@ TEST(CreatureCave, FactsTellOfTheMind)
 	snapshot.turnsLookedAt = 300;
 	snapshot.creaturesKnown = {{.name = u"Ape", .howNice = -0.5f, .attention = 0.0f},
 	                           {.name = u"Cow", .howNice = 0.9f, .attention = 0.45f}};
+	snapshot.templesKnown = 1;
+	snapshot.flocksKnown = 3;
+	snapshot.forestsKnown = 2;
 	const auto facts = creature_cave::FactsOf(snapshot);
 	// The personality in the scroll's order, and only the desires it tells of
 	ASSERT_EQ(facts.desires.size(), 2u);
@@ -399,7 +403,8 @@ TEST(CreatureCave, FactsTellOfTheMind)
 	EXPECT_EQ(facts.desires[1].attitude, 4);
 	EXPECT_FLOAT_EQ(*facts.opinionOfGod, 0.5f);
 	EXPECT_EQ(facts.attention, 3);
-	EXPECT_EQ(facts.known[0], 2);
+	// The creatures, temples, flocks and forests it knows
+	EXPECT_EQ(facts.known, (std::array<int32_t, 4> {2, 1, 3, 2}));
 	// Each creature it knows, and the attention it paid only once it has paid some
 	ASSERT_EQ(facts.creatures.size(), 2u);
 	EXPECT_EQ(facts.creatures[0].name, u"Ape");

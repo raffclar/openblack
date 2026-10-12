@@ -94,6 +94,10 @@ enum class Facet : uint8_t
 	Sky,
 	/// The player's two advisors, the good one and the evil one
 	Advisors,
+	/// The story's set pieces, such as the game's end as the player's temple falls
+	Story,
+	/// The tutorial's lessons: the hand's demonstrations and the help texts that go with them
+	Tutorial,
 
 	_Count
 };
@@ -266,8 +270,17 @@ struct ObjectSetup
 	std::optional<float> fullSize;
 	/// A villager or animal that has eaten poison
 	bool poisoned {false};
+	/// Made indestructible, as a script makes one
+	bool indestructible {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
+	/// A building of the town holds this much wood, rather than the scenario town's usual stock
+	std::optional<uint32_t> storedWood;
+	/// A building is only planned by the scenario's town, as a land's script plans one, rather than standing built
+	bool planned {false};
+	/// A planned building is the plan of one that had been finished and went from the land, which its town wants
+	/// rebuilt as a repair
+	bool wasBuilt {false};
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 };
@@ -299,6 +312,16 @@ struct VortexSetup
 	/// Seconds into the scenario it is made, and after that it is told to fade out; none to stay
 	float delaySeconds {0.0f};
 	std::optional<float> fadeOutAfterSeconds;
+};
+
+/// A reward chest given to the player as a challenge's script gives one: dropped from the sky or put on the land
+struct RewardSetup
+{
+	RewardObjectInfo type {RewardObjectInfo::RewardObjectToyBall};
+	glm::vec2 offset {0.0f};
+	bool fromSky {true};
+	/// Seconds into the scenario it is given
+	float delaySeconds {0.0f};
 };
 
 /// A miracle dispenser, or a one-shot bubble on its own, put down for the scenario
@@ -525,6 +548,23 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// One of the help's message sets (value) runs, as the help system runs it. Needs no creature
+		RunHelpMessage,
+		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
+		/// loses the last of its life. Needs no creature
+		DestroyTemple,
+		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
+		/// does: a static action's start, loop and end, or an individual action
+		ScriptPlay,
+		/// A help text (value, by the scripts' number) shown in the dialogue box, as a script's RUN_TEXT shows one. Needs
+		/// no creature
+		RunText,
+		/// A hand demonstration (handDemo, by its file's name) played through the player's hand and camera, as a
+		/// tutorial's script plays one. Needs no creature
+		PlayHandDemo,
+		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
+		/// flight, say). Needs no creature
+		Reframe,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -586,6 +626,8 @@ struct Command
 	};
 	AdvisorAction advisor {AdvisorAction::Out};
 	uint32_t anim {0};
+	/// The hand demonstration played, by its file's name in the game's hand demonstrations
+	std::string_view handDemo;
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 /// Whether a command is the player's mouse, which needs no creature
@@ -612,6 +654,8 @@ struct TempleSetup
 	glm::vec2 offset {0.0f};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
 	float angle {0.0f};
+	/// How much of it is built, 0 to 1, for a temple still going up; built when not given
+	std::optional<float> built;
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
@@ -681,6 +725,7 @@ struct Scenario
 	std::vector<TempleSetup> temples;
 	std::vector<ParticleSetup> particles;
 	std::vector<VortexSetup> vortices;
+	std::vector<RewardSetup> rewards;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
 	/// The scrolls and signs scripts put up, made after the objects
@@ -738,6 +783,8 @@ void AddBirdScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The vortices between the lands: opening, levelling the ground and closing
 void AddVortexScenarios(std::vector<Scenario>& all);
+/// The reward chests the challenges give: falling, landing and being opened
+void AddRewardScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
 void AddTornadoScenarios(std::vector<Scenario>& all);
 /// The land's nature: a tree pulled up leaving its roots, and the fireflies at nightfall
@@ -763,6 +810,9 @@ void AddHighlightScenarios(std::vector<Scenario>& all);
 void AddSkyScenarios(std::vector<Scenario>& all);
 /// The advisors coming out, clinging, pointing and acting
 void AddAdvisorScenarios(std::vector<Scenario>& all);
+/// A town growing from the buildings it planned
+void AddTownGrowthScenarios(std::vector<Scenario>& all);
+void AddTutorialScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

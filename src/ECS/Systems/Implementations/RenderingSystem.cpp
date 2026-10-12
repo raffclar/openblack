@@ -31,6 +31,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -224,6 +225,11 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		{
 			count.first->second.translucent = true;
 			count.first->second.additiveShare = translucent->share;
+		}
+		// Its see-through parts blend as their materials say
+		if (registry.AllOf<BlendedByMaterial>(entity))
+		{
+			count.first->second.translucent = true;
 		}
 		if (const auto* mark = registry.TryGet<const GroundMark>(entity);
 		    (mark != nullptr && mark->alpha.has_value()) || registry.AllOf<SeeThrough>(entity))

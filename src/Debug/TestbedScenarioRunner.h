@@ -131,6 +131,7 @@ private:
 	void UpdateParticles(float seconds);
 	/// The scenario's vortices open when it is time and are told to fade out when it is time
 	void UpdateVortices();
+	void UpdateRewards();
 	/// The needs and desires go on once the body and mind have started, and every frame for those that hold them
 	void ApplyStates();
 	void Give(const Command& command);
@@ -187,14 +188,19 @@ private:
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
 	std::vector<entt::entity> _objects;
+	/// The scenario's temples, in its order
+	std::vector<entt::entity> _temples;
 	/// When each of the scenario's throws is next due, in seconds; none once done
 	std::vector<std::optional<float>> _throwsDue;
-	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet
+	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet; and
+	/// the walk it is on: where to and the game turn it set off, until it gets there
 	struct ObjectWalk
 	{
 		std::optional<float> nextAt;
 		bool outwards {true};
 		bool dropped {false};
+		glm::vec2 goal {0.0f};
+		std::optional<uint32_t> setOffTurn;
 	};
 	std::vector<ObjectWalk> _walks;
 	/// The scenario's particle effects, and the seconds since each was last started
@@ -211,6 +217,8 @@ private:
 		bool fading {false};
 	};
 	std::vector<RunningVortex> _vortices;
+	/// The scenario's reward chests, each once given
+	std::vector<entt::entity> _rewards;
 	/// The scenario's miracles: when each is next cast, and the one held in its hand until when
 	struct RunningMiracle
 	{

@@ -225,6 +225,17 @@ void creature_physiology::Poo(Needs& needs)
 	needs.poo = 0.0f;
 }
 
+PooLump creature_physiology::PooLumpOf(glm::vec3 groin, glm::vec2 ahead, float shownSize)
+{
+	constexpr float k_Scale = 1.5f;
+	constexpr float k_Speed = 5.0f;
+	return {
+	    .position = groin,
+	    .velocity = glm::vec3(-ahead.x * k_Speed, 0.0f, -ahead.y * k_Speed),
+	    .scale = k_Scale * shownSize,
+	};
+}
+
 bool creature_physiology::SleepTurn(Needs& needs, const Species& species, float size, uint32_t turnsAsleep, bool night)
 {
 	needs.life = Clamp01(needs.life + species.sleepHeal);

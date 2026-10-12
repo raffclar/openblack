@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <numbers>
 
 using namespace openblack;
 using namespace openblack::ecs::planned_building;
@@ -193,4 +194,56 @@ bool planned_building::IsClearToBuild(std::span<const FootprintCell> footprint, 
 		}
 	}
 	return true;
+}
+
+std::vector<std::optional<size_t>>
+planned_building::StartedByScript(std::span<const std::vector<building_construction::PlannedCandidate>> towns, glm::vec2 place)
+{
+	std::vector<std::optional<size_t>> started;
+	started.reserve(towns.size());
+	for (const auto& planned : towns)
+	{
+		started.push_back(building_construction::PlannedAt(planned, place));
+	}
+	return started;
+}
+
+std::optional<planned_building::MendChoice> planned_building::ChooseToMend(std::span<const float> planDesires,
+                                                                           std::span<const MendCandidate> buildings)
+{
+	float most = 0.0f;
+	std::optional<size_t> plan;
+	for (size_t i = 0; i < planDesires.size(); ++i)
+	{
+		if (planDesires[i] > most)
+		{
+			most = planDesires[i];
+			plan = i;
+		}
+	}
+	std::optional<size_t> building;
+	for (size_t i = 0; i < buildings.size(); ++i)
+	{
+		if (!buildings[i].skipped && buildings[i].desireToBeRepaired > most)
+		{
+			most = buildings[i].desireToBeRepaired;
+			building = i;
+		}
+	}
+	if (building.has_value())
+	{
+		return MendChoice {.kind = MendChoice::Kind::Building, .index = *building};
+	}
+	if (plan.has_value())
+	{
+		return MendChoice {.kind = MendChoice::Kind::Plan, .index = *plan};
+	}
+	return std::nullopt;
+}
+
+float planned_building::YAngleOf(const glm::mat3& rotation)
+{
+	// Read back from where the building's own east side points, as it was turned when placed
+	const float angle = std::atan2(rotation[0][2], rotation[0][0]);
+	return angle < 0.0f ? angle + (2.0f * std::numbers::pi_v<float>) : angle;
 }

@@ -228,6 +228,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
+#include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/WorldToolTips.h"
@@ -1181,18 +1182,24 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
 		}
 	}
-	// While a held miracle pours, the hand offers nothing of what is under the pointer
-	if (Locator::magicSystem::has_value() &&
-	    !gui::world_tooltip::OffersOverToolTips(Locator::magicSystem::value().GetHandCastState().state))
+	const auto pointed = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+	const bool shown = !_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	// With a miracle in the hand, poured or not, the hand offers to cast it where it may be cast: on the thing under the
+	// pointer, or on the land where there is none
+	const auto held = Locator::magicSystem::has_value() ? Locator::magicSystem::value().HeldCastAt(pointed) : std::nullopt;
+	if (const auto tip = held.has_value() ? gui::world_tooltip::HeldMiracle(magic::OfferFor(*held)) : std::nullopt;
+	    tip.has_value() && shown)
 	{
-		toolTips.ProcessTurn();
+		toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+		toolTips.ProcessTurn(displayTimeRuns);
 		return;
 	}
+	// Elsewhere it offers only what it would over nothing, never the tooltips of what is under the pointer
+	const bool overToolTips = gui::world_tooltip::OffersOverToolTips(held.has_value());
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
-	if (!_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	if (shown)
 	{
-		const auto hovered = Locator::pickingSystem::value().GetPick().object;
-		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
+		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed))
 		{
 			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 			toolTips.ProcessTurn(displayTimeRuns);
@@ -1202,7 +1209,6 @@ void Game::ProcessHandToolTipTurn()
 	// Over the player's own creature, the hand shows that it can take hold of it to stroke or slap it. It can hold other
 	// players' creatures too, but the game only offers it for the player's own.
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
-	const bool shown = !_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	// While the player's creature duels, the hand offers to block over it, to attack over its opponent, and to manoeuvre
 	// anywhere else, each by the Action button
 	if (const auto tip = Locator::creatureFightSystem::value().HandTip(_creatureUnderHand))
@@ -1212,18 +1218,17 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.Submit(creature_fight::ToolTipIndex(*tip), gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 		}
 	}
-	else if (const auto flagTip = shown ? Locator::townDesireSystem::value().GetFlagToolTip(
-	                                          Locator::pickingSystem::value().GetPick().object.value_or(entt::null))
-	                                    : std::nullopt;
+	else if (const auto flagTip = shown && overToolTips
+	                                  ? Locator::townDesireSystem::value().GetFlagToolTip(pointed.value_or(entt::null))
+	                                  : std::nullopt;
 	         flagTip.has_value() && !over.has_value())
 	{
 		// Over a flag of a town's store, the hand shows how much the town wants its thing, in the flag's own words
 		toolTips.SubmitInWords(ecs::town_desire_flags::k_NeedToolTip, flagTip->words, flagTip->percent);
 	}
-	else if (const auto submissions =
-	             shown && !over.has_value() && Locator::pickingSystem::has_value()
-	                 ? gui::world_tooltip::Over(Locator::pickingSystem::value().GetPick().object.value_or(entt::null))
-	                 : std::vector<gui::world_tooltip::Submission> {};
+	else if (const auto submissions = shown && overToolTips && !over.has_value()
+	                                      ? gui::world_tooltip::Over(pointed.value_or(entt::null))
+	                                      : std::vector<gui::world_tooltip::Submission> {};
 	         !submissions.empty())
 	{
 		// Over a temple, a village centre, a store or a pile, the hand says what it holds or can do
@@ -1240,7 +1245,7 @@ void Game::ProcessHandToolTipTurn()
 			}
 		}
 	}
-	else if (over.has_value() && shown)
+	else if (over.has_value() && shown && overToolTips)
 	{
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
 		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);
@@ -1564,6 +1569,8 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::templeDestructionSystem::value().EndTurn();
 	}
+	// Then one walker that came up against water, the land's edge or a fence tries its walk both ways round
+	Locator::pathfindingSystem::value().ProcessLookahead();
 
 	// Each turn ends with the camera taking the alignment of the player of most influence at its eye
 	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
@@ -1873,6 +1880,13 @@ bool Game::Update() noexcept
 	if (Locator::temple::has_value())
 	{
 		Locator::temple::value().Update(deltaTime);
+		// Leaving the save game room the player was kept in once the game was over ends the game.
+		// TODO(game-over): the game goes back to its front end here, which openblack doesn't have during play yet, so
+		// it closes as the menu's quit does
+		if (Locator::temple::value().TakeGameEnded())
+		{
+			RequestQuit();
+		}
 	}
 	Locator::cameraBookmarkSystem::value().Update(deltaTime);
 	// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
@@ -2052,6 +2066,11 @@ bool Game::Update() noexcept
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
 	                                        Locator::camera::value().GetOrigin());
 	Locator::cinematicDirectorSystem::value().Update(gameTime);
+	// The scripts' words on the screen fade by the game's time, and stand still while a video plays
+	if (!Locator::videoSystem::has_value() || !Locator::videoSystem::value().IsPlaying())
+	{
+		Locator::cinematicDirectorSystem::value().UpdateTexts(static_cast<int32_t>(clock.GetFrameGameTime().count()));
+	}
 	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
@@ -2795,6 +2814,13 @@ bool Game::Initialize() noexcept
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
 			    Locator::creatureCaveSystem::has_value() && Locator::creatureCaveSystem::value().Escape())
 			{
+				return;
+			}
+			// Escape in play, with no dialog open
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && _interface && !_interface->IsDialogOpen() &&
+			    !_interface->GetTattooEditor().IsOpen())
+			{
+				HandleEscapeInPlay(event.key.keysym.mod);
 				return;
 			}
 			// The game's menu takes Escape, and the keyboard and mouse while it is open
@@ -3658,8 +3684,10 @@ bool Game::Run() noexcept
 		try
 		{
 			lhvm.LoadBinary(fileSystem.ReadAll(challengePath));
-			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock
-			if (!_startTestbed)
+			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock. A
+			// playground starts as the playground menu starts one: the scripts are made ready, but no story begins and
+			// the start-of-game question isn't asked
+			if (!_startTestbed && new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish))
 			{
 				StartStoryScripts();
 			}
@@ -4216,6 +4244,54 @@ bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noex
 	return true;
 }
 
+void Game::HandleEscapeInPlay(uint16_t keyModifiers)
+{
+	auto& director = Locator::cinematicDirectorSystem::value();
+	const auto fade = director.GetFadeColour();
+	escape_key::Situation situation {
+	    .shiftOrCtrl = (keyModifiers & (KMOD_SHIFT | KMOD_CTRL)) != 0,
+	    .scriptHoldsCinemaBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
+	    .helpScriptHoldsDialogue = Locator::vm::has_value() && chlapi::CHLApi::HelpScriptHoldsDialogue(),
+	    // openblack's games are all single player
+	    .inGodsPlayground =
+	        Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber == escape_key::k_GodsPlaygroundLand,
+	    .screenClear = director.IsFadeFinished() && (fade >> 24u) == 0,
+	    // The lessons run only after going to the Playground from another land, which openblack can't do yet
+	    .playgroundLessonRunning = false,
+	    .sinceMenuClosed = std::nullopt,
+	};
+	if (_menuClosedAt.has_value())
+	{
+		situation.sinceMenuClosed =
+		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - *_menuClosedAt);
+	}
+
+	const auto response = escape_key::Respond(situation);
+	if (response.clearScreenFade)
+	{
+		director.FadeBackToNormal(0);
+	}
+	if (response.stopHelpScripts)
+	{
+		chlapi::CHLApi::StopHelpScriptsByEscape();
+	}
+	switch (response.outcome)
+	{
+	case escape_key::Outcome::Nothing:
+		break;
+	case escape_key::Outcome::OpenMenu:
+		_interface->OpenMenu();
+		HandleInterfaceAction();
+		break;
+	case escape_key::Outcome::AskLeavePlayground:
+	case escape_key::Outcome::EndPlaygroundLesson:
+		// Both need the player to have come from another land, the game saved as they left it, which openblack can't do
+		// yet
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Escape on the Gods' Playground is not available yet");
+		break;
+	}
+}
+
 void Game::HandleInterfaceAction()
 {
 	using Action = gui::GameMenu::Action;
@@ -4252,6 +4328,7 @@ void Game::HandleInterfaceAction()
 	else if (!open && _menuWasOpen)
 	{
 		Locator::time::value().SetPaused(_pausedBeforeMenu);
+		_menuClosedAt = std::chrono::steady_clock::now();
 	}
 	_menuWasOpen = open;
 

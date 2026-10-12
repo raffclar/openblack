@@ -53,6 +53,36 @@ glm::ivec2 PixelOf(const Box& box, float x, float z)
 	const double py = ((static_cast<double>(box.maxY) - box.minY + 1.0) * z) + box.minY;
 	return {static_cast<int>(px), static_cast<int>(py)};
 }
+/// A path taken at a number of points evenly through its points (not along its length): the first at its start, the last
+/// at its end, the rest between the two points either side
+std::vector<glm::vec3> TakenEvenly(const std::vector<glm::vec3>& path, size_t count)
+{
+	std::vector<glm::vec3> taken;
+	if (path.empty() || count == 0)
+	{
+		return taken;
+	}
+	const auto step = static_cast<float>(1.0 / (static_cast<double>(count) - 1.0));
+	const auto last = path.size() - 1;
+	taken.reserve(count);
+	for (size_t i = 0; i < count; ++i)
+	{
+		const double along = static_cast<double>(i) * step;
+		if (along == 1.0)
+		{
+			taken.push_back(path.back());
+			continue;
+		}
+		const auto at = static_cast<float>(along * static_cast<double>(last));
+		const auto index = std::min(static_cast<size_t>(at), last);
+		// The end of the path rounded up holds at its last point
+		const auto& from = path[index];
+		const auto& to = path[std::min(index + 1, last)];
+		const auto t = static_cast<float>(static_cast<double>(at) - static_cast<double>(index));
+		taken.push_back(((to - from) * t) + from);
+	}
+	return taken;
+}
 } // namespace
 
 TrailSymbol gesture::MakeTrailSymbol(std::span<const glm::vec3> filePoints)
@@ -155,30 +185,30 @@ std::optional<particles::GestureTrail> gesture::BuildTrail(std::span<const glm::
 	}
 
 	// The shape on the land, taken at as many points as the hand's path has, evenly through its points
-	const auto count = landPoints.size();
-	const auto step = static_cast<float>(1.0 / (static_cast<double>(count) - 1.0));
-	const auto last = laid.size() - 1;
-	std::vector<glm::vec3> ideal;
-	ideal.reserve(count);
-	for (size_t i = 0; i < count; ++i)
-	{
-		const double along = static_cast<double>(i) * step;
-		if (along == 1.0)
-		{
-			ideal.push_back(laid.back());
-			continue;
-		}
-		const auto at = static_cast<float>(along * static_cast<double>(last));
-		const auto index = std::min(static_cast<size_t>(at), last);
-		// The end of the path rounded up holds at its last point
-		const auto& from = laid[index];
-		const auto& to = laid[std::min(index + 1, last)];
-		const auto t = static_cast<float>(static_cast<double>(at) - static_cast<double>(index));
-		ideal.push_back(((to - from) * t) + from);
-	}
+	auto ideal = TakenEvenly(laid, landPoints.size());
 
 	particles::GestureTrail trail;
 	trail.drawn = particles::TrailPath(std::vector<glm::vec3>(landPoints.begin(), landPoints.end()));
 	trail.ideal = particles::TrailPath(std::move(ideal));
+	return trail;
+}
+
+particles::GestureTrail gesture::LandGestureTrail(const TrailSymbol& symbol, glm::vec3 corner, float size,
+                                                  const std::function<float(float x, float z)>& landHeight)
+{
+	// The symbol's square is laid on the land from the corner, each point dropped onto the land
+	std::vector<glm::vec3> laid;
+	laid.reserve(symbol.points.size());
+	for (const auto& point : symbol.points)
+	{
+		const float x = (point.x * size) + corner.x;
+		const float z = (point.z * size) + corner.z;
+		laid.emplace_back(x, landHeight ? landHeight(x, z) : corner.y, z);
+	}
+	// The path and the shape are both the shape, taken at a fixed number of points
+	auto points = TakenEvenly(laid, k_LandGesturePoints);
+	particles::GestureTrail trail;
+	trail.drawn = particles::TrailPath(points);
+	trail.ideal = particles::TrailPath(std::move(points));
 	return trail;
 }

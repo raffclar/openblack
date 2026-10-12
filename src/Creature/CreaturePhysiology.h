@@ -13,6 +13,9 @@
 
 #include <optional>
 
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+
 /// A creature's body as time passes: it ages, grows while it stands still, uses up its energy and burns fat once
 /// hungry, tires from moving, gets thirsty, warms or cools by how far the weather is from what its species likes, and
 /// grows stronger from hard work. Eating fills it up (and fattens it if it overeats) and builds up poo, drinking
@@ -194,6 +197,17 @@ float Eat(Needs& needs, Shape& shape, const Species& species, float foodValue);
 void Drink(Needs& needs);
 /// Has a poo
 void Poo(Needs& needs);
+
+/// The lump a poo leaves: it starts at the creature's groin, the creature's size by 1.5, and is thrown back along
+/// the ground behind the creature at 5 m/s, without spin
+struct PooLump
+{
+	glm::vec3 position;
+	glm::vec3 velocity;
+	float scale;
+};
+/// The lump of a creature whose groin is at a point, facing a way on the land (x, z, of length 1), at a shown size
+[[nodiscard]] PooLump PooLumpOf(glm::vec3 groin, glm::vec2 ahead, float shownSize);
 
 /// One game turn asleep: it heals and rests. Returns whether it wakes now, having slept some turns with this one.
 [[nodiscard]] bool SleepTurn(Needs& needs, const Species& species, float size, uint32_t turnsAsleep, bool night);

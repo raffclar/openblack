@@ -27,7 +27,8 @@ namespace openblack::physics::objects
 /// What a tree does as its flight ends
 enum class TreeLanding : uint8_t
 {
-	/// It stays where it is, standing: a forest miracle's tree put down gently, or one ending without going back on the map
+	/// It stays where it is put, standing, without taking root again: a forest miracle's tree put down gently, or one
+	/// ending without going back on the map
 	Stays,
 	/// It takes root again where it was put down
 	Replanted,
@@ -38,6 +39,9 @@ enum class TreeLanding : uint8_t
 /// A tree put down gently on land and not burning takes root again; a forest miracle's tree put down gently just stays;
 /// anything else (thrown, dropped tilted, in the water, burning) dies
 [[nodiscard]] TreeLanding TreeLandingOf(bool putDownGently, bool forestMiracleTree, bool onLand, bool burning);
+/// Whether a tree whose flight ended so stands on the land at its foot afterwards: one replanted, and a forest miracle's
+/// tree put down gently, which stands on the land as a replanted tree does without being planted again
+[[nodiscard]] bool StandsOnLandAfter(TreeLanding landing);
 
 /// A replanted tree looks for company over this many cells of a spiral round it
 inline constexpr int k_ReplantSearchCells = 1000;

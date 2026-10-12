@@ -48,6 +48,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
@@ -71,6 +72,7 @@
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -380,7 +382,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Abode::inhabitants>("inhabitants")
 	    .Field<&components::Abode::couple>("couple")
 	    .Field<&components::Abode::presentAtHome>("presentAtHome")
-	    .Field<&components::Abode::info>("info");
+	    .Field<&components::Abode::info>("info")
+	    .Field<&components::Abode::putUpForMending>("putUpForMending");
 	Reflect<components::Alignment>(context)
 	    .Field<&components::Alignment::value>("value")
 	    .Field<&components::Alignment::pending>("pending");
@@ -479,6 +482,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::bank>("bank")
 	    .Field<&components::AudioEmitter::group>("group");
 	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
+	Reflect<components::BlendedByMaterial> {context};
 	Reflect<components::Lover>(context).Field<&components::Lover::partner>("partner");
 	Reflect<components::BreederSpot>(context).Field<&components::BreederSpot::spot>("spot");
 	Reflect<components::BuildingDamage>(context)
@@ -525,7 +529,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlannedAbode>(context)
 	    .Field<&components::PlannedAbode::townId>("townId")
 	    .Field<&components::PlannedAbode::info>("info")
-	    .Field<&components::PlannedAbode::yAngle>("yAngle");
+	    .Field<&components::PlannedAbode::yAngle>("yAngle")
+	    .Field<&components::PlannedAbode::wasBuilt>("wasBuilt");
 	Reflect<components::BuildingSite>(context)
 	    .Field<&components::BuildingSite::town>("town")
 	    .Field<&components::BuildingSite::desire>("desire")
@@ -717,6 +722,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
 	    .Field<&components::CreatureMindState::turnsLookedAt>("turnsLookedAt")
+	    .Field<&components::CreatureMindState::beliefs>("beliefs")
+	    .Field<&components::CreatureMindState::sweep>("sweep")
+	    .Field<&components::CreatureMindState::beliefCell>("beliefCell")
+	    .Field<&components::CreatureMindState::nearestTemple>("nearestTemple")
 	    .Field<&components::CreatureMindState::feedbackSeconds>("feedbackSeconds")
 	    .Field<&components::CreatureMindState::feedbackWasStroke>("feedbackWasStroke")
 	    .Field<&components::CreatureMindState::attitudeToPlayer>("attitudeToPlayer")
@@ -1341,7 +1350,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Reward::madeAt>("madeAt")
 	    .Field<&components::Reward::goesIntoMap>("goesIntoMap")
 	    .Field<&components::Reward::dustMilliseconds>("dustMilliseconds")
-	    .Field<&components::Reward::dust>("dust");
+	    .Field<&components::Reward::dust>("dust")
+	    .Field<&components::Reward::opened>("opened")
+	    .Field<&components::Reward::turnsLeft>("turnsLeft")
+	    .Field<&components::Reward::clipPlace>("clipPlace");
 	Reflect<components::RewardOnLand> {context};
 	Reflect<components::RisingSoul>(context)
 	    .Field<&components::RisingSoul::mesh>("mesh")
@@ -1791,6 +1803,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WallHugObjectReference::centre>("centre")
 	    .Field<&components::WallHugObjectReference::radius>("radius")
 	    .Field<&components::WallHugObjectReference::entryDistance>("entryDistance");
+	Reflect<components::WallHugLookahead>(context)
+	    .Field<&components::WallHugLookahead::tried>("tried")
+	    .Field<&components::WallHugLookahead::spareAsItGoes>("spareAsItGoes")
+	    .Field<&components::WallHugLookahead::spareTurnedRound>("spareTurnedRound")
+	    .Field<&components::WallHugLookahead::turnedRound>("turnedRound")
+	    .Field<&components::WallHugLookahead::landingShutIn>("landingShutIn");
 	Reflect<components::WallHug>(context)
 	    .Field<&components::WallHug::goal>("goal")
 	    .Field<&components::WallHug::step>("step")
@@ -2191,6 +2209,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::sequence>("sequence")
 	    .Field<&openblack::creature_mind::Step::untilRested>("untilRested")
 	    .Field<&openblack::creature_mind::Step::holdLoop>("holdLoop")
+	    .Field<&openblack::creature_mind::Step::mirrorAtRandom>("mirrorAtRandom")
 	    .Field<&openblack::creature_mind::Step::closedEyes>("closedEyes")
 	    .Field<&openblack::creature_mind::Step::effect>("effect")
 	    .Field<&openblack::creature_mind::Step::object>("object")
@@ -2217,6 +2236,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_morph::Morph::evilGood>("evilGood")
 	    .Field<&openblack::creature_morph::Morph::thinFat>("thinFat")
 	    .Field<&openblack::creature_morph::Morph::weakStrong>("weakStrong");
+	Reflect<openblack::creature_object_beliefs::Sweep>(context, ValueOnly {})
+	    .Field<&openblack::creature_object_beliefs::Sweep::left>("left")
+	    .Field<&openblack::creature_object_beliefs::Sweep::ring>("ring")
+	    .Field<&openblack::creature_object_beliefs::Sweep::step>("step");
 	Reflect<openblack::creature_perceived_desires::PerceivedDesires>(context, ValueOnly {})
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::player>("player")
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::town>("town");

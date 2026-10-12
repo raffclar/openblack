@@ -25,6 +25,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -113,9 +114,10 @@ void CreaturePenSystem::ProcessTurn(ecs::Registry& registry) const
 				}
 				leash->home = glm::vec3(pen->x, _world.groundAt(*pen), pen->y);
 			}
-			// Temples are only ever made built, so the pen always works
+			// The home follows a temple still going up, but the pen only shrinks the creature once the temple is built
 			const auto* templeTransform = registry.TryGet<const Transform>(*temple);
-			if (leash != nullptr && leash->home.has_value() && templeTransform != nullptr)
+			const bool built = !registry.AllOf<BuildProgress>(*temple);
+			if (built && leash != nullptr && leash->home.has_value() && templeTransform != nullptr)
 			{
 				const auto distance = gutils::GetDistanceInMetres(transform.position, *leash->home);
 				if (distance <= temple_pen::k_OuterRadius)

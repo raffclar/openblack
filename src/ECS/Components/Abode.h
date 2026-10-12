@@ -36,6 +36,9 @@ struct Abode
 	uint32_t presentAtHome {0};
 	/// Its row in the buildings' table
 	AbodeInfo info {AbodeInfo::None};
+	/// Its town has put it up for mending, or it went up again from a plan of a finished building, and it hasn't been
+	/// made whole since: its town doesn't put it up again
+	bool putUpForMending {false};
 };
 
 } // namespace openblack::ecs::components

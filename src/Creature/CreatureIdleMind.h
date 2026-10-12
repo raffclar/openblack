@@ -297,6 +297,8 @@ struct Step
 	bool untilRested {false};
 	/// A static step's loop holds the last frame of its start, as lying out cold
 	bool holdLoop {false};
+	/// A static step plays left to right half the time, chosen as it starts
+	bool mirrorAtRandom {false};
 	/// Played with the eyes closed
 	bool closedEyes {false};
 	/// What the step does to the body: when an action is done (eating, as it starts), or a static step's loop ends
@@ -449,6 +451,7 @@ enum class Eyes : uint8_t
 struct Commands
 {
 	std::optional<size_t> playOnce;
+	/// The action played once, or the start, loop and end, plays left to right
 	bool mirrored {false};
 	/// A start, loop and end to play, the loop held on its last frame or not, and the end of the loop playing now
 	std::optional<std::array<size_t, 3>> startSequence;

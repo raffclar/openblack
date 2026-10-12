@@ -40,6 +40,7 @@
 #include "ECS/TownDesire.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TownHomes.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -167,6 +168,14 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		if (const auto* info = FindAbodeInfo(tribe, static_cast<AbodeNumber>(i)); info != nullptr)
 		{
 			in.populationWhenNeeded.at(i) = info->populationWhenNeeded;
+		}
+	}
+	// Its plans, those of finished buildings that went wanting repair
+	for (const auto plan : town.planned)
+	{
+		if (registry.Valid(plan))
+		{
+			in.planRepairDesires.push_back(ecs::town_planning::PlanDesireToBeRepaired(plan));
 		}
 	}
 	in.homeless = static_cast<uint32_t>(town.homelessVillagers.size());

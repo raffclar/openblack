@@ -46,6 +46,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureScriptPlay.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -62,6 +63,7 @@
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
@@ -70,6 +72,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Physics.h"
@@ -102,23 +105,32 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -377,6 +389,10 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		registry.AssignOrReplace<ecs::components::Poisoned>(entity);
 	}
+	if (object.indestructible)
+	{
+		registry.AssignOrReplace<ecs::components::Indestructible>(entity);
+	}
 }
 } // namespace
 
@@ -403,6 +419,7 @@ void Runner::Start(const Scenario& scenario)
 	_timeline = {};
 	_creatures.clear();
 	_objects.clear();
+	_temples.clear();
 	_throwsDue.clear();
 	for (const auto& setup : scenario.throws)
 	{
@@ -509,6 +526,7 @@ void Runner::Start(const Scenario& scenario)
 		_particles.push_back({StartParticle(i), 0.0f});
 	}
 	_vortices.assign(scenario.vortices.size(), {});
+	_rewards.assign(scenario.rewards.size(), entt::null);
 	Frame(scenario.framing.shot, scenario.framing.creature, scenario.framing.distance);
 	Log(fmt::format("Started {}", scenario.name));
 }
@@ -549,6 +567,15 @@ void Runner::Stop()
 		}
 	}
 	_vortices.clear();
+	// Its reward chests go, opened or not
+	for (const auto chest : _rewards)
+	{
+		if (chest != entt::null && Locator::entitiesRegistry::value().Valid(chest))
+		{
+			Locator::entitiesRegistry::value().Destroy(chest);
+		}
+	}
+	_rewards.clear();
 	// Its held miracles stop, and the hand is the mouse's again
 	if (Locator::magicSystem::has_value())
 	{
@@ -753,6 +780,20 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		return;
 	}
 	const auto& land = Locator::terrainSystem::value();
+	// A forest the trees are given that the land doesn't have yet is made where its first tree stands, as the land's
+	// script makes its forests before planting them
+	if (Locator::forestSystem::has_value())
+	{
+		auto& forests = Locator::forestSystem::value();
+		for (const auto& object : scenario.objects)
+		{
+			if (std::holds_alternative<TreeInfo>(object.type) && object.forest != 0 && !forests.LandForestOf(object.forest))
+			{
+				const auto point = MapPoint(middle, object.offset);
+				forests.MakeLandForest(object.forest, {point.x, land.GetHeightAt(point), point.y}, entt::null, false);
+			}
+		}
+	}
 	for (const auto& object : scenario.objects)
 	{
 		const auto point = MapPoint(middle, object.offset);
@@ -787,9 +828,19 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, AbodeInfo>)
 			    {
+				    if (object.planned)
+				    {
+					    const auto plan = ecs::archetypes::AbodeArchetype::CreatePlan(ScenarioTown(middle), position, type, yaw,
+					                                                                  object.scale);
+					    if (auto* planned = Locator::entitiesRegistry::value().TryGet<ecs::components::PlannedAbode>(plan))
+					    {
+						    planned->wasBuilt = object.wasBuilt;
+					    }
+					    return plan;
+				    }
 				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
 				                                                   object.storedFood.value_or(k_ScenarioTownFood),
-				                                                   k_ScenarioTownWood);
+				                                                   object.storedWood.value_or(k_ScenarioTownWood));
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {
@@ -832,8 +883,13 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 	for (const auto& setup : scenario.temples)
 	{
 		const auto point = MapPoint(middle, setup.offset);
-		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, setup.angle,
-		                                          glm::vec3(1.0f));
+		const auto temple = ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner,
+		                                                              setup.angle, glm::vec3(1.0f));
+		if (setup.built.has_value())
+		{
+			ecs::construction::SetBuilt(temple, *setup.built);
+		}
+		_temples.push_back(temple);
 	}
 	if (!Locator::animalSystem::has_value())
 	{
@@ -1448,6 +1504,12 @@ void Runner::Give(const Command& command)
 		Log(line);
 		return;
 	}
+	if (command.kind == Kind::Reframe)
+	{
+		Frame(_scenario->framing.shot, _scenario->framing.creature, _scenario->framing.distance);
+		Log(fmt::format("{:.1f}s: the camera is put back", _seconds));
+		return;
+	}
 	if (command.kind == Kind::SetHour)
 	{
 		if (Locator::skySystem::has_value())
@@ -1474,6 +1536,40 @@ void Runner::Give(const Command& command)
 			Locator::alignmentSystem::value().SetPlayerAlignment(command.player, command.alignment);
 		}
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
+		return;
+	}
+	if (command.kind == Kind::RunHelpMessage)
+	{
+		const bool started =
+		    Locator::helpMessageSystem::has_value() && Locator::helpMessageSystem::value().RunMessageSet(command.value);
+		Log(fmt::format("{:.1f}s: the help message set {} {}", _seconds, command.value, started ? "runs" : "doesn't run"));
+		return;
+	}
+	if (command.kind == Kind::DestroyTemple)
+	{
+		const bool known = command.value < _temples.size();
+		if (known && Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().Start(_temples.at(command.value));
+		}
+		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
+		return;
+	}
+	if (command.kind == Kind::RunText)
+	{
+		// Not alone on its line and not waiting for a click, as the lessons' texts are shown
+		const bool shown = Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().IsStarted() &&
+		                   Locator::helpTextSystem::value().RunText(false, static_cast<uint32_t>(command.value), 0);
+		Log(fmt::format("{:.1f}s: help text {} {}", _seconds, command.value, shown ? "shown" : "not shown"));
+		return;
+	}
+	if (command.kind == Kind::PlayHandDemo)
+	{
+		if (Locator::handDemoSystem::has_value())
+		{
+			Locator::handDemoSystem::value().Play(command.handDemo, 0, false, false);
+		}
+		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
 		return;
 	}
 	if (command.kind == Kind::WideScreen)
@@ -1511,6 +1607,13 @@ void Runner::Give(const Command& command)
 	case Kind::RunTo:
 		result =
 		    MoveResultName(locomotion.MoveTo(*entity, point, command.kind == Kind::RunTo ? Pace::Run : Pace::Walk, 0.0f, 1.0f));
+		break;
+	case Kind::ScriptPlay:
+		result = minds.CarryOutForScript(
+		             *entity, creature_script_play::Agenda({.animation = static_cast<int32_t>(command.value),
+		                                                    .plays = static_cast<uint32_t>(std::lround(command.amount))}))
+		             ? "playing"
+		             : "can't";
 		break;
 	case Kind::WalkHome:
 		if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
@@ -1652,9 +1755,14 @@ void Runner::Give(const Command& command)
 	case Kind::HandTapObject:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
+	case Kind::DestroyTemple:
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::RunHelpMessage:
+	case Kind::RunText:
+	case Kind::PlayHandDemo:
+	case Kind::Reframe:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
@@ -2020,6 +2128,7 @@ void Runner::Update(float seconds)
 	SpawnCrowd();
 	UpdateParticles(seconds);
 	UpdateVortices();
+	UpdateRewards();
 	UpdateMiracles(seconds);
 	UpdateVillagerWalks();
 	UpdateThrows();
@@ -2222,6 +2331,8 @@ void Runner::UpdateVillagerWalks()
 				const auto goal = MapPoint(_middle, walk.outwards ? *setup.walkTo : setup.offset);
 				ecs::villager_home::SetupMoveTo(registry.Get<ecs::components::LivingAction>(entity), goal, setup.walkFinal);
 				Log(fmt::format("Villager {} walks {}", i, walk.outwards ? "out" : "back"));
+				walk.goal = goal;
+				walk.setOffTurn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 				walk.outwards = !walk.outwards;
 				walk.nextAt =
 				    setup.walkRepeatSeconds.has_value() ? std::optional(*walk.nextAt + *setup.walkRepeatSeconds) : std::nullopt;
@@ -2230,6 +2341,12 @@ void Runner::UpdateVillagerWalks()
 					walk.outwards = false;
 				}
 			}
+		}
+		// How long each walk took, in game turns, for comparing walks round things in the way
+		if (walk.setOffTurn.has_value() && Locator::time::has_value() && ecs::villager_home::WalkIsOverAt(entity, walk.goal))
+		{
+			Log(fmt::format("Villager {} got there in {} turns", i, Locator::time::value().GetTurn() - *walk.setOffTurn));
+			walk.setOffTurn.reset();
 		}
 		if (setup.worshipAt.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
 		    Locator::teleportSystem::has_value() && Locator::terrainSystem::has_value())
@@ -2450,6 +2567,29 @@ void Runner::UpdateVortices()
 			running.fading = vortices.StartFadeOut(running.vortex);
 			Log(fmt::format("Vortex {} fading out", i));
 		}
+	}
+}
+
+void Runner::UpdateRewards()
+{
+	if (!Locator::rewardSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	for (size_t i = 0; i < _rewards.size(); ++i)
+	{
+		const auto& setup = _scenario->rewards.at(i);
+		if (_rewards.at(i) != entt::null || _seconds < setup.delaySeconds)
+		{
+			continue;
+		}
+		const auto point = MapPoint(_middle, setup.offset);
+		const glm::vec3 at {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y};
+		_rewards.at(i) = Locator::rewardSystem::value().Create(at, setup.type, player, entt::null, setup.fromSky);
+		Log(fmt::format("Reward chest {} (kind {}) given at {:.0f}, {:.0f}", i, static_cast<int>(setup.type), point.x,
+		                point.y));
 	}
 }
 

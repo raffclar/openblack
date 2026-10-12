@@ -138,6 +138,10 @@ struct Kind
 };
 [[nodiscard]] Kind KindOf(VillagerDisciple type);
 
+/// The work a script names for a villager by its number: one of the kinds from none to coming from the vortex, nothing
+/// for any other number (the villager is left as it is)
+[[nodiscard]] std::optional<VillagerDisciple> FromScript(int32_t number);
+
 /// The cell of the hand's symbol sheet showing a disciple of a kind, eight to a row; none for a kind with no symbol
 [[nodiscard]] std::optional<uint32_t> SymbolCell(VillagerDisciple type);
 

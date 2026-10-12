@@ -459,6 +459,9 @@ private:
 	/// developers' start), which leaves the land as it is rather than black at its start
 	bool AskNewGameChoice();
 	void HandleInterfaceAction();
+	/// Escape in play with no dialog open: the menu opens, unless a script's cut scene is on, and a help script holding
+	/// the dialogue stops
+	void HandleEscapeInPlay(uint16_t keyModifiers);
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
 	/// is held to, or over
 	void UpdateHandInterface();
@@ -506,5 +509,7 @@ private:
 	/// Whether the game was paused when the menu opened, which pauses it
 	bool _pausedBeforeMenu {true};
 	bool _menuWasOpen {false};
+	/// When the menu last closed, on the computer's clock
+	std::optional<std::chrono::steady_clock::time_point> _menuClosedAt;
 };
 } // namespace openblack

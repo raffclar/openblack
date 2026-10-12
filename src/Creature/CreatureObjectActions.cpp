@@ -118,3 +118,8 @@ bool creature_object_actions::ThrowOver(bool animationOver, bool waitsForLanding
 {
 	return animationOver && !(waitsForLanding && thrownFlying);
 }
+
+bool creature_object_actions::BringsBackUp(bool indestructible, bool heldDuringCutscene)
+{
+	return indestructible || heldDuringCutscene;
+}
