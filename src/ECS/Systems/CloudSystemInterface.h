@@ -23,6 +23,9 @@ public:
 	virtual void Reset() = 0;
 	/// Moves the clouds with the wind by the game time that has passed, which stops while the game is paused
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// Every storm gathers its own clouds, one a frame up to its count, and they wander over it with the frames drawn;
+	/// those of storms that have gone go with them
+	virtual void UpdateStormClouds(std::chrono::milliseconds frameRealTime) = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -1814,6 +1814,8 @@ bool Game::Update() noexcept
 	}
 	// The clouds drift with the wind, then every mist and cloud animates
 	Locator::cloudSystem::value().Update(gameTime);
+	// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
+	Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), camera.GetOrigin());
 	// The static the fizzing creatures are drawn through slides across them
