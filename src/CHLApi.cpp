@@ -97,6 +97,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/NeverFades.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
@@ -3888,10 +3889,18 @@ void CountdownTimerExists() // 099 COUNTDOWN_TIMER_EXISTS
 
 void LookGameThing() // 100 LOOK_GAME_THING
 {
-	// const auto target = Pop().uintVal;
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The advisor comes out and keeps looking at the thing, wherever it goes, until it is gone or told otherwise
+	const auto target = PopObject();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (target == entt::null || !Locator::entitiesRegistry::value().Valid(target))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		return;
+	}
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritLookObject(spirit, entt::to_integral(target));
+	}
 }
 
 void GetObjectDestination() // 101 GET_OBJECT_DESTINATION
@@ -5029,12 +5038,26 @@ void MusicPlayed191() // 191 MUSIC_PLAYED
 
 void IsOfType() // 192 IS_OF_TYPE
 {
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether a thing is of a script type and subtype, the subtype 5000 meaning any of the type
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	const auto object = PopObject();
+	constexpr int32_t k_LastType = 41;
+	if (type < 1 || type > k_LastType)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script object type {} out of range", type);
+		Pushb(false);
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushb(false);
+		return;
+	}
+	const auto kind = ecs::script_find::KindOf(registry, object);
+	Pushb(kind.has_value() && ecs::script_find::Matches(*kind, static_cast<ObjectType>(type), subtype));
 }
 
 void ClearHitObject() // 193 CLEAR_HIT_OBJECT
@@ -7011,17 +7034,19 @@ void ThingJcSpecial() // 349 THING_JC_SPECIAL
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
 		return;
 	}
-	// The orders are for a thing drawn in high detail and are ignored by anything else
+	if (special == ecs::high_detail_rules::ThingSpecial::NeverFade)
+	{
+		// The one order any thing takes, drawn in high detail or not: it stays in view however far off it is, whatever
+		// `on` says
+		Locator::entitiesRegistry::value().AssignOrReplace<ecs::components::NeverFades>(target);
+		return;
+	}
+	// The other orders are for a thing drawn in high detail and are ignored by anything else
 	const bool drawnInHighDetail = Locator::highDetailSystem::value().Order(target, special, on);
 	if (drawnInHighDetail && special == ecs::high_detail_rules::ThingSpecial::ReleaseIntroSpecials)
 	{
 		// Given to one drawn in high detail, the opening's light, its hand and its chasing camera all go
 		Locator::introSystem::value().ReleaseAll();
-	}
-	if (special == ecs::high_detail_rules::ThingSpecial::DrawnObjectSpecial)
-	{
-		// TODO(opening): the drawn object's own special
-		NotImplemented(static_cast<int32_t>(special));
 	}
 }
 
