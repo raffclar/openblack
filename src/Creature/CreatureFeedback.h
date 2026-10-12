@@ -204,4 +204,33 @@ constexpr float k_BodyRadiusShare = 0.12f;
 /// Where a line of sight first touches the body, as how many of the direction's lengths along it, if it does
 [[nodiscard]] std::optional<float> RayHit(const glm::vec3& origin, const glm::vec3& direction,
                                           std::span<const Capsule> capsules);
+/// The way out of the body at a point on it: from the nearest capsule's line, or straight up if the point is on it
+[[nodiscard]] glm::vec3 SurfaceNormal(const glm::vec3& point, std::span<const Capsule> capsules);
+
+/// Held to a creature, the hand's up eases round: taking hold it starts pointing from the creature towards the camera; on
+/// the body, as the cursor moves across the screen, it turns to the body's surface tipped towards the camera over 0.9
+/// seconds; off the body it stands back up over 2.5 seconds; resting still on the body it keeps turning as it was.
+constexpr float k_HandStartSeconds = 1.0f;
+constexpr float k_HandTurnsToBodySeconds = 0.9f;
+constexpr float k_HandStandsUpSeconds = 2.5f;
+/// How much the camera's way counts beside the body's surface in the hand's up on the body
+constexpr float k_HandTowardsCamera = 0.4f;
+struct HandUpGlide
+{
+	glm::vec3 destination;
+	float seconds;
+};
+/// The hand's up when it takes hold of the creature
+[[nodiscard]] glm::vec3 HandUpOnTakingHold(const glm::vec3& creaturePosition, const glm::vec3& camera);
+/// Where the hand's up is sent this frame, if anywhere. normal is the way out of the body where the hand touches it.
+[[nodiscard]] std::optional<HandUpGlide> HandUpGlideTo(bool onBody, bool cursorMoved, const glm::vec3& normal,
+                                                       const glm::vec3& creaturePosition, const glm::vec3& camera);
+
+/// Held by the hand, the creature looks at the hand, at a point a little nearer the camera than it; with the hand near
+/// its middle it looks at the camera instead. Shares of its height.
+constexpr float k_LooksAtCameraWithin = 0.6f;
+constexpr float k_LooksNearerTheCamera = 0.3f;
+/// lineOfSight is the way from the camera through the cursor
+[[nodiscard]] glm::vec3 HeldLookPoint(const glm::vec3& hand, const glm::vec3& middle, const glm::vec3& camera,
+                                      const glm::vec3& lineOfSight, float creatureHeight);
 } // namespace openblack::creature_feedback

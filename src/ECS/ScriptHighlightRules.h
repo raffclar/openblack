@@ -22,6 +22,7 @@
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
+#include "Particles/RisingSparks.h"
 
 /// The rules of the scrolls and signs scripts put up (see ScriptHighlight), free of the game so that tests can check them
 namespace openblack::ecs::script_highlights
@@ -56,9 +57,8 @@ void StepPulse(Pulse& pulse, float millisecondsPerTurn);
 /// A started scroll stands in a beam of light; a sign never has one
 [[nodiscard]] bool BeamShown(HighlightInfo kind, bool active);
 /// The colour of the beam a started scroll stands in, as 0xAARRGGBB: a faint pale blue one for silver; a yellow one for
-/// the others, whose alpha is the whole part of the beat times 80. The beat only reaches a whole 1 on the rare turn
-/// whose level is exactly 1 and then only on a frame at the very start of the next turn, so the yellow beam is nearly
-/// never seen
+/// the others, whose alpha is the beat times 80, so it beats from 32 to 80. The game cut the beat to a whole number
+/// first, which hid the yellow beam almost always; openblack shows it as intended (see docs/deviations.md)
 [[nodiscard]] uint32_t BeamColour(HighlightInfo kind, double pulseShare);
 
 /// An angle brought to a turn, as the game brings it, by whole turns towards none
@@ -86,47 +86,20 @@ void StepPulse(Pulse& pulse, float millisecondsPerTurn);
 constexpr uint32_t k_GlowPicture = 0;
 constexpr uint32_t k_GlowSheetPictures = 8;
 
-/// The sparks a gold scroll sends up from the top of its model, whether started or not: twenty, starting 0.4 seconds
-/// apart, each rising 20 metres over 8 seconds of the frames' game time (faster as it goes), shrinking from 2 to 1.2
-/// metres across, fading in over 5 seconds and out over the last 3, turned its own random way, and going through the
-/// first sprite sheet's first 32 pictures, one each 50 milliseconds. Each starts again, turned another way, once its 8
-/// seconds are up. Their time passes only while the scroll is drawn.
+/// A gold scroll sends up a shower of sparks from the top of its model, whether started or not
 [[nodiscard]] constexpr bool SendsSparks(HighlightInfo kind)
 {
 	return kind == HighlightInfo::Gold;
 }
-constexpr size_t k_Sparks = 20;
-constexpr int32_t k_SparkLifeMilliseconds = 8000;
-struct Spark
-{
-	/// Milliseconds since it started; it waits to start while this is below none
-	int32_t ageMilliseconds {0};
-	/// Its turn in the picture, in radians
-	float angle {0.0f};
-};
-struct Sparks
-{
-	std::array<Spark, k_Sparks> sparks {};
-	/// The picture the first spark starts at, of 32
-	uint32_t firstPicture {0};
-};
-/// A random angle up to a whole turn, and a random number below 32, from the game's local random numbers
-[[nodiscard]] Sparks MakeSparks(const std::function<float(float)>& randomFloat,
-                                const std::function<uint32_t(uint32_t)>& random);
-/// The sparks as a frame of the game's time passes
-void StepSparks(Sparks& sparks, uint32_t gameMilliseconds, const std::function<float(float)>& randomFloat);
-/// How a spark is drawn: where, its half size, how much of its colour it adds (of 255), its picture of the sheet and its
-/// turn; none while it waits to start. `from` is the top of the scroll's model.
-struct SparkLook
-{
-	glm::vec3 position {0.0f};
-	float halfSize {0.0f};
-	uint8_t alpha {0};
-	uint32_t picture {0};
-	float angle {0.0f};
-};
-[[nodiscard]] std::optional<SparkLook> LookOf(const Sparks& sparks, size_t index, glm::vec3 from);
-constexpr uint32_t k_SparkSheetPictures = 8;
+using particles::rising_sparks::k_SparkLifeMilliseconds;
+using particles::rising_sparks::k_Sparks;
+using particles::rising_sparks::k_SparkSheetPictures;
+using particles::rising_sparks::LookOf;
+using particles::rising_sparks::MakeSparks;
+using Spark = particles::rising_sparks::Spark;
+using SparkLook = particles::rising_sparks::SparkLook;
+using Sparks = particles::rising_sparks::Sparks;
+using particles::rising_sparks::StepSparks;
 
 /// A scroll is picked under the cursor by a ball a little larger than its model; a sign by its model
 [[nodiscard]] constexpr bool PickedByBall(HighlightInfo kind)

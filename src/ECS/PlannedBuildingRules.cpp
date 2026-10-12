@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <numbers>
 
 using namespace openblack;
 using namespace openblack::ecs::planned_building;
@@ -193,4 +194,23 @@ bool planned_building::IsClearToBuild(std::span<const FootprintCell> footprint, 
 		}
 	}
 	return true;
+}
+
+std::vector<std::optional<size_t>>
+planned_building::StartedByScript(std::span<const std::vector<building_construction::PlannedCandidate>> towns, glm::vec2 place)
+{
+	std::vector<std::optional<size_t>> started;
+	started.reserve(towns.size());
+	for (const auto& planned : towns)
+	{
+		started.push_back(building_construction::PlannedAt(planned, place));
+	}
+	return started;
+}
+
+float planned_building::YAngleOf(const glm::mat3& rotation)
+{
+	// Read back from where the building's own east side points, as it was turned when placed
+	const float angle = std::atan2(rotation[0][2], rotation[0][0]);
+	return angle < 0.0f ? angle + (2.0f * std::numbers::pi_v<float>) : angle;
 }

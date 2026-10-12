@@ -184,7 +184,7 @@ uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates dance
 		auto& living = Locator::livingActionSystem::value();
 		if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, danceState))
 		{
-			villager_home::SetupMobileMoveTo(action, map_coords::ToMetres(slot), danceState);
+			villager_home::SetupMobileMoveTo(action, map_coords::ToMetres(slot));
 		}
 		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::MoveToDancePos, true);
 	}

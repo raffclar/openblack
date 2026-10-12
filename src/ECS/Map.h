@@ -45,6 +45,11 @@ public:
 	[[nodiscard]] virtual std::span<const entt::entity> GetMobileInGridCell(const glm::vec3& pos) const = 0;
 	/// Everything in a cell as a search meets it, none for a cell off the map
 	[[nodiscard]] virtual std::vector<entt::entity> GetAllInCell(glm::ivec2 cell) const = 0;
+	/// What stands on a land block (by its column and row), in the order the game keeps it for drawing; none for a
+	/// block the land hasn't
+	[[nodiscard]] virtual std::span<const entt::entity> GetOnBlock(glm::ivec2 block) const = 0;
+	/// What stands in cells of no land block, in the same order
+	[[nodiscard]] virtual std::span<const entt::entity> GetOffBlocks() const = 0;
 
 	/// Once a game turn, and after the turn's movement: whatever moved to another cell goes into it, as the game moves
 	/// things into their new cells

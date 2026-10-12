@@ -14,14 +14,18 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+namespace openblack::ecs::components
+{
+struct BuildingSite;
+} // namespace openblack::ecs::components
+
 /// Buildings going up in the world, the temple first: a town's planned temple started by a script, how much of a
 /// building is built as scripts and builders change it, and what a temple does once it is finished
 namespace openblack::ecs::construction
 {
 
-/// A script asks the towns to build what they planned at a place with a desire: the planned temple nearest it, if any is
-/// near enough, starts going up with nothing of it built and a site for its builders. The temple it started, if any.
-std::optional<entt::entity> StartPlannedAt(glm::vec3 place, float scriptDesire);
+/// The reach across the ground of a planned temple: its model's larger half width, scaled
+[[nodiscard]] float PlannedTempleReach(entt::entity plan);
 
 /// A planned temple starts going up where it was planned, with nothing of it built and a site for its builders wanting
 /// them by a desire; it is no longer among its town's plans. The temple.
@@ -43,20 +47,27 @@ void SetBuilt(entt::entity building, float built);
 /// starts working again as when it was built (a graveyard counts a burial and takes its town back).
 void BuildBy(entt::entity building, float amount);
 
-/// A building going up gets a site for its builders, with a desire, its builders' places worked out round its model and,
-/// for a temple, its six piles of wood
+/// A building going up gets a site of its own town's for its builders (a new one, even if the town has one there), with
+/// a desire, its builders' places worked out round its model and, for a temple, its six piles of wood
 void OpenSite(entt::entity building, float desire);
 
-/// A worship site going up becomes a building site of a town asked to build it, wanting builders by a desire; its
-/// builders' places are worked out round its model
+/// A town gets a site at a building, if it has none there, wanting builders no more than for its other building; its
+/// builders' places are worked out round its model. Whether the town has a site there.
+bool OpenSiteForTown(entt::entity building, entt::entity town);
+
+/// A town asked to build a worship site going up gets a site of its own there, if it has none, which wants builders by a
+/// desire
 void OpenWorshipSite(entt::entity site, entt::entity town, float desire);
 
-/// A temple's site makes again those of its six piles of wood that have gone; a worship site's makes its one pile if it
-/// has none
-void MakeSitePiles(entt::entity building);
+/// A temple's site makes again those of its six piles of wood that have gone; any other site makes its one pile if it has
+/// none
+void MakeSitePiles(entt::entity building, components::BuildingSite& site);
 
-/// A building's site goes: its builders are let go of it, and of its piles of wood, those with wood in them stay on as
-/// piles of their own for anyone to take from, and the empty ones go
+/// Every site at a building goes, the one taking brought wood first: its builders are let go of it, and of its piles of
+/// wood, those with wood in them stay on as piles of their own for anyone to take from, and the empty ones go
 void CloseSite(entt::entity building);
+/// A town's site at a building goes, the same way. From then on none of the building's other sites takes wood brought by
+/// a hand or a creature, until another site opens.
+void CloseTownsSite(entt::entity building, entt::entity town);
 
 } // namespace openblack::ecs::construction

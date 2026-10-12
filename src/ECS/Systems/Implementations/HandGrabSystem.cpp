@@ -1079,22 +1079,30 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		// is taken as soon as the hand has pulled it free
 		if (_world->IsFlying(grab->object) || !hand_grab::Tuggable(KindOf(grab->object)))
 		{
-			if (hand_grab::ElapsedMs(frame.nowMs, grab->pressMs, frame.turn, grab->pressTurn) >= hand_grab::k_GrabWaitMs)
+			if (hand_grab::ElapsedMs(frame.nowMs, grab->pressMs, frame.turn, grab->pressTurn) < hand_grab::k_GrabWaitMs)
 			{
-				Take(*grab, grab->object);
+				return frame.target;
 			}
-			return frame.target;
+			Take(*grab, grab->object);
 		}
-		if (!grab->pulling)
+		else if (grab->pulling)
+		{
+			if (!grab->tug.has_value())
+			{
+				StartPull(*grab, frame);
+			}
+			return Pull(*grab, frame);
+		}
+		else
 		{
 			Take(*grab, grab->object);
+		}
+		// Taken, the hand holds it from this frame, risen for it at once
+		if (grab->state != HandGrab::State::Holding)
+		{
 			return frame.target;
 		}
-		if (!grab->tug.has_value())
-		{
-			StartPull(*grab, frame);
-		}
-		return Pull(*grab, frame);
+		break;
 	}
 	case HandGrab::State::Holding:
 	case HandGrab::State::ReadyToThrow:
@@ -1255,8 +1263,8 @@ std::optional<HandGrabSystemInterface::HeldPose> HandGrabSystem::GetHeldPose() c
 std::optional<HandGrabSystemInterface::PullPose> HandGrabSystem::GetPullPose() const
 {
 	const auto* grab = Grab();
-	if (grab == nullptr || grab->state != HandGrab::State::Grabbing || !grab->pulling || !grab->tug.has_value() ||
-	    !Exists(grab->object))
+	// Until the hand holds it, including the frame it comes free, the hand keeps to its pull
+	if (grab == nullptr || grab->state != HandGrab::State::Grabbing || !grab->tug.has_value() || !Exists(grab->object))
 	{
 		return std::nullopt;
 	}

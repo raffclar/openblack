@@ -134,7 +134,7 @@ void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 {
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
 	{
-		villager_home::SetupMobileMoveTo(action, goal, final);
+		villager_home::SetupMobileMoveTo(action, goal);
 	}
 }
 
@@ -208,10 +208,11 @@ float LandAlignmentAt(glm::vec3 position)
 	return field_crop::ClampAlignment(sum);
 }
 
-bool IsWorker(entt::entity building, entt::entity villager)
+/// Whether the villager works at its town's site at the building
+bool IsWorker(entt::entity town, entt::entity building, entt::entity villager)
 {
-	const auto& workers = Entities().Get<const BuildingSite>(building).workers;
-	return std::ranges::find(workers, villager) != workers.end();
+	const auto* site = construction::SiteOf(town, building);
+	return site != nullptr && std::ranges::find(site->workers, villager) != site->workers.end();
 }
 
 /// Whether the villager should fetch wood before building at a site
@@ -220,18 +221,22 @@ bool ShouldIGetWood(entt::entity villager, entt::entity building)
 	auto& registry = Entities();
 	const auto& person = registry.Get<const Villager>(villager);
 	const auto& info = InfoOf(person);
+	const auto town = TownOf(person);
 	std::vector<int16_t> workersWood;
-	for (const auto worker : registry.Get<const BuildingSite>(building).workers)
+	if (const auto* site = construction::SiteOf(town, building))
 	{
-		const auto* other = registry.Valid(worker) ? registry.TryGet<const Villager>(worker) : nullptr;
-		workersWood.push_back(other != nullptr ? other->woodHeld : int16_t {0});
+		for (const auto worker : site->workers)
+		{
+			const auto* other = registry.Valid(worker) ? registry.TryGet<const Villager>(worker) : nullptr;
+			workersWood.push_back(other != nullptr ? other->woodHeld : int16_t {0});
+		}
 	}
 	const auto here = PositionOf(villager);
 	const auto dropOff = DropOffPosition(person).value_or(glm::xz(here));
 	return building_site::ShouldFetchWood({
-	    .woodAtSite = construction::WoodAtSite(building),
+	    .woodAtSite = construction::WoodAtSite(town, building),
 	    .workersWood = workersWood,
-	    .woodNeeded = construction::WoodNeededToBuild(building),
+	    .woodNeeded = construction::WoodNeededToBuild(town, building),
 	    .distanceToBuilding = gutils::GetDistanceInMetres(here, PositionOf(building)),
 	    .distanceToDropOff = gutils::GetDistanceInMetres(dropOff, glm::xz(here)),
 	    .woodHeld = person.woodHeld,
@@ -248,10 +253,10 @@ int32_t WoodRoom(const Villager& villager)
 	                                                 static_cast<int32_t>(info.maxWoodCarried)));
 }
 
-/// Where a site's place is on the ground
-glm::vec2 PlacePosition(entt::entity building, uint32_t place)
+/// Where a place of the town's site at the building is on the ground
+glm::vec2 PlacePosition(entt::entity town, entt::entity building, uint32_t place)
 {
-	return glm::xz(Entities().Get<const BuildingSite>(building).places.at(place));
+	return glm::xz(construction::SiteOf(town, building)->places.at(place));
 }
 
 uint32_t ToBuildingSite(LivingAction& action, entt::entity building)
@@ -263,7 +268,7 @@ uint32_t ToBuildingSite(LivingAction& action, entt::entity building)
 	{
 		return 0;
 	}
-	if (!IsWorker(building, villager) && construction::BuildersNeeded(building) <= 0 && !BuilderDisciple(person))
+	if (!IsWorker(town, building, villager) && construction::BuildersNeeded(town, building) <= 0 && !BuilderDisciple(person))
 	{
 		return 0;
 	}
@@ -274,7 +279,7 @@ uint32_t ToBuildingSite(LivingAction& action, entt::entity building)
 	const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
 	const float angle = gutils::Get3DAngleFromXZ(GroundOf(building), GroundOf(villager));
 	builder.buildPlace = static_cast<int32_t>(building_site::PlaceAt(building_site::FirstPlaceAngle(angle, random)));
-	const auto goal = PlacePosition(building, static_cast<uint32_t>(builder.buildPlace));
+	const auto goal = PlacePosition(town, building, static_cast<uint32_t>(builder.buildPlace));
 	if (gutils::GetDistanceInMetres(GroundOf(villager), goal) <= k_HugDistance)
 	{
 		MoveTo(action, goal, VillagerStates::ArrivesAtBuildingSite);
@@ -314,9 +319,9 @@ uint32_t GotoStoragePitForBuildingMaterials(LivingAction& action, entt::entity b
 	{
 		return 0;
 	}
-	if (!IsWorker(building, villager))
+	if (!IsWorker(town, building, villager))
 	{
-		if (construction::BuildersNeeded(building) <= 0 && !BuilderDisciple(person))
+		if (construction::BuildersNeeded(town, building) <= 0 && !BuilderDisciple(person))
 		{
 			return 0;
 		}
@@ -389,9 +394,9 @@ std::optional<entt::entity> BestSite(entt::entity villager, entt::entity town, b
 	for (const auto building : sites)
 	{
 		const auto edge = construction::NearestEdgeToPos(building, here);
-		candidates.push_back({.wantsBuilders = construction::BuildersNeeded(building) > 0,
+		candidates.push_back({.wantsBuilders = construction::BuildersNeeded(town, building) > 0,
 		                      .distanceToEdge = gutils::GetDistanceInMetres(here, edge),
-		                      .desireForVillagers = construction::DesireForVillagers(building)});
+		                      .desireForVillagers = construction::DesireForVillagers(town, building)});
 	}
 	const auto best = building_site::BestSite(candidates, disciple);
 	return best.has_value() ? std::optional(sites[*best]) : std::nullopt;
@@ -476,6 +481,12 @@ uint32_t villager_build::GotoBuildingSite(LivingAction& action, entt::entity bui
 
 uint32_t villager_build::TakeUpSite(LivingAction& action, entt::entity building)
 {
+	// Its town opens a site at the building first if it has none there, whatever state the building is in
+	const auto town = TownOf(VillagerOf(action));
+	if (town == entt::null || !construction::OpenSiteForTown(building, town))
+	{
+		return 0;
+	}
 	return SetupBuildingObject(action, building);
 }
 
@@ -523,8 +534,8 @@ uint32_t villager_build::CheckSatisfyToRepair(LivingAction& action)
 	candidates.reserve(sites.size());
 	for (const auto building : sites)
 	{
-		candidates.push_back({.repair = construction::IsRepairSite(building),
-		                      .desireToBeRepaired = construction::SiteDesireToBeRepaired(building)});
+		candidates.push_back({.repair = construction::IsRepairSite(town, building),
+		                      .desireToBeRepaired = construction::SiteDesireToBeRepaired(town, building)});
 	}
 	const auto best = building_site::BestRepairSite(candidates);
 	return best.has_value() && SetupBuildingObject(action, sites[*best]) == 1 ? 1 : 0;
@@ -598,10 +609,11 @@ uint32_t villager_build::ArrivesAtBuildingSite(LivingAction& action)
 	const auto villager = EntityOf(action);
 	auto& person = VillagerOf(action);
 	const auto building = person.buildingSite;
-	if (building != entt::null && construction::IsSiteValid(TownOf(person), building) && person.buildPlace >= 0 &&
+	const auto town = TownOf(person);
+	if (building != entt::null && construction::IsSiteValid(town, building) && person.buildPlace >= 0 &&
 	    person.buildPlace < static_cast<int32_t>(building_site::k_Places))
 	{
-		const auto place = PlacePosition(building, static_cast<uint32_t>(person.buildPlace));
+		const auto place = PlacePosition(town, building, static_cast<uint32_t>(person.buildPlace));
 		if (gutils::GetDistanceInMetres(GroundOf(villager), place) > k_AtPlace)
 		{
 			MoveTo(action, place, VillagerStates::ArrivesAtBuildingSite);
@@ -612,9 +624,9 @@ uint32_t villager_build::ArrivesAtBuildingSite(LivingAction& action)
 			// It puts all its wood down at the site; what the site doesn't take is lost
 			if (person.woodHeld != 0)
 			{
-				Locator::resourceStoreSystem::value().AddResource(building, ResourceType::Wood,
-				                                                  static_cast<uint32_t>(static_cast<int32_t>(person.woodHeld)),
-				                                                  PositionOf(villager));
+				Locator::resourceStoreSystem::value().AddToTownsSite(
+				    building, town, ResourceType::Wood, static_cast<uint32_t>(static_cast<int32_t>(person.woodHeld)),
+				    PositionOf(villager));
 				const auto dropped = villager_carry::PutDown(person, ResourceType::Wood, 0);
 				if (auto* tally = Entities().TryGet<TownResourceTally>(TownOf(person)))
 				{
@@ -653,12 +665,12 @@ uint32_t villager_build::Building(LivingAction& action)
 		const auto& info = InfoOf(person);
 		const auto want = building_site::WoodPerStroke(info.woodUsedPerBuildCycle, LandAlignmentAt(PositionOf(villager)));
 		auto& stores = Locator::resourceStoreSystem::value();
-		const auto atSite = construction::WoodAtSite(building);
+		const auto atSite = construction::WoodAtSite(town, building);
 		const auto use = atSite < static_cast<uint32_t>(want) ? atSite : static_cast<uint32_t>(want);
 		if (use != 0)
 		{
 			const float progress = static_cast<float>(use) / construction::SiteWoodValue(building);
-			stores.RemoveResource(building, ResourceType::Wood, use);
+			stores.RemoveFromTownsSite(building, town, ResourceType::Wood, use);
 			construction::BuildBy(building, progress);
 			if (auto* tally = Entities().TryGet<TownResourceTally>(town))
 			{
@@ -669,7 +681,7 @@ uint32_t villager_build::Building(LivingAction& action)
 		// Building on while there is something to build and wood to build it with
 		if (construction::IsSiteValid(town, building))
 		{
-			if (construction::WoodAtSite(building) == 0)
+			if (construction::WoodAtSite(town, building) == 0)
 			{
 				return SetupGetBuildingSupplies(action, building);
 			}
@@ -677,7 +689,7 @@ uint32_t villager_build::Building(LivingAction& action)
 			const auto randomInt = [](uint32_t limit) { return Locator::gameRandom::value().GameRand(limit); };
 			person.buildPlace = static_cast<int32_t>(building_site::NextPlace(
 			    static_cast<uint32_t>(person.buildPlace), construction::BuildingRadius(building), randomFloat, randomInt));
-			MoveTo(action, PlacePosition(building, static_cast<uint32_t>(person.buildPlace)),
+			MoveTo(action, PlacePosition(town, building, static_cast<uint32_t>(person.buildPlace)),
 			       VillagerStates::ArrivesAtBuildingSite);
 			return 1;
 		}
@@ -709,7 +721,7 @@ uint32_t villager_build::ReenterBuildingState(LivingAction& action)
 				SetTopState(action, VillagerStates::ArrivesAtBuildingSite);
 				return 1;
 			}
-			const auto goal = PlacePosition(building, static_cast<uint32_t>(person.buildPlace));
+			const auto goal = PlacePosition(town, building, static_cast<uint32_t>(person.buildPlace));
 			if (gutils::GetDistanceInMetres(GroundOf(villager), goal) <= k_HugDistance)
 			{
 				MoveTo(action, goal, VillagerStates::ArrivesAtBuildingSite);
@@ -739,7 +751,7 @@ bool villager_build::EnterBuilding(LivingAction& action, VillagerStates workedTo
 	}
 	if (building_site::JoinsWorkers(IsBuildingState(workedTowards)))
 	{
-		construction::AddWorker(person.buildingSite, villager);
+		construction::AddWorker(TownOf(person), person.buildingSite, villager);
 	}
 	return true;
 }
@@ -754,7 +766,7 @@ bool villager_build::ExitBuilding(LivingAction& action, VillagerStates next)
 		const auto town = TownOf(person);
 		if (town != entt::null && construction::IsSiteValid(town, person.buildingSite))
 		{
-			construction::RemoveWorker(person.buildingSite, villager);
+			construction::RemoveWorker(town, person.buildingSite, villager);
 		}
 		person.buildingSite = entt::null;
 	}

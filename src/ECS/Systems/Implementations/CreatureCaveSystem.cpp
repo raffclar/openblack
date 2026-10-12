@@ -25,6 +25,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CaveCreature.h"
+#include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMindTables.h"
@@ -74,6 +75,13 @@ uint32_t LearntText(size_t miracle)
 	return miracle < info.magicEffect.size()
 	           ? static_cast<uint32_t>(magic::GetMagicEffectInfo(info, static_cast<MagicType>(miracle)).creatureLearntEnum)
 	           : 0;
+}
+
+/// Another creature's own name, as its scroll shows it; nothing for one without a name or that is gone
+std::u16string NameOf(const Registry& registry, entt::entity creature)
+{
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	return body != nullptr ? body->name : std::u16string();
 }
 
 /// The places the temple's walk mesh marks in the creature room: the seat by the fire, the fire, and a place further back
@@ -225,12 +233,21 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		                           return mind->desires.has_value() && desire < mind->desires->desires.size() &&
 		                                  mind->desires->desires.at(desire).activated;
 	                           }).has_value();
-	snapshot.secondsAlone = mind->secondsAlone;
+	snapshot.turnsLookedAt = mind->turnsLookedAt;
+	// The temples, flocks and forests it believes in
+	snapshot.templesKnown = static_cast<uint32_t>(mind->beliefs.Count(creature_tree::belief_types::k_Citadel));
+	snapshot.flocksKnown = static_cast<uint32_t>(mind->beliefs.Count(creature_tree::belief_types::k_Flock));
+	snapshot.forestsKnown = static_cast<uint32_t>(mind->beliefs.Count(creature_tree::belief_types::k_Forest));
 	const auto* tables = Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
 	if (mind->learnt.has_value())
 	{
 		const auto& learnt = *mind->learnt;
-		snapshot.creaturesKnown = learnt.creatures.size();
+		for (const auto& attitude : learnt.creatures)
+		{
+			snapshot.creaturesKnown.push_back({.name = NameOf(registry, static_cast<entt::entity>(attitude.creature)),
+			                                   .howNice = attitude.howNice,
+			                                   .attention = attitude.attention});
+		}
 		if (mind->desires.has_value())
 		{
 			const auto& desires = mind->desires->desires;

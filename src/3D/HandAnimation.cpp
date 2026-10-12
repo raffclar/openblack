@@ -328,11 +328,24 @@ void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycl
 	}
 	const auto seconds = std::chrono::duration<float>(dt).count();
 	const auto mouse = glm::vec2(cursor);
-	StepCursorSpring(seconds, mouse);
-	// Hovering, the hand leans towards where the cursor came from. Dragging the camera, it leans the other way
-	// sideways as if pulling the land along.
-	const auto sideways = state == State::Normal ? _smoothedCursor.x - mouse.x : mouse.x - _smoothedCursor.x;
-	_lean = glm::clamp(glm::vec2(sideways, mouse.y - _smoothedCursor.y), -k_MaxCursorLag, k_MaxCursorLag);
+	std::optional<glm::vec2> lean;
+	if (state == State::Creature)
+	{
+		// Held to a creature, the hand plays its cycle without leaning, and no lag is left to lean with afterwards
+		StepCursorSpring(seconds, mouse);
+		SettleCursor(cursor);
+		_smoothedVelocity = glm::vec2(0.0f);
+		_lean = glm::vec2(0.0f);
+	}
+	else
+	{
+		StepCursorSpring(seconds, mouse);
+		// Hovering, the hand leans towards where the cursor came from. Dragging the camera, it leans the other way
+		// sideways as if pulling the land along.
+		const auto sideways = state == State::Normal ? _smoothedCursor.x - mouse.x : mouse.x - _smoothedCursor.x;
+		_lean = glm::clamp(glm::vec2(sideways, mouse.y - _smoothedCursor.y), -k_MaxCursorLag, k_MaxCursorLag);
+		lean = _lean;
+	}
 
 	auto& time = _cycleTimes.at(static_cast<size_t>(state));
 	// Letting go of a seed fades back from the holding pose
@@ -343,17 +356,20 @@ void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycl
 	}
 	if (state != _state || cycle != _cycle)
 	{
-		if (state != _state && state == State::Camera)
+		if (state != _state && (state == State::Camera || state == State::Creature))
 		{
-			// Starting to drag the camera starts its cycle over
+			// Starting to drag the camera, or taking hold of a creature, starts the state's cycle over
 			time = std::chrono::microseconds::zero();
 		}
 		if (state == State::Normal && cycle == Cycle::HoldFingers)
 		{
 			time = std::chrono::microseconds::zero();
 		}
-		_fadeFrom = _lastPoses;
-		_fadeTime = 0.0f;
+		if (state != _state || FadesBetween(state, _cycle, cycle))
+		{
+			_fadeFrom = _lastPoses;
+			_fadeTime = 0.0f;
+		}
 		_state = state;
 		_cycle = cycle;
 	}
@@ -363,11 +379,20 @@ void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycl
 	time = (time + dt) % std::chrono::duration_cast<std::chrono::microseconds>(duration);
 	const auto timeMs = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(time).count());
 
-	auto poses = EvaluatePoses(cycle, timeMs, _lean);
+	auto poses = EvaluatePoses(cycle, timeMs, lean);
 	ApplyFade(seconds, poses);
 
 	_lastPoses = poses;
 	ComposeBoneMatrices(poses);
+}
+
+bool HandAnimation::FadesBetween(State state, Cycle from, Cycle to)
+{
+	if (from == to)
+	{
+		return false;
+	}
+	return !(state == State::Creature && to == Cycle::Wiggle);
 }
 
 } // namespace openblack

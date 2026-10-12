@@ -249,12 +249,41 @@ void AddShell(Frame& frame, const Effect::DrawAtom& atom, const ObjectGlow& glow
 	});
 }
 
+/// The shower of sparks an atom sends up from its object, each spark as strong as the atom is seen; nothing once the object
+/// has gone
+void AddShower(GroupBuilder& builder, const Effect::DrawAtom& atom, const ObjectShower& shower, const Sources& sources)
+{
+	const auto from = sources.objectPosition ? sources.objectPosition(shower.object) : std::nullopt;
+	if (!shower.sparks.has_value() || !from.has_value())
+	{
+		return;
+	}
+	const auto strength = static_cast<uint8_t>(std::clamp(atom.alpha, 0.0f, k_ByteMax));
+	for (size_t i = 0; i < rising_sparks::k_Sparks; ++i)
+	{
+		const auto look = rising_sparks::LookOf(*shower.sparks, i, *from, strength);
+		if (!look.has_value())
+		{
+			continue;
+		}
+		builder.Sprite(FacingSprite(look->position, look->halfSize, look->angle, static_cast<int>(look->picture),
+		                            static_cast<int>(rising_sparks::k_SparkSheetPictures),
+		                            glm::vec4(1.0f, 1.0f, 1.0f, static_cast<float>(look->alpha) / k_ByteMax)),
+		               rising_sparks::k_SparkSheet, Mode::AlphaTexturedAlphaAdditiveNz);
+	}
+}
+
 void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, int player, const Sources& sources,
              const glm::vec3& origin)
 {
 	if (atom.objectGlow.has_value())
 	{
 		AddShell(frame, atom, *atom.objectGlow, sources);
+		return;
+	}
+	if (atom.shower != nullptr)
+	{
+		AddShower(builder, atom, *atom.shower, sources);
 		return;
 	}
 	const auto& creator = *atom.creator;
@@ -558,6 +587,33 @@ void draw::AddPlayerSymbol(Frame& frame, const PlayerSymbol& symbol, const Sourc
 	{
 		frame.groups.push_back(
 		    {.path = DrawPath::Queued, .origin = symbol.position, .firstItem = firstItem, .itemCount = count});
+	}
+}
+
+void draw::AddFightMarks(Frame& frame, std::span<const FightMark> marks)
+{
+	if (marks.empty())
+	{
+		return;
+	}
+	static constexpr auto k_Sheet = entt::hashed_string("raw/blobs");
+	static constexpr auto k_SheetAlpha = entt::hashed_string("raw/blobsa");
+	// Added to what is behind, writing no depth
+	const auto material = frame.MaterialIndex(
+	    {.texture = k_Sheet.value(), .alphaTexture = k_SheetAlpha.value(), .mode = Mode::AlphaTexturedAlphaAdditiveNz});
+	for (const auto& mark : marks)
+	{
+		const auto firstItem = static_cast<uint32_t>(frame.items.size());
+		// Square, facing the screen, unturned and centred on where it sits
+		frame.items.push_back(
+		    {.kind = ItemKind::Sprite, .index = static_cast<uint32_t>(frame.sprites.size()), .sortPoint = mark.position});
+		frame.sprites.push_back({.positionHalfWidth = glm::vec4(mark.position, mark.halfSize),
+		                         .shape = glm::vec4(mark.halfSize, 0.0f, 0.0f, 0.0f),
+		                         .uv = mark.uv,
+		                         .colour = mark.colour,
+		                         .flags = glm::vec4(0.0f)});
+		frame.spriteMaterials.push_back(material);
+		frame.groups.push_back({.path = DrawPath::Sorted, .origin = mark.position, .firstItem = firstItem, .itemCount = 1});
 	}
 }
 

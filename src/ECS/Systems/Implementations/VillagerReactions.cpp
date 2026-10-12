@@ -335,6 +335,7 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 	}
 	switch (type)
 	{
+	case Reaction::FleeFromObject:
 	case Reaction::FleeFromSpell:
 		SetTop(*action, VillagerStates::FleeingFromObjectReaction);
 		break;
@@ -418,6 +419,14 @@ void villager_reactions::Stop(entt::entity villager, LivingReaction& state, bool
 		{
 			wallHug->speed = GetSpeedStateSpeed(InfoOf(*component).speedGroup.speedDefault);
 		}
+		return;
+	}
+	// The fire states remember what the villager was doing themselves, and leaving them must take it off its blaze's
+	// firemen: it goes back the fire's way
+	if (state.type == Reaction::ReactToFire)
+	{
+		state.previousState = VillagerStates::InvalidState;
+		villager_fire::EndReaction(*action);
 		return;
 	}
 	// Back to the state it was in, or the one that state goes back to; anything else has it decide afresh

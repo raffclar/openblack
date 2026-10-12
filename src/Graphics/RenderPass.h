@@ -44,6 +44,9 @@ enum class RenderPass : uint8_t
 	UnderSea,
 	/// The sky, drawn first into the view: everything in the scene is drawn over it and in front of it
 	Sky,
+	/// The land, drawn after the sea and before everything on it, as the game draws it: it writes its depth even where
+	/// it is clear over the sea, so what is under the sea's surface behind it is hidden
+	Land,
 	Main,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
@@ -80,6 +83,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Reflection Translucent Pass", //
     "Under Sea Pass",              //
     "Sky Pass",                    //
+    "Land Pass",                   //
     "Main Pass",                   //
     "Translucent Pass",            //
     "Gesture Hint Collar 0 Pass",  //
@@ -115,6 +119,12 @@ static_assert(std::ranges::none_of(k_RenderPassNames, &std::string_view::empty))
 	default:
 		return pass;
 	}
+}
+
+/// The pass a scene's land is drawn in: the one before it, into the same target, or the scene's own if it has none
+[[nodiscard]] constexpr RenderPass LandPassOf(RenderPass pass)
+{
+	return pass == RenderPass::Main ? RenderPass::Land : pass;
 }
 
 /// The pass a scene's sky is drawn in: the one before it, into the same target, or the scene's own if it has none

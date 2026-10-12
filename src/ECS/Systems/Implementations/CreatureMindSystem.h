@@ -20,8 +20,10 @@
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -54,6 +56,7 @@ public:
 	bool SitDown(entt::entity creature) override;
 	void StandUp(entt::entity creature) override;
 	void ReceiveFeedback(entt::entity creature, float feedback) override;
+	void HandTookHold(entt::entity creature) override;
 	void UpdateAttitudeFromFeedback(entt::entity creature, float feedback) override;
 	void ChangeDesireSource(entt::entity creature, uint32_t type, float amount) override;
 	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
@@ -87,6 +90,8 @@ public:
 	[[nodiscard]] uint32_t GetActionCount(entt::entity creature, uint32_t action) const override;
 	void SetOnlyDesire(entt::entity creature, creature_desires::Desire desire, float seconds) override;
 	void ClearOnlyDesire(entt::entity creature) override;
+	void ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change) override;
+	void SetAgendaPriority(entt::entity creature, float priority) override;
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
@@ -110,6 +115,8 @@ private:
 	bool FightForScript(entt::entity creature, entt::entity opponent);
 	/// Learns what feedback teaches, from what the creature did lately
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
+	/// Held by the player's hand, it shows what it wants once its body is free
+	void ShowDesireOnHold(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& animation);
 	/// Plans the desires due this turn for one creature
 	/// Plans the desires due this turn for one creature, or all of them, at most once a turn
 	void PlanCreature(entt::entity creature, components::CreatureMindState& mind, bool everyDesire = false);
@@ -134,6 +141,18 @@ private:
 	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
 	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
 	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
+
+	// What it believes about the things about it (CreatureMindBeliefs.cpp)
+	/// It comes across a thing: its belief about it is brought up to date, or made, and a new one leads it on to what the
+	/// thing belongs to
+	void ComeAcross(components::CreatureMindState& mind, entt::entity thing);
+	/// It forgets what it believed about things gone from the world
+	void ForgetGoneThings(components::CreatureMindState& mind);
+	/// Gone into another map cell, it comes across the temple nearest it if that is another than the last
+	void NoteNearestTemple(components::CreatureMindState& mind, const components::Transform& transform);
+	/// Its eyes sweep this turn's cells about it, and it comes across everything in those it can see
+	void SweepEyes(const components::Creature& creature, components::CreatureMindState& mind,
+	               const components::CreatureAnimation& animation, const components::Transform& transform);
 	/// The agenda for an action of the game's table on an object, and what carries it out; none when it can't be made
 	[[nodiscard]] std::optional<std::pair<const creature_plan_actions::Executor*, std::vector<creature_mind::Step>>>
 	PlanAgenda(entt::entity creature, uint32_t action, std::optional<uint32_t> object,

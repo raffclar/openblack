@@ -399,7 +399,7 @@ void Layout(Stream& stream, MindFileData& data)
 	}
 	Sightings(stream, data.actionsSeen, version);
 	Sightings(stream, data.miraclesSeen, version);
-	stream.Value(data.unknown0);
+	stream.Value(data.turnsLookedAt);
 	stream.Value(data.attitudeToPlayer);
 	const auto fixedFloats = [&stream](size_t count) {
 		return [&stream, count](std::vector<float>& values) {

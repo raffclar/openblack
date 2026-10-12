@@ -60,11 +60,13 @@ public:
 	};
 
 	/// The hand states that drive the cycles: the normal state while hovering and the camera state while dragging the
-	/// camera. They lean the hand opposite ways sideways.
+	/// camera, which lean the hand opposite ways sideways, and the creature state while held to a creature, which doesn't
+	/// lean it at all. Each keeps its own time through its cycles.
 	enum class State : uint8_t
 	{
 		Normal,
 		Camera,
+		Creature,
 	};
 
 	using Animation = skeletal_animation::Animation;
@@ -77,6 +79,9 @@ public:
 
 	/// Advances the animation by a frame. cursor is the mouse position in window pixels.
 	void Update(std::chrono::microseconds dt, State state, Cycle cycle, glm::ivec2 cursor);
+	/// Whether changing from one cycle to another cross-fades from the last pose or changes at once. Held to a creature,
+	/// a caress dropping back to the wiggle as the hand leaves the body changes at once; every other change fades.
+	[[nodiscard]] static bool FadesBetween(State state, Cycle from, Cycle to);
 	/// A frame of the hand holding a miracle's seed: a still frame of a cycle, without leaning. Taking hold, and letting
 	/// go (the next Update), cross-fade from the last pose; changing how it holds doesn't.
 	void UpdateHeld(std::chrono::microseconds dt, Cycle cycle, uint32_t timeMs, glm::ivec2 cursor);
@@ -90,6 +95,8 @@ public:
 
 	/// Model space matrices of the hand's bones, in the form L3DMesh::GetBoneMatrices gives the rest pose
 	[[nodiscard]] const std::vector<glm::mat4>& GetBoneMatrices() const { return _boneMatrices; }
+	/// The next pose fades in from the pose last drawn, as when the hand changes what it does
+	void FadeFromLastPose() { StartFade(); }
 	[[nodiscard]] const Animation* GetAnimation(size_t specIndex) const;
 
 	/// The hand is scaled so its rest pose bones span 3.2 units from top to bottom, growing past 150 units from the
@@ -126,8 +133,8 @@ private:
 
 	State _state {State::Normal};
 	Cycle _cycle {Cycle::Wiggle};
-	/// Each state keeps its own cycle time, the camera's restarts whenever it is entered
-	std::array<std::chrono::microseconds, 2> _cycleTimes {};
+	/// Each state keeps its own cycle time, the camera's and the creature's restart whenever they are entered
+	std::array<std::chrono::microseconds, 3> _cycleTimes {};
 
 	bool _springStarted {false};
 	glm::vec2 _smoothedCursor {0.0f, 0.0f};

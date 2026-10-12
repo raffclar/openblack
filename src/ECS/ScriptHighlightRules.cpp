@@ -43,7 +43,7 @@ constexpr float k_GlowOutOfReach = 1.4f;
 /// The beat's least share, and how much more it rises
 constexpr float k_PulseLeast = 0.4f;
 constexpr float k_PulseRise = 0.6f;
-/// The silver beam's colour; the others' colour, and their alpha a whole beat
+/// The silver beam's colour; the others' colour, and their alpha at the top of the beat
 constexpr uint32_t k_SilverBeam = 0x14b4dcff;
 constexpr uint32_t k_YellowBeam = 0x00ffff00;
 constexpr uint32_t k_YellowBeamAlpha = 0x50;
@@ -83,8 +83,9 @@ uint32_t BeamColour(HighlightInfo kind, double pulseShare)
 	{
 		return k_SilverBeam;
 	}
-	// The beat is truncated to a whole number before it is scaled, so the beam only shows at the top of the beat
-	const auto alpha = static_cast<uint8_t>(static_cast<uint32_t>(static_cast<int32_t>(pulseShare)) * k_YellowBeamAlpha);
+	// The beam beats with the scroll, from 0.4 to all of its strength. The game cuts the beat to a whole number before
+	// scaling it, which leaves the beam unseen; openblack scales it first (see docs/deviations.md)
+	const auto alpha = static_cast<uint8_t>(static_cast<int32_t>(pulseShare * static_cast<double>(k_YellowBeamAlpha)));
 	return (static_cast<uint32_t>(alpha) << 24u) | k_YellowBeam;
 }
 
@@ -145,64 +146,6 @@ uint8_t GlowAlpha(HighlightInfo kind)
 		break;
 	}
 	return 0;
-}
-
-Sparks MakeSparks(const std::function<float(float)>& randomFloat, const std::function<uint32_t(uint32_t)>& random)
-{
-	constexpr int32_t k_StartApart = k_SparkLifeMilliseconds / static_cast<int32_t>(k_Sparks);
-	Sparks made;
-	for (size_t i = 0; i < k_Sparks; ++i)
-	{
-		made.sparks.at(i) = {.ageMilliseconds = -static_cast<int32_t>(i) * k_StartApart,
-		                     .angle = randomFloat(glm::two_pi<float>())};
-	}
-	made.firstPicture = random(32);
-	return made;
-}
-
-void StepSparks(Sparks& sparks, uint32_t gameMilliseconds, const std::function<float(float)>& randomFloat)
-{
-	for (auto& spark : sparks.sparks)
-	{
-		spark.ageMilliseconds += static_cast<int32_t>(gameMilliseconds);
-		if (spark.ageMilliseconds > k_SparkLifeMilliseconds)
-		{
-			spark.ageMilliseconds -= k_SparkLifeMilliseconds;
-			spark.angle = randomFloat(glm::two_pi<float>());
-		}
-	}
-}
-
-std::optional<SparkLook> LookOf(const Sparks& sparks, size_t index, glm::vec3 from)
-{
-	if (index >= k_Sparks || sparks.sparks.at(index).ageMilliseconds < 0)
-	{
-		return std::nullopt;
-	}
-	constexpr float k_Rise = 20.0f;
-	constexpr float k_StartHalfSize = 2.0f;
-	constexpr float k_EndHalfSize = 1.2f;
-	constexpr float k_FadeInPerMillisecond = 0.0002f;
-	constexpr float k_FadeOutPerMillisecond = 1.0f / 3000.0f;
-	constexpr int32_t k_FadeOutFrom = 5000;
-	constexpr float k_LifeShareSquared = 1.5625e-08f;
-	constexpr int32_t k_PictureMilliseconds = 50;
-	const auto& spark = sparks.sparks.at(index);
-	const int32_t age = spark.ageMilliseconds;
-	// Its share of its life, squared; the game works this through at more than a float's precision
-	const double share = static_cast<double>(age * age) * static_cast<double>(k_LifeShareSquared);
-	const double fade = age < k_FadeOutFrom
-	                        ? static_cast<double>(age) * static_cast<double>(k_FadeInPerMillisecond)
-	                        : 1.0 - static_cast<double>(age - k_FadeOutFrom) * static_cast<double>(k_FadeOutPerMillisecond);
-	return SparkLook {
-	    .position = {from.x, static_cast<float>(static_cast<double>(from.y) + static_cast<double>(k_Rise) * share), from.z},
-	    .halfSize = static_cast<float>(static_cast<double>(k_EndHalfSize - k_StartHalfSize) * share +
-	                                   static_cast<double>(k_StartHalfSize)),
-	    .alpha = static_cast<uint8_t>(static_cast<int32_t>(255.0 * fade)),
-	    .picture =
-	        (static_cast<uint32_t>(age / k_PictureMilliseconds) + static_cast<uint32_t>(index) + sparks.firstPicture) & 31u,
-	    .angle = spark.angle,
-	};
 }
 
 TapOutcome Tap(HighlightInfo kind, uint32_t scriptId, bool byThisPlayer)

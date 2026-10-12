@@ -66,6 +66,9 @@ private:
 	};
 	/// A step of stroking and slapping
 	void Step(components::HandOnCreature& contact, const StepInput& input);
+	/// The hand's up this frame, easing as the hand rests on the body or leaves it
+	static glm::vec3 TurnHand(components::HandOnCreature& contact, bool onBody, bool cursorMovedAcross, const glm::vec3& normal,
+	                          const glm::vec3& creaturePosition, float seconds);
 	/// A third hard slap in a row at one height bruises the creature where the line of sight meets its skin
 	static void Bruise(entt::entity creature, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, uint8_t column);
 

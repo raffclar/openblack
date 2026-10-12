@@ -1265,6 +1265,7 @@ void ParticleSystem::ProcessTurn()
 void ParticleSystem::Reset()
 {
 	_playerSymbols.clear();
+	_fightMarks.clear();
 	_effects.clear();
 	_explodeObject = k_NoEffect;
 	_gestureTrails = k_NoEffect;
@@ -1303,6 +1304,11 @@ void ParticleSystem::ResolveTextures(const particles::Effect& effect)
 		if (object.className == "ZR_SurfRevol")
 		{
 			resolve(particles::TextureBaseName(object.String("TextureFileName")));
+		}
+		// A shower of sparks over an object is drawn from its own sheet
+		if (object.className == "CreateRule_GameObjectRef" && object.Bool("DoShower", false))
+		{
+			resolve(particles::rising_sparks::k_SparkSheet);
 		}
 		// A village's symbols of belief are drawn by the rule that makes them
 		if (object.className == "UR_TownCentreBelief")
@@ -1376,6 +1382,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 		{
 			particles::draw::AddPlayerSymbol(frame, symbol, sources);
 		}
+		particles::draw::AddFightMarks(frame, _fightMarks);
 	}
 	_drawStats = {
 	    .sprites = frame.sprites.size(),

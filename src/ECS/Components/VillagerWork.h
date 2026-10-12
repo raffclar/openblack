@@ -9,8 +9,12 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
+
+#include "Enums.h"
 
 namespace openblack::ecs::components
 {
@@ -34,6 +38,20 @@ struct WoodReactionTarget
 	entt::entity wood {entt::null};
 	/// The turn it took up the wood, after which it waits only so long for the wood to come to rest
 	uint32_t startTurn {0};
+};
+
+/// A shepherd's timing: the turns left of what it is doing with its flock, counted only while it stands with the flock
+/// and not while it walks, and the state it goes on to when a wait ends, none to decide again
+struct ShepherdWork
+{
+	int16_t countdown {0};
+	VillagerStates pending {VillagerStates::InvalidState};
+};
+
+/// The thing a villager walks to while it moves, as it walks up to the leader of a flock
+struct MoveTarget
+{
+	entt::entity thing {entt::null};
 };
 
 } // namespace openblack::ecs::components

@@ -40,6 +40,12 @@ void SetQueuedMoves(fight::MoveQueue& queue, const std::vector<fight::QueuedMove
 	queue.Assign(moves);
 }
 
+std::vector<fight::marks::Mark> FightMarks(const fight::marks::MarkList& list)
+{
+	const auto marks = list.Marks();
+	return {marks.begin(), marks.end()};
+}
+
 /// A smooth change's value, set as one at rest there
 void ResetZoomer(openblack::Zoomer& zoomer, float value)
 {
@@ -53,6 +59,7 @@ void openblack::inspector::reflection::RegisterHandWrittenFields(entt::meta_ctx&
 	Reflect<fight::MoveQueue>(context, ValueOnly {})
 	    .Property<&QueuedMoves, &SetQueuedMoves>("moves")
 	    .Property<&fight::MoveQueue::HasWaiting, nullptr>("waiting");
+	Reflect<fight::marks::MarkList>(context, ValueOnly {}).Property<&FightMarks, nullptr>("marks");
 	Reflect<DayNightClock>(context, ValueOnly {})
 	    .Property<&DayNightClock::IsRunning, &DayNightClock::SetRunning>("running")
 	    .Property<&DayNightClock::GetScriptTime, &DayNightClock::SetScriptTime>("scriptTime")

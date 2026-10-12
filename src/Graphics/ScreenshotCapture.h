@@ -82,6 +82,7 @@ class OffscreenScreenshots
 public:
 	/// The passes that draw to the window
 	static constexpr std::array k_ScreenPasses = {RenderPass::Sky,
+	                                              RenderPass::Land,
 	                                              RenderPass::Main,
 	                                              RenderPass::Translucent,
 	                                              RenderPass::GestureHintCollar0,

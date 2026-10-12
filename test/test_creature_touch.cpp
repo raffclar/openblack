@@ -7,14 +7,17 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
 #include <chrono>
 #include <optional>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/HandAnimation.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureInteractCameraModel.h"
+#include "Common/Zoomer.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureLocomotion.h"
@@ -199,4 +202,85 @@ TEST(CreatureTouch, TheCameraWooshesFlyingBackFromFarAway)
 {
 	EXPECT_FALSE(creature_interact::WooshesFlyingBack({0.0f, 0.0f, 0.0f}, {150.0f, 0.0f, 0.0f}));
 	EXPECT_TRUE(creature_interact::WooshesFlyingBack({0.0f, 0.0f, 0.0f}, {150.1f, 0.0f, 0.0f}));
+}
+
+TEST(CreatureTouch, HeldToACreatureTheHandDropsToTheWiggleAtOnceButFadesIntoEveryOtherCycle)
+{
+	using State = HandAnimation::State;
+	using Cycle = HandAnimation::Cycle;
+	// Leaving the body, the caress turns back to the wiggle without a fade
+	EXPECT_FALSE(HandAnimation::FadesBetween(State::Creature, Cycle::Tickle, Cycle::Wiggle));
+	// Into the caress or the slap it fades, as everywhere else
+	EXPECT_TRUE(HandAnimation::FadesBetween(State::Creature, Cycle::Wiggle, Cycle::Tickle));
+	EXPECT_TRUE(HandAnimation::FadesBetween(State::Creature, Cycle::Tickle, Cycle::Slap));
+	EXPECT_TRUE(HandAnimation::FadesBetween(State::Creature, Cycle::Slap, Cycle::Tickle));
+	EXPECT_TRUE(HandAnimation::FadesBetween(State::Normal, Cycle::Stroke, Cycle::Wiggle));
+	EXPECT_FALSE(HandAnimation::FadesBetween(State::Creature, Cycle::Slap, Cycle::Slap));
+}
+
+TEST(CreatureTouch, TakingHoldTheHandsBackFacesTheCamera)
+{
+	const auto up = feedback::HandUpOnTakingHold(glm::vec3(0.0f), glm::vec3(0.0f, 30.0f, -40.0f));
+	EXPECT_NEAR(up.y, 0.6f, k_Tolerance);
+	EXPECT_NEAR(up.z, -0.8f, k_Tolerance);
+}
+
+TEST(CreatureTouch, OnTheBodyTheHandTurnsToItsSurfaceTippedTowardsTheCameraAsTheCursorMoves)
+{
+	const glm::vec3 creature(0.0f);
+	const glm::vec3 camera(0.0f, 0.0f, -10.0f);
+	const glm::vec3 out(1.0f, 0.0f, 0.0f);
+	const auto glide = feedback::HandUpGlideTo(true, true, out, creature, camera);
+	ASSERT_TRUE(glide.has_value());
+	EXPECT_NEAR(glide->destination.x, 1.0f, k_Tolerance);
+	EXPECT_NEAR(glide->destination.z, -0.4f, k_Tolerance);
+	EXPECT_FLOAT_EQ(glide->seconds, 0.9f);
+	// Resting still on the body, it goes on turning as it was
+	EXPECT_FALSE(feedback::HandUpGlideTo(true, false, out, creature, camera).has_value());
+	// Off the body it stands up again, slowly
+	const auto upright = feedback::HandUpGlideTo(false, false, out, creature, camera);
+	ASSERT_TRUE(upright.has_value());
+	EXPECT_EQ(upright->destination, glm::vec3(0.0f, 1.0f, 0.0f));
+	EXPECT_FLOAT_EQ(upright->seconds, 2.5f);
+}
+
+TEST(CreatureTouch, TheHandsUpEasesRoundOverItsTime)
+{
+	Zoomer3 up(glm::vec3(0.0f, 0.0f, -1.0f));
+	const auto glide = feedback::HandUpGlideTo(false, false, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+	ASSERT_TRUE(glide.has_value());
+	up.SetDestination(glide->destination, glide->seconds);
+	up.Update(1.0f);
+	EXPECT_GT(up.GetValue().y, 0.0f);
+	EXPECT_LT(up.GetValue().y, 1.0f);
+	up.Update(1.5f);
+	EXPECT_NEAR(up.GetValue().y, 1.0f, k_Tolerance);
+	EXPECT_NEAR(up.GetValue().z, 0.0f, k_Tolerance);
+}
+
+TEST(CreatureTouch, TheBodysSurfaceFacesOutFromTheNearestCapsule)
+{
+	const std::array<feedback::Capsule, 2> body {
+	    feedback::Capsule {.from = glm::vec3(0.0f), .to = glm::vec3(0.0f, 10.0f, 0.0f), .radius = 1.0f},
+	    feedback::Capsule {.from = glm::vec3(5.0f, 0.0f, 0.0f), .to = glm::vec3(5.0f, 10.0f, 0.0f), .radius = 1.0f},
+	};
+	const auto normal = feedback::SurfaceNormal(glm::vec3(0.0f, 5.0f, -1.0f), body);
+	EXPECT_NEAR(normal.z, -1.0f, k_Tolerance);
+	const auto other = feedback::SurfaceNormal(glm::vec3(6.0f, 5.0f, 0.0f), body);
+	EXPECT_NEAR(other.x, 1.0f, k_Tolerance);
+	// On a capsule's own line there is no way out: straight up
+	EXPECT_EQ(feedback::SurfaceNormal(glm::vec3(0.0f, 5.0f, 0.0f), body), glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+TEST(CreatureTouch, HeldTheCreatureLooksAtTheHandOrAtTheCameraWithTheHandNearItsMiddle)
+{
+	const glm::vec3 middle(0.0f, 5.0f, 0.0f);
+	const glm::vec3 camera(0.0f, 10.0f, -30.0f);
+	const glm::vec3 sight(0.0f, 0.0f, 1.0f);
+	// Near its middle (within 0.6 of its height), it looks at the camera
+	EXPECT_EQ(feedback::HeldLookPoint(glm::vec3(0.0f, 5.0f, -8.0f), middle, camera, sight, k_Height), camera);
+	// Further away, at a point 0.3 of its height nearer the camera than the hand
+	const auto look = feedback::HeldLookPoint(glm::vec3(10.0f, 5.0f, -2.0f), middle, camera, sight, k_Height);
+	EXPECT_NEAR(look.x, 10.0f, k_Tolerance);
+	EXPECT_NEAR(look.z, -2.0f - (0.3f * k_Height), k_Tolerance);
 }

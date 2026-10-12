@@ -147,6 +147,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -175,6 +176,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
@@ -195,6 +197,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAge.h"
@@ -525,6 +528,9 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 	                              made.joinsTown ? VillagerArchetype::Joins::NearestTown : VillagerArchetype::Joins::Nobody);
 	if (Locator::livingActionSystem::has_value())
 	{
+		// Then it is set to the script's age, as big as that age and in its models, even when it was made a named
+		// villager of another age
+		Locator::livingActionSystem::value().VillagerSetAge(villager, made.age);
 		Locator::livingActionSystem::value().VillagerSetScriptState(villager, VillagerStates::InScript);
 	}
 	return villager;
@@ -569,18 +575,23 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	// TODO(Daniels118): handle all types
 	switch (type)
 	{
-	// Asking for a mobile static or for a rock makes the same thing: whether it is a rock is up to its kind
+	// Asking for a mobile static or for a rock makes the same thing: whether it is a rock is up to its kind. A mobile
+	// static keeps the height the script gave; a rock is made on the land under the place asked for.
 	case ObjectType::MobileStatic:
 	case ObjectType::Rock:
-		return MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians,
-		                                     yAngleRadians, zAngleRadians, scale);
+		return MobileStaticArchetype::Create(script::create_rules::KeepsScriptHeight(type) ? position : OnGround(position),
+		                                     static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians, yAngleRadians,
+		                                     zAngleRadians, scale);
 	case ObjectType::Ball:
-		return CreateScriptBall(position);
+		// On the land under the place asked for, even when that is the hand up in the air
+		return CreateScriptBall(OnGround(position));
 	case ObjectType::Marker:
 		return ScriptMarkerArchetype::Create(position);
 	case ObjectType::Villager:
 	case ObjectType::VillagerChild:
-		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype, position);
+		// Made standing on the land under the place asked for, whatever height the script gave
+		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype,
+		                            script::create_rules::KeepsScriptHeight(type) ? position : OnGround(position));
 	// The game's whale object type: the opening's sharks
 	case ObjectType::Whale:
 		return SharkArchetype::Create(position, scale);
@@ -1587,6 +1598,12 @@ void GetProperty() // 021 GET_PROPERTY
 		Pushb(IsDrowning(object));
 		return;
 	case script::ObjectPropertyType::Scale:
+		// A creature answers the size its body is shown at
+		if (const auto* creature = registry.TryGet<const ecs::components::Creature>(object); creature != nullptr)
+		{
+			Pushf(ecs::components::ShownSize(*creature));
+			return;
+		}
 		if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(object); transform != nullptr)
 		{
 			Pushf(transform->scale.x);
@@ -2015,6 +2032,19 @@ void SetProperty() // 022 SET_PROPERTY
 		CannotSetProperty(prop);
 		return;
 	case script::ObjectPropertyType::Scale:
+		// A creature grows or shrinks to that size at once, its body shown at it (within the sizes a creature can be
+		// drawn at) unless it is in its pen
+		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)
+		{
+			creature->size = value;
+			if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
+			{
+				transform->scale = glm::vec3(
+				    ecs::archetypes::CreatureArchetype::DrawnScale(creature->species, ecs::components::ShownSize(*creature)));
+				registry.SetDirty();
+			}
+			return;
+		}
 		// The thing is drawn at this size, the same along every axis
 		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
 		{
@@ -2033,6 +2063,13 @@ void SetProperty() // 022 SET_PROPERTY
 		NotImplemented(static_cast<int32_t>(prop));
 		return;
 	case script::ObjectPropertyType::Speed:
+		// A creature is asked to go at that share of its top speed, from none to all of it, until it is next sent
+		// somewhere at a pace of its own
+		if (auto* locomotion = registry.TryGet<ecs::components::CreatureLocomotion>(object); locomotion != nullptr)
+		{
+			locomotion->fraction = script::property_rules::CreatureSpeedFraction(value);
+			return;
+		}
 		// A weather thing's storm travels at it, metres a second
 		if (Locator::weatherSystem::has_value() && Locator::weatherSystem::value().SetWeatherThingSpeed(object, value))
 		{
@@ -3753,13 +3790,49 @@ void OverrideStateAnimation() // 068 OVERRIDE_STATE_ANIMATION
 
 void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREATURE
 {
-	// const auto type = Pop().intVal;
-	// const auto position = PopVec();
-	// const auto scale = Popf();
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// A new creature of the species given, made from another: as big and as strong as that one times the scale, standing
+	// on the ground where the script says. It belongs to the first player who has no creature of their own.
+	// TODO(guide-and-ogre-natives): the game also keeps it out of the land's reactions until a script lets it react, and
+	// starts its body's strength from the other creature's look rather than its own species'; openblack keeps neither
+	const auto type = Pop().intVal;
+	const auto position = PopVec();
+	const auto scale = Popf();
+	const auto source = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto species = type >= 0 ? script::property_rules::CreatureTypeFromScript(static_cast<uint32_t>(type)) : std::nullopt;
+	if (!species.has_value())
+	{
+		ScriptMessage("Invalid creature type");
+	}
+	const auto* from =
+	    source != entt::null && registry.Valid(source) ? registry.TryGet<const ecs::components::Creature>(source) : nullptr;
+	if (from == nullptr)
+	{
+		ScriptMessage("No creature for script");
+		PushObject(entt::null);
+		return;
+	}
+	if (!species.has_value())
+	{
+		ScriptMessage("Creature not created!");
+		PushObject(entt::null);
+		return;
+	}
+	std::array<bool, 7> haveCreatures {};
+	for (size_t i = 0; i < haveCreatures.size(); ++i)
+	{
+		haveCreatures.at(i) = Locator::playerSystem::has_value() &&
+		                      Locator::playerSystem::value().GetPrimaryCreature(static_cast<PlayerNames>(i)).has_value();
+	}
+	const auto owner = script::property_rules::OwnerOfCopy(haveCreatures).value_or(PlayerNames::NEUTRAL);
+	const auto copied = script::property_rules::CopyBody(from->size, from->strength, scale);
+	auto body = ecs::archetypes::CreatureArchetype::StartBody(*species);
+	body.strength = copied.strength;
+	const auto ground = Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z));
+	const auto created = ecs::archetypes::CreatureArchetype::Create({position.x, ground, position.z}, owner, *species, 0, 0.0f,
+	                                                                copied.size, body);
+	RegisterCreated(created);
+	PushObject(created);
 }
 
 void CreatureLearnEverything() // 070 CREATURE_LEARN_EVERYTHING
@@ -3793,10 +3866,23 @@ void CreatureSetKnowsAction() // 071 CREATURE_SET_KNOWS_ACTION
 
 void CreatureSetAgendaPriority() // 072 CREATURE_SET_AGENDA_PRIORITY
 {
-	// const auto priority = Popf();
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto priority = Popf();
+	const auto creature = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		ScriptMessage("No creature for script");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("No script for creature");
+		return;
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().SetAgendaPriority(creature, priority);
+	}
 }
 
 void CreatureTurnOffAllDesires() // 073 CREATURE_TURN_OFF_ALL_DESIRES
@@ -3876,39 +3962,87 @@ void InCreatureHand() // 076 IN_CREATURE_HAND
 	Pushb(script::property_rules::InCreatureHand(thing, held != nullptr ? held->object : entt::null, eating));
 }
 
+/// Changes the desires of the creature a script names, telling the script when it names no creature
+static void ChangeScriptCreatureDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		ScriptMessage("no creature");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("not a creature");
+		return;
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ChangeDesires(creature, change);
+	}
+}
+
+/// A desire as a script numbers it, if there is one of that number
+static std::optional<creature_desires::Desire> ScriptDesire(int32_t desire)
+{
+	if (desire < 0 || desire >= static_cast<int32_t>(creature_desires::k_DesireCount))
+	{
+		return std::nullopt;
+	}
+	return static_cast<creature_desires::Desire>(desire);
+}
+
 void CreatureSetDesireValue() // 077 CREATURE_SET_DESIRE_VALUE
 {
-	// const auto value = Popf();
-	// const auto desire = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto value = Popf();
+	const auto desire = ScriptDesire(Pop().intVal);
+	const auto creature = PopObject();
+	ChangeScriptCreatureDesires(creature, [desire, value](creature_desires::Desires& desires) {
+		if (desire.has_value())
+		{
+			creature_desires::SetValueFromScript(desires, *desire, value);
+		}
+	});
 }
 
 void CreatureSetDesireActivated78() // 078 CREATURE_SET_DESIRE_ACTIVATED
 {
-	// const auto active = Pop().intVal;
-	// const auto desire = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto active = Pop().intVal != 0;
+	const auto desire = ScriptDesire(Pop().intVal);
+	const auto creature = PopObject();
+	ChangeScriptCreatureDesires(creature, [desire, active](creature_desires::Desires& desires) {
+		if (desire.has_value())
+		{
+			desires[*desire].activated = active;
+		}
+	});
 }
 
 void CreatureSetDesireActivated79() // 079 CREATURE_SET_DESIRE_ACTIVATED
 {
-	// const auto active = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Every desire at once
+	const auto active = Pop().intVal != 0;
+	const auto creature = PopObject();
+	ChangeScriptCreatureDesires(creature, [active](creature_desires::Desires& desires) {
+		for (auto& state : desires.desires)
+		{
+			state.activated = active;
+		}
+	});
 }
 
 void CreatureSetDesireMaximum() // 080 CREATURE_SET_DESIRE_MAXIMUM
 {
-	// const auto value = Popf();
-	// const auto desire = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The most it can want the desire, taken as it is
+	const auto maximum = Popf();
+	const auto desire = ScriptDesire(Pop().intVal);
+	const auto creature = PopObject();
+	ChangeScriptCreatureDesires(creature, [desire, maximum](creature_desires::Desires& desires) {
+		if (desire.has_value())
+		{
+			desires[*desire].max = maximum;
+		}
+	});
 }
 
 void ConvertCameraPosition() // 081 CONVERT_CAMERA_POSITION
@@ -4036,10 +4170,27 @@ void ClearDroppedByObject() // 089 CLEAR_DROPPED_BY_OBJECT
 
 void CreateReaction() // 090 CREATE_REACTION
 {
-	// const auto reaction = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The living around the thing react to it as to the kind of reaction given (the kind is taken as a byte, its
+	// last number meaning none). It belongs to no player, so it impresses no one, and its time starts when the first of
+	// them takes it up.
+	const auto type = static_cast<uint8_t>(Pop().intVal);
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("no reaction for thing");
+		return;
+	}
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (type == std::numeric_limits<uint8_t>::max() || transform == nullptr || !Locator::reactionSystem::has_value())
+	{
+		return;
+	}
+	Locator::reactionSystem::value().Create({.initiator = object,
+	                                         .type = static_cast<Reaction>(type),
+	                                         .player = PlayerNames::NEUTRAL,
+	                                         .position = transform->position,
+	                                         .playerless = true});
 }
 
 void RemoveReaction() // 091 REMOVE_REACTION
@@ -4125,9 +4276,12 @@ void ReleaseDualCamera() // 095 RELEASE_DUAL_CAMERA
 
 void SetCreatureHelp() // 096 SET_CREATURE_HELP
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The same switch as the creature help option: the advisor's messages about the player's creature
+	const bool on = Pop().intVal != 0;
+	if (Locator::creatureHelpSystem::has_value())
+	{
+		Locator::creatureHelpSystem::value().SetHelpOn(on);
+	}
 }
 
 void GetTargetObject() // 097 GET_TARGET_OBJECT
@@ -4618,11 +4772,11 @@ void BuildBuilding() // 130 BUILD_BUILDING
 {
 	const auto desire = Popf();
 	const auto position = PopVec();
-	// The towns start what they planned there: a planned temple goes up
-	// TODO(villager-life): the towns' other planned buildings
-	if (!ecs::construction::StartPlannedAt(position, desire).has_value())
+	// Every town starts what it planned there
+	if (ecs::town_planning::StartPlannedAt(position, desire).empty())
 	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned temple at ({}, {})", position.x, position.z);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned building at ({}, {})", position.x,
+		                    position.z);
 	}
 }
 
@@ -6498,10 +6652,29 @@ void VortexFadeOut() // 257 VORTEX_FADE_OUT
 
 void RemoveReactionOfType() // 258 REMOVE_REACTION_OF_TYPE
 {
-	// const auto reaction = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The reactions of that kind the thing made go; a group's are those its members made
+	const auto type = static_cast<Reaction>(Pop().intVal);
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("no reaction for thing");
+		return;
+	}
+	if (!Locator::reactionSystem::has_value())
+	{
+		return;
+	}
+	auto& reactions = Locator::reactionSystem::value();
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			reactions.RemoveFrom(member, type);
+		}
+		return;
+	}
+	reactions.RemoveFrom(object, type);
 }
 
 void CreatureLearnEverythingExcluding() // 259 CREATURE_LEARN_EVERYTHING_EXCLUDING
@@ -6724,7 +6897,7 @@ void SetFocusFollow() // 276 SET_FOCUS_FOLLOW
 	if (thing != entt::null && camera != nullptr)
 	{
 		// The script's camera keeps looking at the thing
-		camera->LookAt(FollowedThing(thing));
+		camera->LookAt({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)});
 	}
 }
 
@@ -6734,7 +6907,7 @@ void SetPositionFollow() // 277 SET_POSITION_FOLLOW
 	if (thing != entt::null && camera != nullptr)
 	{
 		// The script's camera is put behind the thing, as far as eight times its height, and follows it
-		camera->Follow(FollowedThing(thing));
+		camera->Follow({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)});
 	}
 }
 
@@ -6745,7 +6918,7 @@ void SetFocusAndPositionFollow() // 278 SET_FOCUS_AND_POSITION_FOLLOW
 	if (thing != entt::null && camera != nullptr)
 	{
 		// The script's camera is put at a distance from the thing, follows it and looks at it
-		camera->FollowAndLookAt(FollowedThing(thing), distance);
+		camera->FollowAndLookAt({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)}, distance);
 	}
 }
 

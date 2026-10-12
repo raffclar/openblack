@@ -32,6 +32,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -188,7 +189,10 @@ void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
 		registry.Destroy(orphan);
 	}
 
-	const auto frame = DrawFrame(turn);
+	// It plays on only on the frames the land's draw list draws it
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	const auto* view = drawList != nullptr && drawList->GetView().has_value() ? &*drawList->GetView() : nullptr;
+	const auto frame = view != nullptr ? drawList->GetFrame() : object_draw_list::Frame {.rebuilt = true, .drawAll = true};
 
 	struct StoneUpdate
 	{
@@ -206,15 +210,14 @@ void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
 		    {
 			    return;
 		    }
-		    // It plays on only on the frames it is drawn, as the land's draw list draws it
 		    if (frame.rebuilt)
 		    {
-			    pose.inDrawList = InDrawList(transform.position);
+			    pose.inDrawList = view == nullptr || drawList->Listed(entity);
 		    }
 		    const bool drawn = object_draw_list::Drawn(frame, pose.inDrawList, pose.onScreen);
 		    if (frame.drawAll && pose.inDrawList)
 		    {
-			    pose.onScreen = OnScreen(transform, mesh);
+			    pose.onScreen = view == nullptr || OnScreen(*view, transform, mesh);
 		    }
 		    const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(infos[type].defaultAnim));
 		    if (static_cast<int>(infos[type].defaultAnim) < 0 || !animations.Contains(clipId))
@@ -311,100 +314,11 @@ void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
 void AnimatedStaticSystem::Reset()
 {
 	_drawTime.reset();
-	_drawClock.Reset();
-	_blocks.clear();
-	_blockGrid.fill(-1);
-	_view.reset();
 }
 
-void AnimatedStaticSystem::LoadBlocks()
+bool AnimatedStaticSystem::OnScreen(const object_draw_list::View& view, const Transform& transform, const Mesh& mesh)
 {
-	if (!_blocks.empty() || !Locator::terrainSystem::has_value())
-	{
-		return;
-	}
-	_blockGrid.fill(-1);
-	for (const auto& block : Locator::terrainSystem::value().GetBlocks())
-	{
-		const auto& lnd = block.GetLndBlock();
-		if (lnd == nullptr)
-		{
-			continue;
-		}
-		// The highest of its cells, as the land had them when it was loaded
-		uint8_t highest = 0;
-		for (const auto& cell : lnd->cells)
-		{
-			highest = std::max(highest, cell.altitude);
-		}
-		const auto at = block.GetBlockPosition();
-		if (at.x >= 0 && at.x < k_GridBlocks && at.y >= 0 && at.y < k_GridBlocks)
-		{
-			_blockGrid.at(static_cast<size_t>((at.x * k_GridBlocks) + at.y)) = static_cast<int32_t>(_blocks.size());
-		}
-		_blocks.push_back({.block = {.corner = block.GetMapPosition(), .highestAltitude = highest, .reflected = true}});
-	}
-}
-
-object_draw_list::Frame AnimatedStaticSystem::DrawFrame(uint32_t turn)
-{
-	if (!Locator::camera::has_value() || !Locator::terrainSystem::has_value())
-	{
-		// With nothing to see from, everything is drawn
-		_view.reset();
-		return {.rebuilt = true, .drawAll = true};
-	}
-	LoadBlocks();
-	const auto& camera = Locator::camera::value();
-	const auto& projection = camera.GetProjectionMatrix();
-	_view = object_draw_list::View {.viewProjection = camera.GetViewProjectionMatrix(),
-	                                .nearPlane = camera.GetNearClip(),
-	                                .focalHeight = projection[1][1],
-	                                .aspect = projection[0][0] != 0.0f ? projection[1][1] / projection[0][0] : 1.0f,
-	                                .eye = camera.GetOrigin()};
-	// A change in the blocks in view makes the list again
-	bool changed = false;
-	for (auto& block : _blocks)
-	{
-		const bool inView = object_draw_list::BlockInView(_view->viewProjection, _view->nearPlane, block.block);
-		changed = changed || inView != block.inView;
-		block.inView = inView;
-	}
-	const auto frame = _drawClock.Next(turn, _view->eye, camera.GetFocus(), changed);
-	if (frame.rebuilt)
-	{
-		_anyListed = false;
-		for (auto& block : _blocks)
-		{
-			block.listed = block.inView && object_draw_list::BlockDistance(_view->eye, block.block) < object_draw_list::k_Range;
-			_anyListed = _anyListed || block.listed;
-		}
-	}
-	return frame;
-}
-
-bool AnimatedStaticSystem::InDrawList(glm::vec3 position) const
-{
-	if (!_view.has_value())
-	{
-		return true;
-	}
-	// The block of the land cell it stands on; off the land's blocks it is listed with the first block listed
-	const auto cellX = static_cast<int32_t>(std::floor(position.x / 10.0f));
-	const auto cellZ = static_cast<int32_t>(std::floor(position.z / 10.0f));
-	const auto blockX = cellX >> 4;
-	const auto blockZ = cellZ >> 4;
-	if (cellX < 0 || cellZ < 0 || blockX >= k_GridBlocks || blockZ >= k_GridBlocks)
-	{
-		return _anyListed;
-	}
-	const auto index = _blockGrid.at(static_cast<size_t>((blockX * k_GridBlocks) + blockZ));
-	return index < 0 ? _anyListed : _blocks.at(static_cast<size_t>(index)).listed;
-}
-
-bool AnimatedStaticSystem::OnScreen(const Transform& transform, const Mesh& mesh) const
-{
-	if (!_view.has_value() || !Locator::resources::has_value())
+	if (!Locator::resources::has_value())
 	{
 		return true;
 	}
@@ -416,5 +330,5 @@ bool AnimatedStaticSystem::OnScreen(const Transform& transform, const Mesh& mesh
 	const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
 	const auto centre = transform.position + (transform.rotation * (transform.scale * box.Center()));
 	const float radius = std::abs(transform.scale.x) * glm::length(box.Size() * 0.5f);
-	return object_draw_list::SphereOnScreen(*_view, transform.position, centre, radius);
+	return object_draw_list::SphereOnScreen(view, transform.position, centre, radius);
 }

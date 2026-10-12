@@ -119,6 +119,23 @@ TEST(CreatureDecisionTree, BuildsAndEvaluates)
 	EXPECT_FALSE(creature_tree::Describe(tree).empty());
 }
 
+TEST(CreatureDecisionTree, TheLeafAThingReachesIsBelowTheRootOnceTheTreeSplits)
+{
+	std::vector<creature_tree::Episode> agreeing {{.belief = Thing(k_Food, 0), .feedback = 1.0f},
+	                                              {.belief = Thing(k_Villager, 1), .feedback = 1.0f}};
+	// Examples that agree leave the tree a single leaf: the root
+	EXPECT_EQ(creature_tree::LeafOf(creature_tree::Build(agreeing, k_HungerAttributes), Thing(k_Food, 0)), 0u);
+	std::vector<creature_tree::Episode> split {{.belief = Thing(k_Food, 0), .feedback = -1.0f},
+	                                           {.belief = Thing(k_Villager, 1), .feedback = 1.0f}};
+	const auto tree = creature_tree::Build(split, k_HungerAttributes);
+	const auto leaf = creature_tree::LeafOf(tree, Thing(k_Villager, 1));
+	ASSERT_TRUE(leaf.has_value());
+	EXPECT_NE(*leaf, 0u);
+	// No branch for it, or no tree at all: no leaf
+	EXPECT_FALSE(creature_tree::LeafOf(tree, Thing(creature_tree::belief_types::k_Tree, 2)).has_value());
+	EXPECT_FALSE(creature_tree::LeafOf(creature_tree::Build({}, k_HungerAttributes), Thing(k_Food, 0)).has_value());
+}
+
 TEST(CreatureDecisionTree, EmptyTreeKnowsNothing)
 {
 	const auto tree = creature_tree::Build({}, k_HungerAttributes);

@@ -306,6 +306,7 @@ openblack_setup_and_add_test(
   test_creature_footprints test_creature_footprints.cpp
 )
 openblack_setup_and_add_test(test_creature_fight test_creature_fight.cpp)
+openblack_setup_and_add_test(test_fight_marks test_fight_marks.cpp)
 openblack_setup_and_add_test(test_creature_fizz test_creature_fizz.cpp)
 openblack_setup_and_add_test(
   test_creature_fizz_look test_creature_fizz_look.cpp
@@ -328,6 +329,9 @@ openblack_setup_and_add_test(
   test_creature_status_panel test_creature_status_panel.cpp
 )
 openblack_setup_and_add_test(test_creature_mode test_creature_mode.cpp)
+openblack_setup_and_add_test(
+  test_creature_attention test_creature_attention.cpp
+)
 target_link_libraries(test_flat_land PRIVATE lnd)
 target_link_libraries(test_testbed_scenarios PRIVATE lnd)
 openblack_setup_and_add_test(test_town_desire test_town_desire.cpp)
@@ -839,3 +843,18 @@ openblack_setup_and_add_test(test_player_profiles test_player_profiles.cpp)
 openblack_setup_and_add_test(test_text_edit_rules gui/test_text_edit_rules.cpp)
 openblack_setup_and_add_test(test_new_player_box gui/test_new_player_box.cpp)
 openblack_setup_and_add_test(test_creature_names test_creature_names.cpp)
+openblack_setup_and_add_test(test_creature_help test_creature_help.cpp)
+openblack_setup_and_add_test(test_help_messages test_help_messages.cpp)
+openblack_setup_and_add_test(test_object_draw_list test_object_draw_list.cpp)
+openblack_setup_and_add_test(
+  test_building_site_list test_building_site_list.cpp
+)
+openblack_setup_and_add_test(test_hand_trace hand/test_hand_trace.cpp)
+openblack_setup_and_add_test(
+  test_script_guide_ogre_natives test_script_guide_ogre_natives.cpp
+)
+target_link_libraries(test_script_guide_ogre_natives PRIVATE ScriptLibrary helpdude)
+openblack_setup_and_add_test(test_shepherd_rules test_shepherd_rules.cpp)
+openblack_setup_and_add_test(
+  test_creature_object_beliefs test_creature_object_beliefs.cpp
+)

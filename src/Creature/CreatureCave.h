@@ -54,13 +54,24 @@ struct Snapshot
 	/// of the stronger of the two
 	float anger {0.0f};
 	float compassion {0.0f};
-	/// What it thinks of its god, -1 to 1, and seconds since the god last paid it any attention
+	/// What it thinks of its god, -1 to 1, and the game turns its god looked at it, which over the turns it has lived
+	/// (in its needs) is the attention it has been paid
 	float attitudeToPlayer {0.0f};
-	float secondsAlone {0.0f};
+	uint32_t turnsLookedAt {0};
 	/// It thinks it knows its god's dominant desire
 	bool knowsGodsDesire {false};
-	/// Other creatures it knows of
-	size_t creaturesKnown {0};
+	/// Each other creature it knows of: its name, how nice it finds it, -1 to 1, and how much attention it has paid it
+	struct KnownCreature
+	{
+		std::u16string name;
+		float howNice {0.0f};
+		float attention {0.0f};
+	};
+	std::vector<KnownCreature> creaturesKnown;
+	/// How many temples, flocks and forests it believes in, of the things it has come across
+	uint32_t templesKnown {0};
+	uint32_t flocksKnown {0};
+	uint32_t forestsKnown {0};
 	/// The opinion of each action, -1 to 1, by its name
 	struct Opinion
 	{
@@ -91,9 +102,6 @@ struct Snapshot
 	/// How it leans in its fights, from -1 (defensive) to 1 (aggressive)
 	float fightBalance {0.0f};
 };
-
-/// The god's attention fades over this many seconds of leaving the creature alone
-constexpr float k_AttentionFadeSeconds = 300.0f;
 
 /// The scrolls' facts about the creature: the percentages cut short as the game does, the age in its hours of game time
 /// (which the scroll calls years), and the personality's desires with how much it feels each

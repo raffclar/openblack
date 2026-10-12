@@ -35,6 +35,7 @@
 #include "ParticleMaths.h"
 #include "ParticleSpellLink.h"
 #include "PlasmaCommand.h"
+#include "RisingSparks.h"
 #include "StormMaths.h"
 
 namespace openblack
@@ -563,6 +564,15 @@ struct ObjectGlow
 	uint64_t startedAt {0};
 };
 
+/// The shower of sparks an atom sends up from the object it is kept on (see rising_sparks): the sparks are made the first
+/// frame it is drawn, and their time passes only on the frames it is drawn
+struct ObjectShower
+{
+	entt::entity object {entt::null};
+	std::optional<rising_sparks::Sparks> sparks;
+	rising_sparks::FrameMilliseconds clock;
+};
+
 /// A particle
 struct Atom
 {
@@ -628,6 +638,8 @@ struct Atom
 	std::shared_ptr<SurfaceInstance> surface;
 	/// The shell it lays over an object's model, when a rule keeps it on one
 	std::optional<ObjectGlow> objectGlow;
+	/// The shower of sparks it sends up from an object, when a rule keeps it on one and asks for it; it needs no creator
+	std::shared_ptr<ObjectShower> shower;
 	std::vector<std::unique_ptr<Collection>> subCollections;
 	std::unordered_map<const Modifier*, AtomRuleData> data;
 };
@@ -843,6 +855,8 @@ public:
 		int player {-1};
 		/// The shell it lays over an object's model (Atom::objectGlow)
 		std::optional<ObjectGlow> objectGlow;
+		/// The shower of sparks it sends up (Atom::shower)
+		const ObjectShower* shower {nullptr};
 	};
 	/// The ribbon through the joints of one collection
 	struct DrawChain
@@ -886,6 +900,8 @@ public:
 	/// Everything drawn, t of the way from the last step to the current one, appended to the walk. A ribbon needs two
 	/// joints; its joints are drawn whatever their alpha.
 	void Walk(float t, DrawWalk& out) const;
+	/// Each shower of sparks of an atom that is drawn, for a frame's time to pass on it
+	void ForEachDrawnShower(const std::function<void(ObjectShower&)>& visit);
 	[[nodiscard]] size_t AtomCount() const { return _atomCount; }
 	[[nodiscard]] size_t CollectionCount() const;
 

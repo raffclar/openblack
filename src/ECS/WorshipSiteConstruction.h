@@ -9,16 +9,13 @@
 
 #pragma once
 
-#include <span>
-
-#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
 
 // A worship site going up as a building site of the towns asked to build it: where its wood is piled, where what it is
-// given goes, and which towns it is a site of. Pure rules, free of the game.
+// given goes. Pure rules, free of the game.
 
 namespace openblack::ecs::worship_site_construction
 {
@@ -47,8 +44,5 @@ enum class Destination : uint8_t
 
 /// Whether a worship site stores a resource: food (or any) always, wood while it goes up
 [[nodiscard]] bool Stores(ResourceType type, bool goingUp);
-
-/// Whether a site is one of a town's building sites: the town was asked to build it and it isn't built
-[[nodiscard]] bool IsSiteOf(std::span<const entt::entity> askedTowns, entt::entity town, bool built);
 
 } // namespace openblack::ecs::worship_site_construction

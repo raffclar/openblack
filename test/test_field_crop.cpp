@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -139,6 +140,28 @@ TEST(FieldCrop, SinksAtMostEightyPercent)
 	EXPECT_FLOAT_EQ(field_crop::Sink(-1.0f), -0.8f);
 	EXPECT_FLOAT_EQ(field_crop::Sink(-0.5f), -0.5f);
 	EXPECT_FLOAT_EQ(field_crop::Sink(0.0f), 0.0f);
+}
+
+TEST(FieldCrop, ARipeFieldSinksAsItsFarmersDigItUp)
+{
+	// Land 1's fields: ripe at 1200, 350 food when full; a farmer digs 150 at a time
+	const field_crop::Type type {.ageGrowth = 80.0f, .ageRipe = 1200.0f, .timesToSow = 30.0f, .totalFood = 350.0f};
+	const auto drawnHeight = [&type](float food) -> std::optional<float> {
+		const auto look = field_crop::LookOf({.timesSown = 30, .age = 1200.0f, .food = food}, type, 25);
+		if (!look.has_value())
+		{
+			return std::nullopt;
+		}
+		return field_crop::Sink(look->height);
+	};
+	// Full, it stands at its whole height
+	EXPECT_FLOAT_EQ(drawnHeight(350.0f).value_or(1.0f), 0.0f);
+	// After one load more than half of it still stands out of the ground
+	EXPECT_NEAR(drawnHeight(200.0f).value_or(1.0f), -0.4286f, 1e-4f);
+	// After two loads it is down to its lowest, only the tips of its stalks showing
+	EXPECT_FLOAT_EQ(drawnHeight(50.0f).value_or(1.0f), -0.8f);
+	// With less than a handful left it is not drawn at all
+	EXPECT_FALSE(drawnHeight(24.0f).has_value());
 }
 
 TEST(FieldCrop, AlignmentIsClamped)

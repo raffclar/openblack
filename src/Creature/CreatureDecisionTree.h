@@ -148,6 +148,8 @@ struct Tree
 };
 /// Grows a tree from examples, testing only the attributes allowed
 [[nodiscard]] Tree Build(std::span<const Episode> episodes, std::span<const Attribute> allowed);
+/// The leaf a thing reaches in the tree, by its node's place; none when the tree is empty or has no branch for it
+[[nodiscard]] std::optional<size_t> LeafOf(const Tree& tree, const Belief& belief);
 /// How good a thing is by the tree, from -1 to 1; 0 when the tree has nothing to say about it
 [[nodiscard]] float Evaluate(const Tree& tree, const Belief& belief);
 /// The most useful anything can be for the planner, an eighth

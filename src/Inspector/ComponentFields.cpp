@@ -39,6 +39,7 @@
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureFizz.h"
 #include "Creature/CreatureHair.h"
+#include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
@@ -47,6 +48,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
@@ -57,6 +59,7 @@
 #include "Creature/CreatureTattoo.h"
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureWatching.h"
+#include "Creature/FightMarks.h"
 #include "Creature/LeashRope.h"
 #include "Creature/LeashRules.h"
 #include "Creature/PerceivedDesires.h"
@@ -86,6 +89,7 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -98,6 +102,7 @@
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/DrinkingWater.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -210,7 +215,6 @@
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/RewardRules.h"
-#include "ECS/ScriptHighlightRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/VillagerDeathRules.h"
@@ -231,6 +235,7 @@
 #include "Magic/SpellChants.h"
 #include "Magic/TownBelief.h"
 #include "Particles/ParticleSpellLink.h"
+#include "Particles/RisingSparks.h"
 #include "Physics/DamageMesh.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptTimers.h"
@@ -289,6 +294,49 @@ constexpr std::array<std::string_view, 40> k_CreatureDesiresDesireNames {"Impres
                                                                          "LookAround",
                                                                          "Steal"};
 static_assert(static_cast<size_t>(openblack::creature_desires::Desire::_Count) == k_CreatureDesiresDesireNames.size());
+constexpr std::array<std::string_view, 42> k_CreatureHelpKindNames {"LessonIncreaseSource",
+                                                                    "LessonDecreaseSource",
+                                                                    "LessonIncreaseDesire",
+                                                                    "LessonDecreaseDesire",
+                                                                    "LessonIncreaseOpinion",
+                                                                    "LessonDecreaseOpinion",
+                                                                    "LessonNormalAction",
+                                                                    "LessonMagicAction",
+                                                                    "NearlyLearntNormalAction",
+                                                                    "NearlyLearntMagicAction",
+                                                                    "CantLearnNormalActionYet",
+                                                                    "CantLearnMagicActionYet",
+                                                                    "StageInitial",
+                                                                    "StageLearnToEat",
+                                                                    "StagePunishment",
+                                                                    "StageLeashPullAndPickUp",
+                                                                    "StageLeashAttachToHouse",
+                                                                    "StageMeetGuide",
+                                                                    "StageFriendsWithGuide",
+                                                                    "StageGuideExplainsHistory",
+                                                                    "StageLearnSpell",
+                                                                    "StageLearnToImpressTown",
+                                                                    "StageLearnToFight",
+                                                                    "StageLearnToHelpTown",
+                                                                    "StageLeashGoodAndEvil",
+                                                                    "StageFullyMature",
+                                                                    "ReceivedSpell",
+                                                                    "FinishedReceivingSpell",
+                                                                    "Tutorial",
+                                                                    "CurrentSource",
+                                                                    "PhysicalProblem",
+                                                                    "MentalProblem",
+                                                                    "PromptHasntLearntNormalAction",
+                                                                    "TownAttitudeToCreature",
+                                                                    "CannotLearnActionInThisStage",
+                                                                    "ShowStageCriteria",
+                                                                    "SomethingInterestingOffScreen",
+                                                                    "MiscellaneousStacked",
+                                                                    "MiscellaneousUnstacked",
+                                                                    "MessedUpAction",
+                                                                    "FailureExplanation",
+                                                                    "CurrentDesire"};
+static_assert(static_cast<size_t>(openblack::creature_help::Kind::_Count) == k_CreatureHelpKindNames.size());
 constexpr std::array<std::string_view, 16> k_CreatureSpellsSpellNames {
     "Freeze", "Small", "Big",    "Weak",       "Strong", "Fat", "Thin",    "Invisible",
     "Nice",   "Nasty", "Hungry", "Frightened", "Tired",  "Ill", "Thirsty", "Itchy"};
@@ -478,14 +526,18 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlannedAbode>(context)
 	    .Field<&components::PlannedAbode::townId>("townId")
 	    .Field<&components::PlannedAbode::info>("info")
-	    .Field<&components::PlannedAbode::yAngle>("yAngle");
+	    .Field<&components::PlannedAbode::yAngle>("yAngle")
+	    .Field<&components::PlannedAbode::wasBuilt>("wasBuilt");
 	Reflect<components::BuildingSite>(context)
+	    .Field<&components::BuildingSite::town>("town")
 	    .Field<&components::BuildingSite::desire>("desire")
 	    .Field<&components::BuildingSite::repair>("repair")
+	    .Field<&components::BuildingSite::takesBroughtWood>("takesBroughtWood")
 	    .Field<&components::BuildingSite::workers>("workers")
 	    .Field<&components::BuildingSite::workerCount>("workerCount")
 	    .Field<&components::BuildingSite::places>("places")
 	    .Field<&components::BuildingSite::piles>("piles");
+	Reflect<components::BuildingSites>(context).Field<&components::BuildingSites::sites>("sites");
 	Reflect<components::SitePile> {context};
 	Reflect<components::Creature>(context)
 	    .Field<&components::Creature::owner>("owner")
@@ -600,6 +652,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureHair>(context)
 	    .Field<&components::CreatureHair::groups>("groups")
 	    .Field<&components::CreatureHair::started>("started");
+	Reflect<components::CreatureHelpMemory>(context).Field<&components::CreatureHelpMemory::memory>("memory");
 	Reflect<components::CreatureLeash>(context)
 	    .Field<&components::CreatureLeash::known>("known")
 	    .Field<&components::CreatureLeash::worn>("worn")
@@ -665,6 +718,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
+	    .Field<&components::CreatureMindState::turnsLookedAt>("turnsLookedAt")
+	    .Field<&components::CreatureMindState::beliefs>("beliefs")
+	    .Field<&components::CreatureMindState::sweep>("sweep")
+	    .Field<&components::CreatureMindState::beliefCell>("beliefCell")
+	    .Field<&components::CreatureMindState::nearestTemple>("nearestTemple")
 	    .Field<&components::CreatureMindState::feedbackSeconds>("feedbackSeconds")
 	    .Field<&components::CreatureMindState::feedbackWasStroke>("feedbackWasStroke")
 	    .Field<&components::CreatureMindState::attitudeToPlayer>("attitudeToPlayer")
@@ -678,6 +736,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::desiresPhase>("desiresPhase")
 	    .Field<&components::CreatureMindState::inDevelopmentScript>("inDevelopmentScript")
 	    .Field<&components::CreatureMindState::paused>("paused")
+	    .Field<&components::CreatureMindState::showDesireOnHold>("showDesireOnHold")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")
 	    .Field<&components::CreatureMindState::townCompassion>("townCompassion")
@@ -859,6 +918,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::DiscipleMark>(context)
 	    .Field<&components::DiscipleMark::villager>("villager")
 	    .Field<&components::DiscipleMark::symbol>("symbol");
+	Reflect<components::DrinkingWater>(context).Field<&components::DrinkingWater::place>("place");
 	Reflect<components::DropsRoots> {context};
 	Reflect<components::FallingRoots>(context)
 	    .Field<&components::FallingRoots::seconds>("seconds")
@@ -945,7 +1005,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Flock::made>("made")
 	    .Field<&components::Flock::town>("town")
 	    .Field<&components::Flock::most>("most")
-	    .Field<&components::Flock::temple>("temple");
+	    .Field<&components::Flock::temple>("temple")
+	    .Field<&components::Flock::shepherd>("shepherd")
+	    .Field<&components::Flock::savedPlace>("savedPlace")
+	    .Field<&components::Flock::keepsTogether>("keepsTogether");
 	Reflect<components::FlockMember>(context)
 	    .Field<&components::FlockMember::flock>("flock")
 	    .Field<&components::FlockMember::order>("order");
@@ -1058,7 +1121,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandOnCreature::cycle>("cycle")
 	    .Field<&components::HandOnCreature::byCommand>("byCommand")
 	    .Field<&components::HandOnCreature::heldMs>("heldMs")
-	    .Field<&components::HandOnCreature::strokedOrSlapped>("strokedOrSlapped");
+	    .Field<&components::HandOnCreature::strokedOrSlapped>("strokedOrSlapped")
+	    .Field<&components::HandOnCreature::up>("up")
+	    .Field<&components::HandOnCreature::upStarted>("upStarted")
+	    .Field<&components::HandOnCreature::frameCursorX>("frameCursorX");
 	Reflect<components::HandLastFeedback>(context).Field<&components::HandLastFeedback::sum>("sum");
 	Reflect<components::Heartbeat>(context).Field<&components::Heartbeat::state>("state");
 	Reflect<components::HiddenByState> {context};
@@ -1697,6 +1763,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::WoodReactionTarget>(context)
 	    .Field<&components::WoodReactionTarget::wood>("wood")
 	    .Field<&components::WoodReactionTarget::startTurn>("startTurn");
+	Reflect<components::ShepherdWork>(context)
+	    .Field<&components::ShepherdWork::countdown>("countdown")
+	    .Field<&components::ShepherdWork::pending>("pending");
+	Reflect<components::MoveTarget>(context).Field<&components::MoveTarget::thing>("thing");
 	Reflect<components::Vortex>(context)
 	    .Field<&components::Vortex::type>("type")
 	    .Field<&components::Vortex::state>("state")
@@ -1942,6 +2012,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fight::Fighter::landed>("landed")
 	    .Field<&openblack::creature_fight::Fighter::spell>("spell")
 	    .Field<&openblack::creature_fight::Fighter::queue>("queue")
+	    .Field<&openblack::creature_fight::Fighter::marks>("marks")
 	    .Field<&openblack::creature_fight::Fighter::health>("health")
 	    .Field<&openblack::creature_fight::Fighter::stamina>("stamina")
 	    .Field<&openblack::creature_fight::Fighter::control>("control")
@@ -1957,6 +2028,15 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fight::Reach::animation>("animation")
 	    .Field<&openblack::creature_fight::Reach::reach>("reach")
 	    .Field<&openblack::creature_fight::Reach::height>("height");
+	Reflect<openblack::creature_fight::marks::Mark>(context, ValueOnly {})
+	    .Field<&openblack::creature_fight::marks::Mark::anchor>("anchor")
+	    .Field<&openblack::creature_fight::marks::Mark::subMesh>("subMesh")
+	    .Field<&openblack::creature_fight::marks::Mark::firstIndex>("firstIndex")
+	    .Field<&openblack::creature_fight::marks::Mark::s>("s")
+	    .Field<&openblack::creature_fight::marks::Mark::t>("t")
+	    .Field<&openblack::creature_fight::marks::Mark::local>("local")
+	    .Field<&openblack::creature_fight::marks::Mark::chargeMs>("chargeMs")
+	    .Field<&openblack::creature_fight::marks::Mark::frame>("frame");
 	Reflect<openblack::creature_fizz::Fizz>(context, ValueOnly {})
 	    .Field<&openblack::creature_fizz::Fizz::now>("now")
 	    .Field<&openblack::creature_fizz::Fizz::target>("target")
@@ -1965,6 +2045,19 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_hair::Strand>(context, ValueOnly {})
 	    .Field<&openblack::creature_hair::Strand::positions>("positions")
 	    .Field<&openblack::creature_hair::Strand::velocities>("velocities");
+	Reflect<openblack::creature_help::Entry>(context, ValueOnly {})
+	    .Field<&openblack::creature_help::Entry::parameter>("parameter")
+	    .Field<&openblack::creature_help::Entry::thing>("thing")
+	    .Field<&openblack::creature_help::Entry::position>("position")
+	    .Field<&openblack::creature_help::Entry::toldTurn>("toldTurn")
+	    .Field<&openblack::creature_help::Entry::waiting>("waiting");
+	Reflect<openblack::creature_help::Memory>(context, ValueOnly {})
+	    .Field<&openblack::creature_help::Memory::entries>("entries", {k_CreatureHelpKindNames})
+	    .Field<&openblack::creature_help::Memory::physicalProblemTurn>("physicalProblemTurn")
+	    .Field<&openblack::creature_help::Memory::tutorialTurn>("tutorialTurn")
+	    .Field<&openblack::creature_help::Memory::tutorialDone>("tutorialDone")
+	    .Field<&openblack::creature_help::Memory::tutorialToldTurn>("tutorialToldTurn")
+	    .Field<&openblack::creature_help::Memory::handOver>("handOver");
 	Reflect<openblack::creature_layers::BodyAction>(context, ValueOnly {})
 	    .Field<&openblack::creature_layers::BodyAction::kind>("kind")
 	    .Field<&openblack::creature_layers::BodyAction::phase>("phase")
@@ -1997,7 +2090,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_learning::Context::secondsSince>("secondsSince")
 	    .Field<&openblack::creature_learning::Context::learnable>("learnable")
 	    .Field<&openblack::creature_learning::Context::windowSeconds>("windowSeconds")
-	    .Field<&openblack::creature_learning::Context::credited>("credited");
+	    .Field<&openblack::creature_learning::Context::credited>("credited")
+	    .Field<&openblack::creature_learning::Context::source>("source");
 	Reflect<openblack::creature_learning::CreatureAttitude>(context, ValueOnly {})
 	    .Field<&openblack::creature_learning::CreatureAttitude::creature>("creature")
 	    .Field<&openblack::creature_learning::CreatureAttitude::howNice>("howNice")
@@ -2124,6 +2218,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_morph::Morph::evilGood>("evilGood")
 	    .Field<&openblack::creature_morph::Morph::thinFat>("thinFat")
 	    .Field<&openblack::creature_morph::Morph::weakStrong>("weakStrong");
+	Reflect<openblack::creature_object_beliefs::Sweep>(context, ValueOnly {})
+	    .Field<&openblack::creature_object_beliefs::Sweep::left>("left")
+	    .Field<&openblack::creature_object_beliefs::Sweep::ring>("ring")
+	    .Field<&openblack::creature_object_beliefs::Sweep::step>("step");
 	Reflect<openblack::creature_perceived_desires::PerceivedDesires>(context, ValueOnly {})
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::player>("player")
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::town>("town");
@@ -2381,12 +2479,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::reward::DustSprite::offset>("offset")
 	    .Field<&openblack::ecs::reward::DustSprite::frame>("frame")
 	    .Field<&openblack::ecs::reward::DustSprite::rgb>("rgb");
-	Reflect<openblack::ecs::script_highlights::Spark>(context, ValueOnly {})
-	    .Field<&openblack::ecs::script_highlights::Spark::ageMilliseconds>("ageMilliseconds")
-	    .Field<&openblack::ecs::script_highlights::Spark::angle>("angle");
-	Reflect<openblack::ecs::script_highlights::Sparks>(context, ValueOnly {})
-	    .Field<&openblack::ecs::script_highlights::Sparks::sparks>("sparks")
-	    .Field<&openblack::ecs::script_highlights::Sparks::firstPicture>("firstPicture");
 	Reflect<openblack::ecs::town_aggression::Record>(context, ValueOnly {})
 	    .Field<&openblack::ecs::town_aggression::Record::aggression>("aggression", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::town_aggression::Record::lastTurns>("lastTurns", {k_PlayerNamesNames})
@@ -2612,6 +2704,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::particles::ProcessInfo::power>("power")
 	    .Field<&openblack::particles::ProcessInfo::enabled>("enabled")
 	    .Field<&openblack::particles::ProcessInfo::spin>("spin");
+	Reflect<openblack::particles::rising_sparks::Spark>(context, ValueOnly {})
+	    .Field<&openblack::particles::rising_sparks::Spark::ageMilliseconds>("ageMilliseconds")
+	    .Field<&openblack::particles::rising_sparks::Spark::angle>("angle");
+	Reflect<openblack::particles::rising_sparks::Sparks>(context, ValueOnly {})
+	    .Field<&openblack::particles::rising_sparks::Sparks::sparks>("sparks")
+	    .Field<&openblack::particles::rising_sparks::Sparks::firstPicture>("firstPicture");
 	Reflect<openblack::physics::damage::Corner>(context, ValueOnly {})
 	    .Field<&openblack::physics::damage::Corner::position>("position")
 	    .Field<&openblack::physics::damage::Corner::uv>("uv");

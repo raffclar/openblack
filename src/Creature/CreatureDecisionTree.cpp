@@ -282,11 +282,11 @@ Tree creature_tree::Build(std::span<const Episode> episodes, std::span<const Att
 	return tree;
 }
 
-float creature_tree::Evaluate(const Tree& tree, const Belief& belief)
+std::optional<size_t> creature_tree::LeafOf(const Tree& tree, const Belief& belief)
 {
 	if (tree.nodes.empty())
 	{
-		return 0.0f;
+		return std::nullopt;
 	}
 	size_t index = 0;
 	while (true)
@@ -294,20 +294,26 @@ float creature_tree::Evaluate(const Tree& tree, const Belief& belief)
 		const auto& node = tree.nodes.at(index);
 		if (!node.test.has_value())
 		{
-			return k_Buckets.at(node.bucket);
+			return index;
 		}
 		const auto value = belief.Value(*node.test);
 		if (!value.has_value())
 		{
-			return 0.0f;
+			return std::nullopt;
 		}
 		const auto found = std::ranges::find(node.children, *value, &std::pair<uint32_t, size_t>::first);
 		if (found == node.children.end())
 		{
-			return 0.0f;
+			return std::nullopt;
 		}
 		index = found->second;
 	}
+}
+
+float creature_tree::Evaluate(const Tree& tree, const Belief& belief)
+{
+	const auto leaf = LeafOf(tree, belief);
+	return leaf.has_value() ? k_Buckets.at(tree.nodes.at(*leaf).bucket) : 0.0f;
 }
 
 float creature_tree::Usefulness(float utility)

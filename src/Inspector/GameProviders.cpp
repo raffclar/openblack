@@ -54,6 +54,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
+#include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -109,6 +110,7 @@
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -133,6 +135,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -146,6 +149,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -189,6 +193,7 @@
 #include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
+#include "Hand/HandTrace.h"
 #include "Help/AdvisorModel.h"
 #include "Help/AdvisorVoices.h"
 #include "Help/DialogueText.h"
@@ -311,6 +316,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
     LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
+    LocatorCoverage {"objectDrawListSystem", "view.draw_list"},
     LocatorCoverage {"appleBarrelSystem", "living.apple_barrel"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
@@ -333,6 +339,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
     LocatorCoverage {"helpProfileSystem", "help.profile"},
+    LocatorCoverage {"creatureHelpSystem", "help.creature"},
+    LocatorCoverage {"helpMessageSystem", "help.messages"},
     LocatorCoverage {"tipBubbleSystem", "help.bubble"},
     LocatorCoverage {"handDemoSystem", "help.hand_demo"},
     LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
@@ -1466,6 +1474,128 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		            {"object", Id(pick.object)}, {"point", Optional(pick.point)},        {"land", Optional(pick.land)},
 		            {"distance", pick.distance}, {"hover_object", Id(pick.hoverObject)}, {"hover_seconds", pick.hoverSeconds}};
 	        }));
+	provider->Add(
+	    Query("hand_trace",
+	          "The player's hand frame by frame, for hand bugs: start keeps the last frames (frames, 600 by default) of every "
+	          "part of the frame that put the hand somewhere, where it was placed, drawn and showed, on the screen too, and "
+	          "what it did; read returns them (the last few with last) and the jumps among them: frames where the hand "
+	          "moved on the screen more than threshold pixels (12) further than the cursor, came_back when it returned "
+	          "within return_within frames (4); stop forgets them",
+	          {{.name = "action", .type = "string", .description = "start, read (the default) or stop", .required = false},
+	           {.name = "frames", .type = "integer", .description = "With start: how many frames to keep", .required = false},
+	           {.name = "last", .type = "integer", .description = "With read: only the last frames", .required = false},
+	           {.name = "threshold",
+	            .type = "number",
+	            .description = "With read: the pixels beyond the cursor's move that make a jump",
+	            .required = false},
+	           {.name = "return_within",
+	            .type = "integer",
+	            .description = "With read: the frames a jump may take to come back",
+	            .required = false},
+	           {.name = "jumps_only",
+	            .type = "boolean",
+	            .description = "With read: only the jumps, each with the frames around it",
+	            .required = false}}),
+	    [](const QueryContext& context) {
+		    if (!Locator::handSystem::has_value() || Locator::handSystem::value().GetTrace() == nullptr)
+		    {
+			    return QueryResult::Error("the hands keep no trace");
+		    }
+		    auto& trace = *Locator::handSystem::value().GetTrace();
+		    const auto action = context.params.value("action", std::string("read"));
+		    if (action == "start")
+		    {
+			    const auto frames = context.params.value("frames", 600);
+			    if (frames < 1 || frames > 100000)
+			    {
+				    return QueryResult::Error("frames is 1 to 100000");
+			    }
+			    trace.Enable(static_cast<size_t>(frames));
+			    return QueryResult::Value(Json {{"tracing", true}, {"frames", frames}});
+		    }
+		    if (action == "stop")
+		    {
+			    trace.Disable();
+			    return QueryResult::Value(Json {{"tracing", false}});
+		    }
+		    if (action != "read")
+		    {
+			    return QueryResult::Error("action is start, read or stop");
+		    }
+		    auto frames = trace.Frames();
+		    const auto threshold = context.params.value("threshold", 12.0f);
+		    const auto returnWithin = static_cast<size_t>(std::max(context.params.value("return_within", 4), 0));
+		    const auto jumps = hand_trace::FindJumps(frames, threshold, returnWithin);
+		    const auto vec = [](glm::vec3 v) { return Json {v.x, v.y, v.z}; };
+		    const auto frameJson = [&vec](const hand_trace::Frame& frame) {
+			    Json writes = Json::array();
+			    for (const auto& write : frame.Writes())
+			    {
+				    writes.push_back({{"by", std::string(write.writer)}, {"at", vec(write.position)}});
+			    }
+			    return Json {{"frame", frame.frame},
+			                 {"seconds", frame.seconds},
+			                 {"cursor", {frame.cursor.x, frame.cursor.y}},
+			                 {"placed", vec(frame.placed)},
+			                 {"drawn", vec(frame.drawn)},
+			                 {"visible", vec(frame.visible)},
+			                 {"screen", frame.screen.has_value() ? Json {frame.screen->x, frame.screen->y} : Json(nullptr)},
+			                 {"wrist", vec(frame.wrist)},
+			                 {"wrist_screen", frame.wristScreen.has_value() ? Json {frame.wristScreen->x, frame.wristScreen->y}
+			                                                                : Json(nullptr)},
+			                 {"stage", frame.stage},
+			                 {"busy", frame.busy},
+			                 {"held", frame.held.has_value() ? Json(*frame.held) : Json(nullptr)},
+			                 {"picked", frame.picked.has_value() ? Json(*frame.picked) : Json(nullptr)},
+			                 {"cursor_land", frame.cursorLand.has_value() ? vec(*frame.cursorLand) : Json(nullptr)},
+			                 {"rest_on_thing", frame.restOnThing.has_value() ? vec(*frame.restOnThing) : Json(nullptr)},
+			                 {"writes", std::move(writes)},
+			                 {"writes_lost", frame.writesLost}};
+		    };
+		    Json jumpItems = Json::array();
+		    for (const auto& jump : jumps)
+		    {
+			    jumpItems.push_back({{"frame", jump.frame},
+			                         {"pixels", jump.pixels},
+			                         {"beyond_cursor", jump.beyondCursor},
+			                         {"came_back", jump.cameBack},
+			                         {"last_writer", std::string(jump.writer)}});
+		    }
+		    Json items = Json::array();
+		    if (context.params.value("jumps_only", false))
+		    {
+			    // Each jump with the two frames before it and the few it may take to come back
+			    std::vector<bool> keep(frames.size(), false);
+			    for (const auto& jump : jumps)
+			    {
+				    const auto from = jump.index >= 2 ? jump.index - 2 : 0;
+				    for (size_t i = from; i < frames.size() && i <= jump.index + returnWithin; ++i)
+				    {
+					    keep[i] = true;
+				    }
+			    }
+			    for (size_t i = 0; i < frames.size(); ++i)
+			    {
+				    if (keep[i])
+				    {
+					    items.push_back(frameJson(frames[i]));
+				    }
+			    }
+		    }
+		    else
+		    {
+			    const auto last = static_cast<size_t>(std::max(context.params.value("last", 0), 0));
+			    const size_t first = last > 0 && last < frames.size() ? frames.size() - last : 0;
+			    for (size_t i = first; i < frames.size(); ++i)
+			    {
+				    items.push_back(frameJson(frames[i]));
+			    }
+		    }
+		    return QueryResult::Value(Json {{"tracing", trace.Enabled()},
+		                                    {"kept", frames.size()},
+		                                    {"jumps", std::move(jumpItems)},
+		                                    {"frames", std::move(items)}});
+	    });
 	provider->Add(Query("input", "The mouse and the hands as the game's actions see them"),
 	              Serve<Locator::gameActionSystem>(
 	                  "the game's actions", [](const input::GameActionInterface& actions, const QueryContext& /*c*/) {
@@ -1818,6 +1948,35 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		                     {"wide_screen_fraction", director.GetWideScreenFraction()},
 		                     {"interface_active", director.IsInterfaceActive()},
 		                     {"close_clipping", director.IsCloseClipping()}};
+	        }));
+	provider->Add(
+	    Query("draw_list",
+	          "The land's draw list: the things on the blocks in view within 700 units that are drawn, at most 2999, the "
+	          "nearest blocks first; with an id, whether that thing is in it and drawn",
+	          {{.name = "id", .type = "integer", .description = "A thing to look up in the list", .required = false}}),
+	    Serve<Locator::objectDrawListSystem>(
+	        "the land's draw list",
+	        [](const ecs::systems::ObjectDrawListSystemInterface& drawList, const QueryContext& context) {
+		        const auto summary = drawList.GetSummary();
+		        Json result {{"active", summary.active},
+		                     {"rebuilt", summary.frame.rebuilt},
+		                     {"draw_all", summary.frame.drawAll},
+		                     {"made_at_turn", Optional(summary.madeAt)},
+		                     {"blocks_in_view", summary.blocksInView},
+		                     {"blocks_walked", summary.blocksWalked},
+		                     {"farthest_walked", summary.farthestWalked},
+		                     {"things", summary.things},
+		                     {"full", summary.full},
+		                     {"rebuilds_asked", summary.rebuildsAsked}};
+		        if (const auto entity = EntityParam(context.params); entity.has_value())
+		        {
+			        result["listed"] = drawList.Listed(*entity);
+			        if (const auto* registry = Registry(); registry != nullptr)
+			        {
+				        result["drawn"] = drawList.Drawn(*registry, *entity);
+			        }
+		        }
+		        return result;
 	        }));
 	provider->Add(
 	    Query("script_control", "The tasks with the camera and the dialogue, the scripts' spoken lines and the "
@@ -2652,6 +2811,74 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 			                         {"smoothed_rate", count.SmoothedRate()}});
 		        }
 		        return items;
+	        }));
+	provider->Add(Query("creature",
+	                    "The advisor's messages about the player's creature: whether they are on, the ones told lately "
+	                    "(kind, parameter, text, turn), and the creature's waiting ones and prompts",
+	                    {}, ResultKind::Object),
+	              Serve<Locator::creatureHelpSystem>(
+	                  "the creature help",
+	                  [](const ecs::systems::CreatureHelpSystemInterface& system, const QueryContext& /*c*/) -> Json {
+		                  Json told = Json::array();
+		                  for (const auto& message : system.GetTold())
+		                  {
+			                  told.push_back({{"creature", entt::to_integral(message.creature)},
+			                                  {"kind", static_cast<int>(message.kind)},
+			                                  {"parameter", message.parameter},
+			                                  {"text", message.text.has_value() ? Json(*message.text) : Json(nullptr)},
+			                                  {"turn", message.turn}});
+		                  }
+		                  Json creatures = Json::array();
+		                  const auto& registry = Locator::entitiesRegistry::value();
+		                  registry.Each<const CreatureHelpMemory>(
+		                      [&creatures](entt::entity entity, const CreatureHelpMemory& help) {
+			                      Json waiting = Json::array();
+			                      for (size_t kind = 0; kind < help.memory.entries.size(); ++kind)
+			                      {
+				                      for (const auto& entry : help.memory.entries.at(kind))
+				                      {
+					                      if (entry.waiting)
+					                      {
+						                      waiting.push_back({{"kind", kind}, {"parameter", entry.parameter}});
+					                      }
+				                      }
+			                      }
+			                      creatures.push_back({{"creature", entt::to_integral(entity)},
+			                                           {"waiting", waiting},
+			                                           {"hand_over", help.memory.handOver},
+			                                           {"body_problem_turn", help.memory.physicalProblemTurn},
+			                                           {"tutorial_turn", help.memory.tutorialTurn},
+			                                           {"tutorial_done", help.memory.tutorialDone}});
+		                      });
+		                  return Json {{"on", system.IsHelpOn()}, {"told", told}, {"creatures", creatures}};
+	                  }));
+	provider->Add(
+	    Query("messages",
+	          "The help the game starts by itself: the help scripts it started lately (script, texts, a "
+	          "town's need) and how many times each message set has been said",
+	          {}, ResultKind::Object),
+	    Serve<Locator::helpMessageSystem>(
+	        "the help messages", [](const ecs::systems::HelpMessageSystemInterface& system, const QueryContext& /*c*/) -> Json {
+		        Json started = Json::array();
+		        for (const auto& message : system.GetStarted())
+		        {
+			        started.push_back({{"script", message.script},
+			                           {"first", message.first},
+			                           {"last", message.last},
+			                           {"stat_text", message.statText.has_value() ? Json(*message.statText) : Json(nullptr)},
+			                           {"need", message.need.has_value() ? Json(*message.need) : Json(nullptr)},
+			                           {"turn", message.turn}});
+		        }
+		        Json sent = Json::object();
+		        const auto& counts = system.GetSentCounts();
+		        for (size_t set = 0; set < counts.size(); ++set)
+		        {
+			        if (counts.at(set) != 0)
+			        {
+				        sent[std::to_string(set)] = counts.at(set);
+			        }
+		        }
+		        return Json {{"started", started}, {"sets_said", sent}};
 	        }));
 	provider->Add(
 	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "

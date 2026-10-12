@@ -140,7 +140,8 @@ entt::entity AnimalSystem::CreateFlock(glm::vec2 centre, float domainRadius, flo
 	registry.Assign<Flock>(entity, Flock {.place = map_coords::FromMetres(centre),
 	                                      .domainRadius = static_cast<uint16_t>(domainRadius),
 	                                      .flockDistance = static_cast<uint16_t>(flockDistance),
-	                                      .made = _flocksMade++});
+	                                      .made = _flocksMade++,
+	                                      .savedPlace = map_coords::FromMetres(centre)});
 	return entity;
 }
 
@@ -1490,6 +1491,72 @@ void AnimalSystem::SetFlockCentre(entt::entity flock, glm::vec2 centre)
 	}
 }
 
+void AnimalSystem::MoveFlockPlace(entt::entity flock, glm::ivec2 place)
+{
+	auto& registry = EntityRegistry();
+	auto* flockData = registry.Valid(flock) ? registry.TryGet<Flock>(flock) : nullptr;
+	if (flockData == nullptr)
+	{
+		return;
+	}
+	// The leader's goal is the new place, so a leader on its way somewhere turns there
+	if (const auto leader = LeaderOf(flock); leader != entt::null && registry.Valid(leader))
+	{
+		if (auto* animal = registry.TryGet<Animal>(leader))
+		{
+			animal->move.goal = place;
+		}
+		else if (auto* wallHug = registry.TryGet<WallHug>(leader))
+		{
+			wallHug->goal = Metres(place);
+		}
+	}
+	flockData->place = map_coords::MapCoords {place.x, place.y, 0.0f};
+}
+
+entt::entity AnimalSystem::SeparateIntoOwnFlock(entt::entity entity)
+{
+	auto& registry = EntityRegistry();
+	auto* animal = registry.TryGet<Animal>(entity);
+	auto* old = animal != nullptr && registry.Valid(animal->flock) ? registry.TryGet<Flock>(animal->flock) : nullptr;
+	if (old == nullptr)
+	{
+		return entt::null;
+	}
+	const auto domainRadius = old->domainRadius;
+	const auto flockDistance = old->flockDistance;
+	LeaveFlock(entity, *animal);
+	// Its own flock is made where it stands and kept there, before taking the size of the one it left
+	const auto own = CreateFlock(Metres(animal->move.position), static_cast<float>(Flock::k_DefaultDomainRadius),
+	                             static_cast<float>(Flock::k_DefaultFlockDistance));
+	auto& ownData = registry.Get<Flock>(own);
+	ownData.place = map_coords::MapCoords {animal->move.position.x, animal->move.position.y, 0.0f};
+	ownData.savedPlace = ownData.place;
+	JoinLine(ownData, entity);
+	animal->flock = own;
+	ownData.domainRadius = domainRadius;
+	ownData.flockDistance = flockDistance;
+	return own;
+}
+
+void AnimalSystem::SendToSlaughter(entt::entity entity, glm::vec2 goal)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return;
+	}
+	// Its body goes the moment it lies dead
+	animal->deadTurns = 0;
+	SetupMoveTo(*animal, goal, 0.0f, AnimalState::Dead);
+}
+
+uint16_t AnimalSystem::SpeedOf(entt::entity entity) const
+{
+	const auto* animal = EntityRegistry().TryGet<const Animal>(entity);
+	return animal != nullptr ? animal->move.speed : 0;
+}
+
 void AnimalSystem::SetScale(entt::entity animal, float scale)
 {
 	if (auto* transform = EntityRegistry().TryGet<Transform>(animal))
@@ -1528,7 +1595,7 @@ bool AnimalSystem::IsAvailableForReaction(entt::entity entity) const
 	}
 }
 
-bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object)
+bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object, Reaction reaction)
 {
 	auto& registry = EntityRegistry();
 	auto* animal = registry.TryGet<Animal>(entity);
@@ -1538,7 +1605,7 @@ bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object)
 	}
 	// It takes up the flee whatever the object; with the object gone its next step gives the flee up
 	animal->fleeing = object;
-	animal->fleeReaction = Reaction::ReactToFire;
+	animal->fleeReaction = reaction;
 	SetState(*animal, AnimalState::FleeingFromObject);
 	return true;
 }

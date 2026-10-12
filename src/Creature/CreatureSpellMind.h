@@ -51,11 +51,6 @@ struct CheatSetup
 	float floor {0.0f};
 };
 
-/// Sources of these kinds are left as they are when a desire is made dominant: anger from being hurt, and wanting to
-/// restore its health from its life
-inline constexpr std::array<uint32_t, 2> k_SourcesNotMaximised {creature_desires::sources::k_AngerFromDamage,
-                                                                creature_desires::sources::k_RestoreHealthFromLife};
-
 /// Whether making a desire dominant holds another down: always, never, or only when all are to be
 [[nodiscard]] bool HeldDownByCheat(creature_desires::Desire other, bool all);
 

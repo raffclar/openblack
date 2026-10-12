@@ -46,6 +46,10 @@ public:
 	[[nodiscard]] float RadiusOf(entt::entity animal) const override;
 	[[nodiscard]] glm::vec3 MovementOf(entt::entity animal) const override;
 	void SetFlockCentre(entt::entity flock, glm::vec2 centre) override;
+	void MoveFlockPlace(entt::entity flock, glm::ivec2 place) override;
+	entt::entity SeparateIntoOwnFlock(entt::entity animal) override;
+	void SendToSlaughter(entt::entity animal, glm::vec2 goal) override;
+	[[nodiscard]] uint16_t SpeedOf(entt::entity animal) const override;
 	void KillByEffect(entt::entity animal, glm::vec3 position) override;
 	void SetDying(entt::entity animal) override;
 	void IntoHand(entt::entity animal) override;
@@ -58,7 +62,7 @@ public:
 	void StartFading(entt::entity animal) override;
 
 	[[nodiscard]] bool IsAvailableForReaction(entt::entity animal) const override;
-	bool SetupFleeFromObject(entt::entity entity, entt::entity object) override;
+	bool SetupFleeFromObject(entt::entity entity, entt::entity object, Reaction reaction) override;
 	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
 	void StopReaction(entt::entity animal) override;
 

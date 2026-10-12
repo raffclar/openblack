@@ -246,3 +246,58 @@ float creature_feedback::DistanceOutside(const glm::vec3& point, std::span<const
 	}
 	return best;
 }
+
+glm::vec3 creature_feedback::SurfaceNormal(const glm::vec3& point, std::span<const Capsule> capsules)
+{
+	constexpr auto k_Up = glm::vec3(0.0f, 1.0f, 0.0f);
+	std::optional<glm::vec3> out;
+	float nearest = std::numeric_limits<float>::max();
+	for (const auto& capsule : capsules)
+	{
+		const auto axis = capsule.to - capsule.from;
+		const auto axisSquared = glm::dot(axis, axis);
+		const auto along =
+		    axisSquared > 0.0f ? std::clamp(glm::dot(point - capsule.from, axis) / axisSquared, 0.0f, 1.0f) : 0.0f;
+		const auto away = point - (capsule.from + (axis * along));
+		const auto outside = glm::length(away) - capsule.radius;
+		if (outside < nearest)
+		{
+			nearest = outside;
+			out = away;
+		}
+	}
+	return out.has_value() && glm::length(*out) > 0.0f ? glm::normalize(*out) : k_Up;
+}
+
+glm::vec3 creature_feedback::HandUpOnTakingHold(const glm::vec3& creaturePosition, const glm::vec3& camera)
+{
+	const auto towards = camera - creaturePosition;
+	return glm::length(towards) > 0.0f ? glm::normalize(towards) : glm::vec3(0.0f);
+}
+
+std::optional<HandUpGlide> creature_feedback::HandUpGlideTo(bool onBody, bool cursorMoved, const glm::vec3& normal,
+                                                            const glm::vec3& creaturePosition, const glm::vec3& camera)
+{
+	if (!onBody)
+	{
+		return HandUpGlide {.destination = glm::vec3(0.0f, 1.0f, 0.0f), .seconds = k_HandStandsUpSeconds};
+	}
+	if (!cursorMoved)
+	{
+		return std::nullopt;
+	}
+	const auto out = glm::length(normal) > 0.0f ? glm::normalize(normal) : glm::vec3(0.0f);
+	const auto towards = HandUpOnTakingHold(creaturePosition, camera) * k_HandTowardsCamera;
+	return HandUpGlide {.destination = out + towards, .seconds = k_HandTurnsToBodySeconds};
+}
+
+glm::vec3 creature_feedback::HeldLookPoint(const glm::vec3& hand, const glm::vec3& middle, const glm::vec3& camera,
+                                           const glm::vec3& lineOfSight, float creatureHeight)
+{
+	if (glm::distance(middle, hand) <= creatureHeight * k_LooksAtCameraWithin)
+	{
+		return camera;
+	}
+	const auto way = glm::length(lineOfSight) > 0.0f ? glm::normalize(lineOfSight) : glm::vec3(0.0f);
+	return hand - (way * (creatureHeight * k_LooksNearerTheCamera));
+}

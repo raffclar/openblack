@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <array>
+#include <optional>
 
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -85,26 +86,44 @@ VillagerStates FinalStateOf(const LivingAction& action)
 }
 } // namespace
 
-bool villager_script::CanBeDirected(entt::entity villager)
+namespace
+{
+/// How a villager stands for a script: on the land or not, dead or not, drowning or not
+struct ScriptStanding
+{
+	bool onLand;
+	bool dead;
+	bool drowning;
+};
+
+std::optional<ScriptStanding> StandingOf(entt::entity villager)
 {
 	auto& registry = Entities();
 	const auto* action = registry.TryGet<const LivingAction>(villager);
 	if (action == nullptr || !registry.AllOf<Villager>(villager) || !Locator::livingActionSystem::has_value() ||
 	    !Locator::infoConstants::has_value())
 	{
-		return false;
+		return std::nullopt;
 	}
-	// Alive, lying on the land rather than in a hand, flying or in a tornado, and not drowning
 	// A villager is on the land unless held, flying or carried off; one just made is on it before it is filed in the
 	// map's cells
-	const bool onLand = !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(villager);
-	return onLand && FinalStateOf(*action) != VillagerStates::Dead &&
-	       StateOf(*action, LivingAction::Index::Top) != VillagerStates::Drowning;
+	return ScriptStanding {.onLand = !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(villager),
+	                       .dead = FinalStateOf(*action) == VillagerStates::Dead,
+	                       .drowning = StateOf(*action, LivingAction::Index::Top) == VillagerStates::Drowning};
+}
+} // namespace
+
+bool villager_script::CanBeDirected(entt::entity villager)
+{
+	const auto standing = StandingOf(villager);
+	return standing.has_value() && rules::CanBeDirected(standing->onLand, standing->dead, standing->drowning);
 }
 
 void villager_script::SetScriptState(entt::entity villager, VillagerStates state)
 {
-	if (!CanBeDirected(villager))
+	// A drowning villager is taken too: only the natives refuse one
+	const auto standing = StandingOf(villager);
+	if (!standing.has_value() || !rules::CanTakeScriptState(standing->onLand, standing->dead))
 	{
 		return;
 	}
@@ -150,7 +169,7 @@ void villager_script::MoveTo(entt::entity villager, glm::vec2 goal)
 	                                                                               VillagerStates::InScript))
 	{
 		// A script's walk goes straight to the point, through anything in the way: buildings, gates, rocks
-		villager_home::SetupMobileMoveTo(action, goal, VillagerStates::InScript, villager_home::WalkWay::StraightThrough);
+		villager_home::SetupMobileMoveTo(action, goal, villager_home::WalkWay::StraightThrough);
 	}
 }
 

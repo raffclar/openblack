@@ -401,8 +401,7 @@ bool InRange(entt::entity villager, entt::entity fire, float margin)
 /// the reaction
 void WalkTo(LivingAction& action, glm::vec2 goal, VillagerStates destination)
 {
-	villager_home::SetupMobileMoveTo(action, goal, destination);
-	Living().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, destination);
+	villager_home::SetupMoveTo(action, goal, destination);
 }
 
 /// Goes round the fire it is about to a point, then on into a state
@@ -555,17 +554,8 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 	}
 	if (IsFireFightingState(FinalState(action)))
 	{
-		// A fireman already: back to what it remembered, or to deciding afresh if that is a reaction, letting go of this
-		// one
-		PopFromPrevious(action);
-		if (StateInfo(FinalState(action)).isReactionState != 0)
-		{
-			SetTopState(action, VillagerStates::DecideWhatToDo);
-		}
-		if (FireStateOf(villager).reaction != 0)
-		{
-			StopReacting(villager);
-		}
+		// A fireman already: back to what it remembered, letting go of this reaction
+		EndReaction(action);
 		return 1;
 	}
 	// A villager of a town weighs whether the blaze needs it: by how urgent its fires are, how many more firemen fit round
@@ -988,6 +978,20 @@ void villager_fire::StopFireFighting(entt::entity villager)
 	    State(*action, LivingAction::Index::Previous) == VillagerStates::InvalidState)
 	{
 		SetPrevious(*action, VillagerStates::DecideWhatToDo);
+	}
+}
+
+void villager_fire::EndReaction(LivingAction& action)
+{
+	const auto villager = EntityOf(action);
+	PopFromPrevious(action);
+	if (StateInfo(FinalState(action)).isReactionState != 0)
+	{
+		SetTopState(action, VillagerStates::DecideWhatToDo);
+	}
+	if (FireStateOf(villager).reaction != 0)
+	{
+		StopReacting(villager);
 	}
 }
 
