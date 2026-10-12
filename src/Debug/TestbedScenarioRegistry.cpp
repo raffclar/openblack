@@ -1489,6 +1489,30 @@ void AddHand(std::vector<Scenario>& all)
 	         // And comes back in
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.97f}}},
 	});
+	// The camera stands as in the tutorial's throwing demonstration, 9 m over the land and 35 m behind the rock, which
+	// sits in the middle of the screen; the flat land beyond leaves the throw room to land
+	all.push_back({
+	    .id = "hand.throw",
+	    .name = "Throwing a rock",
+	    .facet = Facet::Hand,
+	    .description = "The hand picks up a rock, makes ready to throw low on the screen and flings it with a quick "
+	                   "upward sweep of the pointer, in real time.",
+	    .expected = "Each rock leaves the hand at the hand's speed, the same at any frame rate (the inspector's HandGrab "
+	                "lastThrow), and flies on the order of a hundred metres before it lands.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},
+	    .commands =
+	        {// Takes the rock under the middle of the screen
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	         // Makes ready low on the screen and sweeps up, letting go as the sweep ends
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.45f, 0.85f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
