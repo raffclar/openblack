@@ -25,10 +25,13 @@
 #include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreaturePhysiology.h"
+#include "Creature/CreatureRig.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -37,6 +40,7 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -59,9 +63,6 @@ constexpr uint32_t k_GrownUpPhase = 13;
 /// The time scale can't run more than this many turns of the body in a game turn
 constexpr float k_MaxTimeScale = 3600.0f;
 
-/// The poo lump is the size of the creature by this, and drops this far behind it for its size
-constexpr float k_PooScale = 1.5f;
-constexpr float k_PooBehind = 3.0f;
 /// Sick comes out as this many drops from the creature's mouth, about this high and this far ahead for its size, flung
 /// forwards and up, a little to either side, and lies on the land a while before it is gone
 constexpr int k_PukeDrops = 12;
@@ -190,6 +191,24 @@ glm::vec3 AheadOf(const Transform& transform)
 	auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 	ahead.y = 0.0f;
 	return glm::length(ahead) > 0.0f ? glm::normalize(ahead) : glm::vec3(0.0f, 0.0f, -1.0f);
+}
+/// Where the creature's groin is as its body is posed this frame; its feet when its species' bones aren't known
+glm::vec3 GroinOf(const ecs::Registry& registry, entt::entity creature, const Creature& self, const Transform& transform)
+{
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	if (animation == nullptr || !Locator::resources::has_value())
+	{
+		return transform.position;
+	}
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(self.species);
+	if (!rigs.Contains(rigId) || !rigs.Handle(rigId)->actionPoints.has_value())
+	{
+		return transform.position;
+	}
+	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	const auto groin = rigs.Handle(rigId)->actionPoints->groin;
+	return glm::vec3(creature::PosedBone(groin, animation->boneMatrices, placement)[3]);
 }
 } // namespace
 
@@ -344,15 +363,21 @@ void CreaturePhysiologySystem::Poo(entt::entity creature)
 		return;
 	}
 	physiology::Poo(needs->needs);
-	// The lump drops behind it, turned any way. The game throws it back along the ground; here it lands there.
-	if (!Locator::infoConstants::has_value())
+	// The lump comes out at the groin as the body squats, turned any way, and is thrown back along the ground
+	if (!Locator::infoConstants::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
-	const auto behind = transform->position - (AheadOf(*transform) * (k_PooBehind * ShownSize(*self)));
-	const auto point = glm::vec3(behind.x, HeightAt(glm::vec2(behind.x, behind.z)), behind.z);
-	const auto yaw = std::uniform_real_distribution<float>(0.0f, 2.0f * std::numbers::pi_v<float>)(_random);
-	ecs::archetypes::MobileObjectArchetype::Create(point, MobileObjectInfo::LumpOfPoo, yaw, k_PooScale * ShownSize(*self));
+	const auto ahead = AheadOf(*transform);
+	const auto lump =
+	    physiology::PooLumpOf(GroinOf(registry, creature, *self, *transform), glm::vec2(ahead.x, ahead.z), ShownSize(*self));
+	const auto yaw = Locator::gameRandom::value().GameFloatRand(2.0f * std::numbers::pi_v<float>);
+	const auto entity =
+	    ecs::archetypes::MobileObjectArchetype::Create(lump.position, MobileObjectInfo::LumpOfPoo, yaw, lump.scale);
+	if (Locator::dynamicsSystem::has_value())
+	{
+		Locator::dynamicsSystem::value().InitialisePhysics(entity, {.velocity = lump.velocity, .thrower = creature});
+	}
 }
 
 void CreaturePhysiologySystem::Puke(entt::entity creature)
