@@ -25,6 +25,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CaveCreature.h"
+#include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMindTables.h"
@@ -233,6 +234,10 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		                                  mind->desires->desires.at(desire).activated;
 	                           }).has_value();
 	snapshot.turnsLookedAt = mind->turnsLookedAt;
+	// The temples, flocks and forests it believes in
+	snapshot.templesKnown = static_cast<uint32_t>(mind->beliefs.Count(creature_tree::belief_types::k_Citadel));
+	snapshot.flocksKnown = static_cast<uint32_t>(mind->beliefs.Count(creature_tree::belief_types::k_Flock));
+	snapshot.forestsKnown = static_cast<uint32_t>(mind->beliefs.Count(creature_tree::belief_types::k_Forest));
 	const auto* tables = Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
 	if (mind->learnt.has_value())
 	{

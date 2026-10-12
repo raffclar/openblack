@@ -15,9 +15,12 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <vector>
 
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 
+#include "ECS/BuildingConstruction.h"
 #include "Enums.h"
 
 /// The rules by which a town picks one of the buildings it planned and starts it going up: how much it wants each
@@ -113,5 +116,14 @@ struct FootprintCell
 /// place must be dry, and no building filed in the cell may stand nearer it than their radii together (the house's
 /// being the larger half side of its model's box). A footprint with no cell passes.
 [[nodiscard]] bool IsClearToBuild(std::span<const FootprintCell> footprint, bool dryLandAtPlace, float reach);
+
+/// Which of its plans each town starts when a script names a place, the towns in the order given: each town looks only
+/// at its own plans and starts the one nearest the place within a metre beyond its model's reach (the later on a tie),
+/// or none
+[[nodiscard]] std::vector<std::optional<size_t>>
+StartedByScript(std::span<const std::vector<building_construction::PlannedCandidate>> towns, glm::vec2 place);
+
+/// How far round a building stands, in radians from 0 to a full turn, from the turn it was given on the land
+[[nodiscard]] float YAngleOf(const glm::mat3& rotation);
 
 } // namespace openblack::ecs::planned_building
