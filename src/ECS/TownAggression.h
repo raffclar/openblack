@@ -50,6 +50,13 @@ void Attacked(Record& record, PlayerNames aggressor, bool aggressorIsOwner, floa
 /// everyone's in a neutral town); a multiplier recovers while its want is small
 void ProcessTurn(Record& record, PlayerNames owner);
 
+/// Whether harm done to a town's thing counts as an attack on the town: any harm does, even from a thing whose kind adds
+/// no aggression, so the attacker, the turn, the first-attack bonus and the worn multiplier are still recorded
+[[nodiscard]] constexpr bool CountsAsAttack(float damage)
+{
+	return damage != 0.0f;
+}
+
 /// The harm an attack does a town's thing, as aggression: the harm times the thing's kind's aggressor value
 [[nodiscard]] constexpr float AggressionFromDamage(float damage, float aggressorValue)
 {
