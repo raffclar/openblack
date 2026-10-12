@@ -35,7 +35,7 @@ public:
 	/// Adds the help texts' script, whose texts the scripts also refer to by number: the order they come in
 	size_t AddHelpScript(std::span<const uint8_t> script);
 
-	/// The text of a name, empty when there is none. "\n" in the script is a line break.
+	/// The text of a name, empty when there is none. Its script's codes are converted as ConvertScriptText says.
 	[[nodiscard]] std::u16string_view Get(std::string_view name) const;
 	[[nodiscard]] size_t GetCount() const noexcept { return _texts.size(); }
 	/// The names of the help texts by their numbers
@@ -48,7 +48,7 @@ public:
 		int32_t narrator {0};
 		/// Shown even when the player has only the important texts shown (the first argument of its line)
 		bool important {false};
-		/// As the script writes it, its codes ($ and backslash) left for the help text's display to read
+		/// Converted as ConvertScriptText says; the codes the displays read ($ and backslash) are left in
 		std::u16string text;
 	};
 	/// The help text of a number. Number 0 and numbers past the last give the first text.
@@ -62,6 +62,14 @@ private:
 	std::vector<std::string> _helpNames;
 	std::vector<HelpText> _helpTexts;
 };
+
+/// The blank a '~' in the scripts becomes: a place to break a line that takes no room and is never drawn
+constexpr char16_t k_HiddenBlank = 0xF8FE;
+
+/// A script string as the game keeps it once loaded: a backslash and n becomes a line feed, and a tilde, or a tilde
+/// with one space before or after it, becomes the hidden blank. Everything else stays as written, other backslashes
+/// and the display codes ($m2, $g1, ...) included.
+[[nodiscard]] std::u16string ConvertScriptText(std::u16string_view text);
 
 /// Converts text for logs and the like
 std::string ToUtf8(std::u16string_view text);

@@ -377,14 +377,15 @@ void CreatureSpawner::DrawMovement(entt::entity entity) noexcept
 	}
 	ImGui::Text("Heading %.0f degrees, radius %.1f, scale %.3f", static_cast<double>(glm::degrees(self->heading)),
 	            static_cast<double>(self->radius), static_cast<double>(self->scale));
-	if (!self->route.points.empty())
+	if (const auto& route = self->follower.GetRoute(); !route.legs.empty())
 	{
-		ImGui::Text("Route of %zu points, on segment %zu, %.1f units left", self->route.points.size(), self->route.segment + 1,
-		            static_cast<double>(self->route.RemainingTotal()));
+		ImGui::Text("Route of %zu legs, on leg %zu, %.1f units left", route.legs.size(), route.segment + 1,
+		            static_cast<double>(route.RemainingTotal()));
 	}
-	else if (self->planner.has_value())
+	if (self->follower.IsSearching())
 	{
-		ImGui::Text("Planning, %zu points searched", self->planner->GetSearched());
+		ImGui::Text("Searching (%zu searches), %zu circles met", self->follower.GetSearchCount(),
+		            self->follower.GetObstacles().All().size());
 	}
 	std::string legs;
 	for (const auto& track : self->tracks)
@@ -451,7 +452,7 @@ void CreatureSpawner::DrawRoute(entt::entity entity) noexcept
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* self = registry.TryGet<const CreatureLocomotion>(entity);
-	if (self == nullptr || self->route.points.size() < 2 || !Locator::terrainSystem::has_value())
+	if (self == nullptr || self->follower.GetRoute().legs.empty() || !Locator::terrainSystem::has_value())
 	{
 		return;
 	}
@@ -470,17 +471,25 @@ void CreatureSpawner::DrawRoute(entt::entity entity) noexcept
 		}
 		return ImVec2(screen.x, screen.y);
 	};
-	const auto& points = self->route.points;
-	for (size_t i = 1; i < points.size(); ++i)
+	// Gone over already in grey, still to go in yellow
+	const auto& route = self->follower.GetRoute();
+	const auto stepAngle = glm::radians(5.0f);
+	std::vector<glm::vec2> points;
+	for (size_t leg = 0; leg < route.legs.size(); ++leg)
 	{
-		const auto from = project(points[i - 1]);
-		const auto to = project(points[i]);
-		if (from && to)
+		const auto colour = leg < route.segment ? IM_COL32(160, 160, 160, 200) : IM_COL32(255, 220, 60, 255);
+		const auto legPoints =
+		    creature_route::Route {.legs = {route.legs[leg]}, .segment = 0, .travelled = 0.0f}.Points(stepAngle);
+		for (size_t i = 1; i < legPoints.size(); ++i)
 		{
-			// Gone over already in grey, still to go in yellow
-			const auto colour = i <= self->route.segment ? IM_COL32(160, 160, 160, 200) : IM_COL32(255, 220, 60, 255);
-			drawList->AddLine(*from, *to, colour, 2.5f);
+			const auto from = project(legPoints[i - 1]);
+			const auto to = project(legPoints[i]);
+			if (from && to)
+			{
+				drawList->AddLine(*from, *to, colour, 2.5f);
+			}
 		}
+		points.insert(points.end(), legPoints.begin(), legPoints.end());
 	}
 	if (const auto end = project(points.back()))
 	{

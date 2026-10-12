@@ -167,6 +167,9 @@ private:
 	void DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw::MeshDraw& mesh, uint32_t depth) const;
 	/// The one-shot globes, the miracles in them and the rings round the extreme ones, in the main and reflected views
 	void DrawGlobes(const DrawSceneDesc& desc) const;
+	/// The miracles' seeds spinning above the village centres' stone hands and the worship sites' icons, with a ring round
+	/// each for every power-up level shown
+	void DrawIconSeeds(const DrawSceneDesc& desc) const;
 	/// A miracle's seed shown as a model, as a globe holds it or the creature's room shows it
 	struct SeedModelDraw
 	{

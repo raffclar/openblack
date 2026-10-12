@@ -14,6 +14,8 @@
 #include <string_view>
 #include <vector>
 
+#include <glm/vec2.hpp>
+#include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
 #include "Help/TipBubble.h"
@@ -35,6 +37,16 @@ std::vector<std::u16string> OneLinePerCharacter(std::u16string_view text, float 
 float TenPixelsEach(std::u16string_view text, float /*size*/)
 {
 	return 10.0f * static_cast<float>(text.size());
+}
+/// No action has a binding to show
+bool NoControls(int /*action*/)
+{
+	return false;
+}
+/// Every action has one
+bool EveryControl(int /*action*/)
+{
+	return true;
 }
 } // namespace
 
@@ -146,7 +158,7 @@ TEST(TipBubble, WordsStackFromTheBottomUp)
 	ASSERT_TRUE(placement.has_value());
 	// The tip, a blank line and the title: one line each
 	const std::array<std::u16string_view, 3> items {u"T", u" ", u"D"};
-	const auto words = LayOutWords(*placement, items, 0.0f, 1.0f, OneLinePerCharacter, TenPixelsEach);
+	const auto words = LayOutWords(*placement, items, 0.0f, 1.0f, OneLinePerCharacter, TenPixelsEach, NoControls);
 	ASSERT_EQ(words.lines.size(), 3u);
 	EXPECT_FLOAT_EQ(words.contentHeight, 57.0f);
 	// The bottom line is a third of the margin above the box's bottom
@@ -173,7 +185,7 @@ TEST(TipBubble, WordsFadeInOverTheTopThird)
 	// Enough lines to reach the top: the stack stops at the item that gets there
 	const std::u16string tall(20, u'x');
 	const std::array<std::u16string_view, 3> items {tall, u" ", u"D"};
-	const auto words = LayOutWords(*placement, items, 0.0f, 1.0f, OneLinePerCharacter, TenPixelsEach);
+	const auto words = LayOutWords(*placement, items, 0.0f, 1.0f, OneLinePerCharacter, TenPixelsEach, NoControls);
 	EXPECT_FLOAT_EQ(words.contentHeight, 20.0f * 19.0f);
 	const float top = 110.0f;
 	const float fadeEnd = top + (250.0f / 3.0f);
@@ -256,49 +268,6 @@ TEST(TipBubble, OnScreenByTheSignsBall)
 	EXPECT_TRUE(OnScreen({.centre = {0.0f, 0.0f, -0.5f}, .radius = 2.0f, .origin = {0.0f, 0.0f, 1.0f}}, view));
 }
 
-namespace
-{
-/// Ten pixels a character at any size, the blank that adds no space free
-float Measure(std::u16string_view text, float /*size*/)
-{
-	float width = 0.0f;
-	for (const auto c : text)
-	{
-		width += c == 0xF8FE ? 0.0f : 10.0f;
-	}
-	return width;
-}
-} // namespace
-
-TEST(TipBubble, WrapBreaksAtTheLastBlankThatFits)
-{
-	// 100 pixels: ten characters
-	EXPECT_EQ(Wrap(u"short", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"short"}));
-	EXPECT_EQ(Wrap(u"one two three four", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"one two", u"three four"}));
-	// The line breaks at the last blank, those before it trimmed
-	EXPECT_EQ(Wrap(u"aaaa    bbbbbbb", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"aaaa", u"bbbbbbb"}));
-	// A blank starting a line after a line break stays
-	EXPECT_EQ(Wrap(u"ab\n cd", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"ab", u" cd"}));
-}
-
-TEST(TipBubble, WrapBreaksAfterAHyphenOrWhereItMust)
-{
-	EXPECT_EQ(Wrap(u"well-known words", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"well-known", u"words"}));
-	EXPECT_EQ(Wrap(u"abcdefghijklmnop", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"abcdefghij", u"klmnop"}));
-	// Not a character fits: nothing more
-	EXPECT_TRUE(Wrap(u"abc", 5.0f, 19.0f, Measure).empty());
-}
-
-TEST(TipBubble, WrapEndsLinesAtLineBreaks)
-{
-	EXPECT_EQ(Wrap(u"ab\ncd", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"ab", u"cd"}));
-	// Both of a CR LF break the line: an empty line between
-	EXPECT_EQ(Wrap(u"ab\r\ncd", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"ab", u"", u"cd"}));
-	// The blank that adds no space is a place to break too
-	const std::u16string tilde = u"aaaaaa" + std::u16string(1, char16_t {0xF8FE}) + u"bbbbbbbbb";
-	EXPECT_EQ(Wrap(tilde, 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"aaaaaa", u"bbbbbbbbb"}));
-}
-
 TEST(TipBubble, ItsPixelSizesTakeTheDefaultScreensShare)
 {
 	// At 2.4 times the default screen's pixels (2560 by 1440 and wider) every size is 2.4 times the game's
@@ -320,9 +289,150 @@ TEST(TipBubble, ItsPixelSizesTakeTheDefaultScreensShare)
 	const WrapFn wrap = [](std::u16string_view text, float, float) {
 		return std::vector<std::u16string> {std::u16string(text)};
 	};
-	const auto words = LayOutWords(*scaled, items, 0.0f, 1.0f, wrap, width);
+	const auto words = LayOutWords(*scaled, items, 0.0f, 1.0f, wrap, width, NoControls);
 	ASSERT_EQ(words.lines.size(), 1);
 	ASSERT_EQ(words.shadows.size(), 1);
 	EXPECT_NEAR(words.shadows.front().at.x - words.lines.front().at.x, 2.0f * 2.4f, 1e-3f);
 	EXPECT_NEAR(words.shadows.front().at.y - words.lines.front().at.y, 2.0f * 2.4f, 1e-3f);
+}
+
+TEST(TipBubble, ItReadsGestureAndControlCodes)
+{
+	EXPECT_EQ(ReadCode(u"$m27"), (InlineCode {.kind = InlineCode::Kind::Control, .number = 27}));
+	EXPECT_EQ(ReadCode(u"$g1"), (InlineCode {.kind = InlineCode::Kind::Gesture, .number = 1}));
+	EXPECT_EQ(ReadCode(u"$m 5 and more"), (InlineCode {.kind = InlineCode::Kind::Control, .number = 5}));
+	// A code with no number is code 0
+	EXPECT_EQ(ReadCode(u"$m"), (InlineCode {.kind = InlineCode::Kind::Control, .number = 0}));
+	// Other codes and words aren't picture codes
+	EXPECT_FALSE(ReadCode(u"$p").has_value());
+	EXPECT_FALSE(ReadCode(u"$M2").has_value());
+	EXPECT_FALSE(ReadCode(u"m27").has_value());
+	EXPECT_FALSE(ReadCode(u"").has_value());
+}
+
+TEST(TipBubble, ACodeSplitsItsTipFromTheBottomUp)
+{
+	using Kind = Piece::Kind;
+	const auto control = [](int number) {
+		return Piece {.kind = Kind::Code, .words = {}, .code = {.kind = InlineCode::Kind::Control, .number = number}};
+	};
+	const auto gesture = [](int number) {
+		return Piece {.kind = Kind::Code, .words = {}, .code = {.kind = InlineCode::Kind::Gesture, .number = number}};
+	};
+	const Piece gap {.kind = Kind::Gap, .words = {}, .code = {}};
+	const auto words = [](std::u16string_view text) { return Piece {.kind = Kind::Words, .words = text, .code = {}}; };
+
+	// Words alone
+	EXPECT_EQ(SplitCodes(u"Plain words"), std::vector<Piece> {words(u"Plain words")});
+	// A code alone, read from its first four characters only
+	EXPECT_EQ(SplitCodes(u"$m27"), std::vector<Piece> {control(27)});
+	EXPECT_EQ(SplitCodes(u"$m123 and words"), std::vector<Piece> {control(12)});
+	// Words then a code: the picture, a gap, the words, and the picture again
+	EXPECT_EQ(SplitCodes(u"Press this key. $m27"),
+	          (std::vector<Piece> {control(27), gap, words(u"Press this key. "), control(27)}));
+	// The first gesture code is found before any control code
+	EXPECT_EQ(SplitCodes(u"A $m1 then $g2"), (std::vector<Piece> {gesture(2), gap, words(u"A $m1 then "), gesture(2)}));
+}
+
+TEST(TipBubble, AControlCodeShowsItsPictureTwoLinesTall)
+{
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
+	ASSERT_TRUE(placement.has_value());
+	const std::array<std::u16string_view, 1> items {u"T $m27"};
+	const auto words = LayOutWords(*placement, items, 0.0f, 1.0f, OneLinePerCharacter, TenPixelsEach, EveryControl);
+	// Two pictures of 38 pixels, the gap of 0.7 lines and the two lines of words
+	EXPECT_NEAR(words.contentHeight, 38.0f + 13.3f + 38.0f + 38.0f, 1e-3f);
+	const float bottomLine = 360.0f - (40.0f / 3.0f);
+	ASSERT_EQ(words.lines.size(), 2u);
+	EXPECT_NEAR(words.lines.at(0).at.y, bottomLine - 38.0f - 13.3f - 38.0f, 1e-3f);
+	ASSERT_EQ(words.controls.size(), 2u);
+	const auto& below = words.controls.at(0);
+	EXPECT_EQ(below.action, 27);
+	EXPECT_EQ(below.size, 38);
+	// Half a picture right of the middle of the margins, and raised a fifth of a picture from the middle of its lines
+	EXPECT_EQ(below.right, 469);
+	EXPECT_EQ(below.top, 301);
+	EXPECT_NEAR(below.alpha, 1.0f, 1.5f / 255.0f);
+	EXPECT_EQ(words.controls.at(1).top, 211);
+	// Right-aligned after the gap
+	EXPECT_EQ(PlaceControl(below, 38.0f, 2.0f), (ControlBox {.min = {429.0f, 301.0f}, .max = {467.0f, 339.0f}}));
+	EXPECT_EQ(PlaceControl(below, 60.5f, 2.0f), (ControlBox {.min = {406.0f, 301.0f}, .max = {466.0f, 339.0f}}));
+}
+
+TEST(TipBubble, AnUnboundControlTakesNoRoom)
+{
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
+	ASSERT_TRUE(placement.has_value());
+	const std::array<std::u16string_view, 1> items {u"T $m27"};
+	const auto words = LayOutWords(*placement, items, 0.0f, 1.0f, OneLinePerCharacter, TenPixelsEach, NoControls);
+	// Only the gap and the words
+	EXPECT_TRUE(words.controls.empty());
+	EXPECT_NEAR(words.contentHeight, 13.3f + 38.0f, 1e-3f);
+}
+
+TEST(TipBubble, AControlFadesInOverTheTopThird)
+{
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
+	ASSERT_TRUE(placement.has_value());
+	const std::array<std::u16string_view, 1> items {u"$m27"};
+	const float bottomLine = 360.0f - (40.0f / 3.0f);
+	// Its top 20 pixels below the box's top, of the 250 / 3 the fade takes
+	const float scroll = 130.0f + 38.0f - bottomLine;
+	const auto words = LayOutWords(*placement, items, scroll, 1.0f, OneLinePerCharacter, TenPixelsEach, EveryControl);
+	ASSERT_EQ(words.controls.size(), 1u);
+	EXPECT_NEAR(words.controls.front().alpha, std::trunc(20.0f / (250.0f / 3.0f) * 255.0f) / 255.0f, 1.5f / 255.0f);
+	// Reaching above the box's top it isn't drawn, but still takes its room
+	const auto above = LayOutWords(*placement, items, scroll - 30.0f, 1.0f, OneLinePerCharacter, TenPixelsEach, EveryControl);
+	EXPECT_TRUE(above.controls.empty());
+	EXPECT_NEAR(above.contentHeight, 38.0f, 1e-3f);
+}
+
+TEST(TipBubble, AGestureCodeShowsItsPictureWithAShadow)
+{
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
+	ASSERT_TRUE(placement.has_value());
+	const std::array<std::u16string_view, 1> items {u"$g1"};
+	const auto words = LayOutWords(*placement, items, 0.0f, 1.0f, OneLinePerCharacter, TenPixelsEach, NoControls);
+	EXPECT_NEAR(words.contentHeight, 38.0f, 1e-3f);
+	ASSERT_EQ(words.gestures.size(), 2u);
+	const float bottomLine = 360.0f - (40.0f / 3.0f);
+	// The shadow first, two pixels down and right in black at half the alpha
+	const auto& shadow = words.gestures.at(0);
+	const auto& picture = words.gestures.at(1);
+	EXPECT_NEAR(shadow.min.x, 433.0f, 1e-3f);
+	EXPECT_NEAR(shadow.min.y, bottomLine - 36.0f, 1e-3f);
+	EXPECT_EQ(shadow.colour, glm::vec4(0.0f, 0.0f, 0.0f, 128.0f / 255.0f));
+	// The picture centred between the margins, the second cell of the first sheet
+	EXPECT_EQ(picture.sheet, 0);
+	EXPECT_NEAR(picture.min.x, 431.0f, 1e-3f);
+	EXPECT_NEAR(picture.max.x, 469.0f, 1e-3f);
+	EXPECT_NEAR(picture.min.y, bottomLine - 38.0f, 1e-3f);
+	EXPECT_NEAR(picture.max.y, bottomLine, 1e-3f);
+	EXPECT_EQ(picture.uvMin, glm::vec2(0.25f, 0.0f));
+	EXPECT_EQ(picture.uvMax, glm::vec2(0.5f, 0.25f));
+	EXPECT_EQ(picture.colour, glm::vec4(1.0f));
+	// Gestures outside 1 to 23 show nothing and take no room
+	for (const auto* item : {u"$g0", u"$g24"})
+	{
+		const std::array<std::u16string_view, 1> none {item};
+		const auto nothing = LayOutWords(*placement, none, 0.0f, 1.0f, OneLinePerCharacter, TenPixelsEach, NoControls);
+		EXPECT_TRUE(nothing.gestures.empty());
+		EXPECT_FLOAT_EQ(nothing.contentHeight, 0.0f);
+	}
+}
+
+TEST(TipBubble, AGestureIsCutAtTheBoxsTop)
+{
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
+	ASSERT_TRUE(placement.has_value());
+	const std::array<std::u16string_view, 1> items {u"$g1"};
+	const float bottomLine = 360.0f - (40.0f / 3.0f);
+	// Its top 10 pixels above the box's
+	const float scroll = 100.0f + 38.0f - bottomLine;
+	const auto words = LayOutWords(*placement, items, scroll, 1.0f, OneLinePerCharacter, TenPixelsEach, NoControls);
+	ASSERT_EQ(words.gestures.size(), 2u);
+	const auto& picture = words.gestures.at(1);
+	EXPECT_NEAR(picture.min.y, 110.0f, 1e-3f);
+	EXPECT_NEAR(picture.uvMin.y, (10.0f / 38.0f) * 0.25f, 1e-4f);
+	EXPECT_NEAR(picture.max.y, 138.0f, 1e-3f);
 }

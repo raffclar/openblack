@@ -115,6 +115,25 @@ public:
 		siteDesires[site] = desire;
 	}
 	void CloseBuildingSite(entt::entity site) override { closedSites.push_back(site); }
+	void RemoveDance(entt::entity dance) override
+	{
+		// The towns that still had a site as its dance went
+		std::vector<entt::entity> withSites;
+		_registry.Each<const components::Town>([&withSites](entt::entity town, const components::Town& component) {
+			if (component.worshipSite != entt::null)
+			{
+				withSites.push_back(town);
+			}
+		});
+		removedDances.emplace_back(dance, std::move(withSites));
+		_registry.Destroy(dance);
+	}
+	void ArtefactsLeaveSite(entt::entity site) override { artefactsLeft.push_back(site); }
+	void Remove(entt::entity object) override
+	{
+		removed.push_back(object);
+		_registry.Destroy(object);
+	}
 
 	int32_t landNumber {2};
 	uint32_t turn {0};
@@ -122,6 +141,10 @@ public:
 	std::vector<std::pair<entt::entity, entt::entity>> openedSites;
 	std::unordered_map<entt::entity, float> siteDesires;
 	std::vector<entt::entity> closedSites;
+	/// The dances removed, each with the towns that still had a site as it went
+	std::vector<std::pair<entt::entity, std::vector<entt::entity>>> removedDances;
+	std::vector<entt::entity> artefactsLeft;
+	std::vector<entt::entity> removed;
 	std::unordered_map<entt::entity, float> potAngles;
 	magic::WorshipBatteryRules chantRules {
 	    .chantsPerVillager = 2.0f, .chantsToFillBattery = 100.0f, .eachVillagerAddToFillBattery = 10.0f};
@@ -562,4 +585,62 @@ TEST(WorshipSiteSystem, ASiteGoingUpStopsBeingABuildingSiteWhenNoTownIsLeftToBui
 	f.system->TownChangedHands(town);
 	ASSERT_EQ(f.world->closedSites.size(), 1u);
 	EXPECT_EQ(f.world->closedSites.front(), site);
+}
+
+TEST(WorshipSiteSystem, ATempleLosesItsSitesNewestFirstWithAllOfEachAndItsTownsKeepTheirShare)
+{
+	Fixture f;
+	const auto norseTown = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -100.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	// A second site, made later for a town that joins the player
+	const auto celticTown = f.Town(1, PlayerNames::PLAYER_ONE, Tribe::CELTIC, {100.0f, 0.0f, 0.0f}, 1);
+	f.system->PersonJoinedTown(celticTown);
+	const auto norse = f.registry.Get<const components::Town>(norseTown).worshipSite;
+	const auto celtic = f.registry.Get<const components::Town>(celticTown).worshipSite;
+	ASSERT_TRUE(norse != entt::null);
+	ASSERT_TRUE(celtic != entt::null);
+	f.registry.Get<components::Town>(norseTown).worshipShare = 0.4f;
+	const auto norseSite = f.registry.Get<const WorshipSite>(norse);
+	const auto celticSite = f.registry.Get<const WorshipSite>(celtic);
+	EXPECT_EQ(norseSite.made, 0u);
+	EXPECT_EQ(celticSite.made, 1u);
+
+	f.system->RemoveSites(temple);
+
+	// The newest first: its altar, its dance, its pot and the site itself, then the older one's
+	EXPECT_EQ(f.world->removed, (std::vector<entt::entity> {celticSite.altar, celticSite.foodPot, celtic, norseSite.altar,
+	                                                        norseSite.foodPot, norse}));
+	// Each dance goes while the towns still have their sites, so its dancers are counted out of its worship
+	ASSERT_EQ(f.world->removedDances.size(), 2u);
+	EXPECT_EQ(f.world->removedDances[0].first, celticSite.dance);
+	EXPECT_EQ(f.world->removedDances[0].second.size(), 2u);
+	EXPECT_EQ(f.world->removedDances[1].first, norseSite.dance);
+	EXPECT_EQ(f.world->removedDances[1].second, std::vector<entt::entity> {norseTown});
+	EXPECT_EQ(f.world->artefactsLeft, (std::vector<entt::entity> {celtic, norse}));
+	// Both stop being building sites, as neither was finished
+	EXPECT_EQ(std::ranges::count(f.world->closedSites, celtic), 1);
+	EXPECT_EQ(std::ranges::count(f.world->closedSites, norse), 1);
+	// The towns are left without a site, keeping their share, and the temple's places are free
+	EXPECT_TRUE(f.registry.Get<const components::Town>(norseTown).worshipSite == entt::null);
+	EXPECT_TRUE(f.registry.Get<const components::Town>(celticTown).worshipSite == entt::null);
+	EXPECT_FLOAT_EQ(f.registry.Get<const components::Town>(norseTown).worshipShare, 0.4f);
+	const auto& worship = f.registry.Get<const CitadelWorship>(temple);
+	EXPECT_TRUE(std::ranges::all_of(worship.sites, [](entt::entity site) { return site == entt::null; }));
+	// A site made afterwards is numbered on from the last
+	f.system->SetCanHaveSites(temple, true);
+	const auto again = f.registry.Get<const components::Town>(norseTown).worshipSite;
+	ASSERT_TRUE(again != entt::null);
+	EXPECT_EQ(f.registry.Get<const WorshipSite>(again).made, 2u);
+}
+
+TEST(WorshipSiteSystem, ATempleWithoutSitesLosesNothing)
+{
+	Fixture f;
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->RemoveSites(temple);
+	f.system->AddTemple(temple, 0.0f, true);
+	f.system->RemoveSites(temple);
+	EXPECT_TRUE(f.world->removed.empty());
+	EXPECT_TRUE(f.world->removedDances.empty());
 }

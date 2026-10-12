@@ -30,7 +30,9 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/FallingRoots.h"
@@ -44,6 +46,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/NeverFades.h"
 #include "ECS/Components/ObjectGlow.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
@@ -71,6 +74,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TownDesireFlags.h"
+#include "ECS/TreeRoots.h"
 #include "ECS/VillagerHeldObject.h"
 #include "Game.h"
 #include "Graphics/BonePalette.h"
@@ -90,6 +94,7 @@
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
+using openblack::physics::objects::TreePlace;
 
 namespace
 {
@@ -420,8 +425,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 
 		    // A villager is drawn in less detail the further off it is, fades out, then shows only as a smudge on a blob
-		    // while it stands above the sea. One flying in the physics never fades, and one a script draws in high detail
-		    // is drawn in full however far off.
+		    // while it stands above the sea. One flying in the physics or one a script keeps in view never fades, and one
+		    // a script draws in high detail is drawn in full however far off.
 		    auto drawnMesh = DrawnMeshOf(entity, mesh);
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
@@ -432,8 +437,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    else if (detail != nullptr && camera != nullptr && !registry.AllOf<MorphWithTerrain>(entity))
 		    {
-			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x, !registry.AllOf<InPhysics>(entity),
-			                                     *camera, modelDetail);
+			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x,
+			                                     !registry.AnyOf<InPhysics, NeverFades>(entity), *camera, modelDetail);
 			    if (!choice.mesh.has_value())
 			    {
 				    const auto position = glm::vec3(modelMatrix[3]);
@@ -956,24 +961,33 @@ void RenderingSystem::UploadPartialBuilds()
 		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix});
 		_renderContext.partialBuilds.push_back(draw);
 	});
-	// A standing graveyard shows the graves of its burials over its model drawn with the others; one going up or broken
-	// shows none
+	// A standing building shows its model's numbered parts up to a number over its model drawn with the others; one going
+	// up or broken shows none
+	const auto showParts = [&](entt::entity entity, const Mesh& mesh, const Transform& transform, uint32_t parts) {
+		if (parts == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id))
+		{
+			return;
+		}
+		_renderContext.partialBuilds.push_back({
+		    .meshId = mesh.id,
+		    .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
+		    .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
+		    .gravesShown = parts,
+		});
+		_renderContext.partialBuildInstances.push_back(
+		    {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
+		              glm::scale(glm::mat4(1.0f), transform.scale)});
+	};
+	// A graveyard shows the graves of its burials
 	registry.Each<const Graveyard, const Mesh, const Transform>(
 	    [&](entt::entity entity, const Graveyard&, const Mesh& mesh, const Transform& transform) {
-		    const auto graves = graveyards::GravesShown(entity);
-		    if (graves == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id))
-		    {
-			    return;
-		    }
-		    _renderContext.partialBuilds.push_back({
-		        .meshId = mesh.id,
-		        .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
-		        .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
-		        .gravesShown = graves,
-		    });
-		    _renderContext.partialBuildInstances.push_back(
-		        {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
-		                  glm::scale(glm::mat4(1.0f), transform.scale)});
+		    showParts(entity, mesh, transform, graveyards::GravesShown(entity));
+	    });
+	// A building standing in as its town's graveyard shows the parts its burials' graves would, as in the original game:
+	// its scaffold
+	registry.Each<const StandInGraves, const Mesh, const Transform>(
+	    [&](entt::entity entity, const StandInGraves& graves, const Mesh& mesh, const Transform& transform) {
+		    showParts(entity, mesh, transform, graves.partsShown);
 	    });
 	const auto count = static_cast<uint32_t>(_renderContext.partialBuildInstances.size());
 	if (count == 0)
@@ -1054,8 +1068,15 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			}
 		}
 		_renderContext.treeInstanceData[idx].burning = burning;
-		_renderContext.treeInstanceData[idx].modelMatrix = vegetation.GetTreeMatrix(
-		    modelMatrix, transform.position, transform.scale.y, slots->second.height, swayable.swaySlot);
+		// Out of the land it neither sways nor bends: it is drawn as it is held or as the physics places it
+		const auto place = registry.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
+		                       ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
+		                       : TreePlace::InTheLand;
+		_renderContext.treeInstanceData[idx].modelMatrix =
+		    openblack::physics::objects::SwaysAndBends(place)
+		        ? vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y, slots->second.height,
+		                                   swayable.swaySlot)
+		        : modelMatrix;
 		_renderContext.drawnObjects.push_back({.entity = entity, .model = _renderContext.treeInstanceData[idx].modelMatrix});
 
 		if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
