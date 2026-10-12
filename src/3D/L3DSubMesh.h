@@ -63,6 +63,9 @@ class L3DSubMesh
 		bool twoSided;
 		/// The material's render mode, as the file numbers it
 		uint32_t materialType {0};
+		/// The material's flags: whether it is culled, how it takes an environment map and whether its texture slides
+		/// with its model's skin (see Graphics/MaterialStages.h)
+		uint8_t materialFlags {0};
 	};
 
 public:

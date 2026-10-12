@@ -8,7 +8,8 @@
  *******************************************************************************/
 
 // The testbed's scenarios of the sky: the moon at night, looked at from low on the land towards the east, where it
-// keeps its place beside the camera, for trying its phases and its path through the night with the moon debug window
+// keeps its place beside the camera, for trying its phases and its path through the night with the moon debug window;
+// and a storm's forked bolts coming down round the camera
 
 #include <vector>
 
@@ -63,6 +64,23 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	                "04:40 low in the north east. Its phase does not change through the night.",
 	    .environment = {.hour = 19.0f, .clockRuns = true, .dispenserGrid = false},
 	    .framing = k_LookingEast,
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "sky.storm_bolts",
+	    .name = "A storm's forked bolts",
+	    .facet = Facet::Sky,
+	    .description = "A thunderstorm over the whole island at noon, its forked bolts let down every one to two seconds "
+	                   "somewhere within 300 of the camera (the weather window's storm strikes round the camera), which "
+	                   "looks down on that ground from 700 up.",
+	    .expected = "Each bolt starts as a point of light under the cloud and forks down to points on the ground round "
+	                "it, its ribbons laid out again each step; a light flashes on the land where it lands, and the land and "
+	                "sky flash dimly. The bolt is gone after 0.4 to 0.8 seconds. Its thunder, small, medium or large, "
+	                "comes from the land under it, later the further it is. Bright flashes with thunder of their own come "
+	                "every 3 to 15 seconds without a bolt.",
+	    .environment = {.weather = Weather::Thunderstorm, .boltSeconds = glm::vec2(1.0f, 2.0f), .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 700.0f, -410.0f}, .look = {0.0f, 0.0f, -140.0f}},
 	    .objects = TreesToTheEast(),
 	});
 }

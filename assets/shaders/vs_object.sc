@@ -231,10 +231,11 @@ void main()
 	}
 	float hazeT = HazeT(mul(u_view, vec4(fogOrigin, 1.0f)).z);
 	colour = HazeDiffuse(colour, HazeFactor(hazeT));
-	// The haze is added with the land's colour where the object stands, each channel at most white
+	// The haze is added with the land's colour where the object stands, each channel at most white, unless the object is
+	// lit in a colour of its own that the land's colour doesn't reach (w)
 	vec3 added = HazeColour(hazeT);
 #ifndef USE_LIGHTMAP
-	if (u_landLight.x > 0.0f)
+	if (u_landLight.x > 0.0f && u_landLight.w < 0.5f)
 	{
 		added = min(added + LandColourAt(lightOrigin.xz), vec3_splat(255.0f));
 	}

@@ -641,7 +641,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		                    .seconds = k_WeatherSeconds,
 		                    .fadeSeconds = 0.5f,
 		                    .thunderWait = thunder ? glm::vec2(3.0f, 15.0f) : glm::vec2(0.0f),
-		                    .boltWait = thunder ? glm::vec2(2.0f, 8.0f) : glm::vec2(0.0f)});
+		                    .boltWait = thunder ? environment.boltSeconds.value_or(glm::vec2(2.0f, 8.0f)) : glm::vec2(0.0f)});
 	}
 	if (Locator::creaturePhysiologySystem::has_value())
 	{

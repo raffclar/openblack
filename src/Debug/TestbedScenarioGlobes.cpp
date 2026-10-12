@@ -38,6 +38,49 @@ void AddDispensers(std::vector<Scenario>& all)
 	});
 }
 
+/// The sixteen creature spells' dispensers in four rows of four, this far apart, the first row nearest
+std::vector<DispenserSetup> CreatureSpellDispensers()
+{
+	constexpr float k_Spacing = 12.0f;
+	constexpr float k_FirstRow = 16.0f;
+	constexpr int k_PerRow = 4;
+	constexpr auto k_First = static_cast<int>(MagicType::CreatureSpellFreeze);
+	constexpr auto k_Last = static_cast<int>(MagicType::CreatureSpellItchy);
+	std::vector<DispenserSetup> dispensers;
+	for (int type = k_First; type <= k_Last; ++type)
+	{
+		const int place = type - k_First;
+		const auto column = static_cast<float>(place % k_PerRow) - static_cast<float>(k_PerRow - 1) * 0.5f;
+		const auto row = static_cast<float>(place / k_PerRow);
+		dispensers.push_back(
+		    {.type = static_cast<MagicType>(type), .offset = {column * k_Spacing, k_FirstRow + row * k_Spacing}});
+	}
+	return dispensers;
+}
+
+void AddCreatureSpellDispensers(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "miracles.creature_spell_dispensers",
+	    .name = "The creature spells' dispensers",
+	    .facet = Facet::Miracles,
+	    .description = "A dispenser of each of the sixteen creature spells, close up, each floating its globe at once (a "
+	                   "testbed set-up step): freeze, small, big, weak; strong, fat, thin, invisible; nice, angry, hungry, "
+	                   "frightened; tired, ill, thirsty, itchy, from the nearest row back.",
+	    .expected = "The spells with a globe (freeze, small, big, weak, strong, invisible, nice, angry, hungry and itchy; "
+	                "the others have no one-shot seed and float none, as in the game) each hold their phial spinning "
+	                "twice a second round: a glass bottle shining silver with the environment map, the red liquid inside "
+	                "showing faintly through the glass and not running, its stopper and its label (the spell's own "
+	                "picture) still and unshined. The phials take the land's light and colour, except the small and big "
+	                "ones, which are lit in white with none of the land's colour and are as faint as their globe: the "
+	                "small one shrinks away under a faint whole one, the big one has a fading copy growing out of it. The "
+	                "freeze phial pulses icy, the invisible one fades in and out.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 12.0f}, {20.0f, 56.0f}}, .distance = 0.5f},
+	    .dispensers = CreatureSpellDispensers(),
+	});
+}
+
 /// A row of globes on their own, floating this high, this far apart, from the left
 std::vector<DispenserSetup> GlobeRow(std::initializer_list<MagicType> types, float north, float spacing = 7.0f)
 {
@@ -251,6 +294,7 @@ void AddPiles(std::vector<Scenario>& all)
 void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
 {
 	AddDispensers(all);
+	AddCreatureSpellDispensers(all);
 	AddGlobes(all);
 	AddHand(all);
 	AddPiles(all);
