@@ -176,3 +176,11 @@ TEST(TreeRoots, OnlyTreesShowRoots)
 	tree_roots::Show(registry);
 	EXPECT_FALSE(ShownPlace(registry, rock).has_value());
 }
+
+TEST(TreeRoots, OnlyATreeInTheLandSwaysAndBends)
+{
+	EXPECT_TRUE(openblack::physics::objects::SwaysAndBends(TreePlace::InTheLand));
+	EXPECT_FALSE(openblack::physics::objects::SwaysAndBends(TreePlace::OutOfTheLand));
+	EXPECT_FALSE(openblack::physics::objects::SwaysAndBends(TreePlace::Moving));
+	EXPECT_FALSE(openblack::physics::objects::SwaysAndBends(TreePlace::Still));
+}

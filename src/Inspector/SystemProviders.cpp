@@ -30,6 +30,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipChants.h"
@@ -607,6 +608,61 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 			              result["neutral"] = belief.neutral;
 			              result["scale"] = belief.scale;
 		              }
+		              return QueryResult::Value(std::move(result));
+	              });
+	provider->Add(Query("spells", "A town's miracles, its centre's stone hands and its site's icons", {id}),
+	              [sources](const QueryContext& context) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              const auto town = TownParam(*registry, context.params);
+		              if (const auto* problem = std::get_if<std::string>(&town); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto [entity, component] = std::get<0>(town);
+		              Json result = Json::object();
+		              result["id"] = ToId(entity);
+		              result["owner"] = static_cast<int>(component->owner);
+		              Json held = Json::array();
+		              if (const auto* magic = registry->TryGet<const ecs::components::TownMagic>(entity))
+		              {
+			              for (size_t i = 0; i < magic->held.size(); ++i)
+			              {
+				              if (magic->held.at(i))
+				              {
+					              held.push_back(static_cast<int>(i));
+				              }
+			              }
+		              }
+		              result["magic_held"] = std::move(held);
+		              Json hands = Json::array();
+		              registry->Each<const ecs::components::TownCentreIcon>(
+		                  [&](entt::entity icon, const ecs::components::TownCentreIcon& hand) {
+			                  if (hand.town == entity)
+			                  {
+				                  hands.push_back(Json {{"id", ToId(icon)},
+				                                        {"hand", hand.hand},
+				                                        {"seed", static_cast<int>(hand.seed)},
+				                                        {"power_ups", hand.powerUps}});
+			                  }
+		                  });
+		              result["hands"] = std::move(hands);
+		              Json siteIcons = Json::array();
+		              registry->Each<const ecs::components::WorshipIcon>(
+		                  [&](entt::entity icon, const ecs::components::WorshipIcon& worship) {
+			                  if (worship.site == component->worshipSite && worship.site != entt::null)
+			                  {
+				                  siteIcons.push_back(Json {{"id", ToId(icon)},
+				                                            {"seed", static_cast<int>(worship.seed)},
+				                                            {"charging", worship.charging},
+				                                            {"store", worship.store},
+				                                            {"seed_out", Id(worship.seedOut)}});
+			                  }
+		                  });
+		              result["site_icons"] = std::move(siteIcons);
 		              return QueryResult::Value(std::move(result));
 	              });
 	provider->Add(Query("homeless", "A town's people without a home, newest first", {id}, ResultKind::List),

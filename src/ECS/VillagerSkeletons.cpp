@@ -16,6 +16,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/GraveyardRules.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/VillagerChecks.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -76,6 +77,19 @@ void Set(entt::entity villager, bool skeleton)
 		detail->meshes = models;
 	}
 	registry.SetDirty();
+}
+
+void SetByScript(entt::entity villager, bool skeleton)
+{
+	if (!Entities().AllOf<Villager>(villager))
+	{
+		return;
+	}
+	Set(villager, skeleton);
+	if (Locator::infoConstants::has_value())
+	{
+		ecs::villager_checks::GrowForAge(villager);
+	}
 }
 
 bool Is(entt::entity villager)

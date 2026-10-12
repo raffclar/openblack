@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "TextDatabase.h"
+#include "TextWrap.h"
 
 using namespace openblack::gui;
 
@@ -125,11 +126,6 @@ GameFont::SmallGlyph MakeSmallGlyph(const std::vector<uint8_t>& bitmap, uint16_t
 		}
 	}
 	return small;
-}
-
-bool IsSpace(char16_t c)
-{
-	return c == u' ' || c == u'\t' || c == u'　' || c == u'\xA0';
 }
 } // namespace
 
@@ -285,67 +281,28 @@ const GameFont::Glyph* GameFont::Find(char16_t character) const
 	return nullptr;
 }
 
+float GameFont::Advance(char16_t c) const
+{
+	// The blank the temple and the help texts' loader use takes no room; everything else is a glyph, a line break too
+	if (c == text_wrap::k_Tilde)
+	{
+		return 0.0f;
+	}
+	const auto* glyph = Find(c);
+	return glyph != nullptr ? glyph->right + glyph->ink + glyph->left : 0.0f;
+}
+
 float GameFont::GetWidth(std::u16string_view text, float size) const
 {
 	float width = 0.0f;
 	for (const auto c : text)
 	{
-		if (c == u'\n' || c == u'\r' || c == u'\xF8FE')
-		{
-			continue;
-		}
-		if (const auto* glyph = Find(c))
-		{
-			width += glyph->left + glyph->ink + glyph->right;
-		}
+		width += Advance(c);
 	}
 	return width * size / static_cast<float>(_height);
 }
 
 std::vector<std::u16string_view> GameFont::Wrap(std::u16string_view text, float size, float width) const
 {
-	std::vector<std::u16string_view> lines;
-	while (!text.empty())
-	{
-		// Up to the next line break
-		auto end = text.find_first_of(u"\r\n");
-		auto line = text.substr(0, end);
-		size_t next = end == std::u16string_view::npos ? text.size() : end + 1;
-		if (end != std::u16string_view::npos && text[end] == u'\r' && end + 1 < text.size() && text[end + 1] == u'\n')
-		{
-			++next;
-		}
-
-		if (GetWidth(line, size) > width)
-		{
-			// The most that fits, then back to the last space or hyphen
-			size_t fits = 0;
-			while (fits < line.size() && GetWidth(line.substr(0, fits + 1), size) <= width)
-			{
-				++fits;
-			}
-			size_t breakAt = fits;
-			while (breakAt > 0 && !IsSpace(line[breakAt]) && line[breakAt - 1] != u'-')
-			{
-				--breakAt;
-			}
-			if (breakAt == 0)
-			{
-				breakAt = std::max<size_t>(fits, 1);
-			}
-			next = breakAt;
-			line = line.substr(0, breakAt);
-			while (next < text.size() && IsSpace(text[next]))
-			{
-				++next;
-			}
-		}
-		while (!line.empty() && IsSpace(line.back()))
-		{
-			line.remove_suffix(1);
-		}
-		lines.push_back(line);
-		text.remove_prefix(next);
-	}
-	return lines;
+	return text_wrap::BreakLines(text, width, size / static_cast<float>(_height), [this](char16_t c) { return Advance(c); });
 }

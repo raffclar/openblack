@@ -66,6 +66,12 @@ public:
 	virtual void OpenBuildingSite(entt::entity /*site*/, entt::entity /*town*/, float /*desire*/) {}
 	/// A site's building site goes: no town builds it any more
 	virtual void CloseBuildingSite(entt::entity /*site*/) {}
+	/// A site's dance goes: each of its dancers leaves it and decides afresh what to do
+	virtual void RemoveDance(entt::entity /*dance*/) {}
+	/// The artefacts put down by a site are no longer among its own; they stay where they are
+	virtual void ArtefactsLeaveSite(entt::entity /*site*/) {}
+	/// A thing of a site (the site itself, its altar, its food pot with what is in it) goes from the world
+	virtual void Remove(entt::entity object) = 0;
 };
 
 } // namespace openblack::ecs::worship_site

@@ -294,6 +294,20 @@ TEST(HandGrab, AThrowIsFastAcrossTheGround)
 	EXPECT_FALSE(PotPours({2.0f, 1.0f, 0.1f}));
 }
 
+TEST(HandGrab, AThrowLeavesAtARecordedVelocityElseTheSpringsCappedAtTheMost)
+{
+	const glm::vec3 spring {3.0f, 0.0f, 4.0f};
+	EXPECT_EQ(ThrowVelocity(std::nullopt, true, spring), spring);
+	EXPECT_EQ(ThrowVelocity(std::nullopt, false, spring), glm::vec3(0.0f));
+	const glm::vec3 recorded {73.9941f, 5.2013f, -52.1485f};
+	EXPECT_EQ(ThrowVelocity(recorded, true, spring), recorded);
+	EXPECT_EQ(ThrowVelocity(recorded, false, spring), recorded);
+	// Nothing leaves faster than the most a throw can be
+	const auto capped = ThrowVelocity(glm::vec3(300.0f, 0.0f, 400.0f), false, spring);
+	EXPECT_FLOAT_EQ(glm::length(capped), k_MaxThrowSpeed);
+	EXPECT_FLOAT_EQ(capped.x / capped.z, 0.75f);
+}
+
 TEST(HandGrab, ATwistTurnsAboutTheLevelAxisAcrossTheHandsMotion)
 {
 	const auto torque = ReleaseSpinTorque(2.0f, 10.0f, {1.0f, 5.0f, 0.0f});

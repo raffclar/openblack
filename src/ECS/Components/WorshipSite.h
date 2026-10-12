@@ -36,6 +36,9 @@ struct CitadelWorship
 	/// The temple stands: one still to be built has no sites made for it, as their places are laid out from the
 	/// standing temple's
 	bool standing {false};
+	/// How many sites have been made for it: each new site is numbered by it, and the newest go first when the temple
+	/// loses them
+	uint32_t sitesMade {0};
 };
 
 /// A worship site: the place by a player's temple where the people of one of the player's tribes go to worship. It
@@ -50,6 +53,8 @@ struct WorshipSite
 	Tribe tribe {Tribe::NORSE};
 	/// Its place around the temple, 0 to 5
 	uint8_t place {0};
+	/// Which of its temple's sites it was, counting the first made as 0
+	uint32_t made {0};
 	/// Which way it faces, in radians: the temple's facing and a seventh of a turn for each place round
 	float facing {0.0f};
 	/// The towns whose people worship at it, the newest first

@@ -16,14 +16,18 @@
 namespace openblack::gui::world_tooltip
 {
 
-Numbered Belief(float margin)
+Numbered Belief(double margin)
 {
-	const double scaled = static_cast<double>(margin) * k_BeliefScale;
-	if (scaled < 0.0)
+	return {.index = k_BeliefLeft, .first = margin * k_BeliefScale, .second = std::nullopt};
+}
+
+Wording Worded(uint32_t index, double number)
+{
+	if (index == k_BeliefLeft && number < 0.0)
 	{
-		return {.index = k_BeliefNeeded, .first = -scaled, .second = std::nullopt};
+		return {.words = k_BeliefNeeded, .number = -number};
 	}
-	return {.index = k_BeliefLeft, .first = scaled, .second = std::nullopt};
+	return {.words = index, .number = number};
 }
 
 Numbered TempleHealth(float life)
@@ -49,6 +53,20 @@ Numbered PileAmount(bool food, uint32_t amount)
 Numbered HeldAmount(uint32_t amount)
 {
 	return {.index = k_HeldAmount, .first = static_cast<double>(amount), .second = std::nullopt};
+}
+
+std::optional<uint32_t> ToolTipOfText(uint32_t text)
+{
+	if (text < k_FirstToolTipText || text - k_FirstToolTipText >= k_ToolTipCount)
+	{
+		return std::nullopt;
+	}
+	return text - k_FirstToolTipText;
+}
+
+std::optional<uint32_t> ScaffoldDrop(std::optional<uint32_t> plannedBuildText)
+{
+	return plannedBuildText.has_value() ? ToolTipOfText(*plannedBuildText) : std::optional(k_Build);
 }
 
 std::u16string Compose(uint32_t index, std::u16string_view words, double first, std::optional<double> second)
