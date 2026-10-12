@@ -220,6 +220,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
+#include "Gui/WorldToolTips.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
@@ -1042,6 +1043,15 @@ void Game::ProcessHandToolTipTurn()
 	{
 		toolTips.Force(ecs::village_totem::k_ShareToolTip, tip->percent);
 	}
+	// As the hand takes food or wood from a pile, it shows the amount it holds, over anything else
+	if (Locator::handGrabSystem::has_value())
+	{
+		if (const auto amount = Locator::handGrabSystem::value().TakeAmountToolTip(); amount.has_value())
+		{
+			const auto held = gui::world_tooltip::HeldAmount(*amount);
+			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, static_cast<float>(held.first), std::nullopt, true);
+		}
+	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
 	if (!_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
 	{
@@ -1073,6 +1083,29 @@ void Game::ProcessHandToolTipTurn()
 	{
 		// Over a flag of a town's store, the hand shows how much the town wants its thing, in the flag's own words
 		toolTips.SubmitInWords(ecs::town_desire_flags::k_NeedToolTip, flagTip->words, flagTip->percent);
+	}
+	else if (const auto submissions =
+	             shown && !over.has_value() && Locator::pickingSystem::has_value()
+	                 ? gui::world_tooltip::Over(Locator::pickingSystem::value().GetPick().object.value_or(entt::null))
+	                 : std::vector<gui::world_tooltip::Submission> {};
+	         !submissions.empty())
+	{
+		// Over a temple, a village centre, a store or a pile, the hand says what it holds or can do
+		for (const auto& submission : submissions)
+		{
+			if (submission.wordsOnly)
+			{
+				toolTips.Submit(submission.numbers.index, submission.action, gui::ToolTipArrows::k_None, submission.force);
+			}
+			else
+			{
+				toolTips.SubmitNumbered(
+				    submission.numbers.index, submission.action, static_cast<float>(submission.numbers.first),
+				    submission.numbers.second.has_value() ? std::optional(static_cast<float>(*submission.numbers.second))
+				                                          : std::nullopt,
+				    submission.force);
+			}
+		}
 	}
 	else if (over.has_value() && shown)
 	{
