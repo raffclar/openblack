@@ -1201,10 +1201,12 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	{
 		return;
 	}
-	const auto words = _texts.Get(ToolTips::TextName(shown->words.value_or(shown->index)));
-	const std::u16string text = shown->number.has_value()
-	                                ? world_tooltip::Compose(shown->index, words, *shown->number, shown->second)
-	                                : std::u16string(words);
+	// A numbered tooltip may read in other words by its number (the belief tooltip while the player trails)
+	const auto worded =
+	    shown->number.has_value() ? std::optional(world_tooltip::Worded(shown->index, *shown->number)) : std::nullopt;
+	const auto words = _texts.Get(ToolTips::TextName(shown->words.value_or(worded.has_value() ? worded->words : shown->index)));
+	const std::u16string text =
+	    worded.has_value() ? world_tooltip::Compose(shown->index, words, worded->number, shown->second) : std::u16string(words);
 	const glm::vec4 yellow {1.0f, 1.0f, 0.0f, alpha};
 	const glm::vec4 white {1.0f, 1.0f, 1.0f, alpha};
 	const glm::vec4 shadow {0.0f, 0.0f, 0.0f, alpha};
