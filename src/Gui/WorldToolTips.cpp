@@ -16,6 +16,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -71,6 +72,11 @@ std::vector<Submission> Over(entt::entity object)
 	if (!registry.Valid(object))
 	{
 		return submissions;
+	}
+	// The totem on a village centre shows the centre's belief and population, as the centre itself does
+	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
+	{
+		object = totem->townCentre;
 	}
 	if (registry.AllOf<Temple>(object))
 	{
