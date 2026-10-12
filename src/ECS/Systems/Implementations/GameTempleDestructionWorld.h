@@ -25,6 +25,7 @@ class GameTempleDestructionWorld final: public temple_world::World
 public:
 	[[nodiscard]] Registry* Entities() override;
 	[[nodiscard]] uint32_t MillisecondsPerTurn() const override;
+	[[nodiscard]] uint32_t Turn() const override;
 	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override;
 	entt::entity StartLoop(entt::id_type sound, glm::vec3 position, entt::entity owner) override;
 	void PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner) override;

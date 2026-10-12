@@ -19,20 +19,25 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
 #include "3D/L3DRayCast.h"
 #include "3D/TempleExteriorMorph.h"
+#include "3D/TempleLanterns.h"
 #include "Common/Bitmap16B.h"
+#include "ECS/Archetypes/VillageLightArchetype.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
+#include "ECS/Components/VillageLight.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "Locator.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -62,6 +67,24 @@ void TempleExteriorSystem::UpdateTurn()
 		    const auto follow =
 		        building_construction::FollowBuilt(exterior.drawnBuilt, progress != nullptr ? progress->built : 1.0f);
 		    exterior.drawnBuilt = follow.drawn;
+		    // The two lanterns at its entrance are made the first time it shows more than 7% built, each lit with a town
+		    // village light
+		    if (!exterior.lanternsMade && temple_lanterns::Present(exterior.drawnBuilt))
+		    {
+			    exterior.lanternsMade = true;
+			    const auto placed = registry.Get<const Transform>(entity);
+			    for (size_t i = 0; i < temple_lanterns::k_Positions.size(); ++i)
+			    {
+				    const auto position =
+				        temple_lanterns::WorldPosition(i, placed.position, placed.rotation, placed.scale);
+				    const auto lantern = registry.Create();
+				    registry.Assign<Transform>(lantern, position, glm::mat3(1.0f), glm::vec3(1.0f));
+				    registry.Assign<Mesh>(lantern, resources::HashIdentifier(MeshId::ObjectTownLight), static_cast<int8_t>(0),
+				                          static_cast<int8_t>(1));
+				    const auto light = ecs::archetypes::VillageLightArchetype::Create(position, VillageLight::Kind::Town);
+				    registry.Assign<TempleLantern>(lantern, entity, light);
+			    }
+		    }
 		    if (follow.refile && Locator::entitiesMap::has_value())
 		    {
 			    Locator::entitiesMap::value().Refile(entity);

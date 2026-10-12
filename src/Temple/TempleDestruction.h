@@ -57,6 +57,14 @@ struct Events
 };
 [[nodiscard]] Events Between(float before, float after);
 
+/// The temple's entrance lanterns are drawn only until the clock passes this, just before the temple goes
+inline constexpr float k_LanternsHiddenAfter = 21.8f;
+/// Whether the entrance lanterns are still drawn at the clock
+[[nodiscard]] constexpr bool LanternsShown(float clock)
+{
+	return clock <= k_LanternsHiddenAfter;
+}
+
 /// Whether the heart beams at the clock
 [[nodiscard]] constexpr bool Beaming(float clock)
 {

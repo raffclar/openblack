@@ -22,6 +22,7 @@
 #include "3D/MapCoords.h"
 #include "Animals/GrazerRules.h"
 #include "Camera/Camera.h"
+#include "Common/StringUtils.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
@@ -108,18 +109,14 @@ std::tuple<Tribe, VillagerNumber> GetVillagerTribeAndNumber(const std::string& v
 	}
 }
 
+/// The player a land's script names, in any case; a name that is no player's is the neutral player
 PlayerNames GetPlayerName(const std::string& name)
 {
-	PlayerNames player;
-	try
+	if (const auto player = k_PlayerLookup.find(string_utils::UpperCase(name)); player != k_PlayerLookup.end())
 	{
-		player = k_PlayerLookup.at(name);
+		return player->second;
 	}
-	catch (...)
-	{
-		std::throw_with_nested(std::runtime_error(fmt::format("Could not recognize player name: {}", name)));
-	}
-	return player;
+	return PlayerNames::NEUTRAL;
 }
 
 /// The object the land's script made last
@@ -291,7 +288,13 @@ void FeatureScriptCommands::SetTownBelief(int32_t townId, const std::string& pla
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& registryContext = registry.Context();
 
-	const auto town = registryContext.towns.at(townId);
+	// A town the land never made has no belief to set
+	const auto found = registryContext.towns.find(townId);
+	if (found == registryContext.towns.end())
+	{
+		return;
+	}
+	const auto town = found->second;
 	auto& impression =
 	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
 	magic::town_belief::SetInPlayer(impression.belief, GetPlayerName(playerOwner), belief);
@@ -301,7 +304,14 @@ void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& 
 {
 	// TODO(town-ownership): in a multiplayer game the cap of a player in a town of one tribe is raised to 2 on one map
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto town = registry.Context().towns.at(townId);
+	// A town the land never made has no cap to set
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(townId);
+	if (found == towns.end())
+	{
+		return;
+	}
+	const auto town = found->second;
 	auto& impression =
 	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
 	const auto player = static_cast<size_t>(GetPlayerName(playerOwner));
@@ -686,15 +696,15 @@ void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t param2, i
 void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName, CreatureType creatureType,
                                                    const std::string& creatureMind, glm::vec3 position)
 {
-	auto playerType =
-	    std::distance(k_PlayerNamesStrs.begin(), std::find(k_PlayerNamesStrs.begin(), k_PlayerNamesStrs.end(), playerName));
+	// A name that is no player's, such as an eighth player's, makes the creature the neutral player's
+	const auto player = GetPlayerName(playerName);
 	auto yAngleRadians = glm::radians(180.0f);
 	auto& resources = Locator::resources::value();
 	auto& creatureMindManager = resources.GetCreatureMinds();
 	auto creatureMindPath = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / creatureMind;
 	auto loadResult = creatureMindManager.Load(creatureMind, resources::CreatureMindLoader::FromDiskTag {}, creatureMindPath);
 	auto creatureMindId = loadResult.first->first;
-	CreatureArchetype::Create(position, static_cast<PlayerNames>(playerType), creatureType, creatureMindId, yAngleRadians,
+	CreatureArchetype::Create(position, player, creatureType, creatureMindId, yAngleRadians,
 	                          CreatureArchetype::StartScale(creatureType), CreatureArchetype::StartBody(creatureType));
 }
 

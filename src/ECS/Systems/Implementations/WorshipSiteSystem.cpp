@@ -123,6 +123,11 @@ void WorshipSiteSystem::TownChangedHands(entt::entity town)
 			}
 			std::erase(site->towns, town);
 			std::erase_if(site->buildRequests, [town](const WorshipSite::BuildRequest& asked) { return asked.town == town; });
+			// With no town left to build it, its building site goes
+			if (site->buildRequests.empty() && !IsBuilt(component.worshipSite))
+			{
+				_world->CloseBuildingSite(component.worshipSite);
+			}
 		}
 	}
 	component.worshipSite = entt::null;
@@ -446,6 +451,7 @@ void WorshipSiteSystem::OpenSites(entt::entity temple, float desireBoost)
 			request = requests.begin();
 		}
 		request->desireBoost = desireBoost;
+		_world->OpenBuildingSite(site, town, desireBoost);
 	}
 }
 
@@ -643,6 +649,8 @@ void WorshipSiteSystem::AddTownIfMissing(entt::entity site, entt::entity town)
 void WorshipSiteSystem::Built(entt::entity site)
 {
 	auto& registry = _world->Entities();
+	// Its building site goes first, then it leaves the towns that were asked to build it
+	_world->CloseBuildingSite(site);
 	auto& component = registry.Get<WorshipSite>(site);
 	component.buildRequests.clear();
 	// It stands whole, drawn as itself, and its altar is seen from now on
