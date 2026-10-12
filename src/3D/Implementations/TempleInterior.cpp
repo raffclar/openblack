@@ -38,6 +38,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Camera/TempleCameraModel.h"
+#include "Camera/TemplePress.h"
 #include "Common/EventManager.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureCave.h"
@@ -501,6 +502,20 @@ void TempleInterior::FadeToWhite()
 	}
 }
 
+void TempleInterior::CoverSkippedFlight()
+{
+	// The cut is covered from a whole screen, in whatever colour is still fading
+	if (_interface != nullptr)
+	{
+		_interface->GetScreenFade().FadeFrom(temple_press::k_SkippedFlightFade);
+	}
+}
+
+float TempleInterior::GetFadeAmount() const
+{
+	return _interface != nullptr ? _interface->GetScreenFade().GetAmount() : 0.0f;
+}
+
 void TempleInterior::FadeIntoRoom()
 {
 	// Going to another room covers the cut from 1.2, in whatever colour is still fading
@@ -942,6 +957,8 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		// The temple is lit by the alignment, pulsing with the time
 		_light = TempleLight::At(Locator::alignmentSystem::value().GetCameraAlignment(),
 		                         static_cast<uint32_t>(machine_clock::Ticks()));
+		// The room the player is in sets how thick the fog is, and the light its colour
+		_fog = TempleFog::In(_currentRoom == TempleRoom::CreatureCave, _light);
 		// The creature's room chooses the belts and medals every frame
 		if (IsRoomDrawn(TempleRoom::CreatureCave))
 		{

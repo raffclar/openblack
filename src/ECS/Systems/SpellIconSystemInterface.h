@@ -39,6 +39,9 @@ public:
 	virtual void TownJoinedSite(entt::entity site, entt::entity town) = 0;
 	/// A town no longer worships at a site: the site's icons of the miracles none of its other towns offer go
 	virtual void TownLeftSite(entt::entity site, entt::entity town) = 0;
+	/// A worship site goes (its temple destroyed): every icon of it goes with what it was charging, and the seed out from
+	/// each, in a hand or cast, goes too. The village centres' hands stay with their towns.
+	virtual void SiteRemoved(entt::entity site) = 0;
 
 	/// The hand taps an icon: whether the tap counted
 	virtual bool Tap(entt::entity icon, PlayerNames player) = 0;

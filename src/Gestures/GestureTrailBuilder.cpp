@@ -76,6 +76,7 @@ TrailSymbol gesture::MakeTrailSymbol(std::span<const glm::vec3> filePoints)
 	}
 	// As many points again, evenly along its length from its start, the last one step short of its end
 	const particles::TrailPath path(std::move(square));
+	symbol.length = path.Length();
 	const auto count = filePoints.size();
 	const auto step = static_cast<float>(1.0 / static_cast<double>(static_cast<float>(count)));
 	symbol.points.reserve(count);

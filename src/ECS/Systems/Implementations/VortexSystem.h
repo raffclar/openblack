@@ -11,6 +11,7 @@
 
 #include <vector>
 
+#include "3D/MapCoords.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -19,8 +20,9 @@
 
 namespace openblack::ecs::components
 {
+struct Creature;
 struct Vortex;
-}
+} // namespace openblack::ecs::components
 
 namespace openblack::ecs::systems
 {
@@ -30,6 +32,7 @@ class VortexSystem final: public VortexSystemInterface
 public:
 	entt::entity Create(glm::vec3 position, VortexType type, float altitude) override;
 	bool StartFadeOut(entt::entity vortex) override;
+	bool SetArrival(entt::entity vortex, const components::Vortex::Arrival& arrival) override;
 	[[nodiscard]] float GetOpenness(entt::entity vortex) const override;
 	void ProcessTurn() override;
 	void UpdateFrame(float gameSeconds) override;
@@ -40,6 +43,13 @@ private:
 	static void StartEffects(components::Vortex& vortex);
 	/// They go at once with it
 	static void DeleteEffects(const components::Vortex& vortex);
+	/// A fully open vortex that leads away takes what it reaches this turn
+	static void Pull(const components::Vortex& vortex);
+	/// A creature it reaches sparkles away once near the middle, if it may be taken
+	static void PullCreature(entt::entity entity, const components::Creature& creature, const glm::vec3& position,
+	                         const map_coords::MapCoords& centre);
+	/// How near the middle a creature must come to be taken
+	[[nodiscard]] static float CreatureTakenDistance();
 	/// The land under a vortex is levelled as far as an amount: its heights are read the first time
 	static void LevelGround(components::Vortex& vortex, float amount);
 

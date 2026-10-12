@@ -90,6 +90,8 @@ public:
 	void Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow);
 
 	[[nodiscard]] GameMenu& GetMenu() noexcept { return *_menu; }
+	/// Whether the advisors' words were drawn at the last frame drawn, which the gestures' hints fade out for
+	[[nodiscard]] bool WereDialogueWordsDrawn() const noexcept { return _dialogueWordsDrawn; }
 
 	/// Asks the player how to start the new game, offering to keep the old creature only when the current profile has
 	/// one. The box takes the mouse and every key until answered.
@@ -201,6 +203,9 @@ private:
 	void DrawCreaturePanel(glm::u16vec2 resolution);
 	/// The fight's panel, at the top left of the screen
 	void DrawFightPanel(glm::u16vec2 resolution);
+	/// A bar of the creature's panels in screen pixels: its framed box, its fill from its left (or its middle, with a line
+	/// there) brightening towards where it ends, and shadows inside its frame
+	void DrawStatBar(const creature_panel::Rect& bar, float fill, glm::u8vec3 colour, bool fromMiddle);
 	/// The full-screen video playing, between the interface and the scripts' fade. Returns how wide the black bars at
 	/// its sides are, on a screen wider than its 16:9 picture (none otherwise, and none without a video)
 	int DrawVideo(glm::u16vec2 resolution);
@@ -211,6 +216,9 @@ private:
 	void DrawDialogue(glm::u16vec2 resolution, int barPixels);
 	/// The camera's helper icons by the hand and, in a demonstration, its mouse
 	void DrawHandTricons(glm::u16vec2 resolution);
+	/// The row of hints of the gestures the hand waits for: each gesture's picture and the dots running along it (the
+	/// leashes' collars over them are drawn with the scene)
+	void DrawGestureHints(glm::u16vec2 resolution);
 	/// One word of the dialogue, cut to the box's top and bottom
 	void DrawDialogueRun(const help::TextRun& run);
 	/// The villagers' labels: placed in turn so none covers another, then drawn the furthest first
@@ -246,6 +254,10 @@ private:
 	std::unique_ptr<graphics::Texture2D> _gatheringText;
 	/// The gestures' pictures, sixteen to a sheet, which a tip's gesture codes show
 	std::array<std::unique_ptr<graphics::Texture2D>, 2> _gestureSheets;
+	/// The sprite sheet the gestures' hints' running dots are cut from
+	std::unique_ptr<graphics::Texture2D> _hintDotSheet;
+	/// Whether the advisors' words were drawn at the last frame
+	bool _dialogueWordsDrawn {false};
 	/// The good advisor's font f1 and the evil one's f3, which their words in the dialogue are in
 	std::optional<FontFace> _goodAdvisorFont;
 	std::optional<FontFace> _evilAdvisorFont;

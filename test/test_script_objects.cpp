@@ -57,6 +57,7 @@ struct FakeWorld final: World
 		/// A marker or a timer
 		bool deletedWhenReleased {false};
 		bool highlight {false};
+		bool keptInView {false};
 	};
 	std::map<entt::entity, Object> objects;
 	std::vector<entt::entity> decided;
@@ -130,6 +131,7 @@ struct FakeWorld final: World
 		return objects.at(object).deletedWhenReleased;
 	}
 	[[nodiscard]] bool IsHighlight(entt::entity object) const override { return objects.at(object).highlight; }
+	void KeepInView(entt::entity object) override { objects.at(object).keptInView = true; }
 };
 
 struct System
@@ -241,12 +243,37 @@ TEST(ScriptObjectsSystem, AFoundObjectIsInAScriptButNotControlledAtItsFirstRefer
 	EXPECT_FALSE(world->objects.at(object).controlled);
 }
 
+TEST(ScriptObjectsSystem, WhatAScriptMakesIsKeptInView)
+{
+	auto [world, system] = MakeSystem();
+	const auto made = world->Add(3);
+	const auto found = world->Add(4);
+	ASSERT_TRUE(system->Register(made, true));
+	ASSERT_TRUE(system->Register(found, false));
+	EXPECT_TRUE(world->objects.at(made).keptInView);
+	EXPECT_FALSE(world->objects.at(found).keptInView);
+}
+
 TEST(ScriptObjectsSystem, AnObjectAScriptMadeIsControlledAtItsFirstReference)
 {
 	auto [world, system] = MakeSystem();
 	const auto object = world->Add(3);
 	ASSERT_TRUE(system->Register(object, true));
 	system->AddReference(object);
+	EXPECT_TRUE(world->objects.at(object).controlled);
+}
+
+TEST(ScriptObjectsSystem, AnObjectAScriptMadeIsInNoScriptUntilAVariableHoldsIt)
+{
+	// What CREATE makes takes its place as made by a script, but only a reference puts it in the script: until then a
+	// search excluding scripted things still finds it, as the game's does
+	auto [world, system] = MakeSystem();
+	const auto object = world->Add(3);
+	ASSERT_TRUE(system->Register(object, true));
+	EXPECT_FALSE(world->objects.at(object).inScript);
+	EXPECT_FALSE(world->objects.at(object).controlled);
+	system->AddReference(object);
+	EXPECT_TRUE(world->objects.at(object).inScript);
 	EXPECT_TRUE(world->objects.at(object).controlled);
 }
 

@@ -9,11 +9,14 @@
 
 #include "AnimalArchetype.h"
 
+#include <array>
+
 #include <glm/vec3.hpp>
 
 #include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -31,9 +34,14 @@ entt::entity AnimalArchetype::Create(AnimalInfo type, const glm::vec3& position,
 	const auto& info = Locator::infoConstants::value().animal.at(static_cast<size_t>(type));
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, position, animals::Orientation(heading, 0.0f), glm::vec3(scale));
-	// A bird is drawn with its kind's middle model, as the game draws its birds
+	// The rest of the game knows a bird by its kind's middle model and any other animal by its high one
 	const auto mesh = animals::birds::IsBird(type) ? info.std : info.high;
 	registry.Assign<Mesh>(entity, resources::HashIdentifier(mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
+	// Drawn in less detail further off, by its kind's high, middle and low models (a bird's low model is its middle one)
+	registry.Assign<DetailMeshes>(entity,
+	                              std::array {resources::HashIdentifier(info.high), resources::HashIdentifier(info.std),
+	                                          resources::HashIdentifier(info.low)},
+	                              0.0f);
 	auto& animal = registry.Assign<Animal>(entity);
 	animal.type = type;
 	animal.owner = owner;

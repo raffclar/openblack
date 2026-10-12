@@ -60,16 +60,24 @@ void StepPulse(Pulse& pulse, float millisecondsPerTurn)
 		pulse.phase -= k_TwoPi;
 	}
 	pulse.previous = pulse.level;
-	pulse.level = (1.0f - std::cos(pulse.phase)) * 0.5f;
+	// Worked out in full precision and only then kept as a float, so the beat reaches a whole 1 as the game's does
+	pulse.level = static_cast<float>((1.0 - std::cos(static_cast<double>(pulse.phase))) * 0.5);
 }
 
-float PulseShare(const Pulse& pulse, float turnFraction)
+double PulseShare(const Pulse& pulse, float turnFraction)
 {
-	const float blended = std::clamp(((pulse.level - pulse.previous) * turnFraction) + pulse.previous, 0.0f, 1.0f);
-	return (blended * k_PulseRise) + k_PulseLeast;
+	// Worked out in full precision throughout: whether the share reaches a whole 1 decides the yellow beam
+	const double previous = pulse.previous;
+	const double blended = std::clamp(((pulse.level - previous) * turnFraction) + previous, 0.0, 1.0);
+	return (blended * static_cast<double>(k_PulseRise)) + static_cast<double>(k_PulseLeast);
 }
 
-uint32_t BeamColour(HighlightInfo kind, float pulseShare)
+bool BeamShown(HighlightInfo kind, bool active)
+{
+	return active && !IsTipSign(kind);
+}
+
+uint32_t BeamColour(HighlightInfo kind, double pulseShare)
 {
 	if (kind == HighlightInfo::Silver)
 	{

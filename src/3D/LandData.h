@@ -34,6 +34,9 @@ struct LandData
 	/// The noise and bump maps, 256 by 256 texels each, [x * 256 + z]
 	std::vector<uint8_t> noise;
 	std::vector<uint8_t> bump;
+	/// The land's coarse texture pages, as the landscape file keeps them: each block's coarse texture is a 64 texel
+	/// square of one of them (see LNDBlock::lowResTexture, fuLrs and fvLrs)
+	std::vector<lnd::LNDLowResolutionTexture> coarsePages;
 
 	/// The land of a landscape file
 	[[nodiscard]] static LandData FromLnd(const lnd::LNDFile& lnd);

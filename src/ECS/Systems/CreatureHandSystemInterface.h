@@ -22,7 +22,8 @@ namespace openblack::ecs::systems
 
 /// The player's hand on a creature (see components::HandOnCreature). The hand can't pick a creature up: holding the
 /// right button on one holds the hand to it, if it is any player's and awake (creature_hand::MayHold).
-/// Let go quickly, the press was a click, which puts the leash on instead. Resting on its body the hand strokes it, swept fast
+/// Let go quickly, the press was a click, which puts the leash on instead. While the button holds it, the camera
+/// turns to look at the creature, and gives way back when the hand lets go. Resting on its body the hand strokes it, swept fast
 /// across it the hand slaps it, and the creature reacts to each. When the hand lets go the creature's mind is told how it was
 /// treated, from -1 to 1.
 class CreatureHandSystemInterface
@@ -34,8 +35,10 @@ public:
 		glm::vec3 position;
 		/// Resting on the body rather than beside it
 		bool onBody;
-		/// Just slapped
-		bool slapping;
+		/// The hand's cycle: wiggling beside the body, caressing it or slapping
+		creature_feedback::TouchCycle cycle;
+		/// How much larger the hand is drawn, with the creature's size
+		float scale;
 	};
 
 	virtual ~CreatureHandSystemInterface() = default;
@@ -47,10 +50,10 @@ public:
 	[[nodiscard]] virtual bool MayHold(entt::entity creature) const = 0;
 	/// Whether the hand held to a creature by the button would, let go now, have been clicked on it rather than held
 	[[nodiscard]] virtual bool IsClick() const = 0;
-	/// Once a frame while held to a creature, with the line of sight through the cursor, the cursor on the screen and the
-	/// frame's seconds: strokes and slaps, and where the hand is
+	/// Once a frame while held to a creature, with the line of sight through the cursor, the cursor on the screen, the
+	/// screen's width and the frame's seconds: strokes and slaps, and where the hand is
 	virtual std::optional<HandPose> Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-	                                       float seconds) = 0;
+	                                       float screenWidth, float seconds) = 0;
 	/// The button was let go: the creature is told how it was treated
 	virtual void Release() = 0;
 
@@ -70,6 +73,9 @@ public:
 	[[nodiscard]] virtual float GetFeedbackSum() const = 0;
 	/// While held to a creature the same, and after letting go the sum it let go with, until it takes hold again
 	[[nodiscard]] virtual float GetLastFeedbackSum() const = 0;
+	/// Whether letting go just told the creature something too slight to count, which forces the hand's "Focus Creature"
+	/// tooltip once; asking takes it
+	virtual bool TakeFocusTip() = 0;
 };
 
 } // namespace openblack::ecs::systems

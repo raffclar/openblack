@@ -126,11 +126,10 @@ VillagerStates State(const LivingAction& action, LivingAction::Index index)
 	return Living().VillagerGetState(action, index);
 }
 
-/// The state a villager is in, or walking to
+/// The state a villager is in, when that is an end in itself, or else the one it is walking to
 VillagerStates FinalState(const LivingAction& action)
 {
-	const auto final = State(action, LivingAction::Index::Final);
-	return final != VillagerStates::InvalidState ? final : State(action, LivingAction::Index::Top);
+	return Living().VillagerGetFinalState(action);
 }
 
 void SetTopState(LivingAction& action, VillagerStates state)
@@ -292,40 +291,26 @@ bool IsFireFightingState(VillagerStates state)
 	       state == VillagerStates::GetWaterToPutOutFire || state == VillagerStates::MoveAroundFire;
 }
 
-/// The villager goes back to what it remembered. Both the state it is in and the one it was walking to are left, so
-/// leaving a reaction it was walking to ends that reaction. When either refuses to be left it decides afresh what to
-/// do, without leaving them. Going into the remembered state clears the state it was walking to.
+/// The villager goes back to what it remembered, as any change of state goes: it may pause a second first, and a state
+/// that won't be gone into leaves it deciding what to do. Nothing is remembered afterwards. With nothing remembered it
+/// decides what to do rather than standing still for good.
 void PopFromPrevious(LivingAction& action)
 {
-	auto& living = Living();
 	const auto previous = State(action, LivingAction::Index::Previous);
-	const auto resume = static_cast<VillagerStates>(StateInfo(previous).resumeState);
-	const auto top = State(action, LivingAction::Index::Top);
-	// A state that is an end in itself is also the one it is heading for
-	const auto final = StateInfo(top).isFinalState != 0 ? top : State(action, LivingAction::Index::Final);
-	bool refused = living.VillagerCallExitState(action, LivingAction::Index::Top, resume);
-	if (final != top && living.VillagerCallExitState(action, LivingAction::Index::Final, resume))
-	{
-		refused = true;
-	}
-	if (refused)
-	{
-		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, true);
-	}
-	else
-	{
-		living.VillagerSetState(action, LivingAction::Index::Top, resume, true);
-		living.VillagerSetState(action, LivingAction::Index::Final, VillagerStates::InvalidState, true);
-		living.VillagerCallEntryState(action, LivingAction::Index::Top, top, resume);
-	}
+	SetTopState(action, villager_fire::StateToGoBackTo(static_cast<VillagerStates>(StateInfo(previous).resumeState)));
 	SetPrevious(action, VillagerStates::InvalidState);
 }
 
+/// The villager lets go of the reaction it took up, so the living about a fire can take it up again in their time
 void StopReacting(entt::entity villager)
 {
 	auto& state = FireStateOf(villager);
 	state.reaction = 0;
 	state.reactionTarget = entt::null;
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().StopReacting(villager);
+	}
 }
 
 /// Whether a thing can still be reacted to: it exists, and a villager is not dying
@@ -381,13 +366,6 @@ const ReactionInfo& FireReaction()
 	return Locator::infoConstants::value().reaction.at(static_cast<size_t>(Reaction::ReactToFire));
 }
 
-/// The reaction an object's fire makes, 0 for none
-uint32_t ReactionOf(entt::entity object)
-{
-	const auto* fire = Entities().TryGet<const Fire>(object);
-	return fire != nullptr ? fire->reaction : 0;
-}
-
 /// Where a villager stands to beat a fire: on the line from where the fire burns out through the villager, beyond the
 /// object's radius or the fire's safe radius, whichever is wider, by its own radius and a little more at random
 std::optional<glm::vec2> GetFireFightingPos(entt::entity villager, entt::entity fire)
@@ -418,6 +396,15 @@ bool InRange(entt::entity villager, entt::entity fire, float margin)
 	return distance > radius && distance < radius + margin;
 }
 
+/// Walks to a point to go into a state there. Like the game, it goes into the walk and the state it walks to at once, so
+/// the state it leaves hears where it is heading, not that it walks: leaving a fire's reaction to walk on with it keeps
+/// the reaction
+void WalkTo(LivingAction& action, glm::vec2 goal, VillagerStates destination)
+{
+	villager_home::SetupMobileMoveTo(action, goal, destination);
+	Living().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, destination);
+}
+
 /// Goes round the fire it is about to a point, then on into a state
 bool SetupMoveAroundFire(LivingAction& action, glm::vec2 point, VillagerStates then)
 {
@@ -431,7 +418,8 @@ bool SetupMoveAroundFire(LivingAction& action, glm::vec2 point, VillagerStates t
 	return true;
 }
 
-/// Picks the fire of the blaze nearest it to beat and goes there; false when there is none
+/// Picks the fire of the blaze nearest it to beat and sets off there; false when there is none or no place to stand. It
+/// has decided once it has a place, whether or not it could set off
 bool DecideHowToPutOutFire(LivingAction& action, entt::entity fire)
 {
 	const auto villager = EntityOf(action);
@@ -442,7 +430,12 @@ bool DecideHowToPutOutFire(LivingAction& action, entt::entity fire)
 		return false;
 	}
 	const auto place = GetFireFightingPos(villager, state.fire);
-	return place.has_value() && SetupMoveAroundFire(action, *place, VillagerStates::PutOutFireByBeating);
+	if (!place.has_value())
+	{
+		return false;
+	}
+	SetupMoveAroundFire(action, *place, VillagerStates::PutOutFireByBeating);
+	return true;
 }
 
 /// The villager's walk's goal
@@ -452,7 +445,7 @@ glm::vec2& GoalOf(entt::entity villager)
 }
 } // namespace
 
-uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity object)
+uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity object, uint32_t reaction)
 {
 	auto& registry = Entities();
 	auto& fires = Locator::fireSystem::value();
@@ -468,7 +461,8 @@ uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity o
 	const float priority = urgency * static_cast<float>(info.priority);
 	constexpr float k_Most = 255.0f;
 	const auto result = static_cast<uint8_t>(priority < k_Most ? map_coords::FtoL(priority) : 255);
-	const auto age = ReactionAge(ReactionOf(object));
+	// The age of the reaction weighed, which a fire spreads as soon as it makes it
+	const auto age = ReactionAge(reaction);
 	if (age.has_value() && *age < k_NewReactionTurns && distance < info.minDistanceToRunAwayFromObject)
 	{
 		return result;
@@ -505,7 +499,7 @@ uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity o
 	return 0;
 }
 
-void villager_fire::SetupReactToFire(entt::entity villager, entt::entity object)
+void villager_fire::SetupReactToFire(entt::entity villager, entt::entity object, uint32_t reaction)
 {
 	auto& registry = Entities();
 	auto* action = registry.TryGet<LivingAction>(villager);
@@ -522,7 +516,8 @@ void villager_fire::SetupReactToFire(entt::entity villager, entt::entity object)
 	}
 	villager_home::LeaveHome(villager);
 	SetTopState(*action, VillagerStates::ReactToFire);
-	FireStateOf(villager).reaction = ReactionOf(object);
+	// The reaction it takes up, which a fire spreads as soon as it makes it
+	FireStateOf(villager).reaction = reaction;
 }
 
 uint32_t villager_fire::ReactToFire(LivingAction& action)
@@ -554,14 +549,19 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 		                        ? GameFloatRandom(info.maxDistanceToRunAwayFromObject - info.minDistanceToRunAwayFromObject) +
 		                              info.minDistanceToRunAwayFromObject
 		                        : GameFloatRandom(k_SafeMargin) + reach->safeRadius;
-		villager_home::SetupMoveTo(action, FleeingPosition(here, reach->position, runTo), VillagerStates::ReactToFire);
+		WalkTo(action, FleeingPosition(here, reach->position, runTo), VillagerStates::ReactToFire);
 		SetStateSpeed(villager, VillagerStates::ReactToFire);
 		return 1;
 	}
 	if (IsFireFightingState(FinalState(action)))
 	{
-		// A fireman already: back to its fight
+		// A fireman already: back to what it remembered, or to deciding afresh if that is a reaction, letting go of this
+		// one
 		PopFromPrevious(action);
+		if (StateInfo(FinalState(action)).isReactionState != 0)
+		{
+			SetTopState(action, VillagerStates::DecideWhatToDo);
+		}
 		if (FireStateOf(villager).reaction != 0)
 		{
 			StopReacting(villager);
@@ -697,7 +697,7 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 	{
 		target = ToCoords(state.walkTarget);
 	}
-	villager_home::SetupMoveTo(action, CoordsToMetres(target), VillagerStates::MoveAroundFire);
+	WalkTo(action, CoordsToMetres(target), VillagerStates::MoveAroundFire);
 	// The full speed of its state, wounds, town and its own way of going included
 	ecs::systems::villager_reactions::SetStateSpeed(villager, State(action, LivingAction::Index::Previous));
 	return 1;
@@ -782,7 +782,7 @@ uint32_t villager_fire::OnFire(LivingAction& action)
 		const float distance = GameFloatRandom(k_OnFireRunMore) + k_OnFireRun;
 		goal = CoordsToMetres(ToCoords(Across(here)) + PosFromAngle(angle, distance));
 	}
-	villager_home::SetupMoveTo(action, goal, VillagerStates::OnFire);
+	WalkTo(action, goal, VillagerStates::OnFire);
 	SetStateSpeed(villager, VillagerStates::OnFire);
 	if (State(action, LivingAction::Index::Previous) == VillagerStates::InvalidState)
 	{
@@ -808,6 +808,7 @@ bool villager_fire::EnterPutOutFire(LivingAction& action, VillagerStates from, V
 	auto& state = FireStateOf(villager);
 	auto& fires = Locator::fireSystem::value();
 	const bool valid = state.fire != entt::null && Entities().Valid(state.fire) && Entities().AllOf<Fire>(state.fire);
+	// Refused, the villager decides what to do instead (the change of state sees to that)
 	if (!valid || state.reaction == 0 || !ReactionAge(state.reaction).has_value())
 	{
 		if (!valid)
@@ -818,12 +819,11 @@ bool villager_fire::EnterPutOutFire(LivingAction& action, VillagerStates from, V
 		{
 			StopReacting(villager);
 		}
-		SetTopState(action, VillagerStates::DecideWhatToDo);
 		return false;
 	}
+	// Already one of the blaze's firemen, it is refused but stays listed, keeping its reaction
 	if (fires.IsFiremanOf(state.fire, villager))
 	{
-		SetTopState(action, VillagerStates::DecideWhatToDo);
 		return false;
 	}
 	fires.AddFireman(state.fire, villager);
@@ -832,7 +832,9 @@ bool villager_fire::EnterPutOutFire(LivingAction& action, VillagerStates from, V
 
 bool villager_fire::ExitPutOutFire(LivingAction& action, VillagerStates next)
 {
-	if (IsFireFightingState(next))
+	// It stays one of the blaze's firemen going on to another fire-fighting state, or to a state that isn't an end in
+	// itself (walking somewhere on the way)
+	if (IsFireFightingState(next) || StateInfo(next).isFinalState == 0)
 	{
 		ExitReaction(action, next);
 		return false;
@@ -958,7 +960,8 @@ void villager_fire::StopFireFighting(entt::entity villager)
 		SetTopState(*action, VillagerStates::DecideWhatToDo);
 		return;
 	}
-	auto next = static_cast<VillagerStates>(StateInfo(State(*action, LivingAction::Index::Previous)).resumeState);
+	auto next =
+	    StateToGoBackTo(static_cast<VillagerStates>(StateInfo(State(*action, LivingAction::Index::Previous)).resumeState));
 	if (IsFireFightingState(next))
 	{
 		next = VillagerStates::DecideWhatToDo;
@@ -971,7 +974,13 @@ void villager_fire::StopFireFighting(entt::entity villager)
 	}
 	else
 	{
+		// Walking there: both the walk and the fire state it was heading for are left, so it lets go of the reaction
+		const auto top = State(*action, LivingAction::Index::Top);
 		Living().VillagerCallExitState(*action, LivingAction::Index::Top, next);
+		if (FinalState(*action) != top)
+		{
+			Living().VillagerCallExitState(*action, LivingAction::Index::Final, next);
+		}
 		Living().VillagerSetState(*action, LivingAction::Index::Final, next, true);
 		SetPrevious(*action, VillagerStates::InvalidState);
 	}
