@@ -507,6 +507,26 @@ uint32_t villager_build::CheckSatisfyToBuild(LivingAction& action)
 	return site.has_value() && SetupBuildingObject(action, *site) == 1 ? 1 : 0;
 }
 
+uint32_t villager_build::CheckSatisfyToRepair(LivingAction& action)
+{
+	const auto town = TownOf(VillagerOf(action));
+	if (town == entt::null)
+	{
+		return 0;
+	}
+	// The town's mending site that wants its builders most
+	const auto sites = construction::SitesOfTown(town);
+	std::vector<building_site::RepairCandidate> candidates;
+	candidates.reserve(sites.size());
+	for (const auto building : sites)
+	{
+		candidates.push_back({.repair = construction::IsRepairSite(building),
+		                      .desireToBeRepaired = construction::SiteDesireToBeRepaired(building)});
+	}
+	const auto best = building_site::BestRepairSite(candidates);
+	return best.has_value() && SetupBuildingObject(action, sites[*best]) == 1 ? 1 : 0;
+}
+
 uint32_t villager_build::CheckNeededForBuilding(LivingAction& action)
 {
 	const auto town = TownOf(VillagerOf(action));

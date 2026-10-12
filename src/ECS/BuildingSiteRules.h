@@ -115,6 +115,26 @@ inline constexpr size_t k_TemplePiles = 6;
 inline constexpr float k_TemplePileDistance = 22.0f;
 [[nodiscard]] float TemplePileAngle(float heartYAngle, size_t pile);
 
+/// Where any other building's site puts its one pile of wood, made for the first wood brought: beyond the building on
+/// the side away from its door, as far out from the building as the door is plus four metres, turned an eighth of a
+/// turn either way at random, and facing back towards the building
+struct PilePlace
+{
+	glm::vec2 position;
+	float yAngle;
+};
+inline constexpr float k_PileBeyondDoor = 4.0f;
+[[nodiscard]] PilePlace StandardPilePlace(glm::vec2 building, glm::vec2 door, const FloatRandom& floatRandom);
+
+/// Of a town's sites opened to mend its buildings, the one wanting its builders most, none when none wants them at all.
+/// The earlier one on a tie.
+struct RepairCandidate
+{
+	bool repair;
+	float desireToBeRepaired;
+};
+[[nodiscard]] std::optional<size_t> BestRepairSite(std::span<const RepairCandidate> sites);
+
 /// What becomes of one of a temple site's piles when the temple is finished: an empty one goes, one with wood left in it
 /// stays on as a pile of its own and calls the villagers to come for its wood
 enum class LeftoverPile : uint8_t

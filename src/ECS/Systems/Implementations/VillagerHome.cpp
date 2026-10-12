@@ -316,7 +316,7 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 	const auto town = TownOf(villager);
 	const auto result = Locator::townDesireSystem::value().OfferVillager(
 	    town, IsChild(villager), OwnDesiresTrigger(villager), [&action](TownDesireInfo desire) -> uint32_t {
-		    // TODO(villagers): the game has villagers repair, play and supply the workshop for their town too
+		    // TODO(villagers): the game has villagers play and supply the workshop for their town too
 		    switch (desire)
 		    {
 		    case TownDesireInfo::ForRelaxation:
@@ -335,6 +335,8 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 			    return villager_worship::CheckSatisfySupplyWorship(action);
 		    case TownDesireInfo::ToBuild:
 			    return villager_build::CheckSatisfyToBuild(action);
+		    case TownDesireInfo::ToRepair:
+			    return villager_build::CheckSatisfyToRepair(action);
 		    case TownDesireInfo::ForAbodes:
 		    case TownDesireInfo::ForCivicBuilding:
 			    // TODO(temple-builders): with no site to work at, the town asks for a new abode or its best planned

@@ -16,6 +16,7 @@
 #include <entt/core/hashed_string.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/vec_swizzle.hpp>
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
@@ -23,6 +24,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Audio/GameMusic.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GameRandom.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/BuildingConstruction.h"
@@ -40,7 +42,9 @@
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -305,8 +309,17 @@ void construction::SetBuilt(entt::entity building, float built)
 void construction::BuildBy(entt::entity building, float amount)
 {
 	const auto& registry = Entities();
-	if (!registry.Valid(building) || IsBuilt(building))
+	if (!registry.Valid(building))
 	{
+		return;
+	}
+	// A built building is mended instead: its life goes up by the same share until it is whole again
+	if (IsBuilt(building))
+	{
+		if (world_objects::LifeOf(building) < 1.0f && world_objects::IncreaseLife(building, amount) >= 1.0f)
+		{
+			Repaired(building);
+		}
 		return;
 	}
 	// A worship site goes up with its altar, and its worship sites keep count of it
@@ -373,6 +386,18 @@ building_site::Places PlacesRound(entt::entity building)
 }
 } // namespace
 
+void construction::Repaired(entt::entity building)
+{
+	auto& registry = Entities();
+	CloseSite(building);
+	registry.Remove<RepairSite>(building);
+	if (Locator::buildingDamageSystem::has_value())
+	{
+		Locator::buildingDamageSystem::value().Mended(building);
+	}
+	registry.SetDirty();
+}
+
 void construction::OpenSite(entt::entity building, float desire)
 {
 	auto& registry = Entities();
@@ -382,6 +407,7 @@ void construction::OpenSite(entt::entity building, float desire)
 	}
 	auto& site = registry.AssignOrReplace<BuildingSite>(building);
 	site.desire = desire;
+	site.repair = IsBuilt(building);
 	site.places = PlacesRound(building);
 	// A site added to a town changes what it wants
 	if (const auto town = TownOf(building); town.has_value() && *town >= 0 && Locator::townSystem::has_value())
@@ -454,6 +480,22 @@ void construction::MakeSitePiles(entt::entity building)
 	const auto* temple = registry.TryGet<const Temple>(building);
 	if (temple == nullptr)
 	{
+		// Any other building's one pile stands beyond it, away from its door
+		auto& pile = site->piles.front();
+		if ((registry.Valid(pile) && registry.AllOf<Pot>(pile)) || !registry.AllOf<Abode>(building))
+		{
+			return;
+		}
+		const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
+		const auto at = glm::xz(registry.Get<const Transform>(building).position);
+		const auto place = building_site::StandardPilePlace(at, villager_home::ArrivePosition(building), random);
+		auto position = glm::vec3(place.position.x, 0.0f, place.position.y);
+		if (Locator::terrainSystem::has_value())
+		{
+			position.y = Locator::terrainSystem::value().GetHeightAt(place.position);
+		}
+		pile = archetypes::PotArchetype::CreateEmpty(position, place.yAngle, PotInfo::MagicWood);
+		registry.Assign<SitePile>(pile);
 		return;
 	}
 	const auto& centre = registry.Get<const Transform>(building).position;

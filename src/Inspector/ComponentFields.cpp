@@ -473,6 +473,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::PlannedAbode::info>("info");
 	Reflect<components::BuildingSite>(context)
 	    .Field<&components::BuildingSite::desire>("desire")
+	    .Field<&components::BuildingSite::repair>("repair")
 	    .Field<&components::BuildingSite::workers>("workers")
 	    .Field<&components::BuildingSite::workerCount>("workerCount")
 	    .Field<&components::BuildingSite::places>("places")

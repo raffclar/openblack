@@ -731,6 +731,11 @@ entt::id_type BuildingDamageSystem::DrawnMesh(entt::entity object, entt::id_type
 	return broken != nullptr && broken->drawMesh != 0 ? broken->drawMesh : own;
 }
 
+void BuildingDamageSystem::Mended(entt::entity building)
+{
+	RemoveDamage(*_world, building);
+}
+
 void BuildingDamageSystem::Reset()
 {
 	auto& world = *_world;

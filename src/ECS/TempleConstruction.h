@@ -34,8 +34,12 @@ std::optional<entt::entity> StartPlannedAt(glm::vec3 place, float scriptDesire);
 /// gets a site for its builders if it has none
 void SetBuilt(entt::entity building, float built);
 
-/// Builders add to how much of a building under construction is built, finishing it at all of it
+/// Builders add to how much of a building under construction is built, finishing it at all of it; a built building's
+/// builders mend it instead, adding as much to its life
 void BuildBy(entt::entity building, float amount);
+
+/// A building mended back to its full life: its site goes and it stands whole again
+void Repaired(entt::entity building);
 
 /// A building going up gets a site for its builders, with a desire, its builders' places worked out round its model and,
 /// for a temple, its six piles of wood
