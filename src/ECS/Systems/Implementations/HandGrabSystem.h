@@ -57,6 +57,7 @@ public:
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
 	[[nodiscard]] bool IsBusy() const override;
+	[[nodiscard]] bool IsPulling() const override;
 	[[nodiscard]] std::optional<HeldPose> GetHeldPose() const override;
 	[[nodiscard]] float GetCursorRaise() const override;
 	[[nodiscard]] std::optional<float> GetScoopTip() const override;
