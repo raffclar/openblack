@@ -32,6 +32,8 @@ namespace openblack::ecs::script_find
 
 /// A subtype that matches any thing of the type
 inline constexpr uint32_t k_AnySubtype = 5000;
+/// What the scripts are told is the subtype of a thing whose kind the game can't tell; no kind matches it
+inline constexpr uint32_t k_NoSubtype = 9999;
 /// How far from the place a plain "get ... at" looks, in metres
 inline constexpr float k_AtReach = 1.0f;
 /// How far from the place a "get town at" looks, in metres

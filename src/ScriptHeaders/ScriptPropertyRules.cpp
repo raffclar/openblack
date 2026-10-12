@@ -175,4 +175,27 @@ float BeliefForPlayer(bool town, std::optional<float> townBelief, std::optional<
 	return owner == player ? 1.0f : 0.0f;
 }
 
+glm::vec3 HeadingVelocity(const glm::vec3& from, const glm::vec3& to, float speed)
+{
+	const glm::vec3 delta = to - from;
+	if (delta == glm::vec3(0.0f))
+	{
+		return glm::vec3(0.0f);
+	}
+	// The speed over the length is worked at the higher precision and rounded to a float, then each part is scaled by it
+	const double dx = delta.x;
+	const double dy = delta.y;
+	const double dz = delta.z;
+	const auto scale = static_cast<float>(static_cast<double>(speed) / std::sqrt(dx * dx + dy * dy + dz * dz));
+	return {scale * delta.x, delta.y * scale, delta.z * scale};
+}
+
+float HeadingSpin(float draw)
+{
+	// Worked at double precision and only then rounded to a float
+	constexpr double k_Middle = 100.0;
+	constexpr double k_Scale = 0.01;
+	return static_cast<float>((static_cast<double>(draw) - k_Middle) * k_Scale);
+}
+
 } // namespace openblack::script::property_rules

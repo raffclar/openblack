@@ -495,7 +495,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Creature::penSize>("penSize")
 	    .Field<&components::Creature::autoScale>("autoScale")
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")
-	    .Field<&components::Creature::canDie>("canDie");
+	    .Field<&components::Creature::canDie>("canDie")
+	    .Field<&components::Creature::mayGoThroughVortex>("mayGoThroughVortex");
 	Reflect<components::CreatureArena>(context)
 	    .Field<&components::CreatureArena::place>("place")
 	    .Field<&components::CreatureArena::radius>("radius")
@@ -1684,7 +1685,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Vortex::beforeLandEffect>("beforeLandEffect")
 	    .Field<&components::Vortex::afterLandEffect>("afterLandEffect")
 	    .Field<&components::Vortex::objectMoverEffect>("objectMoverEffect")
-	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect");
+	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect")
+	    .Field<&components::Vortex::arrival>("arrival");
 	Reflect<components::WalkPath>(context)
 	    .Field<&components::WalkPath::number>("number")
 	    .Field<&components::WalkPath::track>("track")
@@ -2320,6 +2322,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::living>("living")
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::destination>("destination")
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::finalState>("finalState");
+	Reflect<openblack::ecs::components::Vortex::Arrival>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::Vortex::Arrival::town>("town")
+	    .Field<&openblack::ecs::components::Vortex::Arrival::gatheringPlace>("gatheringPlace")
+	    .Field<&openblack::ecs::components::Vortex::Arrival::flockDistance>("flockDistance")
+	    .Field<&openblack::ecs::components::Vortex::Arrival::flockRadius>("flockRadius")
+	    .Field<&openblack::ecs::components::Vortex::Arrival::flock>("flock");
 	Reflect<openblack::ecs::components::WorshipSite::BuildRequest>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::town>("town")
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::desireBoost>("desireBoost");

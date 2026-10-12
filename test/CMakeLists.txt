@@ -809,3 +809,8 @@ openblack_setup_and_add_test(test_turn_cheer help/test_turn_cheer.cpp)
 openblack_setup_and_add_test(
   test_script_help_queries help/test_script_help_queries.cpp
 )
+openblack_setup_and_add_test(
+  test_script_vortex_natives test_script_vortex_natives.cpp
+)
+target_link_libraries(test_script_vortex_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_vortex_pull_rules test_vortex_pull_rules.cpp)
