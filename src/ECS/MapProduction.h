@@ -46,6 +46,8 @@ public:
 	[[nodiscard]] std::span<const entt::entity> GetMobileInGridCell(const CellId& cellId) const override;
 	[[nodiscard]] std::span<const entt::entity> GetMobileInGridCell(const glm::vec3& pos) const override;
 	[[nodiscard]] std::vector<entt::entity> GetAllInCell(glm::ivec2 cell) const override;
+	[[nodiscard]] std::span<const entt::entity> GetOnBlock(glm::ivec2 block) const override;
+	[[nodiscard]] std::span<const entt::entity> GetOffBlocks() const override;
 
 	void Sync() override;
 	void Refile(entt::entity entity) override;

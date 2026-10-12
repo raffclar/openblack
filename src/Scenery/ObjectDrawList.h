@@ -9,10 +9,15 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <optional>
+#include <span>
+#include <unordered_set>
+#include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -54,6 +59,57 @@ struct Block
 [[nodiscard]] float BlockDistance(glm::vec3 eye, const Block& block);
 /// Whether a block's objects go in the list
 [[nodiscard]] bool BlockListed(const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye, const Block& block);
+
+/// The most objects the list holds; the nearest blocks fill it first
+constexpr size_t k_MostObjects = 2999;
+
+/// A land block in view, by its column and row, and how far the eye is from its middle
+struct NearBlock
+{
+	glm::ivec2 block {0};
+	float distance {0.0f};
+};
+
+/// The blocks in view from near to far, given in the land's order of its blocks. Of two blocks as far off, the one
+/// later in the land's order comes first, as the game sorts them.
+[[nodiscard]] std::vector<NearBlock> NearToFar(std::span<const NearBlock> inLandOrder);
+
+/// Makes the draw list. The blocks are walked from near to far up to the first that isn't within range; each adds its
+/// objects in the order it keeps them, then the objects off the land's blocks. An object already listed, or one left
+/// out (`leftOut`: those drawn on their own), isn't added, and once the list holds `most` nothing more is.
+/// `objectsOn(block)` gives a block's objects.
+template <typename ObjectsOn, typename LeftOut>
+[[nodiscard]] std::vector<entt::entity> MakeList(std::span<const NearBlock> nearToFar, ObjectsOn&& objectsOn,
+                                                 std::span<const entt::entity> offBlocks, LeftOut&& leftOut,
+                                                 size_t most = k_MostObjects)
+{
+	std::vector<entt::entity> list;
+	std::unordered_set<entt::entity> listed;
+	const auto add = [&](std::span<const entt::entity> objects) {
+		for (const auto object : objects)
+		{
+			if (list.size() >= most)
+			{
+				return;
+			}
+			if (!listed.contains(object) && !leftOut(object))
+			{
+				list.push_back(object);
+				listed.insert(object);
+			}
+		}
+	};
+	for (const auto& block : nearToFar)
+	{
+		if (block.distance >= k_Range)
+		{
+			break;
+		}
+		add(objectsOn(block.block));
+		add(offBlocks);
+	}
+	return list;
+}
 
 /// How the camera sees the screen, for telling what is on it
 struct View

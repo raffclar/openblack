@@ -149,6 +149,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -314,6 +315,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
     LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
+    LocatorCoverage {"objectDrawListSystem", "view.draw_list"},
     LocatorCoverage {"appleBarrelSystem", "living.apple_barrel"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
@@ -1823,6 +1825,35 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		                     {"wide_screen_fraction", director.GetWideScreenFraction()},
 		                     {"interface_active", director.IsInterfaceActive()},
 		                     {"close_clipping", director.IsCloseClipping()}};
+	        }));
+	provider->Add(
+	    Query("draw_list",
+	          "The land's draw list: the things on the blocks in view within 700 units that are drawn, at most 2999, the "
+	          "nearest blocks first; with an id, whether that thing is in it and drawn",
+	          {{.name = "id", .type = "integer", .description = "A thing to look up in the list", .required = false}}),
+	    Serve<Locator::objectDrawListSystem>(
+	        "the land's draw list",
+	        [](const ecs::systems::ObjectDrawListSystemInterface& drawList, const QueryContext& context) {
+		        const auto summary = drawList.GetSummary();
+		        Json result {{"active", summary.active},
+		                     {"rebuilt", summary.frame.rebuilt},
+		                     {"draw_all", summary.frame.drawAll},
+		                     {"made_at_turn", Optional(summary.madeAt)},
+		                     {"blocks_in_view", summary.blocksInView},
+		                     {"blocks_walked", summary.blocksWalked},
+		                     {"farthest_walked", summary.farthestWalked},
+		                     {"things", summary.things},
+		                     {"full", summary.full},
+		                     {"rebuilds_asked", summary.rebuildsAsked}};
+		        if (const auto entity = EntityParam(context.params); entity.has_value())
+		        {
+			        result["listed"] = drawList.Listed(*entity);
+			        if (const auto* registry = Registry(); registry != nullptr)
+			        {
+				        result["drawn"] = drawList.Drawn(*registry, *entity);
+			        }
+		        }
+		        return result;
 	        }));
 	provider->Add(
 	    Query("script_control", "The tasks with the camera and the dialogue, the scripts' spoken lines and the "

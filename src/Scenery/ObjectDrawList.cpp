@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 
 #include <glm/geometric.hpp>
@@ -121,6 +122,14 @@ bool object_draw_list::SphereOnScreen(const View& view, glm::vec3 origin, glm::v
 	const float x = clip.x / clip.w;
 	const float y = clip.y / clip.w;
 	return x >= -1.0f - across && x <= 1.0f + across && y >= -1.0f - upAndDown && y <= 1.0f + upAndDown;
+}
+
+std::vector<NearBlock> object_draw_list::NearToFar(std::span<const NearBlock> inLandOrder)
+{
+	// Each block goes in front of the first already placed that is as far or further
+	std::vector<NearBlock> sorted(inLandOrder.rbegin(), inLandOrder.rend());
+	std::ranges::stable_sort(sorted, {}, &NearBlock::distance);
+	return sorted;
 }
 
 Frame Clock::Next(uint32_t turn, glm::vec3 eye, glm::vec3 focus, bool forced)

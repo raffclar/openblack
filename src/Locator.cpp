@@ -81,6 +81,7 @@
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
+#include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #include "ECS/Systems/Implementations/TipBubbleSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
@@ -213,6 +214,7 @@ using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
 using openblack::ecs::systems::MistSystem;
+using openblack::ecs::systems::ObjectDrawListSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
@@ -439,6 +441,8 @@ void InitializeLevelWith(const LandSource& land)
 	// A land starts with no camera zones
 	Locator::cameraZoneSystem::emplace<CameraZoneSystem>();
 	Locator::terrainSystem::emplace<LandIsland>(land);
+	// The things on the land's blocks that are drawn, near to far
+	Locator::objectDrawListSystem::emplace<ObjectDrawListSystem>();
 	Locator::cameraPathSystem::emplace<CameraPathSystem>();
 }
 } // namespace
@@ -497,6 +501,7 @@ void openblack::ShutDownServices()
 	Locator::worshipSiteSystem::reset();
 	Locator::resourceStoreSystem::reset();
 	Locator::animatedStaticSystem::reset();
+	Locator::objectDrawListSystem::reset();
 	Locator::appleBarrelSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
