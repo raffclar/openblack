@@ -78,6 +78,10 @@ struct Screens
 	std::function<bool(const std::string& name)> failed;
 };
 
+/// Whether a picture of the screen is asked for and not back yet: the game had no debug windows, so they are left out
+/// of the frames a picture may be taken of
+[[nodiscard]] bool AnyWaiting(const Registry& registry);
+
 /// Brings every record's picture up to date with the screens that are back: one given up leaves the old picture
 void Collect(Registry& registry, const Screens& screens);
 
