@@ -3304,12 +3304,18 @@ bool Game::Initialize() noexcept
 		constexpr std::string_view k_GreyAlpha = "human_shadow";
 		const auto stem = string_utils::LowerCase(f.stem().string());
 		const bool isAlpha = stem == k_GreyAlpha || (stem.ends_with('a') && rawStems.contains(stem.substr(0, stem.size() - 1)));
-		const auto kind = graphics::texel_depth::Classify(GameFileBytes(f).value_or(0), rawStems.contains(stem + "a"), isAlpha);
+		const auto bytes = GameFileBytes(f);
+		if (!bytes)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't find {}", f.generic_string());
+			continue;
+		}
+		const auto kind = graphics::texel_depth::Classify(*bytes, rawStems.contains(stem + "a"), isAlpha);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
 		try
 		{
-			RegisterFile(textureManager, fmt::format("raw/{}", f.stem().string()), f,
-			             resources::Texture2DLoader::FromDiskTag {}, f, graphics::texel_depth::DepthOf(kind));
+			textureManager.RegisterLoad(fmt::format("raw/{}", f.stem().string()), *bytes,
+			                            resources::Texture2DLoader::FromDiskTag {}, f, graphics::texel_depth::DepthOf(kind));
 		}
 		catch (std::runtime_error& err)
 		{
