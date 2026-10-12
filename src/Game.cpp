@@ -1049,7 +1049,7 @@ void Game::ProcessHandToolTipTurn()
 		if (const auto amount = Locator::handGrabSystem::value().TakeAmountToolTip(); amount.has_value())
 		{
 			const auto held = gui::world_tooltip::HeldAmount(*amount);
-			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, static_cast<float>(held.first), std::nullopt, true);
+			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
 		}
 	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
@@ -1099,11 +1099,8 @@ void Game::ProcessHandToolTipTurn()
 			}
 			else
 			{
-				toolTips.SubmitNumbered(
-				    submission.numbers.index, submission.action, static_cast<float>(submission.numbers.first),
-				    submission.numbers.second.has_value() ? std::optional(static_cast<float>(*submission.numbers.second))
-				                                          : std::nullopt,
-				    submission.force);
+				toolTips.SubmitNumbered(submission.numbers.index, submission.action, submission.numbers.first,
+				                        submission.numbers.second, submission.force);
 			}
 		}
 	}

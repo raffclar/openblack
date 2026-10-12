@@ -33,22 +33,20 @@ using namespace ecs::components;
 
 constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
 
-/// How much more the town believes in the local player than in the player it believes in most besides
-float BeliefMargin(const TownImpression& impression)
+/// How much more the town believes in the local player than in the player it believes in most besides, the neutral
+/// player included (none counting below nothing)
+double BeliefMargin(const TownImpression& impression)
 {
 	const auto& belief = impression.belief.belief;
 	float others = 0.0f;
-	bool any = false;
 	for (size_t i = 0; i < belief.size(); ++i)
 	{
-		if (i == static_cast<size_t>(k_LocalPlayer))
+		if (i != static_cast<size_t>(k_LocalPlayer))
 		{
-			continue;
+			others = std::max(others, belief[i]);
 		}
-		others = any ? std::max(others, belief[i]) : belief[i];
-		any = true;
 	}
-	return belief[static_cast<size_t>(k_LocalPlayer)] - others;
+	return static_cast<double>(belief[static_cast<size_t>(k_LocalPlayer)]) - static_cast<double>(others);
 }
 
 /// The places for people in a town's homes, adults and children
