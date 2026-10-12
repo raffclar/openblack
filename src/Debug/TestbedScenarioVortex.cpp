@@ -76,6 +76,36 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_pulls_things_in",
+	    .name = "A vortex out of the land pulls things in",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the flat plane after a second, as Land 1's opens for the player to "
+	                   "leave by. Within 25 m of it stand a villager held by a script, a cow, an oak, a rock, a pile of "
+	                   "food and a hut; a second cow grazes 45 m to the east.",
+	    .expected = "Nothing is taken while the vortex fades in (7 seconds). Once it is fully open, the villager, the cow, "
+	                "the oak and the rock leave the land at once and are drawn round the middle, slowly at first, faster "
+	                "and faster as they come nearer, rising or sinking onto the funnel, tumbling, and gone into the "
+	                "middle about 8 seconds after each was taken. The pile gives up pots of food, a smaller pot every few "
+	                "turns, that go the same way, until it is empty. The hut stays, and so does the far cow: the vortex "
+	                "only reaches 30 m along its sides (42 m to its corners). The crossing file vortex.txt in the "
+	                "profile's saved games gets one line for each thing taken.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 30.0f, 45.0f, k_OnThePlane.y - 60.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .objects = {{.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_OnThePlane + glm::vec2(-10.0f, 8.0f),
+	                 .inScript = true},
+	                {.type = AnimalInfo::Cow, .offset = k_OnThePlane + glm::vec2(12.0f, -6.0f)},
+	                {.type = TreeInfo::Oak, .offset = k_OnThePlane + glm::vec2(6.0f, 14.0f)},
+	                {.type = MobileStaticInfo::Rock, .offset = k_OnThePlane + glm::vec2(-14.0f, -10.0f)},
+	                {.type = PotInfo::FoodPile, .offset = k_OnThePlane + glm::vec2(0.0f, -18.0f), .amount = 3000},
+	                {.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(20.0f, 18.0f), .yawDegrees = 90.0f},
+	                {.type = AnimalInfo::Cow, .offset = k_OnThePlane + glm::vec2(45.0f, 0.0f)}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_opens_a_hole",
 	    .name = "A vortex out of the land opens a hole in it",
 	    .facet = Facet::Miracles,
