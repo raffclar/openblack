@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
@@ -38,15 +39,26 @@ namespace openblack::ecs::villager_build
 uint32_t CheckSatisfyToBuild(components::LivingAction& action);
 /// The town wants a home or a civic building: with any site it takes up the best one. 1 when it did.
 uint32_t CheckNeededForBuilding(components::LivingAction& action);
+/// The town wants homes: with any site the villager takes up the best one; with none, once a turn its town starts the
+/// planned house it wants most and the villager tries again. 1 when it took one up.
+uint32_t CheckSatisfyAbodes(components::LivingAction& action);
+/// The town wants civic buildings: the same, its town starting the planned civic building it wants most
+uint32_t CheckSatisfyCivicBuildings(components::LivingAction& action);
+/// The town wants its buildings mended: the villager takes up the town's mending site that wants builders most
+uint32_t CheckSatisfyToRepair(components::LivingAction& action);
 
 uint32_t ArrivesAtStoragePitForBuildingMaterials(components::LivingAction& action);
 uint32_t ArrivesAtBuildingSite(components::LivingAction& action);
 uint32_t Building(components::LivingAction& action);
 uint32_t ReenterBuildingState(components::LivingAction& action);
-/// Going into a building state from another kind of state it counts once more among the site's builders, and leaving
-/// for another kind it is let go of the site
-bool EnterBuilding(components::LivingAction& action, VillagerStates previous, VillagerStates next);
+/// Going into building work when it was working towards something else, a villager joins its site's workers
+bool EnterBuilding(components::LivingAction& action, VillagerStates workedTowards, VillagerStates next);
+/// Going on to something else to work towards, it leaves its site's workers and is let go of the site; a state passed
+/// through on the way keeps it counted
 bool ExitBuilding(components::LivingAction& action, VillagerStates next);
+/// A site closing lets its workers go: each one still about (not dying) decides what to do next, first stepping back
+/// clear of the building when it stands closer than two metres beyond its edge
+void LetGoOfSite(entt::entity building, std::span<const entt::entity> workers);
 
 /// A villager carrying enough wood or food to show takes it to the storage pit. 1 when it went.
 uint32_t CheckTakeResourcesToStoragePit(components::LivingAction& action);

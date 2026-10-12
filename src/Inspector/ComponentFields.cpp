@@ -476,9 +476,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::PlannedTemple::yAngle>("yAngle");
 	Reflect<components::PlannedAbode>(context)
 	    .Field<&components::PlannedAbode::townId>("townId")
-	    .Field<&components::PlannedAbode::info>("info");
+	    .Field<&components::PlannedAbode::info>("info")
+	    .Field<&components::PlannedAbode::yAngle>("yAngle");
 	Reflect<components::BuildingSite>(context)
 	    .Field<&components::BuildingSite::desire>("desire")
+	    .Field<&components::BuildingSite::repair>("repair")
 	    .Field<&components::BuildingSite::workers>("workers")
 	    .Field<&components::BuildingSite::workerCount>("workerCount")
 	    .Field<&components::BuildingSite::places>("places")
@@ -1530,7 +1532,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::graveyard>("graveyard")
 	    .Field<&components::Town::creche>("creche")
 	    .Field<&components::Town::desiresChanged>("desiresChanged")
-	    .Field<&components::Town::desiresChangedLastTurn>("desiresChangedLastTurn");
+	    .Field<&components::Town::desiresChangedLastTurn>("desiresChangedLastTurn")
+	    .Field<&components::Town::planned>("planned")
+	    .Field<&components::Town::askedToBuildTurn>("askedToBuildTurn");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")

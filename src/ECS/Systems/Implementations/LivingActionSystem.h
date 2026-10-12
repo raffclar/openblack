@@ -77,8 +77,9 @@ private:
 	void SetStateDirectly(components::LivingAction& action, components::LivingAction::Index index, VillagerStates state) const;
 	/// Whether the villager's top state, and the state it works towards, let it go into another
 	[[nodiscard]] bool ExitAllowed(components::LivingAction& action, VillagerStates next) const;
-	/// Goes into a state if the state will have it
-	bool EnterState(components::LivingAction& action, VillagerStates state) const;
+	/// Goes into a state if the state will have it. The state is told what the villager was working towards before the
+	/// change (its final state then), not the state it passed through on the way.
+	bool EnterState(components::LivingAction& action, VillagerStates state, VillagerStates workedTowards) const;
 	/// Leaves its state for another, going on to a destination after it when given, with the clips of leaving one state
 	/// and going into the next
 	SetResult ChangeTopState(components::LivingAction& action, VillagerStates current,

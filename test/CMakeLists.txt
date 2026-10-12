@@ -824,3 +824,6 @@ openblack_setup_and_add_test(test_spell_icon_system test_spell_icon_system.cpp)
 openblack_setup_and_add_test(test_music_cues pack/test_music_cues.cpp)
 target_link_libraries(test_music_cues PRIVATE pack)
 openblack_setup_and_add_test(test_storm_clouds test_storm_clouds.cpp)
+openblack_setup_and_add_test(
+  test_planned_building_rules test_planned_building_rules.cpp
+)
