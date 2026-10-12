@@ -793,3 +793,7 @@ openblack_setup_and_add_test(
   test_script_stones_natives test_script_stones_natives.cpp
 )
 target_link_libraries(test_script_stones_natives PRIVATE ScriptLibrary helpdude)
+openblack_setup_and_add_test(test_shape_shadows graphics/test_shape_shadows.cpp)
+openblack_setup_and_add_test(
+  test_land_shadow_casters test_land_shadow_casters.cpp
+)
