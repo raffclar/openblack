@@ -423,6 +423,28 @@ bool ForestSystem::HasTrees(entt::entity spell) const
 	return found;
 }
 
+std::optional<float> ForestSystem::TallestTreeOf(entt::entity spell) const
+{
+	auto& registry = EntityRegistry();
+	std::optional<float> tallest;
+	registry.Each<const MagicForest>([&tallest, &registry, spell](const MagicForest& forest) {
+		if (forest.spell != spell || tallest.has_value())
+		{
+			return;
+		}
+		float height = 0.0f;
+		for (const auto tree : forest.trees)
+		{
+			if (registry.Valid(tree))
+			{
+				height = std::max(height, world_objects::SizeOf(tree).height);
+			}
+		}
+		tallest = height;
+	});
+	return tallest;
+}
+
 std::optional<entt::entity> ForestSystem::AddTreeNear(entt::entity tree)
 {
 	// The water miracle's planting waits a while after any forest last gained a tree

@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
@@ -107,6 +108,7 @@ public:
 		removed.push_back(turn);
 		registry.Destroy(object);
 	}
+	void RemoveWorshipSites(entt::entity temple) override { sitesRemoved.emplace_back(turn, temple); }
 
 	Registry registry;
 	int turn {0};
@@ -121,6 +123,8 @@ public:
 	std::vector<std::pair<uint32_t, entt::entity>> followed;
 	std::vector<std::string> scripts;
 	std::vector<int> removed;
+	/// The turns a temple's worship sites were taken away, and the temple
+	std::vector<std::pair<int, entt::entity>> sitesRemoved;
 	struct Beam
 	{
 		int turn;
@@ -349,3 +353,16 @@ TEST_F(TempleDestructionSystemTest, LosingATempleInASkirmishDoesntEndTheGame)
 }
 
 } // namespace
+
+TEST_F(TempleDestructionSystemTest, TheWorshipSitesGoWhenTheDestructionStartsAndAnyMadeSinceGoWithTheTemple)
+{
+	const auto temple = MakeTemple(PlayerNames::PLAYER_ONE);
+	_system->Start(temple);
+	// At once, before the first turn of the destruction
+	EXPECT_EQ(_world->sitesRemoved, (std::vector<std::pair<int, entt::entity>> {{0, temple}}));
+	for (int i = 0; i < 230 && _world->registry.Valid(temple); ++i)
+	{
+		Turn();
+	}
+	EXPECT_EQ(_world->sitesRemoved, (std::vector<std::pair<int, entt::entity>> {{0, temple}, {220, temple}}));
+}

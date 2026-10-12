@@ -77,6 +77,8 @@ void TempleDestructionSystem::RemoveTemple(entt::entity temple)
 		_world->Remove(entrance);
 	}
 	RemoveLanterns(temple);
+	// Any worship site made for it since its destruction began goes with it
+	_world->RemoveWorshipSites(temple);
 	_world->Remove(temple);
 }
 
@@ -276,7 +278,8 @@ void TempleDestructionSystem::Start(entt::entity temple)
 	// Started again, as by a heart healed and destroyed anew while it goes, its clock starts again from nothing
 	component->destroying = true;
 	component->destructionClock = 0.0f;
-	// TODO(physics): the temple's other parts, its worship sites among them, go at once; openblack's temple has no parts
+	// Its worship sites go at once, the first turn of its destruction
+	_world->RemoveWorshipSites(temple);
 }
 
 void TempleDestructionSystem::EndTurn()
