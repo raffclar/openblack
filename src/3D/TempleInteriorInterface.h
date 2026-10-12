@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/TempleFog.h"
 #include "3D/TempleLight.h"
 #include "3D/TempleMap.h"
 #include "Enums.h"
@@ -150,6 +151,8 @@ public:
 	[[nodiscard]] virtual const std::vector<TempleMapMarker>& GetMapMarkers() const = 0;
 	/// The temple's light this frame, which its rooms and what is in them are drawn in
 	[[nodiscard]] virtual const TempleLight& GetLight() const = 0;
+	/// The depth fog of the room the player is in this frame, in the temple's light
+	[[nodiscard]] virtual const TempleFog& GetFog() const = 0;
 	/// The belts and medals the creature's room shows, while it is drawn
 	[[nodiscard]] virtual const std::vector<TempleCaveTrophy>& GetCaveTrophies() const = 0;
 	/// The seeds of the creature's best-learnt miracles hovering in the creature's room, drawn while it is drawn

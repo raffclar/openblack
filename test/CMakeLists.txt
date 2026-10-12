@@ -366,6 +366,7 @@ openblack_setup_and_add_test(
   test_temple_exterior_morph temple/test_temple_exterior_morph.cpp
 )
 openblack_setup_and_add_test(test_temple_light temple/test_temple_light.cpp)
+openblack_setup_and_add_test(test_temple_fog temple/test_temple_fog.cpp)
 openblack_setup_and_add_test(test_temple_scroll temple/test_temple_scroll.cpp)
 openblack_setup_and_add_test(test_temple_toggles temple/test_temple_toggles.cpp)
 openblack_setup_and_add_test(test_temple_map temple/test_temple_map.cpp)

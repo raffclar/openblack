@@ -289,6 +289,7 @@ private:
 		BonePalette,
 		CreatureSpellLook,
 		ShadeAt,
+		FogAt,
 
 		_count
 	};
@@ -327,6 +328,7 @@ private:
 	    "s_bonePalette",       //
 	    "u_creatureSpellLook", //
 	    "u_shadeAt",           //
+	    "u_fogAt",             //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh

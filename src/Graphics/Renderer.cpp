@@ -1199,12 +1199,34 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (has(MeshUniform::Haze))
 			{
-				// The distance haze is the world's, not the sky's or the temple's
+				// The distance haze is the world's, not the sky's or the temple's. The temple has a depth fog of its own.
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 				const bool hazed = desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple;
-				const auto u_haze = hazed ? _haze[0] : glm::vec4(0.0f);
-				setUniform(MeshUniform::Haze, &u_haze);
-				setUniform(MeshUniform::HazeColour, &_haze[1]);
+				if (inTemple && desc.templeFog)
+				{
+					const auto& fog = Locator::temple::value().GetFog();
+					const auto u_haze = fog.Uniform();
+					const glm::vec4 u_hazeColour {fog.colour, 0.0f};
+					setUniform(MeshUniform::Haze, &u_haze);
+					setUniform(MeshUniform::HazeColour, &u_hazeColour);
+				}
+				else
+				{
+					const auto u_haze = hazed ? _haze[0] : glm::vec4(0.0f);
+					setUniform(MeshUniform::Haze, &u_haze);
+					setUniform(MeshUniform::HazeColour, &_haze[1]);
+				}
+			}
+			if (has(MeshUniform::FogAt))
+			{
+				// A room's wall without a lightmap is fogged once, at its first vertex
+				glm::vec4 u_fogAt {0.0f};
+				if (desc.fogFromFirstVertex.has_value() && program != desc.lightmapProgram &&
+				    !subMesh.GetSurfacePoints().empty())
+				{
+					u_fogAt = glm::vec4(*desc.fogFromFirstVertex + subMesh.GetSurfacePoints().front().position, 1.0f);
+				}
+				setUniform(MeshUniform::FogAt, &u_fogAt);
 			}
 			if (has(MeshUniform::ModelLight))
 			{
@@ -1780,8 +1802,11 @@ void Renderer::DrawCaveTrophies(const DrawSceneDesc& desc) const
 		// The colour multiplies what lights them: the medals come out the mid grey of the game's at 0x80. The game
 		// puts it in the temple's light.
 		const auto& light = Locator::temple::value().GetLight();
-		submitDesc.tint = glm::vec4(light.Colour(colour / 255.0f), 0.0f);
-		submitDesc.lightAdd = light.add;
+		// Each is fogged where it stands, its colour in the temple's light scaled in whole bytes before the light
+		// shades it, and the fog's colour added takes the place of the light's
+		submitDesc.objectLook =
+		    L3DMeshSubmitDesc::ObjectLook {.colour = glm::floor(light.Colour(colour / 255.0f) * 255.0f + 0.5f), .alpha = 1.0f};
+		submitDesc.templeFog = true;
 		DrawMesh(*meshes.Handle(trophy.mesh), submitDesc, std::numeric_limits<uint8_t>::max());
 	}
 }
@@ -4485,7 +4510,8 @@ glm::vec4 Renderer::GetModelLight() const
 			        : 0.0f;
 			const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 			light = model_light::FrameLight(transform->position, ground, Locator::camera::value().GetOrigin(),
-			                                Locator::skySystem::value().GetCurrentSkyType(), inTemple);
+			                                Locator::skySystem::value().GetCurrentSkyType(),
+			                                inTemple ? std::optional(Locator::temple::value().GetPosition()) : std::nullopt);
 		}
 	}
 	return model_light::Uniform(light);
@@ -5476,6 +5502,25 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// The hand glows as a recognised gesture flashes
 				submitDesc.lightAdd =
 				    light.add + (meshId == ecs::components::Hand::k_MeshId ? HandGlowColour() : glm::vec3(0.0f));
+				// Everything in the temple but the hand fades with its depth fog. The walls are fogged with the light's
+				// colour still added; the worshippers have only the fog's added, which takes the light's place.
+				submitDesc.templeFog = templeLit;
+				submitDesc.fogFromFirstVertex = std::nullopt;
+				if (templeLit && placers.templeGrey.has_value())
+				{
+					submitDesc.lightAdd = glm::vec3(0.0f);
+				}
+				else if (templeLit)
+				{
+					submitDesc.fogFromFirstVertex = Locator::temple::value().GetPosition();
+				}
+				// The fog scales the colour in the temple's light in whole bytes, before the model light shades it
+				if (templeLit)
+				{
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {
+					    .colour = glm::floor(glm::vec3(submitDesc.tint) * 255.0f + 0.5f), .alpha = 1.0f};
+					submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+				}
 				submitDesc.landLightScale = meshId == ecs::components::Hand::k_MeshId ? 1.5f : 1.0f;
 				submitDesc.snow = !inTemple && meshId != ecs::components::Hand::k_MeshId;
 				// The villagers a script draws in high detail take no moving shadows, nor does the hand
@@ -5580,6 +5625,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// TODO(bwrsandman): choose the correct LOD
 				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				submitDesc.morphTargets = nullptr;
+				if (templeLit)
+				{
+					submitDesc.objectLook.reset();
+				}
 			};
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
