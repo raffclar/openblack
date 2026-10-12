@@ -860,3 +860,6 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_script_texts gui/test_script_texts.cpp)
 openblack_setup_and_add_test(test_temple_game_over test_temple_game_over.cpp)
+openblack_setup_and_add_test(
+  test_escape_key_rules gui/test_escape_key_rules.cpp
+)

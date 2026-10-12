@@ -470,6 +470,13 @@ bool GameInterface::ProcessSkipBoxEvent(const SDL_Event& event)
 	}
 }
 
+void GameInterface::OpenMenu()
+{
+	_menu->Open();
+	// For the names typed into the menu
+	SDL_StartTextInput();
+}
+
 bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution)
 {
 	_painter.Begin(resolution);
@@ -481,28 +488,20 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	{
 		return ProcessTattooEditorEvent(event);
 	}
-	if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
-	{
-		if (_menu->IsOpen())
-		{
-			_action = _menu->Escape();
-			if (_action == GameMenu::Action::Continue)
-			{
-				_menu->Close();
-				SDL_StopTextInput();
-			}
-		}
-		else
-		{
-			_menu->Open();
-			// For the names typed into the menu
-			SDL_StartTextInput();
-		}
-		return true;
-	}
+	// Escape opening the menu is the game's to decide (OpenMenu)
 	if (!_menu->IsOpen())
 	{
 		return false;
+	}
+	if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
+	{
+		_action = _menu->Escape();
+		if (_action == GameMenu::Action::Continue)
+		{
+			_menu->Close();
+			SDL_StopTextInput();
+		}
+		return true;
 	}
 
 	switch (event.type)

@@ -536,6 +536,8 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// One of the help's message sets (value) runs, as the help system runs it. Needs no creature
+		RunHelpMessage,
 		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
 		/// loses the last of its life. Needs no creature
 		DestroyTemple,

@@ -37,6 +37,10 @@ public:
 	/// The help system starts a help script by name, unless a script holds the dialogue: a help script holding it is
 	/// stopped first. True when it started.
 	static bool StartHelpScript(std::string_view name);
+	/// A help script holds the dialogue
+	[[nodiscard]] static bool HelpScriptHoldsDialogue();
+	/// As the player's Escape does outside a cut scene: the help scripts stop and both advisors are cut short
+	static void StopHelpScriptsByEscape();
 
 	/// The scripts call a native: the one an unwritten native reports itself as
 	void EnterNative(uint32_t native) { _currentNative = native; }

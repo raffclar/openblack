@@ -109,6 +109,7 @@
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
@@ -1464,6 +1465,13 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::RunHelpMessage)
+	{
+		const bool started =
+		    Locator::helpMessageSystem::has_value() && Locator::helpMessageSystem::value().RunMessageSet(command.value);
+		Log(fmt::format("{:.1f}s: the help message set {} {}", _seconds, command.value, started ? "runs" : "doesn't run"));
+		return;
+	}
 	if (command.kind == Kind::DestroyTemple)
 	{
 		const bool known = command.value < _temples.size();
@@ -1678,6 +1686,7 @@ void Runner::Give(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::RunHelpMessage:
 	case Kind::RunText:
 	case Kind::PlayHandDemo:
 	case Kind::Reframe:

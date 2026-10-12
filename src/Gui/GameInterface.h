@@ -79,8 +79,10 @@ public:
 	static std::unique_ptr<GameInterface> Create(std::u16string_view playerName, MenuSettings settings);
 	~GameInterface();
 
-	/// Takes Escape, and every key press and mouse event while the menu is open. True when the event was taken.
+	/// Takes every key press and mouse event while the menu or a dialog is open. True when the event was taken.
 	bool ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	/// The game's menu opens, as Escape in play opens it
+	void OpenMenu();
 	/// What the player last chose in the menu, once
 	GameMenu::Action TakeAction();
 	/// Whether the menu's settings changed since last asked
