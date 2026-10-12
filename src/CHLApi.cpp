@@ -844,6 +844,21 @@ void CHLApi::TaskStopped(uint32_t task)
 	}
 }
 
+bool CHLApi::HelpScriptHoldsDialogue()
+{
+	const auto owner = Locator::dialogueControlSystem::value().GetOwner();
+	return owner != 0 && TaskType(owner) == lhvm::ScriptType::Help;
+}
+
+void CHLApi::StopHelpScriptsByEscape()
+{
+	StopHelpScripts();
+	if (Locator::helpTextSystem::has_value())
+	{
+		Locator::helpTextSystem::value().InterruptAdvisorsByEscape();
+	}
+}
+
 bool CHLApi::StartHelpScript(std::string_view name)
 {
 	// The kinds of script a single player game starts by name

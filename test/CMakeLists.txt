@@ -858,3 +858,7 @@ openblack_setup_and_add_test(test_shepherd_rules test_shepherd_rules.cpp)
 openblack_setup_and_add_test(
   test_creature_object_beliefs test_creature_object_beliefs.cpp
 )
+# What Escape does in play
+openblack_setup_and_add_test(
+  test_escape_key_rules gui/test_escape_key_rules.cpp
+)

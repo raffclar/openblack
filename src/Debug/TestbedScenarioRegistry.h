@@ -523,6 +523,8 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// One of the help's message sets (value) runs, as the help system runs it. Needs no creature
+		RunHelpMessage,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

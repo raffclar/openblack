@@ -228,6 +228,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
+#include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/WorldToolTips.h"
@@ -2801,6 +2802,13 @@ bool Game::Initialize() noexcept
 			{
 				return;
 			}
+			// Escape in play, with no dialog open
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && _interface && !_interface->IsDialogOpen() &&
+			    !_interface->GetTattooEditor().IsOpen())
+			{
+				HandleEscapeInPlay(event.key.keysym.mod);
+				return;
+			}
 			// The game's menu takes Escape, and the keyboard and mouse while it is open
 			if (_interface && Locator::windowing::has_value() &&
 			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
@@ -4220,6 +4228,54 @@ bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noex
 	return true;
 }
 
+void Game::HandleEscapeInPlay(uint16_t keyModifiers)
+{
+	auto& director = Locator::cinematicDirectorSystem::value();
+	const auto fade = director.GetFadeColour();
+	escape_key::Situation situation {
+	    .shiftOrCtrl = (keyModifiers & (KMOD_SHIFT | KMOD_CTRL)) != 0,
+	    .scriptHoldsCinemaBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
+	    .helpScriptHoldsDialogue = Locator::vm::has_value() && chlapi::CHLApi::HelpScriptHoldsDialogue(),
+	    // openblack's games are all single player
+	    .inGodsPlayground =
+	        Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber == escape_key::k_GodsPlaygroundLand,
+	    .screenClear = director.IsFadeFinished() && (fade >> 24u) == 0,
+	    // The lessons run only after going to the Playground from another land, which openblack can't do yet
+	    .playgroundLessonRunning = false,
+	    .sinceMenuClosed = std::nullopt,
+	};
+	if (_menuClosedAt.has_value())
+	{
+		situation.sinceMenuClosed =
+		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - *_menuClosedAt);
+	}
+
+	const auto response = escape_key::Respond(situation);
+	if (response.clearScreenFade)
+	{
+		director.FadeBackToNormal(0);
+	}
+	if (response.stopHelpScripts)
+	{
+		chlapi::CHLApi::StopHelpScriptsByEscape();
+	}
+	switch (response.outcome)
+	{
+	case escape_key::Outcome::Nothing:
+		break;
+	case escape_key::Outcome::OpenMenu:
+		_interface->OpenMenu();
+		HandleInterfaceAction();
+		break;
+	case escape_key::Outcome::AskLeavePlayground:
+	case escape_key::Outcome::EndPlaygroundLesson:
+		// Both need the player to have come from another land, the game saved as they left it, which openblack can't do
+		// yet
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Escape on the Gods' Playground is not available yet");
+		break;
+	}
+}
+
 void Game::HandleInterfaceAction()
 {
 	using Action = gui::GameMenu::Action;
@@ -4256,6 +4312,7 @@ void Game::HandleInterfaceAction()
 	else if (!open && _menuWasOpen)
 	{
 		Locator::time::value().SetPaused(_pausedBeforeMenu);
+		_menuClosedAt = std::chrono::steady_clock::now();
 	}
 	_menuWasOpen = open;
 

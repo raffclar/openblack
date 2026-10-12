@@ -26,6 +26,8 @@ constexpr float k_DelayMsPerHover = 250.0f;
 constexpr float k_MaxDelayMs = 500.0f;
 /// The interruption lines an advisor picks from when cut short
 constexpr int32_t k_InterruptionLines = 5;
+/// The other interruption lines Escape picks from, half the time
+constexpr int32_t k_EscapeInterruptionLines = 8;
 constexpr float k_SecondsPerMs = 0.001f;
 /// A line whose sound has not started playing this long after it should have is stopped
 constexpr float k_NotPlayingStop = 0.5f;
@@ -269,14 +271,18 @@ bool AdvisorVoices::AnyTalking()
 	return (IsActive(0) && TalkingOrJustStopped(0)) || (IsActive(1) && TalkingOrJustStopped(1));
 }
 
-void AdvisorVoices::Interrupt(int advisor)
+void AdvisorVoices::Interrupt(int advisor, InterruptedBy by)
 {
 	if (!IsActive(advisor) || !IsTalking(advisor))
 	{
 		return;
 	}
 	// The interruption line is picked, then the stop leaves no speaker, so the line is never started
-	static_cast<void>(_audio.localRand ? _audio.localRand(k_InterruptionLines) : 0);
+	if (_audio.localRand)
+	{
+		const bool otherLines = by == InterruptedBy::Escape && _audio.localRand(2) == 0;
+		static_cast<void>(_audio.localRand(otherLines ? k_EscapeInterruptionLines : k_InterruptionLines));
+	}
 	Stop(advisor);
 }
 

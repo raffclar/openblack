@@ -105,6 +105,7 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -1431,6 +1432,13 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::RunHelpMessage)
+	{
+		const bool started =
+		    Locator::helpMessageSystem::has_value() && Locator::helpMessageSystem::value().RunMessageSet(command.value);
+		Log(fmt::format("{:.1f}s: the help message set {} {}", _seconds, command.value, started ? "runs" : "doesn't run"));
+		return;
+	}
 	if (command.kind == Kind::WideScreen)
 	{
 		// Held by a script, as the land's scripts hold them
@@ -1610,6 +1618,7 @@ void Runner::Give(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::RunHelpMessage:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
