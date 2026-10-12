@@ -74,4 +74,12 @@ struct TempleEntrance
 {
 	entt::entity temple;
 };
+
+/// One of the two lanterns at a temple's entrance: the lantern's model, with a town village light standing on it (see
+/// temple_lanterns)
+struct TempleLantern
+{
+	entt::entity temple;
+	entt::entity light;
+};
 } // namespace openblack::ecs::components

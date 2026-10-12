@@ -48,6 +48,8 @@ public:
 	/// The game's entities, none before there are any
 	[[nodiscard]] virtual Registry* Entities() = 0;
 	[[nodiscard]] virtual uint32_t MillisecondsPerTurn() const = 0;
+	/// The game turn
+	[[nodiscard]] virtual uint32_t Turn() const = 0;
 	/// The player at this machine, none when there are no players
 	[[nodiscard]] virtual std::optional<PlayerNames> LocalPlayer() const = 0;
 
