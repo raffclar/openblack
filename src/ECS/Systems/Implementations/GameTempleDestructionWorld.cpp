@@ -40,6 +40,11 @@ uint32_t GameTempleDestructionWorld::MillisecondsPerTurn() const
 	return static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
 }
 
+uint32_t GameTempleDestructionWorld::Turn() const
+{
+	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+}
+
 std::optional<PlayerNames> GameTempleDestructionWorld::LocalPlayer() const
 {
 	if (!Locator::playerSystem::has_value())

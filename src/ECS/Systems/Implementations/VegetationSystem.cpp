@@ -32,9 +32,10 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/TreeRustle.h"
 #include "Locator.h"
+#include "Nature/TreeBend.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack::ecs::systems;
@@ -82,7 +83,7 @@ void VegetationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 	}
 }
 
-// The game marks the trees around the hand to bend away from it, within its bounding sphere
+// The game marks the trees around the thing the hand holds to bend away from it, within its bounding sphere
 void VegetationSystem::UpdateBendPoints(bool handShown)
 {
 	_bendPoints.clear();
@@ -98,26 +99,30 @@ void VegetationSystem::UpdateBendPoints(bool handShown)
 	{
 		return;
 	}
-	auto& handSystem = Locator::handSystem::value();
-	const auto handEntity = handSystem.GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	const auto position = handSystem.GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	const auto* transform = registry.TryGet<const Transform>(handEntity);
-	const auto* mesh = registry.TryGet<const Mesh>(handEntity);
-	if (!position || transform == nullptr || mesh == nullptr)
+	// The empty hand passes through the trees without bending them: only a thing it holds bends them, as its model is
+	// drawn in the hand
+	std::optional<nature::tree_bend::HeldModel> heldModel;
+	if (Locator::handGrabSystem::has_value())
 	{
-		return;
+		if (const auto held = Locator::handGrabSystem::value().GetHeld(); held.has_value() && registry.Valid(*held))
+		{
+			const auto* transform = registry.TryGet<const Transform>(*held);
+			const auto* mesh = registry.TryGet<const Mesh>(*held);
+			auto& meshes = Locator::resources::value().GetMeshes();
+			if (transform != nullptr && mesh != nullptr && meshes.Contains(mesh->id))
+			{
+				heldModel = nature::tree_bend::HeldModel {
+				    .position = transform->position,
+				    .scale = transform->scale.y,
+				    .halfDiagonal = glm::length(meshes.Handle(mesh->id)->GetBoundingBox().Size()) * 0.5f,
+				};
+			}
+		}
 	}
-	auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(mesh->id))
+	if (const auto source = nature::tree_bend::HandSource(heldModel))
 	{
-		return;
+		_bendPoints.push_back({.position = source->position, .radius = source->radius});
 	}
-	// The mesh's diagonal length: half the diagonal of the mesh's bounding box
-	const auto halfDiagonal = glm::length(meshes.Handle(mesh->id)->GetBoundingBox().Size()) * 0.5f;
-	_bendPoints.push_back({
-	    .position = *position,
-	    .radius = std::abs(transform->scale.y) * halfDiagonal,
-	});
 }
 
 std::optional<VegetationSystem::Bend> VegetationSystem::GetBend(const glm::vec3& position, float height) const
@@ -125,7 +130,7 @@ std::optional<VegetationSystem::Bend> VegetationSystem::GetBend(const glm::vec3&
 	std::optional<Bend> most;
 	for (const auto& point : _bendPoints)
 	{
-		// The hand bends the trees it is among, from below their tops
+		// A thing bends the trees it is among, from below their tops
 		if (point.position.y > position.y + height || point.radius <= 0.0f)
 		{
 			continue;

@@ -224,9 +224,16 @@ public:
 
 	/// Once a frame, before any press or release
 	virtual void UpdateHand(const HandFrame& frame, float seconds) = 0;
-	/// The left button tapped: a bubble under the cursor goes into the hand. Whether one did, so the hand doesn't grip
-	/// the land with the press.
+	/// The left button tapped: another player's fireball under the cursor is caught into the hand. Whether one was, so the
+	/// hand doesn't grip the land with the press.
 	virtual bool TapAction() = 0;
+	/// The action button went down with an empty hand: a one-shot bubble under the hand, within the player's influence,
+	/// takes the press. Whether one did, so nothing behind it is taken.
+	virtual bool PressOrb(uint32_t nowMs, uint32_t turn) = 0;
+	/// The action button came up: let go quickly, the bubble pressed is tapped and its miracle goes into the hand
+	virtual void ReleaseOrb(uint32_t nowMs, uint32_t turn) = 0;
+	/// The one-shot bubble under the hand now, if any
+	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;
 	/// The action button went down with a miracle in the hand: it is armed, locked on or cast. Whether the miracles took
 	/// the press, so the creatures don't.
 	virtual bool PressAction() = 0;

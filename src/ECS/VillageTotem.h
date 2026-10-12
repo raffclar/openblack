@@ -14,6 +14,8 @@
 #include <numbers>
 #include <optional>
 
+#include "3D/AllMeshes.h"
+
 /// The rules of a village's totem: the statue on the town centre that rises with the share of the town's people who
 /// worship, and that the hand takes hold of and slides up and down to set that share
 namespace openblack::ecs::village_totem
@@ -112,5 +114,8 @@ struct Shown
 
 /// The share as the tooltip and the floating number show it: as a percentage
 [[nodiscard]] float AsPercentage(float share);
+
+/// The mesh of the icon on a player's totems: their creature's species icon, or the hand when they have no creature
+[[nodiscard]] MeshId IconMesh(std::optional<MeshId> creatureIcon);
 
 } // namespace openblack::ecs::village_totem
