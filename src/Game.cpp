@@ -65,6 +65,7 @@
 #include "Audio/GameMusic.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/HelpSpeech.h"
+#include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -225,6 +226,7 @@
 #include "Hand/HandFeel.h"
 #include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
+#include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -1155,6 +1157,26 @@ void Game::ProcessHandToolTipTurn()
 	toolTips.ProcessTurn(displayTimeRuns);
 }
 
+void Game::ProcessTurnCheering()
+{
+	// While the turning lesson asks for it, the advisors cheer the player's turning of the camera on
+	if (!Locator::cameraHelpSystem::has_value() || !Locator::gameRandom::has_value() || !Locator::chlapi::has_value())
+	{
+		return;
+	}
+	auto& help = Locator::cameraHelpSystem::value().Get();
+	auto& random = Locator::gameRandom::value();
+	const help::turn_cheer::Random draws {
+	    .upTo = [&random](float x) { return random.LocalFloatRand(x); },
+	    .below = [&random](int32_t n) { return random.LocalRand(n); },
+	};
+	if (const auto line = help::turn_cheer::ProcessTurn(help.turnCheering, help.turnSpeed, GetTurn(), draws))
+	{
+		Locator::chlapi::value().PlayBankSoundEffect(static_cast<int32_t>(audio::ScriptSoundBank::HelpSprites), *line,
+		                                             std::nullopt);
+	}
+}
+
 bool Game::GameLogicLoop() noexcept
 {
 	using namespace ecs::components;
@@ -1196,6 +1218,7 @@ bool Game::GameLogicLoop() noexcept
 	// The influence asked during the turn is measured from where the hands were at it
 	Locator::influenceSystem::value().SetInGameTurn(true);
 	ProcessHandToolTipTurn();
+	ProcessTurnCheering();
 
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();

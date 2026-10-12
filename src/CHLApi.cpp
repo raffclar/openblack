@@ -6349,11 +6349,29 @@ void RestoreCameraDetails() // 284 RESTORE_CAMERA_DETAILS
 	NotImplemented();
 }
 
+/// The advisors start cheering the player's turning of the camera, the measure of its speed starting again from
+/// still, or stop
+void StartAngleSound(bool enable)
+{
+	if (!Locator::cameraHelpSystem::has_value())
+	{
+		return;
+	}
+	auto& help = Locator::cameraHelpSystem::value().Get();
+	if (enable)
+	{
+		help.turnSpeed = 0.0f;
+		help::turn_cheer::Start(help.turnCheering);
+	}
+	else
+	{
+		help::turn_cheer::Stop(help.turnCheering);
+	}
+}
+
 void StartAngleSound285() // 285 START_ANGLE_SOUND
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	StartAngleSound(Pop().uintVal != 0);
 }
 
 void SetCameraPosFocLens() // 286 SET_CAMERA_POS_FOC_LENS
@@ -7072,9 +7090,7 @@ void EnterExitCitadel() // 347 ENTER_EXIT_CITADEL
 
 void StartAngleSound348() // 348 START_ANGLE_SOUND
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	StartAngleSound(Pop().uintVal != 0);
 }
 
 void ThingJcSpecial() // 349 THING_JC_SPECIAL
