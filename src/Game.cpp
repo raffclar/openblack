@@ -1679,6 +1679,11 @@ bool Game::Update() noexcept
 		}
 		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
 	}
+	// The lens glides on the game's time, and holds while the player is in the temple, whose own lens it has
+	if (!(Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		camera.UpdateLens(std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
+	}
 	if (demoCamera.has_value())
 	{
 		camera.SetOrigin(demoCamera->origin).SetFocus(demoCamera->focus);
