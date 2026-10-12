@@ -37,6 +37,7 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -239,7 +240,11 @@ void CreaturePhysiologySystem::ProcessTurn()
 		auto shape = ShapeOf(creature);
 		// Not while a hand holds it
 		const bool autoScaled = creature.autoScale.has_value() && playersSize.has_value() && !registry.AllOf<InHand>(entity);
-		for (uint32_t i = 0; i < turns; ++i)
+		// While the player's hand holds it to interact with it, its body's turns stand still: it lives no turns and its
+		// body neither grows hungry, tired nor older
+		const bool interacting =
+		    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == entity;
+		for (uint32_t i = 0; i < (interacting ? 0 : turns); ++i)
 		{
 			if (autoScaled)
 			{

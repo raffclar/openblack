@@ -208,7 +208,8 @@ struct MindFileData
 	/// The ordinary actions and the miracles it has seen
 	std::vector<MindSighting> actionsSeen;
 	std::vector<MindSighting> miraclesSeen;
-	uint32_t unknown0 {0};
+	/// The game turns its player looked at it, which over the turns it has lived is the attention it has been paid
+	uint32_t turnsLookedAt {0};
 	float attitudeToPlayer {0.0f};
 	/// From version 16 on, the desires it thinks the player has, and each kind of a village's desire
 	std::optional<std::vector<float>> playerDesires;

@@ -22,6 +22,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMindModel.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureTownCompassion.h"
@@ -55,6 +56,13 @@ struct CreatureMindState
 	/// Game turns its player's camera was looking at it, which over the turns it has lived is the attention its god has
 	/// paid it
 	uint32_t turnsLookedAt {0};
+	/// What it believes about the things it has come across, and how far its eyes have swept the cells about it
+	creature_object_beliefs::Store beliefs;
+	creature_object_beliefs::Sweep sweep {};
+	/// The map cell it stood in when it last looked for the nearest temple, which it does again each time it goes into
+	/// another cell, and the temple that was nearest then
+	std::optional<glm::ivec2> beliefCell;
+	entt::entity nearestTemple {entt::null};
 	/// Seconds since the player last stroked or slapped it, and which
 	std::optional<float> feedbackSeconds;
 	bool feedbackWasStroke {false};
