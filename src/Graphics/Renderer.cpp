@@ -1535,6 +1535,9 @@ void Renderer::DrawTempleMapPass() const
 		const glm::vec4 u_block {static_cast<float>(i++), 0.0f, 0.0f, 0.0f};
 		terrainShader->SetUniformValue("u_block", &u_block);
 		block.BindVertices();
+		// The map shows every block in full
+		const auto& triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+		triangles.Bind(triangles.GetCount());
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 		// The textures stay bound from one block to the next
 		terrainShader->Submit(viewId, 0,
@@ -4968,6 +4971,69 @@ size_t Renderer::MaxCreaturesDrawn()
 	}
 }
 
+void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto& config = Locator::config::value();
+	auto& frame = _landDetail;
+	frame.lines = config.landDetailLines.value_or(land_detail::For(config.detailLevel));
+	const bool coarseLand = detail_level::For(config.detailLevel).coarseLand;
+
+	const auto origin = drawDesc.camera->GetOrigin();
+	const auto forward = drawDesc.camera->GetForward();
+	frame.meshNear = land_detail::LineAcross(origin, forward, frame.lines.meshNear, 0.0f);
+	frame.meshFar = land_detail::LineAcross(origin, forward, frame.lines.meshFar, 0.0f);
+	frame.texture =
+	    land_detail::LineAcross(origin, forward, frame.lines.texture, std::min(origin.y, land_detail::k_TextureGroundCap));
+
+	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+	frame.blocks.resize(blocks.size());
+	frame.coarserSides.assign(blocks.size(), 0);
+	// The blocks by where they are on the map's 32 by 32 grid of blocks
+	constexpr int k_BlocksPerSide = 32;
+	std::array<int16_t, static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide)> grid {};
+	grid.fill(-1);
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto position = blocks[i].GetBlockPosition();
+		if (position.x >= 0 && position.x < k_BlocksPerSide && position.y >= 0 && position.y < k_BlocksPerSide)
+		{
+			grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y)) = static_cast<int16_t>(i);
+		}
+		constexpr float k_BlockSize = 160.0f;
+		const auto low = blocks[i].GetMapPosition();
+		const std::array<glm::vec2, 4> corners = {low, low + glm::vec2(0.0f, k_BlockSize), low + glm::vec2(k_BlockSize, 0.0f),
+		                                          low + glm::vec2(k_BlockSize)};
+		land_detail::CornerOffsets offsets;
+		for (size_t corner = 0; corner < corners.size(); ++corner)
+		{
+			offsets.meshNear.at(corner) = land_detail::Offset(frame.meshNear, corners.at(corner));
+			offsets.meshFar.at(corner) = land_detail::Offset(frame.meshFar, corners.at(corner));
+			offsets.texture.at(corner) = land_detail::Offset(frame.texture, corners.at(corner));
+		}
+		frame.blocks[i] = land_detail::Classify(offsets, frame.lines, coarseLand);
+	}
+	const auto meshAt = [&](glm::ivec2 position) -> std::optional<land_detail::Mesh> {
+		if (position.x < 0 || position.x >= k_BlocksPerSide || position.y < 0 || position.y >= k_BlocksPerSide)
+		{
+			return std::nullopt;
+		}
+		const auto index = grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y));
+		return index < 0 ? std::nullopt : std::optional(frame.blocks[static_cast<size_t>(index)].mesh);
+	};
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto position = blocks[i].GetBlockPosition();
+		const std::array<std::optional<land_detail::Mesh>, 4> neighbours = {
+		    meshAt(position - glm::ivec2(1, 0)), meshAt(position - glm::ivec2(0, 1)), meshAt(position + glm::ivec2(0, 1)),
+		    meshAt(position + glm::ivec2(1, 0))};
+		frame.coarserSides[i] = land_detail::CoarserSides(frame.blocks[i].mesh, neighbours);
+	}
+}
+
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
 	SelectDrawnCreatures(drawDesc);
@@ -4988,6 +5054,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	DrawFootprintPass(drawDesc);
 	DrawLandAlphaPass(drawDesc);
 	UpdateLandLight();
+	UpdateLandDetail(drawDesc);
 	DrawObjectShadowPass(drawDesc);
 	DrawTempleMapPass();
 	DrawGroundShadowPass(drawDesc);
@@ -5227,6 +5294,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			    forwardLength;
 			const glm::vec4 u_smallBumpLine {cameraOrigin.x, cameraOrigin.z, forwardAlongGround / forwardLength};
 			const glm::vec4 u_smallBump {lineDistance, 0.0f, 0.0f, 0.0f};
+			// The land's detail lines this frame, from the view's camera (see land_detail): xy the camera's x and z, zw the
+			// way it faces along the ground; then how far ahead the two mesh lines and the texture line lie, each 0 when
+			// the camera looks straight down, and the bands
+			const auto lineAhead = [](const land_detail::ViewLine& line) { return line.valid ? line.ahead : 0.0f; };
+			const glm::vec4 u_landLine {_landDetail.meshNear.camera, _landDetail.meshNear.forward};
+			const glm::vec4 u_landLineAhead {lineAhead(_landDetail.meshNear), lineAhead(_landDetail.meshFar),
+			                                 lineAhead(_landDetail.texture), _landDetail.meshNear.valid ? 1.0f : 0.0f};
+			const glm::vec4 u_landBands {_landDetail.lines.meshBand, _landDetail.lines.textureBand, 0.0f, 0.0f};
 
 			// The hand's light is in the land's own lighting, so the reflection shows it too
 
@@ -5276,6 +5351,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
 				terrainShader->SetUniformValue("u_smallBumpLine", &u_smallBumpLine);
 				terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
+				terrainShader->SetUniformValue("u_landLine", &u_landLine);
+				terrainShader->SetUniformValue("u_landLineAhead", &u_landLineAhead);
+				terrainShader->SetUniformValue("u_landBands", &u_landBands);
 				terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
 				SetObjectShadowUniforms(*terrainShader);
 				terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
@@ -5322,7 +5400,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const auto& block = blocks[index];
 				const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
 				blockPositionUniform.Set(&mapPositionAndSize);
-				const glm::vec4 u_block {static_cast<float>(index), 0.0f, 0.0f, 0.0f};
+				// The block's mesh and texture this frame: y how its corners morph, z its texture
+				const auto detail = index < _landDetail.blocks.size() ? _landDetail.blocks[index] : land_detail::BlockDetail {};
+				const uint8_t coarserSides = index < _landDetail.coarserSides.size() ? _landDetail.coarserSides[index] : 0;
+				const glm::vec4 u_block {static_cast<float>(index), static_cast<float>(detail.morph),
+				                         static_cast<float>(detail.texture), 0.0f};
 				blockUniform.Set(&u_block);
 				glm::vec4 vortexGround {0.0f, 0.0f, 0.0f, -1.0f};
 				const GroundTextures* blockGround = sharedGround;
@@ -5350,6 +5432,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const glm::vec4 u_groundShadowBlock {shadows, 0.0f, 0.0f};
 				groundShadowBlockUniform.Set(&u_groundShadowBlock);
 				block.BindVertices();
+				// The game leaves out open sea only from blocks wholly before the first line
+				const bool dropOpenSea = detail.mesh == land_detail::Mesh::Full && detail.morph == land_detail::Morph::None;
+				const auto& triangles = block.GetTriangles(detail.mesh, coarserSides, dropOpenSea);
+				triangles.Bind(triangles.GetCount());
 				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
 				terrainShader->Submit(static_cast<bgfx::ViewId>(desc.viewId), blockDepth(block), discard);
 			};

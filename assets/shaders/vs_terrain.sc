@@ -1,4 +1,4 @@
-$input a_position, a_texcoord0
+$input a_position, a_texcoord0, a_texcoord1
 $output v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord, v_haze, v_world
 
 #include <bgfx_shader.sh>
@@ -19,6 +19,38 @@ uniform vec4 u_skyAndBump;
 uniform vec4 u_smallBumpLine;
 // x: how far ahead of the camera along the ground the small bump detail fades out
 uniform vec4 u_smallBump;
+// The land's detail lines (see land_detail): xy the camera's x and z, zw the way it faces along the ground
+uniform vec4 u_landLine;
+// How far ahead the first and second mesh lines and the texture line lie; w 0 when the camera looks straight down, when
+// every corner counts as on the lines
+uniform vec4 u_landLineAhead;
+// x: how far either side of a mesh line its morph reaches, y: the texture line's cross-fade
+uniform vec4 u_landBands;
+// x: the block's layer of the block textures, y: how its corners morph (0 not, 1 to the half mesh, 2 to the quarter
+// mesh), z: its texture (0 full, 1 cross-faded, 2 coarse)
+uniform vec4 u_block;
+
+// How far a point on the ground is before a detail line lying ahead units from the camera; negative beyond it
+float LandLineOffset(vec2 xz, float ahead)
+{
+	return u_landLineAhead.w > 0.5f ? ahead - dot(xz - u_landLine.xy, u_landLine.zw) : 0.0f;
+}
+
+// A corner's altitude as it is drawn while it morphs: its own before the band, the target beyond it, and between them
+// blended in 256ths, rounded down to a whole altitude
+float MorphedAltitude(float own, float target, float offset, float band)
+{
+	if (offset >= band)
+	{
+		return own;
+	}
+	if (offset <= -band)
+	{
+		return target;
+	}
+	float share = floor((band - offset) * 256.0f / (2.0f * band) + 0.5f);
+	return floor(((256.0f - share) * own + share * target) / 256.0f);
+}
 
 void main()
 {
@@ -33,7 +65,18 @@ void main()
 	#if !BGFX_SHADER_LANGUAGE_GLSL
 		blockStartUv.y = 1.0f - blockStartUv.y;
 	#endif
-	vec3 transformedPosition = vec3(a_position.x + blockPosition.x, a_position.y, a_position.z + blockPosition.y);
+	// A block a mesh line runs through morphs its corners towards the coarser mesh across the line's band. Land at sea
+	// level, altitude 3 or below, is drawn flat at height 0.
+	float altitude = a_texcoord0.x;
+	float height = a_position.y;
+	if (u_block.y > 0.5f)
+	{
+		bool toHalf = u_block.y < 1.5f;
+		float offset = LandLineOffset(blockPosition + a_position.xz, toHalf ? u_landLineAhead.x : u_landLineAhead.y);
+		altitude = MorphedAltitude(altitude, toHalf ? a_texcoord1.x : a_texcoord1.y, offset, u_landBands.x);
+		height = altitude <= 3.0f ? 0.0f : altitude * 0.67f;
+	}
+	vec3 transformedPosition = vec3(a_position.x + blockPosition.x, height, a_position.z + blockPosition.y);
 	// zw: where the vertex is along x and z, for the snow lying there
 	v_texcoord1 = vec4(blockStartUv, transformedPosition.xz);
 
@@ -51,7 +94,6 @@ void main()
 	v_world = transformedPosition;
 	// The game gives the land's vertices below altitude 2 no alpha, so shadows fade out towards the water's edge. It goes
 	// by the corner's own altitude: the land of altitudes 2 and 3 is drawn flat at sea level but keeps them.
-	float altitude = a_texcoord0.x;
 	float aboveWater = altitude >= 2.0f ? 1.0f : 0.0f;
 	v_shadowCoord.w = aboveWater;
 
@@ -82,7 +124,7 @@ void main()
 	// Land at sea level is drawn flat at height 0, in the plane of the ocean. Land is never under the sea, so win the
 	// tie: pull those vertices a fraction of their distance towards the camera along their line of sight, which keeps
 	// them where they are on screen and only brings their depth forward.
-	if (a_position.y <= 0.0f)
+	if (height <= 0.0f)
 	{
 		cs_position.xyz *= 0.999f;
 	}

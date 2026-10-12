@@ -271,6 +271,8 @@ void LandIsland::Build(const LandData& data)
 	VertexDecl decl;
 	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
 	decl.emplace_back(VertexAttrib::Attribute::TexCoord0, static_cast<uint8_t>(1), VertexAttrib::Type::Float);
+	// The altitudes the corner morphs towards on the half and the quarter mesh
+	decl.emplace_back(VertexAttrib::Attribute::TexCoord1, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
 	_blockVertices = std::make_unique<VertexBuffer>("LandBlocks", vertexMemory, decl, true);
 	_changedCells.assign(_landBlocks.size(), {});
 	_changedCorners = {};
