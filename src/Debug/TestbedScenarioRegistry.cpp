@@ -2211,6 +2211,53 @@ void AddMind(std::vector<Scenario>& all)
 	                 {.kind = Kind::SeeSkill, .creature = 0, .delaySeconds = 4.0f, .value = k_FirstSkill}},
 	});
 
+	// A content tiger: it only lies down to sleep when told to, and gets up again soon after, being rested
+	const auto rested = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	all.push_back({
+	    .id = "mind.replan_mid_action",
+	    .name = "Changing its plan in the middle of an action",
+	    .facet = Facet::Mind,
+	    .description = "A tiger starts showing it is hungry (an action played once); half a second in it is told to "
+	                   "sleep, which changes its plan.",
+	    .expected = "It shows it is hungry to the end of the animation, then lies down to sleep. It doesn't snap out of "
+	                "the action the moment its plan changes.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {rested},
+	    .commands = {Play(Kind::PlayAction, 0, animations::k_Hungry, 1.0f, true), Act(Kind::Sleep, 0, 0.5f, false)},
+	});
+
+	all.push_back({
+	    .id = "mind.replan_from_sitting",
+	    .name = "Changing its plan while sitting",
+	    .facet = Facet::Mind,
+	    .description = "A tiger sits down; four seconds later, sitting, it is told to sleep, which changes its plan.",
+	    .expected = "It gets up through the end of sitting, then lies down to sleep. It doesn't jump from sitting "
+	                "straight into lying down.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {rested},
+	    .commands = {Act(Kind::SitDown, 0, 1.0f, true), Act(Kind::Sleep, 0, 4.0f, false)},
+	});
+
+	// Worn out, held so, but not yet wanting to sleep when the hand takes hold
+	auto worn = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	worn.needs.exhaustion = 0.75f;
+	worn.desires = {{.desire = Desire::Tiredness, .fraction = 0.0f}};
+	all.push_back({
+	    .id = "mind.held_while_tired",
+	    .name = "Tired while held by the hand",
+	    .facet = Facet::Mind,
+	    .description = "The hand takes hold of a worn out tiger by stroking it; once held, its desire to sleep is set as "
+	                   "strong as it gets. The hand strokes it twice more over twelve seconds, then lets go.",
+	    .expected = "While the hand holds it, its plan never changes and it never lies down to sleep: a held creature's "
+	                "mind stands still, choosing nothing (the Mind panel's activity stays as it was when taken hold of). "
+	                "Once let go it stops what it was doing and chooses afresh.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {worn},
+	    .commands = {Stroke(0, creature_feedback::BodyPart::Head, 1.0f), setDesire(Desire::Tiredness, 1.0f, 0.5f),
+	                 Stroke(0, creature_feedback::BodyPart::Belly, 6.0f), Stroke(0, creature_feedback::BodyPart::Head, 6.0f),
+	                 Act(Kind::HandLetGo, 0, 1.0f, true)},
+	});
+
 	// The player's tiger looks north over two small forests and two flocks of birds; its player's temple stands to
 	// the west and another god's far off to the north east, out of its sight
 	all.push_back({
@@ -2604,7 +2651,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
-	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage || IsPointerCommand(kind);
+	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
+	       kind == Kind::RunHelpMessage || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2612,7 +2660,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",      "Expressions",   "Senses",  "Needs",  "Growth",  "Appearance", "Light",     "Movement", "Footprints",
 	    "Audio",     "Objects",       "Hand",    "Leash",  "Combat",  "Mind",       "Particles", "Editor",   "Miracles",
-	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",  "Story", "Tutorial",
+	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",  "Story",    "Tutorial",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2779,10 +2827,18 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
 	    scenario.vortices.empty() && scenario.rewards.empty() && scenario.fireflyRewards.empty() &&
+	    scenario.landStorms.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
 		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
-		                      "chests, crowd, fireflies' rewards, player's commands or alignment for the hand");
+		                      "chests, crowd, fireflies' rewards, land storms, player's commands or alignment for the hand");
+	}
+	for (const auto& storm : scenario.landStorms)
+	{
+		if (!ValidOffset(storm.offset) || !ValidOffset(storm.destination) || storm.age < 0.0f || storm.cloudCount < 0)
+		{
+			problems.emplace_back("a land storm off the map, or with a negative age or cloud count");
+		}
 	}
 	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
 	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))

@@ -216,6 +216,7 @@ public:
 	void AddPlasma(EffectId id, const particles::PlasmaCommand& command) override;
 	void AddBeliefSprite(const particles::BeliefSprite& sprite) override;
 	void AddHandManaPathSpark(const particles::mana_path::Spark& spark) override;
+	void AddStormBolt(glm::vec3 cloudPoint) override;
 	void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) override;
 	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override { _world.AddLightSheet(sheet); }
 	void UpdateFrame(float gameSeconds, const HandFrame& hand) override;
@@ -240,6 +241,9 @@ private:
 	std::vector<entt::scoped_connection> _connections;
 	/// The effect that throws the pieces of what the blasts break
 	EffectId _explodeObject {k_NoEffect};
+	/// The effect every storm's forked bolts come down in, and the bolts let down before it first ran
+	EffectId _stormBolts {k_NoEffect};
+	std::vector<glm::vec3> _pendingStormBolts;
 	/// The effect every recognised gesture's trail shows in, and the chain behind the hand while it gestures; both run
 	/// all the time, started again whenever they end
 	EffectId _gestureTrails {k_NoEffect};

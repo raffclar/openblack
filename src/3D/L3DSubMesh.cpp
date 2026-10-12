@@ -236,6 +236,7 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 		    primitive.material.alphaCutoutThreshold / 255.0f,
 		    (primitive.material.cullMode & 1U) != 0,
 		    static_cast<uint32_t>(primitive.material.type),
+		    primitive.material.cullMode,
 		});
 
 		// The temple's rooms, the meshes with lightmaps, keep their triangles for the hand to find where the cursor

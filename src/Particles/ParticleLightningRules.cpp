@@ -692,14 +692,16 @@ private:
 	ParticleSound sound;
 };
 
-/// A strike from the sky: once, one atom with its groups, where the bolt lives, and the thunder
+/// The storms' forked bolts: each point of light a storm lets down from its cloud, the last given first, becomes an atom
+/// with its bolt under it and a clap of thunder heard from the land below once the sound has come. It lives a moment, and
+/// its bolt goes with it. While the most there may be are alive, a new one is lost.
 class LightningStrike final: public Modifier
 {
 public:
 	explicit LightningStrike(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , nextGroups(object.IntArray("NextGroups"))
-	    , sound({.action = object.Sound("SoundLightning")})
+	    , sound({.action = object.Sound("SoundLightning"), .travelsAtSoundSpeed = true, .onLand = true})
 	{
 	}
 
@@ -707,9 +709,29 @@ public:
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& /*slot*/) const override
 	{
-		auto& atom = effect.NewAtom(collection, effect.FindCreator(creator), nextGroups);
-		StartAtomSound(effect, atom, sound);
-		return false;
+		const auto* const made = effect.FindCreator(creator);
+		if (made == nullptr)
+		{
+			return true;
+		}
+		while (const auto point = effect.TakeTargetPosition())
+		{
+			if (collection.atoms.size() >= maths::k_MostSkyStrikes)
+			{
+				continue;
+			}
+			auto& atom = effect.NewAtom(collection, made, nextGroups);
+			atom.position = *point;
+			atom.data[this].a.x = effect.Random(maths::k_SkyStrikeLifeMin, maths::k_SkyStrikeLifeMax);
+			auto thunder = sound;
+			thunder.size = maths::SkyStrikeThunderSize(effect.Random(1.0f));
+			StartAtomSound(effect, atom, thunder);
+		}
+		std::erase_if(collection.atoms, [&](const std::unique_ptr<Atom>& atom) {
+			const auto life = atom->data.find(this);
+			return life != atom->data.end() && effect.AtomAge(*atom) > life->second.a.x;
+		});
+		return true;
 	}
 
 	std::string creator;

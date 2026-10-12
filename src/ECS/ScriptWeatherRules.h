@@ -13,6 +13,7 @@
 
 #include <optional>
 #include <span>
+#include <string_view>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -78,5 +79,40 @@ struct ClimateWind
 
 /// A turn of the wind on a storm the wind blows: a hundredth of the wind's bytes
 [[nodiscard]] glm::vec3 Drift(glm::vec3 position, Wind wind);
+
+/// A storm a land's setup script places in one of its climates. It starts where it is put, already part way through its
+/// life, and heads for its destination at its speed (none at 0). What the script leaves out keeps these values.
+struct LandStorm
+{
+	glm::vec3 position {0.0f};
+	glm::vec3 destination {0.0f};
+	/// Seconds of its life already gone
+	float age {0.0f};
+	float speed {0.0f};
+	int32_t cloudCount {8};
+
+	float innerRadius {0.0f};
+	float outerRadius {0.0f};
+	float fadeSeconds {10.0f};
+	float lastsFor {100.0f};
+	float strength {1.0f};
+	float rainSpeed {1.0f};
+	float cloudShade {0.5f};
+	float cloudHeight {160.0f};
+	glm::vec2 thunderWait {0.0f};
+	glm::vec2 boltWait {0.0f};
+	components::WeatherInfo effect {.temperature = 10, .rain = 100, .snow = 0, .overcast = 100, .windX = 10, .windZ = 0};
+};
+
+/// Reads a land storm's three lists of numbers into it, each read in order up to the first number missing or not
+/// followed by a comma:
+/// - its shape: inner radius, outer radius, fading seconds, lifetime, strength and how fast its rain falls;
+/// - its clouds: their shade and height, the least and most seconds between its forks of lightning, then between its
+///   flashes with thunder;
+/// - its weather, as whole numbers: cloud, snow, temperature, rain, then the wind across and along. Each number is
+///   stored four bytes wide, lowest byte first, from its own one-byte place in the weather, spilling into the places
+///   after it. So the temperature and rain, stored after them, overwrite the cloud and snow (which become the rain's
+///   upper bytes), and the wind along spills into the snow cover and past the end.
+[[nodiscard]] LandStorm ParseLandStorm(std::string_view shape, std::string_view clouds, std::string_view weather);
 
 } // namespace openblack::ecs::script_weather

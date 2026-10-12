@@ -122,10 +122,14 @@ public:
 		/// How far the mesh's texture has slid across it, after being scaled by uvScale
 		glm::vec2 uvOffset;
 		float uvScale {1.0f};
+		/// The texture slides only on the primitives whose materials let it, as the game slides a model's skin (the
+		/// creature spells' phials); otherwise on every primitive
+		bool uvOffsetByMaterial {false};
 		/// A texture every primitive with a skin is drawn with in place of it, when set, as the game gives the creature
 		/// room's icons
 		const TextureHandle* skinTexture;
-		/// The environment map added to the mesh where its program takes one (s_environment)
+		/// The environment map the mesh is drawn with where its program takes one (s_environment), each primitive taking
+		/// it as its material says
 		const Texture2D* environment;
 		/// The villagers' bones, read by the instances of a program that takes them (s_bonePalette)
 		const Texture2D* bonePalette {nullptr};
@@ -170,6 +174,9 @@ public:
 		/// in a colour of its own alone, with nothing added over it, as the columns of light over the temples and the
 		/// village centres are
 		bool landLightAndHaze {true};
+		/// The land's colour where the mesh stands is added over it after its light. Off for a mesh lit in a colour of its
+		/// own that the land's colour never reaches, as the shrinking and growing phials are
+		bool landColourAdded {true};
 		/// Nothing of the mesh is drawn below this height, when given, where its program takes it
 		std::optional<float> cutBelow;
 		/// Nothing of the mesh is drawn above this height, when given, where its program takes it: a building drawn as far

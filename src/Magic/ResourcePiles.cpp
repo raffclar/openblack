@@ -180,3 +180,36 @@ float magic::piles::PotScale(uint32_t amount, uint32_t scaleEvery)
 	}
 	return std::min(static_cast<float>(amount) / static_cast<float>(scaleEvery) + k_Least, k_Most);
 }
+
+float magic::piles::Life(uint32_t amount, uint32_t fullAmount)
+{
+	// The game works its turns out in single precision, so each step here is rounded to a float as it was
+	return fullAmount == 0 ? 0.0f : static_cast<float>(amount) / static_cast<float>(fullAmount);
+}
+
+magic::piles::HeldChange magic::piles::ChangeForLife(uint32_t amount, uint32_t fullAmount, float life)
+{
+	if (fullAmount == 0)
+	{
+		return {};
+	}
+	const float now = Life(amount, fullAmount);
+	const auto full = static_cast<float>(fullAmount);
+	// Cut towards nothing, at least one once anything changes
+	const auto whole = [](float change) { return std::max(static_cast<uint32_t>(change), 1u); };
+	if (life < now)
+	{
+		return {.removed = whole((now - life) * full)};
+	}
+	if (life > now)
+	{
+		return {.added = whole((life - now) * full)};
+	}
+	return {};
+}
+
+magic::piles::HeldChange magic::piles::ChangeForDamage(uint32_t amount, uint32_t fullAmount, float damage)
+{
+	const float now = Life(amount, fullAmount);
+	return ChangeForLife(amount, fullAmount, now < damage ? 0.0f : now - damage);
+}

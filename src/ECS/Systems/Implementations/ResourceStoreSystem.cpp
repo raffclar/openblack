@@ -1016,6 +1016,23 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	}
 	if (registry.AllOf<Pot>(object))
 	{
+		// A pile a building's site keeps its wood in gives it up as the site gives wood
+		entt::entity building = entt::null;
+		BuildingSite* keeper = nullptr;
+		registry.Each<BuildingSites>([&](entt::entity entity, BuildingSites& sites) {
+			for (auto& site : sites.sites)
+			{
+				if (keeper == nullptr && std::ranges::find(site.piles, object) != site.piles.end())
+				{
+					building = entity;
+					keeper = &site;
+				}
+			}
+		});
+		if (keeper != nullptr)
+		{
+			return TakeFromSite(building, *keeper, type, amount);
+		}
 		return TakeFromPile(object, type, amount, std::nullopt);
 	}
 	if (auto* dead = registry.TryGet<DeadTree>(object))
