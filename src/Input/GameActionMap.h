@@ -70,6 +70,8 @@ public:
 	[[nodiscard]] bool AdmitEvent(const SDL_Event& event) final;
 	void PointPlayerEvent(SDL_Event& event) final;
 	[[nodiscard]] float GetPointerScale() const final;
+	void SetPointerSpeedMultiplier(float multiplier) final { _pointerSpeedMultiplier = multiplier; }
+	[[nodiscard]] float GetPointerSpeedMultiplier() const final { return _pointerSpeedMultiplier; }
 	[[nodiscard]] glm::ivec2 GetPointerPosition() const final;
 	[[nodiscard]] uint32_t GetPointerButtons() const final;
 	void WarpCursor(glm::ivec2 position) final;
@@ -143,8 +145,10 @@ private:
 	pointer_speed::ScaledPointer _scaledPointer;
 	/// Whether the window has the mouse: its movements come to the window alone and move the scaled pointer
 	bool _pointerScaled {false};
-	/// Whether the player's mouse may move the scaled pointer now: the window has the keyboard, the screen isn't the
-	/// game's 800x600 one, and no agent, script or hand demonstration has the pointer
+	/// The multiplier on the screen-matched speed, for the session
+	float _pointerSpeedMultiplier {pointer_speed::k_DefaultMultiplier};
+	/// Whether the player's mouse may move the scaled pointer now: the window has the keyboard, the pointer's speed isn't
+	/// the system cursor's, and no agent, script or hand demonstration has the pointer
 	[[nodiscard]] bool CanScalePointer() const;
 	/// The window takes the mouse, the pointer starting where the system's cursor is
 	void StartScaledPointer(glm::ivec2 at);

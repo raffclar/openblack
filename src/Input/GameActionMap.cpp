@@ -368,7 +368,7 @@ bool GameActionMap::CanScalePointer() const
 	}
 	const auto* window = static_cast<SDL_Window*>(Locator::windowing::value().GetHandle());
 	return window != nullptr && SDL_GetKeyboardFocus() == window &&
-	       pointer_speed::Scale(Locator::windowing::value().GetSize()) != 1.0f;
+	       pointer_speed::Scale(Locator::windowing::value().GetSize(), _pointerSpeedMultiplier) != 1.0f;
 }
 
 void GameActionMap::StartScaledPointer(glm::ivec2 at)
@@ -451,7 +451,7 @@ float GameActionMap::GetPointerScale() const
 	{
 		return 1.0f;
 	}
-	return pointer_speed::Scale(Locator::windowing::value().GetSize());
+	return pointer_speed::Scale(Locator::windowing::value().GetSize(), _pointerSpeedMultiplier);
 }
 
 glm::ivec2 GameActionMap::GetPointerPosition() const

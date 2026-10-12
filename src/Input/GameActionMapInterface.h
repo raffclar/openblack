@@ -204,6 +204,9 @@ public:
 	/// How many pixels the player's pointer moves for each pixel the mouse would move the system's cursor: the screen's
 	/// pointer speed while the window has the mouse, else 1
 	[[nodiscard]] virtual float GetPointerScale() const { return 1.0f; }
+	/// The multiplier on the screen-matched pointer speed, for the debug windows to try other speeds
+	virtual void SetPointerSpeedMultiplier([[maybe_unused]] float multiplier) {}
+	[[nodiscard]] virtual float GetPointerSpeedMultiplier() const { return 1.0f; }
 	/// Where the pointer the game follows is in the window, and its buttons held as SDL's masks: the mouse's, the scripted
 	/// pointer's, or none held while the player's devices are kept out
 	[[nodiscard]] virtual glm::ivec2 GetPointerPosition() const { return glm::ivec2(GetMousePosition()); }

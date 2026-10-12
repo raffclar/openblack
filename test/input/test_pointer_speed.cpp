@@ -77,3 +77,18 @@ TEST(PointerSpeed, ThePointerStaysOnTheScreen)
 	// And comes straight back off the edge
 	EXPECT_EQ(pointer.Move({-1, -1}, 1.0f, {1920, 1080}), glm::ivec2(1918, 1078));
 }
+
+TEST(PointerSpeed, TheMultiplierScalesTheScreenMatchedSpeed)
+{
+	using openblack::input::pointer_speed::k_DefaultMultiplier;
+	// Half by default, at every size, the default screen included
+	EXPECT_FLOAT_EQ(k_DefaultMultiplier, 0.5f);
+	EXPECT_FLOAT_EQ(Scale({800, 600}, k_DefaultMultiplier), 0.5f);
+	EXPECT_FLOAT_EQ(Scale({1280, 1024}, k_DefaultMultiplier), 0.8f);
+	EXPECT_FLOAT_EQ(Scale({1920, 1080}, k_DefaultMultiplier), 0.9f);
+	EXPECT_FLOAT_EQ(Scale({5120, 1440}, k_DefaultMultiplier), 1.2f);
+	EXPECT_FLOAT_EQ(Scale({1920, 1080}, 1.0f), 1.8f);
+	// Kept within the debug windows' range
+	EXPECT_FLOAT_EQ(Scale({800, 600}, 0.0f), 0.1f);
+	EXPECT_FLOAT_EQ(Scale({800, 600}, 5.0f), 2.0f);
+}

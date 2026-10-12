@@ -26,6 +26,11 @@ float Scale(glm::ivec2 screenSize)
 	return std::min(size.y, size.x * 0.75f) / k_ReferenceHeight;
 }
 
+float Scale(glm::ivec2 screenSize, float multiplier)
+{
+	return Scale(screenSize) * std::clamp(multiplier, k_MinMultiplier, k_MaxMultiplier);
+}
+
 void ScaledPointer::Place(glm::ivec2 position)
 {
 	// The middle of the pixel, so that a movement either way counts the same before it reaches the next
