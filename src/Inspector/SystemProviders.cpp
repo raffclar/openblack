@@ -152,6 +152,10 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "wait_in_map";
 	case Kind::Douse:
 		return "douse";
+	case Kind::WatchCamera:
+		return "watch_camera";
+	case Kind::Observe:
+		return "observe";
 	}
 	return "unknown";
 }
@@ -343,6 +347,8 @@ Json openblack::inspector::PlanJson(const CreatureMindState& mind, const creatur
 		    {"seconds", step.seconds},
 		    {"animation", step.animation},
 		    {"object", OptionalNumber(step.object)},
+		    {"point", step.kind == creature_mind::Step::Kind::Move ? Json::array({step.movement.point.x, step.movement.point.y})
+		                                                           : Json(nullptr)},
 		});
 	}
 	return {

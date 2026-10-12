@@ -3527,7 +3527,15 @@ void Played() // 064 PLAYED
 		Pushb(!Locator::creatureMindSystem::has_value() || Locator::creatureMindSystem::value().HasPlayed(object));
 		return;
 	}
-	// TODO(opening): other living things, the weather and dances
+	if (const auto* animal = Locator::entitiesRegistry::value().TryGet<const ecs::components::Animal>(object))
+	{
+		// An animal has played once it is back in the script's hands, or on its way somewhere to end up there
+		using ecs::components::AnimalState;
+		const auto state = animal->state == AnimalState::MoveToPos ? animal->finalState : animal->state;
+		Pushb(state == AnimalState::InScript);
+		return;
+	}
+	// TODO(opening): the weather and dances
 	NotImplemented();
 	Pushb(true);
 }
@@ -3581,8 +3589,26 @@ void OverrideStateAnimation() // 068 OVERRIDE_STATE_ANIMATION
 		Locator::livingActionSystem::value().VillagerOverrideAnimation(object, clip);
 		return;
 	}
-	// TODO(opening): the clips of creatures and animals; anything else isn't living ("thing must be living")
-	NotImplemented();
+	if (auto* animal = registry.TryGet<ecs::components::Animal>(object))
+	{
+		// A clip the game doesn't have plays its first; another clip than the one playing starts from its beginning,
+		// and plays until the animal's state next chooses one
+		const auto played =
+		    clip >= 0 && clip < static_cast<int32_t>(AnimId::_count) ? static_cast<AnimId>(clip) : static_cast<AnimId>(0);
+		if (animal->animation != played)
+		{
+			animal->animation = played;
+			animal->clipPlace = 0;
+		}
+		return;
+	}
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		// A creature's body plays the creature's own animations, which a clip forced this way never reaches: the game
+		// takes it and nothing shows
+		return;
+	}
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing must be living");
 }
 
 void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREATURE
