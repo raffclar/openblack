@@ -111,6 +111,9 @@ public:
 	/// profile. checkName says whether a name may be taken
 	void ShowNewPlayerBox(bool canCancel, NewPlayerBox::CheckName checkName);
 	/// The new player's box takes the mouse and the keyboard; true when it took the event
+	/// The new player's box during play, from the Players page: the screen goes to the front end's backdrop as on a
+	/// first start
+	void ShowNewPlayerBoxOverGame(bool canCancel, NewPlayerBox::CheckName checkName);
 	bool ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution);
 	[[nodiscard]] NewPlayerBox& GetNewPlayerBox() noexcept { return *_newPlayerBox; }
 	/// The new player's screen: the backdrop, swirling on by the frame's milliseconds, the box and the pointer, under
@@ -118,7 +121,11 @@ public:
 	void DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, float frameMilliseconds,
 	                         uint8_t black);
 	/// The menu greets the player by their profile's name and shows its creature's name and symbol
-	void SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol);
+	/// The menu as the player's profile has it: greeting them, with their creature's name, symbol and options
+	/// The front end's swirling backdrop over the screen's 4:3 box, the swirls turning by the frame's milliseconds
+	void DrawMenuBackdrop(glm::u16vec2 resolution, float frameMilliseconds);
+	void SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol,
+	                      const player_profiles::Settings& kept);
 
 	/// The tattoo editor's dialog, shown while the tattoo editor is open
 	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }
@@ -296,6 +303,10 @@ private:
 	std::optional<menu_backdrop::Swirls> _backdropSwirls;
 	std::array<menu_backdrop::Layer, menu_backdrop::k_Layers> _backdropLayers {};
 	menu_backdrop::Pace _backdropPace;
+	/// The clock when the backdrop was last drawn over the game, none while it isn't
+	std::optional<uint32_t> _lastBackdropTicks;
+	/// The black of the new player's box's screen over the game, from the Players page, while it is up or fading
+	std::optional<menu_backdrop::Fade> _boxOverGameFade;
 	/// Whether the left mouse button is down, as the tattoo editor's dialog has seen it
 	bool _leftButtonDown {false};
 	std::optional<Message> _message;

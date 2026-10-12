@@ -23,6 +23,28 @@
 namespace openblack::player_profiles
 {
 
+/// What the player sets in the options, kept with their profile. A profile that has never kept a setting has the
+/// game's own: intelligent tooltips, the important texts shown, all but the least help, the creature's help on, reading
+/// at middle speed, the newest text at the top, the right hand, no push scrolling and the land saved automatically
+struct Settings
+{
+	/// None, minimum, intelligent or all
+	int toolTips {2};
+	/// No text, the important texts or all of them
+	int storyText {1};
+	/// No help up to all help, 0 to 4
+	int helpLevel {3};
+	bool creatureHelp {true};
+	/// From 0 (slow) to 1 (fast)
+	float readSpeed {0.5f};
+	bool textFromBottom {false};
+	bool leftHanded {false};
+	bool pushScrolling {false};
+	bool autoSave {true};
+
+	bool operator==(const Settings&) const = default;
+};
+
 struct Profile
 {
 	/// The name the player typed, as UTF-8
@@ -33,11 +55,14 @@ struct Profile
 	std::string creatureName;
 	/// The player's symbol, one of the sixteen
 	int symbol {0};
+	/// The options the player set
+	Settings settings;
 
 	bool operator==(const Profile&) const = default;
 };
 
-/// Every profile, and the one being played, by its name
+/// Every profile, in the order the Players page lists them (by name, ignoring the case of plain letters), and the one
+/// being played, by its name
 struct Profiles
 {
 	std::vector<Profile> profiles;
@@ -46,6 +71,8 @@ struct Profiles
 	bool operator==(const Profiles&) const = default;
 };
 
+/// The players' symbols
+constexpr int k_SymbolCount = 16;
 /// The most characters a name typed into the new player's box can have
 constexpr size_t k_NameBoxLength = 29;
 /// A name longer than this is turned down
@@ -86,10 +113,23 @@ enum class NameCheck : uint8_t
 const Profile& Add(Profiles& profiles, std::u16string_view name, std::u16string_view accountName, std::string_view creatureFile,
                    int symbol);
 
+/// The place of the profile of a name in the list, none when it isn't kept
+[[nodiscard]] std::optional<size_t> IndexOf(const Profiles& profiles, std::u16string_view name);
+/// Plays as the profile of the name, if one is kept; whether it is
+bool Select(Profiles& profiles, std::u16string_view name);
+/// Forgets the profile of the name, if one is kept; whether it was. Forgetting the one played leaves none played
+bool Remove(Profiles& profiles, std::u16string_view name);
+
+/// The player's edits on the Players page kept with their profile: the creature's name typed (an empty one is the
+/// player's own name) and the symbol picked (one past the sixteen is the first)
+void Edit(Profile& profile, std::u16string_view creatureName, int symbol);
+
 /// The profiles as they are kept on disk, UTF-8: one line naming the current profile, then a line for each profile with
-/// its name, its creature file, its symbol and its creature's name, separated by tabs (no name can hold a tab)
+/// its name, its creature file, its symbol and its creature's name, then a line for each of its settings: the profile's
+/// name, the setting's and its value; all separated by tabs (no name can hold a tab)
 [[nodiscard]] std::string Write(const Profiles& profiles);
-/// The profiles read back; lines that aren't understood are passed over
+/// The profiles read back, in the list's order; lines that aren't understood are passed over, and settings not kept
+/// are the game's own
 [[nodiscard]] Profiles Read(std::string_view text);
 
 /// Where the profiles and their creatures are kept for a run

@@ -10,10 +10,15 @@
 #include "PlayerProfiles.h"
 
 #include <charconv>
+#include <cstddef>
 
 #include <algorithm>
+#include <array>
 #include <format>
 #include <iterator>
+#include <locale>
+#include <sstream>
+#include <string>
 
 #include "Common/GameRandom.h"
 #include "Gui/TextDatabase.h"
@@ -26,12 +31,87 @@ namespace
 constexpr uint32_t k_ScrambleSeed = 0x913;
 constexpr std::string_view k_CurrentKey = "current";
 constexpr std::string_view k_ProfileKey = "profile";
+constexpr std::string_view k_SettingKey = "setting";
 constexpr char k_Separator = '\t';
 
 char16_t FoldCase(char16_t c)
 {
 	return c >= u'A' && c <= u'Z' ? static_cast<char16_t>(c - u'A' + u'a') : c;
 }
+
+/// The profiles are listed by name, the case of plain letters ignored
+bool ListedBefore(const Profile& a, const Profile& b)
+{
+	const auto first = gui::ToUtf16(a.name);
+	const auto second = gui::ToUtf16(b.name);
+	return std::ranges::lexicographical_compare(first, second, {}, FoldCase, FoldCase);
+}
+
+void SortForTheList(Profiles& profiles)
+{
+	std::ranges::stable_sort(profiles.profiles, ListedBefore);
+}
+
+/// A setting as it is kept: its name and how its value is written and read
+struct SettingField
+{
+	std::string_view name;
+	std::string (*write)(const Settings& settings);
+	bool (*read)(Settings& settings, std::string_view text);
+};
+
+template <typename T>
+bool ParseNumber(std::string_view text, T& value)
+{
+	T parsed {};
+	const auto result = std::from_chars(text.data(), text.data() + text.size(), parsed);
+	if (result.ec != std::errc {} || result.ptr != text.data() + text.size())
+	{
+		return false;
+	}
+	value = parsed;
+	return true;
+}
+
+/// A fraction written in the classic locale, whatever the computer's
+bool ParseFraction(std::string_view text, float& value)
+{
+	std::istringstream stream {std::string(text)};
+	stream.imbue(std::locale::classic());
+	float parsed = 0.0f;
+	stream >> parsed;
+	if (!stream || stream.peek() != std::char_traits<char>::eof())
+	{
+		return false;
+	}
+	value = parsed;
+	return true;
+}
+
+bool ParseFlag(std::string_view text, bool& value)
+{
+	int parsed = 0;
+	if (!ParseNumber(text, parsed) || (parsed != 0 && parsed != 1))
+	{
+		return false;
+	}
+	value = parsed == 1;
+	return true;
+}
+
+// clang-format off
+constexpr std::array k_SettingFields = {
+    SettingField {"tooltips", [](const Settings& s) { return std::to_string(s.toolTips); }, [](Settings& s, std::string_view t) { return ParseNumber(t, s.toolTips); }},
+    SettingField {"story_text", [](const Settings& s) { return std::to_string(s.storyText); }, [](Settings& s, std::string_view t) { return ParseNumber(t, s.storyText); }},
+    SettingField {"help_level", [](const Settings& s) { return std::to_string(s.helpLevel); }, [](Settings& s, std::string_view t) { return ParseNumber(t, s.helpLevel); }},
+    SettingField {"creature_help", [](const Settings& s) { return std::to_string(static_cast<int>(s.creatureHelp)); }, [](Settings& s, std::string_view t) { return ParseFlag(t, s.creatureHelp); }},
+    SettingField {"read_speed", [](const Settings& s) { return std::format("{}", s.readSpeed); }, [](Settings& s, std::string_view t) { return ParseFraction(t, s.readSpeed); }},
+    SettingField {"text_from_bottom", [](const Settings& s) { return std::to_string(static_cast<int>(s.textFromBottom)); }, [](Settings& s, std::string_view t) { return ParseFlag(t, s.textFromBottom); }},
+    SettingField {"left_handed", [](const Settings& s) { return std::to_string(static_cast<int>(s.leftHanded)); }, [](Settings& s, std::string_view t) { return ParseFlag(t, s.leftHanded); }},
+    SettingField {"push_scrolling", [](const Settings& s) { return std::to_string(static_cast<int>(s.pushScrolling)); }, [](Settings& s, std::string_view t) { return ParseFlag(t, s.pushScrolling); }},
+    SettingField {"auto_save", [](const Settings& s) { return std::to_string(static_cast<int>(s.autoSave)); }, [](Settings& s, std::string_view t) { return ParseFlag(t, s.autoSave); }},
+};
+// clang-format on
 
 /// The next field of a line, and the rest of the line after its separator
 std::string_view NextField(std::string_view& line)
@@ -108,14 +188,58 @@ const Profile& Add(Profiles& profiles, std::u16string_view name, std::u16string_
 	{
 		const auto text = gui::ToUtf8(given);
 		profiles.profiles.push_back(
-		    {.name = text, .creatureFile = std::string(creatureFile), .creatureName = text, .symbol = symbol});
-		found = &profiles.profiles.back();
+		    {.name = text, .creatureFile = std::string(creatureFile), .creatureName = text, .symbol = symbol, .settings = {}});
+		SortForTheList(profiles);
+		found = Find(profiles, given);
 	}
 	if (profiles.current.empty())
 	{
 		profiles.current = found->name;
 	}
 	return *found;
+}
+
+std::optional<size_t> IndexOf(const Profiles& profiles, std::u16string_view name)
+{
+	const auto* found = Find(profiles, name);
+	if (found == nullptr)
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(found - profiles.profiles.data());
+}
+
+bool Select(Profiles& profiles, std::u16string_view name)
+{
+	const auto* found = Find(profiles, name);
+	if (found == nullptr)
+	{
+		return false;
+	}
+	profiles.current = found->name;
+	return true;
+}
+
+bool Remove(Profiles& profiles, std::u16string_view name)
+{
+	const auto index = IndexOf(profiles, name);
+	if (!index.has_value())
+	{
+		return false;
+	}
+	const auto removed = profiles.profiles.at(*index).name;
+	profiles.profiles.erase(profiles.profiles.begin() + static_cast<std::ptrdiff_t>(*index));
+	if (profiles.current == removed)
+	{
+		profiles.current.clear();
+	}
+	return true;
+}
+
+void Edit(Profile& profile, std::u16string_view creatureName, int symbol)
+{
+	profile.creatureName = creatureName.empty() ? profile.name : gui::ToUtf8(creatureName);
+	profile.symbol = symbol >= 0 && symbol < k_SymbolCount ? symbol : 0;
 }
 
 std::string Write(const Profiles& profiles)
@@ -125,6 +249,11 @@ std::string Write(const Profiles& profiles)
 	{
 		text += std::format("{1}{0}{2}{0}{3}{0}{4}{0}{5}\n", k_Separator, k_ProfileKey, profile.name, profile.creatureFile,
 		                    profile.symbol, profile.creatureName);
+		for (const auto& field : k_SettingFields)
+		{
+			text += std::format("{1}{0}{2}{0}{3}{0}{4}\n", k_Separator, k_SettingKey, profile.name, field.name,
+			                    field.write(profile.settings));
+		}
 	}
 	return text;
 }
@@ -147,6 +276,23 @@ Profiles Read(std::string_view text)
 			profiles.current = std::string(line);
 			continue;
 		}
+		if (key == k_SettingKey)
+		{
+			const auto owner = NextField(line);
+			const auto name = NextField(line);
+			const auto field = std::ranges::find(k_SettingFields, name, &SettingField::name);
+			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
+			if (field != k_SettingFields.end() && profile != profiles.profiles.end())
+			{
+				// A value that can't be read leaves the setting as it was
+				auto settings = profile->settings;
+				if (field->read(settings, line))
+				{
+					profile->settings = settings;
+				}
+			}
+			continue;
+		}
 		if (key != k_ProfileKey)
 		{
 			continue;
@@ -163,8 +309,10 @@ Profiles Read(std::string_view text)
 		profiles.profiles.push_back({.name = std::string(name),
 		                             .creatureFile = std::string(file),
 		                             .creatureName = std::string(line),
-		                             .symbol = symbol});
+		                             .symbol = symbol,
+		                             .settings = {}});
 	}
+	SortForTheList(profiles);
 	return profiles;
 }
 

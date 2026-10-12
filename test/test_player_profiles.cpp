@@ -130,6 +130,94 @@ TEST(PlayerProfiles, ProfilesAreReadBackAsWritten)
 	EXPECT_EQ(read.current, "Ann");
 }
 
+TEST(PlayerProfiles, TheListIsInTheOrderOfTheNamesWhateverTheirCase)
+{
+	Profiles profiles;
+	Add(profiles, u"matt", u"", "C1.erc", 0);
+	Add(profiles, u"Ann", u"", "C2.erc", 0);
+	Add(profiles, u"bob", u"", "C3.erc", 0);
+	Add(profiles, u"Ab", u"", "C4.erc", 0);
+	ASSERT_EQ(profiles.profiles.size(), 4u);
+	EXPECT_EQ(profiles.profiles[0].name, "Ab");
+	EXPECT_EQ(profiles.profiles[1].name, "Ann");
+	EXPECT_EQ(profiles.profiles[2].name, "bob");
+	EXPECT_EQ(profiles.profiles[3].name, "matt");
+	EXPECT_EQ(IndexOf(profiles, u"BOB"), 2u);
+	EXPECT_FALSE(IndexOf(profiles, u"Zed").has_value());
+	// Read back in the list's order, whatever the file's
+	const auto read = Read("profile\tzed\tC1.erc\t0\tz\nprofile\tAl\tC2.erc\t0\ta\n");
+	ASSERT_EQ(read.profiles.size(), 2u);
+	EXPECT_EQ(read.profiles[0].name, "Al");
+}
+
+TEST(PlayerProfiles, PickingAndForgettingProfiles)
+{
+	Profiles profiles;
+	Add(profiles, u"Matt", u"", "C1.erc", 0);
+	Add(profiles, u"Ann", u"", "C2.erc", 0);
+	EXPECT_EQ(profiles.current, "Matt");
+	EXPECT_TRUE(Select(profiles, u"ann"));
+	EXPECT_EQ(profiles.current, "Ann");
+	EXPECT_FALSE(Select(profiles, u"Zed"));
+	EXPECT_EQ(profiles.current, "Ann");
+	// Forgetting another leaves the one played; forgetting the one played leaves none
+	EXPECT_TRUE(Remove(profiles, u"Matt"));
+	EXPECT_EQ(profiles.current, "Ann");
+	EXPECT_FALSE(Remove(profiles, u"Matt"));
+	EXPECT_TRUE(Remove(profiles, u"ANN"));
+	EXPECT_TRUE(profiles.current.empty());
+	EXPECT_TRUE(profiles.profiles.empty());
+}
+
+TEST(PlayerProfiles, TheCreaturesNameIsThePlayersUntilOneIsGivenAndTheSymbolOneOfSixteen)
+{
+	Profile profile {.name = "Matt", .creatureFile = "C1.erc", .creatureName = "Matt", .symbol = 0, .settings = {}};
+	Edit(profile, u"Rex", 15);
+	EXPECT_EQ(profile.creatureName, "Rex");
+	EXPECT_EQ(profile.symbol, 15);
+	Edit(profile, u"", 16);
+	EXPECT_EQ(profile.creatureName, "Matt");
+	EXPECT_EQ(profile.symbol, 0);
+	Edit(profile, u"Rex", -1);
+	EXPECT_EQ(profile.symbol, 0);
+}
+
+TEST(PlayerProfiles, SettingsAreTheGamesOwnUntilKeptAndAreReadBackAsWritten)
+{
+	// The game's own: intelligent tooltips, the important texts, help level 3, creature help, middle reading speed, the
+	// newest text at the top, the right hand, no push scrolling, saving automatically
+	constexpr Settings k_Default;
+	EXPECT_EQ(k_Default.toolTips, 2);
+	EXPECT_EQ(k_Default.storyText, 1);
+	EXPECT_EQ(k_Default.helpLevel, 3);
+	EXPECT_TRUE(k_Default.creatureHelp);
+	EXPECT_FLOAT_EQ(k_Default.readSpeed, 0.5f);
+	EXPECT_FALSE(k_Default.textFromBottom);
+	EXPECT_FALSE(k_Default.leftHanded);
+	EXPECT_FALSE(k_Default.pushScrolling);
+	EXPECT_TRUE(k_Default.autoSave);
+
+	Profiles profiles;
+	Add(profiles, u"Matt", u"", "C1.erc", 0);
+	Add(profiles, u"Ann", u"", "C2.erc", 0);
+	auto& matt = profiles.profiles.at(*IndexOf(profiles, u"Matt"));
+	matt.settings = {.toolTips = 0,
+	                 .storyText = 2,
+	                 .helpLevel = 4,
+	                 .creatureHelp = false,
+	                 .readSpeed = 0.25f,
+	                 .textFromBottom = true,
+	                 .leftHanded = true,
+	                 .pushScrolling = true,
+	                 .autoSave = false};
+	EXPECT_EQ(Read(Write(profiles)), profiles);
+	// A file kept before the settings were has the game's own; a value not understood is passed over
+	const auto read = Read("profile\tAnn\tC2.erc\t7\tRex\nsetting\tAnn\thelp_level\tlots\nsetting\tAnn\ttooltips\t3\n");
+	ASSERT_EQ(read.profiles.size(), 1u);
+	EXPECT_EQ(read.profiles.front().settings.helpLevel, 3);
+	EXPECT_EQ(read.profiles.front().settings.toolTips, 3);
+}
+
 TEST(PlayerProfiles, ToolsAndDevelopersKeepTheirProfileApartFromThePlayers)
 {
 	const std::filesystem::path user = "user";
@@ -174,6 +262,33 @@ TEST(PlayerProfileSystem, AFirstStartHasNoProfileUntilOneIsMade)
 	std::filesystem::create_directories(*store.creatureMinds);
 	std::ofstream(*store.creatureMinds / "C4a5c8bc8.erc") << "mind";
 	EXPECT_TRUE(later.CurrentProfileHasCreature());
+}
+
+TEST(PlayerProfileSystem, PickingDeletingAndEditingProfilesIsKept)
+{
+	const ProfilesFolder folder("player_profiles_kept");
+	const auto store = StoreIn(folder.Path());
+	ecs::systems::PlayerProfileSystem system(store, FakeMachine());
+	system.CreateProfile(u"Matt", 0);
+	system.CreateProfile(u"Ann", 0);
+	// The profile made is the one played
+	EXPECT_EQ(system.GetProfiles().current, "Ann");
+	EXPECT_TRUE(system.SelectProfile(u"matt"));
+	system.EditCurrentProfile(u"Rex", 9);
+	auto settings = system.GetCurrentProfile()->settings;
+	settings.helpLevel = 0;
+	system.SetCurrentSettings(settings);
+	EXPECT_TRUE(system.DeleteProfile(u"Ann"));
+	EXPECT_FALSE(system.DeleteProfile(u"Ann"));
+
+	ecs::systems::PlayerProfileSystem later(store, FakeMachine());
+	ASSERT_EQ(later.GetProfileCount(), 1u);
+	const auto profile = later.GetCurrentProfile();
+	ASSERT_TRUE(profile.has_value());
+	EXPECT_EQ(profile->name, "Matt");
+	EXPECT_EQ(profile->creatureName, "Rex");
+	EXPECT_EQ(profile->symbol, 9);
+	EXPECT_EQ(profile->settings.helpLevel, 0);
 }
 
 TEST(PlayerProfileSystem, ADevelopersRunPlaysAsAProfileNeverKept)
