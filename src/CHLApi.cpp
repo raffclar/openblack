@@ -121,6 +121,7 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/CreatureNaming.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
@@ -586,9 +587,9 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	case ObjectType::Creature:
 	{
 		// A creature of the species the scripts number, which belongs to no one and has its home where it is made. It
-		// stands on the ground, as big as its species starts.
-		// TODO(opening-skip): the game also keeps it out of the land's reactions until a script lets it react, and names
-		// it from the four creature names of the help texts; openblack keeps neither yet
+		// stands on the ground, as big as its species starts, named from the four creature names of the help texts.
+		// TODO(opening-skip): the game also keeps it out of the land's reactions until a script lets it react; openblack
+		// doesn't yet
 		const auto species = script::property_rules::CreatureTypeFromScript(subtype);
 		if (!species.has_value())
 		{
@@ -3932,12 +3933,16 @@ void ConvertCameraFocus() // 082 CONVERT_CAMERA_FOCUS
 }
 
 /// The creature becomes the local player's: their creature from now on, which they lead on the leash when they have no
-/// other to lead
-// TODO(opening-skip): the game also names it after the player's profile, and moves a reaction it started over to
-// its new player; openblack keeps neither profiles nor creature reactions yet
+/// other to lead, named with their profile's creature name
+// TODO(opening-skip): the game also moves a reaction it started over to its new player; openblack keeps no creature
+// reactions yet
 void MakePlayersCreature(entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	if (auto name = ecs::creature_naming::ProfileCreatureName(); name.has_value())
+	{
+		registry.Get<ecs::components::Creature>(object).name = std::move(*name);
+	}
 	const auto player =
 	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 	if (Locator::leashSystem::has_value())
@@ -7549,10 +7554,21 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 
 void SetCreatureName() // 343 SET_CREATURE_NAME
 {
-	// const auto textID = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature takes a help text's words as its name: number 0, or one past the last, gives the first text's
+	const auto text = Pop().uintVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		return;
+	}
+	auto* creature = registry.TryGet<ecs::components::Creature>(object);
+	if (creature == nullptr)
+	{
+		ScriptMessage("Thing not creature!");
+		return;
+	}
+	creature->name = ecs::creature_naming::HelpWords(text);
 }
 
 void ComputerPlayerReady() // 344 COMPUTER_PLAYER_READY
