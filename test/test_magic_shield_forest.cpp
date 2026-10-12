@@ -379,6 +379,22 @@ TEST(TownAggression, AnAttackAddsByItsMultiplierWhichWearsDown)
 	EXPECT_NEAR(calm.protectionMultiplier, 0.5f * 1.001f * 1.001f, 1e-6f);
 }
 
+TEST(TownAggression, HarmFromAThingThatAddsNoAggressionStillMarksTheAttack)
+{
+	// Any harm counts, whatever its kind's aggression; no harm at all doesn't
+	EXPECT_TRUE(ecs::town_aggression::CountsAsAttack(0.25f));
+	EXPECT_FALSE(ecs::town_aggression::CountsAsAttack(0.0f));
+	ecs::town_aggression::Record record;
+	const float amount = ecs::town_aggression::AggressionFromDamage(0.25f, 0.0f);
+	ecs::town_aggression::Attacked(record, PlayerNames::PLAYER_ONE, false, amount, 0.5f, 300);
+	// The attacker and the turn are kept, the first attack's bonus counts and the multiplier wears down
+	EXPECT_EQ(record.lastAggressor, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(record.lastTurn, 300u);
+	EXPECT_EQ(record.lastTurns.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), 300u);
+	EXPECT_FLOAT_EQ(record.aggression.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), 0.5f);
+	EXPECT_FLOAT_EQ(record.protectionMultiplier, 0.9f);
+}
+
 // The camera along the forest's path
 
 TEST(CameraZoomer, AGlideArrivesStillAtItsDestinationAfterItsTime)

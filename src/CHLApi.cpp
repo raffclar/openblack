@@ -125,6 +125,7 @@
 #include "ECS/CreatureRemoval.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
+#include "ECS/DiscipleRules.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -166,6 +167,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerDance.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerScript.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
@@ -197,6 +199,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAge.h"
@@ -4783,11 +4786,11 @@ void BuildBuilding() // 130 BUILD_BUILDING
 {
 	const auto desire = Popf();
 	const auto position = PopVec();
-	// The towns start what they planned there: a planned temple goes up
-	// TODO(villager-life): the towns' other planned buildings
-	if (!ecs::construction::StartPlannedAt(position, desire).has_value())
+	// Every town starts what it planned there
+	if (ecs::town_planning::StartPlannedAt(position, desire).empty())
 	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned temple at ({}, {})", position.x, position.z);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned building at ({}, {})", position.x,
+		                    position.z);
 	}
 }
 
@@ -8068,11 +8071,26 @@ void GetTownWithId() // 368 GET_TOWN_WITH_ID
 
 void SetDisciple() // 369 SET_DISCIPLE
 {
-	// const auto withSound = static_cast<bool>(Pop().intVal);
-	// const auto discipleType = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Whether with a sound: the game takes it and makes none
+	Pop();
+	const auto number = Pop().intVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Villager>(object))
+	{
+		ScriptMessage("Thing must be villager");
+		return;
+	}
+	// The villager takes up the work at once, glowing as a disciple, and sets about it when it next decides
+	if (const auto type = disciple::FromScript(number); type.has_value())
+	{
+		ecs::villager_disciple::SetType(object, *type);
+	}
 }
 
 void ReleaseComputerPlayer() // 370 RELEASE_COMPUTER_PLAYER

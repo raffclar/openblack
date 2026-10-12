@@ -781,6 +781,7 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 	// The file's desires are active as it says, for the stage it gives
 	mind.desiresPhase = mind.developmentPhase;
 	mind.attitudeToPlayer = loaded.attitudeToPlayer;
+	mind.turnsLookedAt = loaded.turnsLookedAt;
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} took up a mind file: version {}, stage {}",
 	                   entt::to_integral(creature), file->version, mind.developmentPhase);
 }
@@ -1883,7 +1884,7 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 		return std::nullopt;
 	}
 	auto file = creature_mind_model::ToFile(*mind->desires, *mind->learnt, mind->developmentPhase, mind->attitudeToPlayer,
-	                                        static_cast<uint32_t>(creature::InfoRow(body->species)));
+	                                        mind->turnsLookedAt, static_cast<uint32_t>(creature::InfoRow(body->species)));
 	// It is saved as itself: as it was before any spell on it changed it
 	const creature_spells::SavedBody now {.size = body->size, .strength = body->strength, .alignment = body->alignment};
 	const auto* spells = registry.TryGet<const CreatureSpells>(creature);

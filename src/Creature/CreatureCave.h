@@ -68,6 +68,10 @@ struct Snapshot
 		float attention {0.0f};
 	};
 	std::vector<KnownCreature> creaturesKnown;
+	/// How many temples, flocks and forests it believes in, of the things it has come across
+	uint32_t templesKnown {0};
+	uint32_t flocksKnown {0};
+	uint32_t forestsKnown {0};
 	/// The opinion of each action, -1 to 1, by its name
 	struct Opinion
 	{

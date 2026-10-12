@@ -94,6 +94,8 @@ enum class Facet : uint8_t
 	Sky,
 	/// The player's two advisors, the good one and the evil one
 	Advisors,
+	/// The tutorial's lessons: the hand's demonstrations and the help texts that go with them
+	Tutorial,
 
 	_Count
 };
@@ -268,6 +270,13 @@ struct ObjectSetup
 	bool indestructible {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
+	/// A building of the town holds this much wood, rather than the scenario town's usual stock
+	std::optional<uint32_t> storedWood;
+	/// A building is only planned by the scenario's town, as a land's script plans one, rather than standing built
+	bool planned {false};
+	/// A planned building is the plan of one that had been finished and went from the land, which its town wants
+	/// rebuilt as a repair
+	bool wasBuilt {false};
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 };
@@ -525,6 +534,12 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// A help text (value, by the scripts' number) shown in the dialogue box, as a script's RUN_TEXT shows one. Needs
+		/// no creature
+		RunText,
+		/// A hand demonstration (handDemo, by its file's name) played through the player's hand and camera, as a
+		/// tutorial's script plays one. Needs no creature
+		PlayHandDemo,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -586,6 +601,8 @@ struct Command
 	};
 	AdvisorAction advisor {AdvisorAction::Out};
 	uint32_t anim {0};
+	/// The hand demonstration played, by its file's name in the game's hand demonstrations
+	std::string_view handDemo;
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 /// Whether a command is the player's mouse, which needs no creature
@@ -754,6 +771,9 @@ void AddHighlightScenarios(std::vector<Scenario>& all);
 void AddSkyScenarios(std::vector<Scenario>& all);
 /// The advisors coming out, clinging, pointing and acting
 void AddAdvisorScenarios(std::vector<Scenario>& all);
+/// A town growing from the buildings it planned
+void AddTownGrowthScenarios(std::vector<Scenario>& all);
+void AddTutorialScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

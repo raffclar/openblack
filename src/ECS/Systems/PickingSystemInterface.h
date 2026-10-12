@@ -84,6 +84,9 @@ public:
 	virtual void PickUnderCursor(const Frame& frame) = 0;
 	/// The pick of the last frame drawn, which the interface and the hand go by
 	[[nodiscard]] virtual const Pick& GetPick() const = 0;
+	/// A replayed click lands on another thing, or on none: the pick's object becomes it, at the distance given, its point
+	/// the thing's position (the land under the cursor for none), until the next frame is drawn
+	virtual void RetargetObject(std::optional<entt::entity> object, float distance) = 0;
 
 	/// Where a line meets an object's model as it is drawn, the hand feeling it: the nearest triangle ahead of the line's
 	/// start, and its normal turned along the line
