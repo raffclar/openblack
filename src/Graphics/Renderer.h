@@ -193,8 +193,19 @@ private:
 	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
 	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
 	void DrawCaveSeeds(const DrawSceneDesc& desc) const;
-	/// The hand holding a miracle glowing in its player's colour, just after the hand at its depth in the sort
-	void DrawHandGlow(const DrawSceneDesc& desc, uint32_t handDepth) const;
+	/// How the glow over a hand holding a miracle looks this frame: the flow's sheet, the cell of it shown and the
+	/// colour it is drawn in
+	struct HandGlowLook
+	{
+		const Texture2D* flow;
+		glm::vec2 uvOffset;
+		float uvScale;
+		/// Of 255
+		glm::vec3 colour;
+		float alpha;
+	};
+	/// The glow while the hand holds a miracle, none otherwise
+	[[nodiscard]] std::optional<HandGlowLook> HandGlowOf(const DrawSceneDesc& desc) const;
 	[[nodiscard]] const Texture2D* HandFlowTexture() const;
 	/// The bands flying onto and off the hand that holds a miracle and the bracelets it wears, in the main view
 	void DrawHandMiracleBands(const DrawSceneDesc& desc) const;

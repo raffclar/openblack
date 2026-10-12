@@ -172,6 +172,12 @@ TEST(MiracleVisuals, TheGlowFlowsBackwards)
 	EXPECT_NEAR(GlowUvOffset(30.0f).x, 0.75f, k_Epsilon);
 }
 
+TEST(MiracleVisuals, TheGlowIsAddedAtFourFifthsInWholeSteps)
+{
+	// Four fifths of 255 is 204, kept as a whole step of the colour's alpha
+	EXPECT_FLOAT_EQ(GlowAlpha() * 255.0f, 204.0f);
+}
+
 TEST(MiracleVisuals, TheAnnouncerNamesThePowerUp)
 {
 	EXPECT_FALSE(PowerUpVoiceSample(-1).has_value());

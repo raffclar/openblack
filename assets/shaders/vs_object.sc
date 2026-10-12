@@ -278,7 +278,14 @@ void main()
 		v_snow.w = i_data4.x - 1.0f;
 	}
 #endif // USE_INSTANCING
-	v_color0 = vec4(ModelLightColour(colour, shadedElsewhere ? u_shadeAt.w : ModelLightFactor(normal, localLight)), 1.0f);
+	// The posed models the game lights as it poses them take their own rule
+#ifndef USE_LIGHTMAP
+	bool posedLight = u_landLight.w > 0.5f;
+#else
+	bool posedLight = false;
+#endif // USE_LIGHTMAP
+	float lightFactor = posedLight ? PosedModelLightFactor(normal, localLight) : ModelLightFactor(normal, localLight);
+	v_color0 = vec4(ModelLightColour(colour, shadedElsewhere ? u_shadeAt.w : lightFactor), 1.0f);
 #ifndef USE_LIGHTMAP
 	if (u_landLight.z > 0.0f)
 	{
