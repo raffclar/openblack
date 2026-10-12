@@ -38,6 +38,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRouteFollow.h"
 #include "Creature/CreatureRouteSearch.h"
+#include "ECS/BuildingSiteList.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -694,9 +695,11 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 
 	if (thing.avoidance == obstacles::Avoidance::Building)
 	{
-		// A building only just begun on its site isn't walked round yet
+		// A building only just begun, with a site taking wood brought to it, isn't walked round yet
 		const auto* progress = registry.TryGet<const BuildProgress>(entity);
-		thing.justBegun = registry.AnyOf<BuildingSite>(entity) && progress != nullptr && progress->built <= k_JustBegun;
+		const auto* sites = registry.TryGet<const BuildingSites>(entity);
+		thing.justBegun = sites != nullptr && ecs::building_site_list::TakingBroughtWood(*sites) != nullptr &&
+		                  progress != nullptr && progress->built <= k_JustBegun;
 	}
 	return thing;
 }

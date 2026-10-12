@@ -803,3 +803,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_planned_building_rules test_planned_building_rules.cpp
 )
+openblack_setup_and_add_test(
+  test_building_site_list test_building_site_list.cpp
+)

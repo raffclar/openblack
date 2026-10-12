@@ -123,11 +123,11 @@ void WorshipSiteSystem::TownChangedHands(entt::entity town)
 				Locator::spellIconSystem::value().TownLeftSite(component.worshipSite, town);
 			}
 			std::erase(site->towns, town);
-			std::erase_if(site->buildRequests, [town](const WorshipSite::BuildRequest& asked) { return asked.town == town; });
-			// With no town left to build it, its building site goes
-			if (site->buildRequests.empty() && !IsBuilt(component.worshipSite))
+			// The town's own building site there goes, if it was asked to build it; the other towns' stay
+			if (std::erase_if(site->buildRequests,
+			                  [town](const WorshipSite::BuildRequest& asked) { return asked.town == town; }) != 0)
 			{
-				_world->CloseBuildingSite(component.worshipSite);
+				_world->CloseTownsBuildingSite(component.worshipSite, town);
 			}
 		}
 	}
@@ -206,7 +206,8 @@ entt::entity WorshipSiteSystem::MakeBuiltSite(PlayerNames player, Tribe tribe)
 		return entt::null;
 	}
 	AddTownIfMissing(site, *town);
-	// Only a site its town has been asked to build is built: one made here for the first time waits for its builders
+	// Only a site its town has been asked to build is built, as a town given a site going up always is; one already
+	// among the town's sites without being asked waits for its builders
 	const auto& requests = registry.Get<const WorshipSite>(site).buildRequests;
 	if (std::ranges::any_of(requests, [town](const auto& request) { return request.town == *town; }))
 	{
@@ -687,6 +688,17 @@ void WorshipSiteSystem::AddTown(entt::entity site, entt::entity town)
 {
 	auto& registry = _world->Entities();
 	registry.Get<Town>(town).worshipSite = site;
+	// A town given a site still going up is asked to build it, if it isn't already, wanting it no more than its other
+	// building
+	if (!IsBuilt(site))
+	{
+		auto& requests = registry.Get<WorshipSite>(site).buildRequests;
+		if (std::ranges::none_of(requests, [town](const WorshipSite::BuildRequest& asked) { return asked.town == town; }))
+		{
+			requests.insert(requests.begin(), WorshipSite::BuildRequest {.town = town});
+			_world->OpenBuildingSite(site, town, 0.0f);
+		}
+	}
 	// A town with a storage pit, built or planned, is linked to the site by a footpath from its pit to the site's gate.
 	// The site keeps the link; finding the footpath's way between them isn't done yet, so it holds none.
 	const auto& abodes = registry.Get<const Town>(town).abodes;

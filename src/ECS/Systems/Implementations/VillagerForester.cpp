@@ -454,7 +454,7 @@ uint32_t villager_forester::GotWoodDecideWhatToDo(LivingAction& action)
 	const auto town = TownOf(person);
 	const auto site = person.buildingSite;
 	const bool siteWants = site != entt::null && town != entt::null && construction::IsSiteValid(town, site) &&
-	                       (construction::BuildersNeeded(site) > 0 || villager_build::IsBuilderDisciple(person));
+	                       (construction::BuildersNeeded(town, site) > 0 || villager_build::IsBuilderDisciple(person));
 	switch (work::AfterGettingWood(person.woodHeld, IsWorkingDisciple(villager), siteWants))
 	{
 	case work::GotWood::Decide:
@@ -705,7 +705,7 @@ uint32_t villager_forester::ReactToWoodPriority(entt::entity villager, entt::ent
 	}
 	const auto site = person.buildingSite;
 	const bool siteHasEnough = site != entt::null && town != entt::null && construction::IsSiteValid(town, site) &&
-	                           construction::WoodNeededToBuild(site) <= 0.0f;
+	                           construction::WoodNeededToBuild(town, site) <= 0.0f;
 	const auto* role = registry.TryGet<const Disciple>(villager);
 	const float reach =
 	    Locator::infoConstants::value().reaction.at(static_cast<size_t>(Reaction::ReactToWood)).maxReactionDistance;

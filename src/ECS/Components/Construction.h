@@ -42,13 +42,18 @@ struct PlannedAbode
 	float yAngle {0.0f};
 };
 
-/// A building going up with a site for its builders: how much the town wants it built, which a script may force, and its
-/// builders, their places round it and the wood brought for it
+/// One town's site at a building going up or being mended: how much the town wants it built, which a script may force,
+/// and its builders, their places round it and the wood brought for it
 struct BuildingSite
 {
+	/// The town whose builders work at it
+	entt::entity town {entt::null};
 	float desire {0.0f};
 	/// Opened for a building already built, to mend it
 	bool repair {false};
+	/// Wood brought to the building by a hand or a creature goes onto this site: the newest one. Once any of the
+	/// building's sites closes, none of them takes such wood until another site opens.
+	bool takesBroughtWood {false};
 	/// The villagers working at it, a villager once each time it set to work, and the count of them the site keeps
 	std::vector<entt::entity> workers;
 	int32_t workerCount {0};
@@ -57,6 +62,15 @@ struct BuildingSite
 	/// A temple's site keeps its wood in six piles round it, each gone when it has gone; any other site in the first, made
 	/// for the first wood brought
 	std::array<entt::entity, 6> piles {entt::null, entt::null, entt::null, entt::null, entt::null, entt::null};
+};
+
+/// A building going up or being mended with its builders' sites, one for each town building it: a worship site going up
+/// has one for each of its towns asked to build it, each with its own builders and wood; any other building has one,
+/// for its own town
+struct BuildingSites
+{
+	/// The newest first
+	std::vector<BuildingSite> sites;
 };
 
 /// A pile made to hold a building site's wood. It stays one after its building is finished: the villagers always come
