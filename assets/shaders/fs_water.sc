@@ -15,8 +15,7 @@ uniform vec4 u_seaParams;
 // The screen rows (see sea_rows::Rows): x the first row's screen y, y how many, z one over the first row's view depth,
 // w its step from row to row
 uniform vec4 u_seaRows;
-// x: 1 for the still sea of the lowest detail level, y: 1 when the first row is nearly clear, z: how many rows of the
-// ripple's pattern each row spans (see sea_rows::RippleRowsPerRow)
+// x: 1 for the still sea of the lowest detail level, y: 1 when the first row is nearly clear
 uniform vec4 u_seaMode;
 // xyz: the camera's position
 uniform vec4 u_seaCamera;
@@ -39,35 +38,16 @@ float ViewDepth(vec3 p)
 	return mul(u_view, vec4(p, 1.0f)).z;
 }
 
-// The ripple of row q of the ripple's pattern, q even: its own step of a 16 step sine, fully beyond a depth of 70 and
-// fading out by a depth of 30
-float PatternRipple(float q)
-{
-	float inverseDepth = u_seaRows.z + (q / u_seaMode.z) * u_seaRows.w;
-	float step = mod(u_seaParams.y + 2.0f * (q + 1.0f), 16.0f);
-	float s = sin(step * 3.14159265f / 8.0f);
-	return inverseDepth < 1.0f / 70.0f ? s : (inverseDepth < 1.0f / 30.0f ? (1.0f / inverseDepth - 30.0f) * 0.025f * s : 0.0f);
-}
-
-// The ripple of row r. In the ripple's pattern every even row has its own and every odd row repeats the one above, and
-// it goes straight from one row to the next: it holds over an even row and blends into the next even row's over an odd
-// one.
-float RowRipple(float r)
-{
-	float q = r * u_seaMode.z;
-	float j = floor(q);
-	if (mod(j, 2.0f) < 0.5f)
-	{
-		return PatternRipple(j);
-	}
-	return mix(PatternRipple(j - 1.0f), PatternRipple(j + 1.0f), q - j);
-}
-
-// The texture coordinates of row r at pixel column px: where the row meets the sea, moved along the view by its ripple
+// The texture coordinates of row r at pixel column px: where the row meets the sea, moved along the view by its ripple.
+// Each row ripples by its own step of a 16 step sine, fully beyond a depth of 70 and fading out by a depth of 30.
 vec2 RowUv(float r, float px)
 {
 	vec3 p = PlanePoint(px, u_seaRows.x + 2.0f * r).xyz;
-	return (p.xz + u_seaParams.zw * RowRipple(r)) / u_seaParams.x;
+	float inverseDepth = u_seaRows.z + r * u_seaRows.w;
+	float step = mod(u_seaParams.y + 2.0f * (r + 1.0f), 16.0f);
+	float s = sin(step * 3.14159265f / 8.0f);
+	float amplitude = inverseDepth < 1.0f / 70.0f ? s : (inverseDepth < 1.0f / 30.0f ? (1.0f / inverseDepth - 30.0f) * 0.025f * s : 0.0f);
+	return (p.xz + u_seaParams.zw * amplitude) / u_seaParams.x;
 }
 
 // The alpha of row r: whole up to a view depth of 7000, falling to 80 of 255 at 14000. A first row that starts inside

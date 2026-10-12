@@ -30,7 +30,9 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/FallingRoots.h"
@@ -71,6 +73,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TownDesireFlags.h"
+#include "ECS/TreeRoots.h"
 #include "ECS/VillagerHeldObject.h"
 #include "Game.h"
 #include "Graphics/BonePalette.h"
@@ -90,6 +93,7 @@
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
+using openblack::physics::objects::TreePlace;
 
 namespace
 {
@@ -1060,8 +1064,15 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			}
 		}
 		_renderContext.treeInstanceData[idx].burning = burning;
-		_renderContext.treeInstanceData[idx].modelMatrix = vegetation.GetTreeMatrix(
-		    modelMatrix, transform.position, transform.scale.y, slots->second.height, swayable.swaySlot);
+		// Out of the land it neither sways nor bends: it is drawn as it is held or as the physics places it
+		const auto place = registry.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
+		                       ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
+		                       : TreePlace::InTheLand;
+		_renderContext.treeInstanceData[idx].modelMatrix =
+		    openblack::physics::objects::SwaysAndBends(place)
+		        ? vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y, slots->second.height,
+		                                   swayable.swaySlot)
+		        : modelMatrix;
 		_renderContext.drawnObjects.push_back({.entity = entity, .model = _renderContext.treeInstanceData[idx].modelMatrix});
 
 		if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
