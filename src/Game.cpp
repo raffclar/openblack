@@ -2996,6 +2996,19 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("one-off meshes");
+	// The info tables come before the game's interface, whose tooltips take their priorities and times from them
+	{
+		InfoFile infoFile;
+		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
+		if (!result)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
+			return false;
+		}
+		Locator::infoConstants::reset(result.release());
+	}
+
+	_startupTimer->Step("info tables");
 	// The game's menu, which greets the player by their profile's name: openblack has no profiles, so by the name
 	// they log in with
 	{
@@ -3216,18 +3229,6 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("sound and music banks");
-	{
-		InfoFile infoFile;
-		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
-		if (!result)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
-			return false;
-		}
-		Locator::infoConstants::reset(result.release());
-	}
-
-	_startupTimer->Step("info tables");
 	// The temple's leashes are drawn with the leash texture and its alpha
 	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
 	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
