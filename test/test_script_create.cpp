@@ -72,6 +72,31 @@ TEST(ScriptCreate, ASubtypeMustNumberARow)
 	EXPECT_FALSE(IsRow(0, 0));
 }
 
+TEST(ScriptCreate, ARandomVillagerOfATribeIsOneOfItsSevenKinds)
+{
+	// The villagers' table: nine tribes of seven kinds, then the kinds of no tribe
+	constexpr std::size_t k_Rows = 84;
+	EXPECT_EQ(TribeVillagerRow(0, 0, k_Rows), 0u);
+	EXPECT_EQ(TribeVillagerRow(0, 6, k_Rows), 6u);
+	// The Norse (tribe 7): their housewife to their trader
+	EXPECT_EQ(TribeVillagerRow(7, 0, k_Rows), static_cast<uint32_t>(VillagerInfo::NorseHousewifeFemale));
+	EXPECT_EQ(TribeVillagerRow(7, 6, k_Rows), static_cast<uint32_t>(VillagerInfo::NorseTraderMale));
+	EXPECT_FALSE(TribeVillagerRow(-1, 0, k_Rows).has_value());
+	EXPECT_FALSE(TribeVillagerRow(0, 7, k_Rows).has_value());
+	EXPECT_FALSE(TribeVillagerRow(12, 0, k_Rows).has_value());
+}
+
+TEST(ScriptCreate, AScriptsVillagerIsMadeInNoTown)
+{
+	// A grown-up a year past growing up, a child ten, and neither in a town until the script attaches it to one
+	const auto grownUp = ScriptVillagerOf(false, 13);
+	EXPECT_EQ(grownUp.age, 14u);
+	EXPECT_FALSE(grownUp.joinsTown);
+	const auto child = ScriptVillagerOf(true, 13);
+	EXPECT_EQ(child.age, 10u);
+	EXPECT_FALSE(child.joinsTown);
+}
+
 TEST(ScriptCreate, MiraclesAreNumberedAsTheGameNumbersThem)
 {
 	EXPECT_EQ(MagicTypeFromScript(0), MagicType::None);

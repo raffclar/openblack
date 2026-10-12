@@ -55,9 +55,8 @@ constexpr int k_EdgeMargin = 16;
 constexpr float k_FocalDivisor = 22.0f;
 
 /// An icon's half-width on the screen, in pixels, from the projection's horizontal scale (one over the tangent of half
-/// the field of view across). The focal length is measured across the width a 4:3 screen of the same height would
-/// have, so on a wide screen the icons take the same share of the screen's height as on 4:3 rather than growing with
-/// its width; on 4:3 and taller screens this is the focal length across the screen itself.
+/// the field of view across): the focal length in pixels over 22. A screen wider than 4:3 keeps the 4:3 screen's view
+/// up and down, so its focal length, and the icons, take the same share of the screen's height as on 4:3.
 [[nodiscard]] float IconHalfSize(float horizontalProjectionScale, glm::ivec2 screenSize);
 /// The icons are frames 12 to 15 of atmos.raw's 4 by 4 frames
 constexpr int k_AtlasColumns = 4;

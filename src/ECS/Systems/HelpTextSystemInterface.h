@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <string_view>
+
 #include <glm/vec2.hpp>
 
 #include "Help/HelpTextDisplay.h"
@@ -61,6 +63,10 @@ public:
 
 	/// A script shows a help text and has it said; false for an invalid text, which shows the first
 	virtual bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) = 0;
+	/// RunText with a number the text's $D or $P code writes into it; the voice says the text alone
+	virtual bool RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction) = 0;
+	/// A script shows words of its own rather than a help text, with no voice
+	virtual void TempText(bool singleLine, std::string_view words, int32_t withInteraction) = 0;
 	/// The text the scripts last showed has been read
 	[[nodiscard]] virtual bool IsTextRead() const = 0;
 	/// Every text is taken away

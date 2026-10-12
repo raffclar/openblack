@@ -13,9 +13,11 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -385,4 +387,98 @@ TEST(DialogueText, DrawGate)
 	auto always = f.Make({.textDraw = 2});
 	always.RunText(false, 10, 0);
 	EXPECT_TRUE(always.IsDrawn());
+}
+
+namespace
+{
+/// The words a frame draws, every character as wide as the font size
+std::vector<std::u16string> DrawnWords(const DialogueText& dialogue)
+{
+	const WidthFn width = [](TextFont, std::u16string_view text, float size) { return static_cast<float>(text.size()) * size; };
+	std::vector<std::u16string> words;
+	for (const auto& run : dialogue.Layout(640, 480, 0, width).runs)
+	{
+		words.push_back(run.text);
+	}
+	return words;
+}
+
+bool Draws(const std::vector<std::u16string>& words, std::u16string_view word)
+{
+	return std::ranges::find(words, word) != words.end();
+}
+} // namespace
+
+TEST(DialogueText, NumbersAreWrittenWithThreeDecimals)
+{
+	EXPECT_EQ(FormatTextNumber(45.5f, false), u"45.500");
+	EXPECT_EQ(FormatTextNumber(45.5f, true), u"45.500%");
+	EXPECT_EQ(FormatTextNumber(100.0f, true), u"100.000%");
+	// Rounded to the nearest thousandth, the sign kept, no thousands separators
+	EXPECT_EQ(FormatTextNumber(2.0004f, false), u"2.000");
+	EXPECT_EQ(FormatTextNumber(2.0006f, false), u"2.001");
+	EXPECT_EQ(FormatTextNumber(-3.25f, false), u"-3.250");
+	EXPECT_EQ(FormatTextNumber(1234567.0f, false), u"1234567.000");
+	EXPECT_EQ(FormatTextNumber(0.0f, false), u"0.000");
+}
+
+TEST(DialogueText, ATextCarriesItsNumber)
+{
+	Fixture f;
+	f.texts[10] = {.text = u"Need $P now"};
+	f.texts[11] = {.text = u"Count $D"};
+	auto dialogue = f.Make({.textDraw = 2});
+	EXPECT_TRUE(dialogue.RunText(false, 10, 0, 45.5f));
+	EXPECT_TRUE(Draws(DrawnWords(dialogue), u"45.500%"));
+	// Each text keeps its own number; a text shown without one writes 0
+	dialogue.RunText(false, 11, 0);
+	const auto words = DrawnWords(dialogue);
+	EXPECT_TRUE(Draws(words, u"45.500%"));
+	EXPECT_TRUE(Draws(words, u"0.000"));
+	// The number is not spoken: the voice is the text's own
+	EXPECT_EQ(dialogue.GetCurrentText(), 11u);
+}
+
+TEST(DialogueText, ScriptWordsGetAnAsterisk)
+{
+	EXPECT_EQ(ScriptWordsText("Already done"), u"*Already done");
+	EXPECT_EQ(ScriptWordsText(""), u"*");
+	// Characters are kept as they are: no line break conversion, bytes above 127 as Latin-1
+	EXPECT_EQ(ScriptWordsText("a\nb"), u"*a\nb");
+	EXPECT_EQ(ScriptWordsText("caf\xE9"), u"*caf\u00E9");
+}
+
+TEST(DialogueText, ScriptWordsAreShownWithoutAVoice)
+{
+	Fixture f;
+	f.texts[0] = {.text = u"Invalid text string."};
+	f.texts[10] = {.text = u"one two three"};
+	auto dialogue = f.Make({.textDraw = 1});
+	dialogue.RunText(false, 10, 0);
+	// A single line clears the texts before it
+	dialogue.TempText(true, "Already done", 0);
+	EXPECT_TRUE(f.advisorSaid.empty());
+	EXPECT_TRUE(f.narrated.empty());
+	EXPECT_EQ(dialogue.GetCurrentText(), 0u);
+	EXPECT_TRUE(dialogue.GetDisplay().IsSingleLine());
+	// Shown whatever the player's setting, in the plain font
+	EXPECT_TRUE(dialogue.IsDrawn());
+	const auto words = DrawnWords(dialogue);
+	EXPECT_TRUE(Draws(words, u"*Already"));
+	EXPECT_TRUE(Draws(words, u"done"));
+	EXPECT_FALSE(Draws(words, u"three"));
+	// Two words: read after 5 turns a word and 8 more
+	f.turn = 118;
+	EXPECT_FALSE(dialogue.IsTextRead());
+	f.turn = 119;
+	EXPECT_TRUE(dialogue.IsTextRead());
+}
+
+TEST(DialogueText, ScriptWordsCanWaitForAClick)
+{
+	Fixture f;
+	auto dialogue = f.Make();
+	dialogue.TempText(true, "Sorry, the boss got the cheat removed", 1);
+	EXPECT_TRUE(dialogue.IsWaitingForClick());
+	EXPECT_FALSE(dialogue.IsTextRead());
 }

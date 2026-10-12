@@ -39,6 +39,7 @@
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Gui/CinemaBars.h"
@@ -132,6 +133,9 @@ std::unique_ptr<openblack::graphics::Texture2D> LoadTexture(const std::string& n
 		data->data[(i * 4) + 2] = colour[(i * 3) + 2];
 		data->data[(i * 4) + 3] = alpha[i];
 	}
+	// Kept four bits a channel, as the game keeps every texture it loads with an alpha
+	openblack::graphics::texel_depth::Reduce(std::span(data->data, data->size),
+	                                         openblack::graphics::texel_depth::Depth::FourBits);
 	auto texture = std::make_unique<openblack::graphics::Texture2D>(name);
 	texture->Create(k_AtlasSize, k_AtlasSize, 1, openblack::graphics::TextureFormat::RGBA8,
 	                openblack::graphics::Wrapping::ClampEdge, openblack::graphics::Filter::Linear, data);
@@ -257,6 +261,7 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	{
 		created->_gestureSheets.at(i) = LoadTexture("S_Gesture" + std::to_string(i));
 	}
+	created->_hintDotSheet = LoadTexture("S_SpriteSheet2");
 	return created;
 }
 
@@ -498,6 +503,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// and the fades
 	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
+	// The gestures' hints are drawn with the world too, over all of it
+	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
 	DrawFloatingNumbers(resolution);
 	if (_message.has_value())
@@ -662,6 +669,7 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 		};
 		return Locator::helpTextSystem::value().Layout(glm::ivec2(resolution), barPixels, widthOf);
 	}();
+	_dialogueWordsDrawn = frame != nullptr && !frame->runs.empty();
 	if (frame != nullptr)
 	{
 		// The box covers whole pixels, its right and bottom ones included

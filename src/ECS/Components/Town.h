@@ -70,6 +70,10 @@ struct Town
 	/// look for work again soon. Up for the rest of the turn it is raised in and the whole of the next.
 	bool desiresChanged {false};
 	bool desiresChangedLastTurn {false};
+	/// The buildings it plans to build later (houses, civic buildings, its player's temple), in the order it planned them
+	std::vector<entt::entity> planned;
+	/// The game turn one of its villagers last asked it to start a planned building: it is asked at most once a turn
+	std::optional<uint32_t> askedToBuildTurn;
 };
 
 } // namespace openblack::ecs::components

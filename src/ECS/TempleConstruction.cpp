@@ -16,6 +16,7 @@
 #include <entt/core/hashed_string.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/vec_swizzle.hpp>
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
@@ -23,6 +24,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Audio/GameMusic.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GameRandom.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/BuildingConstruction.h"
@@ -42,6 +44,8 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerBuild.h"
+#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -165,7 +169,17 @@ void CallForLeftoverWood(entt::entity pile)
 void construction::CloseSite(entt::entity building)
 {
 	auto& registry = Entities();
-	auto* site = registry.TryGet<BuildingSite>(building);
+	if (!registry.AllOf<BuildingSite>(building))
+	{
+		return;
+	}
+	// Its workers are let go first, each told to find something else to do
+	const auto workers = registry.Get<const BuildingSite>(building).workers;
+	if (Locator::livingActionSystem::has_value())
+	{
+		villager_build::LetGoOfSite(building, workers);
+	}
+	const auto* site = registry.TryGet<const BuildingSite>(building);
 	if (site == nullptr)
 	{
 		return;
@@ -282,15 +296,26 @@ std::optional<entt::entity> construction::StartPlannedAt(glm::vec3 place, float 
 	{
 		return std::nullopt;
 	}
-	const auto plan = plans[*found];
+	return StartPlannedTemple(plans[*found], building_construction::SiteDesire(scriptDesire));
+}
+
+entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesire)
+{
+	auto& registry = Entities();
 	const auto planned = registry.Get<const PlannedTemple>(plan);
 	const auto transform = registry.Get<const Transform>(plan);
+	// It is no longer among its town's plans
+	if (const auto town = registry.Context().towns.find(static_cast<uint32_t>(planned.townId));
+	    planned.townId >= 0 && town != registry.Context().towns.end())
+	{
+		std::erase(registry.Get<Town>(town->second).planned, plan);
+	}
 	registry.Destroy(plan);
 	// The temple's heart goes up where it was planned, with nothing of it built, and a site for its builders
 	const auto temple =
 	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
 	registry.Get<Temple>(temple).town = planned.townId;
-	OpenSite(temple, building_construction::SiteDesire(scriptDesire));
+	OpenSite(temple, siteDesire);
 	return temple;
 }
 
@@ -422,6 +447,7 @@ void construction::OpenSite(entt::entity building, float desire)
 	}
 	auto& site = registry.AssignOrReplace<BuildingSite>(building);
 	site.desire = desire;
+	site.repair = IsBuilt(building);
 	site.places = PlacesRound(building);
 	// A site added to a town changes what it wants
 	if (const auto town = TownOf(building); town.has_value() && *town >= 0 && Locator::townSystem::has_value())
@@ -494,6 +520,22 @@ void construction::MakeSitePiles(entt::entity building)
 	const auto* temple = registry.TryGet<const Temple>(building);
 	if (temple == nullptr)
 	{
+		// Any other building's one pile stands beyond it, away from its door
+		auto& pile = site->piles.front();
+		if ((registry.Valid(pile) && registry.AllOf<Pot>(pile)) || !registry.AllOf<Abode>(building))
+		{
+			return;
+		}
+		const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
+		const auto at = glm::xz(registry.Get<const Transform>(building).position);
+		const auto place = building_site::StandardPilePlace(at, villager_home::ArrivePosition(building), random);
+		auto position = glm::vec3(place.position.x, 0.0f, place.position.y);
+		if (Locator::terrainSystem::has_value())
+		{
+			position.y = Locator::terrainSystem::value().GetHeightAt(place.position);
+		}
+		pile = archetypes::PotArchetype::CreateEmpty(position, place.yAngle, PotInfo::MagicWood);
+		registry.Assign<SitePile>(pile);
 		return;
 	}
 	const auto& centre = registry.Get<const Transform>(building).position;

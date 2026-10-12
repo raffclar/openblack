@@ -22,7 +22,9 @@
 #include "Camera/Camera.h"
 #include "Creature/LeashRope.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ZSort.h"
@@ -35,6 +37,9 @@ using namespace openblack::graphics;
 
 namespace
 {
+/// The player at this computer, whose rope shows over their creature fizzing away
+constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
+
 struct Vertex
 {
 	glm::vec3 position;
@@ -129,8 +134,26 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 		}
 	};
 
-	desc.entities.Each<const CreatureLeash>([&](const CreatureLeash& leashes) {
-		if (!leashes.drawn || !leashes.worn.has_value() || !leashes.worn->ropeStarted)
+	// Cinema bars a script brought in hide the ropes, unless the scripts show the leashes
+	const bool scriptCinema = Locator::cinematicDirectorSystem::has_value() &&
+	                          Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
+	                          Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
+	desc.entities.Each<const CreatureLeash>([&](entt::entity creature, const CreatureLeash& leashes) {
+		if (!leashes.worn.has_value() || !leashes.worn->ropeStarted)
+		{
+			return;
+		}
+		const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(creature);
+		const leash_rope::Showing showing {
+		    .scriptShows = leashes.drawn,
+		    .scriptCinema = scriptCinema,
+		    .local = leashes.worn->holder == k_LocalPlayer,
+		    .handHidden = !desc.drawHand,
+		    // The hand doesn't pick up the rope of a tied leash in openblack yet
+		    .handHoldsTiedRope = false,
+		    .creatureFizz = spells != nullptr ? spells->fizz : 0.0f,
+		};
+		if (!leash_rope::Shown(showing))
 		{
 			return;
 		}

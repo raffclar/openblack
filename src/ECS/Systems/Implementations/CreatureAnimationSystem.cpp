@@ -32,6 +32,7 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -547,6 +548,88 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), seconds);
 		    }
 	    });
+}
+
+void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* self = registry.TryGet<const CreatureCopy>(copy);
+	if (self == nullptr || !registry.Valid(self->creature))
+	{
+		return;
+	}
+	const auto* creature = registry.TryGet<const Creature>(self->creature);
+	const auto* morph = registry.TryGet<const CreatureMorph>(self->creature);
+	auto* animation = registry.TryGet<CreatureAnimation>(copy);
+	const auto* transform = registry.TryGet<const Transform>(copy);
+	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr)
+	{
+		return;
+	}
+	auto& resources = Locator::resources::value();
+	const auto& meshes = resources.GetMeshes();
+	const auto& rigs = resources.GetCreatureRigs();
+	const auto bodyMeshes =
+	    creature_morph::MeshesOf(creature->species, morph->drawn, [&meshes](entt::id_type id) { return meshes.Contains(id); });
+	if (!meshes.Contains(bodyMeshes.base))
+	{
+		return;
+	}
+	const auto base = meshes.Handle(bodyMeshes.base);
+	const auto rigId = creature::GetRigId(creature->species);
+	const CreatureRig* rig = rigs.Contains(rigId) ? &*rigs.Handle(rigId) : nullptr;
+	const float seconds = milliseconds / 1000.0f;
+
+	// The copy is shaped as the creature is: its rest pose and animations follow the creature's body as it changes
+	if (animation->builtRevision != morph->revision || animation->skeleton.Empty())
+	{
+		const auto rest = creature_animation::BlendRest(
+		    base->GetBoneMatrices(), meshes.Handle(bodyMeshes.evilGood)->GetBoneMatrices(), std::abs(morph->drawn.evilGood),
+		    meshes.Handle(bodyMeshes.thinFat)->GetBoneMatrices(), std::abs(morph->drawn.thinFat));
+		animation->skeleton = skeletal_animation::Skeleton::FromRestMatrices(base->GetBoneParents(), rest);
+		animation->animations.clear();
+		animation->pair.reset();
+		animation->builtRevision = morph->revision;
+		animation->boneMatrices = rest;
+		auto mirror = rig != nullptr ? rig->MirrorBones(rest.size()) : std::nullopt;
+		animation->mirror = mirror.has_value() ? std::move(*mirror) : skeletal_animation::MirrorJoints(rest);
+	}
+	// It breathes at the pace of its own size
+	if (animation->breathPeriod <= 0.0f)
+	{
+		animation->breathPeriod = creature_animation::BreathPeriod(self->size);
+	}
+	animation->breathPhase = creature_animation::AdvanceBreath(animation->breathPhase, seconds, animation->breathPeriod);
+	if (rig != nullptr)
+	{
+		PoseBody(*animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds);
+	}
+	if (animation->boneMatrices.size() != base->GetBoneMatrices().size())
+	{
+		animation->boneMatrices = base->GetBoneMatrices();
+	}
+
+	// Its eyes are the creature's, looking where the copy's head looks
+	auto* eyes = registry.TryGet<CreatureEyes>(copy);
+	if (eyes == nullptr)
+	{
+		return;
+	}
+	if (const auto* own = registry.TryGet<const CreatureEyes>(self->creature))
+	{
+		eyes->mode = own->mode;
+		eyes->openness = own->openness;
+	}
+	eyes->lookAt = animation->lookAt;
+	eyes->blink =
+	    creature_eyes::AdvanceBlink(eyes->blink, static_cast<int32_t>(std::lround(milliseconds)), [this](uint32_t range) {
+		    return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
+	    });
+	eyes->drawn = {};
+	if (rig != nullptr && rig->eyes.has_value())
+	{
+		PlaceEyes(*eyes, *rig->eyes, morph->drawn, animation->boneMatrices, *transform, self->size, seconds);
+	}
 }
 
 namespace

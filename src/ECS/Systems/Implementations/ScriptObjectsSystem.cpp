@@ -20,6 +20,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/NeverFades.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -103,6 +104,7 @@ public:
 	[[nodiscard]] bool IsInScript(entt::entity object) const override { return Registry().AllOf<InScript>(object); }
 	void SetInScript(entt::entity object, bool inScript) override { SetTag<InScript>(Registry(), object, inScript); }
 	void HideName(entt::entity object) override { SetTag<NameHidden>(Registry(), object, true); }
+	void KeepInView(entt::entity object) override { SetTag<NeverFades>(Registry(), object, true); }
 	[[nodiscard]] bool IsControlled(entt::entity object) const override { return Registry().AllOf<ScriptControlled>(object); }
 	void SetControlled(entt::entity object, bool controlled) override
 	{
@@ -274,10 +276,12 @@ bool ScriptObjectsSystem::Register(entt::entity object, bool createdByScript)
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Adding null script thing");
 		return false;
 	}
-	// What a script makes keeps its name hidden, even when there is no room left for it
+	// What a script makes keeps its name hidden and never fades out of sight in the distance, even when there is no room
+	// left for it
 	if (createdByScript)
 	{
 		_world->HideName(object);
+		_world->KeepInView(object);
 	}
 	if (!_table.Register(Key(object), createdByScript))
 	{

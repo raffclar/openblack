@@ -26,19 +26,23 @@ struct HandOnCreature
 	entt::entity creature {entt::null};
 	/// The running sum of strokes and slaps, from -1 to 1
 	float sum {0.0f};
-	/// How long the hand has rested on the body, and since the last stroke and slap, in milliseconds
-	float onBodyMs {0.0f};
-	float sinceStrokeMs {creature_feedback::k_StrokeIntervalMs};
-	float sinceSlapMs {creature_feedback::k_SlapIntervalMs};
-	/// The part last stroked
+	/// The clocks strokes wait on, and the time since taking hold or the last stroke, which a slap waits on
+	creature_feedback::StrokeClocks clocks;
+	float slapReadyMs {0.0f};
+	/// The part last stroked, forgotten when the hand comes off the body
 	std::optional<creature_feedback::BodyPart> lastPart;
-	/// Where the hand was on the plane through the creature facing the camera, and the cursor, last frame
+	/// Strokes and slaps are weighed in steps (see creature_feedback::Pace): the time towards the next, and where the
+	/// hand and the cursor were and whether the hand was on the body at the last
+	float sinceStepMs {0.0f};
 	std::optional<glm::vec3> lastPoint;
 	glm::vec2 lastCursor {0.0f};
-	/// How fast the hand moves, in units a second, eased a little over frames
+	bool wasOnBody {false};
+	/// How fast the hand moved across the land at the last step, in units a second
 	float speed {0.0f};
-	/// The hand shows its slap for a moment after it slaps
-	float slapShowMs {0.0f};
+	/// Hard slaps in a row at one height
+	creature_feedback::HardSlaps hardSlaps;
+	/// The hand's cycle: taking hold starts it caressing
+	creature_feedback::TouchCycle cycle {creature_feedback::TouchCycle::Tickle};
 	/// Held by a command, such as a testbed scenario's, rather than by the button, which lets go only when told to
 	bool byCommand {false};
 	/// How long the button has been held, and whether the hand has stroked or slapped since, which tell a click on the

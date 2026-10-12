@@ -39,19 +39,6 @@ constexpr float k_EnterScale = 1.0752688646316528f; // 1/0.93
 constexpr float k_SecondScale = 0.8600000143051147f;
 constexpr float k_OlderScale = 0.9300000071525574f;
 
-/// The entry's number formatted with "%3.3f%%" or "%3.3f"
-std::u16string FormatNumber(float number, bool percent)
-{
-	std::array<char, 64> buffer {};
-	std::snprintf(buffer.data(), buffer.size(), percent ? "%3.3f%%" : "%3.3f", static_cast<double>(number));
-	std::u16string out;
-	for (const char* c = buffer.data(); *c != '\0'; ++c)
-	{
-		out.push_back(static_cast<char16_t>(static_cast<unsigned char>(*c)));
-	}
-	return out;
-}
-
 struct Measure
 {
 	float width {0.0f};
@@ -95,7 +82,7 @@ Measure MeasureText(const TextRegion& region, std::u16string_view text, float li
 			type = splitter.Next(word, state, false);
 			if (type == Piece::Percent || type == Piece::Number) // the type stays: no space follows
 			{
-				word = FormatNumber(number, type == Piece::Percent);
+				word = FormatTextNumber(number, type == Piece::Percent);
 			}
 			if (!word.empty())
 			{
@@ -174,7 +161,7 @@ float DrawEntryText(const TextRegion& region, std::u16string_view text, int vAli
 			type = splitter.Next(word, state, iconFlag);
 			if (type == Piece::Percent || type == Piece::Number)
 			{
-				word = FormatNumber(number, type == Piece::Percent);
+				word = FormatTextNumber(number, type == Piece::Percent);
 				type = Piece::Spaced; // unlike the measure, a space follows the number
 			}
 			if (!word.empty())
@@ -213,6 +200,18 @@ float DrawEntryText(const TextRegion& region, std::u16string_view text, int vAli
 	return measure.height;
 }
 } // namespace
+
+std::u16string FormatTextNumber(float number, bool percent)
+{
+	std::array<char, 64> buffer {};
+	std::snprintf(buffer.data(), buffer.size(), percent ? "%3.3f%%" : "%3.3f", static_cast<double>(number));
+	std::u16string out;
+	for (const char* c = buffer.data(); *c != '\0'; ++c)
+	{
+		out.push_back(static_cast<char16_t>(static_cast<unsigned char>(*c)));
+	}
+	return out;
+}
 
 TextRegion ComputeTextRegion(int width, int height, int barPixels)
 {

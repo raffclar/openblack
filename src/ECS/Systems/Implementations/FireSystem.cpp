@@ -1605,13 +1605,14 @@ void FireSystem::StopSound(entt::entity object)
 	}
 }
 
-void FireSystem::Update(float seconds)
+void FireSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
 {
+	const auto step = frame_pace::Step(_pace, frameRealTime, frameGameTime);
+	const float seconds = std::chrono::duration<float>(step).count();
 	if (!Locator::entitiesRegistry::has_value() || seconds <= 0.0f)
 	{
 		return;
 	}
-	_frameTime += seconds;
 	auto& registry = Entities();
 	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	auto* random = Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
@@ -1827,6 +1828,7 @@ void FireSystem::Reset()
 	}
 	_soundSlots = {};
 	_farthestSlot = 0.0f;
+	_pace = {};
 	_burnPointTurn.reset();
 	_fires.clear();
 	if (Locator::entitiesRegistry::has_value())

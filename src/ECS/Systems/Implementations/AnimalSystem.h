@@ -40,6 +40,8 @@ public:
 	                          entt::entity town) override;
 	void JoinFlock(entt::entity animal, entt::entity flock) override;
 	bool SetScriptState(entt::entity animal, LivingStates state) override;
+	void ScriptMoveTo(entt::entity animal, glm::vec2 point) override;
+	[[nodiscard]] std::optional<uint8_t> FinalGameStateOf(entt::entity animal) const override;
 	void SetScale(entt::entity animal, float scale) override;
 	[[nodiscard]] float RadiusOf(entt::entity animal) const override;
 	[[nodiscard]] glm::vec3 MovementOf(entt::entity animal) const override;

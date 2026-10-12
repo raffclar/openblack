@@ -27,5 +27,6 @@ void main()
 		diffuseTex.rgb = texture2D(s_snow, v_snow.xy).rgb * v_snowLight;
 	}
 	// The distance haze is added after the texture
-	gl_FragColor = vec4(min(diffuseTex.rgb + v_haze.rgb, vec3_splat(1.0f)), diffuseTex.a);
+	// A tree fading out in the distance is blended by its alpha
+	gl_FragColor = vec4(min(diffuseTex.rgb + v_haze.rgb, vec3_splat(1.0f)), diffuseTex.a * (1.0f - v_haze.w));
 }

@@ -11,28 +11,49 @@
 
 #include "CreatureCaveSystem.h"
 
+#include <cmath>
+
 #include <algorithm>
+#include <span>
+#include <vector>
+
+#include <glm/gtx/euler_angles.hpp>
 
 #include "3D/CreatureBody.h"
 #include "3D/CreatureCaveTrophies.h"
+#include "3D/L3DMesh.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Camera/Camera.h"
+#include "Creature/CaveCreature.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureLearning.h"
+#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureRig.h"
 #include "Creature/CreatureWatching.h"
+#include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/Mesh.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Resources/ResourcesInterface.h"
+#include "Windowing/WindowingInterface.h"
 
 namespace openblack::ecs::systems
 {
@@ -72,6 +93,24 @@ std::u16string NameOf(const Registry& registry, entt::entity creature)
 	const auto* body = registry.TryGet<const Creature>(creature);
 	return body != nullptr ? std::u16string(creature_fight_hud::SpeciesName(body->species)) : std::u16string();
 }
+
+/// The places the temple's walk mesh marks in the creature room: the seat by the fire, the fire, and a place further back
+std::optional<cave_creature::Places> CavePlaces()
+{
+	const entt::id_type movement = entt::hashed_string("temple/interior/movement_l3d").value();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(movement))
+	{
+		return std::nullopt;
+	}
+	const auto& marks = meshes.Handle(movement)->GetExtraMetrics();
+	if (marks.size() < 3)
+	{
+		return std::nullopt;
+	}
+	return cave_creature::Places {
+	    .seat = glm::vec3(marks[0][3]), .fire = glm::vec3(marks[1][3]), .back = glm::vec3(marks[2][3])};
+}
 } // namespace
 
 bool CreatureCaveSystem::InTemple() const
@@ -79,15 +118,18 @@ bool CreatureCaveSystem::InTemple() const
 	return Locator::temple::has_value();
 }
 
-void CreatureCaveSystem::Update()
+void CreatureCaveSystem::Update(std::chrono::duration<float, std::milli> frameTime)
 {
 	if (InTemple())
 	{
 		// The temple's creature room is the cave: F5 takes the player there, and Escape back out
 		const auto& temple = Locator::temple::value();
 		_screen.open = temple.Active() && temple.GetCurrentRoom() == TempleRoom::CreatureCave;
+		KeepCaveCreature();
+		UpdateCaveCreature(frameTime.count());
 		return;
 	}
+	DropCaveCreature();
 	// Without a temple to go into, F5 shows the cave on its own and hides it again
 	if (Locator::gameActionSystem::has_value())
 	{
@@ -306,6 +348,277 @@ bool CreatureCaveSystem::RemoveTattoo(uint8_t site)
 	}
 	Locator::creatureSkinSystem::value().SetTattoo(*creature, edit->slot, edit->tattoo);
 	return true;
+}
+
+void CreatureCaveSystem::KeepCaveCreature()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::temple::value().Active())
+	{
+		DropCaveCreature();
+		_caveMade = false;
+		return;
+	}
+	if (_caveCreature.has_value())
+	{
+		// The copy goes when the creature does
+		const auto* copy = registry.TryGet<const CreatureCopy>(*_caveCreature);
+		if (copy == nullptr || !registry.Valid(copy->creature))
+		{
+			DropCaveCreature();
+		}
+		return;
+	}
+	// The room is made once a visit, as it is first drawn: with the creature by the fire if the player has one then and
+	// the scripts haven't said not to show it
+	if (_caveMade || !Locator::temple::value().IsRoomDrawn(TempleRoom::CreatureCave))
+	{
+		return;
+	}
+	_caveMade = true;
+	if (const auto creature = GetCreature(); creature.has_value() && _creatureShown)
+	{
+		MakeCaveCreature(*creature);
+	}
+}
+
+void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto places = CavePlaces();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (!places.has_value() || body == nullptr || !registry.AllOf<Mesh, CreatureMorph>(creature))
+	{
+		return;
+	}
+	const auto size = cave_creature::SizeOf(body->size);
+	const auto coin = std::uniform_int_distribution<uint32_t>(0, 1)(_random) != 0;
+	const auto rest = cave_creature::RestFor(size, coin);
+	const auto position = cave_creature::StandsAt(*places, size, rest);
+	// It is put down facing the fire
+	const auto heading = cave_creature::HeadingTowards(position, places->fire);
+
+	const auto copy = registry.Create();
+	registry.Assign<Transform>(copy, position, glm::mat3(glm::eulerAngleY(heading)),
+	                           glm::vec3(archetypes::CreatureArchetype::DrawnScale(body->species, size)));
+	registry.Assign<CreatureCopy>(copy, creature, size);
+	// Its fidgets in the tattoo editor start 20 to 40 seconds away
+	cave_creature::State state {.rest = rest, .heading = heading};
+	cave_creature::StartIdle(state, [this](uint32_t range) {
+		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
+	});
+	registry.Assign<CaveCreature>(copy, state, places->fire);
+	registry.Assign<CreatureAnimation>(copy);
+	registry.Assign<CreatureEyes>(copy);
+	_caveCreature = copy;
+}
+
+void CreatureCaveSystem::DropCaveCreature()
+{
+	if (_caveCreature.has_value() && Locator::entitiesRegistry::has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		if (registry.Valid(*_caveCreature))
+		{
+			registry.Destroy(*_caveCreature);
+		}
+	}
+	_caveCreature.reset();
+}
+
+void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
+{
+	if (!_caveCreature.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* copy = registry.TryGet<CreatureCopy>(*_caveCreature);
+	auto* cave = registry.TryGet<CaveCreature>(*_caveCreature);
+	auto* animation = registry.TryGet<CreatureAnimation>(*_caveCreature);
+	auto* transform = registry.TryGet<Transform>(*_caveCreature);
+	if (copy == nullptr || cave == nullptr || animation == nullptr || transform == nullptr)
+	{
+		return;
+	}
+	const auto frameMs = std::min(milliseconds, cave_creature::k_MaxFrameMs);
+	const cave_creature::Random random = [this](uint32_t range) {
+		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
+	};
+
+	// The camera is zoomed onto it while the tattoo editor is open on its creature, looking where the editor turns it
+	cave_creature::Frame frame {.fire = cave->light, .position = transform->position, .milliseconds = frameMs};
+	if (Locator::tattooEditorSystem::has_value())
+	{
+		const auto& editor = Locator::tattooEditorSystem::value();
+		frame.zoomed = editor.IsOpen() && editor.GetCreature() == std::optional(copy->creature);
+		frame.eye = editor.GetView().eye;
+		frame.focus = editor.GetView().focus;
+	}
+	if (Locator::gameActionSystem::has_value())
+	{
+		using input::BindableActionMap;
+		const auto& actions = Locator::gameActionSystem::value();
+		frame.buttonHeld = actions.GetAny(BindableActionMap::MOVE, BindableActionMap::ACTION);
+		frame.leftHeld = actions.Get(BindableActionMap::MOVE);
+		if (Locator::camera::has_value() && Locator::windowing::has_value())
+		{
+			// The point under the pointer a little way into the screen
+			const auto size = glm::vec2(Locator::windowing::value().GetSize());
+			const auto& camera = Locator::camera::value();
+			if (size.x > 0.0f && size.y > 0.0f && camera.GetNearClip() > 0.0f)
+			{
+				const auto [eye, near] = camera.OnNearPlane(glm::vec2(actions.GetMousePosition()) / size);
+				frame.pointer = eye + ((near - eye) * (cave_creature::k_PointerDepth / camera.GetNearClip()));
+			}
+		}
+	}
+
+	cave_creature::Body body {.body = animation->body, .gesture = animation->gesture, .lookAt = animation->lookAt};
+	auto& state = cave->state;
+	if (const auto turnTo = cave_creature::Step(state, body, frame, random); turnTo.has_value())
+	{
+		StartCaveTurn(*copy, state, *turnTo);
+	}
+	cave_creature::AdvanceTurn(state, frameMs * creature_layers::PlaybackRate(copy->size));
+	animation->body = body.body;
+	animation->gesture = body.gesture;
+	animation->lookAt = body.lookAt;
+	// While it turns its spin's own root turns the body; it faces the new way once the turn is over
+	animation->slots.clear();
+	if (state.turn.has_value())
+	{
+		const auto& turn = *state.turn;
+		animation->slots.push_back({.animation = turn.spin,
+		                            .timeMs = std::clamp(turn.timeMs, 0.0f, std::max(turn.durationMs - 1.0f, 0.0f)),
+		                            .weight = 1.0f,
+		                            .mirrored = false,
+		                            .blendedWith = turn.blendedWith,
+		                            .blendWeight = turn.blendWeight});
+	}
+	transform->rotation = glm::mat3(glm::eulerAngleY(state.heading));
+	if (Locator::creatureAnimationSystem::has_value())
+	{
+		Locator::creatureAnimationSystem::value().PoseCopy(*_caveCreature, frameMs);
+	}
+}
+
+void CreatureCaveSystem::StartCaveTurn(const CreatureCopy& copy, cave_creature::State& state, float heading)
+{
+	// It turns on the spot by two of its 0, 90 and 180 degree spins to the side it turns to, blended for the angle
+	namespace locomotion = creature_locomotion;
+	const auto angle = locomotion::WrapAngle(heading - state.heading);
+	const auto first = locomotion::SideOf(angle) == locomotion::Side::Right ? locomotion::animations::k_RightSpin
+	                                                                        : locomotion::animations::k_LeftSpin;
+	const auto pair = locomotion::PairFor(first, std::abs(angle));
+	std::optional<float> from;
+	std::optional<float> to;
+	if (Locator::creatureAnimationSystem::has_value())
+	{
+		auto& animations = Locator::creatureAnimationSystem::value();
+		from = animations.AnimationDuration(copy.creature, pair.from);
+		to = animations.AnimationDuration(copy.creature, pair.to);
+	}
+	if (!from.has_value() || !to.has_value())
+	{
+		// TODO(raffclar): a species without its spins; the game plays no turn then, and how it comes round is not known.
+		//                 It faces the new way at once.
+		state.heading = heading;
+		return;
+	}
+	// The blend lasts between the two spins' lengths, to the nearest millisecond
+	state.turn = cave_creature::State::Turn {.from = state.heading,
+	                                         .to = heading,
+	                                         .timeMs = 0.0f,
+	                                         .durationMs = std::nearbyint(*from + ((*to - *from) * pair.weight)),
+	                                         .spin = pair.from,
+	                                         .blendedWith = pair.to,
+	                                         .blendWeight = pair.weight};
+}
+
+std::optional<creature_tattoo_editor::Orbit> CreatureCaveSystem::GetCaveCreatureView() const
+{
+	if (!_caveCreature.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* copy = registry.TryGet<const CreatureCopy>(*_caveCreature);
+	const auto* transform = registry.TryGet<const Transform>(*_caveCreature);
+	if (copy == nullptr || transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	return creature_tattoo_editor::CaveView(transform->position, copy->size);
+}
+
+bool CreatureCaveSystem::CursorOverCaveCreature(const screen_pick::View& view) const
+{
+	if (!_caveCreature.has_value())
+	{
+		return false;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* copy = registry.TryGet<const CreatureCopy>(*_caveCreature);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(*_caveCreature);
+	const auto* transform = registry.TryGet<const Transform>(*_caveCreature);
+	if (copy == nullptr || animation == nullptr || transform == nullptr || !registry.Valid(copy->creature))
+	{
+		return false;
+	}
+	const auto* meshComponent = registry.TryGet<const Mesh>(copy->creature);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (meshComponent == nullptr || !meshes.Contains(meshComponent->id))
+	{
+		return false;
+	}
+	const auto mesh = meshes.Handle(meshComponent->id);
+	const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	// As the game finds what is under the cursor: by the body's bounding sphere, then its triangles as they are drawn
+	const auto box = mesh->GetBoundingBox();
+	const float scale = glm::length(glm::vec3(model[0]));
+	if (!screen_pick::CursorOverSphere(view, glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
+	                                   glm::length(box.Size() * 0.5f) * scale, glm::vec3(model[3])))
+	{
+		return false;
+	}
+	const auto& rest = mesh->GetBoneMatrices();
+	const auto bones = animation->boneMatrices.size() == rest.size() ? std::span<const glm::mat4>(animation->boneMatrices)
+	                                                                 : std::span<const glm::mat4>(rest);
+	std::vector<glm::vec3> placed;
+	std::vector<screen_pick::ClipCorner> corners;
+	for (size_t s = 0; s < mesh->GetSubMeshes().size(); ++s)
+	{
+		const auto& subMesh = *mesh->GetSubMeshes()[s];
+		if (!posed_model::IsDrawn(subMesh))
+		{
+			continue;
+		}
+		posed_model::Place(registry, copy->creature, *mesh, s, model, bones, placed);
+		const auto& geometry = subMesh.GetBodyGeometry();
+		corners.clear();
+		for (size_t c = 0; c < placed.size(); ++c)
+		{
+			corners.push_back(
+			    screen_pick::ToClip(view, placed[c], c < geometry.uvs.size() ? geometry.uvs[c] : glm::vec2(0.0f)));
+		}
+		const std::span<const uint16_t> indices = geometry.indices;
+		for (const auto& primitive : subMesh.GetPrimitives())
+		{
+			if (primitive.indicesOffset + primitive.indicesCount > indices.size())
+			{
+				continue;
+			}
+			const screen_pick::Primitive triangles {.corners = corners,
+			                                        .indices = indices.subspan(primitive.indicesOffset, primitive.indicesCount),
+			                                        .twoSided = primitive.twoSided};
+			if (screen_pick::FirstHit(view, triangles).has_value())
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 } // namespace openblack::ecs::systems

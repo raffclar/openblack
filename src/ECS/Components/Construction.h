@@ -38,6 +38,8 @@ struct PlannedAbode
 {
 	uint32_t townId;
 	AbodeInfo info;
+	/// How far round it will be turned, in radians
+	float yAngle {0.0f};
 };
 
 /// A building going up with a site for its builders: how much the town wants it built, which a script may force, and its
@@ -45,12 +47,15 @@ struct PlannedAbode
 struct BuildingSite
 {
 	float desire {0.0f};
+	/// Opened for a building already built, to mend it
+	bool repair {false};
 	/// The villagers working at it, a villager once each time it set to work, and the count of them the site keeps
 	std::vector<entt::entity> workers;
 	int32_t workerCount {0};
 	/// The places round the building its builders stand at, worked out from its model when the site is opened
 	std::array<glm::vec3, 128> places {};
-	/// A temple's site keeps its wood in six piles round it, each gone when it has gone
+	/// A temple's site keeps its wood in six piles round it, each gone when it has gone; any other site in the first, made
+	/// for the first wood brought
 	std::array<entt::entity, 6> piles {entt::null, entt::null, entt::null, entt::null, entt::null, entt::null};
 };
 

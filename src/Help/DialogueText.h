@@ -27,6 +27,12 @@ constexpr uint32_t k_HelpTextCount = 6974;
 /// The narrators the help texts name that are the advisors
 constexpr int32_t k_NarratorGoodAdvisor = 2;
 constexpr int32_t k_NarratorEvilAdvisor = 3;
+/// The narrator words a script gives itself are drawn as: the plain white font
+constexpr int32_t k_NarratorScriptWords = 1;
+
+/// Words a script gives itself rather than a help text's number, as the dialogue shows them: an asterisk, then the
+/// words, each character as it is (no line break or blank conversion)
+[[nodiscard]] std::u16string ScriptWordsText(std::string_view words);
 
 /// The factor the player's reading speed (0 to 1, 0.5 by default) puts on a text's reading time: 3 - 4r up to 0.5,
 /// then falling from 1 to 0.2. Not a number counts as slow.
@@ -114,8 +120,11 @@ public:
 
 	/// A script shows a help text: with interaction 1 it waits for a click, with 2 a click does nothing. A single line
 	/// clears the texts before it, and so does any text after a single line. A number past the last text shows the
-	/// first, and false is returned for the script's error.
-	bool RunText(bool singleLine, uint32_t number, int32_t withInteraction);
+	/// first, and false is returned for the script's error. `value` is the number the text's $D or $P code writes.
+	bool RunText(bool singleLine, uint32_t number, int32_t withInteraction, float value = 0.0f);
+	/// A script shows words of its own (ScriptWordsText) in the plain font, as RunText shows a help text but with no voice.
+	/// It counts as text 0 for the reading time's end, the draw gate and whether it is read.
+	void TempText(bool singleLine, std::string_view words, int32_t withInteraction);
 	/// The text the scripts last showed has been read
 	[[nodiscard]] bool IsTextRead() const;
 	/// Every text is taken away
@@ -156,7 +165,9 @@ public:
 	[[nodiscard]] const Settings& GetSettings() const { return _settings; }
 
 private:
-	void AddText(const Text& text, uint32_t number, int32_t withInteraction);
+	void AddText(std::u16string_view text, float value, int32_t narrator, uint32_t number, int32_t withInteraction);
+	/// A single line clears the texts before it, and so does any text after a single line
+	void StartLine(bool singleLine);
 	void StartReadingTime(std::u16string_view text);
 	/// Waits are over: the click wait and the reading time
 	void ClearTextDisplayed();

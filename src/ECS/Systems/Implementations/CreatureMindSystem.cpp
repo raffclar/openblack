@@ -77,6 +77,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
@@ -484,6 +485,34 @@ std::optional<bool> WaitedForInMap(const ecs::Registry& registry, const creature
 	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
 }
 
+/// Its player's camera as a creature watching it sees it, only while its step watches the camera; none for a creature
+/// without a player
+std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registry& registry, entt::entity creature,
+                                                              const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WatchCamera ||
+	    !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
+	if (body == nullptr || body->owner == PlayerNames::NEUTRAL || transform == nullptr || self == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto eye = Locator::camera::value().GetOrigin();
+	const glm::vec2 point {eye.x, eye.z};
+	const auto offset = point - glm::vec2(transform->position.x, transform->position.z);
+	return creature_mind::Senses::CameraView {
+	    .distance = glm::distance(eye, transform->position),
+	    .groundDistance = glm::length(offset),
+	    .point = point,
+	    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
+	};
+}
+
 /// Lets go of the miracle the creature holds, as it stops what it was doing
 void ReleaseCast(entt::entity creature)
 {
@@ -812,6 +841,8 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 		physiology.WakeFromFaint(creature);
 		break;
 	case Effect::Completed:
+	case Effect::Observed:
+	case Effect::TookFromPile:
 	case Effect::None:
 		break;
 	}
@@ -861,6 +892,38 @@ std::optional<entt::entity> FoodFromTheSea(ecs::Registry& registry, entt::entity
 	const auto amount = static_cast<int32_t>(size * k_FoodPerSize);
 	const auto food = ecs::archetypes::PotArchetype::Create(transform->position, 0.0f, PotInfo::WheatInHand, amount,
 	                                                        NearestTown(registry, transform->position));
+	if (food == entt::null)
+	{
+		return std::nullopt;
+	}
+	if (auto* foodTransform = registry.TryGet<Transform>(food))
+	{
+		foodTransform->scale = glm::vec3(size * k_ScalePerSize);
+	}
+	return food;
+}
+
+/// The food a creature takes from a pile: a handful at its feet of a thousand for each unit of its size, no more than the
+/// pile holds, drawn three and three quarter times the creature's size, belonging to the nearest town. None from a pile
+/// with no food.
+// TODO(creature-actions-3): the game puts the handful a little short of the creature's reach towards the pile, by a
+// measure of its body not ported yet; here it appears at its feet, as fished food does
+std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity creature, entt::entity pile)
+{
+	constexpr float k_FoodPerSize = 1000.0f;
+	constexpr float k_ScalePerSize = 3.75f;
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (transform == nullptr || !registry.Valid(pile) || !Locator::resourceStoreSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const float size = body != nullptr ? body->size : 1.0f;
+	const auto held = Locator::resourceStoreSystem::value().GetResource(pile, ResourceType::Food);
+	const auto amount = std::min(static_cast<uint32_t>(size * k_FoodPerSize), held);
+	const auto food =
+	    ecs::archetypes::PotArchetype::Create(transform->position, 0.0f, PotInfo::WheatInHand, static_cast<int32_t>(amount),
+	                                          NearestTown(registry, transform->position));
 	if (food == entt::null)
 	{
 		return std::nullopt;
@@ -970,6 +1033,21 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		hands.ThrowTaking(creature, {at.x, height, at.y}, flight);
 		break;
 	}
+	case Kind::TakeFromPile:
+		if (const auto food = object.has_value() ? FoodFromPile(registry, creature, *object) : std::nullopt; food.has_value())
+		{
+			if (auto* mind = registry.TryGet<CreatureMindState>(creature))
+			{
+				mind->takenFood = *food;
+				mind->takenFrom = *object;
+			}
+			hands.PickUp(creature, *food);
+		}
+		else
+		{
+			hands.Cancel(creature);
+		}
+		break;
 	case Kind::FishFromSea:
 		if (const auto food = FoodFromTheSea(registry, creature); food.has_value())
 		{
@@ -981,6 +1059,19 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		}
 		break;
 	}
+}
+
+/// The pile a creature took food from gives up as much as the food it picked up holds
+void GiveUpTakenFood(ecs::Registry& registry, CreatureMindState& mind)
+{
+	const auto food = std::exchange(mind.takenFood, entt::null);
+	const auto pile = std::exchange(mind.takenFrom, entt::null);
+	const auto* pot = registry.Valid(food) ? registry.TryGet<const Pot>(food) : nullptr;
+	if (pot == nullptr || !registry.Valid(pile) || !Locator::resourceStoreSystem::has_value())
+	{
+		return;
+	}
+	static_cast<void>(Locator::resourceStoreSystem::value().RemoveResource(pile, ResourceType::Food, pot->amount));
 }
 
 creature_mind::HandsState HandsOf(entt::entity creature)
@@ -1162,6 +1253,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
 		        .choosesNext = !scripted,
+		        .camera = CameraViewOf(registry, entity, mind.idle),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    Apply(commands, animation, eyes);
@@ -1195,8 +1287,28 @@ void CreatureMindSystem::ProcessTurn()
 			    }
 		    }
 		    TakeEffect(entity, commands, *mind.desires);
+		    // Once it has picked up the food it took from a pile, the pile gives that much up
+		    if (commands.effect == creature_mind::Effect::TookFromPile)
+		    {
+			    GiveUpTakenFood(registry, mind);
+		    }
+		    if (commands.effect == creature_mind::Effect::Observed && commands.effectObject.has_value())
+		    {
+			    const auto thing = static_cast<entt::entity>(*commands.effectObject);
+			    if (const auto belief = BeliefOf(registry, thing, entity))
+			    {
+				    mind.observedKinds.insert(belief->type);
+			    }
+			    else if (registry.AllOf<Animal>(thing))
+			    {
+				    // Animals are their own kind of thing to a creature, though nothing else it knows of them is kept yet
+				    mind.observedKinds.insert(creature_tree::belief_types::k_Animal);
+			    }
+		    }
 		    CountCompleted(entity, mind, commands, GetTables());
-		    if (commands.effect != creature_mind::Effect::None)
+		    // Taking in what a thing is does nothing for the desire the plan serves
+		    if (commands.effect != creature_mind::Effect::None && commands.effect != creature_mind::Effect::Observed &&
+		        commands.effect != creature_mind::Effect::TookFromPile)
 		    {
 			    mind.satisfiedByEffect = true;
 		    }
@@ -1421,6 +1533,12 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	{
 		return false;
 	}
+	// The face is pulled even when the body is too far into something to take the action
+	if (face.has_value())
+	{
+		body->face =
+		    creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, face->cue);
+	}
 	// Not while it is only just into something
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
@@ -1453,11 +1571,6 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
 	body->body = *played;
-	if (face.has_value())
-	{
-		body->face =
-		    creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, face->cue);
-	}
 	// What it was doing is over; it decides afresh once the action has played
 	Abandon(*mind);
 	mind->idle.agenda.resize(std::min(mind->idle.agenda.size(), mind->idle.step));

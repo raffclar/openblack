@@ -43,7 +43,12 @@ public:
 	explicit Camera(glm::vec3 focus = glm::vec3(1000.0f, 0.0f, 1000.0f));
 	virtual ~Camera();
 
+	/// The lens: the view across the width of a 4:3 screen, in radians, as the game sets it (70 degrees in the world)
+	[[nodiscard]] float GetLens() const { return _xFov; }
+	/// The view across the screen's width, in radians: the lens on 4:3 screens and narrower ones, wider on wider screens
 	[[nodiscard]] float GetHorizontalFieldOfView() const;
+	/// The view up and down the screen, in radians: a wider screen than 4:3 keeps the 4:3 screen's
+	[[nodiscard]] float GetVerticalFieldOfView() const;
 	[[nodiscard]] virtual glm::mat4 GetViewMatrix(Interpolation interpolation) const;
 	[[nodiscard]] const glm::mat4& GetProjectionMatrix() const;
 	[[nodiscard]] const glm::mat4& GetProjectionMatrix(Projection projection) const;

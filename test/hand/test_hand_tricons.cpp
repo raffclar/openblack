@@ -16,6 +16,7 @@
 #include <glm/trigonometric.hpp>
 #include <gtest/gtest.h>
 
+#include "Camera/CameraLens.h"
 #include "Hand/HandTricons.h"
 
 using namespace openblack::hand_tricons;
@@ -346,7 +347,7 @@ TEST(HandTricons, TheCrossBrightensWithAThingUnderTheHandAndAtOnceWithTheAction)
 	EXPECT_FLOAT_EQ(fades[3], 1.0f);
 }
 
-TEST(HandTricons, TheIconsAreAPartOfTheFocalLengthAcrossA4By3Screen)
+TEST(HandTricons, TheIconsAreAPartOfTheFocalLength)
 {
 	// A 70 degree field of view across
 	const auto scale = 1.0f / std::tan(glm::radians(70.0f) * 0.5f);
@@ -354,11 +355,14 @@ TEST(HandTricons, TheIconsAreAPartOfTheFocalLengthAcrossA4By3Screen)
 	EXPECT_FLOAT_EQ(IconHalfSize(scale, {800, 600}), scale * 400.0f / 22.0f);
 	EXPECT_FLOAT_EQ(IconHalfSize(scale, {1600, 1200}), scale * 800.0f / 22.0f);
 	EXPECT_FLOAT_EQ(IconHalfSize(scale, {1280, 1024}), scale * 640.0f / 22.0f);
-	// On wide screens, measured across a 4:3 screen as tall, so they take the same share of the height as on 4:3
+	// Wide screens keep the 4:3 screen's view up and down, so the icons take the same share of the height as on 4:3
 	for (const auto screen :
 	     std::array {glm::ivec2(1920, 1080), glm::ivec2(2560, 1440), glm::ivec2(3440, 1440), glm::ivec2(5120, 1440)})
 	{
-		const auto share = IconHalfSize(scale, screen) / static_cast<float>(screen.y);
+		const auto aspect = static_cast<float>(screen.x) / static_cast<float>(screen.y);
+		const auto wideScale =
+		    1.0f / std::tan(openblack::camera_lens::HorizontalFieldOfView(glm::radians(70.0f), aspect) * 0.5f);
+		const auto share = IconHalfSize(wideScale, screen) / static_cast<float>(screen.y);
 		EXPECT_NEAR(share, IconHalfSize(scale, {800, 600}) / 600.0f, 1e-6f) << screen.x << "x" << screen.y;
 	}
 }
