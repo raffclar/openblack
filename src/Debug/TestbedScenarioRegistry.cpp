@@ -465,8 +465,8 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .name = "Needs to poo",
 	    .facet = Facet::Needs,
 	    .description = "A tiger full of poo with its desire to go as strong as it gets.",
-	    .expected = "It may show it needs a poo first, then squats and goes; a poo drops behind it and the desire is "
-	                "held back for a while.",
+	    .expected = "It may show it needs a poo first, then squats and goes; a lump of poo comes out at its groin and is "
+	                "thrown back along the ground behind it, and the desire is held back for a while.",
 	    .framing = {.shot = Shot::Follow},
 	    .creatures = {CreatureSetup {
 	        .species = CreatureType::Tiger,
@@ -724,6 +724,26 @@ void AddGrowth(std::vector<Scenario>& all)
 		    return tiger;
 	    }()},
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {Act(Kind::WalkHome, 0, 1.0f, true), Go(Kind::WalkTo, 0, k_OutOfThePen, 4.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "growth.temple_pen_unbuilt",
+	    .name = "No shrinking at a temple still going up",
+	    .facet = Facet::Growth,
+	    .description = "As the temple pen scenario, but the player's temple is only nine tenths built, as builders leave it "
+	                   "on Land 1 before it is finished.",
+	    .expected = "Its home is still the pen in front of the temple, and it walks there, but it keeps its own size (2) in "
+	                "the pen: a temple shrinks its creature only once it is built.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {[&] {
+		    auto tiger = Posed(CreatureType::Tiger, k_OutOfThePen, 90.0f);
+		    tiger.size = 2.0f;
+		    return tiger;
+	    }()},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .built = 0.9f}},
 	    .commands = {Act(Kind::WalkHome, 0, 1.0f, true), Go(Kind::WalkTo, 0, k_OutOfThePen, 4.0f)},
 	    .repeatFrom = 0,
 	});
@@ -1319,6 +1339,21 @@ void AddObjects(std::vector<Scenario>& all)
 	                {.type = MobileObjectInfo::MagicFood, .offset = {15.0f, -5.0f}}},
 	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::EatHeld, 0, 0.5f, true), OnObject(Kind::PickUp, 0, 1, 1.0f),
 	                 Act(Kind::EatHeld, 0, 0.5f, true), OnObject(Kind::PickUp, 0, 2, 1.0f), Act(Kind::EatHeld, 0, 0.5f, true)},
+	});
+
+	all.push_back({
+	    .id = "objects.bring_back_up",
+	    .name = "Bringing up what can't be eaten",
+	    .facet = Facet::Objects,
+	    .description = "A hungry tiger picks up a villager a script has made indestructible, as Sable is for her lessons, "
+	                   "and tries to eat her.",
+	    .expected = "It brings her to its mouth but doesn't swallow her: she falls from its hand unhurt, and it retches "
+	                "and is sick, then isn't hungry for twenty seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungry},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}, .indestructible = true}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::EatHeld, 0, 0.5f, true)},
 	});
 
 	all.push_back({
@@ -2434,16 +2469,18 @@ bool ValidOffset(glm::vec2 offset)
 	return std::abs(offset.x) <= k_MaxOffset && std::abs(offset.y) <= k_MaxOffset;
 }
 
-/// What is wrong with what a command acts on, if anything: the object it picks up must be a thing or an animal, what it
-/// knocks down a thing or a tree, the part it strokes, the way it looks something over and the leash put on real ones
+/// What is wrong with what a command acts on, if anything: the object it picks up must be a thing, an animal or a
+/// villager, what it knocks down a thing or a tree, the part it strokes, the way it looks something over and the leash
+/// put on real ones
 std::string_view CommandProblem(const Command& command, std::span<const ObjectSetup> objects)
 {
 	const auto* object = command.object < objects.size() ? &objects[command.object] : nullptr;
 	switch (command.kind)
 	{
 	case Kind::PickUp:
-		return object != nullptr && (std::holds_alternative<MobileObjectInfo>(object->type) ||
-		                             std::holds_alternative<AnimalInfo>(object->type))
+		return object != nullptr &&
+		               (std::holds_alternative<MobileObjectInfo>(object->type) ||
+		                std::holds_alternative<AnimalInfo>(object->type) || std::holds_alternative<VillagerInfo>(object->type))
 		           ? ""
 		           : "picks up no thing";
 	case Kind::KnockDown:

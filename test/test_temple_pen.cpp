@@ -22,6 +22,7 @@
 #include "Creature/TemplePen.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -29,6 +30,7 @@
 
 using namespace openblack;
 using namespace openblack::temple_pen;
+using openblack::ecs::components::BuildProgress;
 using openblack::ecs::components::Creature;
 using openblack::ecs::components::CreatureLeash;
 using openblack::ecs::components::Temple;
@@ -117,7 +119,8 @@ protected:
 	          .drawnScale = [](CreatureType, float size) { return size * 10.0f; },
 	      })
 	{
-		const auto temple = _registry.Create();
+		_temple = _registry.Create();
+		const auto temple = _temple;
 		_registry.Assign<Transform>(temple, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 		_registry.Assign<Temple>(temple, Temple {.owner = PlayerNames::PLAYER_ONE, .yAngle = 0.0f});
 	}
@@ -132,6 +135,7 @@ protected:
 
 	ecs::Registry _registry;
 	CreaturePenSystem _system;
+	entt::entity _temple {entt::null};
 };
 } // namespace
 
@@ -212,4 +216,22 @@ TEST_F(CreaturePenSystemTest, AnotherPlayersTempleIsNotItsPen)
 	EXPECT_EQ(_registry.TryGet<const CreatureLeash>(creature), nullptr);
 	EXPECT_FALSE(_registry.Get<const Creature>(creature).penSize.has_value());
 	EXPECT_FLOAT_EQ(_registry.Get<const Transform>(creature).scale.x, 20.0f);
+}
+
+TEST_F(CreaturePenSystemTest, NotShrunkWhileTheTempleIsGoingUp)
+{
+	// Builders are still raising it: its home is already the pen, but the creature keeps its own size there
+	_registry.Assign<BuildProgress>(_temple, BuildProgress {.built = 0.9f});
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, {k_Pen.x, 0.0f, k_Pen.y});
+	_system.ProcessTurn(_registry);
+	const auto* leash = _registry.TryGet<const CreatureLeash>(creature);
+	ASSERT_NE(leash, nullptr);
+	ASSERT_TRUE(leash->home.has_value());
+	EXPECT_FALSE(_registry.Get<const Creature>(creature).penSize.has_value());
+	EXPECT_FLOAT_EQ(_registry.Get<const Transform>(creature).scale.x, 20.0f);
+
+	// Once it is finished the pen shrinks the creature
+	_registry.Remove<BuildProgress>(_temple);
+	_system.ProcessTurn(_registry);
+	EXPECT_EQ(_registry.Get<const Creature>(creature).penSize, std::optional<float>(k_PenSize));
 }

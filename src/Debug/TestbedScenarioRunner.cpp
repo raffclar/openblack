@@ -69,6 +69,7 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Physics.h"
@@ -121,6 +122,7 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -378,6 +380,10 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	if (object.poisoned)
 	{
 		registry.AssignOrReplace<ecs::components::Poisoned>(entity);
+	}
+	if (object.indestructible)
+	{
+		registry.AssignOrReplace<ecs::components::Indestructible>(entity);
 	}
 }
 } // namespace
@@ -800,8 +806,12 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 	for (const auto& setup : scenario.temples)
 	{
 		const auto point = MapPoint(middle, setup.offset);
-		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, setup.angle,
-		                                          glm::vec3(1.0f));
+		const auto temple = ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner,
+		                                                              setup.angle, glm::vec3(1.0f));
+		if (setup.built.has_value())
+		{
+			ecs::construction::SetBuilt(temple, *setup.built);
+		}
 	}
 	if (!Locator::animalSystem::has_value())
 	{

@@ -266,6 +266,8 @@ struct ObjectSetup
 	std::optional<float> fullSize;
 	/// A villager or animal that has eaten poison
 	bool poisoned {false};
+	/// Made indestructible, as a script makes one
+	bool indestructible {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
 	/// A building of the town holds this much wood, rather than the scenario town's usual stock
@@ -630,6 +632,8 @@ struct TempleSetup
 	glm::vec2 offset {0.0f};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
 	float angle {0.0f};
+	/// How much of it is built, 0 to 1, for a temple still going up; built when not given
+	std::optional<float> built;
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
