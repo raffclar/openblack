@@ -73,6 +73,48 @@ uint32_t BeamInterval(uint32_t millisecondsPerTurn)
 	return static_cast<uint32_t>(static_cast<double>(1000u / millisecondsPerTurn) * k_Seconds);
 }
 
+std::optional<float> DamageEffectLife(float life)
+{
+	if (life <= 0.0f)
+	{
+		return 0.0f;
+	}
+	if (1.0f <= life)
+	{
+		return std::nullopt;
+	}
+	return life;
+}
+
+uint32_t DamageInterval(uint32_t millisecondsPerTurn, float life)
+{
+	const float wait = ((k_DamageWaitFull - k_DamageWaitNone) * life) + k_DamageWaitNone;
+	return static_cast<uint32_t>(static_cast<double>(1000u / millisecondsPerTurn) * static_cast<double>(wait));
+}
+
+bool DamageBeamDue(uint32_t& lastTurn, uint32_t turn, uint32_t interval)
+{
+	if (!(interval + lastTurn < turn))
+	{
+		return false;
+	}
+	lastTurn = turn;
+	return true;
+}
+
+bool DamageBeamSounds(float life)
+{
+	return life <= k_DamageSoundLife;
+}
+
+uint32_t NextDamageSample(uint32_t& counter)
+{
+	constexpr uint32_t k_FirstSample = 206;
+	const uint32_t sample = k_FirstSample + counter;
+	counter = (counter + 1) % k_BeamSounds;
+	return sample;
+}
+
 bool BeamAtTargetDue(Beam& beam, entt::entity target, uint32_t turn, uint32_t interval)
 {
 	if (target != beam.target)

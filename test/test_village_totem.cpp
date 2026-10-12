@@ -413,3 +413,11 @@ TEST(VillageTotemSystem, ItsSecondTotemGoesWithIt)
 	village.system->Update(10.0f);
 	EXPECT_FALSE(registry.Valid(ghost));
 }
+
+TEST(VillageTotemRules, TheIconIsTheCreaturesSpeciesIconOrTheHandWithoutOne)
+{
+	EXPECT_EQ(vt::IconMesh(std::nullopt), MeshId::BuildingSpellHand);
+	EXPECT_EQ(static_cast<uint32_t>(MeshId::BuildingSpellHand), 250U);
+	EXPECT_EQ(vt::IconMesh(MeshId::BuildingPlayerIconCow), MeshId::BuildingPlayerIconCow);
+	EXPECT_EQ(static_cast<uint32_t>(vt::IconMesh(MeshId::BuildingPlayerIconCow)), 184U);
+}
