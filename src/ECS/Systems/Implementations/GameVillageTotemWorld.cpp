@@ -26,6 +26,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -57,58 +58,18 @@ ecs::Registry& GameVillageTotemWorld::Entities()
 
 entt::id_type GameVillageTotemWorld::IconMeshFor(PlayerNames player) const
 {
-	auto icon = MeshId::BuildingSpellHand;
+	std::optional<MeshId> creatureIcon;
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (const auto creature = PrimaryCreature(player); creature.has_value())
 	{
-		if (const auto* body = registry.TryGet<const Creature>(*creature))
+		const auto* body = registry.TryGet<const Creature>(*creature);
+		const auto& info = Locator::infoConstants::value();
+		if (body != nullptr && creature::InfoRow(body->species) < info.creature.size())
 		{
-			// TODO(debug-start-with-cow): the creature info's field at 0x344 holds floats in the BW1W120 data, not mesh ids
-			// (it crashed the renderer), so the icon is the species' own player icon mesh by name. Species without
-			// one keep the hand.
-			switch (body->species)
-			{
-			case CreatureType::Cow:
-				icon = MeshId::BuildingPlayerIconCow;
-				break;
-			case CreatureType::Tiger:
-				icon = MeshId::BuildingPlayerIconTiger;
-				break;
-			case CreatureType::Leopard:
-				icon = MeshId::BuildingPlayerIconLeopard;
-				break;
-			case CreatureType::Wolf:
-				icon = MeshId::BuildingPlayerIconWolf;
-				break;
-			case CreatureType::Lion:
-				icon = MeshId::BuildingPlayerIconLion;
-				break;
-			case CreatureType::Horse:
-				icon = MeshId::BuildingPlayerIconHorse;
-				break;
-			case CreatureType::Tortoise:
-				icon = MeshId::BuildingPlayerIconTortoise;
-				break;
-			case CreatureType::Zebra:
-				icon = MeshId::BuildingPlayerIconZebra;
-				break;
-			case CreatureType::BrownBear:
-				icon = MeshId::BuildingPlayerIconBear;
-				break;
-			case CreatureType::PolarBear:
-				icon = MeshId::BuildingPlayerIconPolarBear;
-				break;
-			case CreatureType::Sheep:
-				icon = MeshId::BuildingPlayerIconSheep;
-				break;
-			case CreatureType::GiantApe:
-				icon = MeshId::BuildingPlayerIconApe;
-				break;
-			default:
-				break;
-			}
+			creatureIcon = info.creature.at(creature::InfoRow(body->species)).totemIcon;
 		}
 	}
+	const auto icon = village_totem::IconMesh(creatureIcon);
 	return resources::HashIdentifier(icon);
 }
 
