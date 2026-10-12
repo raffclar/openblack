@@ -72,7 +72,8 @@ public:
 	static constexpr uint32_t k_Count = 170;
 	/// Tooltips at least this high in priority are "important": numbers and stats, always shown
 	static constexpr float k_ImportantPriority = 0.9f;
-	/// The turns a second the counters of how long a tooltip is shown are in
+	/// Game turns counted per second of a tooltip's display times. Turns come 10 a second whatever the frame rate, so a
+	/// tooltip holds for 2.5 times its display time, as in the original
 	static constexpr float k_TurnsPerSecond = 25.0f;
 	/// The most seconds a tooltip ever takes to fade in
 	static constexpr uint32_t k_MaxTimesShown = 80;
