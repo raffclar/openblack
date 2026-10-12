@@ -160,6 +160,7 @@ openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
 openblack_setup_and_add_test(test_draw_order graphics/test_draw_order.cpp)
 openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
 openblack_setup_and_add_test(test_mesh_detail graphics/test_mesh_detail.cpp)
+openblack_setup_and_add_test(test_detail_level graphics/test_detail_level.cpp)
 openblack_setup_and_add_test(
   test_sea_reflection graphics/test_sea_reflection.cpp
 )
@@ -780,6 +781,17 @@ openblack_setup_and_add_test(
   test_worship_site_construction test_worship_site_construction.cpp
 )
 openblack_setup_and_add_test(test_tree_bend test_tree_bend.cpp)
+openblack_setup_and_add_test(
+  test_creature_route_search test_creature_route_search.cpp
+)
+openblack_setup_and_add_test(
+  test_double_click_flight camera/test_double_click_flight.cpp
+)
+openblack_setup_and_add_test(test_spell_icons test_spell_icons.cpp)
+openblack_setup_and_add_test(
+  test_script_stones_natives test_script_stones_natives.cpp
+)
+target_link_libraries(test_script_stones_natives PRIVATE ScriptLibrary helpdude)
 openblack_setup_and_add_test(
   test_planned_building_rules test_planned_building_rules.cpp
 )

@@ -14,9 +14,6 @@
 
 #include <functional>
 #include <optional>
-#include <queue>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -26,10 +23,8 @@
 ///
 /// The land is a grid of 512 by 512 cells of 10 units, sorted once a land is loaded: cells steeper than about 45
 /// degrees and deep sea are blocked, shallow water can be waded through, and land cut off from the main part of the
-/// land is out of reach. Things in the way are circles to walk round, gathered from the cells the planning comes
-/// across. Routes are planned over a finer lattice across
-/// as many game turns as they take, straightened where nothing is in the way, and their corners rounded so the
-/// creature can walk round them without stopping.
+/// land is out of reach. Routes are chains of straight legs and arcs round what stands in the way (see
+/// CreatureRouteSearch.h).
 namespace openblack::creature_route
 {
 constexpr int32_t k_CellsPerSide = 512;
@@ -43,8 +38,6 @@ constexpr float k_DestinationClearance = 7.1f;
 /// nearer than the second
 constexpr float k_ValidPointSearch = 1000.0f;
 constexpr float k_ValidPointReach = 30.0f;
-/// The spacing of the lattice routes are planned on
-constexpr float k_LatticeStep = 2.5f;
 
 enum class Ground : uint8_t
 {
@@ -111,133 +104,91 @@ constexpr float k_StepBlockSize = 80.0f;
 /// Whether a point lies strictly inside any of the circles
 [[nodiscard]] bool InsideAny(glm::vec2 point, const std::vector<Circle>& circles);
 
-/// The circles of what stands in one of the land's cells, asked for the first time a route being planned comes into the
-/// cell
-using CellObstacles = std::function<void(glm::ivec2 cell, std::vector<Circle>& circles)>;
-
-/// A circle about a point this close to where the creature stands is left out
-constexpr float k_TooCloseToCentre = 0.1f;
-
-/// Where to go and what is in the way
-struct Request
+/// Which way round a circle a route goes
+enum class Way : uint8_t
 {
-	glm::vec2 start;
-	glm::vec2 destination;
-	/// Arriving is anywhere from min to max away from the destination
-	float minDistance;
-	float maxDistance;
-	/// What is in the way from the start
-	std::vector<Circle> obstacles;
-	/// What else is in the way, cell by cell as the planning comes across it
-	CellObstacles cellObstacles {};
-	/// Walking to a point, the route ends on the point itself rather than at the near edge of the ring
-	bool ontoDestination {false};
-	/// Corners are rounded at this radius
-	float cornerRadius;
-	/// The most lattice points searched before giving up
-	size_t searchLimit {200000};
+	None,
+	Clockwise,
+	Anticlockwise,
 };
 
-/// Plans a route over the lattice by A*, a budget of lattice points a turn, then straightens and rounds it. What is in the
-/// way is gathered from the cells the planning comes across. A circle the creature stands in is shrunk to reach just to
-/// it, so it can walk out of it, and one about a point right under it is left out. A destination whose whole arrival
-/// ring lies inside a circle can't be reached: the planning gives up as soon as it comes across that circle.
-class Planner
+/// The other way round, none staying none
+[[nodiscard]] constexpr Way Opposite(Way way)
 {
-public:
-	enum class Status : uint8_t
+	switch (way)
 	{
-		Planning,
-		Found,
-		Failed,
-	};
+	case Way::Clockwise:
+		return Way::Anticlockwise;
+	case Way::Anticlockwise:
+		return Way::Clockwise;
+	default:
+		return Way::None;
+	}
+}
 
-	explicit Planner(Request request);
+/// Anticlockwise for clockwise, and clockwise for anything else
+[[nodiscard]] constexpr Way Flip(Way way)
+{
+	return way == Way::Clockwise ? Way::Anticlockwise : Way::Clockwise;
+}
 
-	/// Searches up to a budget of lattice points
-	Status Step(const WalkableLand& land, size_t budget);
-	[[nodiscard]] Status GetStatus() const { return _status; }
-	/// The route found, from the start to the arrival point
-	[[nodiscard]] const std::vector<glm::vec2>& GetRoute() const { return _route; }
-	[[nodiscard]] size_t GetSearched() const { return _searched; }
-	/// What it found in the way, as the route was planned round it
-	[[nodiscard]] const std::vector<Circle>& GetCircles() const { return _circles; }
-
-private:
-	struct Node
-	{
-		float cost;
-		int64_t parent;
-		bool closed;
-	};
-	struct Open
-	{
-		float estimate;
-		int64_t key;
-		bool operator>(const Open& other) const { return estimate > other.estimate; }
-	};
-
-	[[nodiscard]] glm::vec2 PointOf(int64_t key) const;
-	[[nodiscard]] int64_t KeyOf(int32_t i, int32_t j) const;
-	[[nodiscard]] bool Passable(const WalkableLand& land, glm::vec2 point);
-	[[nodiscard]] bool IsGoal(glm::vec2 point) const;
-	[[nodiscard]] float Estimate(glm::vec2 point) const;
-	[[nodiscard]] bool Clear(const WalkableLand& land, glm::vec2 from, glm::vec2 to);
-	/// Takes in the circles of the cell a point is in, the first time it is asked
-	void Gather(glm::vec2 point);
-	void Add(Circle circle);
-	[[nodiscard]] bool InsideAnyNear(glm::vec2 point) const;
-	[[nodiscard]] glm::vec2 ArrivalFrom(glm::vec2 from) const;
-	void Finish(const WalkableLand& land, int64_t goal);
-
-	Request _request;
-	/// What is in the way so far, and which circles reach into each block of the land
-	std::vector<Circle> _circles;
-	std::unordered_map<int32_t, std::vector<uint32_t>> _blocks;
-	std::unordered_set<int32_t> _cellsGathered;
-	/// The destination's whole arrival ring lies inside one of the circles
-	bool _unreachable {false};
-	Status _status {Status::Planning};
-	bool _started {false};
-	std::unordered_map<int64_t, Node> _nodes;
-	std::priority_queue<Open, std::vector<Open>, std::greater<>> _open;
-	size_t _searched {0};
-	std::vector<glm::vec2> _route;
+/// One part of a route: straight, or round the circle the part before headed for
+struct Leg
+{
+	glm::vec2 from;
+	glm::vec2 to;
+	bool arc {false};
+	/// The circle it heads for and which way round it goes, none when it heads for no circle
+	std::optional<uint32_t> heading {};
+	Way way {Way::None};
+	/// It begins on a circle the route starts on
+	bool onStartCircle {false};
+	/// The cost of the route up to its end
+	float cost {0.0f};
+	/// The circle an arc goes round and which way, kept once a route is followed
+	std::optional<Circle> round {};
+	Way roundWay {Way::None};
 };
 
-/// Rounds a polyline's corners into arcs of a radius, smaller where the segments are too short for it, each step of
-/// an arc turning at most maxStepAngle
-[[nodiscard]] std::vector<glm::vec2> RoundCorners(const std::vector<glm::vec2>& points, float radius, float maxStepAngle);
-/// Keeps only the points needed to go between where the way between is clear
-[[nodiscard]] std::vector<glm::vec2> Straighten(const std::vector<glm::vec2>& points,
-                                                const std::function<bool(glm::vec2, glm::vec2)>& clear);
+/// How far round a circle it is from one point on it to another, going one way
+[[nodiscard]] float ArcLength(const Circle& circle, Way way, glm::vec2 from, glm::vec2 to);
 
-/// A route being followed: along each segment in turn
+/// A route being followed: along each leg in turn, straight or round its circle
 struct Route
 {
-	std::vector<glm::vec2> points;
-	/// The segment from points[segment] to points[segment + 1], and how far along it the creature is
+	std::vector<Leg> legs;
+	/// The leg it is on, and how far along it the creature is
 	size_t segment {0};
 	float travelled {0.0f};
 
-	[[nodiscard]] bool Finished() const { return segment + 1 >= points.size(); }
-	[[nodiscard]] bool OnLastSegment() const { return segment + 2 >= points.size(); }
+	[[nodiscard]] bool Finished() const { return segment >= legs.size(); }
+	[[nodiscard]] bool OnLastSegment() const { return segment + 1 >= legs.size(); }
 	[[nodiscard]] float SegmentLength() const;
-	/// How far is left of this segment, and of the whole route
+	/// How far is left of this leg, and of the whole route
 	[[nodiscard]] float Remaining() const;
 	[[nodiscard]] float RemainingTotal() const;
 	[[nodiscard]] glm::vec2 Position() const;
-	/// The heading along this segment (see creature_locomotion::HeadingOf)
+	/// Where the route ends
+	[[nodiscard]] glm::vec2 End() const;
+	/// The heading along this leg where the creature is (see creature_locomotion::HeadingOf)
 	[[nodiscard]] float Heading() const;
-	/// How far the route turns at the end of this segment, 0 at the last
+	/// How far the route turns at the end of this leg, 0 at the last
 	[[nodiscard]] float TurnAtEnd() const;
+	/// Points along the route, arcs in steps of at most an angle, for drawing it
+	[[nodiscard]] std::vector<glm::vec2> Points(float maxStepAngle) const;
 };
+
+/// A leg's length: an arc's round its circle, else straight
+[[nodiscard]] float LengthOf(const Leg& leg);
+/// Where along a leg a distance from its start is, and the heading there
+[[nodiscard]] glm::vec2 PointAlong(const Leg& leg, float distance);
+[[nodiscard]] float HeadingAlong(const Leg& leg, float distance);
 
 struct Advanced
 {
 	glm::vec2 position;
 	float heading;
-	/// Whether it went on to a new segment
+	/// Whether it went on to a new leg
 	bool segmentChanged;
 	bool finished;
 };

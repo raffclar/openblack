@@ -222,6 +222,26 @@ void AddForests(std::vector<Scenario>& all)
 	}
 
 	all.push_back({
+	    .id = "miracles.forest_seed",
+	    .name = "Forest: its seed rides over the trees",
+	    .facet = Facet::Miracles,
+	    .description = "A forest seed summoned from the player's worship and cast by hand on grass north of the middle "
+	                   "once it is ready.",
+	    .expected = "The seed falls and lands; until its trees are planted it is out of sight under the land. Once they "
+	                "are, the seed's own model, at its own size and unturned, sits over the forest's middle at the height "
+	                "of its tallest tree, rising as the trees grow, for as long as the miracle lasts.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 60.0f}}},
+	    .miracles = {{.type = MagicType::Forest,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, 40.0f},
+	                  .delaySeconds = 0.5f,
+	                  .byHand = true,
+	                  .fromWorship = true,
+	                  .holdBeforePress = 2.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.forest_camera_taken_back",
 	    .name = "Forest: the camera taken back from its path",
 	    .facet = Facet::Miracles,

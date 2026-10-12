@@ -94,7 +94,7 @@ struct EngineConfig
 
 	float cameraXFov {70.0f};
 	float cameraNearClip {1.0f};
-	/// The game's graphics detail level, 0 to 6 (see graphics::detail_level)
+	/// The game's graphics detail level, 0 to 6, read once at start-up (see graphics::detail_level)
 	uint8_t detailLevel {4};
 
 	float guiScale {1.0f};

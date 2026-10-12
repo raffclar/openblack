@@ -20,6 +20,7 @@
 
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureRouteFollow.h"
 
 namespace openblack::ecs::components
 {
@@ -65,14 +66,12 @@ struct CreatureLocomotion
 	creature_locomotion::Ring ring {};
 	/// Whether it walks onto the destination itself, as to a point, rather than to the edge of the ring
 	bool ontoDestination {false};
-	/// The route being planned, and the route it follows
-	std::optional<creature_route::Planner> planner;
-	creature_route::Route route;
-	/// What the route it follows was planned round
-	std::vector<creature_route::Circle> plannedRound;
+	/// What it walks round, the searches for its route and the route it follows
+	creature_route::Follower follower;
+	/// A new walk's first turn of searching, which searches further and notes what it meets
+	bool firstSearchTurn {false};
+	/// A route was found while it stood, and it sets off once it has got up
 	bool routeReady {false};
-	/// Milliseconds left for planning before it gives up
-	float planningMs {0.0f};
 	/// Whether the last move failed: nowhere to stand there, or no way there
 	bool failed {false};
 	/// Turning to face a point without going anywhere

@@ -38,12 +38,10 @@ entt::entity StartPlannedTemple(entt::entity plan, float siteDesire);
 /// gets a site for its builders if it has none
 void SetBuilt(entt::entity building, float built);
 
-/// Builders add to how much of a building under construction is built, finishing it at all of it; a built building's
-/// builders mend it instead, adding as much to its life
+/// Builders add to how much of a building under construction is built, finishing it at all of it. On a built building
+/// short of its full life they add to its life instead, and once it is whole it is repaired: a repaired town building
+/// starts working again as when it was built (a graveyard counts a burial and takes its town back).
 void BuildBy(entt::entity building, float amount);
-
-/// A building mended back to its full life: its site goes and it stands whole again
-void Repaired(entt::entity building);
 
 /// A building going up gets a site for its builders, with a desire, its builders' places worked out round its model and,
 /// for a temple, its six piles of wood

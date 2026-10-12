@@ -318,8 +318,10 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	page.Add<StaticText>(DialogRect {.min = {50, 280}, .max = {750, 320}},
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_VIDEOCONTROL")), Layout::Centre);
 	// The detail: the button and the right arrow step it on, the left arrow back
-	// TODO(raffclar): the detail doesn't change anything yet. The original says a changed detail only takes effect the next
-	// time the game starts (HELP_TEXT_DIALOG_VIDEOCHANGE).
+	// The game reads the detail once, when it starts (HELP_TEXT_DIALOG_VIDEOCHANGE): a change here takes effect the next
+	// time it starts.
+	// TODO(raffclar): openblack keeps no settings between runs yet, so the choice is lost when the game closes; start the
+	// game with --detail-level to pick one.
 	auto& detail = page.Add<Button>(
 	    DialogRect {.min = {k_SelectorLeft, 350}, .max = {k_SelectorLeft + k_SelectorWidth, 350 + k_SelectorHeight}},
 	    _detailLabels.at(static_cast<size_t>(_settings.detail)), k_Mid);

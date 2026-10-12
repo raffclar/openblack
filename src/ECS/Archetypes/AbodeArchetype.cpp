@@ -33,6 +33,7 @@
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -212,8 +213,12 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 		AddStoragePitComponents(entity, mesh, info, position, yAngleRadians, foodAmount, woodAmount);
 		break;
 	case AbodeType::TownCentre:
-		// A town centre standing built carries its town's totem
+		// A town centre standing built carries its town's totem, and its stone hands show the miracles its town offers
 		VillageTotemArchetype::Create(entity, info);
+		if (Locator::spellIconSystem::has_value())
+		{
+			Locator::spellIconSystem::value().CentreWorking(entity);
+		}
 		break;
 	case AbodeType::Graveyard:
 		// A graveyard standing built works at once, its first grave shown

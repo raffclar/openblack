@@ -54,8 +54,8 @@ public:
 	[[nodiscard]] virtual std::optional<float> PartialShare(entt::entity building) const = 0;
 	/// Whether the object is drawn whole as any other: not a building drawn only as far up as it is built or repaired
 	[[nodiscard]] virtual bool DrawsWhole(entt::entity object) const = 0;
-	/// A building mended back to its full life is drawn whole again, its broken model gone
-	virtual void Mended(entt::entity building) = 0;
+	/// A building repaired whole is drawn whole again: what was broken off it is mended
+	virtual void Repaired(entt::entity building) = 0;
 	/// A new land: every building whole again
 	virtual void Reset() = 0;
 };

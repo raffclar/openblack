@@ -225,6 +225,29 @@ void Finish(entt::entity building)
 	}
 }
 
+/// A built building is repaired whole: its site for the repair goes, it is drawn whole again, and a town's building
+/// starts working again as it did when it was first built
+void Repaired(entt::entity building)
+{
+	auto& registry = Entities();
+	registry.Remove<RepairSite>(building);
+	construction::CloseSite(building);
+	if (Locator::buildingDamageSystem::has_value())
+	{
+		Locator::buildingDamageSystem::value().Repaired(building);
+	}
+	if (!TownOf(building).has_value())
+	{
+		return;
+	}
+	// A repaired graveyard counts a burial and takes its town back if the town has none
+	graveyards::StartsWorking(building);
+	// A repaired crèche takes its town back if the town has none
+	creches::StartsWorking(building);
+	// TODO(villager-life): a repaired house takes its people in again and its town reacts to it working
+	registry.SetDirty();
+}
+
 void Apply(entt::entity building, building_construction::Progress progress)
 {
 	if (progress.finished)
@@ -324,15 +347,6 @@ void construction::BuildBy(entt::entity building, float amount)
 	{
 		return;
 	}
-	// A built building is mended instead: its life goes up by the same share until it is whole again
-	if (IsBuilt(building))
-	{
-		if (world_objects::LifeOf(building) < 1.0f && world_objects::IncreaseLife(building, amount) >= 1.0f)
-		{
-			Repaired(building);
-		}
-		return;
-	}
 	// A worship site goes up with its altar, and its worship sites keep count of it
 	if (registry.AllOf<WorshipSite>(building))
 	{
@@ -342,7 +356,23 @@ void construction::BuildBy(entt::entity building, float amount)
 		}
 		return;
 	}
-	Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
+	if (!IsBuilt(building))
+	{
+		Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
+		return;
+	}
+	// A built building short of its full life is mended instead, and repaired once whole
+	const float life = world_objects::LifeOf(building);
+	const auto mending = building_construction::RepairBy(life, amount);
+	if (mending.life == life)
+	{
+		return;
+	}
+	world_objects::IncreaseLife(building, mending.life - life);
+	if (mending.repaired)
+	{
+		Repaired(building);
+	}
 }
 
 namespace
@@ -396,18 +426,6 @@ building_site::Places PlacesRound(entt::entity building)
 	return building_site::OutlinePlaces(triangles, matrix, box.Center(), reach);
 }
 } // namespace
-
-void construction::Repaired(entt::entity building)
-{
-	auto& registry = Entities();
-	CloseSite(building);
-	registry.Remove<RepairSite>(building);
-	if (Locator::buildingDamageSystem::has_value())
-	{
-		Locator::buildingDamageSystem::value().Mended(building);
-	}
-	registry.SetDirty();
-}
 
 void construction::OpenSite(entt::entity building, float desire)
 {

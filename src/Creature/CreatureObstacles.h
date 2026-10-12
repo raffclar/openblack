@@ -22,6 +22,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureRoute.h"
+#include "Enums.h"
 
 /// What stands in a walking creature's way, and the circles it plans its route round.
 ///
@@ -56,6 +57,8 @@ enum class Avoidance : uint8_t
 	Burning,
 	/// Another creature: only while it isn't walking along a route of its own
 	Creature,
+	/// A shield: another player's, unless a script controls the creature
+	Shield,
 };
 
 /// The circles a thing is planned round with
@@ -84,6 +87,8 @@ struct Walker
 	/// How far round its middle the creature reaches
 	float radius;
 	bool scriptControlled;
+	/// The player it belongs to
+	PlayerNames owner;
 };
 
 /// A thing that may stand in the creature's way
@@ -112,6 +117,8 @@ struct Thing
 	/// A temple: its player's alignment, and which of the six places round it have a worship site
 	float playerAlignment;
 	std::array<bool, 6> worshipSites;
+	/// The player it belongs to, which matters for shields
+	PlayerNames owner;
 };
 
 /// Anything burning is kept this much further off

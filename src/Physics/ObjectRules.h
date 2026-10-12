@@ -151,6 +151,13 @@ enum class TreePlace : uint8_t
 	Still,
 };
 
+/// Only a tree standing in the land sways in the wind and bends away from the hand and creatures; one out of it (pulled,
+/// held, carried, or in the physics, moving or still) is drawn as it is placed
+[[nodiscard]] constexpr bool SwaysAndBends(TreePlace place)
+{
+	return place == TreePlace::InTheLand;
+}
+
 /// The roots a moving tree has drawn where it has got to between turns are this share of its model's half width
 inline constexpr float k_MovingRootsScale = 0.2f;
 

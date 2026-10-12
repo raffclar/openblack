@@ -189,6 +189,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -216,6 +217,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
@@ -834,7 +836,8 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 			return std::nullopt;
 		}
 		const auto [eye, nearPoint] = camera.OnNearPlane(pixel / size);
-		return Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint, true);
+		return Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint,
+		                                                      ecs::systems::PickingSystemInterface::Sea::Anywhere);
 	};
 	// A point of the screen as far in front of the camera as another point
 	frame.view.atDepthOf = [rayAt, forward = camera.GetForward()](glm::vec2 pixel, glm::vec3 sameDepthAs) {
@@ -1079,7 +1082,7 @@ void Game::ProcessHandToolTipTurn()
 		if (const auto amount = Locator::handGrabSystem::value().TakeAmountToolTip(); amount.has_value())
 		{
 			const auto held = gui::world_tooltip::HeldAmount(*amount);
-			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, static_cast<float>(held.first), std::nullopt, true);
+			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
 		}
 	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
@@ -1129,11 +1132,8 @@ void Game::ProcessHandToolTipTurn()
 			}
 			else
 			{
-				toolTips.SubmitNumbered(
-				    submission.numbers.index, submission.action, static_cast<float>(submission.numbers.first),
-				    submission.numbers.second.has_value() ? std::optional(static_cast<float>(*submission.numbers.second))
-				                                          : std::nullopt,
-				    submission.force);
+				toolTips.SubmitNumbered(submission.numbers.index, submission.action, submission.numbers.first,
+				                        submission.numbers.second, submission.force);
 			}
 		}
 	}
@@ -3006,6 +3006,7 @@ bool Game::Initialize() noexcept
 		settings.sfxVolume = audio.GetSfxVolume();
 		settings.musicVolume = audio.GetMusicVolume();
 		settings.leftHandedHand = !Locator::config::value().rightHandedHand;
+		settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
 		_interface = gui::GameInterface::Create(gui::ToUtf16(user != nullptr ? user : "Player"), std::move(settings));
 		if (!_interface)
 		{
@@ -4629,6 +4630,11 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	magic.UpdateHand(frame, HandStepSeconds());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
+	// The seeds above the stone hands and worship icons spin as the globes' do
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().Update(deltaSeconds);
+	}
 }
 
 void Game::PlayHandGrabSound()
