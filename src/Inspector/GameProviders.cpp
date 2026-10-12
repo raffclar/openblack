@@ -928,7 +928,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              return QueryResult::Value(std::move(result));
 	              }));
 	provider->Add(Query("animal",
-	                    "An animal: its kind, state, clip, flock and town, its kind's radius, where it moves to, whether "
+	                    "An animal: its kind, state (and the game's number of the state it is in for itself), clip, flock "
+	                    "and town, its kind's radius, where it moves to, whether "
 	                    "a creature fears it, and a grazer's needs",
 	                    {IdParameter("The animal's entity id")}),
 	              Serve<Locator::animalSystem>(
@@ -943,6 +944,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  Json result = {{"id", ToId(*entity)},
 		                                 {"kind", static_cast<int>(animal.type)},
 		                                 {"state", static_cast<int>(animal.state)},
+		                                 {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
 		                                 {"turns_in_state", animal.turnsInState},
 		                                 {"clip", static_cast<int>(animal.animation)},
 		                                 {"speed", animal.move.speed},

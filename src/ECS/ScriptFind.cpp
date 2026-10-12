@@ -243,6 +243,17 @@ entt::entity script_find::FindNearest(const map_coords::MapCoords& from, float r
 	return nearest;
 }
 
+uint32_t script_find::TownIdFromScript(float id)
+{
+	// Past the range of a whole number the game's conversion gives its "indefinite" value, the lowest one
+	constexpr float k_Limit = 2147483648.0f;
+	if (!(id > -k_Limit && id < k_Limit))
+	{
+		return static_cast<uint32_t>(std::numeric_limits<int32_t>::min());
+	}
+	return static_cast<uint32_t>(static_cast<int32_t>(id));
+}
+
 entt::entity script_find::FindNearestTown(const map_coords::MapCoords& from, float reach, const std::vector<Candidate>& towns)
 {
 	entt::entity nearest = entt::null;

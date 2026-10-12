@@ -76,6 +76,14 @@ bool animals::WithinStep(glm::ivec2 position, glm::ivec2 goal, uint16_t speed)
 	return dx * dx + dz * dz <= r * r;
 }
 
+bool animals::AreWeThere(glm::ivec2 position, glm::ivec2 goal, uint16_t speed)
+{
+	const auto dx = static_cast<float>(position.x - goal.x);
+	const auto dz = static_cast<float>(position.y - goal.y);
+	const auto r = static_cast<float>(speed);
+	return dx * dx + dz * dz < r * r;
+}
+
 namespace
 {
 /// The turn towards the goal at the start of a turn's step, and the step that heading makes

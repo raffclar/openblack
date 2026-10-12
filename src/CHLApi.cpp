@@ -2116,7 +2116,25 @@ struct ScriptFindRequest
 	map_coords::MapCoords at;
 	std::optional<float> radius;
 	bool excludingScripted;
+	/// Only livings in this state for themselves (the game's number), whatever their distance in the cells looked at.
+	/// A living's state is a byte, so a number past 255 is never matched.
+	std::optional<uint32_t> finalState;
 };
+
+/// The game's number for the state a living thing is in for itself, none for what isn't a villager or an animal
+static std::optional<uint8_t> FinalGameStateOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (const auto* action = registry.TryGet<const ecs::components::LivingAction>(thing);
+	    action != nullptr && registry.AllOf<ecs::components::Villager>(thing) && Locator::livingActionSystem::has_value())
+	{
+		return static_cast<uint8_t>(Locator::livingActionSystem::value().VillagerGetFinalState(*action));
+	}
+	if (registry.AllOf<ecs::components::Animal>(thing) && Locator::animalSystem::has_value())
+	{
+		return Locator::animalSystem::value().FinalGameStateOf(thing);
+	}
+	return std::nullopt;
+}
 
 /// Where a thing is measured from by the scripts' searches
 static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, entt::entity entity)
@@ -2146,6 +2164,14 @@ static std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const Scrip
 		if (!kind.has_value() || !ecs::script_find::Matches(*kind, request.type, request.subtype))
 		{
 			continue;
+		}
+		if (request.finalState.has_value())
+		{
+			const auto state = FinalGameStateOf(registry, thing);
+			if (!state.has_value() || static_cast<uint32_t>(*state) != *request.finalState)
+			{
+				continue;
+			}
 		}
 		const auto at = ScriptFindPosition(registry, thing);
 		if (request.radius.has_value() && gutils::GetDistanceInMetres(request.at, at) > *request.radius)
@@ -2183,9 +2209,10 @@ static entt::entity FindScriptTown(const map_coords::MapCoords& at, float reach)
 }
 
 /// The thing a script's search finds, taken into the scripts' table, or none. Types with no search (markers, dances,
-/// flocks and two unused ones) and types out of range are an error; a creature's search isn't written yet
+/// flocks and two unused ones) and types out of range are an error; a creature's search isn't written yet. A search for
+/// livings in a state looks through the cells within the radius but doesn't measure the distance of what it finds there.
 static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec3& position, std::optional<float> radius,
-                                  bool excludingScripted)
+                                  bool excludingScripted, std::optional<uint32_t> inState = std::nullopt)
 {
 	constexpr int32_t k_LastFindType = 41;
 	if (type < 1 || type > k_LastFindType)
@@ -2218,8 +2245,12 @@ static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec
 	}
 	else
 	{
-		const ScriptFindRequest request {
-		    .type = objectType, .subtype = subtype, .at = at, .radius = radius, .excludingScripted = excludingScripted};
+		const ScriptFindRequest request {.type = objectType,
+		                                 .subtype = subtype,
+		                                 .at = at,
+		                                 .radius = inState.has_value() ? std::nullopt : radius,
+		                                 .excludingScripted = excludingScripted,
+		                                 .finalState = inState};
 		found = ecs::script_find::FindNearest(at, radius.value_or(ecs::script_find::k_AtReach),
 		                                      [&request](glm::ivec2 cell) { return ScriptFindCandidates(request, cell); });
 	}
@@ -2404,6 +2435,15 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 		if (living.VillagerCanBeDirected(object))
 		{
 			living.VillagerScriptMoveTo(object, glm::vec2(position.x, position.z));
+		}
+		return;
+	}
+	if (Locator::entitiesRegistry::value().AllOf<ecs::components::Animal>(object))
+	{
+		// An animal walks there and is held still for the script, or is held at once when already there
+		if (Locator::animalSystem::has_value())
+		{
+			Locator::animalSystem::value().ScriptMoveTo(object, glm::vec2(position.x, position.z));
 		}
 		return;
 	}
@@ -2858,8 +2898,8 @@ void FlockDetach() // 038 FLOCK_DETACH
 		const auto* person = registry.Valid(object) ? registry.TryGet<const ecs::components::Villager>(object) : nullptr;
 		if (person != nullptr && person->town == container)
 		{
-			// TODO(opening): the villager leaves the town altogether
-			NotImplemented();
+			// The villager leaves the town altogether, and the script is given nothing back
+			Locator::townSystem::value().RemoveVillager(object);
 			Pusho(0);
 			return;
 		}
@@ -3504,15 +3544,67 @@ void SetGamespeed() // 066 SET_GAMESPEED
 
 void CallInNear() // 067 CALL_IN_NEAR
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto radius = Popf();
-	// const auto pos = PopVec();
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	const auto excludingScripted = Pop().intVal != 0;
+	const auto radius = Popf();
+	const auto position = PopVec();
+	const auto container = PopObject();
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	// Not finding one is no mistake: the Pied Piper asks every few seconds for a child near him. Only the closest tracing
+	// tells of it
+	const auto notFound = [type, subtype]() {
+		SPDLOG_LOGGER_TRACE(spdlog::get("scripting"), "Cannot find in Near. {}.{}", type, subtype);
+		Pusho(0);
+	};
+	if (container == entt::null || !registry.Valid(container))
+	{
+		notFound();
+		return;
+	}
+	if (!IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Cannot look in object");
+		notFound();
+		return;
+	}
+	const auto objectType = static_cast<ObjectType>(type);
+	if (registry.AllOf<ecs::components::Town>(container))
+	{
+		if (objectType == ObjectType::Animal)
+		{
+			// TODO(town-script-natives): a town's animals, its flocks' in the order it took them; no script asks for them
+			notFound();
+			return;
+		}
+		if (objectType != ObjectType::Villager && objectType != ObjectType::VillagerChild)
+		{
+			ScriptMessage("Looking for strange type in Town");
+			notFound();
+			return;
+		}
+	}
+	// The first of its things of the type and subtype within the radius of the place, passing over those a script holds
+	// when asked to
+	const auto at = map_coords::FromMetres({position.x, position.z});
+	for (const auto member : ContainerMembers(registry, container))
+	{
+		if (!registry.Valid(member) || !registry.AllOf<Transform>(member) ||
+		    (excludingScripted && registry.AllOf<ecs::components::InScript>(member)))
+		{
+			continue;
+		}
+		const auto kind = ecs::script_find::KindOf(registry, member);
+		if (!kind.has_value() || !ecs::script_find::Matches(*kind, objectType, subtype) ||
+		    gutils::GetDistanceInMetres(at, ScriptFindPosition(registry, member)) > radius)
+		{
+			continue;
+		}
+		Locator::scriptObjects::value().Register(member, false);
+		Pusho(static_cast<uint32_t>(member));
+		return;
+	}
+	notFound();
 }
 
 void OverrideStateAnimation() // 068 OVERRIDE_STATE_ANIMATION
@@ -6637,15 +6729,15 @@ void GetStoredCameraFocus() // 315 GET_STORED_CAMERA_FOCUS
 
 void CallNearInState() // 316 CALL_NEAR_IN_STATE
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto radius = Popf();
-	// const auto position = PopVec();
-	// const auto state = Pop().intVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The nearest living thing of the type and subtype in the state, in the cells within the radius of the place
+	const auto excludingScripted = Pop().intVal != 0;
+	const auto radius = Popf();
+	const auto position = PopVec();
+	const auto state = Pop().uintVal;
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	const auto found = FindForScript(type, subtype, position, radius, excludingScripted, state);
+	Pusho(found == entt::null ? 0u : static_cast<uint32_t>(found));
 }
 
 void SetCreatureSound() // 317 SET_CREATURE_SOUND
@@ -7084,11 +7176,22 @@ void StopScriptsInFilesExcluding() // 352 STOP_SCRIPTS_IN_FILES_EXCLUDING
 
 void CreateRandomVillagerOfTribe() // 353 CREATE_RANDOM_VILLAGER_OF_TRIBE
 {
-	// const auto position = PopVec();
-	// const auto tribe = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	const auto position = PopVec();
+	const auto tribe = Pop().intVal;
+	// Any of the tribe's kinds of villager, a grown-up, belonging to no town and left to decide for itself what to do
+	const auto draw = Locator::gameRandom::value().GameRand(script::create_rules::k_VillagersPerTribe);
+	const auto& infos = Locator::infoConstants::value().villager;
+	const auto row = script::create_rules::TribeVillagerRow(tribe, draw, infos.size());
+	if (!row.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Villager not created");
+		Pusho(0);
+		return;
+	}
+	const auto villager = VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(*row),
+	                                                infos.at(*row).grownUpAge, VillagerArchetype::Joins::Nobody);
+	RegisterCreated(villager);
+	Pusho(static_cast<uint32_t>(villager));
 }
 
 void ToggleLeash() // 354 TOGGLE_LEASH
@@ -7287,10 +7390,19 @@ void QueueComputerPlayerAction() // 367 QUEUE_COMPUTER_PLAYER_ACTION
 
 void GetTownWithId() // 368 GET_TOWN_WITH_ID
 {
-	// const auto id = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The town the land's script made with this number, whoever owns it now
+	const auto id = ecs::script_find::TownIdFromScript(Popf());
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(id);
+	if (found == towns.end() || !registry.Valid(found->second))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Town not found");
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found->second, false);
+	Pusho(static_cast<uint32_t>(found->second));
 }
 
 void SetDisciple() // 369 SET_DISCIPLE
