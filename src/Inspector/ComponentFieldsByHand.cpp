@@ -70,7 +70,9 @@ void openblack::inspector::reflection::RegisterHandWrittenFields(entt::meta_ctx&
 	Reflect<hand_grab::HandSpring>(context, ValueOnly {})
 	    .Property<&hand_grab::HandSpring::Position, nullptr>("position")
 	    .Property<&hand_grab::HandSpring::Velocity, nullptr>("velocity")
-	    .Property<&hand_grab::HandSpring::StepsTaken, nullptr>("stepsTaken");
+	    .Property<&hand_grab::HandSpring::StepsTaken, nullptr>("stepsTaken")
+	    .Property<&hand_grab::HandSpring::CountedMs, nullptr>("countedMs")
+	    .Property<&hand_grab::HandSpring::SteppedMs, nullptr>("steppedMs");
 	Reflect<sky_dome::Follow>(context, ValueOnly {})
 	    .Property<&sky_dome::Follow::Following, nullptr>("following")
 	    .Property<&sky_dome::Follow::RowsDone, nullptr>("rowsDone");
