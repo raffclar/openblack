@@ -95,6 +95,8 @@ constexpr uint32_t k_GlowFrames = 15;
 constexpr float k_GlowCycleMs = 500.0f;
 /// Half-bright orange, added to what is behind
 constexpr glm::vec4 k_GlowTint {193.0f / 255.0f, 129.0f / 255.0f, 25.0f / 255.0f, 128.0f / 255.0f};
+/// The symbol is drawn in yellow (0xFFFFFF00), whatever the player
+constexpr glm::vec4 k_SymbolTint {1.0f, 1.0f, 0.0f, 1.0f};
 /// The symbols are drawn from the leash sheet, eight to a row, as they are
 constexpr auto k_SymbolSheet = entt::hashed_string("raw/leash");
 constexpr auto k_SymbolSheetAlpha = entt::hashed_string("raw/leasha");
@@ -607,7 +609,7 @@ entt::entity MakeMark(entt::entity villager, bool symbol)
 	registry.Assign<Sprite>(entity, Sprite {.texture = textures.Handle(sheet)->GetNativeHandle(),
 	                                        .uvMin = glm::vec2(0.0f),
 	                                        .uvExtent = glm::vec2(1.0f / k_SheetCells),
-	                                        .tint = symbol ? glm::vec4(1.0f) : k_GlowTint,
+	                                        .tint = symbol ? k_SymbolTint : k_GlowTint,
 	                                        .additive = !symbol,
 	                                        .facesCamera = true,
 	                                        .alpha = textures.Handle(alpha)->GetNativeHandle()});
