@@ -53,6 +53,7 @@ public:
 	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const override;
 	bool GestureSpecialMove() override;
 	bool GestureSpell(MagicType type) override;
+	void DrawMarks(float realMs, const glm::vec3& eye) override;
 
 	[[nodiscard]] bool IsBlocking(entt::entity creature) const override;
 	void Recoil(entt::entity creature) override;
@@ -102,8 +103,10 @@ private:
 	void EndView();
 	/// Leaves the fight for good, its mind taking over again
 	void Leave(entt::entity creature);
-	/// Whether the line from the player's fighter to its opponent meets the opponent's body, as gestures need
-	[[nodiscard]] bool SeesOpponent(entt::entity creature) const;
+	/// Where the line from the player's fighter to its opponent meets the opponent's body, as gestures need
+	[[nodiscard]] std::optional<glm::vec3> SeesOpponent(entt::entity creature) const;
+	/// A move called by a gesture, queued with its sparkle when the fighter sees its opponent
+	bool GestureMove(const creature_fight::Move& move);
 
 	bool _angerStartsFights {true};
 	bool _cameraWatches {true};
@@ -128,6 +131,10 @@ private:
 	float _lookSeconds {0.0f};
 	/// Whether the player may leave the fight view, and it ends by itself (scripts may forbid it)
 	bool _fightExit {true};
+	/// A press on a body is held: the sparkle added last charges
+	bool _markHeld {false};
+	/// The sparkles flicker at most 60 times a second
+	creature_fight::marks::Pace _marksPace;
 	RandomStreamSource _random {RandomStream::CreatureFight};
 };
 

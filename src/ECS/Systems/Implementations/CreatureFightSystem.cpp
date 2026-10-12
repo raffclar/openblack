@@ -44,6 +44,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMode.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/FightMarks.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -78,6 +79,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingCircles.h"
@@ -94,6 +96,7 @@ using namespace openblack::ecs::components;
 using openblack::creature::CreatureRig;
 namespace fight = openblack::creature_fight;
 namespace feedback = openblack::creature_feedback;
+namespace marks = openblack::creature_fight::marks;
 using Pace = CreatureLocomotionSystemInterface::Pace;
 
 namespace
@@ -263,6 +266,75 @@ std::vector<feedback::Capsule> BodyOf(const ecs::Registry& registry, entt::entit
 	return feedback::BodyCapsules(animation->skeleton.parents, animation->boneMatrices,
 	                              creature::PlacementMatrix(transform->position, transform->rotation, transform->scale),
 	                              feedback::k_BodyRadiusShare * HeightOf(ShownSize(*body)));
+}
+
+/// The bones of a creature's body as posed, placed in the world
+std::vector<glm::mat4> BonesInWorld(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (animation == nullptr || transform == nullptr)
+	{
+		return {};
+	}
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	std::vector<glm::mat4> bones;
+	bones.reserve(animation->boneMatrices.size());
+	for (const auto& bone : animation->boneMatrices)
+	{
+		bones.push_back(placement * bone);
+	}
+	return bones;
+}
+
+/// A sparkle sitting where a point meets a creature's body, kept on the nearest bone so that it moves with the body
+marks::Mark MarkOnBody(const ecs::Registry& registry, entt::entity creature, const glm::vec3& point, marks::Anchor anchor)
+{
+	const auto bones = BonesInWorld(registry, creature);
+	const auto& parents = registry.Get<const CreatureAnimation>(creature).skeleton.parents;
+	const auto bone = marks::NearestBone(parents, bones, point);
+	if (!bone.has_value())
+	{
+		// No pose: kept in the creature's ground frame instead
+		const auto& transform = registry.Get<const Transform>(creature);
+		return {.anchor = anchor, .bone = 0, .local = point - transform.position};
+	}
+	return {.anchor = anchor, .bone = *bone, .local = marks::ToLocal(bones[*bone], point)};
+}
+
+/// Where a sparkle sits now, if what it sits on is still there
+std::optional<glm::vec3> MarkPosition(const ecs::Registry& registry, entt::entity self, entt::entity opponent,
+                                      const marks::Mark& mark)
+{
+	if (mark.anchor == marks::Anchor::Ground)
+	{
+		const auto* locomotion = registry.TryGet<const CreatureLocomotion>(self);
+		const auto& transform = registry.Get<const Transform>(self);
+		return marks::ToWorld(marks::GroundFrame(transform.position, locomotion != nullptr ? locomotion->heading : 0.0f),
+		                      mark.local);
+	}
+	const auto body = mark.anchor == marks::Anchor::Opponent ? opponent : self;
+	if (!registry.Valid(body) || !registry.AllOf<CreatureAnimation, Transform>(body))
+	{
+		return std::nullopt;
+	}
+	const auto bones = BonesInWorld(registry, body);
+	if (mark.bone >= bones.size())
+	{
+		return registry.Get<const Transform>(body).position + mark.local;
+	}
+	return marks::ToWorld(bones[mark.bone], mark.local);
+}
+
+/// The sound of the hand directing a fight: heard the same wherever the click was
+constexpr auto k_DirectSound = entt::hashed_string("InGame.sad/1");
+
+void PlayDirectSound()
+{
+	if (Locator::audio::has_value())
+	{
+		audio::PlayGameSoundEffect(k_DirectSound.value(), std::nullopt);
+	}
 }
 
 /// Sets a creature fizzing out of sight or back in
@@ -623,9 +695,49 @@ fight_view::Fighter ViewedFighter(const ecs::Registry& registry, entt::entity cr
 void CreatureFightSystem::Reset()
 {
 	_pressed.reset();
+	_markHeld = false;
 	EndView();
 	_lookSeconds = 0.0f;
 	_fightExit = true;
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().SetFightMarks({});
+	}
+}
+
+void CreatureFightSystem::DrawMarks(float realMs, const glm::vec3& eye)
+{
+	std::vector<particles::draw::FightMark> drawn;
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool step = _marksPace.Advance(realMs);
+	// Only the local player's creature shows its sparkles, for as long as it has an opponent
+	const auto self = PrimaryCreatureOf(registry, k_LocalPlayer);
+	auto* fighting = self.has_value() ? registry.TryGet<CreatureFighting>(*self) : nullptr;
+	if (fighting != nullptr && registry.Valid(fighting->opponent))
+	{
+		auto& list = fighting->fighter.marks;
+		if (step)
+		{
+			list.Animate();
+		}
+		const auto halfSize = ShownSize(registry.Get<const Creature>(*self));
+		const auto shown = list.Marks();
+		for (size_t place = 0; place < shown.size(); ++place)
+		{
+			const auto& mark = shown[place];
+			if (const auto at = MarkPosition(registry, *self, fighting->opponent, mark))
+			{
+				drawn.push_back({.position = marks::DrawnAt(*at, eye),
+				                 .halfSize = halfSize,
+				                 .uv = marks::FrameUv(mark.frame),
+				                 .colour = marks::Rgba(marks::ColourOf(place))});
+			}
+		}
+	}
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().SetFightMarks(std::move(drawn));
+	}
 }
 
 void CreatureFightSystem::UpdateView(float seconds)
@@ -980,9 +1092,9 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 	{
 		return false;
 	}
-	const auto& fighting = registry.Get<const CreatureFighting>(*self);
-	// Nothing more is taken while twelve moves wait
-	if (fighting.fighter.queue.Size() >= fight::MoveQueue::k_Capacity)
+	auto& fighting = registry.Get<CreatureFighting>(*self);
+	// Nothing more is taken while twelve sparkles show
+	if (fighting.fighter.marks.Full())
 	{
 		return false;
 	}
@@ -994,15 +1106,18 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 	const auto onSelf = feedback::RayHit(rayOrigin, rayDirection, BodyOf(registry, *self));
 
 	fight::Move move;
+	marks::Mark mark;
 	if (onOpponent.has_value() && (!onSelf.has_value() || *onOpponent <= *onSelf))
 	{
 		// High, in the middle or low by where on the opponent's body the press lands
 		const auto point = rayOrigin + (rayDirection * *onOpponent);
 		move = fight::AttackMove(fight::BandOf((point.y - opponentAt.y) / opponentHeight));
+		mark = MarkOnBody(registry, opponent, point, marks::Anchor::Opponent);
 	}
 	else if (onSelf.has_value())
 	{
 		move = fight::BlockMove();
+		mark = MarkOnBody(registry, *self, rayOrigin + (rayDirection * *onSelf), marks::Anchor::Self);
 	}
 	else
 	{
@@ -1019,7 +1134,13 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 		}
 		const auto heading = registry.Get<const CreatureLocomotion>(*self).heading;
 		move = fight::StepMove(fight::StepTowards(WorldToLocal(point - Flat(selfAt), heading)));
+		const glm::vec3 ground {point.x, GroundAt(point), point.y};
+		mark = {.anchor = marks::Anchor::Ground, .local = marks::ToLocal(marks::GroundFrame(selfAt, heading), ground)};
 	}
+	// The sparkle goes up first; a press on a body charges it while held, one on the ground doesn't
+	fighting.fighter.marks.Add(mark);
+	_markHeld = mark.anchor != marks::Anchor::Ground;
+	PlayDirectSound();
 	QueueMove(*self, move, fight::ReplacesQueue(button));
 	_pressed = Pressed {.creature = *self, .milliseconds = milliseconds, .turn = turn};
 	return true;
@@ -1033,6 +1154,7 @@ void CreatureFightSystem::Release(uint32_t milliseconds, uint32_t turn)
 	}
 	const auto pressed = *_pressed;
 	_pressed.reset();
+	_markHeld = false;
 	const auto realMs = milliseconds >= pressed.milliseconds ? milliseconds - pressed.milliseconds : 0u;
 	const auto turns = turn >= pressed.turn ? turn - pressed.turn : 0u;
 	ReleaseCharge(pressed.creature, fight::HeldMs(static_cast<float>(realMs), turns));
@@ -1049,7 +1171,7 @@ std::optional<fight::Tip> CreatureFightSystem::HandTip(std::optional<entt::entit
 	return fight::TipOver(under == self, under == opponent);
 }
 
-bool CreatureFightSystem::SeesOpponent(entt::entity creature) const
+std::optional<glm::vec3> CreatureFightSystem::SeesOpponent(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto opponent = registry.Get<const CreatureFighting>(creature).opponent;
@@ -1058,36 +1180,46 @@ bool CreatureFightSystem::SeesOpponent(entt::entity creature) const
 	const auto length = glm::distance(from, to);
 	if (length <= 0.0f)
 	{
+		return std::nullopt;
+	}
+	const auto direction = (to - from) / length;
+	const auto hit = feedback::RayHit(from, direction, BodyOf(registry, opponent));
+	if (!hit.has_value() || *hit > length)
+	{
+		return std::nullopt;
+	}
+	return from + (direction * *hit);
+}
+
+bool CreatureFightSystem::GestureMove(const fight::Move& move)
+{
+	const auto self = PlayersFighter();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!self.has_value() || registry.Get<const CreatureFighting>(*self).fighter.marks.Full())
+	{
 		return false;
 	}
-	const auto hit = feedback::RayHit(from, (to - from) / length, BodyOf(registry, opponent));
-	return hit.has_value() && *hit <= length;
+	const auto seen = SeesOpponent(*self);
+	if (!seen.has_value())
+	{
+		return false;
+	}
+	// Its sparkle sits where the line to the opponent meets its body; a gesture charges nothing
+	auto& fighting = registry.Get<CreatureFighting>(*self);
+	fighting.fighter.marks.Add(MarkOnBody(registry, fighting.opponent, *seen, marks::Anchor::Opponent));
+	_markHeld = false;
+	QueueMove(*self, move, false);
+	return true;
 }
 
 bool CreatureFightSystem::GestureSpecialMove()
 {
-	const auto self = PlayersFighter();
-	auto& registry = Locator::entitiesRegistry::value();
-	if (!self.has_value() || registry.Get<const CreatureFighting>(*self).fighter.queue.Size() >= fight::MoveQueue::k_Capacity ||
-	    !SeesOpponent(*self))
-	{
-		return false;
-	}
-	QueueMove(*self, {.kind = fight::Move::Kind::Special}, false);
-	return true;
+	return GestureMove({.kind = fight::Move::Kind::Special});
 }
 
 bool CreatureFightSystem::GestureSpell(MagicType type)
 {
-	const auto self = PlayersFighter();
-	auto& registry = Locator::entitiesRegistry::value();
-	if (!self.has_value() || registry.Get<const CreatureFighting>(*self).fighter.queue.Size() >= fight::MoveQueue::k_Capacity ||
-	    !SeesOpponent(*self))
-	{
-		return false;
-	}
-	QueueMove(*self, {.kind = fight::Move::Kind::Spell, .value = static_cast<uint32_t>(type)}, false);
-	return true;
+	return GestureMove({.kind = fight::Move::Kind::Spell, .value = static_cast<uint32_t>(type)});
 }
 
 bool CreatureFightSystem::IsBlocking(entt::entity creature) const
@@ -1810,6 +1942,17 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto milliseconds = gameTime.count();
 	UpdateView(milliseconds / 1000.0f);
+	// A press held on a body charges the sparkle added last
+	if (_markHeld)
+	{
+		if (const auto self = PrimaryCreatureOf(registry, k_LocalPlayer))
+		{
+			if (auto* held = registry.TryGet<CreatureFighting>(*self))
+			{
+				held->fighter.marks.Charge(milliseconds);
+			}
+		}
+	}
 	std::vector<entt::entity> fighters;
 	registry.Each<CreatureFighting>([&fighters](entt::entity entity, CreatureFighting& fighting) {
 		if (fighting.fighter.state != fight::State::Idle)
@@ -1997,8 +2140,14 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	    },
 	    direction);
 	victim.health = std::max(victim.health - result.damage, 0.0f);
-	// Getting hit takes away a charged blow still waiting
+	// Getting hit takes away a charged blow still waiting, and the sparkle of the move added last
+	const auto queuedBefore = victim.queue.Size();
 	victim.queue.CancelWaiting();
+	if (victim.queue.Size() != queuedBefore && victim.marks.Size() > 0)
+	{
+		victim.marks.DropNewest();
+		_markHeld = false;
+	}
 
 	auto& victimAnimation = registry.Get<CreatureAnimation>(opponent);
 	victimAnimation.wobble = {

@@ -54,6 +54,7 @@
 #include "Creature/CreatureTattoo.h"
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureWatching.h"
+#include "Creature/FightMarks.h"
 #include "Creature/LeashRope.h"
 #include "Creature/LeashRules.h"
 #include "Creature/PerceivedDesires.h"
@@ -1883,6 +1884,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fight::Fighter::landed>("landed")
 	    .Field<&openblack::creature_fight::Fighter::spell>("spell")
 	    .Field<&openblack::creature_fight::Fighter::queue>("queue")
+	    .Field<&openblack::creature_fight::Fighter::marks>("marks")
 	    .Field<&openblack::creature_fight::Fighter::health>("health")
 	    .Field<&openblack::creature_fight::Fighter::stamina>("stamina")
 	    .Field<&openblack::creature_fight::Fighter::control>("control")
@@ -1898,6 +1900,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fight::Reach::animation>("animation")
 	    .Field<&openblack::creature_fight::Reach::reach>("reach")
 	    .Field<&openblack::creature_fight::Reach::height>("height");
+	Reflect<openblack::creature_fight::marks::Mark>(context, ValueOnly {})
+	    .Field<&openblack::creature_fight::marks::Mark::anchor>("anchor")
+	    .Field<&openblack::creature_fight::marks::Mark::bone>("bone")
+	    .Field<&openblack::creature_fight::marks::Mark::local>("local")
+	    .Field<&openblack::creature_fight::marks::Mark::chargeMs>("chargeMs")
+	    .Field<&openblack::creature_fight::marks::Mark::frame>("frame");
 	Reflect<openblack::creature_fizz::Fizz>(context, ValueOnly {})
 	    .Field<&openblack::creature_fizz::Fizz::now>("now")
 	    .Field<&openblack::creature_fizz::Fizz::target>("target")
