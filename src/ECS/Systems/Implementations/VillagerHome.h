@@ -46,6 +46,8 @@ bool SetupMoveTo(components::LivingAction& action, glm::vec2 goal, VillagerState
 void SetupMobileMoveTo(components::LivingAction& action, glm::vec2 goal, WalkWay way = WalkWay::RoundThings);
 /// Whether the villager's walk has put it on a goal
 [[nodiscard]] bool WalkIsOverAt(entt::entity villager, glm::vec2 goal);
+/// Where the villager stands, in whole map units (a 65536th of a ten metre cell), as its walk holds it
+[[nodiscard]] glm::ivec2 WalkPosition(entt::entity villager);
 
 /// The villager goes into its abode, and isn't drawn while there
 void ArriveHome(entt::entity villager);
