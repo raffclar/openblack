@@ -33,7 +33,10 @@
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
@@ -301,6 +304,79 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 				DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
 				DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
 			}
+		}
+	});
+}
+
+void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
+{
+	const bool reflection = desc.viewId == RenderPass::Reflection;
+	if ((desc.viewId != RenderPass::Main && !reflection) ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()) || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	using ecs::components::IconSeed;
+	using ecs::components::TownCentreIcon;
+	using ecs::components::WorshipIcon;
+	const auto& registry = desc.entities;
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const bool haveRing = meshes.Contains(ecs::components::OneOffSpellSeed::k_RingMeshId.value());
+	const auto eye = desc.camera->GetOrigin();
+	const auto* objectProgram = _shaderManager->GetShader("Object");
+	const auto translucent = TranslucentPassOf(desc.viewId);
+	// The player an icon shows its miracle for: its town's, or its worship site's
+	const auto playerOf = [&registry](entt::entity icon) {
+		if (const auto* hand = registry.TryGet<const TownCentreIcon>(icon))
+		{
+			const auto* town = registry.Valid(hand->town) ? registry.TryGet<const ecs::components::Town>(hand->town) : nullptr;
+			return town != nullptr ? town->owner : PlayerNames::NEUTRAL;
+		}
+		if (const auto* site = registry.TryGet<const WorshipIcon>(icon))
+		{
+			const auto* component =
+			    registry.Valid(site->site) ? registry.TryGet<const ecs::components::WorshipSite>(site->site) : nullptr;
+			return component != nullptr ? component->player : PlayerNames::NEUTRAL;
+		}
+		return PlayerNames::NEUTRAL;
+	};
+	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
+		const auto player = playerOf(icon);
+		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL
+		                            ? Locator::alignmentSystem::value().GetPlayerAlignment(player)
+		                            : 0.0f;
+		DrawSeedModel(desc, {.seed = shown.seed,
+		                     .middle = shown.middle,
+		                     .scale = 1.0f,
+		                     .spin = shown.spin,
+		                     .phialPhase = shown.phialPhase,
+		                     .phialFrame = shown.phialFrame,
+		                     .phialAlpha = std::numeric_limits<uint8_t>::max(),
+		                     .ownerAlignment = alignment});
+		// A power-up level shown has its rings, each drawn twice over, added without writing depth, in the player's colour
+		const int rings = magic::visuals::RingCount(shown.powerUp);
+		if (!haveRing || rings <= 0)
+		{
+			return;
+		}
+		const auto ring = meshes.Handle(ecs::components::OneOffSpellSeed::k_RingMeshId.value());
+		const auto colour = ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(player)));
+		const float alpha = static_cast<float>(magic::visuals::RingAlpha(std::numeric_limits<uint8_t>::max())) / k_ByteMax;
+		for (int i = 0; i < rings; ++i)
+		{
+			const auto model = magic::visuals::RingModel(i, shown.ringSpin, shown.middle, 1.0f, eye);
+			L3DMeshSubmitDesc submitDesc = {};
+			submitDesc.viewId = translucent;
+			submitDesc.program = objectProgram;
+			submitDesc.modelMatrices = &model;
+			submitDesc.matrixCount = 1;
+			submitDesc.mirrored = reflection;
+			submitDesc.state = k_AddedState;
+			submitDesc.tint = glm::vec4(colour, alpha);
+			submitDesc.lightAdd = ColourOf(magic::visuals::k_RingSpecular);
+			submitDesc.sortDepth = zsort::Depth(shown.middle, eye);
+			DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
+			DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
 		}
 	});
 }

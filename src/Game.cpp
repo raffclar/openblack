@@ -189,6 +189,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -4632,6 +4633,11 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	magic.UpdateHand(frame, HandStepSeconds());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
+	// The seeds above the stone hands and worship icons spin as the globes' do
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().Update(deltaSeconds);
+	}
 }
 
 void Game::PlayHandGrabSound()

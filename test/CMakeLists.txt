@@ -787,3 +787,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_double_click_flight camera/test_double_click_flight.cpp
 )
+openblack_setup_and_add_test(test_spell_icons test_spell_icons.cpp)

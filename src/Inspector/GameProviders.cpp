@@ -323,6 +323,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
     LocatorCoverage {"villageTotemSystem", "living.totems"},
+    LocatorCoverage {"spellIconSystem", "town.spells"},
     LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
     LocatorCoverage {"videoSystem", "view.video"},
