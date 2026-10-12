@@ -46,6 +46,10 @@ public:
 	[[nodiscard]] float RadiusOf(entt::entity animal) const override;
 	[[nodiscard]] glm::vec3 MovementOf(entt::entity animal) const override;
 	void SetFlockCentre(entt::entity flock, glm::vec2 centre) override;
+	void MoveFlockPlace(entt::entity flock, glm::ivec2 place) override;
+	entt::entity SeparateIntoOwnFlock(entt::entity animal) override;
+	void SendToSlaughter(entt::entity animal, glm::vec2 goal) override;
+	[[nodiscard]] uint16_t SpeedOf(entt::entity animal) const override;
 	void KillByEffect(entt::entity animal, glm::vec3 position) override;
 	void SetDying(entt::entity animal) override;
 	void IntoHand(entt::entity animal) override;

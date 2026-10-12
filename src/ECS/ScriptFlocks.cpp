@@ -78,7 +78,7 @@ FlockMember& Membership(Registry& registry, entt::entity living)
 entt::entity script_flocks::Create(Registry& registry, const MapCoords& place)
 {
 	const auto flock = registry.Create();
-	registry.Assign<Flock>(flock, Flock {.place = place});
+	registry.Assign<Flock>(flock, Flock {.place = place, .savedPlace = place});
 	return flock;
 }
 
@@ -148,6 +148,14 @@ entt::entity script_flocks::Leader(const Registry& registry, entt::entity flock)
 
 bool script_flocks::AddLiving(Registry& registry, entt::entity flock, entt::entity living)
 {
+	// A shepherd joining another flock stops herding the one it had
+	if (const auto previous = FlockOf(registry, living); previous != entt::null && previous != flock)
+	{
+		if (auto& data = registry.Get<Flock>(previous); data.shepherd == living)
+		{
+			data.shepherd = entt::null;
+		}
+	}
 	// It leaves whatever flock it was in, this one too, and a flock left empty goes
 	Remove(registry, living, true);
 	if (!IsFlock(registry, flock) || IsMember(registry, flock, living))

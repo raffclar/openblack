@@ -56,9 +56,11 @@
 #include "VillagerHome.h"
 #include "VillagerHousewife.h"
 #include "VillagerMourning.h"
+#include "VillagerMoveToObject.h"
 #include "VillagerPhysics.h"
 #include "VillagerReactions.h"
 #include "VillagerScript.h"
+#include "VillagerShepherd.h"
 #include "VillagerShieldShelter.h"
 #include "VillagerTeleport.h"
 #include "VillagerWorship.h"
@@ -83,6 +85,8 @@ namespace villager_disciple_work = openblack::ecs::villager_disciple_work;
 namespace villager_food = openblack::ecs::villager_food;
 namespace villager_forester = openblack::ecs::villager_forester;
 namespace villager_farmer = openblack::ecs::villager_farmer;
+namespace villager_move_to_object = openblack::ecs::villager_move_to_object;
+namespace villager_shepherd = openblack::ecs::villager_shepherd;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_housewife = openblack::ecs::villager_housewife;
 namespace villager_mourning = openblack::ecs::villager_mourning;
@@ -218,7 +222,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_home::MoveToPos,
     },
-    /* MOVE_TO_OBJECT */ k_TodoEntry,
+    /* MOVE_TO_OBJECT */
+    VillagerStateTableEntry {
+        .state = &villager_move_to_object::MoveToObject,
+    },
     /* MOVE_ON_STRUCTURE */ k_TodoEntry,
     /* IN_SCRIPT */
     VillagerStateTableEntry {
@@ -528,15 +535,51 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* MAKE_SCARED_STIFF */ k_TodoEntry,
     /* SCARED_STIFF */ k_TodoEntry,
     /* WORSHIPPING_CREATURE */ k_TodoEntry,
-    /* SHEPHERD_LOOK_FOR_FLOCK */ k_TodoEntry,
-    /* SHEPHERD_MOVE_FLOCK_TO_WATER */ k_TodoEntry,
-    /* SHEPHERD_MOVE_FLOCK_TO_FOOD */ k_TodoEntry,
-    /* SHEPHERD_MOVE_FLOCK_BACK */ k_TodoEntry,
-    /* SHEPHERD_DECIDE_WHAT_TO_DO_WITH_FLOCK */ k_TodoEntry,
-    /* SHEPHERD_WAIT_FOR_FLOCK */ k_TodoEntry,
-    /* SHEPHERD_SLAUGHTER_ANIMAL */ k_TodoEntry,
-    /* SHEPHERD_FETCH_STRAY */ k_TodoEntry,
-    /* SHEPHERD_GOTO_FLOCK */ k_TodoEntry,
+    /* SHEPHERD_LOOK_FOR_FLOCK */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdLookForFlock,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_MOVE_FLOCK_TO_WATER */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdMoveFlockToWater,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_MOVE_FLOCK_TO_FOOD */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdMoveFlockToFood,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_MOVE_FLOCK_BACK */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdMoveFlockBack,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_DECIDE_WHAT_TO_DO_WITH_FLOCK */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdDecideWhatToDoWithFlock,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_WAIT_FOR_FLOCK */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdWaitForFlock,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_SLAUGHTER_ANIMAL */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdSlaughterAnimal,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_FETCH_STRAY */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdFetchStray,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_GOTO_FLOCK */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdGotoFlock,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
     /* HOUSEWIFE_AT_HOME */
     VillagerStateTableEntry {
         .state = &villager_housewife::AtHome,
@@ -755,9 +798,21 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* TAKE_WOOD_FROM_POT */ k_TodoEntry,
     /* TAKE_WOOD_FROM_TREE_FOR_BUILDING */ k_TodoEntry,
     /* TAKE_WOOD_FROM_POT_FOR_BUILDING */ k_TodoEntry,
-    /* SHEPHERD_TAKE_ANIMAL_FOR_SLAUGHTER */ k_TodoEntry,
-    /* SHEPHERD_TAKES_CONTROL_OF_FLOCK */ k_TodoEntry,
-    /* SHEPHERD_RELEASES_CONTROL_OF_FLOCK */ k_TodoEntry,
+    /* SHEPHERD_TAKE_ANIMAL_FOR_SLAUGHTER */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdTakeAnimalForSlaughter,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_TAKES_CONTROL_OF_FLOCK */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdTakesControlOfFlock,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
+    /* SHEPHERD_RELEASES_CONTROL_OF_FLOCK */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdReleasesControlOfFlock,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
     /* DANCE_BUT_NOT_WORSHIP */ k_TodoEntry,
     /* FAINTING_REACTION */ k_TodoEntry,
     /* START_CONFUSED_REACTION */ k_TodoEntry,
@@ -905,7 +960,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_breeding::ReactToBreeder,
     },
-    /* SHEPHERD_CHECK_ANIMAL_FOR_SLAUGHTER */ k_TodoEntry,
+    /* SHEPHERD_CHECK_ANIMAL_FOR_SLAUGHTER */
+    VillagerStateTableEntry {
+        .state = &villager_shepherd::ShepherdCheckAnimalForSlaughter,
+        .exitState = &villager_shepherd::ExitShepherding,
+    },
     /* INTERACT_DECIDE_WHAT_TO_DO_FOR_OTHER_VILLAGER */ k_TodoEntry,
     /* ARTIFACT_DANCE */
     VillagerStateTableEntry {

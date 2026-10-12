@@ -40,6 +40,7 @@
 #include "VillagerBuild.h"
 #include "VillagerFarmer.h"
 #include "VillagerHome.h"
+#include "VillagerShepherd.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -145,8 +146,10 @@ uint32_t villager_fisherman::CheckSatisfyFoodDesire(LivingAction& action)
 	const auto field = villager_farmer::FindBestField(action);
 	const work::FoodJobCandidate farming {
 	    .job = work::FoodJob::Field, .score = field.has_value() ? field->score : 0.0f, .found = field.has_value()};
-	// TODO(villager-jobs-1): the town's flocks for shepherds are weighed third; openblack has no shepherds yet
-	const std::array<work::FoodJobCandidate, 3> jobs {fishing, farming, work::FoodJobCandidate {.job = work::FoodJob::Flock}};
+	const auto flock = villager_shepherd::FindBestFlock(action);
+	const work::FoodJobCandidate herding {
+	    .job = work::FoodJob::Flock, .score = flock.has_value() ? flock->score : 0.0f, .found = flock.has_value()};
+	const std::array<work::FoodJobCandidate, 3> jobs {fishing, farming, herding};
 	const auto& info = InfoOf(person);
 	const auto room = static_cast<int16_t>(info.maxFoodCarried - static_cast<uint32_t>(person.foodHeld));
 	float storeNearness = 0.0f;
@@ -173,7 +176,7 @@ uint32_t villager_fisherman::CheckSatisfyFoodDesire(LivingAction& action)
 	case work::FoodJob::Field:
 		return villager_farmer::VillagerBecomesFarmer(action, field->field);
 	case work::FoodJob::Flock:
-		return 0;
+		return villager_shepherd::VillagerBecomesShepherd(action, flock->flock);
 	}
 	return 0;
 }

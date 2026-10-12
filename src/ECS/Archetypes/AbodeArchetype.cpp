@@ -30,8 +30,10 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Creches.h"
+#include "ECS/DrinkingWater.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
+#include "ECS/ShepherdRules.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -206,6 +208,12 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	// Create Fixed component with a 2d bounding circle
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);
+
+	// Every building of a town looks for water nearby when it is built, for its people's flocks to drink at
+	if (info.abodeType != AbodeType::Citadel)
+	{
+		ecs::drinking_water::FindFor(entity, ecs::shepherd_rules::k_HomeWaterReach);
+	}
 
 	switch (info.abodeType)
 	{
