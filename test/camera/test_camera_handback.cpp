@@ -269,7 +269,7 @@ class FlatLandPicking final: public MockPickingSystem
 {
 public:
 	[[nodiscard]] std::optional<glm::vec2> LandAtPixel(glm::u16vec2 /*screenCoord*/) const override { return std::nullopt; }
-	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 eye, glm::vec3 nearPoint, bool /*withSea*/) const override
+	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 eye, glm::vec3 nearPoint, Sea /*sea*/) const override
 	{
 		const auto direction = nearPoint - eye;
 		if (overSky || direction.y >= 0.0f)

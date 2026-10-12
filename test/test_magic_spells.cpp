@@ -846,3 +846,44 @@ TEST(SpellBehaviours, AMiracleWithoutAnEffectStartsWithoutActing)
 	EXPECT_TRUE(services.world.appliedAt.empty());
 	EXPECT_FALSE(spells::KeptByKind(services, spell));
 }
+
+TEST(SpellSeedRules, ASeedBoundToItsMiracleIsShownOnlyWhenMadeAtAnIconUntilTheMiracleCloses)
+{
+	const SeedWithSpell shown {.followsSpell = true, .hasIcon = true};
+	EXPECT_TRUE(ShownWithSpell(shown));
+	EXPECT_FALSE(ShownWithSpell({.followsSpell = true, .hasIcon = false}));
+	EXPECT_FALSE(ShownWithSpell({.followsSpell = false, .hasIcon = true}));
+	EXPECT_FALSE(ShownWithSpell({.followsSpell = true, .hasIcon = true, .spellClosedDown = true}));
+	EXPECT_FALSE(ShownWithSpell({.castInHand = true, .followsSpell = true, .hasIcon = true}));
+	EXPECT_FALSE(ShownWithSpell({.keptInHand = true, .followsSpell = true, .hasIcon = true}));
+}
+
+TEST(SpellSeedRules, AShownSeedOutOfInfluenceClosesItsMiracleDown)
+{
+	EXPECT_TRUE(ClosesOutOfInfluence(true, false, false));
+	EXPECT_FALSE(ClosesOutOfInfluence(true, true, false));
+	EXPECT_FALSE(ClosesOutOfInfluence(false, false, false));
+	EXPECT_FALSE(ClosesOutOfInfluence(true, false, true));
+}
+
+TEST(SpellSeedRules, AShownSeedSitsOnTheTallestStillThingWhoseCircleMeetsItsOwn)
+{
+	EXPECT_FLOAT_EQ(TopUnderSeed(1.0f, {}), 0.0f);
+	const std::vector<ThingUnderSeed> things {
+	    {.offset = {1.0f, 0.0f}, .radius = 1.0f, .top = 4.0f},
+	    {.offset = {0.0f, 0.5f}, .radius = 0.5f, .top = 9.0f, .living = true},
+	    {.offset = {0.0f, 0.5f}, .radius = 0.5f, .top = 8.0f, .moving = true},
+	    // The squares of the radii add to 2, the square of the distance is 2: not under it
+	    {.offset = {1.0f, 1.0f}, .radius = 1.0f, .top = 7.0f},
+	    {.offset = {0.0f, 1.0f}, .radius = 1.0f, .top = 3.0f},
+	};
+	EXPECT_FLOAT_EQ(TopUnderSeed(1.0f, things), 4.0f);
+}
+
+TEST(SpellSeedRules, TheForestSeedIsHiddenUntilPlantedThenRidesOverItsTallestTree)
+{
+	EXPECT_FLOAT_EQ(ForestSeedHeight(3.0f, std::nullopt), k_UnplantedForestSeedHeight);
+	EXPECT_FLOAT_EQ(k_UnplantedForestSeedHeight, -5.0f);
+	EXPECT_FLOAT_EQ(ForestSeedHeight(3.0f, 12.0f), 12.0f);
+	EXPECT_FLOAT_EQ(ForestSeedHeight(3.0f, 0.0f), 3.0f);
+}

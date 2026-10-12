@@ -189,6 +189,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -835,7 +836,8 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 			return std::nullopt;
 		}
 		const auto [eye, nearPoint] = camera.OnNearPlane(pixel / size);
-		return Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint, true);
+		return Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint,
+		                                                      ecs::systems::PickingSystemInterface::Sea::Anywhere);
 	};
 	// A point of the screen as far in front of the camera as another point
 	frame.view.atDepthOf = [rayAt, forward = camera.GetForward()](glm::vec2 pixel, glm::vec3 sameDepthAs) {
@@ -4631,6 +4633,11 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	magic.UpdateHand(frame, HandStepSeconds());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
+	// The seeds above the stone hands and worship icons spin as the globes' do
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().Update(deltaSeconds);
+	}
 }
 
 void Game::PlayHandGrabSound()

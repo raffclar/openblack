@@ -168,6 +168,7 @@
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/StoragePit.h"
@@ -623,11 +624,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLocomotion::destination>("destination")
 	    .Field<&components::CreatureLocomotion::ring>("ring")
 	    .Field<&components::CreatureLocomotion::ontoDestination>("ontoDestination")
-	    .Field<&components::CreatureLocomotion::planner>("planner")
-	    .Field<&components::CreatureLocomotion::route>("route")
-	    .Field<&components::CreatureLocomotion::plannedRound>("plannedRound")
+	    .Field<&components::CreatureLocomotion::follower>("follower")
+	    .Field<&components::CreatureLocomotion::firstSearchTurn>("firstSearchTurn")
 	    .Field<&components::CreatureLocomotion::routeReady>("routeReady")
-	    .Field<&components::CreatureLocomotion::planningMs>("planningMs")
 	    .Field<&components::CreatureLocomotion::failed>("failed")
 	    .Field<&components::CreatureLocomotion::facingOnly>("facingOnly")
 	    .Field<&components::CreatureLocomotion::following>("following")
@@ -1374,6 +1373,32 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellDispenser::effect>("effect")
 	    .Field<&components::SpellDispenser::building>("building");
 	Reflect<components::TestbedDispenser> {context};
+	Reflect<components::TownMagic>(context).Field<&components::TownMagic::held>("held");
+	Reflect<components::TownCentreIcon>(context)
+	    .Field<&components::TownCentreIcon::centre>("centre")
+	    .Field<&components::TownCentreIcon::town>("town")
+	    .Field<&components::TownCentreIcon::hand>("hand")
+	    .Field<&components::TownCentreIcon::seed>("seed")
+	    .Field<&components::TownCentreIcon::powerUps>("powerUps");
+	Reflect<components::CentreHands>(context).Field<&components::CentreHands::hands>("hands");
+	Reflect<components::SiteIcons>(context).Field<&components::SiteIcons::icons>("icons");
+	Reflect<components::WorshipIcon>(context)
+	    .Field<&components::WorshipIcon::site>("site")
+	    .Field<&components::WorshipIcon::seed>("seed")
+	    .Field<&components::WorshipIcon::charging>("charging")
+	    .Field<&components::WorshipIcon::powerUp>("powerUp")
+	    .Field<&components::WorshipIcon::charger>("charger")
+	    .Field<&components::WorshipIcon::chargeStartTurn>("chargeStartTurn")
+	    .Field<&components::WorshipIcon::store>("store")
+	    .Field<&components::WorshipIcon::seedOut>("seedOut");
+	Reflect<components::IconSeed>(context)
+	    .Field<&components::IconSeed::seed>("seed")
+	    .Field<&components::IconSeed::middle>("middle")
+	    .Field<&components::IconSeed::powerUp>("powerUp")
+	    .Field<&components::IconSeed::spin>("spin")
+	    .Field<&components::IconSeed::ringSpin>("ringSpin")
+	    .Field<&components::IconSeed::phialFrame>("phialFrame")
+	    .Field<&components::IconSeed::phialPhase>("phialPhase");
 	Reflect<components::SpellSeed>(context)
 	    .Field<&components::SpellSeed::seedType>("seedType")
 	    .Field<&components::SpellSeed::powerUp>("powerUp")
@@ -2071,8 +2096,18 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_route::Circle>(context, ValueOnly {})
 	    .Field<&openblack::creature_route::Circle::centre>("centre")
 	    .Field<&openblack::creature_route::Circle::radius>("radius");
+	Reflect<openblack::creature_route::Leg>(context, ValueOnly {})
+	    .Field<&openblack::creature_route::Leg::from>("from")
+	    .Field<&openblack::creature_route::Leg::to>("to")
+	    .Field<&openblack::creature_route::Leg::arc>("arc")
+	    .Field<&openblack::creature_route::Leg::heading>("heading")
+	    .Field<&openblack::creature_route::Leg::way>("way")
+	    .Field<&openblack::creature_route::Leg::onStartCircle>("onStartCircle")
+	    .Field<&openblack::creature_route::Leg::cost>("cost")
+	    .Field<&openblack::creature_route::Leg::round>("round")
+	    .Field<&openblack::creature_route::Leg::roundWay>("roundWay");
 	Reflect<openblack::creature_route::Route>(context, ValueOnly {})
-	    .Field<&openblack::creature_route::Route::points>("points")
+	    .Field<&openblack::creature_route::Route::legs>("legs")
 	    .Field<&openblack::creature_route::Route::segment>("segment")
 	    .Field<&openblack::creature_route::Route::travelled>("travelled");
 	Reflect<openblack::creature_script_play::Request>(context, ValueOnly {})

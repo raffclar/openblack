@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include <glm/geometric.hpp>
+
 #include "InfoConstants.h"
 
 using namespace openblack;
@@ -48,4 +50,40 @@ float magic::SeedPower(float store, float costToCreate)
 bool magic::SeedReadyAfter(uint32_t turnsInHand, float turnSeconds, float delaySeconds)
 {
 	return static_cast<float>(turnsInHand) * turnSeconds > delaySeconds;
+}
+
+bool magic::ShownWithSpell(const SeedWithSpell& seed)
+{
+	return !seed.castInHand && !seed.keptInHand && seed.followsSpell && !seed.spellClosedDown && seed.hasIcon;
+}
+
+bool magic::ClosesOutOfInfluence(bool shown, bool inInfluence, bool closedDown)
+{
+	return shown && !inInfluence && !closedDown;
+}
+
+float magic::TopUnderSeed(float seedRadius, std::span<const ThingUnderSeed> things)
+{
+	float top = 0.0f;
+	for (const auto& thing : things)
+	{
+		if (thing.living || thing.moving || !(thing.top > top))
+		{
+			continue;
+		}
+		if (glm::dot(thing.offset, thing.offset) < (seedRadius * seedRadius) + (thing.radius * thing.radius))
+		{
+			top = thing.top;
+		}
+	}
+	return top;
+}
+
+float magic::ForestSeedHeight(float topUnder, std::optional<float> tallestTree)
+{
+	if (!tallestTree.has_value())
+	{
+		return k_UnplantedForestSeedHeight;
+	}
+	return std::max(*tallestTree, topUnder);
 }
