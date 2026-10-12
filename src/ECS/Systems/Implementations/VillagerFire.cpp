@@ -415,6 +415,15 @@ bool InRange(entt::entity villager, entt::entity fire, float margin)
 	return distance > radius && distance < radius + margin;
 }
 
+/// Walks to a point to go into a state there. Like the game, it goes into the walk and the state it walks to at once, so
+/// the state it leaves hears where it is heading, not that it walks: leaving a fire's reaction to walk on with it keeps
+/// the reaction
+void WalkTo(LivingAction& action, glm::vec2 goal, VillagerStates destination)
+{
+	villager_home::SetupMobileMoveTo(action, goal, destination);
+	Living().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, destination);
+}
+
 /// Goes round the fire it is about to a point, then on into a state
 bool SetupMoveAroundFire(LivingAction& action, glm::vec2 point, VillagerStates then)
 {
@@ -559,7 +568,7 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 		                        ? GameFloatRandom(info.maxDistanceToRunAwayFromObject - info.minDistanceToRunAwayFromObject) +
 		                              info.minDistanceToRunAwayFromObject
 		                        : GameFloatRandom(k_SafeMargin) + reach->safeRadius;
-		villager_home::SetupMoveTo(action, FleeingPosition(here, reach->position, runTo), VillagerStates::ReactToFire);
+		WalkTo(action, FleeingPosition(here, reach->position, runTo), VillagerStates::ReactToFire);
 		SetStateSpeed(villager, VillagerStates::ReactToFire);
 		return 1;
 	}
@@ -702,7 +711,7 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 	{
 		target = ToCoords(state.walkTarget);
 	}
-	villager_home::SetupMoveTo(action, CoordsToMetres(target), VillagerStates::MoveAroundFire);
+	WalkTo(action, CoordsToMetres(target), VillagerStates::MoveAroundFire);
 	// The full speed of its state, wounds, town and its own way of going included
 	ecs::systems::villager_reactions::SetStateSpeed(villager, State(action, LivingAction::Index::Previous));
 	return 1;
@@ -787,7 +796,7 @@ uint32_t villager_fire::OnFire(LivingAction& action)
 		const float distance = GameFloatRandom(k_OnFireRunMore) + k_OnFireRun;
 		goal = CoordsToMetres(ToCoords(Across(here)) + PosFromAngle(angle, distance));
 	}
-	villager_home::SetupMoveTo(action, goal, VillagerStates::OnFire);
+	WalkTo(action, goal, VillagerStates::OnFire);
 	SetStateSpeed(villager, VillagerStates::OnFire);
 	if (State(action, LivingAction::Index::Previous) == VillagerStates::InvalidState)
 	{
