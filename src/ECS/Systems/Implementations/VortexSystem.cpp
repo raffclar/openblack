@@ -78,7 +78,10 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	const auto ground = Locator::terrainSystem::value().GetHeightAt({position.x, position.z});
 	const glm::vec3 centre {position.x, ground + altitude, position.z};
 	const auto entity = archetypes::VortexArchetype::Create(centre, type, info->initialState, Locator::time::value().GetTurn());
-	StartEffects(Locator::entitiesRegistry::value().Get<Vortex>(entity));
+	auto& vortex = Locator::entitiesRegistry::value().Get<Vortex>(entity);
+	// Until a script says otherwise, the animals that come out gather at the vortex itself
+	vortex.arrival.gatheringPlace = centre;
+	StartEffects(vortex);
 	return entity;
 }
 
@@ -194,6 +197,25 @@ bool VortexSystem::StartFadeOut(entt::entity vortex)
 	}
 	component->state = VortexStateType::FadeOut;
 	component->stateStartTurn = Locator::time::value().GetTurn();
+	return true;
+}
+
+bool VortexSystem::SetArrival(entt::entity vortex, const Vortex::Arrival& arrival)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(vortex))
+	{
+		return false;
+	}
+	auto* component = registry.TryGet<Vortex>(vortex);
+	if (component == nullptr)
+	{
+		return false;
+	}
+	if (component->type == VortexType::Out)
+	{
+		component->arrival = arrival;
+	}
 	return true;
 }
 

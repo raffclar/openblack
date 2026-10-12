@@ -1776,6 +1776,16 @@ void GetProperty() // 021 GET_PROPERTY
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
 		CannotGetProperty(prop);
 		return;
+	case script::ObjectPropertyType::CreatureCanGoThroughVortex:
+		// 1 when a script has let it through, else 0
+		if (const auto* creature = registry.TryGet<const ecs::components::Creature>(object); creature != nullptr)
+		{
+			Pushf(creature->mayGoThroughVortex ? 1.0f : 0.0f);
+			return;
+		}
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+		CannotGetProperty(prop);
+		return;
 	default:
 		// TODO(Daniels118): the other properties
 		NotImplemented(static_cast<int32_t>(prop));
@@ -1951,6 +1961,16 @@ void SetProperty() // 022 SET_PROPERTY
 		{
 			// The size spells take it no further
 			(prop == script::ObjectPropertyType::CreatureMinSize ? spells->smallestSize : spells->largestSize) = value;
+			return;
+		}
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+		CannotSetProperty(prop);
+		return;
+	case script::ObjectPropertyType::CreatureCanGoThroughVortex:
+		// Any value but 0 lets it through
+		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)
+		{
+			creature->mayGoThroughVortex = value != 0.0f;
 			return;
 		}
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
@@ -4205,11 +4225,47 @@ void ChangeCloudProperties() // 126 CHANGE_CLOUD_PROPERTIES
 
 void SetHeadingAndSpeed() // 127 SET_HEADING_AND_SPEED
 {
-	// const auto speed = Popf();
-	// const auto position = PopVec();
-	// const auto unk0 = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The thing is sent off towards the place at the speed: a thing at rest is thrown, tumbling at random, by no one; a
+	// thing already flying only changes its velocity
+	const auto speed = Popf();
+	const auto place = PopVec();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		return;
+	}
+	const auto* transform = registry.TryGet<const Transform>(object);
+	const auto velocity =
+	    script::property_rules::HeadingVelocity(transform != nullptr ? transform->position : glm::vec3(0.0f), place, speed);
+	if (Locator::weatherSystem::has_value() &&
+	    Locator::weatherSystem::value().ChangeWeatherThing(object, [](ecs::components::Storm&) {}))
+	{
+		// TODO(vortex-leave): a weather thing takes the velocity as the way it drifts each turn; openblack's weather
+		// things drift towards a destination instead
+		NotImplemented();
+		return;
+	}
+	if (!IsWorldObject(object) || transform == nullptr || !Locator::dynamicsSystem::has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not an object or weather for Physics");
+		return;
+	}
+	auto& dynamics = Locator::dynamicsSystem::value();
+	if (registry.AllOf<ecs::components::InPhysics>(object))
+	{
+		if (auto* entry = dynamics.Find(object); entry != nullptr && entry->body != nullptr)
+		{
+			entry->body->velocity = velocity;
+		}
+		return;
+	}
+	auto& random = Locator::gameRandom::value();
+	glm::vec3 spin;
+	spin.x = script::property_rules::HeadingSpin(random.GameFloatRand(script::property_rules::k_HeadingSpinDraw));
+	spin.y = script::property_rules::HeadingSpin(random.GameFloatRand(script::property_rules::k_HeadingSpinDraw));
+	spin.z = script::property_rules::HeadingSpin(random.GameFloatRand(script::property_rules::k_HeadingSpinDraw));
+	dynamics.InitialisePhysics(object, {.velocity = velocity, .spin = spin});
 }
 
 void StartGameSpeed() // 128 START_GAME_SPEED
@@ -5447,10 +5503,24 @@ void GameType() // 220 GAME_TYPE
 
 void GameSubType() // 221 GAME_SUB_TYPE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// The row of the thing's kind in its type's table, as a find or an is-of-type test matches it: a creature's species,
+	// a vortex's kind. A thing whose kind the game can't tell gives a number no kind has
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushi(0);
+		return;
+	}
+	const auto kind = ecs::script_find::KindOf(registry, object);
+	if (!kind.has_value() || !kind->subtype.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Unknown type for search");
+		Pushi(static_cast<int32_t>(ecs::script_find::k_NoSubtype));
+		return;
+	}
+	Pushi(static_cast<int32_t>(*kind->subtype));
 }
 
 void IsLeashed() // 222 IS_LEASHED
@@ -6756,16 +6826,41 @@ void IsPlayingJcSpecial() // 327 IS_PLAYING_JC_SPECIAL
 	Pushb(special != k_LiftComeRound || Locator::introSystem::value().HasLiftFinished());
 }
 
+/// Whether a script's thing is one in the world with a component
+template <typename Component>
+static bool IsThingWith(entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	return thing != entt::null && registry.Valid(thing) && registry.AllOf<Component>(thing);
+}
+
 void VortexParameters() // 328 VORTEX_PARAMETERS
 {
-	// const auto flock = Pop().uintVal;
-	// const auto radius = Popf();
-	// const auto distance = Popf();
-	// const auto position = PopVec();
-	// const auto town = Pop().uintVal;
-	// const auto vortex = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A vortex that leads into the land is told the town those who come out join, where its animals gather in a flock,
+	// kept within a distance and a radius, and the flock its people follow. A thing given for the town or the flock that
+	// is none takes their place as nothing. Without a vortex nothing is set; a vortex without a town is still told the rest
+	const auto flock = PopObject();
+	const auto radius = Popf();
+	const auto distance = Popf();
+	const auto place = PopVec();
+	const auto town = PopObject();
+	const auto vortex = PopObject();
+	const bool isVortex = IsThingWith<ecs::components::Vortex>(vortex);
+	const bool isTown = IsThingWith<ecs::components::Town>(town);
+	if (!isTown || !isVortex)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not valid");
+		if (!isVortex)
+		{
+			return;
+		}
+	}
+	Locator::vortexSystem::value().SetArrival(vortex,
+	                                          {.town = isTown ? town : entt::null,
+	                                           .gatheringPlace = place,
+	                                           .flockDistance = distance,
+	                                           .flockRadius = radius,
+	                                           .flock = IsThingWith<ecs::components::Flock>(flock) ? flock : entt::null});
 }
 
 void LoadCreature() // 329 LOAD_CREATURE
