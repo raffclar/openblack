@@ -800,3 +800,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_level_script_match test_level_script_match.cpp
 )
+openblack_setup_and_add_test(test_creature_touch test_creature_touch.cpp)

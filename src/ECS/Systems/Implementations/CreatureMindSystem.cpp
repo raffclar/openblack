@@ -1373,6 +1373,12 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	{
 		return false;
 	}
+	// The face is pulled even when the body is too far into something to take the action
+	if (face.has_value())
+	{
+		body->face =
+		    creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, face->cue);
+	}
 	// Not while it is only just into something
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
@@ -1405,11 +1411,6 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
 	body->body = *played;
-	if (face.has_value())
-	{
-		body->face =
-		    creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, face->cue);
-	}
 	// What it was doing is over; it decides afresh once the action has played
 	Abandon(*mind);
 	mind->idle.agenda.resize(std::min(mind->idle.agenda.size(), mind->idle.step));

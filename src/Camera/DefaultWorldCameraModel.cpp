@@ -1193,6 +1193,20 @@ void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 	Woosh();
 }
 
+void DefaultWorldCameraModel::FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh)
+{
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+		origin = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, focus);
+	}
+	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
+	if (woosh)
+	{
+		Woosh();
+	}
+}
+
 void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
 {
 	_currentOrigin = origin;

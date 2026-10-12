@@ -76,6 +76,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureHandRules.h"
+#include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FrameStatsLog.h"
 #include "Debug/TestbedDispenserGrid.h"
@@ -1088,6 +1089,11 @@ void Game::ProcessHandToolTipTurn()
 	    OnScreen(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem).position).has_value())
 	{
 		toolTips.Force(ecs::village_totem::k_ShareToolTip, tip->percent);
+	}
+	// Let go of the creature having told it next to nothing, the hand offers to focus on it, over anything else
+	if (Locator::creatureHandSystem::value().TakeFocusTip())
+	{
+		toolTips.Force(creature_leash_orders::k_FocusCreatureTip, 1.0f);
 	}
 	// As the hand takes food or wood from a pile, it shows the amount it holds, over anything else
 	if (Locator::handGrabSystem::has_value())
@@ -2182,7 +2188,7 @@ bool Game::Update() noexcept
 						if (hands.GetCreature().has_value())
 						{
 							_handOnCreature = hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
-							                               HandStepSeconds());
+							                               static_cast<float>(screenSize.x), HandStepSeconds());
 						}
 						if (_handOnCreature.has_value())
 						{
@@ -2368,9 +2374,18 @@ bool Game::Update() noexcept
 			// On a creature, it strokes it or shows its slap
 			if (_handOnCreature.has_value())
 			{
-				cycle = _handOnCreature->slapping ? HandCycle::Slap
-				        : _handOnCreature->onBody ? HandCycle::Stroke
-				                                  : HandCycle::Wiggle;
+				switch (_handOnCreature->cycle)
+				{
+				case creature_feedback::TouchCycle::Wiggle:
+					cycle = HandCycle::Wiggle;
+					break;
+				case creature_feedback::TouchCycle::Tickle:
+					cycle = HandCycle::Tickle;
+					break;
+				case creature_feedback::TouchCycle::Slap:
+					cycle = HandCycle::Slap;
+					break;
+				}
 			}
 			// Pulling a thing free, the hand takes the pose the thing is held with
 			std::optional<ecs::systems::HandGrabSystemInterface::PullPose> pull;
@@ -2431,7 +2446,9 @@ bool Game::Update() noexcept
 			{
 				const auto distance = glm::distance(camera.GetOrigin(), handTransform->position);
 				// The game mirrors the mesh's left hand along its x axis to make a right hand
-				const auto scale = _handAnimation->ScaleAtDistance(distance);
+				// Held to a creature, it is drawn larger with the creature's size
+				const auto scale =
+				    _handAnimation->ScaleAtDistance(distance) * (_handOnCreature.has_value() ? _handOnCreature->scale : 1.0f);
 				handTransform->scale = glm::vec3(config.rightHandedHand ? -scale : scale, scale, scale);
 				// Showing it turns the camera as it drags the land, the hand is drawn a third of its height higher, the
 				// place it holds staying where it is
