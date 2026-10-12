@@ -35,6 +35,8 @@ public:
 	[[nodiscard]] uint32_t Turn() const override;
 	entt::entity MakeFoodPot(glm::vec3 position, float yAngle) override;
 	void PowerUpArtefacts(entt::entity site, uint32_t dancers) override;
+	void OpenBuildingSite(entt::entity site, entt::entity town, float desire) override;
+	void CloseBuildingSite(entt::entity site) override;
 };
 
 } // namespace openblack::ecs::systems

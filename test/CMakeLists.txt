@@ -776,3 +776,7 @@ openblack_setup_and_add_test(test_script_weather test_script_weather.cpp)
 openblack_setup_and_add_test(test_challenge_records test_challenge_records.cpp)
 target_link_libraries(test_challenge_records PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_temple_shadow_layout test_temple_shadow_layout.cpp)
+openblack_setup_and_add_test(
+  test_worship_site_construction test_worship_site_construction.cpp
+)
+openblack_setup_and_add_test(test_tree_bend test_tree_bend.cpp)
