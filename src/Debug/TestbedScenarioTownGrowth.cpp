@@ -93,10 +93,11 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .id = "town.mending",
 	    .name = "A town rebuilding a building it lost",
 	    .facet = Facet::Objects,
-	    .description = "A Celtic town of the player's with a village centre, a full storage pit and three built huts, "
-	                   "room enough for its four couples. Where the middle hut of the front row stood is the town's plan "
+	    .description = "A Celtic town with a village centre, a full storage pit and three built huts for its four "
+	                   "couples. Where the middle hut of the front row stood is the town's plan "
 	                   "of it, a hut that had been finished and went from the land. Best watched at game speed 4.",
-	    .expected = "At its first turn the town puts the lost hut up for mending without anyone asking: it appears at "
+	    .expected = "At its first turn the town puts the lost hut up for mending before any villager asks it to (its "
+	                "askedToBuildTurn stays empty): it appears at "
 	                "once with nothing built and a site, and builders fetch wood from the pit and raise it again. A "
 	                "built hut hurt with the inspector gets a site at once, as before; the town puts up no more than "
 	                "one building a turn of its own accord.",
@@ -127,7 +128,7 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .id = "town.food_jobs",
 	    .name = "A town out of food, with fields",
 	    .facet = Facet::Objects,
-	    .description = "A Celtic town of the player's with a village centre, three huts for its four couples, a storage "
+	    .description = "A Celtic town with a village centre, three huts for its four couples, a storage "
 	                   "pit with no food in it (wood plenty) and two bare wheat fields to the east. Best watched at game "
 	                   "speed 4.",
 	    .expected = "The town wants food. Its villagers deciding what to do are offered to its desires, the most wanted "
