@@ -49,6 +49,8 @@ struct TrailSymbol
 	float maxX {0.0f};
 	float minZ {0.0f};
 	float maxZ {0.0f};
+	/// The length of the path through the points it was made from, in the square
+	float length {0.0f};
 };
 
 /// The symbol from the points of its file: x and z from -100 to 100 put in 0 to 1, z turned to run down the screen

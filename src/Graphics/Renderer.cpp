@@ -6408,6 +6408,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	if (desc.viewId == RenderPass::Main && desc.drawEntities)
 	{
 		DrawAdvisors(desc);
+		DrawGestureHintCollars(desc);
 	}
 
 	// The sun's glare over everything else in the view; the temple's comes before its glass

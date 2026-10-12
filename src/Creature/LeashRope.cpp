@@ -212,3 +212,16 @@ std::array<uint16_t, k_RibbonIndexCount> leash_rope::RibbonIndices()
 	}
 	return indices;
 }
+
+bool leash_rope::Shown(const Showing& showing)
+{
+	if (showing.scriptCinema && !showing.scriptShows)
+	{
+		return false;
+	}
+	if (showing.local)
+	{
+		return !(showing.handHidden && !showing.scriptShows) && !showing.handHoldsTiedRope;
+	}
+	return showing.creatureFizz < k_HiddenFizz;
+}
