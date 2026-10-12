@@ -72,6 +72,9 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
+	/// A hand demonstration's recorded throw: if the hand throws before its spring next moves it, what it holds leaves
+	/// at this velocity rather than the spring's
+	virtual void SetRecordedThrow(glm::vec3 velocity) = 0;
 	/// The world is cleared: the hand holds nothing
 	virtual void Reset() = 0;
 

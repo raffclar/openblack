@@ -31,6 +31,16 @@ Progress BuildBy(float built, float amount)
 	return SetBuilt(built + amount);
 }
 
+Mending RepairBy(float life, float amount)
+{
+	if (life >= 1.0f)
+	{
+		return {.life = life, .repaired = false};
+	}
+	const float mended = std::min(life + amount, 1.0f);
+	return {.life = mended, .repaired = mended >= 1.0f};
+}
+
 std::optional<std::size_t> PlannedAt(std::span<const PlannedCandidate> planned, glm::vec2 place, float radius)
 {
 	std::optional<std::size_t> best;

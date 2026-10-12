@@ -16,6 +16,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -33,22 +34,20 @@ using namespace ecs::components;
 
 constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
 
-/// How much more the town believes in the local player than in the player it believes in most besides
-float BeliefMargin(const TownImpression& impression)
+/// How much more the town believes in the local player than in the player it believes in most besides, the neutral
+/// player included (none counting below nothing)
+double BeliefMargin(const TownImpression& impression)
 {
 	const auto& belief = impression.belief.belief;
 	float others = 0.0f;
-	bool any = false;
 	for (size_t i = 0; i < belief.size(); ++i)
 	{
-		if (i == static_cast<size_t>(k_LocalPlayer))
+		if (i != static_cast<size_t>(k_LocalPlayer))
 		{
-			continue;
+			others = std::max(others, belief[i]);
 		}
-		others = any ? std::max(others, belief[i]) : belief[i];
-		any = true;
 	}
-	return belief[static_cast<size_t>(k_LocalPlayer)] - others;
+	return static_cast<double>(belief[static_cast<size_t>(k_LocalPlayer)]) - static_cast<double>(others);
 }
 
 /// The places for people in a town's homes, adults and children
@@ -73,6 +72,11 @@ std::vector<Submission> Over(entt::entity object)
 	if (!registry.Valid(object))
 	{
 		return submissions;
+	}
+	// The totem on a village centre shows the centre's belief and population, as the centre itself does
+	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
+	{
+		object = totem->townCentre;
 	}
 	if (registry.AllOf<Temple>(object))
 	{

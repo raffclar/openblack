@@ -46,6 +46,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/NeverFades.h"
 #include "ECS/Components/ObjectGlow.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
@@ -151,7 +152,6 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	{
 		uint32_t count;
 		bool morphWithTerrain;
-		bool castsShadow;
 		bool unlit;
 		bool perEntity;
 		bool translucent;
@@ -167,7 +167,6 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	                                                      bool morphWithTerrain) {
 		auto count = meshIds.insert(std::make_pair(drawnMesh, MeshInstances {.count = static_cast<uint32_t>(mesh.submeshId),
 		                                                                     .morphWithTerrain = morphWithTerrain,
-		                                                                     .castsShadow = false,
 		                                                                     .unlit = false,
 		                                                                     .perEntity = false,
 		                                                                     .translucent = false,
@@ -175,10 +174,6 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .instanceAlpha = false,
 		                                                                     .villagers = true}));
 		count.first->second.count++;
-		// The things whose shadows Black & White bakes into the land (IsCastShadowAtNight), and its features
-		count.first->second.castsShadow |= registry.AnyOf<Abode, Feature, MobileStatic, StoragePit>(entity);
-		// A temple's parts cast theirs too once it is built, none while it is going up
-		count.first->second.castsShadow |= registry.AllOf<Temple>(entity) && !registry.AllOf<BuildProgress>(entity);
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
@@ -264,9 +259,9 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	_instanceSlots.clear();
 	for (const auto& [meshId, desc] : meshIds)
 	{
-		const auto [drawDesc, inserted] = _renderContext.instancedDrawDescs.emplace(
-		    std::piecewise_construct, std::forward_as_tuple(meshId),
-		    std::forward_as_tuple(offset, desc.count, desc.morphWithTerrain, desc.castsShadow));
+		const auto [drawDesc, inserted] =
+		    _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
+		                                              std::forward_as_tuple(offset, desc.count, desc.morphWithTerrain));
 		drawDesc->second.unlit = desc.unlit;
 		drawDesc->second.perEntity = desc.perEntity;
 		// The villagers of a mesh are drawn together, their bones read from the bone palette
@@ -292,7 +287,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	for (const auto& [meshId, count] : fadingCounts)
 	{
 		const auto [drawDesc, inserted] = _renderContext.fadingDrawDescs.emplace(
-		    std::piecewise_construct, std::forward_as_tuple(meshId), std::forward_as_tuple(offset, count, false, false));
+		    std::piecewise_construct, std::forward_as_tuple(meshId), std::forward_as_tuple(offset, count, false));
 		drawDesc->second.perEntity = true;
 		drawDesc->second.bonePalette = true;
 		drawDesc->second.instanceAlpha = true;
@@ -362,7 +357,7 @@ void RenderingSystem::PrepareTreeDrawDescs(bool drawBoundingBox)
 	for (const auto& [meshId, count] : treeMeshIds)
 	{
 		_renderContext.treeInstancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
-		                                              std::forward_as_tuple(treeOffset, count, false, true));
+		                                              std::forward_as_tuple(treeOffset, count, false));
 		const auto height = meshes.Contains(meshId) ? meshes.Handle(meshId)->GetBoundingBox().Size().y : 0.0f;
 		_treeSlots.emplace(
 		    meshId, InstanceSlots {.offset = treeOffset, .count = count, .filled = 0, .perEntity = false, .height = height});
@@ -430,8 +425,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 
 		    // A villager is drawn in less detail the further off it is, fades out, then shows only as a smudge on a blob
-		    // while it stands above the sea. One flying in the physics never fades, and one a script draws in high detail
-		    // is drawn in full however far off.
+		    // while it stands above the sea. One flying in the physics or one a script keeps in view never fades, and one
+		    // a script draws in high detail is drawn in full however far off.
 		    auto drawnMesh = DrawnMeshOf(entity, mesh);
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
@@ -442,8 +437,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    else if (detail != nullptr && camera != nullptr && !registry.AllOf<MorphWithTerrain>(entity))
 		    {
-			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x, !registry.AllOf<InPhysics>(entity),
-			                                     *camera, modelDetail);
+			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x,
+			                                     !registry.AnyOf<InPhysics, NeverFades>(entity), *camera, modelDetail);
 			    if (!choice.mesh.has_value())
 			    {
 				    const auto position = glm::vec3(modelMatrix[3]);
@@ -966,24 +961,33 @@ void RenderingSystem::UploadPartialBuilds()
 		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix});
 		_renderContext.partialBuilds.push_back(draw);
 	});
-	// A standing graveyard shows the graves of its burials over its model drawn with the others; one going up or broken
-	// shows none
+	// A standing building shows its model's numbered parts up to a number over its model drawn with the others; one going
+	// up or broken shows none
+	const auto showParts = [&](entt::entity entity, const Mesh& mesh, const Transform& transform, uint32_t parts) {
+		if (parts == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id))
+		{
+			return;
+		}
+		_renderContext.partialBuilds.push_back({
+		    .meshId = mesh.id,
+		    .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
+		    .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
+		    .gravesShown = parts,
+		});
+		_renderContext.partialBuildInstances.push_back(
+		    {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
+		              glm::scale(glm::mat4(1.0f), transform.scale)});
+	};
+	// A graveyard shows the graves of its burials
 	registry.Each<const Graveyard, const Mesh, const Transform>(
 	    [&](entt::entity entity, const Graveyard&, const Mesh& mesh, const Transform& transform) {
-		    const auto graves = graveyards::GravesShown(entity);
-		    if (graves == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id))
-		    {
-			    return;
-		    }
-		    _renderContext.partialBuilds.push_back({
-		        .meshId = mesh.id,
-		        .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
-		        .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
-		        .gravesShown = graves,
-		    });
-		    _renderContext.partialBuildInstances.push_back(
-		        {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
-		                  glm::scale(glm::mat4(1.0f), transform.scale)});
+		    showParts(entity, mesh, transform, graveyards::GravesShown(entity));
+	    });
+	// A building standing in as its town's graveyard shows the parts its burials' graves would, as in the original game:
+	// its scaffold
+	registry.Each<const StandInGraves, const Mesh, const Transform>(
+	    [&](entt::entity entity, const StandInGraves& graves, const Mesh& mesh, const Transform& transform) {
+		    showParts(entity, mesh, transform, graves.partsShown);
 	    });
 	const auto count = static_cast<uint32_t>(_renderContext.partialBuildInstances.size());
 	if (count == 0)
