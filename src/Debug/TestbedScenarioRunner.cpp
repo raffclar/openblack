@@ -1388,6 +1388,12 @@ void Runner::Give(const Command& command)
 		Log(line);
 		return;
 	}
+	if (command.kind == Kind::Reframe)
+	{
+		Frame(_scenario->framing.shot, _scenario->framing.creature, _scenario->framing.distance);
+		Log(fmt::format("{:.1f}s: the camera is put back", _seconds));
+		return;
+	}
 	if (command.kind == Kind::SetHour)
 	{
 		if (Locator::skySystem::has_value())
@@ -1595,6 +1601,7 @@ void Runner::Give(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::Reframe:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:

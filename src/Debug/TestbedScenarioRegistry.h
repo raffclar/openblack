@@ -523,6 +523,9 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
+		/// flight, say). Needs no creature
+		Reframe,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
