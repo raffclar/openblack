@@ -50,6 +50,7 @@ private:
 	void DamageEffect(entt::entity entity, components::Temple& temple);
 	/// The temple goes, with its way in
 	void RemoveTemple(entt::entity temple);
+	void RemoveLanterns(entt::entity temple);
 
 	std::unique_ptr<temple_world::World> _world;
 	/// The loops sounding over temples being destroyed, by temple, stopped when their temple goes another way

@@ -76,7 +76,14 @@ void TempleDestructionSystem::RemoveTemple(entt::entity temple)
 	{
 		_world->Remove(entrance);
 	}
-	// Its two entrance lanterns go with it, with their village lights and the lights' flames and glow
+	RemoveLanterns(temple);
+	_world->Remove(temple);
+}
+
+void TempleDestructionSystem::RemoveLanterns(entt::entity temple)
+{
+	auto& registry = *_world->Entities();
+	// Its two entrance lanterns, with their village lights and the lights' flames and glow
 	std::vector<std::pair<entt::entity, entt::entity>> lanterns;
 	registry.Each<const TempleLantern>([temple, &lanterns](entt::entity entity, const TempleLantern& lantern) {
 		if (lantern.temple == temple)
@@ -87,12 +94,13 @@ void TempleDestructionSystem::RemoveTemple(entt::entity temple)
 	for (const auto& [lantern, light] : lanterns)
 	{
 		std::vector<entt::entity> sprites;
-		registry.Each<const VillageLightSprite>([light = light, &sprites](entt::entity entity, const VillageLightSprite& sprite) {
-			if (sprite.light == light)
-			{
-				sprites.push_back(entity);
-			}
-		});
+		registry.Each<const VillageLightSprite>(
+		    [light = light, &sprites](entt::entity entity, const VillageLightSprite& sprite) {
+			    if (sprite.light == light)
+			    {
+				    sprites.push_back(entity);
+			    }
+		    });
 		for (const auto sprite : sprites)
 		{
 			_world->Remove(sprite);
@@ -100,7 +108,6 @@ void TempleDestructionSystem::RemoveTemple(entt::entity temple)
 		_world->Remove(light);
 		_world->Remove(lantern);
 	}
-	_world->Remove(temple);
 }
 
 void TempleDestructionSystem::DamageEffect(entt::entity entity, Temple& temple)
@@ -211,6 +218,11 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 		temple.destructionBeamClock = temple.destructionClock;
 	}
 	Beam(entity, temple, position);
+	// The lanterns are not drawn past 21.8 seconds
+	if (!td::LanternsShown(temple.destructionClock))
+	{
+		RemoveLanterns(entity);
+	}
 	if (events.glow)
 	{
 		temple.destructionGlow = _world->StartSpotVisual(SpotVisualType::MagicFxOnCitadel, position,
