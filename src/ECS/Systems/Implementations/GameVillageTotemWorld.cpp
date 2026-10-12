@@ -30,6 +30,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Resources/ResourcesInterface.h"
 #include "VillagerWorship.h"
 
 using namespace openblack;
@@ -65,7 +66,14 @@ entt::id_type GameVillageTotemWorld::IconMeshFor(PlayerNames player) const
 			const auto& infos = Locator::infoConstants::value().creature;
 			if (const auto row = creature::InfoRow(body->species); row < infos.size())
 			{
-				icon = infos.at(row).totemIcon;
+				// TODO(debug-start-with-cow): the creature info files give floats at 0x344, not mesh ids (seen for every
+				// species in BW1W120 data), so the hand stays on the totem until the real icon source is found; an id
+				// that names no loaded mesh would crash the renderer
+				const auto candidate = infos.at(row).totemIcon;
+				if (Locator::resources::value().GetMeshes().Contains(resources::HashIdentifier(candidate)))
+				{
+					icon = candidate;
+				}
 			}
 		}
 	}

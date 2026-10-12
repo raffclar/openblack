@@ -133,7 +133,23 @@ TEST(NewGameChoice, SelectionsAreBroughtIntoRange)
 {
 	EXPECT_EQ(ClampChoice(-1), Choice::StartNormally);
 	EXPECT_EQ(ClampChoice(2), Choice::SkipCreatureTutorial);
-	EXPECT_EQ(ClampChoice(7), Choice::KeepOldCreature);
+	EXPECT_EQ(ClampChoice(7), Choice::DebugStartWithCow);
+}
+
+// The debug quickstart is always on offer, skips the creature choice and gives the player the Cow
+TEST(NewGameChoice, DebugStartWithCowIsAlwaysAvailableAndMapsToTheCow)
+{
+	for (const bool hasCreature : {false, true})
+	{
+		EXPECT_TRUE(IsAvailable(Choice::DebugStartWithCow, hasCreature));
+		EXPECT_EQ(AvailableChoice(Choice::DebugStartWithCow, hasCreature), Choice::DebugStartWithCow);
+		EXPECT_EQ(AnswerAtOnce(ParseNewGameStart("cow"), hasCreature), Choice::DebugStartWithCow);
+	}
+	EXPECT_EQ(ClampChoice(4), Choice::DebugStartWithCow);
+	EXPECT_EQ(
+	    SkipFor(Choice::DebugStartWithCow),
+	    (TutorialSkip {.skipTutorial = true, .skipCreatureTraining = true, .keepOldCreature = true, .startWithCow = true}));
+	EXPECT_FALSE(SkipFor(Choice::KeepOldCreature).startWithCow);
 }
 
 // The developers' start answers the question with one of its own answers, or asks it
@@ -155,11 +171,11 @@ TEST(NewGameChoice, DevelopersStartNamesTheQuestionsAnswers)
 
 TEST(SkipBox, IsLaidOutAsTheOriginal)
 {
-	EXPECT_EQ(SkipBox::k_Box.min, glm::ivec2(200, 155));
-	EXPECT_EQ(SkipBox::k_Box.max, glm::ivec2(600, 445));
-	EXPECT_EQ(SkipBox::GetRadioRect(0).min, glm::ivec2(250, 225));
-	EXPECT_EQ(SkipBox::GetRadioRect(3).min, glm::ivec2(250, 357));
-	EXPECT_EQ(SkipBox::GetRadioRect(3).max, glm::ivec2(274, 381));
+	EXPECT_EQ(SkipBox::k_Box.min, glm::ivec2(200, 133));
+	EXPECT_EQ(SkipBox::k_Box.max, glm::ivec2(600, 467));
+	EXPECT_EQ(SkipBox::GetRadioRect(0).min, glm::ivec2(250, 203));
+	EXPECT_EQ(SkipBox::GetRadioRect(3).min, glm::ivec2(250, 335));
+	EXPECT_EQ(SkipBox::GetRadioRect(3).max, glm::ivec2(274, 359));
 }
 
 TEST(SkipBox, StartsNormallyUnlessAnotherAnswerIsPicked)

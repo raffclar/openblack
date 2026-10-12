@@ -115,11 +115,11 @@ TEST(InspectorDialogs, TheSkipBoxsControlsHaveNames)
 {
 	const InspectedSkipBox f;
 	const auto controls = SkipBoxControls(f.box);
-	ASSERT_EQ(controls.size(), 5u);
+	ASSERT_EQ(controls.size(), 6u);
 	EXPECT_EQ(controls[0].name, "AW");
 	EXPECT_EQ(controls[0].kind, "button");
-	const std::vector<std::string> answers {"A", "B", "AB", "BAD"};
-	const std::vector<std::string> starts {"normal", "creature", "story", "old"};
+	const std::vector<std::string> answers {"A", "B", "AB", "BAD", "Debug: Start with Cow"};
+	const std::vector<std::string> starts {"normal", "creature", "story", "old", "cow"};
 	for (size_t i = 0; i < answers.size(); ++i)
 	{
 		EXPECT_EQ(controls[i + 1].name, answers[i]) << i;

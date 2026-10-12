@@ -32,7 +32,9 @@ constexpr std::array<std::string_view, openblack::new_game_choice::k_ChoiceCount
     "HELP_TEXT_PATCH_06",
     "HELP_TEXT_PATCH_07",
     "HELP_TEXT_PATCH_08",
+    "", // Debug: Start with Cow, a literal label
 };
+constexpr std::u16string_view k_DebugCowAnswer = u"Debug: Start with Cow";
 constexpr std::string_view k_ButtonText = "HELP_TEXT_REQUESTER_BOXES_04";
 /// What each table gives for a text it doesn't have
 constexpr std::string_view k_MissingPatchText = "HELP_TEXT_PATCH_NONE";
@@ -73,7 +75,8 @@ SkipBox::SkipBox(const TextDatabase& texts, const GameFont& font, int textSize)
 		_radios.at(i) = &radio;
 
 		const auto top = k_FirstAnswer + glm::ivec2(0, k_RadioStep * static_cast<int>(i));
-		_answers.at(i) = Text(texts, k_AnswerTexts.at(i), k_MissingPatchText);
+		_answers.at(i) = k_AnswerTexts.at(i).empty() ? std::u16string(k_DebugCowAnswer)
+		                                             : Text(texts, k_AnswerTexts.at(i), k_MissingPatchText);
 		auto& answer = _dialog.Add<StaticText>(DialogRect {.min = top, .max = top + k_AnswerSize}, _answers.at(i),
 		                                       StaticText::Layout::WrappedLeft, textSize);
 		answer.takesClicks = true;

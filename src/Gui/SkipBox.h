@@ -29,10 +29,11 @@ class StaticText;
 class TextDatabase;
 
 /// The question a player is asked as a new game starts: start the game normally, skip straight to the creature select,
-/// skip all of the creature tutorial or keep the old creature. Keeping the old creature is left out, its radio button
-/// and its answer both hidden in their place, when the current profile has no creature.
+/// skip all of the creature tutorial or keep the old creature. A fifth answer, not in the original game, is a debug
+/// quickstart that skips the creature choice and starts with the Cow as the player's creature. Keeping the old creature is left
+/// out, its radio button and its answer both hidden in their place, when the current profile has no creature.
 ///
-/// A 400 by 290 box in the middle of the dialog space: the question across its top, four radio buttons each with its
+/// A 400 by 334 box in the middle of the dialog space: the question across its top, five radio buttons each with its
 /// answer beside it, and an arrow button labelled OK that answers. The box fades in over half a second and, once
 /// answered, out over a fifth, taking no input as it goes. It can't be escaped out of and no key answers it. The answer
 /// picked stays picked the next time the box is shown.
@@ -47,16 +48,16 @@ public:
 	};
 
 	/// The box's background
-	static constexpr DialogRect k_Box {.min = {200, 155}, .max = {600, 445}};
-	static constexpr DialogRect k_Question {.min = {150, 190}, .max = {650, 260}};
-	static constexpr glm::ivec2 k_ButtonPosition {220, 400};
+	static constexpr DialogRect k_Box {.min = {200, 133}, .max = {600, 467}};
+	static constexpr DialogRect k_Question {.min = {150, 168}, .max = {650, 238}};
+	static constexpr glm::ivec2 k_ButtonPosition {220, 422};
 	static constexpr int k_ButtonSize = 32;
 	/// The first radio button; each one after it is 44 lower
-	static constexpr glm::ivec2 k_FirstRadio {250, 225};
+	static constexpr glm::ivec2 k_FirstRadio {250, 203};
 	static constexpr int k_RadioSize = 24;
 	static constexpr int k_RadioStep = 44;
 	/// Each answer's text, beside its radio button
-	static constexpr glm::ivec2 k_FirstAnswer {290, 225};
+	static constexpr glm::ivec2 k_FirstAnswer {290, 203};
 	static constexpr glm::ivec2 k_AnswerSize {300, 40};
 
 	/// textSize is the dialogs' mid text size
