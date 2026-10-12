@@ -35,6 +35,7 @@
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDevelopment.h"
+#include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
@@ -66,6 +67,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -89,6 +91,24 @@ using creature_desires::Desire;
 
 namespace
 {
+
+/// The advisor may tell the player of the creature's order, or of why it couldn't carry it out
+void TellHelp(entt::entity creature, const openblack::creature_help::Message& message)
+{
+	if (openblack::Locator::creatureHelpSystem::has_value())
+	{
+		openblack::Locator::creatureHelpSystem::value().Raise(creature, message);
+	}
+}
+
+/// The player has shown they know how to give an order the creature's prompts tell of
+void PromptKnown(entt::entity creature, openblack::creature_help::Prompt prompt)
+{
+	if (openblack::Locator::creatureHelpSystem::has_value())
+	{
+		openblack::Locator::creatureHelpSystem::value().PromptKnown(creature, prompt);
+	}
+}
 constexpr float k_TurnsPerSecond = 1.0f / std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 /// Where the leash meets a creature with no collar bone, as a share of its height
 constexpr float k_CollarHeightShare = 0.7f;
@@ -1074,6 +1094,7 @@ void LeashSystem::Pull(entt::entity creature)
 		{
 			leashes.help = CreatureLeash::Help::PulledAway;
 			leashes.helpDesire = desire;
+			TellHelp(creature, {.kind = creature_help::Kind::FailureExplanation, .parameter = creature_help::k_PulledAway});
 		}
 		mind->planActive = false;
 		mind->planner.current.reset();
@@ -1539,6 +1560,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} can't get there: it is inaccessible", entt::to_integral(creature));
 		leashes.help = CreatureLeash::Help::Inaccessible;
 		leashes.helpDesire.reset();
+		TellHelp(creature, {.kind = creature_help::Kind::FailureExplanation, .parameter = creature_help::k_Inaccessible});
 		return false;
 	}
 	if (order.acknowledged)
@@ -1558,6 +1580,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	switch (order.kind)
 	{
 	case Kind::Drink:
+		PromptKnown(creature, creature_help::Prompt::Drink);
 		desire = Desire::Water;
 		taken = Force(creature, {.desire = *desire, .action = orders::k_DrinkAction});
 		break;
@@ -1571,6 +1594,11 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		break;
 	case Kind::MoveTo:
 	{
+		// Sent again while an order is in force, it runs: the player knows how
+		if (OrderInForce(creature))
+		{
+			PromptKnown(creature, creature_help::Prompt::Run);
+		}
 		const auto extra =
 		    Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(orders::k_RunWaitExtraSeconds) : 0.0f;
 		const auto wait = orders::RunWaitSeconds(extra, k_TurnsPerSecond);
@@ -1585,11 +1613,13 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		break;
 	}
 	case Kind::PutDownAt:
+		PromptKnown(creature, creature_help::Prompt::DropAtFeet);
 		taken = Force(
 		    creature,
 		    {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = orders::PutDownAt(order.point, height)});
 		break;
 	case Kind::ThrowAt:
+		PromptKnown(creature, creature_help::Prompt::DropAtFeet);
 		taken = Force(
 		    creature,
 		    {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = orders::ThrowAt(order.point, height)});
@@ -1607,6 +1637,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	{
 		leashes.help = CreatureLeash::Help::CurrentDesire;
 		leashes.helpDesire = desire;
+		TellHelp(creature, {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire)});
 	}
 	// Carrying, the place itself is marked; otherwise where it goes
 	const bool carried = order.kind == Kind::PutDownAt || order.kind == Kind::ThrowAt;
@@ -1718,6 +1749,8 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	auto& leashes = registry.Get<CreatureLeash>(creature);
 	leashes.help = CreatureLeash::Help::CurrentDesire;
 	leashes.helpDesire = desire;
+	TellHelp(creature,
+	         {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire), .thing = object});
 	MarkOrder(creature, object, objectAt, fight);
 	// What it is shown on the aggression and compassion leashes teaches it which desire to act on such things with
 	if (auto lessons = leash::LessonsFor(type, isCreature); mind != nullptr && !lessons.empty())

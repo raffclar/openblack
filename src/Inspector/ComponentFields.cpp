@@ -36,6 +36,7 @@
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureFizz.h"
 #include "Creature/CreatureHair.h"
+#include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
@@ -82,6 +83,7 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -284,6 +286,49 @@ constexpr std::array<std::string_view, 40> k_CreatureDesiresDesireNames {"Impres
                                                                          "LookAround",
                                                                          "Steal"};
 static_assert(static_cast<size_t>(openblack::creature_desires::Desire::_Count) == k_CreatureDesiresDesireNames.size());
+constexpr std::array<std::string_view, 42> k_CreatureHelpKindNames {"LessonIncreaseSource",
+                                                                    "LessonDecreaseSource",
+                                                                    "LessonIncreaseDesire",
+                                                                    "LessonDecreaseDesire",
+                                                                    "LessonIncreaseOpinion",
+                                                                    "LessonDecreaseOpinion",
+                                                                    "LessonNormalAction",
+                                                                    "LessonMagicAction",
+                                                                    "NearlyLearntNormalAction",
+                                                                    "NearlyLearntMagicAction",
+                                                                    "CantLearnNormalActionYet",
+                                                                    "CantLearnMagicActionYet",
+                                                                    "StageInitial",
+                                                                    "StageLearnToEat",
+                                                                    "StagePunishment",
+                                                                    "StageLeashPullAndPickUp",
+                                                                    "StageLeashAttachToHouse",
+                                                                    "StageMeetGuide",
+                                                                    "StageFriendsWithGuide",
+                                                                    "StageGuideExplainsHistory",
+                                                                    "StageLearnSpell",
+                                                                    "StageLearnToImpressTown",
+                                                                    "StageLearnToFight",
+                                                                    "StageLearnToHelpTown",
+                                                                    "StageLeashGoodAndEvil",
+                                                                    "StageFullyMature",
+                                                                    "ReceivedSpell",
+                                                                    "FinishedReceivingSpell",
+                                                                    "Tutorial",
+                                                                    "CurrentSource",
+                                                                    "PhysicalProblem",
+                                                                    "MentalProblem",
+                                                                    "PromptHasntLearntNormalAction",
+                                                                    "TownAttitudeToCreature",
+                                                                    "CannotLearnActionInThisStage",
+                                                                    "ShowStageCriteria",
+                                                                    "SomethingInterestingOffScreen",
+                                                                    "MiscellaneousStacked",
+                                                                    "MiscellaneousUnstacked",
+                                                                    "MessedUpAction",
+                                                                    "FailureExplanation",
+                                                                    "CurrentDesire"};
+static_assert(static_cast<size_t>(openblack::creature_help::Kind::_Count) == k_CreatureHelpKindNames.size());
 constexpr std::array<std::string_view, 16> k_CreatureSpellsSpellNames {
     "Freeze", "Small", "Big",    "Weak",       "Strong", "Fat", "Thin",    "Invisible",
     "Nice",   "Nasty", "Hungry", "Frightened", "Tired",  "Ill", "Thirsty", "Itchy"};
@@ -585,6 +630,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureHair>(context)
 	    .Field<&components::CreatureHair::groups>("groups")
 	    .Field<&components::CreatureHair::started>("started");
+	Reflect<components::CreatureHelpMemory>(context).Field<&components::CreatureHelpMemory::memory>("memory");
 	Reflect<components::CreatureLeash>(context)
 	    .Field<&components::CreatureLeash::known>("known")
 	    .Field<&components::CreatureLeash::worn>("worn")
@@ -1908,6 +1954,19 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_hair::Strand>(context, ValueOnly {})
 	    .Field<&openblack::creature_hair::Strand::positions>("positions")
 	    .Field<&openblack::creature_hair::Strand::velocities>("velocities");
+	Reflect<openblack::creature_help::Entry>(context, ValueOnly {})
+	    .Field<&openblack::creature_help::Entry::parameter>("parameter")
+	    .Field<&openblack::creature_help::Entry::thing>("thing")
+	    .Field<&openblack::creature_help::Entry::position>("position")
+	    .Field<&openblack::creature_help::Entry::toldTurn>("toldTurn")
+	    .Field<&openblack::creature_help::Entry::waiting>("waiting");
+	Reflect<openblack::creature_help::Memory>(context, ValueOnly {})
+	    .Field<&openblack::creature_help::Memory::entries>("entries", {k_CreatureHelpKindNames})
+	    .Field<&openblack::creature_help::Memory::physicalProblemTurn>("physicalProblemTurn")
+	    .Field<&openblack::creature_help::Memory::tutorialTurn>("tutorialTurn")
+	    .Field<&openblack::creature_help::Memory::tutorialDone>("tutorialDone")
+	    .Field<&openblack::creature_help::Memory::tutorialToldTurn>("tutorialToldTurn")
+	    .Field<&openblack::creature_help::Memory::handOver>("handOver");
 	Reflect<openblack::creature_layers::BodyAction>(context, ValueOnly {})
 	    .Field<&openblack::creature_layers::BodyAction::kind>("kind")
 	    .Field<&openblack::creature_layers::BodyAction::phase>("phase")

@@ -53,6 +53,7 @@
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -108,6 +109,7 @@
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -132,6 +134,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -332,6 +335,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
     LocatorCoverage {"helpProfileSystem", "help.profile"},
+    LocatorCoverage {"creatureHelpSystem", "help.creature"},
+    LocatorCoverage {"helpMessageSystem", "help.messages"},
     LocatorCoverage {"tipBubbleSystem", "help.bubble"},
     LocatorCoverage {"handDemoSystem", "help.hand_demo"},
     LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
@@ -2605,6 +2610,74 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 			                         {"smoothed_rate", count.SmoothedRate()}});
 		        }
 		        return items;
+	        }));
+	provider->Add(Query("creature",
+	                    "The advisor's messages about the player's creature: whether they are on, the ones told lately "
+	                    "(kind, parameter, text, turn), and the creature's waiting ones and prompts",
+	                    {}, ResultKind::Object),
+	              Serve<Locator::creatureHelpSystem>(
+	                  "the creature help",
+	                  [](const ecs::systems::CreatureHelpSystemInterface& system, const QueryContext& /*c*/) -> Json {
+		                  Json told = Json::array();
+		                  for (const auto& message : system.GetTold())
+		                  {
+			                  told.push_back({{"creature", entt::to_integral(message.creature)},
+			                                  {"kind", static_cast<int>(message.kind)},
+			                                  {"parameter", message.parameter},
+			                                  {"text", message.text.has_value() ? Json(*message.text) : Json(nullptr)},
+			                                  {"turn", message.turn}});
+		                  }
+		                  Json creatures = Json::array();
+		                  const auto& registry = Locator::entitiesRegistry::value();
+		                  registry.Each<const CreatureHelpMemory>(
+		                      [&creatures](entt::entity entity, const CreatureHelpMemory& help) {
+			                      Json waiting = Json::array();
+			                      for (size_t kind = 0; kind < help.memory.entries.size(); ++kind)
+			                      {
+				                      for (const auto& entry : help.memory.entries.at(kind))
+				                      {
+					                      if (entry.waiting)
+					                      {
+						                      waiting.push_back({{"kind", kind}, {"parameter", entry.parameter}});
+					                      }
+				                      }
+			                      }
+			                      creatures.push_back({{"creature", entt::to_integral(entity)},
+			                                           {"waiting", waiting},
+			                                           {"hand_over", help.memory.handOver},
+			                                           {"body_problem_turn", help.memory.physicalProblemTurn},
+			                                           {"tutorial_turn", help.memory.tutorialTurn},
+			                                           {"tutorial_done", help.memory.tutorialDone}});
+		                      });
+		                  return Json {{"on", system.IsHelpOn()}, {"told", told}, {"creatures", creatures}};
+	                  }));
+	provider->Add(
+	    Query("messages",
+	          "The help the game starts by itself: the help scripts it started lately (script, texts, a "
+	          "town's need) and how many times each message set has been said",
+	          {}, ResultKind::Object),
+	    Serve<Locator::helpMessageSystem>(
+	        "the help messages", [](const ecs::systems::HelpMessageSystemInterface& system, const QueryContext& /*c*/) -> Json {
+		        Json started = Json::array();
+		        for (const auto& message : system.GetStarted())
+		        {
+			        started.push_back({{"script", message.script},
+			                           {"first", message.first},
+			                           {"last", message.last},
+			                           {"stat_text", message.statText.has_value() ? Json(*message.statText) : Json(nullptr)},
+			                           {"need", message.need.has_value() ? Json(*message.need) : Json(nullptr)},
+			                           {"turn", message.turn}});
+		        }
+		        Json sent = Json::object();
+		        const auto& counts = system.GetSentCounts();
+		        for (size_t set = 0; set < counts.size(); ++set)
+		        {
+			        if (counts.at(set) != 0)
+			        {
+				        sent[std::to_string(set)] = counts.at(set);
+			        }
+		        }
+		        return Json {{"started", started}, {"sets_said", sent}};
 	        }));
 	provider->Add(
 	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "

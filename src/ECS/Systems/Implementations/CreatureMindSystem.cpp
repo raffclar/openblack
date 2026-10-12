@@ -72,6 +72,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
@@ -86,6 +87,18 @@ using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 namespace animations = openblack::creature_layers::animations;
+
+namespace
+{
+/// Fainting from what its body lacks, the advisor says why first
+void TellFainting(entt::entity creature)
+{
+	if (openblack::Locator::creatureHelpSystem::has_value())
+	{
+		openblack::Locator::creatureHelpSystem::value().Fainting(creature);
+	}
+}
+} // namespace
 using creature_desires::Desire;
 
 namespace openblack::ecs::systems::mind_detail
@@ -1077,6 +1090,7 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    if (mind.turn > k_TurnsBeforePassingOut)
 			    {
+				    TellFainting(entity);
 				    needs->faint.reset();
 				    passingOut.push_back(entity);
 			    }
@@ -1095,6 +1109,7 @@ void CreatureMindSystem::ProcessTurn()
 				    Locator::creatureLocomotionSystem::value().Stop(entity);
 			    }
 			    animation.body = {};
+			    TellFainting(entity);
 			    creature_mind::Plan(mind.idle, creature_mind::Activity::Faint, creature_mind::Faint());
 			    needs->faint.reset();
 		    }

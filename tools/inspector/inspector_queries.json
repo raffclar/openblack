@@ -1474,6 +1474,18 @@
   "query": "help.profile"
  },
  {
+  "description": "The advisor's messages about the player's creature: whether they are on, the ones told lately (kind, parameter, text, turn), and the creature's waiting ones and prompts",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.creature"
+ },
+ {
+  "description": "The help the game starts by itself: the help scripts it started lately (script, texts, a town's need) and how many times each message set has been said",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.messages"
+ },
+ {
   "description": "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, its time to show, the point it points at, its scroll and whether the hand is on it or grips it",
   "kind": "object",
   "parameters": [],
