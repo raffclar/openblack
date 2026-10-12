@@ -19,6 +19,7 @@
 #include <iterator>
 #include <limits>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <bgfx/bgfx.h>
@@ -41,6 +42,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/InstanceDesc.h"
 #include "Graphics/ShaderManager.h"
+#include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
@@ -372,6 +374,8 @@ const Texture2D* Renderer::HandFlowTexture() const
 					memory->data[(i * 4) + 2] = colour[(i * 3) + 2];
 					memory->data[(i * 4) + 3] = alpha[i];
 				}
+				// Kept four bits a channel, as the game keeps every texture it loads with an alpha
+				texel_depth::Reduce(std::span(memory->data, memory->size), texel_depth::Depth::FourBits);
 				_handFlowTexture = std::make_unique<Texture2D>("HandFlow");
 				_handFlowTexture->CreateWithinFrame(k_Size, k_Size, 1, TextureFormat::RGBA8, Wrapping::Repeat, Filter::Linear,
 				                                    memory);

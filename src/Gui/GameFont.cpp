@@ -158,7 +158,7 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 	}
 	font._name = ToUtf8(name);
 
-	// The glyphs at half height, each pixel the average of four, packed in rows into the atlas
+	// The glyphs at half height, each pixel's alpha by how many of four pixels are set, packed in rows into the atlas
 	const auto cellHeight = static_cast<uint16_t>((font._height + 1) / 2);
 	std::vector<std::vector<uint8_t>> cells;
 	std::vector<std::vector<uint8_t>> bitmaps;
@@ -207,7 +207,8 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 						sum += (*bitmap)[(static_cast<size_t>(sy) * glyph.width) + sx];
 					}
 				}
-				cell[(static_cast<size_t>(y) * cellWidth) + x] = static_cast<uint8_t>(sum * 255 / 4);
+				// The game keeps the glyph's alpha in four bits, read back as n fifteenths of 255
+				cell[(static_cast<size_t>(y) * cellWidth) + x] = static_cast<uint8_t>(k_HalfGlyphAlpha.at(sum) * 17);
 			}
 		}
 
