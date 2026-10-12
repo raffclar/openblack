@@ -172,6 +172,8 @@ bool creature_obstacles::MustAvoid(const Thing& thing, const Walker& walker)
 		return !walker.scriptControlled && thing.burning;
 	case Avoidance::Creature:
 		return !thing.walking;
+	case Avoidance::Shield:
+		return !walker.scriptControlled && thing.owner != walker.owner;
 	}
 	return false;
 }

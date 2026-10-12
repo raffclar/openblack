@@ -34,7 +34,8 @@ constexpr float k_Pi = std::numbers::pi_v<float>;
 /// A creature 15 units tall reaching 2 units round its middle
 Walker AWalker()
 {
-	return {.position = {0.0f, 0.0f}, .height = 15.0f, .radius = 2.0f, .scriptControlled = false};
+	return {
+	    .position = {0.0f, 0.0f}, .height = 15.0f, .radius = 2.0f, .scriptControlled = false, .owner = PlayerNames::PLAYER_ONE};
 }
 
 /// A thing of a kind, its box half sizes given, scale one, at the origin facing along x
@@ -54,7 +55,8 @@ Thing AThing(Avoidance avoidance, Shape shape, glm::vec3 halfSize)
 	        .justBegun = false,
 	        .walking = false,
 	        .playerAlignment = 0.0f,
-	        .worshipSites = {}};
+	        .worshipSites = {},
+	        .owner = PlayerNames::NEUTRAL};
 }
 
 } // namespace
@@ -103,6 +105,13 @@ TEST(CreatureObstacles, EachKindHasItsOwnRule)
 	EXPECT_TRUE(MustAvoid(other, walker));
 	other.walking = true;
 	EXPECT_FALSE(MustAvoid(other, walker));
+	// Shields only another player's, and not for a creature a script moves
+	auto shield = AThing(Avoidance::Shield, Shape::ModelBox, {10.0f, 10.0f, 10.0f});
+	shield.owner = PlayerNames::PLAYER_TWO;
+	EXPECT_TRUE(MustAvoid(shield, walker));
+	EXPECT_FALSE(MustAvoid(shield, scripted));
+	shield.owner = walker.owner;
+	EXPECT_FALSE(MustAvoid(shield, walker));
 }
 
 TEST(CreatureObstacles, LowThingsTakeMoreOfTheCreaturesRadius)

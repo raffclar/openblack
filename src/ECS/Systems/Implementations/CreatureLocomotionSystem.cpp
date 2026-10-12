@@ -27,6 +27,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/mat3x3.hpp>
 
+#include "3D/AllMeshes.h"
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
@@ -56,6 +57,7 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
@@ -77,11 +79,13 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
-#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/ResourcePiles.h"
+#include "Magic/ShieldRules.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -566,7 +570,8 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 	                        .justBegun = false,
 	                        .walking = false,
 	                        .playerAlignment = 0.0f,
-	                        .worshipSites = {}};
+	                        .worshipSites = {},
+	                        .owner = PlayerNames::NEUTRAL};
 	thing.burning = thing.hasFire && Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity);
 
 	if (const auto* other = registry.TryGet<const CreatureLocomotion>(entity))
@@ -583,6 +588,24 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 	if (registry.AnyOf<Villager, Animal, FishFarm, StreetLantern, TownDesireFlag>(entity))
 	{
 		return std::nullopt;
+	}
+	if (const auto* shield = registry.TryGet<const MagicShield>(entity))
+	{
+		// Every shield's object is the solid shield's model's box, the spiritual one at its radius's scale
+		thing.avoidance = obstacles::Avoidance::Shield;
+		thing.owner = shield->player;
+		const auto* dome = registry.TryGet<const ShieldDome>(entity);
+		thing.scale = dome != nullptr ? dome->solidScale : shield->radius * magic::shield::k_DomeScalePerRadius;
+		const auto meshId = resources::HashIdentifier(MeshId::SpellSolidShield);
+		if (Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(meshId))
+		{
+			const auto box = Locator::resources::value().GetMeshes().Handle(meshId)->GetBoundingBox();
+			thing.boxCentre = box.Center();
+			thing.boxHalfSize = box.Size() * 0.5f;
+			thing.height = obstacles::ModelHeight(thing.boxHalfSize, thing.scale);
+			thing.width = obstacles::ModelWidth(thing.boxHalfSize, thing.scale);
+		}
+		return thing;
 	}
 
 	// The model's box gives most things their size
@@ -649,10 +672,15 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 	else if (const auto* pot = registry.TryGet<const Pot>(entity))
 	{
 		thing.shape = obstacles::Shape::AtPlace;
-		if (Locator::infoConstants::has_value() &&
-		    Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).potType == PotType::PileFood)
+		if (Locator::infoConstants::has_value())
 		{
-			thing.avoidance = obstacles::Avoidance::BurningUnlessScripted;
+			const auto& info = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type));
+			if (info.potType == PotType::PileFood)
+			{
+				// A food pile is as wide as it is raised by what it holds
+				thing.avoidance = obstacles::Avoidance::BurningUnlessScripted;
+				thing.width *= magic::piles::ProportionRaised(ResourceType::Food, pot->amount, info.maxAmountInPot);
+			}
 		}
 	}
 	else if (registry.AnyOf<Mobile, Ball, ScriptHighlight>(entity))
@@ -671,6 +699,17 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 		thing.justBegun = registry.AnyOf<BuildingSite>(entity) && progress != nullptr && progress->built <= k_JustBegun;
 	}
 	return thing;
+}
+
+/// A creature as what it walks round sees it
+obstacles::Walker WalkerOf(const ecs::Registry& registry, entt::entity entity, const Creature& body,
+                           const CreatureLocomotion& self, glm::vec2 position)
+{
+	return {.position = position,
+	        .height = obstacles::k_HeightPerSize * ShownSize(body),
+	        .radius = self.radius,
+	        .scriptControlled = registry.AnyOf<ScriptControlled>(entity),
+	        .owner = body.owner};
 }
 
 /// What stands in a cell, added to what a creature walks round the first time its route search reaches the cell's
@@ -718,20 +757,6 @@ route::Obstacles::Gatherer GathererFor(entt::entity self, const obstacles::Walke
 			}
 		}
 	};
-}
-
-/// Another player's shield is walked round; a creature already under one walks out of it
-std::vector<route::Circle> ShieldsAvoided(const ecs::Registry& registry, entt::entity self, float radius)
-{
-	std::vector<route::Circle> circles;
-	if (const auto* owner = registry.TryGet<const Creature>(self); owner != nullptr && Locator::magicShieldSystem::has_value())
-	{
-		for (const auto& shield : Locator::magicShieldSystem::value().CreatureAvoids(owner->owner, false))
-		{
-			circles.push_back({.centre = shield.centre, .radius = shield.radius + radius});
-		}
-	}
-	return circles;
 }
 
 /// How far from something's middle a creature walking up to it stops short, before its own radius
@@ -837,11 +862,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 				self.fromPosition = self.toPosition;
 			}
 		}
-		const auto walker = obstacles::Walker {.position = position,
-		                                       .height = obstacles::k_HeightPerSize * ShownSize(*body),
-		                                       .radius = self.radius,
-		                                       .scriptControlled = registry.AnyOf<ScriptControlled>(creature)};
-		self.follower.Reset(position, self.radius, GathererFor(creature, walker));
+		self.follower.Reset(position, self.radius, GathererFor(creature, WalkerOf(registry, creature, *body, self, position)));
 		self.firstSearchTurn = true;
 	}
 	const auto distance = glm::distance(position, point);
@@ -911,10 +932,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt
 		return MoveResult::Busy;
 	}
 	// It stops short of the thing by how far round it the thing reaches, as the creature plans its route round it
-	const auto walker = obstacles::Walker {.position = PositionOf(*self),
-	                                       .height = obstacles::k_HeightPerSize * ShownSize(*body),
-	                                       .radius = self->radius,
-	                                       .scriptControlled = registry.AnyOf<ScriptControlled>(creature)};
+	const auto walker = WalkerOf(registry, creature, *body, *self, PositionOf(*self));
 	const auto ring = locomotion::ObjectRing(self->radius, ReachOf(registry, target, walker), extra);
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
@@ -1221,10 +1239,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 			    {
 				    return;
 			    }
-			    const auto walker = obstacles::Walker {.position = PositionOf(walking),
-			                                           .height = obstacles::k_HeightPerSize * ShownSize(body),
-			                                           .radius = walking.radius,
-			                                           .scriptControlled = registry.AnyOf<ScriptControlled>(other)};
+			    const auto walker = WalkerOf(registry, other, body, walking, PositionOf(walking));
 			    if (!obstacles::MustAvoid(*thing, walker))
 			    {
 				    return;
