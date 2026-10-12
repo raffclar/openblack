@@ -23,6 +23,7 @@
 #include "ECS/Components/NeverFades.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/VillagerScriptRules.h"
 #include "Enums.h"
 #include "Help/Spirits.h"
 #include "Locator.h"
@@ -195,6 +196,25 @@ TEST_F(ScriptStonesNatives, TakeAndGiveWhatTheGameDoes)
 	EXPECT_EQ(Native("THING_JC_SPECIAL"), 349u);
 	EXPECT_EQ(table[349].stackIn, 3);
 	EXPECT_EQ(table[349].stackOut, 0u);
+}
+
+// The challenge waits while "[Rock1] near [Rock1Pos] radius 2". The boulder stands where the land's script puts it,
+// (2030.81, 2325.50), 10.18 above the land; the marker is at (2031.129, 12.272, 2327.405). The game measures along the
+// ground only, so the boulder is 1.9316 from the marker however high either stands (1.975 counting heights), and it
+// is on its pillar until something moves it 0.07 across the ground
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ScriptStonesBoulder, TheBoulderIsNearItsMarkerAlongTheGround)
+{
+	const glm::vec3 marker {2031.129f, 12.272f, 2327.405f};
+	const glm::vec3 boulder {2030.81f, 1.675f + 10.184691f, 2325.50f};
+	const float distance = ecs::villager_script_rules::ScriptDistance(boulder, marker);
+	// Within the rounding of single-precision positions this far from the map's corner
+	EXPECT_NEAR(distance, 1.9316f, 0.001f);
+	EXPECT_LT(distance, 2.0f);
+	// Heights don't count
+	EXPECT_FLOAT_EQ(ecs::villager_script_rules::ScriptDistance({boulder.x, 100.0f, boulder.z}, marker), distance);
+	// Knocked 0.07 further across the ground, it is off
+	EXPECT_GT(ecs::villager_script_rules::ScriptDistance({boulder.x, boulder.y, boulder.z - 0.07f}, marker), 2.0f);
 }
 
 namespace
