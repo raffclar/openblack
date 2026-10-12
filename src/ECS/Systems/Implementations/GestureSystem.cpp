@@ -20,6 +20,7 @@
 #include <glm/vector_relational.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
@@ -370,6 +371,24 @@ void GestureSystem::LayTrail(GestureType gesture, const gesture::Match& match, c
 	{
 		Locator::particleSystem::value().AddGestureTrail(std::make_shared<particles::GestureTrail>(std::move(*trail)));
 	}
+}
+
+void GestureSystem::ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size)
+{
+	if (gesture == GestureType::None || !Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	const auto symbol = TrailSymbolOf(gesture);
+	if (!symbol.has_value())
+	{
+		return;
+	}
+	const auto landHeight = [](float x, float z) {
+		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({x, z}) : 0.0f;
+	};
+	Locator::particleSystem::value().AddGestureTrail(
+	    std::make_shared<particles::GestureTrail>(gesture::LandGestureTrail(*symbol, corner, size, landHeight)));
 }
 
 void GestureSystem::Act(const gesture::Request& request, const gesture::Match& match, const Frame& frame)

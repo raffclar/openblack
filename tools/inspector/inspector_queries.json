@@ -1034,7 +1034,7 @@
   "query": "living.sound_tags"
  },
  {
-  "description": "The rewards on their way to the land or lying on it",
+  "description": "The rewards on their way to the land, lying on it, or opened",
   "kind": "list",
   "parameters": [],
   "query": "living.rewards"

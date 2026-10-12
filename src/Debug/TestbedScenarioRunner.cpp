@@ -116,6 +116,8 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -521,6 +523,7 @@ void Runner::Start(const Scenario& scenario)
 		_particles.push_back({StartParticle(i), 0.0f});
 	}
 	_vortices.assign(scenario.vortices.size(), {});
+	_rewards.assign(scenario.rewards.size(), entt::null);
 	Frame(scenario.framing.shot, scenario.framing.creature, scenario.framing.distance);
 	Log(fmt::format("Started {}", scenario.name));
 }
@@ -561,6 +564,15 @@ void Runner::Stop()
 		}
 	}
 	_vortices.clear();
+	// Its reward chests go, opened or not
+	for (const auto chest : _rewards)
+	{
+		if (chest != entt::null && Locator::entitiesRegistry::value().Valid(chest))
+		{
+			Locator::entitiesRegistry::value().Destroy(chest);
+		}
+	}
+	_rewards.clear();
 	// Its held miracles stop, and the hand is the mouse's again
 	if (Locator::magicSystem::has_value())
 	{
@@ -2056,6 +2068,7 @@ void Runner::Update(float seconds)
 	SpawnCrowd();
 	UpdateParticles(seconds);
 	UpdateVortices();
+	UpdateRewards();
 	UpdateMiracles(seconds);
 	UpdateVillagerWalks();
 	UpdateThrows();
@@ -2494,6 +2507,29 @@ void Runner::UpdateVortices()
 			running.fading = vortices.StartFadeOut(running.vortex);
 			Log(fmt::format("Vortex {} fading out", i));
 		}
+	}
+}
+
+void Runner::UpdateRewards()
+{
+	if (!Locator::rewardSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	for (size_t i = 0; i < _rewards.size(); ++i)
+	{
+		const auto& setup = _scenario->rewards.at(i);
+		if (_rewards.at(i) != entt::null || _seconds < setup.delaySeconds)
+		{
+			continue;
+		}
+		const auto point = MapPoint(_middle, setup.offset);
+		const glm::vec3 at {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y};
+		_rewards.at(i) = Locator::rewardSystem::value().Create(at, setup.type, player, entt::null, setup.fromSky);
+		Log(fmt::format("Reward chest {} (kind {}) given at {:.0f}, {:.0f}", i, static_cast<int>(setup.type), point.x,
+		                point.y));
 	}
 }
 

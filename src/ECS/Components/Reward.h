@@ -30,6 +30,8 @@ struct Reward
 		Falling,
 		/// On the land
 		Landed,
+		/// Tapped open by its player: its lid lifts, and it goes some turns later
+		Opened,
 	};
 
 	RewardObjectInfo type {RewardObjectInfo::None};
@@ -48,6 +50,12 @@ struct Reward
 	/// How long its dust has left to show, once it has fallen
 	float dustMilliseconds {0.0f};
 	std::array<reward::DustSprite, reward::k_DustSprites> dust {};
+	/// Its player has tapped it open (the scripts ask whether it is active)
+	bool opened {false};
+	/// Game turns an opened chest has left before it goes
+	int32_t turnsLeft {0};
+	/// Where the opened chest's clip has got to, in milliseconds
+	uint32_t clipPlace {0};
 };
 
 /// A reward chest that has come to the land, and stands in the map's cells
