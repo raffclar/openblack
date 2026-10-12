@@ -73,6 +73,7 @@
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TownDesireFlags.h"
@@ -467,10 +468,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.bonePalette.clear();
 	_heldThings.clear();
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &meshes, &fits, drawBoundingBox, camera,
-	     modelDetail](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	    [this, &registry, &vegetation, &meshes, &fits, drawBoundingBox, camera, modelDetail,
+	     drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // A villager is drawn gliding between its turns and turning after the way it faces; one held by the opening's
 		    // hand is drawn in its grip
 		    const auto* villagerPose = registry.TryGet<const VillagerPose>(entity);
@@ -496,7 +498,18 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto level = graphics::mesh_detail::Mesh::High;
 		    bool gone = false;
 		    const auto* detail = registry.TryGet<const DetailMeshes>(entity);
-		    if (detail != nullptr && registry.AllOf<HighDetail>(entity) && !registry.AllOf<MorphWithTerrain>(entity))
+		    if (drawList != nullptr && !drawList->Drawn(registry, entity))
+		    {
+			    // Of the things on the land's blocks only those in the land's draw list are drawn. One left out leaves
+			    // what it stands on painted, as one too far off does; the living and the creatures leave nothing.
+			    if (detail != nullptr || registry.AllOf<CreatureMorph>(entity))
+			    {
+				    return;
+			    }
+			    gone = true;
+			    _goneThings.insert(entity);
+		    }
+		    else if (detail != nullptr && registry.AllOf<HighDetail>(entity) && !registry.AllOf<MorphWithTerrain>(entity))
 		    {
 			    drawnMesh = detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::High));
 		    }
@@ -1169,6 +1182,8 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	const auto paperTurn =
 	    camera != nullptr ? graphics::mesh_detail::PaperTurn(camera->GetOrigin(), camera->GetFocus()) : glm::mat3(1.0f);
 
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+
 	// Each tree as it is drawn this frame, gathered first, then laid out by mesh and detail
 	_placedTrees.clear();
 	registry.Each<const Mesh, const Transform, const Tree, const Swayable>(
@@ -1196,6 +1211,17 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			    return;
 		    }
 		    modelMatrix = *placed;
+
+		    // A tree left out of the land's draw list isn't drawn, as one too far off isn't
+		    if (drawList != nullptr && !drawList->Drawn(registry, entity))
+		    {
+			    _placedTrees.push_back({.mesh = mesh.id,
+			                            .slots = &slots->second,
+			                            .group = Group::Gone,
+			                            .data = {.modelMatrix = modelMatrix, .burning = glm::vec4(0.0f)},
+			                            .box = glm::mat4(0.0f)});
+			    return;
+		    }
 
 		    // Drawn in less detail the further off it is, fading out, then not at all, unless something holds it
 		    auto group = Group::High;
