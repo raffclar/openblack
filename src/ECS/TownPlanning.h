@@ -35,6 +35,15 @@ bool StartBestCivicBuilding(entt::entity town);
 /// without checking the land, its site wanting builders by five times the script's desire. The buildings started.
 std::vector<entt::entity> StartPlannedAt(glm::vec3 place, float scriptDesire);
 
+/// How much one of a town's plans wants repairing: a plan of a building that had been finished before it went wants it
+/// as much as its kind wants mending, any other plan not at all
+[[nodiscard]] float PlanDesireToBeRepaired(entt::entity plan);
+
+/// A town's turn: it puts up at most one thing for mending, the building with no site it hasn't put up already or the
+/// plan of a finished building that went, whichever wants repair most (see planned_building::ChooseToMend). A building
+/// gets a site for its builders; a plan goes up again with nothing of it built.
+void MendBest(entt::entity town);
+
 /// A town's building going from the land is planned again by its town, where it stood and as it was turned, after the
 /// town's other plans; the plan remembers whether the building had been finished. A building of no town is not.
 void PlanAgain(entt::entity building);

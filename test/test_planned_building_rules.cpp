@@ -258,3 +258,32 @@ TEST(PlannedBuildingRules, ABuildingPlannedAgainKeepsTheTurnItWasPlacedWith)
 	EXPECT_NEAR(YAngleOf(glm::mat3(glm::eulerAngleY(-(k_FullTurn + 1.0f)))), 1.0f, 1.0e-4f);
 	EXPECT_NEAR(YAngleOf(glm::mat3(glm::eulerAngleY(1.0f))), k_FullTurn - 1.0f, 1.0e-4f);
 }
+
+TEST(PlannedBuilding, ATownPutsUpTheBuildingWantingMendingMostOverItsFinishedPlans)
+{
+	const std::array<float, 2> plans {0.4f, 0.6f};
+	const std::array<MendCandidate, 3> buildings {MendCandidate {.desireToBeRepaired = 0.5f},
+	                                              MendCandidate {.skipped = true, .desireToBeRepaired = 0.9f},
+	                                              MendCandidate {.desireToBeRepaired = 0.7f}};
+	// The building must want it more than every plan; one with a site or put up already is passed over
+	const auto chosen = ChooseToMend(plans, buildings);
+	ASSERT_TRUE(chosen.has_value());
+	EXPECT_EQ(chosen->kind, MendChoice::Kind::Building);
+	EXPECT_EQ(chosen->index, 2u);
+}
+
+TEST(PlannedBuilding, AFinishedPlanIsStartedWhenNoBuildingWantsMendingMore)
+{
+	// A tie goes to the earlier, and a plan wins a tie with a building
+	const std::array<float, 3> plans {0.0f, 0.6f, 0.6f};
+	const std::array<MendCandidate, 1> buildings {MendCandidate {.desireToBeRepaired = 0.6f}};
+	const auto chosen = ChooseToMend(plans, buildings);
+	ASSERT_TRUE(chosen.has_value());
+	EXPECT_EQ(chosen->kind, MendChoice::Kind::Plan);
+	EXPECT_EQ(chosen->index, 1u);
+	// Nothing wanting it at all puts nothing up
+	const std::array<float, 1> none {0.0f};
+	const std::array<MendCandidate, 1> whole {MendCandidate {}};
+	EXPECT_FALSE(ChooseToMend(none, whole).has_value());
+	EXPECT_FALSE(ChooseToMend({}, {}).has_value());
+}
