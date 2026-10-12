@@ -29,6 +29,7 @@
 #include "Common/VirtualInfluence.h"
 #include "Common/Zoomer.h"
 #include "ComponentReflection.h"
+#include "Creature/CaveCreature.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
@@ -79,6 +80,7 @@
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureHair.h"
@@ -550,6 +552,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureCasting::stuckCheck>("stuckCheck")
 	    .Field<&components::CreatureCasting::destination>("destination")
 	    .Field<&components::CreatureCasting::fizzle>("fizzle");
+	Reflect<components::CreatureCopy>(context)
+	    .Field<&components::CreatureCopy::creature>("creature")
+	    .Field<&components::CreatureCopy::size>("size");
+	Reflect<components::CaveCreature>(context)
+	    .Field<&components::CaveCreature::state>("state")
+	    .Field<&components::CaveCreature::light>("light");
 	Reflect<components::CreatureFighting>(context)
 	    .Field<&components::CreatureFighting::stage>("stage")
 	    .Field<&components::CreatureFighting::opponent>("opponent")
@@ -1838,6 +1846,23 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::camera_track::Walk::forward>("forward")
 	    .Field<&openblack::camera_track::Walk::current>("current")
 	    .Field<&openblack::camera_track::Walk::step>("step");
+	Reflect<openblack::cave_creature::State>(context, ValueOnly {})
+	    .Field<&openblack::cave_creature::State::rest>("rest")
+	    .Field<&openblack::cave_creature::State::heading>("heading")
+	    .Field<&openblack::cave_creature::State::wantedHeading>("wantedHeading")
+	    .Field<&openblack::cave_creature::State::turn>("turn")
+	    .Field<&openblack::cave_creature::State::zoomed>("zoomed")
+	    .Field<&openblack::cave_creature::State::heldMs>("heldMs")
+	    .Field<&openblack::cave_creature::State::idleMs>("idleMs")
+	    .Field<&openblack::cave_creature::State::fidgets>("fidgets");
+	Reflect<openblack::cave_creature::State::Turn>(context, ValueOnly {})
+	    .Field<&openblack::cave_creature::State::Turn::from>("from")
+	    .Field<&openblack::cave_creature::State::Turn::to>("to")
+	    .Field<&openblack::cave_creature::State::Turn::timeMs>("timeMs")
+	    .Field<&openblack::cave_creature::State::Turn::durationMs>("durationMs")
+	    .Field<&openblack::cave_creature::State::Turn::spin>("spin")
+	    .Field<&openblack::cave_creature::State::Turn::blendedWith>("blendedWith")
+	    .Field<&openblack::cave_creature::State::Turn::blendWeight>("blendWeight");
 	Reflect<openblack::creature_audio::Layers>(context, ValueOnly {})
 	    .Field<&openblack::creature_audio::Layers::body>("body")
 	    .Field<&openblack::creature_audio::Layers::gesture>("gesture")

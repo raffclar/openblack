@@ -358,6 +358,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_cave_targets temple/test_creature_cave_targets.cpp
 )
+openblack_setup_and_add_test(test_cave_creature temple/test_cave_creature.cpp)
 openblack_setup_and_add_test(
   test_creature_cave_trophies temple/test_creature_cave_trophies.cpp
 )

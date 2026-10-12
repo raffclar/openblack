@@ -142,6 +142,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
+#include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -8166,9 +8167,12 @@ void StopAllImmersion() // 431 STOP_ALL_IMMERSION
 
 void SetCreatureInTemple() // 432 SET_CREATURE_IN_TEMPLE
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Whether the temple's creature room shows the player's creature, from the next visit on
+	const auto enable = Pop().intVal != 0;
+	if (Locator::creatureCaveSystem::has_value())
+	{
+		Locator::creatureCaveSystem::value().SetCreatureShown(enable);
+	}
 }
 
 void GameDrawText() // 433 GAME_DRAW_TEXT

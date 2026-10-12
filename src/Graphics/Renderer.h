@@ -527,6 +527,10 @@ private:
 	{
 		entt::entity entity;
 		uint32_t instance;
+		/// A copy of the creature drawn elsewhere in its own pose: the entity it takes its pose and eyes from, and where
+		/// it is lit from
+		entt::entity posedBy {entt::null};
+		std::optional<glm::vec3> light;
 	};
 	mutable std::vector<DrawnCreature> _drawnCreatures;
 	mutable bool _warnedCreatureCap {false};
