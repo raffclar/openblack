@@ -118,23 +118,15 @@ glm::ivec2 PointOnScreen(int column, int row, glm::ivec2 size)
 void StepFade(Fade& fade, bool boxGone, int frameMilliseconds)
 {
 	fade.boxGone = boxGone;
-	if (boxGone)
-	{
-		fade.milliseconds += frameMilliseconds;
-	}
-	else
-	{
-		fade.milliseconds -= frameMilliseconds;
-		if (fade.milliseconds < 0)
-		{
-			fade.milliseconds = 0;
-			return;
-		}
-	}
-	if (fade.milliseconds != 0)
-	{
-		fade.alpha = static_cast<uint8_t>(std::clamp((fade.milliseconds * k_Opaque) / k_FadeMilliseconds, 0, k_Opaque));
-	}
+	fade.milliseconds = boxGone ? fade.milliseconds + frameMilliseconds : std::max(fade.milliseconds - frameMilliseconds, 0);
+	// The black is set again every frame; at 0 there is none
+	fade.alpha = static_cast<uint8_t>(std::clamp((fade.milliseconds * k_Opaque) / k_FadeMilliseconds, 0, k_Opaque));
+}
+
+uint8_t SixteenBitLevel(uint8_t level)
+{
+	constexpr uint8_t k_Levels = 17;
+	return static_cast<uint8_t>((level >> 4u) * k_Levels);
 }
 
 bool FadeOver(const Fade& fade)

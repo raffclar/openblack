@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -114,7 +115,8 @@ namespace
 {
 /// A texture of the game made of a colour file and an alpha file, 256 pixels square. Null when they are missing.
 std::unique_ptr<openblack::graphics::Texture2D>
-LoadTexture(const std::string& name, openblack::graphics::Wrapping wrapping = openblack::graphics::Wrapping::ClampEdge)
+LoadTexture(const std::string& name, openblack::graphics::Wrapping wrapping = openblack::graphics::Wrapping::ClampEdge,
+            const std::function<uint8_t(uint8_t)>& level = {})
 {
 	auto& fileSystem = Locator::filesystem::value();
 	const auto colour = ReadIfExists(fileSystem.GetPath<Path::Textures>() / (name + ".raw"));
@@ -132,6 +134,13 @@ LoadTexture(const std::string& name, openblack::graphics::Wrapping wrapping = op
 		data->data[(i * 4) + 1] = colour[(i * 3) + 1];
 		data->data[(i * 4) + 2] = colour[(i * 3) + 2];
 		data->data[(i * 4) + 3] = alpha[i];
+		if (level)
+		{
+			for (size_t channel = 0; channel < 4; ++channel)
+			{
+				data->data[(i * 4) + channel] = level(data->data[(i * 4) + channel]);
+			}
+		}
 	}
 	auto texture = std::make_unique<openblack::graphics::Texture2D>(name);
 	texture->Create(k_AtlasSize, k_AtlasSize, 1, openblack::graphics::TextureFormat::RGBA8, wrapping,
@@ -233,8 +242,9 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	}
 	// The tip bubble's box and tail
 	created->_gatheringText = LoadTexture("gatheringtext");
-	// The front end's swirling backdrop, its texture repeating across the screen
-	created->_backdrop = LoadTexture("pin", graphics::Wrapping::Repeat);
+	// The front end's swirling backdrop, its texture repeating across the screen, kept as the game kept it: 4 bits to a
+	// colour and to its alpha
+	created->_backdrop = LoadTexture("pin", graphics::Wrapping::Repeat, menu_backdrop::SixteenBitLevel);
 	// The gestures' pictures, for the tips that show one
 	for (size_t i = 0; i < created->_gestureSheets.size(); ++i)
 	{
@@ -376,11 +386,11 @@ void GameInterface::DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mous
 	}
 	_newPlayerBox->Draw(_painter);
 	_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
-	// The screen fades from and to black over it all
+	// The screen fades from and to black over it all, the pointer too
 	if (black > 0)
 	{
-		_canvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f),
-		                 glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(black) / 255.0f), nullptr);
+		_pointerCanvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f),
+		                        glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(black) / 255.0f), nullptr);
 	}
 	_canvas.End();
 	_pointerCanvas.End();

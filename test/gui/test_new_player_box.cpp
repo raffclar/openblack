@@ -213,12 +213,12 @@ TEST(MenuBackdrop, TheScreenFadesInFromBlackAndOutToBlackOverASecond)
 	menu_backdrop::Fade fade;
 	menu_backdrop::StepFade(fade, false, 499);
 	EXPECT_EQ(fade.alpha, 127);
-	// Coming to 0 leaves the last black
 	menu_backdrop::StepFade(fade, false, 496);
 	EXPECT_EQ(fade.alpha, 1);
+	// At 0 there is no black at all
 	menu_backdrop::StepFade(fade, false, 10);
 	EXPECT_EQ(fade.milliseconds, 0);
-	EXPECT_EQ(fade.alpha, 1);
+	EXPECT_EQ(fade.alpha, 0);
 	EXPECT_FALSE(menu_backdrop::FadeOver(fade));
 	// Once the box has gone it goes back to black, and is over past 999
 	menu_backdrop::StepFade(fade, true, 999);
@@ -227,6 +227,15 @@ TEST(MenuBackdrop, TheScreenFadesInFromBlackAndOutToBlackOverASecond)
 	menu_backdrop::StepFade(fade, true, 1);
 	EXPECT_EQ(fade.alpha, 255);
 	EXPECT_TRUE(menu_backdrop::FadeOver(fade));
+}
+
+TEST(MenuBackdrop, TheTextureKeepsFourBitsAColour)
+{
+	EXPECT_EQ(menu_backdrop::SixteenBitLevel(0), 0);
+	EXPECT_EQ(menu_backdrop::SixteenBitLevel(15), 0);
+	EXPECT_EQ(menu_backdrop::SixteenBitLevel(16), 17);
+	EXPECT_EQ(menu_backdrop::SixteenBitLevel(0x7f), 7 * 17);
+	EXPECT_EQ(menu_backdrop::SixteenBitLevel(255), 255);
 }
 
 TEST(MenuBackdrop, TheSwirlsTurnAtMostSixtyTimesASecond)

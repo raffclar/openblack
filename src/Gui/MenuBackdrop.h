@@ -63,9 +63,9 @@ void PlaceLayer(Swirls& swirls, int layer, float turn, std::span<glm::vec2, k_Po
 /// Where a point of the grid is on a screen box of a size: across in fortieths, down in thirtieths, each in whole pixels
 [[nodiscard]] glm::ivec2 PointOnScreen(int column, int row, glm::ivec2 size);
 
-/// The black that covers the screen as the box comes up and after it goes: it starts at 999 ms of black, which go down
-/// by each frame's milliseconds while the box is up and up again once it has gone. The black is 255ths of the
-/// milliseconds over 1000; a frame that lands on 0 leaves the black as it was
+/// The black that covers the screen, the box and the pointer as the box comes up and after it goes: it starts at 999 ms
+/// of black, which go down by each frame's milliseconds (to 0 at the least) while the box is up and up again once it
+/// has gone. The black is 255ths of the milliseconds over 1000; none at 0
 struct Fade
 {
 	int milliseconds {999};
@@ -77,6 +77,10 @@ struct Fade
 void StepFade(Fade& fade, bool boxGone, int frameMilliseconds);
 /// The screen is done with once the box was gone at the last frame and the count has passed 999
 [[nodiscard]] bool FadeOver(const Fade& fade);
+
+/// The backdrop's texture is kept with 4 bits to each of its colours and its alpha, the low bits dropped: a level of 0
+/// to 255 as it is drawn
+[[nodiscard]] uint8_t SixteenBitLevel(uint8_t level);
 
 /// The grid is placed once per screen refresh at most, 60 times a second, each time with all the time since the last
 struct Pace
