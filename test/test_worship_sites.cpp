@@ -109,8 +109,19 @@ public:
 		return pot;
 	}
 
+	void OpenBuildingSite(entt::entity site, entt::entity town, float desire) override
+	{
+		openedSites.push_back({site, town});
+		siteDesires[site] = desire;
+	}
+	void CloseBuildingSite(entt::entity site) override { closedSites.push_back(site); }
+
 	int32_t landNumber {2};
 	uint32_t turn {0};
+	/// The building sites opened for a site and a town asked to build it, in turn, and the sites closed
+	std::vector<std::pair<entt::entity, entt::entity>> openedSites;
+	std::unordered_map<entt::entity, float> siteDesires;
+	std::vector<entt::entity> closedSites;
 	std::unordered_map<entt::entity, float> potAngles;
 	magic::WorshipBatteryRules chantRules {
 	    .chantsPerVillager = 2.0f, .chantsToFillBattery = 100.0f, .eachVillagerAddToFillBattery = 10.0f};
@@ -513,4 +524,42 @@ TEST(WorshipSiteSystem, ATownWithAStoragePitIsLinkedToItsSiteByAFootpath)
 			EXPECT_FALSE(f.registry.AllOf<FootpathLink>(site));
 		}
 	}
+}
+
+TEST(WorshipSiteSystem, ATownAskedToBuildItsSiteHasItAsABuildingSiteUntilItIsBuilt)
+{
+	Fixture f;
+	const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, false);
+	f.system->TempleBuilt(temple);
+	const auto site = f.registry.Get<const components::Town>(town).worshipSite;
+	ASSERT_TRUE(site != entt::null);
+	ASSERT_EQ(f.world->openedSites.size(), 1u);
+	EXPECT_EQ(f.world->openedSites.front(), std::make_pair(site, town));
+	EXPECT_FLOAT_EQ(f.world->siteDesires.at(site), 0.0f);
+	EXPECT_TRUE(f.world->closedSites.empty());
+
+	// Built whole, its building site goes
+	f.system->BuildBy(site, 1.0f);
+	ASSERT_EQ(f.world->closedSites.size(), 1u);
+	EXPECT_EQ(f.world->closedSites.front(), site);
+	// Built, no town is asked again
+	f.system->SetCanHaveSites(temple, true);
+	EXPECT_EQ(f.world->openedSites.size(), 1u);
+}
+
+TEST(WorshipSiteSystem, ASiteGoingUpStopsBeingABuildingSiteWhenNoTownIsLeftToBuildIt)
+{
+	Fixture f;
+	const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = f.registry.Get<const components::Town>(town).worshipSite;
+	ASSERT_TRUE(site != entt::null);
+	ASSERT_FALSE(f.world->openedSites.empty());
+	f.registry.Get<components::Town>(town).owner = PlayerNames::NEUTRAL;
+	f.system->TownChangedHands(town);
+	ASSERT_EQ(f.world->closedSites.size(), 1u);
+	EXPECT_EQ(f.world->closedSites.front(), site);
 }
