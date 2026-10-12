@@ -81,6 +81,7 @@
 #include "ECS/CreatureNaming.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -103,6 +104,15 @@ using creature_plan_actions::Target;
 
 namespace
 {
+/// The advisor may tell the player of what the creature learnt
+void TellHelp(entt::entity creature, const openblack::creature_help::Message& message)
+{
+	if (openblack::Locator::creatureHelpSystem::has_value())
+	{
+		openblack::Locator::creatureHelpSystem::value().Raise(creature, message);
+	}
+}
+
 namespace town_compassion = openblack::creature_town_compassion;
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
@@ -1915,7 +1925,7 @@ void CreatureMindSystem::SeeSkill(const glm::vec3& point, size_t skill)
 		return;
 	}
 	registry.Each<const Creature, CreatureMindState, const Transform>(
-	    [&](entt::entity, const Creature&, CreatureMindState& mind, const Transform& at) {
+	    [&](entt::entity entity, const Creature&, CreatureMindState& mind, const Transform& at) {
 		    if (!mind.learnt.has_value() || glm::distance(at.position, point) > k_ViewDistance)
 		    {
 			    return;
@@ -1925,6 +1935,19 @@ void CreatureMindSystem::SeeSkill(const glm::vec3& point, size_t skill)
 		    if (progress.learnt && !progress.ignored)
 		    {
 			    creature_mind_model::Think(*mind.learnt, fmt::format("I've learnt to {}", tables->skills.at(skill).name));
+		    }
+		    // The advisor tells of it: too young to learn it, learnt it now, or still learning it (a skill it knows already
+		    // says nothing)
+		    using creature_help::Kind;
+		    const auto parameter = static_cast<uint32_t>(skill);
+		    if (progress.ignored && !progress.learnt)
+		    {
+			    TellHelp(entity, {.kind = Kind::CantLearnNormalActionYet, .parameter = parameter});
+		    }
+		    else if (!progress.ignored)
+		    {
+			    TellHelp(entity, {.kind = progress.learnt ? Kind::LessonNormalAction : Kind::NearlyLearntNormalAction,
+			                      .parameter = parameter});
 		    }
 	    });
 }
@@ -1938,7 +1961,7 @@ void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)
 		return;
 	}
 	registry.Each<const Creature, CreatureMindState, const Transform>(
-	    [&](entt::entity, const Creature& creature, CreatureMindState& mind, const Transform& at) {
+	    [&](entt::entity entity, const Creature& creature, CreatureMindState& mind, const Transform& at) {
 		    // A mind stilled, as by the freeze spell, learns nothing
 		    if (!mind.learnt.has_value() || mind.paused || glm::distance(at.position, point) > k_ViewDistance)
 		    {
@@ -1951,6 +1974,16 @@ void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)
 		    {
 			    creature_mind_model::Think(*mind.learnt,
 			                               fmt::format("I've learnt the miracle {}", tables->miracles.at(miracle).name));
+		    }
+		    // The advisor tells of what the sighting showed
+		    if (progress.event.has_value())
+		    {
+			    using creature_help::Kind;
+			    using creature_watching::LearningEvent;
+			    const auto kind = *progress.event == LearningEvent::TooYoung       ? Kind::CantLearnMagicActionYet
+			                      : *progress.event == LearningEvent::NearlyLearnt ? Kind::NearlyLearntMagicAction
+			                                                                       : Kind::LessonMagicAction;
+			    TellHelp(entity, {.kind = kind, .parameter = static_cast<uint32_t>(miracle)});
 		    }
 	    });
 }

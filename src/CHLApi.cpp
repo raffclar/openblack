@@ -147,6 +147,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -525,6 +526,9 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 	                              made.joinsTown ? VillagerArchetype::Joins::NearestTown : VillagerArchetype::Joins::Nobody);
 	if (Locator::livingActionSystem::has_value())
 	{
+		// Then it is set to the script's age, as big as that age and in its models, even when it was made a named
+		// villager of another age
+		Locator::livingActionSystem::value().VillagerSetAge(villager, made.age);
 		Locator::livingActionSystem::value().VillagerSetScriptState(villager, VillagerStates::InScript);
 	}
 	return villager;
@@ -580,7 +584,9 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return ScriptMarkerArchetype::Create(position);
 	case ObjectType::Villager:
 	case ObjectType::VillagerChild:
-		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype, position);
+		// Made standing on the land under the place asked for, whatever height the script gave
+		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype,
+		                            script::create_rules::KeepsScriptHeight(type) ? position : OnGround(position));
 	// The game's whale object type: the opening's sharks
 	case ObjectType::Whale:
 		return SharkArchetype::Create(position, scale);
@@ -4125,9 +4131,12 @@ void ReleaseDualCamera() // 095 RELEASE_DUAL_CAMERA
 
 void SetCreatureHelp() // 096 SET_CREATURE_HELP
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The same switch as the creature help option: the advisor's messages about the player's creature
+	const bool on = Pop().intVal != 0;
+	if (Locator::creatureHelpSystem::has_value())
+	{
+		Locator::creatureHelpSystem::value().SetHelpOn(on);
+	}
 }
 
 void GetTargetObject() // 097 GET_TARGET_OBJECT

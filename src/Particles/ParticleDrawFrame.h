@@ -261,6 +261,20 @@ void AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, const 
 void AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> vertices, std::span<const uint32_t> triangles,
                    const glm::vec3& sortPoint, LightSheet::Look look = LightSheet::Look::Stars);
 
+/// A sparkle marking a queued fight move: a frame of the blob sheet facing the screen, added to what is behind it
+struct FightMark
+{
+	glm::vec3 position;
+	/// Half its width and height
+	float halfSize;
+	/// Its frame's top left corner in the sheet and the frame's size
+	glm::vec4 uv;
+	/// Red, green, blue and alpha, 0..1
+	glm::vec4 colour;
+};
+/// Adds the fight sparkles to the frame, each taking its own place among what blends
+void AddFightMarks(Frame& frame, std::span<const FightMark> marks);
+
 /// The three sprites of a player's symbol, in the order drawn: a still glow, a turning glow, then the symbol. Their
 /// materials are the glow's for the first two and the symbol's for the third.
 struct SymbolSprites

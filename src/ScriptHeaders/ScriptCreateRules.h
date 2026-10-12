@@ -36,6 +36,10 @@ inline constexpr int32_t k_LastCreateType = static_cast<int32_t>(ObjectType::Ani
 /// Whether a script may ask to create a thing of the type; any other is refused with an error
 [[nodiscard]] bool IsCreatableType(int32_t type);
 
+/// Whether a thing a script creates keeps the height above the land the script gave its place. Only a marker and a mobile
+/// static do; everything else is made standing on the land under that place, whatever height the script gave.
+[[nodiscard]] bool KeepsScriptHeight(ObjectType type);
+
 /// CREATE_WITH_ANGLE_AND_SCALE gives its angle in degrees; things are turned in radians
 [[nodiscard]] float AngleFromDegrees(float degrees);
 
