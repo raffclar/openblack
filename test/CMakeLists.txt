@@ -781,3 +781,6 @@ openblack_setup_and_add_test(
   test_worship_site_construction test_worship_site_construction.cpp
 )
 openblack_setup_and_add_test(test_tree_bend test_tree_bend.cpp)
+openblack_setup_and_add_test(
+  test_creature_route_search test_creature_route_search.cpp
+)
