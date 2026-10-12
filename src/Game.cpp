@@ -216,6 +216,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
@@ -3006,6 +3007,7 @@ bool Game::Initialize() noexcept
 		settings.sfxVolume = audio.GetSfxVolume();
 		settings.musicVolume = audio.GetMusicVolume();
 		settings.leftHandedHand = !Locator::config::value().rightHandedHand;
+		settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
 		_interface = gui::GameInterface::Create(gui::ToUtf16(user != nullptr ? user : "Player"), std::move(settings));
 		if (!_interface)
 		{
