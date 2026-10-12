@@ -52,6 +52,7 @@ public:
 
 	Registry* Entities() override { return &registry; }
 	[[nodiscard]] uint32_t MillisecondsPerTurn() const override { return 100; }
+	[[nodiscard]] uint32_t Turn() const override { return static_cast<uint32_t>(turn); }
 	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override { return PlayerNames::PLAYER_ONE; }
 	entt::entity StartLoop(entt::id_type sound, glm::vec3 /*position*/, entt::entity /*owner*/) override
 	{
