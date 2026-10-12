@@ -35,6 +35,30 @@ void LandIsland::Draw() noexcept
 
 	ImGui::SliderFloat("Small Bump", &config.smallBumpMapStrength, 0.0f, 1.0f, "%.3f");
 
+	// The lines the land's detail falls off at come from the detail level; here they can be set by hand
+	if (ImGui::TreeNodeEx("Detail Lines", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		const auto levelLines = land_detail::For(config.detailLevel);
+		bool overridden = config.landDetailLines.has_value();
+		if (ImGui::Checkbox("Set by hand", &overridden))
+		{
+			config.landDetailLines = overridden ? std::optional(levelLines) : std::nullopt;
+		}
+		auto lines = config.landDetailLines.value_or(levelLines);
+		ImGui::BeginDisabled(!overridden);
+		ImGui::SliderFloat("Half mesh from", &lines.meshNear, 0.0f, 5000.0f, "%.0f");
+		ImGui::SliderFloat("Quarter mesh from", &lines.meshFar, 0.0f, 5000.0f, "%.0f");
+		ImGui::SliderFloat("Mesh morph band", &lines.meshBand, 1.0f, 500.0f, "%.0f");
+		ImGui::SliderFloat("Coarse texture from", &lines.texture, 0.0f, 5000.0f, "%.0f");
+		ImGui::SliderFloat("Texture fade band", &lines.textureBand, 1.0f, 500.0f, "%.0f");
+		ImGui::EndDisabled();
+		if (overridden)
+		{
+			config.landDetailLines = lines;
+		}
+		ImGui::TreePop();
+	}
+
 	ImGui::Separator();
 
 	ImGui::Text("Block Count: %zu", landIsland.GetBlocks().size());

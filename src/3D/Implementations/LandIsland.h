@@ -98,6 +98,11 @@ public:
 	[[nodiscard]] const graphics::Texture2D& GetLuminosityMap() const override { return *_luminosityMap; }
 	[[nodiscard]] const graphics::Texture2D& GetCellColourMap() const override { return *_cellColourMap; }
 	[[nodiscard]] const graphics::Texture2D& GetBlockTextures() const override { return *_blockTextures; }
+	[[nodiscard]] const graphics::Texture2D* GetCoarsePages() const override { return _coarsePages.get(); }
+	[[nodiscard]] glm::vec4 GetCoarsePageSlot(size_t block) const override
+	{
+		return block < _coarsePageSlots.size() ? _coarsePageSlots[block] : glm::vec4(0.0f);
+	}
 	[[nodiscard]] const graphics::FrameBuffer& GetFootprintFramebuffer() const override { return *_footprintFrameBuffer; }
 	[[nodiscard]] const graphics::FrameBuffer& GetLandAlphaFramebuffer() const override { return *_landAlphaFrameBuffer; }
 
@@ -113,6 +118,8 @@ private:
 	std::unique_ptr<graphics::Texture2D> _luminosityMap;
 	std::unique_ptr<graphics::Texture2D> _cellColourMap;
 	std::unique_ptr<graphics::Texture2D> _blockTextures;
+	std::unique_ptr<graphics::Texture2D> _coarsePages;
+	std::vector<glm::vec4> _coarsePageSlots;
 	/// Every block's vertices, a run of them each
 	std::unique_ptr<graphics::VertexBuffer> _blockVertices;
 
