@@ -148,10 +148,12 @@ struct Layout
 	[[nodiscard]] std::span<const RowLayout> Rows() const { return std::span(rows).first(rowCount); }
 };
 
-/// The width the labels' column takes: the widest label, at the text's size, and half a row more
+/// The width the labels' column takes: the widest label, at the text's size, and half a row more in whole pixels
 [[nodiscard]] float LabelColumnWidth(std::span<const float> labelWidths, float size);
-/// The panel's layout on a screen: with the reward a third of the screen high and a quarter down it, without it three
-/// quarters as high and near the top. The bars are as wide as the labels' column.
+/// The rows' pitch on a screen: a sixteenth of its height, in whole pixels; the text is half of it
+[[nodiscard]] int RowPitch(glm::u16vec2 resolution);
+/// The panel's layout on a screen, in whole pixels: with the reward a third of the screen high and a quarter down it,
+/// without it three quarters as high and near the top. The bars are as wide as the labels' column.
 [[nodiscard]] Layout Compute(glm::u16vec2 resolution, bool withReward, float labelColumnWidth);
 
 /// The part of a bar that is filled: from one side to the other, the bright end where it ends. The reward's bar fills
