@@ -134,7 +134,7 @@ void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 {
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
 	{
-		villager_home::SetupMobileMoveTo(action, goal, final);
+		villager_home::SetupMobileMoveTo(action, goal);
 	}
 }
 

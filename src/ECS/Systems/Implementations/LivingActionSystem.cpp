@@ -1170,6 +1170,12 @@ bool LivingActionSystem::EnterState(LivingAction& action, VillagerStates state, 
 	{
 		return false;
 	}
+	// A new top state lets go of the state the villager was heading for first: whatever it goes on to next is set after
+	// this, as a walk sets where it is heading once it is walking
+	if (VillagerGetState(action, LivingAction::Index::Final) != VillagerStates::InvalidState)
+	{
+		SetStateDirectly(action, LivingAction::Index::Final, VillagerStates::InvalidState);
+	}
 	SetStateDirectly(action, LivingAction::Index::Top, state);
 	return true;
 }
@@ -1198,12 +1204,6 @@ LivingActionSystem::SetResult LivingActionSystem::ChangeTopState(LivingAction& a
 			return SetResult::EntryFailed;
 		}
 		SetStateDirectly(action, LivingAction::Index::Final, *destination);
-	}
-	else if (Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(current)).isFinalState != 0)
-	{
-		// Now in a state that is an end in itself, it no longer heads for the one it was walking to, whose checks
-		// stop with it
-		SetStateDirectly(action, LivingAction::Index::Final, VillagerStates::InvalidState);
 	}
 	const auto villager = Locator::entitiesRegistry::value().ToEntity(action);
 	villager_reactions::SetStateSpeed(villager, current);

@@ -130,7 +130,7 @@ uint32_t villager_flock::MoveInFlock(LivingAction& action)
 		if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos,
 		                                                                               VillagerStates::MoveInFlock))
 		{
-			villager_home::SetupMobileMoveTo(action, map_coords::ToMetres(*step.goal), VillagerStates::MoveInFlock);
+			villager_home::SetupMobileMoveTo(action, map_coords::ToMetres(*step.goal));
 		}
 	}
 	return step.result;

@@ -162,7 +162,7 @@ bool MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 	{
 		return false;
 	}
-	villager_home::SetupMobileMoveTo(action, goal, final);
+	villager_home::SetupMobileMoveTo(action, goal);
 	return true;
 }
 
