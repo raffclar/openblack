@@ -18,7 +18,6 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/vec2.hpp>
-#include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
@@ -278,8 +277,13 @@ void Finish(entt::entity building)
 		graveyards::StartsWorking(building);
 		// A finished crèche starts working
 		creches::StartsWorking(building);
-		// TODO(villager-life): a finished house takes its people in and its town reacts to the new building
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "A building other than a temple was finished without its town's reaction");
+		// A finished building of a town counts as put up for mending only while it isn't whole. No one is moved in: the
+		// homeless and the crowded find it when they next look for a better home.
+		if (auto* abode = registry.TryGet<Abode>(building); abode != nullptr && TownOf(building).has_value())
+		{
+			abode->putUpForMending = world_objects::LifeOf(building) < 1.0f;
+		}
+		// TODO(villager-social): the town's people react to a new civic building
 	}
 }
 
@@ -302,7 +306,12 @@ void Repaired(entt::entity building)
 	graveyards::StartsWorking(building);
 	// A repaired crèche takes its town back if the town has none
 	creches::StartsWorking(building);
-	// TODO(villager-life): a repaired house takes its people in again and its town reacts to it working
+	// Whole again, the town may put it up for mending the next time it is hurt. No one is moved in: the homeless and
+	// the crowded find it when they next look for a better home.
+	if (auto* abode = registry.TryGet<Abode>(building))
+	{
+		abode->putUpForMending = false;
+	}
 	registry.SetDirty();
 }
 
