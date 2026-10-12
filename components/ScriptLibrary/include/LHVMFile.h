@@ -83,8 +83,9 @@ public:
 	/// Read lhvm file from a buffer
 	void Open(const std::vector<uint8_t>& buffer);
 
-	/// Write the program (globals, code, autostart scripts, scripts and data). Runtime status isn't written yet. False
-	/// when the file can't be written.
+	/// Write the program (globals, code, autostart scripts, scripts and data) and, for a saved game, the running state
+	/// (stacks, variable values, tasks and clocks) in the layout the game's script saves use. False when the file can't be
+	/// written.
 	bool Write(const std::filesystem::path& filepath) const;
 	void Write(std::ostream& stream) const;
 
