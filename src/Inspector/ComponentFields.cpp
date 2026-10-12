@@ -1440,13 +1440,17 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Temple::destructionBeamClock>("destructionBeamClock")
 	    .Field<&components::Temple::destructionBeamSource>("destructionBeamSource");
 	Reflect<components::TempleEntrance>(context).Field<&components::TempleEntrance::temple>("temple");
+	Reflect<components::TempleLantern>(context)
+	    .Field<&components::TempleLantern::temple>("temple")
+	    .Field<&components::TempleLantern::light>("light");
 	Reflect<components::TempleExterior>(context)
 	    .Field<&components::TempleExterior::alignment>("alignment")
 	    .Field<&components::TempleExterior::alignmentTarget>("alignmentTarget")
 	    .Field<&components::TempleExterior::size>("size")
 	    .Field<&components::TempleExterior::sizeTarget>("sizeTarget")
 	    .Field<&components::TempleExterior::morphed>("morphed")
-	    .Field<&components::TempleExterior::drawnBuilt>("drawnBuilt");
+	    .Field<&components::TempleExterior::drawnBuilt>("drawnBuilt")
+	    .Field<&components::TempleExterior::lanternsMade>("lanternsMade");
 	Reflect<components::Town>(context)
 	    .Field<&components::Town::id>("id")
 	    .Field<&components::Town::owner>("owner")
@@ -1466,6 +1470,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::onWayToWorship>("onWayToWorship")
 	    .Field<&components::Town::congregationPos>("congregationPos")
 	    .Field<&components::Town::emergencyTurn>("emergencyTurn")
+	    .Field<&components::Town::worshipShareBeforeEmergency>("worshipShareBeforeEmergency")
 	    .Field<&components::Town::graveyard>("graveyard")
 	    .Field<&components::Town::creche>("creche")
 	    .Field<&components::Town::desiresChanged>("desiresChanged")

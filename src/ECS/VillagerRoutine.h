@@ -154,6 +154,60 @@ constexpr float k_TentTreeCrowd = 4.0f;
 	return emergencyTurn != 0 && turn - emergencyTurn < lasts;
 }
 
+/// What a town's game turn does about emergencies
+struct EmergencyTurnFacts
+{
+	/// It is in an emergency now
+	bool inEmergency {false};
+	/// Anything of the town was harmed by someone this very turn
+	bool attackedThisTurn {false};
+	/// Its storage pit or village centre is on fire
+	bool storeOrCentreBurning {false};
+	/// The share of its people wanted at worship, and the share it had when its worship was stopped (0 if it wasn't)
+	float worshipShare {0.0f};
+	float worshipShareBefore {0.0f};
+};
+struct EmergencyTurnOutcome
+{
+	/// Call the emergency: the first call gathers its people, a later one only starts its time again
+	bool call {false};
+	/// Set the town's worship share to this
+	std::optional<float> setWorshipShare;
+	/// The share to keep for after the emergency
+	float worshipShareBefore {0.0f};
+	/// The emergency is over: forget when it was called
+	bool end {false};
+};
+/// During an emergency an attack on the town that turn starts its time again, and its worship stops, the share it had
+/// kept. Out of one, its storage pit or village centre burning calls one; otherwise its worship comes back at the kept
+/// share, unless a share was set meanwhile, and the emergency is forgotten.
+[[nodiscard]] constexpr EmergencyTurnOutcome EmergencyTurn(const EmergencyTurnFacts& facts)
+{
+	EmergencyTurnOutcome outcome {.worshipShareBefore = facts.worshipShareBefore};
+	if (facts.inEmergency)
+	{
+		outcome.call = facts.attackedThisTurn;
+		if (facts.worshipShare != 0.0f)
+		{
+			outcome.worshipShareBefore = facts.worshipShare;
+			outcome.setWorshipShare = 0.0f;
+		}
+		return outcome;
+	}
+	if (facts.storeOrCentreBurning)
+	{
+		outcome.call = true;
+		return outcome;
+	}
+	if (facts.worshipShareBefore != 0.0f && facts.worshipShare == 0.0f)
+	{
+		outcome.setWorshipShare = facts.worshipShareBefore;
+	}
+	outcome.worshipShareBefore = 0.0f;
+	outcome.end = true;
+	return outcome;
+}
+
 /// Whether a villager working towards a state leaves it to gather when its town calls an emergency: most states, but
 /// not being inside its home, in bed, eating at home, sitting about or held by a script
 [[nodiscard]] bool AnswersTownEmergency(VillagerStates state);

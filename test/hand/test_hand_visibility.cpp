@@ -12,6 +12,7 @@
 #include "Hand/HandVisibility.h"
 
 using openblack::hand_visibility::IsShown;
+using openblack::hand_visibility::TakesPresses;
 
 TEST(HandVisibility, TheHandIsOutInPlay)
 {
@@ -29,4 +30,16 @@ TEST(HandVisibility, AScriptsCinemaBarsPutItAway)
 	// Put away, it is still and bends no trees, so nothing near where it was moves for it
 	EXPECT_FALSE(IsShown(false, false));
 	EXPECT_FALSE(IsShown(true, false));
+}
+
+TEST(HandVisibility, TheHandTakesPressesInPlay)
+{
+	static_assert(TakesPresses(true));
+	EXPECT_TRUE(TakesPresses(true));
+}
+
+TEST(HandVisibility, AScriptsCinemaBarsKeepPressesFromTheHand)
+{
+	// A click during the intro's cinema grips no land, so it throws up no dust
+	EXPECT_FALSE(TakesPresses(false));
 }
