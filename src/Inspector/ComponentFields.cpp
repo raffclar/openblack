@@ -213,7 +213,6 @@
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/RewardRules.h"
-#include "ECS/ScriptHighlightRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/VillagerDeathRules.h"
@@ -234,6 +233,7 @@
 #include "Magic/SpellChants.h"
 #include "Magic/TownBelief.h"
 #include "Particles/ParticleSpellLink.h"
+#include "Particles/RisingSparks.h"
 #include "Physics/DamageMesh.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptTimers.h"
@@ -2452,12 +2452,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::reward::DustSprite::offset>("offset")
 	    .Field<&openblack::ecs::reward::DustSprite::frame>("frame")
 	    .Field<&openblack::ecs::reward::DustSprite::rgb>("rgb");
-	Reflect<openblack::ecs::script_highlights::Spark>(context, ValueOnly {})
-	    .Field<&openblack::ecs::script_highlights::Spark::ageMilliseconds>("ageMilliseconds")
-	    .Field<&openblack::ecs::script_highlights::Spark::angle>("angle");
-	Reflect<openblack::ecs::script_highlights::Sparks>(context, ValueOnly {})
-	    .Field<&openblack::ecs::script_highlights::Sparks::sparks>("sparks")
-	    .Field<&openblack::ecs::script_highlights::Sparks::firstPicture>("firstPicture");
 	Reflect<openblack::ecs::town_aggression::Record>(context, ValueOnly {})
 	    .Field<&openblack::ecs::town_aggression::Record::aggression>("aggression", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::town_aggression::Record::lastTurns>("lastTurns", {k_PlayerNamesNames})
@@ -2683,6 +2677,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::particles::ProcessInfo::power>("power")
 	    .Field<&openblack::particles::ProcessInfo::enabled>("enabled")
 	    .Field<&openblack::particles::ProcessInfo::spin>("spin");
+	Reflect<openblack::particles::rising_sparks::Spark>(context, ValueOnly {})
+	    .Field<&openblack::particles::rising_sparks::Spark::ageMilliseconds>("ageMilliseconds")
+	    .Field<&openblack::particles::rising_sparks::Spark::angle>("angle");
+	Reflect<openblack::particles::rising_sparks::Sparks>(context, ValueOnly {})
+	    .Field<&openblack::particles::rising_sparks::Sparks::sparks>("sparks")
+	    .Field<&openblack::particles::rising_sparks::Sparks::firstPicture>("firstPicture");
 	Reflect<openblack::physics::damage::Corner>(context, ValueOnly {})
 	    .Field<&openblack::physics::damage::Corner::position>("position")
 	    .Field<&openblack::physics::damage::Corner::uv>("uv");
