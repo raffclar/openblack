@@ -382,6 +382,20 @@ TEST(ParticleDraw, AnimatedTexturesMoveOnByCellsOrSlide)
 	EXPECT_FLOAT_EQ(creator.UvOffset(500).y, 32.0f * 500.0f / (1000.0f * 256.0f));
 }
 
+TEST(ParticleDraw, AModelKeptOutOfTheLightsShowsItsTextureInItsAtomsColour)
+{
+	MeshCreator creator;
+	// A plain model in the scene's lights is shaded by them
+	EXPECT_FALSE(creator.DrawnUnlit());
+	// Kept out of them, as the falling forest seed is, it is drawn unlit and fully opaque whatever its atom's alpha
+	creator.dynamicLighting = false;
+	EXPECT_TRUE(creator.DrawnUnlit());
+	EXPECT_FLOAT_EQ(creator.UnlitAlpha(0.25f), 1.0f);
+	// One drawn in its atom's alpha takes that alpha
+	creator.useGlobalAlpha = true;
+	EXPECT_FLOAT_EQ(creator.UnlitAlpha(0.25f), 0.25f);
+}
+
 TEST(ParticleDraw, AChakraRisesThenFades)
 {
 	EXPECT_FLOAT_EQ(maths::ChakraFade(0.25f, 0.5f, 1.5f), 0.5f);

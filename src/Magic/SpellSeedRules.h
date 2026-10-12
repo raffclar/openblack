@@ -68,9 +68,6 @@ struct SeedWithSpell
 /// Whether such a seed is shown over its miracle: one bound to its miracle and made at an icon of the player's worship,
 /// until the miracle closes down. A seed whose miracle runs from the hand, or which stays in the hand, never is.
 [[nodiscard]] bool ShownWithSpell(const SeedWithSpell& seed);
-/// Whether such a seed is drawn over its miracle. As shown, but the forest miracle's seed is drawn over its forest even
-/// when it wasn't made at an icon of the player's worship (the user's call: the original leaves it out)
-[[nodiscard]] bool DrawnWithSpell(const SeedWithSpell& seed, bool forest);
 /// A miracle whose seed is shown closes down once the seed stands where its player has no influence
 [[nodiscard]] bool ClosesOutOfInfluence(bool shown, bool inInfluence, bool closedDown);
 
