@@ -1694,7 +1694,7 @@
     "type": "string"
    },
    {
-    "description": "With feature: a short kebab-case description, e.g. \"yogi-face-whole-f30\". It is saved as <root>/<domain>/<feature>/<date>_<branch>_<what>_<backend>.png, never over another, and catalogued in <root>/catalogue.jsonl once written",
+    "description": "With feature: a short kebab-case description, e.g. \"yogi-face-whole-f30\". It is saved as <root>/<domain>/<feature>/<date>_<branch>_<what>_<backend>.png, never over another (a taken name gets _2, _3..., and the answer's renamed_from and warnings say so), and catalogued in <root>/catalogue.jsonl once written with the camera drawn",
     "name": "what",
     "type": "string"
    },
