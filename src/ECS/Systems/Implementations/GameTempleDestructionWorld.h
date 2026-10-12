@@ -42,6 +42,7 @@ public:
 	[[nodiscard]] float RandomShare(float spread) override;
 	void StartScript(std::string_view name) override;
 	void Remove(entt::entity object) override;
+	void RemoveWorshipSites(entt::entity temple) override;
 };
 
 } // namespace openblack::ecs::systems
