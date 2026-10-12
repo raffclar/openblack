@@ -184,9 +184,6 @@ public:
 	static constexpr float k_HandTempleTurnTime = 0.4f;
 	/// Land lower than this is the sea, which the hand rests on
 	static constexpr float k_HandSeaAltitude = 0.1f;
-	/// Seconds the hand eases over to land further from and nearer to the camera
-	static constexpr float k_HandEaseOutTime = 0.28f;
-	static constexpr float k_HandEaseInTime = 0.1f;
 	/// Seconds the hand takes to hold its distance from the camera as it drags by the edge of the screen
 	static constexpr float k_HandHoldTime = 0.4f;
 

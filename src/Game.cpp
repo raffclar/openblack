@@ -4704,14 +4704,10 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		    .reach = handReach,
 		});
 
-		// The hand eases out slowly away from the camera and quickly towards it
-		const auto easeTime = _handHoverZoomer.GetValue() <= hover.target ? k_HandEaseOutTime : k_HandEaseInTime;
-		_handHoverZoomer.SetDestination(hover.target, easeTime);
-		_handHoverZoomer.Update(deltaSeconds);
-		if (_handHoverZoomer.GetValue() < 1.0f)
-		{
-			_handHoverZoomer.Reset(1.0f);
-		}
+		// The hand eases out slowly away from the camera and quickly towards it, but not while it pulls a thing out of
+		// the ground: the pull places it then
+		const bool pulling = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsPulling();
+		hand_feel::EaseHover(_handHoverZoomer, hover.target, deltaSeconds, pulling);
 		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), hover.limit), k_HandMinDistance, handReach);
 	}
 	_handPosition = eye + _handRayDirection * _handDistance;
@@ -5029,6 +5025,10 @@ void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transfor
 		if (const auto held = grab->GetHeld())
 		{
 			frame->held = static_cast<uint32_t>(entt::to_integral(*held));
+			if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(*held))
+			{
+				frame->heldAt = transform->position;
+			}
 		}
 	}
 	trace->EndFrame();

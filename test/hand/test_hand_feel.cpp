@@ -13,6 +13,7 @@
 #include "Hand/HandFeel.h"
 
 namespace hand_feel = openblack::hand_feel;
+using openblack::Zoomer;
 
 TEST(HandFeel, VillagersAndAnimalsAreHoveredBeforeAndModelsFelt)
 {
@@ -165,4 +166,42 @@ TEST(HandFeel, TheHandKeepsItsDistanceUnderTheSkyAndStaysWithinItsReach)
 	                                                .minDistance = 2.0f,
 	                                                .reach = 300.0f});
 	EXPECT_EQ(close.target, 1.0f);
+}
+
+TEST(HandFeel, TheHoverEasesOutSlowlyAndInQuickly)
+{
+	// Re-aimed every frame, it eases on towards the distance aimed at, faster towards the camera than away from it
+	Zoomer out(100.0f);
+	Zoomer in(100.0f);
+	for (int frame = 0; frame < 6; ++frame)
+	{
+		hand_feel::EaseHover(out, 150.0f, 0.016f, false);
+		hand_feel::EaseHover(in, 50.0f, 0.016f, false);
+	}
+	EXPECT_GT(out.GetValue(), 100.0f);
+	EXPECT_LT(out.GetValue(), 150.0f);
+	EXPECT_LT(in.GetValue(), 100.0f);
+	EXPECT_GT(in.GetValue(), 50.0f);
+	EXPECT_GT(100.0f - in.GetValue(), out.GetValue() - 100.0f);
+
+	// Never nearer than a unit
+	Zoomer close(3.0f);
+	hand_feel::EaseHover(close, 0.0f, 0.2f, false);
+	EXPECT_FLOAT_EQ(close.GetValue(), 1.0f);
+}
+
+TEST(HandFeel, PullingAThingOutOfTheGroundLeavesTheHoverWhereItWas)
+{
+	// Looking down on a tree, the hand hovered on its crown, 110 from the camera, when it took hold of it. While it
+	// pulls, the cursor is over the land 150 away, or over the leaning crown nearer the camera.
+	Zoomer hover(110.0f);
+	for (int frame = 0; frame < 60; ++frame)
+	{
+		hand_feel::EaseHover(hover, frame % 2 == 0 ? 150.0f : 95.0f, 0.016f, true);
+		ASSERT_FLOAT_EQ(hover.GetValue(), 110.0f);
+	}
+	// Free, it eases on from where it hovered when it took hold
+	hand_feel::EaseHover(hover, 150.0f, 0.016f, false);
+	EXPECT_GT(hover.GetValue(), 110.0f);
+	EXPECT_LT(hover.GetValue(), 112.0f);
 }
