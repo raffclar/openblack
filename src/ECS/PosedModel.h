@@ -62,8 +62,26 @@ struct SkinHit
 	/// Which of the model's skins: the last of them that the first submesh's primitive of the same place uses, the
 	/// first skin when none does
 	uint32_t skin {0};
+	/// The submesh the triangle is in
+	uint32_t subMesh {0};
 };
 [[nodiscard]] std::optional<SkinHit> NearestSkinHit(const ecs::Registry& registry, entt::entity entity,
                                                     const graphics::L3DMesh& mesh, const glm::mat4& model, glm::vec3 origin,
                                                     glm::vec3 direction);
+/// A point kept on a model's skin, which moves with it as it is posed: a triangle of a submesh, by its first index, and
+/// how far along its first side (s) and third side (t) from its first corner
+struct SkinPoint
+{
+	uint32_t subMesh {0};
+	uint32_t firstIndex {0};
+	float s {0.0f};
+	float t {0.0f};
+};
+/// Where a point on the skin is as the model is drawn this frame: only its triangle's three corners are placed. None when
+/// the model no longer has that triangle.
+[[nodiscard]] std::optional<glm::vec3> PointOnSkin(const ecs::Registry& registry, entt::entity entity,
+                                                   const graphics::L3DMesh& mesh, const glm::mat4& model,
+                                                   const SkinPoint& point);
+/// A triangle's first corner, moved s of the way along its first side and t along its third
+[[nodiscard]] glm::vec3 SkinPointPosition(const std::array<glm::vec3, 3>& corners, float s, float t);
 } // namespace openblack::ecs::posed_model

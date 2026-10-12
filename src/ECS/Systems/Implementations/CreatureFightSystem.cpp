@@ -68,7 +68,9 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/CreatureScars.h"
 #include "ECS/Map.h"
+#include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -80,6 +82,7 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingCircles.h"
@@ -97,6 +100,7 @@ using openblack::creature::CreatureRig;
 namespace fight = openblack::creature_fight;
 namespace feedback = openblack::creature_feedback;
 namespace marks = openblack::creature_fight::marks;
+namespace posed_model = openblack::ecs::posed_model;
 using Pace = CreatureLocomotionSystemInterface::Pace;
 
 namespace
@@ -268,38 +272,41 @@ std::vector<feedback::Capsule> BodyOf(const ecs::Registry& registry, entt::entit
 	                              feedback::k_BodyRadiusShare * HeightOf(ShownSize(*body)));
 }
 
-/// The bones of a creature's body as posed, placed in the world
-std::vector<glm::mat4> BonesInWorld(const ecs::Registry& registry, entt::entity creature)
+/// The creature's mesh and the matrix it is drawn with, if it has a loaded mesh
+std::optional<std::pair<const graphics::L3DMesh*, glm::mat4>> DrawnMeshOf(const ecs::Registry& registry, entt::entity creature)
 {
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (animation == nullptr || transform == nullptr)
+	const auto* mesh = registry.Valid(creature) ? registry.TryGet<const Mesh>(creature) : nullptr;
+	const auto* transform = registry.Valid(creature) ? registry.TryGet<const Transform>(creature) : nullptr;
+	if (mesh == nullptr || transform == nullptr || !Locator::resources::has_value())
 	{
-		return {};
+		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	std::vector<glm::mat4> bones;
-	bones.reserve(animation->boneMatrices.size());
-	for (const auto& bone : animation->boneMatrices)
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(mesh->id))
 	{
-		bones.push_back(placement * bone);
+		return std::nullopt;
 	}
-	return bones;
+	return std::pair {&*meshes.Handle(mesh->id),
+	                  creature::PlacementMatrix(transform->position, transform->rotation, transform->scale)};
 }
 
-/// A sparkle sitting where a point meets a creature's body, kept on the nearest bone so that it moves with the body
-marks::Mark MarkOnBody(const ecs::Registry& registry, entt::entity creature, const glm::vec3& point, marks::Anchor anchor)
+/// Where a line first meets a creature's skin as it is drawn, tested against every triangle of its nearest level of
+/// detail as posed this frame
+std::optional<posed_model::SkinHit> SkinHitOn(const ecs::Registry& registry, entt::entity creature, const glm::vec3& origin,
+                                              const glm::vec3& direction)
 {
-	const auto bones = BonesInWorld(registry, creature);
-	const auto& parents = registry.Get<const CreatureAnimation>(creature).skeleton.parents;
-	const auto bone = marks::NearestBone(parents, bones, point);
-	if (!bone.has_value())
+	const auto drawn = DrawnMeshOf(registry, creature);
+	if (!drawn.has_value())
 	{
-		// No pose: kept in the creature's ground frame instead
-		const auto& transform = registry.Get<const Transform>(creature);
-		return {.anchor = anchor, .bone = 0, .local = point - transform.position};
+		return std::nullopt;
 	}
-	return {.anchor = anchor, .bone = *bone, .local = marks::ToLocal(bones[*bone], point)};
+	return posed_model::NearestSkinHit(registry, creature, *drawn->first, drawn->second, origin, direction);
+}
+
+/// A sparkle sitting where a line met a creature's skin, kept on that triangle so that it moves with the skin
+marks::Mark MarkOnSkin(const posed_model::SkinHit& hit, marks::Anchor anchor)
+{
+	return {.anchor = anchor, .subMesh = hit.subMesh, .firstIndex = hit.hit.firstIndex, .s = hit.hit.s, .t = hit.hit.t};
 }
 
 /// Where a sparkle sits now, if what it sits on is still there
@@ -314,16 +321,28 @@ std::optional<glm::vec3> MarkPosition(const ecs::Registry& registry, entt::entit
 		                      mark.local);
 	}
 	const auto body = mark.anchor == marks::Anchor::Opponent ? opponent : self;
-	if (!registry.Valid(body) || !registry.AllOf<CreatureAnimation, Transform>(body))
+	const auto drawn = DrawnMeshOf(registry, body);
+	if (!drawn.has_value())
 	{
 		return std::nullopt;
 	}
-	const auto bones = BonesInWorld(registry, body);
-	if (mark.bone >= bones.size())
+	return posed_model::PointOnSkin(registry, body, *drawn->first, drawn->second,
+	                                {.subMesh = mark.subMesh, .firstIndex = mark.firstIndex, .s = mark.s, .t = mark.t});
+}
+
+/// The creature the hand is over, as the interface picked it when the last frame was drawn
+std::optional<entt::entity> CreatureUnderHand(const ecs::Registry& registry)
+{
+	if (!Locator::pickingSystem::has_value())
 	{
-		return registry.Get<const Transform>(body).position + mark.local;
+		return std::nullopt;
 	}
-	return marks::ToWorld(bones[mark.bone], mark.local);
+	const auto& picked = Locator::pickingSystem::value().GetPick().object;
+	if (!picked.has_value() || !registry.Valid(*picked) || !registry.AllOf<Creature>(*picked))
+	{
+		return std::nullopt;
+	}
+	return picked;
 }
 
 /// The sound of the hand directing a fight: heard the same wherever the click was
@@ -1102,22 +1121,33 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 	const auto& selfAt = registry.Get<const Transform>(*self).position;
 	const auto& opponentAt = registry.Get<const Transform>(opponent).position;
 	const auto opponentHeight = HeightOf(ShownSize(registry.Get<const Creature>(opponent)));
-	const auto onOpponent = feedback::RayHit(rayOrigin, rayDirection, BodyOf(registry, opponent));
-	const auto onSelf = feedback::RayHit(rayOrigin, rayDirection, BodyOf(registry, *self));
+	// Over the player's creature or its opponent, the press is theirs: it counts only where the line meets their skin
+	const auto under = CreatureUnderHand(registry);
+	if (under.has_value() && *under != *self && *under != opponent)
+	{
+		return false;
+	}
 
 	fight::Move move;
 	marks::Mark mark;
-	if (onOpponent.has_value() && (!onSelf.has_value() || *onOpponent <= *onSelf))
+	if (under.has_value())
 	{
-		// High, in the middle or low by where on the opponent's body the press lands
-		const auto point = rayOrigin + (rayDirection * *onOpponent);
-		move = fight::AttackMove(fight::BandOf((point.y - opponentAt.y) / opponentHeight));
-		mark = MarkOnBody(registry, opponent, point, marks::Anchor::Opponent);
-	}
-	else if (onSelf.has_value())
-	{
-		move = fight::BlockMove();
-		mark = MarkOnBody(registry, *self, rayOrigin + (rayDirection * *onSelf), marks::Anchor::Self);
+		const auto hit = SkinHitOn(registry, *under, rayOrigin, rayDirection);
+		if (!hit.has_value())
+		{
+			return true;
+		}
+		if (*under == opponent)
+		{
+			// High, in the middle or low by where on the opponent's body the press lands
+			move = fight::AttackMove(fight::BandOf((hit->hit.point.y - opponentAt.y) / opponentHeight));
+			mark = MarkOnSkin(*hit, marks::Anchor::Opponent);
+		}
+		else
+		{
+			move = fight::BlockMove();
+			mark = MarkOnSkin(*hit, marks::Anchor::Self);
+		}
 	}
 	else
 	{
@@ -1171,24 +1201,18 @@ std::optional<fight::Tip> CreatureFightSystem::HandTip(std::optional<entt::entit
 	return fight::TipOver(under == self, under == opponent);
 }
 
-std::optional<glm::vec3> CreatureFightSystem::SeesOpponent(entt::entity creature) const
+std::optional<posed_model::SkinHit> CreatureFightSystem::SeesOpponent(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto opponent = registry.Get<const CreatureFighting>(creature).opponent;
-	const auto from = registry.Get<const Transform>(creature).position;
-	const auto to = registry.Get<const Transform>(opponent).position;
-	const auto length = glm::distance(from, to);
-	if (length <= 0.0f)
+	// The line from the fighter's groin through the opponent's must meet the opponent's skin
+	const auto from = creature_scars::GroinOf(creature);
+	const auto to = creature_scars::GroinOf(opponent);
+	if (!from.has_value() || !to.has_value())
 	{
 		return std::nullopt;
 	}
-	const auto direction = (to - from) / length;
-	const auto hit = feedback::RayHit(from, direction, BodyOf(registry, opponent));
-	if (!hit.has_value() || *hit > length)
-	{
-		return std::nullopt;
-	}
-	return from + (direction * *hit);
+	return SkinHitOn(registry, opponent, *from, *to - *from);
 }
 
 bool CreatureFightSystem::GestureMove(const fight::Move& move)
@@ -1204,9 +1228,9 @@ bool CreatureFightSystem::GestureMove(const fight::Move& move)
 	{
 		return false;
 	}
-	// Its sparkle sits where the line to the opponent meets its body; a gesture charges nothing
+	// Its sparkle sits where the line to the opponent meets its skin; a gesture charges nothing
 	auto& fighting = registry.Get<CreatureFighting>(*self);
-	fighting.fighter.marks.Add(MarkOnBody(registry, fighting.opponent, *seen, marks::Anchor::Opponent));
+	fighting.fighter.marks.Add(MarkOnSkin(*seen, marks::Anchor::Opponent));
 	_markHeld = false;
 	QueueMove(*self, move, false);
 	return true;

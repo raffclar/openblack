@@ -18,17 +18,19 @@
 
 #include "Creature/CreatureFight.h"
 #include "Creature/FightMarks.h"
+#include "ECS/PosedModel.h"
 
 using namespace openblack::creature_fight;
 using namespace openblack::creature_fight::marks;
+using openblack::ecs::posed_model::SkinPointPosition;
 
 namespace
 {
 constexpr float k_Tolerance = 1e-4f;
 
-Mark OnOpponent(size_t bone)
+Mark OnOpponent(uint32_t triangle)
 {
-	return {.anchor = Anchor::Opponent, .bone = bone};
+	return {.anchor = Anchor::Opponent, .firstIndex = triangle};
 }
 
 void ExpectNear(const glm::vec3& actual, const glm::vec3& expected)
@@ -108,11 +110,11 @@ TEST(FightMarks, PopFrontShiftsTheRest)
 	list.Add(OnOpponent(3));
 	list.PopFront();
 	ASSERT_EQ(list.Size(), 2u);
-	EXPECT_EQ(list.Marks()[0].bone, 2u);
-	EXPECT_EQ(list.Marks()[1].bone, 3u);
+	EXPECT_EQ(list.Marks()[0].firstIndex, 2u);
+	EXPECT_EQ(list.Marks()[1].firstIndex, 3u);
 	list.DropNewest();
 	ASSERT_EQ(list.Size(), 1u);
-	EXPECT_EQ(list.Marks()[0].bone, 2u);
+	EXPECT_EQ(list.Marks()[0].firstIndex, 2u);
 }
 
 TEST(FightMarks, KeepNewestKeepsTheFrontFrame)
@@ -122,12 +124,12 @@ TEST(FightMarks, KeepNewestKeepsTheFrontFrame)
 	list.Charge(1200.0f);
 	list.Animate();
 	ASSERT_EQ(list.Marks()[0].frame, 8u);
-	list.Add({.anchor = Anchor::Ground, .bone = 7});
+	list.Add({.anchor = Anchor::Ground, .firstIndex = 7});
 	list.Charge(300.0f);
 	list.KeepNewest();
 	ASSERT_EQ(list.Size(), 1u);
 	EXPECT_EQ(list.Marks()[0].anchor, Anchor::Ground);
-	EXPECT_EQ(list.Marks()[0].bone, 7u);
+	EXPECT_EQ(list.Marks()[0].firstIndex, 7u);
 	EXPECT_FLOAT_EQ(list.Marks()[0].chargeMs, 300.0f);
 	EXPECT_EQ(list.Marks()[0].frame, 8u);
 }
@@ -156,18 +158,21 @@ TEST(FightMarks, OnlyBlowsOnTheOpponentFlicker)
 	EXPECT_EQ(list.Marks()[1].frame, 8u);
 }
 
-TEST(FightMarks, NearestBoneFollowsTheStretchFromItsParent)
+TEST(FightMarks, ASkinPointFollowsItsTriangle)
 {
-	// A root at the origin, a bone up at (0, 10, 0) and one out at (10, 10, 0)
-	const std::vector<uint32_t> parents {0, 0, 1};
-	const std::vector<glm::mat4> bones {
-	    glm::mat4(1.0f),
-	    glm::translate(glm::mat4(1.0f), {0.0f, 10.0f, 0.0f}),
-	    glm::translate(glm::mat4(1.0f), {10.0f, 10.0f, 0.0f}),
-	};
-	EXPECT_EQ(NearestBone(parents, bones, {1.0f, 5.0f, 0.0f}), 1u);
-	EXPECT_EQ(NearestBone(parents, bones, {6.0f, 11.0f, 0.0f}), 2u);
-	EXPECT_FALSE(NearestBone(parents, {}, {0.0f, 0.0f, 0.0f}).has_value());
+	// A line pressed onto a triangle, as a click on the opponent's skin is tested
+	const std::vector<glm::vec3> corners {{0.0f, 0.0f, 0.0f}, {4.0f, 0.0f, 0.0f}, {0.0f, 4.0f, 0.0f}};
+	const std::vector<uint16_t> indices {0, 1, 2};
+	const auto hit =
+	    openblack::screen_pick::NearestSkinIntersection(corners, indices, {1.0f, 2.0f, -10.0f}, {0.0f, 0.0f, 1.0f});
+	ASSERT_TRUE(hit.has_value());
+	EXPECT_NEAR(hit->s, 0.25f, k_Tolerance);
+	EXPECT_NEAR(hit->t, 0.5f, k_Tolerance);
+	ExpectNear(SkinPointPosition({corners[0], corners[1], corners[2]}, hit->s, hit->t), {1.0f, 2.0f, 0.0f});
+	// The body moves and bends: the point stays at the same place on the triangle
+	const std::array<glm::vec3, 3> moved {glm::vec3(10.0f, 0.0f, 5.0f), glm::vec3(10.0f, 0.0f, 13.0f),
+	                                      glm::vec3(10.0f, 4.0f, 5.0f)};
+	ExpectNear(SkinPointPosition(moved, hit->s, hit->t), {10.0f, 2.0f, 7.0f});
 }
 
 TEST(FightMarks, PointsGoInAndOutOfAFrame)
@@ -216,5 +221,5 @@ TEST(FightMarks, TheFighterKeepsMarksInStepWithTheQueue)
 	fighter.marks.Add(OnOpponent(4));
 	PlayerMove(fighter, AttackMove(Band::High), true);
 	ASSERT_EQ(fighter.marks.Size(), 1u);
-	EXPECT_EQ(fighter.marks.Marks()[0].bone, 4u);
+	EXPECT_EQ(fighter.marks.Marks()[0].firstIndex, 4u);
 }

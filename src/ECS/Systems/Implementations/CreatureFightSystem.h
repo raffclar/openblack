@@ -12,6 +12,7 @@
 #include <random>
 
 #include "Common/RandomNumberManager.h"
+#include "ECS/PosedModel.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -103,8 +104,8 @@ private:
 	void EndView();
 	/// Leaves the fight for good, its mind taking over again
 	void Leave(entt::entity creature);
-	/// Where the line from the player's fighter to its opponent meets the opponent's body, as gestures need
-	[[nodiscard]] std::optional<glm::vec3> SeesOpponent(entt::entity creature) const;
+	/// Where the line from the player's fighter to its opponent meets the opponent's skin, as gestures need
+	[[nodiscard]] std::optional<ecs::posed_model::SkinHit> SeesOpponent(entt::entity creature) const;
 	/// A move called by a gesture, queued with its sparkle when the fighter sees its opponent
 	bool GestureMove(const creature_fight::Move& move);
 

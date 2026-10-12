@@ -12,7 +12,6 @@
 #include <cmath>
 
 #include <algorithm>
-#include <limits>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -38,14 +37,6 @@ uint32_t Ramp(double share)
 	return static_cast<uint32_t>(share * k_RampScale * k_ByteMax);
 }
 
-/// How far a point is from a stretch between two points
-float DistanceToStretch(const glm::vec3& point, const glm::vec3& from, const glm::vec3& to)
-{
-	const auto along = to - from;
-	const auto lengthSquared = glm::dot(along, along);
-	const auto share = lengthSquared > 0.0f ? std::clamp(glm::dot(point - from, along) / lengthSquared, 0.0f, 1.0f) : 0.0f;
-	return glm::distance(point, from + (along * share));
-}
 } // namespace
 
 bool MarkList::Add(const Mark& mark)
@@ -54,7 +45,9 @@ bool MarkList::Add(const Mark& mark)
 	{
 		return false;
 	}
-	_marks.at(_count) = {.anchor = mark.anchor, .bone = mark.bone, .local = mark.local, .chargeMs = 0.0f, .frame = 0};
+	_marks.at(_count) = mark;
+	_marks.at(_count).chargeMs = 0.0f;
+	_marks.at(_count).frame = 0;
 	++_count;
 	return true;
 }
@@ -158,27 +151,6 @@ glm::vec4 openblack::creature_fight::marks::FrameUv(uint32_t frame)
 	const auto cell = frame % k_FrameCount;
 	return {static_cast<float>(cell % k_FramesPerRow) * k_Cell, static_cast<float>(cell / k_FramesPerRow) * k_Cell, k_Cell,
 	        k_Cell};
-}
-
-std::optional<size_t> openblack::creature_fight::marks::NearestBone(std::span<const uint32_t> parents,
-                                                                    std::span<const glm::mat4> bonesInWorld,
-                                                                    const glm::vec3& point)
-{
-	std::optional<size_t> nearest;
-	float best = std::numeric_limits<float>::max();
-	for (size_t bone = 0; bone < bonesInWorld.size(); ++bone)
-	{
-		const auto at = glm::vec3(bonesInWorld[bone][3]);
-		const auto parent = bone < parents.size() ? static_cast<size_t>(parents[bone]) : bone;
-		const auto from = parent < bonesInWorld.size() ? glm::vec3(bonesInWorld[parent][3]) : at;
-		const auto distance = DistanceToStretch(point, from, at);
-		if (distance < best)
-		{
-			best = distance;
-			nearest = bone;
-		}
-	}
-	return nearest;
 }
 
 glm::vec3 openblack::creature_fight::marks::ToLocal(const glm::mat4& frame, const glm::vec3& point)

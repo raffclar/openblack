@@ -13,7 +13,6 @@
 #include <cstdint>
 
 #include <array>
-#include <optional>
 #include <span>
 
 #include <glm/mat4x4.hpp>
@@ -42,9 +41,13 @@ enum class Anchor : uint8_t
 struct Mark
 {
 	Anchor anchor {Anchor::Ground};
-	/// The bone of the body it sits on (Opponent, Self)
-	size_t bone {0};
-	/// Where it sits in the bone's frame (Opponent, Self) or in the creature's frame (Ground)
+	/// The triangle of the body's skin it sits on (Opponent, Self): its submesh, its first index, and how far along its
+	/// first and third sides from its first corner, so that it moves with the skin as the body is posed
+	uint32_t subMesh {0};
+	uint32_t firstIndex {0};
+	float s {0.0f};
+	float t {0.0f};
+	/// Where it sits in the creature's frame (Ground)
 	glm::vec3 local {0.0f};
 	/// How long its click has been held, up to the full charge
 	float chargeMs {0.0f};
@@ -100,9 +103,6 @@ constexpr float k_TowardsCamera = 0.5f;
 /// The top left corner of a frame in the sheet and the frame's size, as texture coordinates
 [[nodiscard]] glm::vec4 FrameUv(uint32_t frame);
 
-/// The bone nearest a point on a posed body: the one whose stretch from its parent passes closest. None without bones.
-[[nodiscard]] std::optional<size_t> NearestBone(std::span<const uint32_t> parents, std::span<const glm::mat4> bonesInWorld,
-                                                const glm::vec3& point);
 /// A point in a frame, and back out of it
 [[nodiscard]] glm::vec3 ToLocal(const glm::mat4& frame, const glm::vec3& point);
 [[nodiscard]] glm::vec3 ToWorld(const glm::mat4& frame, const glm::vec3& local);

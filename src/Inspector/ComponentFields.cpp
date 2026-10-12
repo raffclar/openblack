@@ -1902,7 +1902,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fight::Reach::height>("height");
 	Reflect<openblack::creature_fight::marks::Mark>(context, ValueOnly {})
 	    .Field<&openblack::creature_fight::marks::Mark::anchor>("anchor")
-	    .Field<&openblack::creature_fight::marks::Mark::bone>("bone")
+	    .Field<&openblack::creature_fight::marks::Mark::subMesh>("subMesh")
+	    .Field<&openblack::creature_fight::marks::Mark::firstIndex>("firstIndex")
+	    .Field<&openblack::creature_fight::marks::Mark::s>("s")
+	    .Field<&openblack::creature_fight::marks::Mark::t>("t")
 	    .Field<&openblack::creature_fight::marks::Mark::local>("local")
 	    .Field<&openblack::creature_fight::marks::Mark::chargeMs>("chargeMs")
 	    .Field<&openblack::creature_fight::marks::Mark::frame>("frame");
