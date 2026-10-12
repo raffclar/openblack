@@ -34,6 +34,7 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "Enums.h"
 #include "Locator.h"
+#include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
@@ -237,6 +238,23 @@ TEST_F(ScriptGuideOgreNatives, ACreatureIsNamedWithAHelpText)
 	Call("SET_CREATURE_NAME", {Object(_rock), Int(5003)});
 	Call("SET_CREATURE_NAME", {Object(static_cast<entt::entity>(0)), Int(5003)});
 	EXPECT_FALSE(registry.AllOf<ecs::components::Creature>(_rock));
+}
+
+// "if MyCreature type CREATURE CREATURE_TYPE_COW": a creature is of its species' subtype
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptGuideOgreNatives, ACreatureIsOfItsSpecies)
+{
+	Locator::entitiesRegistry::value().Get<ecs::components::Creature>(_creature).species = CreatureType::Cow;
+	const auto isOfType = [this](int32_t subtype) {
+		const std::vector<lhvm::NativeArgument> arguments {
+		    Object(_creature), Int(static_cast<int32_t>(script::ObjectType::Creature)), Int(subtype)};
+		Results results;
+		EXPECT_TRUE(Locator::vm::value().CallNative(Native("IS_OF_TYPE", 3), arguments, results));
+		return !results.empty() && results.front().first.floatVal != 0.0f;
+	};
+	EXPECT_TRUE(isOfType(1));    // CREATURE_TYPE_COW
+	EXPECT_FALSE(isOfType(2));   // CREATURE_TYPE_TIGER
+	EXPECT_TRUE(isOfType(5000)); // any
 }
 
 // The Ogre's desires: all off, then hunger and anger on, wanted a little and no more

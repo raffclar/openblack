@@ -36,6 +36,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -129,9 +130,10 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 		}
 		return std::nullopt;
 	}
-	if (registry.AllOf<Creature>(entity))
+	// A creature's subtype is its species, as the scripts number them
+	if (const auto* creature = registry.TryGet<const Creature>(entity))
 	{
-		return Kind {.type = ScriptType::Creature};
+		return Kind {.type = ScriptType::Creature, .subtype = script::property_rules::ScriptCreatureType(creature->species)};
 	}
 	if (registry.AllOf<Town>(entity))
 	{
