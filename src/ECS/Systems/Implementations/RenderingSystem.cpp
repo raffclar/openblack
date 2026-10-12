@@ -117,16 +117,22 @@ entt::id_type DrawnMeshOf(entt::entity entity, const Mesh& mesh)
 }
 
 /// How a thing is drawn this frame by how deep into the view the middle of `box` is, drawn by `model`: the box of its
-/// own mesh, or of a villager's standard mesh
+/// own mesh, or of a villager's standard mesh. Whether it fades out is only asked of one that has come that far.
+template <typename Disappears>
 openblack::graphics::mesh_detail::Choice ChooseDetail(const openblack::AxisAlignedBoundingBox& box, float importance,
-                                                      const glm::mat4& model, float scale, bool disappears,
+                                                      const glm::mat4& model, float scale, Disappears&& disappears,
                                                       const openblack::Camera& camera, float modelDetail)
 {
 	namespace mesh_detail = openblack::graphics::mesh_detail;
 	const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
 	const float depth = mesh_detail::ViewDepth(centre, camera.GetOrigin(), camera.GetForward());
 	const float reach = mesh_detail::Reach(importance, mesh_detail::ScaledRadius(box.Size(), scale), modelDetail);
-	return mesh_detail::Choose(depth, reach, disappears);
+	const auto choice = mesh_detail::Choose(depth, reach, true);
+	if ((choice.alpha.has_value() || !choice.mesh.has_value()) && !disappears())
+	{
+		return mesh_detail::Choose(depth, reach, false);
+	}
+	return choice;
 }
 
 /// Whether a model's parts differ by the detail it is drawn in, of those ever drawn
@@ -504,8 +510,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    {
 				    const auto choice = ChooseDetail(
 				        meshes.Handle(bounding)->GetBoundingBox(), detail != nullptr ? detail->importance : 0.0f, modelMatrix,
-				        transform.scale.x, object_detail::Disappears(registry, entity, IsTownCentre(registry, entity)), *camera,
-				        modelDetail);
+				        transform.scale.x,
+				        [&registry, entity] {
+					        return object_detail::Disappears(registry, entity, IsTownCentre(registry, entity));
+				        },
+				        *camera, modelDetail);
 				    if (!choice.mesh.has_value())
 				    {
 					    if (detail == nullptr)
@@ -1188,8 +1197,9 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    std::optional<uint8_t> fade;
 		    if (camera != nullptr && meshes.Contains(mesh.id) && object_detail::BandedNow(registry, entity))
 		    {
-			    const auto choice = ChooseDetail(meshes.Handle(mesh.id)->GetBoundingBox(), 0.0f, modelMatrix, transform.scale.x,
-			                                     object_detail::Disappears(registry, entity, false), *camera, modelDetail);
+			    const auto choice = ChooseDetail(
+			        meshes.Handle(mesh.id)->GetBoundingBox(), 0.0f, modelMatrix, transform.scale.x,
+			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *camera, modelDetail);
 			    if (!choice.mesh.has_value())
 			    {
 				    group = Group::Gone;
