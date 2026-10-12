@@ -229,6 +229,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		    .end();
 		_renderContext.instanceUniformBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(instanceCount, layout));
 		_renderContext.instanceUniforms.resize(instanceCount);
+		_renderContext.instanceLevels.resize(instanceCount);
 	}
 
 	// Determine uniform buffer offsets and instance count for draw
@@ -238,6 +239,8 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	{
 		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
 		                                                               std::forward_as_tuple(offset, desc.first, desc.second));
+		// Every room part is drawn whole, however far off
+		drawDesc->second.filled = desc.first;
 		drawDesc->second.hiddenFromReflection = !mirroredMeshIds.contains(meshId);
 		drawDesc->second.showsReflection = reflectiveMeshIds.contains(meshId);
 		drawDesc->second.onlyJoints = doorMeshIds.contains(meshId);

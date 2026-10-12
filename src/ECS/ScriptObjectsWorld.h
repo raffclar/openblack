@@ -46,6 +46,8 @@ public:
 	virtual void SetInScript(entt::entity object, bool inScript) = 0;
 	/// A script made the object: a named villager never shows its name after
 	virtual void HideName(entt::entity /*object*/) {}
+	/// A script made the object: it never fades out of sight in the distance
+	virtual void KeepInView(entt::entity /*object*/) {}
 	/// A script controls the object
 	[[nodiscard]] virtual bool IsControlled(entt::entity object) const = 0;
 	virtual void SetControlled(entt::entity object, bool controlled) = 0;
