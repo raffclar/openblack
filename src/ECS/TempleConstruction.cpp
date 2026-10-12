@@ -228,7 +228,7 @@ void Repaired(entt::entity building)
 {
 	auto& registry = Entities();
 	registry.Remove<RepairSite>(building);
-	CloseSite(building);
+	construction::CloseSite(building);
 	if (Locator::buildingDamageSystem::has_value())
 	{
 		Locator::buildingDamageSystem::value().Repaired(building);
