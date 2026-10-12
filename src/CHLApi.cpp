@@ -1044,7 +1044,8 @@ void SpiritPointGameThing() // 010 SPIRIT_POINT_GAME_THING
 	NotImplemented();
 }
 
-/// The view the scripts ask what is in: the camera as it is now and the window's size; none without a window
+/// The view the scripts ask what is in: the camera as it is now and the window's size, only the 4:3 middle of a wider
+/// screen so that the scripts see what they would on a 4:3 screen; none without a window
 static std::optional<screen_pick::View> ScriptScreenView()
 {
 	if (!Locator::camera::has_value() || !Locator::windowing::has_value())
@@ -1057,13 +1058,13 @@ static std::optional<screen_pick::View> ScriptScreenView()
 		return std::nullopt;
 	}
 	const auto& camera = Locator::camera::value();
-	return screen_pick::View {
+	return screen_pick::FourByThreeMiddle({
 	    .worldToClip = camera.GetViewProjectionMatrix(),
 	    .resolution = glm::vec2(size),
 	    .near = camera.GetNearClip(),
 	    .xScale = camera.GetProjectionMatrix()[0][0],
 	    .camera = glm::vec3(glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current))[3]),
-	};
+	});
 }
 
 /// Whether a thing shows on the screen: a thing with a model by its model's bounding sphere, anything else by the point
