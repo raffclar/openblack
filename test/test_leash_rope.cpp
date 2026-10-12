@@ -155,3 +155,35 @@ TEST(LeashRope, RibbonTrianglesCoverEverySegment)
 	EXPECT_EQ(indices.size(), (k_PointCount - 1) * 6);
 	EXPECT_EQ(*std::ranges::max_element(indices), k_RibbonVertexCount - 1);
 }
+
+TEST(LeashRope, AScriptTakingTheCameraAloneHidesNoRope)
+{
+	EXPECT_TRUE(Shown({.scriptShows = false}));
+	EXPECT_TRUE(Shown({.scriptShows = false, .local = false}));
+}
+
+TEST(LeashRope, AScriptsCinemaBarsHideTheRopeUnlessTheScriptsShowLeashes)
+{
+	EXPECT_FALSE(Shown({.scriptShows = false, .scriptCinema = true}));
+	EXPECT_FALSE(Shown({.scriptShows = false, .scriptCinema = true, .local = false}));
+	EXPECT_TRUE(Shown({.scriptShows = true, .scriptCinema = true}));
+}
+
+TEST(LeashRope, ThePutAwayHandHidesItsOwnRopeOnlyWhileTheScriptsHideLeashes)
+{
+	EXPECT_FALSE(Shown({.scriptShows = false, .handHidden = true}));
+	EXPECT_TRUE(Shown({.scriptShows = true, .handHidden = true}));
+	EXPECT_TRUE(Shown({.scriptShows = false, .local = false, .handHidden = true}));
+}
+
+TEST(LeashRope, AHandHoldingATiedRopeDrawsNoneOfItsUsualRope)
+{
+	EXPECT_FALSE(Shown({.handHoldsTiedRope = true}));
+}
+
+TEST(LeashRope, AnotherPlayersRopeGoesAsTheirCreatureFizzesAway)
+{
+	EXPECT_TRUE(Shown({.local = false, .creatureFizz = 0.39f}));
+	EXPECT_FALSE(Shown({.local = false, .creatureFizz = k_HiddenFizz}));
+	EXPECT_TRUE(Shown({.local = true, .creatureFizz = 1.0f}));
+}

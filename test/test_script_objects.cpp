@@ -57,6 +57,7 @@ struct FakeWorld final: World
 		/// A marker or a timer
 		bool deletedWhenReleased {false};
 		bool highlight {false};
+		bool keptInView {false};
 	};
 	std::map<entt::entity, Object> objects;
 	std::vector<entt::entity> decided;
@@ -130,6 +131,7 @@ struct FakeWorld final: World
 		return objects.at(object).deletedWhenReleased;
 	}
 	[[nodiscard]] bool IsHighlight(entt::entity object) const override { return objects.at(object).highlight; }
+	void KeepInView(entt::entity object) override { objects.at(object).keptInView = true; }
 };
 
 struct System
@@ -239,6 +241,17 @@ TEST(ScriptObjectsSystem, AFoundObjectIsInAScriptButNotControlledAtItsFirstRefer
 	system->AddReference(object);
 	EXPECT_TRUE(world->objects.at(object).inScript);
 	EXPECT_FALSE(world->objects.at(object).controlled);
+}
+
+TEST(ScriptObjectsSystem, WhatAScriptMakesIsKeptInView)
+{
+	auto [world, system] = MakeSystem();
+	const auto made = world->Add(3);
+	const auto found = world->Add(4);
+	ASSERT_TRUE(system->Register(made, true));
+	ASSERT_TRUE(system->Register(found, false));
+	EXPECT_TRUE(world->objects.at(made).keptInView);
+	EXPECT_FALSE(world->objects.at(found).keptInView);
 }
 
 TEST(ScriptObjectsSystem, AnObjectAScriptMadeIsControlledAtItsFirstReference)
