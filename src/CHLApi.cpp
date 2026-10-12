@@ -890,6 +890,18 @@ void CHLApi::ResetSwitches()
 	{
 		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(true);
 	}
+	// No lesson of growing up runs any more for the local player's creature, so the game's help about it speaks again
+	if (Locator::playerSystem::has_value() && Locator::entitiesRegistry::has_value())
+	{
+		auto& players = Locator::playerSystem::value();
+		if (const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer()))
+		{
+			if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(*creature))
+			{
+				mind->inDevelopmentScript = false;
+			}
+		}
+	}
 }
 
 void CHLApi::NotImplemented(std::optional<int32_t> detail)
