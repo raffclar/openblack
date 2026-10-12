@@ -135,4 +135,9 @@ float AsPercentage(float share)
 	return share * 100.0f;
 }
 
+MeshId IconMesh(std::optional<MeshId> creatureIcon)
+{
+	return creatureIcon.value_or(MeshId::BuildingSpellHand);
+}
+
 } // namespace openblack::ecs::village_totem
