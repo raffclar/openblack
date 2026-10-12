@@ -1130,6 +1130,18 @@ void ParticleSystem::AddHandManaPathSpark(const particles::mana_path::Spark& spa
 	}
 }
 
+void ParticleSystem::AddStormBolt(glm::vec3 cloudPoint)
+{
+	if (IsRunning(_stormBolts))
+	{
+		AddTargetPosition(_stormBolts, cloudPoint);
+	}
+	else
+	{
+		_pendingStormBolts.push_back(cloudPoint);
+	}
+}
+
 std::shared_ptr<particles::ShieldSphere> ParticleSystem::FindShield(glm::vec3 point, float margin) const
 {
 	return _world.FindShield(point, margin);
@@ -1209,6 +1221,16 @@ void ParticleSystem::ProcessTurn()
 	{
 		_explodeObject = Start(ParticleType::ExplodeObject, glm::vec3(0.0f), 1.0f, true);
 	}
+	// So does the one every storm's forked bolts come down in
+	if (!IsRunning(_stormBolts))
+	{
+		_stormBolts = Start(ParticleType::LightningStrike, glm::vec3(0.0f), 1.0f, true);
+	}
+	for (const auto& point : _pendingStormBolts)
+	{
+		AddTargetPosition(_stormBolts, point);
+	}
+	_pendingStormBolts.clear();
 	KeepGestureTrails();
 	const auto* registry = Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
 	// By id: a step may start other effects
@@ -1268,6 +1290,8 @@ void ParticleSystem::Reset()
 	_fightMarks.clear();
 	_effects.clear();
 	_explodeObject = k_NoEffect;
+	_stormBolts = k_NoEffect;
+	_pendingStormBolts.clear();
 	_gestureTrails = k_NoEffect;
 	_gestureChain = k_NoEffect;
 	_world.Reset();

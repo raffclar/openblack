@@ -122,6 +122,22 @@ struct PileRoom
 /// the rest going on to the next, so only the last uncapped pile holds more than it is drawn full at
 [[nodiscard]] std::vector<uint32_t> ShareAmongPiles(uint32_t amount, std::span<const PileRoom> piles);
 
+/// A pile's life is what it holds of what it is drawn full at, so more than whole for one holding more than that. A
+/// kind of pile drawn full at nothing has no life.
+[[nodiscard]] float Life(uint32_t amount, uint32_t fullAmount);
+
+/// What a pile gains or loses when its life is set: the life it loses (or gains) times what it is drawn full at, cut to
+/// a whole number, and never less than one once it changes at all
+struct HeldChange
+{
+	uint32_t removed {0};
+	uint32_t added {0};
+};
+[[nodiscard]] HeldChange ChangeForLife(uint32_t amount, uint32_t fullAmount, float life);
+/// What a pile loses to damage, as fire or a miracle does it: its life less the damage, or all of it when the damage is
+/// more than it has
+[[nodiscard]] HeldChange ChangeForDamage(uint32_t amount, uint32_t fullAmount, float damage);
+
 /// The models a miracle's piles are drawn at: food three tenths of its size, wood seven
 inline constexpr float k_MagicFoodScale = 0.3f;
 inline constexpr float k_MagicWoodScale = 0.7f;

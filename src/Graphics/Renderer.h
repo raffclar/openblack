@@ -291,6 +291,7 @@ private:
 		CreatureSpellLook,
 		ShadeAt,
 		FogAt,
+		EnvironmentStage,
 
 		_count
 	};
@@ -330,6 +331,7 @@ private:
 	    "u_creatureSpellLook", //
 	    "u_shadeAt",           //
 	    "u_fogAt",             //
+	    "u_environmentStage",  //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
