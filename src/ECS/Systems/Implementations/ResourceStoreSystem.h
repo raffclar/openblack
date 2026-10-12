@@ -15,6 +15,11 @@
 
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 
+namespace openblack::ecs::components
+{
+struct BuildingSite;
+} // namespace openblack::ecs::components
+
 namespace openblack::ecs::systems
 {
 
@@ -33,6 +38,16 @@ public:
 	[[nodiscard]] uint32_t GetResource(entt::entity object, ResourceType type) const override;
 	uint32_t AddResource(entt::entity object, ResourceType type, uint32_t amount, std::optional<glm::vec3> at) override;
 	uint32_t RemoveResource(entt::entity object, ResourceType type, uint32_t amount) override;
+	uint32_t AddToTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount,
+	                        std::optional<glm::vec3> at) override;
+	uint32_t RemoveFromTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount) override;
+
+	/// One site at a building takes wood: a temple's onto its pile nearest where it is brought, any other's onto its one
+	/// pile, made for the first wood. What it took.
+	uint32_t AddToSite(entt::entity building, components::BuildingSite& site, ResourceType type, uint32_t amount,
+	                   std::optional<glm::vec3> at);
+	/// One site at a building gives up to an amount of wood from its piles. What it gave.
+	uint32_t TakeFromSite(entt::entity building, components::BuildingSite& site, ResourceType type, uint32_t amount);
 
 private:
 	/// A storage pit takes what it will into its piles, without the giving's count in its town

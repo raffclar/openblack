@@ -846,3 +846,6 @@ openblack_setup_and_add_test(test_creature_names test_creature_names.cpp)
 openblack_setup_and_add_test(test_creature_help test_creature_help.cpp)
 openblack_setup_and_add_test(test_help_messages test_help_messages.cpp)
 openblack_setup_and_add_test(test_object_draw_list test_object_draw_list.cpp)
+openblack_setup_and_add_test(
+  test_building_site_list test_building_site_list.cpp
+)

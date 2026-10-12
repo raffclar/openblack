@@ -211,6 +211,11 @@ void GameWorshipSiteWorld::CloseBuildingSite(entt::entity site)
 	construction::CloseSite(site);
 }
 
+void GameWorshipSiteWorld::CloseTownsBuildingSite(entt::entity site, entt::entity town)
+{
+	construction::CloseTownsSite(site, town);
+}
+
 void GameWorshipSiteWorld::RemoveDance(entt::entity dance)
 {
 	if (Locator::danceSystem::has_value())

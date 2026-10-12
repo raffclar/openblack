@@ -176,8 +176,8 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	// Its building sites: how much each wants villagers, the builders at it and the most it takes
 	for (const auto building : construction::SitesOfTown(townEntity))
 	{
-		in.siteDesires.push_back(construction::DesireForVillagers(building));
-		in.siteBuilders.push_back(static_cast<uint32_t>(registry.Get<const BuildingSite>(building).workerCount));
+		in.siteDesires.push_back(construction::DesireForVillagers(townEntity, building));
+		in.siteBuilders.push_back(static_cast<uint32_t>(construction::SiteOf(townEntity, building)->workerCount));
 		in.sitePlaces.push_back(construction::MaxBuilders(building));
 	}
 	// What its people carry and the wood at its sites, as it has kept count

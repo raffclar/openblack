@@ -64,8 +64,10 @@ public:
 	virtual void PowerUpArtefacts(entt::entity /*site*/, uint32_t /*dancers*/) {}
 	/// A site going up becomes a building site of a town asked to build it, wanting builders by a desire
 	virtual void OpenBuildingSite(entt::entity /*site*/, entt::entity /*town*/, float /*desire*/) {}
-	/// A site's building site goes: no town builds it any more
+	/// A site's building sites go: no town builds it any more
 	virtual void CloseBuildingSite(entt::entity /*site*/) {}
+	/// A town's building site at a site goes: the town no longer builds it, while other towns asked to still do
+	virtual void CloseTownsBuildingSite(entt::entity /*site*/, entt::entity /*town*/) {}
 	/// A site's spell icons go, with the seeds out from them and what they were charging
 	virtual void RemoveSpellIcons(entt::entity /*site*/) {}
 	/// A site's dance goes: each of its dancers leaves it and decides afresh what to do
