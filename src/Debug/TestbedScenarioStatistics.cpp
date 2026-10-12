@@ -32,6 +32,8 @@ constexpr size_t k_Couples = 4;
 constexpr float k_VillagerSpacing = 3.0f;
 /// Two of the town's men stand apart, where the player's lightning strikes them
 constexpr glm::vec2 k_Struck {45.0f, 0.0f};
+/// The town's belief in the player, so that it stays theirs rather than going back to the neutral player
+constexpr float k_TownBelief = 1000.0f;
 } // namespace
 
 void openblack::testbed_scenarios::AddStatisticsScenarios(std::vector<Scenario>& all)
@@ -72,5 +74,6 @@ void openblack::testbed_scenarios::AddStatisticsScenarios(std::vector<Scenario>&
 	                  .handOffset = k_Struck + glm::vec2(0.0f, -5.0f),
 	                  .handHeight = 15.0f,
 	                  .delaySeconds = 3.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
 	});
 }

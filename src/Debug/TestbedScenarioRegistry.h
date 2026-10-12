@@ -758,6 +758,9 @@ struct Scenario
 	/// A testbed set-up step until worship sets it: the player's power multiplier for a tribe, put back to 1 when the
 	/// scenario stops
 	std::optional<std::pair<Tribe, float>> tribalPower;
+	/// A testbed set-up step: the scenario's town believes this much in the player from the start, so that it stays the
+	/// player's rather than going back to the neutral player at its first turn
+	std::optional<float> townBeliefInPlayer;
 	/// A crowd spawned a batch a frame, after the creatures and objects above; the runner measures the frames once it
 	/// is all there
 	std::optional<Crowd> crowd;
