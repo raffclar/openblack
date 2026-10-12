@@ -22,6 +22,7 @@
 #include "3D/MapCoords.h"
 #include "3D/SkeletalAnimation.h"
 #include "3D/SkyDome.h"
+#include "3D/StormClouds.h"
 #include "Animals/AnimalMove.h"
 #include "Animals/FishShoal.h"
 #include "Animals/GrazerRules.h"
@@ -29,6 +30,7 @@
 #include "Common/VirtualInfluence.h"
 #include "Common/Zoomer.h"
 #include "ComponentReflection.h"
+#include "Creature/CaveCreature.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
@@ -80,6 +82,7 @@
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureHair.h"
@@ -173,6 +176,7 @@
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/StormCloud.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Swayable.h"
@@ -473,9 +477,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::PlannedTemple::yAngle>("yAngle");
 	Reflect<components::PlannedAbode>(context)
 	    .Field<&components::PlannedAbode::townId>("townId")
-	    .Field<&components::PlannedAbode::info>("info");
+	    .Field<&components::PlannedAbode::info>("info")
+	    .Field<&components::PlannedAbode::yAngle>("yAngle");
 	Reflect<components::BuildingSite>(context)
 	    .Field<&components::BuildingSite::desire>("desire")
+	    .Field<&components::BuildingSite::repair>("repair")
 	    .Field<&components::BuildingSite::workers>("workers")
 	    .Field<&components::BuildingSite::workerCount>("workerCount")
 	    .Field<&components::BuildingSite::places>("places")
@@ -494,7 +500,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Creature::penSize>("penSize")
 	    .Field<&components::Creature::autoScale>("autoScale")
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")
-	    .Field<&components::Creature::canDie>("canDie");
+	    .Field<&components::Creature::canDie>("canDie")
+	    .Field<&components::Creature::mayGoThroughVortex>("mayGoThroughVortex");
 	Reflect<components::CreatureArena>(context)
 	    .Field<&components::CreatureArena::place>("place")
 	    .Field<&components::CreatureArena::radius>("radius")
@@ -551,6 +558,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureCasting::stuckCheck>("stuckCheck")
 	    .Field<&components::CreatureCasting::destination>("destination")
 	    .Field<&components::CreatureCasting::fizzle>("fizzle");
+	Reflect<components::CreatureCopy>(context)
+	    .Field<&components::CreatureCopy::creature>("creature")
+	    .Field<&components::CreatureCopy::size>("size");
+	Reflect<components::CaveCreature>(context)
+	    .Field<&components::CaveCreature::state>("state")
+	    .Field<&components::CaveCreature::light>("light");
 	Reflect<components::CreatureFighting>(context)
 	    .Field<&components::CreatureFighting::stage>("stage")
 	    .Field<&components::CreatureFighting::opponent>("opponent")
@@ -670,6 +683,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::planActive>("planActive")
 	    .Field<&components::CreatureMindState::satisfiedByEffect>("satisfiedByEffect")
 	    .Field<&components::CreatureMindState::desireSeenTo>("desireSeenTo")
+	    .Field<&components::CreatureMindState::observedKinds>("observedKinds")
+	    .Field<&components::CreatureMindState::takenFood>("takenFood")
+	    .Field<&components::CreatureMindState::takenFrom>("takenFrom")
 	    .Field<&components::CreatureMindState::planSerial>("planSerial")
 	    .Field<&components::CreatureMindState::agendaSeen>("agendaSeen")
 	    .Field<&components::CreatureMindState::stepTurns>("stepTurns")
@@ -1439,6 +1455,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::StoragePit>(context)
 	    .Field<&components::StoragePit::woodPiles>("woodPiles")
 	    .Field<&components::StoragePit::foodPile>("foodPile");
+	Reflect<components::StormCloud>(context)
+	    .Field<&components::StormCloud::storm>("storm")
+	    .Field<&components::StormCloud::index>("index")
+	    .Field<&components::StormCloud::drift>("drift")
+	    .Field<&components::StormCloud::sizeFactor>("sizeFactor")
+	    .Field<&components::StormCloud::shade>("shade")
+	    .Field<&components::StormCloud::flashGrey>("flashGrey");
 	Reflect<components::Stream>(context).Field<&components::Stream::id>("id").Field<&components::Stream::points>("points");
 	Reflect<components::StreamSegment> {context};
 	Reflect<components::StreetLantern>(context).Field<&components::StreetLantern::country>("country");
@@ -1512,7 +1535,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::graveyard>("graveyard")
 	    .Field<&components::Town::creche>("creche")
 	    .Field<&components::Town::desiresChanged>("desiresChanged")
-	    .Field<&components::Town::desiresChangedLastTurn>("desiresChangedLastTurn");
+	    .Field<&components::Town::desiresChangedLastTurn>("desiresChangedLastTurn")
+	    .Field<&components::Town::planned>("planned")
+	    .Field<&components::Town::askedToBuildTurn>("askedToBuildTurn");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")
@@ -1679,7 +1704,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Vortex::beforeLandEffect>("beforeLandEffect")
 	    .Field<&components::Vortex::afterLandEffect>("afterLandEffect")
 	    .Field<&components::Vortex::objectMoverEffect>("objectMoverEffect")
-	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect");
+	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect")
+	    .Field<&components::Vortex::arrival>("arrival");
 	Reflect<components::WalkPath>(context)
 	    .Field<&components::WalkPath::number>("number")
 	    .Field<&components::WalkPath::track>("track")
@@ -1841,6 +1867,23 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::camera_track::Walk::forward>("forward")
 	    .Field<&openblack::camera_track::Walk::current>("current")
 	    .Field<&openblack::camera_track::Walk::step>("step");
+	Reflect<openblack::cave_creature::State>(context, ValueOnly {})
+	    .Field<&openblack::cave_creature::State::rest>("rest")
+	    .Field<&openblack::cave_creature::State::heading>("heading")
+	    .Field<&openblack::cave_creature::State::wantedHeading>("wantedHeading")
+	    .Field<&openblack::cave_creature::State::turn>("turn")
+	    .Field<&openblack::cave_creature::State::zoomed>("zoomed")
+	    .Field<&openblack::cave_creature::State::heldMs>("heldMs")
+	    .Field<&openblack::cave_creature::State::idleMs>("idleMs")
+	    .Field<&openblack::cave_creature::State::fidgets>("fidgets");
+	Reflect<openblack::cave_creature::State::Turn>(context, ValueOnly {})
+	    .Field<&openblack::cave_creature::State::Turn::from>("from")
+	    .Field<&openblack::cave_creature::State::Turn::to>("to")
+	    .Field<&openblack::cave_creature::State::Turn::timeMs>("timeMs")
+	    .Field<&openblack::cave_creature::State::Turn::durationMs>("durationMs")
+	    .Field<&openblack::cave_creature::State::Turn::spin>("spin")
+	    .Field<&openblack::cave_creature::State::Turn::blendedWith>("blendedWith")
+	    .Field<&openblack::cave_creature::State::Turn::blendWeight>("blendWeight");
 	Reflect<openblack::creature_audio::Layers>(context, ValueOnly {})
 	    .Field<&openblack::creature_audio::Layers::body>("body")
 	    .Field<&openblack::creature_audio::Layers::gesture>("gesture")
@@ -2305,6 +2348,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::living>("living")
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::destination>("destination")
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::finalState>("finalState");
+	Reflect<openblack::ecs::components::Vortex::Arrival>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::Vortex::Arrival::town>("town")
+	    .Field<&openblack::ecs::components::Vortex::Arrival::gatheringPlace>("gatheringPlace")
+	    .Field<&openblack::ecs::components::Vortex::Arrival::flockDistance>("flockDistance")
+	    .Field<&openblack::ecs::components::Vortex::Arrival::flockRadius>("flockRadius")
+	    .Field<&openblack::ecs::components::Vortex::Arrival::flock>("flock");
 	Reflect<openblack::ecs::components::WorshipSite::BuildRequest>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::town>("town")
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::desireBoost>("desireBoost");
@@ -2600,6 +2649,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::sky_dome::Rows::skyType>("skyType")
 	    .Field<&openblack::sky_dome::Rows::first>("first")
 	    .Field<&openblack::sky_dome::Rows::count>("count");
+	Reflect<openblack::storm_clouds::Drift>(context, ValueOnly {})
+	    .Field<&openblack::storm_clouds::Drift::place>("place")
+	    .Field<&openblack::storm_clouds::Drift::target>("target")
+	    .Field<&openblack::storm_clouds::Drift::step>("step")
+	    .Field<&openblack::storm_clouds::Drift::stepsLeft>("stepsLeft");
 	Reflect<openblack::temple_leashes::Look>(context, ValueOnly {})
 	    .Field<&openblack::temple_leashes::Look::scroll>("scroll")
 	    .Field<&openblack::temple_leashes::Look::pitch>("pitch")

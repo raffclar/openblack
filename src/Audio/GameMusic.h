@@ -211,6 +211,34 @@ public:
 	/// A script moves an object's music to another object
 	void MoveMusic(uint32_t from, uint32_t to);
 	[[nodiscard]] const std::vector<AttachedMusic>& GetAttachedMusic() const { return _attached; }
+	/// Whether the music attached to an object has finished: an object without music counts as finished, and attached
+	/// music never finishes while it stays attached
+	[[nodiscard]] bool IsAttachedMusicFinished(uint32_t thing) const;
+	/// A script starts an object's music again from the top: its bank stops at once if it is playing, and the music
+	/// comes back the next time it is chosen
+	void RestartAttachedMusic(uint32_t thing);
+	/// The script music of a type is over: it played to its end, or a script stopped it or started other music
+	[[nodiscard]] bool IsScriptMusicOver(MusicType type) const { return _scriptType != type; }
+
+	/// How far a sung piece of script music has got, from the cues it carries as it plays
+	struct MusicLyrics
+	{
+		/// The number of the last line cue heard, 0 before any
+		int32_t line {0};
+		/// The word of that line reached, counting from 1
+		int32_t word {0};
+	};
+	/// A cue in a piece of script music: "L" (or "l") and a number starts that line at its first word, "W" or "P" (in
+	/// either case) moves on a word, and any other cue changes nothing
+	static void ApplyMusicCue(MusicLyrics& lyrics, std::string_view cue);
+	/// Whether the music has reached a line: its last line cue was that line or a later one. Both are compared as
+	/// unsigned numbers, so a negative line is never reached.
+	[[nodiscard]] static bool ReachedMusicLine(int32_t lastLine, int32_t line);
+	/// A script starting music starts its lyrics again: no line and no word
+	void ResetMusicLyrics() { _lyrics = {}; }
+	/// A cue heard in the script's music as it plays
+	void OnScriptMusicCue(std::string_view cue) { ApplyMusicCue(_lyrics, cue); }
+	[[nodiscard]] const MusicLyrics& GetMusicLyrics() const { return _lyrics; }
 
 	// Debug introspection
 	[[nodiscard]] MusicType GetPlaying() const { return _playing; }
@@ -258,6 +286,7 @@ private:
 	std::map<int32_t, uint32_t> _resumeChunks;
 	/// Music attached to objects, the most recently attached first
 	std::vector<AttachedMusic> _attached;
+	MusicLyrics _lyrics;
 };
 
 } // namespace openblack::audio

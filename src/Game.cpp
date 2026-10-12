@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -66,6 +67,7 @@
 #include "Audio/GameMusic.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/HelpSpeech.h"
+#include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -222,12 +224,14 @@
 #include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
+#include "Graphics/TexelDepth.h"
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
+#include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -1082,6 +1086,9 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
+	// The shown tooltip's display time runs down only while the player may turn the camera
+	const bool displayTimeRuns = !Locator::cameraHelpSystem::has_value() ||
+	                             (Locator::cameraHelpSystem::value().Get().features & camera_help::feature::k_Rotate) != 0;
 	// As the player's own totem moves on the screen, the hand shows the share it is held at, over anything else
 	if (const auto tip = Locator::villageTotemSystem::has_value()
 	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(PlayerNames::PLAYER_ONE)
@@ -1112,7 +1119,7 @@ void Game::ProcessHandToolTipTurn()
 		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
 		{
 			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
-			toolTips.ProcessTurn();
+			toolTips.ProcessTurn(displayTimeRuns);
 			return;
 		}
 	}
@@ -1167,7 +1174,27 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
 		}
 	}
-	toolTips.ProcessTurn();
+	toolTips.ProcessTurn(displayTimeRuns);
+}
+
+void Game::ProcessTurnCheering()
+{
+	// While the turning lesson asks for it, the advisors cheer the player's turning of the camera on
+	if (!Locator::cameraHelpSystem::has_value() || !Locator::gameRandom::has_value() || !Locator::chlapi::has_value())
+	{
+		return;
+	}
+	auto& help = Locator::cameraHelpSystem::value().Get();
+	auto& random = Locator::gameRandom::value();
+	const help::turn_cheer::Random draws {
+	    .upTo = [&random](float x) { return random.LocalFloatRand(x); },
+	    .below = [&random](int32_t n) { return random.LocalRand(n); },
+	};
+	if (const auto line = help::turn_cheer::ProcessTurn(help.turnCheering, help.turnSpeed, GetTurn(), draws))
+	{
+		Locator::chlapi::value().PlayBankSoundEffect(static_cast<int32_t>(audio::ScriptSoundBank::HelpSprites), *line,
+		                                             std::nullopt);
+	}
 }
 
 bool Game::GameLogicLoop() noexcept
@@ -1211,6 +1238,7 @@ bool Game::GameLogicLoop() noexcept
 	// The influence asked during the turn is measured from where the hands were at it
 	Locator::influenceSystem::value().SetInGameTurn(true);
 	ProcessHandToolTipTurn();
+	ProcessTurnCheering();
 
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();
@@ -1714,7 +1742,7 @@ bool Game::Update() noexcept
 	if (Locator::creatureCaveSystem::has_value())
 	{
 		auto creatureCave = profiler.BeginScoped(Profiler::Stage::CreatureCaveUpdate);
-		Locator::creatureCaveSystem::value().Update();
+		Locator::creatureCaveSystem::value().Update(std::chrono::duration<float, std::milli>(deltaTime));
 	}
 	if (Locator::tattooEditorSystem::has_value())
 	{
@@ -1792,6 +1820,8 @@ bool Game::Update() noexcept
 	}
 	// The clouds drift with the wind, then every mist and cloud animates
 	Locator::cloudSystem::value().Update(gameTime);
+	// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
+	Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), camera.GetOrigin());
 	// The static the fizzing creatures are drawn through slides across them
@@ -2780,7 +2810,9 @@ bool Game::Initialize() noexcept
 		if (const auto sheet = fileSystem.GetPath<filesystem::Path::Data>() / fmt::format("{}.raw", name);
 		    fileSystem.Exists(sheet))
 		{
-			textureManager.Load(fmt::format("raw/{}", name), resources::Texture2DLoader::FromDiskTag {}, sheet);
+			// Loaded with its alpha by the game, so both keep four bits a channel
+			textureManager.Load(fmt::format("raw/{}", name), resources::Texture2DLoader::FromDiskTag {}, sheet,
+			                    graphics::texel_depth::Depth::FourBits);
 		}
 	}
 
@@ -3310,36 +3342,55 @@ bool Game::Initialize() noexcept
 			}
 		}
 	}
-	// The sea's texture, its colours and alpha together, four bits a channel as the game keeps it
+	// The sea's texture, its colours and alpha together
 	try
 	{
 		textureManager.Load(sea_texture::k_Id.value(), resources::Texture2DLoader::FromDiskWithAlphaTag {},
 		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_ColourFile,
-		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side,
-		                    graphics::texel_depth::Depth::FourBits);
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side);
 	}
 	catch (std::runtime_error& err)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 	}
-	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
+	// Each texture is kept at the depth the game keeps it: colours with an alpha file and the alphas four bits a channel,
+	// colours without one five bits a channel, and the small pictures the game reads as numbers as they are
+	std::vector<std::filesystem::path> rawFiles;
+	std::unordered_set<std::string> rawStems;
+	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&rawFiles, &rawStems](const std::filesystem::path& f) {
 		// The game ships a grey ice map it never loads, cut short of a whole texture
 		constexpr std::string_view k_UnusedTexture = "s_iceenvmapgrey.raw";
 		if (string_utils::LowerCase(f.extension().string()) == ".raw" &&
 		    string_utils::LowerCase(f.filename().string()) != k_UnusedTexture)
 		{
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
-			try
-			{
-				RegisterFile(textureManager, fmt::format("raw/{}", f.stem().string()), f,
-				             resources::Texture2DLoader::FromDiskTag {}, f);
-			}
-			catch (std::runtime_error& err)
-			{
-				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-			}
+			rawFiles.push_back(f);
+			rawStems.insert(string_utils::LowerCase(f.stem().string()));
 		}
 	});
+	for (const auto& f : rawFiles)
+	{
+		// The people's shadow is a grey picture the game draws as an alpha
+		constexpr std::string_view k_GreyAlpha = "human_shadow";
+		const auto stem = string_utils::LowerCase(f.stem().string());
+		const bool isAlpha = stem == k_GreyAlpha || (stem.ends_with('a') && rawStems.contains(stem.substr(0, stem.size() - 1)));
+		const auto bytes = GameFileBytes(f);
+		if (!bytes)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't find {}", f.generic_string());
+			continue;
+		}
+		const auto kind = graphics::texel_depth::Classify(*bytes, rawStems.contains(stem + "a"), isAlpha);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
+		try
+		{
+			textureManager.RegisterLoad(fmt::format("raw/{}", f.stem().string()), *bytes,
+			                            resources::Texture2DLoader::FromDiskTag {}, f, graphics::texel_depth::DepthOf(kind));
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	}
 
 	_startupTimer->Step("raw textures");
 	// The texture every creature's hair is drawn with, and its alpha beside it
@@ -3353,7 +3404,8 @@ bool Game::Initialize() noexcept
 		}
 		try
 		{
-			textureManager.Load(id, resources::Texture2DLoader::FromDiskTag {}, path);
+			// The game loads the hair with its alpha, so both keep four bits a channel
+			textureManager.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, graphics::texel_depth::Depth::FourBits);
 		}
 		catch (std::runtime_error& err)
 		{

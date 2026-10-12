@@ -32,6 +32,8 @@ namespace openblack::ecs::script_find
 
 /// A subtype that matches any thing of the type
 inline constexpr uint32_t k_AnySubtype = 5000;
+/// What the scripts are told is the subtype of a thing whose kind the game can't tell; no kind matches it
+inline constexpr uint32_t k_NoSubtype = 9999;
 /// How far from the place a plain "get ... at" looks, in metres
 inline constexpr float k_AtReach = 1.0f;
 /// How far from the place a "get town at" looks, in metres
@@ -74,6 +76,10 @@ using CellCandidates = std::function<std::vector<Candidate>(glm::ivec2 cell)>;
 /// counting only when strictly nearer than the nearest so far, so the first met wins a tie. Cells off the map are
 /// passed over. A thing farther than the reach still counts when its cell is looked through
 [[nodiscard]] entt::entity FindNearest(const map_coords::MapCoords& from, float reach, const CellCandidates& inCell);
+
+/// The town number a script gives as a number: cut to a whole number towards nought, a negative one wrapping round to a
+/// number no town has, and one too large for a whole number giving the lowest whole number, as the game takes it
+[[nodiscard]] uint32_t TownIdFromScript(float id);
 
 /// The nearest town strictly within the reach, the towns taken in the order given (each player's, then the neutral
 /// ones), the first met winning a tie

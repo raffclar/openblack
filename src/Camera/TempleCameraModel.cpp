@@ -27,7 +27,10 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera.h"
+#include "CameraLens.h"
 #include "Common/MachineClock.h"
+#include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -570,9 +573,21 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 		// The creature's room finds its targets where their points are projected onto the screen
 		using namespace CreatureCaveTargets;
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
+		// The creature is found by its body under the cursor, as it is drawn
+		if (Locator::creatureCaveSystem::has_value() && size.x > 0.0f && size.y > 0.0f)
+		{
+			const auto [eye, near] = camera.OnNearPlane(input.mouse / size);
+			input.overCaveCreature = Locator::creatureCaveSystem::value().CursorOverCaveCreature({
+			    .worldToClip = camera.GetViewProjectionMatrix(),
+			    .resolution = size,
+			    .near = camera.GetNearClip(),
+			    .xScale = camera.GetProjectionMatrix()[0][0],
+			    .camera = eye,
+			    .cursor = input.mouse,
+			});
+		}
 		for (size_t i = 0; i < k_Count; ++i)
 		{
-			// TODO(raffclar): the creature, found by picking its mesh, opens the tattoo editor
 			const auto target = static_cast<Target>(i);
 			const auto place = target == Target::Exit       ? std::optional<glm::vec3>(k_ExitPlace)
 			                   : target == Target::Creature ? std::nullopt
@@ -877,8 +892,11 @@ void TempleCameraModel::UpdateLook(float dt, const Input& input)
 	}
 	if (input.button != 0 && Locator::windowing::has_value())
 	{
-		const float width = static_cast<float>(Locator::windowing::value().GetSize().x);
-		const float across = 2.0f * std::tan(glm::radians(k_FieldOfView) * 0.5f);
+		const auto size = glm::vec2(Locator::windowing::value().GetSize());
+		const float width = size.x;
+		// What the lens sees across this screen: wider on a screen wider than 4:3, so the look still follows the mouse
+		const float across =
+		    2.0f * std::tan(camera_lens::HorizontalFieldOfView(glm::radians(k_FieldOfView), size.x / size.y) * 0.5f);
 		_look = _lookAtPress + across * (_pressMouse - input.mouse) / width;
 	}
 
@@ -938,14 +956,19 @@ std::optional<glm::vec3> TempleCameraModel::CaveMeshPoint(uint32_t index)
 void TempleCameraModel::UpdateCaveTargets(float dt, const Input& input)
 {
 	using namespace CreatureCaveTargets;
-	_caveTarget =
-	    _state == State::Look && !_lookingAtSubMesh ? TargetAt(input.caveTargets, input.mouse, input.screen.y) : std::nullopt;
+	_caveTarget = !(_state == State::Look && !_lookingAtSubMesh) ? std::nullopt
+	              : input.overCaveCreature                       ? std::optional(Target::Creature)
+	                                                             : TargetAt(input.caveTargets, input.mouse, input.screen.y);
 
-	// A press anywhere zooms back, and a click on a target, while the camera is all the way back, zooms to it
+	// A press anywhere zooms back, but from the creature, and a click on a target, while the camera is all the way back,
+	// zooms to it
 	if (input.button != 0 && !_wasPressed)
 	{
-		_caveZoomTarget = 0.0f;
-		_caveZoomedTo.reset();
+		if (_caveZoomedTo != Target::Creature)
+		{
+			_caveZoomTarget = 0.0f;
+			_caveZoomedTo.reset();
+		}
 		_pressDragged = false;
 	}
 	if (input.button != 0 && glm::any(glm::greaterThan(glm::abs(input.mouse - _pressMouse), glm::vec2(k_DragDistance))))
@@ -961,8 +984,25 @@ void TempleCameraModel::UpdateCaveTargets(float dt, const Input& input)
 	if (actions.GetAny(BindableActionMap::MOVE_LEFT, BindableActionMap::MOVE_RIGHT, BindableActionMap::MOVE_FORWARDS,
 	                   BindableActionMap::MOVE_BACKWARDS))
 	{
+		LeaveCaveCreature();
 		_caveZoomTarget = 0.0f;
 		_caveZoomedTo.reset();
+	}
+	// Zoomed onto the creature, the camera looks at it as the tattoo editor turns the view, and goes back once the editor
+	// has closed
+	if (_caveZoomedTo == Target::Creature)
+	{
+		const bool open = Locator::tattooEditorSystem::has_value() && Locator::tattooEditorSystem::value().IsOpen();
+		if (open)
+		{
+			const auto& view = Locator::tattooEditorSystem::value().GetView();
+			_caveLook = {view.eye, view.focus};
+		}
+		else
+		{
+			_caveZoomTarget = 0.0f;
+			_caveZoomedTo.reset();
+		}
 	}
 
 	// It zooms in over a second and back in half that, and zoomed to the exit, the player leaves the temple
@@ -1006,16 +1046,46 @@ void TempleCameraModel::ZoomToCaveTarget(CreatureCaveTargets::Target target)
 		_caveLook = {*eye, *look};
 		break;
 	}
+	case Target::Creature:
+	{
+		// The creature opens the tattoo editor on the player's creature, the camera taking the editor's view of it: from
+		// in front of it and above
+		if (!Locator::creatureCaveSystem::has_value() || !Locator::tattooEditorSystem::has_value())
+		{
+			return;
+		}
+		const auto& cave = Locator::creatureCaveSystem::value();
+		const auto creature = cave.GetCreature();
+		const auto view = cave.GetCaveCreatureView();
+		if (!creature.has_value() || !view.has_value())
+		{
+			return;
+		}
+		Locator::tattooEditorSystem::value().Open(*creature, *view);
+		_caveLook = {view->eye, view->focus};
+		break;
+	}
 	default:
-		// The fourth place does nothing, and the creature isn't a target yet
+		// The fourth place does nothing
 		return;
 	}
 	_caveZoomTarget = 1.0f;
 	_caveZoomedTo = target;
 }
 
+void TempleCameraModel::LeaveCaveCreature()
+{
+	// Leaving the creature hides the tattoo editor as it is
+	if (_caveZoomedTo == CreatureCaveTargets::Target::Creature && Locator::tattooEditorSystem::has_value() &&
+	    Locator::tattooEditorSystem::value().IsOpen())
+	{
+		Locator::tattooEditorSystem::value().Close();
+	}
+}
+
 void TempleCameraModel::ResetCaveTargets()
 {
+	LeaveCaveCreature();
 	_caveTarget.reset();
 	_caveZoomedTo.reset();
 	_caveZoom = 0.0f;

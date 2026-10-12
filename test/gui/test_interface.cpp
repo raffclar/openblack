@@ -154,10 +154,11 @@ TEST(GameFont, DecodesTheGlyphsAtHalfSize)
 		}
 		return result;
 	};
-	// Each pixel of the atlas is the average of four of the glyph
+	// Each pixel of the atlas is how many of four of the glyph are set, kept in four bits as the game does: 0, 4, 8, 12
+	// or 15 fifteenths
 	EXPECT_EQ(coverage(u'A'), (std::vector<int> {255, 255}));
-	EXPECT_EQ(coverage(u'B'), (std::vector<int> {127, 127}));
-	EXPECT_EQ(coverage(u'?'), (std::vector<int> {127, 63}));
+	EXPECT_EQ(coverage(u'B'), (std::vector<int> {136, 136}));
+	EXPECT_EQ(coverage(u'?'), (std::vector<int> {136, 68}));
 	EXPECT_EQ(coverage(u'W'), (std::vector<int> {255, 255, 255, 255}));
 	EXPECT_TRUE(coverage(u' ').empty());
 }

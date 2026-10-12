@@ -93,14 +93,47 @@ std::vector<Step> creature_mind::SleepAtHome(glm::vec2 home, float height, const
 	return agenda;
 }
 
+std::vector<Step> creature_mind::SleepByObject(glm::vec2 place, float radius, const Random& random)
+{
+	std::vector<Step> agenda;
+	agenda.push_back(
+	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::ToPoint, .point = place, .maxDistance = radius}});
+	if (random(k_YawnBeforeSleepingLots) == 0)
+	{
+		agenda.push_back(PlayOnce(animations::k_Tired, true));
+	}
+	agenda.push_back({.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::FaceDownSlope}});
+	agenda.push_back({.kind = Step::Kind::Static,
+	                  .sequence = {animations::k_StartSleep, animations::k_Sleep, animations::k_EndSleep},
+	                  .untilRested = true,
+	                  .closedEyes = true,
+	                  .effect = Effect::Slept});
+	agenda.push_back(PlayOnce(animations::k_Confused, true, creature_face::Cue::Grimace));
+	return agenda;
+}
+
+std::vector<Step> creature_mind::EatFromPile(uint32_t pile, glm::vec2 pilePoint, float pileRadius, float radius)
+{
+	return {
+	    {.kind = Step::Kind::Move,
+	     .movement = {.kind = Movement::Kind::ToPoint,
+	                  .point = pilePoint,
+	                  .maxDistance = (pileRadius + radius) * k_EatFromPileReach}},
+	    FaceThing(pile, k_FacePileSeconds),
+	    {.kind = Step::Kind::Object,
+	     .effect = Effect::TookFromPile,
+	     .order = {.kind = ObjectOrder::Kind::TakeFromPile, .object = pile}},
+	    {.kind = Step::Kind::Object, .effect = Effect::Eat, .order = {.kind = ObjectOrder::Kind::Eat}},
+	};
+}
+
 std::vector<Step> creature_mind::ExamineByLooking(uint32_t thing, float height, float thingHeight)
 {
-	// TODO(creature-do-action-2): the game then observes the thing (following it while it is interesting, keeping a
-	// distance from it), which isn't ported yet; the agenda ends after the look
 	return {
 	    GoNear(thing, std::max(height * k_ExamineHeights, thingHeight)),
 	    FaceThing(thing, k_ExamineFaceSeconds, creature_face::Cue::None, Gaze {.object = thing}),
 	    {.kind = Step::Kind::Wait, .seconds = k_ExamineWatchSeconds, .gaze = Gaze {.object = thing, .bottom = true}},
+	    {.kind = Step::Kind::Observe, .object = thing},
 	};
 }
 
@@ -173,4 +206,9 @@ std::vector<Step> creature_mind::PointOutHighlight(uint32_t highlight, float cam
 	                  .gaze = Gaze {.object = highlight}});
 	agenda.push_back(lookAtCamera(k_AfterPointingOutSeconds));
 	return agenda;
+}
+
+float creature_mind::CuriosityShare(bool observedKind, bool doingSomethingInteresting)
+{
+	return observedKind && !doingSomethingInteresting ? k_ObservedCuriosityShare : 1.0f;
 }

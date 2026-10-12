@@ -152,6 +152,9 @@ struct ObjectOrder
 		/// Throwing what it holds into a store at the store's own place, taking as long to fly there as it would take to
 		/// fall the distance along the ground
 		ThrowInStore,
+		/// Taking food from a pile: a handful sized to the creature, no more than the pile holds, appears at its feet and
+		/// it picks it up
+		TakeFromPile,
 	};
 	Kind kind {Kind::PickUp};
 	/// What it acts on, by its entity's number. Pointing at an object, it points at wherever the object is, turn by
@@ -234,6 +237,10 @@ enum class Effect : uint8_t
 	Hurled,
 	/// The action it is carrying out counts as done here, before the step that finishes it
 	Completed,
+	/// Has had a good look at a thing (the effect's object), and is far less curious about things of its kind from now on
+	Observed,
+	/// Has picked up the food it took from a pile, which the pile now gives up
+	TookFromPile,
 };
 
 /// What a creature's head is made to look at: a thing (its top, or its foot), a point, or the player's camera
@@ -271,6 +278,12 @@ struct Step
 		WaitInMap,
 		/// Dousing the step's object with water at once, as a creature does after casting the water miracle at a fire
 		Douse,
+		/// Watching its player's camera: turning to it whenever it is more than a quarter turn away, until whole seconds
+		/// of turns more than the step's seconds have gone by, or the camera is right overhead or more than 100 away. A
+		/// creature without a player is done at once.
+		WatchCamera,
+		/// Taking in what the step's object is, done at once
+		Observe,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -403,7 +416,24 @@ struct Senses
 	/// Whether it chooses what to do next by itself when its agenda runs out; under a script's control it only does
 	/// what it is given
 	bool choosesNext {true};
+	/// Its player's camera as the creature sees it, none for a creature without a player: how far it is, how far along
+	/// the ground, where it is on the ground, and how far round from the way the creature faces it is (radians, either
+	/// way)
+	struct CameraView
+	{
+		float distance {0.0f};
+		float groundDistance {0.0f};
+		glm::vec2 point {0.0f};
+		float turn {0.0f};
+	};
+	std::optional<CameraView> camera;
 };
+
+/// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
+/// more than this far round from it
+constexpr float k_WatchCameraFurthest = 100.0f;
+constexpr float k_WatchCameraOverhead = 0.1f;
+constexpr float k_WatchCameraTurn = 1.5707963f;
 
 /// How the eyes should look
 enum class Eyes : uint8_t

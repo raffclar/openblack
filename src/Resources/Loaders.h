@@ -188,7 +188,8 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	{
 	};
 
-	/// A texture of colours with its alpha from the file beside it, "<name>a.raw"
+	/// A texture of colours with its alpha from the file beside it, "<name>a.raw", kept four bits a channel as the game
+	/// keeps every texture it loads with an alpha
 	struct FromDiskWithAlphaTag
 	{
 	};
@@ -201,11 +202,12 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	[[nodiscard]] result_type operator()(FromPackTag, const std::string& name, const pack::G3DTexture& g3dTexture) const;
 	[[nodiscard]] result_type operator()(FromBitmapLayersTag, const std::string& name,
 	                                     std::span<const std::filesystem::path> layerPaths, uint16_t side) const;
-	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath) const;
-	/// @param depth the bits a channel the texture keeps: the game keeps the sea's in four
-	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
-	                                     const std::filesystem::path& alphaPath, uint16_t side,
+	/// A square raw file of one or three bytes a texel
+	/// @param depth the bits a channel the texture keeps, as the game keeps the file (texel_depth::DepthOf)
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath,
 	                                     graphics::texel_depth::Depth depth = graphics::texel_depth::Depth::Full) const;
+	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
+	                                     const std::filesystem::path& alphaPath, uint16_t side) const;
 };
 
 struct L3DAnimLoader final: BaseLoader<L3DAnim>

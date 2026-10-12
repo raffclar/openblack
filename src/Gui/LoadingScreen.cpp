@@ -18,6 +18,7 @@
 
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/RenderPass.h"
+#include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Gui/GlyphTexture.h"
@@ -121,6 +122,8 @@ std::unique_ptr<LoadingScreen> LoadingScreen::Create()
 		atlas[(i * 4) + 2] = colour[(i * 3) + 2];
 		atlas[(i * 4) + 3] = alpha[i];
 	}
+	// Kept four bits a channel, as the game keeps every texture it loads with an alpha
+	graphics::texel_depth::Reduce(atlas, graphics::texel_depth::Depth::FourBits);
 	return std::unique_ptr<LoadingScreen>(new LoadingScreen(std::move(texts), std::move(*font), std::move(atlas)));
 }
 

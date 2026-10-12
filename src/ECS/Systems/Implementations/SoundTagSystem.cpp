@@ -197,3 +197,38 @@ entt::entity SoundTagSystem::CreatePointSound(entt::id_type sound, const glm::ve
 	}
 	return entity;
 }
+
+bool SoundTagSystem::AttachObjectSound(entt::entity entity, entt::id_type sound)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* tag = registry.TryGet<SoundTag>(entity); tag != nullptr)
+	{
+		return tag->sound == sound;
+	}
+	registry.Assign<SoundTag>(entity, SoundTag {
+	                                      .sound = sound,
+	                                      .offset = glm::vec3(0.0f),
+	                                      .active = true,
+	                                      .emitter = entt::null,
+	                                      .point = false,
+	                                      .delayed = false,
+	                                      .turns = 0,
+	                                  });
+	return true;
+}
+
+void SoundTagSystem::DetachObjectSound(entt::entity entity, entt::id_type sound)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* tag = registry.TryGet<SoundTag>(entity);
+	if (tag == nullptr || tag->point || tag->sound != sound)
+	{
+		return;
+	}
+	// The emitter is left to play out; the audio removes it once it has stopped
+	if (tag->emitter != entt::null && Locator::audio::has_value() && IsPlaying(*tag))
+	{
+		Locator::audio::value().ReleaseEmitterLoop(tag->emitter);
+	}
+	registry.Remove<SoundTag>(entity);
+}

@@ -25,6 +25,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerCreatures.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -63,6 +64,14 @@ std::optional<entt::entity> PrimaryOf(const Registry& registry, const PlayerCrea
 class GameWorld final: public creature_removal::WorldInterface
 {
 public:
+	void KeepForNextLand(entt::entity creature) override
+	{
+		if (Locator::creatureCarryOverSystem::has_value())
+		{
+			Locator::creatureCarryOverSystem::value().KeepCreature(creature);
+		}
+	}
+
 	void LetGoFromHand(entt::entity creature) override
 	{
 		if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == creature)
@@ -236,7 +245,9 @@ std::optional<creature_removal::Removed> creature_removal::Remove(Registry& regi
 		}
 	});
 
-	// The hand and a fight let go of it before the game's own deletion starts
+	// The player's own creature is kept for the next land first, as it was. The hand and a fight let go of it before the
+	// game's own deletion starts
+	world.KeepForNextLand(creature);
 	world.LetGoFromHand(creature);
 	world.EndFight(creature);
 	// Then as the game deletes a creature: its leash comes off, its miracles and sounds stop, and its player forgets it
