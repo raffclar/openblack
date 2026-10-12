@@ -4479,8 +4479,8 @@ void Game::AskForAnotherPlayer(bool canCancel)
 {
 	auto& profiles = Locator::playerProfileSystem::value();
 	SDL_StartTextInput();
-	_interface->ShowNewPlayerBox(canCancel && profiles.GetProfileCount() > 0,
-	                             [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
+	_interface->ShowNewPlayerBoxOverGame(canCancel && profiles.GetProfileCount() > 0,
+	                                     [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
 }
 
 void Game::RestartForProfile()
