@@ -136,6 +136,7 @@
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -160,6 +161,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -1371,6 +1373,11 @@ bool Game::GameLogicLoop() noexcept
 		// Creatures fizz on out of sight or back in, after they have acted
 		Locator::creatureFizzSystem::value().ProcessTurn();
 	}
+	// The advisor tells of the player's creature: the messages waiting their turn, and what the help watches of it
+	if (Locator::creatureHelpSystem::has_value())
+	{
+		Locator::creatureHelpSystem::value().ProcessTurn();
+	}
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
 		Locator::livingActionSystem::value().Update();
@@ -1478,6 +1485,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::scriptHighlightSystem::has_value())
 	{
 		Locator::scriptHighlightSystem::value().ProcessTurn();
+	}
+	// The advisors banter when the player has had no help for a while
+	if (Locator::helpMessageSystem::has_value())
+	{
+		Locator::helpMessageSystem::value().ProcessTurn();
 	}
 	// The help's count of what the player has done moves on a turn, and its tip bubble stays while its sign shows
 	if (Locator::helpProfileSystem::has_value())
@@ -4137,6 +4149,10 @@ void Game::HandleInterfaceAction()
 		audio.SetSfxVolume(settings.sfxVolume);
 		audio.SetMusicVolume(settings.musicVolume);
 		Locator::config::value().rightHandedHand = !settings.leftHandedHand;
+		if (Locator::creatureHelpSystem::has_value())
+		{
+			Locator::creatureHelpSystem::value().SetHelpOn(settings.creatureHelp);
+		}
 	}
 
 	// The menu pauses the game while it is open

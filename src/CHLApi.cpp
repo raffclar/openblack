@@ -147,6 +147,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -4125,9 +4126,12 @@ void ReleaseDualCamera() // 095 RELEASE_DUAL_CAMERA
 
 void SetCreatureHelp() // 096 SET_CREATURE_HELP
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The same switch as the creature help option: the advisor's messages about the player's creature
+	const bool on = Pop().intVal != 0;
+	if (Locator::creatureHelpSystem::has_value())
+	{
+		Locator::creatureHelpSystem::value().SetHelpOn(on);
+	}
 }
 
 void GetTargetObject() // 097 GET_TARGET_OBJECT
