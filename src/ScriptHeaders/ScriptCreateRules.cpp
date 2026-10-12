@@ -76,6 +76,12 @@ std::optional<uint32_t> TribeVillagerRow(int32_t tribe, uint32_t draw, std::size
 	return static_cast<uint32_t>(row);
 }
 
+ScriptVillager ScriptVillagerOf(bool child, uint32_t grownUpAge)
+{
+	constexpr uint32_t k_ChildAge = 10;
+	return {.age = child ? k_ChildAge : grownUpAge + 1, .joinsTown = false};
+}
+
 std::optional<MagicType> MagicTypeFromScript(int32_t number)
 {
 	if (number < 0 || number >= k_MagicTypeCount)

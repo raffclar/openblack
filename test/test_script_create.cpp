@@ -86,6 +86,17 @@ TEST(ScriptCreate, ARandomVillagerOfATribeIsOneOfItsSevenKinds)
 	EXPECT_FALSE(TribeVillagerRow(12, 0, k_Rows).has_value());
 }
 
+TEST(ScriptCreate, AScriptsVillagerIsMadeInNoTown)
+{
+	// A grown-up a year past growing up, a child ten, and neither in a town until the script attaches it to one
+	const auto grownUp = ScriptVillagerOf(false, 13);
+	EXPECT_EQ(grownUp.age, 14u);
+	EXPECT_FALSE(grownUp.joinsTown);
+	const auto child = ScriptVillagerOf(true, 13);
+	EXPECT_EQ(child.age, 10u);
+	EXPECT_FALSE(child.joinsTown);
+}
+
 TEST(ScriptCreate, MiraclesAreNumberedAsTheGameNumbersThem)
 {
 	EXPECT_EQ(MagicTypeFromScript(0), MagicType::None);
