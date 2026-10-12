@@ -34,6 +34,8 @@ public:
 	void Reset() override;
 	void Update(const Frame& frame) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;
+	bool RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction) override;
+	void TempText(bool singleLine, std::string_view words, int32_t withInteraction) override;
 	[[nodiscard]] bool IsTextRead() const override;
 	void ClearAllText() override;
 	void CloseDialogue() override;
