@@ -157,6 +157,9 @@ public:
 		bool unlit {false};
 		/// The sun lights the mesh at every detail level, as it does the creatures and the hand
 		bool alwaysLit {false};
+		/// Where the model light is for this mesh in place of where it is this frame, as the creature in the temple's
+		/// creature room is lit from the room's fire
+		std::optional<glm::vec3> modelLight;
 		/// The land's light and colour where the mesh stands and the world's distance haze reach it. Off for a mesh drawn
 		/// in a colour of its own alone, with nothing added over it, as the columns of light over the temples and the
 		/// village centres are

@@ -1206,7 +1206,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (has(MeshUniform::ModelLight))
 			{
-				setUniform(MeshUniform::ModelLight, &_modelLight);
+				// A mesh given a light of its own keeps the frame's ambient
+				const auto modelLight = desc.modelLight.has_value() ? glm::vec4(*desc.modelLight, _modelLight.w) : _modelLight;
+				setUniform(MeshUniform::ModelLight, &modelLight);
 			}
 			if (has(MeshUniform::GroundShadowInfo))
 			{
@@ -1808,6 +1810,7 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, 
 	submitDesc.mirrored = bodyDesc.mirrored;
 	submitDesc.groundShadows = false;
 	submitDesc.sortDepth = bodyDesc.sortDepth;
+	submitDesc.modelLight = bodyDesc.modelLight;
 	auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
 	// Frozen, each piece takes the body's freeze: its light tinted towards the icy colour and a sheen of ice over it
 	if (freeze > 0.0f)
@@ -4932,6 +4935,12 @@ void Renderer::SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const
 			_drawnCreatures.push_back({.entity = entity, .instance = instance});
 		}
 	}
+	// The copies of creatures drawn in poses of their own, as the creature in the temple's creature room
+	for (const auto& copy : Locator::rendereringSystem::value().GetContext().creatureCopyDraws)
+	{
+		_drawnCreatures.push_back(
+		    {.entity = copy.creature, .instance = copy.instance, .posedBy = copy.copy, .light = copy.light});
+	}
 	const auto cap = MaxCreaturesDrawn();
 	if (_drawnCreatures.size() <= cap || drawDesc.camera == nullptr)
 	{
@@ -5598,12 +5607,17 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			// The creatures, each posed and shaped as it is, then its eyes
 			drawingCreatures = true;
-			for (const auto& [entity, instance] : _drawnCreatures)
+			for (const auto& drawn : _drawnCreatures)
 			{
+				const auto entity = drawn.entity;
+				const auto instance = drawn.instance;
+				// A copy drawn elsewhere looks as its creature does, in a pose of its own
+				const bool copy = drawn.posedBy != entt::null;
+				const auto poser = copy ? drawn.posedBy : entity;
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
 				const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);
 				const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
-				const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(entity);
+				const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser);
 				if (mesh == nullptr || !meshManager.Contains(mesh->id))
 				{
 					continue;
@@ -5642,8 +5656,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					continue;
 				}
-				const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(entity);
+				// A copy shows none of its creature's frozen or fizzing look, and is lit by a light of its own
+				const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(poser);
 				const float fizz = spells != nullptr ? spells->fizz : 0.0f;
+				submitDesc.modelLight = drawn.light;
 				if (desc.viewId == RenderPass::Reflection)
 				{
 					// The sea reflects the body alone, without its eyes or hair, whole, and only until it has fizzed a
@@ -5652,6 +5668,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					{
 						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
 					}
+					submitDesc.modelLight.reset();
 					continue;
 				}
 				uint32_t eyesSortDepth = 0;
@@ -5686,9 +5703,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
 				}
 				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
-				DrawCreatureEyes(desc, entity, submitDesc, fizz, freeze, eyesSortDepth);
+				DrawCreatureEyes(desc, poser, submitDesc, fizz, freeze, eyesSortDepth);
+				submitDesc.modelLight.reset();
 				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
-				if (creature_fizz_look::HairShown(fizz, freeze))
+				// TODO(raffclar): a copy's hair isn't drawn: the creature's hangs from the creature where it is in the world
+				if (!copy && creature_fizz_look::HairShown(fizz, freeze))
 				{
 					DrawCreatureHair(desc, entity);
 				}

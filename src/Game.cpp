@@ -1689,7 +1689,7 @@ bool Game::Update() noexcept
 	if (Locator::creatureCaveSystem::has_value())
 	{
 		auto creatureCave = profiler.BeginScoped(Profiler::Stage::CreatureCaveUpdate);
-		Locator::creatureCaveSystem::value().Update();
+		Locator::creatureCaveSystem::value().Update(std::chrono::duration<float, std::milli>(deltaTime));
 	}
 	if (Locator::tattooEditorSystem::has_value())
 	{

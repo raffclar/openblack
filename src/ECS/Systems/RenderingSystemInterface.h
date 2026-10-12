@@ -154,6 +154,17 @@ struct RenderContext
 		uint32_t instance;
 	};
 	std::vector<EntityDraw> entityDraws;
+	/// Copies of creatures drawn where they stand in a pose of their own (see components::CreatureCopy), as the Creature
+	/// Cave shows the player's creature: each looks as `creature` does, takes its pose and eyes from `copy`, is placed by
+	/// its instance and lit from a light of its own
+	struct CreatureCopyDraw
+	{
+		entt::entity creature;
+		entt::entity copy;
+		uint32_t instance;
+		glm::vec3 light;
+	};
+	std::vector<CreatureCopyDraw> creatureCopyDraws;
 	/// Every object drawn this frame, in the order it is drawn, with the matrix it is drawn by: what the cursor can pick
 	struct DrawnObject
 	{

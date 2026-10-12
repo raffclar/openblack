@@ -53,6 +53,7 @@
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -2090,8 +2091,43 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              if (Locator::creatureCaveSystem::has_value())
 		              {
 			              const auto& cave = Locator::creatureCaveSystem::value();
-			              result["cave"] = {
-			                  {"open", cave.IsOpen()}, {"in_temple", cave.InTemple()}, {"creature", Id(cave.GetCreature())}};
+			              result["cave"] = {{"open", cave.IsOpen()},
+			                                {"in_temple", cave.InTemple()},
+			                                {"creature", Id(cave.GetCreature())},
+			                                {"creature_shown", cave.IsCreatureShown()},
+			                                {"copy", Id(cave.GetCaveCreature())}};
+			              // The copy of the creature by the cave's fire, and what it is doing
+			              const auto& registry = Locator::entitiesRegistry::value();
+			              if (const auto copy = cave.GetCaveCreature(); copy.has_value() && registry.Valid(*copy))
+			              {
+				              const auto* self = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
+				              const auto* state = registry.TryGet<const ecs::components::CaveCreature>(*copy);
+				              const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
+				              const auto* animation = registry.TryGet<const ecs::components::CreatureAnimation>(*copy);
+				              if (self != nullptr && state != nullptr && transform != nullptr && animation != nullptr)
+				              {
+					              const auto& s = state->state;
+					              result["cave"]["copy_state"] = {
+					                  {"size", self->size},
+					                  {"position", Point(transform->position)},
+					                  {"heading", s.heading},
+					                  {"rest", s.rest == cave_creature::Rest::Sleep ? "sleep" : "sit"},
+					                  {"turning", s.turn.has_value()},
+					                  {"wanted_heading", s.wantedHeading.has_value() ? Json(*s.wantedHeading) : Json(nullptr)},
+					                  {"zoomed", s.zoomed},
+					                  {"body_animation", creature_layers::IsPlaying(animation->body)
+					                                         ? Json(creature_layers::CurrentAnimation(animation->body))
+					                                         : Json(nullptr)},
+					                  {"body_time_ms", animation->body.timeMs},
+					                  {"mirrored", animation->body.mirrored},
+					                  {"gesture", animation->gesture.animation.has_value() ? Json(*animation->gesture.animation)
+					                                                                       : Json(nullptr)},
+					                  {"looks_at", animation->lookAt.has_value() ? Point(*animation->lookAt) : Json(nullptr)},
+					                  {"light", Point(state->light)},
+					                  {"fidgets", s.fidgets},
+					              };
+				              }
+			              }
 		              }
 		              if (Locator::creatureHandSystem::has_value())
 		              {
