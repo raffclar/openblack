@@ -194,7 +194,8 @@ void AddForests(std::vector<Scenario>& all)
 	            "11 out, of beech, birch and cedar, and grow from nothing each turn, those further out to a smaller size, "
 	            "the middle ones over about nine seconds. Sparkles burst and vortices spin at three and a half seconds; "
 	            "at five and a half, 5 flocks of 10 butterflies circle up over the trees and fade away by 16 seconds. "
-	            "The camera glides onto the forest's path over four seconds and follows it for eleven more, the "
+	            "The forest's seed rides over its tallest tree, though this seed wasn't made at a worship icon (the user's "
+	            "call). The camera glides onto the forest's path over four seconds and follows it for eleven more, the "
 	            "player's camera controls doing nothing meanwhile; then the player has the camera back where it is "
 	            "(the debug log says the path ended after 15.0 s)."},
 	    Ground {"miracles.forest_sand", "Forest on sand", k_Sand, "A forest cast on the patch of sand west of the middle.",
@@ -252,9 +253,8 @@ void AddForests(std::vector<Scenario>& all)
 	                   "Once the camera's flight round it is over the camera looks at the forest's east edge; the hand "
 	                   "pulls up the outermost tree there and puts it down gently on the grass to the lower right.",
 	    .expected = "The seed rides over the forest's tallest tree as before. The tree comes free with its roots and is "
-	                "held upright. Put down, it stands upright with no puff of smoke and no new forest: a magic tree stays "
-	                "the forest's and is not planted again. As in the original game it is left a fifth of its height "
-	                "above the land (about 1.3 for a cedar), its trunk ending over its shadow.",
+	                "held upright. Put down, it stands upright on the land at its foot, as in the original game, with no "
+	                "puff of smoke and no new forest: a magic tree stays the forest's and is not planted again.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {26.0f, 6.0f, 40.0f}, .look = {k_EastTree.x, 1.5f, k_EastTree.y}},
 	    .miracles = {{.type = MagicType::Forest,
