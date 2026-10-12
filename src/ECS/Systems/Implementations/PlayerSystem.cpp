@@ -19,6 +19,7 @@
 #include "ECS/Components/PlayerCreatures.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack::ecs::systems;
@@ -57,7 +58,13 @@ void PlayerSystem::AddCreature(entt::entity creature)
 	}
 	auto* list = registry.TryGet<PlayerCreatures>(player->second);
 	auto& creatures = list != nullptr ? *list : registry.Assign<PlayerCreatures>(player->second);
+	const auto before = GetPrimaryCreature(body->owner);
 	primary_creature::Acquire(creatures.acquired, creature);
+	// A new primary creature changes the icon on the player's totems
+	if (GetPrimaryCreature(body->owner) != before && Locator::villageTotemSystem::has_value())
+	{
+		Locator::villageTotemSystem::value().RefreshIcons(body->owner);
+	}
 }
 
 std::optional<entt::entity> PlayerSystem::GetPrimaryCreature(PlayerNames name) const

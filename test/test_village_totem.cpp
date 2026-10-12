@@ -126,7 +126,7 @@ public:
 	Registry& Entities() override { return registry; }
 	[[nodiscard]] entt::id_type IconMeshFor(PlayerNames player) const override
 	{
-		return player == PlayerNames::PLAYER_ONE ? k_ApeIcon : k_HandIcon;
+		return player == PlayerNames::PLAYER_ONE ? playerOneIcon : k_HandIcon;
 	}
 	[[nodiscard]] Size SizeOf(entt::entity /*unused*/) const override { return {.radius = 0.8f, .height = 2.0f}; }
 	[[nodiscard]] float LandHeightAt(glm::vec2 /*unused*/) const override { return 0.0f; }
@@ -167,6 +167,7 @@ public:
 	std::vector<Number> numbers;
 	bool temple {true};
 	std::vector<bool> moving;
+	entt::id_type playerOneIcon {k_ApeIcon};
 	int bells {0};
 };
 
@@ -216,6 +217,19 @@ TEST(VillageTotemSystem, ItWearsItsPlayersCreatureAndStartsWithNoOneAtWorship)
 	// Set to none from none it arrives at once: the grinding stops and the bell rings
 	EXPECT_EQ(village.world->moving, (std::vector {true, false}));
 	EXPECT_EQ(village.world->bells, 1);
+}
+
+TEST(VillageTotemSystem, ANewPrimaryCreatureChangesTheIconOnTheOwnersTotemsAndLeavesTheirShares)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	village.system->SetTownShare(village.town, 0.4f);
+	village.world->playerOneIcon = k_HandIcon;
+	village.system->RefreshIcons(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(registry.Get<Mesh>(village.icon).id, k_ApeIcon);
+	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(registry.Get<Mesh>(village.icon).id, k_HandIcon);
+	EXPECT_FLOAT_EQ(registry.Get<Town>(village.town).worshipShare, 0.4f);
 }
 
 TEST(VillageTotemSystem, TheHandSlidesItAndLettingGoSetsTheTownsShare)

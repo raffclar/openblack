@@ -13,6 +13,7 @@
 #include <optional>
 #include <unordered_map>
 
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/VillageTotemWorld.h"
@@ -33,6 +34,7 @@ public:
 	~VillageTotemSystem() override;
 
 	void AddToPlayer(entt::entity totem) override;
+	void RefreshIcons(PlayerNames player) override;
 	void SetTownShare(entt::entity town, float share) override;
 	void Update(float gameMilliseconds) override;
 
@@ -45,6 +47,8 @@ public:
 	[[nodiscard]] std::optional<ShareToolTip> TakeShareToolTip(PlayerNames player) override;
 
 private:
+	/// Both of a totem's icons wear a mesh
+	void ShowIcon(const ecs::components::VillageTotem& totem, entt::id_type iconMesh);
 	/// The totem's own share is set: it eases there, its moving sound starting
 	void SetTotemShare(entt::entity totem, float share);
 	/// The town a totem's town centre belongs to, none without one
