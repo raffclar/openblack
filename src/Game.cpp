@@ -3594,10 +3594,12 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	RenderLoadingFrame();
 
 	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
+	// The script is matched by where its file is found, however its path was given
+	const auto scriptFile = Level::ResolveScriptPath(path);
 	bool skirmish = false;
-	Locator::resources::value().GetLevels().Each([&path, &skirmish](entt::id_type /*id*/, const Level& level) {
+	Locator::resources::value().GetLevels().Each([&scriptFile, &skirmish](entt::id_type /*id*/, const Level& level) {
 		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
-		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
+		                        Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
 	});
 	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
 	_landPath = path;

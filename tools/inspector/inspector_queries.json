@@ -706,7 +706,7 @@
   "query": "level.list"
  },
  {
-  "description": "The land loaded now",
+  "description": "The land loaded now, and whether it is played as a skirmish",
   "kind": "object",
   "parameters": [],
   "query": "level.current"
