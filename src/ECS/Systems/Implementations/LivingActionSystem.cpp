@@ -822,7 +822,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* REACT_TO_FIRE */
     VillagerStateTableEntry {
         .state = &villager_fire::ReactToFire,
-        .exitState = &villager_fire::ExitReactToFire,
+        .exitState = &villager_fire::ExitReaction,
         .validate = &villager_fire::ReactionValidate,
     },
     /* PUT_OUT_FIRE_BY_BEATING */

@@ -837,7 +837,9 @@ bool villager_fire::EnterPutOutFire(LivingAction& action, VillagerStates from, V
 
 bool villager_fire::ExitPutOutFire(LivingAction& action, VillagerStates next)
 {
-	if (IsFireFightingState(next))
+	// It stays one of the blaze's firemen going on to another fire-fighting state, or to a state that isn't an end in
+	// itself (walking somewhere on the way)
+	if (IsFireFightingState(next) || StateInfo(next).isFinalState == 0)
 	{
 		ExitReaction(action, next);
 		return false;
@@ -889,16 +891,6 @@ bool villager_fire::ExitOnFire(LivingAction& action, VillagerStates /*next*/)
 		}
 		state.fire = entt::null;
 	}
-	return false;
-}
-
-bool villager_fire::ExitReactToFire(LivingAction& action, VillagerStates /*next*/)
-{
-	// Leaving its reaction to a fire, for whatever it goes on to, it lets go of the reaction. Fighting the fire or going
-	// round it needs the reaction, which a villager coming from here has let go of by the time it would start, so it never
-	// starts: as in the game, villagers about a fire look at it, back off when too near, and go on with their day, and
-	// nobody beats it out
-	StopReacting(EntityOf(action));
 	return false;
 }
 

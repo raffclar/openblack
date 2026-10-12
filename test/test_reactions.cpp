@@ -298,6 +298,7 @@ TEST_F(Reactions, AVillagerKeepsTheFireReactionItTookUpAndLetsGoOfItLeavingTheFi
 	auto& stateTable = _info->villagerStateTable;
 	stateTable.at(static_cast<size_t>(VillagerStates::ReactToFire)).isReactionState = 1;
 	stateTable.at(static_cast<size_t>(VillagerStates::ReactToFire)).availableForReaction = 1;
+	Locator::infoConstants::emplace(*_info);
 	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
 	const auto villager = _villagers[0];
 	const auto burning = registry.Create();
@@ -315,11 +316,12 @@ TEST_F(Reactions, AVillagerKeepsTheFireReactionItTookUpAndLetsGoOfItLeavingTheFi
 	Locator::reactionSystem::reset();
 }
 
-TEST_F(Reactions, LeavingTheReactionToAFireForAnyStateLetsItGoSoNobodyFightsIt)
+TEST_F(Reactions, AVillagerGoingFromAFireToFightItKeepsTheReactionItNeeds)
 {
-	// Going from looking at the fire to fighting it or going round it, the villager lets go of the reaction on the way,
-	// which those states need to start
+	// Going on to fight the fire, or round it, is another reaction state, so it keeps the reaction those states need
 	auto& registry = Locator::entitiesRegistry::value();
+	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::MoveAroundFire)).isReactionState = 1;
+	Locator::infoConstants::emplace(*_info);
 	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
 	const auto villager = _villagers[0];
 	const auto burning = registry.Create();
@@ -327,9 +329,9 @@ TEST_F(Reactions, LeavingTheReactionToAFireForAnyStateLetsItGoSoNobodyFightsIt)
 	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = 7, .type = Reaction::ReactToFire});
 	villager_fire::SetupReactToFire(villager, burning, 7);
 	auto& action = registry.Get<LivingAction>(villager);
-	EXPECT_FALSE(villager_fire::ExitReactToFire(action, VillagerStates::MoveAroundFire));
-	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).reaction, 0u);
-	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	EXPECT_FALSE(villager_fire::ExitReaction(action, VillagerStates::MoveAroundFire));
+	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).reaction, 7u);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 7u);
 	Locator::reactionSystem::reset();
 }
 
