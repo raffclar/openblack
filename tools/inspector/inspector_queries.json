@@ -444,6 +444,19 @@
   "query": "town.belief"
  },
  {
+  "description": "A town's miracles, its centre's stone hands and its site's icons",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The town's entity id (town.list)",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "town.spells"
+ },
+ {
   "description": "A town's people without a home, newest first",
   "kind": "list",
   "parameters": [
@@ -706,7 +719,7 @@
   "query": "level.list"
  },
  {
-  "description": "The land loaded now",
+  "description": "The land loaded now, and whether it is played as a skirmish",
   "kind": "object",
   "parameters": [],
   "query": "level.current"
@@ -1461,7 +1474,7 @@
   "query": "help.profile"
  },
  {
-  "description": "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, its time to show, the point it points at and its scroll",
+  "description": "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, its time to show, the point it points at, its scroll and whether the hand is on it or grips it",
   "kind": "object",
   "parameters": [],
   "query": "help.bubble"

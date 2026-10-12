@@ -9,6 +9,8 @@
 
 #include "Level.h"
 
+#include <exception>
+#include <system_error>
 #include <utility>
 
 #include "Common/StringUtils.h"
@@ -97,4 +99,26 @@ Level Level::ParseLevel(const std::filesystem::path& path, Level::LandType landT
 	}
 
 	return {levelName, path, description, landType, isValid};
+}
+
+std::filesystem::path Level::ResolveScriptPath(const std::filesystem::path& path)
+{
+	std::filesystem::path found = path;
+	try
+	{
+		found = Locator::filesystem::value().FindPath(path);
+	}
+	catch (const std::exception&)
+	{
+		// A script that isn't found is compared as it was given
+	}
+	std::error_code error;
+	auto absolute = std::filesystem::absolute(found, error);
+	return error ? found : absolute;
+}
+
+bool Level::IsSameScript(const std::filesystem::path& first, const std::filesystem::path& second)
+{
+	return string_utils::LowerCase(first.lexically_normal().generic_string()) ==
+	       string_utils::LowerCase(second.lexically_normal().generic_string());
 }

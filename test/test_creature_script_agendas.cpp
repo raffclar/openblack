@@ -167,6 +167,12 @@ TEST(CreatureScriptAgendas, FacingAScriptsPointTurnsOnlyWhenWellOff)
 	ASSERT_EQ(face.size(), 1);
 	EXPECT_EQ(face[0].movement.kind, Movement::Kind::FacePoint);
 	EXPECT_EQ(face[0].movement.point, glm::vec2(1.0f, 3.0f));
+	// Facing a thing, it turns to it and holds still two seconds
+	const auto faceThing = FaceThingForScript(7);
+	ASSERT_EQ(faceThing.size(), 1);
+	EXPECT_EQ(faceThing[0].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(faceThing[0].movement.object, 7u);
+	EXPECT_FLOAT_EQ(faceThing[0].seconds, 2.0f);
 }
 
 // Down the slope: the lowest of eight points ten away, the first when several are as low, the map's corner when none

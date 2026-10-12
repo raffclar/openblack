@@ -25,7 +25,7 @@ class PickingSystem final: public PickingSystemInterface
 public:
 	[[nodiscard]] std::optional<glm::vec3> LandAlong(glm::vec3 from, glm::vec3 to) const override;
 	[[nodiscard]] std::optional<glm::vec3> LandOrSeaAlong(glm::vec3 from, glm::vec3 to, glm::vec3 camera) const override;
-	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 camera, glm::vec3 nearPoint, bool withSea) const override;
+	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 camera, glm::vec3 nearPoint, Sea sea) const override;
 
 	void PickUnderCursor(const Frame& frame) override;
 	[[nodiscard]] const Pick& GetPick() const override { return _pick; }

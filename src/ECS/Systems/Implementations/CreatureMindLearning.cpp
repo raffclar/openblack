@@ -1394,6 +1394,15 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	return true;
 }
 
+void CreatureMindSystem::SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr; mind != nullptr)
+	{
+		mind->scriptFocus = focus;
+	}
+}
+
 void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::Situation& situation)
 {
 	const auto& registry = Locator::entitiesRegistry::value();

@@ -112,6 +112,11 @@ std::vector<Step> openblack::creature_mind::FaceForScript(glm::vec3 point)
 	         .gaze = Gaze {.point = point}}};
 }
 
+std::vector<Step> openblack::creature_mind::FaceThingForScript(uint32_t thing)
+{
+	return {FaceThing(thing, k_FaceThingSeconds)};
+}
+
 std::vector<Step> openblack::creature_mind::MoveForScript(glm::vec2 from, glm::vec3 point, float height, float distance)
 {
 	const glm::vec2 to {point.x, point.z};

@@ -24,6 +24,7 @@
 #include "Creature/CreatureMind.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
+#include "Graphics/TexelDepth.h"
 #include "Level.h"
 
 namespace openblack
@@ -201,8 +202,10 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	[[nodiscard]] result_type operator()(FromBitmapLayersTag, const std::string& name,
 	                                     std::span<const std::filesystem::path> layerPaths, uint16_t side) const;
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath) const;
+	/// @param depth the bits a channel the texture keeps: the game keeps the sea's in four
 	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
-	                                     const std::filesystem::path& alphaPath, uint16_t side) const;
+	                                     const std::filesystem::path& alphaPath, uint16_t side,
+	                                     graphics::texel_depth::Depth depth = graphics::texel_depth::Depth::Full) const;
 };
 
 struct L3DAnimLoader final: BaseLoader<L3DAnim>
