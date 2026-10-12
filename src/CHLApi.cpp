@@ -180,6 +180,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -3064,25 +3065,38 @@ static std::optional<std::string> LoadedSoundGroup(std::string_view file)
 	return std::nullopt;
 }
 
-void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, std::optional<glm::vec3> position) const
+/// The sound of a script's sample in a script sound bank; none for a number naming no bank, a bank the game doesn't
+/// ship or a sample the bank doesn't have
+static std::optional<entt::id_type> BankSound(int32_t bank, int32_t sample)
 {
-	// A number naming no bank, a bank the game doesn't ship and a sample the bank doesn't have all play nothing
 	const auto file = audio::ScriptSoundBankFile(bank);
 	if (!file.has_value() || !Locator::audio::has_value() || !Locator::resources::has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto group = LoadedSoundGroup(*file);
 	if (!group.has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto id = entt::hashed_string(fmt::format("{}/{}", *group, sample).c_str()).value();
-	auto& sounds = Locator::resources::value().GetSounds();
-	if (!sounds.Contains(id))
+	if (!Locator::resources::value().GetSounds().Contains(id))
+	{
+		return std::nullopt;
+	}
+	return id;
+}
+
+void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, std::optional<glm::vec3> position) const
+{
+	// A number naming no bank, a bank the game doesn't ship and a sample the bank doesn't have all play nothing
+	const auto found = BankSound(bank, sample);
+	if (!found.has_value())
 	{
 		return;
 	}
+	const auto id = *found;
+	auto& sounds = Locator::resources::value().GetSounds();
 
 	const auto conditions = audio::CurrentSoundEffectConditions();
 	if (!audio::SoundEffectHeard(conditions, static_cast<audio::ScriptSoundBank>(bank), sounds.Handle(id)->userParam))
@@ -3101,6 +3115,24 @@ void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 	Locator::chlapi::value().PlayBankSoundEffect(bank, sample, withPosition ? std::optional(position) : std::nullopt);
 }
 
+/// The game's music, none before the game has started it
+static audio::GameMusic* ScriptGameMusic()
+{
+	auto* game = Game::Instance();
+	return game != nullptr ? game->GetGameMusic() : nullptr;
+}
+
+/// Without a sound device the scripts that wait on music wait on the help text instead
+static bool AudioInstalled()
+{
+	return Locator::audio::has_value() && Locator::audio::value().IsInstalled();
+}
+
+static bool HelpTextRead()
+{
+	return !Locator::helpTextSystem::has_value() || Locator::helpTextSystem::value().IsTextRead();
+}
+
 void StartMusic() // 044 START_MUSIC
 {
 	const auto music = Pop().intVal;
@@ -3109,8 +3141,10 @@ void StartMusic() // 044 START_MUSIC
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "START_MUSIC: no music type {}", music);
 		return;
 	}
-	if (auto* gameMusic = Game::Instance()->GetGameMusic())
+	if (auto* gameMusic = ScriptGameMusic())
 	{
+		// The sung lines start again with each piece a script starts
+		gameMusic->ResetMusicLyrics();
 		gameMusic->StartScriptMusic(static_cast<audio::MusicType>(music));
 	}
 }
@@ -5351,17 +5385,19 @@ void SetCreatureOnlyDesireOff() // 189 SET_CREATURE_ONLY_DESIRE_OFF
 
 void RestartMusic() // 190 RESTART_MUSIC
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopMusicObject("RESTART_MUSIC");
+	if (auto* gameMusic = ScriptGameMusic(); object && gameMusic != nullptr)
+	{
+		gameMusic->RestartAttachedMusic(*object);
+	}
 }
 
 void MusicPlayed191() // 191 MUSIC_PLAYED
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// Whether the music attached to an object has finished; an object that has gone counts as finished
+	const auto object = PopMusicObject("MUSIC_PLAYED");
+	const auto* gameMusic = ScriptGameMusic();
+	Pushb(!object || gameMusic == nullptr || gameMusic->IsAttachedMusicFinished(*object));
 }
 
 void IsOfType() // 192 IS_OF_TYPE
@@ -7026,8 +7062,7 @@ void ReleaseObjectFocus() // 303 RELEASE_OBJECT_FOCUS
 
 void ImmersionExists() // 304 IMMERSION_EXISTS
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// openblack drives no force-feedback mouse, so there is never a device for the scripts' effects
 	Pushb(false);
 }
 
@@ -7396,10 +7431,16 @@ void HighlightProperties() // 334 HIGHLIGHT_PROPERTIES
 
 void LastMusicLine() // 335 LAST_MUSIC_LINE
 {
-	// const auto line = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether the script's sung music has reached a line: the sung verses wait for each line before showing it
+	const auto line = static_cast<int32_t>(Popf());
+	if (!AudioInstalled())
+	{
+		Pushb(HelpTextRead());
+		return;
+	}
+	const auto* gameMusic = ScriptGameMusic();
+	const auto lastLine = gameMusic != nullptr ? gameMusic->GetMusicLyrics().line : 0;
+	Pushb(audio::GameMusic::ReachedMusicLine(lastLine, line));
 }
 
 void HandDemoTrigger() // 336 HAND_DEMO_TRIGGER
@@ -7580,10 +7621,15 @@ void ThingJcSpecial() // 349 THING_JC_SPECIAL
 
 void MusicPlayed350() // 350 MUSIC_PLAYED
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// Whether the script music of a type is over
+	const auto music = Pop().intVal;
+	if (!AudioInstalled())
+	{
+		Pushb(HelpTextRead());
+		return;
+	}
+	const auto* gameMusic = ScriptGameMusic();
+	Pushb(gameMusic == nullptr || gameMusic->IsScriptMusicOver(static_cast<audio::MusicType>(music)));
 }
 
 void UpdateSnapshotPicture() // 351 UPDATE_SNAPSHOT_PICTURE
@@ -7686,10 +7732,12 @@ void SetGameSound() // 357 SET_GAME_SOUND
 
 void SexIsMale() // 358 SEX_IS_MALE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Only a villager can be female: anything else, or a thing that has gone, answers male
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* villager =
+	    object != entt::null && registry.Valid(object) ? registry.TryGet<const ecs::components::Villager>(object) : nullptr;
+	Pushb(villager == nullptr || villager->sex == ecs::components::Villager::Sex::MALE);
 }
 
 void GetFirstHelp() // 359 GET_FIRST_HELP
@@ -8337,11 +8385,20 @@ void ClearPlayerSpellCharging() // 423 CLEAR_PLAYER_SPELL_CHARGING
 
 void StopSoundEffect() // 424 STOP_SOUND_EFFECT
 {
-	// const auto soundbank = Pop().intVal;
-	// const auto sound = Pop().intVal;
-	// const auto alwaysFalse = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto bank = Pop().intVal;
+	const auto sample = Pop().intVal;
+	const auto speech = Pop().intVal != 0;
+	if (speech)
+	{
+		// The sample is then a help text whose spoken line is stopped. No script passes it.
+		// TODO(raffclar): stop a help text's speech
+		NotImplemented();
+		return;
+	}
+	if (const auto sound = BankSound(bank, sample))
+	{
+		Locator::audio::value().StopSoundEffect(*sound);
+	}
 }
 
 void GetTotemStatue() // 425 GET_TOTEM_STATUE
@@ -8380,16 +8437,14 @@ void SetObjectBeliefScale() // 428 SET_OBJECT_BELIEF_SCALE
 
 void StartImmersion() // 429 START_IMMERSION
 {
-	// const auto effect = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A force-feedback effect, which does nothing without the device (see IMMERSION_EXISTS)
+	Pop();
 }
 
 void StopImmersion() // 430 STOP_IMMERSION
 {
-	// const auto effect = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Stopping a force-feedback effect does nothing without the device either
+	Pop();
 }
 
 void StopAllImmersion() // 431 STOP_ALL_IMMERSION
@@ -8549,21 +8604,47 @@ void GetDeadLiving() // 446 GET_DEAD_LIVING
 
 void AttachSoundTag() // 447 ATTACH_SOUND_TAG
 {
-	// const auto target = Pop().uintVal;
-	// const auto soundbank = Pop().intVal;
-	// const auto sound = Pop().intVal;
-	// const auto threeD = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// An object keeps up a sound from a script bank: it plays from the object while the camera is in its reach
+	const auto object = PopObject();
+	const auto bank = Pop().intVal;
+	const auto sample = Pop().intVal;
+	const auto threeD = Pop().intVal != 0;
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		return;
+	}
+	if (!threeD)
+	{
+		// A sound kept up by an object but not heard from it. No script asks for one.
+		// TODO(raffclar): sound tags that aren't heard from their object
+		NotImplemented();
+		return;
+	}
+	const auto sound = BankSound(bank, sample);
+	if (!sound.has_value() || !Locator::soundTagSystem::has_value())
+	{
+		return;
+	}
+	if (!Locator::soundTagSystem::value().AttachObjectSound(object, *sound))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "ATTACH_SOUND_TAG: object {} already keeps up another sound",
+		                   entt::to_integral(object));
+	}
 }
 
 void DetachSoundTag() // 448 DETACH_SOUND_TAG
 {
-	// const auto target = Pop().uintVal;
-	// const auto soundbank = Pop().intVal;
-	// const auto sound = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto bank = Pop().intVal;
+	const auto sample = Pop().intVal;
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		return;
+	}
+	if (const auto sound = BankSound(bank, sample); sound.has_value() && Locator::soundTagSystem::has_value())
+	{
+		Locator::soundTagSystem::value().DetachObjectSound(object, *sound);
+	}
 }
 
 void GetSacrificeTotal() // 449 GET_SACRIFICE_TOTAL
@@ -8576,11 +8657,11 @@ void GetSacrificeTotal() // 449 GET_SACRIFICE_TOTAL
 
 void GameSoundPlaying() // 450 GAME_SOUND_PLAYING
 {
-	// const auto soundbank = Pop().intVal;
-	// const auto sound = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether a sample a script started from a script bank is still playing
+	const auto bank = Pop().intVal;
+	const auto sample = Pop().intVal;
+	const auto sound = BankSound(bank, sample);
+	Pushb(sound.has_value() && Locator::audio::value().IsSoundEffectPlaying(*sound));
 }
 
 void GetTemplePosition() // 451 GET_TEMPLE_POSITION
