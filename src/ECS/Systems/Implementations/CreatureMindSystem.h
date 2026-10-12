@@ -89,6 +89,8 @@ public:
 	[[nodiscard]] uint32_t GetActionCount(entt::entity creature, uint32_t action) const override;
 	void SetOnlyDesire(entt::entity creature, creature_desires::Desire desire, float seconds) override;
 	void ClearOnlyDesire(entt::entity creature) override;
+	void ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change) override;
+	void SetAgendaPriority(entt::entity creature, float priority) override;
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
 	bool PointOutHighlight(entt::entity creature) override;
 

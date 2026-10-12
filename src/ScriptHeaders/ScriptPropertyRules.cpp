@@ -175,6 +175,29 @@ float BeliefForPlayer(bool town, std::optional<float> townBelief, std::optional<
 	return owner == player ? 1.0f : 0.0f;
 }
 
+float CreatureSpeedFraction(float speed)
+{
+	return std::clamp(speed, 0.0f, 1.0f);
+}
+
+CopiedBody CopyBody(float size, float strength, float scale)
+{
+	return {.size = size * scale, .strength = strength * scale};
+}
+
+std::optional<PlayerNames> OwnerOfCopy(std::span<const bool> playersHaveCreatures)
+{
+	constexpr size_t k_Players = 7;
+	for (size_t i = 0; i < k_Players && i < playersHaveCreatures.size(); ++i)
+	{
+		if (!playersHaveCreatures[i])
+		{
+			return static_cast<PlayerNames>(i);
+		}
+	}
+	return std::nullopt;
+}
+
 glm::vec3 HeadingVelocity(const glm::vec3& from, const glm::vec3& to, float speed)
 {
 	const glm::vec3 delta = to - from;

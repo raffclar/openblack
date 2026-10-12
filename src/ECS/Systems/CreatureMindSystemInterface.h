@@ -11,6 +11,7 @@
 
 #include <cstddef>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -205,6 +206,12 @@ public:
 	/// A script makes a desire the creature's only one for some seconds, or takes it away again
 	virtual void SetOnlyDesire(entt::entity /*creature*/, creature_desires::Desire /*desire*/, float /*seconds*/) {}
 	virtual void ClearOnlyDesire(entt::entity /*creature*/) {}
+	/// A script changes the creature's desires: how much it wants them, whether they are active and how much it can
+	/// want them at most. A creature whose mind hasn't thought yet has them set up first, the ones its stage of growing
+	/// up brings already active, so that what the script sets stands.
+	virtual void ChangeDesires(entt::entity /*creature*/, const std::function<void(creature_desires::Desires&)>& /*change*/) {}
+	/// A script sets how pressing what the creature carries out now is, which a plan of its own must beat to replace it
+	virtual void SetAgendaPriority(entt::entity /*creature*/, float /*priority*/) {}
 	/// The creature is told to point out the lesson highlight about it, if there is one; whether one was found
 	virtual bool PointOutHighlight(entt::entity /*creature*/) { return false; }
 	/// The story moves the creature to a stage of growing up: its desires become the ones its stages so far bring, none

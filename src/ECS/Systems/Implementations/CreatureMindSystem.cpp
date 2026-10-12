@@ -1913,6 +1913,40 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 	ReleaseCast(creature);
 }
 
+void CreatureMindSystem::ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* body = mind != nullptr ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr)
+	{
+		return;
+	}
+	SetUpMind(creature, *body, *mind);
+	if (!mind->desires.has_value())
+	{
+		return;
+	}
+	// Its stage of growing up decides which desires are active before the script has its say, not after
+	if (mind->desiresPhase != mind->developmentPhase)
+	{
+		creature_desires::ActivateForPhase(*mind->desires, Phases(), mind->developmentPhase);
+		mind->desiresPhase = mind->developmentPhase;
+	}
+	change(*mind->desires);
+}
+
+void CreatureMindSystem::SetAgendaPriority(entt::entity creature, float priority)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	// It stands only until the next plan is carried out, which brings its own
+	if (mind != nullptr && mind->planner.current.has_value())
+	{
+		mind->planner.current->priority = priority;
+	}
+}
+
 void CreatureMindSystem::MoveToStage(entt::entity creature, uint32_t stage)
 {
 	auto& registry = Locator::entitiesRegistry::value();

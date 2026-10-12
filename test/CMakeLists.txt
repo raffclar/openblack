@@ -850,3 +850,7 @@ openblack_setup_and_add_test(
   test_building_site_list test_building_site_list.cpp
 )
 openblack_setup_and_add_test(test_hand_trace hand/test_hand_trace.cpp)
+openblack_setup_and_add_test(
+  test_script_guide_ogre_natives test_script_guide_ogre_natives.cpp
+)
+target_link_libraries(test_script_guide_ogre_natives PRIVATE ScriptLibrary helpdude)
