@@ -411,6 +411,22 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	picking::CarryHover(previous, _pick, frame.seconds);
 }
 
+void PickingSystem::RetargetObject(std::optional<entt::entity> object, float distance)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = object.has_value() && registry.Valid(*object) ? registry.TryGet<const Transform>(*object) : nullptr;
+	if (transform == nullptr)
+	{
+		_pick.object.reset();
+		_pick.point = _pick.land;
+		_pick.distance = std::numeric_limits<float>::max();
+		return;
+	}
+	_pick.object = object;
+	_pick.point = transform->position;
+	_pick.distance = distance;
+}
+
 std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object, glm::vec3 origin, glm::vec3 direction) const
 {
 	if (!Locator::rendereringSystem::has_value() || !Locator::resources::has_value())

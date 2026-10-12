@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Common/GUtilsDistance.h"
+
 namespace openblack::hand_demo
 {
 
@@ -41,6 +43,44 @@ glm::ivec2 CursorPixel(std::span<const float, 2> cursor, glm::ivec2 screen, floa
 glm::vec3 RecordedThrowVelocity(const hnd::HNDRecord& record)
 {
 	return {record.heldPlacement[0], record.heldPlacement[1], record.heldPlacement[2]};
+}
+
+bool ClickCanRetarget(hnd::HNDMessage message)
+{
+	return message == hnd::HNDMessage::ActionButtonDown || message == hnd::HNDMessage::ActionButtonUp ||
+	       message == hnd::HNDMessage::Other;
+}
+
+map_coords::MapCoords RecordedPlace(const hnd::HNDRecord& record)
+{
+	return {.x = record.objectPosition.x, .z = record.objectPosition.z, .altitude = record.objectPosition.altitude};
+}
+
+ClickTarget TargetOfClick(const hnd::HNDRecord& record, const std::optional<ThingUnderHand>& underHand)
+{
+	const auto recordedType = static_cast<script::ObjectType>(record.objectType);
+	if (recordedType == script::ObjectType::None)
+	{
+		return ClickTarget::NoThing;
+	}
+	if (!underHand.has_value())
+	{
+		return ClickTarget::NearestOfKind;
+	}
+	// The thing under the hand is compared as it is: a thing with no subtype tells the scripts it has the "none" subtype
+	const auto subtype = underHand->kind.subtype.value_or(ecs::script_find::k_NoSubtype);
+	if (underHand->kind.type != recordedType || subtype != record.objectSubtype ||
+	    gutils::GetDistanceInMetres(underHand->at, RecordedPlace(record)) >= k_RetargetReach)
+	{
+		return ClickTarget::NearestOfKind;
+	}
+	return ClickTarget::UnderHand;
+}
+
+bool TakesRecordedClick(const hnd::HNDRecord& record, const ecs::script_find::Kind& kind, const map_coords::MapCoords& at)
+{
+	return ecs::script_find::Matches(kind, static_cast<script::ObjectType>(record.objectType), record.objectSubtype) &&
+	       gutils::GetDistanceInMetres(RecordedPlace(record), at) <= k_RetargetReach;
 }
 
 HeldButtons AfterRecord(HeldButtons held, hnd::HNDMessage message)
