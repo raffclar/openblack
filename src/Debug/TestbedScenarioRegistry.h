@@ -538,6 +538,9 @@ struct Command
 		/// A hand demonstration (handDemo, by its file's name) played through the player's hand and camera, as a
 		/// tutorial's script plays one. Needs no creature
 		PlayHandDemo,
+		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
+		/// flight, say). Needs no creature
+		Reframe,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

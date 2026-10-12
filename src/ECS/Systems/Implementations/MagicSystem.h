@@ -29,6 +29,7 @@
 #include "Magic/MagicWorldInterface.h"
 #include "Magic/SpellBehaviours.h"
 #include "Magic/SpellGrid.h"
+#include "Magic/SpellSeedRules.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -330,6 +331,8 @@ private:
 	void ShowHeldSeed();
 	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp)
 	void ShowSeedsWithSpells();
+	/// What decides whether a seed bound to its miracle is shown over it
+	[[nodiscard]] magic::SeedWithSpell SeedWithSpellOf(const components::SpellSeed& seed, const components::Spell& spell) const;
 	[[nodiscard]] bool SeedShownWithSpell(const components::SpellSeed& seed, const components::Spell& spell) const;
 	/// A miracle whose seed is shown closes down once the seed is out of its player's influence
 	void KeepSeedInInfluence(entt::entity spellEntity, const components::Spell& spell);
