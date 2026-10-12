@@ -297,9 +297,16 @@ struct TugResult
 [[nodiscard]] bool IsThrow(glm::vec3 velocity, bool byCreature);
 /// Whether a release is fast enough that only a tree is laid along the slope as it leaves the hand
 [[nodiscard]] bool IsFastRelease(glm::vec3 velocity);
-/// The velocity a throw leaves the hand at: a hand demonstration's recorded throw while it stands, else the spring's
-/// while the spring is on, else none; never faster than the most a throw can be
-[[nodiscard]] glm::vec3 ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity);
+/// The screen height the game's throws are matched to: its 800x600 default. The hand follows the cursor, and a pixel is a
+/// fixed share of the camera's height of view, so the same movement in pixels sweeps the hand less on a taller screen.
+inline constexpr float k_ThrowReferenceHeight = 600.0f;
+/// How much the hand's speed is scaled for its throw on a screen of this many pixels high, so that a mouse movement of
+/// the same number of pixels throws as hard as at the reference height
+[[nodiscard]] float ThrowScreenScale(float screenHeight);
+/// The velocity a throw leaves the hand at: a hand demonstration's recorded throw while it stands, else the spring's,
+/// scaled for the screen, while the spring is on, else none; never faster than the most a throw can be
+[[nodiscard]] glm::vec3 ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity,
+                                      float screenScale = 1.0f);
 /// Whether a pot let go at a velocity is poured out where it is
 [[nodiscard]] bool PotPours(glm::vec3 velocity);
 /// The twist a throw gets from how far the hand moved since letting go, for a body of a mass at a speed: a turning force

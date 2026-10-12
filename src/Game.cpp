@@ -2397,6 +2397,7 @@ bool Game::Update() noexcept
 						    .camera = camera.GetOrigin(),
 						    .cursorGround = _cursorWorldPosition,
 						    .handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), land)),
+						    .screenHeight = static_cast<float>(screenSize.y),
 						    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
 						    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
 						    .nowMs = machine_clock::Ticks(),

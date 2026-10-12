@@ -423,7 +423,8 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		// Letting go onto the land counts as one more turn for what the hand keeps of the player's influence past the
 		// border, before the throw
 		_world->HeldThingUsedOnLand(_world->HandPlayer());
-		const auto velocity = hand_grab::ThrowVelocity(grab->recordedThrow, grab->springOn, grab->spring.Velocity());
+		const auto velocity =
+		    hand_grab::ThrowVelocity(grab->recordedThrow, grab->springOn, grab->spring.Velocity(), _throwScreenScale);
 		grab->lastThrow = HandGrab::Throw {
 		    .velocity = velocity,
 		    .springVelocity = hand_grab::ThrowVelocity(std::nullopt, grab->springOn, grab->spring.Velocity()),
@@ -999,6 +1000,7 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		return frame.target;
 	}
 	grab->handSize = frame.handSize;
+	_throwScreenScale = hand_grab::ThrowScreenScale(frame.screenHeight);
 	grab->handPoint = frame.cursorGround;
 	// Clicks are forgotten as the game's turns go by
 	if (auto* clicked = Clicked(); clicked != nullptr)

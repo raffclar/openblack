@@ -45,6 +45,8 @@ public:
 		std::optional<glm::vec3> cursorGround;
 		/// The hand's size against its standard
 		float handSize {1.0f};
+		/// The screen's height in pixels, which scales how hard the hand throws (none leaves it unscaled)
+		float screenHeight {0.0f};
 		/// The frame's time: the clock's for the hand's fades, the game's for the spring
 		float seconds {0.0f};
 		uint32_t gameMs {0};

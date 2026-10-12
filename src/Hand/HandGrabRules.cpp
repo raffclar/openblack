@@ -339,9 +339,15 @@ bool hand_grab::IsFastRelease(glm::vec3 velocity)
 	return glm::dot(velocity, velocity) > k_FastReleaseSpeedSquared;
 }
 
-glm::vec3 hand_grab::ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity)
+float hand_grab::ThrowScreenScale(float screenHeight)
 {
-	const auto velocity = recorded.value_or(springOn ? springVelocity : glm::vec3(0.0f));
+	return screenHeight > 0.0f ? screenHeight / k_ThrowReferenceHeight : 1.0f;
+}
+
+glm::vec3 hand_grab::ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity,
+                                   float screenScale)
+{
+	const auto velocity = recorded.value_or(springOn ? springVelocity * screenScale : glm::vec3(0.0f));
 	if (const float speed = glm::length(velocity); speed > k_MaxThrowSpeed)
 	{
 		return velocity * (k_MaxThrowSpeed / speed);
