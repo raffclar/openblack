@@ -335,6 +335,8 @@ private:
 	void AfterSeedCast(const components::SpellSeed& seed, MagicType type);
 	/// A bubble taken by the hand: its miracle in the hand, the bubble popped
 	bool TapOrb(entt::entity orb);
+	/// Whether the hand, holding no miracle, has its point on the land in its player's influence
+	[[nodiscard]] bool EmptyHandInInfluence() const;
 	void DestroyOrb(entt::entity orb);
 	/// Each tribe's power multiplier for a player
 	[[nodiscard]] std::array<float, magic::k_TribeCount> PlayerTribalMultipliers(PlayerNames player) const;

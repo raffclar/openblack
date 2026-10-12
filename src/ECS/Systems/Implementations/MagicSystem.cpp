@@ -2302,6 +2302,12 @@ std::optional<entt::entity> MagicSystem::OrbUnderHand() const
 	return OrbAlong(_hand.rayOrigin, _hand.rayDirection);
 }
 
+bool MagicSystem::EmptyHandInInfluence() const
+{
+	// The hand is this computer's player's
+	return _hand.point.has_value() && _world.HandInInfluence(PlayerNames::PLAYER_ONE, *_hand.point);
+}
+
 bool MagicSystem::PressOrb(uint32_t nowMs, uint32_t turn)
 {
 	_orbPress.reset();
@@ -2311,7 +2317,7 @@ bool MagicSystem::PressOrb(uint32_t nowMs, uint32_t turn)
 	}
 	const auto orb = OrbUnderHand();
 	// Out of the player's influence the hand neither taps nor takes a bubble
-	if (!orb.has_value() || !IsHandInInfluence())
+	if (!orb.has_value() || !EmptyHandInInfluence())
 	{
 		return false;
 	}
@@ -2331,7 +2337,7 @@ void MagicSystem::ReleaseOrb(uint32_t nowMs, uint32_t turn)
 	_orbPress.reset();
 	const bool quick = hand_grab::ElapsedMs(nowMs, press.pressMs, turn, press.pressTurn) <= hand_grab::k_GrabWaitMs;
 	if (!quick || _held.has_value() || !EntityRegistry().Valid(press.orb) ||
-	    !EntityRegistry().AllOf<OneOffSpellSeed>(press.orb) || !IsHandInInfluence())
+	    !EntityRegistry().AllOf<OneOffSpellSeed>(press.orb) || !EmptyHandInInfluence())
 	{
 		return;
 	}
