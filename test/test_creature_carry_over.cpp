@@ -82,6 +82,7 @@ class FakeLeash final: public ecs::systems::LeashSystemInterface
 public:
 	void ProcessTurn() override {}
 	void Update(float /*seconds*/) override {}
+	void ShowPosts(bool /*handShown*/) override {}
 	void HandleInput(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, glm::vec2 /*cursor*/,
 	                 uint32_t /*milliseconds*/, bool /*actionTaken*/) override
 	{

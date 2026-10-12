@@ -53,6 +53,10 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// Once a frame, some seconds of game time on: the ropes swing
 	virtual void Update(float seconds) = 0;
+	/// Once a frame, after the hand is posed: the leashes on the temples are put where they are drawn, the picked one
+	/// round the hand's wrist, and the glows coloured. While the hand is put away the picked leash and its glow are not
+	/// drawn and can't be tapped.
+	virtual void ShowPosts(bool handShown) = 0;
 	/// The leash hotkeys, and the Action button tapping what is under the cursor (along its ray, where it is on the screen
 	/// and when the press came), unless the hand used the press for something else, such as letting go of a miracle
 	virtual void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor, uint32_t milliseconds,

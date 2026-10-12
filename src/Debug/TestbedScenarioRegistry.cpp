@@ -1732,6 +1732,33 @@ void AddLeash(std::vector<Scenario>& all)
 	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 4.0f, .value = 0}},
 	});
 
+	const auto templeGlows = [](std::string_view id, std::string_view name, float hour) {
+		return Scenario {
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Leash,
+		    .description = "Your tiger knows all three leashes and your temple stands in front of the camera, its leash posts "
+		                   "in view. The learning leash is picked at its post, so the hand carries it.",
+		    .expected = "The aggression leash (the spiked blade) and the compassion leash (the rainbow fur) tumble slowly on "
+		                "their posts, each in a pale smoky glow about four metres across, half seen by day and fading at "
+		                "night. By the empty learning post the glow is orange and added to what is behind it. The learning "
+		                "leash, a twisted rope collar, hangs round the hand's wrist, turned with the hand, its texture "
+		                "running round it. Tapping the orange glow puts the leash back on its post, silently; with the hand "
+		                "put away the carried leash and its orange glow are gone.",
+		    .environment = {.hour = hour, .clockRuns = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed, .eye = {-262.0f, 30.0f, 120.0f}, .look = {-300.0f, 5.0f, 100.0f}},
+		    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+		    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+		    .commands = {Leash(0, LeashType::Rope, 0.5f),
+		                 Leash(0, LeashType::Evil, 0.5f),
+		                 Leash(0, LeashType::Good, 0.5f),
+		                 Act(Kind::TakeOffLeash, 0, 0.5f),
+		                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 1.0f, .value = 1}},
+		};
+	};
+	all.push_back(templeGlows("leash.temple_glows", "The glows round the temple's leashes by day", 12.0f));
+	all.push_back(templeGlows("leash.temple_glows_night", "The glows round the temple's leashes at night", 23.0f));
+
 	all.push_back({
 	    .id = "leash.pull_to_hand",
 	    .name = "Pulled to the hand",

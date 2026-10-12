@@ -55,6 +55,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -666,8 +667,14 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 		leashes->worn->type = type;
 		leashes->worn->rope.look = leash::LookFor(type);
 	}
-	// The posts show the leash picked
-	registry.Each<LeashPost>([leashes](LeashPost& post) { post.selected = post.type == leashes->selected; });
+	// Its player's posts show the leash picked
+	const auto* body = registry.TryGet<const Creature>(creature);
+	registry.Each<LeashPost>([leashes, body](LeashPost& post) {
+		if (body != nullptr && post.owner == body->owner)
+		{
+			post.selected = post.type == leashes->selected;
+		}
+	});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s picked leash is now the {} leash", entt::to_integral(creature),
 	                   leash::Name(type));
 	return true;
@@ -925,49 +932,60 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 void LeashSystem::UpdatePosts(float seconds)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto light = temple_leashes::GlowAlpha(FrameLandLight(LandLightTable::k_Size - 1));
-	// The hand carrying the picked leash
-	std::optional<Transform> hand;
-	if (Locator::handSystem::has_value())
-	{
-		const auto entity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-		if (const auto* at = registry.Valid(entity) ? registry.TryGet<const Transform>(entity) : nullptr)
-		{
-			hand = *at;
-		}
-	}
-	std::vector<entt::entity> posts;
-	registry.Each<const LeashPost>([&posts](entt::entity entity, const LeashPost& /*post*/) { posts.push_back(entity); });
-	for (const auto entity : posts)
-	{
-		auto& post = registry.Get<LeashPost>(entity);
+	registry.Each<LeashPost>([this, seconds, &registry](entt::entity entity, LeashPost& post) {
 		const auto creature = PlayersCreature(post.owner);
 		post.hung = temple_leashes::Hung(creature.has_value(), creature.has_value() && Knows(*creature, post.type));
-		auto& transform = registry.Get<Transform>(entity);
-		auto* glow = post.glow != entt::null && registry.Valid(post.glow) ? registry.TryGet<Transform>(post.glow) : nullptr;
 		if (!post.hung)
 		{
-			transform.scale = glm::vec3(0.0f);
-			if (glow != nullptr)
-			{
-				glow->scale = glm::vec3(0.0f);
-			}
-			continue;
+			return;
 		}
 		post.look = temple_leashes::Advance(post.look, seconds);
 		if (auto* skin = registry.TryGet<SkinOverride>(entity))
 		{
 			skin->uvOffset = glm::vec2(post.look.scroll, temple_leashes::Band(post.type));
 		}
-		// The picked leash of this machine's player is carried in the hand; the others tumble where they hang
-		const bool picked = post.selected && post.owner == k_LocalPlayer;
-		if (picked && hand.has_value())
+	});
+}
+
+void LeashSystem::ShowPosts(bool handShown)
+{
+	_handShown = handShown;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto light = temple_leashes::GlowAlpha(FrameLandLight(LandLightTable::k_Size - 1));
+	// The wrist of the hand carrying the picked leash: its first bone, where it is posed this frame
+	std::optional<std::pair<glm::mat4, float>> wrist;
+	if (Locator::handSystem::has_value())
+	{
+		const auto entity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+		const auto* at = registry.Valid(entity) ? registry.TryGet<const Transform>(entity) : nullptr;
+		const auto* hand = registry.Valid(entity) ? registry.TryGet<const Hand>(entity) : nullptr;
+		if (at != nullptr)
 		{
-			const auto scale = hand->scale.x * temple_leashes::k_HandScale;
-			transform.position = hand->position + (hand->rotation * (temple_leashes::k_InHandOffset * scale));
-			// Carried, it is turned as the hand is, without its tumble
-			transform.rotation = hand->rotation;
-			transform.scale = glm::vec3(scale * temple_leashes::k_InHandShare);
+			const auto model = glm::translate(at->position) * glm::mat4(at->rotation) * glm::scale(at->scale);
+			const auto bone = hand != nullptr && !hand->boneMatrices.empty() ? hand->boneMatrices.front() : glm::mat4(1.0f);
+			// The hand may be mirrored to make a right hand; its size is the same either way
+			wrist = std::pair {model * bone, std::abs(at->scale.y)};
+		}
+	}
+	registry.Each<LeashPost, Transform>([&](const LeashPost& post, Transform& transform) {
+		auto* glow = post.glow != entt::null && registry.Valid(post.glow) ? registry.TryGet<Transform>(post.glow) : nullptr;
+		// The picked leash of this machine's player is carried in the hand; the others tumble where they hang
+		const bool carried = post.selected && post.owner == k_LocalPlayer;
+		if (!post.hung || !temple_leashes::Shows(carried, handShown))
+		{
+			transform.scale = glm::vec3(0.0f);
+			if (glow != nullptr)
+			{
+				glow->scale = glm::vec3(0.0f);
+			}
+			return;
+		}
+		if (carried && wrist.has_value())
+		{
+			const auto at = temple_leashes::CarriedAt(wrist->first, wrist->second);
+			transform.position = at.position;
+			transform.rotation = at.rotation;
+			transform.scale = glm::vec3(at.scale);
 		}
 		else
 		{
@@ -977,9 +995,10 @@ void LeashSystem::UpdatePosts(float seconds)
 		}
 		if (glow != nullptr)
 		{
+			// The glow stays where the leash hangs, even while it is carried
 			glow->scale = glm::vec3(temple_leashes::k_GlowSize);
 			auto& sprite = registry.Get<Sprite>(post.glow);
-			const auto look = temple_leashes::GlowOf(picked, light);
+			const auto look = temple_leashes::GlowOf(carried, light);
 			sprite.tint = look.tint;
 			sprite.additive = look.additive;
 			const auto picture = temple_leashes::GlowPicture(post.look);
@@ -987,7 +1006,7 @@ void LeashSystem::UpdatePosts(float seconds)
 			    glm::vec2(static_cast<float>(picture % k_SmokeCellsPerRow), static_cast<float>(picture / k_SmokeCellsPerRow)) /
 			    k_SmokeCellsPerSide;
 		}
-	}
+	});
 }
 
 bool LeashSystem::TapPost(entt::entity post)
@@ -1383,8 +1402,9 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	std::optional<entt::entity> post;
 	float nearest = k_TapReach;
 	registry.Each<const LeashPost, const Transform>([&](entt::entity entity, const LeashPost& at, const Transform&) {
-		// Only the leashes hanging there can be tapped, where they hang even when the picked one is carried
-		if (at.owner != player || !at.hung)
+		// Only the leashes hanging there can be tapped, where they hang even when the picked one is carried, unless
+		// the hand carrying it is put away
+		if (at.owner != player || !at.hung || !temple_leashes::Shows(at.selected && at.owner == k_LocalPlayer, _handShown))
 		{
 			return;
 		}

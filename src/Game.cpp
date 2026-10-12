@@ -2664,6 +2664,8 @@ bool Game::Update() noexcept
 		}
 		// The camera's helper icons by the hand, where it is drawn this frame, now that it is posed
 		UpdateHandTricons(IsHandDrawn(), std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+		// The temples' leashes, the picked one round the posed hand's wrist
+		Locator::leashSystem::value().ShowPosts(IsHandDrawn());
 		// The tooltip by the drawn hand too, which stays with it while it is held still and the pointer moves on
 		UpdateHandToolTipAnchor();
 		// Taking or letting go of a seed cross-fades the drawn hand, and the seed's in-hand effect sits in its fingers

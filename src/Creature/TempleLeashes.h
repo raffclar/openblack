@@ -15,6 +15,7 @@
 #include <string>
 
 #include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -55,6 +56,11 @@ constexpr float k_FullTurn = 6.2831855f;
 constexpr float k_DrawShare = 3.0518509e-05f;
 /// The look some seconds of game time on
 [[nodiscard]] Look Advance(const Look& look, float seconds);
+/// A turn made of three angles in the game's order: each column is one of the turned thing's own axes in the world
+[[nodiscard]] glm::mat3 TurnByAngles(const glm::vec3& angles);
+/// The three angles that make a turn, the other way round from TurnByAngles. A turn that also grows a thing evenly
+/// gives the angles of the turn alone.
+[[nodiscard]] glm::vec3 AnglesOf(const glm::mat3& turn);
 /// How the leash is turned where it hangs: tumbled by its two angles, about the axes the game turns it by
 [[nodiscard]] glm::mat3 Turn(const Look& look);
 /// The picture of the smoke sheet its glow shows
@@ -81,6 +87,25 @@ constexpr float k_TapRadius = 1.0f;
 constexpr float k_HandScale = 173.52948f;
 constexpr float k_InHandShare = 0.5f;
 constexpr glm::vec3 k_InHandOffset {0.05f, 0.25f, 0.0f};
+
+/// Where the picked leash is drawn while it is carried
+struct Carried
+{
+	glm::vec3 position {0.0f};
+	glm::mat3 rotation {1.0f};
+	float scale {1.0f};
+};
+/// The picked leash round the hand's wrist: turned as the wrist is (its tumble left out), half the hand's scale times
+/// k_HandScale across, shifted along its own axes by k_InHandOffset of that. `wrist` is the hand's first bone in the
+/// world and `handScale` how much the hand is grown.
+[[nodiscard]] Carried CarriedAt(const glm::mat4& wrist, float handScale);
+
+/// What of a hanging leash shows: its collar, its glow, and whether it can be tapped. The picked leash of this
+/// computer's player shows nothing at all, and can't be tapped, while the hand is put away.
+[[nodiscard]] constexpr bool Shows(bool carried, bool handShown)
+{
+	return !carried || handShown;
+}
 
 /// The hand's tooltip over a leash on the temple, by its place among the game's tooltips: "Leash Of Aggression",
 /// "Leash Of Learning" or "Leash Of Compassion"

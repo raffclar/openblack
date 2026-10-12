@@ -49,17 +49,51 @@ Look temple_leashes::Advance(const Look& look, float seconds)
 	};
 }
 
+glm::mat3 temple_leashes::TurnByAngles(const glm::vec3& angles)
+{
+	const auto c1 = std::cos(angles.x);
+	const auto s1 = std::sin(angles.x);
+	const auto c2 = std::cos(angles.y);
+	const auto s2 = std::sin(angles.y);
+	const auto c3 = std::cos(angles.z);
+	const auto s3 = std::sin(angles.z);
+	// Each column is one of the thing's own axes in the world
+	return {
+	    glm::vec3((c1 * c3) - (s1 * s2 * s3), -s3 * c2, (s1 * c3) + (c1 * s2 * s3)),
+	    glm::vec3((s1 * s2 * c3) + (c1 * s3), c3 * c2, (s1 * s3) - (c1 * c3 * s2)),
+	    glm::vec3(-s1 * c2, s2, c1 * c2),
+	};
+}
+
+glm::vec3 temple_leashes::AnglesOf(const glm::mat3& turn)
+{
+	// The first angle turns the third axis out of its plane, the second lifts it, the third turns the first axis
+	const auto first = std::atan2(-turn[2][0], turn[2][2]);
+	const auto c1 = std::cos(-first);
+	const auto s1 = std::sin(-first);
+	const auto xx = (c1 * turn[0][0]) - (s1 * turn[0][2]);
+	const auto xz = (c1 * turn[0][2]) + (s1 * turn[0][0]);
+	const auto second = std::atan2(turn[2][1], (s1 * turn[2][0]) + (c1 * turn[2][2]));
+	const auto c2 = std::cos(-second);
+	const auto s2 = std::sin(-second);
+	const auto third = std::atan2(-((c2 * turn[0][1]) + (s2 * xz)), xx);
+	return {first, second, third};
+}
+
 glm::mat3 temple_leashes::Turn(const Look& look)
 {
-	const auto c2 = std::cos(look.pitch);
-	const auto s2 = std::sin(look.pitch);
-	const auto c3 = std::cos(look.roll);
-	const auto s3 = std::sin(look.roll);
-	// Each column is one of the leash's own axes in the world
+	return TurnByAngles(glm::vec3(0.0f, look.pitch, look.roll));
+}
+
+Carried temple_leashes::CarriedAt(const glm::mat4& wrist, float handScale)
+{
+	const auto size = handScale * k_HandScale;
+	// Turned as the wrist is, with any growth or mirroring of the hand taken out by going through its angles
+	const auto rotation = TurnByAngles(AnglesOf(glm::mat3(wrist)));
 	return {
-	    glm::vec3(c3, -s3 * c2, s3 * s2),
-	    glm::vec3(s3, c3 * c2, -c3 * s2),
-	    glm::vec3(0.0f, s2, c2),
+	    .position = glm::vec3(wrist[3]) + (rotation * (k_InHandOffset * size)),
+	    .rotation = rotation,
+	    .scale = size * k_InHandShare,
 	};
 }
 

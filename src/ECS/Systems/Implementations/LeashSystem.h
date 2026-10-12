@@ -27,6 +27,7 @@ class LeashSystem final: public LeashSystemInterface
 public:
 	void ProcessTurn() override;
 	void Update(float seconds) override;
+	void ShowPosts(bool handShown) override;
 	void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor, uint32_t milliseconds,
 	                 bool actionTaken) override;
 
@@ -93,6 +94,8 @@ private:
 	void UpdatePosts(float seconds);
 	/// Whether the posts have been looked for at the temples yet
 	bool _postsPlaced {false};
+	/// Whether the hand was out when the posts were last shown
+	bool _handShown {true};
 	/// The two leash-tying sounds play in turn
 	bool _secondAttachSound {false};
 	std::optional<Refused> _lastRefusal;
