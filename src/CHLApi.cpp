@@ -203,11 +203,14 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Hand/HandClickRules.h"
+#include "Hand/ScriptHandState.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpProfile.h"
+#include "Help/ScriptHelpText.h"
 #include "Help/ScriptSpirits.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
+#include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -1038,11 +1041,20 @@ void SpiritPointPos() // 009 SPIRIT_POINT_POS
 
 void SpiritPointGameThing() // 010 SPIRIT_POINT_GAME_THING
 {
-	// const auto inWorld = static_cast<bool>(Pop().intVal);
-	// const auto target = Pop().uintVal;
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The advisor comes out and keeps pointing at the top of the thing, wherever it goes, until it is gone or told
+	// otherwise. Only exactly 1 points in the world.
+	const auto inWorld = Pop().uintVal == 1;
+	const auto target = PopObject();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (target == entt::null || !Locator::entitiesRegistry::value().Valid(target))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		return;
+	}
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritPointObject(spirit, entt::to_integral(target), inWorld);
+	}
 }
 
 /// The view the scripts ask what is in: the camera as it is now and the window's size; none without a window
@@ -6002,12 +6014,76 @@ void BeliefForPlayer() // 247 BELIEF_FOR_PLAYER
 	Pushf(script::property_rules::BeliefForPlayer(town != nullptr, townBelief, ecs::world_objects::PlayerOf(object), player));
 }
 
+/// The help texts of a thing still in the world, as the help scripts ask for them: a reward chest's own, a miracle
+/// dispenser's miracle's and the first of its kind's
+help::script_help_text::Texts ObjectHelpTexts(entt::entity object)
+{
+	help::script_help_text::Texts texts;
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& info = Locator::infoConstants::value();
+	if (const auto* reward = registry.TryGet<const ecs::components::Reward>(object); reward != nullptr)
+	{
+		if (const auto row = static_cast<size_t>(reward->type); row < info.reward.size())
+		{
+			texts.reward = info.reward.at(row).helpTextEnum;
+			texts.kind = info.reward.at(row).helpStartEnum;
+		}
+		return texts;
+	}
+	if (const auto* dispenser = registry.TryGet<const ecs::components::SpellDispenser>(object); dispenser != nullptr)
+	{
+		// The text of the effect its miracle casts
+		if (static_cast<size_t>(dispenser->magicType) < magic::k_MagicTypeCount)
+		{
+			const auto effect = magic::GetMagicInfo(info, dispenser->magicType).magicType;
+			texts.dispenser = magic::GetMagicEffectInfo(info, effect).helpStartEnum;
+		}
+		return texts;
+	}
+	if (const auto* kind = ecs::world_objects::InfoOf(object); kind != nullptr)
+	{
+		texts.kind = kind->helpStartEnum;
+	}
+	return texts;
+}
+
+/// The thing a help native is asked about, if it is still in the world; none pushes 0
+std::optional<entt::entity> PopHelpObject()
+{
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushf(0.0f);
+		return std::nullopt;
+	}
+	return object;
+}
+
+/// The first help text the help gives about an object: a spell dispenser's is its miracle's, any other object's its
+/// kind's. Both GET_FIRST_HELP and GET_LAST_HELP give this one (the game reads the same text for both), so the scripts'
+/// run of texts from the first to the last is this text alone.
+void PushObjectHelpText()
+{
+	if (const auto object = PopHelpObject())
+	{
+		Pushf(static_cast<float>(help::script_help_text::FirstHelp(ObjectHelpTexts(*object))));
+	}
+}
+
 void GetHelp() // 248 GET_HELP
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// What a reward chest says when it is clicked: its own text; anything else gives its first help text
+	const auto object = PopHelpObject();
+	if (!object)
+	{
+		return;
+	}
+	if (!Locator::entitiesRegistry::value().AllOf<ecs::components::Reward>(*object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Not reward ");
+	}
+	Pushf(static_cast<float>(help::script_help_text::Help(ObjectHelpTexts(*object))));
 }
 
 void SetLeashWorks() // 249 SET_LEASH_WORKS
@@ -6480,11 +6556,29 @@ void RestoreCameraDetails() // 284 RESTORE_CAMERA_DETAILS
 	NotImplemented();
 }
 
+/// The advisors start cheering the player's turning of the camera, the measure of its speed starting again from
+/// still, or stop
+void StartAngleSound(bool enable)
+{
+	if (!Locator::cameraHelpSystem::has_value())
+	{
+		return;
+	}
+	auto& help = Locator::cameraHelpSystem::value().Get();
+	if (enable)
+	{
+		help.turnSpeed = 0.0f;
+		help::turn_cheer::Start(help.turnCheering);
+	}
+	else
+	{
+		help::turn_cheer::Stop(help.turnCheering);
+	}
+}
+
 void StartAngleSound285() // 285 START_ANGLE_SOUND
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	StartAngleSound(Pop().uintVal != 0);
 }
 
 void SetCameraPosFocLens() // 286 SET_CAMERA_POS_FOC_LENS
@@ -7241,9 +7335,7 @@ void EnterExitCitadel() // 347 ENTER_EXIT_CITADEL
 
 void StartAngleSound348() // 348 START_ANGLE_SOUND
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	StartAngleSound(Pop().uintVal != 0);
 }
 
 void ThingJcSpecial() // 349 THING_JC_SPECIAL
@@ -7373,38 +7465,6 @@ void SexIsMale() // 358 SEX_IS_MALE
 	// TODO(Daniels118): implement this
 	NotImplemented();
 	Pushb(false);
-}
-
-/// The first help text the help gives about an object: a spell dispenser's is its miracle's, any other object's its
-/// kind's. Both GET_FIRST_HELP and GET_LAST_HELP give this one (the game reads the same text for both), so the scripts'
-/// run of texts from the first to the last is this text alone.
-void PushObjectHelpText()
-{
-	const auto object = PopObject();
-	if (object == entt::null)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
-		Pushf(0.0f);
-		return;
-	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	if (const auto* dispenser = registry.TryGet<const ecs::components::SpellDispenser>(object); dispenser != nullptr)
-	{
-		// The text of the effect its miracle casts
-		const auto& info = Locator::infoConstants::value();
-		if (static_cast<size_t>(dispenser->magicType) >= magic::k_MagicTypeCount)
-		{
-			Pushf(0.0f);
-			return;
-		}
-		const auto effect = magic::GetMagicInfo(info, dispenser->magicType).magicType;
-		Pushf(static_cast<float>(magic::GetMagicEffectInfo(info, effect).helpStartEnum));
-		return;
-	}
-	// TODO(advisor-help): an object's kind's help text needs the info row of every kind of object, which openblack
-	// doesn't look up by thing yet
-	NotImplemented();
-	Pushf(0.0f);
 }
 
 void GetFirstHelp() // 359 GET_FIRST_HELP
@@ -7924,9 +7984,23 @@ void GameCloseDialogue() // 412 GAME_CLOSE_DIALOGUE
 
 void GetHandState() // 413 GET_HAND_STATE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	hand::script_state::Facts facts;
+	facts.interfaceActive =
+	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	facts.inTemple = PlayerInsideTemple();
+	if (Locator::camera::has_value())
+	{
+		facts.gripsLand = Locator::camera::value().GetModel().GetHandCues().dragging;
+	}
+	if (Locator::gameActionSystem::has_value())
+	{
+		facts.otherButton = Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
+	}
+	if (Locator::cameraHelpSystem::has_value())
+	{
+		facts.cameraFeatures = Locator::cameraHelpSystem::value().Get().features;
+	}
+	Pushi(static_cast<int32_t>(hand::script_state::StateOf(facts)));
 }
 
 void SetInterfaceCitadel() // 414 SET_INTERFACE_CITADEL

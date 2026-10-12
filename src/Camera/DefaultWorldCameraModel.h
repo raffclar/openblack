@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <glm/vec2.hpp>
 
 #include "CameraHelpEvents.h"
@@ -197,6 +199,8 @@ private:
 	bool _selfTiltEase {false};
 	/// Put back inside the fence, the camera ignores its controls until every one of them is let go
 	bool _heldBack {false};
+	/// The angle the player turned the camera by this frame, in radians, none when the player didn't turn it
+	std::optional<float> _turnedThisFrame;
 	/// The self-tilting camera goes back over where it stood at the start of the frame: it tilted itself, or nothing was
 	/// asked of it
 	bool _keepsToItsPlace {true};

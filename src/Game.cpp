@@ -66,6 +66,7 @@
 #include "Audio/GameMusic.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/HelpSpeech.h"
+#include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -227,6 +228,7 @@
 #include "Hand/HandFeel.h"
 #include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
+#include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -1081,6 +1083,9 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
+	// The shown tooltip's display time runs down only while the player may turn the camera
+	const bool displayTimeRuns = !Locator::cameraHelpSystem::has_value() ||
+	                             (Locator::cameraHelpSystem::value().Get().features & camera_help::feature::k_Rotate) != 0;
 	// As the player's own totem moves on the screen, the hand shows the share it is held at, over anything else
 	if (const auto tip = Locator::villageTotemSystem::has_value()
 	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(PlayerNames::PLAYER_ONE)
@@ -1106,7 +1111,7 @@ void Game::ProcessHandToolTipTurn()
 		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
 		{
 			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
-			toolTips.ProcessTurn();
+			toolTips.ProcessTurn(displayTimeRuns);
 			return;
 		}
 	}
@@ -1161,7 +1166,27 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
 		}
 	}
-	toolTips.ProcessTurn();
+	toolTips.ProcessTurn(displayTimeRuns);
+}
+
+void Game::ProcessTurnCheering()
+{
+	// While the turning lesson asks for it, the advisors cheer the player's turning of the camera on
+	if (!Locator::cameraHelpSystem::has_value() || !Locator::gameRandom::has_value() || !Locator::chlapi::has_value())
+	{
+		return;
+	}
+	auto& help = Locator::cameraHelpSystem::value().Get();
+	auto& random = Locator::gameRandom::value();
+	const help::turn_cheer::Random draws {
+	    .upTo = [&random](float x) { return random.LocalFloatRand(x); },
+	    .below = [&random](int32_t n) { return random.LocalRand(n); },
+	};
+	if (const auto line = help::turn_cheer::ProcessTurn(help.turnCheering, help.turnSpeed, GetTurn(), draws))
+	{
+		Locator::chlapi::value().PlayBankSoundEffect(static_cast<int32_t>(audio::ScriptSoundBank::HelpSprites), *line,
+		                                             std::nullopt);
+	}
 }
 
 bool Game::GameLogicLoop() noexcept
@@ -1205,6 +1230,7 @@ bool Game::GameLogicLoop() noexcept
 	// The influence asked during the turn is measured from where the hands were at it
 	Locator::influenceSystem::value().SetInGameTurn(true);
 	ProcessHandToolTipTurn();
+	ProcessTurnCheering();
 
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();
