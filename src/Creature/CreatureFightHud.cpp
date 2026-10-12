@@ -99,18 +99,3 @@ std::u16string_view creature_fight_hud::FitName(std::u16string_view name, float 
 	}
 	return name;
 }
-
-namespace
-{
-// Indexed by species, from the cow
-constexpr std::array<std::u16string_view, static_cast<size_t>(CreatureType::_COUNT) - 1> k_SpeciesNames {
-    u"Cow",        u"Tiger", u"Leopard", u"Wolf", u"Lion",     u"Horse", u"Tortoise", u"Zebra",     u"Brown Bear",
-    u"Polar Bear", u"Sheep", u"Chimp",   u"Ogre", u"Mandrill", u"Rhino", u"Gorilla",  u"Giant Ape",
-};
-} // namespace
-
-std::u16string_view creature_fight_hud::SpeciesName(CreatureType species)
-{
-	const auto index = static_cast<size_t>(species);
-	return index >= 1 && index <= k_SpeciesNames.size() ? k_SpeciesNames.at(index - 1) : u"Creature";
-}

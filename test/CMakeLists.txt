@@ -838,3 +838,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_player_profiles test_player_profiles.cpp)
 openblack_setup_and_add_test(test_text_edit_rules gui/test_text_edit_rules.cpp)
 openblack_setup_and_add_test(test_new_player_box gui/test_new_player_box.cpp)
+openblack_setup_and_add_test(test_creature_names test_creature_names.cpp)

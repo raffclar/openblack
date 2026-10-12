@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <string>
 #include <string_view>
 
 #include <glm/vec2.hpp>
@@ -77,6 +78,9 @@ public:
 	virtual void InterruptAdvisors() = 0;
 	/// Who says a help text, a narrator of the help texts' script; a number past the last gives the first text's
 	[[nodiscard]] virtual int32_t GetNarrator(uint32_t text) const = 0;
+	/// The words of a help text, as the game keeps them; a number past the last gives the first text's, and there are none
+	/// before the start
+	[[nodiscard]] virtual std::u16string GetWords(uint32_t text) const = 0;
 
 	/// The box and words to draw this frame for a screen with cinema bars of `barPixels`, nothing before the start
 	[[nodiscard]] virtual const help::TextFrame* Layout(glm::ivec2 screen, int barPixels,

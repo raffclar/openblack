@@ -1462,8 +1462,9 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const int width = resolution.x;
 	const int height = resolution.y;
 	const int size = height / 25;
-	const int handX = std::clamp(static_cast<int>(_handOnScreen->x), 0, width - size);
-	const int handY = std::clamp(static_cast<int>(_handOnScreen->y), 0, height - size);
+	const auto kept = world_tooltip::KeptOnScreen(glm::ivec2(*_handOnScreen), glm::ivec2(width, height), size);
+	const int handX = kept.x;
+	const int handY = kept.y;
 
 	// The words, then the mouse with its arrows either side
 	const int iconWidth = shown->action != ToolTipAction::None && _mice != nullptr ? size : 0;
