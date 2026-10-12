@@ -80,10 +80,48 @@ std::vector<ObjectSetup> PondFarmAndPit()
 	    {.type = VillagerInfo::CelticForesterMale, .offset = k_PondPit + glm::vec2(6.0f, -14.0f), .joinTown = true},
 	};
 }
+/// A fish farm whose map cell is the last of the land on the lake's southern shore, the lake's water starting at the
+/// cell's northern edge; its town's hut and empty storage pit on the bank behind it, and one fisherman of the town, so
+/// that the town's want of food sends him to the farm
+constexpr glm::vec2 k_ShoreFarm {5.0f, 145.0f};
+
+std::vector<ObjectSetup> ShoreFarmAndFisherman()
+{
+	return {
+	    {.type = AbodeInfo::NorseHut, .offset = k_ShoreFarm + glm::vec2(-20.0f, -20.0f), .yawDegrees = 180.0f},
+	    {.type = FishFarmInfo::Normal, .offset = k_ShoreFarm},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_ShoreFarm + glm::vec2(25.0f, -30.0f), .storedFood = 0},
+	    {.type = VillagerInfo::NorseFishermanMale, .offset = k_ShoreFarm + glm::vec2(0.0f, -25.0f), .joinTown = true},
+	};
+}
+
+/// Low over the shore, looking north across the farm's map cell to the lake
+Framing OverTheShoreFarm()
+{
+	return {.shot = Shot::Placed,
+	        .eye = {k_ShoreFarm.x, 12.0f, k_ShoreFarm.y - 18.0f},
+	        .look = {k_ShoreFarm.x, 0.0f, k_ShoreFarm.y + 2.0f}};
+}
 } // namespace
 
 void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 {
+	all.push_back({
+	    .id = "villagers.fisherman",
+	    .name = "A fisherman at his fish farm",
+	    .facet = Facet::Movement,
+	    .description = "A fish farm in the last map cell of land on the lake's southern shore, its town's hut and empty "
+	                   "storage pit on the bank behind it, and one fisherman of the town. Seen low from the shore, looking "
+	                   "north over the farm's map cell to the lake.",
+	    .expected = "The town wants food, so the fisherman walks to the farm and fishes there, his clip starting again "
+	                "every 4.3 seconds, facing the water. Once he carries nearly all the food he can, he takes it to the "
+	                "storage pit and comes back. (openblack has no villager footpaths yet: he walks straight to the "
+	                "middle of the farm's map cell, steps to a random spot and faces that way instead.)",
+	    .environment = {.dispenserGrid = false},
+	    .framing = OverTheShoreFarm(),
+	    .objects = ShoreFarmAndFisherman(),
+	});
+
 	all.push_back({
 	    .id = "hand.fish_farm",
 	    .name = "A fish farm's shoal",
