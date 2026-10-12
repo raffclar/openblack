@@ -393,18 +393,9 @@ void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices,
 
 TempleScrolls::Facts TempleScrolls::Facts::Mock()
 {
-	// TODO(raffclar): Made up until openblack keeps the game's statistics, the player's creature, its challenges, saved
-	// games and the help it has shown
+	// TODO(raffclar): Made up until openblack keeps the player's challenges, saved games and the help it has shown; the
+	// world's statistics and the creature are filled in by the temple from the game
 	Facts facts;
-	facts.believersPercent = 62;
-	facts.malePercent = 48;
-	facts.deaths = 12;
-	facts.births = 17;
-	facts.sacrifices = 3;
-	facts.buildings = 24;
-	facts.wonders = 1;
-	facts.disciples = 9;
-	facts.discipleKinds = {2, 1, 1, 2, 1, 0, 1, 1};
 	facts.challengesDiscovered = 2;
 	facts.challengesCompleted = 1;
 	// The titles come from the lands' scripts, which openblack doesn't give them yet

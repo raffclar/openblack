@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <chrono>
 #include <numbers>
+#include <optional>
 
 #include <LNDFile.h>
 #include <entt/core/hashed_string.hpp>
@@ -76,6 +77,7 @@
 #include "ECS/CreatureSight.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -490,7 +492,8 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 				}
 				if (outcome.damaged > 0.0f)
 				{
-					ecs::world_objects::ReduceLife(outcome.entity, outcome.damaged);
+					ecs::world_objects::ReduceLife(outcome.entity, outcome.damaged,
+					                               source.playerless ? std::nullopt : std::optional(source.player));
 				}
 			}
 		}
@@ -2724,9 +2727,9 @@ void MagicSystem::RecordCast(MagicType type, PlayerNames player, glm::vec3 point
 		if (record.name == player)
 		{
 			record.lastCast = components::Player::Cast {.position = point, .type = type, .turn = _turn};
-			++record.castsOfType.at(static_cast<size_t>(type));
 		}
 	});
+	player_statistics::CountCast(EntityRegistry(), player, type);
 }
 
 void MagicSystem::ReactToSpell(Spell& spell, bool onCast)
