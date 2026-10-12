@@ -922,13 +922,12 @@ struct GCreatureInfo: GLivingInfo
 	std::array<uint8_t, 0x4c> field0x28c;
 	/// Running away, the creature goes at least this far from what it flees, and up to 40 further
 	float runAwayDistance;
-	std::array<uint8_t, 0x5c> field0x2dc;
+	std::array<uint8_t, 0x58> field0x2dc;
+	/// The mesh of its species' icon that stands on its player's town totems (the game's creature info +0x344)
+	MeshId totemIcon;
 	/// Each turn the change waiting for its alignment, held between -1 and 1, moves it by that share of this
 	float alignmentChangePerTurn;
-	std::array<uint8_t, 0x8> field0x33c;
-	/// The icon of its species that stands on its player's town totems
-	MeshId totemIcon;
-	std::array<uint8_t, 0x1c> field0x348;
+	std::array<uint8_t, 0x28> field0x33c;
 	/// How long it sleeps for its size, once rested
 	float sleepLength;
 	/// A meal's food value over this, and over its size, is the energy it gains
@@ -944,7 +943,7 @@ static_assert(sizeof(GCreatureInfo) == 0x384);
 static_assert(offsetof(GCreatureInfo, chantsPerEnergy) == 0x284);
 static_assert(offsetof(GCreatureInfo, desireFloor) == 0x264);
 static_assert(offsetof(GCreatureInfo, spellSizeFactor) == 0x380);
-static_assert(offsetof(GCreatureInfo, totemIcon) == 0x344);
+static_assert(offsetof(GCreatureInfo, totemIcon) == 0x334);
 static_assert(offsetof(GCreatureInfo, startEnergy) == 0x1f4);
 static_assert(offsetof(GCreatureInfo, comfortTemperature) == 0x1fc);
 static_assert(offsetof(GCreatureInfo, growUpMinutes) == 0x204);
