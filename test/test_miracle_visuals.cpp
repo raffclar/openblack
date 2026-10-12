@@ -94,6 +94,29 @@ TEST(MiracleVisuals, PhialsRunBackwardsAndPulse)
 	EXPECT_NEAR(PhialScale(1, 0.25f).x, 1.0f, k_Epsilon);
 }
 
+TEST(MiracleVisuals, ShrinkingAndGrowingPhialsAreLitInWhiteTheOthersByTheLand)
+{
+	// The big phial: the whole one at the globe's alpha and a fading copy growing out of it, both lit in white
+	const auto big = PhialDraws(2, 0.25f, 0.5f, 150);
+	ASSERT_EQ(big.size(), 2u);
+	EXPECT_FALSE(big[0].landLit);
+	EXPECT_FALSE(big[1].landLit);
+	EXPECT_EQ(big[0].alpha, 150);
+	EXPECT_NEAR(big[1].size, 1.25f, k_Epsilon);
+	EXPECT_EQ(big[1].alpha, (191u * 150u) >> 8u);
+	// The small phial: shrinking at the globe's alpha with a faint whole one over it
+	const auto small = PhialDraws(1, 0.25f, 0.5f, 150);
+	ASSERT_EQ(small.size(), 2u);
+	EXPECT_FALSE(small[0].landLit);
+	EXPECT_NEAR(small[0].size, 0.75f, k_Epsilon);
+	EXPECT_EQ(small[1].alpha, (150u * 5u) >> 4u);
+	// The others take the land's light, whole
+	const auto other = PhialDraws(3, 0.25f, 0.5f, 150);
+	ASSERT_EQ(other.size(), 1u);
+	EXPECT_TRUE(other[0].landLit);
+	EXPECT_EQ(other[0].alpha, 255);
+}
+
 TEST(MiracleVisuals, BraceletsCountThePowerUpsAndWaitForTheMiracleToSettle)
 {
 	HandBands bands;

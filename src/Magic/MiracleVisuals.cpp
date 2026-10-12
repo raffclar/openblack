@@ -223,21 +223,21 @@ std::vector<PhialDraw> visuals::PhialDraws(int receiveType, float phase, float p
 	{
 	case k_SmallReceiveType:
 		// Shrinking away from the full phial, with a faint full one over it
-		return {{.size = 1.0f - phase, .alpha = globeAlpha, .lit = false},
-		        {.size = 1.0f, .alpha = static_cast<uint8_t>((alpha * 5u) >> 4u), .lit = false}};
+		return {{.size = 1.0f - phase, .alpha = globeAlpha, .landLit = false},
+		        {.size = 1.0f, .alpha = static_cast<uint8_t>((alpha * 5u) >> 4u), .landLit = false}};
 	case k_BigReceiveType:
 	{
 		// The full phial, with a fading one growing out of it
 		const auto fading = static_cast<uint32_t>(static_cast<int32_t>(255.0f - 255.0f * phase));
-		return {{.size = 1.0f, .alpha = globeAlpha, .lit = false},
-		        {.size = 1.0f + phase, .alpha = static_cast<uint8_t>((fading * alpha) >> 8u), .lit = false}};
+		return {{.size = 1.0f, .alpha = globeAlpha, .landLit = false},
+		        {.size = 1.0f + phase, .alpha = static_cast<uint8_t>((fading * alpha) >> 8u), .landLit = false}};
 	}
 	case k_InvisibleReceiveType:
 		return {{.size = 1.0f,
 		         .alpha = static_cast<uint8_t>(static_cast<int32_t>(static_cast<float>(alpha) * pulse)),
-		         .lit = true}};
+		         .landLit = true}};
 	default:
-		return {{.size = 1.0f, .alpha = 255, .lit = true}};
+		return {{.size = 1.0f, .alpha = 255, .landLit = true}};
 	}
 }
 

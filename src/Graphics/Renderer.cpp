@@ -146,6 +146,7 @@
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/LandShadowBake.h"
 #include "Graphics/LightBeams.h"
+#include "Graphics/MaterialStages.h"
 #include "Graphics/ModelLight.h"
 #include "Graphics/Moon.h"
 #include "Graphics/ObjectShadows.h"
@@ -1004,8 +1005,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		// Primitives drawn with their own material's blending can't share render state, nor can a submesh with a texture
 		// of its own
 		// nor inner walls, whose inset each primitive's material decides
+		// nor primitives that may each take the environment map or a sliding texture in their own way
 		const bool primitivePreserveState = !materialBlending && subMeshTexture == nullptr && desc.subMeshGlows.empty() &&
-		                                    !desc.innerWalls && !desc.cap && texture != nullptr && texture == nextTexture &&
+		                                    !desc.innerWalls && !desc.cap && desc.environment == nullptr &&
+		                                    !desc.uvOffsetByMaterial && texture != nullptr && texture == nextTexture &&
 		                                    (preserveState || hasNext);
 
 		// A cut building's inner walls and cap belong only to a primitive with a whole triangle below the cut, and a cap
@@ -1083,10 +1086,22 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				setUniform(MeshUniform::ShadeAt, &desc.shadeAt);
 			}
+			// Each primitive takes the environment map as its material says, and its texture slides with the skin
+			// where it may; a frozen thing's ice is the map alone over every primitive
+			const bool environmentMapped = desc.environment != nullptr && desc.environmentOnlyAlpha <= 0.0f;
+			const auto environmentStage = environmentMapped ? material_stages::EnvironmentStageOf(prim.materialFlags)
+			                                                : material_stages::EnvironmentStage::Added;
 			if (has(MeshUniform::UvOffset))
 			{
-				const glm::vec4 u_uvOffset {desc.uvOffset, desc.uvScale, 0.0f};
+				const bool slides =
+				    !desc.uvOffsetByMaterial || material_stages::TextureSlides(prim.materialFlags, environmentMapped);
+				const glm::vec4 u_uvOffset {slides ? desc.uvOffset : glm::vec2(0.0f), desc.uvScale, 0.0f};
 				setUniform(MeshUniform::UvOffset, &u_uvOffset);
+			}
+			if (has(MeshUniform::EnvironmentStage))
+			{
+				const glm::vec4 u_environmentStage {static_cast<float>(environmentStage), 0.0f, 0.0f, 0.0f};
+				setUniform(MeshUniform::EnvironmentStage, &u_environmentStage);
 			}
 			if (has(MeshUniform::KeepBelow))
 			{
@@ -1202,7 +1217,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// Below Medium detail the sun lights only the creatures and the hand
 				const bool unlit =
 				    desc.unlit || (!desc.alwaysLit && !detail_level::For(Locator::config::value().detailLevel).objectLighting);
-				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, unlit ? 1.0f : 0.0f, 0.0f};
+				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, unlit ? 1.0f : 0.0f,
+				                             desc.landColourAdded ? 0.0f : 1.0f};
 				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
 				program->SetTextureSampler("s_landColour", 8, GetLandColour());
