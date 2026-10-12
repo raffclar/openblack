@@ -8,10 +8,10 @@
  *******************************************************************************/
 
 // A seed that leaves the hand bound to the miracle it cast (the storms', the shields' and the forest's) is shown over
-// its miracle when it was made at an icon of the player's worship (the forest's always is, by the user's call): its model, at
-// its own size and unturned, sitting on top of the tallest still thing beneath it. The forest miracle's seed is hidden under
-// the land until the forest is planted, then rides over the tallest of its trees as they grow. Out of its player's influence
-// such a seed's miracle closes down.
+// its miracle when it was made at an icon of the player's worship: its model, at its own size and unturned, sitting on
+// top of the tallest still thing beneath it. Any other such seed vanishes as it lands, inside its falling effect. The
+// forest miracle's shown seed is hidden under the land until the forest is planted, then rides over the tallest of its
+// trees as they grow. Out of its player's influence such a seed's miracle closes down.
 
 #define LOCATOR_IMPLEMENTATIONS
 
@@ -155,7 +155,7 @@ void MagicSystem::ShowSeedsWithSpells()
 		// It stays with its miracle across the land
 		transform->position.x = spell->position.x;
 		transform->position.z = spell->position.z;
-		if (!magic::DrawnWithSpell(SeedWithSpellOf(seed, *spell), spell->spellClass == magic::SpellClass::Forest))
+		if (!SeedShownWithSpell(seed, *spell))
 		{
 			registry.Remove<Mesh>(entity);
 			continue;
