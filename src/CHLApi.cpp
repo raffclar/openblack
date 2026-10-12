@@ -356,7 +356,7 @@ ScriptCameraModel* ScriptCameraToMove()
 	return ScriptCamera();
 }
 
-/// Leashes are drawn again once a script gives the camera back, and not while it has it
+/// The scripts' switch for the leashes: on again once a script gives the camera back, off while it has it
 void DrawLeashes(bool drawn)
 {
 	if (Locator::leashSystem::has_value())
