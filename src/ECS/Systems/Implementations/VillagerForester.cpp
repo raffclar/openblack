@@ -138,7 +138,7 @@ bool MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 {
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
 	{
-		villager_home::SetupMobileMoveTo(action, goal, final);
+		villager_home::SetupMobileMoveTo(action, goal);
 		return true;
 	}
 	return false;
@@ -676,11 +676,12 @@ uint32_t villager_forester::ArrivesAtWoodReaction(LivingAction& action)
 			{
 				return 1;
 			}
-			auto& living = Locator::livingActionSystem::value();
-			const auto final = FinalState(action);
-			living.VillagerSetState(action, LivingAction::Index::Final, final, true);
-			living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::WaitForCounter, false);
-			action.turnsUntilStateChange = work::k_WaitForWoodToLand;
+			// It waits, then goes on with what it was doing; the wait is counted only once it is waiting
+			if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(
+			        action, VillagerStates::WaitForCounter, FinalState(action)))
+			{
+				action.turnsUntilStateChange = work::k_WaitForWoodToLand;
+			}
 			return 1;
 		}
 	}
