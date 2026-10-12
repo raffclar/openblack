@@ -60,6 +60,16 @@ inline constexpr float k_ClashForkScale = 3.0f;
 /// Each strike of a clash hits twice as hard, for both miracles
 inline constexpr float k_ClashStrength = 2.0f;
 
+/// A storm's forked bolt comes down from a point of light under its cloud, which lives this long, picked between the two;
+/// its bolt goes with it
+inline constexpr float k_SkyStrikeLifeMin = 0.4f;
+inline constexpr float k_SkyStrikeLifeMax = 0.8f;
+/// No more than this many storm bolts are alive at once; a storm's bolt due while they are is lost
+inline constexpr size_t k_MostSkyStrikes = 50;
+/// The size of a storm bolt's thunder, 1 large, 2 medium or 3 small, by a random number in 0..1: small below 0.3, medium
+/// below 0.75, else large
+[[nodiscard]] int SkyStrikeThunderSize(float random);
+
 /// An electric arc crawling over what a bolt struck: from one point of its model to another, leaving and arriving along
 /// the model's normals there, the tangents scaled by the arc's length
 struct ArcEnds

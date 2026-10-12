@@ -121,6 +121,9 @@ struct Environment
 	float hour {12.0f};
 	bool clockRuns {true};
 	Weather weather {Weather::Clear};
+	/// With a thunderstorm, the shortest and longest wait between its forked bolts, in seconds; the weather window's 2 to
+	/// 8 when not given
+	std::optional<glm::vec2> boltSeconds;
 	/// Game turns of the creatures' bodies that pass each game turn
 	float bodyTimeScale {1.0f};
 	/// Whether creatures faint when exhausted, starved or out of life
