@@ -21,8 +21,11 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -31,6 +34,7 @@
 #include "Locator.h"
 #include "Magic/HandHoldPose.h"
 #include "Magic/MagicTables.h"
+#include "Magic/SpellBehaviours.h"
 #include "MagicSystem.h"
 #include "Particles/ParticleEffect.h"
 #include "Resources/ResourceManager.h"
@@ -135,6 +139,44 @@ bool MagicSystem::IsHandInInfluence() const
 	}
 	const auto& seed = registry.Get<const SpellSeed>(*_held);
 	return _hand.point.has_value() && _world.HandInInfluence(seed.player, *_hand.point);
+}
+
+std::optional<magic::HeldCastAtPointer> MagicSystem::HeldCastAt(std::optional<entt::entity> pointed) const
+{
+	auto& registry = EntityRegistry();
+	if (!_held.has_value() || !registry.Valid(*_held) || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& seed = registry.Get<const SpellSeed>(*_held);
+	const auto type = HeldMagicType();
+	auto& self = const_cast<MagicSystem&>(*this);
+	magic::HeldCastAtPointer held {
+	    .handInInfluence = IsHandInInfluence(),
+	    .ready = seed.ready,
+	    .type = type,
+	    .onPointed = std::nullopt,
+	    .atPoint = false,
+	};
+	if (pointed.has_value() && registry.Valid(*pointed))
+	{
+		// A thing cast on stands where the miracle's table lets it be cast, and its kind must take it
+		const auto* transform = registry.TryGet<const Transform>(*pointed);
+		const bool castOnByKind =
+		    magic::GetSpellSeedInfo(Info(), seed.seedType).castOnObject != 0 && transform != nullptr &&
+		    magic::spells::MeetsCastRule(self, type, seed.player, transform->position, _ignoreInfluence) &&
+		    CanCastOn(type, *pointed);
+		held.onPointed = magic::MayCastOn(seed.seedType, {
+		                                                     .scriptHighlight = registry.AllOf<ScriptHighlight>(*pointed),
+		                                                     .fireBall = registry.AllOf<MagicFireBall>(*pointed),
+		                                                     .castOnByKind = castOnByKind,
+		                                                 });
+	}
+	else if (_hand.point.has_value())
+	{
+		held.atPoint = self.CanCastAt(type, seed.player, *_hand.point);
+	}
+	return held;
 }
 
 std::optional<Tribe> MagicSystem::TribalPowerTribe(PlayerNames player, MagicType type) const

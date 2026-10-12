@@ -110,9 +110,23 @@ glm::ivec2 KeptOnScreen(glm::ivec2 hand, glm::ivec2 screen, int size)
 	return {std::clamp(hand.x, 0, std::max(screen.x - size, 0)), std::clamp(hand.y, 0, std::max(screen.y - size, 0))};
 }
 
-bool OffersOverToolTips(magic::CastInput::State cast)
+std::optional<uint32_t> HeldMiracle(magic::HeldCastOffer offer)
 {
-	return cast != magic::CastInput::State::Locked;
+	switch (offer)
+	{
+	case magic::HeldCastOffer::Cast:
+		return k_Cast;
+	case magic::HeldCastOffer::CastCircle:
+		return k_CastCircle;
+	case magic::HeldCastOffer::None:
+		break;
+	}
+	return std::nullopt;
+}
+
+bool OffersOverToolTips(bool miracleInHand)
+{
+	return !miracleInHand;
 }
 
 } // namespace openblack::gui::world_tooltip

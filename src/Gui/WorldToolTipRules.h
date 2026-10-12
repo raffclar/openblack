@@ -19,7 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-#include "Magic/CastInput.h"
+#include "Magic/HeldCastRules.h"
 
 /// The words and numbers of the tooltips the hand shows over things in the world: a village centre's belief and
 /// population, a temple's health and way in, a store's food and wood, and the amount a pile gives. Each is one of the
@@ -121,11 +121,19 @@ struct Wording
 /// The tooltip's corner by the hand, kept on the screen by its size
 [[nodiscard]] glm::ivec2 KeptOnScreen(glm::ivec2 hand, glm::ivec2 screen, int size);
 
-/// Whether the hand offers the tooltips of what is under the pointer (a pile's amount, a store's contents, a flag's
-/// need, a creature, the leash). Not while a held miracle is locked on and applied every turn as the Action button stays
-/// down, as food or wood pours: the hand offers nothing of its own then, so what the pointer crosses (a wood pile beside
-/// the pour) never shows, and a tooltip already up runs out its time. Tooltips forced by what the hand does (the amount
-/// it takes from a pile, a totem's share) still show.
-[[nodiscard]] bool OffersOverToolTips(magic::CastInput::State cast);
+/// "Cast", by the action button, where the miracle held in the hand may be cast on the thing or the land under the
+/// pointer
+constexpr uint32_t k_Cast = 14;
+/// "Cast Circle": the same over the land for the miracles cast at a circle drawn (the storms, the tornado, the shields)
+constexpr uint32_t k_CastCircle = 126;
+
+/// The tooltip of what the hand offers to do with the miracle it holds, none where it offers nothing
+[[nodiscard]] std::optional<uint32_t> HeldMiracle(magic::HeldCastOffer offer);
+
+/// Whether the hand offers the tooltips of what is under the pointer (a pile's amount, a store's contents, a temple, a
+/// village centre, a flag's need, the creature's "Interact"). Only with nothing in it: with a miracle held, poured or
+/// not, it offers to cast the miracle where it may, and elsewhere only what it would over nothing (the leash's tips).
+/// Tooltips forced by what the hand does (the amount it takes from a pile, a totem's share) still show.
+[[nodiscard]] bool OffersOverToolTips(bool miracleInHand);
 
 } // namespace openblack::gui::world_tooltip

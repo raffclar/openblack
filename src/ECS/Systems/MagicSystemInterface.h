@@ -20,6 +20,7 @@
 #include "Enums.h"
 #include "Magic/CastInput.h"
 #include "Magic/HandMotion.h"
+#include "Magic/HeldCastRules.h"
 #include "Magic/PrayerRules.h"
 #include "Magic/SpellRules.h"
 #include "Particles/ParticleSpellLink.h"
@@ -262,6 +263,12 @@ public:
 	virtual void PlaceHandEffect(glm::vec3 /*point*/, float /*handScale*/) {}
 	/// Whether the point under the hand is in the influence of the player whose seed it holds (or influence is ignored)
 	[[nodiscard]] virtual bool IsHandInInfluence() const { return true; }
+	/// The miracle held in the hand and where it may be cast, the pointer over a thing or over the bare land; none
+	/// without a miracle in the hand
+	[[nodiscard]] virtual std::optional<magic::HeldCastAtPointer> HeldCastAt(std::optional<entt::entity> /*pointed*/) const
+	{
+		return std::nullopt;
+	}
 
 	// What a miracle's objects in the world do for it
 

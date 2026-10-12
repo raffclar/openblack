@@ -44,6 +44,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -240,9 +241,12 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	_candidates.clear();
 	_candidateEntities.clear();
 	_candidateModels.clear();
+	// The miracle held in the hand is one of the things the hand holds
+	const auto heldSeed =
+	    Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeed() : std::optional<entt::entity> {};
 	for (const auto& [entity, model] : Locator::rendereringSystem::value().GetContext().drawnObjects)
 	{
-		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity))
+		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity) || heldSeed == entity)
 		{
 			continue;
 		}
