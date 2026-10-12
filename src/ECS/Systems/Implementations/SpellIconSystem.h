@@ -34,6 +34,7 @@ public:
 	void TownChangedHands(entt::entity town, PlayerNames previous) override;
 	void TownJoinedSite(entt::entity site, entt::entity town) override;
 	void TownLeftSite(entt::entity site, entt::entity town) override;
+	void SiteRemoved(entt::entity site) override;
 
 	bool Tap(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] bool HasIconFor(PlayerNames player, SpellSeedType seed) const override;
@@ -70,7 +71,7 @@ private:
 	magic::spell_icons::TapResult TapSiteIcon(entt::entity icon, PlayerNames player);
 	/// An icon's charged miracle goes into its player's hand, carrying what the icon stored
 	bool GiveSeed(entt::entity icon);
-	/// Deletes an icon and forgets it
+	/// Deletes an icon and forgets it, with the seed out from it; what it was charging and what it stored are lost
 	void Destroy(entt::entity icon);
 };
 

@@ -818,3 +818,4 @@ openblack_setup_and_add_test(
   test_script_misc_natives test_script_misc_natives.cpp
 )
 target_link_libraries(test_script_misc_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_spell_icon_system test_spell_icon_system.cpp)
