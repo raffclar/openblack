@@ -54,6 +54,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
+#include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
@@ -535,6 +536,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		magicTookPress = magic.TapAction();
 	}
+	// Letting go of the Action button lets go of the tip bubble
+	if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::tipBubbleSystem::value().LetGo();
+	}
 	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
 	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
 	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
@@ -572,6 +579,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		if (!_actionPressTaken && handHoldsThing)
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		}
+		// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && Locator::tipBubbleSystem::has_value() &&
+		    Locator::tipBubbleSystem::value().IsUnderHand())
+		{
+			Locator::tipBubbleSystem::value().Grip();
+			_actionPressTaken = true;
 		}
 		// With an empty hand, a one-shot bubble under it takes the press before anything behind it
 		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
@@ -3278,6 +3292,18 @@ bool Game::Initialize() noexcept
 				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 			}
 		}
+	}
+	// The sea's texture, its colours and alpha together, four bits a channel as the game keeps it
+	try
+	{
+		textureManager.Load(sea_texture::k_Id.value(), resources::Texture2DLoader::FromDiskWithAlphaTag {},
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_ColourFile,
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side,
+		                    graphics::texel_depth::Depth::FourBits);
+	}
+	catch (std::runtime_error& err)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
 		// The game ships a grey ice map it never loads, cut short of a whole texture

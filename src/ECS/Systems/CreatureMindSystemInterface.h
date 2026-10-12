@@ -203,6 +203,9 @@ public:
 	virtual void ClearOnlyDesire(entt::entity /*creature*/) {}
 	/// The creature is told to point out the lesson highlight about it, if there is one; whether one was found
 	virtual bool PointOutHighlight(entt::entity /*creature*/) { return false; }
+	/// The story moves the creature to a stage of growing up: its desires become the ones its stages so far bring, none
+	/// stays held back, and it drops the plan it was carrying out
+	virtual void MoveToStage(entt::entity /*creature*/, uint32_t /*stage*/) {}
 };
 
 } // namespace openblack::ecs::systems

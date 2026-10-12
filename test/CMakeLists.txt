@@ -211,6 +211,7 @@ target_link_libraries(test_footprint_paint PRIVATE lnd)
 target_link_libraries(test_block_texture PRIVATE lnd)
 openblack_setup_and_add_test(test_land_vertex test_land_vertex.cpp)
 openblack_setup_and_add_test(test_sea_rows test_sea_rows.cpp)
+openblack_setup_and_add_test(test_texel_depth test_texel_depth.cpp)
 openblack_setup_and_add_test(test_day_night_clock test_day_night_clock.cpp)
 openblack_setup_and_add_test(test_mists test_mists.cpp)
 openblack_setup_and_add_test(test_clouds test_clouds.cpp)
@@ -800,4 +801,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(
   test_level_script_match test_level_script_match.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_development test_creature_development.cpp
 )

@@ -58,6 +58,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/LeashRules.h"
@@ -5397,6 +5398,27 @@ void PlayGesture() // 204 PLAY_GESTURE
 	NotImplemented();
 }
 
+/// The story moves a creature to a stage of growing up: its mind takes up the stage, and reaching the stage it may
+/// leave home from, a creature kept near its home off the leash is let go
+void MoveCreatureToStage(entt::entity creature, uint32_t stage)
+{
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().MoveToStage(creature, stage);
+	}
+	if (!Locator::leashSystem::has_value())
+	{
+		return;
+	}
+	auto& leashes = Locator::leashSystem::value();
+	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(creature);
+	if (leash != nullptr &&
+	    creature_development::ReleasedFromHome(stage, leash->confinementRadius, leashes.IsLeashed(creature)))
+	{
+		leashes.ClearConfinement(creature);
+	}
+}
+
 void DevFunction() // 205 DEV_FUNCTION
 {
 	const auto func = Pop().intVal;
@@ -5416,10 +5438,7 @@ void DevFunction() // 205 DEV_FUNCTION
 	switch (func)
 	{
 	case 1:
-		if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(*creature))
-		{
-			mind->developmentPhase = 0;
-		}
+		MoveCreatureToStage(*creature, 0);
 		leashes.ConfineToHome(*creature, creature_leash::k_HomeConfinement);
 		break;
 	case 2:
@@ -5474,10 +5493,20 @@ void NumMouseButtons() // 207 NUM_MOUSE_BUTTONS
 
 void SetCreatureDevStage() // 208 SET_CREATURE_DEV_STAGE
 {
-	// const auto stage = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Each lesson of growing up moves the creature to its stage as it begins
+	const auto stage = Pop().intVal;
+	const auto creature = CreatureForNative(PopObject());
+	if (!creature.has_value())
+	{
+		return;
+	}
+	const auto valid = creature_development::StageFromScript(stage);
+	if (!valid.has_value())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "SET_CREATURE_DEV_STAGE: {} is no stage of growing up", stage);
+		return;
+	}
+	MoveCreatureToStage(*creature, *valid);
 }
 
 void SetFixedCamRotation() // 209 SET_FIXED_CAM_ROTATION
@@ -6427,10 +6456,17 @@ void CreatureReaction() // 281 CREATURE_REACTION
 
 void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT
 {
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A lesson script of growing up says it is running for the creature, or that it is over
+	const auto creature = CreatureForNative(PopObject());
+	const auto enable = Pop().intVal != 0;
+	if (!creature.has_value())
+	{
+		return;
+	}
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(*creature))
+	{
+		mind->inDevelopmentScript = enable;
+	}
 }
 
 void StoreCameraDetails() // 283 STORE_CAMERA_DETAILS

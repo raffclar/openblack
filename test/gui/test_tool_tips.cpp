@@ -154,6 +154,25 @@ TEST(ToolTips, KeepOthersOffForTheirDisplayTime)
 	EXPECT_EQ(toolTips.GetShown()->index, k_ZoomIn);
 }
 
+TEST(ToolTips, OneSecondOfDisplayTimeHoldsForTwoAndAHalfSecondsOfTurns)
+{
+	ToolTips toolTips(Info());
+	// Display time counts 25 game turns a second and turns come 10 a second, so a 1 s tooltip holds for 2.5 s
+	for (int turn = 0; turn < 25; ++turn)
+	{
+		toolTips.Submit(k_Move, ToolTipAction::Select, ToolTipArrows::k_None);
+		toolTips.Submit(k_ZoomIn, ToolTipAction::Select, ToolTipArrows::k_None);
+		toolTips.ProcessTurn();
+		ASSERT_TRUE(toolTips.GetShown().has_value()) << turn;
+		ASSERT_EQ(toolTips.GetShown()->index, k_Move) << turn;
+	}
+	toolTips.Submit(k_Move, ToolTipAction::Select, ToolTipArrows::k_None);
+	toolTips.Submit(k_ZoomIn, ToolTipAction::Select, ToolTipArrows::k_None);
+	toolTips.ProcessTurn();
+	ASSERT_TRUE(toolTips.GetShown().has_value());
+	EXPECT_EQ(toolTips.GetShown()->index, k_ZoomIn);
+}
+
 TEST(ToolTips, TwoStatsSubmittedTogetherTakeTurnsAndKeepTheirOwnNumbers)
 {
 	// As a village centre submits its belief then its population every turn: the first shows for its display time

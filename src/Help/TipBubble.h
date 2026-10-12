@@ -250,12 +250,34 @@ struct Scroll
 	/// More to read above, or below
 	bool moreAbove {false};
 	bool moreBelow {false};
+	/// While the hand grips the bubble: the pointer's height on the screen when the words last followed it
+	std::optional<float> handY;
 
 	/// The scroll in pixels at the last line height
 	[[nodiscard]] float Pixels() const { return lines * lineHeight; }
 };
 /// Holds the scroll to the words last laid out, for the box as it is placed now, and sets the arrows
 void ClampScroll(Scroll& scroll, const Placement& placement);
+/// Gripped, the words follow the hand like paper: the scroll moves by the pointer's movement down the screen, in lines
+/// of the last line height, so moving the hand up brings up the lines below. The first gripped frame only notes where
+/// the pointer is, and nothing moves before the words were laid out. The scroll is held to the words when next clamped.
+void FollowHand(Scroll& scroll, float pointerY);
+/// The hand lets go of the bubble
+void LetGo(Scroll& scroll);
+
+/// Whether a pixel is inside the box, its edges left out
+[[nodiscard]] bool Inside(const Placement& placement, glm::vec2 pointer);
+/// What the hand points at besides the bubble, as depths in front of the camera
+struct UnderHand
+{
+	/// The object the interface picked
+	std::optional<float> objectDepth;
+	/// The land under the pointer
+	std::optional<float> landDepth;
+};
+/// Whether the hand is on the bubble rather than on what is under it: the pointer is inside the box, and neither an
+/// object nor the land under the pointer is nearer than the sign the bubble points at (an object as near wins too)
+[[nodiscard]] bool HandOnBubble(const Placement& placement, glm::vec2 pointer, const UnderHand& under);
 
 /// The sign's model as a ball: its middle in the world and its reach
 struct Ball
