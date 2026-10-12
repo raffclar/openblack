@@ -1831,7 +1831,7 @@ bool Game::Update() noexcept
 	{
 		// The flames, steam and smoke of what burns move on
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
-		Locator::fireSystem::value().Update(std::chrono::duration<float>(gameTime).count());
+		Locator::fireSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	}
 	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
 	if (Locator::vortexSystem::has_value())

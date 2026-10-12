@@ -83,3 +83,16 @@ TEST(ScreenFade, FadesThroughAColour)
 	EXPECT_EQ(fade.GetColour().a, 0.0f);
 	EXPECT_EQ(fade.GetTurns(), 2u);
 }
+
+TEST(ScreenFade, TellsHowMuchItCoversBeyondAWhole)
+{
+	ScreenFade fade;
+	// Coming into the temple, the fade from 1.2 is down to 0.2 after a second
+	fade.FadeFrom(1.2f);
+	EXPECT_FLOAT_EQ(fade.GetAmount(), 1.2f);
+	Step(fade, 0.25f, 4);
+	EXPECT_NEAR(fade.GetAmount(), 0.2f, 1e-5f);
+	// Cutting the flight short covers the screen again
+	fade.FadeFrom(1.0f);
+	EXPECT_FLOAT_EQ(fade.GetAmount(), 1.0f);
+}

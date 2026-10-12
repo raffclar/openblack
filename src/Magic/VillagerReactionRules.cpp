@@ -83,6 +83,15 @@ void villager_reaction::Memory::Record(uint32_t type, uint32_t turn)
 	Remember(type, turn);
 }
 
+void villager_reaction::Memory::Refresh(uint32_t type, uint32_t turn)
+{
+	const auto found = std::ranges::find(_records, type, &Entry::type);
+	if (found != _records.end())
+	{
+		found->turn = turn;
+	}
+}
+
 void villager_reaction::Memory::Remember(uint32_t type, uint32_t turn)
 {
 	if (_records.size() >= k_Records)
