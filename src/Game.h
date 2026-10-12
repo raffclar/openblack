@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <glm/mat4x4.hpp>
@@ -26,6 +27,7 @@
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
 #include "Common/LoadTimer.h"
+#include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
 #include "Creature/CreatureFight.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -99,6 +101,9 @@ struct ScenarioRequest
 	bool benchmark {true};
 };
 
+/// The land a new game starts on, unless another is asked for
+inline constexpr std::string_view k_DefaultStartLevel = "Land1.txt";
+
 struct Arguments
 {
 	std::string executablePath;
@@ -145,6 +150,9 @@ struct Arguments
 	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
 	/// connected, from the start, or never
 	input::LockMode inspectInputLock {input::LockMode::Auto};
+	/// Where the players' profiles and their creatures are kept instead of the game's own folder, as for a first start on
+	/// a clean folder; none for the game's own (or, for a developer's or a tool's run, a profile of its own)
+	std::optional<std::filesystem::path> profileFolder;
 };
 
 class Game
@@ -274,8 +282,14 @@ private:
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,
 	/// the sea's reflection and the camera's shape follow it, on whichever screen is up
 	void FollowWindowSize();
-	/// Whether the player has a profile: openblack keeps none yet, so it counts as having one
-	[[nodiscard]] static bool HasPlayerProfiles() noexcept { return true; }
+	/// Whether the player has a profile. A first start has none: the pre-intro plays, the tips start from the first, the
+	/// intro can't be skipped and the new player's box asks for a name before the first land
+	[[nodiscard]] static bool HasPlayerProfiles() noexcept;
+	/// Where the players' profiles are kept for this run
+	[[nodiscard]] player_profiles::Store ProfileStore() const;
+	/// A first start: the new player's box asks for the player's name before the first land loads. False when the
+	/// window was closed meanwhile
+	bool AskForNewPlayer();
 
 	/// Clears the last land's entities, weather and effects before a new one loads
 	void PrepareNewLand();
@@ -311,6 +325,10 @@ private:
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
+	/// Where the players' profiles are kept instead of the game's own folder
+	std::optional<std::filesystem::path> _profileFolder;
+	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
+	bool _automatedRun {false};
 	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
 	input::LockMode _inspectInputLock {input::LockMode::Auto};

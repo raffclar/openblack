@@ -53,7 +53,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("W,width", "Window resolution in the x axis.", cxxopts::value<uint16_t>()->default_value("1280"))
 		("H,height", "Window resolution in the y axis.", cxxopts::value<uint16_t>()->default_value("1024"))
 		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
-		("s,start-level", "Level that is loaded at start-up", cxxopts::value<std::string>()->default_value("Land1.txt"))
+		("s,start-level", "Level that is loaded at start-up", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
 		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
 		("V,vsync", "Enable Vertical Sync.")
 		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super.", cxxopts::value<uint16_t>()->default_value("4"))
@@ -78,6 +78,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
 		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
+		("profile-folder", "For developers and tests: keep the players' profiles and their creatures in this folder rather than the game's own, as on a first start when it is empty. Without it, a developer's or a tool's run (a level, the testbed, a scenario, --skip-opening, --skip-logos, the inspector, a seed, a video, a number of frames or a screenshot asked for) plays as a profile of its own, kept apart, and never sees the new player's box.", cxxopts::value<std::string>())
 		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
 	;
 #if defined(OPENBLACK_INSPECTOR)
@@ -224,6 +225,11 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.playVideo = result["play-video"].as<std::string>();
 		args.preIntro = result.count("pre-intro") != 0;
 		args.skipLogos = result.count("skip-logos") != 0;
+		if (result.count("profile-folder") != 0)
+		{
+			const auto folder = result["profile-folder"].as<std::string>();
+			args.profileFolder = std::filesystem::path(std::u8string(folder.begin(), folder.end()));
+		}
 		if (result.count("skip-opening") != 0)
 		{
 			const auto text = result["skip-opening"].as<std::string>();
