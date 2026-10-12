@@ -185,6 +185,8 @@ private:
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
 	std::vector<entt::entity> _objects;
+	/// The scenario's temples, in its order
+	std::vector<entt::entity> _temples;
 	/// When each of the scenario's throws is next due, in seconds; none once done
 	std::vector<std::optional<float>> _throwsDue;
 	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet

@@ -729,6 +729,32 @@ void AddGrowth(std::vector<Scenario>& all)
 	});
 }
 
+void AddStory(std::vector<Scenario>& all)
+{
+	// The player's temple west of the middle, turned as Land 1's
+	constexpr glm::vec2 k_Temple {-300.0f, 100.0f};
+	constexpr float k_TempleTurn = 36.0f;
+	all.push_back({
+	    .id = "story.game_over",
+	    .name = "The game's end as the player's temple falls",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle; two seconds in it starts being destroyed, as when "
+	                   "its heart loses the last of its life, and the game's GameOver script plays.",
+	    .expected = "The temple is destroyed and the script takes the camera round and up from it while the advisors leave. "
+	                "The screen fades to black over 12 seconds, and \"Game Over\" fades in white over 3 seconds, centred in a "
+	                "box from a quarter to three quarters across the screen and 45% to 55% down, its line 7.5% of the "
+	                "screen high. Once the advisor's line is read the game's time stops, the words fade out over 5 "
+	                "seconds, and the player is taken into the temple's save game room, kept there: leaving it ends the "
+	                "game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {40.0f}, k_Temple + glm::vec2 {40.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
+	});
+}
+
 void AddAppearance(std::vector<Scenario>& all)
 {
 	constexpr std::array<CreatureType, 3> k_Species {CreatureType::GiantApe, CreatureType::Mandrill, CreatureType::Horse};
@@ -2326,6 +2352,7 @@ std::vector<Scenario> Build()
 	AddHighlightScenarios(all);
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
+	AddStory(all);
 	return all;
 }
 
@@ -2425,7 +2452,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
-	       IsPointerCommand(kind);
+	       kind == Kind::DestroyTemple || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2433,7 +2460,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",      "Expressions",   "Senses",  "Needs",  "Growth",  "Appearance", "Light",     "Movement", "Footprints",
 	    "Audio",     "Objects",       "Hand",    "Leash",  "Combat",  "Mind",       "Particles", "Editor",   "Miracles",
-	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",
+	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",  "Story",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2452,7 +2479,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 93> k_Names {
+	constexpr std::array<std::string_view, 94> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2546,6 +2573,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand tap",
 	    "tell an advisor",
 	    "walk home",
+	    "destroy temple",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

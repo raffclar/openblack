@@ -26,6 +26,7 @@
 #include <bgfx/bgfx.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
@@ -47,6 +48,7 @@
 #include "Gui/CinemaBars.h"
 #include "Gui/GlyphTexture.h"
 #include "Gui/ScreenFit.h"
+#include "Gui/ScriptTexts.h"
 #include "Gui/WorldToolTipRules.h"
 #include "Help/ClickCue.h"
 #include "Help/ControlIcons.h"
@@ -696,7 +698,10 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_cinemaBarsCanvas.Begin(resolution);
 	drawBars(_cinemaBarsCanvas);
 	_cinemaBarsCanvas.End();
-	if (const auto fade = director.GetFadeColour(); (fade >> 24u) != 0)
+	// Inside the temple the temple draws its own fade, never the scripts': a scene that faded to black and took the
+	// player into the temple, as the game's end does, shows the room
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (const auto fade = director.GetFadeColour(); !inTemple && (fade >> 24u) != 0)
 	{
 		const auto colour = glm::vec4(static_cast<float>((fade >> 16u) & 0xFFu), static_cast<float>((fade >> 8u) & 0xFFu),
 		                              static_cast<float>(fade & 0xFFu), static_cast<float>(fade >> 24u)) /
@@ -706,6 +711,11 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		drawBars(_canvas);
 	}
 	DrawDialogue(resolution, static_cast<int>(bars));
+	// The scripts' words go over the advisors' dialogue and the scripts' fade, but not while a video plays
+	if (!Locator::videoSystem::has_value() || !Locator::videoSystem::value().IsPlaying())
+	{
+		DrawScriptTexts(resolution);
+	}
 	// The game covers the frame with the fade's colour last of all
 	if (const auto fade = _screenFade.GetColour(); fade.a > 0.0f)
 	{
@@ -713,6 +723,27 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	}
 	_canvas.End();
 	_pointerCanvas.End();
+}
+
+void GameInterface::DrawScriptTexts(glm::u16vec2 resolution)
+{
+	const auto screen = glm::vec2(resolution);
+	for (const auto& text : Locator::cinematicDirectorSystem::value().GetTexts())
+	{
+		const auto box = script_text::Place(text, screen);
+		const auto lines = _font.Wrap(text.words, box.size, box.max.x - box.min.x);
+		const auto laid =
+		    script_text::Lay(box, lines, [this, &box](std::u16string_view words) { return _font.GetWidth(words, box.size); });
+		// The text is drawn in the scripts' colour at its fade's alpha. The game also draws it a pixel down and right
+		// first, as a shadow, but with no alpha at all, so that nothing of it shows.
+		const auto colour = glm::vec3(text.colour) / 255.0f;
+		const auto alpha = static_cast<float>(script_text::AlphaByte(text.alpha)) / 255.0f;
+		for (const auto& line : laid)
+		{
+			_painter.DrawString(line.at, line.words, box.size, glm::vec4(colour, alpha * line.topShare),
+			                    glm::vec4(colour, alpha * line.bottomShare));
+		}
+	}
 }
 
 int GameInterface::DrawVideo(glm::u16vec2 resolution)

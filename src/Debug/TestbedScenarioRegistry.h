@@ -94,6 +94,8 @@ enum class Facet : uint8_t
 	Sky,
 	/// The player's two advisors, the good one and the evil one
 	Advisors,
+	/// The story's set pieces, such as the game's end as the player's temple falls
+	Story,
 
 	_Count
 };
@@ -523,6 +525,9 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
+		/// loses the last of its life. Needs no creature
+		DestroyTemple,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

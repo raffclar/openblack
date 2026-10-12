@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "Gui/CinemaBars.h"
 #include "Gui/ScriptFade.h"
@@ -39,7 +41,13 @@ public:
 	void SetInterfaceActive(bool active) override { _interfaceActive = active; }
 	[[nodiscard]] bool TakeHideDialogs() override;
 
-	void Reset() override { *this = CinematicDirectorSystem {}; }
+	void WriteText(std::u16string_view words, glm::vec2 corner, glm::vec2 extent, float size, float fadeSeconds) override;
+	void SetTextColour(glm::u8vec3 colour) override { _textColour = colour; }
+	void FadeAllTexts(float seconds) override;
+	void UpdateTexts(int32_t milliseconds) override;
+	[[nodiscard]] std::span<const gui::script_text::ScreenText> GetTexts() const override { return _texts; }
+
+	void Reset() override;
 	void ProcessTurn() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
@@ -53,6 +61,9 @@ private:
 	bool _interfaceActive {true};
 	bool _hideDialogs {false};
 	bool _closeClipping {false};
+	/// The newest first
+	std::vector<gui::script_text::ScreenText> _texts;
+	glm::u8vec3 _textColour {0, 0, 0};
 };
 
 } // namespace openblack::ecs::systems
