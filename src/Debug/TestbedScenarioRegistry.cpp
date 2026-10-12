@@ -1658,6 +1658,22 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.83f, 0.45f}}},
 	});
 
+	// The camera looks along the land just ahead, so the hand is seen up close in the sun
+	all.push_back({
+	    .id = "hand.lighting",
+	    .name = "The hand in the light",
+	    .facet = Facet::Hand,
+	    .description = "The bare hand sits still near the camera while the player turns evil, then good, ten seconds each.",
+	    .expected = "The hand is lit as the game lights the models it poses: the side facing the light at full strength, the "
+	                "side away from it never darker than two fifths, in the land's light half as bright again, whatever its "
+	                "evil or good shape and skin.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -14.0f}, .look = {0.0f, 1.0f, 4.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.7f}},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 8.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
+	});
+
 	// The camera looks down at the land just ahead, so the hand is seen up close
 	all.push_back({
 	    .id = "hand.miracle_glow",

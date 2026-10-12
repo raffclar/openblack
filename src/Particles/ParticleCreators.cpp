@@ -77,6 +77,7 @@ std::unique_ptr<Creator> MakeMesh(const psys::ParticleObject& object, CreatorRes
 	// The plain kind never draws in its atom's alpha, whatever its file says
 	creator->useGlobalAlpha = creator->type != MeshCreator::Type::Plain && object.Bool("UseGlobalAlpha", animated);
 	creator->landscapeColour = object.Bool("DrawWithLandscapeColor", false);
+	creator->dynamicLighting = object.Bool("UseDynamicLighting", true);
 	creator->drawCutByPlane = object.Bool("DrawCutByPlane", false);
 	creator->numFrames = 1;
 	if (creator->type == MeshCreator::Type::AnimTextured)

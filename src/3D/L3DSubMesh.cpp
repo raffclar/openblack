@@ -19,6 +19,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Graphics/IndexBuffer.h"
+#include "Graphics/MeshDetail.h"
 #include "Graphics/RenderModes.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/Texture2D.h"
@@ -114,6 +115,15 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 	const auto& indexSpan = l3d.GetIndexSpan(meshIndex);
 
 	_flags = header.flags;
+	// The file's second flag of the pair after the status marks the part's levels of detail as set
+	constexpr uint32_t k_LevelsMarked = 0b10;
+	const bool levelsMarked = (_flags.unknown2 & k_LevelsMarked) != 0;
+	if (const auto levels = mesh_detail::LoadedPartLevels(static_cast<uint8_t>(_flags.lodMask), levelsMarked);
+	    levels != _flags.lodMask)
+	{
+		_flags.lodMask = levels;
+		_flags.unknown2 |= k_LevelsMarked;
+	}
 
 	// Count vertices and indices
 	uint32_t nVertices = 0;
