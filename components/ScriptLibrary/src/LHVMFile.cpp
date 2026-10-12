@@ -301,6 +301,40 @@ void WriteStrings(std::ostream& stream, const std::vector<std::string>& values)
 	}
 }
 
+void WriteBool(std::ostream& stream, bool value)
+{
+	const auto byte = static_cast<char>(value ? 1 : 0);
+	stream.write(&byte, sizeof(byte));
+}
+
+void WriteStack(std::ostream& stream, const VMStack& stack)
+{
+	WriteU32(stream, stack.count);
+	WriteU32(stream, stack.pushCount);
+	WriteU32(stream, stack.popCount);
+	for (uint32_t i = 0; i < stack.count; ++i)
+	{
+		WriteU32(stream, stack.values.at(i).uintVal);
+	}
+	for (uint32_t i = 0; i < stack.count; ++i)
+	{
+		WriteU32(stream, static_cast<uint32_t>(stack.types.at(i)));
+	}
+}
+
+/// Each value: its type in one byte, the value, then the variable's name
+void WriteVariableValues(std::ostream& stream, const std::vector<VMVar>& variables)
+{
+	WriteU32(stream, static_cast<uint32_t>(variables.size()));
+	for (const auto& variable : variables)
+	{
+		const auto type = static_cast<char>(variable.type);
+		stream.write(&type, sizeof(type));
+		WriteU32(stream, variable.value.uintVal);
+		WriteString(stream, variable.name);
+	}
+}
+
 } // namespace
 
 bool LHVMFile::Write(const std::filesystem::path& filepath) const
@@ -354,7 +388,43 @@ void LHVMFile::Write(std::ostream& stream) const
 	WriteU32(stream, static_cast<uint32_t>(_data.size()));
 	stream.write(_data.data(), static_cast<std::streamsize>(_data.size()));
 
-	// TODO(Daniels118): write runtime status data when _hasStatus is set
+	if (!_hasStatus)
+	{
+		return;
+	}
+
+	// The running state, in the layout of the game's own script saves
+	WriteStack(stream, _stack);
+	WriteVariableValues(stream, _variableValues);
+	WriteU32(stream, static_cast<uint32_t>(_tasks.size()));
+	for (const auto& task : _tasks)
+	{
+		WriteVariableValues(stream, task.localVars);
+		WriteU32(stream, task.id);
+		WriteU32(stream, task.instructionAddress);
+		WriteU32(stream, task.pevInstructionAddress);
+		WriteU32(stream, task.waitingTaskId);
+		WriteU32(stream, task.variablesOffset);
+		WriteU32(stream, task.currentExceptionHandlerIndex);
+		WriteU32(stream, task.ticks);
+		WriteU32(stream, task.scriptId);
+		WriteU32(stream, static_cast<uint32_t>(task.type));
+		WriteBool(stream, task.inExceptionHandler);
+		WriteBool(stream, task.stop);
+		WriteBool(stream, task.iield);
+		WriteBool(stream, task.sleeping);
+		WriteStack(stream, task.stack);
+		WriteU32(stream, static_cast<uint32_t>(task.exceptionHandlerIps.size()));
+		for (const auto ip : task.exceptionHandlerIps)
+		{
+			WriteU32(stream, ip);
+		}
+	}
+	WriteU32(stream, _ticks);
+	WriteU32(stream, _currentLineNumber);
+	WriteU32(stream, _highestTaskId);
+	WriteU32(stream, _highestScriptId);
+	WriteU32(stream, _executedInstructions);
 }
 
 int LHVMFile::LoadVariablesNames(std::istream& stream, std::vector<std::string>& variables)
@@ -767,7 +837,7 @@ int LHVMFile::LoadTask(std::istream& stream, VMTask& task)
 		return EXIT_FAILURE; // Error reading except struct
 	}
 
-	if (task.scriptId < 1 || task.scriptId >= _scripts.size())
+	if (task.scriptId < 1 || task.scriptId > _scripts.size())
 	{
 		return EXIT_FAILURE; // Script not found
 	}
