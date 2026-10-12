@@ -3961,6 +3961,32 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 	std::erase_if(_creatureSkins, [&seen](const auto& entry) { return !std::ranges::binary_search(seen, entry.first); });
 }
 
+namespace
+{
+/// The mesh whose instances hold an instance, its draw, and whether that is among the things fading out in the
+/// distance: a thing drawn in less detail further off is among the instances of the mesh its distance chose
+struct InstanceHolder
+{
+	entt::id_type mesh;
+	const ecs::systems::RenderContext::InstancedDrawDesc* placers;
+	bool fading;
+};
+std::optional<InstanceHolder> HolderOf(const ecs::systems::RenderContext& context, uint32_t instance)
+{
+	for (const bool fading : {false, true})
+	{
+		for (const auto& [meshId, placers] : fading ? context.fadingDrawDescs : context.instancedDrawDescs)
+		{
+			if (instance >= placers.offset && instance < placers.offset + placers.count)
+			{
+				return InstanceHolder {.mesh = meshId, .placers = &placers, .fading = fading};
+			}
+		}
+	}
+	return std::nullopt;
+}
+} // namespace
+
 void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 {
 	// The bones' texture is this many texels wide: 256 matrices a row
@@ -3978,17 +4004,18 @@ void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 	for (const auto& [entity, instance] : renderCtx.entityDraws)
 	{
 		const auto* pose = drawDesc.entities.TryGet<const ecs::components::AnimalPose>(entity);
-		const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(entity);
-		if (pose != nullptr && mesh != nullptr)
+		const auto holder = HolderOf(renderCtx, instance);
+		if (pose != nullptr && holder.has_value() && !holder->fading)
 		{
-			byModel[mesh->id].push_back({.instance = instance, .pose = pose});
+			byModel[holder->mesh].push_back({.instance = instance, .pose = pose});
 		}
 	}
 	for (const auto& [meshId, animals] : byModel)
 	{
-		// Only a model all of whose instances are animals, none fading, all in the same light and none cut
+		// Only a model all of whose instances placed this frame are animals, none fading, all in the same light and none
+		// cut
 		const auto placers = renderCtx.instancedDrawDescs.find(meshId);
-		if (placers == renderCtx.instancedDrawDescs.end() || placers->second.count != animals.size() ||
+		if (placers == renderCtx.instancedDrawDescs.end() || placers->second.filled != animals.size() ||
 		    !meshes.Contains(meshId))
 		{
 			continue;
@@ -5726,32 +5753,41 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 			}
 			drawingCreatures = false;
-			// The animals, each posed by its own clip and in its own light; one fading out blends over the rest
+			// The animals, each posed by its own clip and in its own light, as the mesh its distance chose; one fading out,
+			// by itself or in the distance, blends over the rest
 			const auto drawAnimal = [&](entt::entity entity, uint32_t instance, bool translucent) {
 				const auto* pose = desc.entities.TryGet<const ecs::components::AnimalPose>(entity);
-				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
-				if (pose == nullptr || mesh == nullptr || pose->bones.empty() || (pose->alpha < 255) != translucent ||
-				    !meshManager.Contains(mesh->id) || _animalBoneGroups.contains(mesh->id))
+				const auto holder = HolderOf(renderCtx, instance);
+				if (pose == nullptr || !holder.has_value() || pose->bones.empty() ||
+				    (pose->alpha < 255 || holder->fading) != translucent || !meshManager.Contains(holder->mesh) ||
+				    (!holder->fading && _animalBoneGroups.contains(holder->mesh)))
 				{
 					return;
 				}
-				const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
+				const auto* mesh = &holder->mesh;
+				// How opaque it is drawn: its own alpha, faded further in the distance
+				const float distanceAlpha =
+				    holder->fading ? 1.0f + std::min(renderCtx.instanceUniforms.at(instance).look.z, 0.0f) : 1.0f;
+				const float alpha = (static_cast<float>(pose->alpha) / 255.0f) * distanceAlpha;
+				// Blended by that alpha alone, not by its instance's as well
+				auto drawn = std::make_pair(holder->mesh, *holder->placers);
+				drawn.second.instanceAlpha = false;
+				const auto* placers = &drawn;
 				// A swimmer drawn under the sea as it is isn't mirrored in it, as the game mirrors only the land
-				if (placers == renderCtx.instancedDrawDescs.end() ||
-				    (desc.viewId == RenderPass::Reflection &&
-				     (placers->second.hiddenFromReflection || pose->underSea.has_value())))
+				if (desc.viewId == RenderPass::Reflection &&
+				    (placers->second.hiddenFromReflection || pose->underSea.has_value()))
 				{
 					return;
 				}
 				const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
 				// What of a swimmer is under the sea is drawn beneath the sea's surface, which the sea is then blended
 				// over: in its colour under the sea, and nothing of it above the sea's level
-				if (desc.viewId == RenderPass::Main && desc.drawWater && pose->underSea.has_value() && pose->alpha == 255)
+				if (desc.viewId == RenderPass::Main && desc.drawWater && pose->underSea.has_value() && alpha >= 1.0f)
 				{
 					submitDesc.viewId = RenderPass::UnderSea;
 					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = *pose->underSea, .alpha = 1.0f};
 					submitDesc.cutAbove = pose->cutBelow.value_or(0.0f);
-					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
+					drawInstances(*mesh, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
 					submitDesc.cutAbove.reset();
 					submitDesc.objectLook.reset();
 					submitDesc.viewId = desc.viewId;
@@ -5772,14 +5808,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					colour = pose->colour;
 				}
 				// One lit by the land where it stands takes no colour of its own, only its alpha when it fades
-				if (pose->light != ecs::components::AnimalLight::Land || pose->alpha < 255)
+				if (pose->light != ecs::components::AnimalLight::Land || alpha < 1.0f)
 				{
-					submitDesc.objectLook =
-					    L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = static_cast<float>(pose->alpha) / 255.0f};
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = alpha};
 				}
 				// An animal cut by a plane shows nothing below it
 				submitDesc.cutBelow = pose->cutBelow;
-				drawInstances(mesh->id, placers->second, translucent || placers->second.materialBlending, instance, 1,
+				drawInstances(*mesh, placers->second, translucent || placers->second.materialBlending, instance, 1,
 				              &entityPose);
 				submitDesc.objectLook.reset();
 				submitDesc.cutBelow.reset();
@@ -5895,7 +5930,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
 				}
 				drawInstances(meshId, placers->second, placers->second.materialBlending, placers->second.offset,
-				              placers->second.count, nullptr, nullptr, std::nullopt, &group);
+				              placers->second.filled, nullptr, nullptr, std::nullopt, &group);
 				submitDesc.objectLook.reset();
 				submitDesc.boneTexture = nullptr;
 			}

@@ -38,7 +38,7 @@ bool Banded(const Registry& registry, entt::entity entity)
 {
 	// The creatures, the hands (the player's and the opening's) and the temple are drawn whole at any distance; so are the
 	// things drawn see-through by their materials, which are sorted one by one
-	return !registry.AnyOf<CreatureMorph, Hand, IntroHand, Temple, TempleInteriorPart, Translucent, AnimalPose>(entity);
+	return !registry.AnyOf<CreatureMorph, Hand, IntroHand, Temple, TempleInteriorPart, Translucent>(entity);
 }
 
 bool BandedNow(const Registry& registry, entt::entity entity)

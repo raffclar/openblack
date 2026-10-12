@@ -513,6 +513,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 						    gone = true;
 						    _goneThings.insert(entity);
 					    }
+					    else if (!registry.AllOf<Villager>(entity))
+					    {
+						    // Any other thing of several meshes, an animal, leaves nothing behind
+						    return;
+					    }
 					    else
 					    {
 						    const auto position = glm::vec3(modelMatrix[3]);
