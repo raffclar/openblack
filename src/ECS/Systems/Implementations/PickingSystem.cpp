@@ -117,9 +117,15 @@ std::optional<glm::vec3> PickingSystem::LandOrSeaAlong(glm::vec3 from, glm::vec3
 	return std::nullopt;
 }
 
-std::optional<glm::vec3> PickingSystem::LandUnderPixel(glm::vec3 camera, glm::vec3 nearPoint, bool withSea) const
+std::optional<glm::vec3> PickingSystem::LandUnderPixel(glm::vec3 camera, glm::vec3 nearPoint, Sea sea) const
 {
-	if (const auto point = land_line::UnderPixel(camera, nearPoint, withSea, CornersOf, HeightAt))
+	// The camera's own feel: the line from the camera through the pixel, carried on to the map's edge, meets the land, or
+	// else the sea near the camera
+	if (sea == Sea::NearCamera)
+	{
+		return LandOrSeaAlong(camera, nearPoint, camera);
+	}
+	if (const auto point = land_line::UnderPixel(camera, nearPoint, sea == Sea::Anywhere, CornersOf, HeightAt))
 	{
 		return land_line::KeptInReach(*point);
 	}

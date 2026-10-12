@@ -136,7 +136,7 @@ public:
 		return hit.has_value() ? std::optional(glm::vec3(hit->x, 0.0f, hit->y)) : std::nullopt;
 	}
 	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 camera, glm::vec3 nearPoint,
-	                                                      [[maybe_unused]] bool withSea) const override
+	                                                      [[maybe_unused]] Sea sea) const override
 	{
 		const auto& terrain = openblack::Locator::terrainSystem::value();
 		// The pixel the line through the near plane's point shows
