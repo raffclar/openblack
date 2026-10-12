@@ -224,6 +224,12 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 	_wasGripping = frame.handGripping;
 	if (!StillValid() || _model->WantsToLeave() || gripped)
 	{
+		// Stopped at the fence, the player's camera starts afresh from where it is
+		if (_model->StoppedAtFence())
+		{
+			const auto& camera = Locator::camera::value();
+			_playerModel = std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus());
+		}
 		Leave();
 		return;
 	}

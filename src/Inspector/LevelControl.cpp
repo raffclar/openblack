@@ -60,8 +60,10 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeLevelProvider(Level
 		              }
 		              return QueryResult::Value(std::move(items));
 	              });
-	provider->Add(Description("current", "The land loaded now", {}, false),
-	              [&levels](const QueryContext& /*context*/) { return QueryResult::Value({{"land", levels.Current()}}); });
+	provider->Add(Description("current", "The land loaded now, and whether it is played as a skirmish", {}, false),
+	              [&levels](const QueryContext& /*context*/) {
+		              return QueryResult::Value({{"land", levels.Current()}, {"skirmish", levels.IsSkirmish()}});
+	              });
 	provider->Add(
 	    Description("load",
 	                "Loads a land by its name (level.list). how fresh (the default) loads it as the land menu "

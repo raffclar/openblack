@@ -26,13 +26,24 @@ uint32_t GravesShown(uint32_t burials)
 	return std::max(graves, 1u);
 }
 
+std::optional<StandInBurial> BurialOnStandIn(uint32_t count)
+{
+	if (count >= k_MostBurials)
+	{
+		return std::nullopt;
+	}
+	const auto counted = count + 1;
+	return StandInBurial {.count = counted, .partsShown = GravesShown(counted)};
+}
+
 std::optional<size_t> GraveyardAfterLoss(bool lostWasTheTowns, std::span<const OtherBuilding> others)
 {
 	if (!lostWasTheTowns)
 	{
 		return std::nullopt;
 	}
-	const auto found = std::ranges::find_if(others, [](const OtherBuilding& other) { return other.workingGraveyard; });
+	const auto found =
+	    std::ranges::find_if(others, [](const OtherBuilding& other) { return other.working && other.takesOver; });
 	if (found == others.end())
 	{
 		return std::nullopt;

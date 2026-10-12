@@ -142,6 +142,25 @@ TEST(ControlIcons, AnActionOnAKeyShowsItsKeyCap)
 	EXPECT_EQ(keys({29}), u"Ctrl + S"); // quick save, with its modifier
 }
 
+TEST(ControlIcons, OneActionsPictureWhicheverActionItIs)
+{
+	const auto picture = [](int action, const KeyBindingTable& table = k_Defaults) {
+		return PictureFor(action, table, k_KeyName);
+	};
+	// A sign's tip about showing the villagers' names: its key cap
+	ASSERT_TRUE(picture(27).has_value());
+	EXPECT_TRUE(std::holds_alternative<std::u16string>(*picture(27)));
+	EXPECT_EQ(std::get<MouseClick>(*picture(2)), MouseClick::RightButton);
+	EXPECT_EQ(std::get<std::u16string>(*picture(17)), u"Space");
+	// A camera key is shown too, unlike in the dialogue's bottom icon
+	EXPECT_EQ(std::get<std::u16string>(*picture(7)), u"Left");
+	EXPECT_EQ(std::get<std::u16string>(*picture(29)), u"Ctrl + S");
+	// Nothing for an unbound or unknown action
+	EXPECT_FALSE(picture(27, Without(k_Defaults, BindableActionMap::SHOW_VILLAGER_NAMES)).has_value());
+	EXPECT_FALSE(picture(40).has_value());
+	EXPECT_FALSE(picture(-1).has_value());
+}
+
 TEST(ControlIcons, TheMouseCells)
 {
 	// The left button: the right one's lit picture, mirrored, on the wheel mouse's row

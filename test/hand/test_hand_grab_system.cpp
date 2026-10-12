@@ -679,6 +679,50 @@ TEST_F(HandGrabSystemWithWorld, TheSpringTakesHoldTheFrameAfterThePressAndThrows
 	EXPECT_FALSE(system->GetHeld().has_value());
 }
 
+// A hand demonstration gives the hand the throw it recorded with each button: let go before the spring moves the hand
+// again, the throw flies at the recorded velocity; once the spring has moved it, the spring's own throw counts again
+TEST_F(HandGrabSystemWithWorld, ARecordedThrowStandsUntilTheSpringNextMovesTheHand)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Frame(10);
+	Press();
+	Frame(10, {5.0f, 0.0f, 0.0f});
+	Frame(10, {10.0f, 0.0f, 0.0f});
+	const glm::vec3 recorded {73.9941f, 5.2013f, -52.1485f};
+	system->SetRecordedThrow(recorded);
+	Release();
+	ASSERT_EQ(world->released.size(), 1u);
+	EXPECT_EQ(world->released.front().second, recorded);
+
+	// Taken and made ready again, a recorded throw given before the spring moves is replaced by the spring's
+	world->released.clear();
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Frame(10);
+	Press();
+	system->SetRecordedThrow(recorded);
+	Frame(10, {5.0f, 0.0f, 0.0f});
+	Frame(10, {10.0f, 0.0f, 0.0f});
+	Release();
+	ASSERT_EQ(world->released.size(), 1u);
+	EXPECT_NE(world->released.front().second, recorded);
+	EXPECT_GT(world->released.front().second.x, 0.0f);
+}
+
 TEST_F(HandGrabSystemWithWorld, LettingGoOntoTheLandCountsAsATurnForTheInfluenceKeptPastTheBorder)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});

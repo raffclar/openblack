@@ -83,6 +83,8 @@ struct HandGrab
 	hand_grab::HandSpring spring {};
 	bool springOn {false};
 	bool springPending {false};
+	/// A hand demonstration's throw, which the hand throws with until its spring next moves it
+	std::optional<glm::vec3> recordedThrow;
 	/// Where the hand was last meant to be while holding, before it rose, for the twist of a throw
 	glm::vec3 lastTarget {0.0f};
 

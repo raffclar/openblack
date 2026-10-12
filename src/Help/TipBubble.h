@@ -123,12 +123,89 @@ using WrapFn = std::function<std::vector<std::u16string>(std::u16string_view tex
 /// The width of a line of text at a size
 using WidthFn = std::function<float(std::u16string_view text, float size)>;
 
-/// The lines a text wraps into at a width, measured by `measure` (which counts the line breaks' own widths too, as the
-/// game does while it looks for where to break). A line grows four characters at a time until it is too wide, then
-/// breaks at the rightmost blank (dropped, with the blanks before it) or after the rightmost hyphen at which it fits,
-/// else after as many characters as fit; a line break in it then ends it there. Blanks starting a line stay. Nothing
-/// more comes once not even a character fits.
-[[nodiscard]] std::vector<std::u16string> Wrap(std::u16string_view text, float width, float size, const WidthFn& measure);
+/// A picture code in a tip: "$g<n>" shows gesture n, "$m<n>" the control that does action n (numbered as the key
+/// bindings' actions). Each takes two lines of the bubble instead of words.
+struct InlineCode
+{
+	enum class Kind : uint8_t
+	{
+		Gesture,
+		Control,
+	};
+	Kind kind {Kind::Control};
+	int number {0};
+
+	[[nodiscard]] bool operator==(const InlineCode&) const = default;
+};
+/// The code a text starts with: "$g" or "$m" and the number after it (read as a C string to integer, so 0 when there is
+/// none). None for any other text.
+[[nodiscard]] std::optional<InlineCode> ReadCode(std::u16string_view text);
+
+/// One piece of a tip, in the order the bubble stacks them from the bottom up
+struct Piece
+{
+	enum class Kind : uint8_t
+	{
+		Words,
+		Code,
+		/// The space between a code's picture and the words above it: seven tenths of a line
+		Gap,
+	};
+	Kind kind {Kind::Words};
+	std::u16string_view words;
+	InlineCode code;
+
+	[[nodiscard]] bool operator==(const Piece&) const = default;
+};
+/// The pieces of an item from the bottom up. A text starting with a code is just that code (anything after its first
+/// four characters is dropped). Otherwise the first "$g" (or, failing that, the first "$m") splits it: the code's
+/// picture at the bottom, the gap, the words before it, and the code's picture again on top, from its first four
+/// characters (the game reads such a code twice). Text with no code is one piece of words.
+[[nodiscard]] std::vector<Piece> SplitCodes(std::u16string_view item);
+
+/// The gesture pictures are four by four on each of their sheets, and the game knows this many gestures
+constexpr int k_GestureCells = 16;
+constexpr int k_GestureCount = 24;
+
+/// A gesture picture to draw: which sheet, its rectangle and its corners on the sheet (cut to the words' rows), and its
+/// colour
+struct GestureIcon
+{
+	int sheet {0};
+	glm::vec2 min {0.0f};
+	glm::vec2 max {0.0f};
+	glm::vec2 uvMin {0.0f};
+	glm::vec2 uvMax {0.0f};
+	glm::vec4 colour {0.0f};
+};
+
+/// A control's picture to draw: centred between the words' margins, a little above the two lines it takes, white,
+/// fading in over the top third of the box and out under the bottom line like the words, but not with the bubble
+struct ControlIcon
+{
+	int action {0};
+	/// The right end it is measured back from: half a picture right of the middle
+	int right {0};
+	/// Its top row and size in pixels
+	int top {0};
+	int size {0};
+	float alpha {0.0f};
+};
+/// Where a control's picture goes on the screen
+struct ControlBox
+{
+	glm::vec2 min {0.0f};
+	glm::vec2 max {0.0f};
+
+	[[nodiscard]] bool operator==(const ControlBox&) const = default;
+};
+/// A control's picture `width` wide, right-aligned on its right end after a gap, in pixels
+[[nodiscard]] ControlBox PlaceControl(const ControlIcon& icon, float width, float gap);
+/// The gap between a control's picture and its (empty) label, in pixels of the default screen
+constexpr float k_ControlGap = 2.0f;
+
+/// Whether a control action has a binding to show
+using ControlShownFn = std::function<bool(int action)>;
 
 /// A line of words to draw: where its top left goes, its alpha at its top and bottom, and the rows it is cut to
 struct Line
@@ -146,15 +223,21 @@ struct Words
 {
 	std::vector<Line> shadows;
 	std::vector<Line> lines;
+	/// The gesture pictures, each shadow before its picture
+	std::vector<GestureIcon> gestures;
+	/// The control pictures
+	std::vector<ControlIcon> controls;
 	/// How tall all the words the bubble got to are, for the scroll
 	float contentHeight {0.0f};
 };
 /// The items of the bubble, from the bottom up: the tip, a blank line and the title. Each wraps on its own and is
 /// centred; the stack sits on the bottom line, pushed down by the scroll (in pixels), and stops once an item reaches
 /// the box's top. The words fade in over the top third of the box and out just under the bottom line; their black
-/// shadows sit two pixels down and right at half their alpha.
+/// shadows sit two pixels down and right at half their alpha. An item's picture codes (SplitCodes) take two lines each:
+/// a gesture (1 to 23) always, drawn with a shadow like the words and cut to their rows; a control only when
+/// `controlShown` says its action is bound, drawn only when wholly inside the box.
 [[nodiscard]] Words LayOutWords(const Placement& placement, std::span<const std::u16string_view> items, float scrollPixels,
-                                float alpha, const WrapFn& wrap, const WidthFn& widthOf);
+                                float alpha, const WrapFn& wrap, const WidthFn& widthOf, const ControlShownFn& controlShown);
 
 /// The scroll, in lines: held between none and as far as the words went past the box (less a margin at each end) when
 /// they were last laid out
