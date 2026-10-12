@@ -251,3 +251,12 @@ TEST(DiscipleRules, IdleDisciplesWaitJustBeyondTheCentre)
 	EXPECT_FLOAT_EQ(most.radians, 1.0f + (std::numbers::pi_v<float> / 4.0f));
 	EXPECT_FLOAT_EQ(most.metres, 7.0f);
 }
+
+TEST(DiscipleRules, AScriptNamesAWorkByItsNumberOrNoneOutsideTheKinds)
+{
+	EXPECT_EQ(FromScript(0), None);
+	EXPECT_EQ(FromScript(4), Builder);
+	EXPECT_EQ(FromScript(12), FromVortex);
+	EXPECT_FALSE(FromScript(13).has_value());
+	EXPECT_FALSE(FromScript(-1).has_value());
+}

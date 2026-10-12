@@ -62,6 +62,7 @@
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
@@ -100,10 +101,13 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -693,6 +697,20 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		return;
 	}
 	const auto& land = Locator::terrainSystem::value();
+	// A forest the trees are given that the land doesn't have yet is made where its first tree stands, as the land's
+	// script makes its forests before planting them
+	if (Locator::forestSystem::has_value())
+	{
+		auto& forests = Locator::forestSystem::value();
+		for (const auto& object : scenario.objects)
+		{
+			if (std::holds_alternative<TreeInfo>(object.type) && object.forest != 0 && !forests.LandForestOf(object.forest))
+			{
+				const auto point = MapPoint(middle, object.offset);
+				forests.MakeLandForest(object.forest, {point.x, land.GetHeightAt(point), point.y}, entt::null, false);
+			}
+		}
+	}
 	for (const auto& object : scenario.objects)
 	{
 		const auto point = MapPoint(middle, object.offset);
@@ -727,9 +745,19 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, AbodeInfo>)
 			    {
+				    if (object.planned)
+				    {
+					    const auto plan = ecs::archetypes::AbodeArchetype::CreatePlan(ScenarioTown(middle), position, type, yaw,
+					                                                                  object.scale);
+					    if (auto* planned = Locator::entitiesRegistry::value().TryGet<ecs::components::PlannedAbode>(plan))
+					    {
+						    planned->wasBuilt = object.wasBuilt;
+					    }
+					    return plan;
+				    }
 				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
 				                                                   object.storedFood.value_or(k_ScenarioTownFood),
-				                                                   k_ScenarioTownWood);
+				                                                   object.storedWood.value_or(k_ScenarioTownWood));
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {
@@ -1422,6 +1450,23 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::RunText)
+	{
+		// Not alone on its line and not waiting for a click, as the lessons' texts are shown
+		const bool shown = Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().IsStarted() &&
+		                   Locator::helpTextSystem::value().RunText(false, static_cast<uint32_t>(command.value), 0);
+		Log(fmt::format("{:.1f}s: help text {} {}", _seconds, command.value, shown ? "shown" : "not shown"));
+		return;
+	}
+	if (command.kind == Kind::PlayHandDemo)
+	{
+		if (Locator::handDemoSystem::has_value())
+		{
+			Locator::handDemoSystem::value().Play(command.handDemo, 0, false, false);
+		}
+		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
+		return;
+	}
 	if (command.kind == Kind::WideScreen)
 	{
 		// Held by a script, as the land's scripts hold them
@@ -1601,6 +1646,8 @@ void Runner::Give(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::RunText:
+	case Kind::PlayHandDemo:
 	case Kind::Reframe:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:

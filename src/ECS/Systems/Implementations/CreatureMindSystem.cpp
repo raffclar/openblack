@@ -1170,11 +1170,20 @@ void CreatureMindSystem::ProcessTurn()
 			    mind.desiresPhase = mind.developmentPhase;
 		    }
 		    mind.secondsAlone += k_TurnSeconds;
-		    // Only a creature's own player pays it attention
-		    if (creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
-		        creature_attention::IsLookingAt(view->origin, view->focus, transform.position))
+		    // What it believed about things now gone is forgotten, and going into another cell it notes the nearest temple
+		    ForgetGoneThings(mind);
+		    NoteNearestTemple(mind, transform);
+		    const bool held = HeldByHand(entity);
+		    // Only a creature's own player pays it attention, and not while the hand holds it; nor do its eyes sweep about
+		    // it then
+		    if (!held)
 		    {
-			    ++mind.turnsLookedAt;
+			    if (creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
+			        creature_attention::IsLookingAt(view->origin, view->focus, transform.position))
+			    {
+				    ++mind.turnsLookedAt;
+			    }
+			    SweepEyes(creature, mind, animation, transform);
 		    }
 		    if (mind.feedbackSeconds.has_value())
 		    {
@@ -1182,7 +1191,7 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    // Held by the player's hand its mind stands still, but for showing what it wants once it has turned to the
 		    // player
-		    if (HeldByHand(entity))
+		    if (held)
 		    {
 			    if (mind.showDesireOnHold)
 			    {

@@ -29,6 +29,7 @@ public:
 
 	void PickUnderCursor(const Frame& frame) override;
 	[[nodiscard]] const Pick& GetPick() const override { return _pick; }
+	void RetargetObject(std::optional<entt::entity> object, float distance) override;
 
 	[[nodiscard]] std::optional<screen_pick::MeshHit> FeelModel(entt::entity object, glm::vec3 origin,
 	                                                            glm::vec3 direction) const override;

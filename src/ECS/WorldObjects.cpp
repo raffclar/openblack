@@ -65,6 +65,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownAggression.h"
+#include "ECS/TownPlanning.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Physics/DamageMesh.h"
@@ -564,6 +565,11 @@ void world_objects::Remove(entt::entity object)
 	graveyards::Lost(object);
 	// A crèche going hands its town's children over to another of the town's buildings
 	creches::Lost(object);
+	// A town's building going is planned again by its town, where it stood
+	if (registry.AllOf<Abode>(object))
+	{
+		town_planning::PlanAgain(object);
+	}
 	// A building's people are made homeless as it goes, the newest first
 	if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && Locator::townSystem::has_value())
 	{
@@ -613,11 +619,11 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	{
 		return;
 	}
-	const float amount = ecs::town_aggression::AggressionFromDamage(damage, kind->aggressorValue);
-	if (amount == 0.0f)
+	if (!ecs::town_aggression::CountsAsAttack(damage))
 	{
 		return;
 	}
+	const float amount = ecs::town_aggression::AggressionFromDamage(damage, kind->aggressorValue);
 	auto* aggression = registry.TryGet<TownAggression>(town);
 	if (aggression == nullptr)
 	{

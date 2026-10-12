@@ -206,6 +206,15 @@ VillagerDisciple disciple::AtPickUp(VillagerDisciple current)
 	return current == Missionary ? None : current;
 }
 
+std::optional<VillagerDisciple> disciple::FromScript(int32_t number)
+{
+	if (number < static_cast<int32_t>(VillagerDisciple::None) || number > static_cast<int32_t>(VillagerDisciple::FromVortex))
+	{
+		return std::nullopt;
+	}
+	return static_cast<VillagerDisciple>(number);
+}
+
 Kind disciple::KindOf(VillagerDisciple type)
 {
 	const auto index = static_cast<size_t>(type);

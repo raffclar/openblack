@@ -44,6 +44,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -240,9 +241,12 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	_candidates.clear();
 	_candidateEntities.clear();
 	_candidateModels.clear();
+	// The miracle held in the hand is one of the things the hand holds
+	const auto heldSeed =
+	    Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeed() : std::optional<entt::entity> {};
 	for (const auto& [entity, model] : Locator::rendereringSystem::value().GetContext().drawnObjects)
 	{
-		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity))
+		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity) || heldSeed == entity)
 		{
 			continue;
 		}
@@ -409,6 +413,22 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		_pick.object = FishFarmUnder(_pick.land);
 	}
 	picking::CarryHover(previous, _pick, frame.seconds);
+}
+
+void PickingSystem::RetargetObject(std::optional<entt::entity> object, float distance)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = object.has_value() && registry.Valid(*object) ? registry.TryGet<const Transform>(*object) : nullptr;
+	if (transform == nullptr)
+	{
+		_pick.object.reset();
+		_pick.point = _pick.land;
+		_pick.distance = std::numeric_limits<float>::max();
+		return;
+	}
+	_pick.object = object;
+	_pick.point = transform->position;
+	_pick.distance = distance;
 }
 
 std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object, glm::vec3 origin, glm::vec3 direction) const
