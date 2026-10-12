@@ -22,7 +22,9 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/ForestMember.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
@@ -66,6 +68,13 @@ bool HasFixed(glm::vec2 point)
 	return std::ranges::any_of(fixed, [&registry](entt::entity entity) {
 		return registry.Valid(entity) && (!registry.AllOf<Tree>(entity) || registry.AllOf<ForestMember>(entity));
 	});
+}
+
+/// Where a walker in a herd, its shepherd, stands, in map units
+glm::ivec2 WalkerPosition(entt::entity walker)
+{
+	const auto* transform = EntityRegistry().TryGet<const Transform>(walker);
+	return transform != nullptr ? Fixed(glm::vec2(transform->position.x, transform->position.z)) : glm::ivec2(0);
 }
 
 glm::ivec2 CellOf(glm::ivec2 position)
@@ -198,13 +207,20 @@ void AnimalSystem::SetNewWander(entt::entity entity, Animal& animal, std::option
 	if (const auto* herd = registry.TryGet<const Flock>(animal.flock))
 	{
 		flockDistance = herd->flockDistance;
-		// The newest member first
+		// The newest member first, its shepherd among them
 		for (const auto member : herd->members)
 		{
-			const auto* mate = member != entity && registry.Valid(member) ? registry.TryGet<const Animal>(member) : nullptr;
-			if (mate != nullptr)
+			if (member == entity || !registry.Valid(member))
+			{
+				continue;
+			}
+			if (const auto* mate = registry.TryGet<const Animal>(member))
 			{
 				mates.push_back({.position = mate->move.position, .step = mate->move.step});
+			}
+			else if (const auto* walker = registry.TryGet<const WallHug>(member))
+			{
+				mates.push_back({.position = WalkerPosition(member), .step = walker->step});
 			}
 		}
 	}
@@ -290,8 +306,18 @@ std::optional<glm::ivec2> AnimalSystem::LookForGrazeSpot(entt::entity entity, co
 		{
 			for (const auto member : herd->members)
 			{
-				const auto* mate = member != entity && registry.Valid(member) ? registry.TryGet<const Animal>(member) : nullptr;
-				if (mate != nullptr && (CellOf(mate->move.position) == cell || CellOf(mate->move.goal) == cell))
+				if (member == entity || !registry.Valid(member))
+				{
+					continue;
+				}
+				if (const auto* mate = registry.TryGet<const Animal>(member);
+				    mate != nullptr && (CellOf(mate->move.position) == cell || CellOf(mate->move.goal) == cell))
+				{
+					return false;
+				}
+				// Its shepherd too, where it stands and where it walks to
+				if (const auto* walker = registry.TryGet<const WallHug>(member);
+				    walker != nullptr && (CellOf(WalkerPosition(member)) == cell || CellOf(Fixed(walker->goal)) == cell))
 				{
 					return false;
 				}
@@ -388,10 +414,21 @@ void AnimalSystem::GrazerDecide(entt::entity entity, Animal& animal, Grazer& gra
 	{
 		MergeNearbyHerd(entity, animal);
 	}
-	if (EntityRegistry().AllOf<Flock>(animal.flock) &&
-	    (KeepLeaderWithinDomain(entity, animal) || KeepMemberWithinFlockArea(entity, animal)))
+	if (const auto* herd = EntityRegistry().TryGet<const Flock>(animal.flock))
 	{
-		return;
+		// An animal being led only keeps up, then wanders on
+		if (herd->keepsTogether)
+		{
+			if (!KeepMemberWithinFlockArea(entity, animal))
+			{
+				SetTopState(animal, AnimalState::Wander);
+			}
+			return;
+		}
+		if (KeepLeaderWithinDomain(entity, animal) || KeepMemberWithinFlockArea(entity, animal))
+		{
+			return;
+		}
 	}
 	if (!ReactToGrazerNeeds(entity, animal, grazer))
 	{
@@ -415,8 +452,8 @@ void AnimalSystem::MergeNearbyHerd(entt::entity entity, Animal& animal)
 {
 	auto& registry = EntityRegistry();
 	auto* mine = registry.TryGet<Flock>(animal.flock);
-	// A herd of a town never merges into another
-	if (mine == nullptr || registry.Valid(mine->town) || !Locator::entitiesMap::has_value())
+	// A herd of a town, or one being herded, never merges into another
+	if (mine == nullptr || registry.Valid(mine->town) || mine->shepherd != entt::null || !Locator::entitiesMap::has_value())
 	{
 		return;
 	}
@@ -441,7 +478,8 @@ void AnimalSystem::MergeNearbyHerd(entt::entity entity, Animal& animal)
 				}
 				auto& theirs = registry.Get<Flock>(them->flock);
 				const bool theirsScripted = registry.AllOf<ScriptControlled>(them->flock);
-				if ((theirsScripted && mineScripted) || mine->members.size() + theirs.members.size() > info.maxFlockSize)
+				if (theirs.shepherd != entt::null || (theirsScripted && mineScripted) ||
+				    mine->members.size() + theirs.members.size() > info.maxFlockSize)
 				{
 					continue;
 				}
@@ -475,7 +513,9 @@ void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& graze
 	{
 		const auto age = AgeOf(grazer);
 		grazers::GrowNeeds(grazer.needs, LimitsOf(info), age, HerdSizeOf(animal));
-		if (auto* herd = registry.TryGet<Flock>(animal.flock); herd != nullptr && LeaderOf(animal.flock) == entity)
+		// A herd's leader counts the turns of its leg, unless a shepherd leads the herd
+		if (auto* herd = registry.TryGet<Flock>(animal.flock);
+		    herd != nullptr && herd->shepherd == entt::null && LeaderOf(animal.flock) == entity)
 		{
 			++herd->turnsOnLeg;
 		}

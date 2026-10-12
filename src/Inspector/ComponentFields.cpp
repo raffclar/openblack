@@ -94,6 +94,7 @@
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/DrinkingWater.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -841,6 +842,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::DiscipleMark>(context)
 	    .Field<&components::DiscipleMark::villager>("villager")
 	    .Field<&components::DiscipleMark::symbol>("symbol");
+	Reflect<components::DrinkingWater>(context).Field<&components::DrinkingWater::place>("place");
 	Reflect<components::DropsRoots> {context};
 	Reflect<components::FallingRoots>(context)
 	    .Field<&components::FallingRoots::seconds>("seconds")
@@ -927,7 +929,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Flock::made>("made")
 	    .Field<&components::Flock::town>("town")
 	    .Field<&components::Flock::most>("most")
-	    .Field<&components::Flock::temple>("temple");
+	    .Field<&components::Flock::temple>("temple")
+	    .Field<&components::Flock::shepherd>("shepherd")
+	    .Field<&components::Flock::savedPlace>("savedPlace")
+	    .Field<&components::Flock::keepsTogether>("keepsTogether");
 	Reflect<components::FlockMember>(context)
 	    .Field<&components::FlockMember::flock>("flock")
 	    .Field<&components::FlockMember::order>("order");
@@ -1669,6 +1674,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::WoodReactionTarget>(context)
 	    .Field<&components::WoodReactionTarget::wood>("wood")
 	    .Field<&components::WoodReactionTarget::startTurn>("startTurn");
+	Reflect<components::ShepherdWork>(context)
+	    .Field<&components::ShepherdWork::countdown>("countdown")
+	    .Field<&components::ShepherdWork::pending>("pending");
+	Reflect<components::MoveTarget>(context).Field<&components::MoveTarget::thing>("thing");
 	Reflect<components::Vortex>(context)
 	    .Field<&components::Vortex::type>("type")
 	    .Field<&components::Vortex::state>("state")

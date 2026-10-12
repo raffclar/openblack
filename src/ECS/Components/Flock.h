@@ -62,6 +62,14 @@ struct Flock
 	uint32_t most {0};
 	/// The temple it circles, none for a flock of the land
 	entt::entity temple {entt::null};
+	/// The villager herding it, none for none: a herded flock never merges with another, and its leader keeps no count
+	/// of its legs
+	entt::entity shepherd {entt::null};
+	/// The place it is brought back to: where it was made, or where it grazed before its shepherd took it to water
+	map_coords::MapCoords savedPlace;
+	/// When deciding, its animals only keep up with the others and then wander, without its leader picking legs about
+	/// its place or seeing to their needs first: an animal being led to the store
+	bool keepsTogether {false};
 };
 
 /// A villager's (or other living's not an animal) part in a flock: the flock it is in, if any, and its place in a

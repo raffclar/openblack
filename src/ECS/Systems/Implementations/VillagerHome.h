@@ -44,6 +44,8 @@ void SetupMoveTo(components::LivingAction& action, glm::vec2 goal, VillagerState
 /// The villager's walk to a goal starts afresh, ending in a final state, whatever state it is in meanwhile
 void SetupMobileMoveTo(components::LivingAction& action, glm::vec2 goal, VillagerStates final,
                        WalkWay way = WalkWay::RoundThings);
+/// Whether the villager's walk has put it on a goal
+[[nodiscard]] bool WalkIsOverAt(entt::entity villager, glm::vec2 goal);
 
 /// The villager goes into its abode, and isn't drawn while there
 void ArriveHome(entt::entity villager);
