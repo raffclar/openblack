@@ -168,6 +168,9 @@ public:
 
 	void UpdateHand(const HandFrame& frame, float seconds) override;
 	bool TapAction() override;
+	bool PressOrb(uint32_t nowMs, uint32_t turn) override;
+	void ReleaseOrb(uint32_t nowMs, uint32_t turn) override;
+	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override;
 	bool PressAction() override;
 	void ReleaseAction() override;
 	[[nodiscard]] bool IsHandBusy() const override { return _held.has_value(); }
@@ -372,6 +375,14 @@ private:
 	magic::CastInput _input;
 	/// The action button is down
 	bool _actionDown {false};
+	/// A one-shot bubble the action button went down on, and when
+	struct OrbPress
+	{
+		entt::entity orb {entt::null};
+		uint32_t pressMs {0};
+		uint32_t pressTurn {0};
+	};
+	std::optional<OrbPress> _orbPress;
 	/// The hum of an armed seed
 	entt::entity _holdLoop {entt::null};
 	/// The pour of food or wood lifting and tipping the hand

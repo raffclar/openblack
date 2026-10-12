@@ -97,6 +97,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Hand/HandGrabRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
@@ -1551,6 +1552,7 @@ void MagicSystem::Reset()
 	_held.reset();
 	_input = {};
 	_actionDown = false;
+	_orbPress.reset();
 	_pour = {};
 	_rainWatchers.clear();
 	_circle.reset();
@@ -2284,15 +2286,56 @@ bool MagicSystem::TapAction()
 	{
 		return false;
 	}
-	if (const auto orb = OrbAlong(_hand.rayOrigin, _hand.rayDirection))
-	{
-		return TapOrb(*orb);
-	}
 	if (const auto ball = FireBallAlong(_hand.rayOrigin, _hand.rayDirection))
 	{
 		return CatchFireBall(*ball);
 	}
 	return false;
+}
+
+std::optional<entt::entity> MagicSystem::OrbUnderHand() const
+{
+	if (!_hand.overWorld)
+	{
+		return std::nullopt;
+	}
+	return OrbAlong(_hand.rayOrigin, _hand.rayDirection);
+}
+
+bool MagicSystem::PressOrb(uint32_t nowMs, uint32_t turn)
+{
+	_orbPress.reset();
+	if (!Locator::infoConstants::has_value() || _held.has_value())
+	{
+		return false;
+	}
+	const auto orb = OrbUnderHand();
+	// Out of the player's influence the hand neither taps nor takes a bubble
+	if (!orb.has_value() || !IsHandInInfluence())
+	{
+		return false;
+	}
+	// A bubble is something the hand can take: the press starts taking it, and only a quick release taps it
+	// TODO(hand): held past the tap's time, the hand takes the bubble itself, to carry and throw like any other thing
+	_orbPress = OrbPress {.orb = *orb, .pressMs = nowMs, .pressTurn = turn};
+	return true;
+}
+
+void MagicSystem::ReleaseOrb(uint32_t nowMs, uint32_t turn)
+{
+	if (!_orbPress.has_value())
+	{
+		return;
+	}
+	const auto press = *_orbPress;
+	_orbPress.reset();
+	const bool quick = hand_grab::ElapsedMs(nowMs, press.pressMs, turn, press.pressTurn) <= hand_grab::k_GrabWaitMs;
+	if (!quick || _held.has_value() || !EntityRegistry().Valid(press.orb) ||
+	    !EntityRegistry().AllOf<OneOffSpellSeed>(press.orb) || !IsHandInInfluence())
+	{
+		return;
+	}
+	TapOrb(press.orb);
 }
 
 std::optional<entt::entity> MagicSystem::FireBallAlong(glm::vec3 origin, glm::vec3 direction) const
