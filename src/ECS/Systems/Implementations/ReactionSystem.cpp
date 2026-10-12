@@ -340,6 +340,8 @@ void ReactionSystem::RemoveFrom(entt::entity initiator)
 
 void ReactionSystem::ShutDown(uint32_t id)
 {
+	// It ends before those reacting to it are let go, so a state they go back to already finds it over
+	std::erase_if(_reactions, [id](const Active& reaction) { return reaction.id == id; });
 	if (Locator::entitiesRegistry::has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
@@ -355,7 +357,6 @@ void ReactionSystem::ShutDown(uint32_t id)
 			Stop(entity, registry.Get<LivingReaction>(entity), true);
 		}
 	}
-	std::erase_if(_reactions, [id](const Active& reaction) { return reaction.id == id; });
 }
 
 void ReactionSystem::Remove(uint32_t id)

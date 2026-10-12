@@ -419,6 +419,46 @@ TEST_F(Reactions, AFiremanWalkingToAFireThatGoesLeavesTheBlazeAndLetsGoOfItsReac
 	Locator::reactionSystem::reset();
 }
 
+TEST_F(Reactions, AFiremanWhoseFireCoolsOnTheWayIsNotLeftAmongTheBlazesFiremen)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& stateTable = _info->villagerStateTable;
+	for (const auto state : {VillagerStates::PutOutFireByBeating, VillagerStates::MoveAroundFire})
+	{
+		auto& row = stateTable.at(static_cast<size_t>(state));
+		row.isFinalState = 1;
+		row.isReactionState = 1;
+		row.resumeState = static_cast<int>(state);
+	}
+	Locator::infoConstants::emplace(*_info);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	const auto villager = _villagers[0];
+	const auto burning = registry.Create();
+	registry.Assign<Transform>(burning, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Fire>(burning).root = burning;
+	registry.Assign<FireGroup>(burning, FireGroup {.members = {burning}, .firemen = {villager}});
+	const auto reaction = reactions.Create({.initiator = burning, .type = Reaction::ReactToFire, .position = k_Here});
+	// Walking round the fire to its place to beat it from, one of the blaze's firemen
+	auto& action = registry.Get<LivingAction>(villager);
+	action.states = {static_cast<uint8_t>(VillagerStates::MoveToPos), static_cast<uint8_t>(VillagerStates::MoveAroundFire),
+	                 static_cast<uint8_t>(VillagerStates::PutOutFireByBeating)};
+	registry.Assign<VillagerFireState>(villager,
+	                                   VillagerFireState {.fire = burning, .reactionTarget = burning, .reaction = reaction});
+	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = reaction, .type = Reaction::ReactToFire});
+	// The fire cools below where the living react to it, so its reaction ends
+	reactions.RemoveFrom(burning, Reaction::ReactToFire);
+	// The villager goes back the fire's way: the fire states it leaves take it off the firemen, rather than it being left
+	// listed while it does something else
+	EXPECT_EQ(StateOf(villager), VillagerStates::DecideWhatToDo);
+	EXPECT_TRUE(registry.Get<const FireGroup>(burning).firemen.empty());
+	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).reaction, 0u);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::fireSystem::reset();
+	Locator::reactionSystem::reset();
+}
+
 TEST_F(Reactions, GoingIntoANewStateLetsGoOfTheStateItWasWalkingTo)
 {
 	auto& registry = Locator::entitiesRegistry::value();
