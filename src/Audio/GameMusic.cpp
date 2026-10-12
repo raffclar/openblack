@@ -431,14 +431,21 @@ bool GameMusic::ProcessScript()
 	}
 	SaveResumeChunks();
 	const auto type = _scriptType;
-	audio.MusicPlay(path, MusicPlayOptions {.volume = k_FullVolume, .startChunk = 1, .onFinished = [this, type]() {
-		                                        // Played to its end, the script's music is over unless the script
-		                                        // has since asked for other music
-		                                        if (_scriptType == type)
-		                                        {
-			                                        _scriptType = MusicType::None;
-		                                        }
-	                                        }});
+	audio.MusicPlay(path, MusicPlayOptions {
+	                          .volume = k_FullVolume,
+	                          .startChunk = 1,
+	                          .onFinished =
+	                              [this, type]() {
+		                              // Played to its end, the script's music is over unless the script has since
+		                              // asked for other music
+		                              if (_scriptType == type)
+		                              {
+			                              _scriptType = MusicType::None;
+		                              }
+	                              },
+	                          // The words of a song mark its lines, which the script waits on
+	                          .onCue = [this](std::string_view cue) { OnScriptMusicCue(cue); },
+	                      });
 	_scriptStarted = true;
 	_playing = _scriptType;
 	return true;

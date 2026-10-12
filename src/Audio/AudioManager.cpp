@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include <MusicCues.h>
 #include <PackFile.h>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -809,6 +810,10 @@ std::shared_ptr<const MusicBank> AudioManager::LoadMusicBank(const std::string& 
 	}
 	bank->musicMaxDistance = first.maxDist;
 	bank->chunkCount = static_cast<uint32_t>(headers.size());
+	for (auto& cue : pack::ReadMusicCues(headers))
+	{
+		bank->cues.push_back({.chunk = cue.chunk, .frame = cue.frame, .text = std::move(cue.text)});
+	}
 	bank->chunkSampleRates.reserve(headers.size());
 	std::vector<std::pair<uint64_t, uint32_t>> spans;
 	spans.reserve(headers.size());

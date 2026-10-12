@@ -749,7 +749,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_artefact_rules test_artefact_rules.cpp)
 openblack_setup_and_add_test(test_camera_limits camera/test_camera_limits.cpp)
 openblack_setup_and_add_test(test_ground_shadow graphics/test_ground_shadow.cpp)
-openblack_setup_and_add_test(test_size_follower windowing/test_size_follower.cpp)
+openblack_setup_and_add_test(
+  test_size_follower windowing/test_size_follower.cpp
+)
 openblack_setup_and_add_test(
   test_camera_edge_area camera/test_camera_edge_area.cpp
 )
@@ -776,7 +778,9 @@ openblack_setup_and_add_test(test_disciple_work test_disciple_work.cpp)
 openblack_setup_and_add_test(test_script_weather test_script_weather.cpp)
 openblack_setup_and_add_test(test_challenge_records test_challenge_records.cpp)
 target_link_libraries(test_challenge_records PRIVATE ScriptLibrary)
-openblack_setup_and_add_test(test_temple_shadow_layout test_temple_shadow_layout.cpp)
+openblack_setup_and_add_test(
+  test_temple_shadow_layout test_temple_shadow_layout.cpp
+)
 openblack_setup_and_add_test(
   test_worship_site_construction test_worship_site_construction.cpp
 )
@@ -796,3 +800,5 @@ openblack_setup_and_add_test(
   test_script_misc_natives test_script_misc_natives.cpp
 )
 target_link_libraries(test_script_misc_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_music_cues pack/test_music_cues.cpp)
+target_link_libraries(test_music_cues PRIVATE pack)
