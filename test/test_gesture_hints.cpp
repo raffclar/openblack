@@ -55,6 +55,21 @@ TEST(GestureHints, OnlyTheLeashesThePickerOffersAreHinted)
 	EXPECT_EQ(hints[1].order, 4);
 }
 
+TEST(GestureHints, TheLeashGestureIsHintedWithTheCollarOfTheLeashItIsAbout)
+{
+	const std::vector<gesture::Request> requests {
+	    {.gesture = GestureType::SquareSpirial, .purpose = gesture::Purpose::LeashGesture, .leash = LeashType::Rope},
+	    Pick(GestureType::Heart, LeashType::Good),
+	};
+	const auto hints = HintsFor(requests, FakeShapes);
+	ASSERT_EQ(hints.size(), 2u);
+	// The picker's leashes come nearer the right edge than the leash gesture
+	EXPECT_EQ(hints[0].leash, LeashType::Good);
+	EXPECT_EQ(hints[1].gesture, GestureType::SquareSpirial);
+	EXPECT_EQ(hints[1].leash, LeashType::Rope);
+	EXPECT_EQ(hints[1].order, k_LeashGestureOrder);
+}
+
 TEST(GestureHints, TheDotRunsAlongAGestureInTimeWithItsLengthAgainstTheCircles)
 {
 	const std::vector<gesture::Request> requests {Pick(GestureType::Heart, LeashType::Good)};
