@@ -172,6 +172,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -2498,6 +2499,12 @@ bool Game::Update() noexcept
 				                                             Locator::camera::value().GetViewProjectionMatrix());
 				// The trees out of the land are drawn with their roots, as each now is
 				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
+				// The land's draw list, from the camera the frame is drawn from, is made again when it is due: what stands
+				// on the blocks beyond it isn't drawn
+				if (Locator::objectDrawListSystem::has_value())
+				{
+					Locator::objectDrawListSystem::value().Update(clock.GetTurn());
+				}
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				ShowInspectorCamera(false);
@@ -3806,6 +3813,10 @@ void Game::PrepareNewLand()
 	if (Locator::animatedStaticSystem::has_value())
 	{
 		Locator::animatedStaticSystem::value().Reset();
+	}
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().Reset();
 	}
 	if (Locator::appleBarrelSystem::has_value())
 	{

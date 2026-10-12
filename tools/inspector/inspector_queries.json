@@ -1217,6 +1217,18 @@
   "query": "view.cinematic"
  },
  {
+  "description": "The land's draw list: the things on the blocks in view within 700 units that are drawn, at most 2999, the nearest blocks first; with an id, whether that thing is in it and drawn",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "A thing to look up in the list",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "view.draw_list"
+ },
+ {
   "description": "The tasks with the camera and the dialogue, the scripts' spoken lines and the villagers drawn in high detail",
   "kind": "object",
   "parameters": [],
