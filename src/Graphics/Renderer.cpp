@@ -1798,8 +1798,10 @@ void Renderer::DrawCaveTrophies(const DrawSceneDesc& desc) const
 		// The colour multiplies what lights them: the medals come out the mid grey of the game's at 0x80. The game
 		// puts it in the temple's light.
 		const auto& light = Locator::temple::value().GetLight();
-		submitDesc.tint = glm::vec4(light.Colour(colour / 255.0f), 0.0f);
-		// Each is fogged where it stands, and the fog's colour added takes the place of the light's
+		// Each is fogged where it stands, its colour in the temple's light scaled in whole bytes before the light
+		// shades it, and the fog's colour added takes the place of the light's
+		submitDesc.objectLook =
+		    L3DMeshSubmitDesc::ObjectLook {.colour = glm::floor(light.Colour(colour / 255.0f) * 255.0f + 0.5f), .alpha = 1.0f};
 		submitDesc.templeFog = true;
 		DrawMesh(*meshes.Handle(trophy.mesh), submitDesc, std::numeric_limits<uint8_t>::max());
 	}
@@ -5464,6 +5466,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					submitDesc.fogFromFirstVertex = Locator::temple::value().GetPosition();
 				}
+				// The fog scales the colour in the temple's light in whole bytes, before the model light shades it
+				if (templeLit)
+				{
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {
+					    .colour = glm::floor(glm::vec3(submitDesc.tint) * 255.0f + 0.5f), .alpha = 1.0f};
+					submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+				}
 				submitDesc.landLightScale = meshId == ecs::components::Hand::k_MeshId ? 1.5f : 1.0f;
 				submitDesc.snow = !inTemple && meshId != ecs::components::Hand::k_MeshId;
 				// The villagers a script draws in high detail take no moving shadows, nor does the hand
@@ -5568,6 +5577,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// TODO(bwrsandman): choose the correct LOD
 				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				submitDesc.morphTargets = nullptr;
+				if (templeLit)
+				{
+					submitDesc.objectLook.reset();
+				}
 			};
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
