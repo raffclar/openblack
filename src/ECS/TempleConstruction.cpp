@@ -328,22 +328,9 @@ void Apply(entt::entity building, building_construction::Progress progress)
 
 } // namespace
 
-std::optional<entt::entity> construction::StartPlannedAt(glm::vec3 place, float scriptDesire)
+float construction::PlannedTempleReach(entt::entity plan)
 {
-	auto& registry = Entities();
-	std::vector<entt::entity> plans;
-	std::vector<building_construction::PlannedCandidate> candidates;
-	registry.Each<const PlannedTemple, const Transform>(
-	    [&](entt::entity entity, const PlannedTemple&, const Transform& transform) {
-		    plans.push_back(entity);
-		    candidates.push_back({.position = {transform.position.x, transform.position.z}, .reach = PlannedReach(transform)});
-	    });
-	const auto found = building_construction::PlannedAt(candidates, {place.x, place.z});
-	if (!found.has_value())
-	{
-		return std::nullopt;
-	}
-	return StartPlannedTemple(plans[*found], building_construction::SiteDesire(scriptDesire));
+	return PlannedReach(Entities().Get<const Transform>(plan));
 }
 
 entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesire)

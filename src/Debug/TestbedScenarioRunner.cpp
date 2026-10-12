@@ -100,6 +100,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
@@ -694,6 +695,20 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		return;
 	}
 	const auto& land = Locator::terrainSystem::value();
+	// A forest the trees are given that the land doesn't have yet is made where its first tree stands, as the land's
+	// script makes its forests before planting them
+	if (Locator::forestSystem::has_value())
+	{
+		auto& forests = Locator::forestSystem::value();
+		for (const auto& object : scenario.objects)
+		{
+			if (std::holds_alternative<TreeInfo>(object.type) && object.forest != 0 && !forests.LandForestOf(object.forest))
+			{
+				const auto point = MapPoint(middle, object.offset);
+				forests.MakeLandForest(object.forest, {point.x, land.GetHeightAt(point), point.y}, entt::null, false);
+			}
+		}
+	}
 	for (const auto& object : scenario.objects)
 	{
 		const auto point = MapPoint(middle, object.offset);
@@ -728,9 +743,14 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, AbodeInfo>)
 			    {
+				    if (object.planned)
+				    {
+					    return ecs::archetypes::AbodeArchetype::CreatePlan(ScenarioTown(middle), position, type, yaw,
+					                                                       object.scale);
+				    }
 				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
 				                                                   object.storedFood.value_or(k_ScenarioTownFood),
-				                                                   k_ScenarioTownWood);
+				                                                   object.storedWood.value_or(k_ScenarioTownWood));
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {

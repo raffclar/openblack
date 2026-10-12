@@ -116,11 +116,81 @@ TEST(WorldToolTips, AHandOffTheScreenKeepsItsTooltipOnTheEdge)
 	EXPECT_EQ(KeptOnScreen({100, 200}, {800, 600}, 24), glm::ivec2(100, 200));
 }
 
-TEST(WorldToolTips, NothingUnderThePointerShowsWhileAMiraclePours)
+TEST(WorldToolTips, NothingUnderThePointerShowsWithAMiracleInTheHand)
 {
-	using State = openblack::magic::CastInput::State;
-	// Pouring food beside a wood pile, the pile the pointer crosses says nothing
-	EXPECT_FALSE(OffersOverToolTips(State::Locked));
-	// With nothing being poured, what is under the pointer shows
-	EXPECT_TRUE(OffersOverToolTips(State::Idle));
+	// Holding or pouring food beside a wood pile, the pile the pointer crosses says nothing
+	EXPECT_FALSE(OffersOverToolTips(true));
+	// With nothing in the hand, what is under the pointer shows
+	EXPECT_TRUE(OffersOverToolTips(false));
+}
+
+namespace
+{
+using openblack::MagicType;
+using openblack::SpellSeedType;
+using openblack::magic::HeldCastAtPointer;
+using openblack::magic::HeldCastOffer;
+using openblack::magic::MayCastOn;
+using openblack::magic::OfferFor;
+using openblack::magic::PointedThing;
+
+HeldCastAtPointer ReadyOverLand(MagicType type, bool atPoint)
+{
+	return {.handInInfluence = true, .ready = true, .type = type, .onPointed = std::nullopt, .atPoint = atPoint};
+}
+} // namespace
+
+TEST(WorldToolTips, AHeldMiracleOffersCastOnTheLandWhereItMayBeCast)
+{
+	EXPECT_EQ(OfferFor(ReadyOverLand(MagicType::Food, true)), HeldCastOffer::Cast);
+	EXPECT_EQ(HeldMiracle(HeldCastOffer::Cast), k_Cast);
+	// Where its rule forbids it (food over the sea), the hand offers nothing of its own
+	EXPECT_EQ(OfferFor(ReadyOverLand(MagicType::Food, false)), HeldCastOffer::None);
+	EXPECT_FALSE(HeldMiracle(HeldCastOffer::None).has_value());
+}
+
+TEST(WorldToolTips, TheMiraclesCastAtACircleOfferCastCircleOverTheLand)
+{
+	for (const auto type : {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado, MagicType::Shield,
+	                        MagicType::PhysicalShield})
+	{
+		EXPECT_EQ(OfferFor(ReadyOverLand(type, true)), HeldCastOffer::CastCircle);
+	}
+	EXPECT_EQ(HeldMiracle(HeldCastOffer::CastCircle), k_CastCircle);
+	// The miracles either side of them in the table don't
+	EXPECT_EQ(OfferFor(ReadyOverLand(MagicType::FoodPowerUpOne, true)), HeldCastOffer::Cast);
+	EXPECT_EQ(OfferFor(ReadyOverLand(MagicType::Wood, true)), HeldCastOffer::Cast);
+}
+
+TEST(WorldToolTips, OverAThingOnlyTheThingCounts)
+{
+	auto held = ReadyOverLand(MagicType::Food, true);
+	held.onPointed = false;
+	EXPECT_EQ(OfferFor(held), HeldCastOffer::None);
+	// A storm held over a thing it may be cast on still says "Cast", never "Cast Circle"
+	held = ReadyOverLand(MagicType::StormWindRain, false);
+	held.onPointed = true;
+	EXPECT_EQ(OfferFor(held), HeldCastOffer::Cast);
+}
+
+TEST(WorldToolTips, AHeldMiracleOffersNothingUnreadyOrOutOfInfluence)
+{
+	auto held = ReadyOverLand(MagicType::Water, true);
+	held.ready = false;
+	EXPECT_EQ(OfferFor(held), HeldCastOffer::None);
+	held = ReadyOverLand(MagicType::Water, true);
+	held.handInInfluence = false;
+	EXPECT_EQ(OfferFor(held), HeldCastOffer::None);
+}
+
+TEST(WorldToolTips, WhatAHeldSeedMayBeCastOn)
+{
+	// The creature spells on a creature with room for another
+	EXPECT_TRUE(MayCastOn(SpellSeedType::CreatureSpellBig, {.castOnByKind = true}));
+	EXPECT_FALSE(MayCastOn(SpellSeedType::Food, {}));
+	// Never on a thing a script has highlighted
+	EXPECT_FALSE(MayCastOn(SpellSeedType::CreatureSpellBig, {.scriptHighlight = true, .castOnByKind = true}));
+	// A fireball takes the fire seed only, whatever else would say
+	EXPECT_TRUE(MayCastOn(SpellSeedType::Fire, {.fireBall = true}));
+	EXPECT_FALSE(MayCastOn(SpellSeedType::Food, {.fireBall = true, .castOnByKind = true}));
 }

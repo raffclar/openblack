@@ -48,6 +48,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
@@ -525,7 +526,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlannedAbode>(context)
 	    .Field<&components::PlannedAbode::townId>("townId")
 	    .Field<&components::PlannedAbode::info>("info")
-	    .Field<&components::PlannedAbode::yAngle>("yAngle");
+	    .Field<&components::PlannedAbode::yAngle>("yAngle")
+	    .Field<&components::PlannedAbode::wasBuilt>("wasBuilt");
 	Reflect<components::BuildingSite>(context)
 	    .Field<&components::BuildingSite::town>("town")
 	    .Field<&components::BuildingSite::desire>("desire")
@@ -717,6 +719,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
 	    .Field<&components::CreatureMindState::turnsLookedAt>("turnsLookedAt")
+	    .Field<&components::CreatureMindState::beliefs>("beliefs")
+	    .Field<&components::CreatureMindState::sweep>("sweep")
+	    .Field<&components::CreatureMindState::beliefCell>("beliefCell")
+	    .Field<&components::CreatureMindState::nearestTemple>("nearestTemple")
 	    .Field<&components::CreatureMindState::feedbackSeconds>("feedbackSeconds")
 	    .Field<&components::CreatureMindState::feedbackWasStroke>("feedbackWasStroke")
 	    .Field<&components::CreatureMindState::attitudeToPlayer>("attitudeToPlayer")
@@ -2216,6 +2222,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_morph::Morph::evilGood>("evilGood")
 	    .Field<&openblack::creature_morph::Morph::thinFat>("thinFat")
 	    .Field<&openblack::creature_morph::Morph::weakStrong>("weakStrong");
+	Reflect<openblack::creature_object_beliefs::Sweep>(context, ValueOnly {})
+	    .Field<&openblack::creature_object_beliefs::Sweep::left>("left")
+	    .Field<&openblack::creature_object_beliefs::Sweep::ring>("ring")
+	    .Field<&openblack::creature_object_beliefs::Sweep::step>("step");
 	Reflect<openblack::creature_perceived_desires::PerceivedDesires>(context, ValueOnly {})
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::player>("player")
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::town>("town");

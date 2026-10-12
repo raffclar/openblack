@@ -1181,18 +1181,24 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
 		}
 	}
-	// While a held miracle pours, the hand offers nothing of what is under the pointer
-	if (Locator::magicSystem::has_value() &&
-	    !gui::world_tooltip::OffersOverToolTips(Locator::magicSystem::value().GetHandCastState().state))
+	const auto pointed = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+	const bool shown = !_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	// With a miracle in the hand, poured or not, the hand offers to cast it where it may be cast: on the thing under the
+	// pointer, or on the land where there is none
+	const auto held = Locator::magicSystem::has_value() ? Locator::magicSystem::value().HeldCastAt(pointed) : std::nullopt;
+	if (const auto tip = held.has_value() ? gui::world_tooltip::HeldMiracle(magic::OfferFor(*held)) : std::nullopt;
+	    tip.has_value() && shown)
 	{
-		toolTips.ProcessTurn();
+		toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+		toolTips.ProcessTurn(displayTimeRuns);
 		return;
 	}
+	// Elsewhere it offers only what it would over nothing, never the tooltips of what is under the pointer
+	const bool overToolTips = gui::world_tooltip::OffersOverToolTips(held.has_value());
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
-	if (!_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	if (shown)
 	{
-		const auto hovered = Locator::pickingSystem::value().GetPick().object;
-		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
+		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed))
 		{
 			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 			toolTips.ProcessTurn(displayTimeRuns);
@@ -1202,7 +1208,6 @@ void Game::ProcessHandToolTipTurn()
 	// Over the player's own creature, the hand shows that it can take hold of it to stroke or slap it. It can hold other
 	// players' creatures too, but the game only offers it for the player's own.
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
-	const bool shown = !_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	// While the player's creature duels, the hand offers to block over it, to attack over its opponent, and to manoeuvre
 	// anywhere else, each by the Action button
 	if (const auto tip = Locator::creatureFightSystem::value().HandTip(_creatureUnderHand))
@@ -1212,18 +1217,17 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.Submit(creature_fight::ToolTipIndex(*tip), gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 		}
 	}
-	else if (const auto flagTip = shown ? Locator::townDesireSystem::value().GetFlagToolTip(
-	                                          Locator::pickingSystem::value().GetPick().object.value_or(entt::null))
-	                                    : std::nullopt;
+	else if (const auto flagTip = shown && overToolTips
+	                                  ? Locator::townDesireSystem::value().GetFlagToolTip(pointed.value_or(entt::null))
+	                                  : std::nullopt;
 	         flagTip.has_value() && !over.has_value())
 	{
 		// Over a flag of a town's store, the hand shows how much the town wants its thing, in the flag's own words
 		toolTips.SubmitInWords(ecs::town_desire_flags::k_NeedToolTip, flagTip->words, flagTip->percent);
 	}
-	else if (const auto submissions =
-	             shown && !over.has_value() && Locator::pickingSystem::has_value()
-	                 ? gui::world_tooltip::Over(Locator::pickingSystem::value().GetPick().object.value_or(entt::null))
-	                 : std::vector<gui::world_tooltip::Submission> {};
+	else if (const auto submissions = shown && overToolTips && !over.has_value()
+	                                      ? gui::world_tooltip::Over(pointed.value_or(entt::null))
+	                                      : std::vector<gui::world_tooltip::Submission> {};
 	         !submissions.empty())
 	{
 		// Over a temple, a village centre, a store or a pile, the hand says what it holds or can do
@@ -1240,7 +1244,7 @@ void Game::ProcessHandToolTipTurn()
 			}
 		}
 	}
-	else if (over.has_value() && shown)
+	else if (over.has_value() && shown && overToolTips)
 	{
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
 		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);
