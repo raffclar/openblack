@@ -1154,12 +1154,15 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		// pixel or two a frame still turn the camera
 		const auto pointer = actionSystem.GetPointerPosition();
 		const auto step = _ring.Step(pointer, EdgeArea(screenSize));
-		// The turn feels as it did on the original's default screen, whatever the resolution
-		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, step.turn));
+		// The turn feels as it did on the original's default screen, whatever the resolution: a pixel of the pointer turns
+		// as a pixel did there, and the player's pointer, moving faster on a bigger screen so the same mouse movement
+		// sweeps the same share of it, would turn the camera that much faster too
+		const float turn = step.turn / actionSystem.GetPointerScale();
+		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, turn));
 		if ((_features & camera_help::feature::k_Rotate) != 0)
 		{
-			_turnedThisFrame = step.turn;
-			_rotateAroundDelta.y += step.turn * static_cast<float>(screenSize.x) / glm::pi<float>();
+			_turnedThisFrame = turn;
+			_rotateAroundDelta.y += turn * static_cast<float>(screenSize.x) / glm::pi<float>();
 		}
 		actionSystem.WarpCursor(step.cursor);
 		return Mode::Polar;

@@ -1770,6 +1770,7 @@ bool Game::Update() noexcept
 			{
 				continue;
 			}
+			actions.PointPlayerEvent(e);
 			Locator::events::value().Create<SDL_Event>(e);
 		}
 		FollowWindowSize();
@@ -2412,7 +2413,6 @@ bool Game::Update() noexcept
 						    .camera = camera.GetOrigin(),
 						    .cursorGround = _cursorWorldPosition,
 						    .handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), land)),
-						    .screenSize = static_cast<glm::vec2>(screenSize),
 						    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
 						    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
 						    .nowMs = machine_clock::Ticks(),

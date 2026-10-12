@@ -62,8 +62,6 @@ public:
 	[[nodiscard]] std::optional<float> GetScoopTip() const override;
 
 private:
-	/// How much the hand's speed is scaled for a throw on the current screen
-	float _throwScreenScale {1.0f};
 	/// What the hand last took from a pile, until the interface has shown it
 	std::optional<uint32_t> _amountToolTip;
 	/// The hand's grab, made on the hand when first needed; none without a hand

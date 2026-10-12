@@ -363,31 +363,6 @@ TEST(HandGrab, AThrowLeavesAtARecordedVelocityElseTheSpringsCappedAtTheMost)
 	EXPECT_FLOAT_EQ(capped.x / capped.z, 0.75f);
 }
 
-TEST(HandGrab, TheSpringsThrowIsScaledToTheScreensFourByThreeHeight)
-{
-	// 800x600 is the reference; twice as tall throws twice as hard for the same speed of the hand
-	EXPECT_FLOAT_EQ(ThrowScreenScale({800.0f, 600.0f}), 1.0f);
-	EXPECT_FLOAT_EQ(ThrowScreenScale({640.0f, 480.0f}), 0.8f);
-	EXPECT_FLOAT_EQ(ThrowScreenScale({1600.0f, 1200.0f}), 2.0f);
-	// Wider than 4:3 the view keeps the 4:3 height, so the height alone counts
-	EXPECT_FLOAT_EQ(ThrowScreenScale({1920.0f, 1080.0f}), 1.8f);
-	EXPECT_FLOAT_EQ(ThrowScreenScale({2560.0f, 1440.0f}), 2.4f);
-	EXPECT_FLOAT_EQ(ThrowScreenScale({3440.0f, 1440.0f}), 2.4f);
-	EXPECT_FLOAT_EQ(ThrowScreenScale({5120.0f, 1440.0f}), 2.4f);
-	// Narrower than 4:3 the view keeps the 4:3 width, so the width counts: 1280x1024 as 1280x960
-	EXPECT_FLOAT_EQ(ThrowScreenScale({1280.0f, 1024.0f}), 1.6f);
-	// No screen leaves it as it is
-	EXPECT_FLOAT_EQ(ThrowScreenScale({0.0f, 0.0f}), 1.0f);
-	const glm::vec3 spring {3.0f, 1.0f, 4.0f};
-	EXPECT_EQ(ThrowVelocity(std::nullopt, true, spring, 1.8f), spring * 1.8f);
-	// A hand demonstration's recorded throw is the game's own and is not scaled
-	const glm::vec3 recorded {73.9941f, 5.2013f, -52.1485f};
-	EXPECT_EQ(ThrowVelocity(recorded, true, spring, 2.4f), recorded);
-	// The most a throw can be is applied after the scale
-	const auto capped = ThrowVelocity(std::nullopt, true, glm::vec3(60.0f, 0.0f, 80.0f), 2.4f);
-	EXPECT_FLOAT_EQ(glm::length(capped), k_MaxThrowSpeed);
-}
-
 TEST(HandGrab, ATwistTurnsAboutTheLevelAxisAcrossTheHandsMotion)
 {
 	const auto torque = ReleaseSpinTorque(2.0f, 10.0f, {1.0f, 5.0f, 0.0f});

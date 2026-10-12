@@ -23,6 +23,7 @@
 #include "CursorFreeze.h"
 #include "GameActionMapInterface.h"
 #include "MouseMotion.h"
+#include "PointerSpeed.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp"
@@ -67,6 +68,8 @@ public:
 	void UpdateInputLock(bool clientConnected, float seconds) final;
 	[[nodiscard]] bool IsPlayerInputBlocked() const final { return _lock.Locked(); }
 	[[nodiscard]] bool AdmitEvent(const SDL_Event& event) final;
+	void PointPlayerEvent(SDL_Event& event) final;
+	[[nodiscard]] float GetPointerScale() const final;
 	[[nodiscard]] glm::ivec2 GetPointerPosition() const final;
 	[[nodiscard]] uint32_t GetPointerButtons() const final;
 	void WarpCursor(glm::ivec2 position) final;
@@ -135,5 +138,17 @@ private:
 	void RestPointerUntilCursorSeen();
 	/// Puts the player's own cursor somewhere in the window, noting the jump so it isn't taken for the mouse moving
 	void WarpPlayerCursor(glm::ivec2 position);
+
+	/// The player's pointer moved by the mouse at the screen's pointer speed, while the window has the mouse
+	pointer_speed::ScaledPointer _scaledPointer;
+	/// Whether the window has the mouse: its movements come to the window alone and move the scaled pointer
+	bool _pointerScaled {false};
+	/// Whether the player's mouse may move the scaled pointer now: the window has the keyboard, the screen isn't the
+	/// game's 800x600 one, and no agent, script or hand demonstration has the pointer
+	[[nodiscard]] bool CanScalePointer() const;
+	/// The window takes the mouse, the pointer starting where the system's cursor is
+	void StartScaledPointer(glm::ivec2 at);
+	/// The window lets the mouse go, the system's cursor left where the pointer was
+	void StopScaledPointer();
 };
 } // namespace openblack::input

@@ -1614,9 +1614,8 @@ void AddHand(std::vector<Scenario>& all)
 	    .facet = Facet::Hand,
 	    .description = "The hand picks up a rock, makes ready to throw low on the screen and flings it with a quick "
 	                   "upward sweep of the pointer, in real time.",
-	    .expected = "The rock leaves the hand at the hand's speed scaled for the screen (the height of its 4:3 middle "
-	                "over 600; the inspector's HandGrab lastThrow), the same at any frame rate, and flies on the order "
-	                "of a hundred metres or more before it lands.",
+	    .expected = "The rock leaves the hand at the hand's speed (the inspector's HandGrab lastThrow), the same at any "
+	                "frame rate, and flies on the order of a hundred metres or more before it lands.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},
