@@ -242,10 +242,12 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* FLEEING_FROM_OBJECT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_reactions::Fleeing,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* LOOKING_AT_OBJECT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_reactions::Watching,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* FOLLOWING_OBJECT_REACTION */ k_TodoEntry,
     /* INSPECT_OBJECT_REACTION */ k_TodoEntry,
@@ -284,22 +286,22 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GOTO_FOOD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_food::GotoFoodReaction,
-        .exitState = &villager_food::ExitFoodReaction,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* ARRIVES_AT_FOOD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_food::ArrivesAtFoodReaction,
-        .exitState = &villager_food::ExitFoodReaction,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* GOTO_WOOD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_forester::GotoWoodReaction,
-        .exitState = &villager_food::ExitFoodReaction,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* ARRIVES_AT_WOOD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_forester::ArrivesAtWoodReaction,
-        .exitState = &villager_food::ExitFoodReaction,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* WAIT_FOR_ANIMATION */
     VillagerStateTableEntry {
@@ -328,6 +330,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* FLEEING_AND_LOOKING_AT_OBJECT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_reactions::Watching,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* GOTO_STORAGE_PIT_FOR_DROP_OFF */
     VillagerStateTableEntry {
@@ -762,6 +765,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* POINT_AT_FLYING_OBJECT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_physics::PointAtFlyingObject,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* DECIDE_WHAT_TO_DO */
     VillagerStateTableEntry {
@@ -777,6 +781,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* AMAZED_BY_MAGIC_SHIELD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_shield::AmazedByMagicShield,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* VILLAGER_GOSSIPS */ k_TodoEntry,
     /* CHECK_INTERACT_WITH_ANIMAL */ k_TodoEntry,
@@ -844,35 +849,37 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GO_TOWARDS_TELEPORT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* TELEPORT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_teleport::TeleportReaction,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* DANCE_WHILE_REACTING */ k_TodoEntry,
     /* CONTROLLED_BY_CREATURE */ k_TodoEntry,
     /* POINT_AT_DEAD_PERSON */
     VillagerStateTableEntry {
         .state = &villager_mourning::PointAtDeadPerson,
-        .exitState = &villager_mourning::ExitMourning,
+        .exitState = &villager_reactions::ExitReaction,
         .validate = &villager_mourning::ValidateMourning,
     },
     /* GO_TOWARDS_DEAD_PERSON */
     VillagerStateTableEntry {
         .state = &villager_mourning::GoTowardsDeadPerson,
-        .exitState = &villager_mourning::ExitMourning,
+        .exitState = &villager_reactions::ExitReaction,
         .validate = &villager_mourning::ValidateMourning,
     },
     /* LOOK_AT_DEAD_PERSON */
     VillagerStateTableEntry {
         .state = &villager_mourning::LookAtDeadPerson,
-        .exitState = &villager_mourning::ExitMourning,
+        .exitState = &villager_reactions::ExitReaction,
         .validate = &villager_mourning::ValidateMourning,
     },
     /* MOURN_DEAD_PERSON */
     VillagerStateTableEntry {
         .state = &villager_mourning::MournDeadPerson,
-        .exitState = &villager_mourning::ExitMourning,
+        .exitState = &villager_reactions::ExitReaction,
         .validate = &villager_mourning::ValidateMourning,
     },
     /* NOTHING_TO_DO */
@@ -965,6 +972,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* REACT_TO_BREEDER */
     VillagerStateTableEntry {
         .state = &villager_breeding::ReactToBreeder,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* SHEPHERD_CHECK_ANIMAL_FOR_SLAUGHTER */
     VillagerStateTableEntry {
@@ -991,6 +999,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* WAIT_FOR_MATE */
     VillagerStateTableEntry {
         .state = &villager_reactions::WaitForMate,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* GO_AND_HIDE_IN_NEARBY_BUILDING */ k_TodoEntry,
     /* LOOK_TO_SEE_IF_IT_IS_SAFE */ k_TodoEntry,
@@ -1047,6 +1056,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GO_TOWARDS_TELEPORT_REACTION_QUICKLY: running to a teleport stone is walking to it, faster */
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
+        .exitState = &villager_reactions::ExitReaction,
     },
     /* GO_AND_CHILLOUT_IN_TOWN */
     VillagerStateTableEntry {
@@ -1325,15 +1335,22 @@ bool LivingActionSystem::PausesBefore(LivingAction& action, VillagerStates state
 
 void LivingActionSystem::SetTopState(LivingAction& action, VillagerStates state) const
 {
+	VillagerChangeTopState(action, state);
+}
+
+bool LivingActionSystem::VillagerChangeTopState(LivingAction& action, VillagerStates state) const
+{
 	if (PausesBefore(action, state))
 	{
-		return;
+		return true;
 	}
-	if (ChangeTopState(action, state, std::nullopt) == SetResult::EntryFailed)
+	const auto result = ChangeTopState(action, state, std::nullopt);
+	if (result == SetResult::EntryFailed)
 	{
 		// A state that won't be gone into leaves the villager deciding what to do
 		EnterState(action, VillagerStates::DecideWhatToDo, FinalStateOf(action));
 	}
+	return result != SetResult::Refused;
 }
 
 bool LivingActionSystem::VillagerSetCurrentAndDestinationState(LivingAction& action, VillagerStates current,

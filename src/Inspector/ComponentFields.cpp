@@ -1189,8 +1189,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::LivingReaction::reaction>("reaction")
 	    .Field<&components::LivingReaction::type>("type")
 	    .Field<&components::LivingReaction::startTurn>("startTurn")
-	    .Field<&components::LivingReaction::creatureMemory>("creatureMemory")
-	    .Field<&components::LivingReaction::previousState>("previousState");
+	    .Field<&components::LivingReaction::creatureMemory>("creatureMemory");
 	Reflect<components::MagicFireBall>(context)
 	    .Field<&components::MagicFireBall::strength>("strength")
 	    .Field<&components::MagicFireBall::radius>("radius")
@@ -1237,7 +1236,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AntiInfluence::owner>("owner")
 	    .Field<&components::AntiInfluence::radius>("radius");
 	Reflect<components::VillagerShieldReaction>(context)
-	    .Field<&components::VillagerShieldReaction::previous>("previous")
 	    .Field<&components::VillagerShieldReaction::reaction>("reaction")
 	    .Field<&components::VillagerShieldReaction::type>("type")
 	    .Field<&components::VillagerShieldReaction::shield>("shield")
@@ -1557,7 +1555,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TeleportTraveller::stone>("stone")
 	    .Field<&components::TeleportTraveller::destination>("destination")
 	    .Field<&components::TeleportTraveller::finalState>("finalState")
-	    .Field<&components::TeleportTraveller::previousState>("previousState")
 	    .Field<&components::TeleportTraveller::jumped>("jumped")
 	    .Field<&components::TeleportTraveller::arrival>("arrival")
 	    .Field<&components::TeleportTraveller::transportTurns>("transportTurns")

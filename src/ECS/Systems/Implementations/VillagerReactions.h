@@ -42,8 +42,27 @@ void Start(entt::entity villager, Reaction type, components::LivingReaction& sta
 /// A villager stops reacting; when asked, it goes back to what it was doing
 void Stop(entt::entity villager, components::LivingReaction& state, bool resetState);
 
-/// The villager stops reacting and goes back to what it was doing
+/// The villager remembers the state it works towards to come back to once it stops reacting, as it does taking up a
+/// reaction when it isn't reacting already; a state that keeps what was remembered before, or a reaction's state, isn't
+/// remembered
+void RememberStateToGoBackTo(components::LivingAction& action);
+/// The villager goes back to the state it remembered, as any change of state goes: the remembered state's resume state,
+/// left through the exits of the states it is in. When those won't let it go it is put straight into deciding what to
+/// do. It remembers nothing afterwards. Remembering nothing it goes into no state at all, as in the original game,
+/// unless it is a fireman, which decides what to do instead.
+void GoBackToRemembered(components::LivingAction& action, bool firemanDecidesWhenNothingRemembered);
+/// What every villager does once a reaction is over: it goes back to the state it remembered, and if it is then heading
+/// for a reaction's state it decides what to do afresh
+void GoBackAfterReacting(components::LivingAction& action);
+/// The villager lets go of the reaction it holds: the reaction is cleared, and its memory of the kind is brought up to
+/// now, so it waits its time before taking that kind up again
+void LetGo(entt::entity villager);
+/// The villager stops reacting and goes back to what it was doing: it goes back after reacting, then lets go of the
+/// reaction if going back hasn't already. Every reaction ends this way.
 uint32_t StopReacting(components::LivingAction& action);
+/// Leaving a reaction's state: the circle it was walking round is forgotten, and going to a state that isn't a
+/// reaction's it lets go of the reaction. It never holds the villager back.
+bool ExitReaction(components::LivingAction& action, VillagerStates next);
 /// What the villager reacts to: the reaction's thing, while it is there
 [[nodiscard]] std::optional<entt::entity> ReactingTo(entt::entity villager);
 

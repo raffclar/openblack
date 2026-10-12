@@ -37,8 +37,6 @@ uint32_t PointAtDeadPerson(components::LivingAction& action);
 uint32_t GoTowardsDeadPerson(components::LivingAction& action);
 uint32_t LookAtDeadPerson(components::LivingAction& action);
 uint32_t MournDeadPerson(components::LivingAction& action);
-/// Leaving the mourning for anything but another reaction's state, it no longer reacts to the death
-bool ExitMourning(components::LivingAction& action, VillagerStates next);
 /// The mourning ends when the death's reaction has gone, or when the hand takes up the body and the reaction ends then
 bool ValidateMourning(components::LivingAction& action);
 

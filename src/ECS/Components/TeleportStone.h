@@ -54,8 +54,6 @@ struct TeleportTraveller
 	/// Where it was going, and the state a villager was to take there, to carry on after the jump
 	glm::vec3 destination {0.0f};
 	VillagerStates finalState {VillagerStates::DecideWhatToDo};
-	/// The state a villager's reaction returns it to: the state it was to take, as its state table keeps it
-	VillagerStates previousState {VillagerStates::InvalidState};
 	/// A creature walking on to its own destination after the jump: it doesn't turn aside again until it gets there
 	bool jumped {false};
 	/// A creature the stone carries: where it comes out, and the turns left of its fading out, or once there of its
