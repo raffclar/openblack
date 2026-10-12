@@ -780,3 +780,7 @@ openblack_setup_and_add_test(
   test_worship_site_construction test_worship_site_construction.cpp
 )
 openblack_setup_and_add_test(test_tree_bend test_tree_bend.cpp)
+openblack_setup_and_add_test(test_shape_shadows graphics/test_shape_shadows.cpp)
+openblack_setup_and_add_test(
+  test_land_shadow_casters test_land_shadow_casters.cpp
+)
