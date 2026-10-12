@@ -56,9 +56,8 @@ void StepPulse(Pulse& pulse, float millisecondsPerTurn);
 /// A started scroll stands in a beam of light; a sign never has one
 [[nodiscard]] bool BeamShown(HighlightInfo kind, bool active);
 /// The colour of the beam a started scroll stands in, as 0xAARRGGBB: a faint pale blue one for silver; a yellow one for
-/// the others, whose alpha is the whole part of the beat times 80. The beat only reaches a whole 1 on the rare turn
-/// whose level is exactly 1 and then only on a frame at the very start of the next turn, so the yellow beam is nearly
-/// never seen
+/// the others, whose alpha is the beat times 80, so it beats from 32 to 80. The game cut the beat to a whole number
+/// first, which hid the yellow beam almost always; openblack shows it as intended (see docs/deviations.md)
 [[nodiscard]] uint32_t BeamColour(HighlightInfo kind, double pulseShare);
 
 /// An angle brought to a turn, as the game brings it, by whole turns towards none
