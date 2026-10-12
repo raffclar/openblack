@@ -1167,7 +1167,8 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 	case DragMode::Pitch:
 	case DragMode::PitchFromTop:
 	{
-		const auto fov = Locator::camera::has_value() ? Locator::camera::value().GetHorizontalFieldOfView() : 0.0f;
+		// Through the lens, the view across a 4:3 screen, so a drag tilts as much for the screen's height on any screen
+		const auto fov = Locator::camera::has_value() ? Locator::camera::value().GetLens() : 0.0f;
 		_helpEvents.Add(camera_help::events::TiltDragEvents(_helpControls));
 		if ((_features & camera_help::feature::k_Pitch) != 0)
 		{

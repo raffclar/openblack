@@ -347,6 +347,7 @@ openblack_setup_and_add_test(test_temple_camera camera/test_temple_camera.cpp)
 openblack_setup_and_add_test(
   test_camera_projection camera/test_camera_projection.cpp
 )
+openblack_setup_and_add_test(test_camera_lens camera/test_camera_lens.cpp)
 openblack_setup_and_add_test(test_script_camera camera/test_script_camera.cpp)
 target_link_libraries(test_script_camera PRIVATE edt)
 openblack_setup_and_add_test(test_camera_zones camera/test_camera_zones.cpp)

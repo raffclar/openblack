@@ -737,9 +737,11 @@ bool Gui::ShowMenu() noexcept
 			if (ImGui::BeginMenu("Field of View"))
 			{
 				auto& camera = Locator::camera::value();
-				float fieldOfView = glm::degrees(camera.GetHorizontalFieldOfView());
+				// The lens: the view across a 4:3 screen, which a wider screen widens at its sides
+				float fieldOfView = glm::degrees(camera.GetLens());
 				auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
-				ImGui::Text("Aspect Ratio %.3f", aspect);
+				ImGui::Text("Aspect Ratio %.3f, across %.1f, up %.1f", aspect, glm::degrees(camera.GetHorizontalFieldOfView()),
+				            glm::degrees(camera.GetVerticalFieldOfView()));
 				if (ImGui::MenuItem("Reset"))
 				{
 					camera.SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip);
