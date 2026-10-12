@@ -38,6 +38,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Camera/TempleCameraModel.h"
+#include "Camera/TemplePress.h"
 #include "Common/EventManager.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureCave.h"
@@ -499,6 +500,20 @@ void TempleInterior::FadeToWhite()
 	{
 		_interface->GetScreenFade().FadeThrough(glm::vec3(1.0f));
 	}
+}
+
+void TempleInterior::CoverSkippedFlight()
+{
+	// The cut is covered from a whole screen, in whatever colour is still fading
+	if (_interface != nullptr)
+	{
+		_interface->GetScreenFade().FadeFrom(temple_press::k_SkippedFlightFade);
+	}
+}
+
+float TempleInterior::GetFadeAmount() const
+{
+	return _interface != nullptr ? _interface->GetScreenFade().GetAmount() : 0.0f;
 }
 
 void TempleInterior::FadeIntoRoom()

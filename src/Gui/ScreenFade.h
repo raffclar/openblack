@@ -33,6 +33,8 @@ public:
 
 	/// The colour over the screen, its alpha how much of the screen it covers
 	[[nodiscard]] glm::vec4 GetColour() const;
+	/// How much the fade covers the screen, beyond a whole while it waits to show anything
+	[[nodiscard]] float GetAmount() const noexcept { return _amount; }
 	/// How many times the fade has reached where it was going
 	[[nodiscard]] uint32_t GetTurns() const noexcept { return _turns; }
 
