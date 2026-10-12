@@ -23,6 +23,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -140,6 +141,18 @@ private:
 	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
 	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
 	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
+
+	// What it believes about the things about it (CreatureMindBeliefs.cpp)
+	/// It comes across a thing: its belief about it is brought up to date, or made, and a new one leads it on to what the
+	/// thing belongs to
+	void ComeAcross(components::CreatureMindState& mind, entt::entity thing);
+	/// It forgets what it believed about things gone from the world
+	void ForgetGoneThings(components::CreatureMindState& mind);
+	/// Gone into another map cell, it comes across the temple nearest it if that is another than the last
+	void NoteNearestTemple(components::CreatureMindState& mind, const components::Transform& transform);
+	/// Its eyes sweep this turn's cells about it, and it comes across everything in those it can see
+	void SweepEyes(const components::Creature& creature, components::CreatureMindState& mind,
+	               const components::CreatureAnimation& animation, const components::Transform& transform);
 	/// The agenda for an action of the game's table on an object, and what carries it out; none when it can't be made
 	[[nodiscard]] std::optional<std::pair<const creature_plan_actions::Executor*, std::vector<creature_mind::Step>>>
 	PlanAgenda(entt::entity creature, uint32_t action, std::optional<uint32_t> object,

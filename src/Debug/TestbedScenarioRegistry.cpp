@@ -1489,6 +1489,33 @@ void AddHand(std::vector<Scenario>& all)
 	         // And comes back in
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.97f}}},
 	});
+
+	// The camera looks north over the land, a rock and a tiger to its east, all in the player's influence; the pointer stays
+	// east of the middle, clear of the testbed's window
+	all.push_back({
+	    .id = "hand.cast_tooltips",
+	    .name = "What the hand offers with a miracle in it",
+	    .facet = Facet::Hand,
+	    .description = "A food seed is put in the hand and the pointer goes to the bare land, then to a rock; then a storm "
+	                   "seed over the land; then the creature spell that makes a creature big over the land and over a "
+	                   "tiger. Six seconds each.",
+	    .expected = "Food over the land: \"Cast\" with the right mouse button. Over the rock it offers nothing. The storm "
+	                "over the land: \"Cast Circle\". The big spell over the land offers nothing; over the tiger, "
+	                "\"Cast\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -30.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {40.0f, 40.0f})},
+	    .objects = {{.type = FeatureInfo::FatPilarChalk, .offset = {20.0f, 40.0f}}},
+	    .commands = {{.kind = Kind::HoldSeed, .delaySeconds = 3.0f, .value = static_cast<size_t>(SpellSeedType::Food)},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.1f, .point = {0.75f, 0.8f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.66f, 0.45f}},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 6.0f, .value = static_cast<size_t>(SpellSeedType::Storm)},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.1f, .point = {0.75f, 0.8f}},
+	                 {.kind = Kind::HoldSeed,
+	                  .delaySeconds = 6.0f,
+	                  .value = static_cast<size_t>(SpellSeedType::CreatureSpellBig)},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.83f, 0.45f}}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
@@ -2065,6 +2092,35 @@ void AddMind(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::SeeSkill, .creature = 0, .delaySeconds = 1.0f, .value = k_FirstSkill},
 	                 {.kind = Kind::SeeSkill, .creature = 0, .delaySeconds = 4.0f, .value = k_FirstSkill},
 	                 {.kind = Kind::SeeSkill, .creature = 0, .delaySeconds = 4.0f, .value = k_FirstSkill}},
+	});
+
+	// The player's tiger looks north over two small forests and two flocks of birds; its player's temple stands to
+	// the west and another god's far off to the north east, out of its sight
+	all.push_back({
+	    .id = "mind.object_beliefs",
+	    .name = "Beliefs about the temples, flocks and forests it has met",
+	    .facet = Facet::Mind,
+	    .description = "The player's tiger, its mind paused, stands looking north at two forests of three trees and two "
+	                   "flocks of doves. Its player's temple is to the west; another player's is far to the north east. "
+	                   "After six seconds the Creature Cave opens on its Mind scroll.",
+	    .expected = "Its eyes sweep the cells about it in a couple of seconds. The Mind scroll then says it knows of 1 "
+	                "temple (its player's, the nearest; the far one it never sees), 2 flocks and 2 forests.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "yours")},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {30.0f, 25.0f}, .forest = 1},
+	                {.type = TreeInfo::Oak, .offset = {38.0f, 32.0f}, .forest = 1},
+	                {.type = TreeInfo::Oak, .offset = {26.0f, 36.0f}, .forest = 1},
+	                {.type = TreeInfo::Conifer, .offset = {-30.0f, 25.0f}, .forest = 2},
+	                {.type = TreeInfo::Conifer, .offset = {-38.0f, 32.0f}, .forest = 2},
+	                {.type = TreeInfo::Conifer, .offset = {-26.0f, 36.0f}, .forest = 2}},
+	    .birdFlocks = {{.kind = AnimalInfo::Dove, .offset = {-10.0f, 30.0f}, .count = 5, .reach = 10.0f},
+	                   {.kind = AnimalInfo::Dove, .offset = {10.0f, 40.0f}, .count = 5, .reach = 10.0f}},
+	    .temples = {{.offset = {-90.0f, 0.0f}, .angle = 0.0f},
+	                {.offset = {300.0f, 300.0f}, .owner = PlayerNames::PLAYER_TWO, .angle = 0.0f}},
+	    .commands = {{.kind = Kind::OpenCreatureCave,
+	                  .creature = 0,
+	                  .delaySeconds = 6.0f,
+	                  .value = static_cast<size_t>(creature_cave::Page::Mind)}},
 	});
 }
 
