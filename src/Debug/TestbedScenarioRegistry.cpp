@@ -2971,6 +2971,17 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 			problems.emplace_back("an object of no such kind, size or place");
 		}
 	}
+	for (const auto& footpath : scenario.footpaths)
+	{
+		const auto outOfRange = [&scenario](size_t object) { return object >= scenario.objects.size(); };
+		if ((footpath.startsAt.has_value() && outOfRange(*footpath.startsAt)) ||
+		    std::ranges::any_of(footpath.leadsFrom, outOfRange) ||
+		    !std::ranges::all_of(footpath.nodes, [](glm::vec2 node) { return ValidOffset(node); }) || footpath.nodes.empty() ||
+		    footpath.leadsFrom.empty())
+		{
+			problems.emplace_back("a footpath with no nodes, a node off the map or an object that isn't there");
+		}
+	}
 	for (const auto& throwing : scenario.throws)
 	{
 		if (throwing.object >= scenario.objects.size() || (throwing.from.has_value() && !ValidOffset(*throwing.from)) ||

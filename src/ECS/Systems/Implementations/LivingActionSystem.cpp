@@ -52,6 +52,7 @@
 #include "VillagerFisherman.h"
 #include "VillagerFlock.h"
 #include "VillagerFood.h"
+#include "VillagerFootpath.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
 #include "VillagerHousewife.h"
@@ -93,6 +94,7 @@ namespace villager_mourning = openblack::ecs::villager_mourning;
 namespace villager_checks = openblack::ecs::villager_checks;
 namespace villager_breeding = openblack::ecs::villager_breeding;
 namespace villager_worship = openblack::ecs::villager_worship;
+namespace villager_footpath = openblack::ecs::villager_footpath;
 
 /// A villager with no state does nothing
 uint32_t VillagerInvalidState(LivingAction& /*action*/)
@@ -318,7 +320,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_script::MoveAlongPath,
     },
-    /* MOVE_ON_PATH */ k_TodoEntry,
+    /* MOVE_ON_PATH */
+    VillagerStateTableEntry {
+        .state = &villager_footpath::MoveOnPath,
+        .exitState = &villager_footpath::ExitMoveOnPath,
+    },
     /* FLEEING_AND_LOOKING_AT_OBJECT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_reactions::Watching,
