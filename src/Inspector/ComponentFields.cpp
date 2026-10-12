@@ -870,7 +870,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Field::type>("type")
 	    .Field<&components::Field::crop>("crop")
 	    .Field<&components::Field::growthTurn>("growthTurn")
-	    .Field<&components::Field::height>("height");
+	    .Field<&components::Field::height>("height")
+	    .Field<&components::Field::farmers>("farmers");
 	Reflect<components::Fire>(context)
 	    .Field<&components::Fire::state>("state")
 	    .Field<&components::Fire::source>("source")
@@ -1690,6 +1691,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::detailedHeading>("detailedHeading")
 	    .Field<&components::VillagerPose::clipBlend>("clipBlend");
 	Reflect<components::WorkTarget>(context).Field<&components::WorkTarget::thing>("thing");
+	Reflect<components::FieldWorkSpot>(context).Field<&components::FieldWorkSpot::position>("position");
 	Reflect<components::WoodReactionTarget>(context)
 	    .Field<&components::WoodReactionTarget::wood>("wood")
 	    .Field<&components::WoodReactionTarget::startTurn>("startTurn");
