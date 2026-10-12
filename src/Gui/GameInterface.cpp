@@ -34,6 +34,7 @@
 #include "ECS/FloatingNumber.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -173,6 +174,26 @@ constexpr std::array k_ToolTipArrows = {
 };
 /// The tooltips' mice for a wheel mouse, the third row of mousehelp.raw
 constexpr int k_ToolTipMouseRow = 2;
+
+/// What the interface picked under the pointer at the last frame drawn, as depths in front of the camera
+openblack::help::tip_bubble::UnderHand WhatIsUnderHand()
+{
+	openblack::help::tip_bubble::UnderHand under;
+	if (!Locator::pickingSystem::has_value() || !Locator::camera::has_value())
+	{
+		return under;
+	}
+	const auto& pick = Locator::pickingSystem::value().GetPick();
+	if (pick.object.has_value())
+	{
+		under.objectDepth = pick.distance;
+	}
+	if (pick.land.has_value())
+	{
+		under.landDepth = (Locator::camera::value().GetViewProjectionMatrix() * glm::vec4(*pick.land, 1.0f)).w;
+	}
+	return under;
+}
 } // namespace
 
 std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerName, MenuSettings settings)
@@ -740,6 +761,8 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 		return;
 	}
 	auto& bubble = Locator::tipBubbleSystem::value();
+	// Only a bubble drawn this frame can be under the hand
+	bubble.SetUnderHand(false);
 	const auto anchor = bubble.GetAnchor();
 	if (!bubble.IsUp() || !anchor.has_value() || bubble.GetDisplayTime() <= 0.0f)
 	{
@@ -760,15 +783,23 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	auto& scroll = bubble.GetScroll();
 	tip::ClampScroll(scroll, *placement);
 	const float alpha = std::min(bubble.GetDisplayTime(), 1.0f) * placement->distanceAlpha;
-	// The pointer over the bubble keeps it showing
+	// After the words are drawn: gripped, they follow the hand from the next frame on; the pointer over the bubble keeps
+	// it showing, and the hand is on it unless something under the pointer is nearer
 	const auto pointer = glm::vec2(mouse);
-	if (pointer.x > placement->min.x && pointer.x < placement->max.x && pointer.y > placement->min.y &&
-	    pointer.y < placement->max.y)
-	{
-		bubble.Hover();
-	}
+	const auto afterDrawing = [&bubble, &scroll, &placement, pointer]() {
+		if (bubble.IsGripped())
+		{
+			help::tip_bubble::FollowHand(scroll, pointer.y);
+		}
+		if (help::tip_bubble::Inside(*placement, pointer))
+		{
+			bubble.Hover();
+			bubble.SetUnderHand(help::tip_bubble::HandOnBubble(*placement, pointer, WhatIsUnderHand()));
+		}
+	};
 	if (alpha <= 0.0f)
 	{
+		afterDrawing();
 		return;
 	}
 
@@ -841,6 +872,7 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	{
 		DrawBubbleLine(line, glm::vec3(1.0f));
 	}
+	afterDrawing();
 }
 
 void GameInterface::DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,

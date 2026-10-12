@@ -29,6 +29,11 @@ public:
 	void ProcessTurn() override;
 	void UpdateFrame(float gameMilliseconds) override;
 	void Hover() override;
+	void SetUnderHand(bool underHand) override { _underHand = underHand; }
+	[[nodiscard]] bool IsUnderHand() const override { return _underHand; }
+	void Grip() override { _gripped = true; }
+	void LetGo() override;
+	[[nodiscard]] bool IsGripped() const override { return _gripped; }
 
 	[[nodiscard]] bool IsUp() const override;
 	[[nodiscard]] float GetDisplayTime() const override { return _displayTime; }
@@ -44,6 +49,8 @@ private:
 	/// Kept from one opening to the next: the first bubble of a game shows only from the next turn
 	float _displayTime {0.0f};
 	help::tip_bubble::Scroll _scroll;
+	bool _underHand {false};
+	bool _gripped {false};
 };
 
 } // namespace openblack::ecs::systems

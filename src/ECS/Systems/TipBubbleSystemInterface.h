@@ -42,6 +42,14 @@ public:
 	virtual void UpdateFrame(float gameMilliseconds) = 0;
 	/// The pointer is over the bubble: it keeps showing
 	virtual void Hover() = 0;
+	/// Whether the hand was on the bubble, before anything under it, at the last frame drawn
+	virtual void SetUnderHand(bool underHand) = 0;
+	[[nodiscard]] virtual bool IsUnderHand() const = 0;
+	/// The Action button pressed with an empty hand on the bubble grips it, and its words follow the hand until the
+	/// button is let go
+	virtual void Grip() = 0;
+	virtual void LetGo() = 0;
+	[[nodiscard]] virtual bool IsGripped() const = 0;
 
 	/// Whether it is up and not hidden by a script's cut scene
 	[[nodiscard]] virtual bool IsUp() const = 0;

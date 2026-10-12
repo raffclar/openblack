@@ -535,6 +535,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		magicTookPress = magic.TapAction();
 	}
+	// Letting go of the Action button lets go of the tip bubble
+	if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::tipBubbleSystem::value().LetGo();
+	}
 	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
 	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
 	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
@@ -572,6 +578,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		if (!_actionPressTaken && handHoldsThing)
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		}
+		// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && Locator::tipBubbleSystem::has_value() &&
+		    Locator::tipBubbleSystem::value().IsUnderHand())
+		{
+			Locator::tipBubbleSystem::value().Grip();
+			_actionPressTaken = true;
 		}
 		// With an empty hand, a one-shot bubble under it takes the press before anything behind it
 		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
