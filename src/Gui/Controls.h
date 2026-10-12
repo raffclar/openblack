@@ -256,10 +256,11 @@ public:
 	[[nodiscard]] int GetScrollBarWidth() const noexcept { return _size - 2; }
 	/// Right of the box the items are in, left of the scroll bar
 	[[nodiscard]] int GetBoxRight() const;
+	/// The item at a height of the dialog space, as the list is scrolled
+	[[nodiscard]] std::optional<size_t> ItemAt(int y) const;
 
 private:
 	[[nodiscard]] int GetContentHeight() const;
-	[[nodiscard]] std::optional<size_t> ItemAt(int y) const;
 	void ScrollTo(float scroll);
 
 	const GameFont& _font;

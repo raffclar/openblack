@@ -31,6 +31,7 @@ public:
 
 	void Start(const gui::TextDatabase& texts, int screenHeight) override;
 	[[nodiscard]] bool IsStarted() const override { return _dialogue != nullptr; }
+	void SetTextChoices(const TextChoices& choices) override;
 	void Reset() override;
 	void Update(const Frame& frame) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;
@@ -62,6 +63,7 @@ private:
 	const gui::TextDatabase* _texts {nullptr};
 	help::AdvisorVoices _voices;
 	std::unique_ptr<help::DialogueText> _dialogue;
+	TextChoices _textChoices;
 	/// The sound saying the advisors' line
 	entt::entity _advisorLine {entt::null};
 	/// That sound's length in milliseconds

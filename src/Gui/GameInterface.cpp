@@ -424,12 +424,16 @@ void GameInterface::DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mous
 	_pointerCanvas.End();
 }
 
-void GameInterface::SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol)
+void GameInterface::SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol,
+                                     const player_profiles::Settings& kept)
 {
 	auto settings = _menu->GetSettings();
 	settings.creatureName = creatureName;
 	settings.symbol = symbol;
+	TakeProfileSettings(settings, kept);
+	const bool insideTemple = _menu->IsInsideTemple();
 	_menu = std::make_unique<GameMenu>(_texts, _font, name, std::move(settings));
+	_menu->SetInsideTemple(insideTemple);
 }
 
 bool GameInterface::ProcessSkipBoxEvent(const SDL_Event& event)
@@ -483,6 +487,11 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	if (_skipBox->IsActive())
 	{
 		return ProcessSkipBoxEvent(event);
+	}
+	// The new player's box, from the Players page, takes the input while it is up
+	if (_newPlayerBox->IsActive())
+	{
+		return ProcessNewPlayerBoxEvent(event, resolution);
 	}
 	if (_tattooEditor->IsOpen() && Locator::tattooEditorSystem::has_value())
 	{
@@ -596,6 +605,7 @@ void GameInterface::Update(float deltaSeconds)
 {
 	_menu->Update(deltaSeconds);
 	_skipBox->Update(deltaSeconds);
+	_newPlayerBox->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
 	_screenFade.Update(deltaSeconds);
@@ -637,7 +647,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawTipBubble(resolution, mouse);
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
-	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
+	const bool menuOpen =
+	    (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() || _newPlayerBox->IsActive();
 	DrawFloatingNumbers(resolution);
 	if (_message.has_value())
 	{
@@ -664,7 +675,12 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		}
 		_tattooEditor->Draw(_painter, marker, milliseconds);
 	}
-	if (_menu->IsVisible())
+	// The menu makes way for the new player's box from its Players page, and comes back once it goes
+	if (_newPlayerBox->IsVisible())
+	{
+		_newPlayerBox->Draw(_painter);
+	}
+	else if (_menu->IsVisible())
 	{
 		_menu->Draw(_painter);
 	}

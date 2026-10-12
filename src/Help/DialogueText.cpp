@@ -312,4 +312,11 @@ const TextFrame& DialogueText::Layout(int width, int height, int barPixels, cons
 	                             widthFn);
 }
 
+void DialogueText::SetPlayerChoices(int textDraw, bool topToBottom, float readSpeed)
+{
+	_settings.textDraw = textDraw;
+	_settings.topToBottom = topToBottom;
+	_settings.readSpeed = readSpeed;
+}
+
 } // namespace openblack::help

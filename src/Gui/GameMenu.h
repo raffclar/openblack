@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
 #include "Dialog.h"
 
@@ -45,10 +46,17 @@ struct MenuSettings
 	bool leftHandedHand {false};
 	bool creatureHelp {true};
 	bool textFromBottom {false};
+	/// How fast the player reads the texts, from 0 (slow) to 1 (fast); its slider shows only when the game has no sound
+	float readSpeed {0.5f};
 	std::u16string creatureName;
 	/// One of the 16 player symbols
 	int symbol {15};
 };
+
+/// The options of the menu as the player's profile keeps them
+[[nodiscard]] player_profiles::Settings ToProfileSettings(const MenuSettings& settings);
+/// The menu's options from the player's profile; the sound and the detail aren't kept with it
+void TakeProfileSettings(MenuSettings& settings, const player_profiles::Settings& kept);
 
 /// The menu Escape brings up during a game, and the options behind it.
 ///
@@ -70,10 +78,18 @@ public:
 		StartSkirmish,
 		JoinOnline,
 		Statistics,
+		/// Create New Player: the new player's box is to be shown
 		CreatePlayer,
+		/// The player picked another profile from the list (GetPickedPlayer), to be played from now on
+		PickPlayer,
+		/// The player said yes to deleting the profile picked (GetPlayerToDelete); the one to play next is
+		/// GetPickedPlayer, none when no profile is left
 		DeletePlayer,
 		EditTattoo,
+		/// The player said yes to starting a new game
 		StartNewGame,
+		/// The player said yes to the game starting again, as the profile now picked
+		Restart,
 		RedefineControl,
 		Quit,
 	};
@@ -101,12 +117,14 @@ public:
 	[[nodiscard]] bool IsOpen() const noexcept { return _open; }
 	/// On the screen, fading out included
 	[[nodiscard]] bool IsVisible() const noexcept { return _open || _fade.GetValue() > 0.0f; }
+	/// A question or a message is up over the menu
 	[[nodiscard]] bool IsAskingToQuit() const noexcept { return _question.has_value(); }
 	[[nodiscard]] Page GetPage() const noexcept { return _page; }
 	/// Inside the temple the options are shown on their own, by the options room: their first tab is the World Room
 	/// rather than the Main Menu, Back and that tab close them rather than go back to the main menu, Escape closes them
 	/// too, and there is no Quit arrow
 	void SetInsideTemple(bool inside);
+	[[nodiscard]] bool IsInsideTemple() const noexcept { return _insideTemple; }
 	void ShowPage(Page page);
 
 	void Update(float deltaSeconds);
@@ -128,6 +146,34 @@ public:
 	/// Whether the settings changed since last asked
 	bool TakeSettingsChanged() noexcept { return std::exchange(_settingsChanged, false); }
 	[[nodiscard]] const MenuSettings& GetSettings() const noexcept { return _settings; }
+
+	/// What the player gave on the Players page for the profile played: its creature's name and its symbol
+	struct PlayerEdits
+	{
+		std::u16string creatureName;
+		int symbol {0};
+	};
+	/// The Players page's edits, once they are to be kept: as the page is left, before what its buttons do, and on
+	/// Return or Escape
+	std::optional<PlayerEdits> TakePlayerEdits() noexcept { return std::exchange(_playerEdits, std::nullopt); }
+	/// The profiles' names in the list's order and the one played. The first time the Players page is shown after
+	/// being left, the one played is the one the game was started as: picking another makes Back the Restart arrow.
+	void SetPlayers(std::vector<std::u16string> names, std::optional<size_t> current);
+	/// The profile picked shows its creature's name, its symbol and its options
+	void ShowPlayer(std::u16string_view creatureName, int symbol, const player_profiles::Settings& settings);
+	/// Edit Tattoo shows only while the creature can have its tattoo edited
+	void SetTattooAvailable(bool available);
+	[[nodiscard]] std::optional<size_t> GetPickedPlayer() const noexcept { return _pickedPlayer; }
+	[[nodiscard]] const std::u16string& GetPlayerToDelete() const noexcept { return _playerToDelete; }
+	/// The player has picked another profile or lost the one played, so leaving the page starts the game again
+	[[nodiscard]] bool IsRestartPending() const noexcept { return _mustRestart || _currentPlayer != _originalPlayer; }
+	[[nodiscard]] const List& GetPlayers() const noexcept { return *_players; }
+	/// The Players page's arrow: Back, or Restart once leaving the page starts the game again
+	[[nodiscard]] const std::u16string& GetPlayersBackLabel() const noexcept { return _playersBack->label; }
+	/// Where the Players page's square buttons are: Create New Player, Delete Player, Edit Tattoo and Start a New Game
+	[[nodiscard]] DialogRect GetPlayerButtonRect(size_t index) const { return _playerButtons.at(index)->rect; }
+	[[nodiscard]] bool IsPlayerButtonVisible(size_t index) const { return _playerButtons.at(index)->visible; }
+	[[nodiscard]] const std::u16string& GetQuestionText() const;
 
 	void Draw(const DialogPainter& painter) const;
 
@@ -158,19 +204,45 @@ private:
 	void BuildControls(const TextDatabase& texts);
 	/// The tabs of the options' pages, with selected open
 	std::vector<Dialog::Tab> OptionsTabs(const TextDatabase& texts, Page selected);
-	void Ask(std::u16string text);
+	/// A question with a Yes, which settles on the action, and a No
+	void Ask(std::u16string text, Action yes);
+	/// A message with an OK, which settles on the action
+	void Tell(std::u16string text, Action ok);
 	void Settle(Action action);
 	/// Back from an options page, or their first tab
 	void Back();
+	/// A tab of the options was picked: from the Players page, while leaving it starts the game again, the player is
+	/// asked first
+	void PickTab(Page page);
+	/// The Players page's arrow: Back, or the game starting again
+	void PlayersBack();
+	void PickPlayer(size_t index);
+	/// Yes to deleting the profile picked: which is deleted and which is played after it
+	void PrepareDeletion();
+	/// The Players page's edits are to be kept
+	void KeepPlayerEdits();
+	/// Back or Restart, and Edit Tattoo shown or not, the square buttons spread out over the space
+	void UpdatePlayersPage();
 	void SettingsChanged() { _settingsChanged = true; }
 	[[nodiscard]] Dialog& CurrentDialog() const { return *_pages.at(static_cast<size_t>(_page)); }
 
+	const TextDatabase& _texts;
 	const GameFont& _font;
 	std::u16string _playerName;
 	std::u16string _welcome;
 	std::array<std::u16string, k_ButtonCount> _buttonLabels;
 	std::u16string _yes;
 	std::u16string _no;
+	std::u16string _ok;
+	std::u16string _back;
+	std::u16string _restart;
+	/// HELP_TEXT_DIALOG_RESTART_WARNING, asked before the game starts again, and HELP_TEXT_DIALOG_RESTART, told when it
+	/// must
+	std::u16string _restartQuestion;
+	std::u16string _restartNotice;
+	/// HELP_TEXT_DIALOG_AERYOUSUREDELETE, with the player's name for its %s
+	std::u16string _deleteQuestion;
+	std::u16string _newGameQuestion;
 	/// HELP_TEXT_DIALOG_QUIT_QUESTION, asked by the first page, and HELP_TEXT_DIALOG_AREYOUSUREQUIT by the options
 	std::u16string _quitQuestion;
 	std::u16string _quitGameQuestion;
@@ -187,6 +259,22 @@ private:
 	/// The options page's Quit arrow, hidden inside the temple
 	BigButton* _optionsQuit {nullptr};
 	List* _controls {nullptr};
+	List* _players {nullptr};
+	EditBox* _creatureNameBox {nullptr};
+	SymbolPicture* _symbolPicture {nullptr};
+	BigButton* _playersBack {nullptr};
+	std::array<BigButton*, 4> _playerButtons {};
+	std::vector<std::u16string> _playerNames;
+	std::optional<size_t> _currentPlayer;
+	/// The profile the game was started as, by its name, and its place in the list
+	std::u16string _originalName;
+	std::optional<size_t> _originalPlayer;
+	/// The profile the game was started as was deleted: leaving the page starts the game again
+	bool _mustRestart {false};
+	bool _tattooAvailable {false};
+	std::optional<size_t> _pickedPlayer;
+	std::u16string _playerToDelete;
+	std::optional<PlayerEdits> _playerEdits;
 	/// The wheel's mice on the Controls page turn over
 	std::vector<std::pair<size_t, bool>> _wheelMice;
 	float _wheelTime {0.0f};

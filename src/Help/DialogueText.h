@@ -163,6 +163,8 @@ public:
 	[[nodiscard]] int32_t GetEndMs() const { return _endMs; }
 	[[nodiscard]] const HelpTextDisplay& GetDisplay() const { return _display; }
 	[[nodiscard]] const Settings& GetSettings() const { return _settings; }
+	/// The player's choices in the options: which texts are shown, where the newest goes and how fast they read
+	void SetPlayerChoices(int textDraw, bool topToBottom, float readSpeed);
 
 private:
 	void AddText(std::u16string_view text, float value, int32_t narrator, uint32_t number, int32_t withInteraction);

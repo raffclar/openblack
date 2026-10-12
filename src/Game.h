@@ -459,6 +459,18 @@ private:
 	/// developers' start), which leaves the land as it is rather than black at its start
 	bool AskNewGameChoice();
 	void HandleInterfaceAction();
+	/// The options the player keeps with their profile take effect: the hand, the help, the texts and the tooltips
+	void ApplyPlayerSettings(const player_profiles::Settings& settings);
+	/// The Players page lists the profiles, the one played picked
+	void RefreshPlayersPage();
+	/// Another profile is played: the menu and the options follow it
+	void PlayerProfileChanged();
+	/// The player's creature takes the name the profile played gives it
+	void NameCreatureAfterProfile();
+	/// The new player's box over the game, from the Players page
+	void AskForAnotherPlayer(bool canCancel);
+	/// The game starts again as the profile played
+	void RestartForProfile();
 	/// Escape in play with no dialog open: the menu opens, unless a script's cut scene is on, and a help script holding
 	/// the dialogue stops
 	void HandleEscapeInPlay(uint16_t keyModifiers);
@@ -509,6 +521,8 @@ private:
 	/// Whether the game was paused when the menu opened, which pauses it
 	bool _pausedBeforeMenu {true};
 	bool _menuWasOpen {false};
+	/// The menu asked for the game to start again as the profile played
+	bool _restartRequested {false};
 	/// When the menu last closed, on the computer's clock
 	std::optional<std::chrono::steady_clock::time_point> _menuClosedAt;
 };

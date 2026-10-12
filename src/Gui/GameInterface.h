@@ -118,7 +118,9 @@ public:
 	void DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, float frameMilliseconds,
 	                         uint8_t black);
 	/// The menu greets the player by their profile's name and shows its creature's name and symbol
-	void SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol);
+	/// The menu as the player's profile has it: greeting them, with their creature's name, symbol and options
+	void SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol,
+	                      const player_profiles::Settings& kept);
 
 	/// The tattoo editor's dialog, shown while the tattoo editor is open
 	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }

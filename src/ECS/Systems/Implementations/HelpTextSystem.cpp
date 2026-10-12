@@ -208,6 +208,16 @@ void HelpTextSystem::Start(const gui::TextDatabase& texts, int screenHeight)
 	// Some languages' texts are drawn bigger; the game's English ones are not
 	_dialogue = std::make_unique<help::DialogueText>(screenHeight, false, help::DialogueText::Settings {}, DialogueQueries(),
 	                                                 DialogueHooks());
+	SetTextChoices(_textChoices);
+}
+
+void HelpTextSystem::SetTextChoices(const TextChoices& choices)
+{
+	_textChoices = choices;
+	if (_dialogue)
+	{
+		_dialogue->SetPlayerChoices(choices.textDraw, choices.topToBottom, choices.readSpeed);
+	}
 }
 
 void HelpTextSystem::Reset()
