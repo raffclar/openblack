@@ -210,9 +210,15 @@ void HandDemoSystem::Apply(const std::vector<hand_demo::Played>& played)
 		}
 		else if (const auto button = RecordedButton(record->message); button.has_value())
 		{
-			// A button goes down or up where the cursor last was
-			// TODO(advisor-help): the game also puts back what the hand held where the recording had it, and sends a
-			// click on a thing to the nearest of the same kind within 3 m when the one under the hand isn't it
+			// A button goes down or up where the cursor last was. The hand is given back the throw it was ready to make
+			// when this was recorded, so a recorded throw flies as it did when it was recorded, however the replayed
+			// hand moved
+			// TODO(advisor-help): the game also sends a click on a thing to the nearest of the same kind within 3 m
+			// when the one under the hand isn't it
+			if (Locator::handGrabSystem::has_value())
+			{
+				Locator::handGrabSystem::value().SetRecordedThrow(hand_demo::RecordedThrowVelocity(*record));
+			}
 			const auto [which, down] = *button;
 			pointer.buttons = down ? (pointer.buttons | SDL_BUTTON(which)) : (pointer.buttons & ~SDL_BUTTON(which));
 			actions.SetScriptedPointer(pointer);

@@ -27,6 +27,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/mat3x3.hpp>
 
+#include "3D/AllMeshes.h"
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
@@ -35,6 +36,8 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/CreatureRouteFollow.h"
+#include "Creature/CreatureRouteSearch.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -54,6 +57,7 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
@@ -75,11 +79,13 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
-#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/ResourcePiles.h"
+#include "Magic/ShieldRules.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -95,8 +101,14 @@ namespace
 {
 constexpr float k_TurnMs = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnSeconds = k_TurnMs / 1000.0f;
-/// Lattice points searched for a route each turn
-constexpr size_t k_PlanBudget = 4000;
+/// Steps of the route search each turn: more on a new walk's first turn
+constexpr int32_t k_FirstTurnSearchSteps = 256;
+constexpr int32_t k_TurnSearchSteps = 16;
+/// A route costing more than this much a unit of the straight distance, and this much besides, is given up
+constexpr float k_CostPerUnit = 2.0f;
+constexpr float k_BaseCost = 5000.0f;
+/// Turning on the spot as a route is joined while walking, the join is searched from this far ahead
+constexpr float k_TurningJoinAhead = 0.05f;
 /// A new destination this close to the current one carries on the same walk
 constexpr float k_SameDestination = 0.1f;
 /// Fidgets while waiting for a route: the first comes after this long, a look about is followed by a longer wait, and
@@ -267,8 +279,8 @@ void SetIdle(CreatureLocomotion& self)
 void ClearWalk(CreatureLocomotion& self)
 {
 	SetIdle(self);
-	self.planner.reset();
-	self.route = {};
+	self.follower.Reset(glm::xz(self.toPosition), self.radius);
+	self.firstSearchTurn = false;
 	self.routeReady = false;
 	self.destination.reset();
 	self.facingOnly = false;
@@ -306,15 +318,14 @@ void TrackPair(CreatureLocomotion& self, float fromMs, float advanceMs)
 /// Turns on the spot or steps off towards the end of the route's segment, or walks straight on, by how far round it is
 void BeginLeg(CreatureLocomotion& self, const Moves& moves)
 {
-	const auto position = PositionOf(self);
-	const auto target = self.route.Finished() ? self.route.points.back() : self.route.points[self.route.segment + 1];
-	const auto offset = target - position;
-	if (glm::length(offset) <= k_Tiny)
+	const auto& route = self.follower.GetRoute();
+	const auto remaining = route.Remaining();
+	if (route.Finished() || remaining <= k_Tiny)
 	{
 		self.motion = Motion::Walking;
 		return;
 	}
-	self.targetHeading = locomotion::HeadingOf(offset);
+	self.targetHeading = route.Heading();
 	const auto angle = locomotion::WrapAngle(self.targetHeading - self.heading);
 	const auto side = locomotion::SideOf(angle);
 	const auto firstStep =
@@ -328,7 +339,7 @@ void BeginLeg(CreatureLocomotion& self, const Moves& moves)
 		    std::array {glm::length(moves.Displacement(firstStep)), glm::length(moves.Displacement(firstStep + 1)),
 		                glm::length(moves.Displacement(firstStep + 2))};
 	}
-	const auto distanceInMesh = self.scale > 0.0f ? glm::length(offset) / self.scale : 0.0f;
+	const auto distanceInMesh = self.scale > 0.0f ? remaining / self.scale : 0.0f;
 	const auto start = locomotion::ChooseStart(angle, distanceInMesh, options);
 	self.speed = 0.0f;
 	switch (start.kind)
@@ -344,7 +355,7 @@ void BeginLeg(CreatureLocomotion& self, const Moves& moves)
 		                                      .durationMs = moves.PairDuration(*start.animations),
 		                                      .displacement = moves.PairDisplacement(*start.animations),
 		                                      .startHeading = self.heading,
-		                                      .startRouteHeading = self.route.Heading()};
+		                                      .startRouteHeading = route.Heading()};
 		break;
 	case locomotion::Start::Kind::Turn:
 		self.motion = Motion::Turning;
@@ -355,7 +366,7 @@ void BeginLeg(CreatureLocomotion& self, const Moves& moves)
 		                                                        : moves.Duration(locomotion::animations::k_Stand),
 		                                      .displacement = glm::vec2(0.0f),
 		                                      .startHeading = self.heading,
-		                                      .startRouteHeading = self.route.Heading()};
+		                                      .startRouteHeading = route.Heading()};
 		break;
 	}
 }
@@ -364,6 +375,33 @@ void Arrive(CreatureLocomotion& self)
 {
 	ClearWalk(self);
 	self.failed = false;
+}
+
+/// The end of the route: arrived, or (a new destination having come while it walked) waiting there for the search
+void RouteEnded(CreatureLocomotion& self)
+{
+	if (self.follower.GetState() == route::Follower::State::Planning)
+	{
+		SetIdle(self);
+		self.motion = Motion::Planning;
+		return;
+	}
+	Arrive(self);
+}
+
+/// How far ahead of the creature a route found while walking is joined from: a turn on the spot's little way, or what
+/// is left of a step
+float JoinAhead(const CreatureLocomotion& self)
+{
+	if (self.motion == Motion::Turning)
+	{
+		return k_TurningJoinAhead;
+	}
+	if (self.motion == Motion::Stepping && self.move.has_value())
+	{
+		return (glm::length(self.move->displacement) * self.scale) - self.follower.GetRoute().travelled;
+	}
+	return 0.0f;
 }
 
 void TurnStep(CreatureLocomotion& self, const Moves& moves, float playbackRate)
@@ -391,7 +429,7 @@ void TurnStep(CreatureLocomotion& self, const Moves& moves, float playbackRate)
 	self.headingSnaps = true;
 	self.move.reset();
 	auto lastPart = std::move(self.tracks);
-	if (self.facingOnly || self.route.points.empty())
+	if (self.facingOnly || self.follower.GetRoute().legs.empty())
 	{
 		ClearWalk(self);
 	}
@@ -412,11 +450,11 @@ void StepOff(CreatureLocomotion& self, const Moves& moves)
 	const auto distance = glm::length(move.displacement) * self.scale * fraction;
 	self.speed = distance / k_TurnSeconds;
 	self.distance = distance;
-	const auto advanced = route::Advance(self.route, distance);
+	const auto advanced = self.follower.Advance(distance);
 	PlaceAt(self, advanced.position);
 	if (advanced.finished)
 	{
-		Arrive(self);
+		RouteEnded(self);
 		return;
 	}
 	// The step's own root turns the body round towards the route as it steps; its heading follows once the step ends
@@ -443,16 +481,17 @@ void StepOff(CreatureLocomotion& self, const Moves& moves)
 
 void Walk(CreatureLocomotion& self, const Moves& moves, float targetSpeed, float breathPhase)
 {
-	if (self.route.Finished())
+	const auto& route = self.follower.GetRoute();
+	if (route.Finished())
 	{
-		Arrive(self);
+		RouteEnded(self);
 		return;
 	}
-	auto cap = locomotion::StopCap(self.route.RemainingTotal());
-	if (std::abs(self.route.TurnAtEnd()) >= locomotion::k_CornerAngle)
+	auto cap = locomotion::StopCap(route.RemainingTotal());
+	if (std::abs(route.TurnAtEnd()) >= locomotion::k_CornerAngle)
 	{
 		// Too sharp a corner to walk round: it slows to stop there
-		cap = std::min(cap, locomotion::CornerCap(self.route.Remaining(), 0.0f));
+		cap = std::min(cap, locomotion::CornerCap(route.Remaining(), 0.0f));
 	}
 	const auto position = PositionOf(self);
 	const auto ahead = position + (locomotion::DirectionOf(self.heading) * self.radius);
@@ -461,11 +500,11 @@ void Walk(CreatureLocomotion& self, const Moves& moves, float targetSpeed, float
 
 	const auto distance = self.speed * k_TurnSeconds;
 	self.distance = distance;
-	const auto advanced = route::Advance(self.route, distance);
+	const auto advanced = self.follower.Advance(distance);
 	PlaceAt(self, advanced.position);
 	if (advanced.finished)
 	{
-		Arrive(self);
+		RouteEnded(self);
 		return;
 	}
 	if (std::abs(locomotion::WrapAngle(advanced.heading - self.heading)) >= locomotion::k_CornerAngle)
@@ -531,7 +570,8 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 	                        .justBegun = false,
 	                        .walking = false,
 	                        .playerAlignment = 0.0f,
-	                        .worshipSites = {}};
+	                        .worshipSites = {},
+	                        .owner = PlayerNames::NEUTRAL};
 	thing.burning = thing.hasFire && Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity);
 
 	if (const auto* other = registry.TryGet<const CreatureLocomotion>(entity))
@@ -542,13 +582,30 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 		thing.width = other->shownRadius;
 		thing.height = body != nullptr ? obstacles::k_HeightPerSize * ShownSize(*body) : 0.0f;
 		// Walking along a route of its own: setting off on it, or on its way
-		thing.walking = !other->route.points.empty() && (other->motion == Motion::Turning ||
-		                                                 other->motion == Motion::Stepping || other->motion == Motion::Walking);
+		thing.walking = other->follower.IsFollowing();
 		return thing;
 	}
 	if (registry.AnyOf<Villager, Animal, FishFarm, StreetLantern, TownDesireFlag>(entity))
 	{
 		return std::nullopt;
+	}
+	if (const auto* shield = registry.TryGet<const MagicShield>(entity))
+	{
+		// Every shield's object is the solid shield's model's box, the spiritual one at its radius's scale
+		thing.avoidance = obstacles::Avoidance::Shield;
+		thing.owner = shield->player;
+		const auto* dome = registry.TryGet<const ShieldDome>(entity);
+		thing.scale = dome != nullptr ? dome->solidScale : shield->radius * magic::shield::k_DomeScalePerRadius;
+		const auto meshId = resources::HashIdentifier(MeshId::SpellSolidShield);
+		if (Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(meshId))
+		{
+			const auto box = Locator::resources::value().GetMeshes().Handle(meshId)->GetBoundingBox();
+			thing.boxCentre = box.Center();
+			thing.boxHalfSize = box.Size() * 0.5f;
+			thing.height = obstacles::ModelHeight(thing.boxHalfSize, thing.scale);
+			thing.width = obstacles::ModelWidth(thing.boxHalfSize, thing.scale);
+		}
+		return thing;
 	}
 
 	// The model's box gives most things their size
@@ -615,10 +672,15 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 	else if (const auto* pot = registry.TryGet<const Pot>(entity))
 	{
 		thing.shape = obstacles::Shape::AtPlace;
-		if (Locator::infoConstants::has_value() &&
-		    Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).potType == PotType::PileFood)
+		if (Locator::infoConstants::has_value())
 		{
-			thing.avoidance = obstacles::Avoidance::BurningUnlessScripted;
+			const auto& info = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type));
+			if (info.potType == PotType::PileFood)
+			{
+				// A food pile is as wide as it is raised by what it holds
+				thing.avoidance = obstacles::Avoidance::BurningUnlessScripted;
+				thing.width *= magic::piles::ProportionRaised(ResourceType::Food, pot->amount, info.maxAmountInPot);
+			}
 		}
 	}
 	else if (registry.AnyOf<Mobile, Ball, ScriptHighlight>(entity))
@@ -639,12 +701,26 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 	return thing;
 }
 
-/// The circles of what stands in each cell, as a creature planning a route comes across them: each thing once, the first
-/// time a cell holding it is met, leaving out the creature itself and what it walks up to
-route::CellObstacles ObstaclesFor(entt::entity self, entt::entity target, const obstacles::Walker& walker)
+/// A creature as what it walks round sees it
+obstacles::Walker WalkerOf(const ecs::Registry& registry, entt::entity entity, const Creature& body,
+                           const CreatureLocomotion& self, glm::vec2 position)
 {
-	auto met = std::make_shared<std::unordered_set<entt::entity>>();
-	return [self, target, walker, met](glm::ivec2 cell, std::vector<route::Circle>& circles) {
+	return {.position = position,
+	        .height = obstacles::k_HeightPerSize * ShownSize(body),
+	        .radius = self.radius,
+	        .scriptControlled = registry.AnyOf<ScriptControlled>(entity),
+	        .owner = body.owner};
+}
+
+/// What stands in a cell, added to what a creature walks round the first time its route search reaches the cell's
+/// block: the land it can't walk on, then each thing it must avoid whose circles aren't filed in the block already
+route::Obstacles::Gatherer GathererFor(entt::entity self, const obstacles::Walker& walker)
+{
+	return [self, walker](glm::ivec2 cell, route::Obstacles& into) {
+		if (Locator::creatureLocomotionSystem::has_value())
+		{
+			route::AddLandCircles(Locator::creatureLocomotionSystem::value().GetWalkableLand(), cell, into);
+		}
 		if (!Locator::entitiesMap::has_value())
 		{
 			return;
@@ -652,7 +728,8 @@ route::CellObstacles ObstaclesFor(entt::entity self, entt::entity target, const 
 		const auto& registry = Locator::entitiesRegistry::value();
 		for (const auto entity : Locator::entitiesMap::value().GetAllInCell(cell))
 		{
-			if (entity == self || entity == target || !met->insert(entity).second)
+			const auto key = entt::to_integral(entity);
+			if (entity == self || into.BlockHas(key, cell))
 			{
 				continue;
 			}
@@ -669,28 +746,17 @@ route::CellObstacles ObstaclesFor(entt::entity self, entt::entity target, const 
 				{
 					for (const auto& circle : *gate)
 					{
-						circles.push_back({.centre = circle.centre, .radius = circle.radius});
+						into.Add(key, circle.centre, circle.radius);
 					}
 					continue;
 				}
 			}
-			std::ranges::copy(obstacles::CirclesOf(*thing, walker), std::back_inserter(circles));
+			for (const auto& circle : obstacles::CirclesOf(*thing, walker))
+			{
+				into.Add(key, circle.centre, circle.radius);
+			}
 		}
 	};
-}
-
-/// Another player's shield is walked round; a creature already under one walks out of it
-std::vector<route::Circle> ShieldsAvoided(const ecs::Registry& registry, entt::entity self, float radius)
-{
-	std::vector<route::Circle> circles;
-	if (const auto* owner = registry.TryGet<const Creature>(self); owner != nullptr && Locator::magicShieldSystem::has_value())
-	{
-		for (const auto& shield : Locator::magicShieldSystem::value().CreatureAvoids(owner->owner, false))
-		{
-			circles.push_back({.centre = shield.centre, .radius = shield.radius + radius});
-		}
-	}
-	return circles;
 }
 
 /// How far from something's middle a creature walking up to it stops short, before its own radius
@@ -759,8 +825,7 @@ const route::WalkableLand& CreatureLocomotionSystem::GetWalkableLand()
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::entity creature, CreatureLocomotion& self,
                                                                          glm::vec2 point, float fraction, float minDistance,
-                                                                         float maxDistance, bool ontoDestination,
-                                                                         entt::entity target)
+                                                                         float maxDistance, bool ontoDestination)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -782,51 +847,40 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 		return MoveResult::Started;
 	}
 
-	// Straying somewhere it can't stand, it is put back on the nearest place it can first
+	// Not on a walk, it starts afresh from where it stands; straying somewhere it can't stand, it is put back on the
+	// nearest place it can first
 	auto position = PositionOf(self);
-	if (!land.IsValid(position, route::k_Clearance))
+	const bool onAWalk = self.follower.IsSearching() || self.follower.IsFollowing();
+	if (!onAWalk)
 	{
-		if (const auto valid = land.NearestValid(position, route::k_Clearance, k_StraySearch))
+		if (!land.IsValid(position, route::k_Clearance))
 		{
-			position = *valid;
-			PlaceAt(self, position);
-			self.fromPosition = self.toPosition;
+			if (const auto valid = land.NearestValid(position, route::k_Clearance, k_StraySearch))
+			{
+				position = *valid;
+				PlaceAt(self, position);
+				self.fromPosition = self.toPosition;
+			}
 		}
+		self.follower.Reset(position, self.radius, GathererFor(creature, WalkerOf(registry, creature, *body, self, position)));
+		self.firstSearchTurn = true;
 	}
 	const auto distance = glm::distance(position, point);
 	self.ring = locomotion::MoveRing(distance, minDistance, maxDistance);
 	self.ontoDestination = ontoDestination;
 	self.destination = point;
-	self.planningMs = locomotion::TimeLimitMs(distance);
 	self.fidgetMs = k_FidgetMs;
 	self.fidgeted = false;
-
-	const auto walker = obstacles::Walker {.position = position,
-	                                       .height = obstacles::k_HeightPerSize * ShownSize(*body),
-	                                       .radius = self.radius,
-	                                       .scriptControlled = registry.AnyOf<ScriptControlled>(creature)};
-	self.planner.emplace(route::Request {
-	    .start = position,
-	    .destination = point,
-	    .minDistance = self.ring.min,
-	    .maxDistance = self.ring.max,
-	    .obstacles = ShieldsAvoided(registry, creature, self.radius),
-	    .cellObstacles = ObstaclesFor(creature, target, walker),
-	    .ontoDestination = ontoDestination,
-	    .cornerRadius = std::max(self.radius, k_MinCornerRadius),
-	});
-	self.routeReady = false;
-	// Planned at once, a creature already walking carries on along its new route
-	if (self.planner->Step(land, k_PlanBudget) == route::Planner::Status::Found && self.motion == Motion::Walking)
+	self.follower.SetDestination({.point = point,
+	                              .stopShort = self.ring.min,
+	                              .arriveWithin = self.ring.max,
+	                              .mostCost = (k_CostPerUnit * distance) + k_BaseCost});
+	if (self.follower.GetState() == route::Follower::State::Planning && self.motion != Motion::Planning)
 	{
-		self.route = {.points = self.planner->GetRoute(), .segment = 0, .travelled = 0.0f};
-		self.plannedRound = self.planner->GetCircles();
-		self.planner.reset();
-		return MoveResult::Started;
+		SetIdle(self);
+		self.routeReady = false;
+		self.motion = Motion::Planning;
 	}
-	self.route = {};
-	SetIdle(self);
-	self.motion = Motion::Planning;
 	return MoveResult::Started;
 }
 
@@ -842,8 +896,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveTo(entt::enti
 	}
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
-	return StartMove(creature, *self, point, pace == Pace::Run ? fractions.run : fractions.walk, minDistance, maxDistance, true,
-	                 entt::null);
+	return StartMove(creature, *self, point, pace == Pace::Run ? fractions.run : fractions.walk, minDistance, maxDistance,
+	                 true);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::entity creature, glm::vec2 point, float pull,
@@ -859,7 +913,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::enti
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
 	return StartMove(creature, *self, point, locomotion::LeashFraction(fractions.walk, fractions.run, pull), 0.0f, maxDistance,
-	                 true, entt::null);
+	                 true);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt::entity creature, entt::entity target,
@@ -878,15 +932,12 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt
 		return MoveResult::Busy;
 	}
 	// It stops short of the thing by how far round it the thing reaches, as the creature plans its route round it
-	const auto walker = obstacles::Walker {.position = PositionOf(*self),
-	                                       .height = obstacles::k_HeightPerSize * ShownSize(*body),
-	                                       .radius = self->radius,
-	                                       .scriptControlled = registry.AnyOf<ScriptControlled>(creature)};
+	const auto walker = WalkerOf(registry, creature, *body, *self, PositionOf(*self));
 	const auto ring = locomotion::ObjectRing(self->radius, ReachOf(registry, target, walker), extra);
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
 	return StartMove(creature, *self, glm::xz(at->position), pace == Pace::Run ? fractions.run : fractions.walk, ring.min,
-	                 ring.max, false, target);
+	                 ring.max, false);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::Follow(entt::entity creature, entt::entity target,
@@ -926,7 +977,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::FleeFrom(entt::en
 		point = *valid;
 	}
 	self->following.reset();
-	return StartMove(creature, *self, point, fractions.run, 0.0f, k_RunAwayArrival, false, entt::null);
+	return StartMove(creature, *self, point, fractions.run, 0.0f, k_RunAwayArrival, false);
 }
 
 bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point)
@@ -1039,6 +1090,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 		Follow(entity, target, distance, self.fraction >= fractions.run ? Pace::Run : Pace::Walk);
 	}
 
+	std::vector<entt::entity> stopped;
 	registry.Each<const Creature, CreatureLocomotion, const Transform, CreatureAnimation>(
 	    [&](entt::entity entity, const Creature& creature, CreatureLocomotion& self, const Transform& transform,
 	        CreatureAnimation& animation) {
@@ -1058,26 +1110,33 @@ void CreatureLocomotionSystem::ProcessTurn()
 		    Measure(self, creature, transform, BodyRadius(creature.species));
 		    const auto moves = MovesOf(creature.species);
 
-		    // The route is planned a little each turn
-		    if (self.planner.has_value())
+		    // The route is searched for a little each turn, further on a walk's first turn
+		    const auto standing = [&self]() {
+			    return self.follower.GetState() == route::Follower::State::Standing ||
+			           self.follower.GetState() == route::Follower::State::Planning;
+		    };
+		    const bool wasStanding = standing();
+		    if (self.follower.IsSearching())
 		    {
-			    const auto status = self.planner->Step(land, k_PlanBudget);
-			    self.planningMs -= k_TurnMs;
-			    if (status == route::Planner::Status::Found)
+			    const auto first = std::exchange(self.firstSearchTurn, false);
+			    switch (self.follower.Update(first ? k_FirstTurnSearchSteps : k_TurnSearchSteps, first, JoinAhead(self)))
 			    {
-				    self.route = {.points = self.planner->GetRoute(), .segment = 0, .travelled = 0.0f};
-				    self.plannedRound = self.planner->GetCircles();
-				    self.routeReady = true;
-				    self.planner.reset();
-			    }
-			    else if (status == route::Planner::Status::Failed || self.planningMs <= 0.0f)
-			    {
+			    case route::Follower::Outcome::Found:
+				    if (self.motion == Motion::Planning || self.motion == Motion::Confused)
+				    {
+					    self.routeReady = true;
+				    }
+				    break;
+			    case route::Follower::Outcome::Failed:
+			    case route::Follower::Outcome::GaveUp:
 				    // No way there: it stands where it is
 				    ClearWalk(self);
 				    self.failed = true;
+				    break;
+			    case route::Follower::Outcome::None:
+				    break;
 			    }
 		    }
-
 		    const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
 		    const auto fractions = FractionsOf(creature.species);
 		    const auto fraction =
@@ -1155,13 +1214,42 @@ void CreatureLocomotionSystem::ProcessTurn()
 				    self.fromPosition = self.toPosition;
 				    const auto destination = *self.destination;
 				    const auto ring = self.ring;
-				    SetIdle(self);
-				    StartMove(entity, self, destination, self.fraction, ring.min, ring.max, self.ontoDestination,
-				              self.following.value_or(entt::null));
+				    ClearWalk(self);
+				    StartMove(entity, self, destination, self.fraction, ring.min, ring.max, self.ontoDestination);
 			    }
 		    }
 		    self.toHeading = self.headingSnaps ? self.fromHeading : self.heading;
+		    if (!wasStanding && standing())
+		    {
+			    stopped.push_back(entity);
+		    }
 	    });
+
+	// A creature that has just stopped is now in the way of the others still on their walks
+	for (const auto entity : stopped)
+	{
+		const auto thing = ThingOf(registry, entity);
+		if (!thing.has_value())
+		{
+			continue;
+		}
+		registry.Each<const Creature, CreatureLocomotion>(
+		    [&](entt::entity other, const Creature& body, CreatureLocomotion& walking) {
+			    if (other == entity || !(walking.follower.IsSearching() || walking.follower.IsFollowing()))
+			    {
+				    return;
+			    }
+			    const auto walker = WalkerOf(registry, other, body, walking, PositionOf(walking));
+			    if (!obstacles::MustAvoid(*thing, walker))
+			    {
+				    return;
+			    }
+			    for (const auto& circle : obstacles::CirclesOf(*thing, walker))
+			    {
+				    walking.follower.GetObstacles().Add(entt::to_integral(entity), circle.centre, circle.radius);
+			    }
+		    });
+	}
 }
 
 void CreatureLocomotionSystem::Update(float turnFraction)

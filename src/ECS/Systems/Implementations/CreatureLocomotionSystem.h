@@ -50,7 +50,7 @@ public:
 private:
 	/// Starts a move for a fraction of top speed, the creature's state already gathered, to a point or up to a thing
 	MoveResult StartMove(entt::entity creature, components::CreatureLocomotion& locomotion, glm::vec2 point, float fraction,
-	                     float minDistance, float maxDistance, bool ontoDestination, entt::entity target);
+	                     float minDistance, float maxDistance, bool ontoDestination);
 	/// How far round its middle a species' body reaches at a drawn scale of one, worked out once
 	float BodyRadius(CreatureType species);
 

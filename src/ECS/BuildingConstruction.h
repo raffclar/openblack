@@ -36,6 +36,18 @@ struct Progress
 /// built, once it reaches all of it
 [[nodiscard]] Progress BuildBy(float built, float amount);
 
+/// A building that stands built but has lost life: what its builders' work leaves of its life, and whether it is then
+/// repaired
+struct Mending
+{
+	float life;
+	bool repaired;
+};
+
+/// Builders working on a building that stands built mend it, while it is short of its full life: their work adds to its
+/// life, never beyond all of it, and it is repaired once its life is full. A whole building is left as it is.
+[[nodiscard]] Mending RepairBy(float life, float amount);
+
 /// A script asks a town to build what it planned at a place with a desire, and the building site takes five times it
 inline constexpr float k_ScriptDesireScale = 5.0f;
 [[nodiscard]] constexpr float SiteDesire(float scriptDesire)

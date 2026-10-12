@@ -157,13 +157,21 @@ void ToolTips::Force(uint32_t index, float number)
 void ToolTips::SubmitInWords(uint32_t index, uint32_t words, float number)
 {
 	Submit(index, ToolTipAction::None, ToolTipArrows::k_None);
-	_number = Numbered {.index = index, .number = number, .second = std::nullopt, .words = words};
+	if (_current == index)
+	{
+		_number = Numbered {.index = index, .number = number, .second = std::nullopt, .words = words};
+	}
 }
 
-void ToolTips::SubmitNumbered(uint32_t index, ToolTipAction action, float number, std::optional<float> second, bool force)
+void ToolTips::SubmitNumbered(uint32_t index, ToolTipAction action, double number, std::optional<double> second, bool force)
 {
+	// The numbers are worked out for the tooltip that is shown, so one turned away (as a village centre's population
+	// while its belief shows) never writes its numbers into another's words
 	Submit(index, action, ToolTipArrows::k_None, force);
-	_number = Numbered {.index = index, .number = number, .second = second, .words = std::nullopt};
+	if (_current == index)
+	{
+		_number = Numbered {.index = index, .number = number, .second = second, .words = std::nullopt};
+	}
 }
 
 std::optional<ToolTips::Shown> ToolTips::GetShown() const

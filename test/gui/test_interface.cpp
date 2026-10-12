@@ -48,15 +48,14 @@ std::u16string ToString(const std::vector<std::u16string_view>& lines)
 TEST(TextDatabase, ReadsTheAddTextLines)
 {
 	TextDatabase texts;
-	const auto added =
-	    texts.AddScript(Utf16Script(u"// A comment ADD_TEXT\r\n"
-	                                u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_NONE, \"FIRST\", \"Continue Game\")\r\n"
-	                                u"ADD_TEXT(1,HELP_TEXT_NARRATOR_NONE,\"SECOND\",\"Line one\\nline \\\"two\\\"\")\r\n"
-	                                u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_NONE, \"BROKEN\")\r\n"
-	                                u"MY_ADD_TEXT( 1, NONE, \"NOT\", \"read\")\r\n"));
+	const auto added = texts.AddScript(Utf16Script(u"// A comment ADD_TEXT\r\n"
+	                                               u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_NONE, \"FIRST\", \"Continue Game\")\r\n"
+	                                               u"ADD_TEXT(1,HELP_TEXT_NARRATOR_NONE,\"SECOND\",\"Line one\\nline two\")\r\n"
+	                                               u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_NONE, \"BROKEN\")\r\n"
+	                                               u"MY_ADD_TEXT( 1, NONE, \"NOT\", \"read\")\r\n"));
 	EXPECT_EQ(added, 2);
 	EXPECT_EQ(texts.Get("FIRST"), u"Continue Game");
-	EXPECT_EQ(texts.Get("SECOND"), u"Line one\nline \"two\"");
+	EXPECT_EQ(texts.Get("SECOND"), u"Line one\nline two");
 	EXPECT_TRUE(texts.Get("BROKEN").empty());
 	EXPECT_TRUE(texts.Get("NOT").empty());
 	EXPECT_TRUE(texts.Get("MISSING").empty());
@@ -72,14 +71,19 @@ TEST(TextDatabase, NumbersTheHelpTextsInTheirOrder)
 	TextDatabase texts;
 	texts.AddHelpScript(Utf16Script(u"ADD_TEXT( 0, HELP_TEXT_NARRATOR_NONE, \"NONE\", \"Invalid\")\r\n"
 	                                u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_MAN, \"FIRST\", \"Hello\")\r\n"
-	                                u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_MAN, \"SECOND\", \"Over a line\r\nbreak\")\r\n"));
+	                                u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_MAN, \"SECOND\", \"Over a line\nbreak\")\r\n"
+	                                u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_MAN, \"THIRD\", \"Third\")\r\n"));
 	texts.AddScript(Utf16Script(u"ADD_TEXT(1, NONE, \"PATCH\", \"Not numbered\")", false));
 	const auto names = texts.GetHelpNames();
-	ASSERT_EQ(names.size(), 3);
+	ASSERT_EQ(names.size(), 4);
 	EXPECT_EQ(names[0], "NONE");
 	EXPECT_EQ(names[1], "FIRST");
 	EXPECT_EQ(names[2], "SECOND");
-	EXPECT_EQ(texts.Get("SECOND"), u"Over a line\nbreak");
+	EXPECT_EQ(names[3], "THIRD");
+	// A string whose closing quote is on the next line ends at the line break, which is not part of it, as two of the
+	// game's info sign texts do
+	EXPECT_EQ(texts.Get("SECOND"), u"Over a line");
+	EXPECT_EQ(texts.Get("THIRD"), u"Third");
 	EXPECT_EQ(texts.Get("PATCH"), u"Not numbered");
 }
 
@@ -98,12 +102,30 @@ TEST(TextDatabase, KeepsTheHelpTextsNarratorsAndCodes)
 	EXPECT_EQ(texts.GetHelpText(1).text, u"Click. $m2");
 	EXPECT_EQ(texts.GetHelpText(2).narrator, 7);
 	EXPECT_FALSE(texts.GetHelpText(2).important);
-	// The display reads the codes, so the help text keeps them; by name it reads as any other text
-	EXPECT_EQ(texts.GetHelpText(2).text, u"One\\nTwo");
+	// A backslash and n is a line feed once loaded, by number and by name alike
+	EXPECT_EQ(texts.GetHelpText(2).text, u"One\nTwo");
 	EXPECT_EQ(texts.Get("BREAK"), u"One\nTwo");
 	// Past the last, the first
 	EXPECT_EQ(texts.GetHelpText(3).text, u"Invalid");
 	EXPECT_EQ(texts.GetHelpText(0).narrator, 0);
+}
+
+TEST(TextDatabase, ConvertsTheScriptsCodesAsTheGameLoadsThem)
+{
+	// Only a backslash and n is a line break; other backslashes stay, as the game's texts use them for slashes
+	EXPECT_EQ(ConvertScriptText(u"Tip.\\nNext"), u"Tip.\nNext");
+	EXPECT_EQ(ConvertScriptText(u"hand \\ cross \\destroyed"), u"hand \\ cross \\destroyed");
+	EXPECT_EQ(ConvertScriptText(u"a\\Nb"), u"a\\Nb");
+	// No carriage return comes from a backslash code
+	EXPECT_EQ(ConvertScriptText(u"\\n\\n"), u"\n\n");
+	// A tilde is the hidden blank, swallowing one space beside it
+	const std::u16string hidden(1, k_HiddenBlank);
+	EXPECT_EQ(ConvertScriptText(u"a~b"), u"a" + hidden + u"b");
+	EXPECT_EQ(ConvertScriptText(u"a ~b"), u"a" + hidden + u"b");
+	EXPECT_EQ(ConvertScriptText(u"a~ b"), u"a" + hidden + u"b");
+	EXPECT_EQ(ConvertScriptText(u"a ~ b"), u"a" + hidden + u" b");
+	// The display codes are left for the displays
+	EXPECT_EQ(ConvertScriptText(u"Press $m26"), u"Press $m26");
 }
 
 TEST(TextDatabase, ConvertsBetweenUtf8AndUtf16)
@@ -180,7 +202,13 @@ TEST(GameFont, MeasuresInLinesOfASize)
 	EXPECT_FLOAT_EQ(font.GetWidth(u"A", 4.0f), 4.0f);
 	EXPECT_FLOAT_EQ(font.GetWidth(u"AB", 8.0f), 12.0f);
 	EXPECT_FLOAT_EQ(font.GetWidth(u"A A", 4.0f), 10.0f);
-	EXPECT_FLOAT_EQ(font.GetWidth(u"A\nA", 4.0f), 8.0f);
+	// A line break is measured as a glyph too, '?' when the font has none
+	EXPECT_FLOAT_EQ(font.GetWidth(u"A\nA", 4.0f), 8.0f + font.GetWidth(u"?", 4.0f));
+	// The hidden blank takes no room
+	EXPECT_FLOAT_EQ(font.GetWidth(u"A\xF8FE"
+	                              u"A",
+	                              4.0f),
+	                8.0f);
 }
 
 TEST(GameFont, WrapsAtSpacesHyphensAndLineBreaks)
@@ -191,7 +219,8 @@ TEST(GameFont, WrapsAtSpacesHyphensAndLineBreaks)
 	EXPECT_EQ(ToString(font.Wrap(u"AA AA", 4.0f, 18.0f)), u"[AA AA]");
 	EXPECT_EQ(ToString(font.Wrap(u"AA-BB", 4.0f, 11.0f)), u"[AA-][BB]");
 	EXPECT_EQ(ToString(font.Wrap(u"A\nB", 4.0f, 100.0f)), u"[A][B]");
-	EXPECT_EQ(ToString(font.Wrap(u"A\r\nB", 4.0f, 100.0f)), u"[A][B]");
+	// Each of a CR LF ends a line
+	EXPECT_EQ(ToString(font.Wrap(u"A\r\nB", 4.0f, 100.0f)), u"[A][][B]");
 	// A word too long for a line breaks where it reaches the end
 	EXPECT_EQ(ToString(font.Wrap(u"WWW", 4.0f, 17.0f)), u"[WW][W]");
 }

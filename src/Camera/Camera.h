@@ -75,22 +75,17 @@ public:
 	Camera& SetOriginInterpolator(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& m0, const glm::vec3& m1);
 	Camera& SetFocusInterpolator(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& m0, const glm::vec3& m1);
 
+	/// The eye's and the focus's movements each run on their own clock: they are set off together, but holding the eye
+	/// inside the world's ball sets the eye off again alone. These give the eye's clock, which the camera models time by.
 	[[nodiscard]] std::chrono::microseconds GetInterpolatorTime() const { return _interpolatorTime; }
-	[[nodiscard]] float GetInterpolatorT() const
-	{
-		const auto duration = GetInterpolatorDuration();
-		return (duration == decltype(duration)::zero())
-		           ? 1.0f
-		           : static_cast<float>(GetInterpolatorTime().count()) / GetInterpolatorDuration().count();
-	}
+	[[nodiscard]] float GetInterpolatorT() const { return ShareOf(_interpolatorTime, _interpolatorDuration); }
 	[[nodiscard]] std::chrono::microseconds GetInterpolatorDuration() const { return _interpolatorDuration; }
+	[[nodiscard]] std::chrono::microseconds GetFocusInterpolatorDuration() const { return _focusInterpolatorDuration; }
 
+	/// These set or move on both clocks
 	Camera& SetInterpolatorTime(std::chrono::microseconds t);
-	Camera& AddInterpolatorTime(std::chrono::microseconds t) { return SetInterpolatorTime(t + GetInterpolatorTime()); }
-	Camera& SetInterpolatorT(float t)
-	{
-		return SetInterpolatorTime(std::chrono::duration_cast<std::chrono::microseconds>(t * GetInterpolatorDuration()));
-	}
+	Camera& AddInterpolatorTime(std::chrono::microseconds t);
+	Camera& SetInterpolatorT(float t);
 	Camera& SetInterpolatorDuration(std::chrono::microseconds duration);
 
 	/// A perspective with a near plane and no far one, as the game's: nothing is lost however far away it is, the sky's
@@ -142,13 +137,17 @@ public:
 		ZoomInterpolator3f focus;
 		std::chrono::microseconds time;
 		std::chrono::microseconds duration;
+		std::chrono::microseconds focusTime;
+		std::chrono::microseconds focusDuration;
 	};
 	[[nodiscard]] Motion GetMotion() const
 	{
 		return {.origin = _originInterpolators,
 		        .focus = _focusInterpolators,
 		        .time = _interpolatorTime,
-		        .duration = _interpolatorDuration};
+		        .duration = _interpolatorDuration,
+		        .focusTime = _focusInterpolatorTime,
+		        .focusDuration = _focusInterpolatorDuration};
 	}
 	void SetMotion(const Motion& motion)
 	{
@@ -156,6 +155,8 @@ public:
 		_focusInterpolators = motion.focus;
 		_interpolatorTime = motion.time;
 		_interpolatorDuration = motion.duration;
+		_focusInterpolatorTime = motion.focusTime;
+		_focusInterpolatorDuration = motion.focusDuration;
 	}
 
 	/// How much faster than the game's own speed the movement keys move the camera, kept within the allowed range
@@ -163,11 +164,22 @@ public:
 	[[nodiscard]] float GetKeyboardMoveSpeed() const { return _keyboardMoveSpeed; }
 
 protected:
+	/// How far through its movement a clock is, 0 to 1; a movement of no length is over
+	[[nodiscard]] static float ShareOf(std::chrono::microseconds time, std::chrono::microseconds duration)
+	{
+		return duration == std::chrono::microseconds::zero() ? 1.0f : static_cast<float>(time.count()) / duration.count();
+	}
+	[[nodiscard]] float GetFocusInterpolatorT() const { return ShareOf(_focusInterpolatorTime, _focusInterpolatorDuration); }
+	/// Where the eye is going is kept within the world's ball, as for every camera but the editor's
+	void KeepInsideTheWorld();
+
 	ZoomInterpolator3f _originInterpolators;
 	ZoomInterpolator3f _focusInterpolators;
 	// As a value between 0 and _interpolatorDuration
 	std::chrono::microseconds _interpolatorTime = std::chrono::microseconds::zero();
 	std::chrono::microseconds _interpolatorDuration = std::chrono::microseconds::zero();
+	std::chrono::microseconds _focusInterpolatorTime = std::chrono::microseconds::zero();
+	std::chrono::microseconds _focusInterpolatorDuration = std::chrono::microseconds::zero();
 	float _xFov = 0.0f; // TODO(#707): This should be a zoomer for animations
 	float _aspect = 1.0f;
 	float _nearClip = 1.0f;

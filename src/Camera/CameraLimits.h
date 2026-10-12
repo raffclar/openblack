@@ -38,6 +38,24 @@ inline constexpr float k_ClosestZoom = k_Clearance + 0.1f;
 /// to its rim, at the same height. Only the camera is moved, not what it looks at. Nothing when it is inside.
 [[nodiscard]] std::optional<glm::vec3> KeepInsideAllowedArea(const glm::vec3& origin);
 
+/// However a camera is moved, where it is going is kept within a ball round the middle of the map at the sea's level,
+/// 3500 from it in every direction: going further, it is sent back to 3499 from the middle along the same line, easing
+/// there over three seconds and arriving still. So the camera rises no higher than 3500 over the middle of the map, less
+/// further out, and never reaches the map's corners. Nothing when it is inside.
+inline constexpr glm::vec3 k_WorldCentre {2560.0f, 0.0f, 2560.0f};
+inline constexpr float k_WorldReach = 3500.0f;
+inline constexpr float k_WorldHoldRadius = 3499.0f;
+inline constexpr float k_WorldHoldSeconds = 3.0f;
+[[nodiscard]] std::optional<glm::vec3> KeepInsideTheWorld(const glm::vec3& destination);
+
+/// How long the player's camera takes to ease to where it is going: 0.3 seconds, twice that when the limits moved what it
+/// looks at, and twice again when they moved the camera; for the first 1.5 seconds after a flight began (or the camera
+/// was made), it eases from 1.5 seconds down to that
+inline constexpr float k_EaseSeconds = 0.3f;
+inline constexpr float k_FlightEaseSeconds = 1.5f;
+inline constexpr float k_EaseSettleSeconds = 1.5f;
+[[nodiscard]] float EaseSeconds(float sinceFlight, bool pushed, bool focusMoved);
+
 /// The furthest the camera may go in a frame: 1.6 times the distance to what it looks at each second, but at least
 /// 300
 inline constexpr float k_MinFrameMove = 300.0f;
