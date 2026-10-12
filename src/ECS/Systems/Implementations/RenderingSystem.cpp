@@ -46,6 +46,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/NeverFades.h"
 #include "ECS/Components/ObjectGlow.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
@@ -430,8 +431,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 
 		    // A villager is drawn in less detail the further off it is, fades out, then shows only as a smudge on a blob
-		    // while it stands above the sea. One flying in the physics never fades, and one a script draws in high detail
-		    // is drawn in full however far off.
+		    // while it stands above the sea. One flying in the physics or one a script keeps in view never fades, and one
+		    // a script draws in high detail is drawn in full however far off.
 		    auto drawnMesh = DrawnMeshOf(entity, mesh);
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
@@ -442,8 +443,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    else if (detail != nullptr && camera != nullptr && !registry.AllOf<MorphWithTerrain>(entity))
 		    {
-			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x, !registry.AllOf<InPhysics>(entity),
-			                                     *camera, modelDetail);
+			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x,
+			                                     !registry.AnyOf<InPhysics, NeverFades>(entity), *camera, modelDetail);
 			    if (!choice.mesh.has_value())
 			    {
 				    const auto position = glm::vec3(modelMatrix[3]);

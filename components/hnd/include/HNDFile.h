@@ -58,7 +58,7 @@ struct HNDMapPosition
 struct HNDRecord
 {
 	HNDMessage message {HNDMessage::Move};
-	/// Where the hand placed what it held, as the hand keeps it: three points and three angles
+	/// What the hand was ready to throw with: the velocity, the spin, the point it would leave from and its three angles
 	std::array<float, 12> heldPlacement {};
 	/// The cursor across the screen, and down the 16:9 picture between the cinema bars, from 0 to 1
 	std::array<float, 2> cursor {};

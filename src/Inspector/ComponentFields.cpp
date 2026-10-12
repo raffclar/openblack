@@ -142,6 +142,7 @@
 #include "ECS/Components/MistDome.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/NeverFades.h"
 #include "ECS/Components/ObjectGlow.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
@@ -991,6 +992,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandGrab::spring>("spring")
 	    .Field<&components::HandGrab::springOn>("springOn")
 	    .Field<&components::HandGrab::springPending>("springPending")
+	    .Field<&components::HandGrab::recordedThrow>("recordedThrow")
 	    .Field<&components::HandGrab::lastTarget>("lastTarget")
 	    .Field<&components::HandGrab::scoopSource>("scoopSource")
 	    .Field<&components::HandGrab::scoopTurns>("scoopTurns")
@@ -1175,6 +1177,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::MobileObject>(context).Field<&components::MobileObject::type>("type");
 	Reflect<components::Rock> {context};
 	Reflect<components::MorphWithTerrain>(context).Field<&components::MorphWithTerrain::dummy>("dummy");
+	Reflect<components::NeverFades> {context};
 	Reflect<components::ObjectGlow>(context)
 	    .Field<&components::ObjectGlow::rgb>("rgb")
 	    .Field<&components::ObjectGlow::turnsUnset>("turnsUnset");

@@ -321,6 +321,16 @@ bool hand_grab::IsFastRelease(glm::vec3 velocity)
 	return glm::dot(velocity, velocity) > k_FastReleaseSpeedSquared;
 }
 
+glm::vec3 hand_grab::ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity)
+{
+	const auto velocity = recorded.value_or(springOn ? springVelocity : glm::vec3(0.0f));
+	if (const float speed = glm::length(velocity); speed > k_MaxThrowSpeed)
+	{
+		return velocity * (k_MaxThrowSpeed / speed);
+	}
+	return velocity;
+}
+
 bool hand_grab::PotPours(glm::vec3 velocity)
 {
 	return glm::dot(velocity, velocity) <= k_PourSpeedSquared;

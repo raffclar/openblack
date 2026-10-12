@@ -788,3 +788,7 @@ openblack_setup_and_add_test(
   test_double_click_flight camera/test_double_click_flight.cpp
 )
 openblack_setup_and_add_test(test_spell_icons test_spell_icons.cpp)
+openblack_setup_and_add_test(
+  test_script_stones_natives test_script_stones_natives.cpp
+)
+target_link_libraries(test_script_stones_natives PRIVATE ScriptLibrary helpdude)
