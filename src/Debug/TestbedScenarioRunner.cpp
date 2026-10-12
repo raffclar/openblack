@@ -62,6 +62,7 @@
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
@@ -729,8 +730,13 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    if (object.planned)
 				    {
-					    return ecs::archetypes::AbodeArchetype::CreatePlan(ScenarioTown(middle), position, type, yaw,
-					                                                       object.scale);
+					    const auto plan = ecs::archetypes::AbodeArchetype::CreatePlan(ScenarioTown(middle), position, type, yaw,
+					                                                                  object.scale);
+					    if (auto* planned = Locator::entitiesRegistry::value().TryGet<ecs::components::PlannedAbode>(plan))
+					    {
+						    planned->wasBuilt = object.wasBuilt;
+					    }
+					    return plan;
 				    }
 				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
 				                                                   object.storedFood.value_or(k_ScenarioTownFood),
