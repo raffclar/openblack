@@ -24,6 +24,7 @@ public:
 	uint32_t Plant(entt::entity spell, components::Spell& miracle, float tribalPower) override;
 	[[nodiscard]] bool CanGrowAt(glm::vec3 point) const override;
 	[[nodiscard]] bool HasTrees(entt::entity spell) const override;
+	[[nodiscard]] std::optional<float> TallestTreeOf(entt::entity spell) const override;
 	std::optional<entt::entity> AddTreeNear(entt::entity tree) override;
 	uint32_t MakeLandForest(std::optional<uint32_t> id, glm::vec3 position, entt::entity bigForest, bool scenic) override;
 	[[nodiscard]] std::optional<entt::entity> LandForestOf(uint32_t id) const override;

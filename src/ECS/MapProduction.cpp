@@ -44,6 +44,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -69,10 +70,12 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<DeadTree>();
 	func.template operator()<SpellDispenser>();
 	func.template operator()<TeleportStone>();
+	func.template operator()<WorshipSite>();
 	// A temple's heart, which stands in the land as a building does
 	func.template operator()<Temple>();
 	// Trees, shields and the scripts' scrolls and signs, each in one cell
 	func.template operator()<Tree>();
+	func.template operator()<MagicShield>();
 	func.template operator()<ShieldDome>();
 	func.template operator()<ScriptHighlight>();
 	// Things that count as staying put but can be carried
@@ -142,7 +145,8 @@ MapProduction::~MapProduction()
 
 std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registry, entt::entity entity)
 {
-	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, Temple>(entity))
+	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, WorshipSite, Temple>(
+	        entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}
@@ -151,7 +155,7 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = true};
 	}
-	if (registry.AnyOf<Tree, ShieldDome, ScriptHighlight>(entity))
+	if (registry.AnyOf<Tree, MagicShield, ShieldDome, ScriptHighlight>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = false, .moves = false};
 	}

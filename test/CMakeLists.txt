@@ -782,5 +782,8 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_tree_bend test_tree_bend.cpp)
 openblack_setup_and_add_test(
+  test_creature_route_search test_creature_route_search.cpp
+)
+openblack_setup_and_add_test(
   test_double_click_flight camera/test_double_click_flight.cpp
 )
