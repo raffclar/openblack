@@ -412,6 +412,34 @@ TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
 	EXPECT_EQ(world->reactions.front().initiator, world->hand);
 }
 
+TEST_F(HandGrabSystemWithWorld, TheHandKeepsToItsPullUntilItHoldsAndRisesTheFrameItTakes)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	const glm::vec3 cursor {0.0f, 5.0f, 0.0f};
+	std::optional<glm::vec3> taken;
+	for (int i = 0; i < 40 && !taken.has_value(); ++i)
+	{
+		const auto hand = Frame(10, cursor);
+		if (system->GetHeld().has_value())
+		{
+			taken = hand;
+		}
+		else
+		{
+			// Every frame before it is held, the frame it comes free too, the hand keeps the pose of its pull
+			EXPECT_TRUE(system->GetPullPose().has_value()) << "frame " << i;
+		}
+	}
+	ASSERT_TRUE(taken.has_value());
+	EXPECT_FALSE(system->GetPullPose().has_value());
+	// The frame it takes the thing the hand is already where it holds it, risen above the cursor as on the frames after
+	const auto next = Frame(10, cursor);
+	EXPECT_GT(next.y, cursor.y);
+	EXPECT_FLOAT_EQ(taken->y, next.y);
+}
+
 TEST_F(HandGrabSystemWithWorld, AShortPressIsATap)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});

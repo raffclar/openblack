@@ -849,3 +849,4 @@ openblack_setup_and_add_test(test_object_draw_list test_object_draw_list.cpp)
 openblack_setup_and_add_test(
   test_building_site_list test_building_site_list.cpp
 )
+openblack_setup_and_add_test(test_hand_trace hand/test_hand_trace.cpp)

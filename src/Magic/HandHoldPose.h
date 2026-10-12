@@ -113,20 +113,24 @@ private:
 };
 
 /// The drawn hand through the hand's changes of stage. When the stage changes, the hand is drawn moving in a straight
-/// line over k_FadeSeconds from where it was last placed (before any fade) to where it is now placed, so it never jumps
-/// as it starts or stops pulling, holding or scooping; its turn fades from how it was last drawn.
+/// line over k_FadeSeconds from where it was last drawn to where it is now placed, turning from how it was last drawn,
+/// so it never jumps as it starts or stops pulling, holding or scooping, even when a change comes part way through an
+/// earlier fade. A thing held in it follows its own straight line from where the hand was last placed (before any
+/// fade), so that during a fade begun part way through another it can be drawn a little apart from the hand.
 class StageFade
 {
 public:
-	/// The hand placed at a position and turn this frame, in a stage: they become where it is drawn. How far the drawn
-	/// hand is from where it was placed, which a thing held in it moves by too.
+	/// The hand placed at a position and turn this frame, in a stage: they become where it is drawn. How far a thing held
+	/// in it is drawn from where the hand was placed.
 	glm::vec3 Step(HandStage stage, float seconds, glm::vec3& position, glm::mat3& rotation);
 	[[nodiscard]] bool Fading() const { return _fade.Fading(); }
 
 private:
 	HandFade _fade;
+	HandFade _heldFade;
 	std::optional<HandStage> _stage;
 	std::optional<glm::vec3> _placed;
+	glm::vec3 _drawn {0.0f};
 	glm::mat3 _drawnRotation {1.0f};
 };
 
