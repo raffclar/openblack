@@ -94,12 +94,6 @@ struct Jump
 
 /// Whether a villager dropped by the hand onto a stone jumps at once: the villager is the stone owner's, and the player
 /// has another stone to jump to
-/// The state a villager keeps to come back to as it starts reacting: the state it was to take, unless its state table
-/// says that state keeps the one kept before
-[[nodiscard]] VillagerStates PreviousToKeep(VillagerStates final, VillagerStates keptBefore, bool finalKeepsPrevious);
-/// The state a villager takes once it stops reacting: the state its table says to come back to from the one it kept,
-/// deciding afresh when there is none
-[[nodiscard]] VillagerStates StateAfterReacting(VillagerStates comeBackTo);
 
 [[nodiscard]] bool CanDropOnStone(bool samePlayer, size_t playerStones);
 

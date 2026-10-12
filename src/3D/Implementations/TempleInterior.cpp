@@ -47,14 +47,15 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
-#include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/DetailLevel.h"
@@ -212,12 +213,25 @@ TempleInterior::TempleInterior()
 
 namespace
 {
-/// What the rooms' scrolls tell of the game: made up, but for what openblack keeps
+/// What the rooms' scrolls tell of the game: the world's statistics, the time played and the creature, and made up for
+/// the rest
 TempleScrolls::Facts GatherScrollFacts()
 {
 	auto facts = TempleScrolls::Facts::Mock();
-	// The game's count of the people in the world
-	facts.population = static_cast<int32_t>(Locator::entitiesRegistry::value().Size<ecs::components::Villager>());
+	// The world scroll tells the player at this machine of the world and their people
+	const auto local =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto world = player_statistics::World(local);
+	facts.population = world.population;
+	facts.believersPercent = world.believersPercent;
+	facts.malePercent = world.malePercent;
+	facts.deaths = world.deaths;
+	facts.births = world.births;
+	facts.sacrifices = world.sacrifices;
+	facts.buildings = world.buildings;
+	facts.wonders = world.wonders;
+	facts.disciples = world.disciples;
+	facts.discipleKinds = world.discipleKinds;
 	// The save game room's time played counts from the game's start, as the machine's clock is read
 	facts.timePlayed = std::chrono::seconds(machine_clock::Ticks() / 1000u);
 	// The creature's scrolls tell of the player's own creature, and are blank without one

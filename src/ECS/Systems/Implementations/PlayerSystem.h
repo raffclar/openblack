@@ -19,6 +19,7 @@
 #include "Common/VirtualInfluence.h"
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Player.h"
+#include "ECS/StatisticsRules.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -48,6 +49,9 @@ private:
 		components::Player::Miracles miracles;
 		/// What their hand keeps of their influence past the border, and whether a script switched it off
 		std::optional<virtual_influence::State> virtualInfluence;
+		/// Their histories of influence and population, which run on over the whole game
+		statistics::History influenceHistory;
+		statistics::History populationHistory;
 	};
 
 	std::unordered_map<PlayerNames, entt::entity> _players;

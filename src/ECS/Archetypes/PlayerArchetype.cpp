@@ -10,7 +10,9 @@
 #include "PlayerArchetype.h"
 
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
 
@@ -23,10 +25,13 @@ entt::entity PlayerArchetype::Create(PlayerNames name)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 	registry.Assign<Player>(entity, name);
+	registry.Assign<PlayerStatistics>(entity);
 	// A player made again on a later land is as they were on the last
 	if (Locator::playerSystem::has_value())
 	{
 		Locator::playerSystem::value().TakeUpKept(entity);
 	}
+	// Their statistics start on the land
+	player_statistics::Made(entity);
 	return entity;
 }
