@@ -3662,8 +3662,10 @@ bool Game::Run() noexcept
 		try
 		{
 			lhvm.LoadBinary(fileSystem.ReadAll(challengePath));
-			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock
-			if (!_startTestbed)
+			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock. A
+			// playground starts as the playground menu starts one: the scripts are made ready, but no story begins and
+			// the start-of-game question isn't asked
+			if (!_startTestbed && new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish))
 			{
 				StartStoryScripts();
 			}
