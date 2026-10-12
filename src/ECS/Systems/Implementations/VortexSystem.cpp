@@ -16,20 +16,33 @@
 #include <LNDFile.h>
 #include <glm/vec2.hpp>
 
+#include "3D/AllMeshes.h"
+#include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Common/GUtilsDistance.h"
 #include "ECS/Archetypes/VortexArchetype.h"
+#include "ECS/Components/Creature.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/VortexPullRules.h"
 #include "Magic/VortexRules.h"
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleSpellLink.h"
+#include "Resources/ResourceManager.h"
+#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
+using openblack::ecs::components::Creature;
+using openblack::ecs::components::Transform;
 using openblack::ecs::components::Vortex;
 
 namespace
@@ -240,6 +253,11 @@ void VortexSystem::ProcessTurn()
 	std::vector<entt::entity> gone;
 	bool levelled = false;
 	registry.Each<Vortex>([&gone, &levelled](entt::entity entity, Vortex& vortex) {
+		// What is in it is dealt with first, as it stood before this turn's step of its fade
+		if (vortex.type == VortexType::In && vortex.state == VortexStateType::Active)
+		{
+			Pull(vortex);
+		}
 		const auto seconds = SecondsInState(vortex);
 		switch (vortex::Advance(vortex.state, seconds))
 		{
@@ -275,6 +293,67 @@ void VortexSystem::ProcessTurn()
 	{
 		Locator::terrainSystem::value().CommitAltitudeChanges();
 	}
+}
+
+void VortexSystem::Pull(const Vortex& vortex)
+{
+	if (!Locator::entitiesMap::has_value())
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& map = Locator::entitiesMap::value();
+	const auto centre = map_coords::FromMetres({vortex.centre.x, vortex.centre.z});
+	const auto reach = vortex::PullReach(Locator::time::value().GetTurn(), vortex::k_PullRadius);
+	for (const auto cell : vortex::CellsSearched(centre, reach))
+	{
+		for (const auto entity : map.GetAllInCell(cell))
+		{
+			const auto* transform = registry.TryGet<const Transform>(entity);
+			// Only what stands in this cell; a thing over a cell's edge is met in its own
+			if (!registry.Valid(entity) || transform == nullptr || map_coords::CellOf(transform->position) != cell)
+			{
+				continue;
+			}
+			if (const auto* creature = registry.TryGet<const Creature>(entity); creature != nullptr)
+			{
+				PullCreature(entity, *creature, transform->position, centre);
+			}
+			// TODO(vortex-crossing): the other things it may take are carried in by its object mover and written to the
+			// crossing file, and piles give up pots
+		}
+	}
+}
+
+void VortexSystem::PullCreature(entt::entity entity, const Creature& creature, const glm::vec3& position,
+                                const map_coords::MapCoords& centre)
+{
+	// TODO(vortex-crossing): a creature a script is moving may be taken too
+	constexpr bool k_MovedByScript = false;
+	const bool leashed = Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(entity);
+	if (!vortex::CreatureMayBeTaken(creature.mayGoThroughVortex, leashed, k_MovedByScript) ||
+	    !Locator::creatureFizzSystem::has_value())
+	{
+		return;
+	}
+	// Near enough the middle it sparkles away for good: it crosses in its own files when the land is left
+	const auto at = map_coords::FromMetres({position.x, position.z});
+	if (gutils::GetDistanceInMetres(at, centre) < CreatureTakenDistance())
+	{
+		Locator::creatureFizzSystem::value().SetFizz(entity, 1.0f, vortex::k_CreatureSparkleSeconds, true);
+	}
+}
+
+float VortexSystem::CreatureTakenDistance()
+{
+	// The vortex's own model, unscaled
+	const auto meshId = resources::HashIdentifier(MeshId::SpellVortexCylinder);
+	if (!Locator::resources::has_value() || !Locator::resources::value().GetMeshes().Contains(meshId))
+	{
+		return 0.0f;
+	}
+	const auto box = Locator::resources::value().GetMeshes().Handle(meshId)->GetBoundingBox();
+	return vortex::CreatureTakenDistance(box.maxima.x, box.maxima.z, 1.0f);
 }
 
 void VortexSystem::LevelGround(Vortex& vortex, float amount)
