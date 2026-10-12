@@ -75,6 +75,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -441,6 +442,11 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	{
 		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
 		return Locator::scriptHighlightSystem::value().Tap(object, ownHand);
+	}
+	// A stone hand on a village centre, or a worship site's icon, charges its miracle for the hand
+	if (Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsIcon(object))
+	{
+		return Locator::spellIconSystem::value().Tap(object, player);
 	}
 	// Other things' taps are the clicking and activating of the interface
 	return false;

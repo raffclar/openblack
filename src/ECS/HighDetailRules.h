@@ -69,7 +69,7 @@ enum class ThingSpecial : int32_t
 	AddQuarterTurn = 16,
 	TakeQuarterTurn = 17,
 	ReleaseIntroSpecials = 18,
-	DrawnObjectSpecial = 19,
+	NeverFade = 19,
 };
 
 /// What a high-detail villager's drawing is told

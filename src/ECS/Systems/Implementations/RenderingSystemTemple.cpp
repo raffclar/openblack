@@ -29,8 +29,10 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "EngineConfig.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
@@ -100,10 +102,12 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	std::unordered_set<entt::id_type> sideRoomMeshIds;
 	std::unordered_map<entt::id_type, TempleRoom> roomMeshIds;
 	const auto currentRoom = temple.GetCurrentRoom();
+	const bool templeReflected =
+	    graphics::detail_level::TempleReflected(graphics::detail_level::For(Locator::config::value().detailLevel));
 	registry.Each<const Mesh, const Transform, const TempleInteriorPart>(
 	    [this, &prep, &mirroredMeshIds, &reflectiveMeshIds, &doorMeshIds, &otherRoomMeshIds, &waterMeshIds, &sideRoomMeshIds,
-	     &roomMeshIds, mainRoomDoorsOnly,
-	     currentRoom](const Mesh& mesh, const Transform& /* unused */, const TempleInteriorPart& templePart) {
+	     &roomMeshIds, mainRoomDoorsOnly, currentRoom,
+	     templeReflected](const Mesh& mesh, const Transform& /* unused */, const TempleInteriorPart& templePart) {
 		    if (!_loadedRooms.contains(templePart.room))
 		    {
 			    return;
@@ -141,6 +145,11 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		    }
 		    {
 			    prep(mesh, false);
+			    // Below Maximum detail the main room's floor reflects nothing
+			    if (!templeReflected)
+			    {
+				    return;
+			    }
 			    if (templePart.room == TempleRoom::Main && templePart.mesh == TempleInteriorMesh::Room)
 			    {
 				    mirroredMeshIds.insert(mesh.id);
@@ -198,9 +207,8 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	_renderContext.instancedDrawDescs.clear();
 	for (const auto& [meshId, desc] : meshIds)
 	{
-		auto [drawDesc, _] =
-		    _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
-		                                              std::forward_as_tuple(offset, desc.first, desc.second, false));
+		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
+		                                                               std::forward_as_tuple(offset, desc.first, desc.second));
 		drawDesc->second.hiddenFromReflection = !mirroredMeshIds.contains(meshId);
 		drawDesc->second.showsReflection = reflectiveMeshIds.contains(meshId);
 		drawDesc->second.onlyJoints = doorMeshIds.contains(meshId);
@@ -259,7 +267,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	for (const auto& [meshId, count] : peopleCounts)
 	{
 		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
-		                                                               std::forward_as_tuple(offset, count, false, false));
+		                                                               std::forward_as_tuple(offset, count, false));
 		drawDesc->second.perEntity = true;
 		drawDesc->second.bonePalette = true;
 		drawDesc->second.filled = count;

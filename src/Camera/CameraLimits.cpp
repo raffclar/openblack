@@ -67,6 +67,35 @@ std::optional<glm::vec3> camera_limits::KeepInsideAllowedArea(const glm::vec3& o
 	return glm::vec3(x * scale + k_AllowedAreaCentre.x, origin.y, z * scale + k_AllowedAreaCentre.y);
 }
 
+std::optional<glm::vec3> camera_limits::KeepInsideTheWorld(const glm::vec3& destination)
+{
+	const auto fromCentre = destination - k_WorldCentre;
+	const float squared = glm::dot(fromCentre, fromCentre);
+	if (!(squared > k_WorldReach * k_WorldReach))
+	{
+		return std::nullopt;
+	}
+	return k_WorldCentre + fromCentre * (k_WorldHoldRadius / std::sqrt(squared));
+}
+
+float camera_limits::EaseSeconds(float sinceFlight, bool pushed, bool focusMoved)
+{
+	float seconds = k_EaseSeconds;
+	if (focusMoved)
+	{
+		seconds *= 2.0f;
+	}
+	if (pushed)
+	{
+		seconds *= 2.0f;
+	}
+	if (sinceFlight <= k_EaseSettleSeconds)
+	{
+		seconds = (seconds - k_FlightEaseSeconds) * (sinceFlight / k_EaseSettleSeconds) + k_FlightEaseSeconds;
+	}
+	return seconds;
+}
+
 float camera_limits::FrameMoveLimit(float focusDistance, float seconds)
 {
 	return std::max(k_MinFrameMove, k_FrameMovePerFocusDistance * focusDistance * seconds);

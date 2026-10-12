@@ -189,6 +189,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -216,6 +217,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
@@ -847,7 +849,8 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 			return std::nullopt;
 		}
 		const auto [eye, nearPoint] = camera.OnNearPlane(pixel / size);
-		return Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint, true);
+		return Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint,
+		                                                      ecs::systems::PickingSystemInterface::Sea::Anywhere);
 	};
 	// A point of the screen as far in front of the camera as another point
 	frame.view.atDepthOf = [rayAt, forward = camera.GetForward()](glm::vec2 pixel, glm::vec3 sameDepthAs) {
@@ -1092,7 +1095,7 @@ void Game::ProcessHandToolTipTurn()
 		if (const auto amount = Locator::handGrabSystem::value().TakeAmountToolTip(); amount.has_value())
 		{
 			const auto held = gui::world_tooltip::HeldAmount(*amount);
-			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, static_cast<float>(held.first), std::nullopt, true);
+			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
 		}
 	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
@@ -1142,11 +1145,8 @@ void Game::ProcessHandToolTipTurn()
 			}
 			else
 			{
-				toolTips.SubmitNumbered(
-				    submission.numbers.index, submission.action, static_cast<float>(submission.numbers.first),
-				    submission.numbers.second.has_value() ? std::optional(static_cast<float>(*submission.numbers.second))
-				                                          : std::nullopt,
-				    submission.force);
+				toolTips.SubmitNumbered(submission.numbers.index, submission.action, submission.numbers.first,
+				                        submission.numbers.second, submission.force);
 			}
 		}
 	}
@@ -3008,6 +3008,19 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("one-off meshes");
+	// The info tables come before the game's interface, whose tooltips take their priorities and times from them
+	{
+		InfoFile infoFile;
+		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
+		if (!result)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
+			return false;
+		}
+		Locator::infoConstants::reset(result.release());
+	}
+
+	_startupTimer->Step("info tables");
 	// The game's menu, which greets the player by their profile's name: openblack has no profiles, so by the name
 	// they log in with
 	{
@@ -3019,6 +3032,7 @@ bool Game::Initialize() noexcept
 		settings.sfxVolume = audio.GetSfxVolume();
 		settings.musicVolume = audio.GetMusicVolume();
 		settings.leftHandedHand = !Locator::config::value().rightHandedHand;
+		settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
 		_interface = gui::GameInterface::Create(gui::ToUtf16(user != nullptr ? user : "Player"), std::move(settings));
 		if (!_interface)
 		{
@@ -3227,18 +3241,6 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("sound and music banks");
-	{
-		InfoFile infoFile;
-		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
-		if (!result)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
-			return false;
-		}
-		Locator::infoConstants::reset(result.release());
-	}
-
-	_startupTimer->Step("info tables");
 	// The temple's leashes are drawn with the leash texture and its alpha
 	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
 	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
@@ -3605,10 +3607,12 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	RenderLoadingFrame();
 
 	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
+	// The script is matched by where its file is found, however its path was given
+	const auto scriptFile = Level::ResolveScriptPath(path);
 	bool skirmish = false;
-	Locator::resources::value().GetLevels().Each([&path, &skirmish](entt::id_type /*id*/, const Level& level) {
+	Locator::resources::value().GetLevels().Each([&scriptFile, &skirmish](entt::id_type /*id*/, const Level& level) {
 		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
-		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
+		                        Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
 	});
 	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
 	_landPath = path;
@@ -4642,6 +4646,11 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	magic.UpdateHand(frame, HandStepSeconds());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
+	// The seeds above the stone hands and worship icons spin as the globes' do
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().Update(deltaSeconds);
+	}
 }
 
 void Game::PlayHandGrabSound()

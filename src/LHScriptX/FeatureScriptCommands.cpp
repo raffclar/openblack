@@ -56,6 +56,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -376,14 +377,48 @@ void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position,
 
 void FeatureScriptCommands::CreateTownSpell(int32_t townId, const std::string& spellName)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId, spellName);
+	// The old form names a seed: the town holds the seed's plain miracle, which its centre shows
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	const auto town = towns.find(static_cast<uint32_t>(townId));
+	if (town == towns.end() || !Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto seed = magic::FindSpellSeedByName(info, spellName);
+	if (!seed.has_value())
+	{
+		return;
+	}
+	Locator::spellIconSystem::value().TownHolds(town->second, magic::GetSpellSeedInfo(info, *seed).magicTypes[0]);
 }
 
 void FeatureScriptCommands::CreateNewTownSpell(int32_t townId, const std::string& spellName)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId, spellName);
+	// The town holds the named miracle, and the plain miracle of its seed too when the name is a power-up of it
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	const auto town = towns.find(static_cast<uint32_t>(townId));
+	if (town == towns.end() || !Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto type = magic::FindMagicTypeByName(info, spellName);
+	if (!type.has_value() || *type == MagicType::None)
+	{
+		return;
+	}
+	const auto seed = magic::FindFirstSpellSeedForMagicType(info, *type);
+	if (!seed.has_value())
+	{
+		return;
+	}
+	auto& icons = Locator::spellIconSystem::value();
+	icons.TownHolds(town->second, *type);
+	icons.TownHolds(town->second,
+	                magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, *seed), magic::k_BasePowerUpLevel));
 }
 
 void FeatureScriptCommands::CreateTownCentreSpellIcon(int32_t param1, const std::string& param2)

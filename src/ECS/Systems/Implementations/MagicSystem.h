@@ -164,6 +164,7 @@ public:
 	entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) override;
 	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
+	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int powerUp, float chants) override;
 	void DiscardHeldSeed() override;
 
 	void UpdateHand(const HandFrame& frame, float seconds) override;
@@ -325,6 +326,11 @@ private:
 	/// The held seed as the hand shows it, after it came to the hand, became ready or was powered up: how the hand holds
 	/// it, its model once it is ready (for the seeds that show one), and its in-hand effect drawn once it is ready
 	void ShowHeldSeed();
+	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp)
+	void ShowSeedsWithSpells();
+	[[nodiscard]] bool SeedShownWithSpell(const components::SpellSeed& seed, const components::Spell& spell) const;
+	/// A miracle whose seed is shown closes down once the seed is out of its player's influence
+	void KeepSeedInInfluence(entt::entity spellEntity, const components::Spell& spell);
 	/// Whether a player has an icon for a seed at one of their worship sites, at which a seed from a globe is then made
 	[[nodiscard]] bool PlayerHasSpellIcon(PlayerNames player, SpellSeedType seed) const;
 	/// What the held seed's in-hand effect is handed: where it sits, with the seed's power as its strength

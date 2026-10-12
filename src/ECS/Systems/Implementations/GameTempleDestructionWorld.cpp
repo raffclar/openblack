@@ -22,6 +22,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
 #include "Particles/ParticleEffect.h"
@@ -156,4 +157,12 @@ void GameTempleDestructionWorld::StartScript(std::string_view name)
 void GameTempleDestructionWorld::Remove(entt::entity object)
 {
 	world_objects::Remove(object);
+}
+
+void GameTempleDestructionWorld::RemoveWorshipSites(entt::entity temple)
+{
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().RemoveSites(temple);
+	}
 }
