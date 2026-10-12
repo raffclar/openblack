@@ -48,6 +48,14 @@ uint8_t Lit(const Atom& atom, size_t channel)
 	return static_cast<uint8_t>(std::min(255, atom.rgba.at(channel) + atom.specular.at(channel)));
 }
 
+/// Whether an atom is drawn: one that has been through its steps (or its first, when its rule asks), seen, and with
+/// something to draw it as
+bool IsDrawn(const Atom& atom)
+{
+	return atom.visible && atom.drawn && (atom.creator != nullptr || atom.shower != nullptr) &&
+	       (atom.steps >= 2 || atom.drawOnFirstUpdate);
+}
+
 bool IsCreatorClass(std::string_view className)
 {
 	return className.starts_with("Particle") && className.find("Creator") != std::string_view::npos;
@@ -639,7 +647,7 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	const auto& a = atom.previous;
 	const auto& b = atom.current;
 	const float alpha = (a.alpha + (b.alpha - a.alpha) * k) * _globalAlpha / 255.0f;
-	if (!atom.visible || !atom.drawn || atom.creator == nullptr || (atom.steps < 2 && !atom.drawOnFirstUpdate))
+	if (!IsDrawn(atom))
 	{
 		return std::nullopt;
 	}
@@ -658,7 +666,7 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	    .scale = a.scale + (b.scale - a.scale) * k,
 	    .stretch = a.stretch + (b.stretch - a.stretch) * k,
 	    .alpha = alpha,
-	    .frame = maths::LerpFrame(a.frame, b.frame, t, atom.creator->loopAnim),
+	    .frame = atom.creator != nullptr ? maths::LerpFrame(a.frame, b.frame, t, atom.creator->loopAnim) : 0.0f,
 	    .rgb = {Lit(atom, 0), Lit(atom, 1), Lit(atom, 2)},
 	    .age = std::max(age, 0.0f),
 	    .creatorValue = atom.creatorValue,
@@ -668,6 +676,7 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	    .fragment = atom.fragment,
 	    .player = atom.player,
 	    .objectGlow = atom.objectGlow,
+	    .shower = atom.shower.get(),
 	};
 }
 
@@ -682,14 +691,16 @@ void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out
 		{
 			continue;
 		}
-		const auto kind = drawn->creator->kind;
-		// An atom that lays a shell over an object's model is drawn as that shell, whatever its creator
-		if (drawn->objectGlow.has_value())
+		// An atom that lays a shell over an object's model, or sends up a shower of sparks from it, is drawn as that,
+		// whatever its creator
+		if (drawn->objectGlow.has_value() || drawn->shower != nullptr)
 		{
 			out.steps.push_back({.chain = false, .index = static_cast<uint32_t>(out.atoms.size())});
 			out.atoms.push_back(*drawn);
+			continue;
 		}
-		else if (kind == Creator::Kind::Chain)
+		const auto kind = drawn->creator->kind;
+		if (kind == Creator::Kind::Chain)
 		{
 			chainCreator = drawn->creator;
 		}
@@ -763,7 +774,32 @@ void Effect::Collect(float t, std::vector<DrawAtom>& out, Creator::Kind kind) co
 		return;
 	}
 	std::ranges::copy_if(walk.atoms, std::back_inserter(out),
-	                     [kind](const DrawAtom& atom) { return atom.creator->kind == kind; });
+	                     [kind](const DrawAtom& atom) { return atom.creator != nullptr && atom.creator->kind == kind; });
+}
+
+void Effect::ForEachDrawnShower(const std::function<void(ObjectShower&)>& visit)
+{
+	if (_hidden)
+	{
+		return;
+	}
+	const auto walk = [&visit](const auto& self, Collection& collection) -> void {
+		for (const auto& atom : collection.atoms)
+		{
+			if (atom->shower != nullptr && IsDrawn(*atom))
+			{
+				visit(*atom->shower);
+			}
+			for (const auto& sub : atom->subCollections)
+			{
+				self(self, *sub);
+			}
+		}
+	};
+	for (const auto& root : _roots)
+	{
+		walk(walk, *root);
+	}
 }
 
 std::optional<entt::entity> Effect::TakeTarget()
