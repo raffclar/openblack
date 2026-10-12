@@ -418,8 +418,11 @@ bool Gui::Loop() noexcept
 	ShowDispenserNames();
 	ShowCameraPositionOverlay();
 	ShowInputLockNotice();
-	// The game's Creature Cave screen, drawn with the debug windows' ImGui
-	openblack::gui::DrawCreatureCaveScreen();
+	// The Creature Cave's facts and lessons screen, drawn with the debug windows' ImGui only when the View menu asks for it
+	if (Locator::config::value().showCreatureCaveScreen)
+	{
+		openblack::gui::DrawCreatureCaveScreen();
+	}
 
 	ImGui::Render();
 
@@ -702,6 +705,7 @@ bool Gui::ShowMenu() noexcept
 			if (ImGui::BeginMenu("View"))
 			{
 				ImGui::Checkbox("Game Detail Overlay", &config.viewDetailOverlay);
+				ImGui::Checkbox("Creature Cave Screen", &config.showCreatureCaveScreen);
 				ImGui::Checkbox("Sky", &config.drawSky);
 				ImGui::Checkbox("Water", &config.drawWater);
 				ImGui::Checkbox("Island", &config.drawIsland);

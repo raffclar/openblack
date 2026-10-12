@@ -63,6 +63,8 @@ struct EngineConfig
 	bool debugVillagerStates {false};
 	/// Each miracle dispenser is labelled with its miracle
 	bool showDispenserNames {true};
+	/// The Creature Cave's ImGui screen of the creature's facts and lessons, a debugging aid shown only when asked for
+	bool showCreatureCaveScreen {false};
 
 	bool viewDetailOverlay {false};
 	bool drawSky {true};
