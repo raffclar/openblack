@@ -64,18 +64,6 @@ struct Rows
 };
 [[nodiscard]] Rows MakeRows(const ScreenRange& range);
 
-/// The ripple's pattern down the rows is laid out on the game's default screen, 800 pixels wide, whose rows are two
-/// pixels apart: each even row there takes the next step of the sine, two on from the one before, and each odd row
-/// repeats the row above. The camera keeps the game's horizontal field of view, so a pixel of a screen W wide covers
-/// 800 / W of what a pixel there did. Rows two pixels apart on a wider screen therefore cover less sea each, and the
-/// ripple, the same distance on the sea, would fold the texture back and forth into bands. Instead the pattern runs
-/// over the share of the view it covers on the default screen. This gives how many of its rows each row here spans.
-inline constexpr float k_ReferenceScreenWidth = 800.0f;
-[[nodiscard]] constexpr float RippleRowsPerRow(float screenWidth)
-{
-	return screenWidth > 0.0f ? k_ReferenceScreenWidth / screenWidth : 1.0f;
-}
-
 /// The rows' ripple: a step of 16 round a sine. The game moves it on by one with each frame it draws the sea while its
 /// time goes on, and its frames came at the screen's refresh: it waits for the vertical sync by default, at the display's
 /// default refresh rate. Here the step moves on at most once a frame and no more often than that refresh, 60 times a
