@@ -157,3 +157,44 @@ TEST(ResourcePiles, AHandfulInTheHandIsDrawnWholeWhereItIsHeld)
 	EXPECT_EQ(DrawnSink(SunkRise(3.6f), 3.6f, true), std::optional(0.0f));
 	EXPECT_EQ(DrawnSink(rise, 3.6f, true), std::optional(0.0f));
 }
+
+TEST(ResourcePiles, LifeIsWhatAPileHoldsOfItsFill)
+{
+	EXPECT_FLOAT_EQ(Life(500, 1000), 0.5f);
+	EXPECT_FLOAT_EQ(Life(0, 1000), 0.0f);
+	// A pile holding more than it is drawn full at has more than whole life
+	EXPECT_FLOAT_EQ(Life(3000, 1000), 3.0f);
+	EXPECT_FLOAT_EQ(Life(10, 0), 0.0f);
+}
+
+TEST(ResourcePiles, DamageTakesItsShareOfTheFillAndAtLeastOne)
+{
+	// A tenth of its life is a tenth of its fill
+	EXPECT_EQ(ChangeForDamage(1000, 1000, 0.1f).removed, 100u);
+	EXPECT_EQ(ChangeForDamage(1000, 1000, 0.1f).added, 0u);
+	// The share is cut to a whole number
+	EXPECT_EQ(ChangeForDamage(1000, 1000, 0.00995f).removed, 9u);
+	// Any damage at all takes one
+	EXPECT_EQ(ChangeForDamage(1000, 1000, 0.0001f).removed, 1u);
+	EXPECT_EQ(ChangeForDamage(3, 1000, 0.0001f).removed, 1u);
+	// Damage beyond its life takes all it holds
+	EXPECT_EQ(ChangeForDamage(40, 1000, 0.5f).removed, 40u);
+	// No damage takes nothing
+	EXPECT_EQ(ChangeForDamage(40, 1000, 0.0f).removed, 0u);
+}
+
+TEST(ResourcePiles, SettingLifeAddsOrRemovesItsShare)
+{
+	const auto lower = ChangeForLife(500, 1000, 0.25f);
+	EXPECT_EQ(lower.removed, 250u);
+	EXPECT_EQ(lower.added, 0u);
+	const auto higher = ChangeForLife(500, 1000, 0.75f);
+	EXPECT_EQ(higher.added, 250u);
+	EXPECT_EQ(higher.removed, 0u);
+	// The same life changes nothing; the least change is one
+	EXPECT_EQ(ChangeForLife(500, 1000, 0.5f).removed, 0u);
+	EXPECT_EQ(ChangeForLife(500, 1000, 0.5f).added, 0u);
+	EXPECT_EQ(ChangeForLife(500, 1000, 0.5004f).added, 1u);
+	// None to all
+	EXPECT_EQ(ChangeForLife(500, 1000, 0.0f).removed, 500u);
+}
