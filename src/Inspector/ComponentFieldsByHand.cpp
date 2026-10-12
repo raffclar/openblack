@@ -20,6 +20,7 @@
 #include "ComponentReflection.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureRouteFollow.h"
 #include "Hand/HandGrabRules.h"
 
 namespace
@@ -73,8 +74,9 @@ void openblack::inspector::reflection::RegisterHandWrittenFields(entt::meta_ctx&
 	Reflect<sky_dome::Follow>(context, ValueOnly {})
 	    .Property<&sky_dome::Follow::Following, nullptr>("following")
 	    .Property<&sky_dome::Follow::RowsDone, nullptr>("rowsDone");
-	Reflect<creature_route::Planner>(context, ValueOnly {})
-	    .Property<&creature_route::Planner::GetStatus, nullptr>("status")
-	    .Property<&creature_route::Planner::GetRoute, nullptr>("route")
-	    .Property<&creature_route::Planner::GetSearched, nullptr>("searched");
+	Reflect<creature_route::Follower>(context, ValueOnly {})
+	    .Property<&creature_route::Follower::GetState, nullptr>("state")
+	    .Property<&creature_route::Follower::GetRoute, nullptr>("route")
+	    .Property<&creature_route::Follower::GetPosition, nullptr>("position")
+	    .Property<&creature_route::Follower::GetSearchCount, nullptr>("searches");
 }

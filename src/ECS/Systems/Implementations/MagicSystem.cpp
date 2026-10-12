@@ -1468,6 +1468,11 @@ void MagicSystem::ProcessTurn()
 	}
 	for (const auto entity : std::vector<entt::entity>(_spells.begin(), _spells.end()))
 	{
+		// The seed it was cast from has its turn first
+		if (const auto* before = FindSpell(entity))
+		{
+			KeepSeedInInfluence(entity, *before);
+		}
 		auto* spell = FindSpell(entity);
 		if (spell == nullptr || !Process(entity, *spell))
 		{
@@ -1488,16 +1493,8 @@ void MagicSystem::Update(float /*seconds*/)
 	{
 		Locator::audio::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
 	}
-	// A seed out of the hand stays with its miracle
-	registry.Each<SpellSeed, Transform>([&](entt::entity, const SpellSeed& seed, Transform& transform) {
-		if (seed.followsSpell)
-		{
-			if (const auto* spell = FindSpell(seed.spell))
-			{
-				transform.position = spell->position;
-			}
-		}
-	});
+	// A seed out of the hand stays with its miracle, shown over it or not
+	ShowSeedsWithSpells();
 	// The held seed itself is placed in the hand as the hand is posed, and its in-hand effect with it
 	// (PlaceHandEffect)
 	if (_held.has_value() && registry.Valid(*_held))
