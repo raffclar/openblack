@@ -952,6 +952,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ForestMember::growing>("growing")
 	    .Field<&components::ForestMember::listed>("listed");
 	Reflect<components::Graveyard>(context).Field<&components::Graveyard::burials>("burials");
+	Reflect<components::StandInGraves>(context)
+	    .Field<&components::StandInGraves::count>("count")
+	    .Field<&components::StandInGraves::partsShown>("partsShown");
 	Reflect<components::WalkingSkeleton> {context};
 	Reflect<components::GripLandscapeParticle>(context)
 	    .Field<&components::GripLandscapeParticle::centre>("centre")
@@ -1774,12 +1777,14 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CitadelWorship::sites>("sites")
 	    .Field<&components::CitadelWorship::facing>("facing")
 	    .Field<&components::CitadelWorship::cannotMakeSites>("cannotMakeSites")
-	    .Field<&components::CitadelWorship::standing>("standing");
+	    .Field<&components::CitadelWorship::standing>("standing")
+	    .Field<&components::CitadelWorship::sitesMade>("sitesMade");
 	Reflect<components::WorshipSite>(context)
 	    .Field<&components::WorshipSite::temple>("temple")
 	    .Field<&components::WorshipSite::player>("player")
 	    .Field<&components::WorshipSite::tribe>("tribe")
 	    .Field<&components::WorshipSite::place>("place")
+	    .Field<&components::WorshipSite::made>("made")
 	    .Field<&components::WorshipSite::facing>("facing")
 	    .Field<&components::WorshipSite::towns>("towns")
 	    .Field<&components::WorshipSite::altar>("altar")

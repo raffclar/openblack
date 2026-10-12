@@ -40,6 +40,24 @@ constexpr uint32_t k_Population = 137;
 constexpr uint32_t k_FoodAmount = 138;
 constexpr uint32_t k_WoodAmount = 139;
 
+/// "Build", what a scaffold held anywhere but over a planned building says dropping it does
+constexpr uint32_t k_Build = 125;
+/// "Graveyard", what a scaffold held over a planned graveyard says: its info's text for building it. The buildings'
+/// names (Abode, Totem, Village Store, Creche, Workshop, Wonder, Graveyard, Village Centre, Football Pitch, Miracle
+/// Dispenser, Field) are shown this way only, never over a standing building.
+constexpr uint32_t k_Graveyard = 147;
+
+/// The game's text of its first tooltip, and how many there are
+constexpr uint32_t k_FirstToolTipText = 0xE73;
+constexpr uint32_t k_ToolTipCount = 170;
+
+/// The tooltip a game text is, none for a text that is not a tooltip (the game shows nothing for it)
+[[nodiscard]] std::optional<uint32_t> ToolTipOfText(uint32_t text);
+
+/// What a held scaffold says dropping it does: over a building its town plans, that building's text for building it
+/// (its name: "Graveyard" over a planned graveyard); anywhere else "Build"
+[[nodiscard]] std::optional<uint32_t> ScaffoldDrop(std::optional<uint32_t> plannedBuildText);
+
 /// A belief tooltip is shown in thousandths
 constexpr double k_BeliefScale = 1000.0;
 /// Shares and lives show as percentages
