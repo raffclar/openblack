@@ -19,6 +19,7 @@
 #include <functional>
 #include <iterator>
 #include <limits>
+#include <numbers>
 #include <optional>
 #include <ranges>
 #include <sstream>
@@ -57,6 +58,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/LeashRules.h"
@@ -159,6 +161,7 @@
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerScript.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -299,6 +302,13 @@ ScriptCameraModel* ScriptCamera()
 	if (camera == nullptr)
 	{
 		ScriptMessage("We are in the wrong camera mode! - exception happened?");
+		return nullptr;
+	}
+	// While a two-thing camera has taken over, the script's own commands don't reach the camera
+	if (camera->InDualView())
+	{
+		ScriptMessage("We are in the wrong camera mode!");
+		return nullptr;
 	}
 	return camera;
 }
@@ -2456,10 +2466,12 @@ static void FacePoint(entt::entity object, glm::vec3 point)
 	if (registry.AllOf<ecs::components::Creature>(object))
 	{
 		// The script takes control of the creature, which gives up what it was doing and turns to face the point,
-		// watching it
+		// keeping its head turned to it until the script lets it go
 		if (Locator::creatureMindSystem::has_value())
 		{
-			Locator::creatureMindSystem::value().CarryOutForScript(object, creature_mind::FaceForScript(point));
+			auto& minds = Locator::creatureMindSystem::value();
+			minds.SetScriptFocus(object, creature_mind::Gaze {.point = point});
+			minds.CarryOutForScript(object, creature_mind::FaceForScript(point));
 		}
 		return;
 	}
@@ -3151,11 +3163,12 @@ void ObjectDelete() // 048 OBJECT_DELETE
 	}
 }
 
+void SetFocusFollow();
+
 void FocusFollow() // 049 FOCUS_FOLLOW
 {
-	// const auto target = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The same as SET_FOCUS_FOLLOW: the script's camera glides round to look at the thing and keeps looking at it
+	SetFocusFollow();
 }
 
 void PositionFollow() // 050 POSITION_FOLLOW
@@ -3840,26 +3853,71 @@ void GetCountdownTimer() // 092 GET_COUNTDOWN_TIMER
 	Pushf(0.0f);
 }
 
+/// One of a two-thing camera's things, as the camera sees it while the thing is there: where the game holds it, its
+/// height and its radius on the ground (a marker or a group counts as 30 wide)
+ScriptCameraModel::DualSubject DualSubjectOf(entt::entity thing)
+{
+	return {.id = static_cast<uint32_t>(thing), .lookup = [thing]() -> std::optional<script_camera::DualThing> {
+		        const auto& registry = Locator::entitiesRegistry::value();
+		        const auto* transform = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
+		        if (transform == nullptr)
+		        {
+			        return std::nullopt;
+		        }
+		        const bool modelled =
+		            !registry.AllOf<ecs::components::ScriptMarker>(thing) && !IsScriptContainer(registry, thing);
+		        return script_camera::DualThing {
+		            .position = transform->position,
+		            .height = IsWorldObject(thing) ? ScriptHeightOf(thing) : 0.0f,
+		            .radius = modelled ? ecs::systems::object_measures::TwoDRadius(registry, thing)
+		                               : script_camera::k_DualNoModelRadius,
+		        };
+	        }};
+}
+
+/// The two things a two-thing camera command is given, the second popped first; none, complained of, when either is
+/// missing
+std::optional<std::pair<entt::entity, entt::entity>> PopDualThings()
+{
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (first == entt::null || second == entt::null || !registry.Valid(first) || !registry.Valid(second))
+	{
+		ScriptMessage("Thing invalid for dual cam");
+		return std::nullopt;
+	}
+	return std::pair {first, second};
+}
+
 void StartDualCamera() // 093 START_DUAL_CAMERA
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto things = PopDualThings();
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (things.has_value() && camera != nullptr)
+	{
+		// The camera keeps both things in view, from the side of the line between them, until the script lets it go
+		camera->StartDualView(DualSubjectOf(things->first), DualSubjectOf(things->second));
+	}
 }
 
 void UpdateDualCamera() // 094 UPDATE_DUAL_CAMERA
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto things = PopDualThings();
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (things.has_value() && camera != nullptr)
+	{
+		camera->UpdateDualView(DualSubjectOf(things->first), DualSubjectOf(things->second));
+	}
 }
 
 void ReleaseDualCamera() // 095 RELEASE_DUAL_CAMERA
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The script's own camera takes over again, from wherever the two-thing camera left it
+	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
+	{
+		camera->ReleaseDualView();
+	}
 }
 
 void SetCreatureHelp() // 096 SET_CREATURE_HELP
@@ -3948,21 +4006,98 @@ void CreateDualCameraWithPoint() // 105 CREATE_DUAL_CAMERA_WITH_POINT
 	NotImplemented();
 }
 
+/// The way a thing faces, as a camera sent to face it reads it: a walker by its game angle, a creature by its body's
+/// turn, anything else along the first heading
+float CameraFacingOf(entt::entity object, const Transform& transform)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	constexpr float k_QuarterTurn = std::numbers::pi_v<float> * 0.5f;
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		// Its body is turned a quarter turn on from the way it faces
+		return script_camera::CreatureFacing(LivingAngleOf(object, transform) + k_QuarterTurn);
+	}
+	if (const auto* walk = registry.TryGet<const ecs::components::WallHug>(object); walk != nullptr)
+	{
+		return gutils::ConvertGameAngleToScawenAngle(walk->gameAngle);
+	}
+	if (const auto* animal = registry.TryGet<const ecs::components::Animal>(object); animal != nullptr)
+	{
+		return gutils::ConvertGameAngleToScawenAngle(static_cast<uint16_t>(gutils::ConvertAngle3DToGame(animal->heading)));
+	}
+	return 0.0f;
+}
+
+/// Where a camera facing a thing from a distance stands and looks; none, complained of, without the thing
+std::optional<script_camera::View> FaceViewOf(entt::entity object, float distance)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = object != entt::null && registry.Valid(object) ? registry.TryGet<const Transform>(object) : nullptr;
+	if (transform == nullptr)
+	{
+		ScriptMessage("no object to face");
+		return std::nullopt;
+	}
+	const float facing = CameraFacingOf(object, *transform);
+	if (script_camera::IsWrongFacing(facing))
+	{
+		ScriptMessage("Invalid heading");
+	}
+	return script_camera::FaceView(
+	    {.position = transform->position, .height = IsWorldObject(object) ? ScriptHeightOf(object) : 0.0f, .facing = facing},
+	    distance);
+}
+
+/// The script's camera for a command that sends it to face a thing, complained of when it is missing, in the temple or
+/// under a two-thing camera
+ScriptCameraModel* ScriptCameraToFace()
+{
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed!");
+	}
+	if (PlayerInsideTemple())
+	{
+		ScriptMessage("Script moving camera in citadel");
+	}
+	if (camera != nullptr && camera->InDualView())
+	{
+		ScriptMessage("We are in the wrong camera mode!");
+		return nullptr;
+	}
+	return camera;
+}
+
 void SetCameraToFaceObject() // 106 SET_CAMERA_TO_FACE_OBJECT
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto distance = Popf();
+	const auto object = PopObject();
+	if (auto* camera = ScriptCameraToFace(); camera != nullptr)
+	{
+		// The camera is put at once in front of the thing, by the way it faces, looking at it
+		if (const auto view = FaceViewOf(object, distance); view.has_value())
+		{
+			camera->SetOrigin(view->origin);
+			camera->SetFocus(view->focus);
+		}
+	}
 }
 
 void MoveCameraToFaceObject() // 107 MOVE_CAMERA_TO_FACE_OBJECT
 {
-	// const auto time = Popf();
-	// const auto distance = Popf();
-	// const auto target = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto time = Popf();
+	const auto distance = Popf();
+	const auto object = PopObject();
+	if (auto* camera = ScriptCameraToFace(); camera != nullptr)
+	{
+		// The camera glides over the time to in front of the thing, by the way it faces now, looking at it
+		if (const auto view = FaceViewOf(object, distance); view.has_value())
+		{
+			camera->MoveOrigin(view->origin, time);
+			camera->MoveFocus(view->focus, time);
+		}
+	}
 }
 
 void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
@@ -5262,6 +5397,27 @@ void PlayGesture() // 204 PLAY_GESTURE
 	NotImplemented();
 }
 
+/// The story moves a creature to a stage of growing up: its mind takes up the stage, and reaching the stage it may
+/// leave home from, a creature kept near its home off the leash is let go
+void MoveCreatureToStage(entt::entity creature, uint32_t stage)
+{
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().MoveToStage(creature, stage);
+	}
+	if (!Locator::leashSystem::has_value())
+	{
+		return;
+	}
+	auto& leashes = Locator::leashSystem::value();
+	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(creature);
+	if (leash != nullptr &&
+	    creature_development::ReleasedFromHome(stage, leash->confinementRadius, leashes.IsLeashed(creature)))
+	{
+		leashes.ClearConfinement(creature);
+	}
+}
+
 void DevFunction() // 205 DEV_FUNCTION
 {
 	const auto func = Pop().intVal;
@@ -5281,10 +5437,7 @@ void DevFunction() // 205 DEV_FUNCTION
 	switch (func)
 	{
 	case 1:
-		if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(*creature))
-		{
-			mind->developmentPhase = 0;
-		}
+		MoveCreatureToStage(*creature, 0);
 		leashes.ConfineToHome(*creature, creature_leash::k_HomeConfinement);
 		break;
 	case 2:
@@ -5339,10 +5492,20 @@ void NumMouseButtons() // 207 NUM_MOUSE_BUTTONS
 
 void SetCreatureDevStage() // 208 SET_CREATURE_DEV_STAGE
 {
-	// const auto stage = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Each lesson of growing up moves the creature to its stage as it begins
+	const auto stage = Pop().intVal;
+	const auto creature = CreatureForNative(PopObject());
+	if (!creature.has_value())
+	{
+		return;
+	}
+	const auto valid = creature_development::StageFromScript(stage);
+	if (!valid.has_value())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "SET_CREATURE_DEV_STAGE: {} is no stage of growing up", stage);
+		return;
+	}
+	MoveCreatureToStage(*creature, *valid);
 }
 
 void SetFixedCamRotation() // 209 SET_FIXED_CAM_ROTATION
@@ -6225,6 +6388,12 @@ std::pair<entt::entity, ScriptCameraModel*> FollowCommand(entt::entity thing)
 	{
 		ScriptMessage("Object no longer valid");
 	}
+	// While a two-thing camera has taken over, the script's own commands don't reach the camera
+	if (valid && camera != nullptr && camera->InDualView())
+	{
+		ScriptMessage("We are in the wrong camera mode!");
+		camera = nullptr;
+	}
 	return {valid ? thing : entt::null, camera};
 }
 
@@ -6261,17 +6430,19 @@ void SetFocusAndPositionFollow() // 278 SET_FOCUS_AND_POSITION_FOLLOW
 
 void SetCameraLens() // 279 SET_CAMERA_LENS
 {
-	// const auto lens = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// "reset camera lens": the lens glides back to the normal one over the time
+	const auto time = Popf();
+	Locator::camera::value().SetLens(glm::radians(Locator::config::value().cameraXFov), time);
 }
 
 void MoveCameraLens() // 280 MOVE_CAMERA_LENS
 {
-	// const auto time = Popf();
-	// const auto lens = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// "set camera lens": the lens glides to a field of view in degrees over the time, at once without one
+	const auto time = Popf();
+	const auto degrees = Popf();
+	// Degrees to radians by the game's own float
+	constexpr float k_DegreesToRadians = 0.017453292f;
+	Locator::camera::value().SetLens(degrees * k_DegreesToRadians, time);
 }
 
 void CreatureReaction() // 281 CREATURE_REACTION
@@ -6284,10 +6455,17 @@ void CreatureReaction() // 281 CREATURE_REACTION
 
 void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT
 {
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A lesson script of growing up says it is running for the creature, or that it is over
+	const auto creature = CreatureForNative(PopObject());
+	const auto enable = Pop().intVal != 0;
+	if (!creature.has_value())
+	{
+		return;
+	}
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(*creature))
+	{
+		mind->inDevelopmentScript = enable;
+	}
 }
 
 void StoreCameraDetails() // 283 STORE_CAMERA_DETAILS
@@ -6512,17 +6690,55 @@ void SpiritDisappear() // 301 SPIRIT_DISAPPEAR
 
 void SetFocusOnObject() // 302 SET_FOCUS_ON_OBJECT
 {
-	// const auto target = Pop().uintVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto target = PopObject();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* targetTransform =
+	    target != entt::null && registry.Valid(target) ? registry.TryGet<const Transform>(target) : nullptr;
+	if (object == entt::null || !registry.Valid(object) || targetTransform == nullptr)
+	{
+		ScriptMessage("Thing not found!");
+		return;
+	}
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		// The script takes control of the creature, which turns to face the thing, holding still two seconds, and keeps
+		// its head turned to it until the script lets it go
+		if (Locator::creatureMindSystem::has_value())
+		{
+			auto& minds = Locator::creatureMindSystem::value();
+			minds.SetScriptFocus(object, creature_mind::Gaze {.object = static_cast<uint32_t>(target)});
+			minds.CarryOutForScript(object, creature_mind::FaceThingForScript(static_cast<uint32_t>(target)));
+		}
+		return;
+	}
+	// Anything else turns at once to face where the thing stands, as SET_FOCUS turns it to face a point; a marker or a
+	// group doesn't turn
+	if (!registry.AllOf<ecs::components::ScriptMarker>(object) && !IsScriptContainer(registry, object))
+	{
+		FacePoint(object, targetTransform->position);
+	}
 }
 
 void ReleaseObjectFocus() // 303 RELEASE_OBJECT_FOCUS
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not found!");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		ScriptMessage("Thing not creature!");
+		return;
+	}
+	// The creature's head is free to look about again
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().SetScriptFocus(object, std::nullopt);
+	}
 }
 
 void ImmersionExists() // 304 IMMERSION_EXISTS

@@ -44,6 +44,9 @@ struct CreatureMindState
 	creature_look::Target look {};
 	/// Whether the head turns to what it watches this turn
 	bool lookingAbout {false};
+	/// What a script has it keep its head turned to, whatever it is doing, until the script lets it go: a thing (looked
+	/// at where it stands) or a point
+	std::optional<creature_mind::Gaze> scriptFocus;
 
 	/// Seconds since the player last paid it any attention
 	float secondsAlone {0.0f};
@@ -81,6 +84,9 @@ struct CreatureMindState
 	/// the stage they were last set for. Until the game's story moves it on, a creature starts fully grown up.
 	uint32_t developmentPhase {k_FullyGrownUp};
 	std::optional<uint32_t> desiresPhase;
+	/// A lesson script of growing up is running for it, from when the script says so until it says it is over. The
+	/// game's help about the creature waits meanwhile, except the help about its stage.
+	bool inDevelopmentScript {false};
 
 	/// While paused, the mind leaves the body alone to be posed by hand
 	bool paused {false};

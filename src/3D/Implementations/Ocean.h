@@ -14,6 +14,7 @@
 #include <entt/core/hashed_string.hpp>
 
 #include "3D/OceanInterface.h"
+#include "3D/SeaTexture.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -31,18 +32,13 @@ class Mesh;
 class Ocean final: public OceanInterface
 {
 public:
-	// Oddly enough the water texture is labeled Sky
-	static constexpr entt::hashed_string k_DiffuseTextureId = entt::hashed_string("raw/Sky");
-	static constexpr entt::hashed_string k_AlphaTextureId = entt::hashed_string("raw/Skya");
-
 	Ocean() noexcept;
 	~Ocean() noexcept;
 
 	[[nodiscard]] graphics::FrameBuffer& GetReflectionFramebuffer() const noexcept override { return *_reflectionFrameBuffer; }
 	void ResizeReflectionFramebuffer(glm::u16vec2 size) override;
 	[[nodiscard]] graphics::Mesh& GetMesh() const noexcept override { return *_mesh; }
-	[[nodiscard]] entt::id_type GetDiffuseTexture() const noexcept override { return k_DiffuseTextureId; }
-	[[nodiscard]] entt::id_type GetAlphaTexture() const noexcept override { return k_AlphaTextureId; }
+	[[nodiscard]] entt::id_type GetTexture() const noexcept override { return sea_texture::k_Id; }
 
 private:
 	void CreateMesh();

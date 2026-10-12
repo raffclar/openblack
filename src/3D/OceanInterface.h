@@ -28,7 +28,7 @@ public:
 	/// What lies under the sea is drawn at the size of the view, as the game draws it straight into the frame
 	virtual void ResizeReflectionFramebuffer(glm::u16vec2 size) = 0;
 	[[nodiscard]] virtual graphics::Mesh& GetMesh() const noexcept = 0;
-	[[nodiscard]] virtual entt::id_type GetDiffuseTexture() const noexcept = 0;
-	[[nodiscard]] virtual entt::id_type GetAlphaTexture() const noexcept = 0;
+	/// The sea's texture: its colours in rgb, its alpha in a
+	[[nodiscard]] virtual entt::id_type GetTexture() const noexcept = 0;
 };
 } // namespace openblack

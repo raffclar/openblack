@@ -5180,11 +5180,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			constexpr auto k_SeaState =
 			    k_BgfxDefaultStateInvertedZ & ~(BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_MASK | BGFX_STATE_CULL_MASK);
 			bgfx::setState(k_SeaState);
-			auto diffuse = Locator::resources::value().GetTextures().Handle(ocean.GetDiffuseTexture());
-			auto alpha = Locator::resources::value().GetTextures().Handle(ocean.GetAlphaTexture());
-			waterShader->SetTextureSampler("s_diffuse", 0, *diffuse);
-			waterShader->SetTextureSampler("s_alpha", 1, *alpha);
-			waterShader->SetTextureSampler("s_reflection", 2, ocean.GetReflectionFramebuffer().GetColorAttachment());
+			auto texture = Locator::resources::value().GetTextures().Handle(ocean.GetTexture());
+			waterShader->SetTextureSampler("s_diffuse", 0, *texture);
+			waterShader->SetTextureSampler("s_reflection", 1, ocean.GetReflectionFramebuffer().GetColorAttachment());
 			SetSeaUniforms(*waterShader, *desc.camera);
 			// The sea is drawn in the sky's pass, which keeps its order, so that what is drawn before the land (a vortex's
 			// swirl) goes over the sea and under the land, as the game draws them in turn
