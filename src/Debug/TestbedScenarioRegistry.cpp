@@ -1658,6 +1658,24 @@ void AddHand(std::vector<Scenario>& all)
 	                  .value = static_cast<size_t>(SpellSeedType::CreatureSpellBig)},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.83f, 0.45f}}},
 	});
+
+	// The camera looks down at the land just ahead, so the hand is seen up close
+	all.push_back({
+	    .id = "hand.miracle_glow",
+	    .name = "The glow over a hand holding a miracle",
+	    .facet = Facet::Hand,
+	    .description = "A food seed is put in the hand, which sits still near the camera. Then the player turns evil, "
+	                   "then good, ten seconds each.",
+	    .expected = "The flowing sheet runs over the hand in the player's colour, shaded as the hand is (brighter on the "
+	                "side facing the light), added over it at four fifths and lying exactly on its skin whatever its "
+	                "evil or good shape.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -14.0f}, .look = {0.0f, 1.0f, 4.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.7f}},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Food)},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 8.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)

@@ -48,9 +48,7 @@ void main()
 	vec3 origin = mul(model, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
 	vec3 localLight = ModelLightLocal(mul(model, vec4(1.0f, 0.0f, 0.0f, 0.0f)).xyz, mul(model, vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz,
 	                                  mul(model, vec4(0.0f, 0.0f, 1.0f, 0.0f)).xyz, origin);
-	float facing = dot(a_normal, localLight);
-	float lit = min((facing < 0.0f ? 0.0f : facing * 1.3f) + 0.4f, 1.0f);
-	float intensity = floor(lit * 255.0f);
+	float intensity = PosedModelLightFactor(a_normal, localLight);
 
 	// Out in the world it takes the land's light, white near the screen, and the land's colour added
 	float shade = u_advisorLook.x;

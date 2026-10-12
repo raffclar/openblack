@@ -191,6 +191,12 @@ struct BandPose
 /// The hand's glow while it holds a miracle: the flow's sheet over the hand at this share, its 32 cells backwards at 20
 /// a second
 inline constexpr float k_GlowShare = 0.8f;
+/// The glow's alpha, of 1: its share kept in whole 255ths in the colour the hand is drawn in, which drops the fraction
+[[nodiscard]] constexpr float GlowAlpha()
+{
+	constexpr float k_ByteMax = 255.0f;
+	return static_cast<float>(static_cast<int>(k_GlowShare * k_ByteMax)) / k_ByteMax;
+}
 inline constexpr float k_GlowFrameRate = -20.0f;
 inline constexpr int k_GlowCells = 32;
 /// The flow's texture is an eighth of the sheet across and down

@@ -45,5 +45,9 @@ constexpr float k_Ambient = 90.0f;
 /// I = round(255 n.l), halves to even; the ambient when I < 0, else ambient + ((255 - ambient) I >> 8). As
 /// model_light.sh's ModelLightFactor.
 [[nodiscard]] float Factor(const glm::vec3& normal, const glm::vec3& localLight, float ambient);
+/// The factor, of 256, the game's posed models (the hand, the advisors, the glow over a hand holding a miracle) are lit by
+/// instead: 255 (1.3 n.l + 0.4) with the fraction dropped, from 0.4 when facing away up to 1. As model_light.sh's
+/// PosedModelLightFactor.
+[[nodiscard]] float PosedFactor(const glm::vec3& normal, const glm::vec3& localLight);
 
 } // namespace openblack::model_light
