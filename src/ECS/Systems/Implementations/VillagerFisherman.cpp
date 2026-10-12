@@ -39,6 +39,7 @@
 #include "Locator.h"
 #include "VillagerBuild.h"
 #include "VillagerFarmer.h"
+#include "VillagerFootpath.h"
 #include "VillagerHome.h"
 #include "VillagerShepherd.h"
 
@@ -100,10 +101,10 @@ void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 	}
 }
 
-void MoveOnPathsTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
+/// Walks to the farm along its footpaths where they lead its way
+void MoveOnPathsTo(LivingAction& action, entt::entity farm, glm::vec2 goal, VillagerStates final)
 {
-	// TODO(villager-jobs-1): along the town's footpaths where there are any; villagers don't walk footpaths yet
-	MoveTo(action, goal, final);
+	villager_footpath::SetupMoveToOnFootpath(action, farm, goal, final);
 }
 
 entt::entity FarmOf(entt::entity villager)
@@ -203,7 +204,7 @@ uint32_t villager_fisherman::VillagerBecomesFisherman(LivingAction& action, entt
 	const auto villager = EntityOf(action);
 	SetTopState(action, VillagerStates::DecideWhatToDo);
 	Entities().AssignOrReplace<WorkTarget>(villager, WorkTarget {.thing = farm});
-	MoveOnPathsTo(action, ArrivePositionOf(farm), VillagerStates::FishermanArrivesAtFishing);
+	MoveOnPathsTo(action, farm, ArrivePositionOf(farm), VillagerStates::FishermanArrivesAtFishing);
 	return 1;
 }
 
@@ -221,7 +222,7 @@ uint32_t villager_fisherman::FishermanArrivesAtFishing(LivingAction& action)
 	switch (work::ArriveAtFishing(here, {place.x, place.y, 0.0f}))
 	{
 	case work::FishingArrival::WalkAgain:
-		MoveOnPathsTo(action, ArrivePositionOf(farm), VillagerStates::FishermanArrivesAtFishing);
+		MoveOnPathsTo(action, farm, ArrivePositionOf(farm), VillagerStates::FishermanArrivesAtFishing);
 		break;
 	case work::FishingArrival::MoveToSpot:
 		MoveTo(action, glm::xz(Locator::fishFarmSystem::value().FishingSpot(farm)), VillagerStates::FishermanArrivesAtFishing);

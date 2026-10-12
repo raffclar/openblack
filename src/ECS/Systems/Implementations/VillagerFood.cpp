@@ -55,6 +55,7 @@
 #include "ObjectMeasures.h"
 #include "VillagerBuild.h"
 #include "VillagerFire.h"
+#include "VillagerFootpath.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
 
@@ -65,6 +66,7 @@ namespace rules = openblack::ecs::villager_food_rules;
 namespace needs = openblack::ecs::villager_needs;
 namespace villager_home = openblack::ecs::villager_home;
 namespace villager_build = openblack::ecs::villager_build;
+namespace villager_footpath = openblack::ecs::villager_footpath;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace world_objects = openblack::ecs::world_objects;
 namespace construction = openblack::ecs::construction;
@@ -398,8 +400,8 @@ uint32_t villager_food::GotoStoragePitForFood(LivingAction& action)
 	const auto& person = Entities().Get<const Villager>(EntityOf(action));
 	if (const auto pit = WorkingStoragePit(person); pit.has_value())
 	{
-		// TODO(villagers): along the town's footpaths where there are any
-		villager_home::SetupMoveTo(action, villager_home::ArrivePosition(*pit), VillagerStates::ArrivesAtStoragePitForFood);
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePosition(*pit),
+		                                         VillagerStates::ArrivesAtStoragePitForFood);
 		return 1;
 	}
 	// TODO(villager-hunger-health): without a working pit it walks to its town's own place for food

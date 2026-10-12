@@ -38,6 +38,7 @@
 #include "ObjectMeasures.h"
 #include "VillagerBuild.h"
 #include "VillagerFood.h"
+#include "VillagerFootpath.h"
 #include "VillagerHome.h"
 
 using namespace openblack;
@@ -47,6 +48,7 @@ namespace rules = openblack::ecs::villager_food_rules;
 namespace villager_home = openblack::ecs::villager_home;
 namespace villager_food = openblack::ecs::villager_food;
 namespace villager_build = openblack::ecs::villager_build;
+namespace villager_footpath = openblack::ecs::villager_footpath;
 namespace routine = openblack::ecs::villager_routine;
 namespace construction = openblack::ecs::construction;
 
@@ -213,8 +215,8 @@ uint32_t housewife::GotoStoragePit(LivingAction& action)
 	const auto abode = AbodeOf(villager);
 	if (IsFunctional(pit) && abode != entt::null && !IsEnoughFoodForDinner(abode))
 	{
-		// TODO(villagers): along the town's footpaths where there are any
-		villager_home::SetupMoveTo(action, villager_home::ArrivePosition(*pit), VillagerStates::HousewifeArrivesAtStoragePit);
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePosition(*pit),
+		                                         VillagerStates::HousewifeArrivesAtStoragePit);
 		return 1;
 	}
 	villager_home::GoHome(action);
@@ -256,7 +258,8 @@ uint32_t housewife::ArrivesAtStoragePit(LivingAction& action)
 	}
 	if (Entities().Get<const Villager>(villager).foodHeld != 0)
 	{
-		villager_home::SetupMoveTo(action, villager_home::ArrivePosition(*pit), VillagerStates::HousewifePickupFromStoragePit);
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePosition(*pit),
+		                                         VillagerStates::HousewifePickupFromStoragePit);
 		return 1;
 	}
 	SetTopState(action, VillagerStates::DecideWhatToDo);
@@ -269,7 +272,8 @@ uint32_t housewife::PickupFromStoragePit(LivingAction& action)
 	const auto abode = AbodeOf(villager);
 	if (Entities().Get<const Villager>(villager).foodHeld != 0 && abode != entt::null)
 	{
-		villager_home::SetupMoveTo(action, villager_home::ArrivePosition(abode), VillagerStates::HousewifeReturnHomeWithFood);
+		villager_footpath::SetupMoveToOnFootpath(action, abode, villager_home::ArrivePosition(abode),
+		                                         VillagerStates::HousewifeReturnHomeWithFood);
 		return 1;
 	}
 	SetTopState(action, VillagerStates::DecideWhatToDo);
@@ -367,7 +371,7 @@ uint32_t housewife::GossipsAroundStoragePit(LivingAction& action)
 	const auto spot = routine::Polar(centre, angle, ecs::systems::object_measures::TwoDRadius(Entities(), *pit) + reach);
 	if (!villager_home::Collides(spot))
 	{
-		villager_home::SetupMoveTo(action, spot, VillagerStates::HousewifeGossipsAroundStoragePit);
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, spot, VillagerStates::HousewifeGossipsAroundStoragePit);
 	}
 	const auto& person = Entities().Get<const Villager>(villager);
 	action.turnsUntilStateChange = rules::GossipTurns(InfoOf(person).housewifeGossipTime, person.food);

@@ -867,4 +867,5 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_reward_opening test_reward_opening.cpp)
 openblack_setup_and_add_test(test_lhvm_save_state lhvm/test_lhvm_save_state.cpp)
 target_link_libraries(test_lhvm_save_state PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_footpath_rules test_footpath_rules.cpp)
 openblack_setup_and_add_test(test_statistics_rules test_statistics_rules.cpp)

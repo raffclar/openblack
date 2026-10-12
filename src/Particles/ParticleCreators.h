@@ -78,6 +78,14 @@ struct MeshCreator final: Creator
 	bool drawCutByPlane {false};
 	/// Coloured by the land's light where it is
 	bool landscapeColour {false};
+	/// Shaded by the scene's lights; without it the model shows its texture in its atom's colour
+	bool dynamicLighting {true};
+
+	/// Whether the model is drawn in its atom's colour without the scene's lights: one drawn in its atom's alpha, one
+	/// added to what is behind it, or one its files keep out of the lights
+	[[nodiscard]] bool DrawnUnlit() const { return useGlobalAlpha || additiveMaterial || !dynamicLighting; }
+	/// The opacity an unlit model is drawn with: its atom's alpha when it is drawn in it, otherwise fully opaque
+	[[nodiscard]] float UnlitAlpha(float atomAlpha) const { return useGlobalAlpha || additiveMaterial ? atomAlpha : 1.0f; }
 
 	// A texture that plays frames or slides
 	int textureWidth {64};

@@ -35,6 +35,14 @@ float ModelLightFactor(vec3 localNormal, vec3 localLight)
 	return intensity < 0.0f ? ambient : ambient + floor((255.0f - ambient) * intensity / 256.0f);
 }
 
+// The factor, of 256, the game's posed models (the hand, the advisors) light each vertex by instead: 1.3 n.l + 0.4, with
+// nothing below 0.4 nor above 1, in whole 255ths
+float PosedModelLightFactor(vec3 localNormal, vec3 localLight)
+{
+	float facing = dot(localNormal, localLight);
+	return floor(min((facing < 0.0f ? 0.0f : facing * 1.3f) + 0.4f, 1.0f) * 255.0f);
+}
+
 // A colour of 0 to 255 lit by the factor, each channel (c f) >> 8, as 0 to 1
 vec3 ModelLightColour(vec3 colour, float factor)
 {

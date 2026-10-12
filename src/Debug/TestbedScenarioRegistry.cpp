@@ -1633,6 +1633,40 @@ void AddHand(std::vector<Scenario>& all)
 	                  .value = static_cast<size_t>(SpellSeedType::CreatureSpellBig)},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.83f, 0.45f}}},
 	});
+
+	// The camera looks along the land just ahead, so the hand is seen up close in the sun
+	all.push_back({
+	    .id = "hand.lighting",
+	    .name = "The hand in the light",
+	    .facet = Facet::Hand,
+	    .description = "The bare hand sits still near the camera while the player turns evil, then good, ten seconds each.",
+	    .expected = "The hand is lit as the game lights the models it poses: the side facing the light at full strength, the "
+	                "side away from it never darker than two fifths, in the land's light half as bright again, whatever its "
+	                "evil or good shape and skin.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -14.0f}, .look = {0.0f, 1.0f, 4.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.7f}},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 8.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
+	});
+
+	// The camera looks down at the land just ahead, so the hand is seen up close
+	all.push_back({
+	    .id = "hand.miracle_glow",
+	    .name = "The glow over a hand holding a miracle",
+	    .facet = Facet::Hand,
+	    .description = "A food seed is put in the hand, which sits still near the camera. Then the player turns evil, "
+	                   "then good, ten seconds each.",
+	    .expected = "The flowing sheet runs over the hand in the player's colour, shaded as the hand is (brighter on the "
+	                "side facing the light), added over it at four fifths and lying exactly on its skin whatever its "
+	                "evil or good shape.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -14.0f}, .look = {0.0f, 1.0f, 4.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.7f}},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Food)},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 8.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
@@ -2970,6 +3004,17 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if (!valid || object.scale <= 0.0f || !ValidOffset(object.offset))
 		{
 			problems.emplace_back("an object of no such kind, size or place");
+		}
+	}
+	for (const auto& footpath : scenario.footpaths)
+	{
+		const auto outOfRange = [&scenario](size_t object) { return object >= scenario.objects.size(); };
+		if ((footpath.startsAt.has_value() && outOfRange(*footpath.startsAt)) ||
+		    std::ranges::any_of(footpath.leadsFrom, outOfRange) ||
+		    !std::ranges::all_of(footpath.nodes, [](glm::vec2 node) { return ValidOffset(node); }) || footpath.nodes.empty() ||
+		    footpath.leadsFrom.empty())
+		{
+			problems.emplace_back("a footpath with no nodes, a node off the map or an object that isn't there");
 		}
 	}
 	for (const auto& throwing : scenario.throws)

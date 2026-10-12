@@ -42,6 +42,9 @@ uniform vec4 u_objectLook;
 // The point a model is fogged at in the temple, in place of its own position: xyz the point, w 1 to use it. The temple's
 // walls without a lightmap are fogged once each, at their first vertex.
 uniform vec4 u_fogAt;
+// x: 1 for the light the game gives the models it lights as it poses them (the hand, the glow over it), in place of
+// the usual model light (see PosedModelLightFactor)
+uniform vec4 u_lightRule;
 #ifdef USE_LIGHTMAP
 // The temple's light's colour added to its walls, or a control's glow, and how much darker the light makes them
 uniform vec4 u_glow;
@@ -279,7 +282,9 @@ void main()
 		v_snow.w = i_data4.x - 1.0f;
 	}
 #endif // USE_INSTANCING
-	v_color0 = vec4(ModelLightColour(colour, shadedElsewhere ? u_shadeAt.w : ModelLightFactor(normal, localLight)), 1.0f);
+	// The posed models the game lights as it poses them take their own rule
+	float lightFactor = u_lightRule.x > 0.5f ? PosedModelLightFactor(normal, localLight) : ModelLightFactor(normal, localLight);
+	v_color0 = vec4(ModelLightColour(colour, shadedElsewhere ? u_shadeAt.w : lightFactor), 1.0f);
 #ifndef USE_LIGHTMAP
 	if (u_landLight.z > 0.0f)
 	{

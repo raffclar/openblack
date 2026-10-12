@@ -52,6 +52,7 @@
 #include "ObjectMeasures.h"
 #include "VillagerAnimate.h"
 #include "VillagerFood.h"
+#include "VillagerFootpath.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
 
@@ -140,10 +141,9 @@ void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 }
 
 /// The same along the town's paths
-void MoveOnPathsTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
+void MoveOnPathsTo(LivingAction& action, entt::entity building, glm::vec2 goal, VillagerStates final)
 {
-	// TODO(temple-builders): along the town's footpaths where there are any; villagers don't walk footpaths yet
-	MoveTo(action, goal, final);
+	villager_footpath::SetupMoveToOnFootpath(action, building, goal, final);
 }
 
 /// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
@@ -287,7 +287,7 @@ uint32_t ToBuildingSite(LivingAction& action, entt::entity building)
 	}
 	else
 	{
-		MoveOnPathsTo(action, goal, VillagerStates::ArrivesAtBuildingSite);
+		MoveOnPathsTo(action, building, goal, VillagerStates::ArrivesAtBuildingSite);
 	}
 	return 1;
 }
@@ -333,7 +333,7 @@ uint32_t GotoStoragePitForBuildingMaterials(LivingAction& action, entt::entity b
 	}
 	if (pit.has_value())
 	{
-		MoveOnPathsTo(action, *target, VillagerStates::ArrivesAtStoragePitForBuildingMaterials);
+		MoveOnPathsTo(action, *pit, *target, VillagerStates::ArrivesAtStoragePitForBuildingMaterials);
 	}
 	else
 	{
@@ -445,7 +445,7 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 				}
 				if (result == 1 && arrive != VillagerStates::InvalidState)
 				{
-					MoveOnPathsTo(action, villager_home::ArrivePosition(*pit), arrive);
+					MoveOnPathsTo(action, *pit, villager_home::ArrivePosition(*pit), arrive);
 					return 1;
 				}
 			}
@@ -733,7 +733,7 @@ uint32_t villager_build::ReenterBuildingState(LivingAction& action)
 			}
 			else
 			{
-				MoveOnPathsTo(action, goal, VillagerStates::ArrivesAtBuildingSite);
+				MoveOnPathsTo(action, building, goal, VillagerStates::ArrivesAtBuildingSite);
 			}
 			return 1;
 		}
@@ -833,7 +833,7 @@ uint32_t villager_build::GotoStoragePitForDropOff(LivingAction& action)
 	const auto pit = StoragePitOf(person);
 	if (IsFunctional(pit))
 	{
-		MoveOnPathsTo(action, villager_home::ArrivePosition(*pit), VillagerStates::ArrivesAtStoragePitForDropOff);
+		MoveOnPathsTo(action, *pit, villager_home::ArrivePosition(*pit), VillagerStates::ArrivesAtStoragePitForDropOff);
 		return 1;
 	}
 	const auto held = villager_carry::HeldResource(person);
@@ -880,7 +880,7 @@ uint32_t villager_build::DropOffAtStoragePit(LivingAction& action, std::optional
 					(type == ResourceType::Food ? tally->foodCarried : tally->woodCarried) -= static_cast<float>(dropped);
 				}
 			}
-			MoveOnPathsTo(action, door, VillagerStates::DecideWhatToDo);
+			MoveOnPathsTo(action, *pit, door, VillagerStates::DecideWhatToDo);
 			return 1;
 		}
 		// TODO(temple-builders): without a working storage pit the load goes to the town's temporary pot; not yet
