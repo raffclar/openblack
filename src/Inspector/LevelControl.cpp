@@ -108,13 +108,13 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeLevelProvider(Level
 	                "the opening on the beach skipped), story (all of the first land's creature tutorial skipped too), "
 	                "old (keep the old creature; with no kept creature it is story), normal; or ask, to be asked it, as "
 	                "every new game is without skip. Answers once the land has loaded",
-	                {Parameter("skip", "string", "creature, story, old, normal or ask", false)}, true),
+	                {Parameter("skip", "string", "creature, story, old, cow, normal or ask", false)}, true),
 	    [&levels](const QueryContext& context) {
 		    const auto skip = StringMember(context.params, "skip").value_or("");
-		    constexpr std::array<std::string_view, 6> k_Starts {"", "ask", "normal", "creature", "story", "old"};
+		    constexpr std::array<std::string_view, 7> k_Starts {"", "ask", "normal", "creature", "story", "old", "cow"};
 		    if (std::ranges::find(k_Starts, skip) == k_Starts.end())
 		    {
-			    return QueryResult::Error("skip is creature, story, old, normal or ask");
+			    return QueryResult::Error("skip is creature, story, old, cow, normal or ask");
 		    }
 		    if (auto why = levels.NewGame(skip); !why.empty())
 		    {

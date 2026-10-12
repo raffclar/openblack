@@ -742,7 +742,7 @@
   "kind": "object",
   "parameters": [
    {
-    "description": "creature, story, old, normal or ask",
+    "description": "creature, story, old, cow, normal or ask",
     "name": "skip",
     "type": "string"
    }

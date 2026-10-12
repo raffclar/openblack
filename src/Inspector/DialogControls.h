@@ -52,7 +52,7 @@ struct DialogControl
 [[nodiscard]] std::vector<DialogControl> DialogControls(std::span<const gui::Dialog::NamedControl> controls);
 
 /// The start-of-game question's controls: its OK button, then each answer's radio button by its answer, which also
-/// answers to the name the developers' start gives that answer ("normal", "creature", "story", "old")
+/// answers to the name the developers' start gives that answer ("normal", "creature", "story", "old", "cow")
 [[nodiscard]] std::vector<DialogControl> SkipBoxControls(const gui::SkipBox& box);
 
 /// The middle of the control a path names: its name or another of its names, in any case, with [n] before it for the

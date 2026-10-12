@@ -3713,24 +3713,13 @@ void ConvertCameraFocus() // 082 CONVERT_CAMERA_FOCUS
 	Pushv(focus[2]);
 }
 
-void CreatureSetPlayer() // 083 CREATURE_SET_PLAYER
+/// The creature becomes the local player's: their creature from now on, which they lead on the leash when they have no
+/// other to lead
+// TODO(opening-skip): the game also names it after the player's profile, and moves a reaction it started over to
+// its new player; openblack keeps neither profiles nor creature reactions yet
+void MakePlayersCreature(entt::entity object)
 {
-	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
-	if (object == entt::null || !registry.Valid(object))
-	{
-		ScriptMessage("no creature");
-		return;
-	}
-	if (!registry.AllOf<ecs::components::Creature>(object))
-	{
-		ScriptMessage("not a creature");
-		return;
-	}
-	// The creature becomes the local player's: their creature from now on, which they lead on the leash when they have
-	// no other to lead
-	// TODO(opening-skip): the game also names it after the player's profile, and moves a reaction it started over to
-	// its new player; openblack keeps neither profiles nor creature reactions yet
 	const auto player =
 	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 	if (Locator::leashSystem::has_value())
@@ -3746,6 +3735,23 @@ void CreatureSetPlayer() // 083 CREATURE_SET_PLAYER
 	{
 		Locator::playerSystem::value().AddCreature(object);
 	}
+}
+
+void CreatureSetPlayer() // 083 CREATURE_SET_PLAYER
+{
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("no creature");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		ScriptMessage("not a creature");
+		return;
+	}
+	MakePlayersCreature(object);
 }
 
 void StartCountdownTimer() // 084 START_COUNTDOWN_TIMER
@@ -5824,10 +5830,31 @@ void SetLeashWorks() // 249 SET_LEASH_WORKS
 	leashes.SetWorks(creature, enable);
 }
 
+/// Debug quickstart: the Cow is made where the creature choice makes the chosen creature (its home in the glade), and
+/// becomes the player's exactly as CREATURE_SET_PLAYER makes the one they pick
+void StartWithCow()
+{
+	constexpr int32_t k_CowSubtype = 1;
+	const glm::vec3 homePosition {1896.5f, 29.48f, 2520.06f};
+	const auto cow = CreateScriptObject(ObjectType::Creature, k_CowSubtype, homePosition, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+	if (cow == entt::null || cow == static_cast<entt::entity>(0) || !Locator::entitiesRegistry::value().Valid(cow))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "The debug quickstart could not make the Cow");
+		return;
+	}
+	RegisterCreated(cow);
+	MakePlayersCreature(cow);
+}
+
 void LoadMyCreature() // 250 LOAD_MY_CREATURE
 {
 	// The player's creature, as kept when a land was last cleared, comes out at the place, unless they have one already
 	const auto position = PopVec();
+	if (Locator::tutorialSkipSystem::value().Get().startWithCow)
+	{
+		StartWithCow();
+		return;
+	}
 	Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z});
 }
 
@@ -8100,7 +8127,9 @@ void IsKeepingOldCreature() // 462 IS_KEEPING_OLD_CREATURE
 
 void CurrentProfileHasCreature() // 463 CURRENT_PROFILE_HAS_CREATURE
 {
-	Pushb(Locator::playerProfileSystem::value().CurrentProfileHasCreature());
+	// The debug quickstart's Cow stands in for a kept creature
+	Pushb(Locator::tutorialSkipSystem::value().Get().startWithCow ||
+	      Locator::playerProfileSystem::value().CurrentProfileHasCreature());
 }
 
 void CHLApi::InitFunctionsTable0()

@@ -19,16 +19,18 @@
 namespace openblack::new_game_choice
 {
 
-/// The four ways a player can start a new game, in the order the start-of-game question lists them
+/// The ways a player can start a new game, in the order the start-of-game question lists them. The last is not in the
+/// original game: a debug quickstart that skips the creature choice and gives the player the Cow
 enum class Choice : uint8_t
 {
 	StartNormally,
 	SkipToCreatureSelect,
 	SkipCreatureTutorial,
 	KeepOldCreature,
+	DebugStartWithCow,
 };
 
-inline constexpr size_t k_ChoiceCount = 4;
+inline constexpr size_t k_ChoiceCount = 5;
 
 /// What the story's scripts are told about the player's choice. The first land's set-up reads them through
 /// CAN_SKIP_TUTORIAL, CAN_SKIP_CREATURE_TRAINING and IS_KEEPING_OLD_CREATURE.
@@ -37,6 +39,8 @@ struct TutorialSkip
 	bool skipTutorial {false};
 	bool skipCreatureTraining {false};
 	bool keepOldCreature {false};
+	/// Not in the original game: the creature choice is skipped and the Cow is the player's creature
+	bool startWithCow {false};
 
 	[[nodiscard]] constexpr bool operator==(const TutorialSkip&) const = default;
 };
@@ -44,6 +48,11 @@ struct TutorialSkip
 /// Each choice skips everything the one before it skips, and one thing more
 [[nodiscard]] constexpr TutorialSkip SkipFor(Choice choice) noexcept
 {
+	if (choice == Choice::DebugStartWithCow)
+	{
+		// Goes the way keeping an old creature does (the glade's choice is skipped), with the Cow as the creature kept
+		return {.skipTutorial = true, .skipCreatureTraining = true, .keepOldCreature = true, .startWithCow = true};
+	}
 	const auto level = static_cast<uint8_t>(choice);
 	return {.skipTutorial = level >= 1, .skipCreatureTraining = level >= 2, .keepOldCreature = level >= 3};
 }
@@ -92,7 +101,7 @@ struct NewGameStart
 }
 
 /// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)
-/// or "old" (keep the old creature); nothing for anything else
+/// or "old" (keep the old creature) or "cow" (debug: start with the Cow); nothing for anything else
 [[nodiscard]] constexpr std::optional<NewGameStart> ParseNewGameStart(std::string_view text) noexcept
 {
 	if (text == "ask")
@@ -115,6 +124,10 @@ struct NewGameStart
 	{
 		return NewGameStart {.answer = Choice::KeepOldCreature};
 	}
+	if (text == "cow")
+	{
+		return NewGameStart {.answer = Choice::DebugStartWithCow};
+	}
 	return std::nullopt;
 }
 
@@ -129,6 +142,8 @@ struct NewGameStart
 		return "story";
 	case Choice::KeepOldCreature:
 		return "old";
+	case Choice::DebugStartWithCow:
+		return "cow";
 	case Choice::StartNormally:
 	default:
 		return "normal";

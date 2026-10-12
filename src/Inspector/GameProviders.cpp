@@ -1372,6 +1372,7 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 			              result["skip_tutorial"] = skip.skipTutorial;
 			              result["skip_creature_training"] = skip.skipCreatureTraining;
 			              result["keep_old_creature"] = skip.keepOldCreature;
+			              result["start_with_cow"] = skip.startWithCow;
 		              }
 		              if (Locator::playerProfileSystem::has_value())
 		              {
