@@ -347,9 +347,10 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 		submitDesc.useMaterialBlending = true;
 		submitDesc.useMaterialCulling = true;
 	}
-	// Those drawn in their atom's alpha, or added to what is behind, take their atom's colour unlit; the others are lit
-	const bool unlit = creator.useGlobalAlpha || creator.additiveMaterial;
-	submitDesc.tint = glm::vec4(glm::vec3(draw.colour), unlit ? std::max(draw.colour.a, 1.0f / 255.0f) : 0.0f);
+	// Those drawn in their atom's alpha, added to what is behind or kept out of the lights take their atom's colour
+	// unlit; the others are lit
+	submitDesc.tint = glm::vec4(glm::vec3(draw.colour),
+	                            creator.DrawnUnlit() ? std::max(creator.UnlitAlpha(draw.colour.a), 1.0f / 255.0f) : 0.0f);
 	DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 }
 
