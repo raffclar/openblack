@@ -804,3 +804,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_development test_creature_development.cpp
 )
+openblack_setup_and_add_test(test_creature_touch test_creature_touch.cpp)
