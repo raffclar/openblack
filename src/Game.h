@@ -434,6 +434,8 @@ private:
 	void UpdateHandInterface();
 	/// The interface's pick of what is under the cursor, at the frame as it is about to be drawn
 	void PickUnderCursor(float seconds);
+	/// Whether the hand hovers over a thing: a one-shot bubble, or anything with a model that the cursor picks
+	[[nodiscard]] bool HandOverThing() const;
 	/// The near plane for the camera where it is now
 	void FitNearClip();
 	/// Shows the camera where the inspector wants the frame drawn from (an override, a picture's), or gives the camera
