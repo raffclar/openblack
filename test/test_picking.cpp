@@ -470,6 +470,43 @@ TEST(ScreenPick, OnlyAStrictlyNearerObjectTakesThePick)
 	    screen_pick::PickAmong(view, candidates, [](size_t) -> std::optional<float> { return std::nullopt; }).has_value());
 }
 
+// A creature resting in its pen stands inside the temple's model, which holds the pen's walls: neither has priority,
+// the nearest triangle under the cursor wins
+TEST(ScreenPick, ACreatureInItsPenIsPickedOnlyWhereNoWallIsNearer)
+{
+	const auto view = View();
+	// The temple is met first in the drawing, its large sphere around the small one of the creature in its pen
+	const std::array<screen_pick::Candidate, 2> candidates = {{
+	    {.centre = {0.0f, 0.0f, -60.0f}, .radius = 40.0f, .origin = {0.0f, 0.0f, -60.0f}},
+	    {.centre = {0.0f, 0.0f, -50.0f}, .radius = 1.0f, .origin = {0.0f, 0.0f, -50.0f}},
+	}};
+	constexpr float k_Creature = 49.5f;
+
+	// Over the open pen the cursor meets the temple only on the wall behind the creature: the creature is picked
+	const auto overThePen =
+	    screen_pick::PickAmong(view, candidates, [](size_t i) -> std::optional<float> { return i == 0 ? 70.0f : k_Creature; });
+	ASSERT_TRUE(overThePen.has_value());
+	EXPECT_EQ(overThePen->index, 1u);
+
+	// Seen from above, nothing of the temple is under the cursor
+	const auto fromAbove = screen_pick::PickAmong(view, candidates, [](size_t i) -> std::optional<float> {
+		return i == 0 ? std::nullopt : std::optional<float>(k_Creature);
+	});
+	ASSERT_TRUE(fromAbove.has_value());
+	EXPECT_EQ(fromAbove->index, 1u);
+
+	// A wall in front of it hides it: the temple is picked, and the creature, further than the wall by more than its
+	// own size, isn't even tested
+	std::vector<size_t> tested;
+	const auto behindAWall = screen_pick::PickAmong(view, candidates, [&tested](size_t i) -> std::optional<float> {
+		tested.push_back(i);
+		return i == 0 ? 45.0f : k_Creature;
+	});
+	ASSERT_TRUE(behindAWall.has_value());
+	EXPECT_EQ(behindAWall->index, 0u);
+	EXPECT_EQ(tested, (std::vector<size_t> {0}));
+}
+
 TEST(Picking, GrippingTheLandKeepsWhatWasPickedAndFollowsOnlyTheLand)
 {
 	using Pick = openblack::ecs::systems::PickingSystemInterface::Pick;
