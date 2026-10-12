@@ -408,7 +408,29 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 	}
 }
 
-void villager_reactions::Stop(entt::entity villager, LivingReaction& /*state*/, bool resetState)
+bool villager_reactions::ActsOut(Reaction type)
+{
+	switch (type)
+	{
+	case Reaction::FleeFromObject:
+	case Reaction::FleeFromSpell:
+	case Reaction::LookAtNiceSpell:
+	case Reaction::ReactToImpressiveSpell:
+	case Reaction::ReactToTeleport:
+	case Reaction::ReactToFlyingObject:
+	case Reaction::ReactToFood:
+	case Reaction::ReactToWood:
+	case Reaction::ReactToVillagerInHand:
+	case Reaction::ReactToBreeder:
+	case Reaction::ReactToDeath:
+	case Reaction::ReactToFire:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void villager_reactions::Stop(entt::entity villager, LivingReaction& state, bool resetState)
 {
 	auto& registry = EntityRegistry();
 	auto* action = registry.TryGet<LivingAction>(villager);
@@ -419,6 +441,13 @@ void villager_reactions::Stop(entt::entity villager, LivingReaction& /*state*/, 
 		{
 			wallHug->speed = GetSpeedStateSpeed(InfoOf(*component).speedGroup.speedDefault);
 		}
+		return;
+	}
+	// TODO(raffclar): a reaction villagers don't act out yet left them doing what they were doing, so there is nothing
+	// to go back from; it is only let go. Once each is acted out it ends as every other does.
+	if (!ActsOut(state.type))
+	{
+		LetGo(villager);
 		return;
 	}
 	StopReacting(*action);

@@ -967,3 +967,21 @@ TEST_F(Reactions, AVillagerWhoseStateWontLetItGoIsPutStraightIntoDecidingWhatToD
 	EXPECT_EQ(StateOf(villager), VillagerStates::DecideWhatToDo);
 	EXPECT_EQ(SlotOf(villager, LivingAction::Index::Previous), VillagerStates::InvalidState);
 }
+
+TEST_F(Reactions, AReactionVillagersDontActOutYetEndsWithoutMovingThem)
+{
+	MakeJob(*_info, k_JobAgain);
+	auto& celebration = _info->reaction.at(static_cast<size_t>(Reaction::ReactToTownCelebration));
+	celebration = _info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell));
+	Locator::infoConstants::emplace(*_info);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	const auto villager = _villagers[0];
+	WalkToJob(villager);
+	const auto id = Locator::reactionSystem::value().Create(Miracle(Reaction::ReactToTownCelebration));
+	ASSERT_NE(Locator::entitiesRegistry::value().Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::reactionSystem::value().Remove(id);
+	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
+	EXPECT_EQ(SlotOf(villager, LivingAction::Index::Final), k_Job);
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::reactionSystem::reset();
+}

@@ -39,6 +39,8 @@ namespace openblack::ecs::systems::villager_reactions
 [[nodiscard]] bool Available(entt::entity villager, Reaction type);
 /// A villager takes up a reaction of a kind: it keeps what it was doing to go back to, unless it was reacting already
 void Start(entt::entity villager, Reaction type, components::LivingReaction& state, bool wasReacting);
+/// Whether villagers act out a kind of reaction, going into its states, rather than only holding it
+[[nodiscard]] bool ActsOut(Reaction type);
 /// A villager stops reacting; when asked, it goes back to what it was doing
 void Stop(entt::entity villager, components::LivingReaction& state, bool resetState);
 
