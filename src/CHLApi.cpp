@@ -1128,11 +1128,12 @@ void RunText() // 013 RUN_TEXT
 
 void TempText() // 014 TEMP_TEXT
 {
-	// const auto withInteraction = Pop().intVal;
-	// const auto string = PopString();
-	// const auto singleLine = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withInteraction = Pop().intVal;
+	const auto words = PopString();
+	const auto singleLine = Pop().uintVal != 0;
+	// The game warns that words written into a script are shown rather than a translated help text
+	SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "Development text being used in game: {}", words);
+	Locator::helpTextSystem::value().TempText(singleLine, words, withInteraction);
 }
 
 void TextRead() // 015 TEXT_READ
@@ -5785,12 +5786,14 @@ void TempTextWithNumber() // 231 TEMP_TEXT_WITH_NUMBER
 
 void RunTextWithNumber() // 232 RUN_TEXT_WITH_NUMBER
 {
-	// const auto withInteraction = Pop().intVal;
-	// const auto number = Popf();
-	// const auto string = Pop().intVal;
-	// const auto singleLine = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withInteraction = Pop().intVal;
+	const auto number = Popf();
+	const auto text = Pop().uintVal;
+	const auto singleLine = Pop().uintVal != 0;
+	if (!Locator::helpTextSystem::value().RunTextWithNumber(singleLine, text, number, withInteraction))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid text");
+	}
 }
 
 void CreatureSpellReversion() // 233 CREATURE_SPELL_REVERSION
