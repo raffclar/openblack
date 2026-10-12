@@ -74,6 +74,7 @@
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipSiteConstruction.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
@@ -275,18 +276,70 @@ bool IsWorshipSite(entt::entity thing)
 	return registry.Valid(thing) && registry.AllOf<WorshipSite>(thing);
 }
 
-/// A worship site takes food into its pot, as much as it is given
-uint32_t AddToWorshipSite(entt::entity site, ResourceType type, uint32_t amount, bool poisoned)
+/// A worship site going up is a building site, whose one pile of wood its builders bring wood to
+bool IsWorshipSiteGoingUp(entt::entity site)
 {
-	auto* pot = WorshipSitePot(site);
-	if (pot == nullptr || (type != ResourceType::Food && type != ResourceType::Any))
+	return Locator::entitiesRegistry::value().AllOf<BuildingSite>(site);
+}
+
+/// A worship site takes food into its pot, as much as it is given, and while it goes up wood onto its building site's
+/// pile, made for the first wood brought
+uint32_t AddToWorshipSite(ResourceStoreSystem& stores, entt::entity site, ResourceType type, uint32_t amount, bool poisoned)
+{
+	namespace wsc = ecs::worship_site_construction;
+	switch (wsc::WhereGiven(type, IsWorshipSiteGoingUp(site)))
 	{
-		// TODO(worship): a site still going up takes wood onto its building site
+	case wsc::Destination::SitePile:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		ecs::construction::MakeSitePiles(site);
+		const auto pile = registry.Get<const BuildingSite>(site).piles.front();
+		return registry.Valid(pile) ? stores.AddToPile(pile, type, amount, poisoned) : 0u;
+	}
+	case wsc::Destination::FoodPot:
+	{
+		auto* pot = WorshipSitePot(site);
+		if (pot == nullptr)
+		{
+			return 0;
+		}
+		pot->amount += amount;
+		pot->poisoned = pot->poisoned || poisoned;
+		return amount;
+	}
+	case wsc::Destination::Nowhere:
+		break;
+	}
+	return 0;
+}
+
+/// A worship site gives food from its pot, and while it goes up wood from its building site's pile
+uint32_t TakeFromWorshipSite(entt::entity site, ResourceType type, uint32_t amount)
+{
+	namespace wsc = ecs::worship_site_construction;
+	auto& registry = Locator::entitiesRegistry::value();
+	Pot* pot = nullptr;
+	switch (wsc::WhereGiven(type, IsWorshipSiteGoingUp(site)))
+	{
+	case wsc::Destination::SitePile:
+	{
+		const auto pile = registry.Get<const BuildingSite>(site).piles.front();
+		pot = registry.Valid(pile) ? registry.TryGet<Pot>(pile) : nullptr;
+		break;
+	}
+	case wsc::Destination::FoodPot:
+		pot = WorshipSitePot(site);
+		break;
+	case wsc::Destination::Nowhere:
+		break;
+	}
+	if (pot == nullptr)
+	{
 		return 0;
 	}
-	pot->amount += amount;
-	pot->poisoned = pot->poisoned || poisoned;
-	return amount;
+	const auto taken = std::min(amount, pot->amount);
+	pot->amount -= taken;
+	return taken;
 }
 } // namespace
 
@@ -378,10 +431,10 @@ bool ResourceStoreSystem::IsStore(entt::entity store, ResourceType type) const
 	{
 		return true;
 	}
-	// A worship site stores food in its pot
+	// A worship site stores food in its pot, and wood on its building site while it goes up
 	if (IsWorshipSite(store))
 	{
-		return type == ResourceType::Food || type == ResourceType::Any;
+		return ecs::worship_site_construction::Stores(type, IsWorshipSiteGoingUp(store));
 	}
 	// A building going up stores wood on its site
 	if (IsBuildingSite(store))
@@ -468,7 +521,7 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 	}
 	if (IsWorshipSite(store))
 	{
-		return AddToWorshipSite(store, type, amount, poisoned);
+		return AddToWorshipSite(*this, store, type, amount, poisoned);
 	}
 	// A building going up takes wood onto its site, where the builders take it from
 	if (IsBuildingSite(store))
@@ -869,7 +922,7 @@ uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type
 	}
 	if (IsWorshipSite(object))
 	{
-		return AddToWorshipSite(object, type, amount, false);
+		return AddToWorshipSite(*this, object, type, amount, false);
 	}
 	if (auto* site = PiledSite(object))
 	{
@@ -960,14 +1013,7 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	}
 	if (IsWorshipSite(object))
 	{
-		auto* pot = WorshipSitePot(object);
-		if (pot == nullptr || (type != ResourceType::Food && type != ResourceType::Any))
-		{
-			return 0;
-		}
-		const auto taken = std::min(amount, pot->amount);
-		pot->amount -= taken;
-		return taken;
+		return TakeFromWorshipSite(object, type, amount);
 	}
 	if (auto* site = PiledSite(object))
 	{

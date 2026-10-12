@@ -34,6 +34,7 @@
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
@@ -195,4 +196,14 @@ void GameWorshipSiteWorld::PowerUpArtefacts(entt::entity site, uint32_t dancers)
 	{
 		Locator::artefactSystem::value().PowerUpSite(site, dancers);
 	}
+}
+
+void GameWorshipSiteWorld::OpenBuildingSite(entt::entity site, entt::entity town, float desire)
+{
+	construction::OpenWorshipSite(site, town, desire);
+}
+
+void GameWorshipSiteWorld::CloseBuildingSite(entt::entity site)
+{
+	construction::CloseSite(site);
 }
