@@ -1199,6 +1199,12 @@ LivingActionSystem::SetResult LivingActionSystem::ChangeTopState(LivingAction& a
 		}
 		SetStateDirectly(action, LivingAction::Index::Final, *destination);
 	}
+	else if (Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(current)).isFinalState != 0)
+	{
+		// Now in a state that is an end in itself, it no longer heads for the one it was walking to, whose checks
+		// stop with it
+		SetStateDirectly(action, LivingAction::Index::Final, VillagerStates::InvalidState);
+	}
 	const auto villager = Locator::entitiesRegistry::value().ToEntity(action);
 	villager_reactions::SetStateSpeed(villager, current);
 	if (outOf.has_value())
