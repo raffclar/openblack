@@ -24,23 +24,24 @@ constexpr float k_Day = 2.0f;
 
 TEST(ModelLight, TheSunByDay)
 {
-	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Day, false), model_light::k_Sun);
+	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Day, std::nullopt), model_light::k_Sun);
 }
 
 TEST(ModelLight, TheHandCarriesTheLightAtNight)
 {
-	const auto light = model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Night, false);
+	const auto light = model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Night, std::nullopt);
 	// A little before the hand, towards the camera
 	EXPECT_NEAR(glm::distance(light, k_Hand), 3.0f, 1e-4f);
 	EXPECT_GT(light.z, k_Hand.z);
 	// Never lower than 10 over the ground under the hand
-	const auto low = model_light::FrameLight({100.0f, 0.0f, 100.0f}, 5.0f, k_Camera, k_Night, false);
+	const auto low = model_light::FrameLight({100.0f, 0.0f, 100.0f}, 5.0f, k_Camera, k_Night, std::nullopt);
 	EXPECT_GE(low.y, 15.0f - 3.0f);
 }
 
-TEST(ModelLight, NoNightLightOnTheHandInsideTheTemple)
+TEST(ModelLight, TheTemplesLightInsideTheTemple)
 {
-	// Inside the temple the hand carries no light, so it doesn't light itself there
-	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Night, true), model_light::k_Sun);
-	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Day, true), model_light::k_Sun);
+	// Inside the temple the light stands off the temple's origin, by day and by night, and the hand carries none
+	const glm::vec3 temple {2000.0f, 10.0f, 1500.0f};
+	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Night, temple), glm::vec3(1000.0f, 1010.0f, 1000.0f));
+	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Day, glm::vec3(0.0f)), model_light::k_Temple);
 }

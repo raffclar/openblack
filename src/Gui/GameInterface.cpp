@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -29,6 +30,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/FixedFormat.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/FloatingNumber.h"
@@ -39,6 +41,7 @@
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Gui/CinemaBars.h"
@@ -113,7 +116,9 @@ std::unique_ptr<openblack::graphics::Texture2D> MakeFontTexture(const GameFont& 
 namespace
 {
 /// A texture of the game made of a colour file and an alpha file, 256 pixels square. Null when they are missing.
-std::unique_ptr<openblack::graphics::Texture2D> LoadTexture(const std::string& name)
+std::unique_ptr<openblack::graphics::Texture2D>
+LoadTexture(const std::string& name, openblack::graphics::Wrapping wrapping = openblack::graphics::Wrapping::ClampEdge,
+            const std::function<uint8_t(uint8_t)>& level = {})
 {
 	auto& fileSystem = Locator::filesystem::value();
 	const auto colour = ReadIfExists(fileSystem.GetPath<Path::Textures>() / (name + ".raw"));
@@ -131,10 +136,20 @@ std::unique_ptr<openblack::graphics::Texture2D> LoadTexture(const std::string& n
 		data->data[(i * 4) + 1] = colour[(i * 3) + 1];
 		data->data[(i * 4) + 2] = colour[(i * 3) + 2];
 		data->data[(i * 4) + 3] = alpha[i];
+		if (level)
+		{
+			for (size_t channel = 0; channel < 4; ++channel)
+			{
+				data->data[(i * 4) + channel] = level(data->data[(i * 4) + channel]);
+			}
+		}
 	}
+	// Kept four bits a channel, as the game keeps every texture it loads with an alpha
+	openblack::graphics::texel_depth::Reduce(std::span(data->data, data->size),
+	                                         openblack::graphics::texel_depth::Depth::FourBits);
 	auto texture = std::make_unique<openblack::graphics::Texture2D>(name);
-	texture->Create(k_AtlasSize, k_AtlasSize, 1, openblack::graphics::TextureFormat::RGBA8,
-	                openblack::graphics::Wrapping::ClampEdge, openblack::graphics::Filter::Linear, data);
+	texture->Create(k_AtlasSize, k_AtlasSize, 1, openblack::graphics::TextureFormat::RGBA8, wrapping,
+	                openblack::graphics::Filter::Linear, data);
 	return texture;
 }
 
@@ -252,11 +267,15 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	}
 	// The tip bubble's box and tail
 	created->_gatheringText = LoadTexture("gatheringtext");
+	// The front end's swirling backdrop, its texture repeating across the screen, kept as the game kept it: 4 bits to a
+	// colour and to its alpha
+	created->_backdrop = LoadTexture("pin", graphics::Wrapping::Repeat, menu_backdrop::SixteenBitLevel);
 	// The gestures' pictures, for the tips that show one
 	for (size_t i = 0; i < created->_gestureSheets.size(); ++i)
 	{
 		created->_gestureSheets.at(i) = LoadTexture("S_Gesture" + std::to_string(i));
 	}
+	created->_hintDotSheet = LoadTexture("S_SpriteSheet2");
 	return created;
 }
 
@@ -275,6 +294,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _menu(std::make_unique<GameMenu>(_texts, _font, playerName, std::move(settings)))
     , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::k_MidTextSize))
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
+    , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
@@ -292,6 +312,122 @@ void GameInterface::ShowSkipBox(bool currentProfileHasCreature)
 	glm::ivec2 mouse;
 	SDL_GetMouseState(&mouse.x, &mouse.y);
 	_skipBox->MouseMove(_painter.ToDialog(mouse));
+}
+
+void GameInterface::ShowNewPlayerBox(bool canCancel, NewPlayerBox::CheckName checkName)
+{
+	_newPlayerBox->checkName = std::move(checkName);
+	_newPlayerBox->Show(canCancel);
+	// The control under the pointer lights up at once
+	glm::ivec2 mouse;
+	SDL_GetMouseState(&mouse.x, &mouse.y);
+	_newPlayerBox->MouseMove(_painter.ToDialog(mouse));
+}
+
+bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_newPlayerBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_newPlayerBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		// Every control clicks as it is let go over, the texts too
+		if (event.button.button == SDL_BUTTON_LEFT &&
+		    _newPlayerBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_TEXTINPUT:
+		_newPlayerBox->TextInput(ToUtf16(event.text.text));
+		return true;
+	case SDL_KEYDOWN:
+		_newPlayerBox->KeyDown(event.key.keysym.sym);
+		return true;
+	default:
+		return false;
+	}
+}
+
+void GameInterface::DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds,
+                                        float frameMilliseconds, uint8_t black)
+{
+	_canvas.Begin(resolution);
+	_pointerCanvas.Begin(resolution);
+	_painter.Begin(resolution);
+	_newPlayerBox->Update(frameMilliseconds / 1000.0f);
+	// The swirls turn on at most once a screen refresh; they start at random the first time
+	if (!_backdropSwirls.has_value())
+	{
+		_backdropSwirls = menu_backdrop::Start([](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); });
+		_backdropPace.sinceStep = 0.0f;
+		for (int layer = 0; layer < menu_backdrop::k_Layers; ++layer)
+		{
+			menu_backdrop::PlaceLayer(*_backdropSwirls, layer, 0.0f, _backdropLayers.at(static_cast<size_t>(layer)));
+		}
+	}
+	if (const auto step = menu_backdrop::StepPace(_backdropPace, frameMilliseconds); step.has_value())
+	{
+		const auto turn = static_cast<float>(*step) * menu_backdrop::k_TurnPerMillisecond;
+		for (int layer = 0; layer < menu_backdrop::k_Layers; ++layer)
+		{
+			menu_backdrop::PlaceLayer(*_backdropSwirls, layer, turn, _backdropLayers.at(static_cast<size_t>(layer)));
+		}
+	}
+	// The backdrop covers the screen's 4:3 box, black round it
+	if (_backdrop)
+	{
+		const auto box = FitInside(k_FourByThree, resolution.x, resolution.y);
+		const auto size = glm::ivec2(box.width, box.height);
+		const auto origin = glm::vec2(static_cast<float>(box.x), static_cast<float>(box.y));
+		const auto point = [&size, &origin](int column, int row) {
+			return origin + glm::vec2(menu_backdrop::PointOnScreen(column, row, size));
+		};
+		const auto white = glm::vec4(1.0f);
+		for (const auto& layer : _backdropLayers)
+		{
+			const auto uv = [&layer](int column, int row) {
+				return layer.at((static_cast<size_t>(column) * menu_backdrop::k_Rows) + static_cast<size_t>(row));
+			};
+			for (int column = 1; column < menu_backdrop::k_Columns; ++column)
+			{
+				for (int row = 1; row < menu_backdrop::k_Rows; ++row)
+				{
+					// Two triangles a square, split from its top left corner to its bottom right
+					_canvas.DrawShape(
+					    {point(column - 1, row - 1), point(column, row - 1), point(column, row), point(column - 1, row)},
+					    {uv(column - 1, row - 1), uv(column, row - 1), uv(column, row), uv(column - 1, row)},
+					    {white, white, white, white}, _backdrop.get());
+				}
+			}
+		}
+	}
+	_newPlayerBox->Draw(_painter);
+	_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
+	// The screen fades from and to black over it all, the pointer too
+	if (black > 0)
+	{
+		_pointerCanvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f),
+		                        glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(black) / 255.0f), nullptr);
+	}
+	_canvas.End();
+	_pointerCanvas.End();
+}
+
+void GameInterface::SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol)
+{
+	auto settings = _menu->GetSettings();
+	settings.creatureName = creatureName;
+	settings.symbol = symbol;
+	_menu = std::make_unique<GameMenu>(_texts, _font, name, std::move(settings));
 }
 
 bool GameInterface::ProcessSkipBoxEvent(const SDL_Event& event)
@@ -498,6 +634,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// and the fades
 	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
+	// The gestures' hints are drawn with the world too, over all of it
+	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
 	DrawFloatingNumbers(resolution);
 	if (_message.has_value())
@@ -662,6 +800,7 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 		};
 		return Locator::helpTextSystem::value().Layout(glm::ivec2(resolution), barPixels, widthOf);
 	}();
+	_dialogueWordsDrawn = frame != nullptr && !frame->runs.empty();
 	if (frame != nullptr)
 	{
 		// The box covers whole pixels, its right and bottom ones included
@@ -1157,7 +1296,8 @@ void GameInterface::DrawCreaturePanel(glm::u16vec2 resolution)
 	using creature_panel::Row;
 	const auto& values = *_creaturePanel;
 	const bool withReward = values.reward.has_value();
-	const float textSize = static_cast<float>(resolution.y) / 32.0f;
+	const int rowPitch = creature_panel::RowPitch(resolution);
+	const auto textSize = static_cast<float>(rowPitch / 2);
 
 	// The labels' column is as wide as the widest label
 	std::array<std::u16string_view, creature_panel::k_RowCount> labels {};
@@ -1168,7 +1308,7 @@ void GameInterface::DrawCreaturePanel(glm::u16vec2 resolution)
 		widths.at(i) = _font.GetWidth(labels.at(i), textSize);
 	}
 	const auto layout =
-	    creature_panel::Compute(resolution, withReward, creature_panel::LabelColumnWidth(widths, textSize * 2.0f));
+	    creature_panel::Compute(resolution, withReward, creature_panel::LabelColumnWidth(widths, static_cast<float>(rowPitch)));
 	const creature_panel::RewardTexts rewardTexts {
 	    .bad = _texts.Get(creature_panel::k_BadBoyName),
 	    .good = _texts.Get(creature_panel::k_GoodBoyName),
@@ -1196,35 +1336,50 @@ void GameInterface::DrawCreaturePanel(glm::u16vec2 resolution)
 		drawText({row.labelRight.x - std::floor(_font.GetWidth(label, layout.textSize)), row.labelRight.y}, label);
 		drawText(row.valueLeft, creature_panel::FormatValue(row.row, values, rewardTexts));
 
-		// The bar's dark box and white frame, its fill brightening towards where it ends, and shadows inside its frame
-		const auto& bar = row.bar;
-		_painter.DrawBevelBox({_painter.ToDialog(glm::ivec2(bar.min)), _painter.ToDialog(glm::ivec2(bar.max))}, 1,
-		                      DialogPainter::All, white);
 		const float fill = creature_panel::Fill(row.row, values);
-		const auto filled = creature_panel::FillOf(bar, fill, row.row == Row::Reward);
-		if (!filled.Empty())
-		{
-			const auto bright = creature_panel::BarColour(row.row, fill);
-			const auto dim = glm::vec4(glm::vec3(bright) * 0.5f, 1.0f);
-			_canvas.DrawShape({glm::vec2(filled.from, filled.top), glm::vec2(filled.to, filled.top),
-			                   glm::vec2(filled.to, filled.bottom), glm::vec2(filled.from, filled.bottom)},
-			                  {dim, bright, bright, dim});
-		}
-		if (filled.middle.has_value())
-		{
-			_canvas.DrawLine(glm::ivec2(static_cast<int>(*filled.middle), static_cast<int>(filled.top)),
-			                 glm::ivec2(static_cast<int>(*filled.middle), static_cast<int>(filled.bottom) - 1), black);
-		}
-		const float inset = creature_panel::k_BarInset;
-		const glm::vec2 inner {bar.min.x + inset, bar.min.y + inset};
-		const glm::vec2 innerMax {bar.max.x - inset, bar.max.y - inset};
-		_canvas.DrawShape({inner, glm::vec2(innerMax.x, inner.y), glm::vec2(innerMax.x, inner.y + inset),
-		                   glm::vec2(inner.x, inner.y + inset)},
-		                  {black, black, clear, clear});
-		_canvas.DrawShape({inner, glm::vec2(inner.x + inset, inner.y), glm::vec2(inner.x + inset, innerMax.y),
-		                   glm::vec2(inner.x, innerMax.y)},
-		                  {black, clear, clear, black});
+		const auto bright = creature_panel::BarColour(row.row, fill);
+		DrawStatBar(row.bar, fill, glm::u8vec3(glm::vec3(bright) * 255.0f), row.row == Row::Reward);
 	}
+}
+
+void GameInterface::DrawStatBar(const creature_panel::Rect& bar, float fill, glm::u8vec3 colour, bool fromMiddle)
+{
+	// The frame: a three-quarters black box with a white line round it two pixels in
+	const glm::vec4 frame {0.0f, 0.0f, 0.0f, 191.0f / 255.0f};
+	const glm::vec4 line {254.0f / 255.0f, 254.0f / 255.0f, 254.0f / 255.0f, 1.0f};
+	const glm::vec4 black {0.0f, 0.0f, 0.0f, 1.0f};
+	const glm::vec4 clear {0.0f, 0.0f, 0.0f, 0.0f};
+	const auto quad = [this](glm::vec2 min, glm::vec2 max, const std::array<glm::vec4, 4>& colours) {
+		_canvas.DrawShape({min, glm::vec2(max.x, min.y), max, glm::vec2(min.x, max.y)}, colours);
+	};
+	quad(bar.min, bar.max, {frame, frame, frame, frame});
+	const auto inner = glm::ivec2(bar.min) + 2;
+	const auto innerMax = glm::ivec2(bar.max) - 2;
+	_canvas.DrawLine(inner, {innerMax.x, inner.y}, line);
+	_canvas.DrawLine({inner.x, innerMax.y}, innerMax, line);
+	_canvas.DrawLine(inner, {inner.x, innerMax.y}, line);
+	_canvas.DrawLine({innerMax.x, inner.y}, innerMax, line);
+
+	// The fill, from half the colour where it starts to the whole colour where it ends
+	const auto filled = creature_panel::FillOf(bar, fill, fromMiddle);
+	if (!filled.Empty())
+	{
+		const auto bright = glm::vec4(glm::vec3(colour) / 255.0f, 1.0f);
+		const auto dim = glm::vec4(glm::vec3(colour / glm::u8vec3(2)) / 255.0f, 1.0f);
+		quad({filled.from, filled.top}, {filled.to, filled.bottom}, {dim, bright, bright, dim});
+	}
+	if (filled.middle.has_value())
+	{
+		_canvas.DrawLine(glm::ivec2(static_cast<int>(*filled.middle), static_cast<int>(filled.top)),
+		                 glm::ivec2(static_cast<int>(*filled.middle), static_cast<int>(filled.bottom) - 1), black);
+	}
+
+	// Shadows inside the frame along its top and its left, along the whole bar
+	const float inset = creature_panel::k_BarInset;
+	const glm::vec2 top {bar.min.x + inset, bar.min.y + inset};
+	const glm::vec2 bottomRight {bar.max.x - inset, bar.max.y - inset};
+	quad(top, {bottomRight.x, top.y + inset}, {black, black, clear, clear});
+	quad(top, {top.x + inset, bottomRight.y}, {black, clear, clear, black});
 }
 
 void GameInterface::DrawFightPanel(glm::u16vec2 resolution)
@@ -1235,25 +1390,29 @@ void GameInterface::DrawFightPanel(glm::u16vec2 resolution)
 	}
 	const auto layout = creature_fight_hud::Compute(resolution);
 	const glm::vec4 shade {0.0f, 0.0f, 0.0f, 95.0f / 255.0f};
+	const glm::vec4 clear {0.0f, 0.0f, 0.0f, 0.0f};
 	const glm::vec4 white {1.0f, 1.0f, 1.0f, 1.0f};
 	const glm::vec4 black {0.0f, 0.0f, 0.0f, 1.0f};
-	const auto quad = [this](const creature_fight_hud::Rect& rect, const glm::vec4& colour) {
-		_canvas.DrawShape({rect.min, glm::vec2(rect.max.x, rect.min.y), rect.max, glm::vec2(rect.min.x, rect.max.y)},
-		                  {colour, colour, colour, colour});
-	};
-	quad(layout.box, shade);
+	// The shade is darkest in the screen's corner and clear at the box's other three corners, split from its top right
+	// to its bottom left, so the lower right half of the box is clear
+	const auto& box = layout.box;
+	_canvas.DrawShape({glm::vec2(box.max.x, box.min.y), box.max, glm::vec2(box.min.x, box.max.y), box.min},
+	                  {clear, clear, clear, shade});
+	const auto widthOf = [this, &layout](std::u16string_view text) { return _font.GetWidth(text, layout.textSize); };
 	for (size_t i = 0; i < layout.rows.size(); ++i)
 	{
 		const auto& row = layout.rows.at(i);
 		const auto& side = _fightPanel->sides.at(i);
-		// The name in white over its black shadow, two pixels of the default screen down and right
-		_painter.DrawString(row.name + (2.0f * ReferenceScale(resolution.x, resolution.y)), side.name, layout.textSize, black);
-		_painter.DrawString(row.name, side.name, layout.textSize, white);
-		for (const auto& [bar, value] : {std::pair(row.health, side.health), std::pair(row.stamina, side.stamina)})
-		{
-			quad(bar, black);
-			quad(creature_fight_hud::Filled(bar, value), creature_fight_hud::BarColour(value));
-		}
+		const auto toPanel = [](const creature_fight_hud::Rect& rect) {
+			return creature_panel::Rect {.min = rect.min, .max = rect.max};
+		};
+		// The stamina bar first, then the health bar over its top
+		DrawStatBar(toPanel(row.stamina), side.stamina, creature_fight_hud::StaminaColour(side.stamina), false);
+		DrawStatBar(toPanel(row.health), side.health, creature_fight_hud::HealthColour(side.health), false);
+		// The name to the bars' right in white over its black shadow, two pixels of the default screen down and right
+		const auto name = creature_fight_hud::FitName(side.name, layout.nameWidth, widthOf);
+		_painter.DrawString(row.name + (2.0f * ReferenceScale(resolution.x, resolution.y)), name, layout.textSize, black);
+		_painter.DrawString(row.name, name, layout.textSize, white);
 	}
 }
 
@@ -1303,8 +1462,9 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const int width = resolution.x;
 	const int height = resolution.y;
 	const int size = height / 25;
-	const int handX = std::clamp(static_cast<int>(_handOnScreen->x), 0, width - size);
-	const int handY = std::clamp(static_cast<int>(_handOnScreen->y), 0, height - size);
+	const auto kept = world_tooltip::KeptOnScreen(glm::ivec2(*_handOnScreen), glm::ivec2(width, height), size);
+	const int handX = kept.x;
+	const int handY = kept.y;
 
 	// The words, then the mouse with its arrows either side
 	const int iconWidth = shown->action != ToolTipAction::None && _mice != nullptr ? size : 0;

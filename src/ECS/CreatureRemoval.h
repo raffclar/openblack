@@ -38,6 +38,8 @@ class WorldInterface
 public:
 	virtual ~WorldInterface() = default;
 	/// The hand lets go of the creature if it holds it, or stops stroking it if it is on it
+	/// The player's own creature is kept with its mind and body for a later land, as it is deleted
+	virtual void KeepForNextLand(entt::entity creature) = 0;
 	virtual void LetGoFromHand(entt::entity creature) = 0;
 	/// It leaves its fight at once, letting go of its arena; its opponent's fight ends as one given up does
 	virtual void EndFight(entt::entity creature) = 0;

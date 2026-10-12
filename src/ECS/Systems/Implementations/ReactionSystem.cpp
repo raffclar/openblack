@@ -463,7 +463,7 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 	// A villager weighs a fire by its own rule: how far the fire reaches of its fiercest, and whether it fights it already
 	if (reaction.source.type == Reaction::ReactToFire && registry.AllOf<Villager>(living))
 	{
-		return villager_fire::ReactToFirePriority(living, reaction.source.initiator);
+		return villager_fire::ReactToFirePriority(living, reaction.source.initiator, reaction.id);
 	}
 	// A creature heeds a fire only when it is near enough the burning thing and big enough beside it
 	if (reaction.source.type == Reaction::ReactToFire && registry.AllOf<Creature>(living))
@@ -723,6 +723,20 @@ void ReactionSystem::Stop(entt::entity living, LivingReaction& state, bool reset
 	}
 	state.reaction = 0;
 	state.type = Reaction::None;
+}
+
+void ReactionSystem::StopReacting(entt::entity living)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* state = registry.TryGet<LivingReaction>(living);
+	if (state == nullptr || state->reaction == 0)
+	{
+		return;
+	}
+	// Its memory of the kind is brought up to now, so it waits its time before taking up that kind again
+	MemoryOf(registry, living, *state).Refresh(static_cast<uint32_t>(state->type), _turn);
+	state->reaction = 0;
+	state->type = Reaction::None;
 }
 
 void ReactionSystem::ProcessLiving()

@@ -122,6 +122,7 @@ public:
 	void Remove(uint32_t) override {}
 	void SetInitiator(uint32_t, entt::entity) override {}
 	[[nodiscard]] bool IsActive(uint32_t) const override { return false; }
+	void StopReacting(entt::entity) override {}
 	[[nodiscard]] bool HasReaction(entt::entity) const override { return false; }
 	void ProcessTurn() override {}
 	void Reset() override {}
@@ -225,19 +226,6 @@ TEST_F(ScriptGuideOgreNatives, TakeAndGiveWhatTheGameDoes)
 		EXPECT_EQ(table[number].stackIn, in) << name;
 		EXPECT_EQ(table[number].stackOut, out) << name;
 	}
-}
-
-// "set Guide name HELP_TEXT_GUIDE_CREATURE_NAME_01": only a creature takes a name
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
-TEST_F(ScriptGuideOgreNatives, ACreatureIsNamedWithAHelpText)
-{
-	Call("SET_CREATURE_NAME", {Object(_creature), Int(5003)});
-	const auto& registry = Locator::entitiesRegistry::value();
-	EXPECT_EQ(registry.Get<const ecs::components::Creature>(_creature).nameText, 5003u);
-	// Nothing happens to what isn't a creature, or to no thing at all
-	Call("SET_CREATURE_NAME", {Object(_rock), Int(5003)});
-	Call("SET_CREATURE_NAME", {Object(static_cast<entt::entity>(0)), Int(5003)});
-	EXPECT_FALSE(registry.AllOf<ecs::components::Creature>(_rock));
 }
 
 // "if MyCreature type CREATURE CREATURE_TYPE_COW": a creature is of its species' subtype

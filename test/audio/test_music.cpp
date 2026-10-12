@@ -15,6 +15,8 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <Audio/GameMusic.h>
@@ -33,6 +35,7 @@ public:
 		std::vector<uint32_t> queued;
 		uint32_t played {0};
 		uint32_t position {0};
+		uint64_t framesPlayed {0};
 		uint32_t firstSkip {0};
 		bool playing {false};
 		float volume {0.0f};
@@ -68,6 +71,7 @@ public:
 		return played;
 	}
 	[[nodiscard]] uint32_t GetPlayPosition(Stream stream) const override { return streams.at(stream).position; }
+	[[nodiscard]] uint64_t GetFramesPlayed(Stream stream) const override { return streams.at(stream).framesPlayed; }
 	void Play(Stream stream) override { streams.at(stream).playing = true; }
 	[[nodiscard]] bool IsPlaying(Stream stream) const override
 	{
@@ -438,4 +442,98 @@ TEST(MusicPlayer, StoppingOneBank)
 	music.Play({.bank = first, .volume = 127});
 	music.StopBank(first, false);
 	EXPECT_FALSE(music.IsActive());
+}
+
+TEST(MusicCues, TheClockCountsWholeChunksFromTheStartChunk)
+{
+	EXPECT_EQ(CuePositionAfter(1, 0), (MusicCuePosition {.chunk = 1, .frame = 0}));
+	EXPECT_EQ(CuePositionAfter(1, k_CueChunkFrames - 1), (MusicCuePosition {.chunk = 1, .frame = k_CueChunkFrames - 1}));
+	EXPECT_EQ(CuePositionAfter(1, k_CueChunkFrames), (MusicCuePosition {.chunk = 2, .frame = 0}));
+	EXPECT_EQ(CuePositionAfter(5, 2 * k_CueChunkFrames + 7), (MusicCuePosition {.chunk = 7, .frame = 7}));
+}
+
+TEST(MusicCues, CuesPassedAreAfterTheLastCheckAndUpToNow)
+{
+	const std::vector<MusicCue> cues {
+	    {.chunk = 1, .frame = 0, .text = "L1"},
+	    {.chunk = 3, .frame = 18815, .text = "L2"},
+	    {.chunk = 3, .frame = 2303, .text = "p"},
+	};
+	// Nothing checked yet: a cue at the very start is passed at once
+	EXPECT_EQ(CuesPassed(cues, {}, {.chunk = 1, .frame = 0}), (std::vector<std::string_view> {"L1"}));
+	EXPECT_TRUE(CuesPassed(cues, {.chunk = 1, .frame = 0}, {.chunk = 3, .frame = 2302}).empty());
+	EXPECT_EQ(CuesPassed(cues, {.chunk = 3, .frame = 2302}, {.chunk = 3, .frame = 2303}),
+	          (std::vector<std::string_view> {"p"}));
+	// Several in one step come in the bank's cue order
+	EXPECT_EQ(CuesPassed(cues, {.chunk = 2, .frame = 0}, {.chunk = 4, .frame = 0}),
+	          (std::vector<std::string_view> {"L2", "p"}));
+	// Starting later than a cue's chunk, the first check passes it
+	EXPECT_EQ(CuesPassed(cues, {}, {.chunk = 3, .frame = 0}), (std::vector<std::string_view> {"L1"}));
+}
+
+TEST(MusicCues, TheChannelHeardPassesItsCuesOnTheTicksAsItsStreamPlays)
+{
+	FakeMusicBackend backend;
+	MusicPlayer music(backend);
+	auto bank = MakeBank(8, 1);
+	bank->cues = {
+	    {.chunk = 1, .frame = 0, .text = "L1"},
+	    {.chunk = 1, .frame = 9000, .text = "p"},
+	    {.chunk = 2, .frame = 100, .text = "L2"},
+	};
+	std::vector<std::string> heard;
+	music.Play({.bank = bank, .onCue = [&heard](std::string_view cue) { heard.emplace_back(cue); }});
+	auto& stream = backend.streams.at(music.GetChannels()[0].stream);
+
+	// Cues wait for the next tick of the music thread
+	music.Update(MusicPlayer::k_Tick / 2);
+	EXPECT_TRUE(heard.empty());
+	music.Update(MusicPlayer::k_Tick / 2);
+	EXPECT_EQ(heard, (std::vector<std::string> {"L1"}));
+
+	// The stream's frames heard time them, however long the ticks have taken
+	stream.framesPlayed = 8999;
+	music.Update(MusicPlayer::k_Tick * 5);
+	EXPECT_EQ(heard, (std::vector<std::string> {"L1"}));
+	stream.framesPlayed = k_CueChunkFrames + 100;
+	music.Update(MusicPlayer::k_Tick);
+	EXPECT_EQ(heard, (std::vector<std::string> {"L1", "p", "L2"}));
+	// Each cue is passed once
+	music.Update(MusicPlayer::k_Tick);
+	EXPECT_EQ(heard.size(), 3u);
+}
+
+TEST(MusicCues, OnlyTheChannelHeardPassesCuesAndAnotherCatchesUpWhenHeardAgain)
+{
+	FakeMusicBackend backend;
+	MusicPlayer music(backend);
+	auto verse = MakeBank(8, 1);
+	verse->cues = {{.chunk = 1, .frame = 0, .text = "L1"}, {.chunk = 1, .frame = 5000, .text = "L2"}};
+	auto other = MakeBank(8, 2);
+	std::vector<std::string> heard;
+	music.Play({.bank = verse, .onCue = [&heard](std::string_view cue) { heard.emplace_back(cue); }});
+	music.Update(MusicPlayer::k_Tick);
+	EXPECT_EQ(heard, (std::vector<std::string> {"L1"}));
+
+	// Other music takes over while the verse fades out: the verse's cues wait
+	music.Play({.bank = other, .volume = 127});
+	backend.streams.at(music.GetChannels()[0].stream).framesPlayed = 6000;
+	music.Update(MusicPlayer::k_Tick);
+	EXPECT_EQ(heard, (std::vector<std::string> {"L1"}));
+
+	// Heard again, it passes what it missed
+	music.Play({.bank = verse, .volume = 127});
+	music.Update(MusicPlayer::k_Tick);
+	EXPECT_EQ(heard, (std::vector<std::string> {"L1", "L2"}));
+}
+
+TEST(MusicCues, MusicWithoutAHandlerPassesNone)
+{
+	FakeMusicBackend backend;
+	MusicPlayer music(backend);
+	auto bank = MakeBank(8, 1);
+	bank->cues = {{.chunk = 1, .frame = 0, .text = "L1"}};
+	music.Play({.bank = bank});
+	music.Update(MusicPlayer::k_Tick);
+	EXPECT_EQ(music.GetChannels()[0].cueChecked, MusicCuePosition {});
 }

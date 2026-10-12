@@ -135,4 +135,13 @@ struct CopiedBody
 /// of their own; none when every one has
 [[nodiscard]] std::optional<PlayerNames> OwnerOfCopy(std::span<const bool> playersHaveCreatures);
 
+/// The velocity a script sets a thing off at towards a place: its speed along the line from the thing to the place, and
+/// none when the thing is at the place already
+[[nodiscard]] glm::vec3 HeadingVelocity(const glm::vec3& from, const glm::vec3& to, float speed);
+/// A thing a script sets off from rest tumbles: about each of its axes it spins at a draw of 0 to 200 taken down by 100,
+/// a hundredth of that, so -1 to 1
+[[nodiscard]] float HeadingSpin(float draw);
+/// The largest draw each axis of that spin takes
+constexpr float k_HeadingSpinDraw = 200.0f;
+
 } // namespace openblack::script::property_rules

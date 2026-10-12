@@ -134,9 +134,10 @@ void Dialog::MouseDown(glm::ivec2 point)
 	MouseMove(point);
 	_pressed = HitTest(point);
 	_hovered = _pressed;
+	// The focus goes to the control the button went down on, or nowhere
+	SetFocus(_pressed);
 	if (_pressed != nullptr)
 	{
-		_focused = _pressed;
 		_pressed->MouseDown(point);
 		_pressed->Drag(point);
 	}
@@ -167,8 +168,25 @@ bool Dialog::MouseUp(glm::ivec2 point)
 void Dialog::Hold(Control& control)
 {
 	_pressed = &control;
-	_focused = &control;
+	SetFocus(&control);
 	_hovered = &control;
+}
+
+void Dialog::SetFocus(Control* control)
+{
+	if (control == _focused)
+	{
+		return;
+	}
+	if (_focused != nullptr)
+	{
+		_focused->SetFocus(false);
+	}
+	_focused = control;
+	if (_focused != nullptr)
+	{
+		_focused->SetFocus(true);
+	}
 }
 
 bool Dialog::IsPointerOverControl() const
@@ -210,7 +228,7 @@ void Dialog::Reset()
 {
 	_hovered = nullptr;
 	_pressed = nullptr;
-	_focused = nullptr;
+	SetFocus(nullptr);
 	if (auto it =
 	        std::ranges::find_if(_controls, [](const auto& c) { return dynamic_cast<SymbolPicture*>(c.get()) != nullptr; });
 	    it != _controls.end())

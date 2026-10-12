@@ -171,17 +171,52 @@ TEST(ScriptHighlightRules, ThePulseGoesRoundOnceInAboutThirteenTurns)
 TEST(ScriptHighlightRules, TheBeatBlendsBetweenTurnsFromFourTenthsToOne)
 {
 	const Pulse low {.phase = 0.0f, .level = 0.0f, .previous = 0.0f};
-	EXPECT_FLOAT_EQ(PulseShare(low, 0.5f), 0.4f);
+	EXPECT_NEAR(PulseShare(low, 0.5f), 0.4, 1e-6);
 	const Pulse rising {.phase = 0.0f, .level = 1.0f, .previous = 0.0f};
-	EXPECT_FLOAT_EQ(PulseShare(rising, 0.5f), 0.7f);
-	EXPECT_FLOAT_EQ(PulseShare(rising, 1.0f), 1.0f);
+	EXPECT_NEAR(PulseShare(rising, 0.5f), 0.7, 1e-6);
+	EXPECT_NEAR(PulseShare(rising, 1.0f), 1.0, 1e-6);
 }
 
 TEST(ScriptHighlightRules, OnlyTheTopOfTheBeatShowsAYellowBeam)
 {
-	EXPECT_EQ(BeamColour(HighlightInfo::Silver, 0.7f), 0x14b4dcffu);
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.99f), 0x00ffff00u);
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 1.0f), 0x50ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Silver, 0.7), 0x14b4dcffu);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.99), 0x00ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 1.0), 0x50ffff00u);
+	// A plain scroll's beam is the gold one's
+	EXPECT_EQ(BeamColour(HighlightInfo::Scroll, 1.0), 0x50ffff00u);
+}
+
+TEST(ScriptHighlightRules, TheYellowBeamShowsOnlyAtTheStartOfATurnAfterAWholeBeat)
+{
+	// The turn before was a whole 1: at the turn's very start the beam shows, a moment later it has gone
+	const Pulse afterTop {.phase = 3.6f, .level = 0.95f, .previous = 1.0f};
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(afterTop, 0.0f)), 0x50ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(afterTop, 0.01f)), 0x00ffff00u);
+	// Rising to a whole 1, the turn's fraction never reaches it
+	const Pulse toTop {.phase = 3.1416f, .level = 1.0f, .previous = 0.9f};
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(toTop, 0.99f)), 0x00ffff00u);
+	// The float just short of 1 isn't enough, as it isn't for the game
+	const Pulse justShort {.phase = 3.0f, .level = 0.99999994f, .previous = 0.99999994f};
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(justShort, 0.0f)), 0x00ffff00u);
+}
+
+TEST(ScriptHighlightRules, TheBeatReachesAWholeOneOnlyRightAtItsTop)
+{
+	Pulse pulse {.phase = 3.1415f - 0.5f, .level = 0.0f, .previous = 0.0f};
+	StepPulse(pulse, 100.0f);
+	EXPECT_EQ(pulse.level, 1.0f);
+	pulse = {.phase = 3.14f - 0.5f, .level = 0.0f, .previous = 0.0f};
+	StepPulse(pulse, 100.0f);
+	EXPECT_LT(pulse.level, 1.0f);
+}
+
+TEST(ScriptHighlightRules, OnlyAStartedScrollStandsInABeam)
+{
+	EXPECT_TRUE(BeamShown(HighlightInfo::Silver, true));
+	EXPECT_TRUE(BeamShown(HighlightInfo::Gold, true));
+	EXPECT_TRUE(BeamShown(HighlightInfo::Scroll, true));
+	EXPECT_FALSE(BeamShown(HighlightInfo::Gold, false));
+	EXPECT_FALSE(BeamShown(HighlightInfo::DidYouKnowSign, true));
 }
 
 TEST(ScriptHighlightRules, AHighlightSpinsHalfATurnASecond)

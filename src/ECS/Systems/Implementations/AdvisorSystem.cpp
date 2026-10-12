@@ -255,7 +255,9 @@ void AdvisorSystem::Update(const Frame& frame)
 	input.frameMs = frame.stepMs;
 	input.screen = _stage.layout;
 	input.mouse = _stage.ToLayout(frame.mouse);
-	input.share = _stage.share;
+	// A screen wider than 4:3 keeps the 4:3 screen's view up and down, so the camera already draws them at their 4:3
+	// size: nothing to shrink
+	input.share = 1.0f;
 	input.tickMs = frame.tickMs;
 	input.wideScreen = frame.wideScreen;
 	_controller->Update(input);

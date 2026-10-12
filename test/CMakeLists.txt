@@ -162,6 +162,8 @@ openblack_setup_and_add_test(test_draw_order graphics/test_draw_order.cpp)
 openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
 openblack_setup_and_add_test(test_mesh_detail graphics/test_mesh_detail.cpp)
 openblack_setup_and_add_test(test_detail_level graphics/test_detail_level.cpp)
+openblack_setup_and_add_test(test_land_detail graphics/test_land_detail.cpp)
+target_link_libraries(test_land_detail PRIVATE lnd)
 openblack_setup_and_add_test(
   test_sea_reflection graphics/test_sea_reflection.cpp
 )
@@ -243,6 +245,7 @@ openblack_setup_and_add_test(test_fish_farm test_fish_farm.cpp)
 openblack_setup_and_add_test(test_snow_cover test_snow_cover.cpp)
 openblack_setup_and_add_test(test_snowfall test_snowfall.cpp)
 openblack_setup_and_add_test(test_water_rings test_water_rings.cpp)
+openblack_setup_and_add_test(test_frame_pace test_frame_pace.cpp)
 openblack_setup_and_add_test(test_flat_land test_flat_land.cpp)
 openblack_setup_and_add_test(test_creature_body test_creature_body.cpp)
 openblack_setup_and_add_test(test_creature_removal test_creature_removal.cpp)
@@ -347,6 +350,7 @@ openblack_setup_and_add_test(test_temple_camera camera/test_temple_camera.cpp)
 openblack_setup_and_add_test(
   test_camera_projection camera/test_camera_projection.cpp
 )
+openblack_setup_and_add_test(test_camera_lens camera/test_camera_lens.cpp)
 openblack_setup_and_add_test(test_script_camera camera/test_script_camera.cpp)
 target_link_libraries(test_script_camera PRIVATE edt)
 openblack_setup_and_add_test(test_camera_zones camera/test_camera_zones.cpp)
@@ -358,6 +362,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_cave_targets temple/test_creature_cave_targets.cpp
 )
+openblack_setup_and_add_test(test_cave_creature temple/test_cave_creature.cpp)
 openblack_setup_and_add_test(
   test_creature_cave_trophies temple/test_creature_cave_trophies.cpp
 )
@@ -365,6 +370,7 @@ openblack_setup_and_add_test(
   test_temple_exterior_morph temple/test_temple_exterior_morph.cpp
 )
 openblack_setup_and_add_test(test_temple_light temple/test_temple_light.cpp)
+openblack_setup_and_add_test(test_temple_fog temple/test_temple_fog.cpp)
 openblack_setup_and_add_test(test_temple_scroll temple/test_temple_scroll.cpp)
 openblack_setup_and_add_test(test_temple_toggles temple/test_temple_toggles.cpp)
 openblack_setup_and_add_test(test_temple_map temple/test_temple_map.cpp)
@@ -804,6 +810,35 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_development test_creature_development.cpp
 )
+openblack_setup_and_add_test(test_turn_cheer help/test_turn_cheer.cpp)
+openblack_setup_and_add_test(
+  test_script_help_queries help/test_script_help_queries.cpp
+)
+openblack_setup_and_add_test(
+  test_script_vortex_natives test_script_vortex_natives.cpp
+)
+target_link_libraries(test_script_vortex_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_vortex_pull_rules test_vortex_pull_rules.cpp)
+openblack_setup_and_add_test(
+  test_script_misc_natives test_script_misc_natives.cpp
+)
+target_link_libraries(test_script_misc_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_spell_icon_system test_spell_icon_system.cpp)
+openblack_setup_and_add_test(test_music_cues pack/test_music_cues.cpp)
+target_link_libraries(test_music_cues PRIVATE pack)
+openblack_setup_and_add_test(test_storm_clouds test_storm_clouds.cpp)
+openblack_setup_and_add_test(
+  test_planned_building_rules test_planned_building_rules.cpp
+)
+openblack_setup_and_add_test(test_creature_touch test_creature_touch.cpp)
+openblack_setup_and_add_test(test_gesture_hints test_gesture_hints.cpp)
+openblack_setup_and_add_test(
+  test_object_detail graphics/test_object_detail.cpp
+)
+openblack_setup_and_add_test(test_player_profiles test_player_profiles.cpp)
+openblack_setup_and_add_test(test_text_edit_rules gui/test_text_edit_rules.cpp)
+openblack_setup_and_add_test(test_new_player_box gui/test_new_player_box.cpp)
+openblack_setup_and_add_test(test_creature_names test_creature_names.cpp)
 openblack_setup_and_add_test(
   test_script_guide_ogre_natives test_script_guide_ogre_natives.cpp
 )

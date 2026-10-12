@@ -38,6 +38,7 @@ public:
 	{
 	}
 
+	void KeepForNextLand(entt::entity creature) override { Step("keep", creature); }
 	void LetGoFromHand(entt::entity creature) override { Step("hand", creature); }
 	void EndFight(entt::entity creature) override { Step("fight", creature); }
 	void TakeOffLeash(entt::entity creature) override { Step("leash", creature); }
@@ -99,7 +100,8 @@ TEST_F(CreatureRemovalTest, GoesThroughEveryStepInTheGamesOrder)
 	const auto removed = creature_removal::Remove(registry, creature, world);
 
 	ASSERT_TRUE(removed.has_value());
-	const std::vector<std::string> expected {"hand", "fight", "leash", "effects", "reactions", "actions", "view", "world"};
+	const std::vector<std::string> expected {"keep",      "hand",    "fight", "leash", "effects",
+	                                         "reactions", "actions", "view",  "world"};
 	EXPECT_EQ(world.steps, expected);
 	EXPECT_FALSE(registry.Valid(creature));
 	EXPECT_TRUE(registry.Get<PlayerCreatures>(player).acquired.empty());

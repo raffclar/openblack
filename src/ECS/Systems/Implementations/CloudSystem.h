@@ -23,6 +23,11 @@ class CloudSystem final: public CloudSystemInterface
 public:
 	void Reset() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void UpdateStormClouds(std::chrono::milliseconds frameRealTime) override;
+
+private:
+	/// The real time since the storm clouds last stepped that counts towards the next step
+	std::chrono::duration<float, std::milli> _sinceStormStep {0.0f};
 };
 
 } // namespace openblack::ecs::systems

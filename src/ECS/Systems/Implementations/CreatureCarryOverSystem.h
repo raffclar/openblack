@@ -10,8 +10,9 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <optional>
-#include <string_view>
+#include <string>
 #include <vector>
 
 #include "Creature/CreatureCarryOver.h"
@@ -32,13 +33,14 @@ namespace openblack::ecs::systems
 class CreatureCarryOverSystem final: public CreatureCarryOverSystemInterface
 {
 public:
-	/// The player's profile file the creature is kept under, until players have profiles of their own
-	static constexpr std::string_view k_ProfileFile = "Player.erc";
+	/// The file of the current player's profile the creature is kept in, none when there is none
+	using ProfileFile = std::function<std::optional<std::string>()>;
 
-	/// The creature kept is written to and read from the folder, when there is one
-	explicit CreatureCarryOverSystem(std::optional<std::filesystem::path> folder = std::nullopt);
+	/// The creature kept is written to and read from the profile's file in the folder, when there are both
+	explicit CreatureCarryOverSystem(std::optional<std::filesystem::path> folder = std::nullopt, ProfileFile profileFile = {});
 
 	void KeepPlayersCreature() override;
+	void KeepCreature(entt::entity creature) override;
 	void Keep(std::shared_ptr<const creaturemind::MindFileData> file) override;
 	[[nodiscard]] std::shared_ptr<const creaturemind::MindFileData> Kept() const override;
 	std::optional<entt::entity> LoadPlayersCreature(glm::vec2 place) override;
@@ -56,7 +58,11 @@ private:
 	void Write(const creaturemind::MindFileData& mind, const creaturemind::PhysiqueFileData& physique) const;
 	void ReadIfNoneKept();
 
+	/// The kept creature's two files, when there is a folder and a profile to keep them for
+	[[nodiscard]] std::optional<creature_carry_over::KeptFiles> Files() const;
+
 	std::optional<std::filesystem::path> _folder;
+	ProfileFile _profileFile;
 	std::shared_ptr<const creaturemind::MindFileData> _kept;
 	std::vector<Arriving> _arriving;
 };

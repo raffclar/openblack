@@ -241,6 +241,8 @@ std::optional<CameraState> GameCamera::State() const
 	    .rotation = glm::degrees(camera.GetRotation()),
 	    .forward = camera.GetForward(),
 	    .horizontalFieldOfView = camera.GetHorizontalFieldOfView(),
+	    .verticalFieldOfView = camera.GetVerticalFieldOfView(),
+	    .lens = camera.GetLens(),
 	    .nearClip = camera.GetNearClip(),
 	    .model = std::string(ModelName(camera.GetModel())),
 	    .heldByPath = PathHoldsCamera(),

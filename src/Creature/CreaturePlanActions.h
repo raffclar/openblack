@@ -53,9 +53,11 @@ enum class Target : uint8_t
 	Unburnt,
 	/// A storage pit
 	StoragePit,
+	/// A pile of food the food miracle made, away from any storage pit
+	MagicFoodPile,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::StoragePit) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::MagicFoodPile) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -113,6 +115,10 @@ enum class Build : uint8_t
 	DeadForever,
 	/// Pointing out a lesson's highlight to the player
 	PointOutHighlight,
+	/// Sleeping in a clear place by a thing, or at home when there is no such place
+	SleepByObject,
+	/// Taking food from a pile and eating it
+	EatFromPile,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -167,12 +173,15 @@ struct Situation
 	bool hasPlayer {false};
 	bool controlledByScript {false};
 	float radius {0.0f};
-	/// Its height, and the height of the thing the action is done to
+	/// Its height, and the height and radius on the ground of the thing the action is done to
 	float height {0.0f};
 	float thingHeight {0.0f};
+	float thingRadius {0.0f};
 	/// How far the camera is from it
 	float eyeDistance {0.0f};
 	float chance {0.0f};
+	/// A clear place by the thing to sleep there, none when there is none (or it wasn't looked for)
+	std::optional<glm::vec2> clearArea;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

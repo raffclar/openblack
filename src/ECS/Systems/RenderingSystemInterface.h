@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <map>
 #include <memory>
 #include <optional>
@@ -77,6 +79,12 @@ struct RenderContext
 		bool bonePalette {false};
 		/// How many of the instances are placed this frame, from the first
 		uint32_t filled {0};
+		/// How many of the instances, from the last back, are of things too far off to be drawn this frame: they are
+		/// placed only for what they leave on the land (their footprints)
+		uint32_t gone {0};
+		/// The model's parts differ by the detail its instances are drawn in (see graphics::mesh_detail::PartDrawn): each
+		/// instance is drawn by itself, with the parts of its own detail (see RenderContext::instanceLevels)
+		bool partsByLevel {false};
 		/// The grey the instances are drawn in, in the temple's light: in the main pass, then in the reflection. The
 		/// temple's walking worshippers.
 		std::optional<glm::vec2> templeGrey;
@@ -107,6 +115,9 @@ struct RenderContext
 		glm::vec4 look {0.0f};
 	};
 	std::vector<ObjectInstance> instanceUniforms;
+	/// By instance, the detail it is drawn in this frame, as the bit its model's parts name it by (see
+	/// graphics::mesh_detail::LevelBit): only read for models whose parts differ by it
+	std::vector<uint8_t> instanceLevels;
 	/// The bones of the villagers drawn this frame, refilled with the instances, and the texture the vertex shader reads
 	/// them from (see graphics::bone_palette)
 	std::vector<glm::vec4> bonePalette;
@@ -117,18 +128,35 @@ struct RenderContext
 	{
 		glm::mat4 modelMatrix;
 		/// While it has a fire on it: x the grey of 256 its light is scaled by, no brighter than the trees' brightness,
-		/// and y the alpha below which its foliage is cut away, of 1; 0 for none
+		/// and y the alpha below which its foliage is cut away, of 1; 0 for none. z: while it fades out in the distance,
+		/// how much of it is faded, of 1.
 		glm::vec4 burning {0.0f};
 	};
 
 	/// CPU-side buffer of tree instance data
 	std::vector<TreeInstanceData> treeInstanceData;
+	/// The trees of a mesh drawn in one detail this frame, one after another in the tree instances: within each mesh's
+	/// instances those of the most detail first, then less, then those fading out, then those too far off to be drawn,
+	/// which are there only for what the land keeps of them
+	struct TreeRun
+	{
+		entt::id_type mesh {0};
+		uint32_t first {0};
+		uint32_t count {0};
+		/// The detail they are drawn in, as the bit their mesh's parts name it by (see graphics::mesh_detail::LevelBit)
+		uint8_t level {1};
+		/// Blended by each one's alpha, with the blended things
+		bool fading {false};
+		/// Not drawn at all
+		bool gone {false};
+	};
+	std::vector<TreeRun> treeRuns;
 
 	/// Stores information for rendering which is prepared at \ref PrepareDraw.
 	std::map<entt::id_type, InstancedDrawDesc> instancedDrawDescs;
 	std::map<entt::id_type, InstancedDrawDesc> treeInstancedDrawDescs;
-	/// The villagers fading out of sight in the distance, by the low mesh they are drawn as: blended by each one's alpha,
-	/// after the opaque things
+	/// The things fading out of sight in the distance, by the mesh they are drawn as (a villager's low mesh): blended by
+	/// each one's alpha, after the opaque things
 	std::map<entt::id_type, InstancedDrawDesc> fadingDrawDescs;
 	/// A villager too far away to be drawn as a mesh, which shows only as a dark smudge standing on a wide blob
 	struct FarVillager
@@ -151,6 +179,17 @@ struct RenderContext
 		uint32_t instance;
 	};
 	std::vector<EntityDraw> entityDraws;
+	/// Copies of creatures drawn where they stand in a pose of their own (see components::CreatureCopy), as the Creature
+	/// Cave shows the player's creature: each looks as `creature` does, takes its pose and eyes from `copy`, is placed by
+	/// its instance and lit from a light of its own
+	struct CreatureCopyDraw
+	{
+		entt::entity creature;
+		entt::entity copy;
+		uint32_t instance;
+		glm::vec3 light;
+	};
+	std::vector<CreatureCopyDraw> creatureCopyDraws;
 	/// Every object drawn this frame, in the order it is drawn, with the matrix it is drawn by: what the cursor can pick
 	struct DrawnObject
 	{
@@ -207,6 +246,8 @@ struct RenderContext
 		std::optional<float> innerWallInset;
 		/// A standing graveyard's graves: those of its model's parts numbered one up to this are drawn over the rest
 		std::optional<uint32_t> gravesShown;
+		/// It is fading out in the distance: blended by the alpha in its instances' looks, with the blended things
+		bool fading {false};
 	};
 	std::vector<PartialBuildDraw> partialBuilds;
 	std::vector<ObjectInstance> partialBuildInstances;

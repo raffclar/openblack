@@ -38,6 +38,8 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "Help/HelpProfile.h"
+#include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -914,9 +916,17 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	const bool doubleClicked = (_features & camera_help::feature::k_DoubleClick) != 0 && !moving &&
 	                           Locator::gameActionSystem::value().TakeDoubleClick();
 	// A drag of the land given up too far ahead takes every control away until the buttons are let go
+	_turnedThisFrame.reset();
 	if (!_dragGivenUp)
 	{
-		_helpEvents.Add(camera_help::events::InputEvents(_helpControls));
+		const auto inputEvents = camera_help::events::InputEvents(_helpControls);
+		_helpEvents.Add(inputEvents);
+		// The keys, the middle button and both buttons turned the camera as far as they asked
+		if (inputEvents.Contains(help::profile::k_CameraTurn) && Locator::windowing::has_value())
+		{
+			_turnedThisFrame =
+			    _helpControls.turn * glm::pi<float>() / static_cast<float>(Locator::windowing::value().GetSize().x);
+		}
 		if (doubleClicked && Locator::pickingSystem::has_value())
 		{
 			const auto& pick = Locator::pickingSystem::value().GetPick();
@@ -1008,6 +1018,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 			std::ignore = HandleDrag(false);
 			_mode = Mode::Cartesian;
 			_helpEvents = {};
+			_turnedThisFrame.reset();
 		}
 	}
 	// Whether the self-tilting camera keeps to its place this frame: held back, the controls count for nothing and the
@@ -1020,6 +1031,13 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		    camera_help::KeepsToItsPlace(autoTilting && !_heldBack, _dragging && !_heldBack, anythingAsked && !_heldBack);
 	}
 	SendHelpEvents(_helpEvents);
+	// The measure of how fast the player turns the camera, which the advisors' cheering of the turning lesson goes by,
+	// takes in this frame's turn, or slows towards still
+	if (const auto seconds = std::chrono::duration<float>(dt).count(); seconds > 0.0f && Locator::cameraHelpSystem::has_value())
+	{
+		auto& turnSpeed = Locator::cameraHelpSystem::value().Get().turnSpeed;
+		turnSpeed = help::turn_cheer::SmoothSpeed(turnSpeed, _turnedThisFrame.value_or(0.0f), seconds);
+	}
 	UpdateIconFrame(onFight);
 }
 
@@ -1140,6 +1158,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, step.turn));
 		if ((_features & camera_help::feature::k_Rotate) != 0)
 		{
+			_turnedThisFrame = step.turn;
 			_rotateAroundDelta.y += step.turn * static_cast<float>(screenSize.x) / glm::pi<float>();
 		}
 		actionSystem.WarpCursor(step.cursor);
@@ -1148,7 +1167,8 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 	case DragMode::Pitch:
 	case DragMode::PitchFromTop:
 	{
-		const auto fov = Locator::camera::has_value() ? Locator::camera::value().GetHorizontalFieldOfView() : 0.0f;
+		// Through the lens, the view across a 4:3 screen, so a drag tilts as much for the screen's height on any screen
+		const auto fov = Locator::camera::has_value() ? Locator::camera::value().GetLens() : 0.0f;
 		_helpEvents.Add(camera_help::events::TiltDragEvents(_helpControls));
 		if ((_features & camera_help::feature::k_Pitch) != 0)
 		{
@@ -1191,6 +1211,20 @@ void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 	}
 	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
 	Woosh();
+}
+
+void DefaultWorldCameraModel::FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh)
+{
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+		origin = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, focus);
+	}
+	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
+	if (woosh)
+	{
+		Woosh();
+	}
 }
 
 void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)

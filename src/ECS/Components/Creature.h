@@ -50,8 +50,11 @@ struct Creature
 	/// Whether a miracle that takes the last of its life knocks it out; a script can make it unable to die, when such a
 	/// miracle gives it back all its life instead
 	bool canDie {true};
-	/// The help text a script named it with, whose words are its name; none until a script names it
-	std::optional<uint32_t> nameText;
+	/// Whether a script lets it go into a vortex that leads away from the land: while it is on the leash it may then go
+	/// near one and be taken, rather than keep away. No creature may until a script says so
+	bool mayGoThroughVortex {false};
+	/// Its own name, shown in the fight panel and on the Creature Cave's scroll; empty shows no name
+	std::u16string name;
 };
 
 /// The size its body is shown at: its own size, or the smaller one while it is in its temple's pen. Whatever goes by

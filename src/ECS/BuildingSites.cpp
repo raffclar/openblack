@@ -26,6 +26,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
 #include "InfoConstants.h"
@@ -174,8 +175,7 @@ int32_t construction::BuildersNeeded(entt::entity building)
 	    .workers = site->workerCount,
 	    .built = IsBuilt(building),
 	    .repaired = world_objects::LifeOf(building) >= 1.0f,
-	    // TODO(temple-builders): a built building's wish to be mended comes with repairing
-	    .repairDesire = 0.0f,
+	    .repairDesire = DesireToBeRepaired(building),
 	});
 }
 
@@ -187,6 +187,38 @@ float construction::DesireForVillagers(entt::entity building)
 		return 0.0f;
 	}
 	return building_site::DesireForVillagers(BuildersNeeded(building), MaxBuilders(building), site->desire);
+}
+
+float construction::DesireToBeRepaired(entt::entity building)
+{
+	const auto& registry = Entities();
+	const auto* abode = registry.TryGet<const Abode>(building);
+	const auto* info = InfoOf(building);
+	if (abode == nullptr || info == nullptr || TownOfSite(building) == entt::null)
+	{
+		return 0.0f;
+	}
+	const auto& abodeInfo = static_cast<const GAbodeInfo&>(*info);
+	return town_desire::AbodeDesireToBeRepaired(
+	    {
+	        .life = world_objects::LifeOf(building),
+	        .livingQuarters =
+	            (static_cast<uint32_t>(abodeInfo.abodeType) & static_cast<uint32_t>(AbodeType::LivingQuarters)) != 0,
+	        .inhabitants = static_cast<uint32_t>(abode->inhabitants.size()),
+	        .desireToBeRepaired = abodeInfo.desireToBeRepaired,
+	    },
+	    Locator::infoConstants::value().town);
+}
+
+bool construction::IsRepairSite(entt::entity building)
+{
+	const auto* site = Entities().TryGet<const BuildingSite>(building);
+	return site != nullptr && site->repair;
+}
+
+float construction::SiteDesireToBeRepaired(entt::entity building)
+{
+	return DesireForVillagers(building) * DesireToBeRepaired(building);
 }
 
 uint32_t construction::WoodAtSite(entt::entity building)
@@ -211,7 +243,6 @@ uint32_t construction::WoodAtSite(entt::entity building)
 			wood += pot->amount;
 		}
 	}
-	// TODO(temple-builders): the site of an abode going up keeps its wood in one pile of its own; abodes have no sites yet
 	return wood;
 }
 
@@ -262,11 +293,11 @@ void construction::AddWorker(entt::entity building, entt::entity villager)
 void construction::RemoveWorker(entt::entity building, entt::entity villager)
 {
 	auto* site = Entities().TryGet<BuildingSite>(building);
-	// With nobody working at it the count stays as it is
-	if (site == nullptr || site->workers.empty())
+	if (site == nullptr)
 	{
 		return;
 	}
+	// Every time it was counted goes, but the count goes down by one, even with nobody on the list
 	std::erase(site->workers, villager);
 	--site->workerCount;
 }

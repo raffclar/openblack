@@ -22,6 +22,8 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Creature/CreatureRig.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Stream.h"
@@ -46,6 +48,19 @@ namespace
 {
 /// The temple's walking worshippers are drawn a light grey, and darker in the reflection
 constexpr glm::vec2 k_PeopleGrey {224.0f / 255.0f, 96.0f / 255.0f};
+/// The creature in its room is drawn the same light grey, in the temple's light; the room reflects nothing
+constexpr glm::vec2 k_CaveCreatureGrey {224.0f / 255.0f, 224.0f / 255.0f};
+
+/// The mesh of the creature a copy looks like, while the creature is there
+std::optional<entt::id_type> CopiedMesh(const openblack::ecs::Registry& registry, const CreatureCopy& copy)
+{
+	if (!registry.Valid(copy.creature))
+	{
+		return std::nullopt;
+	}
+	const auto* mesh = registry.TryGet<const Mesh>(copy.creature);
+	return mesh != nullptr ? std::optional(mesh->id) : std::nullopt;
+}
 
 /// The hand of the player, whose hand alone is in the temple. The other hand waits at the world's origin, where the
 /// temple's rooms are.
@@ -177,6 +192,20 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		++peopleCounts[person.mesh];
 		++instanceCount;
 	}
+	// The player's creature in its room, drawn one by one as the creatures are
+	std::map<entt::id_type, uint32_t> creatureCounts;
+	if (_loadedRooms.contains(TempleRoom::CreatureCave))
+	{
+		registry.Each<const CreatureCopy, const CaveCreature, const Transform>(
+		    [&registry, &creatureCounts, &instanceCount](const CreatureCopy& copy, const CaveCreature& /*unused*/,
+		                                                 const Transform& /*unused*/) {
+			    if (const auto mesh = CopiedMesh(registry, copy); mesh.has_value())
+			    {
+				    ++creatureCounts[*mesh];
+				    ++instanceCount;
+			    }
+		    });
+	}
 
 	if (drawBoundingBox)
 	{
@@ -200,6 +229,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		    .end();
 		_renderContext.instanceUniformBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(instanceCount, layout));
 		_renderContext.instanceUniforms.resize(instanceCount);
+		_renderContext.instanceLevels.resize(instanceCount);
 	}
 
 	// Determine uniform buffer offsets and instance count for draw
@@ -209,6 +239,8 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	{
 		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
 		                                                               std::forward_as_tuple(offset, desc.first, desc.second));
+		// Every room part is drawn whole, however far off
+		drawDesc->second.filled = desc.first;
 		drawDesc->second.hiddenFromReflection = !mirroredMeshIds.contains(meshId);
 		drawDesc->second.showsReflection = reflectiveMeshIds.contains(meshId);
 		drawDesc->second.onlyJoints = doorMeshIds.contains(meshId);
@@ -272,6 +304,15 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.bonePalette = true;
 		drawDesc->second.filled = count;
 		drawDesc->second.templeGrey = k_PeopleGrey;
+		offset += count;
+	}
+	for (const auto& [meshId, count] : creatureCounts)
+	{
+		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
+		                                                               std::forward_as_tuple(offset, count, false));
+		drawDesc->second.perEntity = true;
+		drawDesc->second.hiddenFromReflection = true;
+		drawDesc->second.templeGrey = k_CaveCreatureGrey;
 		offset += count;
 	}
 }
@@ -347,6 +388,30 @@ void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 		offset.first->second++;
 	}
 	UploadBonePalette();
+
+	// The player's creature in its room, where it stands there, lit from the room's fire
+	_renderContext.creatureCopyDraws.clear();
+	if (_loadedRooms.contains(TempleRoom::CreatureCave))
+	{
+		registry.Each<const CreatureCopy, const CaveCreature, const Transform>(
+		    [this, &registry, &uniformOffsets](const entt::entity entity, const CreatureCopy& copy, const CaveCreature& cave,
+		                                       const Transform& transform) {
+			    const auto mesh = CopiedMesh(registry, copy);
+			    const auto desc =
+			        mesh.has_value() ? _renderContext.instancedDrawDescs.find(*mesh) : _renderContext.instancedDrawDescs.end();
+			    if (desc == _renderContext.instancedDrawDescs.end())
+			    {
+				    return;
+			    }
+			    auto offset = uniformOffsets.insert(std::make_pair(*mesh, 0));
+			    const uint32_t idx = desc->second.offset + offset.first->second;
+			    _renderContext.instanceUniforms[idx] = {
+			        .model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale)};
+			    _renderContext.creatureCopyDraws.push_back(
+			        {.creature = copy.creature, .copy = entity, .instance = idx, .light = cave.light});
+			    offset.first->second++;
+		    });
+	}
 
 	if (!_renderContext.instanceUniforms.empty())
 	{

@@ -100,6 +100,9 @@ void GestureSystem::Reset()
 	_circleSeed = entt::null;
 	_lastRecognised.reset();
 	_requests.clear();
+	// A new land: no hints, and the collars start unturned; the row's fade carries on
+	_hints.hints.clear();
+	_hints.collars = {};
 }
 
 void GestureSystem::ForgetPath()
@@ -277,6 +280,7 @@ void GestureSystem::Update(const Frame& frame)
 	_picker.Update(frame.seconds, timeout, leashed);
 	context.pickerOpen = _picker.open;
 	_requests = gesture::Requests(context);
+	RefreshHints();
 	// The chain follows the hand while it powers up the miracle in it, or holds one that a circle sizes
 	const auto& seed = context.seed;
 	_gesturing =
@@ -487,4 +491,26 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	ForgetPath();
 	_pause = gesture::k_RecognisedPauseSeconds;
 	_requests = gesture::Requests(ContextOf(frame));
+}
+
+void GestureSystem::RefreshHints()
+{
+	if (!gesture_hints::Differs(_hints.hints, gesture_hints::HintsFor(_requests, nullptr)))
+	{
+		return;
+	}
+	const auto shapeOf = [](GestureType gesture) -> std::optional<gesture_hints::Shape> {
+		const auto symbol = TrailSymbolOf(gesture);
+		if (!symbol.has_value())
+		{
+			return std::nullopt;
+		}
+		return gesture_hints::Shape {.points = symbol->points, .length = symbol->length};
+	};
+	_hints.hints = gesture_hints::HintsFor(_requests, shapeOf);
+}
+
+void GestureSystem::StepHints(float seconds, bool wordsShowing)
+{
+	gesture_hints::Step(_hints, seconds, wordsShowing);
 }

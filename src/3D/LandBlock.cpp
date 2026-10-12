@@ -17,6 +17,7 @@
 #include <LNDFile.h>
 #include <bgfx/bgfx.h>
 
+#include "Graphics/IndexBuffer.h"
 #include "Graphics/VertexBuffer.h"
 
 using namespace openblack;
@@ -24,31 +25,45 @@ using namespace openblack::graphics;
 
 LandVertex openblack::MakeLandVertex(glm::vec2 cornerPosition, uint8_t altitude)
 {
+	const auto height = static_cast<float>(altitude);
 	return {
 	    .position = glm::vec3(cornerPosition.x, LandIslandInterface::GetDrawnAltitude(altitude), cornerPosition.y),
-	    .altitude = static_cast<float>(altitude),
+	    .altitude = height,
+	    .halfAltitude = height,
+	    .quarterAltitude = height,
 	};
 }
+
+LandBlock::LandBlock() = default;
+LandBlock::LandBlock(LandBlock&&) noexcept = default;
+LandBlock& LandBlock::operator=(LandBlock&&) noexcept = default;
+LandBlock::~LandBlock() = default;
 
 void LandBlock::BuildMesh(LandIslandInterface& island, std::span<LandVertex> vertices)
 {
 	assert(vertices.size() == k_VertexCount);
 	BuildVertexList(vertices, island);
+}
 
-	// The game draws no land in open sea cells, so only the sea shows there and nothing else is hidden behind them. Their
-	// six vertices collapse to a point, which draws nothing.
-	constexpr uint8_t k_OpenSeaFlag = 0x02;
-	constexpr size_t k_VerticesPerCell = 6;
-	for (size_t cell = 0; cell < static_cast<size_t>(k_Resolution.x) * k_Resolution.y; ++cell)
+const IndexBuffer& LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coarserSides, bool dropOpenSea) const
+{
+	const size_t set = (static_cast<size_t>(mesh) * 16 + (coarserSides & 0xF)) * 2 + (dropOpenSea ? 1 : 0);
+	auto& triangles = _triangles.at(set);
+	if (!triangles)
 	{
-		const size_t x = cell / k_Resolution.y;
-		const size_t z = cell % k_Resolution.y;
-		if ((_block->cells.at(x * 17 + z).flags & k_OpenSeaFlag) != 0)
-		{
-			const auto cellVertices = vertices.subspan(cell * k_VerticesPerCell, k_VerticesPerCell);
-			std::ranges::fill(cellVertices, cellVertices.front());
-		}
+		assert(_block);
+		std::array<land_detail::CellFlags, land_detail::k_CornerCount> flags;
+		// Bit 1 of a cell's flags marks open sea, where the land isn't drawn
+		constexpr uint8_t k_OpenSeaFlag = 0x02;
+		std::ranges::transform(_block->cells, flags.begin(), [](const lnd::LNDCell& cell) {
+			return land_detail::CellFlags {.split = cell.properties.split != 0, .openSea = (cell.flags & k_OpenSeaFlag) != 0};
+		});
+		const auto indices = land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, flags);
+		// bgfx keeps a copy: the list is gone before it reads it
+		const auto* memory = bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t)));
+		triangles = std::make_unique<IndexBuffer>("LandBlockTriangles", memory, IndexBuffer::Type::Uint16);
 	}
+	return *triangles;
 }
 
 void LandBlock::SetVertices(const VertexBuffer& buffer, uint32_t firstVertex)
@@ -68,71 +83,26 @@ void LandBlock::BindVertices() const
 void LandBlock::BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island)
 {
 	// The land is coloured by its block texture (see block_texture) and lit by its luminosity of the frame: its vertices
-	// carry only where they are and their altitude
+	// carry only where they are and their altitudes
 	const auto blockOffset = static_cast<glm::u16vec2>(GetBlockPosition() * 16);
-
-	uint16_t index = 0;
-	for (int x = 0; x < 16; x++)
+	std::array<uint8_t, land_detail::k_CornerCount> altitudes {};
+	for (size_t x = 0; x < land_detail::k_CornersPerSide; ++x)
 	{
-		for (int z = 0; z < 16; z++)
+		for (size_t z = 0; z < land_detail::k_CornersPerSide; ++z)
 		{
-			enum class Corner
-			{
-				TopLeft,
-				TopRight,
-				BottomLeft,
-				BottomRight,
-
-				_COUNT
-			};
-
-			std::array<glm::u16vec2, static_cast<size_t>(Corner::_COUNT)> offsets;
-			offsets[static_cast<size_t>(Corner::TopLeft)] = glm::u16vec2(x, z);
-			offsets[static_cast<size_t>(Corner::TopRight)] = glm::u16vec2(x + 1, z);
-			offsets[static_cast<size_t>(Corner::BottomLeft)] = glm::u16vec2(x, z + 1);
-			offsets[static_cast<size_t>(Corner::BottomRight)] = glm::u16vec2(x + 1, z + 1);
-
-			std::array<const lnd::LNDCell*, static_cast<size_t>(Corner::_COUNT)> cells;
-			// The corners' vertices from the cells' altitudes
-			std::array<LandVertex, static_cast<size_t>(Corner::_COUNT)> corners;
-			for (auto [corner, cell, offset] : std::views::zip(corners, cells, offsets))
-			{
-				cell = &island.GetCell(blockOffset + offset);
-				corner = MakeLandVertex(glm::vec2(offset) * LandIslandInterface::k_CellSize, cell->altitude);
-			}
-
-			auto makeVert = [&corners](Corner corner) -> LandVertex {
-				// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-				return corners[static_cast<size_t>(corner)];
-			};
-
-			auto makeTriangle = [&makeVert, &vertices, &index](const std::array<Corner, 3>& corners, bool forward) {
-				if (forward)
-				{
-					vertices[index++] = makeVert(corners[0]);
-					vertices[index++] = makeVert(corners[1]);
-					vertices[index++] = makeVert(corners[2]);
-				}
-				else
-				{
-					vertices[index++] = makeVert(corners[2]);
-					vertices[index++] = makeVert(corners[1]);
-					vertices[index++] = makeVert(corners[0]);
-				}
-			};
-
-			// cell splitting
-			// winding order = clockwise
-			if (!cells[static_cast<size_t>(Corner::TopLeft)]->properties.split)
-			{
-				makeTriangle({Corner::TopLeft, Corner::TopRight, Corner::BottomRight}, true);    //  ┐
-				makeTriangle({Corner::TopLeft, Corner::BottomLeft, Corner::BottomRight}, false); // └
-			}
-			else
-			{
-				makeTriangle({Corner::BottomLeft, Corner::TopLeft, Corner::TopRight}, true);      // ┌
-				makeTriangle({Corner::BottomLeft, Corner::BottomRight, Corner::TopRight}, false); //  ┘
-			}
+			altitudes.at(x * land_detail::k_CornersPerSide + z) = island.GetCell(blockOffset + glm::u16vec2(x, z)).altitude;
+		}
+	}
+	for (size_t x = 0; x < land_detail::k_CornersPerSide; ++x)
+	{
+		for (size_t z = 0; z < land_detail::k_CornersPerSide; ++z)
+		{
+			const size_t corner = x * land_detail::k_CornersPerSide + z;
+			auto vertex = MakeLandVertex(glm::vec2(x, z) * LandIslandInterface::k_CellSize, altitudes.at(corner));
+			const auto targets = land_detail::TargetsAt(altitudes, x, z);
+			vertex.halfAltitude = static_cast<float>(targets.half);
+			vertex.quarterAltitude = static_cast<float>(targets.quarter);
+			vertices[corner] = vertex;
 		}
 	}
 }
@@ -158,6 +128,7 @@ glm::vec2 LandBlock::GetMapPosition() const
 void LandBlock::SetLndBlock(const lnd::LNDBlock& block)
 {
 	_block = std::make_unique<lnd::LNDBlock>(block);
+	std::ranges::for_each(_triangles, [](auto& triangles) { triangles.reset(); });
 }
 
 void LandBlock::SetCellAltitude(size_t index, uint8_t altitude)

@@ -225,6 +225,9 @@ public:
 	/// The hand drops the miracle it holds, as a scribble or a shake does: what was started is called off and what the
 	/// seed still holds goes back to the player's worship
 	virtual void DiscardHeldSeed() = 0;
+	/// A seed goes with the icon that made it: out of the hand if it is held, and a miracle still running from it closes
+	/// down. What it holds is lost.
+	virtual void DeleteSeed(entt::entity seed) = 0;
 
 	// The hand
 

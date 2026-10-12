@@ -36,7 +36,8 @@ constexpr float k_GazeSeconds = 6.0f;
 constexpr std::array k_Executors {
     Executor {.action = "EatAfterExamining", .target = Target::Food, .build = Build::Eat, .activity = Activity::Eat},
     Executor {.action = "EatAlive", .target = Target::LiveFood, .build = Build::Eat, .activity = Activity::Eat},
-    Executor {.action = "EatFromFoodPile", .target = Target::Food, .build = Build::Eat, .activity = Activity::Eat},
+    Executor {
+        .action = "EatFromFoodPile", .target = Target::MagicFoodPile, .build = Build::EatFromPile, .activity = Activity::Eat},
     Executor {.action = "SleepOnTheSpot", .build = Build::Sleep, .activity = Activity::Sleep},
     Executor {.action = "Poo", .build = Build::Poo, .activity = Activity::Poo},
     Executor {.action = "Puke", .build = Build::Puke, .activity = Activity::Puke},
@@ -135,6 +136,8 @@ constexpr std::array k_Executors {
     Executor {.action = "CastHealSpellPU1", .target = Target::HurtVillager, .build = Build::CastHelpful},
     Executor {.action = "DeadForever", .build = Build::DeadForever},
     Executor {.action = "PointOutHighlight", .target = Target::Anything, .build = Build::PointOutHighlight},
+    Executor {
+        .action = "SleepByObject", .target = Target::Anything, .build = Build::SleepByObject, .activity = Activity::Sleep},
     // What scripts force on creatures to stage their scenes
     Executor {.action = "LookForever", .target = Target::Anything, .build = Build::LookForever},
     Executor {.action = "LookButDontApproach", .target = Target::Anything, .build = Build::LookButDontApproach},
@@ -189,6 +192,10 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return situation.instrument.has_value() || situation.hurlTarget.has_value();
 	case Build::SleepAtHome:
 		return situation.home.has_value();
+	case Build::SleepByObject:
+		// TODO(creature-actions-3): left to itself the game only does this leashed or far from home, with nothing
+		// frightening near; until that is ported only scripts make a creature do it
+		return situation.controlledByScript && (situation.clearArea.has_value() || situation.home.has_value());
 	case Build::FaceCameraEmote:
 	case Build::RunFromPlayer:
 		return situation.camera.has_value();
@@ -217,6 +224,10 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	{
 	case Build::Eat:
 		return creature_mind::Eat(*object);
+	case Build::EatFromPile:
+		// TODO(creature-actions-3): with something it can eat in its hand already, the game does something else; what
+		// isn't known yet, so it goes to the pile all the same
+		return creature_mind::EatFromPile(*object, objectPoint, situation.thingRadius, situation.radius);
 	case Build::Sleep:
 		return creature_mind::Sleep(random);
 	case Build::Poo:
@@ -248,6 +259,13 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		}
 		return creature_mind::Hurl(*object, *situation.hurlTarget, random);
 	case Build::SleepAtHome:
+		return creature_mind::SleepAtHome(*situation.home, situation.height, random);
+	case Build::SleepByObject:
+		// Without a clear place by the thing, it sleeps at home instead
+		if (situation.clearArea.has_value())
+		{
+			return creature_mind::SleepByObject(*situation.clearArea, situation.radius, random);
+		}
 		return creature_mind::SleepAtHome(*situation.home, situation.height, random);
 	case Build::SmileAt:
 		return creature_mind::SmileAt(*object, situation.height, situation.chance, random);

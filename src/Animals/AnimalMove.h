@@ -63,6 +63,8 @@ struct Turn
 [[nodiscard]] glm::ivec2 StepAlong(uint16_t angle, uint16_t speed);
 /// Whether a point is within a step of another
 [[nodiscard]] bool WithinStep(glm::ivec2 position, glm::ivec2 goal, uint16_t speed);
+/// Whether a walker at a speed is already at a point it is sent to: strictly nearer than one step
+[[nodiscard]] bool AreWeThere(glm::ivec2 position, glm::ivec2 goal, uint16_t speed);
 
 /// A move set up towards a goal: turned towards it, and arrived already if within a step. The turn made is returned too.
 [[nodiscard]] Turn SetUpMove(Move& move, glm::ivec2 goal, uint16_t turnAngle);

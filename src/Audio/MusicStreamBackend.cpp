@@ -10,6 +10,7 @@
 #include "MusicStreamBackend.h"
 
 #include <algorithm>
+#include <numeric>
 #include <span>
 #include <utility>
 #include <vector>
@@ -118,6 +119,7 @@ bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32
 	const auto buffer = _player.CreateBuffer(sound.channelLayout, sound.samples, sound.sampleRate);
 	_player.QueueBuffer(state.source, buffer);
 	state.buffers.push_back(buffer);
+	state.bufferFrames.push_back(sound.samples.size() / channels);
 	return true;
 }
 
@@ -136,6 +138,8 @@ uint32_t MusicStreamBackend::ReleasePlayedChunks(Stream stream)
 		if (!state.buffers.empty())
 		{
 			state.buffers.pop_front();
+			state.releasedFrames += state.bufferFrames.front();
+			state.bufferFrames.pop_front();
 		}
 	}
 	return static_cast<uint32_t>(played.size());
@@ -145,6 +149,29 @@ uint32_t MusicStreamBackend::GetPlayPosition(Stream stream) const
 {
 	const auto found = _streams.find(stream);
 	return found != _streams.end() ? _player.GetSampleOffset(found->second.source) : 0;
+}
+
+uint64_t MusicStreamBackend::GetFramesPlayed(Stream stream) const
+{
+	const auto found = _streams.find(stream);
+	if (found == _streams.end())
+	{
+		return 0;
+	}
+	const auto& state = found->second;
+	switch (_player.GetStatus(state.source))
+	{
+	case AudioStatus::Playing:
+	case AudioStatus::Paused:
+		// The offset counts from the first buffer still on the source
+		return state.releasedFrames + _player.GetSampleOffset(state.source);
+	case AudioStatus::Stopped:
+		// Run out: every buffer on it has played
+		return std::accumulate(state.bufferFrames.begin(), state.bufferFrames.end(), state.releasedFrames);
+	case AudioStatus::Initial:
+		break;
+	}
+	return state.releasedFrames;
 }
 
 void MusicStreamBackend::Play(Stream stream)

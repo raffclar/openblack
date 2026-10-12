@@ -2532,6 +2532,29 @@ void MagicSystem::DiscardHeldSeed()
 	_lastHandResult = HandResult::Discarded;
 }
 
+void MagicSystem::DeleteSeed(entt::entity entity)
+{
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(entity) || !registry.AllOf<SpellSeed>(entity))
+	{
+		return;
+	}
+	auto& seed = registry.Get<SpellSeed>(entity);
+	// The miracle it cast that still runs from it closes down; one that has moved on from it carries on
+	if (auto* spell = FindSpell(seed.spell); spell != nullptr && spell->seed == entity)
+	{
+		spell->seed = entt::null;
+		CloseDown(seed.spell);
+	}
+	seed.spell = entt::null;
+	if (_held == entity)
+	{
+		LetGoOfSeed(true);
+		return;
+	}
+	registry.Destroy(entity);
+}
+
 void MagicSystem::PowerUpHeldSeed(int level)
 {
 	auto& registry = EntityRegistry();

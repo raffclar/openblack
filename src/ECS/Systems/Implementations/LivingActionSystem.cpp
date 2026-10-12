@@ -47,6 +47,7 @@
 #include "VillagerDiscipleWork.h"
 #include "VillagerDisciples.h"
 #include "VillagerEaten.h"
+#include "VillagerFarmer.h"
 #include "VillagerFire.h"
 #include "VillagerFisherman.h"
 #include "VillagerFlock.h"
@@ -81,6 +82,7 @@ namespace villager_disciple = openblack::ecs::villager_disciple;
 namespace villager_disciple_work = openblack::ecs::villager_disciple_work;
 namespace villager_food = openblack::ecs::villager_food;
 namespace villager_forester = openblack::ecs::villager_forester;
+namespace villager_farmer = openblack::ecs::villager_farmer;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_housewife = openblack::ecs::villager_housewife;
 namespace villager_mourning = openblack::ecs::villager_mourning;
@@ -483,9 +485,24 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .exitState = &villager_worship::ExitGetFoodAtWorship,
     },
     /* RESTART_WORSHIPPING_CREATURE */ k_TodoEntry,
-    /* FARMER_ARRIVES_AT_FARM */ k_TodoEntry,
-    /* FARMER_PLANTS_CROP */ k_TodoEntry,
-    /* FARMER_DIGS_UP_CROP */ k_TodoEntry,
+    /* FARMER_ARRIVES_AT_FARM */
+    VillagerStateTableEntry {
+        .state = &villager_farmer::FarmerArrivesAtFarm,
+        .entryState = &villager_farmer::EnterFarming,
+        .exitState = &villager_farmer::ExitFarming,
+    },
+    /* FARMER_PLANTS_CROP */
+    VillagerStateTableEntry {
+        .state = &villager_farmer::FarmerPlantsCrop,
+        .entryState = &villager_farmer::EnterFarming,
+        .exitState = &villager_farmer::ExitFarming,
+    },
+    /* FARMER_DIGS_UP_CROP */
+    VillagerStateTableEntry {
+        .state = &villager_farmer::FarmerDigsUpCrop,
+        .entryState = &villager_farmer::EnterFarming,
+        .exitState = &villager_farmer::ExitFarming,
+    },
     /* MOVE_TO_FOOTBALL_PITCH_CONSTRUCTION */ k_TodoEntry,
     /* FOOTBALL_WALK_TO_POSITION */ k_TodoEntry,
     /* FOOTBALL_WAIT_FOR_KICK_OFF */ k_TodoEntry,
@@ -1163,11 +1180,10 @@ bool LivingActionSystem::ExitAllowed(LivingAction& action, VillagerStates next) 
 	return allowed;
 }
 
-bool LivingActionSystem::EnterState(LivingAction& action, VillagerStates state) const
+bool LivingActionSystem::EnterState(LivingAction& action, VillagerStates state, VillagerStates workedTowards) const
 {
-	const auto previous = VillagerGetState(action, LivingAction::Index::Top);
 	const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(state));
-	if (entry.entryState && !entry.entryState(action, previous, state))
+	if (entry.entryState && !entry.entryState(action, workedTowards, state))
 	{
 		return false;
 	}
@@ -1184,9 +1200,10 @@ LivingActionSystem::SetResult LivingActionSystem::ChangeTopState(LivingAction& a
 		return SetResult::Refused;
 	}
 	const auto outOf = villager_animate::OutOfClip(action, next);
-	// The state it works towards is told the state the villager was in before, as the one it now passes through is
-	const auto previous = VillagerGetState(action, LivingAction::Index::Top);
-	if (!EnterState(action, current))
+	// Both states are told what the villager was working towards before the change, so going on from a state passed
+	// through on the way (walking, pausing) into the state it was heading for doesn't count as starting it afresh
+	const auto previous = FinalStateOf(action);
+	if (!EnterState(action, current, previous))
 	{
 		return SetResult::EntryFailed;
 	}
@@ -1198,6 +1215,12 @@ LivingActionSystem::SetResult LivingActionSystem::ChangeTopState(LivingAction& a
 			return SetResult::EntryFailed;
 		}
 		SetStateDirectly(action, LivingAction::Index::Final, *destination);
+	}
+	else if (Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(current)).isFinalState != 0)
+	{
+		// Now in a state that is an end in itself, it no longer heads for the one it was walking to, whose checks
+		// stop with it
+		SetStateDirectly(action, LivingAction::Index::Final, VillagerStates::InvalidState);
 	}
 	const auto villager = Locator::entitiesRegistry::value().ToEntity(action);
 	villager_reactions::SetStateSpeed(villager, current);
@@ -1244,7 +1267,7 @@ void LivingActionSystem::SetTopState(LivingAction& action, VillagerStates state)
 	if (ChangeTopState(action, state, std::nullopt) == SetResult::EntryFailed)
 	{
 		// A state that won't be gone into leaves the villager deciding what to do
-		EnterState(action, VillagerStates::DecideWhatToDo);
+		EnterState(action, VillagerStates::DecideWhatToDo, FinalStateOf(action));
 	}
 }
 
@@ -1255,7 +1278,7 @@ bool LivingActionSystem::VillagerSetCurrentAndDestinationState(LivingAction& act
 	if (result == SetResult::EntryFailed)
 	{
 		// A state that won't be gone into leaves the villager deciding what to do
-		EnterState(action, VillagerStates::DecideWhatToDo);
+		EnterState(action, VillagerStates::DecideWhatToDo, FinalStateOf(action));
 	}
 	return result == SetResult::Done;
 }
@@ -1263,12 +1286,13 @@ bool LivingActionSystem::VillagerSetCurrentAndDestinationState(LivingAction& act
 void LivingActionSystem::VillagerPlayAnimThenSetState(LivingAction& action, VillagerStates next) const
 {
 	// The clip it plays now plays on to its end, then it goes on into the next state
-	if (!ExitAllowed(action, next) || !EnterState(action, VillagerStates::WaitForAnimation))
+	const auto previous = FinalStateOf(action);
+	if (!ExitAllowed(action, next) || !EnterState(action, VillagerStates::WaitForAnimation, previous))
 	{
 		return;
 	}
 	const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(next));
-	if (entry.entryState && !entry.entryState(action, VillagerStates::WaitForAnimation, next))
+	if (entry.entryState && !entry.entryState(action, previous, next))
 	{
 		return;
 	}
