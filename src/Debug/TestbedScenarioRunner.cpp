@@ -742,9 +742,14 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, AbodeInfo>)
 			    {
+				    if (object.planned)
+				    {
+					    return ecs::archetypes::AbodeArchetype::CreatePlan(ScenarioTown(middle), position, type, yaw,
+					                                                       object.scale);
+				    }
 				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
 				                                                   object.storedFood.value_or(k_ScenarioTownFood),
-				                                                   k_ScenarioTownWood);
+				                                                   object.storedWood.value_or(k_ScenarioTownWood));
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {

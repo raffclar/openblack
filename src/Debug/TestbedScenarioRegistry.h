@@ -266,6 +266,10 @@ struct ObjectSetup
 	bool poisoned {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
+	/// A building of the town holds this much wood, rather than the scenario town's usual stock
+	std::optional<uint32_t> storedWood;
+	/// A building is only planned by the scenario's town, as a land's script plans one, rather than standing built
+	bool planned {false};
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 };
@@ -750,6 +754,8 @@ void AddHighlightScenarios(std::vector<Scenario>& all);
 void AddSkyScenarios(std::vector<Scenario>& all);
 /// The advisors coming out, clinging, pointing and acting
 void AddAdvisorScenarios(std::vector<Scenario>& all);
+/// A town growing from the buildings it planned
+void AddTownGrowthScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

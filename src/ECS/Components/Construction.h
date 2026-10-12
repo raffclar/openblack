@@ -32,14 +32,17 @@ struct PlannedTemple
 	float yAngle {0.0f};
 };
 
-/// A building a town plans to build later, made by the land's script: nothing of it stands, it isn't drawn and it holds
-/// nothing yet. The Transform places it; a town centre is planned the same way, by its row.
+/// A building a town plans to build later, made by the land's script or left by a building of the town that went from
+/// the land: nothing of it stands, it isn't drawn and it holds nothing yet. The Transform places it; a town centre is
+/// planned the same way, by its row.
 struct PlannedAbode
 {
 	uint32_t townId;
 	AbodeInfo info;
 	/// How far round it will be turned, in radians
 	float yAngle {0.0f};
+	/// It was left by a building that had once been finished
+	bool wasBuilt {false};
 };
 
 /// One town's site at a building going up or being mended: how much the town wants it built, which a script may force,

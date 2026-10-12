@@ -526,7 +526,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlannedAbode>(context)
 	    .Field<&components::PlannedAbode::townId>("townId")
 	    .Field<&components::PlannedAbode::info>("info")
-	    .Field<&components::PlannedAbode::yAngle>("yAngle");
+	    .Field<&components::PlannedAbode::yAngle>("yAngle")
+	    .Field<&components::PlannedAbode::wasBuilt>("wasBuilt");
 	Reflect<components::BuildingSite>(context)
 	    .Field<&components::BuildingSite::town>("town")
 	    .Field<&components::BuildingSite::desire>("desire")

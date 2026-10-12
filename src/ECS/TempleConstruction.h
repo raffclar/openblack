@@ -24,9 +24,8 @@ struct BuildingSite;
 namespace openblack::ecs::construction
 {
 
-/// A script asks the towns to build what they planned at a place with a desire: the planned temple nearest it, if any is
-/// near enough, starts going up with nothing of it built and a site for its builders. The temple it started, if any.
-std::optional<entt::entity> StartPlannedAt(glm::vec3 place, float scriptDesire);
+/// The reach across the ground of a planned temple: its model's larger half width, scaled
+[[nodiscard]] float PlannedTempleReach(entt::entity plan);
 
 /// A planned temple starts going up where it was planned, with nothing of it built and a site for its builders wanting
 /// them by a desire; it is no longer among its town's plans. The temple.

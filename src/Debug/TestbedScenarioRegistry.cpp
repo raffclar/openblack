@@ -2382,6 +2382,7 @@ std::vector<Scenario> Build()
 	AddHighlightScenarios(all);
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
+	AddTownGrowthScenarios(all);
 	return all;
 }
 
