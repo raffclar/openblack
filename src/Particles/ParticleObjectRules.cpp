@@ -7,9 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The rules that tie an effect to a game object: an unseen atom kept on each object the effect is given, and atoms let
-// out from random points of the object's model under that atom, as the sparkles over a pile of food that speeds up the
-// people who take from it.
+// The rules that tie an effect to a game object: an atom kept on each object the effect is given, unseen or drawn as a
+// shower of sparks rising from the object (as over the gate stones of Land 1), and atoms let out from random points of the
+// object's model under that atom, as the sparkles over a pile of food that speeds up the people who take from it.
 
 #include "ParticleObjectRules.h"
 
@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <any>
+#include <memory>
 #include <numbers>
 #include <vector>
 
@@ -32,8 +33,9 @@ namespace
 {
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 
-/// An unseen atom on each object the effect is given, one a step, with its next groups under it. Every atom of the
-/// collection is kept where its object stands, raised by the offset, until the object is gone; then it stays put.
+/// An atom on each object the effect is given, one a step, with its next groups under it; unseen, or drawn as a shower
+/// of sparks rising from the object when the file asks for one. Every atom of the collection is kept where its object
+/// stands, raised by the offset, until the object is gone; then it stays put.
 class CreateRuleGameObjectRef final: public Modifier
 {
 public:
@@ -42,6 +44,7 @@ public:
 	    , _nextGroups(object.IntArray("NextGroups"))
 	    , _alpha(static_cast<uint8_t>(std::clamp(object.Int("Alpha", 255), 0, 255)))
 	    , _offsetY(object.Float("OffsetY", 0.0f))
+	    , _doShower(object.Bool("DoShower", false))
 	{
 	}
 	/// It waits for objects to be given only until the effect closes down, so a closed effect ends once its atoms have
@@ -56,6 +59,11 @@ public:
 			auto& atom = effect.NewAtom(collection, effect.FindCreator(_creator), _nextGroups);
 			atom.rgba[3] = _alpha;
 			atom.data[this].object = *target;
+			// It may be drawn as a shower of sparks rising from its object instead of its creator's look
+			if (_doShower)
+			{
+				atom.shower = std::make_shared<ObjectShower>(ObjectShower {.object = *target});
+			}
 		}
 		for (auto& atom : collection.atoms)
 		{
@@ -88,6 +96,7 @@ private:
 	std::vector<int> _nextGroups;
 	uint8_t _alpha;
 	float _offsetY;
+	bool _doShower;
 };
 
 /// What the emitter keeps for a collection: how many atoms it is owed and has let out, and the last point it picked

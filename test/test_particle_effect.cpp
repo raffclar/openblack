@@ -703,3 +703,119 @@ TEST_F(ParticleEffectTest, RunsEveryFileOfTheGame)
 	}
 	EXPECT_GT(count, 100u);
 }
+
+TEST_F(ParticleEffectTest, AnObjectsHighlightAsksForSparksRisingFromIt)
+{
+	// The highlight a script puts on an object, as on the gate stones: its atom has no creator and is drawn as the
+	// shower, as strong as the file's alpha
+	const auto text = [](bool shower) {
+		return Header() + Object("CreateRule_GameObjectRef", "Create0",
+		                         "PROPERTY Group INTEGER 0\nPROPERTY NextGroups ARRAY SIZE 1 1 \n"
+		                         "PROPERTY PCreator PERSIS_PNTR NULL_STRING\nPROPERTY Alpha INTEGER 100\n"
+		                         "PROPERTY DoShower BOOL " +
+		                             std::string(shower ? "1" : "0") + "\n");
+	};
+	constexpr auto k_Stone = static_cast<entt::entity>(5);
+	auto effect = Make(text(true));
+	effect->AddTarget(k_Stone);
+	size_t visited = 0;
+	const auto count = [&visited](ObjectShower& shower) {
+		EXPECT_EQ(shower.object, k_Stone);
+		++visited;
+	};
+	// Drawn from its second step, as any atom is
+	effect->Step(k_Step);
+	effect->ForEachDrawnShower(count);
+	EXPECT_EQ(visited, 0u);
+	effect->Step(k_Step);
+	effect->ForEachDrawnShower(count);
+	EXPECT_EQ(visited, 1u);
+	Effect::DrawWalk walk;
+	effect->Walk(1.0f, walk);
+	ASSERT_EQ(walk.atoms.size(), 1u);
+	EXPECT_NE(walk.atoms.front().shower, nullptr);
+	EXPECT_EQ(walk.atoms.front().creator, nullptr);
+	EXPECT_FLOAT_EQ(walk.atoms.front().alpha, 100.0f);
+	// Without the shower the atom only marks its object
+	auto unseen = Make(text(false));
+	unseen->AddTarget(k_Stone);
+	unseen->Step(k_Step);
+	unseen->Step(k_Step);
+	walk.Clear();
+	unseen->Walk(1.0f, walk);
+	EXPECT_TRUE(walk.atoms.empty());
+}
+
+TEST_F(ParticleEffectTest, ASparkShowerRisesFromItsObjectAsStrongAsItsAtom)
+{
+	auto effect = Make(Header() + Object("CreateRule_GameObjectRef", "Create0",
+	                                     "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR NULL_STRING\n"
+	                                     "PROPERTY Alpha INTEGER 100\nPROPERTY DoShower BOOL 1\n"));
+	constexpr auto k_Stone = static_cast<entt::entity>(5);
+	effect->AddTarget(k_Stone);
+	effect->Step(k_Step);
+	effect->Step(k_Step);
+	// Made, then moved on 5 seconds of drawn frames
+	effect->ForEachDrawnShower([](ObjectShower& shower) {
+		shower.sparks = rising_sparks::MakeSparks([](float) { return 0.0f; }, [](uint32_t) { return 0u; });
+		rising_sparks::StepSparks(*shower.sparks, 5000, [](float) { return 0.0f; });
+	});
+	Effect::DrawWalk walk;
+	effect->Walk(1.0f, walk);
+	const glm::vec3 stone {10.0f, 20.0f, 30.0f};
+	std::vector<std::string> sheets;
+	const draw::Sources sources {
+	    .textures =
+	        [&sheets](std::string_view sheet) {
+		        sheets.emplace_back(sheet);
+		        return std::optional(std::pair<entt::id_type, entt::id_type>(1, 2));
+	        },
+	    .playerColour = [](int) { return 0xFFFFFFu; },
+	    .random = [](float) { return 0.0f; },
+	    .objectPosition = [&stone](entt::entity object) { return object == k_Stone ? std::optional(stone) : std::nullopt; },
+	};
+	draw::Frame frame;
+	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), 0, sources);
+	// 5 seconds in, 13 have started (0.4 s apart), each drawn from the first sheet
+	ASSERT_EQ(frame.sprites.size(), 13u);
+	EXPECT_TRUE(std::ranges::all_of(sheets, [](const std::string& sheet) { return sheet == "S_SpriteSheet1"; }));
+	// The first is 5 seconds old: fully faded in, but only as strong as the atom's 100 of 255; it has risen
+	// 20 * (5/8)^2 metres straight up from where the stone stands
+	const auto& first = frame.sprites.front();
+	EXPECT_NEAR(first.colour.a, 100.0f / 255.0f, 1e-6f);
+	EXPECT_NEAR(first.positionHalfWidth.x, 10.0f, k_Epsilon);
+	EXPECT_NEAR(first.positionHalfWidth.y, 20.0f + 20.0f * 0.390625f, 1e-3f);
+	EXPECT_NEAR(first.positionHalfWidth.z, 30.0f, k_Epsilon);
+	// Once the stone has gone nothing is drawn
+	const draw::Sources gone {
+	    .textures = sources.textures,
+	    .playerColour = sources.playerColour,
+	    .random = sources.random,
+	    .objectPosition = [](entt::entity) { return std::optional<glm::vec3>(); },
+	};
+	frame.Clear();
+	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), 0, gone);
+	EXPECT_TRUE(frame.sprites.empty());
+}
+
+TEST(RisingSparks, ASparksAlphaIsCutDownFromTheShowersStrengthAndOnlyItsLowByteKept)
+{
+	auto sparks = rising_sparks::MakeSparks([](float) { return 0.0f; }, [](uint32_t) { return 0u; });
+	rising_sparks::StepSparks(sparks, 2500, [](float) { return 0.0f; });
+	const glm::vec3 from {0.0f};
+	// Half faded in (the game's 0.0002 a millisecond is a hair under, so just under a half)
+	EXPECT_EQ(rising_sparks::LookOf(sparks, 0, from)->alpha, 127);
+	EXPECT_EQ(rising_sparks::LookOf(sparks, 0, from, 100)->alpha, 49);
+	EXPECT_EQ(rising_sparks::LookOf(sparks, 0, from, 0)->alpha, 0);
+}
+
+TEST(RisingSparks, FramesPassWholeMillisecondsKeepingWhatIsLeftOver)
+{
+	rising_sparks::FrameMilliseconds clock;
+	// 16.75, 33.5, 50.25 and 67 milliseconds in all
+	EXPECT_EQ(clock.Take(16.75f), 16u);
+	EXPECT_EQ(clock.Take(16.75f), 17u);
+	EXPECT_EQ(clock.Take(16.75f), 17u);
+	EXPECT_EQ(clock.Take(16.75f), 17u);
+	EXPECT_EQ(clock.Take(-5.0f), 0u);
+}

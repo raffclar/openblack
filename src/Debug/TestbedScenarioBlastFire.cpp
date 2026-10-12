@@ -189,6 +189,40 @@ void AddFire(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.firemen_blaze",
+	    .name = "Firemen at two burning huts",
+	    .facet = Facet::Miracles,
+	    .description = "A fireball thrown at the first of two huts side by side, with eight of their town's people about "
+	                   "them. The fire spreads to the second hut, so both burn as one blaze.",
+	    .expected = "The town's people come to beat the fire out and the rest go round it. Once the first hut is beaten "
+	                "below the heat the living react to, the second hut leads the blaze; those who were on their way to "
+	                "beat the first go on there and, finding it no longer hot enough, decide afresh, and none is left counted "
+	                "among the blaze's firemen while doing "
+	                "something else (the inspector's FireGroup firemen against each one's state).",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 25.0f}, {30.0f, 60.0f}}},
+	    .objects =
+	        {
+	            {.type = AbodeInfo::NorseHut, .offset = {0.0f, 44.0f}, .yawDegrees = 180.0f},
+	            {.type = AbodeInfo::NorseHut, .offset = {9.0f, 44.0f}, .yawDegrees = 180.0f},
+	            {.type = VillagerInfo::NorseFarmerMale, .offset = {-8.0f, 32.0f}, .joinTown = true},
+	            {.type = VillagerInfo::NorseHousewifeFemale, .offset = {-4.0f, 30.0f}, .joinTown = true},
+	            {.type = VillagerInfo::NorseForesterMale, .offset = {0.0f, 30.0f}, .joinTown = true},
+	            {.type = VillagerInfo::NorseFarmerMale, .offset = {4.0f, 30.0f}, .joinTown = true},
+	            {.type = VillagerInfo::NorseHousewifeFemale, .offset = {8.0f, 30.0f}, .joinTown = true},
+	            {.type = VillagerInfo::NorseForesterMale, .offset = {12.0f, 30.0f}, .joinTown = true},
+	            {.type = VillagerInfo::NorseFarmerMale, .offset = {16.0f, 32.0f}, .joinTown = true},
+	            {.type = VillagerInfo::NorseHousewifeFemale, .offset = {-12.0f, 34.0f}, .joinTown = true},
+	        },
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {0.0f, 44.0f},
+	                  .handOffset = {0.0f, 34.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.creature_puts_out_fire",
 	    .name = "Creature putting out a fire",
 	    .facet = Facet::Miracles,
