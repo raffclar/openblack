@@ -197,6 +197,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAge.h"
@@ -4771,11 +4772,11 @@ void BuildBuilding() // 130 BUILD_BUILDING
 {
 	const auto desire = Popf();
 	const auto position = PopVec();
-	// The towns start what they planned there: a planned temple goes up
-	// TODO(villager-life): the towns' other planned buildings
-	if (!ecs::construction::StartPlannedAt(position, desire).has_value())
+	// Every town starts what it planned there
+	if (ecs::town_planning::StartPlannedAt(position, desire).empty())
 	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned temple at ({}, {})", position.x, position.z);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned building at ({}, {})", position.x,
+		                    position.z);
 	}
 }
 
