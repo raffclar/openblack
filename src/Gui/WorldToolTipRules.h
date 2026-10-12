@@ -15,6 +15,10 @@
 #include <string>
 #include <string_view>
 
+#include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+
 /// The words and numbers of the tooltips the hand shows over things in the world: a village centre's belief and
 /// population, a temple's health and way in, a store's food and wood, and the amount a pile gives. Each is one of the
 /// game's 170 tooltips (from text 0xE73).
@@ -104,5 +108,15 @@ struct Wording
 
 /// A tooltip's words with its numbers written in, as the game writes them
 [[nodiscard]] std::u16string Compose(uint32_t index, std::u16string_view words, double first, std::optional<double> second);
+
+/// Where the hand's tooltip hangs: the whole pixel the drawn hand's origin (at its fingertips) projects to, wherever
+/// the pointer is. While the hand stays put and the pointer moves on (pouring food or wood, gripping the land, holding a
+/// totem) the tooltip stays with the hand. None while the hand is behind the camera; off the screen it still counts,
+/// to be kept on the screen by KeptOnScreen.
+[[nodiscard]] std::optional<glm::ivec2> HandOnScreen(const glm::mat4& worldToClip, float nearClip, glm::vec3 hand,
+                                                     glm::ivec2 screen);
+
+/// The tooltip's corner by the hand, kept on the screen by its size
+[[nodiscard]] glm::ivec2 KeptOnScreen(glm::ivec2 hand, glm::ivec2 screen, int size);
 
 } // namespace openblack::gui::world_tooltip
