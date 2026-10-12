@@ -190,12 +190,13 @@ void AddForests(std::vector<Scenario>& all)
 	            "Forest on grass",
 	            {0.0f, 40.0f},
 	            "A forest cast on the testbed's grass north of the middle.",
-	            "The seed falls with a trail of blue blobs and lands; 18 trees are planted at once on a spiral from 2 to "
+	            "The red seed falls spinning under a trail of glowing blobs in the player's colour and vanishes as it "
+	            "lands in a white burst; 18 trees are planted at once on a spiral from 2 to "
 	            "11 out, of beech, birch and cedar, and grow from nothing each turn, those further out to a smaller size, "
 	            "the middle ones over about nine seconds. Sparkles burst and vortices spin at three and a half seconds; "
 	            "at five and a half, 5 flocks of 10 butterflies circle up over the trees and fade away by 16 seconds. "
-	            "The forest's seed rides over its tallest tree, though this seed wasn't made at a worship icon (the user's "
-	            "call). The camera glides onto the forest's path over four seconds and follows it for eleven more, the "
+	            "No seed is drawn over the forest: this seed wasn't made at a worship icon. The camera glides onto the "
+	            "forest's path over four seconds and follows it for eleven more, the "
 	            "player's camera controls doing nothing meanwhile; then the player has the camera back where it is "
 	            "(the debug log says the path ended after 15.0 s)."},
 	    Ground {"miracles.forest_sand", "Forest on sand", k_Sand, "A forest cast on the patch of sand west of the middle.",
