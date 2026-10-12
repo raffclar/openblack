@@ -306,7 +306,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	for (const auto& [meshId, count] : creatureCounts)
 	{
 		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
-		                                                               std::forward_as_tuple(offset, count, false, false));
+		                                                               std::forward_as_tuple(offset, count, false));
 		drawDesc->second.perEntity = true;
 		drawDesc->second.hiddenFromReflection = true;
 		drawDesc->second.templeGrey = k_CaveCreatureGrey;
