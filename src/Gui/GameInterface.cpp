@@ -42,6 +42,7 @@
 #include "Gui/CinemaBars.h"
 #include "Gui/GlyphTexture.h"
 #include "Gui/ScreenFit.h"
+#include "Gui/WorldToolTipRules.h"
 #include "Help/ClickCue.h"
 #include "Help/ControlIcons.h"
 #include "Help/DialogueText.h"
@@ -1201,8 +1202,9 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 		return;
 	}
 	const auto words = _texts.Get(ToolTips::TextName(shown->words.value_or(shown->index)));
-	const std::u16string text =
-	    shown->number.has_value() ? fixed_format::WithNumber(words, *shown->number) : std::u16string(words);
+	const std::u16string text = shown->number.has_value()
+	                                ? world_tooltip::Compose(shown->index, words, *shown->number, shown->second)
+	                                : std::u16string(words);
 	const glm::vec4 yellow {1.0f, 1.0f, 0.0f, alpha};
 	const glm::vec4 white {1.0f, 1.0f, 1.0f, alpha};
 	const glm::vec4 shadow {0.0f, 0.0f, 0.0f, alpha};

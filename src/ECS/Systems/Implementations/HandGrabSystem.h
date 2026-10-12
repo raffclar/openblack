@@ -10,7 +10,9 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 
 #include "ECS/Systems/HandGrabSystemInterface.h"
 
@@ -49,6 +51,7 @@ public:
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
 	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
 	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
+	[[nodiscard]] std::optional<uint32_t> TakeAmountToolTip() override { return std::exchange(_amountToolTip, std::nullopt); }
 	void Reset() override;
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
@@ -58,6 +61,8 @@ public:
 	[[nodiscard]] std::optional<float> GetScoopTip() const override;
 
 private:
+	/// What the hand last took from a pile, until the interface has shown it
+	std::optional<uint32_t> _amountToolTip;
 	/// The hand's grab, made on the hand when first needed; none without a hand
 	[[nodiscard]] components::HandGrab* Grab();
 	[[nodiscard]] const components::HandGrab* Grab() const;
