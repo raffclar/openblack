@@ -52,6 +52,9 @@ inline constexpr float k_SpringStiffness = 260.0f;
 inline constexpr float k_SpringDamping = 40.0f;
 /// The spring is stepped in steps of this many milliseconds of game time
 inline constexpr uint32_t k_SpringStepMs = 10;
+/// The game drew a frame at every 60 Hz screen refresh and stepped the spring at least once each; when this much real
+/// time goes by without a step, the spring takes one anyway
+inline constexpr float k_SpringFrameMs = 1000.0f / 60.0f;
 /// Nothing leaves the hand faster than this
 inline constexpr float k_MaxThrowSpeed = 124.0f;
 
@@ -181,28 +184,39 @@ struct HoldFacts
 /// How far the point the hand picks on the land is raised for what it holds
 [[nodiscard]] float CursorRaise(float handRise);
 
-/// The spring that drags the hand after where it should be while it is ready to throw. It is stepped in fixed steps of
-/// game time, at least one each frame however short, and what it holds leaves the hand at its speed. The game time the
-/// hand spends holding things is counted all along, the spring on or not, and the spring catches up with all of it when
-/// it next steps.
+/// The spring that drags the hand after where it should be while it is ready to throw. It takes a fixed step for every
+/// few milliseconds of game time, and what it holds leaves the hand at its speed. The game time the hand spends holding
+/// things is counted all along, the spring on or not, and the spring catches up with all of it when it next steps.
+/// The game stepped it at least once a frame, at the screen's 60 Hz refresh; so when a sixtieth of a second of real time
+/// goes by without a step (the game paused, or its time held back), it takes one anyway. A faster screen takes no more
+/// steps than the game time allows, so the hand's speed, and a throw's, is the same at any frame rate.
 class HandSpring
 {
 public:
 	/// The spring takes hold at the hand, at rest; the time counted so far is kept
 	void Start(glm::vec3 position);
-	/// A frame of holding some game milliseconds long goes by, whether the spring is on or not
-	void Count(uint32_t frameMs);
-	/// The spring is stepped towards where the hand should be, as many steps as the time counted allows and at least one
+	/// A frame of holding goes by, some game and real milliseconds long, whether the spring is on or not
+	void Count(uint32_t frameGameMs, float frameRealMs);
+	/// The spring is stepped towards where the hand should be, as many steps as the game time counted allows, and one
+	/// if a sixtieth of a second has gone by without any
 	void Step(glm::vec3 target);
 	[[nodiscard]] glm::vec3 Position() const { return _position; }
 	[[nodiscard]] glm::vec3 Velocity() const { return _velocity; }
 	[[nodiscard]] uint32_t StepsTaken() const { return _steps; }
+	/// The game time counted while holding, and the time the spring has stepped through
+	[[nodiscard]] uint32_t CountedMs() const { return _elapsedMs; }
+	[[nodiscard]] uint32_t SteppedMs() const { return _steppedMs; }
 
 private:
+	void StepOnce(glm::vec3 target);
+
 	glm::vec3 _position {0.0f};
 	glm::vec3 _velocity {0.0f};
 	uint32_t _elapsedMs {0};
 	uint32_t _steppedMs {0};
+	/// Real time counted towards the next 60 Hz refresh, and whether the spring has stepped since the last one
+	float _sinceRefreshMs {0.0f};
+	bool _steppedSinceRefresh {false};
 	/// How many steps the last Step took
 	uint32_t _steps {0};
 };

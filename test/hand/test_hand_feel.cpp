@@ -100,6 +100,18 @@ TEST(HandFeel, OverTheLandTheHandEasesToTheLandLessItsHeight)
 	EXPECT_NEAR(hover.target, 46.8f, 1e-4f);
 }
 
+TEST(HandFeel, HoldingSomethingTheHandGoesAllTheWayToTheLand)
+{
+	const auto hover = hand_feel::HoverDistancesOf({.camera = {},
+	                                                .land = glm::vec3(0.0f, 0.0f, -50.0f),
+	                                                .holding = true,
+	                                                .handHeight = 3.2f,
+	                                                .minDistance = 2.0f,
+	                                                .reach = 1000.0f});
+	EXPECT_NEAR(hover.limit, 50.0f, 1e-4f);
+	EXPECT_NEAR(hover.target, 50.0f, 1e-4f);
+}
+
 TEST(HandFeel, OnTheSeaTheHandRestsOnTheWater)
 {
 	const auto hover = hand_feel::HoverDistancesOf({.camera = {},

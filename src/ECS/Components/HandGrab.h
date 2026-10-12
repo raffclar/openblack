@@ -85,6 +85,15 @@ struct HandGrab
 	bool springPending {false};
 	/// A hand demonstration's throw, which the hand throws with until its spring next moves it
 	std::optional<glm::vec3> recordedThrow;
+	/// The hand's last throw: the speed it let the thing go at, its spring's own speed then (the same unless a hand
+	/// demonstration's throw stood in for it), and where the hand was
+	struct Throw
+	{
+		glm::vec3 velocity {0.0f};
+		glm::vec3 springVelocity {0.0f};
+		glm::vec3 from {0.0f};
+	};
+	std::optional<Throw> lastThrow;
 	/// Where the hand was last meant to be while holding, before it rose, for the twist of a throw
 	glm::vec3 lastTarget {0.0f};
 
