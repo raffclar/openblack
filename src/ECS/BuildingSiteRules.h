@@ -43,6 +43,16 @@ struct BuildersNeededInputs
 };
 [[nodiscard]] int32_t BuildersNeeded(const BuildersNeededInputs& in);
 
+/// A villager is counted once among its site's workers while it works at the site, whatever building work it does in
+/// turn (fetching wood, walking up, building). It joins when it goes into building work from anything else it was
+/// working towards: the state it was heading for before the change counts, not one it passed through on the way, such
+/// as walking or pausing.
+[[nodiscard]] bool JoinsWorkers(bool wasWorkingTowardsBuilding);
+
+/// It leaves its site's workers when it goes on to something else to work towards (a final state) that isn't building
+/// work. Passing through a state on the way, such as walking or pausing, keeps it counted.
+[[nodiscard]] bool LeavesWorkers(bool nextIsBuilding, bool nextIsFinal);
+
 /// How much a site wants villagers: the share of its builders it still wants plus the desire a script forced on it,
 /// never below none nor above all
 [[nodiscard]] float DesireForVillagers(int32_t needed, int32_t maxBuilders, float forcedDesire);

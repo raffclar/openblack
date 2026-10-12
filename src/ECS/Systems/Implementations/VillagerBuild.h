@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
@@ -50,10 +51,14 @@ uint32_t ArrivesAtStoragePitForBuildingMaterials(components::LivingAction& actio
 uint32_t ArrivesAtBuildingSite(components::LivingAction& action);
 uint32_t Building(components::LivingAction& action);
 uint32_t ReenterBuildingState(components::LivingAction& action);
-/// Going into a building state from another kind of state it counts once more among the site's builders, and leaving
-/// for another kind it is let go of the site
-bool EnterBuilding(components::LivingAction& action, VillagerStates previous, VillagerStates next);
+/// Going into building work when it was working towards something else, a villager joins its site's workers
+bool EnterBuilding(components::LivingAction& action, VillagerStates workedTowards, VillagerStates next);
+/// Going on to something else to work towards, it leaves its site's workers and is let go of the site; a state passed
+/// through on the way keeps it counted
 bool ExitBuilding(components::LivingAction& action, VillagerStates next);
+/// A site closing lets its workers go: each one still about (not dying) decides what to do next, first stepping back
+/// clear of the building when it stands closer than two metres beyond its edge
+void LetGoOfSite(entt::entity building, std::span<const entt::entity> workers);
 
 /// A villager carrying enough wood or food to show takes it to the storage pit. 1 when it went.
 uint32_t CheckTakeResourcesToStoragePit(components::LivingAction& action);

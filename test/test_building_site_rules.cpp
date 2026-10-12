@@ -289,3 +289,100 @@ TEST(BuildingSiteRules, TheRepairSiteWantedMostIsChosen)
 	};
 	EXPECT_EQ(BestRepairSite(unwanted), std::nullopt);
 }
+
+namespace
+{
+/// A villager's states as the pairing rules see them: what it does now and what it works towards, each state either
+/// building work or not, and either something to work towards (final) or a state passed through on the way
+struct FakeState
+{
+	bool building;
+	bool final;
+};
+constexpr FakeState k_Deciding {.building = false, .final = true};
+constexpr FakeState k_Walking {.building = false, .final = false};
+constexpr FakeState k_Pausing {.building = false, .final = false};
+constexpr FakeState k_Arriving {.building = true, .final = true};
+constexpr FakeState k_Building {.building = true, .final = true};
+constexpr FakeState k_FetchingWood {.building = true, .final = true};
+constexpr FakeState k_Sleeping {.building = false, .final = true};
+
+/// Counts a site's workers over one villager's changes of state, leaving and joining by the rules
+struct FakeBuilder
+{
+	FakeState top = k_Deciding;
+	FakeState towards = k_Deciding;
+	int32_t workers = 0;
+
+	[[nodiscard]] FakeState WorkingTowards() const { return top.final ? top : towards; }
+
+	void Leave(FakeState next)
+	{
+		if (WorkingTowards().building && LeavesWorkers(next.building, next.final))
+		{
+			--workers;
+		}
+	}
+
+	void Join(FakeState previous, FakeState next)
+	{
+		if (next.building && JoinsWorkers(previous.building))
+		{
+			++workers;
+		}
+	}
+
+	/// Goes straight into a state
+	void Set(FakeState next)
+	{
+		Leave(next);
+		const auto previous = WorkingTowards();
+		Join(previous, next);
+		top = next;
+	}
+
+	/// Passes through one state on its way to another
+	void SetVia(FakeState current, FakeState destination)
+	{
+		Leave(destination);
+		const auto previous = WorkingTowards();
+		Join(previous, current);
+		top = current;
+		Join(previous, destination);
+		towards = destination;
+	}
+};
+} // namespace
+
+TEST(BuildingSiteRules, AWorkerIsCountedOnceWhateverBuildingWorkItDoes)
+{
+	FakeBuilder builder;
+	// Walks to the site, arrives, pauses on the way into building, fetches wood, walks back and builds again
+	builder.SetVia(k_Walking, k_Arriving);
+	EXPECT_EQ(builder.workers, 1);
+	builder.Set(builder.towards);
+	builder.SetVia(k_Pausing, k_Building);
+	builder.Set(builder.towards);
+	builder.SetVia(k_Walking, k_FetchingWood);
+	builder.Set(builder.towards);
+	builder.SetVia(k_Walking, k_Building);
+	builder.Set(builder.towards);
+	EXPECT_EQ(builder.workers, 1);
+	// Walking off with nothing new to work towards keeps it counted
+	builder.Set(k_Walking);
+	EXPECT_EQ(builder.workers, 1);
+	// Going home to sleep lets it go, and only once
+	builder.Set(k_Sleeping);
+	EXPECT_EQ(builder.workers, 0);
+	builder.Set(k_Deciding);
+	EXPECT_EQ(builder.workers, 0);
+}
+
+TEST(BuildingSiteRules, JoiningAndLeavingWorkers)
+{
+	EXPECT_TRUE(JoinsWorkers(false));
+	EXPECT_FALSE(JoinsWorkers(true));
+	EXPECT_TRUE(LeavesWorkers(false, true));
+	EXPECT_FALSE(LeavesWorkers(false, false));
+	EXPECT_FALSE(LeavesWorkers(true, true));
+}

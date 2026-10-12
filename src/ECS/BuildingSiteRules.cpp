@@ -78,6 +78,16 @@ glm::vec3 Transform(const glm::mat4& model, glm::vec3 point)
 }
 } // namespace
 
+bool building_site::JoinsWorkers(bool wasWorkingTowardsBuilding)
+{
+	return !wasWorkingTowardsBuilding;
+}
+
+bool building_site::LeavesWorkers(bool nextIsBuilding, bool nextIsFinal)
+{
+	return !nextIsBuilding && nextIsFinal;
+}
+
 int32_t building_site::BuildersNeeded(const BuildersNeededInputs& in)
 {
 	if (in.built && (in.repaired || in.repairDesire == 0.0f))

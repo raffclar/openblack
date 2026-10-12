@@ -44,6 +44,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerBuild.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -168,7 +169,17 @@ void CallForLeftoverWood(entt::entity pile)
 void construction::CloseSite(entt::entity building)
 {
 	auto& registry = Entities();
-	auto* site = registry.TryGet<BuildingSite>(building);
+	if (!registry.AllOf<BuildingSite>(building))
+	{
+		return;
+	}
+	// Its workers are let go first, each told to find something else to do
+	const auto workers = registry.Get<const BuildingSite>(building).workers;
+	if (Locator::livingActionSystem::has_value())
+	{
+		villager_build::LetGoOfSite(building, workers);
+	}
+	const auto* site = registry.TryGet<const BuildingSite>(building);
 	if (site == nullptr)
 	{
 		return;

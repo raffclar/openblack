@@ -1019,13 +1019,13 @@ uint32_t villager_home::MoveToPos(LivingAction& action)
 		return 0;
 	}
 	registry.Remove<MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
+	// It goes on into the state it was heading for, which stays what it works towards, so that state's work carries
+	// on rather than starting afresh
 	auto final = State(action, LivingAction::Index::Final);
 	if (final == VillagerStates::InvalidState)
 	{
 		final = VillagerStates::DecideWhatToDo;
 	}
-	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Final, VillagerStates::InvalidState,
-	                                                      true);
 	SetTopState(action, final);
 	return 0;
 }
