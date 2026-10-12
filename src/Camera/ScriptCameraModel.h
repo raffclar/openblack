@@ -227,13 +227,22 @@ public:
 
 	/// Finds a followed thing now; nothing once it is gone
 	using ThingLookup = std::function<std::optional<script_camera::FollowedThing>()>;
+	/// A thing the camera follows or looks at: which it is, and how to find it
+	struct Subject
+	{
+		uint32_t id;
+		ThingLookup lookup;
+	};
 	/// The camera is placed behind a thing at a distance, the heading and pitch it looks at it now, and follows it and
 	/// looks at it
-	void FollowAndLookAt(ThingLookup thing, float distance);
+	void FollowAndLookAt(Subject thing, float distance);
 	/// The camera is placed behind a thing, from eight times its height, and follows it
-	void Follow(ThingLookup thing);
+	void Follow(Subject thing);
 	/// The camera looks at a thing and keeps looking at it
-	void LookAt(ThingLookup thing);
+	void LookAt(Subject thing);
+	/// The thing the camera is about: the one it looks at, else the one it follows; nothing while a two-thing camera has
+	/// taken over
+	[[nodiscard]] std::optional<uint32_t> GetFocusedThing() const;
 	/// A script's settings for the following: its distance, glide time, heading and whether the heading turns with the
 	/// thing
 	void SetFollowSettings(float distance, float zoomTimeScale, float heading, bool relativeHeading);
@@ -287,6 +296,9 @@ private:
 	GroundHeight _groundAt;
 	ThingLookup _followed;
 	ThingLookup _lookedAt;
+	/// Which things they are
+	std::optional<uint32_t> _followedId;
+	std::optional<uint32_t> _lookedAtId;
 	script_camera::FollowSettings _follow;
 	/// Seconds since the script took the camera, or since it last began following
 	float _seconds {0.0f};

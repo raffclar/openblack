@@ -76,6 +76,13 @@ uint32_t LearntText(size_t miracle)
 	           : 0;
 }
 
+/// Another creature's own name, as its scroll shows it; nothing for one without a name or that is gone
+std::u16string NameOf(const Registry& registry, entt::entity creature)
+{
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	return body != nullptr ? body->name : std::u16string();
+}
+
 /// The places the temple's walk mesh marks in the creature room: the seat by the fire, the fire, and a place further back
 std::optional<cave_creature::Places> CavePlaces()
 {
@@ -225,12 +232,17 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		                           return mind->desires.has_value() && desire < mind->desires->desires.size() &&
 		                                  mind->desires->desires.at(desire).activated;
 	                           }).has_value();
-	snapshot.secondsAlone = mind->secondsAlone;
+	snapshot.turnsLookedAt = mind->turnsLookedAt;
 	const auto* tables = Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
 	if (mind->learnt.has_value())
 	{
 		const auto& learnt = *mind->learnt;
-		snapshot.creaturesKnown = learnt.creatures.size();
+		for (const auto& attitude : learnt.creatures)
+		{
+			snapshot.creaturesKnown.push_back({.name = NameOf(registry, static_cast<entt::entity>(attitude.creature)),
+			                                   .howNice = attitude.howNice,
+			                                   .attention = attitude.attention});
+		}
 		if (mind->desires.has_value())
 		{
 			const auto& desires = mind->desires->desires;

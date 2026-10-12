@@ -387,6 +387,25 @@ void SendAdvisorsHome(bool helpScript)
 	advisors.SpiritHome(2, helpScript);
 }
 
+/// The creature a script's camera is about, any player's: the thing it looks at, else the one it follows, when that is
+/// a creature
+std::optional<entt::entity> ScriptCameraCreature()
+{
+	if (!Locator::scriptControlSystem::has_value() || !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	const auto thing = camera != nullptr ? camera->GetFocusedThing() : std::nullopt;
+	if (!thing.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto entity = static_cast<entt::entity>(*thing);
+	const auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(entity) && registry.AllOf<ecs::components::Creature>(entity) ? std::optional(entity) : std::nullopt;
+}
+
 } // namespace
 
 const std::string k_WindowTitle = "openblack";
@@ -968,8 +987,8 @@ void Game::UpdateHandInterface()
 	{
 		return;
 	}
-	// Nor is the panel shown while a script has the cinema bars in
-	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	// Nor is the panel shown while a script has the cinema bars in, whether or not the player's interface is put away
+	if (Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0)
 	{
 		return;
 	}
@@ -986,6 +1005,12 @@ void Game::UpdateHandInterface()
 	if (!creature.has_value() && Locator::creatureModeSystem::has_value())
 	{
 		creature = Locator::creatureModeSystem::value().GetCreature();
+		reward.reset();
+	}
+	// or the creature a script's camera follows or looks at, any player's
+	if (!creature.has_value())
+	{
+		creature = ScriptCameraCreature();
 		reward.reset();
 	}
 	if (!creature.has_value())

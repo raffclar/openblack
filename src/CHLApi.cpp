@@ -6733,7 +6733,7 @@ void SetFocusFollow() // 276 SET_FOCUS_FOLLOW
 	if (thing != entt::null && camera != nullptr)
 	{
 		// The script's camera keeps looking at the thing
-		camera->LookAt(FollowedThing(thing));
+		camera->LookAt({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)});
 	}
 }
 
@@ -6743,7 +6743,7 @@ void SetPositionFollow() // 277 SET_POSITION_FOLLOW
 	if (thing != entt::null && camera != nullptr)
 	{
 		// The script's camera is put behind the thing, as far as eight times its height, and follows it
-		camera->Follow(FollowedThing(thing));
+		camera->Follow({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)});
 	}
 }
 
@@ -6754,7 +6754,7 @@ void SetFocusAndPositionFollow() // 278 SET_FOCUS_AND_POSITION_FOLLOW
 	if (thing != entt::null && camera != nullptr)
 	{
 		// The script's camera is put at a distance from the thing, follows it and looks at it
-		camera->FollowAndLookAt(FollowedThing(thing), distance);
+		camera->FollowAndLookAt({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)}, distance);
 	}
 }
 

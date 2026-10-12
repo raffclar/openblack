@@ -385,8 +385,11 @@ TEST(CreatureCave, FactsTellOfTheMind)
 	snapshot.likes = {
 	    {.desire = Desire::Play, .level = 4}, {.desire = Desire::Hunger, .level = 1}, {.desire = Desire::Poo, .level = 0}};
 	snapshot.attitudeToPlayer = 0.5f;
-	snapshot.secondsAlone = creature_cave::k_AttentionFadeSeconds / 4.0f;
-	snapshot.creaturesKnown = 2;
+	// Looked at for three fifths of its life
+	snapshot.needs.turns = 500;
+	snapshot.turnsLookedAt = 300;
+	snapshot.creaturesKnown = {{.name = u"Ape", .howNice = -0.5f, .attention = 0.0f},
+	                           {.name = u"Cow", .howNice = 0.9f, .attention = 0.45f}};
 	const auto facts = creature_cave::FactsOf(snapshot);
 	// The personality in the scroll's order, and only the desires it tells of
 	ASSERT_EQ(facts.desires.size(), 2u);
@@ -395,9 +398,31 @@ TEST(CreatureCave, FactsTellOfTheMind)
 	EXPECT_EQ(facts.desires[1].text, "HELP_TEXT_ROOM_PERSONALITY_PLAYFUL");
 	EXPECT_EQ(facts.desires[1].attitude, 4);
 	EXPECT_FLOAT_EQ(*facts.opinionOfGod, 0.5f);
-	EXPECT_FLOAT_EQ(facts.attention, 0.75f);
+	EXPECT_EQ(facts.attention, 3);
 	EXPECT_EQ(facts.known[0], 2);
+	// Each creature it knows, and the attention it paid only once it has paid some
+	ASSERT_EQ(facts.creatures.size(), 2u);
+	EXPECT_EQ(facts.creatures[0].name, u"Ape");
+	EXPECT_FLOAT_EQ(facts.creatures[0].opinion, -0.5f);
+	EXPECT_FALSE(facts.creatures[0].attention.has_value());
+	EXPECT_EQ(facts.creatures[1].attention, 2);
 	EXPECT_FALSE(creature_cave::PersonalityText(Desire::Poo).has_value());
+}
+
+TEST(CreatureCave, ItSaysWhatItThinksOfItsGodOnlyOnceItsGodHasLookedAtIt)
+{
+	creature_cave::Snapshot snapshot;
+	snapshot.attitudeToPlayer = 0.5f;
+	snapshot.needs.turns = 100;
+	auto facts = creature_cave::FactsOf(snapshot);
+	EXPECT_FALSE(facts.opinionOfGod.has_value());
+	EXPECT_EQ(facts.attention, 0);
+	snapshot.turnsLookedAt = 1;
+	facts = creature_cave::FactsOf(snapshot);
+	EXPECT_FLOAT_EQ(*facts.opinionOfGod, 0.5f);
+	// Before it has lived a turn, nothing was paid
+	snapshot.needs.turns = 0;
+	EXPECT_FALSE(creature_cave::FactsOf(snapshot).opinionOfGod.has_value());
 }
 
 TEST(CreatureCave, FactsTellOfTheStrongerOfAngerAndCompassion)
