@@ -249,12 +249,41 @@ void AddShell(Frame& frame, const Effect::DrawAtom& atom, const ObjectGlow& glow
 	});
 }
 
+/// The shower of sparks an atom sends up from its object, each spark as strong as the atom is seen; nothing once the object
+/// has gone
+void AddShower(GroupBuilder& builder, const Effect::DrawAtom& atom, const ObjectShower& shower, const Sources& sources)
+{
+	const auto from = sources.objectPosition ? sources.objectPosition(shower.object) : std::nullopt;
+	if (!shower.sparks.has_value() || !from.has_value())
+	{
+		return;
+	}
+	const auto strength = static_cast<uint8_t>(std::clamp(atom.alpha, 0.0f, k_ByteMax));
+	for (size_t i = 0; i < rising_sparks::k_Sparks; ++i)
+	{
+		const auto look = rising_sparks::LookOf(*shower.sparks, i, *from, strength);
+		if (!look.has_value())
+		{
+			continue;
+		}
+		builder.Sprite(FacingSprite(look->position, look->halfSize, look->angle, static_cast<int>(look->picture),
+		                            static_cast<int>(rising_sparks::k_SparkSheetPictures),
+		                            glm::vec4(1.0f, 1.0f, 1.0f, static_cast<float>(look->alpha) / k_ByteMax)),
+		               rising_sparks::k_SparkSheet, Mode::AlphaTexturedAlphaAdditiveNz);
+	}
+}
+
 void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, int player, const Sources& sources,
              const glm::vec3& origin)
 {
 	if (atom.objectGlow.has_value())
 	{
 		AddShell(frame, atom, *atom.objectGlow, sources);
+		return;
+	}
+	if (atom.shower != nullptr)
+	{
+		AddShower(builder, atom, *atom.shower, sources);
 		return;
 	}
 	const auto& creator = *atom.creator;

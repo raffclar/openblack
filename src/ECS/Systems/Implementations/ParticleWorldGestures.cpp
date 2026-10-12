@@ -19,6 +19,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/GameRandom.h"
 #include "ECS/Components/HandGlow.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -117,6 +118,7 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 			sheet->Update(gameSeconds);
 		}
 	}
+	StepShowers(gameSeconds);
 
 	if (!IsRunning(_gestureChain))
 	{
@@ -144,6 +146,36 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	if (StepEffect(*it->effect, gameSeconds))
 	{
 		_effects.erase(FindRunning(_gestureChain));
+	}
+}
+
+void ParticleSystem::StepShowers(float gameSeconds)
+{
+	constexpr float k_MillisecondsPerSecond = 1000.0f;
+	const auto localFloat = [](float range) {
+		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().LocalFloatRand(range) : 0.0f;
+	};
+	const auto local = [](uint32_t range) {
+		return Locator::gameRandom::has_value()
+		           ? static_cast<uint32_t>(Locator::gameRandom::value().LocalRand(static_cast<int32_t>(range)))
+		           : 0u;
+	};
+	// The sparks showers over objects: made the first frame they are drawn, their sparks moving on by each drawn frame's
+	// game time, only while their object is there to rise from
+	for (auto& running : _effects)
+	{
+		running.effect->ForEachDrawnShower([&](particles::ObjectShower& shower) {
+			if (!_world.ObjectPosition(shower.object).has_value())
+			{
+				return;
+			}
+			if (!shower.sparks.has_value())
+			{
+				shower.sparks = particles::rising_sparks::MakeSparks(localFloat, local);
+			}
+			particles::rising_sparks::StepSparks(*shower.sparks, shower.clock.Take(gameSeconds * k_MillisecondsPerSecond),
+			                                     localFloat);
+		});
 	}
 }
 

@@ -273,6 +273,8 @@ private:
 	/// The gesture trails' effect, started when it isn't running
 	void KeepGestureTrails();
 	/// The trails' sheets of light, each in its place among what blends
+	/// The sparks showers over objects move on by a frame's game time
+	void StepShowers(float gameSeconds);
 	void AddLightSheets(particles::draw::Frame& frame) const;
 
 	GameCreatorResources _resources;
