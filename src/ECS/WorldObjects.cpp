@@ -42,7 +42,9 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -60,6 +62,7 @@
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -68,6 +71,7 @@
 #include "ECS/TownPlanning.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/ResourcePiles.h"
 #include "Physics/DamageMesh.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
@@ -281,6 +285,95 @@ world_objects::Size world_objects::SizeOf(entt::entity object)
 	return size;
 }
 
+namespace
+{
+/// The pot of a pile of food or wood, whose life is what it holds; none for anything else
+const Pot* PileOf(entt::entity object)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	return registry.AllOf<ResourcePile>(object) ? registry.TryGet<const Pot>(object) : nullptr;
+}
+
+/// What a pile of its kind is drawn full at
+uint32_t FullAmountOf(const Pot& pile)
+{
+	return Locator::infoConstants::value().pot.at(static_cast<size_t>(pile.type)).maxAmountInPot;
+}
+
+/// The town an abode belongs to, none for none
+entt::entity TownOfAbode(const Abode& abode)
+{
+	entt::entity town = entt::null;
+	Locator::entitiesRegistry::value().Each<const Town>([&](entt::entity entity, const Town& candidate) {
+		if (candidate.id == abode.townId)
+		{
+			town = entity;
+		}
+	});
+	return town;
+}
+
+/// The town of the storage pit a pile is part of, or of the building whose site keeps its wood in it; none for a pile
+/// of neither. (A worship site's food pile is left out: which town the game gives it was not traced.)
+std::optional<entt::entity> TownOfPile(entt::entity object)
+{
+	if (PileOf(object) == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	auto structure =
+	    Locator::resourceStoreSystem::has_value() ? Locator::resourceStoreSystem::value().StoreOf(object) : std::nullopt;
+	if (structure.has_value() && !registry.AllOf<StoragePit>(*structure))
+	{
+		return std::nullopt;
+	}
+	if (!structure.has_value())
+	{
+		registry.Each<const BuildingSites>([&](entt::entity building, const BuildingSites& sites) {
+			for (const auto& site : sites.sites)
+			{
+				if (std::ranges::find(site.piles, object) != site.piles.end())
+				{
+					structure = building;
+				}
+			}
+		});
+	}
+	const auto* abode = structure.has_value() ? registry.TryGet<const Abode>(*structure) : nullptr;
+	if (abode == nullptr)
+	{
+		return std::nullopt;
+	}
+	return TownOfAbode(*abode);
+}
+
+/// A pile gives up what it loses as anything does, from its store when it is part of one, and takes what it gains
+/// into itself or its store, keeping the poison it has
+void ChangeHeld(entt::entity pile, magic::piles::HeldChange change)
+{
+	if (!Locator::resourceStoreSystem::has_value() || (change.removed == 0 && change.added == 0))
+	{
+		return;
+	}
+	auto& stores = Locator::resourceStoreSystem::value();
+	const auto& pot = Locator::entitiesRegistry::value().Get<const Pot>(pile);
+	const auto type = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot.type)).resourceType;
+	if (change.removed != 0)
+	{
+		static_cast<void>(stores.RemoveResource(pile, type, change.removed));
+		return;
+	}
+	const bool poisoned = pot.poisoned;
+	if (const auto store = stores.StoreOf(pile))
+	{
+		static_cast<void>(stores.AddToStore(*store, type, change.added, std::nullopt, poisoned, std::nullopt));
+		return;
+	}
+	static_cast<void>(stores.AddToPile(pile, type, change.added, poisoned));
+}
+} // namespace
+
 float world_objects::LifeOf(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -291,6 +384,11 @@ float world_objects::LifeOf(entt::entity object)
 	if (const auto* needs = registry.TryGet<const CreatureNeeds>(object))
 	{
 		return needs->needs.life;
+	}
+	// A pile's life is what it holds of its fill
+	if (const auto* pile = PileOf(object))
+	{
+		return magic::piles::Life(pile->amount, FullAmountOf(*pile));
 	}
 	if (const auto* life = registry.TryGet<const ObjectLife>(object))
 	{
@@ -333,6 +431,15 @@ void world_objects::SetLife(entt::entity object, float life, bool allowed)
 		Remove(object);
 		return;
 	}
+	// A pile set to a life gains or loses what that life holds
+	if (const auto* pile = PileOf(object))
+	{
+		if (allowed)
+		{
+			ChangeHeld(object, magic::piles::ChangeForLife(pile->amount, FullAmountOf(*pile), life));
+		}
+		return;
+	}
 	if (allowed)
 	{
 		registry.AssignOrReplace<ObjectLife>(object, ObjectLife {.life = life});
@@ -355,6 +462,12 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 			field->crop.food = std::max(field->crop.food - damage * type.totalFoodInField, 0.0f);
 		}
 		return 1.0f;
+	}
+	// A pile loses what it holds rather than life: burnt or blasted away, and gone once a pile on its own has nothing left
+	if (const auto* pile = PileOf(object))
+	{
+		ChangeHeld(object, magic::piles::ChangeForDamage(pile->amount, FullAmountOf(*pile), damage));
+		return LifeOf(object);
 	}
 	if (auto* needs = registry.TryGet<CreatureNeeds>(object))
 	{
@@ -598,14 +711,15 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 		town = villager->town;
 		kind = InfoOf(object);
 	}
+	else if (const auto pileTown = TownOfPile(object); pileTown.has_value())
+	{
+		// A pile is its store's or its building's, and burning it attacks that town as much as its own kind says
+		town = *pileTown;
+		kind = InfoOf(object);
+	}
 	else if (const auto* abode = registry.TryGet<const Abode>(object))
 	{
-		registry.Each<const Town>([&](entt::entity entity, const Town& candidate) {
-			if (candidate.id == abode->townId)
-			{
-				town = entity;
-			}
-		});
+		town = TownOfAbode(*abode);
 		if (town != entt::null)
 		{
 			if (const auto* tribe = registry.TryGet<const Tribe>(town))
