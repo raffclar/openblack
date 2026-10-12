@@ -154,6 +154,12 @@ void TipBubbleSystem::Hover()
 	_displayTime = k_DisplayTime;
 }
 
+void TipBubbleSystem::LetGo()
+{
+	_gripped = false;
+	help::tip_bubble::LetGo(_scroll);
+}
+
 bool TipBubbleSystem::IsUp() const
 {
 	return _sign != entt::null && !InScriptCutScene();
@@ -177,4 +183,6 @@ void TipBubbleSystem::Reset()
 {
 	_sign = entt::null;
 	_text = 0;
+	_underHand = false;
+	LetGo();
 }

@@ -41,18 +41,15 @@ struct RenderContext
 
 	struct InstancedDrawDesc
 	{
-		InstancedDrawDesc(uint32_t offset, uint32_t count, bool morphWithTerrain, bool castsShadow)
+		InstancedDrawDesc(uint32_t offset, uint32_t count, bool morphWithTerrain)
 		    : offset(offset)
 		    , count(count)
 		    , morphWithTerrain(morphWithTerrain)
-		    , castsShadow(castsShadow)
 		{
 		}
 		uint32_t offset;
 		uint32_t count;
 		bool morphWithTerrain;
-		/// The instances cast their shadows onto the land (see graphics::ObjectShadows)
-		bool castsShadow;
 		/// The instances aren't shaded by the sun (see components::Unlit)
 		bool unlit {false};
 		/// The instances aren't seen in the reflection pass

@@ -432,6 +432,31 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	return glm::vec3 {flat.x, at->y + ecs::systems::object_measures::Height(registry, thing), flat.y};
 }
 
+/// Where a script has the creature keep its head turned: a thing where it stands, or a point. The focus is let go once
+/// the thing is gone or the script has let the creature go.
+std::optional<glm::vec3> ScriptFocusPoint(const ecs::Registry& registry, entt::entity creature, CreatureMindState& mind)
+{
+	if (!mind.scriptFocus.has_value())
+	{
+		return std::nullopt;
+	}
+	if (!registry.AllOf<ScriptControlled>(creature))
+	{
+		mind.scriptFocus.reset();
+		return std::nullopt;
+	}
+	if (!mind.scriptFocus->object.has_value())
+	{
+		return mind.scriptFocus->point;
+	}
+	const auto at = ecs::systems::object_measures::PositionOf(registry, static_cast<entt::entity>(*mind.scriptFocus->object));
+	if (!at.has_value())
+	{
+		mind.scriptFocus.reset();
+	}
+	return at;
+}
+
 /// The rest of the agenda is no use: it gives it up
 void GiveUp(creature_mind::IdleMind& idle)
 {
@@ -1168,7 +1193,13 @@ void CreatureMindSystem::ProcessTurn()
 
 		    // Looking about, the head turns to the most interesting thing in sight, or ahead
 		    mind.lookingAbout = commands.lookAbout;
-		    if (commands.gaze.has_value())
+		    const auto focus = ScriptFocusPoint(registry, entity, mind);
+		    if (focus.has_value())
+		    {
+			    // A script's focus holds the head whatever the creature is doing
+			    animation.lookAt = focus;
+		    }
+		    else if (commands.gaze.has_value())
 		    {
 			    animation.lookAt = GazePoint(registry, entity, *commands.gaze, moving);
 		    }
@@ -1664,4 +1695,27 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 		Abandon(*mind);
 	}
 	ReleaseCast(creature);
+}
+
+void CreatureMindSystem::MoveToStage(entt::entity creature, uint32_t stage)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr)
+	{
+		return;
+	}
+	mind->developmentPhase = stage;
+	// Its desires are set for the stage at once, even for the stage it is at already; a mind yet to think sets them up
+	// for the stage when it first does
+	if (mind->desires.has_value())
+	{
+		creature_desires::ActivateForPhase(*mind->desires, Phases(), stage);
+		mind->desiresPhase = stage;
+	}
+	else
+	{
+		mind->desiresPhase.reset();
+	}
+	Abandon(*mind);
 }

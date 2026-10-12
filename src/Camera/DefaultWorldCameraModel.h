@@ -18,6 +18,7 @@
 #include "CameraModel.h"
 #include "CameraPan.h"
 #include "Common/Zoomer.h"
+#include "DoubleClickFlight.h"
 
 class TestDefaultCameraModel;
 class TestDefaultCameraModel_single_line_Test;
@@ -74,7 +75,11 @@ private:
 	void UpdateModePolar(glm::vec3 eulerAngles, bool recalculatePoint);
 	void UpdateModeArcBall(glm::vec3 eulerAngles, glm::u16vec2 mouseCurrent, float xFov);
 	void UpdateModeDragging(const Camera& camera, glm::u16vec2 mouseCurrent);
-	void UpdateModeFlying(glm::vec3 eulerAngles);
+	/// Flies to the thing under the hand, else the land or sea under the cursor, for a double click or land gripped too far
+	/// ahead; nothing happens without such a place. Whether it flies.
+	bool FlyTo(camera_fly::Reason reason);
+	/// One of the four wooshes of a flight
+	static void Woosh();
 
 	/// Updates the model's focus point parameters after a change in position or focus point of view
 	void UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, glm::vec3 eulerAngles, const Camera& camera);
@@ -100,8 +105,16 @@ private:
 	/// inside the fence, above the floor and under the ceiling over where it started the frame, within the disc round the
 	/// island, and no further from where it started than a frame allows. Whether it was moved; a fence hit is heard at
 	/// `listener`.
-	bool ApplyLimits(glm::vec3 originAtFrameStart, glm::vec3 listener, std::chrono::microseconds dt, float zoomDelta,
-	                 glm::vec3 eulerAngles, const Camera& camera);
+	struct LimitsMoved
+	{
+		/// The camera itself was moved
+		bool pushed {false};
+		/// What it looks at was moved, or it was brought back inside the disc
+		bool focusMoved {false};
+		[[nodiscard]] bool Any() const { return pushed || focusMoved; }
+	};
+	LimitsMoved ApplyLimits(glm::vec3 originAtFrameStart, glm::vec3 listener, std::chrono::microseconds dt, float zoomDelta,
+	                        glm::vec3 eulerAngles, const Camera& camera);
 	/// Puts the camera back inside the zones' fence; whether it was outside
 	bool KeepInsideFence(const camera_zones::Zones& zones, glm::vec3 originAtFrameStart, glm::vec3 listener);
 	/// Whether the player is using any of the camera's controls this frame
@@ -111,7 +124,7 @@ private:
 	[[nodiscard]] glm::vec3 GetTargetForwardUnitVector() const;
 	[[nodiscard]] glm::vec3 ProjectPointOnForwardVector(float distanceFromOrigin) const;
 
-	[[nodiscard]] std::optional<CameraInterpolationUpdateInfo> ComputeUpdateReturnInfo(bool originHasBeenAdjusted,
+	[[nodiscard]] std::optional<CameraInterpolationUpdateInfo> ComputeUpdateReturnInfo(LimitsMoved moved,
 	                                                                                   std::chrono::microseconds t);
 
 	Mode _mode = Mode::Cartesian;
@@ -129,6 +142,8 @@ private:
 	std::optional<glm::vec3> _screenSpaceMouseRaycastHit;
 	std::optional<glm::vec3> _screenSpaceMouseRaycastHitAtClick;
 	std::optional<glm::vec3> _screenSpaceCenterRaycastHit;
+	/// The last land or sea the middle of the screen showed, kept while it shows none
+	glm::vec3 _lastScreenCentreHit {0.0f};
 
 	// State of input Action
 	glm::vec3 _rotateAroundDelta = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -174,6 +189,12 @@ private:
 	uint32_t _features {camera_drag::k_DefaultFeatures};
 	/// A drag gripping land too far ahead is given up until the buttons are let go
 	bool _dragGivenUp {false};
+	/// Land was just gripped too far ahead: the camera flies there this frame
+	bool _flyToGrip {false};
+	/// The camera set off on a flight this frame
+	bool _flewThisFrame {false};
+	/// The self-tilting camera eases to its place over a second this frame
+	bool _selfTiltEase {false};
 	/// Put back inside the fence, the camera ignores its controls until every one of them is let go
 	bool _heldBack {false};
 	/// The self-tilting camera goes back over where it stood at the start of the frame: it tilted itself, or nothing was

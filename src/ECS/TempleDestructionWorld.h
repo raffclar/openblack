@@ -35,7 +35,8 @@ class Registry;
 }
 
 /// What a temple's destruction needs of the rest of the game: the entities, the turn's length, the local player, its
-/// sounds, spot visuals and plasma beams, its heart's model, random numbers, the game-over script and taking the temple away.
+/// sounds, spot visuals and plasma beams, its heart's model, random numbers, the game-over script and taking the temple and its
+/// worship sites away.
 /// The game's own world works through the game's systems; tests give a fake.
 namespace openblack::ecs::temple_world
 {
@@ -82,6 +83,8 @@ public:
 	virtual void StartScript(std::string_view name) = 0;
 	/// The thing goes from the world
 	virtual void Remove(entt::entity object) = 0;
+	/// The temple's worship sites all go at once
+	virtual void RemoveWorshipSites(entt::entity temple) = 0;
 };
 
 } // namespace openblack::ecs::temple_world

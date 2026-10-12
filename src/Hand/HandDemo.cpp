@@ -38,6 +38,11 @@ glm::ivec2 CursorPixel(std::span<const float, 2> cursor, glm::ivec2 screen, floa
 	        static_cast<int>(((height - (2.0f * barF)) * cursor[1]) + barF + 0.5f)};
 }
 
+glm::vec3 RecordedThrowVelocity(const hnd::HNDRecord& record)
+{
+	return {record.heldPlacement[0], record.heldPlacement[1], record.heldPlacement[2]};
+}
+
 HeldButtons AfterRecord(HeldButtons held, hnd::HNDMessage message)
 {
 	switch (message)

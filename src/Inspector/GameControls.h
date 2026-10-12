@@ -97,6 +97,7 @@ public:
 	std::string LoadTestbed() override;
 	std::string NewGame(std::string_view start) override;
 	[[nodiscard]] std::string Current() const override;
+	[[nodiscard]] bool IsSkirmish() const override;
 };
 
 /// Pictures of the screen through the game's own screenshot

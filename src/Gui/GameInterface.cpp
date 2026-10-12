@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <SDL.h>
@@ -33,6 +34,7 @@
 #include "ECS/FloatingNumber.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -79,6 +81,12 @@ std::vector<uint8_t> ReadIfExists(const std::filesystem::path& path)
 		return {};
 	}
 	return fileSystem.ReadAll(path);
+}
+
+/// A key's name as the control pictures show it ("Shift", "Left", "Space")
+openblack::help::control_icons::KeyNameFn ControlKeyName()
+{
+	return [](SDL_Scancode key) { return openblack::gui::ToUtf16(openblack::input::KeyChordName({.key = key})); };
 }
 
 /// One of the game's fonts, from its glyph metrics and bitmaps. Nothing when they are missing or don't fit together.
@@ -166,6 +174,26 @@ constexpr std::array k_ToolTipArrows = {
 };
 /// The tooltips' mice for a wheel mouse, the third row of mousehelp.raw
 constexpr int k_ToolTipMouseRow = 2;
+
+/// What the interface picked under the pointer at the last frame drawn, as depths in front of the camera
+openblack::help::tip_bubble::UnderHand WhatIsUnderHand()
+{
+	openblack::help::tip_bubble::UnderHand under;
+	if (!Locator::pickingSystem::has_value() || !Locator::camera::has_value())
+	{
+		return under;
+	}
+	const auto& pick = Locator::pickingSystem::value().GetPick();
+	if (pick.object.has_value())
+	{
+		under.objectDepth = pick.distance;
+	}
+	if (pick.land.has_value())
+	{
+		under.landDepth = (Locator::camera::value().GetViewProjectionMatrix() * glm::vec4(*pick.land, 1.0f)).w;
+	}
+	return under;
+}
 } // namespace
 
 std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerName, MenuSettings settings)
@@ -224,6 +252,11 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	}
 	// The tip bubble's box and tail
 	created->_gatheringText = LoadTexture("gatheringtext");
+	// The gestures' pictures, for the tips that show one
+	for (size_t i = 0; i < created->_gestureSheets.size(); ++i)
+	{
+		created->_gestureSheets.at(i) = LoadTexture("S_Gesture" + std::to_string(i));
+	}
 	return created;
 }
 
@@ -728,6 +761,8 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 		return;
 	}
 	auto& bubble = Locator::tipBubbleSystem::value();
+	// Only a bubble drawn this frame can be under the hand
+	bubble.SetUnderHand(false);
 	const auto anchor = bubble.GetAnchor();
 	if (!bubble.IsUp() || !anchor.has_value() || bubble.GetDisplayTime() <= 0.0f)
 	{
@@ -748,15 +783,23 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	auto& scroll = bubble.GetScroll();
 	tip::ClampScroll(scroll, *placement);
 	const float alpha = std::min(bubble.GetDisplayTime(), 1.0f) * placement->distanceAlpha;
-	// The pointer over the bubble keeps it showing
+	// After the words are drawn: gripped, they follow the hand from the next frame on; the pointer over the bubble keeps
+	// it showing, and the hand is on it unless something under the pointer is nearer
 	const auto pointer = glm::vec2(mouse);
-	if (pointer.x > placement->min.x && pointer.x < placement->max.x && pointer.y > placement->min.y &&
-	    pointer.y < placement->max.y)
-	{
-		bubble.Hover();
-	}
+	const auto afterDrawing = [&bubble, &scroll, &placement, pointer]() {
+		if (bubble.IsGripped())
+		{
+			help::tip_bubble::FollowHand(scroll, pointer.y);
+		}
+		if (help::tip_bubble::Inside(*placement, pointer))
+		{
+			bubble.Hover();
+			bubble.SetUnderHand(help::tip_bubble::HandOnBubble(*placement, pointer, WhatIsUnderHand()));
+		}
+	};
 	if (alpha <= 0.0f)
 	{
+		afterDrawing();
 		return;
 	}
 
@@ -791,12 +834,36 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	const auto& title = _texts.GetHelpText(tip::k_TitleText).text;
 	const std::array<std::u16string_view, 3> items {tipText, u" ", title};
 	const tip::WidthFn measure = [this](std::u16string_view text, float size) { return BubbleTextWidth(text, size); };
-	const tip::WrapFn wrap = [&measure](std::u16string_view text, float width, float size) {
-		return tip::Wrap(text, width, size, measure);
+	const tip::WrapFn wrap = [this](std::u16string_view text, float width, float size) {
+		const auto lines = _font.Wrap(text, size, width);
+		return std::vector<std::u16string>(lines.begin(), lines.end());
 	};
-	const auto words = tip::LayOutWords(*placement, items, scroll.Pixels(), alpha, wrap, measure);
+	// A tip's control codes show the player's bindings
+	std::span<const input::KeyBinding> bindings;
+	if (Locator::gameActionSystem::has_value())
+	{
+		bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	}
+	const auto keyName = ControlKeyName();
+	const tip::ControlShownFn controlShown = [bindings, &keyName](int action) {
+		return help::control_icons::PictureFor(action, bindings, keyName).has_value();
+	};
+	const auto words = tip::LayOutWords(*placement, items, scroll.Pixels(), alpha, wrap, measure, controlShown);
 	scroll.contentHeight = words.contentHeight;
 	scroll.lineHeight = placement->sizes.lineHeight;
+	for (const auto& gesture : words.gestures)
+	{
+		const auto sheet = static_cast<size_t>(gesture.sheet);
+		if (sheet < _gestureSheets.size() && _gestureSheets.at(sheet) != nullptr)
+		{
+			_canvas.DrawQuad(gesture.min, gesture.max, gesture.uvMin, gesture.uvMax, gesture.colour,
+			                 _gestureSheets.at(sheet).get());
+		}
+	}
+	for (const auto& control : words.controls)
+	{
+		DrawBubbleControl(control, bindings, placement->pixelScale);
+	}
 	for (const auto& line : words.shadows)
 	{
 		DrawBubbleLine(line, glm::vec3(0.0f));
@@ -805,6 +872,47 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	{
 		DrawBubbleLine(line, glm::vec3(1.0f));
 	}
+	afterDrawing();
+}
+
+void GameInterface::DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,
+                                      float pixelScale)
+{
+	namespace icons = help::control_icons;
+	const auto picture = icons::PictureFor(icon.action, bindings, ControlKeyName());
+	if (!picture.has_value())
+	{
+		return;
+	}
+	// The gap is in the default screen's pixels
+	const float gap = help::tip_bubble::k_ControlGap * pixelScale;
+	const auto colour = glm::vec4(1.0f, 1.0f, 1.0f, icon.alpha);
+	if (const auto* text = std::get_if<std::u16string>(&*picture); text != nullptr)
+	{
+		// A key cap as wide as its words need
+		const float textWidth = _font.GetWidth(*text, icons::KeyTextSize(icon.size));
+		const auto box = help::tip_bubble::PlaceControl(icon, icons::KeyCapWidth(icon.size, textWidth), gap);
+		const icons::Placed placed {.icon = {box.min, box.max}, .glowColour = {}, .alpha = icon.alpha, .size = icon.size};
+		const auto cap = icons::LayoutKeyCap(placed);
+		if (_atmos != nullptr)
+		{
+			for (size_t i = 0; i < cap.slices.size(); ++i)
+			{
+				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max, colour,
+				                 _atmos.get());
+			}
+		}
+		_painter.DrawString(cap.textAt, *text, cap.textSize, cap.textColour);
+		return;
+	}
+	if (_mice == nullptr)
+	{
+		return;
+	}
+	const auto box = help::tip_bubble::PlaceControl(icon, static_cast<float>(icon.size), gap);
+	const auto cell =
+	    icons::CellFor(std::get<icons::MouseClick>(*picture), help::click_cue::k_WheelMouseRow, machine_clock::Ticks());
+	_canvas.DrawQuad(box.min, box.max, cell.uvMin, cell.uvMax, colour, _mice.get());
 }
 
 void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
@@ -858,27 +966,7 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 
 float GameInterface::BubbleTextWidth(std::u16string_view text, float size) const
 {
-	// Every character's advance, the line breaks' too; the blank that adds no space has none; a missing one is a '?'
-	constexpr char16_t k_Tilde = 0xF8FE;
-	const float scale = size / static_cast<float>(_font.GetHeight());
-	float width = 0.0f;
-	for (const auto c : text)
-	{
-		if (c == k_Tilde)
-		{
-			continue;
-		}
-		const auto* glyph = _font.Find(c);
-		if (glyph == nullptr)
-		{
-			glyph = _font.Find(u'?');
-		}
-		if (glyph != nullptr)
-		{
-			width += (glyph->left + glyph->ink + glyph->right) * scale;
-		}
-	}
-	return width;
+	return _font.GetWidth(text, size);
 }
 
 void GameInterface::DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour)
@@ -959,7 +1047,7 @@ void GameInterface::DrawControlIcons(const help::TextFrame& frame, const help::D
 		return;
 	}
 	const auto bindings = Locator::gameActionSystem::value().GetKeyBindings();
-	const icons::KeyNameFn keyName = [](SDL_Scancode key) { return ToUtf16(input::KeyChordName({.key = key})); };
+	const auto keyName = ControlKeyName();
 	const auto& box = frame.box;
 	const int size = icons::IconSize(box.top, box.bottom);
 	// Inset from the strip's right end, which is the screen's on 4:3
@@ -1201,10 +1289,12 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	{
 		return;
 	}
-	const auto words = _texts.Get(ToolTips::TextName(shown->words.value_or(shown->index)));
-	const std::u16string text = shown->number.has_value()
-	                                ? world_tooltip::Compose(shown->index, words, *shown->number, shown->second)
-	                                : std::u16string(words);
+	// A numbered tooltip may read in other words by its number (the belief tooltip while the player trails)
+	const auto worded =
+	    shown->number.has_value() ? std::optional(world_tooltip::Worded(shown->index, *shown->number)) : std::nullopt;
+	const auto words = _texts.Get(ToolTips::TextName(shown->words.value_or(worded.has_value() ? worded->words : shown->index)));
+	const std::u16string text =
+	    worded.has_value() ? world_tooltip::Compose(shown->index, words, worded->number, shown->second) : std::u16string(words);
 	const glm::vec4 yellow {1.0f, 1.0f, 0.0f, alpha};
 	const glm::vec4 white {1.0f, 1.0f, 1.0f, alpha};
 	const glm::vec4 shadow {0.0f, 0.0f, 0.0f, alpha};

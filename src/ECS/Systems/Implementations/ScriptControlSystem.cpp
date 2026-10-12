@@ -15,12 +15,14 @@
 #include <string_view>
 #include <utility>
 
+#include <glm/trigonometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
+#include "EngineConfig.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -28,6 +30,9 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
+/// Given back, the camera's lens returns to normal over this long
+constexpr float k_LensBackSeconds = 0.5f;
+
 void ScriptMessage(std::string_view message)
 {
 	if (const auto logger = spdlog::get("scripting"))
@@ -87,6 +92,11 @@ void ScriptControlSystem::ReleaseCamera(Camera& camera)
 	         !Locator::temple::value().ReleaseOutsideScriptCamera())
 	{
 		ScriptMessage("We are in the wrong camera mode! - exception happened?");
+	}
+	// The lens glides back to the normal one over half a second
+	if (Locator::config::has_value())
+	{
+		camera.SetLens(glm::radians(Locator::config::value().cameraXFov), k_LensBackSeconds);
 	}
 	_cameraOwner = 0;
 }

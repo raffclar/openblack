@@ -11,8 +11,10 @@
 
 #include <cstdint>
 
+#include <array>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -50,10 +52,16 @@ struct TextFrame;
 struct TextRegion;
 namespace tip_bubble
 {
+struct ControlIcon;
 struct Line;
-}
+} // namespace tip_bubble
 struct TextRun;
 } // namespace openblack::help
+
+namespace openblack::input
+{
+struct KeyBinding;
+} // namespace openblack::input
 
 namespace openblack::gui
 {
@@ -213,6 +221,9 @@ private:
 	[[nodiscard]] float BubbleTextWidth(std::u16string_view text, float size) const;
 	/// A line of the bubble's words in a colour, fading from its top to its bottom
 	void DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour);
+	/// The picture of the control that does a tip's action: its mouse buttons or its key cap
+	void DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,
+	                       float pixelScale);
 	/// The "Continue" cue at the right of the dialogue box, so far through its fade
 	void DrawClickCue(const help::TextRegion& box, float share);
 	/// The control icons the newest text asks for at the right of the dialogue box: the camera keys' cap in its top
@@ -233,6 +244,8 @@ private:
 	std::unique_ptr<graphics::Texture2D> _atmos;
 	/// The tip bubble's texture of box corners and tails
 	std::unique_ptr<graphics::Texture2D> _gatheringText;
+	/// The gestures' pictures, sixteen to a sheet, which a tip's gesture codes show
+	std::array<std::unique_ptr<graphics::Texture2D>, 2> _gestureSheets;
 	/// The good advisor's font f1 and the evil one's f3, which their words in the dialogue are in
 	std::optional<FontFace> _goodAdvisorFont;
 	std::optional<FontFace> _evilAdvisorFont;

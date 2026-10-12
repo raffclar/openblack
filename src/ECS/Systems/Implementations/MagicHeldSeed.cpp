@@ -26,6 +26,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/HandHoldPose.h"
@@ -114,12 +115,11 @@ void MagicSystem::PlaceHandEffect(glm::vec3 point, float handScale)
 	particles.SetDrawOffset(seed.handEffect, point - _handAtStep);
 }
 
-bool MagicSystem::PlayerHasSpellIcon(PlayerNames /*player*/, SpellSeedType /*seed*/) const
+bool MagicSystem::PlayerHasSpellIcon(PlayerNames player, SpellSeedType seed) const
 {
-	// A player's icons stand on the worship sites of their citadel, one for each miracle they have learnt; a seed taken
-	// from a globe is made at the best icon the player has for it. openblack's citadels have no worship sites yet, so
-	// no player has an icon and a globe's seed is always made without one.
-	return false;
+	// A player's icons stand on the worship sites of their citadel, one for each miracle their towns offer; a seed taken
+	// from a globe is made at the icon the player has for it
+	return Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().HasIconFor(player, seed);
 }
 
 bool MagicSystem::IsHandInInfluence() const
