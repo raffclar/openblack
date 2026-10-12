@@ -48,6 +48,7 @@
 #include "Magic/VillagerReactionRules.h"
 #include "MagicShieldSystem.h"
 #include "VillagerHome.h"
+#include "VillagerReactions.h"
 #include "VillagerShieldShelter.h"
 
 using namespace openblack;
@@ -466,7 +467,6 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id)
 	const auto at = PositionOf(villager);
 	const auto centre = PositionOf(reaction.object);
 	auto* current = registry.TryGet<VillagerShieldReaction>(villager);
-	const auto previous = current != nullptr ? current->previous : living.VillagerGetState(action, LivingAction::Index::Top);
 
 	if (reaction.type == Reaction::ReactToMagicShieldStruck)
 	{
@@ -483,10 +483,14 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id)
 		return;
 	}
 
+	// Not reacting yet, it remembers what it was doing to go back to
+	if (current == nullptr)
+	{
+		ecs::systems::villager_reactions::RememberStateToGoBackTo(action);
+	}
 	auto& reacting = registry.AssignOrReplace<VillagerShieldReaction>(
 	    villager,
-	    VillagerShieldReaction {.previous = previous,
-	                            .reaction = id,
+	    VillagerShieldReaction {.reaction = id,
 	                            .type = reaction.type,
 	                            .shield = reaction.type == Reaction::ReactToMagicShield ? reaction.object : entt::null,
 	                            .lookAt = at,
@@ -531,15 +535,18 @@ void MagicShieldSystem::StopReacting(entt::entity villager, bool setState)
 	{
 		std::erase(found->second.reacting, villager);
 	}
-	const auto previous = current->previous;
+	// Its memory of the kind is brought up to now, so it waits its time before taking that kind up again
+	if (auto* memory = registry.TryGet<VillagerReactionMemory>(villager))
+	{
+		memory->memory.Refresh(static_cast<uint32_t>(current->type), GameTurn());
+	}
 	registry.Remove<VillagerShieldReaction>(villager);
 	if (setState)
 	{
 		if (auto* action = registry.TryGet<LivingAction>(villager))
 		{
-			// Back to what it was doing
-			const auto state = previous != VillagerStates::InvalidState ? previous : VillagerStates::DecideWhatToDo;
-			Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Top, state, false);
+			// Back to what it was doing, as every reaction ends
+			ecs::systems::villager_reactions::GoBackAfterReacting(*action);
 		}
 	}
 }

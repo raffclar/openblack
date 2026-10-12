@@ -841,3 +841,147 @@ TEST_F(Reactions, ACreaturesReactionFollowsIt)
 	EXPECT_FLOAT_EQ(reaction->velocity.y, 0.0f);
 	EXPECT_FLOAT_EQ(reaction->velocity.z, facing.y);
 }
+
+namespace
+{
+/// A job a villager walks to, and the state it takes up again once a reaction is over
+constexpr auto k_Job = VillagerStates::InspectObject;
+constexpr auto k_JobAgain = VillagerStates::NothingToDo;
+
+/// Makes the job a state villagers may react from, that resumes in another, plain state
+void MakeJob(InfoConstants& info, VillagerStates resumesIn)
+{
+	auto& job = info.villagerStateTable.at(static_cast<size_t>(k_Job));
+	job.isFinalState = 1;
+	job.availableForReaction = 1;
+	job.resumeState = static_cast<int>(resumesIn);
+	// Reactions' states are ends in themselves
+	info.villagerStateTable.at(static_cast<size_t>(VillagerStates::FleeingAndLookingAtObjectReaction)).isFinalState = 1;
+	info.villagerStateTable.at(static_cast<size_t>(VillagerStates::LookingAtObjectReaction)).isFinalState = 1;
+	info.villagerStateTable.at(static_cast<size_t>(k_JobAgain)).isFinalState = 1;
+	Locator::infoConstants::emplace(info);
+}
+
+VillagerStates SlotOf(entt::entity villager, LivingAction::Index index)
+{
+	return static_cast<VillagerStates>(
+	    Locator::entitiesRegistry::value().Get<const LivingAction>(villager).states.at(static_cast<size_t>(index)));
+}
+
+/// The villager walks to its job
+void WalkToJob(entt::entity villager)
+{
+	auto& action = Locator::entitiesRegistry::value().Get<LivingAction>(villager);
+	action.states.at(static_cast<size_t>(LivingAction::Index::Top)) = static_cast<uint8_t>(VillagerStates::MoveToPos);
+	action.states.at(static_cast<size_t>(LivingAction::Index::Final)) = static_cast<uint8_t>(k_Job);
+}
+} // namespace
+
+TEST_F(Reactions, AVillagerRemembersTheStateItWasHeadingForAndTakesUpWhereThatResumesOnceTheReactionIsOver)
+{
+	MakeJob(*_info, k_JobAgain);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	const auto villager = _villagers[0];
+	WalkToJob(villager);
+	// What made the miracle stays, so the reaction lasts until the villager's time is over
+	auto miracle = Miracle();
+	miracle.initiator = Locator::entitiesRegistry::value().Create();
+	reactions.Create(miracle);
+	ASSERT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	// It remembers its job, the state it was walking to, not the walk
+	EXPECT_EQ(SlotOf(villager, LivingAction::Index::Previous), k_Job);
+	for (int turn = 0; turn < 100; ++turn)
+	{
+		reactions.ProcessTurn();
+	}
+	// Its time over, it takes up the state its job resumes in, remembers nothing, and waits its time from now before
+	// taking the kind up again
+	EXPECT_EQ(StateOf(villager), k_JobAgain);
+	EXPECT_EQ(SlotOf(villager, LivingAction::Index::Previous), VillagerStates::InvalidState);
+	const auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	EXPECT_GT(registry.Get<const VillagerReactionMemory>(villager).memory.LastReacted(
+	              static_cast<uint32_t>(Reaction::LookAtNiceSpell)),
+	          80u);
+	Locator::reactionSystem::reset();
+}
+
+TEST_F(Reactions, AReactionsEndGoesBackTheSameWayWhenTheReactionIsShutDown)
+{
+	MakeJob(*_info, k_JobAgain);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	const auto villager = _villagers[0];
+	WalkToJob(villager);
+	const auto id = reactions.Create(Miracle());
+	ASSERT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	reactions.Remove(id);
+	EXPECT_EQ(StateOf(villager), k_JobAgain);
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::reactionSystem::reset();
+}
+
+TEST_F(Reactions, AVillagerWhoseRememberedStateResumesInAReactionDecidesWhatToDo)
+{
+	MakeJob(*_info, VillagerStates::FleeingAndLookingAtObjectReaction);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	const auto villager = _villagers[0];
+	WalkToJob(villager);
+	const auto id = Locator::reactionSystem::value().Create(Miracle());
+	Locator::reactionSystem::value().Remove(id);
+	EXPECT_EQ(StateOf(villager), VillagerStates::DecideWhatToDo);
+	Locator::reactionSystem::reset();
+}
+
+TEST_F(Reactions, AVillagerLeavingAReactionsStateForAnotherKindLetsGoOfTheReaction)
+{
+	MakeJob(*_info, k_JobAgain);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	registry.Assign<WallHugObjectReference>(villager, WallHugObjectReference {.stepsAway = 3});
+	const auto id = Locator::reactionSystem::value().Create(Miracle());
+	ASSERT_NE(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	// Taken off to its job by something else, it lets go of the reaction and forgets the circle it was going round
+	Locator::livingActionSystem::value().VillagerChangeTopState(registry.Get<LivingAction>(villager), k_Job);
+	EXPECT_EQ(StateOf(villager), k_Job);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	EXPECT_FALSE(registry.AllOf<WallHugObjectReference>(villager));
+	// So the reaction's end no longer moves it
+	Locator::reactionSystem::value().Remove(id);
+	EXPECT_EQ(StateOf(villager), k_Job);
+	Locator::reactionSystem::reset();
+}
+
+TEST_F(Reactions, AVillagerWhoseStateWontLetItGoIsPutStraightIntoDecidingWhatToDo)
+{
+	MakeJob(*_info, k_JobAgain);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	auto& action = registry.Get<LivingAction>(villager);
+	// A body is let out of death only into the hand or the air
+	action.states.at(static_cast<size_t>(LivingAction::Index::Top)) = static_cast<uint8_t>(VillagerStates::Dead);
+	action.states.at(static_cast<size_t>(LivingAction::Index::Previous)) = static_cast<uint8_t>(k_Job);
+	ecs::systems::villager_reactions::StopReacting(action);
+	EXPECT_EQ(StateOf(villager), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(SlotOf(villager, LivingAction::Index::Previous), VillagerStates::InvalidState);
+}
+
+TEST_F(Reactions, AReactionVillagersDontActOutYetEndsWithoutMovingThem)
+{
+	MakeJob(*_info, k_JobAgain);
+	auto& celebration = _info->reaction.at(static_cast<size_t>(Reaction::ReactToTownCelebration));
+	celebration = _info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell));
+	Locator::infoConstants::emplace(*_info);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	const auto villager = _villagers[0];
+	WalkToJob(villager);
+	const auto id = Locator::reactionSystem::value().Create(Miracle(Reaction::ReactToTownCelebration));
+	ASSERT_NE(Locator::entitiesRegistry::value().Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::reactionSystem::value().Remove(id);
+	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
+	EXPECT_EQ(SlotOf(villager, LivingAction::Index::Final), k_Job);
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::reactionSystem::reset();
+}

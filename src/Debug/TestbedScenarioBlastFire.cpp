@@ -38,6 +38,18 @@ std::vector<ObjectSetup> Village(glm::vec2 at)
 	};
 }
 
+/// The village with more of its people about, a little way from its trees, to watch going back after reacting
+std::vector<ObjectSetup> ReactionsVillage()
+{
+	auto objects = Village({0.0f, 40.0f});
+	for (const auto offset :
+	     {glm::vec2(18.0f, 28.0f), glm::vec2(22.0f, 31.0f), glm::vec2(15.0f, 24.0f), glm::vec2(25.0f, 26.0f)})
+	{
+		objects.push_back({.type = VillagerInfo::NorseFarmerMale, .offset = offset, .joinTown = true});
+	}
+	return objects;
+}
+
 /// A forest of a few rows of trees, a few metres apart
 std::vector<ObjectSetup> Forest(glm::vec2 at, int rows, int columns, float spacing)
 {
@@ -263,6 +275,38 @@ void AddFire(std::vector<Scenario>& all)
 	                  .handHeight = 6.0f,
 	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
 	                  .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
+	    .id = "villagers.reactions_reset",
+	    .name = "Villagers going back after reacting",
+	    .facet = Facet::Miracles,
+	    .description = "A village's people at their work, then food poured beside them, a lightning bolt a little "
+	                   "way off and a fireball thrown at one of their trees, one after another.",
+	    .expected = "Each time the villagers break off to react (going for the food, running from the bolt, watching or "
+	                "fighting the fire) and, once each reaction is over, go back to what they were doing before it "
+	                "(the inspector's LivingAction: the state each remembered, then the state that resumes it), never "
+	                "keeping a reaction they have left nor standing in no state.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 25.0f}, {25.0f, 60.0f}}},
+	    .objects = ReactionsVillage(),
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {-10.0f, 30.0f},
+	                  .handOffset = {-10.0f, 30.0f},
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 2.0f,
+	                  .holdSeconds = 3.0f},
+	                 {.type = MagicType::LightningBolt,
+	                  .point = {-40.0f, 75.0f},
+	                  .handOffset = {-40.0f, 75.0f},
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 25.0f},
+	                 {.type = MagicType::Fireball,
+	                  .point = {-12.0f, 49.0f},
+	                  .handOffset = {-12.0f, 39.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 45.0f}},
 	});
 
 	all.push_back({

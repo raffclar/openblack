@@ -292,26 +292,17 @@ bool IsFireFightingState(VillagerStates state)
 	       state == VillagerStates::GetWaterToPutOutFire || state == VillagerStates::MoveAroundFire;
 }
 
-/// The villager goes back to what it remembered, as any change of state goes: it may pause a second first, and a state
-/// that won't be gone into leaves it deciding what to do. Nothing is remembered afterwards. With nothing remembered it
-/// decides what to do rather than standing still for good.
+/// The villager goes back to what it remembered, as any change of state goes. With nothing remembered a fireman decides
+/// what to do rather than standing still for good.
 void PopFromPrevious(LivingAction& action)
 {
-	const auto previous = State(action, LivingAction::Index::Previous);
-	SetTopState(action, villager_fire::StateToGoBackTo(static_cast<VillagerStates>(StateInfo(previous).resumeState)));
-	SetPrevious(action, VillagerStates::InvalidState);
+	ecs::systems::villager_reactions::GoBackToRemembered(action, true);
 }
 
 /// The villager lets go of the reaction it took up, so the living about a fire can take it up again in their time
 void StopReacting(entt::entity villager)
 {
-	auto& state = FireStateOf(villager);
-	state.reaction = 0;
-	state.reactionTarget = entt::null;
-	if (Locator::reactionSystem::has_value())
-	{
-		Locator::reactionSystem::value().StopReacting(villager);
-	}
+	ecs::systems::villager_reactions::LetGo(villager);
 }
 
 /// Whether a thing can still be reacted to: it exists, and a villager is not dying
@@ -882,11 +873,7 @@ bool villager_fire::ExitOnFire(LivingAction& action, VillagerStates /*next*/)
 
 bool villager_fire::ExitReaction(LivingAction& action, VillagerStates next)
 {
-	if (StateInfo(next).isReactionState == 0)
-	{
-		StopReacting(EntityOf(action));
-	}
-	return false;
+	return ecs::systems::villager_reactions::ExitReaction(action, next);
 }
 
 bool villager_fire::ReactionValidate(LivingAction& action)
@@ -984,16 +971,7 @@ void villager_fire::StopFireFighting(entt::entity villager)
 
 void villager_fire::EndReaction(LivingAction& action)
 {
-	const auto villager = EntityOf(action);
-	PopFromPrevious(action);
-	if (StateInfo(FinalState(action)).isReactionState != 0)
-	{
-		SetTopState(action, VillagerStates::DecideWhatToDo);
-	}
-	if (FireStateOf(villager).reaction != 0)
-	{
-		StopReacting(villager);
-	}
+	ecs::systems::villager_reactions::StopReacting(action);
 }
 
 entt::entity villager_fire::FireOf(entt::entity villager)

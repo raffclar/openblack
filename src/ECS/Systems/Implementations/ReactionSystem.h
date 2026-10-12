@@ -58,7 +58,8 @@ private:
 	[[nodiscard]] uint32_t PriorityTo(const Active& reaction, entt::entity living, const glm::vec3& at) const;
 	[[nodiscard]] uint32_t PriorityTo(const Active& reaction, entt::entity living, const glm::vec3& at, float distance) const;
 	/// A living thing takes up a reaction: it is impressed by it, and does what it does about it
-	void Start(Active& reaction, entt::entity living, components::LivingReaction& state);
+	/// A living takes up a reaction; one taking it over from another it reacted to counts as reacting already
+	void Start(Active& reaction, entt::entity living, components::LivingReaction& state, bool takingOver = false);
 	/// A living thing stops reacting, a villager going back to what it was doing when asked
 	void Stop(entt::entity living, components::LivingReaction& state, bool resetState);
 	/// A turn of each living thing's reaction: it stops once it has reacted its time, or its reaction has gone

@@ -31,6 +31,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Mesh.h"
@@ -49,6 +50,7 @@
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerAge.h"
+#include "ECS/VillagerMemory.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerSpeed.h"
 #include "ECS/WorldObjects.h"
@@ -152,18 +154,16 @@ std::optional<ReactionSystemInterface::Active> ReactionOf(entt::entity villager)
 /// The villager stops reacting and goes back to what it was doing
 uint32_t GiveUp(LivingAction& action)
 {
-	const auto villager = EntityRegistry().ToEntity(action);
-	if (auto* state = EntityRegistry().TryGet<LivingReaction>(villager); state != nullptr && state->reaction != 0)
-	{
-		villager_reactions::Stop(villager, *state, true);
-		state->reaction = 0;
-		state->type = Reaction::None;
-	}
-	else
-	{
-		SetTop(action, VillagerStates::DecideWhatToDo);
-	}
+	villager_reactions::StopReacting(action);
 	return 0;
+}
+
+/// Whether the villager holds a reaction: one of the reactions going on, or a fire's
+bool HoldsReaction(entt::entity villager)
+{
+	const auto* state = EntityRegistry().TryGet<const LivingReaction>(villager);
+	const auto* fire = EntityRegistry().TryGet<const VillagerFireState>(villager);
+	return (state != nullptr && state->reaction != 0) || (fire != nullptr && fire->reaction != 0);
 }
 
 /// The villager turns towards a point by at most a step a turn: whether it now faces it
@@ -331,7 +331,7 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 	}
 	if (!wasReacting)
 	{
-		state.previousState = StateOf(*action, LivingAction::Index::Top);
+		villager_reactions::RememberStateToGoBackTo(*action);
 	}
 	switch (type)
 	{
@@ -408,40 +408,127 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 	}
 }
 
+bool villager_reactions::ActsOut(Reaction type)
+{
+	switch (type)
+	{
+	case Reaction::FleeFromObject:
+	case Reaction::FleeFromSpell:
+	case Reaction::LookAtNiceSpell:
+	case Reaction::ReactToImpressiveSpell:
+	case Reaction::ReactToTeleport:
+	case Reaction::ReactToFlyingObject:
+	case Reaction::ReactToFood:
+	case Reaction::ReactToWood:
+	case Reaction::ReactToVillagerInHand:
+	case Reaction::ReactToBreeder:
+	case Reaction::ReactToDeath:
+	case Reaction::ReactToFire:
+		return true;
+	default:
+		return false;
+	}
+}
+
 void villager_reactions::Stop(entt::entity villager, LivingReaction& state, bool resetState)
 {
 	auto& registry = EntityRegistry();
 	auto* action = registry.TryGet<LivingAction>(villager);
-	auto* wallHug = registry.TryGet<WallHug>(villager);
 	if (!resetState || action == nullptr)
 	{
+		auto* wallHug = registry.TryGet<WallHug>(villager);
 		if (const auto* component = registry.TryGet<const Villager>(villager); component != nullptr && wallHug != nullptr)
 		{
 			wallHug->speed = GetSpeedStateSpeed(InfoOf(*component).speedGroup.speedDefault);
 		}
 		return;
 	}
-	// The fire states remember what the villager was doing themselves, and leaving them must take it off its blaze's
-	// firemen: it goes back the fire's way
-	if (state.type == Reaction::ReactToFire)
+	// TODO(raffclar): a reaction villagers don't act out yet left them doing what they were doing, so there is nothing
+	// to go back from; it is only let go. Once each is acted out it ends as every other does.
+	if (!ActsOut(state.type))
 	{
-		state.previousState = VillagerStates::InvalidState;
-		villager_fire::EndReaction(*action);
+		LetGo(villager);
 		return;
 	}
-	// Back to the state it was in, or the one that state goes back to; anything else has it decide afresh
-	auto resume = state.previousState != VillagerStates::InvalidState
-	                  ? static_cast<VillagerStates>(StateInfo(state.previousState).resumeState)
-	                  : VillagerStates::InvalidState;
-	if (resume == VillagerStates::InvalidState || StateInfo(resume).isReactionState != 0)
+	StopReacting(*action);
+}
+
+void villager_reactions::RememberStateToGoBackTo(LivingAction& action)
+{
+	villager_memory::StorePreviousState(action);
+}
+
+void villager_reactions::GoBackToRemembered(LivingAction& action, bool firemanDecidesWhenNothingRemembered)
+{
+	auto& living = Locator::livingActionSystem::value();
+	const auto remembered = StateOf(action, LivingAction::Index::Previous);
+	auto resume = static_cast<VillagerStates>(StateInfo(remembered).resumeState);
+	if (firemanDecidesWhenNothingRemembered)
 	{
-		resume = VillagerStates::DecideWhatToDo;
+		resume = villager_fire::StateToGoBackTo(resume);
 	}
-	state.previousState = VillagerStates::InvalidState;
-	Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Final, VillagerStates::InvalidState,
-	                                                      true);
-	SetTop(*action, resume);
-	SetStateSpeed(villager, FinalStateOf(*action));
+	if (!living.VillagerChangeTopState(action, resume))
+	{
+		// The states it is in won't let it go: it is put straight into deciding what to do, with none of their rules
+		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, true);
+	}
+	living.VillagerSetState(action, LivingAction::Index::Previous, VillagerStates::InvalidState, true);
+}
+
+void villager_reactions::GoBackAfterReacting(LivingAction& action)
+{
+	const auto villager = EntityRegistry().ToEntity(action);
+	const auto* state = EntityRegistry().TryGet<const LivingReaction>(villager);
+	const bool fireman = villager_fire::IsFireMan(villager) || (state != nullptr && state->type == Reaction::ReactToFire);
+	GoBackToRemembered(action, fireman);
+	// Still heading for a reaction's state, with the reaction over, it decides afresh
+	if (StateInfo(FinalStateOf(action)).isReactionState != 0)
+	{
+		SetTop(action, VillagerStates::DecideWhatToDo);
+	}
+}
+
+void villager_reactions::LetGo(entt::entity villager)
+{
+	auto& registry = EntityRegistry();
+	if (auto* fire = registry.TryGet<VillagerFireState>(villager))
+	{
+		fire->reaction = 0;
+		fire->reactionTarget = entt::null;
+	}
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().StopReacting(villager);
+	}
+	else if (auto* state = registry.TryGet<LivingReaction>(villager))
+	{
+		state->reaction = 0;
+		state->type = Reaction::None;
+	}
+}
+
+uint32_t villager_reactions::StopReacting(LivingAction& action)
+{
+	const auto villager = EntityRegistry().ToEntity(action);
+	GoBackAfterReacting(action);
+	if (HoldsReaction(villager))
+	{
+		LetGo(villager);
+	}
+	return 0;
+}
+
+bool villager_reactions::ExitReaction(LivingAction& action, VillagerStates next)
+{
+	auto& registry = EntityRegistry();
+	const auto villager = registry.ToEntity(action);
+	// The circle it was walking round, and any trial of going round it the other way, are forgotten
+	registry.Remove<WallHugObjectReference, WallHugLookahead>(villager);
+	if (StateInfo(next).isReactionState == 0 && HoldsReaction(villager))
+	{
+		LetGo(villager);
+	}
+	return false;
 }
 
 uint32_t villager_reactions::Fleeing(LivingAction& action)
@@ -483,11 +570,6 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 	villager_home::SetupMoveTo(action, glm::xz(to), VillagerStates::FleeingAndLookingAtObjectReaction);
 	SetStateSpeed(villager, FinalStateOf(action));
 	return 0;
-}
-
-uint32_t villager_reactions::StopReacting(LivingAction& action)
-{
-	return GiveUp(action);
 }
 
 std::optional<entt::entity> villager_reactions::ReactingTo(entt::entity villager)

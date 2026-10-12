@@ -86,8 +86,6 @@ struct AntiInfluence
 /// looks towards, and the animation it last chose
 struct VillagerShieldReaction
 {
-	/// What it was doing before, which it goes back to
-	VillagerStates previous {VillagerStates::InvalidState};
 	uint32_t reaction {0};
 	Reaction type {Reaction::None};
 	entt::entity shield {entt::null};

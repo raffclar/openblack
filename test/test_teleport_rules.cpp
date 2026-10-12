@@ -127,19 +127,3 @@ TEST(TeleportRules, ACreatureFadesOutAndInOverTwoSeconds)
 	EXPECT_FLOAT_EQ(CreatureFadeIn(19, 20), 0.95f);
 	EXPECT_FLOAT_EQ(CreatureFadeIn(0, 20), 0.0f);
 }
-
-TEST(TeleportRules, AVillagerComesBackToWhatItWasDoing)
-{
-	// Through the stone it comes back to the state it was to take, unless its table says that state keeps the one kept
-	// before
-	EXPECT_EQ(PreviousToKeep(openblack::VillagerStates::ArrivesAtWorshipSiteForWorship, openblack::VillagerStates::InvalidState,
-	                         false),
-	          openblack::VillagerStates::ArrivesAtWorshipSiteForWorship);
-	EXPECT_EQ(PreviousToKeep(openblack::VillagerStates::ArrivesAtWorshipSiteForWorship,
-	                         openblack::VillagerStates::DecideWhatToDo, true),
-	          openblack::VillagerStates::DecideWhatToDo);
-	// With nothing to come back to it decides afresh
-	EXPECT_EQ(StateAfterReacting(openblack::VillagerStates::GotoWorshipSiteForWorship),
-	          openblack::VillagerStates::GotoWorshipSiteForWorship);
-	EXPECT_EQ(StateAfterReacting(openblack::VillagerStates::InvalidState), openblack::VillagerStates::DecideWhatToDo);
-}
