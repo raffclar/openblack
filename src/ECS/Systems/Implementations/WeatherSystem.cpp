@@ -1005,6 +1005,8 @@ entt::entity WeatherSystem::AddMiracleStorm(const MiracleStorm& miracle)
 	storm.lastsFor = k_MiracleStormLife;
 	storm.strength = 1.0f;
 	storm.cloudHeight = miracle.cloudHeight;
+	// The miracle's own clouds are its particles: its storm gathers none of its own
+	storm.cloudCount = 0;
 	storm.rainSpeed = registry.Get<const Climate>(GetGlobalClimate()).stormSpeed;
 	storm.effect = miracle.effect;
 	storm.climate = entt::null;

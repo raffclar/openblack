@@ -22,6 +22,7 @@
 #include "3D/MapCoords.h"
 #include "3D/SkeletalAnimation.h"
 #include "3D/SkyDome.h"
+#include "3D/StormClouds.h"
 #include "Animals/AnimalMove.h"
 #include "Animals/FishShoal.h"
 #include "Animals/GrazerRules.h"
@@ -172,6 +173,7 @@
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/StormCloud.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Swayable.h"
@@ -1431,6 +1433,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::StoragePit>(context)
 	    .Field<&components::StoragePit::woodPiles>("woodPiles")
 	    .Field<&components::StoragePit::foodPile>("foodPile");
+	Reflect<components::StormCloud>(context)
+	    .Field<&components::StormCloud::storm>("storm")
+	    .Field<&components::StormCloud::index>("index")
+	    .Field<&components::StormCloud::drift>("drift")
+	    .Field<&components::StormCloud::sizeFactor>("sizeFactor")
+	    .Field<&components::StormCloud::shade>("shade")
+	    .Field<&components::StormCloud::flashGrey>("flashGrey");
 	Reflect<components::Stream>(context).Field<&components::Stream::id>("id").Field<&components::Stream::points>("points");
 	Reflect<components::StreamSegment> {context};
 	Reflect<components::StreetLantern>(context).Field<&components::StreetLantern::country>("country");
@@ -2583,6 +2592,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::sky_dome::Rows::skyType>("skyType")
 	    .Field<&openblack::sky_dome::Rows::first>("first")
 	    .Field<&openblack::sky_dome::Rows::count>("count");
+	Reflect<openblack::storm_clouds::Drift>(context, ValueOnly {})
+	    .Field<&openblack::storm_clouds::Drift::place>("place")
+	    .Field<&openblack::storm_clouds::Drift::target>("target")
+	    .Field<&openblack::storm_clouds::Drift::step>("step")
+	    .Field<&openblack::storm_clouds::Drift::stepsLeft>("stepsLeft");
 	Reflect<openblack::temple_leashes::Look>(context, ValueOnly {})
 	    .Field<&openblack::temple_leashes::Look::scroll>("scroll")
 	    .Field<&openblack::temple_leashes::Look::pitch>("pitch")

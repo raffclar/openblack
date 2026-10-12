@@ -58,6 +58,7 @@
 #include "3D/OrientedText.h"
 #include "3D/Rain.h"
 #include "3D/SnowCover.h"
+#include "3D/StormClouds.h"
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
@@ -97,6 +98,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/Sprite.h"
+#include "ECS/Components/StormCloud.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -2570,6 +2572,8 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		fullLight = ((texel & 0xFFu) << 16u) | (texel & 0xFF00u) | ((texel >> 16u) & 0xFFu);
 	}
 	const auto cloudColour = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), fullLight);
+	// The storms' clouds are tinted from the land's colour this frame
+	const auto landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu;
 
 	// Looked up once for all the mists
 	const ProgramUniform s_diffuse {*program, "s_diffuse"};
@@ -2598,6 +2602,12 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 			const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
 			colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
 		}
+		// A storm's cloud takes the land's colour, darkened by the storm's shade, and is lit by its lightning
+		const auto* stormCloud = desc.entities.TryGet<ecs::components::StormCloud>(entity);
+		if (stormCloud != nullptr)
+		{
+			colour = (colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud->shade);
+		}
 		const auto alpha = static_cast<float>(colour >> 24u);
 		if (alpha <= 0.0f)
 		{
@@ -2617,7 +2627,10 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		                              static_cast<float>(colour & 0xFFu) / 255.0f, alpha / 255.0f};
 		// The others take the land's light where they stand and the haze, in the models' light
 		const bool landLit = !mist.shrinksEdgeOn && _landLightTexture.has_value();
-		const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, 1.0f, 0.0f, 0.0f};
+		// A storm's cloud is faded by the haze, which adds the flash of its lightning
+		const bool hazed = landLit || stormCloud != nullptr;
+		const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, 1.0f, stormCloud != nullptr ? 1.0f : 0.0f,
+		                             stormCloud != nullptr ? static_cast<float>(stormCloud->flashGrey) : 0.0f};
 		const glm::vec4 noHaze {0.0f};
 
 		for (const auto& subMesh : mesh->GetSubMeshes())
@@ -2632,7 +2645,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 				s_landColour.Set(8, GetLandColour());
 				u_islandExtent.Set(&islandExtent);
 				u_landLightUniform.Set(&u_landLight);
-				u_haze.Set(landLit ? &_haze[0] : &noHaze);
+				u_haze.Set(hazed ? &_haze[0] : &noHaze);
 				u_hazeColour.Set(&_haze[1]);
 				u_modelLight.Set(mist.shrinksEdgeOn ? &skyLight : &_modelLight);
 				u_mistUniform.Set(&u_mist);
@@ -3821,6 +3834,37 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 			               BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
 			                   BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN));
 		    });
+	}
+
+	// A storm with clouds of its own darkens the land under it by its shade and strength, its shadow centred on it
+	const auto stormShadowId = entt::hashed_string("raw/sstorm");
+	if (detail_level::CloudShadows(Locator::config::value().detailLevel) && textures.Contains(stormShadowId.value()))
+	{
+		const auto shadow = textures.Handle(stormShadowId.value());
+		constexpr auto k_ShadowCells = static_cast<float>(storm_clouds::k_ShadowCells);
+		drawDesc.entities.Each<const ecs::components::Storm>([&](const ecs::components::Storm& storm) {
+			if (storm_clouds::Wanted(storm.cloudCount) == 0)
+			{
+				return;
+			}
+			const auto alpha = storm_clouds::ShadowAlpha(storm.cloudShade, storm.currentStrength);
+			if (!alpha.has_value())
+			{
+				return;
+			}
+			// A texel's middle falls on each cell's corner
+			const auto corner = storm_clouds::ShadowCorner({storm.currentPosition.x, storm.currentPosition.z}) /
+			                        LandIslandInterface::k_CellSize -
+			                    firstCell + 0.5f;
+			const float half = 0.5f / k_ShadowCells;
+			const glm::vec4 u_landShade {0.0f, static_cast<float>(*alpha), 0.0f, 0.0f};
+			shadeProgram.SetTextureSampler("s_texture", 0, *shadow);
+			shadeProgram.SetUniformValue("u_landShade", &u_landShade);
+			submitQuad(shadeView, shadeProgram, corner, corner + (k_ShadowCells - 1.0f), glm::vec2(half),
+			           glm::vec2(1.0f - half),
+			           BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
+			               BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN));
+		});
 	}
 
 	// The lights, once the land is dark enough: each stamps its image of brightness, a texel a cell from the cell its
