@@ -414,11 +414,16 @@ TEST(ScriptCamera, ATwoThingCameraTakesOverUntilLetGoOrAThingIsGone)
 	EXPECT_NEAR(model.GetTargetFocus().x, 2420.0f, 1e-3f);
 	EXPECT_TRUE(model.InDualView());
 
-	// A thing gone, it lets go, and the script's own camera holds where it was sent
+	// A thing gone is framed where it was last seen until the turn lets go of it; then the script's own camera holds
+	// where it was sent
 	secondThere = false;
 	const auto held = model.GetTargetFocus();
 	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
+	EXPECT_TRUE(model.InDualView());
+	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), held), 0.0f, 1e-4f);
+	model.LetGoOfGoneThings();
 	EXPECT_FALSE(model.InDualView());
+	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
 	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), held), 0.0f, 1e-4f);
 	EXPECT_FALSE(model.ReleaseDualView());
 }

@@ -256,6 +256,9 @@ public:
 	bool ReleaseDualView();
 	/// Whether a two-thing camera has taken over: the script's own commands then don't reach the camera
 	[[nodiscard]] bool InDualView() const { return !_duals.empty(); }
+	/// Once a game turn, the two-thing cameras whose things have gone let go; until then they frame them where they were
+	/// last seen. When the one on top lets go, the one below, or the script's own, takes over again.
+	void LetGoOfGoneThings();
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	void HandleActions(std::chrono::microseconds dt) override;
@@ -276,7 +279,7 @@ private:
 	void StopTrack();
 	/// Puts the camera where its track has got to
 	void UpdateTrack();
-	/// Sends the camera after the two things of the two-thing camera on top; it lets go once either is gone
+	/// Sends the camera after the two things of the two-thing camera on top
 	void UpdateDual();
 
 	Zoomers _origin;
@@ -297,6 +300,9 @@ private:
 		DualSubject first;
 		DualSubject second;
 		script_camera::DualSettings settings;
+		/// Where each was last seen
+		std::optional<script_camera::DualThing> lastFirst;
+		std::optional<script_camera::DualThing> lastSecond;
 	};
 	std::vector<Dual> _duals;
 };

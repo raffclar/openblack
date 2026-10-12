@@ -1166,6 +1166,12 @@ bool Game::GameLogicLoop() noexcept
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();
 
+	// A script's two-thing camera lets go of a thing that has gone
+	if (auto* scriptCamera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	    scriptCamera != nullptr)
+	{
+		scriptCamera->LetGoOfGoneThings();
+	}
 	// The players' temples take their turn first: one whose heart lost all its life moves on through its destruction
 	if (Locator::templeDestructionSystem::has_value())
 	{

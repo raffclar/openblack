@@ -335,8 +335,17 @@ void ScriptCameraModel::UpdateDualView(DualSubject first, DualSubject second)
 	{
 		return;
 	}
-	_duals.back().first = std::move(first);
-	_duals.back().second = std::move(second);
+	auto& dual = _duals.back();
+	dual.first = std::move(first);
+	dual.second = std::move(second);
+	dual.lastFirst.reset();
+	dual.lastSecond.reset();
+}
+
+void ScriptCameraModel::LetGoOfGoneThings()
+{
+	const auto gone = [](const DualSubject& subject) { return !subject.lookup || !subject.lookup().has_value(); };
+	std::erase_if(_duals, [&gone](const Dual& dual) { return gone(dual.first) || gone(dual.second); });
 }
 
 bool ScriptCameraModel::ReleaseDualView()
@@ -352,28 +361,24 @@ bool ScriptCameraModel::ReleaseDualView()
 
 void ScriptCameraModel::UpdateDual()
 {
-	// A camera whose thing has gone lets go, without its clock starting again
-	while (!_duals.empty())
+	auto& dual = _duals.back();
+	// A thing gone is framed where it was last seen until the turn lets go of it
+	if (auto first = dual.first.lookup ? dual.first.lookup() : std::nullopt; first.has_value())
 	{
-		auto& dual = _duals.back();
-		const auto first = dual.first.lookup ? dual.first.lookup() : std::nullopt;
-		const auto second = dual.second.lookup ? dual.second.lookup() : std::nullopt;
-		if (first.has_value() && second.has_value())
-		{
-			const float seconds = DualSeconds(_seconds);
-			const auto view = DualView(*first, *second, dual.settings);
-			Send(_focus, view.focus, seconds);
-			Send(_origin, view.origin, seconds);
-			return;
-		}
-		_duals.pop_back();
+		dual.lastFirst = first;
 	}
-	// The script's own camera takes over again
-	if (_track != nullptr)
+	if (auto second = dual.second.lookup ? dual.second.lookup() : std::nullopt; second.has_value())
 	{
-		UpdateTrack();
+		dual.lastSecond = second;
 	}
-	UpdateFollowing();
+	if (!dual.lastFirst.has_value() || !dual.lastSecond.has_value())
+	{
+		return;
+	}
+	const float seconds = DualSeconds(_seconds);
+	const auto view = DualView(*dual.lastFirst, *dual.lastSecond, dual.settings);
+	Send(_focus, view.focus, seconds);
+	Send(_origin, view.origin, seconds);
 }
 
 void ScriptCameraModel::SetFollowSettings(float distance, float zoomTimeScale, float heading, bool relativeHeading)
