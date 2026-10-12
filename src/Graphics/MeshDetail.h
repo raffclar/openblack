@@ -72,6 +72,18 @@ struct Choice
 	return static_cast<uint8_t>(1u << static_cast<uint8_t>(mesh));
 }
 
+/// The bits of every choice a part can be drawn at
+inline constexpr uint8_t k_EveryLevel = 0b111;
+
+/// The choices a model's part is drawn at once loaded, from those its file names and whether the file marks them as
+/// set. A part whose file names none and doesn't mark them is drawn at every choice, as the game reads it: the loose
+/// models of the miracles' effects (the forest's falling seed and its vortex) are made so. A part that marks its choices
+/// and names none (physics and window parts) is never drawn as a mesh.
+[[nodiscard]] constexpr uint8_t LoadedPartLevels(uint8_t fileLevels, bool levelsMarked) noexcept
+{
+	return fileLevels == 0 && !levelsMarked ? k_EveryLevel : fileLevels;
+}
+
 /// Whether a part that names the choices `partLevels` is drawn at the choice `mesh`
 [[nodiscard]] constexpr bool PartDrawn(uint8_t partLevels, Mesh mesh) noexcept
 {
@@ -81,8 +93,7 @@ struct Choice
 /// Whether a model's parts differ between the choices: some part, of those ever drawn, isn't drawn at every one
 [[nodiscard]] constexpr bool PartsDifferByLevel(uint8_t partLevels) noexcept
 {
-	constexpr uint8_t k_Every = 0b111;
-	return (partLevels & k_Every) != 0 && (partLevels & k_Every) != k_Every;
+	return (partLevels & k_EveryLevel) != 0 && (partLevels & k_EveryLevel) != k_EveryLevel;
 }
 
 /// The matrix a paper thing (a tree, a field's crop) is drawn by as its low mesh: standing upright where it stands, at

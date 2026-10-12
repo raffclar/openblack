@@ -194,6 +194,17 @@ TEST(MeshDetail, OnlyPartsOfSomeChoicesMakeAModelDifferByThem)
 	EXPECT_TRUE(mesh_detail::PartsDifferByLevel(6));
 }
 
+TEST(MeshDetail, APartWithNoLevelsUnmarkedIsDrawnAtEveryLevel)
+{
+	// The forest's falling seed and its vortex name no levels and don't mark them: they are drawn at every level
+	EXPECT_EQ(mesh_detail::LoadedPartLevels(0, false), mesh_detail::k_EveryLevel);
+	// Physics and window parts mark their levels and name none: never drawn
+	EXPECT_EQ(mesh_detail::LoadedPartLevels(0, true), 0);
+	// Levels named are kept, marked or not
+	EXPECT_EQ(mesh_detail::LoadedPartLevels(1, false), 1);
+	EXPECT_EQ(mesh_detail::LoadedPartLevels(6, true), 6);
+}
+
 TEST(MeshDetail, PaperTurnsWithTheCameraHeading)
 {
 	const glm::vec3 position {100.0f, 5.0f, 200.0f};
