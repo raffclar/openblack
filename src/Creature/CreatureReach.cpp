@@ -101,3 +101,26 @@ float creature_reach::MaxReach(const Points& points)
 	                      (k_Front * (At(points, Corner::FrontLeft) + At(points, Corner::FrontRight)));
 	return glm::length(glm::vec2(furthest.x, furthest.z));
 }
+
+float creature_reach::StraightReach(const Points& points)
+{
+	// The two back corners weigh in at just under minus four tenths, the front two at nine tenths, added up in corner
+	// order
+	constexpr std::array<float, k_CornerCount> k_Weights {-0.39999998f, -0.39999998f, 0.9f, 0.9f};
+	glm::vec3 furthest {0.0f};
+	for (size_t i = 0; i < k_CornerCount; ++i)
+	{
+		furthest += k_Weights.at(i) * points.at(i);
+	}
+	return glm::length(furthest);
+}
+
+glm::vec2 creature_reach::HandfulPoint(glm::vec2 creature, glm::vec2 pile, float reach)
+{
+	const auto toPile = pile - creature;
+	if (toPile == glm::vec2(0.0f))
+	{
+		return creature;
+	}
+	return creature + (toPile * (reach * k_HandfulShare / glm::length(toPile)));
+}

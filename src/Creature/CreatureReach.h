@@ -13,6 +13,7 @@
 
 #include <array>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 /// How a creature reaches for something on the ground to pick it up or strike it. Each species has four reaching
@@ -72,4 +73,15 @@ constexpr float k_DepthLimit = 0.8f;
 
 /// The middle of the corners, along the ground: where something is easiest to reach
 [[nodiscard]] glm::vec3 Centre(const Points& points);
+
+/// How far the hand gets with the front pair stretched to the furthest depth, measured straight rather than along the
+/// ground
+[[nodiscard]] float StraightReach(const Points& points);
+
+/// A handful a creature takes from a pile appears this share of its straight reach from it, towards the pile
+constexpr float k_HandfulShare = 0.95f;
+
+/// Where along the ground a handful taken from a pile appears: from the creature towards the pile, at the share of its
+/// straight reach; at the creature itself when it stands right on the pile's point
+[[nodiscard]] glm::vec2 HandfulPoint(glm::vec2 creature, glm::vec2 pile, float reach);
 } // namespace openblack::creature_reach

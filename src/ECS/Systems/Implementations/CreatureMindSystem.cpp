@@ -45,6 +45,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureReach.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureThrow.h"
@@ -944,9 +945,21 @@ std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity c
 	const float size = body != nullptr ? body->size : 1.0f;
 	const auto held = Locator::resourceStoreSystem::value().GetResource(pile, ResourceType::Food);
 	const auto amount = std::min(static_cast<uint32_t>(size * k_FoodPerSize), held);
-	const auto food =
-	    ecs::archetypes::PotArchetype::Create(transform->position, 0.0f, PotInfo::WheatInHand, static_cast<int32_t>(amount),
-	                                          NearestTown(registry, transform->position));
+	// The handful appears on the ground beside the creature, most of its reach towards the pile, at the creature's own
+	// height
+	glm::vec3 at = transform->position;
+	const auto* pileTransform = registry.TryGet<const Transform>(pile);
+	const auto reach = Locator::creatureObjectActionSystem::has_value()
+	                       ? Locator::creatureObjectActionSystem::value().PickUpStraightReach(creature)
+	                       : std::nullopt;
+	if (pileTransform != nullptr && reach.has_value())
+	{
+		const auto point = creature_reach::HandfulPoint({transform->position.x, transform->position.z},
+		                                                {pileTransform->position.x, pileTransform->position.z}, *reach);
+		at = {point.x, transform->position.y, point.y};
+	}
+	const auto food = ecs::archetypes::PotArchetype::Create(at, 0.0f, PotInfo::WheatInHand, static_cast<int32_t>(amount),
+	                                                        NearestTown(registry, transform->position));
 	if (food == entt::null)
 	{
 		return std::nullopt;
