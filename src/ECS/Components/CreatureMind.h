@@ -44,6 +44,9 @@ struct CreatureMindState
 	creature_look::Target look {};
 	/// Whether the head turns to what it watches this turn
 	bool lookingAbout {false};
+	/// What a script has it keep its head turned to, whatever it is doing, until the script lets it go: a thing (looked
+	/// at where it stands) or a point
+	std::optional<creature_mind::Gaze> scriptFocus;
 
 	/// Seconds since the player last paid it any attention
 	float secondsAlone {0.0f};

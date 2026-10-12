@@ -648,6 +648,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::scriptPlay>("scriptPlay")
 	    .Field<&components::CreatureMindState::look>("look")
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
+	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
 	    .Field<&components::CreatureMindState::feedbackSeconds>("feedbackSeconds")
 	    .Field<&components::CreatureMindState::feedbackWasStroke>("feedbackWasStroke")

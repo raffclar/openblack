@@ -127,8 +127,31 @@ Camera::NearPlanePoint Camera::OnNearPlane(glm::vec2 screenCoord, Interpolation 
 Camera& Camera::SetProjectionMatrixPerspective(float xFov, float aspect, float nearClip)
 {
 	_xFov = glm::radians(xFov);
+	// A lens set outright stops any glide
+	_lens.SetPosition(_xFov);
 	_aspect = aspect;
 	return SetNearClip(nearClip);
+}
+
+Camera& Camera::SetLens(float radians, float seconds)
+{
+	_lens.SetDestination(radians, 0.0f, seconds);
+	if (_lens.Value() != _xFov)
+	{
+		_xFov = _lens.Value();
+		SetNearClip(_nearClip);
+	}
+	return *this;
+}
+
+void Camera::UpdateLens(float seconds)
+{
+	_lens.Update(seconds);
+	if (_lens.Value() != _xFov)
+	{
+		_xFov = _lens.Value();
+		SetNearClip(_nearClip);
+	}
 }
 
 Camera& Camera::SetNearClip(float nearClip)

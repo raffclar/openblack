@@ -142,6 +142,30 @@ TEST(CameraProjection, ANewAspectKeepsTheLensAndTheClipPlanes)
 	}
 }
 
+// A script's lens glides to a new field of view across the width over its time, and the perspective follows it
+TEST(CameraProjection, TheLensGlidesToANewFieldOfView)
+{
+	const auto camera = MakeCamera(1.0f);
+	const float normal = glm::radians(70.0f);
+	EXPECT_FLOAT_EQ(camera->GetHorizontalFieldOfView(), normal);
+	const float wide = 100.0f * 0.017453292f;
+	camera->SetLens(wide, 2.0f);
+	EXPECT_FLOAT_EQ(camera->GetHorizontalFieldOfView(), normal);
+	EXPECT_FLOAT_EQ(camera->GetLensDestination(), wide);
+	camera->UpdateLens(1.0f);
+	const float halfway = camera->GetHorizontalFieldOfView();
+	EXPECT_GT(halfway, normal);
+	EXPECT_LT(halfway, wide);
+	// Wider lenses see more across the width
+	EXPECT_LT(camera->GetProjectionMatrix(Camera::Projection::Normal)[0][0], 1.0f / std::tan(normal / 2.0f));
+	camera->UpdateLens(1.0f);
+	EXPECT_FLOAT_EQ(camera->GetHorizontalFieldOfView(), wide);
+	EXPECT_NEAR(camera->GetProjectionMatrix(Camera::Projection::Normal)[0][0], 1.0f / std::tan(wide / 2.0f), 1e-5f);
+	// Without a time it changes at once
+	camera->SetLens(normal, 0.0f);
+	EXPECT_FLOAT_EQ(camera->GetHorizontalFieldOfView(), normal);
+}
+
 // On the default 800x600 screen the game draws the land across the whole window: 70 degrees across its width and,
 // with a 4:3 shape, about 55.4 degrees from top to bottom. Nothing is cut to a wide-screen picture; only a script's
 // cinema bars cover the top and bottom.

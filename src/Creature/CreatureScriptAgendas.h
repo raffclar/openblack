@@ -58,6 +58,8 @@ constexpr float k_FacePlaceSeconds = 0.1f;
 [[nodiscard]] std::vector<Step> SitDownAt(uint32_t place, glm::vec2 point, float radius, const Random& random);
 /// Turning to face a point, watching it, as a script asks
 [[nodiscard]] std::vector<Step> FaceForScript(glm::vec3 point);
+/// Turning to face a thing, as a script asks: it turns, holding still two seconds once it does
+[[nodiscard]] std::vector<Step> FaceThingForScript(uint32_t thing);
 
 /// A creature a script sends to a point walks there in two goes, watching the point. With no distance given, it first
 /// gets within a sixth of the way (at least its height, and no more than 0.7 of its height and 22), then within its
