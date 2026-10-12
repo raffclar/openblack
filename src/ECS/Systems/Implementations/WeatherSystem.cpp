@@ -483,6 +483,43 @@ void WeatherSystem::SetClimateWind(int32_t index, float windX, float windZ, floa
 	climate.windAngle = angle;
 }
 
+void WeatherSystem::AddLandStorm(int32_t climateIndex, const script_weather::LandStorm& land)
+{
+	const auto climateEntity = climateIndex == 0 ? GetGlobalClimate() : FindClimate(climateIndex);
+	if (climateEntity == entt::null)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto stormEntity = registry.Create();
+	auto& storm = registry.Assign<Storm>(stormEntity);
+	storm.position = land.position;
+	storm.currentPosition = land.position;
+	storm.destination = land.destination;
+	storm.speed = land.speed;
+	storm.arrived = true;
+	storm.age = land.age;
+	storm.innerRadius = land.innerRadius;
+	storm.outerRadius = land.outerRadius;
+	storm.fadeTime = land.fadeSeconds;
+	storm.lastsFor = land.lastsFor;
+	storm.strength = land.strength;
+	storm.cloudHeight = land.cloudHeight;
+	storm.cloudCount = land.cloudCount;
+	storm.cloudShade = land.cloudShade;
+	storm.rainSpeed = land.rainSpeed;
+	storm.effect = land.effect;
+	storm.thunderWait = land.thunderWait;
+	storm.boltWait = land.boltWait;
+	storm.climate = climateEntity;
+	storm.serial = _nextStormSerial++;
+	// It joins the climate's storms without making the climate rain
+	auto& storms = registry.Get<Climate>(climateEntity).storms;
+	storms.insert(storms.begin(), stormEntity);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Climate {} was given a storm at ({}, {}): radius {}, {}s of {}s gone",
+	                    climateIndex, land.position.x, land.position.z, land.outerRadius, land.age, land.lastsFor);
+}
+
 void WeatherSystem::Update(uint32_t turn)
 {
 	_turn = turn;
@@ -949,6 +986,8 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 		storm.lastsFor = lastsFor;
 		storm.strength = 1.0f;
 		storm.cloudHeight = climate.stormCloudHeight;
+		// Its clouds are as dark as it is cloudy
+		storm.cloudShade = cloud;
 		storm.rainSpeed = climate.stormSpeed;
 		storm.effect = effect;
 		storm.thunderWait = thunderWait;
