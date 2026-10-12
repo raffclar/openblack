@@ -77,6 +77,7 @@
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/ChallengePicture.h"
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
@@ -505,6 +506,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CameraBookmark::savedOrigin>("savedOrigin");
 	Reflect<components::CarriedByTornado>(context).Field<&components::CarriedByTornado::carried>("carried");
 	Reflect<components::CaughtByTornado> {context};
+	Reflect<components::ChallengePicture>(context)
+	    .Field<&components::ChallengePicture::full>("full")
+	    .Field<&components::ChallengePicture::small>("small")
+	    .Field<&components::ChallengePicture::waiting>("waiting")
+	    .Field<&components::ChallengePicture::asked>("asked")
+	    .Field<&components::ChallengePicture::taken>("taken");
 	Reflect<components::ChallengeRecord>(context)
 	    .Field<&components::ChallengeRecord::challenge>("challenge")
 	    .Field<&components::ChallengeRecord::order>("order")

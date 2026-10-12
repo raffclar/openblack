@@ -85,6 +85,7 @@
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
+#include "ECS/ChallengePictures.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -3836,6 +3837,12 @@ bool Game::Run() noexcept
 			auto section = profiler.BeginScoped(Profiler::Stage::RendererFrame);
 			Locator::rendererInterface::value().Frame();
 		}
+		// The challenges' pictures whose screens are back
+		auto& renderer = Locator::rendererInterface::value();
+		ecs::challenge_pictures::Collect(
+		    Locator::entitiesRegistry::value(),
+		    {.take = [&renderer](const std::string& name) { return renderer.TakeCapturedFrame(name); },
+		     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
 		ShowInspectorCamera(false);
 
 		// Clear the stale screenshot request

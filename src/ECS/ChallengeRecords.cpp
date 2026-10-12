@@ -90,7 +90,7 @@ challenge_records::Outcome challenge_records::Record(Registry& registry, const s
 			update.success = 1.0f;
 		}
 		Write(record, update, takesCamera, turn, references);
-		return {.record = *existing, .alignment = snapshot.alignment};
+		return {.record = *existing, .alignment = snapshot.alignment, .takesPicture = takesCamera};
 	}
 
 	uint32_t order = 0;
@@ -103,7 +103,12 @@ challenge_records::Outcome challenge_records::Record(Registry& registry, const s
 	record.startedTurn = turn;
 	record.quest = call == snapshots::Call::Start && snapshot.quest;
 	Write(record, snapshot, call != snapshots::Call::Update, turn, references);
-	return {.record = entity, .alignment = std::nullopt};
+	return {.record = entity, .alignment = std::nullopt, .takesPicture = true};
+}
+
+std::vector<snapshots::Value> challenge_records::ReminderArguments(const ChallengeRecord& record)
+{
+	return {record.arguments.rbegin(), record.arguments.rend()};
 }
 
 float challenge_records::AlignmentChange(float playerAlignment, float snapshotAlignment, float scriptScale)

@@ -37,6 +37,10 @@ public:
 	/// The help system starts a help script by name, unless a script holds the dialogue: a help script holding it is
 	/// stopped first. True when it started.
 	static bool StartHelpScript(std::string_view name);
+	/// A challenge's scroll tapped again: its record's reminder script starts with its arguments, unless a script holds
+	/// the dialogue (a help script holding it is stopped first). True when it started; false too before the challenge
+	/// has a record.
+	static bool StartChallengeReminder(uint32_t challenge);
 	/// A help script holds the dialogue
 	[[nodiscard]] static bool HelpScriptHoldsDialogue();
 	/// As the player's Escape does outside a cut scene: the help scripts stop and both advisors are cut short
