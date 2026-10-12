@@ -13,8 +13,9 @@ namespace openblack::ecs::systems
 {
 
 /// The creatures' pens at their players' temples (see temple_pen). Each game turn, a creature whose player has a
-/// temple has its home moved to that temple's pen, and it is shown smaller the further it walks into the pen
-/// (components::Creature::penSize), growing back as it walks out; its own size is kept.
+/// temple has its home moved to that temple's pen, even while the temple is still going up. Once the temple is built,
+/// the creature is shown smaller the further it walks into the pen (components::Creature::penSize), growing back as it
+/// walks out; its own size is kept.
 class CreaturePenSystemInterface
 {
 public:
