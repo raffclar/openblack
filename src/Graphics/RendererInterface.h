@@ -147,6 +147,12 @@ public:
 		/// whose land light, land colour and haze it takes, w its shade of 255 in place of the sun's on each vertex. w 0 for
 		/// none.
 		glm::vec4 shadeAt {0.0f};
+		/// Inside the temple, the mesh fades with the temple's depth fog: a model once where it stands, the lightmapped
+		/// walls at each vertex. Off for the hand, which the game leaves unfogged.
+		bool templeFog {false};
+		/// The temple's origin, for a room's mesh: its walls without a lightmap are fogged once each at their first
+		/// vertex, placed from here as the game reads it in the temple's own space
+		std::optional<glm::vec3> fogFromFirstVertex;
 		/// The temple's light, which the lightmapped submeshes are multiplied by, and which is added to every submesh
 		/// that doesn't glow, as the game adds the vertices' specular
 		glm::vec3 lightMultiply {1.0f};
