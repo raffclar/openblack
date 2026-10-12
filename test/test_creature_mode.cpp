@@ -404,21 +404,22 @@ TEST(CreatureCave, FactsTellOfSkillsAndMiracles)
 	creature_cave::Snapshot snapshot;
 	// The scroll tells of the skills after building
 	snapshot.skills = {{"build", true}, {"field", true}, {"totem", false}, {"store", true}, {"fish", false}, {"dance", true}};
-	// It tells of each miracle the creature knows about that the game has a text for, however little it has learnt it,
-	// its percentage cut short
-	snapshot.miracles = {{.name = "none", .knownAbout = true},
-	                     {.name = "fireball", .knownAbout = true, .learnt = 40.9f},
-	                     {.name = "lightning", .knownAbout = false},
-	                     {.name = "heal", .knownAbout = true, .hasLearntText = false, .learnt = 100.0f},
-	                     {.name = "food", .knownAbout = true, .learnt = 0.0f}};
+	// It tells of each miracle the creature knows about that the game has a text for, by that miracle's own text (two
+	// miracles may share one), however little it has learnt it, its percentage cut short
+	snapshot.miracles = {{.name = "none", .knownAbout = true, .learntText = 902},
+	                     {.name = "fireball", .knownAbout = true, .learntText = 903, .learnt = 40.9f},
+	                     {.name = "lightning", .knownAbout = false, .learntText = 904},
+	                     {.name = "heal", .knownAbout = true, .learnt = 100.0f},
+	                     {.name = "food", .knownAbout = true, .learntText = 903, .learnt = 0.0f}};
 	const auto facts = creature_cave::FactsOf(snapshot);
 	EXPECT_EQ(facts.actionsKnown, (std::array<bool, 5> {true, false, true, false, true}));
 	ASSERT_EQ(facts.miracles.size(), 2u);
-	EXPECT_EQ(facts.miracles[0].text, "HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_02");
+	EXPECT_EQ(facts.miracles[0].text, 903u);
 	EXPECT_EQ(facts.miracles[0].percent, 40);
 	EXPECT_EQ(facts.miracles[0].miracle, 1u);
 	EXPECT_FLOAT_EQ(facts.miracles[0].learnt, 40.9f);
-	EXPECT_EQ(facts.miracles[1].text, "HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_05");
+	EXPECT_EQ(facts.miracles[1].text, 903u);
+	EXPECT_EQ(facts.miracles[1].miracle, 4u);
 	EXPECT_EQ(facts.miracles[1].percent, 0);
 }
 

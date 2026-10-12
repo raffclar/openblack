@@ -443,9 +443,9 @@ TempleScrolls::Facts TempleScrolls::Facts::Mock()
 	creature.known = {0, 1, 2, 3};
 	creature.fightBalance = 0.2f;
 	creature.miracles = {
-	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_02", 12, 1, 12.0f},
-	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_03", 9, 2, 9.0f},
-	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_10", 97, 9, 97.0f},
+	    {903, 12, 1, 12.0f},
+	    {904, 9, 2, 9.0f},
+	    {910, 97, 9, 97.0f},
 	};
 	facts.creature = creature;
 	return facts;
@@ -456,6 +456,11 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 {
 	TempleScrollText text(font);
 	const auto get = [&texts](std::string_view name) { return texts.Get(name); };
+	// A help text by its number, empty when there is none
+	const auto helpText = [&texts, &get](uint32_t number) {
+		const auto names = texts.GetHelpNames();
+		return number < names.size() ? get(names[number]) : std::u16string_view();
+	};
 	const auto number = [&](std::string_view name, int32_t value) { text.Add(TempleScrollText::WithNumber(get(name), value)); };
 	const auto named = [&](std::string_view name, std::u16string_view value) {
 		text.Add(TempleScrollText::WithString(get(name), value));
@@ -612,7 +617,7 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 		{
 			for (const auto& miracle : creature->miracles)
 			{
-				text.Add(get(miracle.text));
+				text.Add(helpText(miracle.text));
 				text.Add(gui::ToUtf16(fmt::format("{}%", miracle.percent)));
 				text.AddNewLine();
 			}

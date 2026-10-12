@@ -12,8 +12,6 @@
 #include <algorithm>
 #include <ranges>
 
-#include <fmt/format.h>
-
 namespace openblack::creature_cave
 {
 
@@ -30,21 +28,6 @@ constexpr size_t k_FirstScrollSkill = 1;
 
 /// The first of the game's table of miracles is none at all, which every creature knows
 constexpr size_t k_FirstScrollMiracle = 1;
-
-/// The game's texts for learning each miracle, by the miracle's place in its table: the first is "none"
-constexpr size_t k_MagicTexts = 64;
-std::string_view MagicActionText(size_t index)
-{
-	static const auto k_Names = [] {
-		std::array<std::string, k_MagicTexts> names;
-		for (size_t i = 0; i < names.size(); ++i)
-		{
-			names.at(i) = fmt::format("HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_{:02}", i + 1);
-		}
-		return names;
-	}();
-	return k_Names.at(std::min(index, k_MagicTexts - 1));
-}
 
 constexpr std::array<std::pair<creature_desires::Desire, std::string_view>, 6> k_Personality {{
     {creature_desires::Desire::Hunger, "HELP_TEXT_ROOM_PERSONALITY_GREEDY"},
@@ -96,14 +79,14 @@ TempleScrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
 	facts.attention = std::clamp(1.0f - (snapshot.secondsAlone / k_AttentionFadeSeconds), 0.0f, 1.0f);
 	facts.knowsGodsDesire = snapshot.knowsGodsDesire;
 	facts.known = {static_cast<int32_t>(snapshot.creaturesKnown), 0, 0, 0};
-	// The miracles it knows about that the game has a text for having learnt, by the game's texts for them, with how far
-	// it has learnt each cut short
+	// The miracles it knows about that the game has a text for having learnt, by each one's own text, with how far it has
+	// learnt each cut short
 	for (size_t i = k_FirstScrollMiracle; i < snapshot.miracles.size(); ++i)
 	{
 		const auto& miracle = snapshot.miracles.at(i);
-		if (miracle.knownAbout && miracle.hasLearntText)
+		if (miracle.knownAbout && miracle.learntText != 0)
 		{
-			facts.miracles.push_back({.text = MagicActionText(i),
+			facts.miracles.push_back({.text = miracle.learntText,
 			                          .percent = static_cast<int32_t>(miracle.learnt),
 			                          .miracle = static_cast<uint32_t>(i),
 			                          .learnt = miracle.learnt});
