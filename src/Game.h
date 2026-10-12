@@ -371,8 +371,6 @@ private:
 	glm::vec3 _handGripPoint {0.0f, 0.0f, 0.0f};
 	/// The fade from where the hand was to where it is now held, as it grips the land or lets go
 	HandCrossFade _handCrossFade;
-	/// What the hand did as its pose was last chosen, to fade its pose when that changes
-	std::optional<magic::hand_hold::HandStage> _handPoseStage;
 	/// The hand's tap after it knocked on a house: it stays upright where it knocked while the tap plays through once.
 	/// Holding something puts it off, and it starts over once the hand lets go.
 	struct HandKnock

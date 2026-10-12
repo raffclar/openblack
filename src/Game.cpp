@@ -2501,20 +2501,6 @@ bool Game::Update() noexcept
 				};
 			}
 		}
-		// Each change of what the hand does (pulling, holding, scooping or none) fades its pose from how it was last
-		// drawn, as its place fades (see magic::hand_hold::StageFade)
-		if (_handAnimation)
-		{
-			const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
-			const auto stage =
-			    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
-			                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
-			if (_handPoseStage.has_value() && stage != *_handPoseStage)
-			{
-				_handAnimation->FadeFromLastPose();
-			}
-			_handPoseStage = stage;
-		}
 		bool holdingSeed = false;
 		{
 			const auto handEntity = Locator::handSystem::value()
@@ -2684,7 +2670,13 @@ bool Game::Update() noexcept
 				    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
 				                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
 				const auto placed = handTransform->position;
-				_handHold.Fade(stage, heldThing.has_value() ? heldThing->entity : entt::null, deltaTime, *handTransform);
+				// Each change of what the hand does (pulling, holding, scooping or none) blends the drawn hand from how it
+				// was last drawn
+				if (auto* hand = Locator::entitiesRegistry::value().TryGet<ecs::components::Hand>(handEntity))
+				{
+					_handHold.Fade(stage, heldThing.has_value() ? heldThing->entity : entt::null, deltaTime, *handTransform,
+					               hand->boneMatrices);
+				}
 				TraceHand("stage fade", handTransform->position);
 				EndHandTrace(placed, *handTransform, stage, grab);
 				_handHold.PlaceHandEffect(heldSeed, _handAnimation.get(), *handTransform, handSize);
