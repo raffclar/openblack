@@ -275,6 +275,8 @@ struct ObjectSetup
 	bool poisoned {false};
 	/// Made indestructible, as a script makes one
 	bool indestructible {false};
+	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes
+	bool inScript {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
 	/// A building of the town holds this much wood, rather than the scenario town's usual stock

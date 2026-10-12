@@ -116,6 +116,7 @@
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -124,8 +125,8 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
-#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -394,6 +395,10 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	if (object.indestructible)
 	{
 		registry.AssignOrReplace<ecs::components::Indestructible>(entity);
+	}
+	if (object.inScript && registry.AllOf<ecs::components::Villager>(entity) && Locator::livingActionSystem::has_value())
+	{
+		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);
 	}
 }
 } // namespace
