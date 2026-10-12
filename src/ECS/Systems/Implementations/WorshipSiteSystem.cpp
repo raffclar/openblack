@@ -41,6 +41,7 @@
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/WorshipSites.h"
 #include "ECS/WorshipperRules.h"
@@ -454,12 +455,7 @@ void WorshipSiteSystem::CountChantsUsed(entt::entity site, float amount)
 {
 	auto& registry = _world->Entities();
 	const auto owner = registry.Get<const WorshipSite>(site).player;
-	registry.Each<Player>([owner, amount](Player& player) {
-		if (player.name == owner)
-		{
-			player.totalChantsUsed += amount;
-		}
-	});
+	player_statistics::CountChantsUsed(registry, owner, amount);
 }
 
 void WorshipSiteSystem::BuildBy(entt::entity site, float share)

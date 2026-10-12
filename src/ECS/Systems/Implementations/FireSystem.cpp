@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <optional>
 #include <unordered_map>
 
 #include <LNDFile.h>
@@ -1069,7 +1070,7 @@ void FireSystem::Process(entt::entity object)
 			// Who lit it, read before the burn: a pile on its own burnt to nothing goes with it
 			const auto& lit = registry.Get<const Fire>(object);
 			const auto litBy = lit.hasPlayer ? std::optional(lit.player) : std::nullopt;
-			const float life = world_objects::ReduceLife(object, outcome.damage);
+			const float life = world_objects::ReduceLife(object, outcome.damage, litBy);
 			// Burning a town's people, buildings or stores is an attack on the town by whoever lit the fire, by nobody's
 			// when no one did
 			if (!field && registry.Valid(object))
