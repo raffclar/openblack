@@ -13,6 +13,7 @@
 
 #include <cstdlib>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iterator>
@@ -133,6 +134,66 @@ void PlayerProfileSystem::CreateProfile(std::u16string_view name, int symbol)
 		SPDLOG_LOGGER_INFO(logger, "Made the player profile \"{}\", its creature to be kept in {}", made.name,
 		                   made.creatureFile);
 	}
+	Save();
+}
+
+player_profiles::Profile* PlayerProfileSystem::CurrentProfile()
+{
+	const auto found = std::ranges::find(_profiles.profiles, _profiles.current, &player_profiles::Profile::name);
+	return found != _profiles.profiles.end() ? &*found : nullptr;
+}
+
+bool PlayerProfileSystem::SelectProfile(std::u16string_view name)
+{
+	if (!player_profiles::Select(_profiles, name))
+	{
+		return false;
+	}
+	if (const auto logger = spdlog::get("game"); logger != nullptr)
+	{
+		SPDLOG_LOGGER_INFO(logger, "Playing as the player profile \"{}\"", _profiles.current);
+	}
+	Save();
+	return true;
+}
+
+bool PlayerProfileSystem::DeleteProfile(std::u16string_view name)
+{
+	if (!player_profiles::Remove(_profiles, name))
+	{
+		return false;
+	}
+	if (const auto logger = spdlog::get("game"); logger != nullptr)
+	{
+		SPDLOG_LOGGER_INFO(logger, "Deleted the player profile \"{}\"", gui::ToUtf8(name));
+	}
+	Save();
+	return true;
+}
+
+void PlayerProfileSystem::EditCurrentProfile(std::u16string_view creatureName, int symbol)
+{
+	auto* profile = CurrentProfile();
+	if (profile == nullptr)
+	{
+		return;
+	}
+	const auto before = *profile;
+	player_profiles::Edit(*profile, creatureName, symbol);
+	if (*profile != before)
+	{
+		Save();
+	}
+}
+
+void PlayerProfileSystem::SetCurrentSettings(const player_profiles::Settings& settings)
+{
+	auto* profile = CurrentProfile();
+	if (profile == nullptr || profile->settings == settings)
+	{
+		return;
+	}
+	profile->settings = settings;
 	Save();
 }
 
