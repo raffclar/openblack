@@ -1252,9 +1252,15 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    if (commands.effect == creature_mind::Effect::Observed && commands.effectObject.has_value())
 		    {
-			    if (const auto belief = BeliefOf(registry, static_cast<entt::entity>(*commands.effectObject), entity))
+			    const auto thing = static_cast<entt::entity>(*commands.effectObject);
+			    if (const auto belief = BeliefOf(registry, thing, entity))
 			    {
 				    mind.observedKinds.insert(belief->type);
+			    }
+			    else if (registry.AllOf<Animal>(thing))
+			    {
+				    // Animals are their own kind of thing to a creature, though nothing else it knows of them is kept yet
+				    mind.observedKinds.insert(creature_tree::belief_types::k_Animal);
 			    }
 		    }
 		    CountCompleted(entity, mind, commands, GetTables());
