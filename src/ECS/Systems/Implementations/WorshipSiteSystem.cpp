@@ -280,7 +280,9 @@ void WorshipSiteSystem::Remove(entt::entity site)
 	auto& registry = _world->Entities();
 	// Copied: the site's own record goes with it
 	const auto component = registry.Get<const WorshipSite>(site);
-	// Its altar goes first, then its dance: the dancers leave it while their towns still have the site, so they are
+	// Its spell icons go first, each with the seed out from it and what it was charging
+	_world->RemoveSpellIcons(site);
+	// Then its altar, then its dance: the dancers leave it while their towns still have the site, so they are
 	// counted out of its worship as they go
 	if (component.altar != entt::null && registry.Valid(component.altar))
 	{

@@ -479,9 +479,9 @@ float ReferenceTurnScale(glm::vec2 from, glm::vec2 to, glm::ivec2 screenSize, in
 	                                 ReferenceRingAxes(WholeScreenArea(screenSize, viewHeight)));
 }
 
-float PitchStep(int deltaY, int screenHeight, float horizontalFieldOfView)
+float PitchStep(int deltaY, int screenHeight, float lens)
 {
-	return static_cast<float>(deltaY) / static_cast<float>(screenHeight) * k_PitchPerScreen * horizontalFieldOfView;
+	return static_cast<float>(deltaY) / static_cast<float>(screenHeight) * k_PitchPerScreen * lens;
 }
 
 int TwoButtonTurn::Update(bool held, int deltaX, int cursorX, int screenWidth)

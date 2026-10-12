@@ -16,6 +16,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 
 using namespace openblack;
@@ -76,6 +77,16 @@ glm::vec3 Transform(const glm::mat4& model, glm::vec3 point)
 	return glm::vec3(model * glm::vec4(point, 1.0f));
 }
 } // namespace
+
+bool building_site::JoinsWorkers(bool wasWorkingTowardsBuilding)
+{
+	return !wasWorkingTowardsBuilding;
+}
+
+bool building_site::LeavesWorkers(bool nextIsBuilding, bool nextIsFinal)
+{
+	return !nextIsBuilding && nextIsFinal;
+}
 
 int32_t building_site::BuildersNeeded(const BuildersNeededInputs& in)
 {
@@ -298,6 +309,31 @@ Places building_site::CirclePlaces(glm::vec3 centre, float reach, const std::fun
 float building_site::TemplePileAngle(float heartYAngle, size_t pile)
 {
 	return heartYAngle + static_cast<float>(static_cast<int32_t>(pile)) * k_SeventhTurn - k_PileAngleOffset;
+}
+
+PilePlace building_site::StandardPilePlace(glm::vec2 building, glm::vec2 door, const FloatRandom& floatRandom)
+{
+	// The way from the door through the building, give or take an eighth of a turn
+	const float angle = (std::numbers::pi_v<float> / 8.0f - floatRandom(std::numbers::pi_v<float> / 4.0f)) +
+	                    gutils::Get3DAngleFromXZ(door, building);
+	const float distance = glm::distance(building, door) + k_PileBeyondDoor;
+	const auto offset = gutils::GetPointFromAngle(angle, distance);
+	return {.position = building + glm::vec2(offset.x, offset.z), .yAngle = angle - std::numbers::pi_v<float>};
+}
+
+std::optional<size_t> building_site::BestRepairSite(std::span<const RepairCandidate> sites)
+{
+	std::optional<size_t> best;
+	float most = 0.0f;
+	for (size_t i = 0; i < sites.size(); ++i)
+	{
+		if (sites[i].repair && most < sites[i].desireToBeRepaired)
+		{
+			most = sites[i].desireToBeRepaired;
+			best = i;
+		}
+	}
+	return best;
 }
 
 LeftoverPile building_site::WhenSiteCloses(uint32_t woodInPile)

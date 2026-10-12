@@ -93,7 +93,8 @@ public:
 	/// Every source of a type in the creature's desires goes up or down by an amount
 	virtual void ChangeDesireSource(entt::entity /*creature*/, uint32_t /*type*/, float /*amount*/) {}
 	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through
-	/// what it plays; a face can be pulled with it. Returns whether it played.
+	/// what it plays; a face can be pulled with it, which is pulled even when the action can't play. Returns whether it
+	/// played.
 	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
 	                         float interruptsAfter) = 0;
 

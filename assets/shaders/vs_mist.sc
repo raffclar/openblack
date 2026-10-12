@@ -17,7 +17,8 @@ uniform vec4 u_mist;
 uniform vec4 u_mistColour;
 
 // A puff of mist: its colour taken by the land's light where it stands when u_landLight.x is set, faded by the distance
-// haze, then shaded by the model light as the game shades its models
+// haze, then shaded by the model light as the game shades its models. A storm's cloud (u_landLight.z) is faded by the
+// haze without the land's light.
 void main()
 {
 	v_texcoord0 = vec4(a_texcoord0 + u_mist.xy, 0.0f, 0.0f);
@@ -32,6 +33,14 @@ void main()
 		colour = HazeDiffuse(colour, HazeFactor(hazeT));
 		// The haze is added with the land's colour where it stands, each channel at most white
 		v_haze = vec4(min(HazeColour(hazeT) + LandColourAt(origin.xz), vec3_splat(255.0f)) / 255.0f, 0.0f);
+	}
+	else if (u_landLight.z > 0.0f)
+	{
+		// A storm's cloud: faded by the haze, which adds the grey of the storm's lightning flash (u_landLight.w), each
+		// channel at most white
+		float hazeT = HazeT(mul(u_view, vec4(origin, 1.0f)).z);
+		colour = HazeDiffuse(colour, HazeFactor(hazeT));
+		v_haze = vec4(min(HazeColour(hazeT) + vec3_splat(u_landLight.w), vec3_splat(255.0f)) / 255.0f, 0.0f);
 	}
 	vec3 localLight = ModelLightLocal(mul(u_model[0], vec4(1.0f, 0.0f, 0.0f, 0.0f)).xyz, mul(u_model[0], vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz,
 	                                  mul(u_model[0], vec4(0.0f, 0.0f, 1.0f, 0.0f)).xyz, origin);

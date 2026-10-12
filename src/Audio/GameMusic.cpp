@@ -9,6 +9,8 @@
 
 #include "GameMusic.h"
 
+#include <charconv>
+
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -260,6 +262,59 @@ void GameMusic::MoveMusic(uint32_t from, uint32_t to)
 	}
 }
 
+bool GameMusic::IsAttachedMusicFinished(uint32_t thing) const
+{
+	return std::ranges::find(_attached, thing, &AttachedMusic::thing) == _attached.end();
+}
+
+void GameMusic::RestartAttachedMusic(uint32_t thing)
+{
+	const auto found = std::ranges::find(_attached, thing, &AttachedMusic::thing);
+	if (found == _attached.end() || !Locator::audio::has_value())
+	{
+		return;
+	}
+	if (const auto path = GetMusicBankPath(found->type); !path.empty())
+	{
+		Locator::audio::value().MusicStopBank(std::string(path), false);
+	}
+}
+
+void GameMusic::ApplyMusicCue(MusicLyrics& lyrics, std::string_view cue)
+{
+	if (cue.empty())
+	{
+		return;
+	}
+	switch (cue.front())
+	{
+	case 'L':
+	case 'l':
+	{
+		// The line's number is read as far as its digits go, and as 0 without any
+		auto line = int32_t {0};
+		const auto digits = cue.substr(1);
+		std::from_chars(digits.data(), digits.data() + digits.size(), line);
+		lyrics.line = line;
+		lyrics.word = 1;
+		break;
+	}
+	case 'P':
+	case 'p':
+	case 'W':
+	case 'w':
+		++lyrics.word;
+		break;
+	default:
+		break;
+	}
+}
+
+bool GameMusic::ReachedMusicLine(int32_t lastLine, int32_t line)
+{
+	return static_cast<uint32_t>(lastLine) >= static_cast<uint32_t>(line);
+}
+
 void GameMusic::StartScriptMusic(MusicType type)
 {
 	_scriptType = type;
@@ -376,14 +431,21 @@ bool GameMusic::ProcessScript()
 	}
 	SaveResumeChunks();
 	const auto type = _scriptType;
-	audio.MusicPlay(path, MusicPlayOptions {.volume = k_FullVolume, .startChunk = 1, .onFinished = [this, type]() {
-		                                        // Played to its end, the script's music is over unless the script
-		                                        // has since asked for other music
-		                                        if (_scriptType == type)
-		                                        {
-			                                        _scriptType = MusicType::None;
-		                                        }
-	                                        }});
+	audio.MusicPlay(path, MusicPlayOptions {
+	                          .volume = k_FullVolume,
+	                          .startChunk = 1,
+	                          .onFinished =
+	                              [this, type]() {
+		                              // Played to its end, the script's music is over unless the script has since
+		                              // asked for other music
+		                              if (_scriptType == type)
+		                              {
+			                              _scriptType = MusicType::None;
+		                              }
+	                              },
+	                          // The words of a song mark its lines, which the script waits on
+	                          .onCue = [this](std::string_view cue) { OnScriptMusicCue(cue); },
+	                      });
 	_scriptStarted = true;
 	_playing = _scriptType;
 	return true;

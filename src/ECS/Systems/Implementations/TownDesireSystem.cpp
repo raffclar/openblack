@@ -40,6 +40,7 @@
 #include "ECS/TownDesire.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TownHomes.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -142,13 +143,13 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 				stats.childRoom += static_cast<int32_t>(info->maxChildrenInAbode) - static_cast<int32_t>(household.children);
 			}
 		}
-		// Abodes don't wear down yet, so none wants repairing
+		// Each abode as worn as it is, by how much its kind wants mending
 		in.abodes.push_back({
-		    .life = 1.0f,
+		    .life = ecs::world_objects::LifeOf(entity),
 		    .livingQuarters = info != nullptr &&
 		                      (static_cast<uint32_t>(info->abodeType) & static_cast<uint32_t>(AbodeType::LivingQuarters)) != 0,
 		    .inhabitants = static_cast<uint32_t>(abode.inhabitants.size()),
-		    .desireToBeRepaired = 0.0f,
+		    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
 		});
 		if (abode.type == AbodeNumber::StoragePit)
 		{

@@ -250,6 +250,20 @@ TEST(ScriptObjectsSystem, AnObjectAScriptMadeIsControlledAtItsFirstReference)
 	EXPECT_TRUE(world->objects.at(object).controlled);
 }
 
+TEST(ScriptObjectsSystem, AnObjectAScriptMadeIsInNoScriptUntilAVariableHoldsIt)
+{
+	// What CREATE makes takes its place as made by a script, but only a reference puts it in the script: until then a
+	// search excluding scripted things still finds it, as the game's does
+	auto [world, system] = MakeSystem();
+	const auto object = world->Add(3);
+	ASSERT_TRUE(system->Register(object, true));
+	EXPECT_FALSE(world->objects.at(object).inScript);
+	EXPECT_FALSE(world->objects.at(object).controlled);
+	system->AddReference(object);
+	EXPECT_TRUE(world->objects.at(object).inScript);
+	EXPECT_TRUE(world->objects.at(object).controlled);
+}
+
 TEST(ScriptObjectsSystem, OnlyAControllingNativeTakesControlOfWhatItIsGiven)
 {
 	auto [world, system] = MakeSystem();

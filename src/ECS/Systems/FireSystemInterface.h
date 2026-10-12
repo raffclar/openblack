@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -69,8 +70,9 @@ public:
 	/// The point in the turn at which the game burns its fires, after the living and before the scripts and the
 	/// miracles. The fires burn later in this turn, but those made after this point wait for the next turn.
 	virtual void MarkBurnPoint() = 0;
-	/// Once a frame: the flames, steam and smoke move on by the game time
-	virtual void Update(float seconds) = 0;
+	/// Once a frame, of this real and game time: the flames, steam and smoke move on, at most 60 times a second, each
+	/// time by all the game time since they last did
+	virtual void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) = 0;
 	/// A new land: no fires
 	virtual void Reset() = 0;
 

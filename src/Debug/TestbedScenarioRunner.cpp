@@ -298,9 +298,7 @@ std::string_view Started(bool started)
 /// The camera's fields of view across and up and down, in radians
 glm::vec2 FieldsOfView(const Camera& camera)
 {
-	const auto horizontal = camera.GetHorizontalFieldOfView();
-	const auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
-	return {horizontal, 2.0f * std::atan(std::tan(horizontal * 0.5f) / std::max(aspect, 0.1f))};
+	return {camera.GetHorizontalFieldOfView(), camera.GetVerticalFieldOfView()};
 }
 
 /// Why the leash was refused, for the readout

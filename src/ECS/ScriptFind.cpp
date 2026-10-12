@@ -34,8 +34,10 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -129,9 +131,13 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 		}
 		return std::nullopt;
 	}
-	if (registry.AllOf<Creature>(entity))
+	if (const auto* creature = registry.TryGet<const Creature>(entity))
 	{
-		return Kind {.type = ScriptType::Creature};
+		return Kind {.type = ScriptType::Creature, .subtype = script::property_rules::ScriptCreatureType(creature->species)};
+	}
+	if (const auto* vortex = registry.TryGet<const Vortex>(entity))
+	{
+		return Kind {.type = ScriptType::Vortex, .subtype = Row(vortex->type)};
 	}
 	if (registry.AllOf<Town>(entity))
 	{
@@ -241,6 +247,17 @@ entt::entity script_find::FindNearest(const map_coords::MapCoords& from, float r
 		}
 	}
 	return nearest;
+}
+
+uint32_t script_find::TownIdFromScript(float id)
+{
+	// Past the range of a whole number the game's conversion gives its "indefinite" value, the lowest one
+	constexpr float k_Limit = 2147483648.0f;
+	if (!(id > -k_Limit && id < k_Limit))
+	{
+		return static_cast<uint32_t>(std::numeric_limits<int32_t>::min());
+	}
+	return static_cast<uint32_t>(static_cast<int32_t>(id));
 }
 
 entt::entity script_find::FindNearestTown(const map_coords::MapCoords& from, float reach, const std::vector<Candidate>& towns)

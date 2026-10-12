@@ -64,17 +64,44 @@ constexpr float k_RewardFaceMs = 2000.0f;
 /// The part nearest a point the hand touches, given where each part's bone is, in part order
 [[nodiscard]] BodyPart NearestPart(const glm::vec3& touch, std::span<const glm::vec3, k_BodyPartCount> parts);
 
-/// The hand has to rest on the body this long before it strokes, and strokes again only on another part after this long
+/// The hand runs its strokes and slaps at most this many times a second, as the game did once a frame at the screen's
+/// refresh; each step takes all the time since the last
+constexpr float k_StepsPerSecond = 60.0f;
+/// The milliseconds the next step runs on after a frame of some milliseconds, the time left over kept in `sinceStep`;
+/// nothing until a step's worth has gone by
+[[nodiscard]] std::optional<float> Pace(float& sinceStep, float frameMs);
+
+/// The clocks a stroke waits on, in milliseconds
+struct StrokeClocks
+{
+	/// Since the last stroke or slap played, or since taking hold
+	float sinceTouch {0.0f};
+	/// Starts at 0 on taking hold and is set to k_ReadyAfterTouchMs after each stroke or slap that plays: a stroke needs
+	/// it at k_ReadyForStrokeMs, so the first comes two seconds after taking hold and the next a second after the last
+	float ready {0.0f};
+	/// How long the hand has been on the body, in all, since taking hold or the last slap
+	float contact {0.0f};
+};
+constexpr float k_ReadyForStrokeMs = 2000.0f;
+constexpr float k_ReadyAfterTouchMs = 1000.0f;
+/// The hand has to have been on the body this long, in all, before it strokes, and the cursor must be moving across
 constexpr float k_StrokeHoldMs = 1000.0f;
-constexpr float k_StrokeIntervalMs = 2000.0f;
+/// After a stroke or slap the next stroke waits this long at no reward, twice that at the most punishment, nothing at the
+/// most reward
+constexpr float k_StrokeWaitMs = 1250.0f;
+[[nodiscard]] float StrokeWaitMs(float sum);
+/// Whether a stroke is due on a part: another part than the last stroked, the clocks run long enough for the reward so far
+[[nodiscard]] bool StrokeDue(const StrokeClocks& clocks, std::optional<BodyPart> last, BodyPart part, float sum);
+
 /// A stroke interrupts nothing that is less than this far through; a slap nothing less than this far
 constexpr float k_StrokeInterruptsAfter = 0.8f;
 constexpr float k_SlapInterruptsAfter = 0.35f;
-/// Slaps are at least this long apart
-constexpr float k_SlapIntervalMs = 1000.0f;
+/// A slap needs this long since taking hold or the last stroke (slaps themselves don't hold the next one back)
+constexpr float k_SlapReadyMs = 1000.0f;
 
-/// Whether a stroke plays now: on a part other than the last stroked, long enough after the last
-[[nodiscard]] bool StrokeDue(std::optional<BodyPart> last, BodyPart part, float msSinceLast);
+/// The hand's sweep is weighed as a slap only as it first comes onto the body, or as the cursor crosses the middle of the
+/// screen, on the body or not
+[[nodiscard]] bool SlapConsidered(bool onBody, bool wasOnBody, float cursorX, float lastCursorX, float screenMiddle);
 
 /// The slapping animations, from the head to the feet, and their gentle versions, all to the right side
 constexpr size_t k_SlapHead = 165;
@@ -90,17 +117,54 @@ constexpr float k_SlapAbove = 1.1f;
 constexpr float k_SlapSpeed = 5.0f;
 constexpr float k_HardSlapSpeed = 9.0f;
 
+enum class SlapBand : uint8_t
+{
+	Feet,
+	Waist,
+	Head,
+};
+
 struct Slap
 {
 	size_t animation;
+	SlapBand band;
 	bool gentle;
-	/// Played to the left side, by which way the hand swept across the screen
+	/// Played to the left side, when the hand swept to the left across the screen
 	bool mirrored;
 };
 
-/// The slap a hand moving across the body makes, if any: by its height above the ground and its speed, against the
-/// creature's height, and which way it moves across the screen
-[[nodiscard]] std::optional<Slap> ClassifySlap(float handHeight, float speed, float creatureHeight, bool sweepsRight);
+/// The slap a hand moving across the body makes, if any: by its height above the ground and its speed across the land,
+/// against the creature's height, and which way it moves across the screen
+[[nodiscard]] std::optional<Slap> ClassifySlap(float handHeight, float speed, float creatureHeight, bool sweepsLeft);
+
+/// Hard slaps are counted at one height; the third in a row there that lands on the body bruises the creature where it
+/// lands and the count starts again. A slap at another height starts the count afresh.
+struct HardSlaps
+{
+	SlapBand band {SlapBand::Feet};
+	uint32_t count {0};
+};
+constexpr uint32_t k_HardSlapsToBruise = 3;
+/// Counts a slap; whether it bruises
+[[nodiscard]] bool CountSlap(HardSlaps& slaps, const Slap& slap, bool onBody);
+/// The bruise's column in the skin's marks: 7 for a hard slap just past the hard speed, less the faster, down to 0
+[[nodiscard]] uint8_t BruiseColumn(float speed, float creatureHeight);
+/// A bruise takes this much of the creature's life, never leaving less
+constexpr float k_BruiseLife = 0.01f;
+[[nodiscard]] float LifeAfterBruise(float life);
+
+/// The hand's cycles while it is held to a creature
+enum class TouchCycle : uint8_t
+{
+	/// Beside the body
+	Wiggle,
+	/// The caress, which taking hold starts with and stroking plays
+	Tickle,
+	Slap,
+};
+/// The cycle after a step: a fast hand slaps, stroking caresses, and off the body a caress turns back to the wiggle; a
+/// slapping hand keeps slapping until it strokes again
+[[nodiscard]] TouchCycle NextCycle(TouchCycle cycle, bool fast, bool stroking, bool onBody);
 
 /// What each stroke and slap adds to the running sum of the player's feedback, which stays from -1 to 1
 constexpr float k_StrokeAmount = 0.1f;

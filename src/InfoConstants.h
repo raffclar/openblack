@@ -1415,7 +1415,8 @@ struct GAnimalStateTableInfo
 	uint32_t field0x0;
 	int field0x4;
 	float field0x8;
-	uint32_t field0xc;
+	/// A state an animal is in for itself rather than on its way into another, as moving somewhere is
+	uint32_t isFinalState;
 	uint32_t field0x10;
 	uint32_t field0x14;
 	uint32_t field0x18;
