@@ -13,6 +13,7 @@
 
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Graveyard.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
 #include "ECS/GraveyardRules.h"
 #include "ECS/Registry.h"
@@ -27,6 +28,8 @@ namespace
 {
 using ecs::components::Abode;
 using ecs::components::Graveyard;
+using ecs::components::SpellDispenser;
+using ecs::components::StandInGraves;
 using ecs::components::Town;
 
 ecs::Registry& Entities()
@@ -62,14 +65,67 @@ bool TakesOver(entt::entity building)
 	return info != nullptr && graveyard::TakesOverAsGraveyard(info->abodeType);
 }
 
+/// A burial on another civic building standing in as the town's graveyard. This is the original game's behaviour: the
+/// burial is counted as if the building were a graveyard, on a value of the building's own, and the building's model
+/// shows its scaffold over its finished model from then on.
+void CountBurialOnStandIn(entt::entity building)
+{
+	auto& registry = Entities();
+	const auto* info = ecs::world_objects::AbodeInfoOf(building);
+	if (info == nullptr)
+	{
+		return;
+	}
+	auto* dispenser = registry.TryGet<SpellDispenser>(building);
+	const auto* kept = registry.TryGet<const StandInGraves>(building);
+	uint32_t count = 0;
+	switch (graveyard::StandInCountOf(info->abodeType))
+	{
+	case graveyard::StandInCount::None:
+		return;
+	case graveyard::StandInCount::ScaffoldTurns:
+		// TODO(workshops): openblack's workshops make no scaffolds yet, so the count is always at rest. In the original
+		// game a burial on a resting workshop leaves it one turn from finishing a scaffold, which it then makes without
+		// using any wood; a burial on a workshop making one delays it by a turn.
+		count = 0;
+		break;
+	case graveyard::StandInCount::Kept:
+		// TODO(totems): the hand letting go of a totem it slid sets this count to where it was let go
+		count = kept != nullptr ? kept->count : 0;
+		break;
+	case graveyard::StandInCount::DispenserTurns:
+		if (dispenser == nullptr)
+		{
+			return;
+		}
+		count = dispenser->timer.tick;
+		break;
+	}
+	const auto burial = graveyard::BurialOnStandIn(count);
+	if (!burial.has_value())
+	{
+		return;
+	}
+	if (dispenser != nullptr)
+	{
+		dispenser->timer.tick = burial->count;
+	}
+	registry.AssignOrReplace<StandInGraves>(building, StandInGraves {.count = burial->count, .partsShown = burial->partsShown});
+	registry.SetDirty();
+}
+
 /// The graveyard counts one more burial, if it has a town and works, until it is full; its graves follow
 void CountBurial(entt::entity graveyard)
 {
 	auto& registry = Entities();
-	// Only a graveyard counts burials: another building standing in as the town's graveyard counts none
-	auto* yard = registry.TryGet<Graveyard>(graveyard);
-	if (yard == nullptr || TownOfBuilding(graveyard) == entt::null || !ecs::villager_home::IsFunctional(graveyard))
+	if (TownOfBuilding(graveyard) == entt::null || !ecs::villager_home::IsFunctional(graveyard))
 	{
+		return;
+	}
+	auto* yard = registry.TryGet<Graveyard>(graveyard);
+	if (yard == nullptr)
+	{
+		CountBurialOnStandIn(graveyard);
 		return;
 	}
 	const auto burials = graveyard::BurialsAfterDeath(yard->burials);

@@ -109,6 +109,41 @@ TEST(GraveyardRules, LosingASpareGraveyardLeavesTheTownWithoutOneAsInTheOriginal
 	EXPECT_FALSE(GraveyardAfterLoss(false, others).has_value());
 }
 
+TEST(GraveyardRules, AStandInCountsABurialOnItsOwnValueAsTheOriginalDoes)
+{
+	EXPECT_EQ(StandInCountOf(AbodeType::Workshop), StandInCount::ScaffoldTurns);
+	EXPECT_EQ(StandInCountOf(AbodeType::Totem), StandInCount::Kept);
+	EXPECT_EQ(StandInCountOf(AbodeType::SpellDispenser), StandInCount::DispenserTurns);
+	// These keep a link to another object there, or (the crèche) nothing that can be known
+	for (const auto other : {AbodeType::TownCentre, AbodeType::StoragePit, AbodeType::Creche, AbodeType::Field,
+	                         AbodeType::Citadel, AbodeType::FootballPitch})
+	{
+		EXPECT_EQ(StandInCountOf(other), StandInCount::None) << static_cast<uint32_t>(other);
+	}
+}
+
+TEST(GraveyardRules, ABurialOnARestingStandInShowsItsScaffold)
+{
+	const auto burial = BurialOnStandIn(0);
+	ASSERT_TRUE(burial.has_value());
+	EXPECT_EQ(burial->count, 1u);
+	EXPECT_EQ(burial->partsShown, 1u);
+}
+
+TEST(GraveyardRules, AStandInsCountGrowsAsAGraveyardsUntilFull)
+{
+	const auto burial = BurialOnStandIn(11);
+	ASSERT_TRUE(burial.has_value());
+	EXPECT_EQ(burial->count, 12u);
+	EXPECT_EQ(burial->partsShown, 2u);
+	const auto last = BurialOnStandIn(k_MostBurials - 1);
+	ASSERT_TRUE(last.has_value());
+	EXPECT_EQ(last->count, k_MostBurials);
+	EXPECT_EQ(last->partsShown, 9u);
+	EXPECT_FALSE(BurialOnStandIn(k_MostBurials).has_value());
+	EXPECT_FALSE(BurialOnStandIn(1000).has_value());
+}
+
 TEST(GraveyardRules, ASkeletonWearsTheSkeletonAtEveryDistance)
 {
 	const std::array own {1, 2, 3};

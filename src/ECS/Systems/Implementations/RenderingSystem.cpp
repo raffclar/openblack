@@ -962,24 +962,33 @@ void RenderingSystem::UploadPartialBuilds()
 		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix});
 		_renderContext.partialBuilds.push_back(draw);
 	});
-	// A standing graveyard shows the graves of its burials over its model drawn with the others; one going up or broken
-	// shows none
+	// A standing building shows its model's numbered parts up to a number over its model drawn with the others; one going
+	// up or broken shows none
+	const auto showParts = [&](entt::entity entity, const Mesh& mesh, const Transform& transform, uint32_t parts) {
+		if (parts == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id))
+		{
+			return;
+		}
+		_renderContext.partialBuilds.push_back({
+		    .meshId = mesh.id,
+		    .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
+		    .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
+		    .gravesShown = parts,
+		});
+		_renderContext.partialBuildInstances.push_back(
+		    {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
+		              glm::scale(glm::mat4(1.0f), transform.scale)});
+	};
+	// A graveyard shows the graves of its burials
 	registry.Each<const Graveyard, const Mesh, const Transform>(
 	    [&](entt::entity entity, const Graveyard&, const Mesh& mesh, const Transform& transform) {
-		    const auto graves = graveyards::GravesShown(entity);
-		    if (graves == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id))
-		    {
-			    return;
-		    }
-		    _renderContext.partialBuilds.push_back({
-		        .meshId = mesh.id,
-		        .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
-		        .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
-		        .gravesShown = graves,
-		    });
-		    _renderContext.partialBuildInstances.push_back(
-		        {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
-		                  glm::scale(glm::mat4(1.0f), transform.scale)});
+		    showParts(entity, mesh, transform, graveyards::GravesShown(entity));
+	    });
+	// A building standing in as its town's graveyard shows the parts its burials' graves would, as in the original game:
+	// its scaffold
+	registry.Each<const StandInGraves, const Mesh, const Transform>(
+	    [&](entt::entity entity, const StandInGraves& graves, const Mesh& mesh, const Transform& transform) {
+		    showParts(entity, mesh, transform, graves.partsShown);
 	    });
 	const auto count = static_cast<uint32_t>(_renderContext.partialBuildInstances.size());
 	if (count == 0)

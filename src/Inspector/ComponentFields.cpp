@@ -951,6 +951,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ForestMember::growing>("growing")
 	    .Field<&components::ForestMember::listed>("listed");
 	Reflect<components::Graveyard>(context).Field<&components::Graveyard::burials>("burials");
+	Reflect<components::StandInGraves>(context)
+	    .Field<&components::StandInGraves::count>("count")
+	    .Field<&components::StandInGraves::partsShown>("partsShown");
 	Reflect<components::WalkingSkeleton> {context};
 	Reflect<components::GripLandscapeParticle>(context)
 	    .Field<&components::GripLandscapeParticle::centre>("centre")

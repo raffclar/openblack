@@ -25,7 +25,8 @@ void Made(entt::entity graveyard);
 /// none, and it counts a burial straight away, so a new graveyard shows its first grave
 void StartsWorking(entt::entity graveyard);
 
-/// One of a town's people has died: its graveyard, if it has one, counts a burial
+/// One of a town's people has died: its graveyard, if it has one, counts a burial. As in the original game, a civic
+/// building standing in as the town's graveyard is counted on as if it were one, and shows its scaffold from then on.
 void TownPersonDied(entt::entity town);
 
 /// A graveyard goes: when it was its town's own, the first other working civic building of the town (any but a wonder)

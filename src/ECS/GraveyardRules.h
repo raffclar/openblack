@@ -57,6 +57,51 @@ inline constexpr float k_GravePerBurial = 0.18f;
 	return (static_cast<uint32_t>(type) & static_cast<uint32_t>(AbodeType::Graveyard)) != 0;
 }
 
+/// What a civic building standing in as its town's graveyard keeps where a graveyard keeps its burials. As in the
+/// original game, a burial on a stand-in is counted as if the building were a graveyard, on a value of its own that has
+/// nothing to do with burials, so what a burial changes depends on the building.
+enum class StandInCount : uint8_t
+{
+	/// Something never below a full graveyard's count (a link to another object): a burial changes nothing
+	None,
+	/// A workshop's turns left to finish the scaffold it is making, none while it makes none
+	ScaffoldTurns,
+	/// A totem's own count, kept from burial to burial
+	Kept,
+	/// A miracle dispenser's turns counted towards its next miracle
+	DispenserTurns,
+};
+
+/// What a building of this kind keeps where a graveyard keeps its burials. A crèche keeps nothing there: the original
+/// game counts on whatever lies past the building's own data, which can't be known, so openblack counts nothing.
+[[nodiscard]] constexpr StandInCount StandInCountOf(AbodeType type)
+{
+	switch (type)
+	{
+	case AbodeType::Workshop:
+		return StandInCount::ScaffoldTurns;
+	case AbodeType::Totem:
+		return StandInCount::Kept;
+	case AbodeType::SpellDispenser:
+		return StandInCount::DispenserTurns;
+	default:
+		return StandInCount::None;
+	}
+}
+
+/// A burial counted on a building standing in as its town's graveyard: the count it keeps afterwards, and how many of
+/// its model's numbered parts are shown (the graves a graveyard with that count would show). On any building but a
+/// graveyard the parts numbered one are its scaffold, so a stand-in shows its scaffold over its finished model.
+struct StandInBurial
+{
+	uint32_t count {0};
+	uint32_t partsShown {0};
+};
+
+/// A burial on a stand-in whose count was this, counted as on a graveyard: one more, and the parts its graves would
+/// show. None once the count has reached a full graveyard's, when nothing changes.
+[[nodiscard]] std::optional<StandInBurial> BurialOnStandIn(uint32_t count);
+
 /// One of a town's other buildings, in the town's order (the newest first), as a graveyard to take over from one going
 struct OtherBuilding
 {
