@@ -49,6 +49,7 @@
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
@@ -771,6 +772,7 @@ bool villager_disciple::SetAboutWorkOnLanding(LivingAction& action)
 	{
 		return false;
 	}
+	const auto atPickUp = registry.Get<const DiscipleHeld>(villager).atPickUp;
 	registry.Remove<DiscipleHeld>(villager);
 	const auto type = TypeOf(villager);
 	if (type == None)
@@ -782,8 +784,11 @@ bool villager_disciple::SetAboutWorkOnLanding(LivingAction& action)
 	{
 		return false;
 	}
-	// TODO(disciples): the player's statistics count a disciple made of a new kind (only a statistics screen would show
-	// them)
+	// Its town's player counts a disciple made of a new kind
+	if (const auto town = TownOfVillager(villager); town.has_value() && type != atPickUp)
+	{
+		player_statistics::CountDiscipleMade(registry, registry.Get<const Town>(*town).owner, type);
+	}
 	const auto kind = disciple::KindOf(type);
 	// A farmer, builder, breeder or craftsman put by a thing of another town moves into that town, taking on its tribe
 	if (kind.movesIntoTown)

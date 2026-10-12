@@ -39,6 +39,8 @@ struct Abode
 	/// Its town has put it up for mending, or it went up again from a plan of a finished building, and it hasn't been
 	/// made whole since: its town doesn't put it up again
 	bool putUpForMending {false};
+	/// How many of its town's passes over its buildings it has stood through, up to the age it counts as settled
+	uint32_t age {0};
 };
 
 } // namespace openblack::ecs::components

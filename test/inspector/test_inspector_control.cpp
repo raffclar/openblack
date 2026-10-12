@@ -835,6 +835,40 @@ TEST(InspectorScreenshot, KeptPicturesAreNamedByFeature)
 	EXPECT_EQ(DateOf(std::chrono::system_clock::time_point {std::chrono::seconds {951782400}}), "2000-02-29");
 }
 
+// A picture's catalogue line records the camera it is drawn from: its own, else an override shown, else the game's
+TEST(InspectorScreenshot, ThePicturesCameraIsTheOneDrawn)
+{
+	const CameraPose own {.origin = {1.0f, 2.0f, 3.0f}, .focus = {4.0f, 5.0f, 6.0f}};
+	const CameraPose shown {.origin = {7.0f, 8.0f, 9.0f}, .focus = {0.0f, 1.0f, 0.0f}};
+	const CameraState game {.origin = {10.0f, 11.0f, 12.0f}, .focus = {13.0f, 14.0f, 15.0f}};
+	const auto origin = [](const std::optional<CameraPose>& pose) { return pose.value_or(CameraPose {}).origin; };
+	EXPECT_EQ(origin(PictureCamera(own, shown, game)), own.origin);
+	EXPECT_EQ(origin(PictureCamera(std::nullopt, shown, game)), shown.origin);
+	EXPECT_EQ(PictureCamera(std::nullopt, shown, game)->focus, shown.focus);
+	EXPECT_EQ(origin(PictureCamera(std::nullopt, std::nullopt, game)), game.origin);
+	EXPECT_EQ(PictureCamera(std::nullopt, std::nullopt, game)->focus, game.focus);
+	EXPECT_FALSE(PictureCamera(std::nullopt, std::nullopt, std::nullopt).has_value());
+
+	// Through a kept picture taken while an override is shown
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	camera.overridden = shown;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	provider->Frame(10);
+	const auto kept =
+	    Ask(inspector, R"({"query": "screenshot.take", "params": {"feature": "sky/moon", "what": "overridden"}})");
+	screenshots.written.insert(kept["path"].get<std::string>());
+	provider->Frame(11);
+	ASSERT_EQ(screenshots.lines.size(), 1u);
+	const auto line = Parse(screenshots.lines[0].second);
+	ASSERT_TRUE(line.has_value());
+	ExpectNear((*line)["camera"]["origin"], shown.origin);
+	ExpectNear((*line)["camera"]["focus"], shown.focus);
+}
+
 // The folder: the one given, else the environment's, else E:'s when the drive is there (on Windows)
 TEST(InspectorScreenshot, TheScreenshotFolder)
 {
@@ -873,6 +907,12 @@ TEST(InspectorScreenshot, KeptPicturesAreCataloguedOnceWritten)
 	const auto again =
 	    Ask(inspector, R"({"query": "screenshot.take", "params": {"feature": "sky/moon", "what": "full-moon"}})");
 	EXPECT_EQ(again["path"], "E:/openblack/screenshots/sky/moon/2026-10-10_fix-moon_full-moon_d3d12_2.png");
+	// And the answer says it was renamed, so runs aren't mixed up; a first one says nothing
+	EXPECT_EQ(again["renamed_from"], path);
+	ASSERT_TRUE(again.contains("warnings"));
+	EXPECT_NE(again["warnings"][0].get<std::string>().find("full-moon_d3d12_2.png"), std::string::npos);
+	EXPECT_FALSE(kept.contains("renamed_from"));
+	EXPECT_FALSE(kept.contains("warnings"));
 
 	// Not written yet: no line
 	provider->Frame(11);

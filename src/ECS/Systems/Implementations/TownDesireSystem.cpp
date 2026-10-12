@@ -34,6 +34,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/StatisticsRules.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -132,6 +133,10 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 			if (number < stats.abodesByNumber.size())
 			{
 				++stats.abodesByNumber.at(number);
+			}
+			if (info != nullptr && openblack::statistics::IsCivicBuilding(info->abodeType))
+			{
+				++stats.civicBuildings;
 			}
 			if (info != nullptr && info->maxVillagersInAbode + info->maxChildrenInAbode != 0)
 			{

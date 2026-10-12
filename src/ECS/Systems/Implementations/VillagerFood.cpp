@@ -36,6 +36,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/DiscipleRules.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -284,13 +285,7 @@ float villager_food::EatFoodHeld(entt::entity villager)
 		{
 			tally->foodUsed += static_cast<float>(meal.eaten);
 		}
-		const auto owner = registry.Get<const Town>(town).owner;
-		registry.Each<Player>([owner, &meal](entt::entity, Player& player) {
-			if (player.name == owner)
-			{
-				player.foodUsed += meal.eaten;
-			}
-		});
+		player_statistics::CountFoodUsed(registry, registry.Get<const Town>(town).owner, meal.eaten);
 	}
 	registry.SetDirty();
 	return person.food;
@@ -588,21 +583,4 @@ uint32_t villager_food::ArrivesAtFoodReaction(LivingAction& action)
 	}
 	SetTopState(action, VillagerStates::DecideWhatToDo);
 	return 1;
-}
-
-bool villager_food::ExitFoodReaction(LivingAction& action, VillagerStates next)
-{
-	auto& registry = Entities();
-	const auto villager = EntityOf(action);
-	if (StateInfo(next).isReactionState == 0)
-	{
-		if (auto* state = registry.TryGet<LivingReaction>(villager); state != nullptr && state->reaction != 0)
-		{
-			ecs::systems::villager_reactions::Stop(villager, *state, false);
-			state->reaction = 0;
-			state->type = Reaction::None;
-		}
-	}
-	// Leaving is never held up
-	return false;
 }

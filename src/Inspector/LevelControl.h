@@ -98,6 +98,11 @@ ResolveShotRoot(const std::optional<std::filesystem::path>& given, const char* e
 [[nodiscard]] std::filesystem::path KeptShotPath(const std::filesystem::path& root, std::string_view feature,
                                                  std::string_view what, const ShotSource& source,
                                                  const std::function<bool(const std::filesystem::path&)>& taken);
+/// The camera a picture is drawn from, for its catalogue line: its own camera when one was put in place for it, else
+/// the inspector's override while one is shown, else the game's own camera
+[[nodiscard]] std::optional<CameraPose> PictureCamera(const std::optional<CameraPose>& placed,
+                                                      const std::optional<CameraPose>& overridden,
+                                                      const std::optional<CameraState>& state);
 /// The date of a moment, as YYYY-MM-DD (UTC)
 [[nodiscard]] std::string DateOf(std::chrono::system_clock::time_point moment);
 

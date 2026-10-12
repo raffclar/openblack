@@ -250,14 +250,6 @@ glm::ivec2 WalkPositionOf(entt::entity villager)
 	return wall_hug::ToWhole(metres);
 }
 
-/// Whether the villager is closer to a point than the step its walk makes in a turn
-bool AreWeThere(entt::entity villager, glm::vec2 point)
-{
-	const auto* wallHug = WorldRegistry().TryGet<const WallHug>(villager);
-	const float speed = wallHug != nullptr ? wallHug->speed : 0.0f;
-	return walk_arrival::WithinAStep(WalkPositionOf(villager), wall_hug::ToWhole(point), speed);
-}
-
 /// The state of the first of these walk tags the villager carries
 template <typename... Tags>
 std::optional<MoveState> FirstWalkTag(entt::entity villager)
@@ -531,6 +523,13 @@ std::optional<glm::vec2> TreeTentPos(entt::entity tree)
 }
 
 } // namespace
+
+bool villager_home::AreWeThere(entt::entity villager, glm::vec2 point)
+{
+	const auto* wallHug = WorldRegistry().TryGet<const WallHug>(villager);
+	const float speed = wallHug != nullptr ? wallHug->speed : 0.0f;
+	return walk_arrival::WithinAStep(WalkPositionOf(villager), wall_hug::ToWhole(point), speed);
+}
 
 std::optional<glm::vec2> villager_home::PosOutsideAbode(entt::entity villager)
 {
