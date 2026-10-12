@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <iostream>
 #include <ranges>
 #include <span>
@@ -229,47 +230,34 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromPackTag, const std:
 	return texture2D;
 }
 
-Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std::filesystem::path& rawTexturePath) const
+Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std::filesystem::path& rawTexturePath,
+                                                         graphics::texel_depth::Depth depth) const
 {
-	bool found = false;
-	const std::array<uint16_t, 12> resolutions = {{1024, 512, 256, 128, 64, 40, 32, 14, 12, 6}};
+	constexpr std::array<uint16_t, 10> k_Sides = {{1024, 512, 256, 128, 64, 40, 32, 14, 12, 6}};
 
-	const auto data = Locator::filesystem::value().ReadAll(rawTexturePath);
-	graphics::TextureFormat format = graphics::TextureFormat::R8;
-	uint16_t width = 0;
-	uint16_t height = 0;
-	for (auto res : resolutions)
-	{
-		if (found)
-		{
-			break;
-		}
-
-		width = res;
-		height = res;
-
-		const typename decltype(data)::size_type pixelCount = width * height;
-
-		if (data.size() == pixelCount)
-		{
-			format = graphics::TextureFormat::R8;
-			found = true;
-		}
-		if (data.size() == 3 * pixelCount)
-		{
-			format = graphics::TextureFormat::RGB8;
-			found = true;
-		}
-	}
-	if (!found)
+	auto data = Locator::filesystem::value().ReadAll(rawTexturePath);
+	const auto side = std::ranges::find_if(k_Sides, [&data](uint16_t candidate) {
+		const auto pixels = static_cast<size_t>(candidate) * candidate;
+		return data.size() == pixels || data.size() == 3 * pixels;
+	});
+	if (side == k_Sides.end())
 	{
 		throw std::runtime_error("Unable to load texture: Ambiguous size and format: " + std::to_string(data.size()));
 	}
+	const size_t channels = data.size() / (static_cast<size_t>(*side) * *side);
 
 	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string());
-	texture->Create(width, height, 1, format, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	if (depth == graphics::texel_depth::Depth::FiveBits)
+	{
+		const auto packed = graphics::texel_depth::PackRgb555(data, channels);
+		texture->Create(*side, *side, 1, graphics::TextureFormat::BGR5A1, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+		                bgfx::copy(packed.data(), static_cast<uint32_t>(packed.size() * sizeof(packed[0]))));
+		return texture;
+	}
+	graphics::texel_depth::Reduce(data, depth);
+	texture->Create(*side, *side, 1, channels == 3 ? graphics::TextureFormat::RGB8 : graphics::TextureFormat::R8,
+	                graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(data.data(), static_cast<uint32_t>(data.size())));
-
 	return texture;
 }
 
@@ -290,6 +278,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
 		const auto& rgb = colours->pixels.at(i);
 		texels.insert(texels.end(), {rgb[0], rgb[1], rgb[2], alpha->pixels.at(i)});
 	}
+	graphics::texel_depth::Reduce(texels, graphics::texel_depth::Depth::FourBits);
 	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
 	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));

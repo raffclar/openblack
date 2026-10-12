@@ -9,26 +9,30 @@
 
 #pragma once
 
+#include <optional>
+
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
 /// The game lights its models with a single point light and an ambient level, per vertex and in whole numbers: a vertex
 /// facing the light at an intensity I = round(255 n.l) has its colour times f / 256, where f is the ambient when it
 /// faces away and ambient + (255 - ambient) I / 256 when it faces it. The light is a distant sun by day; in the darker
-/// half of the night it moves next to the god hand, a little towards the camera. assets/shaders/model_light.sh is the
-/// shader side.
+/// half of the night it moves next to the god hand, a little towards the camera. Inside the temple it stands off to one
+/// side of the rooms, up and away along -x. assets/shaders/model_light.sh is the shader side.
 namespace openblack::model_light
 {
 
 /// The sun, far off at the same height as it is away along -x and -z
 constexpr glm::vec3 k_Sun {-500000.0f, 500000.0f, -500000.0f};
+/// The temple's light, from the temple's origin: everything drawn in its rooms is lit from here
+constexpr glm::vec3 k_Temple {-1000.0f, 1000.0f, -500.0f};
 /// The ambient level, of 255
 constexpr float k_Ambient = 90.0f;
 
 /// Where the light is this frame. `skyType` runs from 0 at night to 2 by day: at night the hand carries the light, never
-/// below 10 over the ground under it. Inside the temple the hand carries no light, and the light stays the sun.
+/// below 10 over the ground under it. Inside the temple, whose origin is given then, the temple's light takes its place.
 [[nodiscard]] glm::vec3 FrameLight(glm::vec3 hand, float groundUnderHand, const glm::vec3& camera, float skyType,
-                                   bool inTemple);
+                                   std::optional<glm::vec3> templeOrigin);
 
 /// The uniform the object shaders read: the light's position, and the ambient
 [[nodiscard]] glm::vec4 Uniform(const glm::vec3& light, float ambient = k_Ambient);

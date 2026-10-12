@@ -147,6 +147,8 @@ Json StateJson(const CameraState& state)
 	    {"rotation", Point(state.rotation)},
 	    {"forward", Point(state.forward)},
 	    {"horizontal_fov", state.horizontalFieldOfView},
+	    {"vertical_fov", state.verticalFieldOfView},
+	    {"lens", state.lens},
 	    {"near_clip", state.nearClip},
 	    {"model", state.model},
 	    {"held_by_path", state.heldByPath},

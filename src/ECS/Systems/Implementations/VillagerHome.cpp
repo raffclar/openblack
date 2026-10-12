@@ -316,7 +316,7 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 	const auto town = TownOf(villager);
 	const auto result = Locator::townDesireSystem::value().OfferVillager(
 	    town, IsChild(villager), OwnDesiresTrigger(villager), [&action](TownDesireInfo desire) -> uint32_t {
-		    // TODO(villagers): the game has villagers repair, play and supply the workshop for their town too
+		    // TODO(villagers): the game has villagers play and supply the workshop for their town too
 		    switch (desire)
 		    {
 		    case TownDesireInfo::ForRelaxation:
@@ -335,11 +335,12 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 			    return villager_worship::CheckSatisfySupplyWorship(action);
 		    case TownDesireInfo::ToBuild:
 			    return villager_build::CheckSatisfyToBuild(action);
+		    case TownDesireInfo::ToRepair:
+			    return villager_build::CheckSatisfyToRepair(action);
 		    case TownDesireInfo::ForAbodes:
+			    return villager_build::CheckSatisfyAbodes(action);
 		    case TownDesireInfo::ForCivicBuilding:
-			    // TODO(temple-builders): with no site to work at, the town asks for a new abode or its best planned
-			    // building and the villager tries again; towns don't plan their buildings yet
-			    return villager_build::CheckNeededForBuilding(action);
+			    return villager_build::CheckSatisfyCivicBuildings(action);
 		    default:
 			    return 0;
 		    }
@@ -1018,13 +1019,13 @@ uint32_t villager_home::MoveToPos(LivingAction& action)
 		return 0;
 	}
 	registry.Remove<MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
+	// It goes on into the state it was heading for, which stays what it works towards, so that state's work carries
+	// on rather than starting afresh
 	auto final = State(action, LivingAction::Index::Final);
 	if (final == VillagerStates::InvalidState)
 	{
 		final = VillagerStates::DecideWhatToDo;
 	}
-	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Final, VillagerStates::InvalidState,
-	                                                      true);
 	SetTopState(action, final);
 	return 0;
 }

@@ -105,6 +105,9 @@ public:
 	virtual void SetInitiator(uint32_t id, entt::entity initiator) = 0;
 	/// Whether a reaction is still going
 	[[nodiscard]] virtual bool IsActive(uint32_t id) const = 0;
+	/// A living thing lets go of the reaction it has taken up, leaving what it is doing as it is, and remembers that it
+	/// last reacted to that kind now
+	virtual void StopReacting(entt::entity living) = 0;
 	/// Whether an initiator has a reaction going
 	[[nodiscard]] virtual bool HasReaction(entt::entity initiator) const = 0;
 	/// Once a game turn: the reactions age, and impress who is in their reach

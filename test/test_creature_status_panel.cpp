@@ -139,26 +139,57 @@ TEST(CreatureStatusPanel, LayoutWithTheReward)
 	const auto layout = Compute({1024, 768}, true, column);
 	EXPECT_FLOAT_EQ(layout.size, 48.0f);
 	EXPECT_FLOAT_EQ(layout.textSize, 24.0f);
-	EXPECT_FLOAT_EQ(layout.box.min.x, 25.6f);
-	EXPECT_FLOAT_EQ(layout.box.max.x, 281.6f);
+	EXPECT_FLOAT_EQ(layout.box.min.x, 25.0f);
+	EXPECT_FLOAT_EQ(layout.box.max.x, 281.0f);
 	EXPECT_FLOAT_EQ(layout.box.min.y, 192.0f);
 	EXPECT_FLOAT_EQ(layout.box.max.y, 448.0f);
 	ASSERT_EQ(layout.Rows().size(), 4u);
 
 	const auto& damage = layout.Rows()[0];
 	EXPECT_EQ(damage.row, Row::Damage);
-	EXPECT_FLOAT_EQ(damage.bar.min.x, 141.6f);
-	EXPECT_FLOAT_EQ(damage.bar.max.x, 257.6f);
+	EXPECT_FLOAT_EQ(damage.bar.min.x, 141.0f);
+	EXPECT_FLOAT_EQ(damage.bar.max.x, 257.0f);
 	EXPECT_FLOAT_EQ(damage.bar.min.y, 224.0f);
 	EXPECT_FLOAT_EQ(damage.bar.max.y, 248.0f);
-	EXPECT_FLOAT_EQ(damage.labelRight.x, 129.6f);
-	EXPECT_FLOAT_EQ(damage.valueLeft.x, 269.6f);
+	EXPECT_FLOAT_EQ(damage.labelRight.x, 129.0f);
+	EXPECT_FLOAT_EQ(damage.valueLeft.x, 269.0f);
 	EXPECT_FLOAT_EQ(damage.labelRight.y, 224.0f);
 
 	// A row apart, and a third of a row more before the reward
 	EXPECT_FLOAT_EQ(layout.Rows()[2].bar.min.y, 320.0f);
 	EXPECT_EQ(layout.Rows()[3].row, Row::Reward);
 	EXPECT_FLOAT_EQ(layout.Rows()[3].bar.min.y, 384.0f);
+}
+
+TEST(CreatureStatusPanel, AtTheDefaultScreenEverythingIsInWholePixels)
+{
+	// 800 by 600: rows 37 apart, text 18 high, a gap of 9 by the bars
+	EXPECT_EQ(RowPitch({800, 600}), 37);
+	const std::array<float, 4> labels {60.0f, 58.0f, 80.0f, 61.0f};
+	const auto column = LabelColumnWidth(labels, 37.0f);
+	EXPECT_FLOAT_EQ(column, 98.0f);
+	const auto layout = Compute({800, 600}, true, column);
+	EXPECT_FLOAT_EQ(layout.textSize, 18.0f);
+	EXPECT_EQ(layout.box.min, glm::vec2(20.0f, 150.0f));
+	EXPECT_EQ(layout.box.max, glm::vec2(220.0f, 350.0f));
+	ASSERT_EQ(layout.Rows().size(), 4u);
+	EXPECT_FLOAT_EQ(layout.Rows()[0].bar.min.y, 174.0f);
+	EXPECT_FLOAT_EQ(layout.Rows()[1].bar.min.y, 211.0f);
+	EXPECT_FLOAT_EQ(layout.Rows()[2].bar.min.y, 248.0f);
+	EXPECT_FLOAT_EQ(layout.Rows()[3].bar.min.y, 297.0f);
+	EXPECT_FLOAT_EQ(layout.Rows()[0].bar.max.y, 192.0f);
+	EXPECT_FLOAT_EQ(layout.Rows()[0].bar.min.x, 118.0f);
+	EXPECT_FLOAT_EQ(layout.Rows()[0].bar.max.x, 216.0f);
+	EXPECT_FLOAT_EQ(layout.Rows()[0].labelRight.x, 109.0f);
+	EXPECT_FLOAT_EQ(layout.Rows()[0].valueLeft.x, 225.0f);
+
+	// Following a creature: near the top, three quarters as high
+	const auto follow = Compute({800, 600}, false, column);
+	EXPECT_EQ(follow.box.min, glm::vec2(20.0f, 15.0f));
+	EXPECT_EQ(follow.box.max, glm::vec2(220.0f, 165.0f));
+	ASSERT_EQ(follow.Rows().size(), 3u);
+	EXPECT_FLOAT_EQ(follow.Rows()[0].bar.min.y, 39.0f);
+	EXPECT_FLOAT_EQ(follow.Rows()[2].bar.min.y, 113.0f);
 }
 
 TEST(CreatureStatusPanel, LayoutFollowingACreature)

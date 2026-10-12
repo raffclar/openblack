@@ -43,6 +43,16 @@ struct BuildersNeededInputs
 };
 [[nodiscard]] int32_t BuildersNeeded(const BuildersNeededInputs& in);
 
+/// A villager is counted once among its site's workers while it works at the site, whatever building work it does in
+/// turn (fetching wood, walking up, building). It joins when it goes into building work from anything else it was
+/// working towards: the state it was heading for before the change counts, not one it passed through on the way, such
+/// as walking or pausing.
+[[nodiscard]] bool JoinsWorkers(bool wasWorkingTowardsBuilding);
+
+/// It leaves its site's workers when it goes on to something else to work towards (a final state) that isn't building
+/// work. Passing through a state on the way, such as walking or pausing, keeps it counted.
+[[nodiscard]] bool LeavesWorkers(bool nextIsBuilding, bool nextIsFinal);
+
 /// How much a site wants villagers: the share of its builders it still wants plus the desire a script forced on it,
 /// never below none nor above all
 [[nodiscard]] float DesireForVillagers(int32_t needed, int32_t maxBuilders, float forcedDesire);
@@ -114,6 +124,26 @@ inline constexpr float k_FootHeight = 2.5f;
 inline constexpr size_t k_TemplePiles = 6;
 inline constexpr float k_TemplePileDistance = 22.0f;
 [[nodiscard]] float TemplePileAngle(float heartYAngle, size_t pile);
+
+/// Where any other building's site puts its one pile of wood, made for the first wood brought: beyond the building on
+/// the side away from its door, as far out from the building as the door is plus four metres, turned an eighth of a
+/// turn either way at random, and facing back towards the building
+struct PilePlace
+{
+	glm::vec2 position;
+	float yAngle;
+};
+inline constexpr float k_PileBeyondDoor = 4.0f;
+[[nodiscard]] PilePlace StandardPilePlace(glm::vec2 building, glm::vec2 door, const FloatRandom& floatRandom);
+
+/// Of a town's sites opened to mend its buildings, the one wanting its builders most, none when none wants them at all.
+/// The earlier one on a tie.
+struct RepairCandidate
+{
+	bool repair;
+	float desireToBeRepaired;
+};
+[[nodiscard]] std::optional<size_t> BestRepairSite(std::span<const RepairCandidate> sites);
 
 /// What becomes of one of a temple site's piles when the temple is finished: an empty one goes, one with wood left in it
 /// stays on as a pile of its own and calls the villagers to come for its wood

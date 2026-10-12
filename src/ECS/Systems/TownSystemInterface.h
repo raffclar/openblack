@@ -54,6 +54,9 @@ public:
 	[[nodiscard]] virtual bool HasRoomForNewcomer(entt::entity town) const = 0;
 	/// A villager has died: the children of its town whose mother it was lose her, and it leaves its home and its town
 	virtual void RemoveDeadVillager(entt::entity villager) = 0;
+	/// A villager leaves its town alive, as a script takes it out: the children of its town whose mother it was lose her,
+	/// it leaves its home or the homeless, worship and the town, and has no mother any more
+	virtual void RemoveVillager(entt::entity villager) = 0;
 	/// The people of a town whose mother a villager is, in the town's order
 	[[nodiscard]] virtual std::vector<entt::entity> ChildrenOf(entt::entity town, entt::entity mother) const = 0;
 

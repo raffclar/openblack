@@ -29,6 +29,12 @@ public:
 	virtual void SetActive(entt::entity entity, bool active) = 0;
 	/// Sounds once at a point: at once, or, when delayed, once it has travelled to the camera at the speed of sound
 	virtual entt::entity CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) = 0;
+	/// A script has an object keep up a sound, switched on, from the object's position. False when the object
+	/// already keeps up a sound, which it goes on keeping up instead.
+	virtual bool AttachObjectSound(entt::entity entity, entt::id_type sound) = 0;
+	/// A script takes a sound off an object: a sound still playing is let go, to finish the pass it is in where it
+	/// is, and is not started again
+	virtual void DetachObjectSound(entt::entity entity, entt::id_type sound) = 0;
 };
 
 } // namespace openblack::ecs::systems

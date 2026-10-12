@@ -72,10 +72,10 @@ class VertexPlacer
 {
 public:
 	VertexPlacer(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
-	             const glm::mat4& model)
+	             const glm::mat4& model, std::span<const glm::mat4> bones)
 	    : _geometry(mesh.GetSubMeshes()[index]->GetBodyGeometry())
 	    , _model(model)
-	    , _bones(posed_model::BonesOf(registry, entity, mesh))
+	    , _bones(bones)
 	    , _followsLand(registry.AllOf<MorphWithTerrain>(entity))
 	{
 		// A creature's body is its base mesh moved towards the meshes of how evil or good, thin or fat and weak or strong
@@ -150,7 +150,13 @@ private:
 void posed_model::Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
                         const glm::mat4& model, std::vector<glm::vec3>& corners)
 {
-	const VertexPlacer place(registry, entity, mesh, index, model);
+	Place(registry, entity, mesh, index, model, posed_model::BonesOf(registry, entity, mesh), corners);
+}
+
+void posed_model::Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
+                        const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners)
+{
+	const VertexPlacer place(registry, entity, mesh, index, model, bones);
 	corners.clear();
 	corners.reserve(place.Count());
 	for (size_t i = 0; i < place.Count(); ++i)
@@ -171,7 +177,7 @@ std::optional<glm::vec3> posed_model::PointOnSkin(const ecs::Registry& registry,
 	{
 		return std::nullopt;
 	}
-	const VertexPlacer place(registry, entity, mesh, point.subMesh, model);
+	const VertexPlacer place(registry, entity, mesh, point.subMesh, model, posed_model::BonesOf(registry, entity, mesh));
 	std::array<glm::vec3, 3> corners {};
 	for (size_t c = 0; c < corners.size(); ++c)
 	{

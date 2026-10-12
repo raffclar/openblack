@@ -66,27 +66,35 @@ CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::
 
 void CreatureCarryOverSystem::KeepPlayersCreature()
 {
-	const auto creature = PlayersCreature();
-	if (!creature.has_value() || !Locator::creatureMindSystem::has_value())
+	if (const auto creature = PlayersCreature(); creature.has_value())
+	{
+		KeepCreature(*creature);
+	}
+}
+
+void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr || body->owner != LocalPlayer() || !Locator::creatureMindSystem::has_value())
 	{
 		return;
 	}
-	auto file = Locator::creatureMindSystem::value().SaveMind(*creature);
+	auto file = Locator::creatureMindSystem::value().SaveMind(creature);
 	if (!file.has_value())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature {} has no mind yet to keep for the next land",
-		                   entt::to_integral(*creature));
+		                   entt::to_integral(creature));
 		return;
 	}
 	// Its physique is saved beside its mind: its body as it is now, but for the alignment, as no spell made it
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto now = ecs::creature_body_file::Capture(registry, *creature);
+	const auto now = ecs::creature_body_file::Capture(registry, creature);
 	const creature_spells::SavedBody nowValues {
 	    .size = now.size.value_or(1.0f), .strength = now.strength, .alignment = now.alignment.value_or(0.0f)};
-	const auto* spells = registry.TryGet<const CreatureSpells>(*creature);
+	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
 	const auto saved = spells != nullptr ? creature_spells::ValuesToSave(spells->spells, nowValues) : nowValues;
 	const auto physique = creature_mind_body::ToPhysiqueFile(now, file->speciesRow, saved.alignment);
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Kept the player's creature {} for the next land", entt::to_integral(*creature));
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Kept the player's creature {} for the next land", entt::to_integral(creature));
 	Write(*file, physique);
 	Keep(std::make_shared<const creaturemind::MindFileData>(std::move(*file)));
 }

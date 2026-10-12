@@ -35,6 +35,9 @@ public:
 	/// As a land is cleared: the player's creature, if they have one, is kept as it is now, in place of any kept before.
 	/// With no creature, what was kept before stays.
 	virtual void KeepPlayersCreature() = 0;
+	/// A creature of the player's own is kept as it is now, in place of any kept before, as the game keeps it whenever
+	/// it is deleted: as it sparkles away through a vortex as much as with the land. Another player's creature isn't
+	virtual void KeepCreature(entt::entity creature) = 0;
 	/// A creature file kept in place of any before
 	virtual void Keep(std::shared_ptr<const creaturemind::MindFileData> file) = 0;
 	/// The creature kept, if any

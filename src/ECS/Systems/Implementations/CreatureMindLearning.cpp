@@ -31,6 +31,7 @@
 #include "3D/CreatureBody.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
+#include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureLayers.h"
@@ -51,6 +52,7 @@
 #include "Creature/LeashRules.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
@@ -128,6 +130,8 @@ constexpr std::string_view k_CurseScript = "CreatureCurse";
 constexpr float k_HeightOfSizeOne = 15.0f;
 /// A villager hurt to this share of its life or less can be healed by a creature
 constexpr float k_HurtEnoughToHeal = 0.7f;
+/// A pile of food this many times a storage pit's radius from it is the storage pit's
+constexpr float k_StoragePitReach = 1.1f;
 
 /// The actions that cast a power-up of a miracle, which only a creature grown up enough tries
 bool IsPowerUpCast(std::string_view action)
@@ -243,6 +247,22 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return true;
 	case Target::StoragePit:
 		return registry.AllOf<StoragePit>(entity);
+	case Target::MagicFoodPile:
+	{
+		// The food miracle's piles, but not one by the storage pit of the town nearest it (within a tenth more than the
+		// pit's radius), which belongs to the town's store
+		const auto* pot = registry.TryGet<const Pot>(entity);
+		const auto* at = registry.TryGet<const Transform>(entity);
+		if (heldByOther || pot == nullptr || pot->type != PotInfo::MagicFood || at == nullptr)
+		{
+			return false;
+		}
+		const auto town = NearestTown(registry, at->position);
+		const auto pit = town != entt::null ? ecs::construction::StoragePitOf(town) : std::nullopt;
+		const auto* pitAt = pit.has_value() ? registry.TryGet<const Transform>(*pit) : nullptr;
+		return pitAt == nullptr || !(gutils::GetDistanceInMetres(pitAt->position, at->position) <
+		                             object_measures::TwoDRadius(registry, *pit) * k_StoragePitReach);
+	}
 	case Target::Burning:
 	case Target::Unburnt:
 	{
@@ -292,7 +312,7 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		});
 	}
 	// Pots and piles of food are only ever eaten
-	if (target == Target::Food)
+	if (target == Target::Food || target == Target::MagicFoodPile)
 	{
 		registry.Each<const Pot, const Transform>(
 		    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
@@ -979,6 +999,16 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	if (object.has_value())
 	{
 		situated.thingHeight = object_measures::Height(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
+		situated.thingRadius =
+		    object_measures::TwoDRadius(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
+		// Sleeping by a thing, it looks for a clear place four times as wide as it is tall about it; one not under a
+		// script's control also wants nothing living there
+		if (executor->build == creature_plan_actions::Build::SleepByObject)
+		{
+			situated.clearArea =
+			    ClearAreaFor(Locator::entitiesRegistry::value(), creature, point,
+			                 creature_mind::k_SleepByObjectHeights * situation.height, !situation.controlledByScript);
+		}
 	}
 	if (executor->build == creature_plan_actions::Build::LookButDontApproach ||
 	    executor->build == creature_plan_actions::Build::SmileAt)
@@ -993,6 +1023,32 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	}
 	return std::pair {executor, std::move(*agenda)};
 }
+
+namespace
+{
+/// Curious, a creature cares little for a kind of thing it has had a good look at. Towns aren't things it looks at that
+/// way.
+// TODO(creature-actions-3): a villager busy at something that would teach the creature an action it doesn't know yet
+// stays interesting; which of a villager state's values names that action isn't mapped yet, so villagers stay
+// interesting always
+float ObservedShare(const ecs::Registry& registry, const CreatureMindState& mind, Desire desire, entt::entity object,
+                    const std::optional<creature_tree::Belief>& belief)
+{
+	if (desire != Desire::Curiosity || !belief.has_value() || registry.AnyOf<Town, Villager>(object))
+	{
+		return 1.0f;
+	}
+	return creature_mind::CuriosityShare(mind.observedKinds.contains(belief->type), false);
+}
+
+/// How useful a thing is to act on for a desire, by what the creature has learnt and what it has looked over
+float ObjectUsefulness(const ecs::Registry& registry, const creature_mind_model::Learnt& learnt, const CreatureMindState& mind,
+                       Desire desire, entt::entity object, entt::entity creature)
+{
+	const auto belief = BeliefOf(registry, object, creature);
+	return Usefulness(learnt, desire, belief) * ObservedShare(registry, mind, desire, object, belief);
+}
+} // namespace
 
 float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const CreatureMindState& mind, Desire desire,
                                              entt::entity object) const
@@ -1026,7 +1082,7 @@ float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const Creatu
 			return 0.0f;
 		}
 	}
-	return Usefulness(*mind.learnt, desire, BeliefOf(registry, object, creature));
+	return ObjectUsefulness(registry, *mind.learnt, mind, desire, object, creature);
 }
 
 void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, bool everyDesire)
@@ -1193,7 +1249,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 						objects.push_back(
 						    {.id = entt::to_integral(*leashTarget),
 						     .distance = glm::distance(at, position),
-						     .usefulness = Usefulness(learnt, desire, BeliefOf(registry, *leashTarget, creature))});
+						     .usefulness = ObjectUsefulness(registry, learnt, mind, desire, *leashTarget, creature)});
 					}
 				}
 				else
@@ -1209,7 +1265,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 						    .id = entt::to_integral(found.entity),
 						    .distance = found.distance,
 						    .held = held != nullptr && held->creature == creature,
-						    .usefulness = Usefulness(learnt, desire, BeliefOf(registry, found.entity, creature)),
+						    .usefulness = ObjectUsefulness(registry, learnt, mind, desire, found.entity, creature),
 						});
 					}
 				}
@@ -1310,6 +1366,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			if (plan.object.has_value() && registry.Valid(*plan.object))
 			{
 				situation.thingHeight = object_measures::Height(registry, *plan.object);
+				situation.thingRadius = object_measures::TwoDRadius(registry, *plan.object);
 			}
 			if (const auto home = ecs::creature_home::HomeOf(registry, creature))
 			{
@@ -1317,6 +1374,14 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			}
 			const auto point =
 			    plan.object.has_value() ? PointOf(registry, *plan.object).value_or(position) : plan.point.value_or(position);
+			// Sleeping by a thing, it looks for a clear place four times as wide as it is tall about it; one not under a
+			// script's control also wants nothing living there
+			if (executor->build == creature_plan_actions::Build::SleepByObject)
+			{
+				situation.clearArea =
+				    ClearAreaFor(registry, creature, point, creature_mind::k_SleepByObjectHeights * situation.height,
+				                 !situation.controlledByScript);
+			}
 			const auto actionIndex = creature_mind_tables::FindAction(*tables, plan.action);
 			const auto cast = creature_plan_actions::IsCast(*executor) && actionIndex.has_value()
 			                      ? CastInfoFor(creature, *actionIndex)
@@ -1392,6 +1457,15 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
 	return true;
+}
+
+void CreatureMindSystem::SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr; mind != nullptr)
+	{
+		mind->scriptFocus = focus;
+	}
 }
 
 void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::Situation& situation)

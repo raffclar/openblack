@@ -22,6 +22,7 @@
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
@@ -61,6 +62,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/TownAggression.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -75,20 +77,25 @@ using namespace openblack::ecs::components;
 namespace
 {
 /// A building that is built and whose town stands: one whose repair the town would see to
-bool IsBuiltBuildingOfATown(const Registry& registry, entt::entity object)
+bool IsAbodeOfATown(const Registry& registry, entt::entity object)
 {
 	const auto* abode = registry.TryGet<const Abode>(object);
 	if (abode == nullptr)
 	{
 		return false;
 	}
+	const auto& towns = registry.Context().towns;
+	const auto town = towns.find(abode->townId);
+	return town != towns.end() && registry.Valid(town->second) && registry.AllOf<Town>(town->second);
+}
+
+bool IsBuiltBuildingOfATown(const Registry& registry, entt::entity object)
+{
 	if (const auto* progress = registry.TryGet<const BuildProgress>(object); progress != nullptr && progress->built < 1.0f)
 	{
 		return false;
 	}
-	const auto& towns = registry.Context().towns;
-	const auto town = towns.find(abode->townId);
-	return town != towns.end() && registry.Valid(town->second) && registry.AllOf<Town>(town->second);
+	return IsAbodeOfATown(registry, object);
 }
 
 /// An object with no model stands this big
@@ -391,6 +398,11 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 	if (life.life < 1.0f && IsBuiltBuildingOfATown(registry, object))
 	{
 		registry.AssignOrReplace<RepairSite>(object, RepairSite {.startLife = physics::damage::RepairStartLife(life.life)});
+	}
+	// A town's abode left under its full life is given a site by its town, for its builders to mend it
+	if (life.life < 1.0f && IsAbodeOfATown(registry, object) && !registry.AllOf<BuildingSite>(object))
+	{
+		construction::OpenSite(object, 0.0f);
 	}
 	return life.life;
 }

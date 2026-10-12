@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/TempleFog.h"
 #include "3D/TempleLight.h"
 #include "3D/TempleMap.h"
 #include "Enums.h"
@@ -150,6 +151,8 @@ public:
 	[[nodiscard]] virtual const std::vector<TempleMapMarker>& GetMapMarkers() const = 0;
 	/// The temple's light this frame, which its rooms and what is in them are drawn in
 	[[nodiscard]] virtual const TempleLight& GetLight() const = 0;
+	/// The depth fog of the room the player is in this frame, in the temple's light
+	[[nodiscard]] virtual const TempleFog& GetFog() const = 0;
 	/// The belts and medals the creature's room shows, while it is drawn
 	[[nodiscard]] virtual const std::vector<TempleCaveTrophy>& GetCaveTrophies() const = 0;
 	/// The seeds of the creature's best-learnt miracles hovering in the creature's room, drawn while it is drawn
@@ -172,6 +175,10 @@ public:
 	virtual void RequestLeave() = 0;
 	/// Fades the screen to white over a second, as the temple does before the player leaves it for the island
 	virtual void FadeToWhite() = 0;
+	/// Covers the screen again as the player cuts a room's flight in short, fading away over a second
+	virtual void CoverSkippedFlight() = 0;
+	/// How much the temple's fade covers the screen: above 1 it is wholly covered for that much longer
+	[[nodiscard]] virtual float GetFadeAmount() const = 0;
 	/// Carries out what the frame asked of the temple, and moves on what goes on in its rooms by themselves
 	virtual void Update(std::chrono::microseconds dt) = 0;
 	/// How far the creature's room's waterfall has slid down it, the offset of its texture

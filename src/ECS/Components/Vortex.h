@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
+#include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
@@ -47,6 +48,18 @@ struct Vortex
 		return k_GroundTextures.at(type == VortexType::Volcano ? 1 : 0);
 	}
 
+	/// What a script tells a vortex that leads into the land: the town those who come out join (none: the nearest town
+	/// when it starts throwing), and where the animals that come out gather, as one flock kept within a distance and a
+	/// radius, and the flock the people who come out follow, if any. Until told, the animals gather at the vortex
+	struct Arrival
+	{
+		entt::entity town {entt::null};
+		glm::vec3 gatheringPlace {0.0f};
+		float flockDistance {0.0f};
+		float flockRadius {0.0f};
+		entt::entity flock {entt::null};
+	};
+
 	VortexType type {VortexType::In};
 	VortexStateType state {VortexStateType::FadeIn};
 	/// The game turn its state began on
@@ -64,6 +77,8 @@ struct Vortex
 	uint32_t afterLandEffect {0};
 	uint32_t objectMoverEffect {0};
 	uint32_t lightMapEffect {0};
+	/// Only a vortex that leads into the land keeps one
+	Arrival arrival;
 };
 
 } // namespace openblack::ecs::components

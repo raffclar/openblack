@@ -270,6 +270,19 @@ bool HelpTextSystem::RunText(bool singleLine, uint32_t text, int32_t withInterac
 	return _dialogue ? _dialogue->RunText(singleLine, text, withInteraction) : false;
 }
 
+bool HelpTextSystem::RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction)
+{
+	return _dialogue ? _dialogue->RunText(singleLine, text, withInteraction, number) : false;
+}
+
+void HelpTextSystem::TempText(bool singleLine, std::string_view words, int32_t withInteraction)
+{
+	if (_dialogue)
+	{
+		_dialogue->TempText(singleLine, words, withInteraction);
+	}
+}
+
 bool HelpTextSystem::IsTextRead() const
 {
 	// Without the help texts there is nothing to wait for

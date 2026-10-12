@@ -70,6 +70,7 @@ public:
 	[[nodiscard]] const std::vector<TempleCaveTrophy>& GetCaveTrophies() const override { return _caveTrophies; }
 	[[nodiscard]] const std::vector<TempleCaveSeed>& GetCaveSeeds() const override { return _caveSeeds; }
 	[[nodiscard]] const TempleLight& GetLight() const override { return _light; }
+	[[nodiscard]] const TempleFog& GetFog() const override { return _fog; }
 	[[nodiscard]] const std::vector<TemplePerson>& GetPeople() const override;
 	[[nodiscard]] size_t GetPeopleInside() const override { return _people != nullptr ? _people->GetCount() : 0; }
 	[[nodiscard]] float GetMapMarkerTurn() const override { return _mapMarkerTurn; }
@@ -77,6 +78,8 @@ public:
 	void Escape() override;
 	void RequestLeave() override { _leaveRequested = true; }
 	void FadeToWhite() override;
+	void CoverSkippedFlight() override;
+	[[nodiscard]] float GetFadeAmount() const override;
 	void Update(std::chrono::microseconds dt) override;
 	[[nodiscard]] glm::vec2 GetWaterfallSlide() const override;
 	void Activate() override { Activate(TempleRoom::Main); }
@@ -112,6 +115,7 @@ private:
 	std::vector<TempleMapMarker> _mapMarkers;
 	std::vector<TempleCaveTrophy> _caveTrophies;
 	TempleLight _light;
+	TempleFog _fog;
 	/// The creature's room's belts for how the creature fights, the medals for its miracles and the seeds of its best
 	/// learnt, at the points of the room's mesh, while the room is drawn
 	void UpdateCaveTrophies(float seconds);

@@ -19,11 +19,12 @@ using namespace openblack::creature_panel;
 
 namespace
 {
-/// The box sits a fortieth of the screen in from its left, and is a quarter of the screen wide
-constexpr float k_BoxInset = 1.0f / 40.0f;
-constexpr float k_BoxWidth = 1.0f / 4.0f;
+/// The box sits a fortieth of the screen in from its left (and from the top while following a creature), and is a
+/// quarter of the screen wide
+constexpr int k_BoxInsets = 40;
+constexpr int k_BoxWidths = 4;
 /// The rows are a sixteenth of the screen's height apart
-constexpr float k_RowsPerScreen = 16.0f;
+constexpr int k_RowsPerScreen = 16;
 } // namespace
 
 float creature_panel::Clamp01(float value)
@@ -160,42 +161,53 @@ std::u16string creature_panel::FormatValue(Row row, const Values& values, const 
 float creature_panel::LabelColumnWidth(std::span<const float> labelWidths, float size)
 {
 	const auto widest = labelWidths.empty() ? 0.0f : *std::ranges::max_element(labelWidths);
-	return widest + (size * 0.5f);
+	return widest + static_cast<float>(static_cast<int>(size) / 2);
+}
+
+int creature_panel::RowPitch(glm::u16vec2 resolution)
+{
+	return resolution.y / k_RowsPerScreen;
 }
 
 Layout creature_panel::Compute(glm::u16vec2 resolution, bool withReward, float labelColumnWidth)
 {
-	const auto screen = glm::vec2(resolution);
+	// Whole pixels throughout, from shares of the screen. The width is a 4:3 screen's as tall as this one (or this
+	// one's, when narrower): on a wider screen the panel keeps its 4:3 size against the left edge.
+	const int screenHeight = resolution.y;
+	const int width = std::min<int>(resolution.x, (screenHeight * 4) / 3);
+	const int size = RowPitch(resolution);
 	Layout layout;
-	layout.size = screen.y / k_RowsPerScreen;
-	layout.textSize = layout.size * 0.5f;
-	// Shares of a 4:3 screen's width, as tall as this one (of its own width when narrower): on a wider screen the panel
-	// keeps its 4:3 size against the left edge
-	const float width = std::min(screen.x, screen.y * 4.0f / 3.0f);
-	const float x0 = width * k_BoxInset;
-	const float x1 = (width * k_BoxWidth) + x0;
+	layout.size = static_cast<float>(size);
+	layout.textSize = static_cast<float>(size / 2);
+	const int x0 = width / k_BoxInsets;
+	const int x1 = (width / k_BoxWidths) + x0;
 	// With the reward a quarter of the way down; following a creature near the top, three quarters as high
-	const float y0 = withReward ? screen.y / 4.0f : screen.y * k_BoxInset;
-	const float height = withReward ? screen.y / 3.0f : 0.75f * (screen.y / 3.0f);
-	layout.box = {.min = {x0, y0}, .max = {x1, y0 + height}};
+	const int y0 = withReward ? screenHeight / 4 : screenHeight / k_BoxInsets;
+	const float heightShare = withReward ? 1.0f : 0.75f;
+	const int y1 = static_cast<int>((static_cast<float>(screenHeight / 3) * heightShare) + static_cast<float>(y0));
+	layout.box = {.min = {static_cast<float>(x0), static_cast<float>(y0)},
+	              .max = {static_cast<float>(x1), static_cast<float>(y1)}};
 
 	layout.rowCount = withReward ? k_RowCount : k_RowCount - 1;
-	const float gap = layout.size * 0.25f;
+	const auto gap = static_cast<float>(size / 4);
+	const auto left = static_cast<float>(static_cast<int>(static_cast<float>(x0) + labelColumnWidth));
+	const auto right = static_cast<float>(static_cast<int>(left + labelColumnWidth));
 	for (size_t i = 0; i < layout.rowCount; ++i)
 	{
 		const auto row = static_cast<Row>(i);
 		// A third of a row more before the reward
-		float y = y0 + (2.0f * layout.size / 3.0f) + (static_cast<float>(i) * layout.size);
+		int y = y0 + ((2 * size) / 3) + (static_cast<int>(i) * size);
 		if (row == Row::Reward)
 		{
-			y += layout.size / 3.0f;
+			y += size / 3;
 		}
-		const Rect bar {.min = {x0 + labelColumnWidth, y}, .max = {x0 + (2.0f * labelColumnWidth), y + layout.textSize}};
+		const auto top = static_cast<float>(y);
+		const Rect bar {.min = {left, top}, .max = {right, top + layout.textSize}};
 		layout.rows.at(i) = {
 		    .row = row,
 		    .bar = bar,
-		    .labelRight = {bar.min.x - gap, y},
-		    .valueLeft = {bar.max.x + gap, y},
+		    .labelRight = {bar.min.x - gap, top},
+		    .valueLeft = {bar.max.x + gap, top},
 		};
 	}
 	return layout;

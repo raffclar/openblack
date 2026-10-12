@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 
 #include "CameraModel.h"
+#include "CameraZoomer.h"
 #include "Common/ZoomInterpolator.h"
 #include "ECS/Components/Transform.h"
 #include "KeyboardMoveSpeed.h"
@@ -42,7 +43,12 @@ public:
 	explicit Camera(glm::vec3 focus = glm::vec3(1000.0f, 0.0f, 1000.0f));
 	virtual ~Camera();
 
+	/// The lens: the view across the width of a 4:3 screen, in radians, as the game sets it (70 degrees in the world)
+	[[nodiscard]] float GetLens() const { return _xFov; }
+	/// The view across the screen's width, in radians: the lens on 4:3 screens and narrower ones, wider on wider screens
 	[[nodiscard]] float GetHorizontalFieldOfView() const;
+	/// The view up and down the screen, in radians: a wider screen than 4:3 keeps the 4:3 screen's
+	[[nodiscard]] float GetVerticalFieldOfView() const;
 	[[nodiscard]] virtual glm::mat4 GetViewMatrix(Interpolation interpolation) const;
 	[[nodiscard]] const glm::mat4& GetProjectionMatrix() const;
 	[[nodiscard]] const glm::mat4& GetProjectionMatrix(Projection projection) const;
@@ -98,6 +104,14 @@ public:
 	Camera& SetAspect(float aspect);
 	[[nodiscard]] float GetAspect() const { return _aspect; }
 	Camera& SetProjectionMatrix(const glm::mat4& projection);
+
+	/// The lens (the field of view across the width, in radians) glides to a new one over some seconds, starting from
+	/// how it is changing now; under a thousandth of a second it changes at once
+	Camera& SetLens(float radians, float seconds);
+	/// The lens moves on by some seconds of its glide, and the perspective follows it
+	void UpdateLens(float seconds);
+	/// Where the lens is gliding to, or where it is when still
+	[[nodiscard]] float GetLensDestination() const { return _lens.Destination(); }
 
 	[[nodiscard]] glm::vec3 GetForward() const;
 	[[nodiscard]] glm::vec3 GetRight() const;
@@ -180,7 +194,9 @@ protected:
 	std::chrono::microseconds _interpolatorDuration = std::chrono::microseconds::zero();
 	std::chrono::microseconds _focusInterpolatorTime = std::chrono::microseconds::zero();
 	std::chrono::microseconds _focusInterpolatorDuration = std::chrono::microseconds::zero();
-	float _xFov = 0.0f; // TODO(#707): This should be a zoomer for animations
+	float _xFov = 0.0f;
+	/// The lens as it glides; the field of view follows it while it moves
+	camera::Zoomer _lens;
 	float _aspect = 1.0f;
 	float _nearClip = 1.0f;
 	glm::mat4 _projectionMatrix = glm::mat4 {1.0f};

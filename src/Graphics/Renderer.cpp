@@ -58,6 +58,7 @@
 #include "3D/OrientedText.h"
 #include "3D/Rain.h"
 #include "3D/SnowCover.h"
+#include "3D/StormClouds.h"
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
@@ -97,6 +98,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/Sprite.h"
+#include "ECS/Components/StormCloud.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -1197,16 +1199,40 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (has(MeshUniform::Haze))
 			{
-				// The distance haze is the world's, not the sky's or the temple's
+				// The distance haze is the world's, not the sky's or the temple's. The temple has a depth fog of its own.
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 				const bool hazed = desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple;
-				const auto u_haze = hazed ? _haze[0] : glm::vec4(0.0f);
-				setUniform(MeshUniform::Haze, &u_haze);
-				setUniform(MeshUniform::HazeColour, &_haze[1]);
+				if (inTemple && desc.templeFog)
+				{
+					const auto& fog = Locator::temple::value().GetFog();
+					const auto u_haze = fog.Uniform();
+					const glm::vec4 u_hazeColour {fog.colour, 0.0f};
+					setUniform(MeshUniform::Haze, &u_haze);
+					setUniform(MeshUniform::HazeColour, &u_hazeColour);
+				}
+				else
+				{
+					const auto u_haze = hazed ? _haze[0] : glm::vec4(0.0f);
+					setUniform(MeshUniform::Haze, &u_haze);
+					setUniform(MeshUniform::HazeColour, &_haze[1]);
+				}
+			}
+			if (has(MeshUniform::FogAt))
+			{
+				// A room's wall without a lightmap is fogged once, at its first vertex
+				glm::vec4 u_fogAt {0.0f};
+				if (desc.fogFromFirstVertex.has_value() && program != desc.lightmapProgram &&
+				    !subMesh.GetSurfacePoints().empty())
+				{
+					u_fogAt = glm::vec4(*desc.fogFromFirstVertex + subMesh.GetSurfacePoints().front().position, 1.0f);
+				}
+				setUniform(MeshUniform::FogAt, &u_fogAt);
 			}
 			if (has(MeshUniform::ModelLight))
 			{
-				setUniform(MeshUniform::ModelLight, &_modelLight);
+				// A mesh given a light of its own keeps the frame's ambient
+				const auto modelLight = desc.modelLight.has_value() ? glm::vec4(*desc.modelLight, _modelLight.w) : _modelLight;
+				setUniform(MeshUniform::ModelLight, &modelLight);
 			}
 			if (has(MeshUniform::GroundShadowInfo))
 			{
@@ -1535,6 +1561,9 @@ void Renderer::DrawTempleMapPass() const
 		const glm::vec4 u_block {static_cast<float>(i++), 0.0f, 0.0f, 0.0f};
 		terrainShader->SetUniformValue("u_block", &u_block);
 		block.BindVertices();
+		// The map shows every block in full
+		const auto& triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+		triangles.Bind(triangles.GetCount());
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 		// The textures stay bound from one block to the next
 		terrainShader->Submit(viewId, 0,
@@ -1776,8 +1805,11 @@ void Renderer::DrawCaveTrophies(const DrawSceneDesc& desc) const
 		// The colour multiplies what lights them: the medals come out the mid grey of the game's at 0x80. The game
 		// puts it in the temple's light.
 		const auto& light = Locator::temple::value().GetLight();
-		submitDesc.tint = glm::vec4(light.Colour(colour / 255.0f), 0.0f);
-		submitDesc.lightAdd = light.add;
+		// Each is fogged where it stands, its colour in the temple's light scaled in whole bytes before the light
+		// shades it, and the fog's colour added takes the place of the light's
+		submitDesc.objectLook =
+		    L3DMeshSubmitDesc::ObjectLook {.colour = glm::floor(light.Colour(colour / 255.0f) * 255.0f + 0.5f), .alpha = 1.0f};
+		submitDesc.templeFog = true;
 		DrawMesh(*meshes.Handle(trophy.mesh), submitDesc, std::numeric_limits<uint8_t>::max());
 	}
 }
@@ -1808,6 +1840,7 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, 
 	submitDesc.mirrored = bodyDesc.mirrored;
 	submitDesc.groundShadows = false;
 	submitDesc.sortDepth = bodyDesc.sortDepth;
+	submitDesc.modelLight = bodyDesc.modelLight;
 	auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
 	// Frozen, each piece takes the body's freeze: its light tinted towards the icy colour and a sheen of ice over it
 	if (freeze > 0.0f)
@@ -2570,6 +2603,8 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		fullLight = ((texel & 0xFFu) << 16u) | (texel & 0xFF00u) | ((texel >> 16u) & 0xFFu);
 	}
 	const auto cloudColour = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), fullLight);
+	// The storms' clouds are tinted from the land's colour this frame
+	const auto landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu;
 
 	// Looked up once for all the mists
 	const ProgramUniform s_diffuse {*program, "s_diffuse"};
@@ -2598,6 +2633,12 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 			const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
 			colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
 		}
+		// A storm's cloud takes the land's colour, darkened by the storm's shade, and is lit by its lightning
+		const auto* stormCloud = desc.entities.TryGet<ecs::components::StormCloud>(entity);
+		if (stormCloud != nullptr)
+		{
+			colour = (colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud->shade);
+		}
 		const auto alpha = static_cast<float>(colour >> 24u);
 		if (alpha <= 0.0f)
 		{
@@ -2617,7 +2658,10 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		                              static_cast<float>(colour & 0xFFu) / 255.0f, alpha / 255.0f};
 		// The others take the land's light where they stand and the haze, in the models' light
 		const bool landLit = !mist.shrinksEdgeOn && _landLightTexture.has_value();
-		const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, 1.0f, 0.0f, 0.0f};
+		// A storm's cloud is faded by the haze, which adds the flash of its lightning
+		const bool hazed = landLit || stormCloud != nullptr;
+		const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, 1.0f, stormCloud != nullptr ? 1.0f : 0.0f,
+		                             stormCloud != nullptr ? static_cast<float>(stormCloud->flashGrey) : 0.0f};
 		const glm::vec4 noHaze {0.0f};
 
 		for (const auto& subMesh : mesh->GetSubMeshes())
@@ -2632,7 +2676,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 				s_landColour.Set(8, GetLandColour());
 				u_islandExtent.Set(&islandExtent);
 				u_landLightUniform.Set(&u_landLight);
-				u_haze.Set(landLit ? &_haze[0] : &noHaze);
+				u_haze.Set(hazed ? &_haze[0] : &noHaze);
 				u_hazeColour.Set(&_haze[1]);
 				u_modelLight.Set(mist.shrinksEdgeOn ? &skyLight : &_modelLight);
 				u_mistUniform.Set(&u_mist);
@@ -3823,6 +3867,37 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 		    });
 	}
 
+	// A storm with clouds of its own darkens the land under it by its shade and strength, its shadow centred on it
+	const auto stormShadowId = entt::hashed_string("raw/sstorm");
+	if (detail_level::CloudShadows(Locator::config::value().detailLevel) && textures.Contains(stormShadowId.value()))
+	{
+		const auto shadow = textures.Handle(stormShadowId.value());
+		constexpr auto k_ShadowCells = static_cast<float>(storm_clouds::k_ShadowCells);
+		drawDesc.entities.Each<const ecs::components::Storm>([&](const ecs::components::Storm& storm) {
+			if (storm_clouds::Wanted(storm.cloudCount) == 0)
+			{
+				return;
+			}
+			const auto alpha = storm_clouds::ShadowAlpha(storm.cloudShade, storm.currentStrength);
+			if (!alpha.has_value())
+			{
+				return;
+			}
+			// A texel's middle falls on each cell's corner
+			const auto corner = storm_clouds::ShadowCorner({storm.currentPosition.x, storm.currentPosition.z}) /
+			                        LandIslandInterface::k_CellSize -
+			                    firstCell + 0.5f;
+			const float half = 0.5f / k_ShadowCells;
+			const glm::vec4 u_landShade {0.0f, static_cast<float>(*alpha), 0.0f, 0.0f};
+			shadeProgram.SetTextureSampler("s_texture", 0, *shadow);
+			shadeProgram.SetUniformValue("u_landShade", &u_landShade);
+			submitQuad(shadeView, shadeProgram, corner, corner + (k_ShadowCells - 1.0f), glm::vec2(half),
+			           glm::vec2(1.0f - half),
+			           BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
+			               BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN));
+		});
+	}
+
 	// The lights, once the land is dark enough: each stamps its image of brightness, a texel a cell from the cell its
 	// point falls in, up to the second to last cell of the map
 	const auto landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu;
@@ -4438,7 +4513,8 @@ glm::vec4 Renderer::GetModelLight() const
 			        : 0.0f;
 			const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 			light = model_light::FrameLight(transform->position, ground, Locator::camera::value().GetOrigin(),
-			                                Locator::skySystem::value().GetCurrentSkyType(), inTemple);
+			                                Locator::skySystem::value().GetCurrentSkyType(),
+			                                inTemple ? std::optional(Locator::temple::value().GetPosition()) : std::nullopt);
 		}
 	}
 	return model_light::Uniform(light);
@@ -4929,6 +5005,12 @@ void Renderer::SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const
 			_drawnCreatures.push_back({.entity = entity, .instance = instance});
 		}
 	}
+	// The copies of creatures drawn in poses of their own, as the creature in the temple's creature room
+	for (const auto& copy : Locator::rendereringSystem::value().GetContext().creatureCopyDraws)
+	{
+		_drawnCreatures.push_back(
+		    {.entity = copy.creature, .instance = copy.instance, .posedBy = copy.copy, .light = copy.light});
+	}
 	const auto cap = MaxCreaturesDrawn();
 	if (_drawnCreatures.size() <= cap || drawDesc.camera == nullptr)
 	{
@@ -4968,6 +5050,79 @@ size_t Renderer::MaxCreaturesDrawn()
 	}
 }
 
+void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto& config = Locator::config::value();
+	auto& frame = _landDetail;
+	frame.lines = config.landDetailLines.value_or(land_detail::For(config.detailLevel));
+	const bool coarseLand = detail_level::For(config.detailLevel).coarseLand;
+
+	const auto origin = drawDesc.camera->GetOrigin();
+	const auto forward = drawDesc.camera->GetForward();
+	frame.meshNear = land_detail::LineAcross(origin, forward, frame.lines.meshNear, 0.0f);
+	frame.meshFar = land_detail::LineAcross(origin, forward, frame.lines.meshFar, 0.0f);
+	frame.texture =
+	    land_detail::LineAcross(origin, forward, frame.lines.texture, std::min(origin.y, land_detail::k_TextureGroundCap));
+
+	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+	frame.blocks.resize(blocks.size());
+	frame.coarserSides.assign(blocks.size(), 0);
+	// The blocks by where they are on the map's 32 by 32 grid of blocks
+	constexpr int k_BlocksPerSide = 32;
+	std::array<int16_t, static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide)> grid {};
+	grid.fill(-1);
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto position = blocks[i].GetBlockPosition();
+		if (position.x >= 0 && position.x < k_BlocksPerSide && position.y >= 0 && position.y < k_BlocksPerSide)
+		{
+			grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y)) = static_cast<int16_t>(i);
+		}
+		constexpr float k_BlockSize = 160.0f;
+		const auto low = blocks[i].GetMapPosition();
+		const std::array<glm::vec2, 4> corners = {low, low + glm::vec2(0.0f, k_BlockSize), low + glm::vec2(k_BlockSize, 0.0f),
+		                                          low + glm::vec2(k_BlockSize)};
+		land_detail::CornerOffsets offsets;
+		for (size_t corner = 0; corner < corners.size(); ++corner)
+		{
+			offsets.meshNear.at(corner) = land_detail::Offset(frame.meshNear, corners.at(corner));
+			offsets.meshFar.at(corner) = land_detail::Offset(frame.meshFar, corners.at(corner));
+			offsets.texture.at(corner) = land_detail::Offset(frame.texture, corners.at(corner));
+		}
+		frame.blocks[i] = land_detail::Classify(offsets, frame.lines, coarseLand);
+	}
+	const auto meshAt = [&](glm::ivec2 position) -> std::optional<land_detail::Mesh> {
+		if (position.x < 0 || position.x >= k_BlocksPerSide || position.y < 0 || position.y >= k_BlocksPerSide)
+		{
+			return std::nullopt;
+		}
+		const auto index = grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y));
+		return index < 0 ? std::nullopt : std::optional(frame.blocks[static_cast<size_t>(index)].mesh);
+	};
+	const auto indexAt = [&](glm::ivec2 position) {
+		if (position.x < 0 || position.x >= k_BlocksPerSide || position.y < 0 || position.y >= k_BlocksPerSide)
+		{
+			return -1.0f;
+		}
+		return static_cast<float>(grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y)));
+	};
+	frame.neighbours.resize(blocks.size());
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto position = blocks[i].GetBlockPosition();
+		const std::array<std::optional<land_detail::Mesh>, 4> neighbours = {
+		    meshAt(position - glm::ivec2(1, 0)), meshAt(position - glm::ivec2(0, 1)), meshAt(position + glm::ivec2(0, 1)),
+		    meshAt(position + glm::ivec2(1, 0))};
+		frame.coarserSides[i] = land_detail::CoarserSides(frame.blocks[i].mesh, neighbours);
+		frame.neighbours[i] = {indexAt(position - glm::ivec2(1, 0)), indexAt(position - glm::ivec2(0, 1)),
+		                       indexAt(position + glm::ivec2(0, 1)), indexAt(position + glm::ivec2(1, 0))};
+	}
+}
+
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
 	SelectDrawnCreatures(drawDesc);
@@ -4988,6 +5143,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	DrawFootprintPass(drawDesc);
 	DrawLandAlphaPass(drawDesc);
 	UpdateLandLight();
+	UpdateLandDetail(drawDesc);
 	DrawObjectShadowPass(drawDesc);
 	DrawTempleMapPass();
 	DrawGroundShadowPass(drawDesc);
@@ -5180,11 +5336,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			constexpr auto k_SeaState =
 			    k_BgfxDefaultStateInvertedZ & ~(BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_MASK | BGFX_STATE_CULL_MASK);
 			bgfx::setState(k_SeaState);
-			auto diffuse = Locator::resources::value().GetTextures().Handle(ocean.GetDiffuseTexture());
-			auto alpha = Locator::resources::value().GetTextures().Handle(ocean.GetAlphaTexture());
-			waterShader->SetTextureSampler("s_diffuse", 0, *diffuse);
-			waterShader->SetTextureSampler("s_alpha", 1, *alpha);
-			waterShader->SetTextureSampler("s_reflection", 2, ocean.GetReflectionFramebuffer().GetColorAttachment());
+			auto texture = Locator::resources::value().GetTextures().Handle(ocean.GetTexture());
+			waterShader->SetTextureSampler("s_diffuse", 0, *texture);
+			waterShader->SetTextureSampler("s_reflection", 1, ocean.GetReflectionFramebuffer().GetColorAttachment());
 			SetSeaUniforms(*waterShader, *desc.camera);
 			// The sea is drawn in the sky's pass, which keeps its order, so that what is drawn before the land (a vortex's
 			// swirl) goes over the sea and under the land, as the game draws them in turn
@@ -5227,6 +5381,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			    forwardLength;
 			const glm::vec4 u_smallBumpLine {cameraOrigin.x, cameraOrigin.z, forwardAlongGround / forwardLength};
 			const glm::vec4 u_smallBump {lineDistance, 0.0f, 0.0f, 0.0f};
+			// The land's detail lines this frame, from the view's camera (see land_detail): xy the camera's x and z, zw the
+			// way it faces along the ground; then how far ahead the two mesh lines and the texture line lie, each 0 when
+			// the camera looks straight down, and the bands
+			const auto lineAhead = [](const land_detail::ViewLine& line) { return line.valid ? line.ahead : 0.0f; };
+			const glm::vec4 u_landLine {_landDetail.meshNear.camera, _landDetail.meshNear.forward};
+			const glm::vec4 u_landLineAhead {lineAhead(_landDetail.meshNear), lineAhead(_landDetail.meshFar),
+			                                 lineAhead(_landDetail.texture), _landDetail.meshNear.valid ? 1.0f : 0.0f};
+			const glm::vec4 u_landBands {_landDetail.lines.meshBand, _landDetail.lines.textureBand, 0.0f, 0.0f};
 
 			// The hand's light is in the land's own lighting, so the reflection shows it too
 
@@ -5276,6 +5438,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
 				terrainShader->SetUniformValue("u_smallBumpLine", &u_smallBumpLine);
 				terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
+				terrainShader->SetUniformValue("u_landLine", &u_landLine);
+				terrainShader->SetUniformValue("u_landLineAhead", &u_landLineAhead);
+				terrainShader->SetUniformValue("u_landBands", &u_landBands);
+				// Without pages of its own the land binds its block textures in their place, never read
+				const auto* coarsePages = island.GetCoarsePages();
+				terrainShader->SetTextureSampler("s15_coarsePages", 15,
+				                                 coarsePages != nullptr ? *coarsePages : island.GetBlockTextures());
 				terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
 				SetObjectShadowUniforms(*terrainShader);
 				terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
@@ -5296,6 +5465,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			const ProgramUniform blockPositionUniform {*terrainShader, "u_blockPositionAndSize"};
 			const ProgramUniform blockUniform {*terrainShader, "u_block"};
+			const ProgramUniform blockNeighboursUniform {*terrainShader, "u_blockNeighbours"};
+			const ProgramUniform coarsePageUniform {*terrainShader, "u_coarsePage"};
+			const bool coarseLand = detail_level::For(Locator::config::value().detailLevel).coarseLand;
 			const ProgramUniform vortexGroundUniform {*terrainShader, "u_vortexGround"};
 			const ProgramUniform groundShadowBlockUniform {*terrainShader, "u_groundShadowBlock"};
 			const bool groundShadowed = desc.viewId == RenderPass::Main;
@@ -5322,8 +5494,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const auto& block = blocks[index];
 				const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
 				blockPositionUniform.Set(&mapPositionAndSize);
-				const glm::vec4 u_block {static_cast<float>(index), 0.0f, 0.0f, 0.0f};
+				// The block's mesh and texture this frame: y how its corners morph, z its texture
+				const auto detail = index < _landDetail.blocks.size() ? _landDetail.blocks[index] : land_detail::BlockDetail {};
+				const uint8_t coarserSides = index < _landDetail.coarserSides.size() ? _landDetail.coarserSides[index] : 0;
+				const glm::vec4 u_block {static_cast<float>(index), static_cast<float>(detail.morph),
+				                         static_cast<float>(detail.texture), 0.0f};
 				blockUniform.Set(&u_block);
+				const glm::vec4 u_blockNeighbours =
+				    index < _landDetail.neighbours.size() ? _landDetail.neighbours[index] : glm::vec4(-1.0f);
+				blockNeighboursUniform.Set(&u_blockNeighbours);
+				// The coarse land draws every block from the landscape file's pages, where it has them
+				glm::vec4 u_coarsePage = island.GetCoarsePageSlot(index);
+				u_coarsePage.w = coarseLand && island.GetCoarsePages() != nullptr ? u_coarsePage.w : 0.0f;
+				coarsePageUniform.Set(&u_coarsePage);
 				glm::vec4 vortexGround {0.0f, 0.0f, 0.0f, -1.0f};
 				const GroundTextures* blockGround = sharedGround;
 				const auto mark = std::ranges::find(groundMarks | std::views::reverse, block.GetBlockPosition(),
@@ -5350,6 +5533,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const glm::vec4 u_groundShadowBlock {shadows, 0.0f, 0.0f};
 				groundShadowBlockUniform.Set(&u_groundShadowBlock);
 				block.BindVertices();
+				// The game leaves out open sea only from blocks wholly before the first line
+				const bool dropOpenSea = detail.mesh == land_detail::Mesh::Full && detail.morph == land_detail::Morph::None;
+				const auto& triangles = block.GetTriangles(detail.mesh, coarserSides, dropOpenSea);
+				triangles.Bind(triangles.GetCount());
 				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
 				terrainShader->Submit(static_cast<bgfx::ViewId>(desc.viewId), blockDepth(block), discard);
 			};
@@ -5425,6 +5612,25 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// The hand glows as a recognised gesture flashes
 				submitDesc.lightAdd =
 				    light.add + (meshId == ecs::components::Hand::k_MeshId ? HandGlowColour() : glm::vec3(0.0f));
+				// Everything in the temple but the hand fades with its depth fog. The walls are fogged with the light's
+				// colour still added; the worshippers have only the fog's added, which takes the light's place.
+				submitDesc.templeFog = templeLit;
+				submitDesc.fogFromFirstVertex = std::nullopt;
+				if (templeLit && placers.templeGrey.has_value())
+				{
+					submitDesc.lightAdd = glm::vec3(0.0f);
+				}
+				else if (templeLit)
+				{
+					submitDesc.fogFromFirstVertex = Locator::temple::value().GetPosition();
+				}
+				// The fog scales the colour in the temple's light in whole bytes, before the model light shades it
+				if (templeLit)
+				{
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {
+					    .colour = glm::floor(glm::vec3(submitDesc.tint) * 255.0f + 0.5f), .alpha = 1.0f};
+					submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+				}
 				submitDesc.landLightScale = meshId == ecs::components::Hand::k_MeshId ? 1.5f : 1.0f;
 				submitDesc.snow = !inTemple && meshId != ecs::components::Hand::k_MeshId;
 				// The villagers a script draws in high detail take no moving shadows, nor does the hand
@@ -5529,6 +5735,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// TODO(bwrsandman): choose the correct LOD
 				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				submitDesc.morphTargets = nullptr;
+				if (templeLit)
+				{
+					submitDesc.objectLook.reset();
+				}
 			};
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
@@ -5595,12 +5805,17 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			// The creatures, each posed and shaped as it is, then its eyes
 			drawingCreatures = true;
-			for (const auto& [entity, instance] : _drawnCreatures)
+			for (const auto& drawn : _drawnCreatures)
 			{
+				const auto entity = drawn.entity;
+				const auto instance = drawn.instance;
+				// A copy drawn elsewhere looks as its creature does, in a pose of its own
+				const bool copy = drawn.posedBy != entt::null;
+				const auto poser = copy ? drawn.posedBy : entity;
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
 				const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);
 				const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
-				const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(entity);
+				const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser);
 				if (mesh == nullptr || !meshManager.Contains(mesh->id))
 				{
 					continue;
@@ -5639,8 +5854,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					continue;
 				}
-				const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(entity);
+				// A copy shows none of its creature's frozen or fizzing look, and is lit by a light of its own
+				const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(poser);
 				const float fizz = spells != nullptr ? spells->fizz : 0.0f;
+				submitDesc.modelLight = drawn.light;
 				if (desc.viewId == RenderPass::Reflection)
 				{
 					// The sea reflects the body alone, without its eyes or hair, whole, and only until it has fizzed a
@@ -5649,6 +5866,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					{
 						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
 					}
+					submitDesc.modelLight.reset();
 					continue;
 				}
 				uint32_t eyesSortDepth = 0;
@@ -5683,9 +5901,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
 				}
 				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
-				DrawCreatureEyes(desc, entity, submitDesc, fizz, freeze, eyesSortDepth);
+				DrawCreatureEyes(desc, poser, submitDesc, fizz, freeze, eyesSortDepth);
+				submitDesc.modelLight.reset();
 				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
-				if (creature_fizz_look::HairShown(fizz, freeze))
+				// TODO(raffclar): a copy's hair isn't drawn: the creature's hangs from the creature where it is in the world
+				if (!copy && creature_fizz_look::HairShown(fizz, freeze))
 				{
 					DrawCreatureHair(desc, entity);
 				}
@@ -5975,6 +6195,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawHandMiracleBands(desc);
 			DrawTribalPower(desc);
 			DrawLightColumns(desc);
+			DrawScrollBeams(desc);
 			DrawLeashes(desc);
 			DrawWaterRings(desc);
 			DrawRain(desc);

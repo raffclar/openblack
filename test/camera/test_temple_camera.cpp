@@ -20,6 +20,7 @@
 #include "3D/CameraPath.h"
 #include "Camera/Camera.h"
 #include "Camera/TempleCameraModel.h"
+#include "Camera/TemplePress.h"
 #include "Common/Zoomer.h"
 
 using namespace openblack;
@@ -227,4 +228,31 @@ TEST(TempleCamera, CastsAgainstEachRoomsOwnWalls)
 	EXPECT_NEAR(hit->distance, 37.0f, 1e-3f);
 	EXPECT_NEAR(hit->point.x, room.centre.x + 37.0f, 1e-3f);
 	EXPECT_NEAR(hit->height, 10.0f, 1e-3f);
+}
+
+TEST(TemplePress, APressHeldFromOutsideIsNoPressUntilLetGo)
+{
+	using temple_press::Button;
+	temple_press::HeldFromOutside held;
+	// Still holding the click that took the player in, the temple hears nothing
+	EXPECT_EQ(held.Filter(Button::Held), Button::None);
+	EXPECT_EQ(held.Filter(Button::Held), Button::None);
+	// Once let go, the next press is a press
+	EXPECT_EQ(held.Filter(Button::None), Button::None);
+	EXPECT_EQ(held.Filter(Button::Held), Button::Held);
+	// A double click always comes through
+	temple_press::HeldFromOutside fresh;
+	EXPECT_EQ(fresh.Filter(Button::DoubleClick), Button::DoubleClick);
+}
+
+TEST(TemplePress, TheFadeHoldsPressesBackForTheFirstSecond)
+{
+	using temple_press::Button;
+	// Coming in, the fade falls from 1.2 at a whole a second: no press cuts the flight short until it is down to 0.2
+	EXPECT_EQ(temple_press::UnderFade(Button::Held, 1.2f), Button::None);
+	EXPECT_EQ(temple_press::UnderFade(Button::Held, 0.21f), Button::None);
+	EXPECT_EQ(temple_press::UnderFade(Button::Held, 0.2f), Button::Held);
+	EXPECT_EQ(temple_press::UnderFade(Button::Held, 0.0f), Button::Held);
+	EXPECT_EQ(temple_press::UnderFade(Button::DoubleClick, 1.2f), Button::DoubleClick);
+	EXPECT_EQ(temple_press::UnderFade(Button::None, 0.0f), Button::None);
 }

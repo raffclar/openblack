@@ -48,6 +48,9 @@ namespace openblack::ecs::posed_model
 /// meshes, and a model following the land moved up and down with it
 void Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
            const glm::mat4& model, std::vector<glm::vec3>& corners);
+/// The same, posed by other bones than the model's own, as a copy of a creature drawn elsewhere in a pose of its own
+void Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
+           const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners);
 
 /// Whether the submesh is drawn at the level of detail and stage the model is drawn at: the nearest level of detail and
 /// the first stage, as openblack draws every model

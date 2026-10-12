@@ -174,8 +174,9 @@ private:
 /// movement in pixels would give on the ring of the original's default screen
 [[nodiscard]] float ReferenceTurnScale(glm::vec2 from, glm::vec2 to, glm::ivec2 screenSize, int viewHeight);
 
-/// How far a drag down the screen tilts the camera up, in radians, through the camera's field of view across
-[[nodiscard]] float PitchStep(int deltaY, int screenHeight, float horizontalFieldOfView);
+/// How far a drag down the screen tilts the camera up, in radians, through the camera's lens: its field of view across
+/// a 4:3 screen
+[[nodiscard]] float PitchStep(int deltaY, int screenHeight, float lens);
 
 /// Both buttons zoom the camera as the mouse moves up and down, and turn it once it has moved far enough across
 class TwoButtonTurn

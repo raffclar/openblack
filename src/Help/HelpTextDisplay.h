@@ -75,6 +75,10 @@ struct TextFrame
 	std::vector<int> controlIcons;
 };
 
+/// The number a text carries as its $D code writes it, three decimals ("45.500"), or as its $P code does, with a percent
+/// sign after ("45.500%"). A negative number keeps its sign; there are no thousands separators.
+[[nodiscard]] std::u16string FormatTextNumber(float number, bool percent);
+
 /// The width of a text in a font at that font size
 using WidthFn = std::function<float(TextFont, std::u16string_view, float size)>;
 

@@ -93,7 +93,8 @@ public:
 	/// Every source of a type in the creature's desires goes up or down by an amount
 	virtual void ChangeDesireSource(entt::entity /*creature*/, uint32_t /*type*/, float /*amount*/) {}
 	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through
-	/// what it plays; a face can be pulled with it. Returns whether it played.
+	/// what it plays; a face can be pulled with it, which is pulled even when the action can't play. Returns whether it
+	/// played.
 	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
 	                         float interruptsAfter) = 0;
 
@@ -179,6 +180,9 @@ public:
 	/// a script's control it chooses nothing for itself, standing about once the agenda is over, until the script lets
 	/// it go. Returns whether it could.
 	virtual bool CarryOutForScript(entt::entity /*creature*/, std::vector<creature_mind::Step> /*agenda*/) { return false; }
+	/// A script has the creature keep its head turned to a thing or a point until it lets it go (nothing lets it go); it
+	/// lets go by itself once the thing is gone or the script lets the creature go
+	virtual void SetScriptFocus(entt::entity /*creature*/, std::optional<creature_mind::Gaze> /*focus*/) {}
 	/// A script forces an action of the game's table on the creature, by its row, done to a thing and with another, as
 	/// it stages a scene: the script takes control of it, and it carries the action out as an order from its player.
 	/// Returns whether the action could be carried out.
@@ -200,6 +204,9 @@ public:
 	virtual void ClearOnlyDesire(entt::entity /*creature*/) {}
 	/// The creature is told to point out the lesson highlight about it, if there is one; whether one was found
 	virtual bool PointOutHighlight(entt::entity /*creature*/) { return false; }
+	/// The story moves the creature to a stage of growing up: its desires become the ones its stages so far bring, none
+	/// stays held back, and it drops the plan it was carrying out
+	virtual void MoveToStage(entt::entity /*creature*/, uint32_t /*stage*/) {}
 };
 
 } // namespace openblack::ecs::systems
