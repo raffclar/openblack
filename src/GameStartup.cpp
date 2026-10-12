@@ -180,7 +180,9 @@ bool Game::AskForNewPlayer()
 	SDL_StopTextInput();
 	if (const auto profile = profiles.GetCurrentProfile(); profile.has_value())
 	{
-		_interface->SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName), profile->symbol);
+		_interface->SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName), profile->symbol,
+		                             profile->settings);
+		RefreshPlayersPage();
 	}
 	return !_quitRequested;
 }

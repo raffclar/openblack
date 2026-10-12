@@ -121,8 +121,10 @@ bool MayHearGuidance(PlayerNames here, GuidanceSound sound, const villager_death
 		heard = &registry.Assign<GuidanceHeard>(*player);
 	}
 	// The help level the player chose, none while the scripts keep the help system off
+	constexpr uint32_t k_DefaultHelpLevel = 3;
 	const bool helpOn = !Locator::chlapi::has_value() || Locator::chlapi::value().IsHelpSystemOn();
-	const auto helpLevel = helpOn ? chlapi::CHLApi::k_PlayerHelpLevel : 0u;
+	const auto playerLevel = Locator::chlapi::has_value() ? Locator::chlapi::value().GetPlayerHelpLevel() : k_DefaultHelpLevel;
+	const auto helpLevel = helpOn ? playerLevel : 0u;
 	const auto& context = registry.Context();
 	const bool firstLand = context.mapScriptGlobals.landNumber == 1 && !context.skirmish;
 	auto& random = Locator::gameRandom::value();

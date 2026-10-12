@@ -49,12 +49,18 @@ public:
 	[[nodiscard]] std::optional<std::string> CreatureFile() const final;
 	[[nodiscard]] player_profiles::NameCheck CheckNewName(std::u16string_view name) const final;
 	void CreateProfile(std::u16string_view name, int symbol) final;
+	[[nodiscard]] const player_profiles::Profiles& GetProfiles() const final { return _profiles; }
+	bool SelectProfile(std::u16string_view name) final;
+	bool DeleteProfile(std::u16string_view name) final;
+	void EditCurrentProfile(std::u16string_view creatureName, int symbol) final;
+	void SetCurrentSettings(const player_profiles::Settings& settings) final;
 
 	/// The computer's own: its account's name, and the milliseconds since it started
 	[[nodiscard]] static Machine ThisMachine();
 
 private:
 	void Save() const;
+	[[nodiscard]] player_profiles::Profile* CurrentProfile();
 
 	player_profiles::Store _store;
 	Machine _machine;
