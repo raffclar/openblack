@@ -12,6 +12,7 @@
 #include "TempleDestructionSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -19,10 +20,13 @@
 #include <entt/core/hashed_string.hpp>
 
 #include "3D/ModelSurface.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageLight.h"
 #include "ECS/Registry.h"
 #include "GameTempleDestructionWorld.h"
+#include "Physics/TempleHeart.h"
 #include "Temple/TempleDestruction.h"
 
 using namespace openblack;
@@ -35,6 +39,13 @@ namespace
 /// The sound that loops over the temple until the explosion, and the explosion's
 constexpr entt::hashed_string k_LoopSound = entt::hashed_string("InGame.sad/171");
 constexpr entt::hashed_string k_ExplosionSound = entt::hashed_string("InGame.sad/168");
+/// A hurt heart's five beam sounds, in the order the samples 206 to 210 go
+constexpr std::array<entt::hashed_string, 5> k_DamageSounds {
+    entt::hashed_string("InGame.sad/206"), entt::hashed_string("InGame.sad/207"), entt::hashed_string("InGame.sad/208"),
+    entt::hashed_string("InGame.sad/209"), entt::hashed_string("InGame.sad/210"),
+};
+static_assert(k_DamageSounds.size() == physics::temple_heart::k_BeamSounds);
+constexpr uint32_t k_FirstDamageSample = 206;
 /// The script the game starts when the local player's temple is destroyed
 constexpr std::string_view k_GameOverScript = "GameOver";
 } // namespace
@@ -65,7 +76,57 @@ void TempleDestructionSystem::RemoveTemple(entt::entity temple)
 	{
 		_world->Remove(entrance);
 	}
+	// Its two entrance lanterns go with it, with their village lights and the lights' flames and glow
+	std::vector<std::pair<entt::entity, entt::entity>> lanterns;
+	registry.Each<const TempleLantern>([temple, &lanterns](entt::entity entity, const TempleLantern& lantern) {
+		if (lantern.temple == temple)
+		{
+			lanterns.emplace_back(entity, lantern.light);
+		}
+	});
+	for (const auto& [lantern, light] : lanterns)
+	{
+		std::vector<entt::entity> sprites;
+		registry.Each<const VillageLightSprite>([light = light, &sprites](entt::entity entity, const VillageLightSprite& sprite) {
+			if (sprite.light == light)
+			{
+				sprites.push_back(entity);
+			}
+		});
+		for (const auto sprite : sprites)
+		{
+			_world->Remove(sprite);
+		}
+		_world->Remove(light);
+		_world->Remove(lantern);
+	}
 	_world->Remove(temple);
+}
+
+void TempleDestructionSystem::DamageEffect(entt::entity entity, Temple& temple)
+{
+	namespace temple_heart = physics::temple_heart;
+	auto& registry = *_world->Entities();
+	// Only a heart with some life lost does it; one with none left does it at its fiercest
+	const auto* objectLife = registry.TryGet<const ObjectLife>(entity);
+	const auto life = temple_heart::DamageEffectLife(objectLife != nullptr ? objectLife->life : 1.0f);
+	if (!life.has_value())
+	{
+		return;
+	}
+	const auto interval = temple_heart::DamageInterval(_world->MillisecondsPerTurn(), *life);
+	if (!temple_heart::DamageBeamDue(temple.beamTurn, _world->Turn(), interval))
+	{
+		return;
+	}
+	// TODO(temple-dressing): the beam itself, plasma from a point of the heart's model, isn't made yet; only its sound
+	if (temple_heart::DamageBeamSounds(*life))
+	{
+		// The sound takes the next of the five whether or not it can be heard
+		const auto sample = temple_heart::NextDamageSample(registry.Context().nextDamageBeamSound);
+		_world->PlayOnce(k_DamageSounds.at(sample - k_FirstDamageSample).value(),
+		                 registry.Get<const Transform>(entity).position, entity);
+	}
 }
 
 void TempleDestructionSystem::Beam(entt::entity entity, Temple& temple, glm::vec3 position)
@@ -262,6 +323,16 @@ void TempleDestructionSystem::ProcessTurn()
 		if (registry->Valid(entity))
 		{
 			Step(entity, registry->Get<Temple>(entity));
+		}
+	}
+	// Then every heart that is hurt beams, its destruction under way or not
+	std::vector<entt::entity> temples;
+	registry->Each<const Temple>([&temples](entt::entity entity, const Temple&) { temples.push_back(entity); });
+	for (const auto entity : temples)
+	{
+		if (registry->Valid(entity))
+		{
+			DamageEffect(entity, registry->Get<Temple>(entity));
 		}
 	}
 }

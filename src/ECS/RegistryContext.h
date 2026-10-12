@@ -48,6 +48,8 @@ struct RegistryContext
 	bool skirmish {false};
 	/// The temple hearts' beam sounds go round in turn: the next of the five a beam plays
 	uint32_t nextHeartBeamSound {0};
+	/// The same five, for the beams of a hurt heart, which keep their own turn
+	uint32_t nextDamageBeamSound {0};
 	/// The order towns are gained by their players in, the next to be given
 	uint32_t nextTownGained {0};
 	/// Where creatures may go on the land, worked out once the land is there and first asked for

@@ -46,6 +46,8 @@ private:
 	void Step(entt::entity entity, components::Temple& temple);
 	/// The beams across the heart while it beams, fired from a spot visual at its place
 	void Beam(entt::entity entity, components::Temple& temple, glm::vec3 position);
+	/// A hurt heart's beams, with the sound they sound, every turn it is due
+	void DamageEffect(entt::entity entity, components::Temple& temple);
 	/// The temple goes, with its way in
 	void RemoveTemple(entt::entity temple);
 
