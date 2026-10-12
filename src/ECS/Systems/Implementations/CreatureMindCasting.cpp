@@ -27,6 +27,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "Creature/CreatureCastMoves.h"
+#include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureRoute.h"
@@ -60,6 +61,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -406,6 +408,11 @@ bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt:
 		auto* casting = registry.TryGet<CreatureCasting>(creature);
 		(casting != nullptr ? *casting : registry.Assign<CreatureCasting>(creature)).fizzle =
 		    CreatureCasting::Fizzle {.target = target, .magicType = type};
+		if (Locator::creatureHelpSystem::has_value())
+		{
+			Locator::creatureHelpSystem::value().Raise(
+			    creature, {.kind = creature_help::Kind::MessedUpAction, .parameter = creature_help::k_FumbledMiracle});
+		}
 		++mind->learnt->knowledge.miraclesSeen[magicType].count;
 		return false;
 	}

@@ -50,6 +50,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -70,6 +71,7 @@
 #include "VillagerBreeding.h"
 #include "VillagerBuild.h"
 #include "VillagerDiscipleWork.h"
+#include "VillagerFarmer.h"
 #include "VillagerFisherman.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
@@ -512,6 +514,27 @@ std::optional<glm::vec2> WaitPosition(entt::entity villager, std::optional<entt:
 	return glm::xz(PositionOf(*town));
 }
 
+/// A farmer goes to its town's best field; if that field has grown and it still carries a load of food, it takes the
+/// load to the store first
+bool FarmerSetsAboutWork(LivingAction& action)
+{
+	const auto best = villager_farmer::FindBestField(action);
+	if (!best.has_value())
+	{
+		return false;
+	}
+	const auto& person = Entities().Get<const Villager>(EntityOf(action));
+	const auto& info =
+	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person.tribe, person.number)));
+	if (Locator::fieldSystem::value().GetActivity(best->field) == field_crop::Activity::Grown &&
+	    static_cast<int32_t>(person.foodHeld) > static_cast<int32_t>(static_cast<int16_t>(info.minFoodToShowGraphic)))
+	{
+		SetTopState(action, VillagerStates::GotoStoragePitForDropOff);
+		return true;
+	}
+	return villager_farmer::VillagerBecomesFarmer(action, best->field) == 1;
+}
+
 /// The disciple's own work, when there is some to be had now
 bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 {
@@ -543,6 +566,8 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 		return villager_forester::CheckSatisfyWoodDesire(action) == 1;
 	case Fisherman:
 		return villager_fisherman::FishermanLookForWater(action) == 1;
+	case Farmer:
+		return FarmerSetsAboutWork(action);
 	case Breeder:
 		return villager_breeding::SetupBreederDisciple(action);
 	case Craftsman:
@@ -552,8 +577,7 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 	case Worship:
 		SetTopState(action, VillagerStates::GotoWorshipSiteForWorship);
 		return true;
-	// TODO(disciples): farming isn't in openblack yet, so a farmer finds none and waits by the town centre. A missionary
-	// has no work of its own once preaching: it lives as a villager of its new town.
+	// A missionary has no work of its own once preaching: it lives as a villager of its new town.
 	default:
 		return false;
 	}

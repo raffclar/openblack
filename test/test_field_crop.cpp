@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -141,6 +142,28 @@ TEST(FieldCrop, SinksAtMostEightyPercent)
 	EXPECT_FLOAT_EQ(field_crop::Sink(0.0f), 0.0f);
 }
 
+TEST(FieldCrop, ARipeFieldSinksAsItsFarmersDigItUp)
+{
+	// Land 1's fields: ripe at 1200, 350 food when full; a farmer digs 150 at a time
+	const field_crop::Type type {.ageGrowth = 80.0f, .ageRipe = 1200.0f, .timesToSow = 30.0f, .totalFood = 350.0f};
+	const auto drawnHeight = [&type](float food) -> std::optional<float> {
+		const auto look = field_crop::LookOf({.timesSown = 30, .age = 1200.0f, .food = food}, type, 25);
+		if (!look.has_value())
+		{
+			return std::nullopt;
+		}
+		return field_crop::Sink(look->height);
+	};
+	// Full, it stands at its whole height
+	EXPECT_FLOAT_EQ(drawnHeight(350.0f).value_or(1.0f), 0.0f);
+	// After one load more than half of it still stands out of the ground
+	EXPECT_NEAR(drawnHeight(200.0f).value_or(1.0f), -0.4286f, 1e-4f);
+	// After two loads it is down to its lowest, only the tips of its stalks showing
+	EXPECT_FLOAT_EQ(drawnHeight(50.0f).value_or(1.0f), -0.8f);
+	// With less than a handful left it is not drawn at all
+	EXPECT_FALSE(drawnHeight(24.0f).has_value());
+}
+
 TEST(FieldCrop, AlignmentIsClamped)
 {
 	EXPECT_FLOAT_EQ(field_crop::ClampAlignment(3.0f), 1.0f);
@@ -153,19 +176,57 @@ TEST(FieldCrop, TheHandTakesMoreFromAnUnripeCropAndEmptyingARipeOneUnsowsIt)
 	const field_crop::Type type {.ageGrowth = 10.0f, .ageRipe = 20.0f, .timesToSow = 1.0f};
 	field_crop::Crop unripe {.timesSown = 1, .age = 15.0f, .food = 100.0f};
 	// Twenty taken, and half as much again lost
-	EXPECT_FALSE(field_crop::RemoveFood(unripe, type, 0.5f, 20.0f));
+	auto harvest = field_crop::RemoveFood(unripe, type, 0.5f, 20.0f);
+	EXPECT_FALSE(harvest.emptied);
+	EXPECT_EQ(harvest.given, 20u);
 	EXPECT_FLOAT_EQ(unripe.food, 70.0f);
-	EXPECT_TRUE(field_crop::RemoveFood(unripe, type, 0.5f, 100.0f));
+	// Emptying an unripe crop gives only the share it loses
+	harvest = field_crop::RemoveFood(unripe, type, 0.5f, 100.0f);
+	EXPECT_TRUE(harvest.emptied);
+	EXPECT_EQ(harvest.given, 50u);
 	EXPECT_FLOAT_EQ(unripe.food, 0.0f);
 	EXPECT_EQ(unripe.timesSown, 1);
 
-	field_crop::Crop ripe {.timesSown = 1, .age = 25.0f, .food = 30.0f};
-	EXPECT_TRUE(field_crop::RemoveFood(ripe, type, 0.5f, 30.0f));
+	// Emptying a ripe crop gives all it had
+	field_crop::Crop ripe {.timesSown = 1, .age = 25.0f, .food = 30.5f};
+	harvest = field_crop::RemoveFood(ripe, type, 0.5f, 150.0f);
+	EXPECT_TRUE(harvest.emptied);
+	EXPECT_EQ(harvest.given, 30u);
 	EXPECT_EQ(ripe.timesSown, 0);
 	EXPECT_FLOAT_EQ(ripe.age, 0.0f);
 
 	// An unsown field gives nothing
 	field_crop::Crop unsown {.timesSown = 0, .age = 25.0f, .food = 30.0f};
-	EXPECT_FALSE(field_crop::RemoveFood(unsown, type, 0.5f, 10.0f));
+	harvest = field_crop::RemoveFood(unsown, type, 0.5f, 10.0f);
+	EXPECT_FALSE(harvest.emptied);
+	EXPECT_EQ(harvest.given, 0u);
 	EXPECT_FLOAT_EQ(unsown.food, 30.0f);
+}
+
+TEST(FieldCrop, AFarmerTakesThreeLoadsFromAFullRipeField)
+{
+	const field_crop::Type type {.ageGrowth = 80.0f, .ageRipe = 1200.0f, .timesToSow = 30.0f};
+	field_crop::Crop crop {.timesSown = 30, .age = 1200.0f, .food = 350.0f};
+	EXPECT_EQ(field_crop::RemoveFood(crop, type, 0.2f, 150.0f).given, 150u);
+	EXPECT_EQ(field_crop::RemoveFood(crop, type, 0.2f, 150.0f).given, 150u);
+	const auto last = field_crop::RemoveFood(crop, type, 0.2f, 150.0f);
+	EXPECT_EQ(last.given, 50u);
+	EXPECT_TRUE(last.emptied);
+	EXPECT_EQ(field_crop::ActivityOf(crop, type), field_crop::Activity::Sowing);
+}
+
+TEST(FieldCrop, AFieldIsSownThirtyTimesThenGrowsUntilItIsGrown)
+{
+	const field_crop::Type type {.ageGrowth = 80.0f, .ageRipe = 1200.0f, .timesToSow = 30.0f};
+	field_crop::Crop crop;
+	EXPECT_EQ(field_crop::ActivityOf(crop, type), field_crop::Activity::Sowing);
+	for (int i = 0; i < 30; ++i)
+	{
+		EXPECT_TRUE(field_crop::PlantCrop(crop, type));
+	}
+	EXPECT_FALSE(field_crop::PlantCrop(crop, type));
+	EXPECT_EQ(crop.timesSown, 30);
+	EXPECT_EQ(field_crop::ActivityOf(crop, type), field_crop::Activity::Growing);
+	crop.age = 80.0f;
+	EXPECT_EQ(field_crop::ActivityOf(crop, type), field_crop::Activity::Grown);
 }

@@ -67,13 +67,19 @@ public:
 	/// that resource. A villager says none, whatever it carries.
 	[[nodiscard]] virtual uint32_t GetResource(entt::entity object, ResourceType type) const = 0;
 	/// A thing takes an amount of a resource as it takes it from a script or a villager, with nobody's giving counted:
-	/// a store into its piles, a pile into its store or itself, a building going up into its site (a temple's site into
-	/// the pile nearest a place, making its piles if it has none), a villager into its load. What it took, which for a
-	/// villager is always none.
+	/// a store into its piles, a pile into its store or itself, a building going up into its newest site, while one takes it (a
+	/// temple's site into the pile nearest a place, making its piles if it has none), a villager into its load. What it took,
+	/// which for a villager is always none.
 	virtual uint32_t AddResource(entt::entity object, ResourceType type, uint32_t amount, std::optional<glm::vec3> at) = 0;
 	/// A thing gives up to an amount of a resource, with nobody's taking counted: a store from its piles, a pile from its
-	/// store or itself, a building going up from its site's piles in turn. What it gave.
+	/// store or itself, a building going up from its newest site's piles in turn. What it gave.
 	virtual uint32_t RemoveResource(entt::entity object, ResourceType type, uint32_t amount) = 0;
+	/// A town's site at a building takes wood its builders bring, as the building takes wood brought to it but onto the
+	/// town's own site rather than the newest. What it took, none if the town has no site there.
+	virtual uint32_t AddToTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount,
+	                                std::optional<glm::vec3> at) = 0;
+	/// A town's site at a building gives up to an amount of wood to its builders. What it gave.
+	virtual uint32_t RemoveFromTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount) = 0;
 };
 
 } // namespace openblack::ecs::systems

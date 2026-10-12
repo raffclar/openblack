@@ -38,6 +38,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Camera/TempleCameraModel.h"
+#include "Camera/TemplePress.h"
 #include "Common/EventManager.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureCave.h"
@@ -499,6 +500,20 @@ void TempleInterior::FadeToWhite()
 	{
 		_interface->GetScreenFade().FadeThrough(glm::vec3(1.0f));
 	}
+}
+
+void TempleInterior::CoverSkippedFlight()
+{
+	// The cut is covered from a whole screen, in whatever colour is still fading
+	if (_interface != nullptr)
+	{
+		_interface->GetScreenFade().FadeFrom(temple_press::k_SkippedFlightFade);
+	}
+}
+
+float TempleInterior::GetFadeAmount() const
+{
+	return _interface != nullptr ? _interface->GetScreenFade().GetAmount() : 0.0f;
 }
 
 void TempleInterior::FadeIntoRoom()
@@ -1071,11 +1086,46 @@ void TempleInterior::Deactivate()
 	{
 		return;
 	}
+	Close();
+	// Leaving the temple goes out to the island all white, which fades over a second
+	if (_interface != nullptr)
+	{
+		_interface->GetScreenFade().FadeFrom(1.0f, glm::vec3(1.0f));
+	}
+	ApplyLens();
+	// The help running stops as the player leaves
+	temple_help::GameScripts scripts;
+	temple_help::Leave(scripts);
+	auto& camera = Locator::camera::value();
+	camera.SetOrigin(_playerPositionOutside);
+	camera.SetFocus(_playerPositionOutside + glm::quat(_playerRotationOutside) * glm::vec3(0.0f, 0.0f, 1.0f));
+	if (_leaveTo.has_value())
+	{
+		camera.SetOrigin(_leaveTo->first);
+		camera.SetFocus(_leaveTo->second);
+	}
+	_leaveTo.reset();
+}
+
+void TempleInterior::CloseForNewLand()
+{
+	if (!_active)
+	{
+		return;
+	}
+	// The new land places the camera and starts its own help, so nothing of the walk out is wanted
+	Close();
+	_leaveTo.reset();
+}
+
+void TempleInterior::Close()
+{
 	if (_soundsOfCreatureCave)
 	{
 		StopCreatureCaveSounds();
 		_soundsOfCreatureCave = false;
 	}
+	// The creature's room's flames, smoke and mist are entities of the land's registry, so they go before the land
 	_creatureCaveEffects.reset();
 	_people.reset();
 	_scrolls.reset();
@@ -1115,24 +1165,7 @@ void TempleInterior::Deactivate()
 	_caveTrophies.clear();
 	// The seeds by the plinths go as the player leaves, and the room works out the miracles afresh on the next visit
 	ClearCaveSeeds();
-	// Leaving the temple goes out to the island all white, which fades over a second
-	if (_interface != nullptr)
-	{
-		_interface->GetScreenFade().FadeFrom(1.0f, glm::vec3(1.0f));
-	}
-	ApplyLens();
-	// The help running stops as the player leaves
 	_enteredRoom.reset();
-	temple_help::GameScripts scripts;
-	temple_help::Leave(scripts);
-	camera.SetOrigin(_playerPositionOutside);
-	camera.SetFocus(_playerPositionOutside + glm::quat(_playerRotationOutside) * glm::vec3(0.0f, 0.0f, 1.0f));
-	if (_leaveTo.has_value())
-	{
-		camera.SetOrigin(_leaveTo->first);
-		camera.SetFocus(_leaveTo->second);
-		_leaveTo.reset();
-	}
 	if (Locator::cameraPathSystem::value().IsPathing())
 	{
 		Locator::cameraPathSystem::value().Stop();

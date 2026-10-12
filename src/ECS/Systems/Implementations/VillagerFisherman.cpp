@@ -20,7 +20,6 @@
 #include "Animals/FishFarmRules.h"
 #include "Common/GUtilsDistance.h"
 #include "ECS/BuildingSites.h"
-#include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Town.h"
@@ -39,6 +38,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerBuild.h"
+#include "VillagerFarmer.h"
 #include "VillagerHome.h"
 
 using namespace openblack;
@@ -49,8 +49,6 @@ namespace work = openblack::ecs::villager_work;
 
 namespace
 {
-/// How near a field is to a farmer counts for less the further it is, out to this many metres
-constexpr float k_FieldReach = 300.0f;
 /// How near the store is counts for less the further it is, out to this many metres, as a villager weighs taking its
 /// food there
 constexpr float k_DropOffReach = 500.0f;
@@ -97,7 +95,7 @@ void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 {
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
 	{
-		villager_home::SetupMobileMoveTo(action, goal, final);
+		villager_home::SetupMobileMoveTo(action, goal);
 	}
 }
 
@@ -121,41 +119,6 @@ glm::vec2 ArrivePositionOf(entt::entity farm)
 	                                                   Entities().Get<const FishFarm>(farm).place.y, 0.0f});
 }
 
-/// The best of its town's fields for the villager, by how much each wants farming and how near it is
-work::FoodJobCandidate BestField(entt::entity villager, entt::entity town)
-{
-	work::FoodJobCandidate best {.job = work::FoodJob::Field};
-	const auto* record = Entities().TryGet<const Town>(town);
-	if (record == nullptr)
-	{
-		return best;
-	}
-	const auto& types = Locator::infoConstants::value().fieldType;
-	const auto here = glm::xz(PositionOf(villager));
-	Entities().Each<const Field, const Transform>([&](const Field& field, const Transform& at) {
-		if (field.town != static_cast<int>(record->id))
-		{
-			return;
-		}
-		const auto& type = types.at(static_cast<size_t>(field.type));
-		// TODO(villager-jobs-1): fields keep no farmers in openblack yet, so none is ever crowded
-		const float desire = work::DesireToBeFarmed({.timesSown = field.crop.timesSown,
-		                                             .timesToSow = type.timesToSow,
-		                                             .age = field.crop.age,
-		                                             .ageGrowth = type.ageGrowth,
-		                                             .ageRecolt = type.ageRecolt,
-		                                             .farmers = 0,
-		                                             .maxFarmers = type.maxFarmerInFarm});
-		const float score =
-		    gutils::GetDistanceModifier(gutils::GetDistanceInMetres(glm::xz(at.position), here), k_FieldReach) * desire;
-		if (score > best.score)
-		{
-			best.score = score;
-			best.found = true;
-		}
-	});
-	return best;
-}
 } // namespace
 
 uint32_t villager_fisherman::CheckSatisfyFoodDesire(LivingAction& action)
@@ -179,9 +142,11 @@ uint32_t villager_fisherman::CheckSatisfyFoodDesire(LivingAction& action)
 			fishing.found = true;
 		}
 	}
+	const auto field = villager_farmer::FindBestField(action);
+	const work::FoodJobCandidate farming {
+	    .job = work::FoodJob::Field, .score = field.has_value() ? field->score : 0.0f, .found = field.has_value()};
 	// TODO(villager-jobs-1): the town's flocks for shepherds are weighed third; openblack has no shepherds yet
-	const std::array<work::FoodJobCandidate, 3> jobs {fishing, BestField(villager, town),
-	                                                  work::FoodJobCandidate {.job = work::FoodJob::Flock}};
+	const std::array<work::FoodJobCandidate, 3> jobs {fishing, farming, work::FoodJobCandidate {.job = work::FoodJob::Flock}};
 	const auto& info = InfoOf(person);
 	const auto room = static_cast<int16_t>(info.maxFoodCarried - static_cast<uint32_t>(person.foodHeld));
 	float storeNearness = 0.0f;
@@ -206,9 +171,7 @@ uint32_t villager_fisherman::CheckSatisfyFoodDesire(LivingAction& action)
 	case work::FoodJob::FishFarm:
 		return VillagerBecomesFisherman(action, *farm);
 	case work::FoodJob::Field:
-		// TODO(villager-jobs-1): farming isn't in openblack yet; a villager the town would send to a field does nothing
-		// for its want of food
-		return 0;
+		return villager_farmer::VillagerBecomesFarmer(action, field->field);
 	case work::FoodJob::Flock:
 		return 0;
 	}

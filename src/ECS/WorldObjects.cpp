@@ -17,6 +17,7 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -400,7 +401,7 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 		registry.AssignOrReplace<RepairSite>(object, RepairSite {.startLife = physics::damage::RepairStartLife(life.life)});
 	}
 	// A town's abode left under its full life is given a site by its town, for its builders to mend it
-	if (life.life < 1.0f && IsAbodeOfATown(registry, object) && !registry.AllOf<BuildingSite>(object))
+	if (life.life < 1.0f && IsAbodeOfATown(registry, object) && construction::BroughtWoodSite(object) == nullptr)
 	{
 		construction::OpenSite(object, 0.0f);
 	}

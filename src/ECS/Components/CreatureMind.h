@@ -52,6 +52,9 @@ struct CreatureMindState
 
 	/// Seconds since the player last paid it any attention
 	float secondsAlone {0.0f};
+	/// Game turns its player's camera was looking at it, which over the turns it has lived is the attention its god has
+	/// paid it
+	uint32_t turnsLookedAt {0};
 	/// Seconds since the player last stroked or slapped it, and which
 	std::optional<float> feedbackSeconds;
 	bool feedbackWasStroke {false};
@@ -92,6 +95,8 @@ struct CreatureMindState
 
 	/// While paused, the mind leaves the body alone to be posed by hand
 	bool paused {false};
+	/// The player's hand took hold of it: once it has turned to the player it shows what it wants, and the help says it
+	bool showDesireOnHold {false};
 
 	/// What it has learnt and remembers, set up with the desires (from its mind file when it has one)
 	std::optional<creature_mind_model::Learnt> learnt;

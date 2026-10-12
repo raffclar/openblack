@@ -9,8 +9,6 @@
 
 #include "WorshipSiteConstruction.h"
 
-#include <algorithm>
-
 #include "ECS/WorshipSites.h"
 
 using namespace openblack;
@@ -34,9 +32,4 @@ worship_site_construction::Destination worship_site_construction::WhereGiven(Res
 bool worship_site_construction::Stores(ResourceType type, bool goingUp)
 {
 	return type == ResourceType::Food || type == ResourceType::Any || (goingUp && type == ResourceType::Wood);
-}
-
-bool worship_site_construction::IsSiteOf(std::span<const entt::entity> askedTowns, entt::entity town, bool built)
-{
-	return !built && town != entt::null && std::ranges::find(askedTowns, town) != askedTowns.end();
 }

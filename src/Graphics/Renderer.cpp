@@ -891,8 +891,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
                            bool preserveState, const TextureHandle* subMeshTexture, glm::vec3 glow) const
 {
 	assert(&subMesh.GetMesh());
-	// We don't draw physics meshes, we haven't implemented statuses (building and graves) and modern GPUs can handle high
-	// lod. Windows fail the game's lod test unless their house lights them, which the object shader decides.
+	// Physics meshes aren't drawn, nor the parts of other statuses (building stages, graves) or of another detail than
+	// the one drawn. Windows fail the detail test unless their house lights them, which the object shader decides.
 	const bool window = subMesh.GetFlags().isWindow;
 	// A lit window is a faint glow, blended by its texture's alpha as its material says, over the wall behind it
 	const bool materialBlending = desc.useMaterialBlending || window;
@@ -900,7 +900,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	const auto status = subMesh.GetFlags().status;
 	const bool statusDrawn =
 	    desc.statusesUpTo.has_value() ? status >= 1 && status <= *desc.statusesUpTo : status == desc.onlyStatus.value_or(0);
-	if (!desc.drawAll && (subMesh.IsPhysics() || !statusDrawn || (!window && (subMesh.GetFlags().lodMask & 1) != 1)))
+	if (!desc.drawAll &&
+	    (subMesh.IsPhysics() || !statusDrawn || (!window && (subMesh.GetFlags().lodMask & desc.detailLevel) == 0)))
 	{
 		return;
 	}
@@ -1572,6 +1573,9 @@ void Renderer::DrawTempleMapPass() const
 		const glm::vec4 u_block {static_cast<float>(i++), 0.0f, 0.0f, 0.0f};
 		terrainShader->SetUniformValue("u_block", &u_block);
 		block.BindVertices();
+		// The map shows every block in full
+		const auto& triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+		triangles.Bind(triangles.GetCount());
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 		// The textures stay bound from one block to the next
 		terrainShader->Submit(viewId, 0,
@@ -2292,20 +2296,30 @@ void Renderer::DrawFootprintPass(const DrawSceneDesc& drawDesc) const
 		const auto& meshManager = Locator::resources::value().GetMeshes();
 		const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 		const auto* footprintShaderInstanced = _shaderManager->GetShader("FootprintInstanced");
-		for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
-		{
+		// Every thing leaves its footprint however far off it is: those drawn this frame, those fading out and those too
+		// far off to be drawn
+		const auto paintFootprints = [&](entt::id_type meshId, uint32_t first, uint32_t count) {
 			auto mesh = meshManager.Handle(meshId);
-			if (!mesh->ContainsLandscapeFeature() || mesh->GetFootprints().empty())
+			if (count == 0 || !mesh->ContainsLandscapeFeature() || mesh->GetFootprints().empty())
 			{
-				continue;
+				return;
 			}
 			const auto& footprint = mesh->GetFootprints()[0];
 			SetFootprintTexture(*footprintShaderInstanced, *footprint.texture);
 			SetFootprintPaint(*footprintShaderInstanced);
 			footprint.mesh->GetVertexBuffer().Bind();
-			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.instanceUniformBuffer), placers.offset, placers.count);
+			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.instanceUniformBuffer), first, count);
 			bgfx::setState(k_FootprintPaintState | BGFX_STATE_CULL_CW);
 			footprintShaderInstanced->Submit(static_cast<bgfx::ViewId>(viewId));
+		};
+		for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
+		{
+			paintFootprints(meshId, placers.offset, placers.filled);
+			paintFootprints(meshId, placers.offset + placers.count - placers.gone, placers.gone);
+		}
+		for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
+		{
+			paintFootprints(meshId, placers.offset, placers.filled);
 		}
 
 		for (const auto& [meshId, placers] : renderCtx.treeInstancedDrawDescs)
@@ -4033,6 +4047,32 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 	std::erase_if(_creatureSkins, [&seen](const auto& entry) { return !std::ranges::binary_search(seen, entry.first); });
 }
 
+namespace
+{
+/// The mesh whose instances hold an instance, its draw, and whether that is among the things fading out in the
+/// distance: a thing drawn in less detail further off is among the instances of the mesh its distance chose
+struct InstanceHolder
+{
+	entt::id_type mesh;
+	const ecs::systems::RenderContext::InstancedDrawDesc* placers;
+	bool fading;
+};
+std::optional<InstanceHolder> HolderOf(const ecs::systems::RenderContext& context, uint32_t instance)
+{
+	for (const bool fading : {false, true})
+	{
+		for (const auto& [meshId, placers] : fading ? context.fadingDrawDescs : context.instancedDrawDescs)
+		{
+			if (instance >= placers.offset && instance < placers.offset + placers.count)
+			{
+				return InstanceHolder {.mesh = meshId, .placers = &placers, .fading = fading};
+			}
+		}
+	}
+	return std::nullopt;
+}
+} // namespace
+
 void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 {
 	// The bones' texture is this many texels wide: 256 matrices a row
@@ -4050,17 +4090,18 @@ void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 	for (const auto& [entity, instance] : renderCtx.entityDraws)
 	{
 		const auto* pose = drawDesc.entities.TryGet<const ecs::components::AnimalPose>(entity);
-		const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(entity);
-		if (pose != nullptr && mesh != nullptr)
+		const auto holder = HolderOf(renderCtx, instance);
+		if (pose != nullptr && holder.has_value() && !holder->fading)
 		{
-			byModel[mesh->id].push_back({.instance = instance, .pose = pose});
+			byModel[holder->mesh].push_back({.instance = instance, .pose = pose});
 		}
 	}
 	for (const auto& [meshId, animals] : byModel)
 	{
-		// Only a model all of whose instances are animals, none fading, all in the same light and none cut
+		// Only a model all of whose instances placed this frame are animals, none fading, all in the same light and none
+		// cut
 		const auto placers = renderCtx.instancedDrawDescs.find(meshId);
-		if (placers == renderCtx.instancedDrawDescs.end() || placers->second.count != animals.size() ||
+		if (placers == renderCtx.instancedDrawDescs.end() || placers->second.filled != animals.size() ||
 		    !meshes.Contains(meshId))
 		{
 			continue;
@@ -5058,6 +5099,79 @@ size_t Renderer::MaxCreaturesDrawn()
 	}
 }
 
+void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto& config = Locator::config::value();
+	auto& frame = _landDetail;
+	frame.lines = config.landDetailLines.value_or(land_detail::For(config.detailLevel));
+	const bool coarseLand = detail_level::For(config.detailLevel).coarseLand;
+
+	const auto origin = drawDesc.camera->GetOrigin();
+	const auto forward = drawDesc.camera->GetForward();
+	frame.meshNear = land_detail::LineAcross(origin, forward, frame.lines.meshNear, 0.0f);
+	frame.meshFar = land_detail::LineAcross(origin, forward, frame.lines.meshFar, 0.0f);
+	frame.texture =
+	    land_detail::LineAcross(origin, forward, frame.lines.texture, std::min(origin.y, land_detail::k_TextureGroundCap));
+
+	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+	frame.blocks.resize(blocks.size());
+	frame.coarserSides.assign(blocks.size(), 0);
+	// The blocks by where they are on the map's 32 by 32 grid of blocks
+	constexpr int k_BlocksPerSide = 32;
+	std::array<int16_t, static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide)> grid {};
+	grid.fill(-1);
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto position = blocks[i].GetBlockPosition();
+		if (position.x >= 0 && position.x < k_BlocksPerSide && position.y >= 0 && position.y < k_BlocksPerSide)
+		{
+			grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y)) = static_cast<int16_t>(i);
+		}
+		constexpr float k_BlockSize = 160.0f;
+		const auto low = blocks[i].GetMapPosition();
+		const std::array<glm::vec2, 4> corners = {low, low + glm::vec2(0.0f, k_BlockSize), low + glm::vec2(k_BlockSize, 0.0f),
+		                                          low + glm::vec2(k_BlockSize)};
+		land_detail::CornerOffsets offsets;
+		for (size_t corner = 0; corner < corners.size(); ++corner)
+		{
+			offsets.meshNear.at(corner) = land_detail::Offset(frame.meshNear, corners.at(corner));
+			offsets.meshFar.at(corner) = land_detail::Offset(frame.meshFar, corners.at(corner));
+			offsets.texture.at(corner) = land_detail::Offset(frame.texture, corners.at(corner));
+		}
+		frame.blocks[i] = land_detail::Classify(offsets, frame.lines, coarseLand);
+	}
+	const auto meshAt = [&](glm::ivec2 position) -> std::optional<land_detail::Mesh> {
+		if (position.x < 0 || position.x >= k_BlocksPerSide || position.y < 0 || position.y >= k_BlocksPerSide)
+		{
+			return std::nullopt;
+		}
+		const auto index = grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y));
+		return index < 0 ? std::nullopt : std::optional(frame.blocks[static_cast<size_t>(index)].mesh);
+	};
+	const auto indexAt = [&](glm::ivec2 position) {
+		if (position.x < 0 || position.x >= k_BlocksPerSide || position.y < 0 || position.y >= k_BlocksPerSide)
+		{
+			return -1.0f;
+		}
+		return static_cast<float>(grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y)));
+	};
+	frame.neighbours.resize(blocks.size());
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto position = blocks[i].GetBlockPosition();
+		const std::array<std::optional<land_detail::Mesh>, 4> neighbours = {
+		    meshAt(position - glm::ivec2(1, 0)), meshAt(position - glm::ivec2(0, 1)), meshAt(position + glm::ivec2(0, 1)),
+		    meshAt(position + glm::ivec2(1, 0))};
+		frame.coarserSides[i] = land_detail::CoarserSides(frame.blocks[i].mesh, neighbours);
+		frame.neighbours[i] = {indexAt(position - glm::ivec2(1, 0)), indexAt(position - glm::ivec2(0, 1)),
+		                       indexAt(position + glm::ivec2(0, 1)), indexAt(position + glm::ivec2(1, 0))};
+	}
+}
+
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
 	SelectDrawnCreatures(drawDesc);
@@ -5078,6 +5192,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	DrawFootprintPass(drawDesc);
 	DrawLandAlphaPass(drawDesc);
 	UpdateLandLight();
+	UpdateLandDetail(drawDesc);
 	DrawObjectShadowPass(drawDesc);
 	DrawTempleMapPass();
 	DrawGroundShadowPass(drawDesc);
@@ -5324,6 +5439,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			    forwardLength;
 			const glm::vec4 u_smallBumpLine {cameraOrigin.x, cameraOrigin.z, forwardAlongGround / forwardLength};
 			const glm::vec4 u_smallBump {lineDistance, 0.0f, 0.0f, 0.0f};
+			// The land's detail lines this frame, from the view's camera (see land_detail): xy the camera's x and z, zw the
+			// way it faces along the ground; then how far ahead the two mesh lines and the texture line lie, each 0 when
+			// the camera looks straight down, and the bands
+			const auto lineAhead = [](const land_detail::ViewLine& line) { return line.valid ? line.ahead : 0.0f; };
+			const glm::vec4 u_landLine {_landDetail.meshNear.camera, _landDetail.meshNear.forward};
+			const glm::vec4 u_landLineAhead {lineAhead(_landDetail.meshNear), lineAhead(_landDetail.meshFar),
+			                                 lineAhead(_landDetail.texture), _landDetail.meshNear.valid ? 1.0f : 0.0f};
+			const glm::vec4 u_landBands {_landDetail.lines.meshBand, _landDetail.lines.textureBand, 0.0f, 0.0f};
 
 			// The hand's light is in the land's own lighting, so the reflection shows it too
 
@@ -5373,6 +5496,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
 				terrainShader->SetUniformValue("u_smallBumpLine", &u_smallBumpLine);
 				terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
+				terrainShader->SetUniformValue("u_landLine", &u_landLine);
+				terrainShader->SetUniformValue("u_landLineAhead", &u_landLineAhead);
+				terrainShader->SetUniformValue("u_landBands", &u_landBands);
+				// Without pages of its own the land binds its block textures in their place, never read
+				const auto* coarsePages = island.GetCoarsePages();
+				terrainShader->SetTextureSampler("s15_coarsePages", 15,
+				                                 coarsePages != nullptr ? *coarsePages : island.GetBlockTextures());
 				terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
 				SetObjectShadowUniforms(*terrainShader);
 				terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
@@ -5393,6 +5523,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			const ProgramUniform blockPositionUniform {*terrainShader, "u_blockPositionAndSize"};
 			const ProgramUniform blockUniform {*terrainShader, "u_block"};
+			const ProgramUniform blockNeighboursUniform {*terrainShader, "u_blockNeighbours"};
+			const ProgramUniform coarsePageUniform {*terrainShader, "u_coarsePage"};
+			const bool coarseLand = detail_level::For(Locator::config::value().detailLevel).coarseLand;
 			const ProgramUniform vortexGroundUniform {*terrainShader, "u_vortexGround"};
 			const ProgramUniform groundShadowBlockUniform {*terrainShader, "u_groundShadowBlock"};
 			const bool groundShadowed = desc.viewId == RenderPass::Main;
@@ -5419,8 +5552,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const auto& block = blocks[index];
 				const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
 				blockPositionUniform.Set(&mapPositionAndSize);
-				const glm::vec4 u_block {static_cast<float>(index), 0.0f, 0.0f, 0.0f};
+				// The block's mesh and texture this frame: y how its corners morph, z its texture
+				const auto detail = index < _landDetail.blocks.size() ? _landDetail.blocks[index] : land_detail::BlockDetail {};
+				const uint8_t coarserSides = index < _landDetail.coarserSides.size() ? _landDetail.coarserSides[index] : 0;
+				const glm::vec4 u_block {static_cast<float>(index), static_cast<float>(detail.morph),
+				                         static_cast<float>(detail.texture), 0.0f};
 				blockUniform.Set(&u_block);
+				const glm::vec4 u_blockNeighbours =
+				    index < _landDetail.neighbours.size() ? _landDetail.neighbours[index] : glm::vec4(-1.0f);
+				blockNeighboursUniform.Set(&u_blockNeighbours);
+				// The coarse land draws every block from the landscape file's pages, where it has them
+				glm::vec4 u_coarsePage = island.GetCoarsePageSlot(index);
+				u_coarsePage.w = coarseLand && island.GetCoarsePages() != nullptr ? u_coarsePage.w : 0.0f;
+				coarsePageUniform.Set(&u_coarsePage);
 				glm::vec4 vortexGround {0.0f, 0.0f, 0.0f, -1.0f};
 				const GroundTextures* blockGround = sharedGround;
 				const auto mark = std::ranges::find(groundMarks | std::views::reverse, block.GetBlockPosition(),
@@ -5447,6 +5591,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const glm::vec4 u_groundShadowBlock {shadows, 0.0f, 0.0f};
 				groundShadowBlockUniform.Set(&u_groundShadowBlock);
 				block.BindVertices();
+				// The game leaves out open sea only from blocks wholly before the first line
+				const bool dropOpenSea = detail.mesh == land_detail::Mesh::Full && detail.morph == land_detail::Morph::None;
+				const auto& triangles = block.GetTriangles(detail.mesh, coarserSides, dropOpenSea);
+				triangles.Bind(triangles.GetCount());
 				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
 				terrainShader->Submit(static_cast<bgfx::ViewId>(landViewId), blockDepth(block), discard);
 			};
@@ -5647,23 +5795,40 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.objectLook.reset();
 				}
 			};
+			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own
+			const auto drawPlaced = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
+			                            bool useMaterialBlending, const EntityPose* pose = nullptr) {
+				if (!placers.partsByLevel)
+				{
+					drawInstances(meshId, placers, useMaterialBlending, placers.offset, placers.filled, pose);
+					return;
+				}
+				for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
+				{
+					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+					drawInstances(meshId, placers, useMaterialBlending, instance, 1, pose);
+				}
+				submitDesc.detailLevel = 1;
+			};
+			// Those placed this frame: the things too far off to be drawn are after them
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
 				if (meshId != ecs::components::Hand::k_MeshId && !placers.translucent && !placers.perEntity &&
 				    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
 				{
-					drawInstances(meshId, placers, placers.materialBlending, placers.offset, placers.count);
+					drawPlaced(meshId, placers, placers.materialBlending);
 				}
 			}
 			// A broken or unfinished building's whole model, as far up as it stands, from both sides and with its inner
 			// walls, and its scaffold sunk into the land or cut down from the top
-			for (const auto& build : renderCtx.partialBuilds)
-			{
+			// One fading out in the distance is drawn with the blended things, by its alpha
+			const auto drawPartialBuild = [&](const RenderContext::PartialBuildDraw& build) {
 				if (!meshManager.Contains(build.meshId))
 				{
-					continue;
+					return;
 				}
-				const RenderContext::InstancedDrawDesc placers {0, 1, build.morphWithTerrain};
+				RenderContext::InstancedDrawDesc placers {0, 1, build.morphWithTerrain};
+				placers.instanceAlpha = build.fading;
 				// A part cut at a height is drawn from both sides; a scaffold standing whole, only sunk into the land, is
 				// drawn as the building's own model is
 				const auto drawPart = [&](uint32_t instance, std::optional<float> cut, std::optional<uint32_t> status,
@@ -5708,6 +5873,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					drawInstances(build.meshId, placers, false, build.instance, 1, nullptr, nullptr,
 					              renderCtx.partialBuildInstanceBuffer);
 					submitDesc.statusesUpTo.reset();
+				}
+			};
+			for (const auto& build : renderCtx.partialBuilds)
+			{
+				if (!build.fading)
+				{
+					drawPartialBuild(build);
 				}
 			}
 			// The creatures, each posed and shaped as it is, then its eyes
@@ -5818,32 +5990,41 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 			}
 			drawingCreatures = false;
-			// The animals, each posed by its own clip and in its own light; one fading out blends over the rest
+			// The animals, each posed by its own clip and in its own light, as the mesh its distance chose; one fading out,
+			// by itself or in the distance, blends over the rest
 			const auto drawAnimal = [&](entt::entity entity, uint32_t instance, bool translucent) {
 				const auto* pose = desc.entities.TryGet<const ecs::components::AnimalPose>(entity);
-				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
-				if (pose == nullptr || mesh == nullptr || pose->bones.empty() || (pose->alpha < 255) != translucent ||
-				    !meshManager.Contains(mesh->id) || _animalBoneGroups.contains(mesh->id))
+				const auto holder = HolderOf(renderCtx, instance);
+				if (pose == nullptr || !holder.has_value() || pose->bones.empty() ||
+				    (pose->alpha < 255 || holder->fading) != translucent || !meshManager.Contains(holder->mesh) ||
+				    (!holder->fading && _animalBoneGroups.contains(holder->mesh)))
 				{
 					return;
 				}
-				const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
+				const auto* mesh = &holder->mesh;
+				// How opaque it is drawn: its own alpha, faded further in the distance
+				const float distanceAlpha =
+				    holder->fading ? 1.0f + std::min(renderCtx.instanceUniforms.at(instance).look.z, 0.0f) : 1.0f;
+				const float alpha = (static_cast<float>(pose->alpha) / 255.0f) * distanceAlpha;
+				// Blended by that alpha alone, not by its instance's as well
+				auto drawn = std::make_pair(holder->mesh, *holder->placers);
+				drawn.second.instanceAlpha = false;
+				const auto* placers = &drawn;
 				// A swimmer drawn under the sea as it is isn't mirrored in it, as the game mirrors only the land
-				if (placers == renderCtx.instancedDrawDescs.end() ||
-				    (desc.viewId == RenderPass::Reflection &&
-				     (placers->second.hiddenFromReflection || pose->underSea.has_value())))
+				if (desc.viewId == RenderPass::Reflection &&
+				    (placers->second.hiddenFromReflection || pose->underSea.has_value()))
 				{
 					return;
 				}
 				const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
 				// What of a swimmer is under the sea is drawn beneath the sea's surface, which the sea is then blended
 				// over: in its colour under the sea, and nothing of it above the sea's level
-				if (desc.viewId == RenderPass::Main && desc.drawWater && pose->underSea.has_value() && pose->alpha == 255)
+				if (desc.viewId == RenderPass::Main && desc.drawWater && pose->underSea.has_value() && alpha >= 1.0f)
 				{
 					submitDesc.viewId = RenderPass::UnderSea;
 					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = *pose->underSea, .alpha = 1.0f};
 					submitDesc.cutAbove = pose->cutBelow.value_or(0.0f);
-					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
+					drawInstances(*mesh, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
 					submitDesc.cutAbove.reset();
 					submitDesc.objectLook.reset();
 					submitDesc.viewId = desc.viewId;
@@ -5864,14 +6045,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					colour = pose->colour;
 				}
 				// One lit by the land where it stands takes no colour of its own, only its alpha when it fades
-				if (pose->light != ecs::components::AnimalLight::Land || pose->alpha < 255)
+				if (pose->light != ecs::components::AnimalLight::Land || alpha < 1.0f)
 				{
-					submitDesc.objectLook =
-					    L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = static_cast<float>(pose->alpha) / 255.0f};
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = alpha};
 				}
 				// An animal cut by a plane shows nothing below it
 				submitDesc.cutBelow = pose->cutBelow;
-				drawInstances(mesh->id, placers->second, translucent || placers->second.materialBlending, instance, 1,
+				drawInstances(*mesh, placers->second, translucent || placers->second.materialBlending, instance, 1,
 				              &entityPose);
 				submitDesc.objectLook.reset();
 				submitDesc.cutBelow.reset();
@@ -5931,26 +6111,39 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                             .morphTargets = nullptr};
 				drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &entityPose);
 			};
-			// The gates and other scenery the scripts open and close, each posed by its own clip
-			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance) {
+			// Whether an instance is of a thing fading out in the distance (not a villager, which the palette draws)
+			const auto fadingHolds = [&renderCtx](uint32_t instance) {
+				return std::ranges::any_of(renderCtx.fadingDrawDescs, [instance](const auto& entry) {
+					const auto& placers = entry.second;
+					return !placers.bonePalette && instance >= placers.offset && instance < placers.offset + placers.count;
+				});
+			};
+			// The gates and other scenery the scripts open and close, each posed by its own clip: those fading out in the
+			// distance with the blended things
+			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool fading) {
 				const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity);
-				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
-				if (still == nullptr || mesh == nullptr || !meshManager.Contains(mesh->id))
+				if (still == nullptr || fadingHolds(instance) != fading)
 				{
 					return;
 				}
-				const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
-				if (placers == renderCtx.instancedDrawDescs.end() ||
-				    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+				const auto holding = drawHolding(instance);
+				if (!holding.has_value() || !meshManager.Contains(holding->first) ||
+				    (desc.viewId == RenderPass::Reflection && holding->second->hiddenFromReflection))
 				{
 					return;
 				}
-				const auto model = meshManager.Handle(mesh->id);
+				const auto& [meshId, placers] = *holding;
+				const auto model = meshManager.Handle(meshId);
 				const bool posed = still->bones.size() == model->GetBoneMatrices().size();
 				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(still->bones)
 				                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
 				                             .morphTargets = nullptr};
-				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
+				if (placers->partsByLevel)
+				{
+					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+				}
+				drawInstances(meshId, *placers, fading ? false : placers->materialBlending, instance, 1, &entityPose);
+				submitDesc.detailLevel = 1;
 			};
 			// The animals of a model drawn at once, in their light: the brightest of the land's, or white
 			for (const auto& [meshId, group] : _animalBoneGroups)
@@ -5974,7 +6167,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
 				}
 				drawInstances(meshId, placers->second, placers->second.materialBlending, placers->second.offset,
-				              placers->second.count, nullptr, nullptr, std::nullopt, &group);
+				              placers->second.filled, nullptr, nullptr, std::nullopt, &group);
 				submitDesc.objectLook.reset();
 				submitDesc.boneTexture = nullptr;
 			}
@@ -5982,7 +6175,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				drawAnimal(entity, instance, false);
 				drawVillager(entity, instance);
-				drawPosedStill(entity, instance);
+				drawPosedStill(entity, instance, false);
 			}
 			// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
 			if (renderCtx.bonePaletteTexture)
@@ -6028,18 +6221,46 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			// The translucent meshes blend over the opaque ones, each in its own place in the sort
 			submitDesc.viewId = translucentViewId;
-			// The villagers fading out in the distance, a draw for each low mesh, blended by each one's alpha
-			if (renderCtx.bonePaletteTexture)
+			// The things fading out in the distance, each blended by its alpha in its own place in the sort: the
+			// villagers posed from the bone palette, the things posed one by one with them
 			{
 				const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
 				for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
 				{
-					if (placers.filled > 0 && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection) &&
-					    meshManager.Contains(meshId))
+					if (placers.filled == 0 || (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection) ||
+					    !meshManager.Contains(meshId) || (placers.bonePalette && !renderCtx.bonePaletteTexture) ||
+					    (placers.perEntity && !placers.bonePalette))
 					{
-						const auto position = glm::vec3(renderCtx.instanceUniforms.at(placers.offset).model[3]);
+						continue;
+					}
+					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
+					{
+						const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
 						submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
-						drawInstances(meshId, placers, false, placers.offset, placers.filled, &palettePose);
+						if (placers.partsByLevel)
+						{
+							submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+						}
+						drawInstances(meshId, placers, false, instance, 1, placers.bonePalette ? &palettePose : nullptr);
+					}
+					submitDesc.detailLevel = 1;
+				}
+				for (const auto& build : renderCtx.partialBuilds)
+				{
+					if (build.fading && build.instance < renderCtx.partialBuildInstances.size())
+					{
+						submitDesc.sortDepth =
+						    zsort::Depth(glm::vec3(renderCtx.partialBuildInstances.at(build.instance).model[3]), cameraOrigin);
+						drawPartialBuild(build);
+					}
+				}
+				for (const auto& [entity, instance] : renderCtx.entityDraws)
+				{
+					if (fadingHolds(instance))
+					{
+						submitDesc.sortDepth =
+						    zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
+						drawPosedStill(entity, instance, true);
 					}
 				}
 			}
@@ -6068,7 +6289,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				if (placers.translucent && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
 				{
-					for (uint32_t instance = placers.offset; instance < placers.offset + placers.count; ++instance)
+					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
 						const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
 						submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
@@ -6203,12 +6424,18 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                   | BGFX_STATE_MSAA               //
 				    ;
 
-				// Instance meshes
-				for (const auto& [meshId, placers] : renderCtx.treeInstancedDrawDescs)
+				// The trees of each mesh, a draw for each detail they are drawn in: each with the parts of its detail. Those
+				// fading out in the distance are blended by each one's alpha with the blended things.
+				const auto opaqueState = submitDesc.state;
+				for (const auto& run : renderCtx.treeRuns)
 				{
-					auto mesh = meshManager.Handle(meshId);
-					submitDesc.instanceDesc = std::make_unique<graphics::InstanceDesc>(renderCtx.treeInstanceUniformBuffer,
-					                                                                   placers.offset, placers.count);
+					if (run.gone || run.count == 0 || !meshManager.Contains(run.mesh))
+					{
+						continue;
+					}
+					auto mesh = meshManager.Handle(run.mesh);
+					submitDesc.instanceDesc =
+					    std::make_unique<graphics::InstanceDesc>(renderCtx.treeInstanceUniformBuffer, run.first, run.count);
 					const static auto identity = glm::mat4(1.0f);
 					submitDesc.modelMatrices = &identity;
 					submitDesc.matrixCount = 1;
@@ -6217,8 +6444,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.landLightScale = _treeBrightness;
 					submitDesc.snow = !inTemple;
 					submitDesc.program = vegetationShaderInstanced;
+					submitDesc.detailLevel = run.level;
+					submitDesc.viewId = run.fading ? TranslucentView(desc.viewId) : desc.viewId;
+					submitDesc.state = run.fading ? opaqueState | BGFX_STATE_BLEND_ALPHA : opaqueState;
+					submitDesc.sortDepth =
+					    run.fading ? zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(run.first).modelMatrix[3]),
+					                              desc.camera->GetOrigin())
+					               : 0;
 					DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				}
+				submitDesc.detailLevel = 1;
+				submitDesc.viewId = desc.viewId;
+				submitDesc.state = opaqueState;
+				submitDesc.sortDepth = 0;
 
 				// Draw tree bounding boxes if enabled
 				if (renderCtx.boundingBox && renderCtx.treeInstanceCount > 0)
@@ -6315,6 +6553,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	if (desc.viewId == RenderPass::Main && desc.drawEntities)
 	{
 		DrawAdvisors(desc);
+		DrawGestureHintCollars(desc);
 	}
 
 	// The sun's glare over everything else in the view; the temple's comes before its glass

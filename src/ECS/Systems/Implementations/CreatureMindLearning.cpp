@@ -78,8 +78,10 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/CreatureNaming.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -102,6 +104,15 @@ using creature_plan_actions::Target;
 
 namespace
 {
+/// The advisor may tell the player of what the creature learnt
+void TellHelp(entt::entity creature, const openblack::creature_help::Message& message)
+{
+	if (openblack::Locator::creatureHelpSystem::has_value())
+	{
+		openblack::Locator::creatureHelpSystem::value().Raise(creature, message);
+	}
+}
+
 namespace town_compassion = openblack::creature_town_compassion;
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
@@ -741,10 +752,15 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 {
 	const auto file = std::move(mind.pendingFile);
 	mind.pendingFile.reset();
-	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+	auto* body = Locator::entitiesRegistry::value().TryGet<Creature>(creature);
 	if (body == nullptr || !mind.desires.has_value() || !mind.learnt.has_value())
 	{
 		return;
+	}
+	// It takes the name the file keeps, unless a computer player owns it
+	if (creature_names::TakesNameFromFile(ecs::creature_naming::OwnerOf(body->owner)))
+	{
+		body->name = file->name;
 	}
 	const auto fresh =
 	    creature_desires::Create(SetupFor(body->species), [](float low, float high) { return 0.5f * (low + high); });
@@ -897,6 +913,10 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	        .belief = object.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*object), creature) : std::nullopt,
 	        .learnable = info.learnable,
 	        .windowSeconds = info.learningWindowSeconds,
+	        .source = mind.desires.has_value()
+	                      ? creature_learning::PlanSource((*mind.desires)[static_cast<Desire>(info.desire)])
+	                            .value_or(creature_learning::k_NoTellingSource)
+	                      : creature_learning::k_NoTellingSource,
 	    });
 	mind.learnt->turnsSinceDone.at(*action) = 0;
 	mind.underway = CreatureMindState::ActionUnderway {.serial = idle.serial, .action = *action};
@@ -947,7 +967,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	learnt.turnsSinceDone.at(plan.action) = 0;
 	// It is remembered for the player's feedback unless nothing says why it wants what the plan serves, as a forced plan
 	// is, and the desires the plan's desire opposes are held back
-	if (creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]))
+	if (const auto source = creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]); source.has_value())
 	{
 		creature_learning::Remember(learnt.contexts,
 		                            {
@@ -959,6 +979,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		                                              : std::nullopt,
 		                                .learnable = info.learnable,
 		                                .windowSeconds = info.learningWindowSeconds,
+		                                .source = *source,
 		                            });
 	}
 	creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
@@ -1424,6 +1445,9 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	                         .belief = plan.object.has_value() ? BeliefOf(registry, *plan.object, creature) : std::nullopt,
 	                         .learnable = info.learnable,
 	                         .windowSeconds = info.learningWindowSeconds,
+	                         .source = mind->desires.has_value() ? creature_learning::PlanSource((*mind->desires)[plan.desire])
+	                                                                   .value_or(creature_learning::k_NoTellingSource)
+	                                                             : creature_learning::k_NoTellingSource,
 	                     });
 	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 	return true;
@@ -1585,6 +1609,11 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		return;
 	}
 
+	// With nothing it did lately to credit the feedback to, it learns nothing from it
+	if (context == nullptr)
+	{
+		return;
+	}
 	const auto strength = creature_learning::Strengthened(feedback);
 	if (feedback > 0.0f)
 	{
@@ -1596,7 +1625,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		creature_desires::Suppress(desires, Desire::Sadness, k_StrokeSadnessSeconds, k_TurnsPerSecond);
 	}
 
-	if (context == nullptr || info == nullptr || mind.developmentPhase < k_MinLessonPhase)
+	if (info == nullptr || mind.developmentPhase < k_MinLessonPhase)
 	{
 		// Nothing to learn from yet: stroking makes it playful, showy and kind; slapping angry and fearful
 		const auto amount = 0.5f * std::abs(feedback);
@@ -1608,6 +1637,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		{
 			creature_desires::ChangeSource(desires, type, amount);
 		}
+		TellHelp(creature, creature_help::TooYoungToLearn(feedback));
 		return;
 	}
 
@@ -1631,6 +1661,13 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 			creature_mind_model::Think(
 			    learnt, creature_learning::ObjectLessonText(strength, ObjectName(context->belief), texts.trying));
 		}
+		// The lesson changed its opinion of doing it to such things when what it knows of them has split up
+		const auto belowRoot = [&learnt, desire](TreeKind kind, const creature_tree::Belief& belief) {
+			const auto& tree = learnt.trees.at(static_cast<size_t>(kind)).at(static_cast<size_t>(desire));
+			const auto leaf = creature_tree::LeafOf(tree, belief);
+			return leaf.has_value() && *leaf != 0;
+		};
+		bool opinionChanged = context->belief.has_value() && belowRoot(TreeKind::ActOn, *context->belief);
 		if (context->usedBelief.has_value() && context->used != context->object)
 		{
 			const auto used = desire == Desire::Poo ? std::clamp(strength, -k_PooUseFeedback, k_PooUseFeedback) : strength;
@@ -1640,11 +1677,13 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 				                           {.belief = *context->usedBelief, .feedback = std::clamp(share, -1.0f, 1.0f)},
 				                           tables->attributes.at(static_cast<size_t>(other)));
 			}
+			opinionChanged = belowRoot(TreeKind::Use, *context->usedBelief) || opinionChanged;
 		}
 		auto& opinion = learnt.opinions.at(context->action);
 		opinion = creature_learning::OpinionAfter(opinion, strength);
 		creature_mind_model::Think(
 		    learnt, creature_learning::ActionLessonText(strength, info->name, texts.trying, ObjectName(context->belief)));
+		TellHelp(creature, creature_help::FeedbackLesson(strength, opinionChanged, desire, context->source));
 	}
 
 	if (feedback <= 0.0f)
@@ -1873,6 +1912,8 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 	kept.strength = saved.strength;
 	kept.alignment = saved.alignment;
 	creature_mind_body::ToMindFile(kept, file);
+	// Its name is saved with its mind
+	file.name = body->name;
 	return file;
 }
 
@@ -1907,7 +1948,7 @@ void CreatureMindSystem::SeeSkill(const glm::vec3& point, size_t skill)
 		return;
 	}
 	registry.Each<const Creature, CreatureMindState, const Transform>(
-	    [&](entt::entity, const Creature&, CreatureMindState& mind, const Transform& at) {
+	    [&](entt::entity entity, const Creature&, CreatureMindState& mind, const Transform& at) {
 		    if (!mind.learnt.has_value() || glm::distance(at.position, point) > k_ViewDistance)
 		    {
 			    return;
@@ -1917,6 +1958,19 @@ void CreatureMindSystem::SeeSkill(const glm::vec3& point, size_t skill)
 		    if (progress.learnt && !progress.ignored)
 		    {
 			    creature_mind_model::Think(*mind.learnt, fmt::format("I've learnt to {}", tables->skills.at(skill).name));
+		    }
+		    // The advisor tells of it: too young to learn it, learnt it now, or still learning it (a skill it knows already
+		    // says nothing)
+		    using creature_help::Kind;
+		    const auto parameter = static_cast<uint32_t>(skill);
+		    if (progress.ignored && !progress.learnt)
+		    {
+			    TellHelp(entity, {.kind = Kind::CantLearnNormalActionYet, .parameter = parameter});
+		    }
+		    else if (!progress.ignored)
+		    {
+			    TellHelp(entity, {.kind = progress.learnt ? Kind::LessonNormalAction : Kind::NearlyLearntNormalAction,
+			                      .parameter = parameter});
 		    }
 	    });
 }
@@ -1930,7 +1984,7 @@ void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)
 		return;
 	}
 	registry.Each<const Creature, CreatureMindState, const Transform>(
-	    [&](entt::entity, const Creature& creature, CreatureMindState& mind, const Transform& at) {
+	    [&](entt::entity entity, const Creature& creature, CreatureMindState& mind, const Transform& at) {
 		    // A mind stilled, as by the freeze spell, learns nothing
 		    if (!mind.learnt.has_value() || mind.paused || glm::distance(at.position, point) > k_ViewDistance)
 		    {
@@ -1943,6 +1997,16 @@ void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)
 		    {
 			    creature_mind_model::Think(*mind.learnt,
 			                               fmt::format("I've learnt the miracle {}", tables->miracles.at(miracle).name));
+		    }
+		    // The advisor tells of what the sighting showed
+		    if (progress.event.has_value())
+		    {
+			    using creature_help::Kind;
+			    using creature_watching::LearningEvent;
+			    const auto kind = *progress.event == LearningEvent::TooYoung       ? Kind::CantLearnMagicActionYet
+			                      : *progress.event == LearningEvent::NearlyLearnt ? Kind::NearlyLearntMagicAction
+			                                                                       : Kind::LessonMagicAction;
+			    TellHelp(entity, {.kind = kind, .parameter = static_cast<uint32_t>(miracle)});
 		    }
 	    });
 }

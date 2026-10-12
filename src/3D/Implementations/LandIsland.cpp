@@ -260,6 +260,40 @@ void LandIsland::Build(const LandData& data)
 		_blockTextures->UpdateLayer(static_cast<uint16_t>(i), blockTexels.data(), static_cast<uint32_t>(blockTexels.size()));
 	}
 
+	// The coarse texture pages the landscape file keeps, a layer each, and where each block's square of them is. A block
+	// naming a page the file doesn't have takes the first.
+	_coarsePages.reset();
+	_coarsePageSlots.assign(_landBlocks.size(), glm::vec4(0.0f));
+	constexpr uint16_t k_CoarsePageSide = 256;
+	std::vector<std::pair<uint32_t, lnd::LNDLowResolutionTexels>> coarsePages;
+	for (const auto& page : data.coarsePages)
+	{
+		const auto texels = lnd::GetTexels(page);
+		if (texels.has_value() && texels->width == k_CoarsePageSide && texels->height == k_CoarsePageSide)
+		{
+			coarsePages.emplace_back(page.header.index, *texels);
+		}
+	}
+	if (!coarsePages.empty())
+	{
+		_coarsePages = std::make_unique<Texture2D>("LandIslandCoarsePages");
+		_coarsePages->Create(k_CoarsePageSide, k_CoarsePageSide, static_cast<uint16_t>(coarsePages.size()),
+		                     TextureFormat::BlockCompression2, Wrapping::ClampEdge, Filter::Linear, nullptr);
+		for (size_t layer = 0; layer < coarsePages.size(); ++layer)
+		{
+			const auto& blocks = coarsePages[layer].second.blocks;
+			_coarsePages->UpdateLayer(static_cast<uint16_t>(layer), blocks.data(), static_cast<uint32_t>(blocks.size()));
+		}
+		for (size_t i = 0; i < _landBlocks.size(); ++i)
+		{
+			const auto& block = *_landBlocks[i].GetLndBlock();
+			const auto page =
+			    std::ranges::find(coarsePages, block.lowResTexture, &std::pair<uint32_t, lnd::LNDLowResolutionTexels>::first);
+			const auto layer = page != coarsePages.end() ? std::distance(coarsePages.begin(), page) : 0;
+			_coarsePageSlots[i] = glm::vec4(static_cast<float>(layer), block.fuLrs, block.fvLrs, 1.0f);
+		}
+	}
+
 	// The blocks' vertices, one after another in one buffer, which changes where the land changes height
 	const auto vertexCount = _landBlocks.size() * LandBlock::k_VertexCount;
 	const auto* vertexMemory = bgfx::alloc(static_cast<uint32_t>(vertexCount * sizeof(LandVertex)));
@@ -271,6 +305,8 @@ void LandIsland::Build(const LandData& data)
 	VertexDecl decl;
 	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
 	decl.emplace_back(VertexAttrib::Attribute::TexCoord0, static_cast<uint8_t>(1), VertexAttrib::Type::Float);
+	// The altitudes the corner morphs towards on the half and the quarter mesh
+	decl.emplace_back(VertexAttrib::Attribute::TexCoord1, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
 	_blockVertices = std::make_unique<VertexBuffer>("LandBlocks", vertexMemory, decl, true);
 	_changedCells.assign(_landBlocks.size(), {});
 	_changedCorners = {};

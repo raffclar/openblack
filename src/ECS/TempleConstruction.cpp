@@ -28,7 +28,9 @@
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/BuildingConstruction.h"
+#include "ECS/BuildingSiteList.h"
 #include "ECS/BuildingSiteRules.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Fire.h"
@@ -166,25 +168,18 @@ void CallForLeftoverWood(entt::entity pile)
 
 } // namespace
 
-void construction::CloseSite(entt::entity building)
+namespace
+{
+/// A town's site at the building has closed: its workers are let go, each told to find something else to do, and of its
+/// piles of wood, those with wood in them stay on as piles of their own and the empty ones go
+void SiteClosed(entt::entity building, const BuildingSite& site)
 {
 	auto& registry = Entities();
-	if (!registry.AllOf<BuildingSite>(building))
-	{
-		return;
-	}
-	// Its workers are let go first, each told to find something else to do
-	const auto workers = registry.Get<const BuildingSite>(building).workers;
 	if (Locator::livingActionSystem::has_value())
 	{
-		villager_build::LetGoOfSite(building, workers);
+		villager_build::LetGoOfSite(building, site.workers);
 	}
-	const auto* site = registry.TryGet<const BuildingSite>(building);
-	if (site == nullptr)
-	{
-		return;
-	}
-	for (const auto pile : site->piles)
+	for (const auto pile : site.piles)
 	{
 		if (!registry.Valid(pile) || !registry.AllOf<Pot>(pile))
 		{
@@ -200,7 +195,59 @@ void construction::CloseSite(entt::entity building)
 			break;
 		}
 	}
-	registry.Remove<BuildingSite>(building);
+}
+
+/// The building's sites, to open another at
+BuildingSites& SitesToOpenAt(entt::entity building)
+{
+	auto& registry = Entities();
+	if (auto* sites = registry.TryGet<BuildingSites>(building))
+	{
+		return *sites;
+	}
+	return registry.Assign<BuildingSites>(building);
+}
+
+/// A town's site at the building closes, if it has one there: it is no longer the town's before its workers are let go
+void CloseOne(entt::entity building, entt::entity town)
+{
+	auto& registry = Entities();
+	auto* sites = registry.TryGet<BuildingSites>(building);
+	if (sites == nullptr)
+	{
+		return;
+	}
+	auto closed = building_site_list::Close(*sites, town);
+	if (sites->sites.empty())
+	{
+		registry.Remove<BuildingSites>(building);
+	}
+	if (closed.has_value())
+	{
+		SiteClosed(building, *closed);
+	}
+}
+} // namespace
+
+void construction::CloseSite(entt::entity building)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(building) || !registry.AllOf<BuildingSites>(building))
+	{
+		return;
+	}
+	for (const auto town : building_site_list::ClosingOrder(registry.Get<const BuildingSites>(building)))
+	{
+		CloseOne(building, town);
+	}
+}
+
+void construction::CloseTownsSite(entt::entity building, entt::entity town)
+{
+	if (Entities().Valid(building))
+	{
+		CloseOne(building, town);
+	}
 }
 
 namespace
@@ -345,7 +392,7 @@ void construction::SetBuilt(entt::entity building, float built)
 	const auto progress = building_construction::SetBuilt(built);
 	Apply(building, progress);
 	// A town's building left unfinished gets a site for its builders
-	if (!progress.finished && TownOf(building).has_value() && !registry.AllOf<BuildingSite>(building))
+	if (!progress.finished && TownOf(building).has_value() && SiteOf(TownOfSite(building), building) == nullptr)
 	{
 		OpenSite(building, 0.0f);
 	}
@@ -445,63 +492,63 @@ void construction::OpenSite(entt::entity building, float desire)
 	{
 		return;
 	}
-	auto& site = registry.AssignOrReplace<BuildingSite>(building);
+	// The building's own town opens a new site at it
+	const auto town = TownOfSite(building);
+	auto& site = building_site_list::Open(SitesToOpenAt(building), town);
 	site.desire = desire;
 	site.repair = IsBuilt(building);
 	site.places = PlacesRound(building);
 	// A site added to a town changes what it wants
-	if (const auto town = TownOf(building); town.has_value() && *town >= 0 && Locator::townSystem::has_value())
+	if (town != entt::null && Locator::townSystem::has_value())
 	{
-		registry.Each<const Town>([town](entt::entity entity, const Town& each) {
-			if (each.id == static_cast<uint32_t>(*town))
-			{
-				Locator::townSystem::value().MarkDesiresChanged(entity);
-			}
-		});
+		Locator::townSystem::value().MarkDesiresChanged(town);
 	}
 	if (registry.AllOf<Temple>(building))
 	{
-		MakeSitePiles(building);
+		MakeSitePiles(building, site);
 	}
+}
+
+bool construction::OpenSiteForTown(entt::entity building, entt::entity town)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(building) || !registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return false;
+	}
+	if (SiteOf(town, building) != nullptr)
+	{
+		return true;
+	}
+	// The town opens a new site at it, wanting it built no more than its other building; its pile of wood is made when
+	// the first wood comes
+	auto& site = building_site_list::Open(SitesToOpenAt(building), town);
+	site.repair = IsBuilt(building);
+	site.places = PlacesRound(building);
+	// A site added to a town changes what it wants
+	if (Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().MarkDesiresChanged(town);
+	}
+	return true;
 }
 
 void construction::OpenWorshipSite(entt::entity site, entt::entity town, float desire)
 {
-	auto& registry = Entities();
-	if (!registry.Valid(site))
+	// Each town asked to build it has a site of its own there, opened if it has none, which wants builders by the desire
+	if (OpenSiteForTown(site, town))
 	{
-		return;
-	}
-	// One site serves every town asked to build it; its pile of wood is made when the first wood comes
-	if (auto* open = registry.TryGet<BuildingSite>(site))
-	{
-		open->desire = desire;
-	}
-	else
-	{
-		auto& made = registry.Assign<BuildingSite>(site);
-		made.desire = desire;
-		made.places = PlacesRound(site);
-	}
-	// A site added to a town changes what it wants
-	if (Locator::townSystem::has_value() && registry.Valid(town) && registry.AllOf<Town>(town))
-	{
-		Locator::townSystem::value().MarkDesiresChanged(town);
+		SiteOf(town, site)->desire = desire;
 	}
 }
 
-void construction::MakeSitePiles(entt::entity building)
+void construction::MakeSitePiles(entt::entity building, BuildingSite& site)
 {
 	auto& registry = Entities();
-	auto* site = registry.TryGet<BuildingSite>(building);
-	if (site == nullptr)
-	{
-		return;
-	}
 	// A worship site's one pile stands at a point of its model, turned as the site is
 	if (const auto* worship = registry.TryGet<const WorshipSite>(building))
 	{
-		auto& pile = site->piles.front();
+		auto& pile = site.piles.front();
 		if (registry.Valid(pile) && registry.AllOf<Pot>(pile))
 		{
 			return;
@@ -521,7 +568,7 @@ void construction::MakeSitePiles(entt::entity building)
 	if (temple == nullptr)
 	{
 		// Any other building's one pile stands beyond it, away from its door
-		auto& pile = site->piles.front();
+		auto& pile = site.piles.front();
 		if ((registry.Valid(pile) && registry.AllOf<Pot>(pile)) || !registry.AllOf<Abode>(building))
 		{
 			return;
@@ -539,9 +586,9 @@ void construction::MakeSitePiles(entt::entity building)
 		return;
 	}
 	const auto& centre = registry.Get<const Transform>(building).position;
-	for (size_t i = 0; i < site->piles.size(); ++i)
+	for (size_t i = 0; i < site.piles.size(); ++i)
 	{
-		auto& pile = site->piles.at(i);
+		auto& pile = site.piles.at(i);
 		if (registry.Valid(pile) && registry.AllOf<Pot>(pile))
 		{
 			continue;

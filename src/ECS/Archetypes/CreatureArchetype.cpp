@@ -25,6 +25,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/CreatureNaming.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -114,6 +115,8 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	registry.Assign<CreatureMarks>(entity);
 	registry.Assign<CreatureSkin>(entity);
 	registry.Assign<CreatureLocomotion>(entity);
+	// It is named as it is made, by who it belongs to and how many creatures there are with it
+	registry.Get<Creature>(entity).name = creature_naming::NewName(playerName, registry.Size<Creature>());
 	// Its own size is kept as given; only the size it is drawn at is kept within what a creature can be drawn at
 	registry.Assign<Transform>(entity, position, glm::eulerAngleY(yAngleRadians),
 	                           glm::vec3(DrawnScale(creatureType, creature_morph::ClampScale(scale))));

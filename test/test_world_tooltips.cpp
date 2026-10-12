@@ -86,3 +86,41 @@ TEST(WorldToolTips, OnlyTheGamesTooltipTextsAreTooltips)
 	EXPECT_FALSE(ToolTipOfText(k_FirstToolTipText + k_ToolTipCount).has_value());
 	EXPECT_FALSE(ScaffoldDrop(0u).has_value());
 }
+
+TEST(WorldToolTips, TheTooltipHangsWhereTheHandIsDrawnNotWhereThePointerIs)
+{
+	// A camera looking straight down the z axis: a point at x = y = 0 lands mid-screen, whatever the pointer does
+	const glm::mat4 worldToClip {1.0f};
+	const glm::ivec2 screen {800, 600};
+	const glm::vec3 pinnedHand {0.0f, 0.0f, 0.0f};
+	// clip.w is 1 for the identity, so a near plane above it puts the hand behind the camera
+	const auto anchored = HandOnScreen(worldToClip, 0.5f, pinnedHand, screen);
+	ASSERT_TRUE(anchored.has_value());
+	EXPECT_EQ(*anchored, glm::ivec2(400, 300));
+	// The hand right of and above the middle is drawn there, in whole pixels cut down
+	EXPECT_EQ(*HandOnScreen(worldToClip, 0.5f, {0.501f, 0.5f, 0.0f}, screen), glm::ivec2(600, 150));
+}
+
+TEST(WorldToolTips, NoTooltipWithTheHandBehindTheCamera)
+{
+	EXPECT_FALSE(HandOnScreen(glm::mat4 {1.0f}, 2.0f, {0.0f, 0.0f, 0.0f}, {800, 600}).has_value());
+}
+
+TEST(WorldToolTips, AHandOffTheScreenKeepsItsTooltipOnTheEdge)
+{
+	// Off the screen the hand still counts, its tooltip held in by the tooltip's size
+	const auto off = HandOnScreen(glm::mat4 {1.0f}, 0.5f, {2.0f, -2.0f, 0.0f}, {800, 600});
+	ASSERT_TRUE(off.has_value());
+	EXPECT_EQ(KeptOnScreen(*off, {800, 600}, 24), glm::ivec2(776, 576));
+	EXPECT_EQ(KeptOnScreen({-30, -1}, {800, 600}, 24), glm::ivec2(0, 0));
+	EXPECT_EQ(KeptOnScreen({100, 200}, {800, 600}, 24), glm::ivec2(100, 200));
+}
+
+TEST(WorldToolTips, NothingUnderThePointerShowsWhileAMiraclePours)
+{
+	using State = openblack::magic::CastInput::State;
+	// Pouring food beside a wood pile, the pile the pointer crosses says nothing
+	EXPECT_FALSE(OffersOverToolTips(State::Locked));
+	// With nothing being poured, what is under the pointer shows
+	EXPECT_TRUE(OffersOverToolTips(State::Idle));
+}

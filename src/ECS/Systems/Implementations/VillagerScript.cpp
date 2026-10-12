@@ -169,7 +169,7 @@ void villager_script::MoveTo(entt::entity villager, glm::vec2 goal)
 	                                                                               VillagerStates::InScript))
 	{
 		// A script's walk goes straight to the point, through anything in the way: buildings, gates, rocks
-		villager_home::SetupMobileMoveTo(action, goal, VillagerStates::InScript, villager_home::WalkWay::StraightThrough);
+		villager_home::SetupMobileMoveTo(action, goal, villager_home::WalkWay::StraightThrough);
 	}
 }
 

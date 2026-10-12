@@ -335,6 +335,7 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 	}
 	switch (type)
 	{
+	case Reaction::FleeFromObject:
 	case Reaction::FleeFromSpell:
 		SetTop(*action, VillagerStates::FleeingFromObjectReaction);
 		break;
@@ -398,7 +399,7 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 		{
 			if (const auto reaction = Locator::reactionSystem::value().Find(state.reaction))
 			{
-				villager_fire::SetupReactToFire(villager, reaction->source.initiator);
+				villager_fire::SetupReactToFire(villager, reaction->source.initiator, state.reaction);
 			}
 		}
 		break;

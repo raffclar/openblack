@@ -922,7 +922,22 @@ struct GCreatureInfo: GLivingInfo
 	std::array<uint8_t, 0x4c> field0x28c;
 	/// Running away, the creature goes at least this far from what it flees, and up to 40 further
 	float runAwayDistance;
-	std::array<uint8_t, 0x58> field0x2dc;
+	std::array<uint8_t, 0x20> field0x2dc;
+	/// The help tells of a problem with its body at most once in this many seconds
+	float helpBodyProblemSeconds;
+	float field0x300;
+	/// The help prompts on how to look after it at most once in this many seconds
+	float helpTutorialSeconds;
+	/// The help says it is low on energy, hurt, tired or thirsty past these, each with a "very" step
+	float helpLowEnergy;
+	float helpVeryLowEnergy;
+	float helpLowLife;
+	float helpVeryLowLife;
+	float helpTired;
+	float helpVeryTired;
+	float helpThirsty;
+	float helpVeryThirsty;
+	std::array<uint8_t, 0xc> field0x328;
 	/// The mesh of its species' icon that stands on its player's town totems (the game's creature info +0x344)
 	MeshId totemIcon;
 	/// Each turn the change waiting for its alignment, held between -1 and 1, moves it by that share of this
@@ -944,6 +959,8 @@ static_assert(offsetof(GCreatureInfo, chantsPerEnergy) == 0x284);
 static_assert(offsetof(GCreatureInfo, desireFloor) == 0x264);
 static_assert(offsetof(GCreatureInfo, spellSizeFactor) == 0x380);
 static_assert(offsetof(GCreatureInfo, totemIcon) == 0x334);
+static_assert(offsetof(GCreatureInfo, helpBodyProblemSeconds) == 0x2fc);
+static_assert(offsetof(GCreatureInfo, helpVeryThirsty) == 0x324);
 static_assert(offsetof(GCreatureInfo, startEnergy) == 0x1f4);
 static_assert(offsetof(GCreatureInfo, comfortTemperature) == 0x1fc);
 static_assert(offsetof(GCreatureInfo, growUpMinutes) == 0x204);

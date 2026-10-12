@@ -136,6 +136,7 @@
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -160,6 +161,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -176,6 +178,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -229,6 +232,7 @@
 #include "Gui/LoadingScreen.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandFeel.h"
+#include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
 #include "Help/TurnCheer.h"
@@ -253,6 +257,15 @@ using namespace std::chrono_literals;
 
 namespace
 {
+
+/// Notes in the hand's debugging trace that a part of the frame put the hand at a position (see hand_trace::HandTrace)
+void TraceHand(std::string_view writer, const glm::vec3& position)
+{
+	if (auto* trace = Locator::handSystem::value().GetTrace(); trace != nullptr)
+	{
+		trace->Note(writer, position);
+	}
+}
 /// The hand's splash, its sound and the scare it gives the fish are this high over the sea
 constexpr float k_HandSplashHeight = 0.2f;
 // Where the camera starts on the testbed: above and behind the middle of the map
@@ -384,6 +397,25 @@ void SendAdvisorsHome(bool helpScript)
 	advisors.SpiritHome(2, helpScript);
 }
 
+/// The creature a script's camera is about, any player's: the thing it looks at, else the one it follows, when that is
+/// a creature
+std::optional<entt::entity> ScriptCameraCreature()
+{
+	if (!Locator::scriptControlSystem::has_value() || !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	const auto thing = camera != nullptr ? camera->GetFocusedThing() : std::nullopt;
+	if (!thing.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto entity = static_cast<entt::entity>(*thing);
+	const auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(entity) && registry.AllOf<ecs::components::Creature>(entity) ? std::optional(entity) : std::nullopt;
+}
+
 } // namespace
 
 const std::string k_WindowTitle = "openblack";
@@ -405,6 +437,12 @@ Game::Game(Arguments&& args) noexcept
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
+    , _profileFolder(args.profileFolder)
+    // Any of these is a developer's or a tool's run; the game started plainly, or with only its window's size, mode,
+    // backend, detail and logging chosen, is the player's
+    , _automatedRun(args.startLevel != k_DefaultStartLevel || args.startTestbed || args.scenario.has_value() ||
+                    args.newGameStart.has_value() || args.skipLogos || args.inspectPort.has_value() || args.seed.has_value() ||
+                    !args.playVideo.empty() || args.numFramesToSimulate > 0 || args.requestScreenshot.has_value())
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	std::function<std::shared_ptr<spdlog::logger>(const std::string&)> createLogger;
@@ -959,11 +997,8 @@ void Game::UpdateHandInterface()
 	{
 		return;
 	}
-	// Outside it, the tooltip is drawn by the hand, which is at the cursor
-	_interface->SetHandOnScreen(Locator::debugGui::value().IsMouseOverWindow() ? std::nullopt
-	                                                                           : std::optional(glm::vec2(_mousePosition)));
-	// Nor is the panel shown while a script has the cinema bars in
-	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	// Nor is the panel shown while a script has the cinema bars in, whether or not the player's interface is put away
+	if (Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0)
 	{
 		return;
 	}
@@ -982,6 +1017,12 @@ void Game::UpdateHandInterface()
 		creature = Locator::creatureModeSystem::value().GetCreature();
 		reward.reset();
 	}
+	// or the creature a script's camera follows or looks at, any player's
+	if (!creature.has_value())
+	{
+		creature = ScriptCameraCreature();
+		reward.reset();
+	}
 	if (!creature.has_value())
 	{
 		return;
@@ -992,6 +1033,34 @@ void Game::UpdateHandInterface()
 		// The reward is the hand's, which it keeps showing after letting go until it takes hold again
 		_interface->SetCreaturePanel(creature_panel::FromNeeds(needs->needs, reward));
 	}
+}
+
+void Game::UpdateHandToolTipAnchor()
+{
+	// The temple places the hand's tooltip itself
+	if (!_interface || !Locator::windowing::has_value() || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		return;
+	}
+	// Not while the pointer is over a debug window
+	if (Locator::debugGui::value().IsMouseOverWindow())
+	{
+		_interface->SetHandOnScreen(std::nullopt);
+		return;
+	}
+	const auto handEntity =
+	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	const auto* handTransform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity);
+	if (handTransform == nullptr)
+	{
+		_interface->SetHandOnScreen(std::nullopt);
+		return;
+	}
+	// At the hand as drawn this frame, wherever the pointer is
+	const auto& camera = Locator::camera::value();
+	const auto hand = gui::world_tooltip::HandOnScreen(camera.GetViewProjectionMatrix(), camera.GetNearClip(),
+	                                                   handTransform->position, Locator::windowing::value().GetSize());
+	_interface->SetHandOnScreen(hand.has_value() ? std::optional(glm::vec2(*hand)) : std::nullopt);
 }
 
 std::optional<glm::vec2> Game::OnScreen(glm::vec3 point) const
@@ -1111,6 +1180,13 @@ void Game::ProcessHandToolTipTurn()
 			const auto held = gui::world_tooltip::HeldAmount(*amount);
 			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
 		}
+	}
+	// While a held miracle pours, the hand offers nothing of what is under the pointer
+	if (Locator::magicSystem::has_value() &&
+	    !gui::world_tooltip::OffersOverToolTips(Locator::magicSystem::value().GetHandCastState().state))
+	{
+		toolTips.ProcessTurn();
+		return;
 	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
 	if (!_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
@@ -1333,6 +1409,11 @@ bool Game::GameLogicLoop() noexcept
 		// Creatures fizz on out of sight or back in, after they have acted
 		Locator::creatureFizzSystem::value().ProcessTurn();
 	}
+	// The advisor tells of the player's creature: the messages waiting their turn, and what the help watches of it
+	if (Locator::creatureHelpSystem::has_value())
+	{
+		Locator::creatureHelpSystem::value().ProcessTurn();
+	}
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
 		Locator::livingActionSystem::value().Update();
@@ -1440,6 +1521,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::scriptHighlightSystem::has_value())
 	{
 		Locator::scriptHighlightSystem::value().ProcessTurn();
+	}
+	// The advisors banter when the player has had no help for a while
+	if (Locator::helpMessageSystem::has_value())
+	{
+		Locator::helpMessageSystem::value().ProcessTurn();
 	}
 	// The help's count of what the player has done moves on a turn, and its tip bubble stays while its sign shows
 	if (Locator::helpProfileSystem::has_value())
@@ -1831,7 +1917,7 @@ bool Game::Update() noexcept
 	{
 		// The flames, steam and smoke of what burns move on
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
-		Locator::fireSystem::value().Update(std::chrono::duration<float>(gameTime).count());
+		Locator::fireSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	}
 	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
 	if (Locator::vortexSystem::has_value())
@@ -1869,6 +1955,9 @@ bool Game::Update() noexcept
 		// The fight animations play, blows land and the fighters move as their animations carry them
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
 		Locator::creatureFightSystem::value().Update(gameTime);
+		// The sparkles marking the player's queued fight moves
+		Locator::creatureFightSystem::value().DrawMarks(
+		    std::chrono::duration<float, std::milli>(clock.GetFrameRealTime()).count(), camera.GetOrigin());
 	}
 	{
 		// The animals are drawn between their last two turns, their models posed by their clips
@@ -1993,6 +2082,13 @@ bool Game::Update() noexcept
 		    .skipKey = !demoPlaying && keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
 		});
 		_dialogueClick = false;
+	}
+	// The gestures' hints fade while the advisors' words were drawn, and while shown their dots run and their collars
+	// turn, by the game's time
+	if (Locator::gestureSystem::has_value())
+	{
+		const auto seconds = std::chrono::duration<float>(clock.GetFrameGameTime()).count();
+		Locator::gestureSystem::value().StepHints(seconds, _interface && _interface->WereDialogueWordsDrawn());
 	}
 	// The tip bubble's time to show runs down by the game's time while it is up
 	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
@@ -2178,6 +2274,18 @@ bool Game::Update() noexcept
 			Locator::temple::value().Activate();
 		}
 
+		// The hand's debugging trace records this frame, starting from where the hand was left before it
+		if (auto* trace = Locator::handSystem::value().GetTrace(); trace != nullptr && trace->Enabled())
+		{
+			trace->BeginFrame(_frameCount, std::chrono::duration<float>(deltaTime).count());
+			const auto handEntity = Locator::handSystem::value()
+			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity))
+			{
+				trace->Note("frame start", transform->position);
+			}
+		}
+
 		// Update Hand
 		{
 			// Put away, it stays where it was and does nothing until it comes back
@@ -2206,6 +2314,7 @@ bool Game::Update() noexcept
 					           std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				}
 				PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+				TraceHand("navigation", handTransform.position);
 				// Held to a creature, the hand rests on its body under the cursor, stroking and slapping it
 				{
 					auto creatureHand = profiler.BeginScoped(Profiler::Stage::CreatureHandUpdate);
@@ -2235,6 +2344,7 @@ bool Game::Update() noexcept
 						if (_handOnCreature.has_value())
 						{
 							handTransform.position = _handOnCreature->position;
+							TraceHand("on creature", handTransform.position);
 						}
 					}
 					UpdateHandInterface();
@@ -2251,6 +2361,7 @@ bool Game::Update() noexcept
 					}
 					handTransform.position = pour.pinned.value_or(handTransform.position);
 					handTransform.position.y += pour.raise;
+					TraceHand("scenario or pour", handTransform.position);
 					// A seed in the hand lifts it, by how it is held; the pour tips it as the hand is posed
 					// (magic::HandHoldPoser)
 					if (const auto held = magic::HandHoldPoser::Find())
@@ -2259,6 +2370,7 @@ bool Game::Update() noexcept
 						const auto land = driven.has_value() ? driven->point : _cursorWorldPosition;
 						handTransform.position.y += magic::HandHoldPoser::Lift(
 						    *held, glm::distance(camera.GetOrigin(), land.value_or(handTransform.position)));
+						TraceHand("seed lift", handTransform.position);
 					}
 					else if (const auto screenSize = Locator::windowing::has_value() ? Locator::windowing::value().GetSize()
 					                                                                 : glm::zero<glm::ivec2>();
@@ -2283,6 +2395,7 @@ bool Game::Update() noexcept
 						    .nowMs = machine_clock::Ticks(),
 						    .turn = Locator::time::value().GetTurn(),
 						});
+						TraceHand("grab", handTransform.position);
 					}
 					UpdateMagicHand(handTransform.position,
 					                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
@@ -2300,6 +2413,7 @@ bool Game::Update() noexcept
 					if (const auto hold = totems.GetHandHold())
 					{
 						handTransform.position = hold->position;
+						TraceHand("totem", handTransform.position);
 						// It faces the way it always does, tipped forwards over the icon
 						using namespace hand_orientation;
 						const auto facingCamera = glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection);
@@ -2360,6 +2474,20 @@ bool Game::Update() noexcept
 				    .effectInFingers = false,
 				};
 			}
+		}
+		// Each change of what the hand does (pulling, holding, scooping or none) fades its pose from how it was last
+		// drawn, as its place fades (see magic::hand_hold::StageFade)
+		if (_handAnimation)
+		{
+			const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
+			const auto stage =
+			    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
+			                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
+			if (_handPoseStage.has_value() && stage != *_handPoseStage)
+			{
+				_handAnimation->FadeFromLastPose();
+			}
+			_handPoseStage = stage;
 		}
 		bool holdingSeed = false;
 		{
@@ -2511,6 +2639,8 @@ bool Game::Update() noexcept
 		}
 		// The camera's helper icons by the hand, where it is drawn this frame, now that it is posed
 		UpdateHandTricons(IsHandDrawn(), std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+		// The tooltip by the drawn hand too, which stays with it while it is held still and the pointer moves on
+		UpdateHandToolTipAnchor();
 		// Taking or letting go of a seed cross-fades the drawn hand, and the seed's in-hand effect sits in its fingers
 		{
 			const auto handEntity = Locator::handSystem::value()
@@ -2524,7 +2654,10 @@ bool Game::Update() noexcept
 				const auto stage =
 				    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
 				                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
+				const auto placed = handTransform->position;
 				_handHold.Fade(stage, heldThing.has_value() ? heldThing->entity : entt::null, deltaTime, *handTransform);
+				TraceHand("stage fade", handTransform->position);
+				EndHandTrace(placed, *handTransform, stage, grab);
 				_handHold.PlaceHandEffect(heldSeed, _handAnimation.get(), *handTransform, handSize);
 				// The trails' sheets of light and the chain behind the gesturing hand move on every frame
 				Locator::particleSystem::value().UpdateFrame(
@@ -2570,6 +2703,12 @@ bool Game::Update() noexcept
 				                                             Locator::camera::value().GetViewProjectionMatrix());
 				// The trees out of the land are drawn with their roots, as each now is
 				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
+				// The land's draw list, from the camera the frame is drawn from, is made again when it is due: what stands
+				// on the blocks beyond it isn't drawn
+				if (Locator::objectDrawListSystem::has_value())
+				{
+					Locator::objectDrawListSystem::value().Update(clock.GetTurn());
+				}
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				ShowInspectorCamera(false);
@@ -2700,7 +2839,8 @@ bool Game::Initialize() noexcept
 		_startMap = fileSystem.GetPath<Path::Scripts>() / _startMap;
 	}
 
-	if (!InitializeGame())
+	const auto profiles = ProfileStore();
+	if (!InitializeGame(profiles))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
@@ -3082,19 +3222,26 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("info tables");
-	// The game's menu, which greets the player by their profile's name: openblack has no profiles, so by the name
-	// they log in with
+	// The game's menu, which greets the player by their profile's name and shows their creature's name and their
+	// symbol; before a first start's player has a profile, by the name they log in with
 	{
 		const auto* user = std::getenv("USERNAME");
 		user = user != nullptr ? user : std::getenv("USER");
+		auto playerName = gui::ToUtf16(user != nullptr ? user : "Player");
 		// The settings the menu starts with are the game's
 		gui::MenuSettings settings;
+		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
+		{
+			playerName = gui::ToUtf16(profile->name);
+			settings.creatureName = gui::ToUtf16(profile->creatureName);
+			settings.symbol = profile->symbol;
+		}
 		auto& audio = Locator::audio::value();
 		settings.sfxVolume = audio.GetSfxVolume();
 		settings.musicVolume = audio.GetMusicVolume();
 		settings.leftHandedHand = !Locator::config::value().rightHandedHand;
 		settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
-		_interface = gui::GameInterface::Create(gui::ToUtf16(user != nullptr ? user : "Player"), std::move(settings));
+		_interface = gui::GameInterface::Create(playerName, std::move(settings));
 		if (!_interface)
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game's menu is not available, Escape quits");
@@ -3462,9 +3609,15 @@ bool Game::Run() noexcept
 	{
 		LoadTestbed();
 	}
-	else if (!LoadMap(_startMap))
+	else
 	{
-		return false;
+		// A first start: the new player is asked their name before the first land; closing the window meanwhile ends
+		// the game at its first frame
+		AskForNewPlayer();
+		if (!LoadMap(_startMap))
+		{
+			return false;
+		}
 	}
 	if (_startupTimer.has_value())
 	{
@@ -3847,6 +4000,12 @@ void Game::LoadTestbed() noexcept
 
 void Game::PrepareNewLand()
 {
+	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
+	// creature's room's flames and smoke, keeps entities of the land after they have gone
+	if (Locator::temple::has_value())
+	{
+		Locator::temple::value().CloseForNewLand();
+	}
 	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
 	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment
 	if (Locator::creatureCarryOverSystem::has_value())
@@ -3912,6 +4071,10 @@ void Game::PrepareNewLand()
 	if (Locator::animatedStaticSystem::has_value())
 	{
 		Locator::animatedStaticSystem::value().Reset();
+	}
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().Reset();
 	}
 	if (Locator::appleBarrelSystem::has_value())
 	{
@@ -4067,6 +4230,10 @@ void Game::HandleInterfaceAction()
 		audio.SetSfxVolume(settings.sfxVolume);
 		audio.SetMusicVolume(settings.musicVolume);
 		Locator::config::value().rightHandedHand = !settings.leftHandedHand;
+		if (Locator::creatureHelpSystem::has_value())
+		{
+			Locator::creatureHelpSystem::value().SetHelpOn(settings.creatureHelp);
+		}
 	}
 
 	// The menu pauses the game while it is open
@@ -4720,6 +4887,60 @@ std::chrono::milliseconds Game::CameraStepTime() const
 float Game::HandStepSeconds() const
 {
 	return static_cast<float>(static_cast<int32_t>(CameraStepTime().count())) * 0.001f;
+}
+
+void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transform& hand, magic::hand_hold::HandStage stage,
+                        const ecs::systems::HandGrabSystemInterface* grab)
+{
+	auto* trace = Locator::handSystem::value().GetTrace();
+	auto* frame = trace != nullptr ? trace->Current() : nullptr;
+	if (frame == nullptr)
+	{
+		return;
+	}
+	frame->cursor = glm::vec2(_mousePosition);
+	frame->placed = placed;
+	frame->drawn = hand.position;
+	// The hand shows where its fingertips are as posed, which its pose can carry away from its origin
+	frame->visible = hand.position;
+	if (_handAnimation && _handAnimation->IsLoaded())
+	{
+		const auto model =
+		    glm::translate(glm::mat4(1.0f), hand.position) * glm::mat4(hand.rotation) * glm::scale(glm::mat4(1.0f), hand.scale);
+		frame->visible = glm::vec3(model * glm::vec4(_handAnimation->LeafBoneCentre(), 1.0f));
+		if (const auto& bones = _handAnimation->GetBoneMatrices(); !bones.empty())
+		{
+			frame->wrist = glm::vec3(model * bones.front()[3]);
+		}
+	}
+	const auto screenSize = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::zero<glm::ivec2>();
+	glm::vec3 screen;
+	if (screenSize.x > 0 && screenSize.y > 0 &&
+	    Locator::camera::value().ProjectWorldToScreen(frame->visible, glm::vec4(0.0f, 0.0f, glm::vec2(screenSize)), screen))
+	{
+		frame->screen = glm::vec2(screen);
+	}
+	if (screenSize.x > 0 && screenSize.y > 0 &&
+	    Locator::camera::value().ProjectWorldToScreen(frame->wrist, glm::vec4(0.0f, 0.0f, glm::vec2(screenSize)), screen))
+	{
+		frame->wristScreen = glm::vec2(screen);
+	}
+	frame->stage = static_cast<uint8_t>(stage);
+	if (const auto picked = Locator::pickingSystem::value().GetPick().object)
+	{
+		frame->picked = static_cast<uint32_t>(entt::to_integral(*picked));
+	}
+	frame->cursorLand = _cursorLand;
+	frame->restOnThing = _handRestOnThing;
+	if (grab != nullptr)
+	{
+		frame->busy = grab->IsBusy();
+		if (const auto held = grab->GetHeld())
+		{
+			frame->held = static_cast<uint32_t>(entt::to_integral(*held));
+		}
+	}
+	trace->EndFrame();
 }
 
 void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)

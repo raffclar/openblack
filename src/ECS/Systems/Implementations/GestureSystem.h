@@ -57,6 +57,8 @@ public:
 	[[nodiscard]] bool IsLeashPickerOpen() const override { return _picker.open; }
 	[[nodiscard]] float GetCircleSecondsLeft() const override { return _circleSeconds; }
 	[[nodiscard]] bool IsGesturing() const override { return _gesturing; }
+	[[nodiscard]] const gesture_hints::Row& GetHints() const override { return _hints; }
+	void StepHints(float seconds, bool wordsShowing) override;
 
 private:
 	/// The game's templates, loaded through the resource caches the first time they are wanted
@@ -67,6 +69,8 @@ private:
 	void Act(const gesture::Request& request, const gesture::Match& match, const Frame& frame);
 	/// The recognised gesture's trail on the land, for the particles to show
 	void LayTrail(GestureType gesture, const gesture::Match& match, const Frame& frame) const;
+	/// The hints for what the hand waits for now, replacing those shown when they differ
+	void RefreshHints();
 
 	std::vector<GestureEvent> _events;
 	std::shared_ptr<const gestures::GestureFile> _templates;
@@ -89,6 +93,7 @@ private:
 	float _circleSeconds {0.0f};
 	bool _gesturing {false};
 	entt::entity _circleSeed {entt::null};
+	gesture_hints::Row _hints;
 };
 
 } // namespace openblack::ecs::systems

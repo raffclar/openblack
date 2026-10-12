@@ -250,6 +250,11 @@ int32_t HelpTextSystem::GetNarrator(uint32_t text) const
 	return _texts != nullptr ? _texts->GetHelpText(text).narrator : 0;
 }
 
+std::u16string HelpTextSystem::GetWords(uint32_t text) const
+{
+	return _texts != nullptr ? _texts->GetHelpText(text).text : std::u16string {};
+}
+
 void HelpTextSystem::Update(const Frame& frame)
 {
 	_clockMs += static_cast<int32_t>(frame.gameMs);

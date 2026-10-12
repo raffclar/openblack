@@ -229,6 +229,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		    .end();
 		_renderContext.instanceUniformBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(instanceCount, layout));
 		_renderContext.instanceUniforms.resize(instanceCount);
+		_renderContext.instanceLevels.resize(instanceCount);
 	}
 
 	// Determine uniform buffer offsets and instance count for draw
@@ -238,6 +239,8 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	{
 		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
 		                                                               std::forward_as_tuple(offset, desc.first, desc.second));
+		// Every room part is drawn whole, however far off
+		drawDesc->second.filled = desc.first;
 		drawDesc->second.hiddenFromReflection = !mirroredMeshIds.contains(meshId);
 		drawDesc->second.showsReflection = reflectiveMeshIds.contains(meshId);
 		drawDesc->second.onlyJoints = doorMeshIds.contains(meshId);
@@ -413,7 +416,7 @@ void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 	if (!_renderContext.instanceUniforms.empty())
 	{
 		const auto size = static_cast<uint32_t>(_renderContext.instanceUniforms.size() * sizeof(RenderContext::ObjectInstance));
-		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0,
-		             bgfx::makeRef(_renderContext.instanceUniforms.data(), size));
+		// Copied, never referenced: bgfx's render thread reads the update while the next frame refills these instances
+		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0, bgfx::copy(_renderContext.instanceUniforms.data(), size));
 	}
 }

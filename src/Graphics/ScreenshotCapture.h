@@ -81,9 +81,19 @@ class OffscreenScreenshots
 {
 public:
 	/// The passes that draw to the window
-	static constexpr std::array k_ScreenPasses = {RenderPass::Sky,         RenderPass::Land,       RenderPass::Main,
-	                                              RenderPass::Translucent, RenderPass::CinemaBars, RenderPass::Advisors,
-	                                              RenderPass::Interface,   RenderPass::ImGui,      RenderPass::Cursor};
+	static constexpr std::array k_ScreenPasses = {RenderPass::Sky,
+	                                              RenderPass::Land,
+	                                              RenderPass::Main,
+	                                              RenderPass::Translucent,
+	                                              RenderPass::GestureHintCollar0,
+	                                              RenderPass::GestureHintCollar1,
+	                                              RenderPass::GestureHintCollar2,
+	                                              RenderPass::GestureHints,
+	                                              RenderPass::CinemaBars,
+	                                              RenderPass::Advisors,
+	                                              RenderPass::Interface,
+	                                              RenderPass::ImGui,
+	                                              RenderPass::Cursor};
 
 	OffscreenScreenshots() = default;
 	OffscreenScreenshots(const OffscreenScreenshots&) = delete;

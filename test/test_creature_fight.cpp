@@ -513,8 +513,6 @@ TEST(CreatureFightHud, ALongNameIsCutToFit)
 	EXPECT_EQ(creature_fight_hud::FitName(u"Bartholomew", 50.0f, tenEach), u"Barth");
 	EXPECT_EQ(creature_fight_hud::FitName(u"Rex", 50.0f, tenEach), u"Rex");
 	EXPECT_EQ(creature_fight_hud::FitName(u"", 50.0f, tenEach), u"");
-	EXPECT_EQ(creature_fight_hud::SpeciesName(CreatureType::Tiger), u"Tiger");
-	EXPECT_EQ(creature_fight_hud::SpeciesName(CreatureType::Unknown), u"Creature");
 }
 
 TEST(CreatureFight, AMoveForACreatureNobodyFightsLeavesItToTheQueue)
