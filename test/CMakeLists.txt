@@ -797,3 +797,6 @@ openblack_setup_and_add_test(test_shape_shadows graphics/test_shape_shadows.cpp)
 openblack_setup_and_add_test(
   test_land_shadow_casters test_land_shadow_casters.cpp
 )
+openblack_setup_and_add_test(
+  test_level_script_match test_level_script_match.cpp
+)
