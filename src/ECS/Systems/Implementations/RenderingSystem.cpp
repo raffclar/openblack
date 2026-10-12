@@ -12,6 +12,7 @@
 #include "RenderingSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -201,6 +202,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
 	std::unordered_map<entt::id_type, uint32_t> fadingCounts;
+	_meshBoxes.clear();
 
 	auto prepMesh = [&registry, &meshIds, &instanceCount](entt::entity entity, entt::id_type drawnMesh, const Mesh& mesh,
 	                                                      bool morphWithTerrain) {
@@ -506,11 +508,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    const auto bounding = detail != nullptr
 			                              ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard))
 			                              : drawnMesh;
-			    if (meshes.Contains(bounding))
+			    if (const auto& box = MeshBox(bounding); box.has_value())
 			    {
 				    const auto choice = ChooseDetail(
-				        meshes.Handle(bounding)->GetBoundingBox(), detail != nullptr ? detail->importance : 0.0f, modelMatrix,
-				        transform.scale.x,
+				        *box, detail != nullptr ? detail->importance : 0.0f, modelMatrix, transform.scale.x,
 				        [&registry, entity] {
 					        return object_detail::Disappears(registry, entity, IsTownCentre(registry, entity));
 				        },
@@ -1164,6 +1165,9 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	const float modelDetail = graphics::detail_level::ModelDetail(Locator::config::value().detailLevel);
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	using Group = PlacedTree::Group;
+	// Every far tree turns the same way, by the camera's heading
+	const auto paperTurn =
+	    camera != nullptr ? graphics::mesh_detail::PaperTurn(camera->GetOrigin(), camera->GetFocus()) : glm::mat3(1.0f);
 
 	// Each tree as it is drawn this frame, gathered first, then laid out by mesh and detail
 	_placedTrees.clear();
@@ -1185,6 +1189,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    if (!placed.has_value())
 		    {
 			    _placedTrees.push_back({.mesh = mesh.id,
+			                            .slots = &slots->second,
 			                            .group = Group::Gone,
 			                            .data = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)},
 			                            .box = glm::mat4(0.0f)});
@@ -1195,20 +1200,24 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    // Drawn in less detail the further off it is, fading out, then not at all, unless something holds it
 		    auto group = Group::High;
 		    std::optional<uint8_t> fade;
-		    if (camera != nullptr && meshes.Contains(mesh.id) && object_detail::BandedNow(registry, entity))
+		    if (const auto& box = MeshBox(mesh.id);
+		        camera != nullptr && box.has_value() && object_detail::BandedNow(registry, entity))
 		    {
 			    const auto choice = ChooseDetail(
-			        meshes.Handle(mesh.id)->GetBoundingBox(), 0.0f, modelMatrix, transform.scale.x,
+			        *box, 0.0f, modelMatrix, transform.scale.x,
 			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *camera, modelDetail);
 			    if (!choice.mesh.has_value())
 			    {
-				    group = Group::Gone;
+				    // Too far off to be drawn: kept only for what the land keeps of it
+				    _placedTrees.push_back({.mesh = mesh.id,
+				                            .slots = &slots->second,
+				                            .group = Group::Gone,
+				                            .data = {.modelMatrix = modelMatrix, .burning = glm::vec4(0.0f)},
+				                            .box = glm::mat4(0.0f)});
+				    return;
 			    }
-			    else
-			    {
-				    group = static_cast<Group>(*choice.mesh);
-				    fade = choice.alpha;
-			    }
+			    group = static_cast<Group>(*choice.mesh);
+			    fade = choice.alpha;
 		    }
 
 		    // A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
@@ -1227,71 +1236,89 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			    burning.z = 1.0f - (static_cast<float>(*fade) / 255.0f);
 			    group = Group::Fading;
 		    }
-		    // Out of the land it neither sways nor bends: it is drawn as it is held or as the physics places it
-		    const auto place = registry.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
-		                           ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
-		                           : TreePlace::InTheLand;
-		    auto drawnMatrix = openblack::physics::objects::SwaysAndBends(place)
-		                           ? vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y,
-		                                                      slots->second.height, swayable.swaySlot)
-		                           : modelMatrix;
 		    // In its least detail a tree is a paper cut-out standing turned to the camera, which neither sways nor bends,
-		    // unless it moves in the physics
+		    // unless it moves in the physics. Otherwise out of the land it neither sways nor bends: it is drawn as it is held
+		    // or as the physics places it.
+		    glm::mat4 drawnMatrix;
 		    if (camera != nullptr && (group == Group::Low || group == Group::Fading) && !registry.AllOf<InPhysics>(entity))
 		    {
-			    drawnMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x,
-			                                                     camera->GetOrigin(), camera->GetFocus());
+			    drawnMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x, paperTurn);
 		    }
-		    if (group != Group::Gone)
+		    else
 		    {
-			    _renderContext.drawnObjects.push_back({.entity = entity, .model = drawnMatrix});
+			    const auto place = registry.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
+			                           ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
+			                           : TreePlace::InTheLand;
+			    drawnMatrix = openblack::physics::objects::SwaysAndBends(place)
+			                      ? vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y,
+			                                                 slots->second.height, swayable.swaySlot)
+			                      : modelMatrix;
 		    }
+		    _renderContext.drawnObjects.push_back({.entity = entity, .model = drawnMatrix});
 		    glm::mat4 boxMatrix(0.0f);
 		    if (drawBoundingBox && meshes.Contains(mesh.id))
 		    {
 			    const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
 			    boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
 		    }
-		    _placedTrees.push_back(
-		        {.mesh = mesh.id, .group = group, .data = {.modelMatrix = drawnMatrix, .burning = burning}, .box = boxMatrix});
+		    _placedTrees.push_back({.mesh = mesh.id,
+		                            .slots = &slots->second,
+		                            .group = group,
+		                            .data = {.modelMatrix = drawnMatrix, .burning = burning},
+		                            .box = boxMatrix});
 	    });
 
-	// Laid out within each mesh's instances by detail, each run drawn in its own
-	std::ranges::stable_sort(_placedTrees, {}, [](const PlacedTree& tree) { return std::tuple(tree.mesh, tree.group); });
+	// Laid out within each mesh's instances by detail, each run drawn in its own: counted by mesh and detail first, then
+	// each tree put in its place
+	constexpr size_t k_Groups = static_cast<size_t>(Group::Gone) + 1;
 	for (auto& [meshId, slots] : _treeSlots)
 	{
-		slots.filled = 0;
+		slots.treeGroups = {};
+	}
+	for (const auto& tree : _placedTrees)
+	{
+		++tree.slots->treeGroups.at(static_cast<size_t>(tree.group));
 	}
 	_renderContext.treeRuns.clear();
 	bool fits = true;
 	const auto low = graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::Low);
+	for (auto& [meshId, slots] : _treeSlots)
+	{
+		slots.filled = 0;
+		uint32_t first = slots.offset;
+		for (size_t group = 0; group < k_Groups; ++group)
+		{
+			const auto count = slots.treeGroups.at(group);
+			slots.treeGroups.at(group) = first;
+			if (count == 0)
+			{
+				continue;
+			}
+			const auto drawn = static_cast<Group>(group);
+			const bool fading = drawn == Group::Fading;
+			const bool gone = drawn == Group::Gone;
+			const auto level =
+			    fading || gone ? low : graphics::mesh_detail::LevelBit(static_cast<graphics::mesh_detail::Mesh>(group));
+			_renderContext.treeRuns.push_back(
+			    {.mesh = meshId, .first = first, .count = count, .level = level, .fading = fading, .gone = gone});
+			first += count;
+			slots.filled += count;
+		}
+		fits = fits && slots.filled <= slots.count;
+	}
 	for (const auto& tree : _placedTrees)
 	{
-		const auto slots = _treeSlots.find(tree.mesh);
-		if (slots->second.filled >= slots->second.count)
+		if (!fits)
 		{
-			fits = false;
 			break;
 		}
-		const uint32_t idx = slots->second.offset + slots->second.filled;
+		const uint32_t idx = tree.slots->treeGroups.at(static_cast<size_t>(tree.group))++;
 		_renderContext.treeInstanceData[idx] = tree.data;
 		if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
 		{
 			// Bounding box matrices in the second half of the instance data
 			_renderContext.treeInstanceData[idx + (_renderContext.treeInstanceData.size() / 2)].modelMatrix = tree.box;
 		}
-		++slots->second.filled;
-		const bool fading = tree.group == Group::Fading;
-		const bool gone = tree.group == Group::Gone;
-		const auto level =
-		    fading || gone ? low : graphics::mesh_detail::LevelBit(static_cast<graphics::mesh_detail::Mesh>(tree.group));
-		auto& runs = _renderContext.treeRuns;
-		if (runs.empty() || runs.back().mesh != tree.mesh || runs.back().level != level || runs.back().fading != fading ||
-		    runs.back().gone != gone)
-		{
-			runs.push_back({.mesh = tree.mesh, .first = idx, .count = 0, .level = level, .fading = fading, .gone = gone});
-		}
-		++runs.back().count;
 	}
 
 	if (fits && !_renderContext.treeInstanceData.empty())
@@ -1304,4 +1331,16 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		             bgfx::makeRef(_renderContext.treeInstanceData.data(), size));
 	}
 	return fits;
+}
+
+const std::optional<openblack::AxisAlignedBoundingBox>& RenderingSystem::MeshBox(entt::id_type mesh)
+{
+	const auto found = _meshBoxes.find(mesh);
+	if (found != _meshBoxes.end())
+	{
+		return found->second;
+	}
+	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
+	return _meshBoxes.emplace(mesh, meshes.Contains(mesh) ? std::optional(meshes.Handle(mesh)->GetBoundingBox()) : std::nullopt)
+	    .first->second;
 }

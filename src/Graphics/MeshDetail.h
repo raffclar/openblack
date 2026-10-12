@@ -90,6 +90,10 @@ struct Choice
 /// turns the same way at once, by the camera's heading alone.
 [[nodiscard]] glm::mat4 PaperMatrix(const glm::vec3& position, float scale, const glm::vec3& eye,
                                     const glm::vec3& focus) noexcept;
+/// The turn every paper thing takes for a camera, worked out once a frame (see PaperMatrix)
+[[nodiscard]] glm::mat3 PaperTurn(const glm::vec3& eye, const glm::vec3& focus) noexcept;
+/// A paper thing's matrix by the turn of its camera
+[[nodiscard]] glm::mat4 PaperMatrix(const glm::vec3& position, float scale, const glm::mat3& turn) noexcept;
 
 /// How important a villager is to keep in detail: a thousandth of the age it was made at
 [[nodiscard]] float VillagerImportance(uint32_t ageWhenMade) noexcept;

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <map>
 #include <optional>
@@ -19,6 +20,7 @@
 #include <glm/mat4x4.hpp>
 
 #include "3D/AllMeshes.h"
+#include "3D/AxisAlignedBoundingBox.h"
 #include "RenderingSystemCommon.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -61,6 +63,8 @@ private:
 		bool bonePalette {false};
 		/// How many, from the last back, are of things too far off to be drawn this frame
 		uint32_t gone {0};
+		/// The trees: how many are drawn in each detail this frame, then where the next of each goes
+		std::array<uint32_t, 5> treeGroups {};
 	};
 	std::unordered_map<entt::id_type, InstanceSlots> _instanceSlots;
 	std::unordered_map<entt::id_type, InstanceSlots> _treeSlots;
@@ -90,11 +94,16 @@ private:
 			Gone,
 		};
 		entt::id_type mesh;
+		InstanceSlots* slots;
 		Group group;
 		RenderContext::TreeInstanceData data;
 		glm::mat4 box;
 	};
 	std::vector<PlacedTree> _placedTrees;
+	/// The bounding box of each mesh the distance bands have looked at, kept while the draw lists are
+	std::unordered_map<entt::id_type, std::optional<AxisAlignedBoundingBox>> _meshBoxes;
+	/// The bounding box of a mesh, none when it isn't loaded
+	[[nodiscard]] const std::optional<AxisAlignedBoundingBox>& MeshBox(entt::id_type mesh);
 	/// The things drawn by the distance bands that are fading out this frame, by how opaque, and those too far off to be
 	/// drawn at all: their other draws (a building's part built, a graveyard's graves) follow them
 	std::unordered_map<entt::entity, uint8_t> _fadingThings;

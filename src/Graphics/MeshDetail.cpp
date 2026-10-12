@@ -68,7 +68,7 @@ Choice Choose(float depth, float reach, bool disappears) noexcept
 	return {.mesh = std::nullopt, .alpha = std::nullopt};
 }
 
-glm::mat4 PaperMatrix(const glm::vec3& position, float scale, const glm::vec3& eye, const glm::vec3& focus) noexcept
+glm::mat3 PaperTurn(const glm::vec3& eye, const glm::vec3& focus) noexcept
 {
 	// The camera's heading on the ground, a whole turn kept between 0 and two pi, turned a quarter further: the face,
 	// along the model's own z, then points back at the camera
@@ -80,12 +80,18 @@ glm::mat4 PaperMatrix(const glm::vec3& position, float scale, const glm::vec3& e
 	heading += 0.5f * std::numbers::pi_v<float>;
 	const float cosine = std::cos(heading);
 	const float sine = std::sin(heading);
-	return {
-	    glm::vec4(cosine * scale, 0.0f, sine * scale, 0.0f),
-	    glm::vec4(0.0f, scale, 0.0f, 0.0f),
-	    glm::vec4(-sine * scale, 0.0f, cosine * scale, 0.0f),
-	    glm::vec4(position, 1.0f),
-	};
+	return {glm::vec3(cosine, 0.0f, sine), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-sine, 0.0f, cosine)};
+}
+
+glm::mat4 PaperMatrix(const glm::vec3& position, float scale, const glm::mat3& turn) noexcept
+{
+	return {glm::vec4(turn[0] * scale, 0.0f), glm::vec4(turn[1] * scale, 0.0f), glm::vec4(turn[2] * scale, 0.0f),
+	        glm::vec4(position, 1.0f)};
+}
+
+glm::mat4 PaperMatrix(const glm::vec3& position, float scale, const glm::vec3& eye, const glm::vec3& focus) noexcept
+{
+	return PaperMatrix(position, scale, PaperTurn(eye, focus));
 }
 
 float VillagerImportance(uint32_t ageWhenMade) noexcept
