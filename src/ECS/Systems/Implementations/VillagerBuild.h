@@ -80,7 +80,8 @@ bool FaceTowards(entt::entity villager, glm::vec2 point, int32_t step);
 /// builders. 1 when it went.
 uint32_t GotoBuildingSite(components::LivingAction& action, entt::entity building);
 
-/// The villager takes up building a site, fetching wood first when it lacks it. 1 when it did.
+/// The villager takes up building at a building, its town opening a site there first if it has none, fetching wood
+/// first when it lacks it. 1 when it did.
 uint32_t TakeUpSite(components::LivingAction& action, entt::entity building);
 
 /// In a script's crowd: a fresh crowd clip each time the last has played

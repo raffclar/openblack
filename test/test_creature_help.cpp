@@ -263,3 +263,38 @@ TEST(CreatureHelp, TheDominantDesireIsTheFirstGreatestActive)
 	const std::array on {true, true};
 	EXPECT_EQ(DominantDesire(none, on), 0u);
 }
+
+TEST(CreatureHelp, TheHandsHoldShowsTheCreditedDesireElseThePlans)
+{
+	using openblack::creature_desires::Desire;
+	// What it did lately comes first
+	EXPECT_EQ(DesireShownOnHold(Desire::Hunger, Desire::Poo), Desire::Hunger);
+	// Else what its plan serves
+	EXPECT_EQ(DesireShownOnHold(std::nullopt, Desire::Poo), Desire::Poo);
+	// A desire with no way of being shown is neither shown nor told of, even with a plan's that could be
+	EXPECT_FALSE(DesireShownOnHold(Desire::BuildHome, Desire::Poo).has_value());
+	EXPECT_FALSE(DesireShownOnHold(std::nullopt, std::nullopt).has_value());
+}
+
+TEST(CreatureHelp, FeedbackTooYoungToLearnFrom)
+{
+	EXPECT_EQ(TooYoungToLearn(0.5f).kind, Kind::MiscellaneousStacked);
+	EXPECT_EQ(TooYoungToLearn(0.5f).parameter, k_StrokedTooYoung);
+	EXPECT_EQ(TooYoungToLearn(-0.5f).parameter, k_SlappedTooYoung);
+	EXPECT_EQ(Text(Kind::MiscellaneousStacked, k_StrokedTooYoung), 1109u);
+}
+
+TEST(CreatureHelp, FeedbackLessonsTellOfTheOpinionOrTheSource)
+{
+	using openblack::creature_desires::Desire;
+	auto lesson = FeedbackLesson(0.4f, true, Desire::Hunger, 12);
+	EXPECT_EQ(lesson.kind, Kind::LessonIncreaseOpinion);
+	EXPECT_EQ(lesson.parameter, static_cast<uint32_t>(Desire::Hunger));
+	lesson = FeedbackLesson(-0.4f, true, Desire::Hunger, 12);
+	EXPECT_EQ(lesson.kind, Kind::LessonDecreaseOpinion);
+	lesson = FeedbackLesson(0.4f, false, Desire::Hunger, 12);
+	EXPECT_EQ(lesson.kind, Kind::LessonIncreaseSource);
+	EXPECT_EQ(lesson.parameter, 12u);
+	EXPECT_EQ(FeedbackLesson(-0.4f, false, Desire::Hunger, 12).kind, Kind::LessonDecreaseSource);
+	EXPECT_EQ(Text(Kind::LessonDecreaseSource, 12), 535u);
+}

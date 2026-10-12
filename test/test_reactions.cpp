@@ -17,7 +17,9 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/GameRandom.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/LivingAction.h"
@@ -43,6 +45,7 @@
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
+#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/Implementations/VillagerReactions.h"
 
 using namespace openblack;
@@ -82,6 +85,21 @@ public:
 
 	PhysicsEntry entry;
 };
+/// Every draw of the game's random numbers is as low as it can be
+class AlwaysLowGameRandom final: public GameRandomInterface
+{
+public:
+	uint32_t GameRand(uint32_t) override { return 0; }
+	float GameFloatRand(float) override { return 0.0f; }
+	uint32_t LocalRand(int32_t) override { return 0; }
+	float LocalFloatRand(float) override { return 0.0f; }
+	int32_t CrtRand() override { return 0; }
+	void CrtSrand(uint32_t) override {}
+	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return {}; }
+	void SetSeeds(GameRandomSeeds) override {}
+	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
+	void SetParticleStream(ParticleRandomStream) override {}
+};
 } // namespace
 
 /// Villagers of a town and a creature about a miracle, with made-up reaction tables
@@ -101,7 +119,8 @@ protected:
 		Locator::entitiesMap::emplace<MapProduction>();
 		Locator::livingActionSystem::emplace<ecs::systems::LivingActionSystem>();
 		_info = std::make_unique<InfoConstants>();
-		for (const auto type : {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield})
+		for (const auto type :
+		     {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield, Reaction::FleeFromObject})
 		{
 			auto& reaction = _info->reaction.at(static_cast<size_t>(type));
 			reaction.priority = type == Reaction::FleeFromSpell ? 150 : 120;
@@ -120,6 +139,8 @@ protected:
 		for (auto& villager : _info->villager)
 		{
 			ReactToEverything(villager);
+			// As every kind of villager in the game's data, they walk in the plain walking state
+			villager.moveState = LivingStates::LivingMoveToPos;
 		}
 		for (auto& creature : _info->creature)
 		{
@@ -398,7 +419,7 @@ TEST_F(Reactions, AFiremanWalkingToAFireThatGoesLeavesTheBlazeAndLetsGoOfItsReac
 	Locator::reactionSystem::reset();
 }
 
-TEST_F(Reactions, GoingIntoAStateThatIsAnEndInItselfLetsGoOfTheStateItWasWalkingTo)
+TEST_F(Reactions, GoingIntoANewStateLetsGoOfTheStateItWasWalkingTo)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& living = Locator::livingActionSystem::value();
@@ -406,15 +427,85 @@ TEST_F(Reactions, GoingIntoAStateThatIsAnEndInItselfLetsGoOfTheStateItWasWalking
 	const auto final = [&action] {
 		return static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final)));
 	};
-	// Setting off on a walk keeps where it is heading
-	action.states.at(static_cast<size_t>(LivingAction::Index::Final)) = static_cast<uint8_t>(VillagerStates::DecideWhatToDo);
-	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::MoveToPos, false);
+	// Setting off on a walk goes into the walk and where it is heading together
+	ASSERT_TRUE(
+	    living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, VillagerStates::DecideWhatToDo));
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::MoveToPos);
 	EXPECT_EQ(final(), VillagerStates::DecideWhatToDo);
 	// Arriving, it goes into that state and heads for nothing more
 	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, false);
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
 	EXPECT_EQ(final(), VillagerStates::InvalidState);
+	// Any new state lets go of where it was heading, even one that isn't an end in itself
+	ASSERT_TRUE(
+	    living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, VillagerStates::DecideWhatToDo));
+	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::WaitForCounter, false);
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::WaitForCounter);
+	EXPECT_EQ(final(), VillagerStates::InvalidState);
+}
+
+TEST_F(Reactions, AFiremanWalkingAwayFromTheFireIsNoLongerOneOfItsFiremen)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& row = _info->villagerStateTable.at(static_cast<size_t>(VillagerStates::PutOutFireByBeating));
+	row.isFinalState = 1;
+	row.isReactionState = 1;
+	row.resumeState = static_cast<int>(VillagerStates::PutOutFireByBeating);
+	Locator::infoConstants::emplace(*_info);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
+	const auto villager = _villagers[0];
+	const auto burning = registry.Create();
+	registry.Assign<Transform>(burning, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Fire>(burning).root = burning;
+	registry.Assign<FireGroup>(burning, FireGroup {.members = {burning}, .firemen = {villager}});
+	// Beating the fire, it is sent off to walk somewhere and then decide what to do
+	auto& action = registry.Get<LivingAction>(villager);
+	action.states = {static_cast<uint8_t>(VillagerStates::PutOutFireByBeating),
+	                 static_cast<uint8_t>(VillagerStates::InvalidState), static_cast<uint8_t>(VillagerStates::InvalidState)};
+	registry.Assign<VillagerFireState>(villager, VillagerFireState {.fire = burning, .reactionTarget = burning, .reaction = 7});
+	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = 7, .type = Reaction::ReactToFire});
+	ASSERT_TRUE(villager_home::SetupMoveTo(action, glm::vec2(600.0f, 600.0f), VillagerStates::DecideWhatToDo));
+	// Its fire state hears where it is heading, not that it walks, so it leaves the blaze rather than staying listed
+	EXPECT_TRUE(registry.Get<const FireGroup>(burning).firemen.empty());
+	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
+	EXPECT_EQ(static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final))),
+	          VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(registry.Get<const WallHug>(villager).goal, glm::vec2(600.0f, 600.0f));
+	Locator::fireSystem::reset();
+	Locator::reactionSystem::reset();
+}
+
+TEST_F(Reactions, AVillagerSettingOffOnAWalkNeverStopsForASecondFirst)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& living = Locator::livingActionSystem::value();
+	// Every villager that may stop for a second does
+	for (const auto state : {VillagerStates::MoveToPos, VillagerStates::DecideWhatToDo})
+	{
+		_info->villagerStateTable.at(static_cast<size_t>(state)).canPauseForASecond = 1;
+	}
+	for (auto& villager : _info->villager)
+	{
+		villager.pauseForASecondChance = 2.0f;
+	}
+	Locator::infoConstants::emplace(*_info);
+	Locator::gameRandom::emplace<AlwaysLowGameRandom>();
+	const auto villager = _villagers[0];
+	auto& action = registry.Get<LivingAction>(villager);
+	const auto final = [&action] {
+		return static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final)));
+	};
+	// Going into a state plainly, it stops for a second first, then goes on into that state
+	action.states.at(static_cast<size_t>(LivingAction::Index::Top)) = static_cast<uint8_t>(VillagerStates::InvalidState);
+	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, false);
+	EXPECT_EQ(StateOf(villager), VillagerStates::PauseForASecond);
+	EXPECT_EQ(final(), VillagerStates::DecideWhatToDo);
+	// Setting off on a walk from the pause, it walks at once and keeps where the walk is heading
+	ASSERT_TRUE(villager_home::SetupMoveTo(action, glm::vec2(600.0f, 600.0f), VillagerStates::DecideWhatToDo));
+	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
+	EXPECT_EQ(final(), VillagerStates::DecideWhatToDo);
+	Locator::gameRandom::reset();
 }
 
 TEST(ReactionRules, LettingGoOfAKindBringsItUpToNowOnlyWhenRemembered)
@@ -670,4 +761,43 @@ TEST(ShieldRules, WhatIsSurelyWithinAShield)
 	EXPECT_TRUE(WithinPhysicalShield(dome, 10.0f, 4.9f));
 	EXPECT_FALSE(WithinPhysicalShield(dome, 10.0f, 5.0f));
 	EXPECT_FALSE(WithinPhysicalShield(dome, 20.0f, 0.0f));
+}
+
+// A script makes a thing for the living around it to run from: the villagers near it flee as from a frightening miracle
+TEST_F(Reactions, VillagersFleeAThingToFlee)
+{
+	_reactions.ProcessTurn();
+	_reactions.Create({.initiator = _creature,
+	                   .type = Reaction::FleeFromObject,
+	                   .player = PlayerNames::NEUTRAL,
+	                   .position = k_Here,
+	                   .playerless = true});
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::FleeingFromObjectReaction);
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::FleeingFromObjectReaction);
+	// Out of its reach
+	EXPECT_EQ(StateOf(_villagers[2]), VillagerStates::DecideWhatToDo);
+}
+
+// A creature's reaction goes where the creature goes, moving the way it faces
+TEST_F(Reactions, ACreaturesReactionFollowsIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& locomotion = registry.Assign<CreatureLocomotion>(_creature);
+	locomotion.started = true;
+	locomotion.heading = 1.0f;
+	const auto id = _reactions.Create({.initiator = _creature,
+	                                   .type = Reaction::FleeFromObject,
+	                                   .player = PlayerNames::NEUTRAL,
+	                                   .position = k_Here,
+	                                   .playerless = true});
+	const glm::vec3 moved = k_Here + glm::vec3(20.0f, 0.0f, -10.0f);
+	registry.Get<Transform>(_creature).position = moved;
+	_reactions.ProcessTurn();
+	const auto reaction = _reactions.Find(id);
+	ASSERT_TRUE(reaction.has_value());
+	EXPECT_EQ(reaction->source.position, moved);
+	const auto facing = creature_locomotion::DirectionOf(1.0f) * 10.0f;
+	EXPECT_FLOAT_EQ(reaction->velocity.x, facing.x);
+	EXPECT_FLOAT_EQ(reaction->velocity.y, 0.0f);
+	EXPECT_FLOAT_EQ(reaction->velocity.z, facing.y);
 }

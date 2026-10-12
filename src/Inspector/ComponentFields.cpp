@@ -526,12 +526,15 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::PlannedAbode::info>("info")
 	    .Field<&components::PlannedAbode::yAngle>("yAngle");
 	Reflect<components::BuildingSite>(context)
+	    .Field<&components::BuildingSite::town>("town")
 	    .Field<&components::BuildingSite::desire>("desire")
 	    .Field<&components::BuildingSite::repair>("repair")
+	    .Field<&components::BuildingSite::takesBroughtWood>("takesBroughtWood")
 	    .Field<&components::BuildingSite::workers>("workers")
 	    .Field<&components::BuildingSite::workerCount>("workerCount")
 	    .Field<&components::BuildingSite::places>("places")
 	    .Field<&components::BuildingSite::piles>("piles");
+	Reflect<components::BuildingSites>(context).Field<&components::BuildingSites::sites>("sites");
 	Reflect<components::SitePile> {context};
 	Reflect<components::Creature>(context)
 	    .Field<&components::Creature::owner>("owner")
@@ -712,6 +715,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
+	    .Field<&components::CreatureMindState::turnsLookedAt>("turnsLookedAt")
 	    .Field<&components::CreatureMindState::feedbackSeconds>("feedbackSeconds")
 	    .Field<&components::CreatureMindState::feedbackWasStroke>("feedbackWasStroke")
 	    .Field<&components::CreatureMindState::attitudeToPlayer>("attitudeToPlayer")
@@ -725,6 +729,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::desiresPhase>("desiresPhase")
 	    .Field<&components::CreatureMindState::inDevelopmentScript>("inDevelopmentScript")
 	    .Field<&components::CreatureMindState::paused>("paused")
+	    .Field<&components::CreatureMindState::showDesireOnHold>("showDesireOnHold")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")
 	    .Field<&components::CreatureMindState::townCompassion>("townCompassion")
@@ -2066,7 +2071,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_learning::Context::secondsSince>("secondsSince")
 	    .Field<&openblack::creature_learning::Context::learnable>("learnable")
 	    .Field<&openblack::creature_learning::Context::windowSeconds>("windowSeconds")
-	    .Field<&openblack::creature_learning::Context::credited>("credited");
+	    .Field<&openblack::creature_learning::Context::credited>("credited")
+	    .Field<&openblack::creature_learning::Context::source>("source");
 	Reflect<openblack::creature_learning::CreatureAttitude>(context, ValueOnly {})
 	    .Field<&openblack::creature_learning::CreatureAttitude::creature>("creature")
 	    .Field<&openblack::creature_learning::CreatureAttitude::howNice>("howNice")

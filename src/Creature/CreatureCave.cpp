@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <ranges>
 
+#include "Creature/CreatureAttention.h"
+
 namespace openblack::creature_cave
 {
 
@@ -81,10 +83,26 @@ TempleScrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
 			facts.desires.push_back({.text = text, .attitude = static_cast<int32_t>(like->level)});
 		}
 	}
-	facts.opinionOfGod = std::clamp(snapshot.attitudeToPlayer, -1.0f, 1.0f);
-	facts.attention = std::clamp(1.0f - (snapshot.secondsAlone / k_AttentionFadeSeconds), 0.0f, 1.0f);
+	// The attention its god has paid it is the share of its life its god looked at it, and only once its god has looked
+	// at it at all does it say what it thinks of its god
+	const auto attention = creature_attention::Share(snapshot.turnsLookedAt, needs.turns);
+	facts.attention = creature_attention::HowMuch(attention);
+	facts.opinionOfGod = attention > 0.0 ? std::optional(std::clamp(snapshot.attitudeToPlayer, -1.0f, 1.0f)) : std::nullopt;
 	facts.knowsGodsDesire = snapshot.knowsGodsDesire;
-	facts.known = {static_cast<int32_t>(snapshot.creaturesKnown), 0, 0, 0};
+	// What it thinks of each creature it knows, and how much attention that creature has paid it once it has paid any
+	for (const auto& known : snapshot.creaturesKnown)
+	{
+		facts.creatures.push_back({
+		    .name = known.name,
+		    .opinion = known.howNice,
+		    .attention = known.attention > 0.0f
+		                     ? std::optional(creature_attention::HowMuch(static_cast<double>(known.attention)))
+		                     : std::nullopt,
+		});
+	}
+	// TODO(raffclar): the temples, flocks and forests it knows about are counted from what it believes about the things it
+	// has come across, which creatures don't keep yet
+	facts.known = {static_cast<int32_t>(snapshot.creaturesKnown.size()), 0, 0, 0};
 	// The miracles it knows about that the game has a text for having learnt, by each one's own text, with how far it has
 	// learnt each cut short
 	for (size_t i = k_FirstScrollMiracle; i < snapshot.miracles.size(); ++i)

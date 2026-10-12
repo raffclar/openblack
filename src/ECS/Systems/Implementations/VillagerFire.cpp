@@ -401,8 +401,7 @@ bool InRange(entt::entity villager, entt::entity fire, float margin)
 /// the reaction
 void WalkTo(LivingAction& action, glm::vec2 goal, VillagerStates destination)
 {
-	villager_home::SetupMobileMoveTo(action, goal, destination);
-	Living().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, destination);
+	villager_home::SetupMoveTo(action, goal, destination);
 }
 
 /// Goes round the fire it is about to a point, then on into a state

@@ -193,11 +193,11 @@ TEST(HandHoldPose, ChangingStageMovesTheDrawnHandOverInAStraightLine)
 	position = {0.0f, 0.0f, 0.0f};
 	fade.Step(HandStage::Pulling, 0.065f, position, rotation);
 	ExpectNear(position, {0.0f, 1.0f, 0.0f});
-	// Taken into the hand, it fades back up from the grip where it was placed, not from where it was drawn, and what it
-	// holds moves with it
+	// Taken into the hand halfway down, the hand fades back up from where it was drawn, so it never jumps; what it holds
+	// fades from the grip where the hand was placed
 	position = {0.0f, 3.0f, 0.0f};
 	const auto offset = fade.Step(HandStage::Holding, 0.0325f, position, rotation);
-	ExpectNear(position, {0.0f, 0.75f, 0.0f});
+	ExpectNear(position, {0.0f, 1.5f, 0.0f});
 	ExpectNear(offset, {0.0f, -2.25f, 0.0f});
 	EXPECT_TRUE(fade.Fading());
 	position = {0.0f, 3.0f, 0.0f};

@@ -111,9 +111,10 @@ public:
 	/// Whether an animal may take up a reaction: not held, flying or carried, and not dying, dead, brought down or holding
 	/// still while a clip plays
 	[[nodiscard]] virtual bool IsAvailableForReaction([[maybe_unused]] entt::entity animal) const { return false; }
-	/// An animal flees from an object with no test, as it flees a fire: false only when it isn't an animal. With the
-	/// object gone it gives up on its next step.
-	virtual bool SetupFleeFromObject([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity object)
+	/// An animal flees from an object with no test, as it flees a fire, by the distances of the kind of reaction it
+	/// takes up: false only when it isn't an animal. With the object gone it gives up on its next step.
+	virtual bool SetupFleeFromObject([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity object,
+	                                 [[maybe_unused]] Reaction reaction)
 	{
 		return false;
 	}

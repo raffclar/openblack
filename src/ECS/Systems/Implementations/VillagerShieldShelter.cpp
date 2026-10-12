@@ -73,10 +73,12 @@ bool LookAtPos(Transform& transform, glm::vec2 point)
 
 void SetupWaitForCounter(LivingAction& action, uint16_t counter, VillagerStates state)
 {
-	auto& living = Locator::livingActionSystem::value();
-	living.VillagerSetState(action, LivingAction::Index::Final, state, true);
-	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::WaitForCounter, false);
-	action.turnsUntilStateChange = counter;
+	// It waits, then goes into the state; the wait is counted only once it is waiting
+	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::WaitForCounter,
+	                                                                               state))
+	{
+		action.turnsUntilStateChange = counter;
+	}
 }
 } // namespace
 

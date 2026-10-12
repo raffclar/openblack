@@ -227,15 +227,20 @@ HandStage hand_hold::StageOf(bool holdsSeed, bool pulling, bool scooping, bool h
 
 glm::vec3 StageFade::Step(HandStage stage, float seconds, glm::vec3& position, glm::mat3& rotation)
 {
-	// The fade starts from where the hand was placed, not from where it was drawn part way through an earlier fade
+	// The hand fades from where it was drawn; what it holds from where the hand was placed
 	if (_stage.has_value() && stage != *_stage && _placed.has_value())
 	{
-		_fade.Start(*_placed, _drawnRotation);
+		_fade.Start(_drawn, _drawnRotation);
+		_heldFade.Start(*_placed, _drawnRotation);
 	}
 	_stage = stage;
 	_placed = position;
 	const auto placed = position;
+	auto held = position;
+	auto heldRotation = rotation;
+	_heldFade.Step(seconds, held, heldRotation);
 	_fade.Step(seconds, position, rotation);
+	_drawn = position;
 	_drawnRotation = rotation;
-	return position - placed;
+	return held - placed;
 }

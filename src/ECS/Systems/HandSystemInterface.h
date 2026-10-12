@@ -17,6 +17,11 @@
 
 #include "3D/MapCoords.h"
 
+namespace openblack::hand_trace
+{
+class HandTrace;
+} // namespace openblack::hand_trace
+
 namespace openblack::ecs::systems
 {
 class HandSystemInterface
@@ -36,5 +41,8 @@ public:
 	/// again as they go into or out of the player's influence, tested at the point picked under the cursor (see
 	/// hand_morph::Pick and NextPoint)
 	virtual void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) = 0;
+	/// The debugging trace of the player's hand frame by frame (see hand_trace::HandTrace), off unless asked for; none
+	/// where the hands keep no trace
+	[[nodiscard]] virtual hand_trace::HandTrace* GetTrace() noexcept { return nullptr; }
 };
 } // namespace openblack::ecs::systems

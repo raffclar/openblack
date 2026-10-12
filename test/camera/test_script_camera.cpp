@@ -243,7 +243,7 @@ TEST(ScriptCamera, ItFollowsAThingAtOnceWithNoGlideUntilSentElsewhere)
 	const auto thing = [&at]() {
 		return std::optional(script_camera::FollowedThing {.point = at, .gameAngle = std::nullopt, .height = 1.0f});
 	};
-	model.FollowAndLookAt(thing, 3.0f);
+	model.FollowAndLookAt({.id = 7, .lookup = thing}, 3.0f);
 	model.SetFollowSettings(3.0f, 0.0f, 0.0f, false);
 	at += glm::vec3(4.0f, 0.0f, 0.0f);
 	Camera camera;
@@ -258,6 +258,29 @@ TEST(ScriptCamera, ItFollowsAThingAtOnceWithNoGlideUntilSentElsewhere)
 	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
 	EXPECT_NEAR(glm::distance(model.GetTargetOrigin(), glm::vec3(980.0f, 50.0f, 980.0f)), 0.0f, 1e-4f);
 	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), lastSeen), 0.0f, 1e-4f);
+}
+
+TEST(ScriptCamera, ItIsAboutTheThingItLooksAtElseTheOneItFollows)
+{
+	ScriptCameraModel model({990.0f, 20.0f, 990.0f}, {1000.0f, 5.0f, 1000.0f}, FlatLand);
+	bool followedThere = true;
+	const auto followed = [&followedThere]() {
+		return followedThere ? std::optional(script_camera::FollowedThing {.point = {1000.0f, 5.0f, 1000.0f}}) : std::nullopt;
+	};
+	const auto lookedAt = []() { return std::optional(script_camera::FollowedThing {.point = {1010.0f, 5.0f, 1000.0f}}); };
+	EXPECT_FALSE(model.GetFocusedThing().has_value());
+	model.Follow({.id = 3, .lookup = followed});
+	EXPECT_EQ(model.GetFocusedThing(), 3u);
+	model.LookAt({.id = 5, .lookup = lookedAt});
+	EXPECT_EQ(model.GetFocusedThing(), 5u);
+	// Sent to look at a point, it is about what it follows again
+	model.MoveFocus({1000.0f, 0.0f, 990.0f}, 1.0f);
+	EXPECT_EQ(model.GetFocusedThing(), 3u);
+	// Once the followed thing is gone, about nothing
+	followedThere = false;
+	Camera camera;
+	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
+	EXPECT_FALSE(model.GetFocusedThing().has_value());
 }
 
 TEST(ScriptCamera, ATrackPutsTheCameraWhereItsWaysHaveGotToAtTheFramesTime)

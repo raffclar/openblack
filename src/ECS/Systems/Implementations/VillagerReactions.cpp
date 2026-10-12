@@ -335,6 +335,7 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 	}
 	switch (type)
 	{
+	case Reaction::FleeFromObject:
 	case Reaction::FleeFromSpell:
 		SetTop(*action, VillagerStates::FleeingFromObjectReaction);
 		break;

@@ -14,6 +14,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "Common/GUtilsAngle.h"
+#include "ECS/BuildingSiteList.h"
 #include "ECS/BuildingSiteRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
@@ -28,7 +29,6 @@
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
-#include "ECS/WorshipSiteConstruction.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -85,29 +85,6 @@ bool IsBuiltAndRepaired(entt::entity building)
 {
 	return construction::IsBuilt(building) && world_objects::LifeOf(building) >= 1.0f;
 }
-
-/// The towns a worship site going up was asked to build it by
-std::vector<entt::entity> TownsAskedToBuild(const WorshipSite& site)
-{
-	std::vector<entt::entity> towns;
-	towns.reserve(site.buildRequests.size());
-	for (const auto& request : site.buildRequests)
-	{
-		towns.push_back(request.town);
-	}
-	return towns;
-}
-
-/// Whether a building's site is one of a town's sites: a worship site's of every town asked to build it, any other
-/// building's of the town that planned it
-bool IsSiteOfTown(entt::entity town, entt::entity building)
-{
-	if (const auto* site = Entities().TryGet<const WorshipSite>(building))
-	{
-		return worship_site_construction::IsSiteOf(TownsAskedToBuild(*site), town, construction::IsBuilt(building));
-	}
-	return construction::TownOfSite(building) == town;
-}
 } // namespace
 
 std::vector<entt::entity> construction::SitesOfTown(entt::entity town)
@@ -118,9 +95,8 @@ std::vector<entt::entity> construction::SitesOfTown(entt::entity town)
 	{
 		return sites;
 	}
-	const auto id = registry.Get<const Town>(town).id;
-	registry.Each<const BuildingSite>([&](entt::entity building, const BuildingSite&) {
-		if (registry.AllOf<WorshipSite>(building) ? IsSiteOfTown(town, building) : TownIdOf(building) == id)
+	registry.Each<const BuildingSites>([&](entt::entity building, const BuildingSites& atBuilding) {
+		if (building_site_list::Find(atBuilding, town) != nullptr)
 		{
 			sites.push_back(building);
 		}
@@ -145,15 +121,23 @@ entt::entity construction::TownOfSite(entt::entity building)
 	return town;
 }
 
+BuildingSite* construction::SiteOf(entt::entity town, entt::entity building)
+{
+	auto& registry = Entities();
+	auto* sites = town != entt::null && registry.Valid(building) ? registry.TryGet<BuildingSites>(building) : nullptr;
+	return sites != nullptr ? building_site_list::Find(*sites, town) : nullptr;
+}
+
+BuildingSite* construction::BroughtWoodSite(entt::entity building)
+{
+	auto& registry = Entities();
+	auto* sites = registry.Valid(building) ? registry.TryGet<BuildingSites>(building) : nullptr;
+	return sites != nullptr ? building_site_list::TakingBroughtWood(*sites) : nullptr;
+}
+
 bool construction::IsSiteValid(entt::entity town, entt::entity building)
 {
-	const auto& registry = Entities();
-	if (town == entt::null || !registry.Valid(building) || !registry.AllOf<BuildingSite>(building) ||
-	    !IsSiteOfTown(town, building))
-	{
-		return false;
-	}
-	return !IsBuiltAndRepaired(building);
+	return SiteOf(town, building) != nullptr && !IsBuiltAndRepaired(building);
 }
 
 int32_t construction::MaxBuilders(entt::entity building)
@@ -162,9 +146,9 @@ int32_t construction::MaxBuilders(entt::entity building)
 	return info != nullptr ? static_cast<int32_t>(info->maxVillagerNeededToBuild) : 0;
 }
 
-int32_t construction::BuildersNeeded(entt::entity building)
+int32_t construction::BuildersNeeded(entt::entity town, entt::entity building)
 {
-	const auto* site = Entities().TryGet<const BuildingSite>(building);
+	const auto* site = SiteOf(town, building);
 	const auto* info = InfoOf(building);
 	if (site == nullptr || info == nullptr)
 	{
@@ -179,14 +163,14 @@ int32_t construction::BuildersNeeded(entt::entity building)
 	});
 }
 
-float construction::DesireForVillagers(entt::entity building)
+float construction::DesireForVillagers(entt::entity town, entt::entity building)
 {
-	const auto* site = Entities().TryGet<const BuildingSite>(building);
+	const auto* site = SiteOf(town, building);
 	if (site == nullptr)
 	{
 		return 0.0f;
 	}
-	return building_site::DesireForVillagers(BuildersNeeded(building), MaxBuilders(building), site->desire);
+	return building_site::DesireForVillagers(BuildersNeeded(town, building), MaxBuilders(building), site->desire);
 }
 
 float construction::DesireToBeRepaired(entt::entity building)
@@ -210,27 +194,28 @@ float construction::DesireToBeRepaired(entt::entity building)
 	    Locator::infoConstants::value().town);
 }
 
-bool construction::IsRepairSite(entt::entity building)
+bool construction::IsRepairSite(entt::entity town, entt::entity building)
 {
-	const auto* site = Entities().TryGet<const BuildingSite>(building);
+	const auto* site = SiteOf(town, building);
 	return site != nullptr && site->repair;
 }
 
-float construction::SiteDesireToBeRepaired(entt::entity building)
+float construction::SiteDesireToBeRepaired(entt::entity town, entt::entity building)
 {
-	return DesireForVillagers(building) * DesireToBeRepaired(building);
+	return DesireForVillagers(town, building) * DesireToBeRepaired(building);
 }
 
-uint32_t construction::WoodAtSite(entt::entity building)
+uint32_t construction::WoodAtSite(entt::entity town, entt::entity building)
+{
+	const auto* site = SiteOf(town, building);
+	return site != nullptr ? WoodAt(*site) : 0u;
+}
+
+uint32_t construction::WoodAt(const BuildingSite& site)
 {
 	auto& registry = Entities();
-	const auto* site = registry.TryGet<const BuildingSite>(building);
-	if (site == nullptr)
-	{
-		return 0;
-	}
 	uint32_t wood = 0;
-	for (const auto pile : site->piles)
+	for (const auto pile : site.piles)
 	{
 		if (!registry.Valid(pile))
 		{
@@ -257,10 +242,10 @@ float construction::SiteWoodValue(entt::entity building)
 	return building_site::WoodValue(transform->scale.x, info->woodValue, k_SiteTribalPower);
 }
 
-float construction::WoodNeededToBuild(entt::entity building)
+float construction::WoodNeededToBuild(entt::entity town, entt::entity building)
 {
 	const float builtOrLife = IsBuilt(building) ? world_objects::LifeOf(building) : BuiltOf(building);
-	return building_site::WoodNeededToBuild(builtOrLife, SiteWoodValue(building), WoodAtSite(building));
+	return building_site::WoodNeededToBuild(builtOrLife, SiteWoodValue(building), WoodAtSite(town, building));
 }
 
 float construction::BuildingRadius(entt::entity building)
@@ -276,9 +261,9 @@ glm::vec2 construction::NearestEdgeToPos(entt::entity building, glm::vec2 place)
 	return centre + glm::vec2(offset.x, offset.z);
 }
 
-void construction::AddWorker(entt::entity building, entt::entity villager)
+void construction::AddWorker(entt::entity town, entt::entity building, entt::entity villager)
 {
-	auto* site = Entities().TryGet<BuildingSite>(building);
+	auto* site = SiteOf(town, building);
 	if (site == nullptr)
 	{
 		return;
@@ -290,9 +275,9 @@ void construction::AddWorker(entt::entity building, entt::entity villager)
 	++site->workerCount;
 }
 
-void construction::RemoveWorker(entt::entity building, entt::entity villager)
+void construction::RemoveWorker(entt::entity town, entt::entity building, entt::entity villager)
 {
-	auto* site = Entities().TryGet<BuildingSite>(building);
+	auto* site = SiteOf(town, building);
 	if (site == nullptr)
 	{
 		return;

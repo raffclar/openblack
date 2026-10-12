@@ -229,6 +229,7 @@ void ScriptCameraModel::MoveFocus(const glm::vec3& focus, float seconds)
 void ScriptCameraModel::StopFollowing()
 {
 	_followed = nullptr;
+	_followedId.reset();
 	// A heading kept relative to the thing starts again from straight behind it
 	if (_follow.relativeHeading)
 	{
@@ -239,11 +240,22 @@ void ScriptCameraModel::StopFollowing()
 void ScriptCameraModel::StopLookingAt()
 {
 	_lookedAt = nullptr;
+	_lookedAtId.reset();
 }
 
-void ScriptCameraModel::FollowAndLookAt(ThingLookup thing, float distance)
+std::optional<uint32_t> ScriptCameraModel::GetFocusedThing() const
 {
-	_followed = std::move(thing);
+	if (InDualView())
+	{
+		return std::nullopt;
+	}
+	return _lookedAtId.has_value() ? _lookedAtId : _followedId;
+}
+
+void ScriptCameraModel::FollowAndLookAt(Subject thing, float distance)
+{
+	_followed = std::move(thing.lookup);
+	_followedId = _followed ? std::optional(thing.id) : std::nullopt;
 	if (_followed)
 	{
 		const auto view = HeadingAndPitchFromPoints(DestinationOf(_origin), DestinationOf(_focus));
@@ -254,9 +266,10 @@ void ScriptCameraModel::FollowAndLookAt(ThingLookup thing, float distance)
 	SnapToFollowed();
 }
 
-void ScriptCameraModel::Follow(ThingLookup thing)
+void ScriptCameraModel::Follow(Subject thing)
 {
-	_followed = std::move(thing);
+	_followed = std::move(thing.lookup);
+	_followedId = _followed ? std::optional(thing.id) : std::nullopt;
 	if (_followed)
 	{
 		const auto view = HeadingAndPitchFromPoints(DestinationOf(_origin), DestinationOf(_focus));
@@ -272,10 +285,11 @@ void ScriptCameraModel::Follow(ThingLookup thing)
 	SnapToFollowed();
 }
 
-void ScriptCameraModel::LookAt(ThingLookup thing)
+void ScriptCameraModel::LookAt(Subject thing)
 {
 	StopTrack();
-	_lookedAt = std::move(thing);
+	_lookedAt = std::move(thing.lookup);
+	_lookedAtId = _lookedAt ? std::optional(thing.id) : std::nullopt;
 }
 
 void ScriptCameraModel::StopTrack()
@@ -411,11 +425,13 @@ void ScriptCameraModel::UpdateFollowing()
 	if (_followed && !followed.has_value())
 	{
 		_followed = nullptr;
+		_followedId.reset();
 	}
 	auto lookedAt = _lookedAt ? _lookedAt() : std::nullopt;
 	if (_lookedAt && !lookedAt.has_value())
 	{
 		_lookedAt = nullptr;
+		_lookedAtId.reset();
 	}
 	_follow.viewingDistance =
 	    _follow.viewingDistance > k_FollowNearest ? std::min(_follow.viewingDistance, k_FollowFarthest) : k_FollowNearest;
