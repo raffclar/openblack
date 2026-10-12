@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -95,5 +96,24 @@ struct Beam
 
 /// The heart's beam sound is one of five in turn
 inline constexpr uint32_t k_BeamSounds = 5;
+
+/// A heart that is hurt, with less than all its life, beams every turn it is due: the less life, the oftener. The wait
+/// between beams is 3 seconds at nearly all its life, down to 0.4 seconds at none, in whole turns.
+inline constexpr float k_DamageWaitFull = 3.0f;
+inline constexpr float k_DamageWaitNone = 0.4f;
+/// It sounds a beam sound only once it has this much life or less
+inline constexpr float k_DamageSoundLife = 0.6f;
+
+/// The life the damage effect works from, none when the heart is whole and the effect is not made at all
+[[nodiscard]] std::optional<float> DamageEffectLife(float life);
+/// The turns between a hurt heart's beams, by its life from the damage effect's: whole turns a second, times the wait
+[[nodiscard]] uint32_t DamageInterval(uint32_t millisecondsPerTurn, float life);
+/// The turn after the interval, once the last beam is more than that many turns gone. Due, it is the beam's turn now.
+[[nodiscard]] bool DamageBeamDue(uint32_t& lastTurn, uint32_t turn, uint32_t interval);
+/// Whether a hurt heart's beam sounds, by its life from the damage effect's
+[[nodiscard]] bool DamageBeamSounds(float life);
+/// The sample of the next damage beam sound, 206 to 210 in turn, and the counter moved on. The counter is the damage
+/// effect's own, apart from the one the beams for blows that break buildings go round on.
+[[nodiscard]] uint32_t NextDamageSample(uint32_t& counter);
 
 } // namespace openblack::physics::temple_heart

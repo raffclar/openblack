@@ -28,6 +28,8 @@ struct TempleExterior
 	std::optional<glm::vec2> morphed;
 	/// How much of the temple its model shows built, following its heart each turn
 	float drawnBuilt {1.0f};
+	/// Whether its entrance lanterns have been made, which happens once it is more than 7% built
+	bool lanternsMade {false};
 };
 
 } // namespace openblack::ecs::components

@@ -149,6 +149,51 @@ TEST(VillagerRoutine, AnEmergencyLastsItsTurnsFromTheLastCall)
 	EXPECT_FALSE(IsInStateOfEmergency(100, 1300, 1200));
 }
 
+TEST(VillagerRoutine, DuringAnEmergencyWorshipStopsAndItsShareIsKept)
+{
+	const auto first = EmergencyTurn({.inEmergency = true, .worshipShare = 0.4f});
+	EXPECT_FALSE(first.call);
+	ASSERT_TRUE(first.setWorshipShare.has_value());
+	EXPECT_FLOAT_EQ(*first.setWorshipShare, 0.0f);
+	EXPECT_FLOAT_EQ(first.worshipShareBefore, 0.4f);
+	EXPECT_FALSE(first.end);
+	// Once stopped, later turns of it leave the kept share alone
+	const auto later = EmergencyTurn({.inEmergency = true, .worshipShareBefore = 0.4f});
+	EXPECT_FALSE(later.setWorshipShare.has_value());
+	EXPECT_FLOAT_EQ(later.worshipShareBefore, 0.4f);
+}
+
+TEST(VillagerRoutine, AnAttackDuringAnEmergencyRenewsIt)
+{
+	EXPECT_TRUE(EmergencyTurn({.inEmergency = true, .attackedThisTurn = true}).call);
+	// Out of one, an attack alone doesn't call one
+	const auto calm = EmergencyTurn({.attackedThisTurn = true});
+	EXPECT_FALSE(calm.call);
+	EXPECT_TRUE(calm.end);
+}
+
+TEST(VillagerRoutine, ABurningStoreCallsAnEmergencyAndKeepsTheShare)
+{
+	const auto burning = EmergencyTurn({.storeOrCentreBurning = true, .worshipShare = 0.3f, .worshipShareBefore = 0.5f});
+	EXPECT_TRUE(burning.call);
+	EXPECT_FALSE(burning.setWorshipShare.has_value());
+	EXPECT_FLOAT_EQ(burning.worshipShareBefore, 0.5f);
+	EXPECT_FALSE(burning.end);
+}
+
+TEST(VillagerRoutine, AfterAnEmergencyWorshipComesBackUnlessAShareWasSetMeanwhile)
+{
+	const auto back = EmergencyTurn({.worshipShareBefore = 0.4f});
+	ASSERT_TRUE(back.setWorshipShare.has_value());
+	EXPECT_FLOAT_EQ(*back.setWorshipShare, 0.4f);
+	EXPECT_FLOAT_EQ(back.worshipShareBefore, 0.0f);
+	EXPECT_TRUE(back.end);
+	const auto moved = EmergencyTurn({.worshipShare = 0.2f, .worshipShareBefore = 0.4f});
+	EXPECT_FALSE(moved.setWorshipShare.has_value());
+	EXPECT_FLOAT_EQ(moved.worshipShareBefore, 0.0f);
+	EXPECT_TRUE(moved.end);
+}
+
 TEST(VillagerRoutine, ThoseInsideOrAsleepDontAnswerAnEmergency)
 {
 	EXPECT_FALSE(AnswersTownEmergency(VillagerStates::AtHome));

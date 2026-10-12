@@ -22,10 +22,12 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipSiteConstruction.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -66,6 +68,10 @@ const GMultiMapFixedInfo* InfoOf(entt::entity building)
 	{
 		return &info.citadelHeart;
 	}
+	if (const auto* site = registry.TryGet<const WorshipSite>(building))
+	{
+		return &info.worshipSite.at(static_cast<size_t>(site->tribe));
+	}
 	if (const auto* abode = registry.TryGet<const Abode>(building); abode != nullptr && abode->info != AbodeInfo::None)
 	{
 		return &info.abode.at(static_cast<size_t>(abode->info));
@@ -77,6 +83,29 @@ const GMultiMapFixedInfo* InfoOf(entt::entity building)
 bool IsBuiltAndRepaired(entt::entity building)
 {
 	return construction::IsBuilt(building) && world_objects::LifeOf(building) >= 1.0f;
+}
+
+/// The towns a worship site going up was asked to build it by
+std::vector<entt::entity> TownsAskedToBuild(const WorshipSite& site)
+{
+	std::vector<entt::entity> towns;
+	towns.reserve(site.buildRequests.size());
+	for (const auto& request : site.buildRequests)
+	{
+		towns.push_back(request.town);
+	}
+	return towns;
+}
+
+/// Whether a building's site is one of a town's sites: a worship site's of every town asked to build it, any other
+/// building's of the town that planned it
+bool IsSiteOfTown(entt::entity town, entt::entity building)
+{
+	if (const auto* site = Entities().TryGet<const WorshipSite>(building))
+	{
+		return worship_site_construction::IsSiteOf(TownsAskedToBuild(*site), town, construction::IsBuilt(building));
+	}
+	return construction::TownOfSite(building) == town;
 }
 } // namespace
 
@@ -90,7 +119,7 @@ std::vector<entt::entity> construction::SitesOfTown(entt::entity town)
 	}
 	const auto id = registry.Get<const Town>(town).id;
 	registry.Each<const BuildingSite>([&](entt::entity building, const BuildingSite&) {
-		if (TownIdOf(building) == id)
+		if (registry.AllOf<WorshipSite>(building) ? IsSiteOfTown(town, building) : TownIdOf(building) == id)
 		{
 			sites.push_back(building);
 		}
@@ -119,7 +148,7 @@ bool construction::IsSiteValid(entt::entity town, entt::entity building)
 {
 	const auto& registry = Entities();
 	if (town == entt::null || !registry.Valid(building) || !registry.AllOf<BuildingSite>(building) ||
-	    TownOfSite(building) != town)
+	    !IsSiteOfTown(town, building))
 	{
 		return false;
 	}
