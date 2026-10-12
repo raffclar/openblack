@@ -17,12 +17,14 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <cstdint>
@@ -579,6 +581,10 @@ void SetSceneViewRects(RenderPass viewId, glm::u16vec2 resolution) noexcept
 	{
 		setRect(viewId);
 	}
+	if (const auto landId = LandPassOf(viewId); landId != viewId)
+	{
+		setRect(landId);
+	}
 	if (viewId == RenderPass::Main)
 	{
 		setRect(RenderPass::Advisors);
@@ -601,6 +607,11 @@ void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolutio
 	if (HasSkyPass(viewId))
 	{
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(viewId), BGFX_CLEAR_NONE);
+	}
+	// Its land is drawn over the sky and the sea, before the rest of the scene
+	if (const auto landId = LandPassOf(viewId); landId != viewId)
+	{
+		bgfx::setViewClear(static_cast<bgfx::ViewId>(landId), BGFX_CLEAR_NONE);
 	}
 	// The advisors near the screen are drawn over the main view, its depth cleared
 	if (viewId == RenderPass::Main)
@@ -5120,16 +5131,24 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	// The sky is drawn first, in its own pass into the same target, in the order the game draws it: the dome, the sun
 	// and the moon. The scene's pass then draws everything else over it.
 	const auto skyViewId = SkyPassOf(desc.viewId);
+	// The land is drawn next, in a pass of its own, the nearest block first: after the sea and before everything that
+	// stands on it or is under the sea behind it, which its depth hides
+	const auto landViewId = LandPassOf(desc.viewId);
 	if (desc.frameBuffer != nullptr)
 	{
 		desc.frameBuffer->Bind(desc.viewId);
 		desc.frameBuffer->Bind(skyViewId);
+		desc.frameBuffer->Bind(landViewId);
 	}
 	// This dummy draw call is here to make sure that view is cleared if no
 	// other draw calls are submitted to view
 	bgfx::touch(static_cast<bgfx::ViewId>(skyViewId));
 	bgfx::touch(static_cast<bgfx::ViewId>(desc.viewId));
 	_shaderManager->SetViewOrder(skyViewId, ViewOrder::Sequential);
+	if (landViewId != desc.viewId)
+	{
+		_shaderManager->SetViewOrder(landViewId, ViewOrder::Sequential);
+	}
 	// bgfx sorts a view's blended draws by their programs unless told to keep them in order. The game draws the temple
 	// in the order it is submitted, and its blended parts must be too: the pool's water, drawn with the lightmap
 	// program, would otherwise land after the hand, whose faded wrist writes depth, and leave a hole in the water
@@ -5153,6 +5172,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto cameraOrigin = desc.camera->GetOrigin();
 
 	_shaderManager->SetCamera(skyViewId, *desc.camera);
+	_shaderManager->SetCamera(landViewId, *desc.camera);
 	_shaderManager->SetCamera(desc.viewId, *desc.camera);
 	_modelLight = GetModelLight();
 	if (Locator::camera::has_value())
@@ -5340,10 +5360,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 			};
 			// What every block shares. bgfx gives a draw the uniforms set since the draw before it was submitted, and
-			// they stay for the draws after it in the order the view sorts them. The blocks share their program and
-			// state, so the view keeps them together, ordered by their distance with ties in the order they came. The
-			// nearest block is submitted first with all of these, so they reach every block after it; the textures
-			// stay bound from one block to the next.
+			// they stay for the draws after it in the order the view sorts them. The blocks come the nearest first,
+			// in that order in the land's own pass and sorted by their distance in the reflection's. The nearest block
+			// is submitted first with all of these, so they reach every block after it; the textures stay bound from
+			// one block to the next.
 			const auto setTerrainUniforms = [&]() {
 				terrainShader->SetTextureSampler("s0_blockTextures", 0, island.GetBlockTextures());
 				terrainShader->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
@@ -5428,21 +5448,18 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				groundShadowBlockUniform.Set(&u_groundShadowBlock);
 				block.BindVertices();
 				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
-				terrainShader->Submit(static_cast<bgfx::ViewId>(desc.viewId), blockDepth(block), discard);
+				terrainShader->Submit(static_cast<bgfx::ViewId>(landViewId), blockDepth(block), discard);
 			};
 			if (!blocks.empty())
 			{
-				const auto nearest = static_cast<size_t>(
-				    std::distance(blocks.begin(),
-				                  std::ranges::min_element(blocks, {}, [&](const auto& block) { return blockDepth(block); })));
+				// The land's pass keeps the order the blocks come in, so they come the nearest first
+				std::vector<size_t> order(blocks.size());
+				std::iota(order.begin(), order.end(), size_t {0});
+				std::ranges::stable_sort(order, {}, [&](size_t index) { return blockDepth(blocks[index]); });
 				setTerrainUniforms();
-				submitBlock(nearest);
-				for (size_t i = 0; i < blocks.size(); ++i)
+				for (const auto index : order)
 				{
-					if (i != nearest)
-					{
-						submitBlock(i);
-					}
+					submitBlock(index);
 				}
 			}
 			_shaderManager->DiscardBindings();
