@@ -26,6 +26,7 @@
 
 #include "InstanceDesc.h"
 #include "RenderPass.h"
+#include "ScreenshotCapture.h"
 
 #include "../EngineConfig.h"
 
@@ -266,6 +267,10 @@ public:
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
 	/// Why a picture asked for was given up, once; none while it may still come
 	[[nodiscard]] virtual std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept = 0;
+	/// The picture asked for at a path starting with graphics::CapturedFrames::k_Prefix, kept in memory, once it is
+	/// back; none while it may still come
+	[[nodiscard]] virtual std::optional<graphics::CapturedFrame>
+	TakeCapturedFrame(const std::filesystem::path& filepath) noexcept = 0;
 	[[nodiscard]] virtual bool GetDebug() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
 	[[nodiscard]] virtual bool GetProfile() const noexcept = 0;
