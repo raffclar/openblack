@@ -443,6 +443,48 @@ CircleSweep SweepCircle(const CircleSweepInput& input)
 	}
 }
 
+int32_t TurnsToSpare(const std::function<bool()>& walkOneTurn)
+{
+	if (walkOneTurn())
+	{
+		return k_TrialTurns;
+	}
+	for (int32_t left = k_TrialTurns; left > 0; --left)
+	{
+		if (walkOneTurn())
+		{
+			return left - 1;
+		}
+	}
+	return -1;
+}
+
+bool TurnedRoundIsBetter(const TrialWalk& turnedRound, const TrialWalk& asItGoes)
+{
+	if (turnedRound.turnsToSpare != asItGoes.turnsToSpare)
+	{
+		return turnedRound.turnsToSpare > asItGoes.turnsToSpare;
+	}
+	return turnedRound.distanceSq < asItGoes.distanceSq;
+}
+
+TurnedRound TurnRound(glm::ivec2 position, glm::ivec2 step, uint16_t gameAngle)
+{
+	constexpr int32_t k_StepsOn = 3;
+	constexpr uint16_t k_HalfTurn = 0x400;
+	return {
+	    .position = position + step * k_StepsOn,
+	    .step = {-step.x, 0},
+	    .gameAngle = static_cast<uint16_t>((gameAngle - k_HalfTurn) & gutils::k_GameAngleMask),
+	};
+}
+
+uint16_t HeadingRound(glm::ivec2 position, glm::ivec2 centre, bool clockwise)
+{
+	const int32_t towards = gutils::GetAngleFromXZ(position, centre);
+	return static_cast<uint16_t>((towards + (clockwise ? k_QuarterTurn : -k_QuarterTurn)) & gutils::k_GameAngleMask);
+}
+
 namespace
 {
 

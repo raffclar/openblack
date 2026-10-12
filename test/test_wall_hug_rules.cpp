@@ -332,3 +332,52 @@ TEST(WallHugRules, OnlyTheFencesModelsAreFences)
 	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingCelticFenceTall));
 	EXPECT_FALSE(IsFenceModel(openblack::MeshId::BuildingCeltic4));
 }
+
+// A trial walk has a turn, then up to 1,500 more: the turns left when it gets there are its turns to spare
+TEST(WallHugRules, ATrialWalkCountsTheTurnsItHasToSpare)
+{
+	const auto arrivingOnTurn = [](int turn) {
+		int walked = 0;
+		return TurnsToSpare([&walked, turn]() { return ++walked == turn; });
+	};
+	EXPECT_EQ(arrivingOnTurn(1), 1500);
+	EXPECT_EQ(arrivingOnTurn(2), 1499);
+	EXPECT_EQ(arrivingOnTurn(1501), 0);
+	EXPECT_EQ(arrivingOnTurn(1502), -1);
+	int walked = 0;
+	EXPECT_EQ(TurnsToSpare([&walked]() {
+		          ++walked;
+		          return false;
+	          }),
+	          -1);
+	EXPECT_EQ(walked, 1501);
+}
+
+// Turned round wins with more turns to spare, or with as many and ending nearer; a tie keeps the way it goes
+TEST(WallHugRules, TurningRoundWinsOnlyWhenItGetsThereSoonerOrEndsNearer)
+{
+	EXPECT_TRUE(TurnedRoundIsBetter({.turnsToSpare = 900, .distanceSq = 9.0f}, {.turnsToSpare = 800, .distanceSq = 0.0f}));
+	EXPECT_FALSE(TurnedRoundIsBetter({.turnsToSpare = 800, .distanceSq = 0.0f}, {.turnsToSpare = 900, .distanceSq = 9.0f}));
+	EXPECT_TRUE(TurnedRoundIsBetter({.turnsToSpare = -1, .distanceSq = 4.0f}, {.turnsToSpare = -1, .distanceSq = 25.0f}));
+	EXPECT_FALSE(TurnedRoundIsBetter({.turnsToSpare = -1, .distanceSq = 25.0f}, {.turnsToSpare = -1, .distanceSq = 4.0f}));
+	EXPECT_FALSE(TurnedRoundIsBetter({.turnsToSpare = 5, .distanceSq = 1.0f}, {.turnsToSpare = 5, .distanceSq = 1.0f}));
+}
+
+// A walker turned round jumps three steps on and faces back; of its step only the across part is left, backwards
+TEST(WallHugRules, AWalkerTurnedRoundJumpsThreeStepsOnAndFacesBack)
+{
+	const auto turned = TurnRound({1000000, 2000000}, {1200, -500}, 100);
+	EXPECT_EQ(turned.position, glm::ivec2(1003600, 1998500));
+	EXPECT_EQ(turned.step, glm::ivec2(-1200, 0));
+	EXPECT_EQ(turned.gameAngle, 100 + 2048 - 1024);
+	EXPECT_EQ(TurnRound({0, 0}, {0, 0}, 1500).gameAngle, 476);
+}
+
+// A walker going round a circle that keeps its way faces a quarter turn round from the circle's middle
+TEST(WallHugRules, AWalkerKeepingItsWayRoundFacesAQuarterTurnFromTheMiddle)
+{
+	const glm::ivec2 position = ToWhole({100.0f, 100.0f});
+	const glm::ivec2 east = ToWhole({110.0f, 100.0f});
+	EXPECT_EQ(HeadingRound(position, east, true), 0x200);
+	EXPECT_EQ(HeadingRound(position, east, false), 2048 - 0x200);
+}

@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -28,6 +29,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/DeadTree.h"
@@ -42,10 +44,14 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingCircles.h"
+#include "ECS/VillagerAge.h"
+#include "ECS/VillagerNeeds.h"
+#include "ECS/VillagerSpeed.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -176,6 +182,10 @@ struct Walker
 	MoveStateClockwise clockwise;
 	int32_t speed;
 	glm::ivec2 goal;
+	/// Whether it came up against water, the land's edge or a fence going round this turn
+	bool needsLookahead {false};
+	/// A stand-in on a trial walk, never seen: it isn't put on the ground
+	bool standIn {false};
 };
 
 /// Where the walk holds a walker: its whole map position, taken up afresh when something else has moved it
@@ -196,8 +206,9 @@ void MoveWalker(Walker& walker, glm::ivec2 position)
 	auto& wallHug = walker.wallHug;
 	wallHug.position = position;
 	wallHug.placedAt = wall_hug::ToPoint(position);
-	const float altitude = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(wallHug.placedAt)
-	                                                           : walker.transform.position.y;
+	const float altitude = Locator::terrainSystem::has_value() && !walker.standIn
+	                           ? Locator::terrainSystem::value().GetHeightAt(wallHug.placedAt)
+	                           : walker.transform.position.y;
 	walker.transform.position = glm::xzy(glm::vec3(wallHug.placedAt, altitude));
 }
 
@@ -252,11 +263,16 @@ void SweepAroundCircle(ecs::Registry& registry, Walker& walker, WallHugObjectRef
 	    .wholeSpeed = walker.speed,
 	    .blockers = blockers.circles,
 	});
+	if (sweep.hugged.has_value())
+	{
+		walker.needsLookahead = sweep.needsLookahead;
+	}
 	if (sweep.outcome == wall_hug::CircleSweep::Outcome::StepThrough)
 	{
 		FaceGoal(walker);
 		walker.wallHug.turnsUntilStepRebuild = k_TurnsToReaimAfterHugging;
-		registry.Remove<WallHugObjectReference>(walker.entity);
+		// It no longer hugs anything, so it no longer waits for or keeps a trial of both ways round
+		registry.Remove<WallHugObjectReference, WallHugLookahead>(walker.entity);
 		walker.state = MoveState::StepThrough;
 		walker.clockwise = MoveStateClockwise::Undefined;
 		return;
@@ -337,6 +353,11 @@ void WalkStraight(ecs::Registry& registry, Walker& walker)
 	if (auto* reference = registry.TryGet<WallHugObjectReference>(walker.entity);
 	    reference != nullptr && TurnsRunOut(*reference))
 	{
+		// Reaching water or the land's edge, it will try both ways round
+		if (reference->entity == entt::null)
+		{
+			walker.needsLookahead = true;
+		}
 		if (walker.clockwise == MoveStateClockwise::Undefined)
 		{
 			const bool clockwise = wall_hug::GoesRoundClockwise(position, wall_hug::ToWhole(reference->centre), wallHug.step);
@@ -398,6 +419,12 @@ void WalkRound(ecs::Registry& registry, Walker& walker)
 	{
 		FaceAngle(walker, gutils::GetAngleFromXZ(wall_hug::ToWhole(hugged->centre), wallHug.position));
 		walker.state = MoveState::ExitCircle;
+		// Leaving the circle, it may try both ways round again at the next
+		if (const auto* lookahead = registry.TryGet<const WallHugLookahead>(walker.entity);
+		    lookahead != nullptr && lookahead->tried)
+		{
+			registry.Remove<WallHugLookahead>(walker.entity);
+		}
 	}
 }
 
@@ -444,37 +471,39 @@ void StepThrough(Walker& walker)
 	}
 }
 
-void Walk(ecs::Registry& registry, Walker& walker)
+/// The walker's walk this turn; true when it has got there, standing on its goal
+bool Walk(ecs::Registry& registry, Walker& walker)
 {
 	switch (walker.state)
 	{
 	case MoveState::FinalStep:
 		MoveWalker(walker, walker.goal);
-		return;
+		return true;
 	case MoveState::Arrived:
 		if (AtGoal(walker))
 		{
 			MoveWalker(walker, walker.goal);
-			return;
+			return true;
 		}
 		// Moved off its goal: it steps back to it
 		walker.wallHug.turnsUntilStepRebuild = k_TurnsToReaimAfterHugging;
 		walker.state = MoveState::StepThrough;
 		StepThrough(walker);
-		return;
+		return false;
 	case MoveState::StepThrough:
 		StepThrough(walker);
-		return;
+		return false;
 	case MoveState::Linear:
 		WalkStraight(registry, walker);
-		return;
+		return false;
 	case MoveState::Orbit:
 		WalkRound(registry, walker);
-		return;
+		return false;
 	case MoveState::ExitCircle:
 		WalkOut(registry, walker);
-		return;
+		return false;
 	}
+	return false;
 }
 
 template <MoveState S>
@@ -529,6 +558,127 @@ void Retag(ecs::Registry& registry, const Walker& walker)
 	}
 }
 
+/// The walker's walk as it stands, from the walk state it is in; one not walking is taken as there
+Walker WalkerOf(ecs::Registry& registry, entt::entity entity, WallHug& wallHug, Transform& transform)
+{
+	Walker walker {.entity = entity,
+	               .transform = transform,
+	               .wallHug = wallHug,
+	               .state = MoveState::Arrived,
+	               .clockwise = MoveStateClockwise::Undefined,
+	               .speed = wall_hug::WholeSpeed(wallHug.speed),
+	               .goal = wall_hug::ToWhole(wallHug.goal)};
+	const auto take = [&registry, &walker]<MoveState S>() {
+		if (const auto* tag = registry.TryGet<const MoveStateTagComponent<S>>(walker.entity); tag != nullptr)
+		{
+			walker.state = S;
+			walker.clockwise = tag->clockwise;
+			return true;
+		}
+		return false;
+	};
+	[[maybe_unused]] const bool walking =
+	    take.template operator()<MoveState::Linear>() || take.template operator()<MoveState::Orbit>() ||
+	    take.template operator()<MoveState::ExitCircle>() || take.template operator()<MoveState::StepThrough>() ||
+	    take.template operator()<MoveState::FinalStep>() || take.template operator()<MoveState::Arrived>();
+	return walker;
+}
+
+/// Turns a walker round, the other way round what it goes round or heads past: it jumps three steps on and faces back
+/// (see WallHugRules.h); going round a circle it looks along it again the new way. A walker heading straight for its
+/// goal with no side to keep, or not going round anything, stays as it is.
+void TurnRound(ecs::Registry& registry, Walker& walker)
+{
+	switch (walker.state)
+	{
+	case MoveState::Linear:
+		if (walker.clockwise == MoveStateClockwise::Undefined)
+		{
+			return;
+		}
+		break;
+	case MoveState::Orbit:
+	case MoveState::ExitCircle:
+		break;
+	case MoveState::StepThrough:
+	case MoveState::FinalStep:
+	case MoveState::Arrived:
+		return;
+	}
+	walker.clockwise = walker.clockwise == MoveStateClockwise::Clockwise ? MoveStateClockwise::CounterClockwise
+	                                                                     : MoveStateClockwise::Clockwise;
+	auto& wallHug = walker.wallHug;
+	const auto turned = wall_hug::TurnRound(wallHug.position, wallHug.step, wallHug.gameAngle);
+	MoveWalker(walker, turned.position);
+	wallHug.step = turned.step;
+	// Only its walking direction turns: it is drawn facing as before until it is next turned
+	wallHug.gameAngle = turned.gameAngle;
+	if (walker.state == MoveState::Orbit)
+	{
+		if (auto* reference = HuggedCircle(registry, walker.entity); reference != nullptr)
+		{
+			SweepAroundCircle(registry, walker, *reference, wallHug.position);
+		}
+	}
+}
+
+/// A trial of the walker's walk by a stand-in villager made where it stands, as the game makes one (with the drawing of
+/// lots, the counting of things made and the name that making any villager may take): a grown-up woman of the first
+/// kind of villager, going four times the walker's speed at her own pace. She walks the walker's walk, as it goes or
+/// turned round, until she gets there or her turns run out, then is taken away.
+wall_hug::TrialWalk TrialWalk(ecs::Registry& registry, const Walker& walker, bool turnedRound)
+{
+	constexpr auto k_StandInKind = VillagerInfo::CelticHousewifeFemale;
+	const auto standIn =
+	    archetypes::VillagerArchetype::Create(walker.transform.position, walker.transform.position, k_StandInKind,
+	                                          wall_hug::k_TrialWalkerAge, archetypes::VillagerArchetype::Joins::Nobody);
+	const auto& person = registry.Get<const Villager>(standIn);
+	const auto& info = Locator::infoConstants::value().villager.at(static_cast<size_t>(k_StandInKind));
+	const float pace = villager_speed::PersonalFactor({
+	    .creationIndex = person.creationIndex,
+	    .age = villager_age::AgeNow(person),
+	    .grownUpAge = info.grownUpAge,
+	    .oldAge = info.oldAge,
+	    .desireForFood = villager_needs::DesireForFood(person.food),
+	    .life = person.life,
+	    .female = info.sex == SexType::Female,
+	});
+
+	auto& wallHug = registry.Get<WallHug>(standIn);
+	wallHug.goal = walker.wallHug.goal;
+	wallHug.step = walker.wallHug.step;
+	wallHug.gameAngle = walker.wallHug.gameAngle;
+	wallHug.turnsUntilStepRebuild = 0;
+	wallHug.position = walker.wallHug.position;
+	wallHug.placedAt = walker.wallHug.placedAt;
+	if (const auto* reference = registry.TryGet<const WallHugObjectReference>(walker.entity); reference != nullptr)
+	{
+		registry.Assign<WallHugObjectReference>(standIn, *reference);
+	}
+	Walker trial {.entity = standIn,
+	              .transform = registry.Get<Transform>(standIn),
+	              .wallHug = wallHug,
+	              .state = walker.state,
+	              .clockwise = walker.clockwise,
+	              .speed = villager_speed::FinalSpeed(walker.speed * wall_hug::k_TrialSpeedUp, pace),
+	              .goal = walker.goal,
+	              .standIn = true};
+
+	wall_hug::TrialWalk result {.turnsToSpare = 0, .distanceSq = std::numeric_limits<float>::max()};
+	if (turnedRound)
+	{
+		TurnRound(registry, trial);
+	}
+	// Turned round straight towards its goal, it no longer goes round anything: no trial
+	if (!turnedRound || trial.state != MoveState::StepThrough)
+	{
+		result.turnsToSpare = wall_hug::TurnsToSpare([&registry, &trial]() { return Walk(registry, trial); });
+		result.distanceSq = wall_hug::MetresDistanceSq(trial.goal, trial.wallHug.position);
+	}
+	registry.Destroy(standIn);
+	return result;
+}
+
 } // namespace
 
 void PathfindingSystem::Update()
@@ -548,5 +698,57 @@ void PathfindingSystem::Update()
 		HeldPosition(walker.wallHug, walker.transform);
 		Walk(registry, walker);
 		Retag(registry, walker);
+		// One that came up against water, the land's edge or a fence waits for its trial of both ways round, unless it
+		// has had it
+		if (walker.needsLookahead && !registry.AllOf<WallHugLookahead>(walker.entity))
+		{
+			registry.Assign<WallHugLookahead>(walker.entity);
+		}
+	}
+}
+
+void PathfindingSystem::ProcessLookahead()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The waiting walker that comes first
+	std::optional<entt::entity> next;
+	registry.Each<const WallHugLookahead>([&next](entt::entity entity, const WallHugLookahead& lookahead) {
+		if (!lookahead.tried && (!next.has_value() || entt::to_integral(entity) < entt::to_integral(*next)))
+		{
+			next = entity;
+		}
+	});
+	if (!next.has_value())
+	{
+		return;
+	}
+	auto* lookahead = &registry.Get<WallHugLookahead>(*next);
+	lookahead->tried = true;
+	auto* wallHug = registry.TryGet<WallHug>(*next);
+	auto* transform = registry.TryGet<Transform>(*next);
+	if (wallHug == nullptr || transform == nullptr || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto walker = WalkerOf(registry, *next, *wallHug, *transform);
+	const auto asItGoes = TrialWalk(registry, walker, false);
+	const auto turnedRound = TrialWalk(registry, walker, true);
+	// The stand-ins came and went: look the walker's trial up again
+	lookahead = &registry.Get<WallHugLookahead>(*next);
+	lookahead->spareAsItGoes = asItGoes.turnsToSpare;
+	lookahead->spareTurnedRound = turnedRound.turnsToSpare;
+	lookahead->turnedRound = wall_hug::TurnedRoundIsBetter(turnedRound, asItGoes);
+	if (lookahead->turnedRound)
+	{
+		TurnRound(registry, walker);
+		Retag(registry, walker);
+		return;
+	}
+	// Going round the way it goes, it faces round its circle afresh
+	if (const auto* reference = registry.TryGet<const WallHugObjectReference>(*next);
+	    walker.state == MoveState::Orbit && reference != nullptr)
+	{
+		FaceAngle(walker, wall_hug::HeadingRound(wallHug->position, wall_hug::ToWhole(reference->centre),
+		                                         walker.clockwise == MoveStateClockwise::Clockwise));
 	}
 }

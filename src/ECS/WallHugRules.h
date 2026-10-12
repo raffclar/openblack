@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
@@ -191,6 +192,48 @@ struct LineScan
 	/// The circle it will reach, of those it was given
 	std::optional<size_t> circle;
 };
+
+// Trying both ways round: a walker that comes up against water, the land's edge or a fence while going round may be
+// going the long way. Once a turn the game takes one such walker, makes a stand-in villager where it stands with its walk
+// (going four times as fast, at the stand-in's own pace), and lets it walk on for up to 1,500 turns, once as the walker
+// goes and once turned round. The way that gets there with more turns to spare wins, or with the same turns to spare
+// the one that ends nearer the goal; when turned round wins, the walker is turned round.
+
+/// How many turns a trial walk gets
+constexpr int32_t k_TrialTurns = 1500;
+/// How much faster than the walker the stand-in goes
+constexpr int32_t k_TrialSpeedUp = 4;
+/// A stand-in's age, in years
+constexpr uint32_t k_TrialWalkerAge = 21;
+
+/// How a trial walk went: the turns it had to spare when it got there (-1 if it never did), and how far from the goal
+/// it ended, squared, in metres
+struct TrialWalk
+{
+	int32_t turnsToSpare;
+	float distanceSq;
+};
+
+/// The turns to spare of a trial walk: it walks a turn, then up to k_TrialTurns more until one says it got there
+[[nodiscard]] int32_t TurnsToSpare(const std::function<bool()>& walkOneTurn);
+
+/// Whether the walk turned round beats the walk as it goes
+[[nodiscard]] bool TurnedRoundIsBetter(const TrialWalk& turnedRound, const TrialWalk& asItGoes);
+
+/// A walker turned round: it jumps three steps on, then faces back the way it came. Its new step keeps only the
+/// across part of the old one, backwards, as the game's does (its along-the-map part comes out nothing), until it is
+/// next aimed.
+struct TurnedRound
+{
+	glm::ivec2 position;
+	glm::ivec2 step;
+	uint16_t gameAngle;
+};
+[[nodiscard]] TurnedRound TurnRound(glm::ivec2 position, glm::ivec2 step, uint16_t gameAngle);
+
+/// The heading of a walker going round a circle that stays the way it goes after its trial: a quarter turn round from
+/// facing the circle's middle, the way it goes round
+[[nodiscard]] uint16_t HeadingRound(glm::ivec2 position, glm::ivec2 centre, bool clockwise);
 
 /// A walker heading straight on from its map position along its step looks for the nearest circle its line meets, of
 /// those given in the order the game comes across them: the first circle whose near edge comes before every other's
