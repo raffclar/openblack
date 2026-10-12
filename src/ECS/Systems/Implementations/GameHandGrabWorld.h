@@ -54,6 +54,7 @@ public:
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
 	[[nodiscard]] bool HoldsLooseLeash() const override;
+	bool LeashTap(entt::entity object) override;
 	/// Whether the player's hand holds their creature's leash, rather than a post or a thing holding it
 	[[nodiscard]] static bool HoldsLeash(PlayerNames player);
 	[[nodiscard]] uint32_t LocalRandom(uint32_t count) override;

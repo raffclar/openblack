@@ -404,7 +404,12 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		}
 		if (tap && Exists(object))
 		{
-			Tap(object);
+			// With the leash held loose in the hand, the tap is an order to the creature when the leash takes it, needing no
+			// influence; otherwise the thing is tapped
+			if (!_world->LeashTap(object))
+			{
+				Tap(object);
+			}
 			return object;
 		}
 		return std::nullopt;

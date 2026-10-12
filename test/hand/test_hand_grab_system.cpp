@@ -121,6 +121,15 @@ public:
 		return true;
 	}
 	[[nodiscard]] bool HoldsLooseLeash() const override { return looseLeash; }
+	bool LeashTap(entt::entity object) override
+	{
+		if (!leashTakesTaps)
+		{
+			return false;
+		}
+		leashTapped.push_back(object);
+		return true;
+	}
 	[[nodiscard]] uint32_t LocalRandom(uint32_t) override { return 0; }
 	void VillagerIntoHand(entt::entity villager) override { villagersInHand.push_back(villager); }
 	void AnimalIntoOwnFlock(entt::entity) override {}
@@ -309,6 +318,9 @@ public:
 	std::optional<entt::entity> underCursor;
 	bool influence {true};
 	bool looseLeash {false};
+	/// The leash held loose in the hand takes taps as orders
+	bool leashTakesTaps {false};
+	std::vector<entt::entity> leashTapped;
 	std::vector<PlayerNames> usedOnLand;
 	std::map<entt::entity, Size> sizes;
 	std::map<entt::entity, float> weights;
@@ -453,6 +465,20 @@ TEST_F(HandGrabSystemWithWorld, AShortPressIsATap)
 	// The tap reaches the thing
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), rock);
+}
+
+TEST_F(HandGrabSystemWithWorld, WithTheLeashHeldAShortPressIsAnOrderInsteadOfATap)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	world->leashTakesTaps = true;
+	EXPECT_TRUE(Press());
+	Frame(50);
+	const auto tapped = Release();
+	ASSERT_TRUE(tapped.has_value());
+	ASSERT_EQ(world->leashTapped.size(), 1u);
+	EXPECT_EQ(world->leashTapped.front(), rock);
+	EXPECT_TRUE(world->tapped.empty());
 }
 
 TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)

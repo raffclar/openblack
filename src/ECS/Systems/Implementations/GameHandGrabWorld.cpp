@@ -471,6 +471,11 @@ bool GameHandGrabWorld::HoldsLooseLeash() const
 	return creature.has_value() && leashes.HolderPoint(*creature).has_value();
 }
 
+bool GameHandGrabWorld::LeashTap(entt::entity object)
+{
+	return Locator::leashSystem::has_value() && Locator::leashSystem::value().TapThing(HandPlayer(), object);
+}
+
 void GameHandGrabWorld::LeaveRootsHole(entt::entity tree)
 {
 	auto& registry = Locator::entitiesRegistry::value();

@@ -56,6 +56,14 @@ struct CreatureLeash
 		leash_rope::Rope rope;
 		/// Whether the rope has been placed from its ends yet
 		bool ropeStarted {false};
+		/// While the hand holds the rope of the tied leash, the rope is drawn as two of its own: from the collar to the
+		/// hand, and from what it is tied to to the hand
+		struct HeldRopes
+		{
+			leash_rope::Rope toCollar;
+			leash_rope::Rope toTied;
+		};
+		std::optional<HeldRopes> held;
 	};
 	std::optional<Worn> worn;
 	/// The leash picked to put on next, at the citadel or by the hotkeys

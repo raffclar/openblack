@@ -1792,6 +1792,40 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.tie_by_hand",
+	    .name = "Ordering and tying with the hand",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger is clicked to put the leash on, a tree and a pillar of rock stand ahead. With the hand: "
+	                   "right click the tree once, then double click it, then double click it again; right click the "
+	                   "rock, and double click the rock.",
+	    .expected = "Over the tree with the leash in the hand the tip says Attach Leash. A single click sends the tiger to "
+	                "act on the tree (marked); the double click ties the leash to it, the rope running from the tree, and "
+	                "over the tree the tip now says Detach Leash; double clicked again it comes back to the hand. The "
+	                "same for the rock. The hand never pulls the tree up on a quick click.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 60.0f}, {40.0f, 60.0f}, {0.0f, 20.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 60.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {40.0f, 60.0f}}},
+	    .commands = {{.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "leash.snap_rope",
+	    .name = "Snap the tied leash",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger's leash is tied to a tree. Put the hand on the rope (the hand opens its fingers), hold "
+	                   "the right button to take hold of it, drag it out over the land and let go.",
+	    .expected = "Over the rope the hand opens its fingers to pinch it and no tip shows. Holding it, the fingers pinch "
+	                "it and the rope runs as two, one from the collar and one from the tree, both to the hand. Let go, the "
+	                "tiger is sent to the place under the hand (marked) and is kept within the distance from the tree to "
+	                "where the hand let go.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 60.0f}, {60.0f, 20.0f}, {0.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 60.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false)},
+	});
+
+	all.push_back({
 	    .id = "leash.hand",
 	    .name = "Leash your creature with the hand",
 	    .facet = Facet::Leash,

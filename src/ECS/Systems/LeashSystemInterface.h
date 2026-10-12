@@ -15,11 +15,13 @@
 #include <optional>
 
 #include <entt/entity/fwd.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOwnership.h"
+#include "Creature/LeashSnap.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -57,10 +59,9 @@ public:
 	/// round the hand's wrist, and the glows coloured. While the hand is put away the picked leash and its glow are not
 	/// drawn and can't be tapped.
 	virtual void ShowPosts(bool handShown) = 0;
-	/// The leash hotkeys, and the Action button tapping what is under the cursor (along its ray, where it is on the screen
-	/// and when the press came), unless the hand used the press for something else, such as letting go of a miracle
-	virtual void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor, uint32_t milliseconds,
-	                         bool actionTaken) = 0;
+	/// The leash hotkeys, and the Action button tapping what is under the cursor along its ray, unless the hand used the
+	/// press for something else, such as letting go of a miracle, or the leash took it as a double tap (see PressAction)
+	virtual void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken) = 0;
 
 	/// Whether the creature knows a leash, which it must before it can wear it; the learning leash before any
 	[[nodiscard]] virtual bool Knows(entt::entity creature, LeashType type) const = 0;
@@ -128,6 +129,35 @@ public:
 	virtual bool OrderOn(PlayerNames player, entt::entity object) = 0;
 	/// Where the player's creature was last sent, while it carries the order out
 	[[nodiscard]] virtual std::optional<glm::vec3> OrderTarget(entt::entity creature) const = 0;
+	/// The Action button is pressed with the hand empty, along a ray, where on the screen and when: a second press soon
+	/// after the first, near it, is a double tap, which with the leash held ties the leash to the thing under the cursor
+	/// or unties it. Returns whether the leash took the press; any press it doesn't take is left to the hand.
+	virtual bool PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
+	                         uint32_t milliseconds) = 0;
+	/// A tap on a thing that the hand let go before taking it, with the leash held loose in the hand: an order to act on
+	/// it, in place of the thing's own tap. Returns whether the leash took the tap.
+	virtual bool TapThing(PlayerNames player, entt::entity object) = 0;
+
+	/// The frame as seen, to find whether the hand is over the rope of the player's tied leash: the camera's view and
+	/// projection, the screen's size in pixels, the cursor's pixel, and what else the interface picked under it
+	struct RopeFrame
+	{
+		glm::mat4 viewProjection {1.0f};
+		glm::vec2 screenSize {0.0f};
+		glm::ivec2 cursor {0};
+		leash_snap::Under under;
+	};
+	/// Once a frame: whether the player's hand is over the rope of their tied leash
+	virtual void UpdateRopeHover(PlayerNames player, const RopeFrame& frame) = 0;
+	/// What the player's hand does about the rope of their tied leash: nothing, over it, or holding it
+	[[nodiscard]] virtual leash_snap::Hand RopeHand(PlayerNames player) const = 0;
+	/// The Action button is pressed with the hand over the rope of the tied leash: the hand takes hold of it. Returns
+	/// whether it did.
+	virtual bool PressRope(PlayerNames player) = 0;
+	/// The Action button is let go while the hand holds the rope: the leash's length becomes how far the hand is from what
+	/// it is tied to, and the creature is sent to the place under the hand, if there is one
+	virtual void LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place) = 0;
+
 	/// The tooltip the hand shows for the leash over something, or over nothing, by its place among the game's tooltips
 	[[nodiscard]] virtual std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const = 0;
 

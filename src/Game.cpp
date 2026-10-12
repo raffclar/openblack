@@ -611,6 +611,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	// instead (see the leash's input).
 	if (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT))
 	{
+		// Letting go of the rope of the tied leash: the leash's length becomes how far the hand is from what it is tied to,
+		// and the creature goes to the place under the hand
+		if (Locator::leashSystem::value().RopeHand(PlayerNames::PLAYER_ONE) == leash_snap::Hand::Holding &&
+		    Locator::pickingSystem::has_value())
+		{
+			Locator::leashSystem::value().LetGoOfRope(PlayerNames::PLAYER_ONE, Locator::pickingSystem::value().GetPick().point);
+		}
 		magic.ReleaseAction();
 		// Let go quickly on a one-shot bubble, its miracle goes into the hand
 		magic.ReleaseOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
@@ -624,11 +631,30 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
+		// With an empty hand and the leash held, a quick second press near the first is a double tap, which ties the leash
+		// to the thing under the cursor or unties it, before anything else takes it
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
+		{
+			const auto screenSize = Locator::windowing::value().GetSize();
+			const auto cursor = glm::vec2(event.button.x, event.button.y);
+			glm::vec3 rayOrigin;
+			glm::vec3 rayDirection;
+			Locator::camera::value().DeprojectScreenToWorld(
+			    cursor / static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))), rayOrigin, rayDirection);
+			_actionPressTaken = Locator::leashSystem::value().PressAction(PlayerNames::PLAYER_ONE, rayOrigin, rayDirection,
+			                                                              cursor, machine_clock::Ticks());
+		}
 		// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
 		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && Locator::tipBubbleSystem::has_value() &&
 		    Locator::tipBubbleSystem::value().IsUnderHand())
 		{
 			Locator::tipBubbleSystem::value().Grip();
+			_actionPressTaken = true;
+		}
+		// With an empty hand over the rope of the tied leash, the hand takes hold of the rope
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() &&
+		    Locator::leashSystem::value().PressRope(PlayerNames::PLAYER_ONE))
+		{
 			_actionPressTaken = true;
 		}
 		// With an empty hand, a one-shot bubble under it takes the press before anything behind it
@@ -2182,8 +2208,30 @@ bool Game::Update() noexcept
 					if (!Locator::debugGui::value().StealsFocus())
 					{
 						auto& leashes = Locator::leashSystem::value();
-						leashes.HandleInput(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
-						                    machine_clock::Ticks(), _actionPressTaken);
+						// Whether the hand is over the rope of the tied leash, which comes before the land and things
+						// behind it
+						{
+							const auto& pick = Locator::pickingSystem::value().GetPick();
+							const auto viewProjection = camera.GetViewProjectionMatrix();
+							const auto& registry = Locator::entitiesRegistry::value();
+							ecs::systems::LeashSystemInterface::RopeFrame frame {
+							    .viewProjection = viewProjection,
+							    .screenSize = static_cast<glm::vec2>(screenSize),
+							    .cursor = _mousePosition,
+							};
+							if (pick.object.has_value() && registry.Valid(*pick.object))
+							{
+								frame.under.object = true;
+								frame.under.creature = registry.AllOf<ecs::components::Creature>(*pick.object);
+								frame.under.objectDepth = pick.distance;
+							}
+							if (pick.land.has_value())
+							{
+								frame.under.landDepth = (viewProjection * glm::vec4(*pick.land, 1.0f)).w;
+							}
+							leashes.UpdateRopeHover(PlayerNames::PLAYER_ONE, frame);
+						}
+						leashes.HandleInput(rayOrigin, rayDirection, _actionPressTaken);
 						_actionPressTaken = false;
 					}
 					// The gestures drawn with the hand: circles and power-ups for the miracles, the leash's gestures, and
@@ -2566,6 +2614,12 @@ bool Game::Update() noexcept
 			{
 				cycle = HandCycle::Stroke;
 			}
+			// Over the rope of the tied leash the fingers open to pinch it, and holding it they pinch it
+			const auto ropeHand = Locator::leashSystem::value().RopeHand(PlayerNames::PLAYER_ONE);
+			if (!_handCameraState && ropeHand != leash_snap::Hand::Away)
+			{
+				cycle = HandCycle::HoldFingers;
+			}
 			// On a creature, it strokes it or shows its slap
 			if (_handOnCreature.has_value())
 			{
@@ -2625,7 +2679,7 @@ bool Game::Update() noexcept
 			}
 			else if (!holdingSeed)
 			{
-				_handAnimation->Update(deltaTime, state, cycle, _mousePosition);
+				_handAnimation->Update(deltaTime, state, cycle, _mousePosition, leash_snap::PinchShare(ropeHand));
 			}
 
 			const auto handEntity = Locator::handSystem::value()

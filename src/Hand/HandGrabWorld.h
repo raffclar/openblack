@@ -113,6 +113,9 @@ public:
 	virtual bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) = 0;
 	/// Whether the hand's player holds their creature's leash loose in the hand, tied to nothing
 	[[nodiscard]] virtual bool HoldsLooseLeash() const = 0;
+	/// A tap on a thing, let go before the hand took it, given to the leash held loose in the hand: whether the leash took
+	/// it as an order to the creature, in place of the thing's own tap
+	virtual bool LeashTap(entt::entity object) = 0;
 	/// A local random number below a count
 	[[nodiscard]] virtual uint32_t LocalRandom(uint32_t count) = 0;
 	/// A villager goes into the hand: it remembers what it was doing and is held

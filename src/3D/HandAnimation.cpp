@@ -320,7 +320,7 @@ void HandAnimation::UpdateHeld(std::chrono::microseconds dt, Cycle cycle, uint32
 	ComposeBoneMatrices(poses);
 }
 
-void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycle, glm::ivec2 cursor)
+void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycle, glm::ivec2 cursor, float pinchShare)
 {
 	if (!IsLoaded())
 	{
@@ -361,10 +361,6 @@ void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycl
 			// Starting to drag the camera, or taking hold of a creature, starts the state's cycle over
 			time = std::chrono::microseconds::zero();
 		}
-		if (state == State::Normal && cycle == Cycle::HoldFingers)
-		{
-			time = std::chrono::microseconds::zero();
-		}
 		if (state != _state || FadesBetween(state, _cycle, cycle))
 		{
 			_fadeFrom = _lastPoses;
@@ -377,6 +373,12 @@ void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycl
 	const auto* animation = GetAnimation(static_cast<size_t>(cycle));
 	const auto duration = std::chrono::milliseconds(animation != nullptr ? std::max(animation->duration, 1u) : 1u);
 	time = (time + dt) % std::chrono::duration_cast<std::chrono::microseconds>(duration);
+	// The pinch is held still: open at its start, closed halfway through
+	if (cycle == Cycle::HoldFingers)
+	{
+		time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float, std::micro>(
+		    static_cast<float>(std::chrono::duration_cast<std::chrono::microseconds>(duration).count()) * pinchShare));
+	}
 	const auto timeMs = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(time).count());
 
 	auto poses = EvaluatePoses(cycle, timeMs, lean);

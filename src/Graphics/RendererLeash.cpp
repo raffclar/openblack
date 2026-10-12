@@ -138,29 +138,11 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 	const bool scriptCinema = Locator::cinematicDirectorSystem::has_value() &&
 	                          Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
 	                          Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
-	desc.entities.Each<const CreatureLeash>([&](entt::entity creature, const CreatureLeash& leashes) {
-		if (!leashes.worn.has_value() || !leashes.worn->ropeStarted)
-		{
-			return;
-		}
-		const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(creature);
-		const leash_rope::Showing showing {
-		    .scriptShows = leashes.drawn,
-		    .scriptCinema = scriptCinema,
-		    .local = leashes.worn->holder == k_LocalPlayer,
-		    .handHidden = !desc.drawHand,
-		    // The hand doesn't pick up the rope of a tied leash in openblack yet
-		    .handHoldsTiedRope = false,
-		    .creatureFizz = spells != nullptr ? spells->fizz : 0.0f,
-		};
-		if (!leash_rope::Shown(showing))
-		{
-			return;
-		}
-		const auto ribbon = leash_rope::BuildRibbon(leashes.worn->rope, eye, ground);
-		const auto middle = leash_rope::Point(leashes.worn->rope, leash_rope::k_PointCount / 2);
-
-		// The shadow first, flat on the land in the main view only, the reflection having no land to lie on
+	// A rope: its shadow first, flat on the land in the main view only, the reflection having no land to lie on; then the
+	// rope, lit by the land, blended by the texture's alpha among the translucent things
+	const auto draw = [&](const leash_rope::Rope& leash) {
+		const auto ribbon = leash_rope::BuildRibbon(leash, eye, ground);
+		const auto middle = leash_rope::Point(leash, leash_rope::k_PointCount / 2);
 		bgfx::TransientVertexBuffer vertices;
 		bgfx::TransientIndexBuffer indices;
 		if (desc.viewId == RenderPass::Main && Fill(ribbon.shadow, true, vertices, indices))
@@ -172,8 +154,6 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
 			shadow->Submit(static_cast<uint16_t>(desc.viewId));
 		}
-
-		// Then the rope, lit by the land, blended by the texture's alpha among the translucent things
 		if (Fill(ribbon.rope, false, vertices, indices))
 		{
 			bind(*rope);
@@ -189,6 +169,34 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
 			               BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 			rope->Submit(static_cast<uint16_t>(translucent), zsort::Depth(middle, eye));
+		}
+	};
+
+	desc.entities.Each<const CreatureLeash>([&](entt::entity creature, const CreatureLeash& leashes) {
+		if (!leashes.worn.has_value() || !leashes.worn->ropeStarted)
+		{
+			return;
+		}
+		const auto& worn = *leashes.worn;
+		const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(creature);
+		const leash_rope::Showing showing {
+		    .scriptShows = leashes.drawn,
+		    .scriptCinema = scriptCinema,
+		    .local = worn.holder == k_LocalPlayer,
+		    .handHidden = !desc.drawHand,
+		    .handHoldsTiedRope = worn.held.has_value(),
+		    .creatureFizz = spells != nullptr ? spells->fizz : 0.0f,
+		};
+		if (leash_rope::Shown(showing))
+		{
+			draw(worn.rope);
+		}
+		// The hand holding the rope of the tied leash: the rope is drawn as two, from the collar and from what it is tied to
+		// to the hand
+		if (leash_rope::HeldRopesShown(showing))
+		{
+			draw(worn.held->toCollar);
+			draw(worn.held->toTied);
 		}
 	});
 }

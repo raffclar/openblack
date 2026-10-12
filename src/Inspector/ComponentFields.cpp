@@ -2411,7 +2411,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTo>("tiedTo")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTurn>("tiedTurn")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::rope>("rope")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::ropeStarted>("ropeStarted");
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::ropeStarted>("ropeStarted")
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::held>("held");
+	Reflect<openblack::ecs::components::CreatureLeash::Worn::HeldRopes>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toCollar>("toCollar")
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toTied>("toTied");
 	Reflect<openblack::ecs::components::CreatureLocomotion::Move>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::animations>("animations")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::timeMs>("timeMs")
