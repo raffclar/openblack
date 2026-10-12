@@ -115,3 +115,12 @@ TEST(WorldToolTips, AHandOffTheScreenKeepsItsTooltipOnTheEdge)
 	EXPECT_EQ(KeptOnScreen({-30, -1}, {800, 600}, 24), glm::ivec2(0, 0));
 	EXPECT_EQ(KeptOnScreen({100, 200}, {800, 600}, 24), glm::ivec2(100, 200));
 }
+
+TEST(WorldToolTips, NothingUnderThePointerShowsWhileAMiraclePours)
+{
+	using State = openblack::magic::CastInput::State;
+	// Pouring food beside a wood pile, the pile the pointer crosses says nothing
+	EXPECT_FALSE(OffersOverToolTips(State::Locked));
+	// With nothing being poured, what is under the pointer shows
+	EXPECT_TRUE(OffersOverToolTips(State::Idle));
+}

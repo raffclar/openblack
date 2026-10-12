@@ -19,6 +19,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Magic/CastInput.h"
+
 /// The words and numbers of the tooltips the hand shows over things in the world: a village centre's belief and
 /// population, a temple's health and way in, a store's food and wood, and the amount a pile gives. Each is one of the
 /// game's 170 tooltips (from text 0xE73).
@@ -118,5 +120,12 @@ struct Wording
 
 /// The tooltip's corner by the hand, kept on the screen by its size
 [[nodiscard]] glm::ivec2 KeptOnScreen(glm::ivec2 hand, glm::ivec2 screen, int size);
+
+/// Whether the hand offers the tooltips of what is under the pointer (a pile's amount, a store's contents, a flag's
+/// need, a creature, the leash). Not while a held miracle is locked on and applied every turn as the Action button stays
+/// down, as food or wood pours: the hand offers nothing of its own then, so what the pointer crosses (a wood pile beside
+/// the pour) never shows, and a tooltip already up runs out its time. Tooltips forced by what the hand does (the amount
+/// it takes from a pile, a totem's share) still show.
+[[nodiscard]] bool OffersOverToolTips(magic::CastInput::State cast);
 
 } // namespace openblack::gui::world_tooltip

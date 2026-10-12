@@ -1124,6 +1124,13 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
 		}
 	}
+	// While a held miracle pours, the hand offers nothing of what is under the pointer
+	if (Locator::magicSystem::has_value() &&
+	    !gui::world_tooltip::OffersOverToolTips(Locator::magicSystem::value().GetHandCastState().state))
+	{
+		toolTips.ProcessTurn();
+		return;
+	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
 	if (!_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
 	{

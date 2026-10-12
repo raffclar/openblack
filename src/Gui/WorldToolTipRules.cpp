@@ -110,4 +110,9 @@ glm::ivec2 KeptOnScreen(glm::ivec2 hand, glm::ivec2 screen, int size)
 	return {std::clamp(hand.x, 0, std::max(screen.x - size, 0)), std::clamp(hand.y, 0, std::max(screen.y - size, 0))};
 }
 
+bool OffersOverToolTips(magic::CastInput::State cast)
+{
+	return cast != magic::CastInput::State::Locked;
+}
+
 } // namespace openblack::gui::world_tooltip
