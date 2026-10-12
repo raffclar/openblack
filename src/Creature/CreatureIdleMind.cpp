@@ -670,6 +670,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::Static:
 			commands.startSequence = step.sequence;
 			commands.holdLoop = step.holdLoop;
+			if (step.mirrorAtRandom)
+			{
+				commands.mirrored = random(2) == 1;
+			}
 			if (step.closedEyes)
 			{
 				commands.eyes = Eyes::Closed;

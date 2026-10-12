@@ -523,6 +523,9 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
+		/// does: a static action's start, loop and end, or an individual action
+		ScriptPlay,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

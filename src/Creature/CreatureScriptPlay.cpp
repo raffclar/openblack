@@ -9,30 +9,45 @@
 
 #include "CreatureScriptPlay.h"
 
+#include <limits>
+
 using namespace openblack;
 using namespace openblack::creature_script_play;
 
-std::optional<std::vector<creature_mind::Step>> creature_script_play::Agenda(const Request& request)
+std::vector<creature_mind::Step> creature_script_play::Agenda(const Request& request)
 {
-	if (request.animation <= k_LastStaticAction)
+	using creature_mind::Step;
+	if (request.animation <= 0)
 	{
-		// TODO(opening-skip): static actions take their start, loop and end from the game's table of them, held for
-		// k_StaticActionSeconds; no script of the first land plays one
-		return std::nullopt;
+		// The body has no animation before its first static action's loop to start with, so the action is tried again
+		// and again and the creature never gets past it
+		return {{.kind = Step::Kind::Wait, .seconds = std::numeric_limits<float>::infinity()}};
 	}
-	std::vector<creature_mind::Step> agenda;
+	const auto animation = static_cast<size_t>(request.animation);
+	const bool isStatic = request.animation <= k_LastStaticAction;
+	std::vector<Step> agenda;
 	agenda.reserve(static_cast<size_t>(request.plays) + 1);
 	for (uint32_t i = 0; i < request.plays; ++i)
 	{
-		// Each starts once its body is free, and is played through
-		agenda.push_back(
-		    {.kind = creature_mind::Step::Kind::Action, .seconds = 0.0f, .animation = static_cast<size_t>(request.animation)});
+		// Each starts once its body is free
+		if (isStatic)
+		{
+			agenda.push_back({.kind = Step::Kind::Static,
+			                  .seconds = k_StaticActionSeconds,
+			                  .animation = animation,
+			                  .sequence = {animation - 1, animation, animation + 1},
+			                  .mirrorAtRandom = true});
+		}
+		else
+		{
+			agenda.push_back({.kind = Step::Kind::Action, .seconds = 0.0f, .animation = animation});
+		}
 	}
 	// Then it waits for its body to be free, which the last action's end already waits for; with nothing to play, it
 	// only waits
 	if (agenda.empty())
 	{
-		agenda.push_back({.kind = creature_mind::Step::Kind::Wait, .seconds = 0.0f});
+		agenda.push_back({.kind = Step::Kind::Wait, .seconds = 0.0f});
 	}
 	return agenda;
 }

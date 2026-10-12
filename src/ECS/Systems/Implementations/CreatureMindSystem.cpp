@@ -560,7 +560,8 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 	if (commands.startSequence.has_value())
 	{
 		const auto& sequence = *commands.startSequence;
-		if (auto body = creature_layers::PlaySequence(animation.body, sequence[0], sequence[1], sequence[2], commands.holdLoop))
+		if (auto body = creature_layers::PlaySequence(animation.body, sequence[0], sequence[1], sequence[2], commands.holdLoop,
+		                                              commands.mirrored))
 		{
 			animation.body = *body;
 		}
