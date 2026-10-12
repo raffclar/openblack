@@ -1185,7 +1185,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 				const bool landLit =
 				    desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
-				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, desc.unlit ? 1.0f : 0.0f, 0.0f};
+				// Below Medium detail the sun lights only the creatures and the hand
+				const bool unlit =
+				    desc.unlit || (!desc.alwaysLit && !detail_level::For(Locator::config::value().detailLevel).objectLighting);
+				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, unlit ? 1.0f : 0.0f, 0.0f};
 				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
 				program->SetTextureSampler("s_landColour", 8, GetLandColour());
@@ -1211,8 +1214,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// the reflection
 				const bool mainView = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Translucent;
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				SetObjectGroundShadowUniforms(*program, desc.groundShadows && mainView && !inTemple && !desc.isSky &&
-				                                            !desc.drawAll && desc.morphTargets == nullptr);
+				SetObjectGroundShadowUniforms(
+				    *program, desc.groundShadows && detail_level::For(Locator::config::value().detailLevel).objectShadows &&
+				                  mainView && !inTemple && !desc.isSky && !desc.drawAll && desc.morphTargets == nullptr);
 			}
 			if (has(MeshUniform::ObjectLook))
 			{
@@ -2056,7 +2060,9 @@ void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 
 void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId == RenderPass::Reflection || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	// The lower detail levels draw no light shafts
+	if (desc.viewId == RenderPass::Reflection || !Locator::temple::has_value() || !Locator::temple::value().Active() ||
+	    !detail_level::TempleLightShafts(detail_level::For(Locator::config::value().detailLevel)))
 	{
 		return;
 	}
@@ -3790,7 +3796,7 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	// The clouds' shadows: each of the 40 by 40 cells under a cloud, from its corner, takes the darker of its luminosity
 	// and the shadow's, by the cloud's alpha
 	const auto shadowId = entt::hashed_string("raw/sclouds");
-	if (detail_level::Clouds(Locator::config::value().detailLevel) && textures.Contains(shadowId.value()))
+	if (detail_level::CloudShadows(Locator::config::value().detailLevel) && textures.Contains(shadowId.value()))
 	{
 		const auto shadow = textures.Handle(shadowId.value());
 		constexpr float k_ShadowCells = 40.0f;
@@ -4399,8 +4405,10 @@ TextureHandle Renderer::UpdateLandLight() const
 		const auto [skyType, alignment, overcast, flash] = dome->landLight;
 		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash);
 		const auto& haze = _landLightTable->GetHaze();
-		_haze = {glm::vec4(haze.nearDistance, haze.farDistance, haze.k, 1.0f), glm::vec4(haze.colour, 0.0f)};
 		const auto detailLevel = Locator::config::value().detailLevel;
+		// The lower detail levels draw no haze at all
+		const float hazeOn = detail_level::Fog(detailLevel) ? 1.0f : 0.0f;
+		_haze = {glm::vec4(haze.nearDistance, haze.farDistance, haze.k, hazeOn), glm::vec4(haze.colour, 0.0f)};
 		_skyTint = sky_dome::TintOf({
 		    .hazeColour = haze.colour,
 		    .overcast = overcast,
@@ -5197,7 +5205,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	{
 		auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawIsland
 		                                                                          : Profiler::Stage::MainPassDrawIsland);
-		if (desc.drawIsland)
+		// Below High detail the sea doesn't mirror the land
+		const bool landShown =
+		    desc.viewId != RenderPass::Reflection || detail_level::For(Locator::config::value().detailLevel).landReflection;
+		if (desc.drawIsland && landShown)
 		{
 			auto& island = Locator::terrainSystem::value();
 			auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
@@ -5389,6 +5400,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				/// Each instance's bones are read from the bone palette, where its instance says they start
 				bool bonePalette {false};
 			};
+			// The creatures are drawn with a light of their own, at every detail level
+			bool drawingCreatures = false;
 			const auto drawInstances = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
 			                               const EntityPose* pose = nullptr,
@@ -5418,10 +5431,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.landLightScale = meshId == ecs::components::Hand::k_MeshId ? 1.5f : 1.0f;
 				submitDesc.snow = !inTemple && meshId != ecs::components::Hand::k_MeshId;
 				// The villagers a script draws in high detail take no moving shadows, nor does the hand
-				submitDesc.groundShadows =
-				    meshId != ecs::components::Hand::k_MeshId &&
-				    std::ranges::none_of(renderCtx.highDetailDraws, [meshId](const auto& draw) { return draw.mesh == meshId; });
+				const bool highDetail =
+				    std::ranges::any_of(renderCtx.highDetailDraws, [meshId](const auto& draw) { return draw.mesh == meshId; });
+				submitDesc.groundShadows = meshId != ecs::components::Hand::k_MeshId && !highDetail;
 				submitDesc.unlit = placers.unlit;
+				// The creatures, the hand and the villagers a script draws in high detail are lit at every detail level
+				submitDesc.alwaysLit = drawingCreatures || highDetail || meshId == ecs::components::Hand::k_MeshId;
 				submitDesc.instanceDesc =
 				    std::make_unique<graphics::InstanceDesc>(instances.value_or(renderCtx.instanceUniformBuffer), first, count);
 				if (mesh->IsBoned())
@@ -5582,6 +5597,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 			}
 			// The creatures, each posed and shaped as it is, then its eyes
+			drawingCreatures = true;
 			for (const auto& [entity, instance] : _drawnCreatures)
 			{
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
@@ -5677,6 +5693,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					DrawCreatureHair(desc, entity);
 				}
 			}
+			drawingCreatures = false;
 			// The animals, each posed by its own clip and in its own light; one fading out blends over the rest
 			const auto drawAnimal = [&](entt::entity entity, uint32_t instance, bool translucent) {
 				const auto* pose = desc.entities.TryGet<const ecs::components::AnimalPose>(entity);
@@ -6125,7 +6142,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    {
 						    const bool inMainRoom = templePart->room == TempleRoom::Main;
 						    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
-						    if (desc.viewId == RenderPass::Reflection ? !inMainRoom : !drawn)
+						    const bool inReflection = desc.viewId == RenderPass::Reflection;
+						    if ((inReflection ? !inMainRoom : !drawn) ||
+						        !detail_level::TempleGlowsShown(detail_level::For(Locator::config::value().detailLevel),
+						                                        inReflection))
 						    {
 							    return;
 						    }

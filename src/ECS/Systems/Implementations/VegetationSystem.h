@@ -29,10 +29,10 @@ namespace openblack::ecs::systems
 /// tree follows the sway its facing picks, so trees facing the same way move together. The sway leans the tree along
 /// the world's z axis by up to 3% of its height, whatever the weather.
 ///
-/// Things passing through the trees bend them instead: a tree within reach of the hand, or under a creature walking
-/// through it, leans away by up to 27 degrees, less the further it is, and stands straight again as soon as the hand or
-/// creature has gone. Bending them makes them crash about, and they rustle by themselves around the camera
-/// (TreeRustle).
+/// Things passing through the trees bend them instead: a tree within reach of a thing the hand holds (never the empty
+/// hand), or under a creature walking through it, leans away by up to 27 degrees, less the further it is, and stands
+/// straight again as soon as the thing or creature has gone. Bending them makes them crash about, and they rustle by themselves
+/// around the camera (TreeRustle).
 ///
 /// Fully grown fields follow the same sways, leaning their crops 1.75 times as far.
 // TODO(raffclar): thrown objects bend the trees they pass in the game too, and creatures knock them down
@@ -72,7 +72,7 @@ private:
 	std::array<float, k_SwayCount> _speeds {};
 	/// Game time since the speeds last changed
 	std::chrono::duration<float, std::milli> _speedTime {0.0f};
-	/// The hand's bend point and the creatures'
+	/// The bend points of the thing the hand holds and of the creatures
 	std::vector<BendPoint> _bendPoints;
 };
 } // namespace openblack::ecs::systems
