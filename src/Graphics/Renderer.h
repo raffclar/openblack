@@ -381,6 +381,11 @@ private:
 	void DrawCreatureHair(const DrawSceneDesc& desc, entt::entity entity) const;
 	/// The columns of light over the village centres and temples of the players whose borders show
 	void DrawLightColumns(const DrawSceneDesc& desc) const;
+	/// The beams of light the started scrolls stand in
+	void DrawScrollBeams(const DrawSceneDesc& desc) const;
+	/// A tall shaft of light standing at a point and turned to face the eye, added over the scene in a colour: the
+	/// columns over villages and temples, and the scrolls' beams
+	void DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint) const;
 	/// The leashes' ropes, each a ribbon lit by the land beneath it, and their shadows on the land
 	void DrawLeashes(const DrawSceneDesc& desc) const;
 	/// Takes up the creatures' skins where they have been painted again, before their bodies are drawn with them; drops
