@@ -129,6 +129,7 @@ private:
 	void UpdateParticles(float seconds);
 	/// The scenario's vortices open when it is time and are told to fade out when it is time
 	void UpdateVortices();
+	void UpdateRewards();
 	/// The needs and desires go on once the body and mind have started, and every frame for those that hold them
 	void ApplyStates();
 	void Give(const Command& command);
@@ -209,6 +210,8 @@ private:
 		bool fading {false};
 	};
 	std::vector<RunningVortex> _vortices;
+	/// The scenario's reward chests, each once given
+	std::vector<entt::entity> _rewards;
 	/// The scenario's miracles: when each is next cast, and the one held in its hand until when
 	struct RunningMiracle
 	{

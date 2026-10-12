@@ -299,6 +299,16 @@ struct VortexSetup
 	std::optional<float> fadeOutAfterSeconds;
 };
 
+/// A reward chest given to the player as a challenge's script gives one: dropped from the sky or put on the land
+struct RewardSetup
+{
+	RewardObjectInfo type {RewardObjectInfo::RewardObjectToyBall};
+	glm::vec2 offset {0.0f};
+	bool fromSky {true};
+	/// Seconds into the scenario it is given
+	float delaySeconds {0.0f};
+};
+
 /// A miracle dispenser, or a one-shot bubble on its own, put down for the scenario
 struct DispenserSetup
 {
@@ -670,6 +680,7 @@ struct Scenario
 	std::vector<TempleSetup> temples;
 	std::vector<ParticleSetup> particles;
 	std::vector<VortexSetup> vortices;
+	std::vector<RewardSetup> rewards;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
 	/// The scrolls and signs scripts put up, made after the objects
@@ -725,6 +736,8 @@ void AddBirdScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The vortices between the lands: opening, levelling the ground and closing
 void AddVortexScenarios(std::vector<Scenario>& all);
+/// The reward chests the challenges give: falling, landing and being opened
+void AddRewardScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
 void AddTornadoScenarios(std::vector<Scenario>& all);
 /// The land's nature: a tree pulled up leaving its roots, and the fireflies at nightfall
