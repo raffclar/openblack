@@ -103,8 +103,10 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -1436,6 +1438,23 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::RunText)
+	{
+		// Not alone on its line and not waiting for a click, as the lessons' texts are shown
+		const bool shown = Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().IsStarted() &&
+		                   Locator::helpTextSystem::value().RunText(false, static_cast<uint32_t>(command.value), 0);
+		Log(fmt::format("{:.1f}s: help text {} {}", _seconds, command.value, shown ? "shown" : "not shown"));
+		return;
+	}
+	if (command.kind == Kind::PlayHandDemo)
+	{
+		if (Locator::handDemoSystem::has_value())
+		{
+			Locator::handDemoSystem::value().Play(command.handDemo, 0, false, false);
+		}
+		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
+		return;
+	}
 	if (command.kind == Kind::WideScreen)
 	{
 		// Held by a script, as the land's scripts hold them
@@ -1615,6 +1634,8 @@ void Runner::Give(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::RunText:
+	case Kind::PlayHandDemo:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
