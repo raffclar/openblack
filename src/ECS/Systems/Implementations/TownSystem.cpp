@@ -32,6 +32,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -39,6 +40,7 @@
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -623,6 +625,11 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 	// It becomes the player's, gained after the towns they have already
 	component->owner = player;
 	component->gained = registry.Context().nextTownGained++;
+	// Its people count as converted to the player
+	if (const auto* stats = registry.TryGet<const TownStats>(town))
+	{
+		player_statistics::CountConverted(registry, player, stats->adults + stats->children);
+	}
 	// The miracles it offers go from its old player to its new one
 	if (Locator::spellIconSystem::has_value())
 	{

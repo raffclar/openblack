@@ -76,6 +76,7 @@
 #include "ECS/CreatureSight.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -2724,9 +2725,9 @@ void MagicSystem::RecordCast(MagicType type, PlayerNames player, glm::vec3 point
 		if (record.name == player)
 		{
 			record.lastCast = components::Player::Cast {.position = point, .type = type, .turn = _turn};
-			++record.castsOfType.at(static_cast<size_t>(type));
 		}
 	});
+	player_statistics::CountCast(EntityRegistry(), player, type);
 }
 
 void MagicSystem::ReactToSpell(Spell& spell, bool onCast)

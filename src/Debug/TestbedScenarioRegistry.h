@@ -769,6 +769,8 @@ void AddSkyScenarios(std::vector<Scenario>& all);
 void AddAdvisorScenarios(std::vector<Scenario>& all);
 /// A town growing from the buildings it planned
 void AddTownGrowthScenarios(std::vector<Scenario>& all);
+/// The player's statistics counting as their town lives
+void AddStatisticsScenarios(std::vector<Scenario>& all);
 void AddTutorialScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them

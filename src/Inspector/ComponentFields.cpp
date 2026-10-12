@@ -157,6 +157,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerCreatures.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
@@ -215,6 +216,7 @@
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/RewardRules.h"
+#include "ECS/StatisticsRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/VillagerDeathRules.h"
@@ -1300,16 +1302,33 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Player::name>("name")
 	    .Field<&components::Player::damageFrom>("damageFrom")
 	    .Field<&components::Player::lastCast>("lastCast")
-	    .Field<&components::Player::castsOfType>("castsOfType")
 	    .Field<&components::Player::windResistance>("windResistance")
-	    .Field<&components::Player::villagersLost>("villagersLost")
-	    .Field<&components::Player::villagersKilled>("villagersKilled")
-	    .Field<&components::Player::sacrifices>("sacrifices")
-	    .Field<&components::Player::foodUsed>("foodUsed")
-	    .Field<&components::Player::births>("births")
-	    .Field<&components::Player::totalChantsUsed>("totalChantsUsed")
 	    .Field<&components::Player::miracles>("miracles");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");
+	Reflect<components::PlayerStatistics>(context)
+	    .Field<&components::PlayerStatistics::births>("births")
+	    .Field<&components::PlayerStatistics::deaths>("deaths")
+	    .Field<&components::PlayerStatistics::peopleKilled>("peopleKilled")
+	    .Field<&components::PlayerStatistics::sacrifices>("sacrifices")
+	    .Field<&components::PlayerStatistics::peopleConverted>("peopleConverted")
+	    .Field<&components::PlayerStatistics::built>("built")
+	    .Field<&components::PlayerStatistics::buildingsDestroyed>("buildingsDestroyed")
+	    .Field<&components::PlayerStatistics::disciplesMade>("disciplesMade")
+	    .Field<&components::PlayerStatistics::foodUsed>("foodUsed")
+	    .Field<&components::PlayerStatistics::woodUsed>("woodUsed")
+	    .Field<&components::PlayerStatistics::godsDefeated>("godsDefeated")
+	    .Field<&components::PlayerStatistics::castsOfType>("castsOfType")
+	    .Field<&components::PlayerStatistics::chantsUsed>("chantsUsed")
+	    .Field<&components::PlayerStatistics::satisfaction>("satisfaction")
+	    .Field<&components::PlayerStatistics::population>("population")
+	    .Field<&components::PlayerStatistics::men>("men")
+	    .Field<&components::PlayerStatistics::women>("women")
+	    .Field<&components::PlayerStatistics::belief>("belief")
+	    .Field<&components::PlayerStatistics::startAlignment>("startAlignment")
+	    .Field<&components::PlayerStatistics::startCreatureAlignment>("startCreatureAlignment")
+	    .Field<&components::PlayerStatistics::startCreatureSize>("startCreatureSize")
+	    .Field<&components::PlayerStatistics::influenceHistory>("influenceHistory")
+	    .Field<&components::PlayerStatistics::populationHistory>("populationHistory");
 	Reflect<components::Poisoned>(context).Field<&components::Poisoned::dummy>("dummy");
 	Reflect<components::CreatureMiracleOpinion>(context)
 	    .Field<&components::CreatureMiracleOpinion::lastTurn>("lastTurn")
@@ -2751,6 +2770,19 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::sky_dome::Rows::skyType>("skyType")
 	    .Field<&openblack::sky_dome::Rows::first>("first")
 	    .Field<&openblack::sky_dome::Rows::count>("count");
+	Reflect<openblack::statistics::BuildingsBuilt>(context, ValueOnly {})
+	    .Field<&openblack::statistics::BuildingsBuilt::total>("total")
+	    .Field<&openblack::statistics::BuildingsBuilt::abodes>("abodes")
+	    .Field<&openblack::statistics::BuildingsBuilt::civic>("civic")
+	    .Field<&openblack::statistics::BuildingsBuilt::wonders>("wonders");
+	Reflect<openblack::statistics::History>(context, ValueOnly {})
+	    .Field<&openblack::statistics::History::points>("points")
+	    .Field<&openblack::statistics::History::index>("index")
+	    .Field<&openblack::statistics::History::samplesPerPoint>("samplesPerPoint")
+	    .Field<&openblack::statistics::History::samplesInPoint>("samplesInPoint");
+	Reflect<openblack::statistics::Satisfaction>(context, ValueOnly {})
+	    .Field<&openblack::statistics::Satisfaction::total>("total")
+	    .Field<&openblack::statistics::Satisfaction::samples>("samples");
 	Reflect<openblack::storm_clouds::Drift>(context, ValueOnly {})
 	    .Field<&openblack::storm_clouds::Drift::place>("place")
 	    .Field<&openblack::storm_clouds::Drift::target>("target")

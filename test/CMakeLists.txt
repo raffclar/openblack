@@ -858,3 +858,4 @@ openblack_setup_and_add_test(test_shepherd_rules test_shepherd_rules.cpp)
 openblack_setup_and_add_test(
   test_creature_object_beliefs test_creature_object_beliefs.cpp
 )
+openblack_setup_and_add_test(test_statistics_rules test_statistics_rules.cpp)

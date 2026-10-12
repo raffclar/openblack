@@ -50,6 +50,7 @@
 #include "ECS/Creches.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -399,12 +400,7 @@ entt::entity ChildBorn(entt::entity mother)
 	registry.Get<Villager>(child).mother = mother;
 	if (const auto owner = world_objects::PlayerOf(mother); owner.has_value())
 	{
-		registry.Each<Player>([owner](entt::entity, Player& player) {
-			if (player.name == *owner)
-			{
-				++player.births;
-			}
-		});
+		player_statistics::CountBirth(registry, *owner);
 	}
 	if (registry.AllOf<Poisoned>(mother))
 	{

@@ -2383,6 +2383,7 @@ std::vector<Scenario> Build()
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
 	AddTownGrowthScenarios(all);
+	AddStatisticsScenarios(all);
 	AddTutorialScenarios(all);
 	return all;
 }

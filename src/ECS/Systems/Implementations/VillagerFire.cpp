@@ -45,6 +45,7 @@
 #include "ECS/GraveyardRules.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -1021,26 +1022,11 @@ void RememberDeath(entt::entity villager, const villager_fire::DeathCause& cause
 		{
 			town->deathsByKiller.at(killerIndex).at(reasonIndex) += cause.weight;
 		}
-		const auto owner = town->owner;
-		registry.Each<Player>([owner, killer](entt::entity, Player& player) {
-			if (player.name == owner)
-			{
-				++player.villagersLost;
-			}
-			if (player.name == killer)
-			{
-				++player.villagersKilled;
-			}
-		});
+		player_statistics::CountDeath(registry, town->owner, killer);
 	}
 	if (cause.reason == DeathReason::Sacrifice)
 	{
-		registry.Each<Player>([killer](entt::entity, Player& player) {
-			if (player.name == killer)
-			{
-				++player.sacrifices;
-			}
-		});
+		player_statistics::CountSacrifice(registry, killer);
 	}
 }
 } // namespace
