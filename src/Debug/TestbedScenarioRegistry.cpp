@@ -354,6 +354,25 @@ void AddExpressions(std::vector<Scenario>& all)
 	    .commands = actions,
 	    .repeatFrom = 0,
 	});
+
+	// The guide plays static action 47 before each miracle it makes for the player
+	auto staticPlay = [](float plays, float delay) {
+		return Command {.kind = Kind::ScriptPlay, .delaySeconds = delay, .waitUntilFree = true, .value = 47, .amount = plays};
+	};
+	all.push_back({
+	    .id = "expressions.script_static",
+	    .name = "A script's static action",
+	    .facet = Facet::Expressions,
+	    .description = "A tiger is given static action 47 by a script, as the guide is before it makes a miracle "
+	                   "(\"Guide play 47 loop 1\"): once, then twice in a row.",
+	    .expected = "It plays the start (46), loops 47 until ten seconds after the start began, then the end (48), "
+	                "left to right half the time; the second time it does it all twice, then stands. No \"not "
+	                "implemented\" in the log.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true}},
+	    .commands = {staticPlay(1.0f, 1.0f), staticPlay(2.0f, 14.0f)},
+	    .repeatFrom = 0,
+	});
 }
 
 void AddSenses(std::vector<Scenario>& all)
@@ -2547,7 +2566,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 96> k_Names {
+	constexpr std::array<std::string_view, 97> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2641,6 +2660,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand tap",
 	    "tell an advisor",
 	    "walk home",
+	    "script play",
 	    "run text",
 	    "play hand demo",
 	    "reframe",

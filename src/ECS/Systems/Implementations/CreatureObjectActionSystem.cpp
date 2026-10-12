@@ -1299,6 +1299,24 @@ bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
 	       registry.AnyOf<Tree, Abode, MobileObject, Ball>(target);
 }
 
+std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !Locator::creatureAnimationSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* points = body != nullptr ? PointsOf(*body) : nullptr;
+	if (transform == nullptr || points == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto reach = MeasureReach(creature, *transform, *points, creature_reach::k_PickUpAnimations, points->pickUpMs);
+	return reach.has_value() ? std::optional(creature_reach::StraightReach(*reach)) : std::nullopt;
+}
+
 void CreatureObjectActionSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();

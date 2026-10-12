@@ -534,6 +534,9 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
+		/// does: a static action's start, loop and end, or an individual action
+		ScriptPlay,
 		/// A help text (value, by the scripts' number) shown in the dialogue box, as a script's RUN_TEXT shows one. Needs
 		/// no creature
 		RunText,

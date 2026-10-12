@@ -1205,15 +1205,9 @@ static std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry,
 void CreatureCarriesOutScriptPlay(entt::entity creature)
 {
 	auto& mind = Locator::entitiesRegistry::value().Get<ecs::components::CreatureMindState>(creature);
-	const auto agenda = creature_script_play::Agenda(mind.scriptPlay);
-	if (!agenda.has_value())
-	{
-		NotImplemented(mind.scriptPlay.animation);
-		return;
-	}
 	if (Locator::creatureMindSystem::has_value())
 	{
-		Locator::creatureMindSystem::value().CarryOutForScript(creature, *agenda);
+		Locator::creatureMindSystem::value().CarryOutForScript(creature, creature_script_play::Agenda(mind.scriptPlay));
 	}
 }
 

@@ -46,6 +46,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureScriptPlay.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -1512,6 +1513,13 @@ void Runner::Give(const Command& command)
 	case Kind::RunTo:
 		result =
 		    MoveResultName(locomotion.MoveTo(*entity, point, command.kind == Kind::RunTo ? Pace::Run : Pace::Walk, 0.0f, 1.0f));
+		break;
+	case Kind::ScriptPlay:
+		result = minds.CarryOutForScript(
+		             *entity, creature_script_play::Agenda({.animation = static_cast<int32_t>(command.value),
+		                                                    .plays = static_cast<uint32_t>(std::lround(command.amount))}))
+		             ? "playing"
+		             : "can't";
 		break;
 	case Kind::WalkHome:
 		if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);

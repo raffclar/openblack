@@ -2192,6 +2192,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::sequence>("sequence")
 	    .Field<&openblack::creature_mind::Step::untilRested>("untilRested")
 	    .Field<&openblack::creature_mind::Step::holdLoop>("holdLoop")
+	    .Field<&openblack::creature_mind::Step::mirrorAtRandom>("mirrorAtRandom")
 	    .Field<&openblack::creature_mind::Step::closedEyes>("closedEyes")
 	    .Field<&openblack::creature_mind::Step::effect>("effect")
 	    .Field<&openblack::creature_mind::Step::object>("object")
