@@ -1696,7 +1696,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Tree::type>("type")
 	    .Field<&components::Tree::maxSize>("maxSize")
 	    .Field<&components::Tree::growthCountdown>("growthCountdown")
-	    .Field<&components::Tree::madeToGrow>("madeToGrow");
+	    .Field<&components::Tree::madeToGrow>("madeToGrow")
+	    .Field<&components::Tree::nonScenic>("nonScenic");
 	Reflect<components::Unlit> {context};
 	Reflect<components::Velocity>(context)
 	    .Field<&components::Velocity::dX>("dX")
@@ -1783,6 +1784,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Vortex::state>("state")
 	    .Field<&components::Vortex::stateStartTurn>("stateStartTurn")
 	    .Field<&components::Vortex::centre>("centre")
+	    .Field<&components::Vortex::altitude>("altitude")
 	    .Field<&components::Vortex::levelApplied>("levelApplied")
 	    .Field<&components::Vortex::groundHeights>("groundHeights")
 	    .Field<&components::Vortex::groundAverage>("groundAverage")
@@ -1791,6 +1793,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Vortex::objectMoverEffect>("objectMoverEffect")
 	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect")
 	    .Field<&components::Vortex::arrival>("arrival");
+	Reflect<components::DrawnIntoVortex>(context).Field<&components::DrawnIntoVortex::vortex>("vortex");
 	Reflect<components::WalkPath>(context)
 	    .Field<&components::WalkPath::number>("number")
 	    .Field<&components::WalkPath::track>("track")

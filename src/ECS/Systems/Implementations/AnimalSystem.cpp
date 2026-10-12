@@ -1790,6 +1790,14 @@ void AnimalSystem::Remove(entt::entity animal)
 	registry.Destroy(animal);
 }
 
+void AnimalSystem::LeaveFlock(entt::entity entity)
+{
+	if (auto* animal = EntityRegistry().TryGet<Animal>(entity))
+	{
+		LeaveFlock(entity, *animal);
+	}
+}
+
 void AnimalSystem::LeaveFlock(entt::entity entity, Animal& animal)
 {
 	auto& registry = EntityRegistry();

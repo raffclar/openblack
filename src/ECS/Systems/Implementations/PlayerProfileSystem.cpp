@@ -116,6 +116,18 @@ std::optional<std::string> PlayerProfileSystem::CreatureFile() const
 	return std::nullopt;
 }
 
+std::optional<std::filesystem::path> PlayerProfileSystem::SavedGamesFolder() const
+{
+	const auto* profile = player_profiles::Current(_profiles);
+	if (profile == nullptr || !_store.folder.has_value())
+	{
+		return std::nullopt;
+	}
+	// Each profile keeps its own, under the profiles' folder by its name
+	const std::u8string name(profile->name.begin(), profile->name.end());
+	return *_store.folder / "Profiles" / std::filesystem::path(name) / "Saved Games";
+}
+
 player_profiles::NameCheck PlayerProfileSystem::CheckNewName(std::u16string_view name) const
 {
 	return player_profiles::CheckNewName(_profiles, name);

@@ -47,6 +47,7 @@ public:
 	[[nodiscard]] bool CurrentProfileHasCreature() const final;
 	[[nodiscard]] std::optional<player_profiles::Profile> GetCurrentProfile() const final;
 	[[nodiscard]] std::optional<std::string> CreatureFile() const final;
+	[[nodiscard]] std::optional<std::filesystem::path> SavedGamesFolder() const final;
 	[[nodiscard]] player_profiles::NameCheck CheckNewName(std::u16string_view name) const final;
 	void CreateProfile(std::u16string_view name, int symbol) final;
 

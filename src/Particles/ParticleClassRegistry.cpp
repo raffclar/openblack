@@ -106,6 +106,7 @@ ParticleClassRegistry ParticleClassRegistry::WithAllClasses(CreatorResourcesInte
 	RegisterSurfaceRules(registry);
 	RegisterObjectRules(registry);
 	RegisterTornadoRules(registry);
+	RegisterVortexRules(registry);
 	RegisterFlockingRules(registry);
 	RegisterForestRules(registry);
 	RegisterBeamRules(registry);

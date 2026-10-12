@@ -34,8 +34,8 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position, TreeInfo type,
-                                   [[maybe_unused]] bool isNonScenic, float yAngleRadians, float maxSize, float scale)
+entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position, TreeInfo type, bool isNonScenic,
+                                   float yAngleRadians, float maxSize, float scale)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
@@ -48,6 +48,7 @@ entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position,
 	auto& tree = registry.Assign<Tree>(entity, type, maxSize);
 	// A tree made short of its full size grows while it is in a forest, first after a random part of its kind's wait
 	tree.madeToGrow = maxSize != scale;
+	tree.nonScenic = isNonScenic;
 	if (tree.madeToGrow && Locator::gameRandom::has_value())
 	{
 		tree.growthCountdown = forest_growth::FirstWait(Locator::gameRandom::value().GameRand(info.growsAfterNumGameTurns));
