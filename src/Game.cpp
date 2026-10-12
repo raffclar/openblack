@@ -2506,20 +2506,6 @@ bool Game::Update() noexcept
 				};
 			}
 		}
-		// Each change of what the hand does (pulling, holding, scooping or none) fades its pose from how it was last
-		// drawn, as its place fades (see magic::hand_hold::StageFade)
-		if (_handAnimation)
-		{
-			const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
-			const auto stage =
-			    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
-			                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
-			if (_handPoseStage.has_value() && stage != *_handPoseStage)
-			{
-				_handAnimation->FadeFromLastPose();
-			}
-			_handPoseStage = stage;
-		}
 		bool holdingSeed = false;
 		{
 			const auto handEntity = Locator::handSystem::value()
@@ -2689,7 +2675,13 @@ bool Game::Update() noexcept
 				    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
 				                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
 				const auto placed = handTransform->position;
-				_handHold.Fade(stage, heldThing.has_value() ? heldThing->entity : entt::null, deltaTime, *handTransform);
+				// Each change of what the hand does (pulling, holding, scooping or none) blends the drawn hand from how it
+				// was last drawn
+				if (auto* hand = Locator::entitiesRegistry::value().TryGet<ecs::components::Hand>(handEntity))
+				{
+					_handHold.Fade(stage, heldThing.has_value() ? heldThing->entity : entt::null, deltaTime, *handTransform,
+					               hand->boneMatrices);
+				}
 				TraceHand("stage fade", handTransform->position);
 				EndHandTrace(placed, *handTransform, stage, grab);
 				_handHold.PlaceHandEffect(heldSeed, _handAnimation.get(), *handTransform, handSize);
@@ -4876,14 +4868,10 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		    .reach = handReach,
 		});
 
-		// The hand eases out slowly away from the camera and quickly towards it
-		const auto easeTime = _handHoverZoomer.GetValue() <= hover.target ? k_HandEaseOutTime : k_HandEaseInTime;
-		_handHoverZoomer.SetDestination(hover.target, easeTime);
-		_handHoverZoomer.Update(deltaSeconds);
-		if (_handHoverZoomer.GetValue() < 1.0f)
-		{
-			_handHoverZoomer.Reset(1.0f);
-		}
+		// The hand eases out slowly away from the camera and quickly towards it, but not while it pulls a thing out of
+		// the ground: the pull places it then
+		const bool pulling = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsPulling();
+		hand_feel::EaseHover(_handHoverZoomer, hover.target, deltaSeconds, pulling);
 		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), hover.limit), k_HandMinDistance, handReach);
 	}
 	_handPosition = eye + _handRayDirection * _handDistance;
@@ -5201,6 +5189,10 @@ void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transfor
 		if (const auto held = grab->GetHeld())
 		{
 			frame->held = static_cast<uint32_t>(entt::to_integral(*held));
+			if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(*held))
+			{
+				frame->heldAt = transform->position;
+			}
 		}
 	}
 	trace->EndFrame();

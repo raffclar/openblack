@@ -114,9 +114,22 @@ bool HandHoldPoser::Pose(const std::optional<HeldSeed>& seed, const Frame& frame
 	return true;
 }
 
-void HandHoldPoser::Fade(HandStage stage, entt::entity held, std::chrono::microseconds dt, Transform& hand)
+void HandHoldPoser::Fade(HandStage stage, entt::entity held, std::chrono::microseconds dt, const Transform& hand,
+                         std::vector<glm::mat4>& bones)
 {
-	const auto offset = _fade.Step(stage, std::chrono::duration<float>(dt).count(), hand.position, hand.rotation);
+	const float seconds = std::chrono::duration<float>(dt).count();
+	// The hand itself is drawn by its blended bones; the stage fade only says where a thing it holds hangs
+	auto position = hand.position;
+	auto rotation = hand.rotation;
+	const auto offset = _fade.Step(stage, seconds, position, rotation);
+	if (_stage.has_value() && stage != *_stage)
+	{
+		_poseFade.Start();
+	}
+	_stage = stage;
+	const auto model =
+	    glm::translate(glm::mat4(1.0f), hand.position) * glm::mat4(hand.rotation) * glm::scale(glm::mat4(1.0f), hand.scale);
+	_poseFade.Apply(seconds, model, bones);
 	// What the hand holds hangs from it where it is drawn
 	auto& registry = Locator::entitiesRegistry::value();
 	if (stage != HandStage::Holding || offset == glm::vec3(0.0f) || !registry.Valid(held))

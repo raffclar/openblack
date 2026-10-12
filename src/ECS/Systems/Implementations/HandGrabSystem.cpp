@@ -1243,6 +1243,13 @@ bool HandGrabSystem::IsBusy() const
 	return grab != nullptr && grab->state != HandGrab::State::Empty;
 }
 
+bool HandGrabSystem::IsPulling() const
+{
+	const auto* grab = Grab();
+	// Once it has come free the pull is over, though the hand takes it a frame later
+	return grab != nullptr && grab->state == HandGrab::State::Grabbing && grab->pulling;
+}
+
 std::optional<HandGrabSystemInterface::HeldPose> HandGrabSystem::GetHeldPose() const
 {
 	const auto held = GetHeld();
