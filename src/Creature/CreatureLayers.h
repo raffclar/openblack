@@ -137,7 +137,9 @@ struct BodyAction
 /// play left to right
 [[nodiscard]] std::optional<BodyAction> PlaySequence(const BodyAction& body, size_t start, size_t loop, size_t end,
                                                      bool holdLoop = false, bool mirrored = false);
-/// A sequence's loop ends and its end plays
+/// A sequence's loop ends and its end plays; one still starting plays its start out, then its end. An action played
+/// once is left to play to its end. This is also what a change of plan does to the body: whatever the creature turns to
+/// next waits for the body to finish.
 [[nodiscard]] BodyAction EndLoop(BodyAction body);
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no
 /// such animation. Each animation starts from its beginning, without blending into the last. A body timed by what plays it

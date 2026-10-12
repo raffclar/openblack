@@ -46,6 +46,7 @@ public:
 	void SetClimateRain(int32_t index, float desire, int32_t dryDays, int32_t rainingDays, int32_t raining) override;
 	void SetClimateTemperature(int32_t index, float temperature, float targetTemperature) override;
 	void SetClimateWind(int32_t index, float windX, float windZ, float angle) override;
+	void AddLandStorm(int32_t climateIndex, const script_weather::LandStorm& storm) override;
 	void SetClimateSystemEnabled(bool enabled) override { _climateSystemEnabled = enabled; }
 	void SetStormCreationEnabled(bool enabled) override { _stormCreationEnabled = enabled; }
 	[[nodiscard]] bool IsClimateSystemEnabled() const override { return _climateSystemEnabled; }

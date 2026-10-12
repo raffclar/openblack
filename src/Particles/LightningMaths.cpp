@@ -113,3 +113,14 @@ std::vector<glm::vec3> maths::ArcJoints(const ArcEnds& ends, glm::vec3 fromTange
 	}
 	return joints;
 }
+
+int maths::SkyStrikeThunderSize(float random)
+{
+	constexpr float k_SmallBelow = 0.3f;
+	constexpr float k_MediumBelow = 0.75f;
+	if (random < k_SmallBelow)
+	{
+		return 3;
+	}
+	return random < k_MediumBelow ? 2 : 1;
+}
