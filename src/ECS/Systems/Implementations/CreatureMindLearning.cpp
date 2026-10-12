@@ -78,6 +78,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/CreatureNaming.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -741,10 +742,15 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 {
 	const auto file = std::move(mind.pendingFile);
 	mind.pendingFile.reset();
-	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+	auto* body = Locator::entitiesRegistry::value().TryGet<Creature>(creature);
 	if (body == nullptr || !mind.desires.has_value() || !mind.learnt.has_value())
 	{
 		return;
+	}
+	// It takes the name the file keeps, unless a computer player owns it
+	if (creature_names::TakesNameFromFile(ecs::creature_naming::OwnerOf(body->owner)))
+	{
+		body->name = file->name;
 	}
 	const auto fresh =
 	    creature_desires::Create(SetupFor(body->species), [](float low, float high) { return 0.5f * (low + high); });
@@ -1873,6 +1879,8 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 	kept.strength = saved.strength;
 	kept.alignment = saved.alignment;
 	creature_mind_body::ToMindFile(kept, file);
+	// Its name is saved with its mind
+	file.name = body->name;
 	return file;
 }
 

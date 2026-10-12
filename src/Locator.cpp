@@ -23,8 +23,8 @@
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
+#include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
-#include "Common/UserData.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/MapProduction.h"
@@ -293,7 +293,7 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	return true;
 }
 
-bool openblack::InitializeGame() noexcept
+bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 {
 	Locator::terrainSystem::emplace<UnloadedIsland>();
 	Locator::resources::emplace<Resources>();
@@ -309,7 +309,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
-	Locator::playerProfileSystem::emplace<PlayerProfileSystem>();
+	Locator::playerProfileSystem::emplace<PlayerProfileSystem>(profiles);
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::time::emplace<TimeSystem>();
@@ -369,7 +369,9 @@ bool openblack::InitializeGame() noexcept
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
-	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(user_data::CreatureMindFolder());
+	// The player's creature is kept under their profile's file
+	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
+	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
 	Locator::forestSystem::emplace<ForestSystem>();
