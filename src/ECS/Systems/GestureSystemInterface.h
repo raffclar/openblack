@@ -22,6 +22,7 @@
 
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "Enums.h"
+#include "Gestures/GestureHints.h"
 #include "Gestures/GestureMatcher.h"
 #include "Gestures/GestureRecorder.h"
 #include "Gestures/GestureRequests.h"
@@ -118,6 +119,11 @@ public:
 	/// Whether the hand is drawing a gesture that the chain behind it shows: one that powers up the miracle in it, or the
 	/// circle that sizes it
 	[[nodiscard]] virtual bool IsGesturing() const = 0;
+	/// The row of hints of the gestures the hand waits for, at the bottom right of the screen
+	[[nodiscard]] virtual const gesture_hints::Row& GetHints() const = 0;
+	/// Once a frame, by the game's time: the hints fade while the advisors' words show, and while they show their dots
+	/// run and their collars turn
+	virtual void StepHints(float seconds, bool wordsShowing) = 0;
 };
 
 } // namespace openblack::ecs::systems

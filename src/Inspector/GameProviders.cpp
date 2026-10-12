@@ -1484,6 +1484,15 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                                 {"leash_picker_open", gestures.IsLeashPickerOpen()},
 		                                 {"circle_seconds_left", gestures.GetCircleSecondsLeft()},
 		                                 {"events_queue", Locator::gestureEvents::has_value()}};
+		                  // The row of hints at the bottom right: each hinted gesture and its leash, and the row's fade
+		                  Json hints = Json::array();
+		                  for (const auto& hint : gestures.GetHints().hints)
+		                  {
+			                  hints.push_back({{"gesture", static_cast<uint32_t>(hint.gesture)},
+			                                   {"leash", static_cast<int>(hint.leash)},
+			                                   {"dot", hint.dot}});
+		                  }
+		                  result["hints"] = {{"alpha", gestures.GetHints().alpha}, {"shown", hints}};
 		                  if (const auto last = gestures.GetLastRecognised(); last.has_value())
 		                  {
 			                  result["last_recognised"] = {{"number", last->number}, {"age", last->age}};

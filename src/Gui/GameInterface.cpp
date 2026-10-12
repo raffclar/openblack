@@ -257,6 +257,7 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	{
 		created->_gestureSheets.at(i) = LoadTexture("S_Gesture" + std::to_string(i));
 	}
+	created->_hintDotSheet = LoadTexture("S_SpriteSheet2");
 	return created;
 }
 
@@ -498,6 +499,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// and the fades
 	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
+	// The gestures' hints are drawn with the world too, over all of it
+	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
 	DrawFloatingNumbers(resolution);
 	if (_message.has_value())
@@ -662,6 +665,7 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 		};
 		return Locator::helpTextSystem::value().Layout(glm::ivec2(resolution), barPixels, widthOf);
 	}();
+	_dialogueWordsDrawn = frame != nullptr && !frame->runs.empty();
 	if (frame != nullptr)
 	{
 		// The box covers whole pixels, its right and bottom ones included
