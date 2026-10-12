@@ -49,9 +49,31 @@ inline constexpr uint32_t k_TurnsPerGrowth = 10;
 [[nodiscard]] bool IsSown(const Crop& crop, const Type& type);
 [[nodiscard]] bool IsRipe(const Crop& crop, const Type& type);
 
-/// Food taken out of a sown field by the hand: an unripe crop loses more than is taken, by its kind's share before it
-/// is ripe. Whether the field was emptied: an emptied ripe field must be sown again; an emptied unripe one stays sown.
-bool RemoveFood(Crop& crop, const Type& type, float ratioBeforeRipe, float amount);
+/// What taking food out of a field gives: what the taker gets, and whether the field was emptied
+struct Harvest
+{
+	uint32_t given {0};
+	bool emptied {false};
+};
+/// Food taken out of a sown field: an unripe crop loses more than is taken, by its kind's share before it is ripe. The
+/// taker gets what it asked for while food is left. An emptied ripe field gives what it had and must be sown again; an
+/// emptied unripe one gives only that share and stays sown.
+Harvest RemoveFood(Crop& crop, const Type& type, float ratioBeforeRipe, float amount);
+
+/// A farmer sows the field once more, if it still wants sowing; whether it did
+bool PlantCrop(Crop& crop, const Type& type);
+
+/// What a field wants of its farmers
+enum class Activity : uint8_t
+{
+	/// It still wants sowing
+	Sowing,
+	/// It is sown and growing, and wants nothing yet
+	Growing,
+	/// It has grown, and is harvested once ripe
+	Grown,
+};
+[[nodiscard]] Activity ActivityOf(const Crop& crop, const Type& type);
 
 /// The land's alignment the crop grows on, from -1 for evil to 1 for good, from the sum of each player's influence there
 /// times their alignment

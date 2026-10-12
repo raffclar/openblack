@@ -386,7 +386,7 @@ void GameMenu::BuildPlayers(const TextDatabase& texts)
 	page.Add<StaticText>(DialogRect {.min = {0, 370}, .max = {190, 410}},
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_CREATURENAME")), Layout::Right, k_Mid);
 	// The name box takes 29 characters
-	auto& name = page.Add<EditBox>(DialogRect {.min = {200, 370}, .max = {600, 410}}, _settings.creatureName, 29);
+	auto& name = page.Add<EditBox>(_font, DialogRect {.min = {200, 370}, .max = {600, 410}}, _settings.creatureName, 29, k_Mid);
 	name.onChange = [this](const std::u16string& text) {
 		_settings.creatureName = text;
 		SettingsChanged();

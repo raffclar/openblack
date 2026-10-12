@@ -1276,7 +1276,7 @@ std::optional<creature_fight_hud::Values> CreatureFightSystem::GetPanel() const
 	{
 		const auto entity = i == 0 ? *shown : opponent;
 		auto& side = values.sides.at(i);
-		side.name = creature_fight_hud::SpeciesName(registry.Get<const Creature>(entity).species);
+		side.name = registry.Get<const Creature>(entity).name;
 		if (const auto* fighting = registry.TryGet<const CreatureFighting>(entity))
 		{
 			side.health = fighting->fighter.health;

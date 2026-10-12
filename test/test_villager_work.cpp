@@ -243,3 +243,37 @@ TEST(VillagerWork, ATownCountsWhatItsPeopleDoByTheirStates)
 	EXPECT_FLOAT_EQ(out->count, -1.0f);
 	EXPECT_FALSE(town_desire::DoingNowChange({.desire = -1, .weight = 1.0f}, 1.0f).has_value());
 }
+
+TEST(VillagerWork, AFarmerWorksAtSpotsUpToFiveMetresEitherWayOfTheFieldsMiddle)
+{
+	// The first draw moves it along x, the second along z
+	const auto spot = work::FieldWorkSpot({100.0f, 200.0f}, 0.0f, 10.0f);
+	EXPECT_NEAR(spot.x, 105.0f, 0.001f);
+	EXPECT_NEAR(spot.y, 195.0f, 0.001f);
+	const auto middle = work::FieldWorkSpot({100.0f, 200.0f}, 5.0f, 5.0f);
+	EXPECT_NEAR(middle.x, 100.0f, 0.001f);
+	EXPECT_NEAR(middle.y, 200.0f, 0.001f);
+}
+
+TEST(VillagerWork, AFarmerSowsOrDigsOnceAtItsSpotAndOtherwiseDecidesAfresh)
+{
+	using enum work::FarmerArrival;
+	EXPECT_EQ(work::ArriveAtField(true, false, false, false), WalkToSpot);
+	EXPECT_EQ(work::ArriveAtField(true, false, false, true), Sow);
+	EXPECT_EQ(work::ArriveAtField(false, true, true, false), WalkToSpot);
+	EXPECT_EQ(work::ArriveAtField(false, true, true, true), Dig);
+	// Grown but not yet ripe, or still growing: nothing to do
+	EXPECT_EQ(work::ArriveAtField(false, true, false, true), Decide);
+	EXPECT_EQ(work::ArriveAtField(false, false, false, true), Decide);
+}
+
+TEST(VillagerWork, AFarmerTakesItsHarvestToTheStoreOnceItHasLessRoomThanALoadOfCrop)
+{
+	// A full load of 150 leaves no room
+	EXPECT_TRUE(work::TakesHarvestToStore(150, 0, 100.0f));
+	// After the last 50 of a field it still has room for 100: it goes on, to sow the field again
+	EXPECT_FALSE(work::TakesHarvestToStore(50, 100, 100.0f));
+	EXPECT_TRUE(work::TakesHarvestToStore(51, 99, 100.0f));
+	// Getting nothing it never goes
+	EXPECT_FALSE(work::TakesHarvestToStore(0, 0, 100.0f));
+}
