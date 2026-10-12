@@ -52,6 +52,7 @@
 #include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
+#include "VillagerFootpath.h"
 #include "VillagerHome.h"
 
 using namespace openblack;
@@ -167,10 +168,9 @@ bool MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 }
 
 /// Walks to a point of a site, on its footpaths where there are any
-bool MoveOnPathsTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
+bool MoveOnPathsTo(LivingAction& action, entt::entity place, glm::vec2 goal, VillagerStates final)
 {
-	// TODO(villagers): along the footpath from the town to the site; villagers don't walk footpaths yet
-	return MoveTo(action, goal, final);
+	return villager_footpath::SetupMoveToOnFootpath(action, place, goal, final);
 }
 
 /// Whether the villager has got to a point, as near as its step and some slack in the map's whole units
@@ -563,7 +563,7 @@ uint32_t StartHidingAtWorshipSite(LivingAction& action)
 		return villager_home::DecideWhatToDo(action);
 	}
 	const auto door = Sites().PlaceAt(site, SitePlace::Door);
-	if (!door.has_value() || !MoveOnPathsTo(action, *door, VillagerStates::HidingAtWorshipSite))
+	if (!door.has_value() || !MoveOnPathsTo(action, site, *door, VillagerStates::HidingAtWorshipSite))
 	{
 		return 0;
 	}
@@ -800,7 +800,7 @@ uint32_t villager_worship::GotoWorshipSiteForWorship(LivingAction& action)
 		const auto gate = Sites().PlaceAt(site, SitePlace::Gate).value_or(PositionOf(site));
 		if (gutils::GetDistanceInMetres(map_coords::FromMetres(PositionOf(villager)), map_coords::FromMetres(gate)) > 0.0f)
 		{
-			MoveOnPathsTo(action, gate, VillagerStates::ArrivesAtWorshipSiteForWorship);
+			MoveOnPathsTo(action, site, gate, VillagerStates::ArrivesAtWorshipSiteForWorship);
 		}
 		else
 		{
@@ -857,7 +857,7 @@ uint32_t villager_worship::ArrivesAtWorshipSiteForWorship(LivingAction& action)
 		StartHidingAtWorshipSite(action);
 		break;
 	case rules::Arrival::WalkOn:
-		MoveOnPathsTo(action, gate, VillagerStates::ArrivesAtWorshipSiteForWorship);
+		MoveOnPathsTo(action, site, gate, VillagerStates::ArrivesAtWorshipSiteForWorship);
 		break;
 	}
 	return 1;
@@ -946,7 +946,7 @@ uint32_t villager_worship::GotoAltarForRest(LivingAction& action)
 		SetTopState(action, VillagerStates::DecideWhatToDo);
 		return 1;
 	}
-	MoveOnPathsTo(action, Sites().PlaceAt(site, SitePlace::Rest).value_or(PositionOf(site)),
+	MoveOnPathsTo(action, site, Sites().PlaceAt(site, SitePlace::Rest).value_or(PositionOf(site)),
 	              VillagerStates::ArrivesAtAltarForRest);
 	return 1;
 }
@@ -1033,8 +1033,8 @@ uint32_t villager_worship::GotoStoragePitForWorshipSupplies(LivingAction& action
 	{
 		return 0;
 	}
-	// TODO(villagers): to the edge of the pit's food nearest it, along the footpaths; the pit's door for now
-	MoveTo(action, villager_home::ArrivePosition(*pit), VillagerStates::ArrivesAtStoragePitForWorshipSupplies);
+	// TODO(villagers): to the edge of the pit's food nearest it; the pit's door for now
+	MoveOnPathsTo(action, *pit, villager_home::ArrivePosition(*pit), VillagerStates::ArrivesAtStoragePitForWorshipSupplies);
 	return 1;
 }
 

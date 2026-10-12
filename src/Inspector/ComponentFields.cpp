@@ -1026,10 +1026,16 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::FlockSpell::evil>("evil")
 	    .Field<&components::FlockSpell::closedDown>("closedDown");
 	Reflect<components::Flowers>(context).Field<&components::Flowers::type>("type");
-	Reflect<components::Footpath>(context).Field<&components::Footpath::nodes>("nodes");
+	Reflect<components::Footpath>(context).Field<&components::Footpath::nodes>("nodes").Field<&components::Footpath::walkable>(
+	    "walkable");
 	Reflect<components::FootpathLink>(context)
 	    .Field<&components::FootpathLink::position>("position")
 	    .Field<&components::FootpathLink::footpaths>("footpaths");
+	Reflect<components::FootpathWalk>(context)
+	    .Field<&components::FootpathWalk::footpath>("footpath")
+	    .Field<&components::FootpathWalk::towardsStart>("towardsStart")
+	    .Field<&components::FootpathWalk::node>("node")
+	    .Field<&components::FootpathWalk::then>("then");
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::wood>(
 	    "wood");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");
@@ -2445,7 +2451,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::CreatureSkin::Skin::id>("id")
 	    .Field<&openblack::ecs::components::CreatureSkin::Skin::texels>("texels");
 	Reflect<openblack::ecs::components::Footpath::Node>(context, ValueOnly {})
-	    .Field<&openblack::ecs::components::Footpath::Node::position>("position");
+	    .Field<&openblack::ecs::components::Footpath::Node::position>("position")
+	    .Field<&openblack::ecs::components::Footpath::Node::place>("place");
 	Reflect<openblack::ecs::components::HandGrab::Throw>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandGrab::Throw::velocity>("velocity")
 	    .Field<&openblack::ecs::components::HandGrab::Throw::springVelocity>("springVelocity")

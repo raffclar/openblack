@@ -32,6 +32,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerBuild.h"
+#include "VillagerFootpath.h"
 #include "VillagerHome.h"
 
 using namespace openblack;
@@ -85,10 +86,10 @@ void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 	villager_home::SetupMoveTo(action, goal, final);
 }
 
-void MoveOnPathsTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
+/// Walks to the field along its footpaths where they lead its way
+void MoveOnPathsTo(LivingAction& action, entt::entity field, glm::vec2 goal, VillagerStates final)
 {
-	// TODO(villager-jobs-1): along the town's footpaths where there are any; villagers don't walk footpaths yet
-	MoveTo(action, goal, final);
+	villager_footpath::SetupMoveToOnFootpath(action, field, goal, final);
 }
 
 /// The field the villager farms, if it still stands
@@ -174,7 +175,7 @@ uint32_t villager_farmer::SetFarmerGotoField(LivingAction& action, entt::entity 
 	const auto villager = EntityOf(action);
 	SetTopState(action, VillagerStates::DecideWhatToDo);
 	Entities().AssignOrReplace<WorkTarget>(villager, WorkTarget {.thing = field});
-	MoveOnPathsTo(action, GroundOf(field), VillagerStates::FarmerArrivesAtFarm);
+	MoveOnPathsTo(action, field, GroundOf(field), VillagerStates::FarmerArrivesAtFarm);
 	// Its first spot is picked once it has set off
 	PickNewSpot(villager, field);
 	return 1;
