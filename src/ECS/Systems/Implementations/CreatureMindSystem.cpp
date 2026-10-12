@@ -33,6 +33,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
+#include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -1016,6 +1017,16 @@ void CreatureMindSystem::ProcessTurn()
 	const bool night = IsNight();
 	// The creatures passing out this turn, which are knocked out once every mind has thought
 	std::vector<entt::entity> passingOut;
+	// Where the player's camera is and looks, which tells whether it is looking at the player's creatures
+	struct View
+	{
+		glm::vec3 origin;
+		glm::vec3 focus;
+	};
+	const auto view =
+	    Locator::camera::has_value()
+	        ? std::optional(View {.origin = Locator::camera::value().GetOrigin(), .focus = Locator::camera::value().GetFocus()})
+	        : std::nullopt;
 
 	registry.Each<const Creature, CreatureMindState, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, CreatureMindState& mind, CreatureAnimation& animation,
@@ -1046,6 +1057,12 @@ void CreatureMindSystem::ProcessTurn()
 			    mind.desiresPhase = mind.developmentPhase;
 		    }
 		    mind.secondsAlone += k_TurnSeconds;
+		    // Only a creature's own player pays it attention
+		    if (creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
+		        creature_attention::IsLookingAt(view->origin, view->focus, transform.position))
+		    {
+			    ++mind.turnsLookedAt;
+		    }
 		    if (mind.feedbackSeconds.has_value())
 		    {
 			    *mind.feedbackSeconds += k_TurnSeconds;

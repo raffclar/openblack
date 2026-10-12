@@ -55,6 +55,23 @@ uint32_t LearntText(size_t miracle)
 	           ? static_cast<uint32_t>(magic::GetMagicEffectInfo(info, static_cast<MagicType>(miracle)).creatureLearntEnum)
 	           : 0;
 }
+
+/// A creature's name: the one its mind was given, else its species' until creatures take their names from their
+/// profiles; nothing for one that is gone
+std::u16string NameOf(const Registry& registry, entt::entity creature)
+{
+	if (!registry.Valid(creature))
+	{
+		return {};
+	}
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	    mind != nullptr && mind->learnt.has_value() && !mind->learnt->name.empty())
+	{
+		return mind->learnt->name;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	return body != nullptr ? std::u16string(creature_fight_hud::SpeciesName(body->species)) : std::u16string();
+}
 } // namespace
 
 bool CreatureCaveSystem::InTemple() const
@@ -184,7 +201,7 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		                           return mind->desires.has_value() && desire < mind->desires->desires.size() &&
 		                                  mind->desires->desires.at(desire).activated;
 	                           }).has_value();
-	snapshot.secondsAlone = mind->secondsAlone;
+	snapshot.turnsLookedAt = mind->turnsLookedAt;
 	const auto* tables = Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
 	if (mind->learnt.has_value())
 	{
@@ -193,7 +210,12 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		{
 			snapshot.name = learnt.name;
 		}
-		snapshot.creaturesKnown = learnt.creatures.size();
+		for (const auto& attitude : learnt.creatures)
+		{
+			snapshot.creaturesKnown.push_back({.name = NameOf(registry, static_cast<entt::entity>(attitude.creature)),
+			                                   .howNice = attitude.howNice,
+			                                   .attention = attitude.attention});
+		}
 		if (mind->desires.has_value())
 		{
 			const auto& desires = mind->desires->desires;

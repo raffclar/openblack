@@ -50,6 +50,9 @@ struct CreatureMindState
 
 	/// Seconds since the player last paid it any attention
 	float secondsAlone {0.0f};
+	/// Game turns its player's camera was looking at it, which over the turns it has lived is the attention its god has
+	/// paid it
+	uint32_t turnsLookedAt {0};
 	/// Seconds since the player last stroked or slapped it, and which
 	std::optional<float> feedbackSeconds;
 	bool feedbackWasStroke {false};

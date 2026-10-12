@@ -470,6 +470,10 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 		const auto n = std::clamp(static_cast<int32_t>((value + 1.0f) * 0.5f * 6.9999995f), 0, 6);
 		return get(fmt::format("HELP_TEXT_ALIGNMENT_{:02}", n + 1));
 	};
+	// The game's five texts for how much attention, from 0
+	const auto howMuch = [&](int32_t level) {
+		return get(fmt::format("HELP_TEXT_HOW_MUCH_{:02}", std::clamp(level, 0, 4) + 1));
+	};
 	const auto* creature = facts.creature ? &*facts.creature : nullptr;
 	// The texts about the player's creature are a blank line without one
 	const auto aboutCreature = [&](const auto& write) {
@@ -592,9 +596,7 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 		{
 			named("HELP_TEXT_ROOM_PERSONALITY_ATTITUDE_TO_PLAYER", alignment(*creature->opinionOfGod));
 		}
-		named("HELP_TEXT_ROOM_PERSONALITY_HOW_MUCH_ATTENTION_PLAYER_HAS_GIVEN_ME",
-		      get(fmt::format("HELP_TEXT_HOW_MUCH_{:02}",
-		                      std::clamp(static_cast<int32_t>(creature->attention * 5.0f), 0, 4) + 1)));
+		named("HELP_TEXT_ROOM_PERSONALITY_HOW_MUCH_ATTENTION_PLAYER_HAS_GIVEN_ME", howMuch(creature->attention));
 		if (creature->knowsGodsDesire)
 		{
 			// Always "I want to impress somebody.", whatever the desire
@@ -602,7 +604,15 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 			      get("HELP_TEXT_CREATURE_CURRENT_DESIRE_FIRST_PERSON_01"));
 		}
 		text.AddNewLine();
-		// TODO(raffclar): What it thinks of each creature it knows of
+		for (const auto& known : creature->creatures)
+		{
+			named("HELP_TEXT_ROOM_PERSONALITY_ATTITUDE_TO_CREATURE_START", known.name);
+			named("HELP_TEXT_ROOM_PERSONALITY_ATTITUDE_TO_CREATURE_END", alignment(known.opinion));
+			if (known.attention)
+			{
+				named("HELP_TEXT_ROOM_PERSONALITY_ATTITUDE_TO_CREATURE_HOW_WELL_I_KNOW_HIM", howMuch(*known.attention));
+			}
+		}
 		text.AddNewLine();
 		number("HELP_TEXT_ROOM_PERSONALITY_BELIEFS_ABOUT_CREATURES", creature->known[0]);
 		number("HELP_TEXT_ROOM_PERSONALITY_BELIEFS_ABOUT_CITADELS", creature->known[1]);

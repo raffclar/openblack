@@ -325,6 +325,9 @@ openblack_setup_and_add_test(
   test_creature_status_panel test_creature_status_panel.cpp
 )
 openblack_setup_and_add_test(test_creature_mode test_creature_mode.cpp)
+openblack_setup_and_add_test(
+  test_creature_attention test_creature_attention.cpp
+)
 target_link_libraries(test_flat_land PRIVATE lnd)
 target_link_libraries(test_testbed_scenarios PRIVATE lnd)
 openblack_setup_and_add_test(test_town_desire test_town_desire.cpp)
