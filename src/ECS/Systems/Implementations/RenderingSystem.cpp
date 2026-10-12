@@ -612,11 +612,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    ++slots->second.filled;
 			    return;
 		    }
-		    // A mesh drawn with another texture, slid across it: the temple's leashes
+		    // A mesh drawn with another texture, slid across it: the temple's leashes, whether drawn whole or fading out
 		    if (const auto* skin = registry.TryGet<const SkinOverride>(entity))
 		    {
-			    if (const auto desc = _renderContext.instancedDrawDescs.find(slots->first);
-			        desc != _renderContext.instancedDrawDescs.end())
+			    auto& drawDescs = slotMap == &_fadingSlots ? _renderContext.fadingDrawDescs : _renderContext.instancedDrawDescs;
+			    if (const auto desc = drawDescs.find(slots->first); desc != drawDescs.end())
 			    {
 				    desc->second.uvOffset = skin->uvOffset;
 				    if (desc->second.subMeshTextures.empty())
