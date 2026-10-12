@@ -819,3 +819,5 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_misc_natives PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_spell_icon_system test_spell_icon_system.cpp)
+openblack_setup_and_add_test(test_music_cues pack/test_music_cues.cpp)
+target_link_libraries(test_music_cues PRIVATE pack)

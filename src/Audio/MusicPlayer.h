@@ -17,13 +17,23 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <glm/vec3.hpp>
 
 namespace openblack::audio
 {
+
+/// A point the bank marks in its music: the 1-based chunk, the frames into it and the cue's text
+struct MusicCue
+{
+	uint32_t chunk {1};
+	uint32_t frame {0};
+	std::string text;
+};
 
 /// A music bank: a sound bank whose samples are chunks of one piece of music, sect0000.mpg onwards, played back to
 /// back. Banks of one music group are variations of the same piece with the same chunk lengths, so the game can switch
@@ -48,6 +58,8 @@ struct MusicBank
 	/// How many chunks the bank's music is cut into
 	uint32_t chunkCount {0};
 	std::vector<uint32_t> chunkSampleRates;
+	/// The cues marked in the chunks' texts, in the order they are checked
+	std::vector<MusicCue> cues;
 	/// Reads a chunk's data, 0-based. A bank's music is far too big to hold: like the game, it stays in the bank's file,
 	/// and each chunk is read from it only as it is queued to play. Empty if it couldn't be read.
 	std::function<std::vector<uint8_t>(uint32_t chunk)> readChunk;
@@ -87,6 +99,8 @@ public:
 	[[nodiscard]] virtual uint32_t ReleasePlayedChunks(Stream stream) = 0;
 	/// Frames played of the oldest queued chunk
 	[[nodiscard]] virtual uint32_t GetPlayPosition(Stream stream) const = 0;
+	/// Frames heard since the stream was made, across every chunk queued on it
+	[[nodiscard]] virtual uint64_t GetFramesPlayed(Stream stream) const = 0;
 	/// Plays the queued chunks, or picks up again after running out of them
 	virtual void Play(Stream stream) = 0;
 	[[nodiscard]] virtual bool IsPlaying(Stream stream) const = 0;
@@ -121,14 +135,37 @@ struct MusicPlayOptions
 	float distanceScale {1.0f};
 	/// Called when the bank has played to its end
 	std::function<void()> onFinished;
+	/// Called with a cue's text as playback passes each cue of the bank
+	std::function<void(std::string_view)> onCue;
 };
+
+/// Where playback is as the bank's cues count it: a 1-based chunk and the frames into it
+struct MusicCuePosition
+{
+	uint32_t chunk {0};
+	uint32_t frame {0};
+
+	auto operator<=>(const MusicCuePosition&) const = default;
+};
+
+/// Cues are timed as if every chunk were this many frames long, counted from the chunk playback started at
+constexpr uint32_t k_CueChunkFrames = 24192;
+
+/// Where the cues' clock is after framesHeard frames from the start of startChunk
+[[nodiscard]] MusicCuePosition CuePositionAfter(uint32_t startChunk, uint64_t framesHeard);
+
+/// The texts of the cues passed going from one position to the next: those after `from` and up to `to`, in the bank's
+/// cue order
+[[nodiscard]] std::vector<std::string_view> CuesPassed(std::span<const MusicCue> cues, MusicCuePosition from,
+                                                       MusicCuePosition to);
 
 /// Port of the music part of LHAudioDLL ver7.0 (LHMusicPlay, LHMusicStop, LHMusicIsActive and the music thread).
 ///
 /// Six channels each stream a bank chunk by chunk, keeping four chunks queued. A channel plays its bank through,
 /// starting again from the first chunk while it has loops left. One channel at a time is current: it fades in to its
 /// target volume while the others fade out, so a new piece crossfades with the old. Volumes are LHAudio units, 0 to
-/// 127, and change once per tick of the music thread.
+/// 127, and change once per tick of the music thread. On each tick the current channel also passes the cues its
+/// playback has reached since the last tick to whoever played it.
 class MusicPlayer
 {
 public:
@@ -153,6 +190,11 @@ public:
 		bool sync {false};
 		int32_t pitchPercent {100};
 		std::function<void()> onFinished;
+		std::function<void(std::string_view)> onCue;
+		/// The cues' clock: the chunk and frames into it playback started at, and where it was last checked
+		uint32_t cueStartChunk {1};
+		uint32_t cueStartFrames {0};
+		MusicCuePosition cueChecked;
 		/// Where a positional channel is heard from
 		std::optional<MusicPlacement> placement;
 		MusicBackend::Stream stream {MusicBackend::k_InvalidStream};
@@ -192,6 +234,7 @@ private:
 	void Feed(Channel& channel);
 	void Release(size_t index);
 	void VolumeTick();
+	void CueTick();
 	void ApplyVolume(const Channel& channel);
 
 	MusicBackend& _backend;
