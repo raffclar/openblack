@@ -1109,7 +1109,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandOnCreature::cycle>("cycle")
 	    .Field<&components::HandOnCreature::byCommand>("byCommand")
 	    .Field<&components::HandOnCreature::heldMs>("heldMs")
-	    .Field<&components::HandOnCreature::strokedOrSlapped>("strokedOrSlapped");
+	    .Field<&components::HandOnCreature::strokedOrSlapped>("strokedOrSlapped")
+	    .Field<&components::HandOnCreature::up>("up")
+	    .Field<&components::HandOnCreature::upStarted>("upStarted")
+	    .Field<&components::HandOnCreature::frameCursorX>("frameCursorX");
 	Reflect<components::HandLastFeedback>(context).Field<&components::HandLastFeedback::sum>("sum");
 	Reflect<components::Heartbeat>(context).Field<&components::Heartbeat::state>("state");
 	Reflect<components::HiddenByState> {context};

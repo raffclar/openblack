@@ -189,6 +189,23 @@ TEST_F(HandAnimationTest, CursorLagLeansTheHand)
 	EXPECT_NEAR(_animation.GetLean().x, 0.0f, 0.5f);
 }
 
+TEST_F(HandAnimationTest, HeldToACreatureTheHandPlaysItsCycleWithoutLeaning)
+{
+	using Cycle = HandAnimation::Cycle;
+	using State = HandAnimation::State;
+	// Swept fast across the screen, the hand held to a creature doesn't lean, and keeps no lag to lean with afterwards
+	_animation.Update(k_Frame, State::Creature, Cycle::Slap, {100, 240});
+	for (int i = 0; i < 20; ++i)
+	{
+		_animation.Update(k_Frame, State::Creature, Cycle::Slap, {100 + (i * 40), 240});
+	}
+	EXPECT_EQ(_animation.GetLean(), glm::vec2(0.0f));
+	EXPECT_EQ(_animation.GetCursorLag(), glm::vec2(0.0f));
+	// Letting go, the hovering hand starts with no lean built up
+	_animation.Update(k_Frame, State::Normal, Cycle::Wiggle, {860, 240});
+	EXPECT_EQ(_animation.GetLean(), glm::vec2(0.0f));
+}
+
 TEST_F(HandAnimationTest, GrippingCrossFadesToTheGripCycle)
 {
 	using Cycle = HandAnimation::Cycle;
