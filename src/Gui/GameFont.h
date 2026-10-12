@@ -81,11 +81,12 @@ public:
 	[[nodiscard]] const Glyph* Find(char16_t character) const;
 	[[nodiscard]] const std::vector<Glyph>& GetGlyphs() const noexcept { return _glyphs; }
 
-	/// How far text of a size moves the pen. U+F8FE, which the temple hides the words it can't show with, takes no
-	/// room.
+	/// How far a character moves the pen in the font's units: left bearing, ink and right bearing of its glyph (or of
+	/// '?'). U+F8FE, the blank the temple and the help texts use, takes no room. Line breaks are glyphs like any other.
+	[[nodiscard]] float Advance(char16_t c) const;
+	/// How far text of a size moves the pen, as the game measures it: every character's advance, line breaks included
 	[[nodiscard]] float GetWidth(std::u16string_view text, float size) const;
-	/// The game's line breaking: lines that fit in width at a size, broken after spaces and hyphens and
-	/// at line breaks. A word too long for a line is broken where it reaches the end.
+	/// The game's line breaking (gui::text_wrap::BreakLines): lines that fit in width at a size
 	[[nodiscard]] std::vector<std::u16string_view> Wrap(std::u16string_view text, float size, float width) const;
 
 	/// Coverage of the glyphs, one byte a pixel

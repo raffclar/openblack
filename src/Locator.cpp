@@ -110,6 +110,7 @@
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
+#include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/Implementations/TattooEditorSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
 #include "ECS/Systems/Implementations/TempleDestructionSystem.h"
@@ -222,6 +223,7 @@ using openblack::ecs::systems::SharkSystem;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
+using openblack::ecs::systems::SpellIconSystem;
 using openblack::ecs::systems::TattooEditorSystem;
 using openblack::ecs::systems::TeleportSystem;
 using openblack::ecs::systems::TempleDestructionSystem;
@@ -316,6 +318,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
 	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
+	Locator::spellIconSystem::emplace<SpellIconSystem>();
 	Locator::artefactSystem::emplace<ArtefactSystem>();
 	Locator::heartbeatSystem::emplace<HeartbeatSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
@@ -533,6 +536,7 @@ void openblack::ShutDownServices()
 	Locator::animalSystem::reset();
 	Locator::soundTagSystem::reset();
 	Locator::villageTotemSystem::reset();
+	Locator::spellIconSystem::reset();
 	Locator::artefactSystem::reset();
 	Locator::heartbeatSystem::reset();
 	Locator::townDesireSystem::reset();

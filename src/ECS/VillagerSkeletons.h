@@ -23,6 +23,10 @@ namespace openblack::villager_skeleton
 /// Makes the villager a skeleton, or its own self again, wearing the models that go with it
 void Set(entt::entity villager, bool skeleton);
 
+/// A script makes the villager a skeleton, or its own self again: it wears the models that go with it, and its size is
+/// worked out afresh for its age as when it grows (a child's a little nearer its age's size, an adult's grown size)
+void SetByScript(entt::entity villager, bool skeleton);
+
 /// Whether the villager is a skeleton
 [[nodiscard]] bool Is(entt::entity villager);
 

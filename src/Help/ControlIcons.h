@@ -75,6 +75,11 @@ using KeyNameFn = std::function<std::u16string(SDL_Scancode)>;
 [[nodiscard]] std::optional<ActionPicture> ActionIcon(std::span<const int> codes, std::span<const input::KeyBinding> bindings,
                                                       const KeyNameFn& keyName);
 
+/// The picture of one action's binding, whichever action it is: its mouse buttons, or failing that its key cap ("Ctrl +
+/// S"). None when it has neither. A tip bubble's "$m" codes show this.
+[[nodiscard]] std::optional<ActionPicture> PictureFor(int action, std::span<const input::KeyBinding> bindings,
+                                                      const KeyNameFn& keyName);
+
 /// A rectangle in pixels
 struct Box
 {

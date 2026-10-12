@@ -48,6 +48,27 @@ TEST(BuildingConstruction, BuildByAddsAndFinishes)
 	EXPECT_FLOAT_EQ(BuildBy(0.1f, -0.5f).built, 0.0f);
 }
 
+TEST(BuildingConstruction, RepairByMendsABuiltBuildingAndRepairsItOnceWhole)
+{
+	const auto partly = RepairBy(0.5f, 0.25f);
+	EXPECT_FLOAT_EQ(partly.life, 0.75f);
+	EXPECT_FALSE(partly.repaired);
+	const auto whole = RepairBy(0.75f, 0.25f);
+	EXPECT_FLOAT_EQ(whole.life, 1.0f);
+	EXPECT_TRUE(whole.repaired);
+	// More work than it needs mends it no further than whole
+	const auto beyond = RepairBy(0.9f, 0.5f);
+	EXPECT_FLOAT_EQ(beyond.life, 1.0f);
+	EXPECT_TRUE(beyond.repaired);
+}
+
+TEST(BuildingConstruction, RepairByLeavesAWholeBuildingAsItIs)
+{
+	const auto whole = RepairBy(1.0f, 0.25f);
+	EXPECT_FLOAT_EQ(whole.life, 1.0f);
+	EXPECT_FALSE(whole.repaired);
+}
+
 TEST(BuildingConstruction, ScriptDesireIsFiveTimesOnTheSite)
 {
 	EXPECT_FLOAT_EQ(SiteDesire(1.0f), 5.0f);
