@@ -1489,6 +1489,33 @@ void AddHand(std::vector<Scenario>& all)
 	         // And comes back in
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.97f}}},
 	});
+
+	// The camera looks north over the land, a rock and a tiger to its east, all in the player's influence; the pointer stays
+	// east of the middle, clear of the testbed's window
+	all.push_back({
+	    .id = "hand.cast_tooltips",
+	    .name = "What the hand offers with a miracle in it",
+	    .facet = Facet::Hand,
+	    .description = "A food seed is put in the hand and the pointer goes to the bare land, then to a rock; then a storm "
+	                   "seed over the land; then the creature spell that makes a creature big over the land and over a "
+	                   "tiger. Six seconds each.",
+	    .expected = "Food over the land: \"Cast\" with the right mouse button. Over the rock it offers nothing. The storm "
+	                "over the land: \"Cast Circle\". The big spell over the land offers nothing; over the tiger, "
+	                "\"Cast\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -30.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {40.0f, 40.0f})},
+	    .objects = {{.type = FeatureInfo::FatPilarChalk, .offset = {20.0f, 40.0f}}},
+	    .commands = {{.kind = Kind::HoldSeed, .delaySeconds = 3.0f, .value = static_cast<size_t>(SpellSeedType::Food)},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.1f, .point = {0.75f, 0.8f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.66f, 0.45f}},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 6.0f, .value = static_cast<size_t>(SpellSeedType::Storm)},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.1f, .point = {0.75f, 0.8f}},
+	                 {.kind = Kind::HoldSeed,
+	                  .delaySeconds = 6.0f,
+	                  .value = static_cast<size_t>(SpellSeedType::CreatureSpellBig)},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.83f, 0.45f}}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
