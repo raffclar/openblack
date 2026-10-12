@@ -416,7 +416,7 @@ void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 	if (!_renderContext.instanceUniforms.empty())
 	{
 		const auto size = static_cast<uint32_t>(_renderContext.instanceUniforms.size() * sizeof(RenderContext::ObjectInstance));
-		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0,
-		             bgfx::makeRef(_renderContext.instanceUniforms.data(), size));
+		// Copied, never referenced: bgfx's render thread reads the update while the next frame refills these instances
+		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0, bgfx::copy(_renderContext.instanceUniforms.data(), size));
 	}
 }
