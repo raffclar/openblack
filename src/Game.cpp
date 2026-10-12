@@ -4500,13 +4500,16 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		}
 
 		// The furthest the hand may be is the land less its height, so its fingers hang down to the land, or the
-		// water over the sea. Over a thing it eases to where it rests on the thing, touching it.
+		// water over the sea; holding something, the land itself. Over a thing it eases to where it rests on the thing,
+		// touching it.
+		const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
 		const auto overSea =
 		    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
 		const auto hover = hand_feel::HoverDistancesOf({
 		    .camera = eye,
 		    .land = _cursorLand,
 		    .landIsSea = overSea,
+		    .holding = holding,
 		    .restOnThing = _handRestOnThing,
 		    .handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance),
 		    .currentDistance = _handDistance,
