@@ -66,9 +66,15 @@ TempleScrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
 		const auto skill = i + k_FirstScrollSkill;
 		facts.actionsKnown.at(i) = skill < snapshot.skills.size() && snapshot.skills.at(skill).known;
 	}
-	// The personality, in the scroll's order
+	// The personality, in the scroll's order. Of anger and compassion, only the one felt more strongly now, and neither
+	// when they are even.
 	for (const auto& [desire, text] : k_Personality)
 	{
+		if ((desire == creature_desires::Desire::Anger && !(snapshot.anger > snapshot.compassion)) ||
+		    (desire == creature_desires::Desire::Compassion && !(snapshot.compassion > snapshot.anger)))
+		{
+			continue;
+		}
 		const auto like = std::ranges::find(snapshot.likes, desire, &Snapshot::Like::desire);
 		if (like != snapshot.likes.end())
 		{

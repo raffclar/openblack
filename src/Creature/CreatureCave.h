@@ -50,6 +50,10 @@ struct Snapshot
 		size_t level;
 	};
 	std::vector<Like> likes;
+	/// How strongly it feels its anger and its compassion now, whether they are activated or not: the scroll tells only
+	/// of the stronger of the two
+	float anger {0.0f};
+	float compassion {0.0f};
 	/// What it thinks of its god, -1 to 1, and seconds since the god last paid it any attention
 	float attitudeToPlayer {0.0f};
 	float secondsAlone {0.0f};

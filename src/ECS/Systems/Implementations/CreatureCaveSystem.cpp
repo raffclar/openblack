@@ -196,6 +196,9 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		snapshot.creaturesKnown = learnt.creatures.size();
 		if (mind->desires.has_value())
 		{
+			const auto& desires = mind->desires->desires;
+			snapshot.anger = desires.at(static_cast<size_t>(creature_desires::Desire::Anger)).value;
+			snapshot.compassion = desires.at(static_cast<size_t>(creature_desires::Desire::Compassion)).value;
 			for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
 			{
 				const auto& state = mind->desires->desires.at(d);

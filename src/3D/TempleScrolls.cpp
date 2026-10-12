@@ -600,8 +600,8 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 			// Always "I want to impress somebody.", whatever the desire
 			named("HELP_TEXT_ROOM_PERSONALITY_PERCEIVED_PLAYER_DESIRE",
 			      get("HELP_TEXT_CREATURE_CURRENT_DESIRE_FIRST_PERSON_01"));
-			text.AddNewLine();
 		}
+		text.AddNewLine();
 		// TODO(raffclar): What it thinks of each creature it knows of
 		text.AddNewLine();
 		number("HELP_TEXT_ROOM_PERSONALITY_BELIEFS_ABOUT_CREATURES", creature->known[0]);

@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <numbers>
+#include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -397,6 +398,27 @@ TEST(CreatureCave, FactsTellOfTheMind)
 	EXPECT_FLOAT_EQ(facts.attention, 0.75f);
 	EXPECT_EQ(facts.known[0], 2);
 	EXPECT_FALSE(creature_cave::PersonalityText(Desire::Poo).has_value());
+}
+
+TEST(CreatureCave, FactsTellOfTheStrongerOfAngerAndCompassion)
+{
+	using creature_desires::Desire;
+	creature_cave::Snapshot snapshot;
+	snapshot.likes = {{.desire = Desire::Anger, .level = 2}, {.desire = Desire::Compassion, .level = 3}};
+	const auto told = [&snapshot](float anger, float compassion) {
+		snapshot.anger = anger;
+		snapshot.compassion = compassion;
+		std::vector<std::string_view> texts;
+		for (const auto& desire : creature_cave::FactsOf(snapshot).desires)
+		{
+			texts.push_back(desire.text);
+		}
+		return texts;
+	};
+	EXPECT_EQ(told(0.6f, 0.2f), std::vector<std::string_view> {"HELP_TEXT_ROOM_PERSONALITY_ANGRY"});
+	EXPECT_EQ(told(0.2f, 0.6f), std::vector<std::string_view> {"HELP_TEXT_ROOM_PERSONALITY_COMPASSIONATE"});
+	// Felt just as strongly, the scroll tells of neither
+	EXPECT_TRUE(told(0.4f, 0.4f).empty());
 }
 
 TEST(CreatureCave, FactsTellOfSkillsAndMiracles)
