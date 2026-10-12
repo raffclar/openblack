@@ -507,6 +507,9 @@ void WeatherSystem::Update(uint32_t turn)
 		_stamp = 1;
 	}
 
+	// The weather things follow their storms, which the wind blows along if it may, before the climates' turn
+	ProcessWeatherThings();
+
 	// Every climate, with the season changing on a new day
 	GetGlobalClimate();
 	const auto day = Ftol(GetDayOfMonth(turn));
@@ -524,37 +527,61 @@ void WeatherSystem::Update(uint32_t turn)
 	{
 		ProcessClimate(entity, newDay);
 	}
-
-	ProcessWeatherThings();
 }
 
-// A weather thing stands where its storm is. Once the storm has ended it has none, and it goes unless a script still
-// holds it.
+// A weather thing stands where its storm is, which the wind blows along a turn's worth if it may. Once the storm has
+// ended it has none, and it goes unless a script still holds it.
 void WeatherSystem::ProcessWeatherThings()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> gone;
-	registry.Each<WeatherThing, Transform>([&registry, &gone](entt::entity entity, WeatherThing& thing, Transform& transform) {
-		if (thing.storm != entt::null)
-		{
-			const auto* storm = registry.Valid(thing.storm) ? registry.TryGet<const Storm>(thing.storm) : nullptr;
-			if (storm != nullptr && !storm->dead)
-			{
-				transform.position = storm->position;
-				thing.lastStorm = *storm;
-				return;
-			}
-			thing.storm = entt::null;
-		}
-		if (!registry.AllOf<components::InScript>(entity))
-		{
-			gone.push_back(entity);
-		}
-	});
+	registry.Each<WeatherThing, Transform>(
+	    [this, &registry, &gone](entt::entity entity, WeatherThing& thing, Transform& transform) {
+		    if (thing.storm != entt::null)
+		    {
+			    auto* storm = registry.Valid(thing.storm) ? registry.TryGet<Storm>(thing.storm) : nullptr;
+			    if (storm != nullptr && !storm->dead)
+			    {
+				    if (thing.affectedByWind)
+				    {
+					    storm->position = script_weather::Drift(storm->position, DriftWindAt(storm->position));
+				    }
+				    transform.position = storm->position;
+				    thing.lastStorm = *storm;
+				    return;
+			    }
+			    thing.storm = entt::null;
+		    }
+		    if (!registry.AllOf<components::InScript>(entity))
+		    {
+			    gone.push_back(entity);
+		    }
+	    });
 	for (const auto entity : gone)
 	{
 		registry.Destroy(entity);
 	}
+}
+
+script_weather::Wind WeatherSystem::DriftWindAt(const glm::vec3& position)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto toWind = [](const Climate& climate) {
+		const auto centre = CellCentre(climate);
+		return script_weather::ClimateWind {
+		    .centre = {centre.x, centre.z},
+		    .innerRadius = climate.innerRadius,
+		    .outerRadius = climate.outerRadius,
+		    .windX = climate.windX,
+		    .windZ = climate.windZ,
+		};
+	};
+	const auto global = toWind(registry.Get<const Climate>(GetGlobalClimate()));
+	// The newest climate first
+	std::vector<script_weather::ClimateWind> climates;
+	registry.Each<const Climate>([&climates, &toWind](const Climate& climate) { climates.push_back(toWind(climate)); });
+	const auto air = GetWeather(position);
+	return script_weather::DriftWind({.x = air.windX, .z = air.windZ}, global, climates, {position.x, position.z});
 }
 
 // Storms age, fade in and out and travel towards their destination; dead ones linger a couple of turns
@@ -1118,6 +1145,38 @@ bool WeatherSystem::ChangeWeatherThing(entt::entity thing, const std::function<v
 	return true;
 }
 
+bool WeatherSystem::MoveWeatherThing(entt::entity thing, glm::vec3 destination)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* weatherThing = registry.Valid(thing) ? registry.TryGet<WeatherThing>(thing) : nullptr;
+	if (weatherThing == nullptr)
+	{
+		return false;
+	}
+	if (auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<Storm>(weatherThing->storm) : nullptr;
+	    storm != nullptr && !storm->dead)
+	{
+		storm->destination = destination;
+	}
+	return true;
+}
+
+bool WeatherSystem::SetWeatherThingSpeed(entt::entity thing, float speed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* weatherThing = registry.Valid(thing) ? registry.TryGet<WeatherThing>(thing) : nullptr;
+	if (weatherThing == nullptr)
+	{
+		return false;
+	}
+	if (auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<Storm>(weatherThing->storm) : nullptr;
+	    storm != nullptr && !storm->dead)
+	{
+		storm->speed = speed;
+	}
+	return true;
+}
+
 bool WeatherSystem::SetWeatherThingAffectedByWind(entt::entity thing, bool affected)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1126,8 +1185,7 @@ bool WeatherSystem::SetWeatherThingAffectedByWind(entt::entity thing, bool affec
 	{
 		return false;
 	}
-	// TODO(scripted-weather): a weather thing the wind blows drifts with its storm on the wind; no script on the first
-	// land lets the wind take one
+	// The wind blows its storm along each turn while this is set
 	weatherThing->affectedByWind = affected;
 	return true;
 }

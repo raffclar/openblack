@@ -1985,6 +1985,11 @@ void SetProperty() // 022 SET_PROPERTY
 		NotImplemented(static_cast<int32_t>(prop));
 		return;
 	case script::ObjectPropertyType::Speed:
+		// A weather thing's storm travels at it, metres a second
+		if (Locator::weatherSystem::has_value() && Locator::weatherSystem::value().SetWeatherThingSpeed(object, value))
+		{
+			return;
+		}
 		// Metres a turn
 		if (auto* wallHug = registry.TryGet<ecs::components::WallHug>(object); wallHug != nullptr)
 		{
@@ -2432,7 +2437,12 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 		}
 		return;
 	}
-	// TODO(opening): the weather, computer players and other things
+	// A weather thing's storm sets off for the point at its speed
+	if (Locator::weatherSystem::has_value() && Locator::weatherSystem::value().MoveWeatherThing(object, position))
+	{
+		return;
+	}
+	// TODO(opening): computer players and other things
 	NotImplemented();
 }
 
