@@ -122,6 +122,38 @@ TEST(StatisticsBuildings, EarlierTownsCountAgainInTheTotal)
 	EXPECT_EQ(TotalBuildings(std::span(towns).first(1)), 4u);
 }
 
+TEST(StatisticsBuildings, ABuildingAgesOnItsTownsPassesUpToSettled)
+{
+	EXPECT_TRUE(TownPassesItsBuildings(0, 10));
+	EXPECT_FALSE(TownPassesItsBuildings(15, 10));
+	EXPECT_TRUE(TownPassesItsBuildings(30, 10));
+	uint32_t age = 0;
+	for (int pass = 0; pass < 250; ++pass)
+	{
+		age = AgedOnePass(age);
+	}
+	EXPECT_EQ(age, k_SettledAge);
+}
+
+TEST(StatisticsBuildings, OnlyHarmTakingItOutOfActionStopsItWorking)
+{
+	// From above the share to at or under it
+	EXPECT_TRUE(StopsWorking(0.6f, 0.5f, 0.5f));
+	EXPECT_TRUE(StopsWorking(1.0f, 0.0f, 0.5f));
+	// Already out of action, or still above the share
+	EXPECT_FALSE(StopsWorking(0.5f, 0.2f, 0.5f));
+	EXPECT_FALSE(StopsWorking(1.0f, 0.7f, 0.5f));
+	// Left with all its life
+	EXPECT_FALSE(StopsWorking(1.0f, 1.0f, 1.0f));
+}
+
+TEST(StatisticsBuildings, OnlyASettledBuildingAPlayerPutsOutCountsAsDestroyed)
+{
+	EXPECT_TRUE(CountsAsDestroyed(true, k_SettledAge));
+	EXPECT_FALSE(CountsAsDestroyed(true, k_SettledAge - 1));
+	EXPECT_FALSE(CountsAsDestroyed(false, k_SettledAge));
+}
+
 TEST(StatisticsDisciples, OnlyTheEightWorkingKindsAreCounted)
 {
 	EXPECT_EQ(DiscipleMadeIndex(VillagerDisciple::Farmer), 0u);

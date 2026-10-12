@@ -72,6 +72,26 @@ void CountBuilt(BuildingsBuilt& built, AbodeType type)
 	}
 }
 
+bool TownPassesItsBuildings(uint32_t turn, uint32_t every)
+{
+	return every != 0 && turn % every == 0;
+}
+
+uint32_t AgedOnePass(uint32_t age)
+{
+	return age < k_SettledAge ? age + 1 : age;
+}
+
+bool StopsWorking(float lifeBefore, float lifeAfter, float stopsWorkingAt)
+{
+	return lifeAfter < 1.0f && stopsWorkingAt < lifeBefore && stopsWorkingAt >= lifeAfter;
+}
+
+bool CountsAsDestroyed(bool byAPlayer, uint32_t age)
+{
+	return byAPlayer && age >= k_SettledAge;
+}
+
 std::optional<size_t> DiscipleMadeIndex(VillagerDisciple kind)
 {
 	switch (kind)

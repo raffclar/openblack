@@ -500,8 +500,21 @@ void TownSystem::ProcessTurn()
 	const auto& infos = Locator::infoConstants::value().abode;
 	const auto* fire = Locator::fireSystem::has_value() ? &Locator::fireSystem::value() : nullptr;
 	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	const bool passOverBuildings =
+	    statistics::TownPassesItsBuildings(turn, Locator::infoConstants::value().town.processAbodeEvery);
 	for (const auto townEntity : towns)
 	{
+		// Every so many turns it passes over its buildings, which age by it; a football pitch never ages
+		if (passOverBuildings)
+		{
+			for (const auto abode : registry.Get<const Town>(townEntity).abodes)
+			{
+				if (auto* data = registry.TryGet<Abode>(abode); data != nullptr && data->type != AbodeNumber::FootballPitch)
+				{
+					data->age = statistics::AgedOnePass(data->age);
+				}
+			}
+		}
 		// It puts up at most one of its buildings, or a finished one that went, for mending
 		town_planning::MendBest(townEntity);
 		const bool inEmergency = IsInStateOfEmergency(townEntity);

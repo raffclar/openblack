@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <chrono>
 #include <numbers>
+#include <optional>
 
 #include <LNDFile.h>
 #include <entt/core/hashed_string.hpp>
@@ -491,7 +492,8 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 				}
 				if (outcome.damaged > 0.0f)
 				{
-					ecs::world_objects::ReduceLife(outcome.entity, outcome.damaged);
+					ecs::world_objects::ReduceLife(outcome.entity, outcome.damaged,
+					                               source.playerless ? std::nullopt : std::optional(source.player));
 				}
 			}
 		}

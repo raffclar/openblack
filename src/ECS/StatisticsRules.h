@@ -82,6 +82,20 @@ struct BuildingsBuilt
 /// One more building of a kind finished
 void CountBuilt(BuildingsBuilt& built, AbodeType type);
 
+/// A building's age: its town's passes over its buildings it has stood through, every so many turns its town's kind
+/// gives, up to the age at which it counts as settled. A football pitch never ages; nor does a building of no town.
+inline constexpr uint32_t k_SettledAge = 200;
+/// Whether a town passes over its buildings at a turn
+[[nodiscard]] bool TownPassesItsBuildings(uint32_t turn, uint32_t every);
+/// A building's age after one more pass of its town
+[[nodiscard]] uint32_t AgedOnePass(uint32_t age);
+/// Whether harm took a building from working to out of action: from above the share of its life under which it stops
+/// working to at or under it, left under its full life
+[[nodiscard]] bool StopsWorking(float lifeBefore, float lifeAfter, float stopsWorkingAt);
+/// Whether a building put out of action counts as destroyed by a player: only when a player did it and only once the
+/// building has settled, so a building put up and knocked down at once doesn't count
+[[nodiscard]] bool CountsAsDestroyed(bool byAPlayer, uint32_t age);
+
 /// The disciples made of each kind, as the game counts them: farmers, foresters, fishermen, builders, breeders, traders,
 /// missionaries and craftsmen. Protection, worship and the other kinds aren't counted.
 using DisciplesMade = std::array<uint32_t, 8>;
