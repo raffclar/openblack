@@ -31,6 +31,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureCatch.h"
+#include "Creature/CreatureDesires.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureReach.h"
@@ -45,9 +46,11 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -60,8 +63,10 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -264,6 +269,41 @@ void Consume(ecs::Registry& registry, entt::entity food)
 		}
 	}
 	registry.Destroy(food);
+}
+
+/// Whether a creature about to swallow a thing brings it back up instead: one made indestructible (as Sable is for her
+/// lessons), or one the scripts hold while they own the widescreen bars
+bool BringsBackUp(const ecs::Registry& registry, entt::entity food)
+{
+	bool heldDuringCutscene = false;
+	if (registry.AllOf<InScript>(food) && Locator::cinematicDirectorSystem::has_value())
+	{
+		const auto& director = Locator::cinematicDirectorSystem::value();
+		heldDuringCutscene = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
+	}
+	return creature_object_actions::BringsBackUp(registry.AllOf<Indestructible>(food), heldDuringCutscene);
+}
+
+/// The creature brings up what it was about to swallow: it falls from where it is, uneaten, the creature isn't hungry
+/// for a while and is sick
+void BringBackUp(entt::entity creature, entt::entity food)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureHeldObject>(creature);
+	registry.Remove<HeldByCreature>(food);
+	if (Locator::dynamicsSystem::has_value())
+	{
+		Locator::dynamicsSystem::value().InitialisePhysics(food, {.thrower = creature});
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		auto& minds = Locator::creatureMindSystem::value();
+		minds.ChangeDesires(creature, [](creature_desires::Desires& desires) {
+			creature_desires::Suppress(desires, creature_desires::Desire::Hunger,
+			                           creature_object_actions::k_NotHungryAfterBringingUpSeconds, 1.0f / k_TurnSeconds);
+		});
+		minds.Puke(creature);
+	}
 }
 
 /// A villager picked up stops wherever it was walking
@@ -1259,6 +1299,24 @@ bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
 	       registry.AnyOf<Tree, Abode, MobileObject, Ball>(target);
 }
 
+std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !Locator::creatureAnimationSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* points = body != nullptr ? PointsOf(*body) : nullptr;
+	if (transform == nullptr || points == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto reach = MeasureReach(creature, *transform, *points, creature_reach::k_PickUpAnimations, points->pickUpMs);
+	return reach.has_value() ? std::optional(creature_reach::StraightReach(*reach)) : std::nullopt;
+}
+
 void CreatureObjectActionSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1576,6 +1634,11 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			const auto held = GetHeld(creature);
 			if (!held.has_value())
 			{
+				break;
+			}
+			if (BringsBackUp(registry, *held))
+			{
+				BringBackUp(creature, *held);
 				break;
 			}
 			const auto value = FoodValueOf(*held);

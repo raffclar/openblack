@@ -46,6 +46,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureScriptPlay.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -69,6 +70,7 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Physics.h"
@@ -107,20 +109,26 @@
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -129,8 +137,10 @@
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
+#include "LHScriptX/FeatureScriptCommands.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Magic/ScriptCast.h"
 #include "Magic/SpellRules.h"
 #include "TestbedDispenserGrid.h"
 #include "Windowing/WindowingInterface.h"
@@ -379,6 +389,10 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		registry.AssignOrReplace<ecs::components::Poisoned>(entity);
 	}
+	if (object.indestructible)
+	{
+		registry.AssignOrReplace<ecs::components::Indestructible>(entity);
+	}
 }
 } // namespace
 
@@ -405,6 +419,7 @@ void Runner::Start(const Scenario& scenario)
 	_timeline = {};
 	_creatures.clear();
 	_objects.clear();
+	_temples.clear();
 	_throwsDue.clear();
 	for (const auto& setup : scenario.throws)
 	{
@@ -505,11 +520,24 @@ void Runner::Start(const Scenario& scenario)
 	{
 		_miracles.push_back({.nextAt = miracle.delaySeconds, .letGoAt = std::nullopt, .spell = entt::null});
 	}
+	// The storms a land's setup script places, in the island's global climate
+	if (Locator::weatherSystem::has_value())
+	{
+		for (const auto& storm : scenario.landStorms)
+		{
+			const auto at = MapPoint(_middle, storm.offset);
+			const auto to = MapPoint(_middle, storm.destination);
+			lhscriptx::FeatureScriptCommands::CreateWeatherStorm(
+			    0, {at.x, land.GetHeightAt(at), at.y}, storm.age, storm.cloudCount, std::string(storm.shape),
+			    std::string(storm.clouds), std::string(storm.weather), storm.speed, {to.x, land.GetHeightAt(to), to.y});
+		}
+	}
 	for (size_t i = 0; i < scenario.particles.size(); ++i)
 	{
 		_particles.push_back({StartParticle(i), 0.0f});
 	}
 	_vortices.assign(scenario.vortices.size(), {});
+	_rewards.assign(scenario.rewards.size(), entt::null);
 	Frame(scenario.framing.shot, scenario.framing.creature, scenario.framing.distance);
 	Log(fmt::format("Started {}", scenario.name));
 }
@@ -550,6 +578,15 @@ void Runner::Stop()
 		}
 	}
 	_vortices.clear();
+	// Its reward chests go, opened or not
+	for (const auto chest : _rewards)
+	{
+		if (chest != entt::null && Locator::entitiesRegistry::value().Valid(chest))
+		{
+			Locator::entitiesRegistry::value().Destroy(chest);
+		}
+	}
+	_rewards.clear();
 	// Its held miracles stop, and the hand is the mouse's again
 	if (Locator::magicSystem::has_value())
 	{
@@ -618,7 +655,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		                    .seconds = k_WeatherSeconds,
 		                    .fadeSeconds = 0.5f,
 		                    .thunderWait = thunder ? glm::vec2(3.0f, 15.0f) : glm::vec2(0.0f),
-		                    .boltWait = thunder ? glm::vec2(2.0f, 8.0f) : glm::vec2(0.0f)});
+		                    .boltWait = thunder ? environment.boltSeconds.value_or(glm::vec2(2.0f, 8.0f)) : glm::vec2(0.0f)});
 	}
 	if (Locator::creaturePhysiologySystem::has_value())
 	{
@@ -800,8 +837,13 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 	for (const auto& setup : scenario.temples)
 	{
 		const auto point = MapPoint(middle, setup.offset);
-		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, setup.angle,
-		                                          glm::vec3(1.0f));
+		const auto temple = ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner,
+		                                                              setup.angle, glm::vec3(1.0f));
+		if (setup.built.has_value())
+		{
+			ecs::construction::SetBuilt(temple, *setup.built);
+		}
+		_temples.push_back(temple);
 	}
 	if (!Locator::animalSystem::has_value())
 	{
@@ -1416,6 +1458,12 @@ void Runner::Give(const Command& command)
 		Log(line);
 		return;
 	}
+	if (command.kind == Kind::Reframe)
+	{
+		Frame(_scenario->framing.shot, _scenario->framing.creature, _scenario->framing.distance);
+		Log(fmt::format("{:.1f}s: the camera is put back", _seconds));
+		return;
+	}
 	if (command.kind == Kind::SetHour)
 	{
 		if (Locator::skySystem::has_value())
@@ -1442,6 +1490,23 @@ void Runner::Give(const Command& command)
 			Locator::alignmentSystem::value().SetPlayerAlignment(command.player, command.alignment);
 		}
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
+		return;
+	}
+	if (command.kind == Kind::RunHelpMessage)
+	{
+		const bool started =
+		    Locator::helpMessageSystem::has_value() && Locator::helpMessageSystem::value().RunMessageSet(command.value);
+		Log(fmt::format("{:.1f}s: the help message set {} {}", _seconds, command.value, started ? "runs" : "doesn't run"));
+		return;
+	}
+	if (command.kind == Kind::DestroyTemple)
+	{
+		const bool known = command.value < _temples.size();
+		if (known && Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().Start(_temples.at(command.value));
+		}
+		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
 		return;
 	}
 	if (command.kind == Kind::RunText)
@@ -1496,6 +1561,13 @@ void Runner::Give(const Command& command)
 	case Kind::RunTo:
 		result =
 		    MoveResultName(locomotion.MoveTo(*entity, point, command.kind == Kind::RunTo ? Pace::Run : Pace::Walk, 0.0f, 1.0f));
+		break;
+	case Kind::ScriptPlay:
+		result = minds.CarryOutForScript(
+		             *entity, creature_script_play::Agenda({.animation = static_cast<int32_t>(command.value),
+		                                                    .plays = static_cast<uint32_t>(std::lround(command.amount))}))
+		             ? "playing"
+		             : "can't";
 		break;
 	case Kind::WalkHome:
 		if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
@@ -1637,11 +1709,14 @@ void Runner::Give(const Command& command)
 	case Kind::HandTapObject:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
+	case Kind::DestroyTemple:
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::RunHelpMessage:
 	case Kind::RunText:
 	case Kind::PlayHandDemo:
+	case Kind::Reframe:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
@@ -2007,6 +2082,7 @@ void Runner::Update(float seconds)
 	SpawnCrowd();
 	UpdateParticles(seconds);
 	UpdateVortices();
+	UpdateRewards();
 	UpdateMiracles(seconds);
 	UpdateVillagerWalks();
 	UpdateThrows();
@@ -2209,6 +2285,8 @@ void Runner::UpdateVillagerWalks()
 				const auto goal = MapPoint(_middle, walk.outwards ? *setup.walkTo : setup.offset);
 				ecs::villager_home::SetupMoveTo(registry.Get<ecs::components::LivingAction>(entity), goal, setup.walkFinal);
 				Log(fmt::format("Villager {} walks {}", i, walk.outwards ? "out" : "back"));
+				walk.goal = goal;
+				walk.setOffTurn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 				walk.outwards = !walk.outwards;
 				walk.nextAt =
 				    setup.walkRepeatSeconds.has_value() ? std::optional(*walk.nextAt + *setup.walkRepeatSeconds) : std::nullopt;
@@ -2217,6 +2295,12 @@ void Runner::UpdateVillagerWalks()
 					walk.outwards = false;
 				}
 			}
+		}
+		// How long each walk took, in game turns, for comparing walks round things in the way
+		if (walk.setOffTurn.has_value() && Locator::time::has_value() && ecs::villager_home::WalkIsOverAt(entity, walk.goal))
+		{
+			Log(fmt::format("Villager {} got there in {} turns", i, Locator::time::value().GetTurn() - *walk.setOffTurn));
+			walk.setOffTurn.reset();
 		}
 		if (setup.worshipAt.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
 		    Locator::teleportSystem::has_value() && Locator::terrainSystem::has_value())
@@ -2296,6 +2380,16 @@ entt::entity Runner::CastMiracle(size_t index)
 	}
 	const auto hand2 = MapPoint(_middle, setup.handOffset);
 	const glm::vec3 hand {hand2.x, land.GetHeightAt(hand2) + setup.handHeight, hand2.y};
+	// As a script casts it: the neutral player's, from the hand's place, on the creature when its seed is cast on things
+	if (setup.script.has_value())
+	{
+		const auto scripted = magic::MakeScriptCast(magic::GetMagicEffectInfo(info, setup.type).initialChants, point, hand,
+		                                            setup.script->radius, setup.script->seconds, setup.script->curl);
+		const bool onObject =
+		    target.has_value() && seed != SpellSeedType::None && magic::GetSpellSeedInfo(info, seed).castOnObject != 0;
+		return onObject ? magic.CastOnObject(setup.type, PlayerNames::NEUTRAL, *target, scripted.cast, scripted.info)
+		                : magic.CastAtPoint(setup.type, PlayerNames::NEUTRAL, scripted.point, scripted.cast, scripted.info);
+	}
 	const auto toward = point - hand;
 	const particles::ProcessInfo process {
 	    .handPosition = hand,
@@ -2437,6 +2531,29 @@ void Runner::UpdateVortices()
 			running.fading = vortices.StartFadeOut(running.vortex);
 			Log(fmt::format("Vortex {} fading out", i));
 		}
+	}
+}
+
+void Runner::UpdateRewards()
+{
+	if (!Locator::rewardSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	for (size_t i = 0; i < _rewards.size(); ++i)
+	{
+		const auto& setup = _scenario->rewards.at(i);
+		if (_rewards.at(i) != entt::null || _seconds < setup.delaySeconds)
+		{
+			continue;
+		}
+		const auto point = MapPoint(_middle, setup.offset);
+		const glm::vec3 at {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y};
+		_rewards.at(i) = Locator::rewardSystem::value().Create(at, setup.type, player, entt::null, setup.fromSky);
+		Log(fmt::format("Reward chest {} (kind {}) given at {:.0f}, {:.0f}", i, static_cast<int>(setup.type), point.x,
+		                point.y));
 	}
 }
 

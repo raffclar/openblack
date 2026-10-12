@@ -107,17 +107,17 @@ entt::entity SpellIconSystem::WorkingCentreOf(entt::entity town) const
 	return centre;
 }
 
-void SpellIconSystem::TownHolds(entt::entity town, MagicType type)
+bool SpellIconSystem::TownHolds(entt::entity town, MagicType type)
 {
 	auto& registry = Entities();
 	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
 	{
-		return;
+		return false;
 	}
 	auto& magicHeld = registry.AnyOf<TownMagic>(town) ? registry.Get<TownMagic>(town) : registry.Assign<TownMagic>(town);
 	if (!icons::Hold(magicHeld.held, type))
 	{
-		return;
+		return false;
 	}
 	// Its player may cast it while the town is theirs
 	SetEnabled(registry.Get<const Town>(town).owner, type, true);
@@ -126,7 +126,7 @@ void SpellIconSystem::TownHolds(entt::entity town, MagicType type)
 	const auto centre = WorkingCentreOf(town);
 	if (!level.has_value() || centre == entt::null)
 	{
-		return;
+		return true;
 	}
 	if (level->powerUp == magic::k_BasePowerUpLevel)
 	{
@@ -136,6 +136,18 @@ void SpellIconSystem::TownHolds(entt::entity town, MagicType type)
 	{
 		AddPowerUp(centre, level->seed, level->powerUp);
 	}
+	return true;
+}
+
+std::optional<size_t> SpellIconSystem::CentreMiraclesShown(entt::entity town) const
+{
+	const auto centre = WorkingCentreOf(town);
+	const auto* hands = centre != entt::null ? Entities().TryGet<const CentreHands>(centre) : nullptr;
+	if (hands == nullptr)
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::ranges::count_if(hands->hands, [](entt::entity hand) { return hand != entt::null; }));
 }
 
 void SpellIconSystem::AddHand(entt::entity centre, entt::entity town, SpellSeedType seed)

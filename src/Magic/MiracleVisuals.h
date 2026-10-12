@@ -100,8 +100,9 @@ struct PhialDraw
 {
 	float size;
 	uint8_t alpha;
-	/// Lit by the land, else drawn in plain white
-	bool lit;
+	/// Takes the land's light and colour where it stands; otherwise lit in white by the sun, with none of the land's
+	/// colour added, as a phial shrinking or growing is
+	bool landLit;
 };
 [[nodiscard]] std::vector<PhialDraw> PhialDraws(int receiveType, float phase, float pulse, uint8_t globeAlpha);
 

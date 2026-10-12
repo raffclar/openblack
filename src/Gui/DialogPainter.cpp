@@ -432,6 +432,37 @@ void DialogPainter::DrawString(glm::vec2 screen, std::u16string_view text, float
 	           sharp && _fullFontTexture != nullptr && size > static_cast<float>(_font.GetHeight()) * 0.5f);
 }
 
+void DialogPainter::DrawString(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 top, glm::vec4 bottom) const
+{
+	if (top == bottom)
+	{
+		DrawGlyphs(screen, text, size, top, false);
+		return;
+	}
+	const auto scale = size / static_cast<float>(_font.GetHeight());
+	const auto atlasSize = glm::vec2(_font.GetAtlasSize());
+	const auto topColour = glm::vec4(glm::vec3(top), top.a * _alpha);
+	const auto bottomColour = glm::vec4(glm::vec3(bottom), bottom.a * _alpha);
+	auto pen = glm::floor(screen);
+	for (const auto c : text)
+	{
+		const auto* glyph = _font.Find(c);
+		if (glyph == nullptr)
+		{
+			continue;
+		}
+		const auto uvMin = glm::vec2(glyph->atlasMin) / atlasSize;
+		const auto uvMax = glm::vec2(glyph->atlasMax) / atlasSize;
+		// The half height atlas holds the glyph at half size
+		const auto cellSize = (glm::vec2(glyph->atlasMax) - glm::vec2(glyph->atlasMin)) * 2.0f * scale;
+		const auto min = glm::vec2(pen.x + (glyph->left * scale), pen.y);
+		const auto max = min + cellSize;
+		_canvas.DrawShape({min, {max.x, min.y}, max, {min.x, max.y}}, {uvMin, {uvMax.x, uvMin.y}, uvMax, {uvMin.x, uvMax.y}},
+		                  {topColour, topColour, bottomColour, bottomColour}, &_fontTexture);
+		pen.x += (glyph->left + glyph->ink + glyph->right) * scale;
+	}
+}
+
 bool DialogPainter::UseFullGlyphs(float drawnSize) const noexcept
 {
 	// The game draws every text from its glyphs at half height, also when it scales them up. Text the layout scales

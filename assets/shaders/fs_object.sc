@@ -12,6 +12,9 @@ SAMPLER2D(s_groundShadowData, 14);
 SAMPLER2D(s_diffuse, 0);
 #ifdef USE_ENVIRONMENT
 SAMPLER2D(s_environment, 5);
+// x: how the environment map is combined with the colour: 0 not at all, 1 in its place, 2 left as it was, 3 multiplied,
+// 4 multiplied and doubled, 5 added
+uniform vec4 u_environmentStage;
 #endif // USE_ENVIRONMENT
 uniform vec4 u_skyAlphaThreshold;
 // The temple's controls glow under the cursor: the game adds the colour as the vertices' specular, after the texture
@@ -96,8 +99,26 @@ void main()
 		diffuseTex.rgb = texture2D(s_snow, v_snow.xy).rgb * (tinted ? vec3_splat(1.0f) : v_snowLight) * u_tint.rgb;
 	}
 #ifdef USE_ENVIRONMENT
-	// The second texture stage adds the environment map, which saturates
-	diffuseTex.rgb = min(diffuseTex.rgb + texture2D(s_environment, v_texcoord0.zw).rgb, vec3_splat(1.0f));
+	// The second texture stage combines the environment map with the colour as the primitive's material says: added,
+	// which saturates, multiplied, doubled after multiplying, in its place, or not at all
+	vec3 environment = texture2D(s_environment, v_texcoord0.zw).rgb;
+	float stage = floor(u_environmentStage.x + 0.5f);
+	if (stage == 1.0f)
+	{
+		diffuseTex.rgb = environment;
+	}
+	else if (stage == 3.0f)
+	{
+		diffuseTex.rgb = diffuseTex.rgb * environment;
+	}
+	else if (stage == 4.0f)
+	{
+		diffuseTex.rgb = min(diffuseTex.rgb * environment * 2.0f, vec3_splat(1.0f));
+	}
+	else if (stage == 5.0f)
+	{
+		diffuseTex.rgb = min(diffuseTex.rgb + environment, vec3_splat(1.0f));
+	}
 	// Or the environment map alone, in the light, at an alpha of its own
 	if (u_glow.w > 0.0f)
 	{

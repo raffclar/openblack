@@ -1066,23 +1066,25 @@ void FireSystem::Process(entt::entity object)
 		if (field || proofing == nullptr || !proofing->notHurtByFire)
 		{
 			const float lifeUnburnt = world_objects::LifeOf(object);
-			const float life = world_objects::ReduceLife(object, outcome.damage);
-			// Burning a town's people or buildings is an attack on the town by whoever lit the fire, by nobody's when
-			// no one did
+			// Who lit it, read before the burn: a pile on its own burnt to nothing goes with it
 			const auto& lit = registry.Get<const Fire>(object);
-			if (!field)
+			const auto litBy = lit.hasPlayer ? std::optional(lit.player) : std::nullopt;
+			const float life = world_objects::ReduceLife(object, outcome.damage);
+			// Burning a town's people, buildings or stores is an attack on the town by whoever lit the fire, by nobody's
+			// when no one did
+			if (!field && registry.Valid(object))
 			{
-				world_objects::AttackTown(object, outcome.damage, lit.hasPlayer ? lit.player : PlayerNames::NEUTRAL);
+				world_objects::AttackTown(object, outcome.damage, litBy.value_or(PlayerNames::NEUTRAL));
 			}
 			// Only the burn that takes the last of its life burns it down: one burning on with none left is not burnt down
 			// again
-			if (life <= 0.0f && lifeUnburnt > 0.0f && !world_objects::IsCreature(object))
+			if (life <= 0.0f && lifeUnburnt > 0.0f && (!registry.Valid(object) || !world_objects::IsCreature(object)))
 			{
 				// Burnt down: a building stands with no life, a villager dies, anything else goes
 				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Fire: object {} burnt down", entt::to_integral(object));
 				// A villager burnt to death is put down to whoever lit the fire, weighing nothing with its town
 				world_objects::DestroyedByEffect(object, world_objects::EffectDeath {
-				                                             .killer = lit.hasPlayer ? std::optional(lit.player) : std::nullopt,
+				                                             .killer = litBy,
 				                                             .weight = 0.0f,
 				                                         });
 				if (!registry.Valid(object) || !registry.AllOf<Fire>(object))

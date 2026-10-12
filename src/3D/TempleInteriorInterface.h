@@ -185,6 +185,11 @@ public:
 	[[nodiscard]] virtual glm::vec2 GetWaterfallSlide() const = 0;
 	virtual void Activate() = 0;
 	virtual void Activate(TempleRoom room) = 0;
+	/// Takes the player to a room of the temple, from outside or from another room, and keeps them there, as the game
+	/// does with the save game room once the game is over: going to another room or out of the temple ends the game
+	virtual void EnterLockedRoom(TempleRoom room) = 0;
+	/// Whether the player left the room they were kept in since this was last asked, so that the game is over
+	[[nodiscard]] virtual bool TakeGameEnded() = 0;
 	virtual void Deactivate() = 0;
 	/// Closes the temple at once as its land goes, before the land's entities do: everything its rooms made goes with
 	/// it, and the island's camera and drawing come back, without the walk out to the island

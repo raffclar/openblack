@@ -160,14 +160,12 @@ std::optional<uint32_t> TownScenicForest(const Registry& registry, entt::entity 
 	return forest;
 }
 
-/// The tree takes root again: a white puff of smoke at its foot, then it finds a forest to join among what stands round it
-void Replant(const PhysicsEntry* entry, entt::entity tree, const LandIslandInterface& land)
+/// The tree takes root again, standing on the land: a white puff of smoke at its foot, then it finds a forest to join among
+/// what stands round it
+void Replant(const PhysicsEntry* entry, entt::entity tree)
 {
 	auto& registry = Entities();
-	// It stands on the land again, at no height above it
-	auto& placed = registry.Get<Transform>(tree).position;
-	placed.y = land.GetHeightAt({placed.x, placed.z});
-	const auto position = placed;
+	const auto position = registry.Get<const Transform>(tree).position;
 	const glm::vec3 foot = position;
 	if (Locator::explosionSystem::has_value())
 	{
@@ -325,11 +323,19 @@ entt::entity object_physics::EndTree(systems::DynamicsSystemInterface& dynamics,
 	const auto& position = registry.Get<const Transform>(tree).position;
 	const PhysicsGround ground(land);
 	const bool burning = registry.AllOf<Fire>(tree);
-	switch (objects::TreeLandingOf(entry != nullptr && entry->Has(PhysicsEntry::k_Landed), registry.AllOf<MagicTree>(tree),
-	                               ground.IsLand({position.x, position.z}), burning))
+	const auto landing =
+	    objects::TreeLandingOf(entry != nullptr && entry->Has(PhysicsEntry::k_Landed), registry.AllOf<MagicTree>(tree),
+	                           ground.IsLand({position.x, position.z}), burning);
+	if (objects::StandsOnLandAfter(landing))
+	{
+		// It stands on the land at its foot, at no height above it
+		auto& placed = registry.Get<Transform>(tree).position;
+		placed.y = land.GetHeightAt({placed.x, placed.z});
+	}
+	switch (landing)
 	{
 	case objects::TreeLanding::Replanted:
-		Replant(entry, tree, land);
+		Replant(entry, tree);
 		[[fallthrough]];
 	case objects::TreeLanding::Stays:
 		return dynamics.EndPhysicsAsObject(tree, true, hasBody);

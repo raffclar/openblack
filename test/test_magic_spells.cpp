@@ -858,6 +858,20 @@ TEST(SpellSeedRules, ASeedBoundToItsMiracleIsShownOnlyWhenMadeAtAnIconUntilTheMi
 	EXPECT_FALSE(ShownWithSpell({.keptInHand = true, .followsSpell = true, .hasIcon = true}));
 }
 
+TEST(SpellSeedRules, TheForestSeedIsDrawnOverItsForestEvenWithoutAnIcon)
+{
+	// Any other miracle's seed is drawn only as the original shows it
+	EXPECT_FALSE(DrawnWithSpell({.followsSpell = true, .hasIcon = false}, false));
+	EXPECT_TRUE(DrawnWithSpell({.followsSpell = true, .hasIcon = true}, false));
+	// The forest's is drawn without an icon too, but still not once its miracle has closed down or while it isn't bound
+	EXPECT_TRUE(DrawnWithSpell({.followsSpell = true, .hasIcon = false}, true));
+	EXPECT_FALSE(DrawnWithSpell({.followsSpell = true, .hasIcon = false, .spellClosedDown = true}, true));
+	EXPECT_FALSE(DrawnWithSpell({.followsSpell = false, .hasIcon = true}, true));
+	EXPECT_FALSE(DrawnWithSpell({.keptInHand = true, .followsSpell = true}, true));
+	// Drawing it doesn't make a seed without an icon close its miracle out of influence
+	EXPECT_FALSE(ShownWithSpell({.followsSpell = true, .hasIcon = false}));
+}
+
 TEST(SpellSeedRules, AShownSeedOutOfInfluenceClosesItsMiracleDown)
 {
 	EXPECT_TRUE(ClosesOutOfInfluence(true, false, false));

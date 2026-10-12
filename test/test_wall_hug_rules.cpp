@@ -9,9 +9,11 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 #include <numbers>
 #include <span>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -331,4 +333,93 @@ TEST(WallHugRules, OnlyTheFencesModelsAreFences)
 	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingCelticFenceShort));
 	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingCelticFenceTall));
 	EXPECT_FALSE(IsFenceModel(openblack::MeshId::BuildingCeltic4));
+}
+
+// A trial walk has a turn, then up to 1,500 more: the turns left when it gets there are its turns to spare
+TEST(WallHugRules, ATrialWalkCountsTheTurnsItHasToSpare)
+{
+	const auto arrivingOnTurn = [](int turn) {
+		int walked = 0;
+		return TurnsToSpare([&walked, turn]() { return ++walked == turn; });
+	};
+	EXPECT_EQ(arrivingOnTurn(1), 1500);
+	EXPECT_EQ(arrivingOnTurn(2), 1499);
+	EXPECT_EQ(arrivingOnTurn(1501), 0);
+	EXPECT_EQ(arrivingOnTurn(1502), -1);
+	int walked = 0;
+	EXPECT_EQ(TurnsToSpare([&walked]() {
+		          ++walked;
+		          return false;
+	          }),
+	          -1);
+	EXPECT_EQ(walked, 1501);
+}
+
+// Turned round wins with more turns to spare, or with as many and ending nearer; a tie keeps the way it goes
+TEST(WallHugRules, TurningRoundWinsOnlyWhenItGetsThereSoonerOrEndsNearer)
+{
+	EXPECT_TRUE(TurnedRoundIsBetter({.turnsToSpare = 900, .distanceSq = 9.0f}, {.turnsToSpare = 800, .distanceSq = 0.0f}));
+	EXPECT_FALSE(TurnedRoundIsBetter({.turnsToSpare = 800, .distanceSq = 0.0f}, {.turnsToSpare = 900, .distanceSq = 9.0f}));
+	EXPECT_TRUE(TurnedRoundIsBetter({.turnsToSpare = -1, .distanceSq = 4.0f}, {.turnsToSpare = -1, .distanceSq = 25.0f}));
+	EXPECT_FALSE(TurnedRoundIsBetter({.turnsToSpare = -1, .distanceSq = 25.0f}, {.turnsToSpare = -1, .distanceSq = 4.0f}));
+	EXPECT_FALSE(TurnedRoundIsBetter({.turnsToSpare = 5, .distanceSq = 1.0f}, {.turnsToSpare = 5, .distanceSq = 1.0f}));
+}
+
+// A walker turned round jumps three steps on and faces back; of its step only the across part is left, backwards
+TEST(WallHugRules, AWalkerTurnedRoundJumpsThreeStepsOnAndFacesBack)
+{
+	const auto turned = TurnRound({1000000, 2000000}, {1200, -500}, 100);
+	EXPECT_EQ(turned.position, glm::ivec2(1003600, 1998500));
+	EXPECT_EQ(turned.step, glm::ivec2(-1200, 0));
+	EXPECT_EQ(turned.gameAngle, 100 + 2048 - 1024);
+	EXPECT_EQ(TurnRound({0, 0}, {0, 0}, 1500).gameAngle, 476);
+}
+
+// A walker going round a circle that keeps its way faces a quarter turn round from the circle's middle
+TEST(WallHugRules, AWalkerKeepingItsWayRoundFacesAQuarterTurnFromTheMiddle)
+{
+	const glm::ivec2 position = ToWhole({100.0f, 100.0f});
+	const glm::ivec2 east = ToWhole({110.0f, 100.0f});
+	EXPECT_EQ(HeadingRound(position, east, true), 0x200);
+	EXPECT_EQ(HeadingRound(position, east, false), 2048 - 0x200);
+}
+
+// A point inside a ring of overlapping circles is shut in; with a gap in the ring, or outside it, it isn't
+TEST(WallHugRules, APointInARingOfOverlappingCirclesIsShutIn)
+{
+	const auto circle = [](glm::vec2 centre, float radius) {
+		return BlockingCircle {.centre = centre, .radius = radius, .landscape = false, .landscapeOrFence = false};
+	};
+	// Eight circles of 3 m, their middles 5 m from the middle of the ring: neighbours overlap
+	std::vector<BlockingCircle> ring;
+	for (int i = 0; i < 8; ++i)
+	{
+		const float angle = static_cast<float>(i) * std::numbers::pi_v<float> / 4.0f;
+		ring.push_back(circle(k_Middle + 5.0f * glm::vec2(std::cos(angle), std::sin(angle)), 3.0f));
+	}
+	EXPECT_TRUE(ShutInByCircles(k_Middle, ring));
+	EXPECT_TRUE(ShutInByCircles(k_Middle + glm::vec2(1.0f, -0.5f), ring));
+	EXPECT_FALSE(ShutInByCircles(k_Middle + glm::vec2(20.0f, 0.0f), ring));
+	// The same ring, in any order
+	std::ranges::reverse(ring);
+	EXPECT_TRUE(ShutInByCircles(k_Middle, ring));
+	// One circle gone: the ring is open
+	ring.pop_back();
+	EXPECT_FALSE(ShutInByCircles(k_Middle, ring));
+	EXPECT_FALSE(ShutInByCircles(k_Middle, {}));
+}
+
+// The pocket on Land 1 between a Norse house's two circles and a short fence's three: the spot a walker turned round
+// jumped to is shut in; outside the house and the fence nothing is
+TEST(WallHugRules, ThePocketBetweenAHouseAndItsFenceShutsAWalkerIn)
+{
+	const auto circle = [](glm::vec2 centre, float radius) {
+		return BlockingCircle {.centre = centre, .radius = radius, .landscape = false, .landscapeOrFence = false};
+	};
+	const std::array circles {circle({1861.12f, 2764.14f}, 4.43f), circle({1864.96f, 2769.13f}, 4.43f),
+	                          circle({1858.36f, 2768.14f}, 1.0f), circle({1859.43f, 2769.5f}, 1.0f),
+	                          circle({1860.49f, 2770.86f}, 1.0f)};
+	EXPECT_TRUE(ShutInByCircles({1859.47f, 2768.59f}, circles));
+	EXPECT_FALSE(ShutInByCircles({1855.0f, 2763.0f}, circles));
+	EXPECT_FALSE(ShutInByCircles({1858.0f, 2772.0f}, circles));
 }

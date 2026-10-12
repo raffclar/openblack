@@ -45,6 +45,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureReach.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureThrow.h"
@@ -560,7 +561,8 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 	if (commands.startSequence.has_value())
 	{
 		const auto& sequence = *commands.startSequence;
-		if (auto body = creature_layers::PlaySequence(animation.body, sequence[0], sequence[1], sequence[2], commands.holdLoop))
+		if (auto body = creature_layers::PlaySequence(animation.body, sequence[0], sequence[1], sequence[2], commands.holdLoop,
+		                                              commands.mirrored))
 		{
 			animation.body = *body;
 		}
@@ -943,9 +945,21 @@ std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity c
 	const float size = body != nullptr ? body->size : 1.0f;
 	const auto held = Locator::resourceStoreSystem::value().GetResource(pile, ResourceType::Food);
 	const auto amount = std::min(static_cast<uint32_t>(size * k_FoodPerSize), held);
-	const auto food =
-	    ecs::archetypes::PotArchetype::Create(transform->position, 0.0f, PotInfo::WheatInHand, static_cast<int32_t>(amount),
-	                                          NearestTown(registry, transform->position));
+	// The handful appears on the ground beside the creature, most of its reach towards the pile, at the creature's own
+	// height
+	glm::vec3 at = transform->position;
+	const auto* pileTransform = registry.TryGet<const Transform>(pile);
+	const auto reach = Locator::creatureObjectActionSystem::has_value()
+	                       ? Locator::creatureObjectActionSystem::value().PickUpStraightReach(creature)
+	                       : std::nullopt;
+	if (pileTransform != nullptr && reach.has_value())
+	{
+		const auto point = creature_reach::HandfulPoint({transform->position.x, transform->position.z},
+		                                                {pileTransform->position.x, pileTransform->position.z}, *reach);
+		at = {point.x, transform->position.y, point.y};
+	}
+	const auto food = ecs::archetypes::PotArchetype::Create(at, 0.0f, PotInfo::WheatInHand, static_cast<int32_t>(amount),
+	                                                        NearestTown(registry, transform->position));
 	if (food == entt::null)
 	{
 		return std::nullopt;
@@ -1244,7 +1258,8 @@ void CreatureMindSystem::ProcessTurn()
 			    {
 				    Locator::creatureLocomotionSystem::value().Stop(entity);
 			    }
-			    animation.body = {};
+			    // As with any change of plan, a pose ends and an action plays out before it drops
+			    animation.body = creature_layers::EndLoop(animation.body);
 			    TellFainting(entity);
 			    creature_mind::Plan(mind.idle, creature_mind::Activity::Faint, creature_mind::Faint());
 			    needs->faint.reset();
@@ -1670,7 +1685,7 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	}
 	body->body = *played;
 	// Only the body is taken: the mind goes on with what it was doing once the action has played, as its agenda waits for
-	// a busy body. Deciding afresh now would end the action at once, as a new plan stops what the body plays.
+	// a busy body
 	return true;
 }
 
@@ -1693,9 +1708,9 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
-	// Whatever it plays ends at once, as the game ends a creature's animations when it changes what it does, and it lets
-	// go of any miracle it holds
-	body->body = {};
+	// A sitting or lying pose goes on to its end, but an action it is playing, such as reeling from a slap, plays on: the
+	// new agenda waits for the body to be free. It lets go of any miracle it holds.
+	body->body = creature_layers::EndLoop(body->body);
 	ReleaseCast(creature);
 	if (auto* eyes = registry.TryGet<CreatureEyes>(creature))
 	{
@@ -1863,12 +1878,13 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	                    actionObject.value_or(0), built.has_value() ? "planned" : "can't be planned");
 	if (!built.has_value())
 	{
-		// The plan couldn't be made: it is left doing nothing, to decide afresh
+		// The plan couldn't be made: it is left doing nothing, to decide afresh, once a pose it was in has ended and an
+		// action it was playing has played out
 		if (Locator::creatureLocomotionSystem::has_value())
 		{
 			Locator::creatureLocomotionSystem::value().Stop(creature);
 		}
-		body->body = {};
+		body->body = creature_layers::EndLoop(body->body);
 		creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 		return false;
 	}

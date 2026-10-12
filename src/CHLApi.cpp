@@ -210,6 +210,7 @@
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Gui/ScriptTexts.h"
 #include "Hand/HandClickRules.h"
 #include "Hand/ScriptHandState.h"
 #include "Help/DialogueText.h"
@@ -234,6 +235,7 @@
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
+#include "Temple/TempleEntrancePoint.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::chlapi
@@ -847,6 +849,21 @@ void CHLApi::TaskStopped(uint32_t task)
 	}
 }
 
+bool CHLApi::HelpScriptHoldsDialogue()
+{
+	const auto owner = Locator::dialogueControlSystem::value().GetOwner();
+	return owner != 0 && TaskType(owner) == lhvm::ScriptType::Help;
+}
+
+void CHLApi::StopHelpScriptsByEscape()
+{
+	StopHelpScripts();
+	if (Locator::helpTextSystem::has_value())
+	{
+		Locator::helpTextSystem::value().InterruptAdvisorsByEscape();
+	}
+}
+
 bool CHLApi::StartHelpScript(std::string_view name)
 {
 	// The kinds of script a single player game starts by name
@@ -892,6 +909,18 @@ void CHLApi::ResetSwitches()
 	if (Locator::creatureAudioSystem::has_value())
 	{
 		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(true);
+	}
+	// No lesson of growing up runs any more for the local player's creature, so the game's help about it speaks again
+	if (Locator::playerSystem::has_value() && Locator::entitiesRegistry::has_value())
+	{
+		auto& players = Locator::playerSystem::value();
+		if (const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer()))
+		{
+			if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(*creature))
+			{
+				mind->inDevelopmentScript = false;
+			}
+		}
 	}
 }
 
@@ -1193,15 +1222,9 @@ static std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry,
 void CreatureCarriesOutScriptPlay(entt::entity creature)
 {
 	auto& mind = Locator::entitiesRegistry::value().Get<ecs::components::CreatureMindState>(creature);
-	const auto agenda = creature_script_play::Agenda(mind.scriptPlay);
-	if (!agenda.has_value())
-	{
-		NotImplemented(mind.scriptPlay.animation);
-		return;
-	}
 	if (Locator::creatureMindSystem::has_value())
 	{
-		Locator::creatureMindSystem::value().CarryOutForScript(creature, *agenda);
+		Locator::creatureMindSystem::value().CarryOutForScript(creature, creature_script_play::Agenda(mind.scriptPlay));
 	}
 }
 
@@ -5815,9 +5838,21 @@ void MoveCreatureToStage(entt::entity creature, uint32_t stage)
 	}
 }
 
+/// The developer function the GameOver script ends with
+constexpr int32_t k_DevFunctionEnterSaveGameRoom = 12;
+
 void DevFunction() // 205 DEV_FUNCTION
 {
 	const auto func = Pop().intVal;
+	// Once the game is over the player is taken into the temple's save game room, and kept there
+	if (func == k_DevFunctionEnterSaveGameRoom)
+	{
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().EnterLockedRoom(TempleRoom::SaveGame);
+		}
+		return;
+	}
 	// The functions the tutorials use on the local player's creature: starting it growing up again kept at home, and
 	// granting it the learning leash, then the aggression and compassion leashes
 	if (!Locator::leashSystem::has_value())
@@ -7976,8 +8011,12 @@ void IsActive() // 361 IS_ACTIVE
 		Pushb(dispenser->timer.active);
 		return;
 	}
-	// A reward is active once the player has tapped it open.
-	// TODO(script-natives): openblack's rewards can't be tapped open yet, so none is ever active
+	// A reward is active once the player has tapped it open
+	if (registry.AllOf<ecs::components::Reward>(object))
+	{
+		Pushb(Locator::rewardSystem::has_value() && Locator::rewardSystem::value().IsOpened(object));
+		return;
+	}
 	// Nothing else is ever active
 	Pushb(false);
 }
@@ -8684,46 +8723,56 @@ void SetCreatureInTemple() // 432 SET_CREATURE_IN_TEMPLE
 	}
 }
 
+/// Writes words across the screen for a cut scene, as GAME_DRAW_TEXT and GAME_DRAW_TEMP_TEXT do: the box's corner and
+/// size and the lines' height as shares of the screen, and the time they fade in over
+void DrawScreenText(std::u16string_view words, float across, float down, float width, float height, float size, float fade)
+{
+	Locator::cinematicDirectorSystem::value().WriteText(words, {across, down}, {width, height}, size, fade);
+}
+
 void GameDrawText() // 433 GAME_DRAW_TEXT
 {
-	// const auto fade = Popf();
-	// const auto size = Popf();
-	// const auto height = Popf();
-	// const auto width = Popf();
-	// const auto down = Popf();
-	// const auto across = Popf();
-	// const auto textID = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto fade = Popf();
+	const auto size = Popf();
+	const auto height = Popf();
+	const auto width = Popf();
+	const auto down = Popf();
+	const auto across = Popf();
+	const auto textID = Pop().uintVal;
+	// A help text by its number; 0 and numbers past the last give the first
+	const auto words = Locator::helpTextSystem::value().GetWords(textID);
+	DrawScreenText(words, across, down, width, height, size, fade);
 }
 
 void GameDrawTempText() // 434 GAME_DRAW_TEMP_TEXT
 {
-	// const auto fade = Popf();
-	// const auto size = Popf();
-	// const auto height = Popf();
-	// const auto width = Popf();
-	// const auto down = Popf();
-	// const auto across = Popf();
-	// const auto string = PopString();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto fade = Popf();
+	const auto size = Popf();
+	const auto height = Popf();
+	const auto width = Popf();
+	const auto down = Popf();
+	const auto across = Popf();
+	// The script's own words, as written, each byte a character
+	const auto string = PopString();
+	std::u16string words;
+	words.reserve(string.size());
+	std::ranges::transform(string, std::back_inserter(words),
+	                       [](char c) { return static_cast<char16_t>(static_cast<unsigned char>(c)); });
+	DrawScreenText(words, across, down, width, height, size, fade);
 }
 
 void FadeAllDrawText() // 435 FADE_ALL_DRAW_TEXT
 {
-	// const auto time = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto time = Popf();
+	Locator::cinematicDirectorSystem::value().FadeAllTexts(time);
 }
 
 void SetDrawTextColour() // 436 SET_DRAW_TEXT_COLOUR
 {
-	// const auto blue = Popf();
-	// const auto green = Popf();
-	// const auto red = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto blue = Popf();
+	const auto green = Popf();
+	const auto red = Popf();
+	Locator::cinematicDirectorSystem::value().SetTextColour(gui::script_text::ColourFromScript(red, green, blue));
 }
 
 void SetClippingWindow() // 437 SET_CLIPPING_WINDOW
@@ -8885,14 +8934,30 @@ void GameSoundPlaying() // 450 GAME_SOUND_PLAYING
 	Pushb(sound.has_value() && Locator::audio::value().IsSoundEffectPlaying(*sound));
 }
 
+/// A player's temple, the earliest made when there are several, none when the player has none
+std::optional<entt::entity> PlayersTemple(PlayerNames player)
+{
+	std::optional<entt::entity> found;
+	Locator::entitiesRegistry::value().Each<const ecs::components::Temple>(
+	    [player, &found](entt::entity entity, const ecs::components::Temple& temple) {
+		    if (temple.owner == player && (!found.has_value() || entity < *found))
+		    {
+			    found = entity;
+		    }
+	    });
+	return found;
+}
+
 void GetTemplePosition() // 451 GET_TEMPLE_POSITION
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// Where a player's temple stands, or nowhere (all zero) without one
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	glm::vec3 position {0.0f};
+	if (const auto templeEntity = PlayersTemple(player); templeEntity.has_value())
+	{
+		position = Locator::entitiesRegistry::value().Get<const Transform>(*templeEntity).position;
+	}
+	PushVec(position);
 }
 
 void CreatureAutoscale() // 452 CREATURE_AUTOSCALE
@@ -8947,14 +9012,35 @@ void GetNextInContainer() // 456 GET_NEXT_IN_CONTAINER
 
 void GetTempleEntrancePosition() // 457 GET_TEMPLE_ENTRANCE_POSITION
 {
-	// const auto height = Popf();
-	// const auto radius = Popf();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// A point out from a player's temple towards its entrance, at a distance and a height, or nowhere (all zero)
+	// without a temple
+	const auto height = Popf();
+	const auto radius = Popf();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto templeEntity = PlayersTemple(player);
+	if (!templeEntity.has_value())
+	{
+		PushVec(glm::vec3(0.0f));
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& transform = registry.Get<const Transform>(*templeEntity);
+	// The entrance is the place its model marks for it, turned and placed with the temple, raised or lowered as the
+	// land under it is from the land under the temple; a model without it has its entrance at the temple
+	auto entrance = transform.position;
+	if (const auto* mesh = registry.TryGet<const ecs::components::Mesh>(*templeEntity); mesh != nullptr)
+	{
+		auto& meshes = Locator::resources::value().GetMeshes();
+		if (meshes.Contains(mesh->id) && meshes.Handle(mesh->id)->GetExtraMetrics().size() > openblack::temple::k_EntrancePlace)
+		{
+			const auto& place = meshes.Handle(mesh->id)->GetExtraMetrics().at(openblack::temple::k_EntrancePlace);
+			entrance = transform.position + (transform.rotation * (transform.scale * glm::vec3(place[3])));
+			const auto& land = Locator::terrainSystem::value();
+			entrance.y +=
+			    land.GetHeightAt({entrance.x, entrance.z}) - land.GetHeightAt({transform.position.x, transform.position.z});
+		}
+	}
+	PushVec(openblack::temple::TowardsEntrance(transform.position, entrance, radius, height));
 }
 
 void SaySoundEffectPlaying() // 458 SAY_SOUND_EFFECT_PLAYING

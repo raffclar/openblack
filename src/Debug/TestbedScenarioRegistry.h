@@ -94,6 +94,8 @@ enum class Facet : uint8_t
 	Sky,
 	/// The player's two advisors, the good one and the evil one
 	Advisors,
+	/// The story's set pieces, such as the game's end as the player's temple falls
+	Story,
 	/// The tutorial's lessons: the hand's demonstrations and the help texts that go with them
 	Tutorial,
 
@@ -119,6 +121,9 @@ struct Environment
 	float hour {12.0f};
 	bool clockRuns {true};
 	Weather weather {Weather::Clear};
+	/// With a thunderstorm, the shortest and longest wait between its forked bolts, in seconds; the weather window's 2 to
+	/// 8 when not given
+	std::optional<glm::vec2> boltSeconds;
 	/// Game turns of the creatures' bodies that pass each game turn
 	float bodyTimeScale {1.0f};
 	/// Whether creatures faint when exhausted, starved or out of life
@@ -266,6 +271,8 @@ struct ObjectSetup
 	std::optional<float> fullSize;
 	/// A villager or animal that has eaten poison
 	bool poisoned {false};
+	/// Made indestructible, as a script makes one
+	bool indestructible {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
 	/// A building of the town holds this much wood, rather than the scenario town's usual stock
@@ -308,6 +315,16 @@ struct VortexSetup
 	std::optional<float> fadeOutAfterSeconds;
 };
 
+/// A reward chest given to the player as a challenge's script gives one: dropped from the sky or put on the land
+struct RewardSetup
+{
+	RewardObjectInfo type {RewardObjectInfo::RewardObjectToyBall};
+	glm::vec2 offset {0.0f};
+	bool fromSky {true};
+	/// Seconds into the scenario it is given
+	float delaySeconds {0.0f};
+};
+
 /// A miracle dispenser, or a one-shot bubble on its own, put down for the scenario
 struct DispenserSetup
 {
@@ -318,6 +335,31 @@ struct DispenserSetup
 	/// A testbed set-up step: the dispenser starts with its period already counted and floats its globe at once, rather
 	/// than after its period as a dispenser put down in the game does
 	bool charged {true};
+};
+
+/// How a script casts a miracle at a point or a thing: by the neutral player, from the hand's place, as big as the radius,
+/// lasting the seconds and spun by the curl
+struct ScriptSpell
+{
+	float radius {0.0f};
+	float seconds {0.0f};
+	float curl {0.0f};
+};
+
+/// A storm a land's setup script places in the island's global climate, as CREATE_WEATHER_STORM does, with the script's
+/// own lists of numbers (see script_weather::ParseLandStorm), made as the scenario starts
+struct LandStormSetup
+{
+	/// Where it starts and where it heads, from the middle of the map, on the land
+	glm::vec2 offset {0.0f};
+	glm::vec2 destination {0.0f};
+	/// Seconds of its life already gone, and its speed (0 stays put)
+	float age {0.0f};
+	float speed {0.0f};
+	int32_t cloudCount {8};
+	std::string_view shape;
+	std::string_view clouds;
+	std::string_view weather;
 };
 
 /// A miracle cast in the scenario, as if from a hand above the land
@@ -363,6 +405,8 @@ struct MiracleCast
 	std::optional<float> casterAlignment;
 	/// By hand, the seed is held this many seconds before the button goes down, rather than just long enough to be ready
 	std::optional<float> holdBeforePress;
+	/// Cast as a script casts it, from the hand's place, rather than as a seed in the hand would
+	std::optional<ScriptSpell> script;
 };
 
 /// Something a creature is told to do, in turn with the scenario's other commands
@@ -532,12 +576,23 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// One of the help's message sets (value) runs, as the help system runs it. Needs no creature
+		RunHelpMessage,
+		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
+		/// loses the last of its life. Needs no creature
+		DestroyTemple,
+		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
+		/// does: a static action's start, loop and end, or an individual action
+		ScriptPlay,
 		/// A help text (value, by the scripts' number) shown in the dialogue box, as a script's RUN_TEXT shows one. Needs
 		/// no creature
 		RunText,
 		/// A hand demonstration (handDemo, by its file's name) played through the player's hand and camera, as a
 		/// tutorial's script plays one. Needs no creature
 		PlayHandDemo,
+		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
+		/// flight, say). Needs no creature
+		Reframe,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -627,6 +682,8 @@ struct TempleSetup
 	glm::vec2 offset {0.0f};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
 	float angle {0.0f};
+	/// How much of it is built, 0 to 1, for a temple still going up; built when not given
+	std::optional<float> built;
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
@@ -687,8 +744,10 @@ struct Scenario
 	std::vector<TempleSetup> temples;
 	std::vector<ParticleSetup> particles;
 	std::vector<VortexSetup> vortices;
+	std::vector<RewardSetup> rewards;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
+	std::vector<LandStormSetup> landStorms;
 	/// The scrolls and signs scripts put up, made after the objects
 	std::vector<HighlightSetup> highlights;
 	std::vector<Command> commands;
@@ -742,6 +801,8 @@ void AddBirdScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The vortices between the lands: opening, levelling the ground and closing
 void AddVortexScenarios(std::vector<Scenario>& all);
+/// The reward chests the challenges give: falling, landing and being opened
+void AddRewardScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
 void AddTornadoScenarios(std::vector<Scenario>& all);
 /// The land's nature: a tree pulled up leaving its roots, and the fireflies at nightfall

@@ -53,6 +53,7 @@ public:
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;
 	[[nodiscard]] bool CanPickUp(entt::entity object) const override;
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
+	[[nodiscard]] std::optional<float> PickUpStraightReach(entt::entity creature) const override;
 
 private:
 	/// Catches made to wait while a creature's body acted out something else start once it is free

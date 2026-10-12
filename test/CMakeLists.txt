@@ -289,6 +289,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_miracle_surfaces test_miracle_surfaces.cpp)
 target_link_libraries(test_miracle_surfaces PRIVATE psys)
 openblack_setup_and_add_test(test_miracle_visuals test_miracle_visuals.cpp)
+openblack_setup_and_add_test(test_material_stages test_material_stages.cpp)
 openblack_setup_and_add_test(test_resource_piles test_resource_piles.cpp)
 openblack_setup_and_add_test(test_resource_cache test_resource_cache.cpp)
 openblack_setup_and_add_test(test_upload_pacer test_upload_pacer.cpp)
@@ -858,4 +859,12 @@ openblack_setup_and_add_test(test_shepherd_rules test_shepherd_rules.cpp)
 openblack_setup_and_add_test(
   test_creature_object_beliefs test_creature_object_beliefs.cpp
 )
+openblack_setup_and_add_test(test_script_texts gui/test_script_texts.cpp)
+openblack_setup_and_add_test(test_temple_game_over test_temple_game_over.cpp)
+openblack_setup_and_add_test(
+  test_escape_key_rules gui/test_escape_key_rules.cpp
+)
+openblack_setup_and_add_test(test_reward_opening test_reward_opening.cpp)
+openblack_setup_and_add_test(test_lhvm_save_state lhvm/test_lhvm_save_state.cpp)
+target_link_libraries(test_lhvm_save_state PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_statistics_rules test_statistics_rules.cpp)

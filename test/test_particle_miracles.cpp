@@ -22,6 +22,7 @@
 
 #include "Common/GameRandom.h"
 #include "Magic/MapSpiral.h"
+#include "Particles/LightningMaths.h"
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleMiracleMaths.h"
@@ -682,4 +683,89 @@ TEST_F(ParticleMiracleTest, SparklesComeOffTheModelOfTheObjectTheEffectIsGiven)
 		effect->Step(k_Step);
 	}
 	EXPECT_EQ(effect->AtomCount(), 1u);
+}
+
+TEST(ParticleMiracleMaths, AStormBoltsThunderIsSmallMediumOrLargeByARandomNumber)
+{
+	EXPECT_EQ(maths::SkyStrikeThunderSize(0.0f), 3);
+	EXPECT_EQ(maths::SkyStrikeThunderSize(0.29f), 3);
+	EXPECT_EQ(maths::SkyStrikeThunderSize(0.3f), 2);
+	EXPECT_EQ(maths::SkyStrikeThunderSize(0.74f), 2);
+	EXPECT_EQ(maths::SkyStrikeThunderSize(0.75f), 1);
+	EXPECT_EQ(maths::SkyStrikeThunderSize(1.0f), 1);
+}
+
+namespace
+{
+/// The storms' bolts as the game's file has them: a point of light under the cloud with its bolt's group under it
+std::string StormBolts()
+{
+	return Header("1 0 0") + Object("ParticleSpriteCreator", "Root", k_Point) +
+	       Object("UR_LightningStrike", "Strike",
+	              "PROPERTY Group INTEGER 0\nPROPERTY NextGroups ARRAY SIZE 1 1\nPROPERTY PCreator PERSIS_PNTR Root\n"
+	              "PROPERTY SoundLightning SOUND_ACTION SOUND_SPELL_LIGHTNING LOOPING 0 ONLYONE 0 SOFTRELEASE 1 "
+	              "USESURFACE 0\n");
+}
+} // namespace
+
+TEST_F(ParticleMiracleTest, EachStormBoltComesDownWhereItWasLetDownWithThunderHeardFromTheLand)
+{
+	auto bolts = Make(StormBolts());
+	bolts->AddTargetPosition({10.0f, 160.0f, 20.0f});
+	bolts->AddTargetPosition({-30.0f, 200.0f, 5.0f});
+	bolts->Step(k_Step);
+	EXPECT_EQ(bolts->TargetPositionCount(), 0u);
+	EXPECT_EQ(bolts->AtomCount(), 2u);
+	// Each with its bolt's group under it, beside the group they are in
+	EXPECT_EQ(bolts->CollectionCount(), 3u);
+	ASSERT_EQ(world.sounds.size(), 2u);
+	// The last let down comes first; each thunders from the land under its cloud
+	EXPECT_EQ(world.sounds[0]->position, glm::vec3(-30.0f, 0.0f, 5.0f));
+	EXPECT_EQ(world.sounds[1]->position, glm::vec3(10.0f, 0.0f, 20.0f));
+	for (const auto& sound : world.sounds)
+	{
+		EXPECT_EQ(sound->sound.action.sound, "SOUND_SPELL_LIGHTNING");
+		EXPECT_TRUE(sound->sound.travelsAtSoundSpeed);
+		EXPECT_TRUE(sound->sound.onLand);
+		EXPECT_GE(sound->sound.size, 1);
+		EXPECT_LE(sound->sound.size, 3);
+	}
+}
+
+TEST_F(ParticleMiracleTest, AStormBoltGoesWithinFourToEightTenthsOfASecondAndTheEffectWaitsForTheNext)
+{
+	auto bolts = Make(StormBolts());
+	bolts->AddTargetPosition({0.0f, 160.0f, 0.0f});
+	bolts->Step(k_Step);
+	ASSERT_EQ(bolts->AtomCount(), 1u);
+	// Alive for at least 0.4 s
+	for (int step = 0; step < 3; ++step)
+	{
+		bolts->Step(k_Step);
+	}
+	EXPECT_EQ(bolts->AtomCount(), 1u);
+	// Gone, with its bolt's group, by 0.8 s
+	for (int step = 0; step < 6; ++step)
+	{
+		bolts->Step(k_Step);
+	}
+	EXPECT_EQ(bolts->AtomCount(), 0u);
+	EXPECT_EQ(bolts->CollectionCount(), 1u);
+	EXPECT_FALSE(bolts->Finished());
+	// The next one comes down as before
+	bolts->AddTargetPosition({5.0f, 160.0f, 5.0f});
+	bolts->Step(k_Step);
+	EXPECT_EQ(bolts->AtomCount(), 1u);
+}
+
+TEST_F(ParticleMiracleTest, NoMoreThanFiftyStormBoltsAreAliveAndOneDueWhileTheyAreIsLost)
+{
+	auto bolts = Make(StormBolts());
+	for (int i = 0; i < 55; ++i)
+	{
+		bolts->AddTargetPosition({static_cast<float>(i), 160.0f, 0.0f});
+	}
+	bolts->Step(k_Step);
+	EXPECT_EQ(bolts->AtomCount(), maths::k_MostSkyStrikes);
+	EXPECT_EQ(bolts->TargetPositionCount(), 0u);
 }

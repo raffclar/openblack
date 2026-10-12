@@ -59,6 +59,7 @@ public:
 	[[nodiscard]] bool IsGesturing() const override { return _gesturing; }
 	[[nodiscard]] const gesture_hints::Row& GetHints() const override { return _hints; }
 	void StepHints(float seconds, bool wordsShowing) override;
+	void ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size) override;
 
 private:
 	/// The game's templates, loaded through the resource caches the first time they are wanted

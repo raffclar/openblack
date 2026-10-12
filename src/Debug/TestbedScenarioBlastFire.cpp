@@ -189,6 +189,49 @@ void AddFire(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.burning_resources",
+	    .name = "Burning food, wood and a storage pit",
+	    .facet = Facet::Miracles,
+	    .description = "Three fireballs, one each at a pile of food, a pile of wood and a storage pit stocked with both, "
+	                   "with nobody about to beat the fires out.",
+	    .expected = "Each catches and burns. A burning pile loses what it holds every turn while it burns (its share of its "
+	                "fill for the fire's damage, at least one), sinking into the ground as it goes; the flames shrink with "
+	                "what is left. A pile on its own burnt to nothing goes. The storage pit's own piles catch from the "
+	                "pit and the town's store of food and wood runs down with them (the inspector's Pot amounts and the "
+	                "pit's Abode food and wood).",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 30.0f}, {35.0f, 60.0f}}},
+	    .objects =
+	        {
+	            {.type = AbodeInfo::CelticStoragePit,
+	             .offset = {20.0f, 46.0f},
+	             .yawDegrees = 180.0f,
+	             .storedFood = 2000,
+	             .storedWood = 1000},
+	            {.type = PotInfo::FoodPile, .offset = {-20.0f, 44.0f}, .amount = 1000},
+	            {.type = PotInfo::WoodPile_1, .offset = {0.0f, 44.0f}, .amount = 300},
+	        },
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {-20.0f, 44.0f},
+	                  .handOffset = {-20.0f, 34.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f},
+	                 {.type = MagicType::Fireball,
+	                  .point = {0.0f, 44.0f},
+	                  .handOffset = {0.0f, 34.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f},
+	                 {.type = MagicType::Fireball,
+	                  .point = {20.0f, 46.0f},
+	                  .handOffset = {20.0f, 34.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.firemen_blaze",
 	    .name = "Firemen at two burning huts",
 	    .facet = Facet::Miracles,
