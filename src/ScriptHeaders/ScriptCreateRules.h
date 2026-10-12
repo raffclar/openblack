@@ -53,6 +53,17 @@ inline constexpr uint32_t k_VillagersPerTribe = 7;
 /// per tribe. None for a tribe with no kinds in a table of this many rows.
 [[nodiscard]] std::optional<uint32_t> TribeVillagerRow(int32_t tribe, uint32_t draw, std::size_t rows);
 
+/// A villager a script makes with CREATE: how old it is made, and whether it joins a town
+struct ScriptVillager
+{
+	uint32_t age;
+	bool joinsTown;
+};
+
+/// A child is made ten years old, a grown-up a year past the age its kind grows up. Either joins no town: the script
+/// puts it in one itself, or it finds its own way once the script lets it go.
+[[nodiscard]] ScriptVillager ScriptVillagerOf(bool child, uint32_t grownUpAge);
+
 /// The miracle a script names by its number, if the game has one by that number (none is 0)
 [[nodiscard]] std::optional<MagicType> MagicTypeFromScript(int32_t number);
 

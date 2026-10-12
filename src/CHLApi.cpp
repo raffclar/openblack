@@ -492,7 +492,8 @@ entt::entity CreateScriptBall(const glm::vec3& position)
 	return ball;
 }
 
-/// A villager a script makes: a grown-up just past growing up, or a child of ten, standing waiting for the script
+/// A villager a script makes: a grown-up just past growing up, or a child of ten, in no town, standing waiting for the
+/// script
 entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3& position)
 {
 	const auto& infos = Locator::infoConstants::value().villager;
@@ -501,11 +502,11 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 		ScriptMessage("Thing not created");
 		return entt::null;
 	}
-	constexpr uint32_t k_ChildAge = 10;
-	const auto& info = infos.at(subtype);
-	const uint32_t age = child ? k_ChildAge : info.grownUpAge + 1;
+	const auto made = script::create_rules::ScriptVillagerOf(child, infos.at(subtype).grownUpAge);
 	// TODO(opening): the game makes one of its special villagers instead, now and then, when one fits
-	const auto villager = VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(subtype), age);
+	const auto villager =
+	    VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(subtype), made.age,
+	                              made.joinsTown ? VillagerArchetype::Joins::NearestTown : VillagerArchetype::Joins::Nobody);
 	if (Locator::livingActionSystem::has_value())
 	{
 		Locator::livingActionSystem::value().VillagerSetScriptState(villager, VillagerStates::InScript);
