@@ -479,3 +479,68 @@ TEST(TipBubble, AGestureIsCutAtTheBoxsTop)
 	EXPECT_NEAR(picture.uvMin.y, (10.0f / 38.0f) * 0.25f, 1e-4f);
 	EXPECT_NEAR(picture.max.y, 138.0f, 1e-3f);
 }
+
+TEST(TipBubble, GrippedTheWordsFollowTheHand)
+{
+	Scroll scroll;
+	scroll.lines = 4.0f;
+	// Before the words were laid out the hand moves nothing
+	FollowHand(scroll, 300.0f);
+	EXPECT_FLOAT_EQ(scroll.lines, 4.0f);
+	EXPECT_FALSE(scroll.handY.has_value());
+	scroll.lineHeight = 19.0f;
+	// The first gripped frame only notes where the hand is
+	FollowHand(scroll, 300.0f);
+	EXPECT_FLOAT_EQ(scroll.lines, 4.0f);
+	// Up the screen by two lines' height: the words go up with it, two lines further down the tip
+	FollowHand(scroll, 262.0f);
+	EXPECT_FLOAT_EQ(scroll.lines, 2.0f);
+	// Down again by half a line
+	FollowHand(scroll, 271.5f);
+	EXPECT_FLOAT_EQ(scroll.lines, 2.5f);
+	// Let go, the next grip starts again from where the hand is then
+	LetGo(scroll);
+	EXPECT_FALSE(scroll.handY.has_value());
+	FollowHand(scroll, 100.0f);
+	EXPECT_FLOAT_EQ(scroll.lines, 2.5f);
+}
+
+TEST(TipBubble, TheHandScrollsOnlyAsFarAsTheWordsGo)
+{
+	const auto placement = Place({320.0f, 400.0f}, 2.0f, 640.0f, 1.0f);
+	ASSERT_TRUE(placement.has_value());
+	Scroll scroll;
+	// 380 pixels of words in a box of 250 less two margins: 210 / 19 lines at most
+	scroll.contentHeight = 380.0f;
+	scroll.lineHeight = 19.0f;
+	ClampScroll(scroll, *placement);
+	FollowHand(scroll, 100.0f);
+	// Dragged down past the top of the words, held there when next clamped
+	FollowHand(scroll, 500.0f);
+	ClampScroll(scroll, *placement);
+	EXPECT_FLOAT_EQ(scroll.lines, 210.0f / 19.0f);
+	// Dragged up past the bottom, held at none
+	FollowHand(scroll, -1000.0f);
+	ClampScroll(scroll, *placement);
+	EXPECT_FLOAT_EQ(scroll.lines, 0.0f);
+	EXPECT_FALSE(scroll.moreBelow);
+	EXPECT_TRUE(scroll.moreAbove);
+}
+
+TEST(TipBubble, TheHandIsOnTheBubbleUnlessSomethingIsNearer)
+{
+	const auto placement = Place({320.0f, 400.0f}, 50.0f, 640.0f, 1.0f);
+	ASSERT_TRUE(placement.has_value());
+	const auto middle = (placement->min + placement->max) * 0.5f;
+	EXPECT_TRUE(HandOnBubble(*placement, middle, {}));
+	// Its edges are outside
+	EXPECT_FALSE(HandOnBubble(*placement, placement->min, {}));
+	EXPECT_FALSE(HandOnBubble(*placement, {placement->max.x, middle.y}, {}));
+	// Things behind it don't count, nor the land behind it or as near
+	EXPECT_TRUE(HandOnBubble(*placement, middle, {.objectDepth = 60.0f, .landDepth = 50.0f}));
+	// An object as near or nearer takes the hand
+	EXPECT_FALSE(HandOnBubble(*placement, middle, {.objectDepth = 50.0f}));
+	EXPECT_FALSE(HandOnBubble(*placement, middle, {.objectDepth = 20.0f}));
+	// So does the land in front of it
+	EXPECT_FALSE(HandOnBubble(*placement, middle, {.landDepth = 49.0f}));
+}

@@ -632,6 +632,41 @@ void ClampScroll(Scroll& scroll, const Placement& placement)
 	scroll.moreAbove = scroll.lines < most - 1.0f;
 }
 
+void FollowHand(Scroll& scroll, float pointerY)
+{
+	if (scroll.lineHeight == 0.0f)
+	{
+		return;
+	}
+	const float from = scroll.handY.value_or(pointerY);
+	scroll.lines += (pointerY - from) / scroll.lineHeight;
+	scroll.handY = pointerY;
+}
+
+void LetGo(Scroll& scroll)
+{
+	scroll.handY.reset();
+}
+
+bool Inside(const Placement& placement, glm::vec2 pointer)
+{
+	return pointer.x > placement.min.x && pointer.x < placement.max.x && pointer.y > placement.min.y &&
+	       pointer.y < placement.max.y;
+}
+
+bool HandOnBubble(const Placement& placement, glm::vec2 pointer, const UnderHand& under)
+{
+	if (!Inside(placement, pointer))
+	{
+		return false;
+	}
+	if (under.objectDepth.has_value() && *under.objectDepth <= placement.depth)
+	{
+		return false;
+	}
+	return !under.landDepth.has_value() || *under.landDepth >= placement.depth;
+}
+
 bool OnScreen(const Ball& ball, const View& view)
 {
 	const auto projected = view.project(ball.centre);
