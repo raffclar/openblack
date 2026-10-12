@@ -44,6 +44,9 @@ public:
 	[[nodiscard]] virtual bool CanGrowAt(glm::vec3 point) const = 0;
 	/// Whether a forest miracle's forest still has trees
 	[[nodiscard]] virtual bool HasTrees(entt::entity spell) const = 0;
+	/// How tall the tallest tree of a forest miracle's forest stands (none tall with no trees left); none before the
+	/// miracle has planted it
+	[[nodiscard]] virtual std::optional<float> TallestTreeOf(entt::entity spell) const = 0;
 	/// A young tree of the same kind is planted near a tree of a forest, as the water miracle plants one by a full grown
 	/// tree: no sooner than 41 turns after the last tree any forest gained this way (none in a land's first 41 turns), at
 	/// the first free spot of up to 160 tried round it. One planted by a forest miracle's tree joins that miracle's

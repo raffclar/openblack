@@ -15,6 +15,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/LandIslandInterface.h"
+#include "CameraLimits.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
@@ -91,14 +92,16 @@ std::optional<ecs::components::Transform> Camera::RaycastMouseToLand(bool includ
 std::optional<ecs::components::Transform> Camera::RaycastScreenCoordToLand(glm::vec2 screenCoord, bool includeWater,
                                                                            Interpolation interpolation) const
 {
-	// The land the line from the eye through the pixel meets, as the game finds the land under the cursor, and the sea's
-	// level when asked for
+	// The land the line from the eye through the pixel meets, and when asked for, the sea's level near the camera, as the
+	// camera feels for what is ahead of it
 	if (!Locator::pickingSystem::has_value())
 	{
 		return std::nullopt;
 	}
+	using Sea = ecs::systems::PickingSystemInterface::Sea;
 	const auto [eye, nearPoint] = OnNearPlane(screenCoord, interpolation);
-	if (const auto point = Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint, includeWater))
+	if (const auto point =
+	        Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint, includeWater ? Sea::NearCamera : Sea::No))
 	{
 		return ecs::components::Transform {.position = *point, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
 	}
@@ -147,6 +150,23 @@ Camera& Camera::SetAspect(float aspect)
 Camera& Camera::SetInterpolatorTime(std::chrono::microseconds t)
 {
 	_interpolatorTime = t;
+	_focusInterpolatorTime = t;
+
+	return *this;
+}
+
+Camera& Camera::AddInterpolatorTime(std::chrono::microseconds t)
+{
+	_interpolatorTime += t;
+	_focusInterpolatorTime += t;
+
+	return *this;
+}
+
+Camera& Camera::SetInterpolatorT(float t)
+{
+	_interpolatorTime = std::chrono::duration_cast<std::chrono::microseconds>(t * _interpolatorDuration);
+	_focusInterpolatorTime = std::chrono::duration_cast<std::chrono::microseconds>(t * _focusInterpolatorDuration);
 
 	return *this;
 }
@@ -260,16 +280,32 @@ void Camera::Update(std::chrono::microseconds dt)
 		SetInterpolatorDuration(updateInfo->duration);
 		SetInterpolatorTime(0us);
 	}
+	KeepInsideTheWorld();
 
-	const auto duration = GetInterpolatorDuration().count();
-	if (duration == 0.0f)
+	// Each clock runs on until its movement is over, where it stops
+	const auto step = std::min(100'000us, dt);
+	_interpolatorTime = std::min(_interpolatorTime + step, _interpolatorDuration);
+	_focusInterpolatorTime = std::min(_focusInterpolatorTime + step, _focusInterpolatorDuration);
+}
+
+void Camera::KeepInsideTheWorld()
+{
+	using namespace std::chrono_literals;
+	if (_model == nullptr || !_model->HeldInsideTheWorld())
 	{
-		SetInterpolatorT(1.0f);
+		return;
 	}
-	else
+	const auto held = camera_limits::KeepInsideTheWorld(GetOrigin(Interpolation::Target));
+	if (!held.has_value())
 	{
-		AddInterpolatorTime(std::min(100'000us, dt));
+		return;
 	}
+	// The eye sets off afresh for the ball's edge from where it is, as fast as it is going, and arrives there still
+	const auto duration =
+	    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float>(camera_limits::k_WorldHoldSeconds));
+	SetOriginInterpolator(GetOrigin(), *held, GetOriginVelocity() * camera_limits::k_WorldHoldSeconds, glm::zero<glm::vec3>());
+	_interpolatorDuration = duration;
+	_interpolatorTime = 0us;
 }
 
 void Camera::HandleActions(std::chrono::microseconds dt)
@@ -328,7 +364,7 @@ glm::vec3 Camera::GetFocus(Interpolation interpolation) const
 	switch (interpolation)
 	{
 	case Interpolation::Current:
-		return _focusInterpolators.PositionAt(GetInterpolatorT());
+		return _focusInterpolators.PositionAt(GetFocusInterpolatorT());
 	case Interpolation::Start:
 		return _focusInterpolators.p0;
 	case Interpolation::Target:
@@ -371,7 +407,7 @@ glm::vec3 Camera::GetFocusVelocity(Interpolation interpolation) const
 	switch (interpolation)
 	{
 	case Interpolation::Current:
-		result = _focusInterpolators.VelocityAt(GetInterpolatorT());
+		result = _focusInterpolators.VelocityAt(GetFocusInterpolatorT());
 		break;
 	case Interpolation::Start:
 		result = _focusInterpolators.v0;
@@ -384,11 +420,11 @@ glm::vec3 Camera::GetFocusVelocity(Interpolation interpolation) const
 		std::unreachable();
 	}
 
-	if (_interpolatorDuration == decltype(_interpolatorDuration)::zero())
+	if (_focusInterpolatorDuration == decltype(_focusInterpolatorDuration)::zero())
 	{
 		return result;
 	}
-	return result / std::chrono::duration_cast<std::chrono::duration<float>>(_interpolatorDuration).count();
+	return result / std::chrono::duration_cast<std::chrono::duration<float>>(_focusInterpolatorDuration).count();
 }
 
 glm::vec3 Camera::GetRotation() const
@@ -426,8 +462,8 @@ Camera& Camera::SetFocus(const glm::vec3& position)
 Camera& Camera::Place(const glm::vec3& origin, const glm::vec3& focus)
 {
 	SetOrigin(origin).SetFocus(focus);
-	_interpolatorTime = std::chrono::microseconds::zero();
-	_interpolatorDuration = std::chrono::microseconds::zero();
+	SetInterpolatorDuration(std::chrono::microseconds::zero());
+	SetInterpolatorTime(std::chrono::microseconds::zero());
 	_model->PlaceAt(origin, focus);
 	return *this;
 }
@@ -449,6 +485,7 @@ Camera& Camera::SetFocusInterpolator(const glm::vec3& p0, const glm::vec3& p1, c
 Camera& Camera::SetInterpolatorDuration(std::chrono::microseconds duration)
 {
 	_interpolatorDuration = duration;
+	_focusInterpolatorDuration = duration;
 
 	return *this;
 }
