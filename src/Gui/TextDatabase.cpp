@@ -67,8 +67,10 @@ public:
 		return Separator() ? std::optional(word) : std::nullopt;
 	}
 
-	/// The next argument, a quoted string with its escapes resolved, or with `raw` as it is written
-	std::optional<std::u16string> String(bool raw = false)
+	/// The next argument, a quoted string as it is written. Like the game, a string ends at its closing quote or at
+	/// the end of its line: a string whose closing quote is on the next line ends at the line break, which is not part
+	/// of it. A comma or bracket after the closing quote is stepped over if there is one.
+	std::optional<std::u16string> String()
 	{
 		SkipSpaces();
 		if (Peek() != u'"')
@@ -76,32 +78,18 @@ public:
 			return std::nullopt;
 		}
 		++_position;
-		std::u16string result;
-		// A string may go on over a line break: two of the game's texts have their closing quote on the next line
-		while (_position < _text.size() && _text[_position] != u'"')
+		const auto start = _position;
+		while (_position < _text.size() && _text[_position] != u'"' && _text[_position] != u'\n')
 		{
-			auto c = _text[_position++];
-			if (c == u'\r')
-			{
-				continue;
-			}
-			if (!raw && c == u'\\' && _position < _text.size())
-			{
-				c = _text[_position++];
-				if (c == u'n')
-				{
-					c = u'\n';
-				}
-			}
-			result.push_back(c);
+			++_position;
 		}
-		if (Peek() != u'"')
+		std::u16string result(_text.substr(start, _position - start));
+		if (Peek() == u'"')
 		{
-			return std::nullopt;
+			++_position;
+			Separator();
 		}
-		++_position;
-		SkipSpaces();
-		return Separator() ? std::optional(std::move(result)) : std::nullopt;
+		return result;
 	}
 
 private:
@@ -132,27 +120,6 @@ private:
 	std::u16string_view _text;
 	size_t _position {0};
 };
-
-/// A string's escapes resolved: a backslash keeps the character after it, and a backslash and n is a line break
-std::u16string Unescape(std::u16string_view text)
-{
-	std::u16string result;
-	result.reserve(text.size());
-	for (size_t i = 0; i < text.size(); ++i)
-	{
-		auto c = text[i];
-		if (c == u'\\' && i + 1 < text.size())
-		{
-			c = text[++i];
-			if (c == u'n')
-			{
-				c = u'\n';
-			}
-		}
-		result.push_back(c);
-	}
-	return result;
-}
 
 /// The script's whole number constants: the lines "NAME = value"
 std::unordered_map<std::u16string, int32_t> ReadConstants(std::u16string_view text)
@@ -268,13 +235,14 @@ size_t TextDatabase::Add(std::span<const uint8_t> script, std::vector<std::strin
 	{
 		const auto number = reader.Word();
 		const auto narrator = reader.Word();
-		auto name = reader.String();
-		auto value = reader.String(helpTexts != nullptr);
+		const auto name = reader.String();
+		const auto value = reader.String();
 		if (!number || !narrator || !name || !value)
 		{
 			continue;
 		}
-		auto key = ToUtf8(*name);
+		auto key = ToUtf8(ConvertScriptText(*name));
+		auto converted = ConvertScriptText(*value);
 		if (names != nullptr)
 		{
 			names->push_back(key);
@@ -284,15 +252,40 @@ size_t TextDatabase::Add(std::span<const uint8_t> script, std::vector<std::strin
 			helpTexts->push_back({
 			    .narrator = ValueOf(*narrator, constants),
 			    .important = ValueOf(*number, constants) != 0,
-			    .text = *value,
+			    .text = converted,
 			});
-			// Looked up by name it reads as the other scripts' texts do
-			value = Unescape(*value);
 		}
-		_texts.insert_or_assign(std::move(key), std::move(*value));
+		_texts.insert_or_assign(std::move(key), std::move(converted));
 		++count;
 	}
 	return count;
+}
+
+std::u16string openblack::gui::ConvertScriptText(std::u16string_view text)
+{
+	std::u16string result;
+	result.reserve(text.size());
+	for (size_t i = 0; i < text.size(); ++i)
+	{
+		const auto c = text[i];
+		const auto after = i + 1 < text.size() ? text[i + 1] : u'\0';
+		if ((c == u' ' && after == u'~') || (c == u'~' && after == u' '))
+		{
+			// A tilde swallows one space beside it
+			result.push_back(k_HiddenBlank);
+			++i;
+		}
+		else if (c == u'\\' && after == u'n')
+		{
+			result.push_back(u'\n');
+			++i;
+		}
+		else
+		{
+			result.push_back(c == u'~' ? k_HiddenBlank : c);
+		}
+	}
+	return result;
 }
 
 std::u16string_view TextDatabase::Get(std::string_view name) const
