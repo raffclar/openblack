@@ -5647,6 +5647,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			                               const L3DMeshSubmitDesc::MorphTargets* handMorph = nullptr,
 			                               std::optional<graphics::DynamicVertexBufferHandle> instances = std::nullopt,
 			                               const AnimalBoneGroup* posedGroup = nullptr) {
+				// A mesh with none of its things placed this frame, such as the temple's leashes before a creature wears
+				// one, has nothing to draw
+				if (count == 0)
+				{
+					return;
+				}
 				auto mesh = meshManager.Handle(meshId);
 
 				submitDesc.useMaterialBlending = useMaterialBlending;
