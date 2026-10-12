@@ -13,9 +13,11 @@
 #include <vector>
 
 #include <Graphics/LandDetail.h>
+#include <LNDFile.h>
 #include <gtest/gtest.h>
 
 using namespace openblack::graphics::land_detail;
+namespace lnd = openblack::lnd;
 
 namespace
 {
@@ -271,4 +273,45 @@ TEST(LandDetail, CoarseTextureSamplesTheBlockTexture)
 	EXPECT_EQ(CoarseSourceTexel(62), 248);
 	EXPECT_NEAR(CoarseTexelPosition(0.0f), 1.0039f, 1e-4f);
 	EXPECT_NEAR(CoarseTexelPosition(1.0f), 63.0039f, 1e-4f);
+}
+
+namespace
+{
+
+/// A page as the landscape file keeps it: its surface description, then its DXT3 blocks
+lnd::LNDLowResolutionTexture FakePage(uint32_t side, const char* fourCc)
+{
+	constexpr size_t k_Description = 124;
+	lnd::LNDLowResolutionTexture page {};
+	page.texels.assign(k_Description + static_cast<size_t>(side / 4) * (side / 4) * 16, 0);
+	const auto write32 = [&](size_t at, uint32_t value) {
+		for (size_t i = 0; i < 4; ++i)
+		{
+			page.texels[at + i] = static_cast<uint8_t>(value >> (8 * i));
+		}
+	};
+	write32(0, k_Description);
+	write32(8, side);
+	write32(12, side);
+	std::copy_n(fourCc, 4, page.texels.begin() + 80);
+	page.texels[k_Description] = 0xAB;
+	return page;
+}
+
+} // namespace
+
+TEST(LandDetail, CoarsePagesAreReadFromTheirSurfaceDescriptions)
+{
+	const auto page = FakePage(256, "DXT3");
+	const auto texels = lnd::GetTexels(page);
+	ASSERT_TRUE(texels.has_value());
+	EXPECT_EQ(texels->width, 256);
+	EXPECT_EQ(texels->height, 256);
+	EXPECT_EQ(texels->blocks.size(), 64u * 64u * 16u);
+	EXPECT_EQ(texels->blocks.front(), 0xAB);
+
+	EXPECT_FALSE(lnd::GetTexels(FakePage(256, "DXT1")).has_value());
+	auto cut = page;
+	cut.texels.resize(cut.texels.size() - 1);
+	EXPECT_FALSE(lnd::GetTexels(cut).has_value());
 }

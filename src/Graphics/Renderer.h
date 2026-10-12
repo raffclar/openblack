@@ -446,6 +446,8 @@ private:
 		land_detail::ViewLine texture;
 		std::vector<land_detail::BlockDetail> blocks;
 		std::vector<uint8_t> coarserSides;
+		/// The indices of the blocks at x - 1, z - 1, z + 1 and x + 1, -1 where there is none
+		std::vector<glm::vec4> neighbours;
 	};
 	mutable LandDetailFrame _landDetail;
 	/// A counted part of a shadow's bodies: a submesh, its first point and whether it covers only every second row of

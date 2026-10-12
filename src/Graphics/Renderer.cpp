@@ -5024,6 +5024,14 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 		const auto index = grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y));
 		return index < 0 ? std::nullopt : std::optional(frame.blocks[static_cast<size_t>(index)].mesh);
 	};
+	const auto indexAt = [&](glm::ivec2 position) {
+		if (position.x < 0 || position.x >= k_BlocksPerSide || position.y < 0 || position.y >= k_BlocksPerSide)
+		{
+			return -1.0f;
+		}
+		return static_cast<float>(grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y)));
+	};
+	frame.neighbours.resize(blocks.size());
 	for (size_t i = 0; i < blocks.size(); ++i)
 	{
 		const auto position = blocks[i].GetBlockPosition();
@@ -5031,6 +5039,8 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 		    meshAt(position - glm::ivec2(1, 0)), meshAt(position - glm::ivec2(0, 1)), meshAt(position + glm::ivec2(0, 1)),
 		    meshAt(position + glm::ivec2(1, 0))};
 		frame.coarserSides[i] = land_detail::CoarserSides(frame.blocks[i].mesh, neighbours);
+		frame.neighbours[i] = {indexAt(position - glm::ivec2(1, 0)), indexAt(position - glm::ivec2(0, 1)),
+		                       indexAt(position + glm::ivec2(0, 1)), indexAt(position + glm::ivec2(1, 0))};
 	}
 }
 
@@ -5354,6 +5364,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetUniformValue("u_landLine", &u_landLine);
 				terrainShader->SetUniformValue("u_landLineAhead", &u_landLineAhead);
 				terrainShader->SetUniformValue("u_landBands", &u_landBands);
+				// Without pages of its own the land binds its block textures in their place, never read
+				const auto* coarsePages = island.GetCoarsePages();
+				terrainShader->SetTextureSampler("s15_coarsePages", 15,
+				                                 coarsePages != nullptr ? *coarsePages : island.GetBlockTextures());
 				terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
 				SetObjectShadowUniforms(*terrainShader);
 				terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
@@ -5374,6 +5388,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			const ProgramUniform blockPositionUniform {*terrainShader, "u_blockPositionAndSize"};
 			const ProgramUniform blockUniform {*terrainShader, "u_block"};
+			const ProgramUniform blockNeighboursUniform {*terrainShader, "u_blockNeighbours"};
+			const ProgramUniform coarsePageUniform {*terrainShader, "u_coarsePage"};
+			const bool coarseLand = detail_level::For(Locator::config::value().detailLevel).coarseLand;
 			const ProgramUniform vortexGroundUniform {*terrainShader, "u_vortexGround"};
 			const ProgramUniform groundShadowBlockUniform {*terrainShader, "u_groundShadowBlock"};
 			const bool groundShadowed = desc.viewId == RenderPass::Main;
@@ -5406,6 +5423,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const glm::vec4 u_block {static_cast<float>(index), static_cast<float>(detail.morph),
 				                         static_cast<float>(detail.texture), 0.0f};
 				blockUniform.Set(&u_block);
+				const glm::vec4 u_blockNeighbours =
+				    index < _landDetail.neighbours.size() ? _landDetail.neighbours[index] : glm::vec4(-1.0f);
+				blockNeighboursUniform.Set(&u_blockNeighbours);
+				// The coarse land draws every block from the landscape file's pages, where it has them
+				glm::vec4 u_coarsePage = island.GetCoarsePageSlot(index);
+				u_coarsePage.w = coarseLand && island.GetCoarsePages() != nullptr ? u_coarsePage.w : 0.0f;
+				coarsePageUniform.Set(&u_coarsePage);
 				glm::vec4 vortexGround {0.0f, 0.0f, 0.0f, -1.0f};
 				const GroundTextures* blockGround = sharedGround;
 				const auto mark = std::ranges::find(groundMarks | std::views::reverse, block.GetBlockPosition(),

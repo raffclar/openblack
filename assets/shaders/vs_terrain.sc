@@ -60,7 +60,20 @@ void main()
 	vec2 extentMin = u_islandExtent.xy;
 	vec2 extentMax = u_islandExtent.zw;
 
-	v_texcoord0 = vec4(a_position.zx / blockSize.yx, 0.0f, 0.0f);
+	// z: how opaque the block's coarse texture is over its full one at the corner (see land_detail::CrossFadeAlpha):
+	// clear before the texture line's band, opaque beyond it, in 255ths across it
+	float textureOffset = LandLineOffset(blockPosition + a_position.xz, u_landLineAhead.z);
+	float textureBand = u_landBands.y;
+	float coarseFade = 1.0f;
+	if (textureOffset > textureBand)
+	{
+		coarseFade = 0.0f;
+	}
+	else if (textureOffset > -textureBand)
+	{
+		coarseFade = floor((textureBand - textureOffset) * 255.0f / (2.0f * textureBand) + 0.5f) / 255.0f;
+	}
+	v_texcoord0 = vec4(a_position.zx / blockSize.yx, coarseFade, 0.0f);
 	vec2 blockStartUv = (blockPosition + a_position.xz - extentMin) / (extentMax - extentMin);
 	#if !BGFX_SHADER_LANGUAGE_GLSL
 		blockStartUv.y = 1.0f - blockStartUv.y;
