@@ -227,6 +227,15 @@ TEST(CreatureObjectActions, AThrowIntoAStoreIsOverOnlyOnceTheThingHasComeDown)
 	EXPECT_TRUE(creature_object_actions::ThrowOver(true, true, false));
 }
 
+TEST(CreatureObjectActions, ACreatureBringsBackUpWhatCantBeEaten)
+{
+	EXPECT_FALSE(creature_object_actions::BringsBackUp(false, false));
+	// Sable, made indestructible for her lessons, and anything the scripts hold in a cutscene
+	EXPECT_TRUE(creature_object_actions::BringsBackUp(true, false));
+	EXPECT_TRUE(creature_object_actions::BringsBackUp(false, true));
+	EXPECT_TRUE(creature_object_actions::BringsBackUp(true, true));
+}
+
 TEST(CreatureFeedback, AStrokeLandsOnTheNearestPart)
 {
 	std::array<glm::vec3, creature_feedback::k_BodyPartCount> parts {};
