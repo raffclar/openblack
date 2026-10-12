@@ -50,6 +50,10 @@ struct Snapshot
 		size_t level;
 	};
 	std::vector<Like> likes;
+	/// How strongly it feels its anger and its compassion now, whether they are activated or not: the scroll tells only
+	/// of the stronger of the two
+	float anger {0.0f};
+	float compassion {0.0f};
 	/// What it thinks of its god, -1 to 1, and seconds since the god last paid it any attention
 	float attitudeToPlayer {0.0f};
 	float secondsAlone {0.0f};
@@ -77,8 +81,9 @@ struct Snapshot
 		std::string name;
 		/// It has seen the miracle and knows about it
 		bool knownAbout {false};
-		/// The game has a text for having learnt it, without which the creature's room leaves it out
-		bool hasLearntText {true};
+		/// The number of the game's help text for having learnt it, which the creature's room shows it by; without one
+		/// (0) the room leaves it out
+		uint32_t learntText {0};
 		/// How far it has learnt it, 0 to 100
 		float learnt {0.0f};
 	};
