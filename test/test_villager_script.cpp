@@ -103,6 +103,19 @@ TEST(VillagerScriptRules, OnlyTheWalkingStatesCarryOnWithAWalk)
 	EXPECT_FALSE(rules::KeepsWalking(VillagerStates::WaitForAnimation));
 }
 
+TEST(VillagerScriptRules, AScriptTakesADrowningVillagerButItsNativesDoNot)
+{
+	// The Saviour's drowning men are made over the sea, drowning, and taken into the script's hands at once
+	EXPECT_TRUE(rules::CanTakeScriptState(true, false));
+	EXPECT_FALSE(rules::CanTakeScriptState(false, false));
+	EXPECT_FALSE(rules::CanTakeScriptState(true, true));
+	// Setting a state or sending one walking leaves a drowning villager alone
+	EXPECT_TRUE(rules::CanBeDirected(true, false, false));
+	EXPECT_FALSE(rules::CanBeDirected(true, false, true));
+	EXPECT_FALSE(rules::CanBeDirected(false, false, false));
+	EXPECT_FALSE(rules::CanBeDirected(true, true, false));
+}
+
 TEST(VillagerScriptRules, ScriptLetsGoOnlyForItsOwnStates)
 {
 	constexpr rules::StateRules k_Plain {.isScriptState = false, .isScriptInterruptable = false};

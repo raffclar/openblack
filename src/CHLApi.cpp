@@ -574,13 +574,16 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	// TODO(Daniels118): handle all types
 	switch (type)
 	{
-	// Asking for a mobile static or for a rock makes the same thing: whether it is a rock is up to its kind
+	// Asking for a mobile static or for a rock makes the same thing: whether it is a rock is up to its kind. A mobile
+	// static keeps the height the script gave; a rock is made on the land under the place asked for.
 	case ObjectType::MobileStatic:
 	case ObjectType::Rock:
-		return MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians,
-		                                     yAngleRadians, zAngleRadians, scale);
+		return MobileStaticArchetype::Create(script::create_rules::KeepsScriptHeight(type) ? position : OnGround(position),
+		                                     static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians, yAngleRadians,
+		                                     zAngleRadians, scale);
 	case ObjectType::Ball:
-		return CreateScriptBall(position);
+		// On the land under the place asked for, even when that is the hand up in the air
+		return CreateScriptBall(OnGround(position));
 	case ObjectType::Marker:
 		return ScriptMarkerArchetype::Create(position);
 	case ObjectType::Villager:

@@ -32,7 +32,8 @@ namespace openblack::ecs::villager_script
 /// Whether a script can set the villager's state: it is alive, on the land and not drowning
 [[nodiscard]] bool CanBeDirected(entt::entity villager);
 
-/// A script puts the villager straight into a state, which starts its clip from the beginning
+/// A script puts the villager straight into a state, which starts its clip from the beginning; a drowning villager is
+/// taken too
 void SetScriptState(entt::entity villager, VillagerStates state);
 /// A script sends the villager to a point, where it stands waiting for the script; one already there waits at once
 void MoveTo(entt::entity villager, glm::vec2 goal);
