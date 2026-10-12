@@ -68,6 +68,7 @@
 #include "VillagerFire.h"
 #include "VillagerFisherman.h"
 #include "VillagerFood.h"
+#include "VillagerFootpath.h"
 #include "VillagerForester.h"
 #include "VillagerWorship.h"
 
@@ -81,6 +82,7 @@ namespace villager_age = openblack::ecs::villager_age;
 namespace world_objects = openblack::ecs::world_objects;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_build = openblack::ecs::villager_build;
+namespace villager_footpath = openblack::ecs::villager_footpath;
 namespace villager_forester = openblack::ecs::villager_forester;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_disciple = openblack::ecs::villager_disciple;
@@ -793,6 +795,11 @@ bool villager_home::WalkIsOverAt(entt::entity villager, glm::vec2 goal)
 	return walk_arrival::WalkIsOver(WalkStateOf(villager), WalkPositionOf(villager), wall_hug::ToWhole(goal));
 }
 
+glm::ivec2 villager_home::WalkPosition(entt::entity villager)
+{
+	return WalkPositionOf(villager);
+}
+
 void villager_home::ArriveHome(entt::entity villager)
 {
 	auto& registry = WorldRegistry();
@@ -1074,8 +1081,7 @@ uint32_t villager_home::DoGoingHome(LivingAction& action, VillagerStates arrive,
 		}
 		else if (FinalState(action) != arrive)
 		{
-			// TODO(villagers): along the town's footpaths where there are any
-			SetupMoveTo(action, ArrivePosition(abode), arrive);
+			villager_footpath::SetupMoveToOnFootpath(action, abode, ArrivePosition(abode), arrive);
 		}
 		return 1;
 	}
@@ -1124,7 +1130,7 @@ uint32_t villager_home::ArrivesHome(LivingAction& action)
 	const auto door = ArrivePosition(abode);
 	if (!AreWeThere(villager, door))
 	{
-		SetupMoveTo(action, door, VillagerStates::ArrivesHome);
+		villager_footpath::SetupMoveToOnFootpath(action, abode, door, VillagerStates::ArrivesHome);
 		return 1;
 	}
 	if (!IsBuilt(abode) || !IsRepaired(abode))

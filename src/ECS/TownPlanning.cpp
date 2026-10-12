@@ -42,6 +42,7 @@
 #include "ECS/PlannedBuildingRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
+#include "ECS/Systems/Implementations/VillagerFootpath.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -308,9 +309,14 @@ bool Start(entt::entity town, entt::entity plan)
 	const auto planned = registry.Get<const PlannedAbode>(plan);
 	const auto transform = registry.Get<const Transform>(plan);
 	std::erase(registry.Get<Town>(town).planned, plan);
-	registry.Destroy(plan);
 	const auto building = archetypes::AbodeArchetype::Create(planned.townId, transform.position, planned.info, planned.yAngle,
 	                                                         transform.scale.x, 0, 0, 0.0f);
+	// The footpaths laid to the plan lead to the building that goes up in its place
+	if (building != entt::null)
+	{
+		villager_footpath::HandOverFootpaths(plan, building);
+	}
+	registry.Destroy(plan);
 	if (building == entt::null)
 	{
 		return false;
