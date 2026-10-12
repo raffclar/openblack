@@ -11,12 +11,21 @@
 
 #include "FieldSystem.h"
 
+#include <algorithm>
+
+#include <glm/gtx/vec_swizzle.hpp>
+
+#include "Common/GUtilsDistance.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/VillagerWorkRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -26,6 +35,14 @@ using namespace openblack::ecs::components;
 
 namespace
 {
+
+/// How near a field is to a farmer counts for less the further it is, out to this many metres
+constexpr float k_FieldReach = 300.0f;
+
+ecs::Registry& Entities()
+{
+	return Locator::entitiesRegistry::value();
+}
 
 field_crop::Type TypeOf(FieldTypeInfo type)
 {
@@ -94,4 +111,94 @@ std::optional<field_crop::Look> FieldSystem::GetLook(const Field& field) const
 	const auto leastFood =
 	    Locator::infoConstants::value().pot.at(static_cast<size_t>(PotInfo::HandFood)).amountPickedUpInitially;
 	return field_crop::LookOf(field.crop, TypeOf(field.type), leastFood);
+}
+
+field_crop::Activity FieldSystem::GetActivity(entt::entity field) const
+{
+	const auto& data = Entities().Get<const Field>(field);
+	return field_crop::ActivityOf(data.crop, TypeOf(data.type));
+}
+
+bool FieldSystem::IsRipe(entt::entity field) const
+{
+	const auto& data = Entities().Get<const Field>(field);
+	return field_crop::IsRipe(data.crop, TypeOf(data.type));
+}
+
+std::optional<FieldSystemInterface::FieldChoice> FieldSystem::BestFieldFor(entt::entity town, const glm::vec3& position) const
+{
+	const auto* record = Entities().TryGet<const Town>(town);
+	if (record == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto& types = Locator::infoConstants::value().fieldType;
+	const auto here = glm::xz(position);
+	// The newest of equals wins, as fields are weighed newest first
+	std::optional<FieldChoice> best;
+	float bestScore = 0.0f;
+	Entities().Each<const Field, const Transform>([&](entt::entity entity, const Field& field, const Transform& at) {
+		if (field.town != static_cast<int>(record->id))
+		{
+			return;
+		}
+		const auto& type = types.at(static_cast<size_t>(field.type));
+		const float desire = ecs::villager_work::DesireToBeFarmed({.timesSown = field.crop.timesSown,
+		                                                           .timesToSow = type.timesToSow,
+		                                                           .age = field.crop.age,
+		                                                           .ageGrowth = type.ageGrowth,
+		                                                           .ageRecolt = type.ageRecolt,
+		                                                           .farmers = static_cast<uint32_t>(field.farmers.size()),
+		                                                           .maxFarmers = type.maxFarmerInFarm});
+		const float score =
+		    gutils::GetDistanceModifier(gutils::GetDistanceInMetres(glm::xz(at.position), here), k_FieldReach) * desire;
+		if (score > bestScore)
+		{
+			bestScore = score;
+			best = FieldChoice {.field = entity, .score = score};
+		}
+	});
+	return best;
+}
+
+void FieldSystem::AddFarmer(entt::entity field, entt::entity villager)
+{
+	auto& farmers = Entities().Get<Field>(field).farmers;
+	if (std::ranges::find(farmers, villager) == farmers.end())
+	{
+		farmers.push_back(villager);
+	}
+}
+
+void FieldSystem::RemoveFarmer(entt::entity field, entt::entity villager)
+{
+	std::erase(Entities().Get<Field>(field).farmers, villager);
+}
+
+bool FieldSystem::PlantCrop(entt::entity field)
+{
+	auto& data = Entities().Get<Field>(field);
+	return field_crop::PlantCrop(data.crop, TypeOf(data.type));
+}
+
+uint32_t FieldSystem::RemoveFood(entt::entity field, float amount)
+{
+	auto& data = Entities().Get<Field>(field);
+	const auto& info = Locator::infoConstants::value().fieldType.at(static_cast<size_t>(data.type));
+	const auto harvest = field_crop::RemoveFood(data.crop, TypeOf(data.type), info.ratioBeforeRipe, amount);
+	if (harvest.emptied)
+	{
+		// An emptied field's fire goes out, and its town looks again at what it wants
+		if (Locator::fireSystem::has_value())
+		{
+			Locator::fireSystem::value().SetTemperature(field, 0.0f, entt::null);
+		}
+		const auto& towns = Entities().Context().towns;
+		if (const auto town = towns.find(static_cast<uint32_t>(data.town));
+		    data.town >= 0 && town != towns.end() && Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().MarkDesiresChanged(town->second);
+		}
+	}
+	return harvest.given;
 }

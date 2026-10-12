@@ -523,12 +523,13 @@ TEST(GameMenu, PlayersNameTheirCreatureAndPickASymbol)
 	Click(f.menu, ButtonCentre(3));
 	Click(f.menu, TabCentre(2));
 
-	// The creature's name box takes the focus and the keyboard
+	// The creature's name box takes the focus and the keyboard; the first click into it selects the whole name, which
+	// typing replaces
 	Click(f.menu, {400, 390});
 	f.menu.TextInput(u"AB");
-	EXPECT_EQ(f.menu.GetSettings().creatureName, u"aaaAB");
+	EXPECT_EQ(f.menu.GetSettings().creatureName, u"AB");
 	f.menu.KeyDown(SDLK_BACKSPACE);
-	EXPECT_EQ(f.menu.GetSettings().creatureName, u"aaaA");
+	EXPECT_EQ(f.menu.GetSettings().creatureName, u"A");
 
 	// Holding the button down on the symbol brings up the others to pick from, once they are all the way up
 	const SymbolPicture picture({.min = {368, 295}, .max = {432, 359}}, 15);

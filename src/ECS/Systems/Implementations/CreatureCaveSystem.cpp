@@ -25,7 +25,6 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CaveCreature.h"
-#include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMindTables.h"
@@ -77,21 +76,11 @@ uint32_t LearntText(size_t miracle)
 	           : 0;
 }
 
-/// A creature's name: the one its mind was given, else its species' until creatures take their names from their
-/// profiles; nothing for one that is gone
+/// Another creature's own name, as its scroll shows it; nothing for one without a name or that is gone
 std::u16string NameOf(const Registry& registry, entt::entity creature)
 {
-	if (!registry.Valid(creature))
-	{
-		return {};
-	}
-	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-	    mind != nullptr && mind->learnt.has_value() && !mind->learnt->name.empty())
-	{
-		return mind->learnt->name;
-	}
-	const auto* body = registry.TryGet<const Creature>(creature);
-	return body != nullptr ? std::u16string(creature_fight_hud::SpeciesName(body->species)) : std::u16string();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	return body != nullptr ? body->name : std::u16string();
 }
 
 /// The places the temple's walk mesh marks in the creature room: the seat by the fire, the fire, and a place further back
@@ -217,7 +206,7 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		return std::nullopt;
 	}
 	creature_cave::Snapshot snapshot;
-	snapshot.name = creature_fight_hud::SpeciesName(body->species);
+	snapshot.name = body->name;
 	snapshot.strength = body->strength;
 	snapshot.fatness = body->fatness;
 	snapshot.alignment = body->alignment;
@@ -248,10 +237,6 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 	if (mind->learnt.has_value())
 	{
 		const auto& learnt = *mind->learnt;
-		if (!learnt.name.empty())
-		{
-			snapshot.name = learnt.name;
-		}
 		for (const auto& attitude : learnt.creatures)
 		{
 			snapshot.creaturesKnown.push_back({.name = NameOf(registry, static_cast<entt::entity>(attitude.creature)),

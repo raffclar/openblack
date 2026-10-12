@@ -187,4 +187,29 @@ struct FieldDesireInputs
 };
 [[nodiscard]] float DesireToBeFarmed(const FieldDesireInputs& in);
 
+/// A farmer works at random spots up to this many metres either way of the field's middle, along x and along z
+inline constexpr float k_FieldSpotReach = 5.0f;
+/// The next spot a farmer works the field at, from the field's middle and two draws of 0 to twice the reach, the first
+/// for x and the second for z, kept as a map position is
+[[nodiscard]] glm::vec2 FieldWorkSpot(glm::vec2 field, float drawX, float drawZ);
+
+/// What a farmer does on getting to its field or its spot in it
+enum class FarmerArrival : uint8_t
+{
+	/// It walks on to its spot
+	WalkToSpot,
+	/// It sows there, after its clip
+	Sow,
+	/// It digs up the crop there, after its clip
+	Dig,
+	/// The field wants nothing of it: it decides afresh
+	Decide,
+};
+/// A field still being sown is sown, a grown and ripe one is dug, each once the farmer stands at its spot
+[[nodiscard]] FarmerArrival ArriveAtField(bool sowing, bool grown, bool ripe, bool atSpot);
+
+/// After digging up the crop, a farmer that got some and has less room than a load of crop takes it to the store;
+/// otherwise it goes back to work
+[[nodiscard]] bool TakesHarvestToStore(uint32_t given, int16_t roomAfter, float cropFoodValue);
+
 } // namespace openblack::ecs::villager_work

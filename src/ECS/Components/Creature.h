@@ -53,6 +53,8 @@ struct Creature
 	/// Whether a script lets it go into a vortex that leads away from the land: while it is on the leash it may then go
 	/// near one and be taken, rather than keep away. No creature may until a script says so
 	bool mayGoThroughVortex {false};
+	/// Its own name, shown in the fight panel and on the Creature Cave's scroll; empty shows no name
+	std::u16string name;
 };
 
 /// The size its body is shown at: its own size, or the smaller one while it is in its temple's pen. Whatever goes by
