@@ -6389,6 +6389,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const auto handMorph = HandMorphTargets();
 				const auto* morph = handMorph ? &*handMorph : nullptr;
 
+				// The game lights the hand as it poses it, with the posed models' rule rather than the usual model light
+				submitDesc.posedModelLight = true;
 				// The inside does not write depth so the outside is never hidden behind it
 				submitDesc.state = (opaqueState & ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z)) | cullFront;
 				drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
@@ -6411,16 +6413,15 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.skinTexture = &glow->flow->GetNativeHandle();
 					submitDesc.uvScale = glow->uvScale;
 					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glow->colour, .alpha = glow->alpha};
-					submitDesc.posedModelLight = true;
 					// Nothing of it is left out by its alpha
 					submitDesc.alphaThreshold = 0.0f;
 					drawInstances(hand->first, glowPlacers, false, glowPlacers.offset, glowPlacers.count, nullptr, morph);
 					submitDesc.alphaThreshold.reset();
-					submitDesc.posedModelLight = false;
 					submitDesc.objectLook.reset();
 					submitDesc.uvScale = 1.0f;
 					submitDesc.skinTexture = nullptr;
 				}
+				submitDesc.posedModelLight = false;
 				submitDesc.state = opaqueState;
 				submitDesc.viewId = desc.viewId;
 				submitDesc.sortDepth = 0;
