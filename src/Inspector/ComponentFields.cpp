@@ -723,6 +723,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::desiresPhase>("desiresPhase")
 	    .Field<&components::CreatureMindState::inDevelopmentScript>("inDevelopmentScript")
 	    .Field<&components::CreatureMindState::paused>("paused")
+	    .Field<&components::CreatureMindState::showDesireOnHold>("showDesireOnHold")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")
 	    .Field<&components::CreatureMindState::townCompassion>("townCompassion")
@@ -2052,7 +2053,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_learning::Context::secondsSince>("secondsSince")
 	    .Field<&openblack::creature_learning::Context::learnable>("learnable")
 	    .Field<&openblack::creature_learning::Context::windowSeconds>("windowSeconds")
-	    .Field<&openblack::creature_learning::Context::credited>("credited");
+	    .Field<&openblack::creature_learning::Context::credited>("credited")
+	    .Field<&openblack::creature_learning::Context::source>("source");
 	Reflect<openblack::creature_learning::CreatureAttitude>(context, ValueOnly {})
 	    .Field<&openblack::creature_learning::CreatureAttitude::creature>("creature")
 	    .Field<&openblack::creature_learning::CreatureAttitude::howNice>("howNice")

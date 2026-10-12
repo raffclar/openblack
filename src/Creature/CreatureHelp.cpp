@@ -418,3 +418,35 @@ size_t creature_help::DominantDesire(std::span<const float> values, std::span<co
 	}
 	return dominant;
 }
+
+std::optional<creature_desires::Desire> creature_help::DesireShownOnHold(std::optional<creature_desires::Desire> credited,
+                                                                         std::optional<creature_desires::Desire> planned)
+{
+	const auto desire = credited.has_value() ? credited : planned;
+	if (!desire.has_value() || !creature_desires::EmoteFor(*desire).has_value())
+	{
+		return std::nullopt;
+	}
+	return desire;
+}
+
+Message creature_help::TooYoungToLearn(float feedback)
+{
+	return {.kind = Kind::MiscellaneousStacked, .parameter = feedback >= 0.0f ? k_StrokedTooYoung : k_SlappedTooYoung};
+}
+
+Message creature_help::FeedbackLesson(float feedback, bool opinionChanged, creature_desires::Desire desire, uint32_t source)
+{
+	const bool better = feedback > 0.0f;
+	if (opinionChanged)
+	{
+		return {.kind = better ? Kind::LessonIncreaseOpinion : Kind::LessonDecreaseOpinion,
+		        .parameter = static_cast<uint32_t>(desire)};
+	}
+	return {.kind = better ? Kind::LessonIncreaseSource : Kind::LessonDecreaseSource, .parameter = source};
+}
+
+Message creature_help::SpellMessage(bool tookHold, uint32_t spell)
+{
+	return {.kind = tookHold ? Kind::ReceivedSpell : Kind::FinishedReceivingSpell, .parameter = spell};
+}

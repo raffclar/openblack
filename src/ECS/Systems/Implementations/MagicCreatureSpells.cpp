@@ -26,6 +26,7 @@
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureAudio.h"
+#include "Creature/CreatureHelp.h"
 #include "Creature/CreatureSpellCasting.h"
 #include "Creature/CreatureSpellMind.h"
 #include "ECS/Components/Creature.h"
@@ -37,6 +38,7 @@
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -54,6 +56,18 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
+/// The advisor tells of a spell taking hold of the player's creature, and of it wearing off
+void TellSpellHelp(entt::entity creature, const creature_spells::TurnEvent& event)
+{
+	using creature_spells::Event;
+	if (!Locator::creatureHelpSystem::has_value() || (event.event != Event::Start && event.event != Event::Finish))
+	{
+		return;
+	}
+	Locator::creatureHelpSystem::value().Raise(
+	    creature, creature_help::SpellMessage(event.event == Event::Start, static_cast<uint32_t>(event.spell)));
+}
+
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
 /// The spells' sound bank, which a creature spell's own sound is played from
@@ -256,6 +270,7 @@ void MagicSystem::ProcessCreatureSpells()
 		for (const auto& event : turn.events)
 		{
 			ApplyCreatureSpell(entity, event);
+			TellSpellHelp(entity, event);
 		}
 		for (const auto miracle : turn.ended)
 		{
