@@ -36,6 +36,9 @@ public:
 	[[nodiscard]] float GetSecondsInMode() const { return _seconds; }
 	/// Whether the player has asked for their camera back with the cursor keys
 	[[nodiscard]] bool WantsToLeave() const { return _leaveRequested; }
+	/// Whether it gave the camera back because it would have gone outside the fence: the player's camera then starts
+	/// afresh from where it stopped
+	[[nodiscard]] bool StoppedAtFence() const { return _stoppedAtFence; }
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	/// Reads the keys: the cursor keys with Shift or Ctrl, the wheel, and Ctrl and Shift together for a clear view
@@ -50,6 +53,7 @@ private:
 	glm::vec3 _focus;
 	float _seconds {0.0f};
 	bool _leaveRequested {false};
+	bool _stoppedAtFence {false};
 };
 
 } // namespace openblack
