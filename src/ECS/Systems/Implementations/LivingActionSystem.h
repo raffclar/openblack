@@ -46,6 +46,7 @@ public:
 	bool VillagerCallValidate(components::LivingAction& action, components::LivingAction::Index index) const override;
 	bool VillagerSetCurrentAndDestinationState(components::LivingAction& action, VillagerStates current,
 	                                           VillagerStates destination) const override;
+	bool VillagerChangeTopState(components::LivingAction& action, VillagerStates state) const override;
 	void VillagerPlayAnimThenSetState(components::LivingAction& action, VillagerStates next) const override;
 	void VillagerSetTopStateToFinal(components::LivingAction& action) const override;
 	[[nodiscard]] bool VillagerIsReadyForNewAnimation(const components::LivingAction& action, uint32_t times) const override;

@@ -114,6 +114,7 @@
 #include "ECS/FloatingNumber.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -1382,6 +1383,8 @@ bool Game::GameLogicLoop() noexcept
 	Locator::chimneySmokeSystem::value().ProcessTurn();
 	// How far the players' influence reaches, and its border
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	// The players' statistics take in their towns, influence and creature as the turn goes
+	player_statistics::ProcessTurn(Locator::time::value().GetTurn());
 	// The players' hearts beat on, quicker the more their people are in danger
 	if (Locator::heartbeatSystem::has_value())
 	{
@@ -1796,6 +1799,7 @@ bool Game::Update() noexcept
 			{
 				continue;
 			}
+			actions.PointPlayerEvent(e);
 			Locator::events::value().Create<SDL_Event>(e);
 		}
 		FollowWindowSize();
@@ -4739,13 +4743,16 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		}
 
 		// The furthest the hand may be is the land less its height, so its fingers hang down to the land, or the
-		// water over the sea. Over a thing it eases to where it rests on the thing, touching it.
+		// water over the sea; holding something, the land itself. Over a thing it eases to where it rests on the thing,
+		// touching it.
+		const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
 		const auto overSea =
 		    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
 		const auto hover = hand_feel::HoverDistancesOf({
 		    .camera = eye,
 		    .land = _cursorLand,
 		    .landIsSea = overSea,
+		    .holding = holding,
 		    .restOnThing = _handRestOnThing,
 		    .handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance),
 		    .currentDistance = _handDistance,

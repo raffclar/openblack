@@ -43,6 +43,7 @@
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBuild.h"
@@ -282,6 +283,13 @@ void Finish(entt::entity building)
 		if (auto* abode = registry.TryGet<Abode>(building); abode != nullptr && TownOf(building).has_value())
 		{
 			abode->putUpForMending = world_objects::LifeOf(building) < 1.0f;
+			// Its town's player counts one more building finished, of its kind
+			if (const auto owner = world_objects::PlayerOf(building);
+			    owner.has_value() && abode->info != AbodeInfo::None && Locator::infoConstants::has_value())
+			{
+				const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(abode->info));
+				player_statistics::CountBuilt(registry, *owner, info.abodeType);
+			}
 		}
 		// TODO(villager-social): the town's people react to a new civic building
 	}

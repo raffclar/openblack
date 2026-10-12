@@ -27,6 +27,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -448,6 +449,7 @@ TEST(WorshipSiteChants, WhatIsDrawnCountsInThePlayersStatistics)
 	Fixture f;
 	const auto player = f.registry.Create();
 	f.registry.Assign<Player>(player, Player {.name = PlayerNames::PLAYER_ONE});
+	f.registry.Assign<PlayerStatistics>(player);
 	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
 	f.system->SetDancers(site, 4);
 	f.system->ProcessChants();
@@ -455,7 +457,7 @@ TEST(WorshipSiteChants, WhatIsDrawnCountsInThePlayersStatistics)
 	// Asked more than is left, the site gives what it has
 	EXPECT_FLOAT_EQ(f.system->UseChants(site, 50.0f), 7.0f);
 	EXPECT_FLOAT_EQ(f.system->ChantsAvailable(site), 0.0f);
-	EXPECT_FLOAT_EQ(f.registry.Get<const Player>(player).totalChantsUsed, 12.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const PlayerStatistics>(player).chantsUsed, 12.0f);
 	// A dropped seed's charge goes back into the battery
 	f.system->ReturnChants(site, 3.0f);
 	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipChants>(site).battery, 7.0f);

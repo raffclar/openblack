@@ -120,7 +120,7 @@ hand_feel::HoverDistances hand_feel::HoverDistancesOf(const Hover& hover)
 	if (hover.land.has_value())
 	{
 		limit = glm::length(*hover.land - hover.camera);
-		if (!hover.landIsSea)
+		if (!hover.landIsSea && !hover.holding)
 		{
 			limit -= hover.handHeight;
 		}

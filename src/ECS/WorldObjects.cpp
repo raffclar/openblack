@@ -55,6 +55,7 @@
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -446,7 +447,7 @@ void world_objects::SetLife(entt::entity object, float life, bool allowed)
 	}
 }
 
-float world_objects::ReduceLife(entt::entity object, float damage)
+float world_objects::ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -507,6 +508,16 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 	{
 		// Its people come out of a building left under its full life, however little it lost
 		BuildingHurt(object, before, life.life);
+	}
+	// A settled building a player puts out of action counts as destroyed by them
+	if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && abode->info != AbodeInfo::None)
+	{
+		const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(abode->info));
+		if (statistics::StopsWorking(before, life.life, info.thresholdForStopBeingFunctional) &&
+		    statistics::CountsAsDestroyed(by.has_value(), abode->age))
+		{
+			player_statistics::CountDestroyed(registry, *by);
+		}
 	}
 	// A built building of a town left under its full life gets a site for its repair, which starts from a little less
 	// than the life it is left with, whatever took it there

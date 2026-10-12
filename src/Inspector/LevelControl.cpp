@@ -213,6 +213,26 @@ std::filesystem::path openblack::inspector::KeptShotPath(const std::filesystem::
 	return path;
 }
 
+std::optional<CameraPose> openblack::inspector::PictureCamera(const std::optional<CameraPose>& placed,
+                                                              const std::optional<CameraPose>& overridden,
+                                                              const std::optional<CameraState>& state)
+{
+	// A picture's own camera is put in place over an override, and an override over the game's camera
+	if (placed.has_value())
+	{
+		return placed;
+	}
+	if (overridden.has_value())
+	{
+		return overridden;
+	}
+	if (state.has_value())
+	{
+		return CameraPose {.origin = state->origin, .focus = state->focus};
+	}
+	return std::nullopt;
+}
+
 std::string openblack::inspector::DateOf(std::chrono::system_clock::time_point moment)
 {
 	// The civil date of a count of days since 1970-01-01
@@ -265,8 +285,9 @@ std::vector<QueryDescription> ScreenshotProvider::Describe() const
 	                           false),
 	                 Parameter("what", "string",
 	                           "With feature: a short kebab-case description, e.g. \"yogi-face-whole-f30\". It is saved "
-	                           "as <root>/<domain>/<feature>/<date>_<branch>_<what>_<backend>.png, never over another, "
-	                           "and catalogued in <root>/catalogue.jsonl once written",
+	                           "as <root>/<domain>/<feature>/<date>_<branch>_<what>_<backend>.png, never over another (a "
+	                           "taken name gets _2, _3..., and the answer's renamed_from and warnings say so), and "
+	                           "catalogued in <root>/catalogue.jsonl once written with the camera drawn",
 	                           false),
 	                 Parameter("note", "string", "With feature: a note for the catalogue's line", false),
 	                 Parameter("root", "string",
@@ -303,18 +324,10 @@ std::string ScreenshotProvider::Take(const Pending& pending, uint64_t frame, con
 	}
 	if (pending.record.has_value())
 	{
-		// Its line says the frame and the camera it was taken from: where the picture's camera was put, or the player's
+		// Its line says the frame and the camera it was drawn from
 		auto record = *pending.record;
 		record["frame"] = frame;
-		std::optional<CameraPose> pose = placed;
-		if (!pose.has_value())
-		{
-			if (const auto state = _camera.State(); state.has_value())
-			{
-				pose = CameraPose {.origin = state->origin, .focus = state->focus};
-			}
-		}
-		if (pose.has_value())
+		if (const auto pose = PictureCamera(placed, _camera.Override(), _camera.State()); pose.has_value())
 		{
 			const auto angles = AnglesOf(*pose);
 			record["camera"] = {{"origin", {pose->origin.x, pose->origin.y, pose->origin.z}},
@@ -631,6 +644,8 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 	}
 	const auto source = feature.has_value() ? _target.Source() : ShotSource {};
 	std::filesystem::path path;
+	// A kept picture whose name was taken already (an earlier run's, or one still being written) gets a number after it
+	std::optional<std::filesystem::path> renamedFrom;
 	if (pathParam.has_value())
 	{
 		path = *pathParam;
@@ -640,6 +655,10 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 		path = KeptShotPath(*root, *feature, *what, source, [this](const std::filesystem::path& candidate) {
 			return _reserved.contains(candidate) || _target.Exists(candidate);
 		});
+		if (const auto wanted = KeptShotPath(*root, *feature, *what, source, nullptr); wanted != path)
+		{
+			renamedFrom = wanted;
+		}
 	}
 	else
 	{
@@ -713,6 +732,13 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 	{
 		answer["kept"] = true;
 		answer["catalogue"] = (*root / "catalogue.jsonl").generic_string();
+		if (renamedFrom.has_value())
+		{
+			answer["renamed_from"] = renamedFrom->generic_string();
+			answer["warnings"] = Json::array({"a picture of that name was there already (an earlier run's?): this one is "
+			                                  "saved as " +
+			                                  path.filename().generic_string() + ", so don't mix it up with the other"});
+		}
 	}
 	else if (!pathParam.has_value())
 	{

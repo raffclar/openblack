@@ -153,16 +153,6 @@ std::optional<size_t> teleport::FindRouteStone(glm::vec3 worshipper, glm::vec3 s
 	return std::nullopt;
 }
 
-openblack::VillagerStates teleport::PreviousToKeep(VillagerStates final, VillagerStates keptBefore, bool finalKeepsPrevious)
-{
-	return finalKeepsPrevious ? keptBefore : final;
-}
-
-openblack::VillagerStates teleport::StateAfterReacting(VillagerStates comeBackTo)
-{
-	return comeBackTo == VillagerStates::InvalidState ? VillagerStates::DecideWhatToDo : comeBackTo;
-}
-
 bool teleport::CanDropOnStone(bool samePlayer, size_t playerStones)
 {
 	return samePlayer && playerStones != 1;

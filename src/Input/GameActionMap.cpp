@@ -15,6 +15,7 @@
 #include <utility>
 
 #include <SDL_events.h>
+#include <SDL_hints.h>
 #include <SDL_mouse.h>
 #include <glm/common.hpp>
 #include <glm/gtc/constants.hpp>
@@ -266,6 +267,11 @@ uint32_t GameActionMap::PointerState(glm::ivec2* position) const
 		}
 		return SDL_GetMouseState(nullptr, nullptr);
 	}
+	if (position != nullptr && _pointerScaled)
+	{
+		*position = _scaledPointer.Position();
+		return SDL_GetMouseState(nullptr, nullptr);
+	}
 	if (position != nullptr)
 	{
 		return SDL_GetMouseState(&position->x, &position->y);
@@ -354,6 +360,100 @@ bool GameActionMap::AdmitEvent(const SDL_Event& event)
 	return verdict == LockVerdict::Pass;
 }
 
+bool GameActionMap::CanScalePointer() const
+{
+	if (!Locator::windowing::has_value() || _lock.Locked() || _scriptedPointer.has_value() || _playerMouseBlocked)
+	{
+		return false;
+	}
+	const auto* window = static_cast<SDL_Window*>(Locator::windowing::value().GetHandle());
+	return window != nullptr && SDL_GetKeyboardFocus() == window &&
+	       pointer_speed::Scale(Locator::windowing::value().GetSize(), _pointerSpeedMultiplier) != 1.0f;
+}
+
+void GameActionMap::StartScaledPointer(glm::ivec2 at)
+{
+	_scaledPointer.Place(at);
+	// The movements come with the system's own speed and acceleration, as its cursor moves, before the screen's scale
+	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "1");
+	if (SDL_SetRelativeMouseMode(SDL_TRUE) != 0)
+	{
+		return;
+	}
+	_pointerScaled = true;
+	_playerCursorSeen = true;
+}
+
+void GameActionMap::StopScaledPointer()
+{
+	_pointerScaled = false;
+	// Unless the mouse turns the camera, which holds it in the window until the turn ends
+	if (_cursorFreeze.IsFrozen())
+	{
+		return;
+	}
+	const auto at = _scaledPointer.Position();
+	SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), at.x, at.y);
+	SDL_SetRelativeMouseMode(SDL_FALSE);
+}
+
+void GameActionMap::PointPlayerEvent(SDL_Event& event)
+{
+	if (IsInjected(event))
+	{
+		return;
+	}
+	if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST && _pointerScaled)
+	{
+		StopScaledPointer();
+		return;
+	}
+	// The window takes the mouse as the player clicks in it
+	if (event.type == SDL_MOUSEBUTTONDOWN && !_pointerScaled && CanScalePointer())
+	{
+		StartScaledPointer({event.button.x, event.button.y});
+	}
+	if (!_pointerScaled)
+	{
+		return;
+	}
+	if (event.type == SDL_MOUSEMOTION)
+	{
+		const auto before = _scaledPointer.Position();
+		const auto after = _scaledPointer.Move({event.motion.xrel, event.motion.yrel}, GetPointerScale(),
+		                                       Locator::windowing::value().GetSize());
+		event.motion.x = after.x;
+		event.motion.y = after.y;
+		// While the mouse turns the camera, the camera takes the mouse's own movement; else the pointer's
+		if (!_cursorFreeze.IsFrozen())
+		{
+			event.motion.xrel = after.x - before.x;
+			event.motion.yrel = after.y - before.y;
+		}
+	}
+	else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP)
+	{
+		const auto at = _scaledPointer.Position();
+		event.button.x = at.x;
+		event.button.y = at.y;
+	}
+	else if (event.type == SDL_MOUSEWHEEL)
+	{
+		const auto at = _scaledPointer.Position();
+		event.wheel.mouseX = at.x;
+		event.wheel.mouseY = at.y;
+	}
+}
+
+float GameActionMap::GetPointerScale() const
+{
+	if (!_pointerScaled || !Locator::windowing::has_value())
+	{
+		return 1.0f;
+	}
+	return pointer_speed::Scale(Locator::windowing::value().GetSize(), _pointerSpeedMultiplier);
+}
+
 glm::ivec2 GameActionMap::GetPointerPosition() const
 {
 	glm::ivec2 position {0, 0};
@@ -401,6 +501,14 @@ void GameActionMap::WarpPlayerCursor(glm::ivec2 position)
 {
 	if (!Locator::windowing::has_value())
 	{
+		return;
+	}
+	// While the window has the mouse, the pointer is put there and the system's cursor with it, which the window doesn't
+	// report as the pointer moving
+	if (_pointerScaled)
+	{
+		_scaledPointer.Place(position);
+		SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), position.x, position.y);
 		return;
 	}
 	// The window reports the jump as the pointer moving, with the next events; it isn't the mouse moving. While a hand
@@ -458,6 +566,10 @@ float GameActionMap::GetMouseWheelDelta() const
 void GameActionMap::Frame()
 {
 	_cursorWarp.reset();
+	if (_pointerScaled && !CanScalePointer())
+	{
+		StopScaledPointer();
+	}
 	ReleaseKeysNoLongerHeld();
 	RestPointerUntilCursorSeen();
 
@@ -527,7 +639,9 @@ void GameActionMap::Frame()
 		const auto cursor = _cursorFreeze.Update(turning, absoluteMousePosition);
 		if (cursor.started && !_scriptedPointer.has_value())
 		{
-			// The pointer is held in the window while the mouse's movement still comes through
+			// The pointer is held in the window while the mouse's movement still comes through, as the mouse's own
+			// movement without the system's acceleration
+			SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");
 			SDL_SetRelativeMouseMode(SDL_TRUE);
 		}
 		if (cursor.warpTo.has_value() && _scriptedPointer.has_value())
@@ -536,7 +650,12 @@ void GameActionMap::Frame()
 		}
 		else if (cursor.warpTo.has_value())
 		{
-			SDL_SetRelativeMouseMode(SDL_FALSE);
+			// The window keeps the mouse if it had it before the turn
+			SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "1");
+			if (!_pointerScaled)
+			{
+				SDL_SetRelativeMouseMode(SDL_FALSE);
+			}
 			WarpPlayerCursor(*cursor.warpTo);
 		}
 		_mousePosition = glm::clamp(cursor.cursor, glm::zero<decltype(screenSize)>(), screenSize);
