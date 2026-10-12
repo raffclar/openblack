@@ -1994,6 +1994,13 @@ bool Game::Update() noexcept
 		});
 		_dialogueClick = false;
 	}
+	// The gestures' hints fade while the advisors' words were drawn, and while shown their dots run and their collars
+	// turn, by the game's time
+	if (Locator::gestureSystem::has_value())
+	{
+		const auto seconds = std::chrono::duration<float>(clock.GetFrameGameTime()).count();
+		Locator::gestureSystem::value().StepHints(seconds, _interface && _interface->WereDialogueWordsDrawn());
+	}
 	// The tip bubble's time to show runs down by the game's time while it is up
 	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
 	// The names display grows in and out by the game's time

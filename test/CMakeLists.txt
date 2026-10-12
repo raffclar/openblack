@@ -831,3 +831,7 @@ openblack_setup_and_add_test(
   test_planned_building_rules test_planned_building_rules.cpp
 )
 openblack_setup_and_add_test(test_creature_touch test_creature_touch.cpp)
+openblack_setup_and_add_test(test_gesture_hints test_gesture_hints.cpp)
+openblack_setup_and_add_test(
+  test_object_detail graphics/test_object_detail.cpp
+)

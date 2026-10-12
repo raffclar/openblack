@@ -389,6 +389,9 @@ private:
 	void DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint) const;
 	/// The leashes' ropes, each a ribbon lit by the land beneath it, and their shadows on the land
 	void DrawLeashes(const DrawSceneDesc& desc) const;
+	/// The collars of the leashes the gestures' hints offer, each over its hint's square, seen through a camera of its
+	/// own
+	void DrawGestureHintCollars(const DrawSceneDesc& desc) const;
 	/// Takes up the creatures' skins where they have been painted again, before their bodies are drawn with them; drops
 	/// those of creatures no longer on the land
 	void UploadCreatureSkins(const DrawSceneDesc& drawDesc) const;
