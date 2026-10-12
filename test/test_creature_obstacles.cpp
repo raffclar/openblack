@@ -12,9 +12,6 @@
 #include <algorithm>
 #include <array>
 #include <numbers>
-#include <optional>
-#include <set>
-#include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -28,7 +25,6 @@
 using namespace openblack;
 using namespace openblack::creature_obstacles;
 using openblack::creature_route::Circle;
-using openblack::creature_route::Planner;
 
 namespace
 {
@@ -61,38 +57,6 @@ Thing AThing(Avoidance avoidance, Shape shape, glm::vec3 halfSize)
 	        .worshipSites = {}};
 }
 
-float Flat(int32_t /*x*/, int32_t /*z*/)
-{
-	return 5.0f;
-}
-std::optional<bool> Dry(int32_t /*x*/, int32_t /*z*/)
-{
-	return false;
-}
-
-Planner::Status PlanAll(Planner& planner, const creature_route::WalkableLand& land)
-{
-	for (int turn = 0; turn < 1000 && planner.GetStatus() == Planner::Status::Planning; ++turn)
-	{
-		planner.Step(land, 4000);
-	}
-	return planner.GetStatus();
-}
-
-bool ClearOf(const std::vector<glm::vec2>& route, const std::vector<Circle>& circles)
-{
-	for (size_t i = 1; i < route.size(); ++i)
-	{
-		for (const auto& circle : circles)
-		{
-			if (creature_route::DistanceToSegment(circle.centre, route[i - 1], route[i]) < circle.radius - 0.01f)
-			{
-				return false;
-			}
-		}
-	}
-	return true;
-}
 } // namespace
 
 TEST(CreatureObstacles, BuildingsATenthOfTheCreaturesHeightAreWalkedRound)
@@ -276,111 +240,4 @@ TEST(CreatureObstacles, TurnsAreReadOffTheModelsAxis)
 {
 	const auto rotation = glm::mat3(glm::eulerAngleY(-0.6f));
 	EXPECT_NEAR(YAngleOf(rotation), 0.6f, k_Tolerance);
-}
-
-TEST(CreatureObstacles, TheRouteGoesRoundABuildingFoundInTheCellsOnTheWay)
-{
-	const auto land = creature_route::WalkableLand::Build(Flat, Dry);
-	const auto walker = AWalker();
-	auto hall = AThing(Avoidance::Building, Shape::ModelBox, {14.8f, 7.0f, 3.8f});
-	hall.position = {1050.0f, 1000.0f};
-	hall.yAngle = k_Pi / 2.0f;
-	const auto hallCircles = CirclesOf(hall, walker);
-	std::set<std::pair<int32_t, int32_t>> asked;
-	Planner planner({.start = {1000.0f, 1000.0f},
-	                 .destination = {1100.0f, 1000.0f},
-	                 .minDistance = 0.0f,
-	                 .maxDistance = 1.0f,
-	                 .obstacles = {},
-	                 .cellObstacles =
-	                     [&](glm::ivec2 cell, std::vector<Circle>& circles) {
-		                     asked.insert({cell.x, cell.y});
-		                     // The hall stands in the cell of its middle
-		                     if (cell == glm::ivec2(105, 100))
-		                     {
-			                     circles.insert(circles.end(), hallCircles.begin(), hallCircles.end());
-		                     }
-	                     },
-	                 .ontoDestination = true,
-	                 .cornerRadius = 6.0f});
-	ASSERT_EQ(PlanAll(planner, land), Planner::Status::Found);
-	EXPECT_GT(planner.GetRoute().size(), 2u);
-	EXPECT_TRUE(ClearOf(planner.GetRoute(), hallCircles));
-	EXPECT_EQ(planner.GetCircles().size(), hallCircles.size());
-	// Only the cells near the way are looked in, each once
-	EXPECT_LT(asked.size(), 400u);
-}
-
-TEST(CreatureObstacles, TheShorterWayRoundIsChosen)
-{
-	const auto land = creature_route::WalkableLand::Build(Flat, Dry);
-	// A wall across the way, reaching much further to the north (+z) than the south
-	std::vector<Circle> wall;
-	for (int i = -2; i <= 8; ++i)
-	{
-		wall.push_back({.centre = {1050.0f, 1000.0f + (static_cast<float>(i) * 8.0f)}, .radius = 6.0f});
-	}
-	Planner planner({.start = {1000.0f, 1000.0f},
-	                 .destination = {1100.0f, 1000.0f},
-	                 .minDistance = 0.0f,
-	                 .maxDistance = 1.0f,
-	                 .obstacles = wall,
-	                 .ontoDestination = true,
-	                 .cornerRadius = 6.0f});
-	ASSERT_EQ(PlanAll(planner, land), Planner::Status::Found);
-	const auto& route = planner.GetRoute();
-	EXPECT_TRUE(ClearOf(route, wall));
-	const auto south = std::ranges::min(route, {}, [](glm::vec2 p) { return p.y; });
-	EXPECT_LT(south.y, 1000.0f - 16.0f);
-	EXPECT_TRUE(std::ranges::all_of(route, [](glm::vec2 p) { return p.y < 1010.0f; }));
-}
-
-TEST(CreatureObstacles, ACircleTheCreatureStandsInReachesJustToIt)
-{
-	const auto land = creature_route::WalkableLand::Build(Flat, Dry);
-	const Circle around {.centre = {1004.0f, 1000.0f}, .radius = 10.0f};
-	Planner planner({.start = {1000.0f, 1000.0f},
-	                 .destination = {900.0f, 1000.0f},
-	                 .minDistance = 0.0f,
-	                 .maxDistance = 1.0f,
-	                 .obstacles = {around},
-	                 .ontoDestination = true,
-	                 .cornerRadius = 6.0f});
-	ASSERT_EQ(PlanAll(planner, land), Planner::Status::Found);
-	ASSERT_EQ(planner.GetCircles().size(), 1u);
-	EXPECT_NEAR(planner.GetCircles()[0].radius, 4.0f, k_Tolerance);
-	// A circle about the point right under it is no use at all
-	Planner under({.start = {1000.0f, 1000.0f},
-	               .destination = {1100.0f, 1000.0f},
-	               .minDistance = 0.0f,
-	               .maxDistance = 1.0f,
-	               .obstacles = {{.centre = {1000.05f, 1000.0f}, .radius = 10.0f}},
-	               .ontoDestination = true,
-	               .cornerRadius = 6.0f});
-	ASSERT_EQ(PlanAll(under, land), Planner::Status::Found);
-	EXPECT_TRUE(under.GetCircles().empty());
-	EXPECT_EQ(under.GetRoute().size(), 2u);
-}
-
-TEST(CreatureObstacles, ADestinationInsideABuildingCantBeReached)
-{
-	const auto land = creature_route::WalkableLand::Build(Flat, Dry);
-	Planner planner({.start = {1000.0f, 1000.0f},
-	                 .destination = {1100.0f, 1000.0f},
-	                 .minDistance = 0.0f,
-	                 .maxDistance = 1.0f,
-	                 .obstacles = {{.centre = {1101.0f, 1000.0f}, .radius = 8.0f}},
-	                 .ontoDestination = true,
-	                 .cornerRadius = 6.0f});
-	EXPECT_EQ(planner.Step(land, 4000), Planner::Status::Failed);
-	EXPECT_EQ(planner.GetSearched(), 0u);
-	// A ring reaching out of it is reached outside it
-	Planner ring({.start = {1000.0f, 1000.0f},
-	              .destination = {1100.0f, 1000.0f},
-	              .minDistance = 0.0f,
-	              .maxDistance = 9.0f,
-	              .obstacles = {{.centre = {1101.0f, 1000.0f}, .radius = 8.0f}},
-	              .cornerRadius = 6.0f});
-	ASSERT_EQ(PlanAll(ring, land), Planner::Status::Found);
-	EXPECT_GE(glm::distance(ring.GetRoute().back(), glm::vec2(1101.0f, 1000.0f)), 8.0f - k_Tolerance);
 }

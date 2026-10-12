@@ -776,3 +776,6 @@ openblack_setup_and_add_test(test_script_weather test_script_weather.cpp)
 openblack_setup_and_add_test(test_challenge_records test_challenge_records.cpp)
 target_link_libraries(test_challenge_records PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_temple_shadow_layout test_temple_shadow_layout.cpp)
+openblack_setup_and_add_test(
+  test_creature_route_search test_creature_route_search.cpp
+)
