@@ -76,6 +76,11 @@ std::optional<uint32_t> TribeVillagerRow(int32_t tribe, uint32_t draw, std::size
 	return static_cast<uint32_t>(row);
 }
 
+bool KeepsScriptHeight(ObjectType type)
+{
+	return type == ObjectType::Marker || type == ObjectType::MobileStatic;
+}
+
 ScriptVillager ScriptVillagerOf(bool child, uint32_t grownUpAge)
 {
 	constexpr uint32_t k_ChildAge = 10;
