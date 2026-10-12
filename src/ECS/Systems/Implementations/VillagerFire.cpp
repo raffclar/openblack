@@ -126,11 +126,10 @@ VillagerStates State(const LivingAction& action, LivingAction::Index index)
 	return Living().VillagerGetState(action, index);
 }
 
-/// The state a villager is in, or walking to
+/// The state a villager is in, when that is an end in itself, or else the one it is walking to
 VillagerStates FinalState(const LivingAction& action)
 {
-	const auto final = State(action, LivingAction::Index::Final);
-	return final != VillagerStates::InvalidState ? final : State(action, LivingAction::Index::Top);
+	return Living().VillagerGetFinalState(action);
 }
 
 void SetTopState(LivingAction& action, VillagerStates state)
@@ -429,7 +428,8 @@ bool SetupMoveAroundFire(LivingAction& action, glm::vec2 point, VillagerStates t
 	return true;
 }
 
-/// Picks the fire of the blaze nearest it to beat and goes there; false when there is none
+/// Picks the fire of the blaze nearest it to beat and sets off there; false when there is none or no place to stand. It
+/// has decided once it has a place, whether or not it could set off
 bool DecideHowToPutOutFire(LivingAction& action, entt::entity fire)
 {
 	const auto villager = EntityOf(action);
@@ -440,7 +440,12 @@ bool DecideHowToPutOutFire(LivingAction& action, entt::entity fire)
 		return false;
 	}
 	const auto place = GetFireFightingPos(villager, state.fire);
-	return place.has_value() && SetupMoveAroundFire(action, *place, VillagerStates::PutOutFireByBeating);
+	if (!place.has_value())
+	{
+		return false;
+	}
+	SetupMoveAroundFire(action, *place, VillagerStates::PutOutFireByBeating);
+	return true;
 }
 
 /// The villager's walk's goal
@@ -884,6 +889,16 @@ bool villager_fire::ExitOnFire(LivingAction& action, VillagerStates /*next*/)
 		}
 		state.fire = entt::null;
 	}
+	return false;
+}
+
+bool villager_fire::ExitReactToFire(LivingAction& action, VillagerStates /*next*/)
+{
+	// Leaving its reaction to a fire, for whatever it goes on to, it lets go of the reaction. Fighting the fire or going
+	// round it needs the reaction, which a villager coming from here has let go of by the time it would start, so it never
+	// starts: as in the game, villagers about a fire look at it, back off when too near, and go on with their day, and
+	// nobody beats it out
+	StopReacting(EntityOf(action));
 	return false;
 }
 

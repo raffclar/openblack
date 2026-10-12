@@ -315,6 +315,24 @@ TEST_F(Reactions, AVillagerKeepsTheFireReactionItTookUpAndLetsGoOfItLeavingTheFi
 	Locator::reactionSystem::reset();
 }
 
+TEST_F(Reactions, LeavingTheReactionToAFireForAnyStateLetsItGoSoNobodyFightsIt)
+{
+	// Going from looking at the fire to fighting it or going round it, the villager lets go of the reaction on the way,
+	// which those states need to start
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	const auto villager = _villagers[0];
+	const auto burning = registry.Create();
+	registry.Assign<Transform>(burning, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = 7, .type = Reaction::ReactToFire});
+	villager_fire::SetupReactToFire(villager, burning, 7);
+	auto& action = registry.Get<LivingAction>(villager);
+	EXPECT_FALSE(villager_fire::ExitReactToFire(action, VillagerStates::MoveAroundFire));
+	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).reaction, 0u);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::reactionSystem::reset();
+}
+
 TEST(ReactionRules, LettingGoOfAKindBringsItUpToNowOnlyWhenRemembered)
 {
 	openblack::magic::villager_reaction::Memory memory;

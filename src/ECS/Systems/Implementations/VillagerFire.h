@@ -83,6 +83,8 @@ bool EnterOnFire(components::LivingAction& action, VillagerStates from, Villager
 bool ExitOnFire(components::LivingAction& action, VillagerStates next);
 /// Leaving the reaction to a fire for a state that isn't a reaction lets the reaction go
 bool ExitReaction(components::LivingAction& action, VillagerStates next);
+/// Leaving the state of reacting to a fire, for any state, lets the reaction go
+bool ExitReactToFire(components::LivingAction& action, VillagerStates next);
 /// A villager reacting to a fire whose object has gone, or is held, goes back to what it was doing
 bool ReactionValidate(components::LivingAction& action);
 
