@@ -8,10 +8,10 @@
  *******************************************************************************/
 
 // A seed that leaves the hand bound to the miracle it cast (the storms', the shields' and the forest's) is shown over
-// its miracle when it was made at an icon of the player's worship: its model, at its own size and unturned, sitting on
-// top of the tallest still thing beneath it. The forest miracle's seed is hidden under the land until the forest is
-// planted, then rides over the tallest of its trees as they grow. Out of its player's influence such a seed's miracle
-// closes down.
+// its miracle when it was made at an icon of the player's worship (the forest's always is, by the user's call): its model, at
+// its own size and unturned, sitting on top of the tallest still thing beneath it. The forest miracle's seed is hidden under
+// the land until the forest is planted, then rides over the tallest of its trees as they grow. Out of its player's influence
+// such a seed's miracle closes down.
 
 #define LOCATOR_IMPLEMENTATIONS
 
@@ -93,14 +93,19 @@ std::vector<magic::ThingUnderSeed> ThingsUnder(entt::entity seed, const glm::vec
 }
 } // namespace
 
-bool MagicSystem::SeedShownWithSpell(const SpellSeed& seed, const Spell& spell) const
+magic::SeedWithSpell MagicSystem::SeedWithSpellOf(const SpellSeed& seed, const Spell& spell) const
 {
 	const auto& info = magic::GetSpellSeedInfo(Info(), seed.seedType);
-	return magic::ShownWithSpell({.castInHand = info.castType == SpellCastType::SpellCastInHand,
-	                              .keptInHand = info.isKeptInHand != 0,
-	                              .followsSpell = seed.followsSpell && info.seedFollowsSpell != 0,
-	                              .hasIcon = seed.hasIcon,
-	                              .spellClosedDown = spell.closedDown});
+	return {.castInHand = info.castType == SpellCastType::SpellCastInHand,
+	        .keptInHand = info.isKeptInHand != 0,
+	        .followsSpell = seed.followsSpell && info.seedFollowsSpell != 0,
+	        .hasIcon = seed.hasIcon,
+	        .spellClosedDown = spell.closedDown};
+}
+
+bool MagicSystem::SeedShownWithSpell(const SpellSeed& seed, const Spell& spell) const
+{
+	return magic::ShownWithSpell(SeedWithSpellOf(seed, spell));
 }
 
 void MagicSystem::KeepSeedInInfluence(entt::entity spellEntity, const Spell& spell)
@@ -150,7 +155,7 @@ void MagicSystem::ShowSeedsWithSpells()
 		// It stays with its miracle across the land
 		transform->position.x = spell->position.x;
 		transform->position.z = spell->position.z;
-		if (!SeedShownWithSpell(seed, *spell))
+		if (!magic::DrawnWithSpell(SeedWithSpellOf(seed, *spell), spell->spellClass == magic::SpellClass::Forest))
 		{
 			registry.Remove<Mesh>(entity);
 			continue;

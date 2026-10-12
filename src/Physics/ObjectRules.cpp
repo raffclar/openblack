@@ -32,6 +32,11 @@ TreeLanding objects::TreeLandingOf(bool putDownGently, bool forestMiracleTree, b
 	return TreeLanding::Dies;
 }
 
+bool objects::StandsOnLandAfter(TreeLanding landing)
+{
+	return landing == TreeLanding::Replanted || landing == TreeLanding::Stays;
+}
+
 bool ForestSearch::Meet(const Thing& thing)
 {
 	if (thing.edgeDistance < k_ReplantNearEdge && thing.ofTown)
