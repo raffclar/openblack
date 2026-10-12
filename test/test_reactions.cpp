@@ -398,6 +398,25 @@ TEST_F(Reactions, AFiremanWalkingToAFireThatGoesLeavesTheBlazeAndLetsGoOfItsReac
 	Locator::reactionSystem::reset();
 }
 
+TEST_F(Reactions, GoingIntoAStateThatIsAnEndInItselfLetsGoOfTheStateItWasWalkingTo)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& living = Locator::livingActionSystem::value();
+	auto& action = registry.Get<LivingAction>(_villagers[0]);
+	const auto final = [&action] {
+		return static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final)));
+	};
+	// Setting off on a walk keeps where it is heading
+	action.states.at(static_cast<size_t>(LivingAction::Index::Final)) = static_cast<uint8_t>(VillagerStates::DecideWhatToDo);
+	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::MoveToPos, false);
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::MoveToPos);
+	EXPECT_EQ(final(), VillagerStates::DecideWhatToDo);
+	// Arriving, it goes into that state and heads for nothing more
+	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, false);
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(final(), VillagerStates::InvalidState);
+}
+
 TEST(ReactionRules, LettingGoOfAKindBringsItUpToNowOnlyWhenRemembered)
 {
 	openblack::magic::villager_reaction::Memory memory;
