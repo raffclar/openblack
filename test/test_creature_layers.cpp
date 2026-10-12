@@ -124,6 +124,54 @@ TEST(CreatureLayers, ASitStartsLoopsUntilToldThenEnds)
 	EXPECT_FALSE(IsPlaying(body));
 }
 
+TEST(CreatureLayers, ACreatureChangingItsPlanLetsAnActionPlayOn)
+{
+	// Reeling from a slap when it decides to do something else, it reels to the end
+	const auto reel = *PlayOnce({}, 167, true);
+	auto body = AdvanceBody(reel, 400.0f, 1633);
+	const auto stopped = EndLoop(body);
+	EXPECT_EQ(stopped.kind, BodyAction::Kind::Once);
+	EXPECT_EQ(CurrentAnimation(stopped), 167u);
+	EXPECT_TRUE(stopped.mirrored);
+	EXPECT_NEAR(stopped.timeMs, 400.0f, k_Tolerance);
+	body = AdvanceBody(stopped, 1200.0f, 1633);
+	EXPECT_TRUE(IsPlaying(body));
+	EXPECT_FALSE(IsPlaying(AdvanceBody(body, 100.0f, 1633)));
+}
+
+TEST(CreatureLayers, ACreatureChangingItsPlanGetsUpThroughItsEnd)
+{
+	// Asleep when it decides to do something else, it wakes up through the end of sleeping rather than snapping upright
+	auto body = *PlaySequence({}, animations::k_StartSleep, animations::k_Sleep, animations::k_EndSleep);
+	body = AdvanceBody(body, 600.0f, 600);
+	ASSERT_TRUE(IsLooping(body));
+	body = AdvanceBody(EndLoop(body), 16.0f, 900);
+	EXPECT_EQ(CurrentAnimation(body), animations::k_EndSleep);
+	body = AdvanceBody(body, 1000.0f, 1000);
+	EXPECT_FALSE(IsPlaying(body));
+}
+
+TEST(CreatureLayers, ASequenceToldToEndWhileStartingGoesStraightFromItsStartToItsEnd)
+{
+	auto body = *PlaySequence({}, animations::k_StartSit, animations::k_Sit, animations::k_EndSit);
+	body = AdvanceBody(EndLoop(AdvanceBody(body, 200.0f, 500)), 200.0f, 500);
+	// The start plays out
+	EXPECT_EQ(CurrentAnimation(body), animations::k_StartSit);
+	body = AdvanceBody(body, 100.0f, 500);
+	EXPECT_EQ(body.phase, BodyAction::Phase::End);
+	EXPECT_EQ(CurrentAnimation(body), animations::k_EndSit);
+	EXPECT_NEAR(body.timeMs, 0.0f, k_Tolerance);
+}
+
+TEST(CreatureLayers, ACreatureLyingWhereItFellGetsUpWhenItsPlanChanges)
+{
+	auto body = *PlaySequence({}, animations::k_Faint, animations::k_Faint, animations::k_GetUp, true);
+	body = AdvanceBody(AdvanceBody(body, 800.0f, 800), 5000.0f, 800);
+	ASSERT_TRUE(IsLooping(body));
+	body = AdvanceBody(EndLoop(body), 16.0f, 800);
+	EXPECT_EQ(CurrentAnimation(body), animations::k_GetUp);
+}
+
 TEST(CreatureLayers, ABodyTimedByWhatPlaysItStaysWherePut)
 {
 	// A fight sets its fighter's move at the move's own time each frame; the frame mustn't move it on as well, or the

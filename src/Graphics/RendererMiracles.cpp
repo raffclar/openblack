@@ -124,7 +124,7 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 		}
 		const float pulse = visuals::PhialPulse(shown.phialPhase);
 		const auto draws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
-		                         : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = 255, .lit = true}};
+		                         : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = 255, .landLit = true}};
 		const auto shape = phial ? visuals::PhialScale(receiveType, shown.phialPhase) : glm::vec3(1.0f);
 		const bool environmentMapped = environment != nullptr && (phial || shown.seed == SpellSeedType::Food);
 		const bool added = shown.seed == k_AddedSeed;
@@ -149,7 +149,10 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 			submitDesc.matrixCount = bones.empty() ? 1 : static_cast<uint8_t>(std::min<size_t>(bones.size(), UINT8_MAX));
 			submitDesc.mirrored = reflection;
 			submitDesc.useMaterialCulling = true;
+			// A phial's skin is stepped through its frames, but slides only where its materials let it and never while
+			// the phial shines with the environment map, so its liquid shows its first frame
 			submitDesc.uvOffset = phial ? visuals::PhialUvOffset(shown.phialFrame) : glm::vec2(0.0f);
+			submitDesc.uvOffsetByMaterial = phial;
 			submitDesc.sortDepth = zsort::Depth(at, eye);
 			const float alpha = static_cast<float>(draw.alpha) / k_ByteMax;
 			if (added)
@@ -158,12 +161,15 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 				submitDesc.viewId = translucent;
 				submitDesc.state = k_AddedState | BGFX_STATE_WRITE_A;
 			}
-			else if (!draw.lit)
+			else if (!draw.landLit)
 			{
-				// Plain white at its alpha, blended over what is behind
-				submitDesc.viewId = translucent;
-				submitDesc.state = k_BlendedState | BGFX_STATE_BLEND_ALPHA;
-				submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, alpha);
+				// Lit in white by the sun with none of the land's colour, at its alpha: blended by its materials over
+				// what is behind, or as they say when whole
+				submitDesc.viewId = draw.alpha < 255 ? translucent : desc.viewId;
+				submitDesc.state = k_BlendedState | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z;
+				submitDesc.useMaterialBlending = true;
+				submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(k_ByteMax), .alpha = alpha};
+				submitDesc.landColourAdded = false;
 			}
 			else if (draw.alpha < 255)
 			{
@@ -259,8 +265,9 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 		                     .ownerAlignment = 0.0f});
 
 		// The globe, added at 150 of 255 by its texture's alpha and writing its depth, turned to face the camera about its
-		// middle, and with its origin pushed towards the camera from its middle by its radius so that it comes after what
-		// is inside it, its glint running over its dome
+		// middle, its glint running over its dome. It is drawn where it is, round its seed; only where it comes among the
+		// blended things is taken from its middle pushed towards the camera by its radius, so that it comes after what is
+		// inside it.
 		if (haveBubble)
 		{
 			const auto bubble = meshes.Handle(OneOffSpellSeed::k_MeshId.value());
@@ -269,7 +276,7 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 			const auto towards = eye - globe.middle;
 			const auto push = glm::length(towards) > 0.0f ? glm::normalize(towards) * radius : glm::vec3(0.0f);
 			glm::mat4 model = glm::mat4(transform.rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
-			model[3] = glm::vec4(globe.middle + push, 1.0f);
+			model[3] = glm::vec4(transform.position, 1.0f);
 			L3DMeshSubmitDesc submitDesc = {};
 			submitDesc.viewId = translucent;
 			submitDesc.program = objectProgram;

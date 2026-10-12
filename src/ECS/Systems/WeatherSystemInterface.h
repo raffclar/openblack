@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/Components/Weather.h"
+#include "ECS/ScriptWeatherRules.h"
 
 namespace openblack::ecs::systems
 {
@@ -83,6 +84,9 @@ public:
 	virtual void SetClimateRain(int32_t index, float desire, int32_t dryDays, int32_t rainingDays, int32_t raining) = 0;
 	virtual void SetClimateTemperature(int32_t index, float temperature, float targetTemperature) = 0;
 	virtual void SetClimateWind(int32_t index, float windX, float windZ, float angle) = 0;
+	/// A storm a land's setup script places in one of its climates (CREATE_WEATHER_STORM). It counts among that climate's
+	/// storms, beyond its usual limit; nothing happens without such a climate.
+	virtual void AddLandStorm(int32_t climateIndex, const script_weather::LandStorm& storm) = 0;
 
 	// Game script commands
 	virtual void SetClimateSystemEnabled(bool enabled) = 0;

@@ -42,6 +42,9 @@ uniform vec4 u_objectLook;
 // The point a model is fogged at in the temple, in place of its own position: xyz the point, w 1 to use it. The temple's
 // walls without a lightmap are fogged once each, at their first vertex.
 uniform vec4 u_fogAt;
+// x: 1 for the light the game gives the models it lights as it poses them (the hand, the glow over it), in place of
+// the usual model light (see PosedModelLightFactor)
+uniform vec4 u_lightRule;
 #ifdef USE_LIGHTMAP
 // The temple's light's colour added to its walls, or a control's glow, and how much darker the light makes them
 uniform vec4 u_glow;
@@ -231,10 +234,11 @@ void main()
 	}
 	float hazeT = HazeT(mul(u_view, vec4(fogOrigin, 1.0f)).z);
 	colour = HazeDiffuse(colour, HazeFactor(hazeT));
-	// The haze is added with the land's colour where the object stands, each channel at most white
+	// The haze is added with the land's colour where the object stands, each channel at most white, unless the object is
+	// lit in a colour of its own that the land's colour doesn't reach (w)
 	vec3 added = HazeColour(hazeT);
 #ifndef USE_LIGHTMAP
-	if (u_landLight.x > 0.0f)
+	if (u_landLight.x > 0.0f && u_landLight.w < 0.5f)
 	{
 		added = min(added + LandColourAt(lightOrigin.xz), vec3_splat(255.0f));
 	}
@@ -279,12 +283,7 @@ void main()
 	}
 #endif // USE_INSTANCING
 	// The posed models the game lights as it poses them take their own rule
-#ifndef USE_LIGHTMAP
-	bool posedLight = u_landLight.w > 0.5f;
-#else
-	bool posedLight = false;
-#endif // USE_LIGHTMAP
-	float lightFactor = posedLight ? PosedModelLightFactor(normal, localLight) : ModelLightFactor(normal, localLight);
+	float lightFactor = u_lightRule.x > 0.5f ? PosedModelLightFactor(normal, localLight) : ModelLightFactor(normal, localLight);
 	v_color0 = vec4(ModelLightColour(colour, shadedElsewhere ? u_shadeAt.w : lightFactor), 1.0f);
 #ifndef USE_LIGHTMAP
 	if (u_landLight.z > 0.0f)

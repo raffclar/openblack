@@ -196,4 +196,86 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	                  .circleRadius = k_StormRadius,
 	                  .holdBeforePress = 8.0f}},
 	});
+
+	// The guide's death in the storm challenge: its script strikes the guide with the lightning bolt's second power up
+	// six times, from points about the guide 60 above the land (radius 5, 3 seconds, curl 1), then with the first
+	// explosion from its storm (radius 50, 5 seconds, no curl). The points and the storm keep their places about the guide
+	// from the challenge; the storm is the challenge's (inner 150, outer 500, rain at 15 degrees, 150 clouds of shade 1.5
+	// 250 up), placed as a land's script would, with the forks of lightning it has once the guide is struck.
+	constexpr glm::vec2 k_Guide {0.0f, 40.0f};
+	const auto strike = [](glm::vec2 from, float delay) {
+		return MiracleCast {.type = MagicType::LightningBoltPowerUpTwo,
+		                    .target = MiracleCast::Target::Creature,
+		                    .handOffset = k_Guide + from,
+		                    .handHeight = 60.0f,
+		                    .delaySeconds = delay,
+		                    .player = PlayerNames::NEUTRAL,
+		                    .script = ScriptSpell {.radius = 5.0f, .seconds = 3.0f, .curl = 1.0f}};
+	};
+	constexpr glm::vec2 k_StormFromGuide {-19.1f, -213.5f};
+	all.push_back({
+	    .id = "miracles.guide_death_lightning",
+	    .name = "The guide struck down by a script's lightning in a storm",
+	    .facet = Facet::Miracles,
+	    .description = "As the storm challenge kills the guide: a creature stands under a storm; a script strikes it with "
+	                   "the lightning bolt's second power up six times from points around it 60 above the land, then with "
+	                   "the first explosion from the storm to its south.",
+	    .expected = "The storm's grey clouds hang over the creature and rain falls. From two seconds in a bolt of lightning "
+	                "lashes down at the creature from a point above it, twisting as it goes, lasting three seconds, then "
+	                "another half a second later, then two more two seconds apart, then two at once three seconds later. "
+	                "Three seconds after those an explosion rushes in from the storm to the south and bursts at the "
+	                "creature. Forks of lightning strike from the storm every one to three seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, 0.0f}, {60.0f, 80.0f}}, .distance = 1.6f},
+	    .creatures = {{.label = "guide",
+	                   .species = CreatureType::GiantApe,
+	                   .offset = k_Guide,
+	                   .facingDegrees = 180.0f,
+	                   .owner = PlayerNames::NEUTRAL,
+	                   .hold = true,
+	                   .pauseMind = true}},
+	    .miracles = {strike({20.0f, -11.1f}, 2.0f),
+	                 strike({-13.8f, -22.0f}, 2.5f),
+	                 strike({-30.6f, 6.2f}, 4.5f),
+	                 strike({50.6f, -62.3f}, 6.5f),
+	                 strike({9.5f, 7.2f}, 9.5f),
+	                 strike({-2.5f, -15.9f}, 9.5f),
+	                 {.type = MagicType::ExplosionOne,
+	                  .target = MiracleCast::Target::Creature,
+	                  .handOffset = k_Guide + k_StormFromGuide,
+	                  .handHeight = 0.0f,
+	                  .delaySeconds = 12.5f,
+	                  .player = PlayerNames::NEUTRAL,
+	                  .script = ScriptSpell {.radius = 50.0f, .seconds = 5.0f, .curl = 0.0f}}},
+	    .landStorms = {{.offset = k_Guide + k_StormFromGuide,
+	                    .destination = k_Guide + k_StormFromGuide,
+	                    .age = 20.0f,
+	                    .cloudCount = 150,
+	                    .shape = "150,500,10,2000000,1,0",
+	                    .clouds = "1.5,250,1,3,5,25",
+	                    .weather = "80,0,15,100,0,0"}},
+	});
+
+	// The first storm of the Three Gods playground, placed by its land script in one of its climates
+	all.push_back({
+	    .id = "sky.land_storm",
+	    .name = "A storm a land's script places in a climate",
+	    .facet = Facet::Sky,
+	    .description = "The first storm the Three Gods playground's land script places: 70.8 seconds into its 460, 8 "
+	                   "clouds of shade 0.12 500 above the land, inner radius 160 and outer 176, rain at 8 degrees, the "
+	                   "wind (-3, 39), speed 0, no lightning.",
+	    .expected = "The storm is already in full: rain falls in streaks over a circle about 350 across north of the "
+	                "camera, the land under it darkened, and eight pale clouds gather high above it one a frame and wander. "
+	                "It stays where it is (its speed is 0), with no lightning, until about 390 seconds later it fades out "
+	                "over ten seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-180.0f, -100.0f}, {180.0f, 260.0f}}, .distance = 1.4f},
+	    .landStorms = {{.offset = {0.0f, 80.0f},
+	                    .destination = {20.3f, -175.6f},
+	                    .age = 70.799492f,
+	                    .cloudCount = 8,
+	                    .shape = "160.00,176.00,10.00,460.00,1.00,1.10",
+	                    .clouds = "0.12,500.00,0.00,0.00,0.00,0.00",
+	                    .weather = "0,0,8,93,-3,39"}},
+	});
 }
