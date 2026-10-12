@@ -3002,19 +3002,26 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("one-off meshes");
-	// The game's menu, which greets the player by their profile's name: openblack has no profiles, so by the name
-	// they log in with
+	// The game's menu, which greets the player by their profile's name and shows their creature's name and their
+	// symbol; before a first start's player has a profile, by the name they log in with
 	{
 		const auto* user = std::getenv("USERNAME");
 		user = user != nullptr ? user : std::getenv("USER");
+		auto playerName = gui::ToUtf16(user != nullptr ? user : "Player");
 		// The settings the menu starts with are the game's
 		gui::MenuSettings settings;
+		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
+		{
+			playerName = gui::ToUtf16(profile->name);
+			settings.creatureName = gui::ToUtf16(profile->creatureName);
+			settings.symbol = profile->symbol;
+		}
 		auto& audio = Locator::audio::value();
 		settings.sfxVolume = audio.GetSfxVolume();
 		settings.musicVolume = audio.GetMusicVolume();
 		settings.leftHandedHand = !Locator::config::value().rightHandedHand;
 		settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
-		_interface = gui::GameInterface::Create(gui::ToUtf16(user != nullptr ? user : "Player"), std::move(settings));
+		_interface = gui::GameInterface::Create(playerName, std::move(settings));
 		if (!_interface)
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game's menu is not available, Escape quits");
@@ -3362,9 +3369,15 @@ bool Game::Run() noexcept
 	{
 		LoadTestbed();
 	}
-	else if (!LoadMap(_startMap))
+	else
 	{
-		return false;
+		// A first start: the new player is asked their name before the first land; closing the window meanwhile ends
+		// the game at its first frame
+		AskForNewPlayer();
+		if (!LoadMap(_startMap))
+		{
+			return false;
+		}
 	}
 	if (_startupTimer.has_value())
 	{

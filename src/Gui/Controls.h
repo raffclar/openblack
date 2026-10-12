@@ -396,6 +396,7 @@ public:
 	[[nodiscard]] bool IsOnTop() const override { return GetRingOpening() > 0.0f; }
 
 	[[nodiscard]] int GetSymbol() const noexcept { return _symbol; }
+	void SetSymbol(int symbol) noexcept { _symbol = std::clamp(symbol, 0, k_SymbolCount - 1); }
 	[[nodiscard]] bool IsRingOpen() const noexcept { return _ringOpen; }
 	/// How far the ring has come up, 0 to 1
 	[[nodiscard]] float GetRingOpening() const noexcept { return std::clamp(_ring.GetValue(), 0.0f, 1.0f); }

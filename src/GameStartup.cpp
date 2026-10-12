@@ -19,7 +19,9 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/MusicPlayer.h"
+#include "Common/MachineClock.h"
 #include "Common/UserData.h"
+#include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
@@ -27,10 +29,13 @@
 #include "Game.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
+#include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/LoadingScreenRules.h"
+#include "Gui/MenuBackdrop.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
+#include "Gui/TextDatabase.h"
 #include "Locator.h"
 #include "Video/StillPicture.h"
 #include "Video/VideoRules.h"
@@ -119,6 +124,65 @@ player_profiles::Store Game::ProfileStore() const
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The players' profiles are kept in {}", store.folder->generic_string());
 	}
 	return store;
+}
+
+bool Game::AskForNewPlayer()
+{
+	auto& profiles = Locator::playerProfileSystem::value();
+	if (profiles.GetProfileCount() > 0)
+	{
+		return true;
+	}
+	if (!_interface || !Locator::windowing::has_value() || Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
+	{
+		// With no box to ask in, the player gets the profile the game makes for one who gives no name: the account's
+		profiles.CreateProfile(u"", 0);
+		return !_quitRequested;
+	}
+	// Tools wait while the player is asked
+	const ecs::systems::InspectorLoading asking("new player");
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "No player has a profile: asking the new player for their name");
+	SDL_StartTextInput();
+	_interface->ShowNewPlayerBox(false, [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
+	gui::menu_backdrop::Fade fade;
+	auto last = Milliseconds();
+	while (!gui::menu_backdrop::FadeOver(fade) && !_quitRequested)
+	{
+		const auto now = Milliseconds();
+		const auto frame = static_cast<int>(now - last);
+		last = now;
+		auto& box = _interface->GetNewPlayerBox();
+		const auto resolution = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
+		SDL_Event event;
+		while (SDL_PollEvent(&event) != 0)
+		{
+			if (event.type == SDL_QUIT)
+			{
+				RequestQuit();
+			}
+			else
+			{
+				_interface->ProcessNewPlayerBoxEvent(event, resolution);
+			}
+		}
+		// The profile is made as the box is answered
+		if (const auto answer = box.TakeAnswer(); answer.has_value())
+		{
+			profiles.CreateProfile(answer->name, answer->symbol);
+		}
+		gui::menu_backdrop::StepFade(fade, !box.IsActive(), frame);
+		glm::ivec2 mouse {0, 0};
+		SDL_GetMouseState(&mouse.x, &mouse.y);
+		PresentStartupFrame([this, mouse, frame, &fade](glm::u16vec2 size) {
+			_interface->DrawNewPlayerScreen(size, mouse, machine_clock::Ticks(), static_cast<float>(frame), fade.alpha);
+		});
+	}
+	SDL_StopTextInput();
+	if (const auto profile = profiles.GetCurrentProfile(); profile.has_value())
+	{
+		_interface->SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName), profile->symbol);
+	}
+	return !_quitRequested;
 }
 
 void Game::PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw)

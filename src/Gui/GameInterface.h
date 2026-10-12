@@ -29,6 +29,8 @@
 #include "GameFont.h"
 #include "GameMenu.h"
 #include "Hand/HandTricons.h"
+#include "MenuBackdrop.h"
+#include "NewPlayerBox.h"
 #include "ScreenFade.h"
 #include "SkipBox.h"
 #include "TattooEditorDialog.h"
@@ -100,6 +102,19 @@ public:
 	[[nodiscard]] const SkipBox& GetSkipBox() const noexcept { return *_skipBox; }
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept { return _menu->IsOpen() || _skipBox->IsActive(); }
+
+	/// Asks a new player for their name, over the front end's swirling backdrop; Cancel shows only when someone has a
+	/// profile. checkName says whether a name may be taken
+	void ShowNewPlayerBox(bool canCancel, NewPlayerBox::CheckName checkName);
+	/// The new player's box takes the mouse and the keyboard; true when it took the event
+	bool ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	[[nodiscard]] NewPlayerBox& GetNewPlayerBox() noexcept { return *_newPlayerBox; }
+	/// The new player's screen: the backdrop, swirling on by the frame's milliseconds, the box and the pointer, under
+	/// black of an alpha
+	void DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, float frameMilliseconds,
+	                         uint8_t black);
+	/// The menu greets the player by their profile's name and shows its creature's name and symbol
+	void SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol);
 
 	/// The tattoo editor's dialog, shown while the tattoo editor is open
 	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }
@@ -259,6 +274,12 @@ private:
 	std::unique_ptr<SkipBox> _skipBox;
 	std::optional<new_game_choice::Choice> _skipBoxAnswer;
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
+	std::unique_ptr<NewPlayerBox> _newPlayerBox;
+	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates
+	std::unique_ptr<graphics::Texture2D> _backdrop;
+	std::optional<menu_backdrop::Swirls> _backdropSwirls;
+	std::array<menu_backdrop::Layer, menu_backdrop::k_Layers> _backdropLayers {};
+	menu_backdrop::Pace _backdropPace;
 	/// Whether the left mouse button is down, as the tattoo editor's dialog has seen it
 	bool _leftButtonDown {false};
 	std::optional<Message> _message;

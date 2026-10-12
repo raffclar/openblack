@@ -29,6 +29,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/FixedFormat.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/FloatingNumber.h"
@@ -112,7 +113,8 @@ std::unique_ptr<openblack::graphics::Texture2D> MakeFontTexture(const GameFont& 
 namespace
 {
 /// A texture of the game made of a colour file and an alpha file, 256 pixels square. Null when they are missing.
-std::unique_ptr<openblack::graphics::Texture2D> LoadTexture(const std::string& name)
+std::unique_ptr<openblack::graphics::Texture2D>
+LoadTexture(const std::string& name, openblack::graphics::Wrapping wrapping = openblack::graphics::Wrapping::ClampEdge)
 {
 	auto& fileSystem = Locator::filesystem::value();
 	const auto colour = ReadIfExists(fileSystem.GetPath<Path::Textures>() / (name + ".raw"));
@@ -132,8 +134,8 @@ std::unique_ptr<openblack::graphics::Texture2D> LoadTexture(const std::string& n
 		data->data[(i * 4) + 3] = alpha[i];
 	}
 	auto texture = std::make_unique<openblack::graphics::Texture2D>(name);
-	texture->Create(k_AtlasSize, k_AtlasSize, 1, openblack::graphics::TextureFormat::RGBA8,
-	                openblack::graphics::Wrapping::ClampEdge, openblack::graphics::Filter::Linear, data);
+	texture->Create(k_AtlasSize, k_AtlasSize, 1, openblack::graphics::TextureFormat::RGBA8, wrapping,
+	                openblack::graphics::Filter::Linear, data);
 	return texture;
 }
 
@@ -231,6 +233,8 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	}
 	// The tip bubble's box and tail
 	created->_gatheringText = LoadTexture("gatheringtext");
+	// The front end's swirling backdrop, its texture repeating across the screen
+	created->_backdrop = LoadTexture("pin", graphics::Wrapping::Repeat);
 	// The gestures' pictures, for the tips that show one
 	for (size_t i = 0; i < created->_gestureSheets.size(); ++i)
 	{
@@ -254,6 +258,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _menu(std::make_unique<GameMenu>(_texts, _font, playerName, std::move(settings)))
     , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::k_MidTextSize))
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
+    , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
@@ -271,6 +276,122 @@ void GameInterface::ShowSkipBox(bool currentProfileHasCreature)
 	glm::ivec2 mouse;
 	SDL_GetMouseState(&mouse.x, &mouse.y);
 	_skipBox->MouseMove(_painter.ToDialog(mouse));
+}
+
+void GameInterface::ShowNewPlayerBox(bool canCancel, NewPlayerBox::CheckName checkName)
+{
+	_newPlayerBox->checkName = std::move(checkName);
+	_newPlayerBox->Show(canCancel);
+	// The control under the pointer lights up at once
+	glm::ivec2 mouse;
+	SDL_GetMouseState(&mouse.x, &mouse.y);
+	_newPlayerBox->MouseMove(_painter.ToDialog(mouse));
+}
+
+bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_newPlayerBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_newPlayerBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		// Every control clicks as it is let go over, the texts too
+		if (event.button.button == SDL_BUTTON_LEFT &&
+		    _newPlayerBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_TEXTINPUT:
+		_newPlayerBox->TextInput(ToUtf16(event.text.text));
+		return true;
+	case SDL_KEYDOWN:
+		_newPlayerBox->KeyDown(event.key.keysym.sym);
+		return true;
+	default:
+		return false;
+	}
+}
+
+void GameInterface::DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds,
+                                        float frameMilliseconds, uint8_t black)
+{
+	_canvas.Begin(resolution);
+	_pointerCanvas.Begin(resolution);
+	_painter.Begin(resolution);
+	_newPlayerBox->Update(frameMilliseconds / 1000.0f);
+	// The swirls turn on at most once a screen refresh; they start at random the first time
+	if (!_backdropSwirls.has_value())
+	{
+		_backdropSwirls = menu_backdrop::Start([](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); });
+		_backdropPace.sinceStep = 0.0f;
+		for (int layer = 0; layer < menu_backdrop::k_Layers; ++layer)
+		{
+			menu_backdrop::PlaceLayer(*_backdropSwirls, layer, 0.0f, _backdropLayers.at(static_cast<size_t>(layer)));
+		}
+	}
+	if (const auto step = menu_backdrop::StepPace(_backdropPace, frameMilliseconds); step.has_value())
+	{
+		const auto turn = static_cast<float>(*step) * menu_backdrop::k_TurnPerMillisecond;
+		for (int layer = 0; layer < menu_backdrop::k_Layers; ++layer)
+		{
+			menu_backdrop::PlaceLayer(*_backdropSwirls, layer, turn, _backdropLayers.at(static_cast<size_t>(layer)));
+		}
+	}
+	// The backdrop covers the screen's 4:3 box, black round it
+	if (_backdrop)
+	{
+		const auto box = FitInside(k_FourByThree, resolution.x, resolution.y);
+		const auto size = glm::ivec2(box.width, box.height);
+		const auto origin = glm::vec2(static_cast<float>(box.x), static_cast<float>(box.y));
+		const auto point = [&size, &origin](int column, int row) {
+			return origin + glm::vec2(menu_backdrop::PointOnScreen(column, row, size));
+		};
+		const auto white = glm::vec4(1.0f);
+		for (const auto& layer : _backdropLayers)
+		{
+			const auto uv = [&layer](int column, int row) {
+				return layer.at((static_cast<size_t>(column) * menu_backdrop::k_Rows) + static_cast<size_t>(row));
+			};
+			for (int column = 1; column < menu_backdrop::k_Columns; ++column)
+			{
+				for (int row = 1; row < menu_backdrop::k_Rows; ++row)
+				{
+					// Two triangles a square, split from its top left corner to its bottom right
+					_canvas.DrawShape(
+					    {point(column - 1, row - 1), point(column, row - 1), point(column, row), point(column - 1, row)},
+					    {uv(column - 1, row - 1), uv(column, row - 1), uv(column, row), uv(column - 1, row)},
+					    {white, white, white, white}, _backdrop.get());
+				}
+			}
+		}
+	}
+	_newPlayerBox->Draw(_painter);
+	_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
+	// The screen fades from and to black over it all
+	if (black > 0)
+	{
+		_canvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f),
+		                 glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(black) / 255.0f), nullptr);
+	}
+	_canvas.End();
+	_pointerCanvas.End();
+}
+
+void GameInterface::SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol)
+{
+	auto settings = _menu->GetSettings();
+	settings.creatureName = creatureName;
+	settings.symbol = symbol;
+	_menu = std::make_unique<GameMenu>(_texts, _font, name, std::move(settings));
 }
 
 bool GameInterface::ProcessSkipBoxEvent(const SDL_Event& event)
