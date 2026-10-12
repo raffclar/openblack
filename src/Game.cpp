@@ -2995,6 +2995,19 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("one-off meshes");
+	// The info tables come before the game's interface, whose tooltips take their priorities and times from them
+	{
+		InfoFile infoFile;
+		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
+		if (!result)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
+			return false;
+		}
+		Locator::infoConstants::reset(result.release());
+	}
+
+	_startupTimer->Step("info tables");
 	// The game's menu, which greets the player by their profile's name: openblack has no profiles, so by the name
 	// they log in with
 	{
@@ -3215,18 +3228,6 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("sound and music banks");
-	{
-		InfoFile infoFile;
-		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
-		if (!result)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
-			return false;
-		}
-		Locator::infoConstants::reset(result.release());
-	}
-
-	_startupTimer->Step("info tables");
 	// The temple's leashes are drawn with the leash texture and its alpha
 	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
 	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
@@ -3593,10 +3594,12 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	RenderLoadingFrame();
 
 	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
+	// The script is matched by where its file is found, however its path was given
+	const auto scriptFile = Level::ResolveScriptPath(path);
 	bool skirmish = false;
-	Locator::resources::value().GetLevels().Each([&path, &skirmish](entt::id_type /*id*/, const Level& level) {
+	Locator::resources::value().GetLevels().Each([&scriptFile, &skirmish](entt::id_type /*id*/, const Level& level) {
 		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
-		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
+		                        Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
 	});
 	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
 	_landPath = path;
