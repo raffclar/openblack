@@ -31,9 +31,7 @@ uint32_t GoTowardsTeleportReaction(components::LivingAction& action);
 /// At the stone: the jump, then on its way again
 uint32_t TeleportReaction(components::LivingAction& action);
 
-/// The state a villager keeps to come back to as it starts reacting to a stone, from the state it was to take
-[[nodiscard]] VillagerStates PreviousToKeep(VillagerStates final);
-/// The villager stops reacting to its stone: it takes the state its table says to come back to from the state it kept
+/// The villager stops reacting to its stone and goes back to what it was doing, as every reaction ends
 void StopReacting(components::LivingAction& action, entt::entity villager);
 
 } // namespace openblack::ecs::villager_teleport

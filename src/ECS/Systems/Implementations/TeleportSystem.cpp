@@ -53,6 +53,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
+#include "VillagerReactions.h"
 #include "VillagerTeleport.h"
 
 using namespace openblack;
@@ -315,11 +316,15 @@ void TeleportSystem::ReactTo(entt::entity stone, entt::entity living, glm::vec3 
 	TeleportTraveller traveller {.stone = stone, .destination = destination};
 	if (isVillager)
 	{
-		const auto& action = registry.Get<const LivingAction>(living);
+		auto& action = registry.Get<LivingAction>(living);
 		const auto final = Locator::livingActionSystem::value().VillagerGetState(action, LivingAction::Index::Final);
 		traveller.finalState = final == VillagerStates::InvalidState ? VillagerStates::DecideWhatToDo : final;
-		// What it comes back to once it is through
-		traveller.previousState = ecs::villager_teleport::PreviousToKeep(final);
+		// What it comes back to once it is through, as any villager taking up a reaction remembers it
+		if (const auto* reacting = registry.TryGet<const LivingReaction>(living);
+		    reacting == nullptr || reacting->reaction == 0)
+		{
+			ecs::systems::villager_reactions::RememberStateToGoBackTo(action);
+		}
 	}
 	// Listed afresh at the head of the stone's travellers
 	std::erase_if(component.travellers, [living](const auto& entry) { return entry.living == living; });

@@ -486,14 +486,7 @@ uint32_t villager_physics::PointAtFlyingObject(LivingAction& action)
 	if (!ActuallyInTheAir(object, *entry))
 	{
 		registry.Remove<WatchedFlyingObject>(villager);
-		if (auto* reaction = registry.TryGet<LivingReaction>(villager))
-		{
-			systems::villager_reactions::Stop(villager, *reaction, true);
-		}
-		else
-		{
-			SetTopState(action, VillagerStates::DecideWhatToDo);
-		}
+		systems::villager_reactions::StopReacting(action);
 	}
 	return 1;
 }
