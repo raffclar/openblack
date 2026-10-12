@@ -134,6 +134,9 @@ public:
 	/// A spark of the mana path the hand lets out past the border, in the effect every such spark runs in, started
 	/// once wanted and kept running
 	virtual void AddHandManaPathSpark(const particles::mana_path::Spark& /*spark*/) {}
+	/// A storm's forked bolt, let down from a point of light under its cloud, in the effect every storm's bolts come down
+	/// in, which runs all the time; it comes down when the particles next step
+	virtual void AddStormBolt(glm::vec3 /*cloudPoint*/) {}
 
 	/// This computer's hand in a frame, for the chain that follows it while it gestures
 	struct HandFrame
