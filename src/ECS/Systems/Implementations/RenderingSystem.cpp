@@ -147,7 +147,6 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	{
 		uint32_t count;
 		bool morphWithTerrain;
-		bool castsShadow;
 		bool unlit;
 		bool perEntity;
 		bool translucent;
@@ -163,7 +162,6 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	                                                      bool morphWithTerrain) {
 		auto count = meshIds.insert(std::make_pair(drawnMesh, MeshInstances {.count = static_cast<uint32_t>(mesh.submeshId),
 		                                                                     .morphWithTerrain = morphWithTerrain,
-		                                                                     .castsShadow = false,
 		                                                                     .unlit = false,
 		                                                                     .perEntity = false,
 		                                                                     .translucent = false,
@@ -171,10 +169,6 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .instanceAlpha = false,
 		                                                                     .villagers = true}));
 		count.first->second.count++;
-		// The things whose shadows Black & White bakes into the land (IsCastShadowAtNight), and its features
-		count.first->second.castsShadow |= registry.AnyOf<Abode, Feature, MobileStatic, StoragePit>(entity);
-		// A temple's parts cast theirs too once it is built, none while it is going up
-		count.first->second.castsShadow |= registry.AllOf<Temple>(entity) && !registry.AllOf<BuildProgress>(entity);
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
@@ -260,9 +254,9 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	_instanceSlots.clear();
 	for (const auto& [meshId, desc] : meshIds)
 	{
-		const auto [drawDesc, inserted] = _renderContext.instancedDrawDescs.emplace(
-		    std::piecewise_construct, std::forward_as_tuple(meshId),
-		    std::forward_as_tuple(offset, desc.count, desc.morphWithTerrain, desc.castsShadow));
+		const auto [drawDesc, inserted] =
+		    _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
+		                                              std::forward_as_tuple(offset, desc.count, desc.morphWithTerrain));
 		drawDesc->second.unlit = desc.unlit;
 		drawDesc->second.perEntity = desc.perEntity;
 		// The villagers of a mesh are drawn together, their bones read from the bone palette
@@ -288,7 +282,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	for (const auto& [meshId, count] : fadingCounts)
 	{
 		const auto [drawDesc, inserted] = _renderContext.fadingDrawDescs.emplace(
-		    std::piecewise_construct, std::forward_as_tuple(meshId), std::forward_as_tuple(offset, count, false, false));
+		    std::piecewise_construct, std::forward_as_tuple(meshId), std::forward_as_tuple(offset, count, false));
 		drawDesc->second.perEntity = true;
 		drawDesc->second.bonePalette = true;
 		drawDesc->second.instanceAlpha = true;
@@ -358,7 +352,7 @@ void RenderingSystem::PrepareTreeDrawDescs(bool drawBoundingBox)
 	for (const auto& [meshId, count] : treeMeshIds)
 	{
 		_renderContext.treeInstancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
-		                                              std::forward_as_tuple(treeOffset, count, false, true));
+		                                              std::forward_as_tuple(treeOffset, count, false));
 		const auto height = meshes.Contains(meshId) ? meshes.Handle(meshId)->GetBoundingBox().Size().y : 0.0f;
 		_treeSlots.emplace(
 		    meshId, InstanceSlots {.offset = treeOffset, .count = count, .filled = 0, .perEntity = false, .height = height});

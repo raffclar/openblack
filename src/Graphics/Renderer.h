@@ -67,7 +67,7 @@ class Registry;
 namespace graphics
 {
 class FrameBuffer;
-class TreeShadowBake;
+class LandShadowBake;
 class L3DSubMesh;
 class OffscreenScreenshots;
 class MorphStreamLayouts;
@@ -225,7 +225,8 @@ private:
 	void DrawHandWaterGlow(const DrawSceneDesc& desc) const;
 	/// The sea's rows, ripple, period and colour for the camera
 	void SetSeaUniforms(const ShaderProgram& waterShader, const Camera& camera) const;
-	/// Casts the shadows of the island's trees, rocks and buildings onto it (see ObjectShadows)
+	/// Bakes the shadows of the island's trees, rocks and buildings into its land (see LandShadowBake), and draws the trees'
+	/// moving shadows when they are asked for (see ObjectShadows)
 	void DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const;
 	/// Draws the coverage of the flattened silhouettes of the creatures, the hand and the villagers a script draws in
 	/// high detail, for their moving shadows on the land (see GroundShadow)
@@ -408,12 +409,16 @@ private:
 
 	/// How a creature's variant meshes are read to blend its body
 	std::unique_ptr<MorphStreamLayouts> _morphStreamLayouts;
-	/// Where the objects' shadows cover the island, laid out as its footprints are and made for the island's size
+	/// Where the trees' moving shadows cover the island, when they are asked for, laid out as its footprints are and made
+	/// for the island's size
 	mutable std::unique_ptr<FrameBuffer> _objectShadowFrameBuffer;
-	/// The trees' and big forests' shadows baked into the land, as the game bakes them (unless they are drawn moving)
-	mutable std::unique_ptr<TreeShadowBake> _treeShadowBake;
-	/// Whether this frame's land takes the baked tree shadows
-	mutable bool _treeShadowsBaked {false};
+	/// Whether this frame's trees cast their moving shadows
+	mutable bool _movingTreeShadows {false};
+	/// The shadows baked into the land, as the game bakes them: the buildings', rocks' and other things', and the trees'
+	/// and big forests' unless they are drawn moving
+	mutable std::unique_ptr<LandShadowBake> _landShadowBake;
+	/// Whether this frame's land takes the baked shadows
+	mutable bool _landShadowsBaked {false};
 	/// The land seen from above for the temple's map, and the visit to the temple it was drawn for
 	mutable std::unique_ptr<FrameBuffer> _templeMapFrameBuffer;
 	mutable std::optional<uint32_t> _templeMapVisit;

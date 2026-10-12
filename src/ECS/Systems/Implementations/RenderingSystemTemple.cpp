@@ -198,9 +198,8 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	_renderContext.instancedDrawDescs.clear();
 	for (const auto& [meshId, desc] : meshIds)
 	{
-		auto [drawDesc, _] =
-		    _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
-		                                              std::forward_as_tuple(offset, desc.first, desc.second, false));
+		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
+		                                                               std::forward_as_tuple(offset, desc.first, desc.second));
 		drawDesc->second.hiddenFromReflection = !mirroredMeshIds.contains(meshId);
 		drawDesc->second.showsReflection = reflectiveMeshIds.contains(meshId);
 		drawDesc->second.onlyJoints = doorMeshIds.contains(meshId);
@@ -259,7 +258,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	for (const auto& [meshId, count] : peopleCounts)
 	{
 		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
-		                                                               std::forward_as_tuple(offset, count, false, false));
+		                                                               std::forward_as_tuple(offset, count, false));
 		drawDesc->second.perEntity = true;
 		drawDesc->second.bonePalette = true;
 		drawDesc->second.filled = count;

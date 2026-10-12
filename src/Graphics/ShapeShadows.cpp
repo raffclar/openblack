@@ -41,11 +41,12 @@ int Truncate(float value)
 	return static_cast<int>(value);
 }
 
-/// The columns where each row's covered samples start and end
+/// The columns where each row's covered samples start and end. Every row a triangle's edges go through is passed by one
+/// edge going down the rows and one going up, so both are written for each row filled, and needn't be cleared first.
 struct Edges
 {
-	std::array<int, k_Rows> starts {};
-	std::array<int, k_Rows> ends {};
+	std::array<int, k_Rows> starts;
+	std::array<int, k_Rows> ends;
 	/// The rows any edge went through: from the first to before the last
 	int first {k_Rows};
 	int last {0};
