@@ -75,6 +75,7 @@
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Poisoned.h"
@@ -116,6 +117,7 @@
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -124,8 +126,8 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
-#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -395,6 +397,10 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		registry.AssignOrReplace<ecs::components::Indestructible>(entity);
 	}
+	if (object.inScript && registry.AllOf<ecs::components::Villager>(entity) && Locator::livingActionSystem::has_value())
+	{
+		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);
+	}
 }
 } // namespace
 
@@ -497,6 +503,18 @@ void Runner::Start(const Scenario& scenario)
 		for (const auto& [name, weight] : scenario.fireflyRewards)
 		{
 			Locator::fireflySystem::value().SetRewardWeight(name, weight);
+		}
+	}
+	if (scenario.townBeliefInPlayer.has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
+			{
+				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_ONE, *scenario.townBeliefInPlayer);
+			}
 		}
 	}
 	if (scenario.tribalPower.has_value() && Locator::magicSystem::has_value())

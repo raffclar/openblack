@@ -114,6 +114,7 @@
 #include "ECS/FloatingNumber.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -1356,6 +1357,8 @@ bool Game::GameLogicLoop() noexcept
 	Locator::chimneySmokeSystem::value().ProcessTurn();
 	// How far the players' influence reaches, and its border
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	// The players' statistics take in their towns, influence and creature as the turn goes
+	player_statistics::ProcessTurn(Locator::time::value().GetTurn());
 	// The players' hearts beat on, quicker the more their people are in danger
 	if (Locator::heartbeatSystem::has_value())
 	{

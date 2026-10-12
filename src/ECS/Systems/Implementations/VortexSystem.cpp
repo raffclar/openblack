@@ -11,6 +11,7 @@
 
 #include "VortexSystem.h"
 
+#include <algorithm>
 #include <vector>
 
 #include <LNDFile.h>
@@ -24,6 +25,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/LandFollowers.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
@@ -252,7 +254,8 @@ void VortexSystem::ProcessTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> gone;
 	bool levelled = false;
-	registry.Each<Vortex>([&gone, &levelled](entt::entity entity, Vortex& vortex) {
+	std::vector<ecs::land_followers::Follower> followers;
+	registry.Each<Vortex>([&gone, &levelled, &followers](entt::entity entity, Vortex& vortex) {
 		// What is in it is dealt with first, as it stood before this turn's step of its fade
 		if (vortex.type == VortexType::In && vortex.state == VortexStateType::Active)
 		{
@@ -280,6 +283,18 @@ void VortexSystem::ProcessTurn()
 		if (vortex.levelApplied < amount)
 		{
 			vortex.levelApplied = amount;
+			// The living about it keep their height above the land as it is levelled under them
+			const auto reach = static_cast<float>(vortex::k_LevelHalfSide + 1) * LandIslandInterface::k_CellSize;
+			const glm::vec2 centre {vortex.centre.x, vortex.centre.z};
+			for (const auto& follower : ecs::land_followers::Capture(
+			         Locator::entitiesRegistry::value(), Locator::terrainSystem::value(), centre - reach, centre + reach))
+			{
+				// One about two vortices goes with the land under it once
+				if (std::ranges::none_of(followers, [&follower](const auto& kept) { return kept.entity == follower.entity; }))
+				{
+					followers.push_back(follower);
+				}
+			}
 			LevelGround(vortex, amount);
 			levelled = true;
 		}
@@ -292,6 +307,7 @@ void VortexSystem::ProcessTurn()
 	if (levelled)
 	{
 		Locator::terrainSystem::value().CommitAltitudeChanges();
+		ecs::land_followers::Follow(registry, Locator::terrainSystem::value(), followers);
 	}
 }
 

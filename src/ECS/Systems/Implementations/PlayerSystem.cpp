@@ -17,6 +17,7 @@
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerCreatures.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
@@ -93,13 +94,16 @@ void PlayerSystem::KeepForNextLand()
 	registry.Each<const Player>([this, &registry](entt::entity entity, const Player& player) {
 		const auto* alignment = registry.TryGet<const Alignment>(entity);
 		const auto* virtualInfluence = registry.TryGet<const VirtualInfluence>(entity);
+		const auto* statistics = registry.TryGet<const PlayerStatistics>(entity);
 		_kept.insert_or_assign(
 		    player.name,
 		    Kept {.alignment = alignment != nullptr ? std::optional(*alignment) : std::nullopt,
 		          .damageFrom = player.damageFrom,
 		          .windResistance = player.windResistance,
 		          .miracles = player.miracles,
-		          .virtualInfluence = virtualInfluence != nullptr ? std::optional(virtualInfluence->state) : std::nullopt});
+		          .virtualInfluence = virtualInfluence != nullptr ? std::optional(virtualInfluence->state) : std::nullopt,
+		          .influenceHistory = statistics != nullptr ? statistics->influenceHistory : statistics::History {},
+		          .populationHistory = statistics != nullptr ? statistics->populationHistory : statistics::History {}});
 	});
 }
 
@@ -130,5 +134,11 @@ void PlayerSystem::TakeUpKept(entt::entity playerEntity)
 	if (kept.virtualInfluence.has_value())
 	{
 		registry.AssignOrReplace<VirtualInfluence>(playerEntity, *kept.virtualInfluence);
+	}
+	// Their histories go on, though their statistics' counters start again
+	if (auto* statistics = registry.TryGet<PlayerStatistics>(playerEntity))
+	{
+		statistics->influenceHistory = kept.influenceHistory;
+		statistics->populationHistory = kept.populationHistory;
 	}
 }

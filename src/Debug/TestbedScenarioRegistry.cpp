@@ -2607,6 +2607,7 @@ std::vector<Scenario> Build()
 	AddAdvisorScenarios(all);
 	AddStory(all);
 	AddTownGrowthScenarios(all);
+	AddStatisticsScenarios(all);
 	AddTutorialScenarios(all);
 	return all;
 }

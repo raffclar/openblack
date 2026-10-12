@@ -52,6 +52,30 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_levels_under_the_living",
+	    .name = "The living go down with the land a vortex levels",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the lake's south bank after a second, as Land 1's opens beside the "
+	                   "fisherman's wife waiting on the cliff. On the slope above it, within the square it levels, a "
+	                   "villager stands still held by a script, a cow grazes, and an oak and a hut stand.",
+	    .expected = "As the bank is levelled over 5 seconds, the villager and the cow go down (or up) with the land under "
+	                "them, their feet and shadows on the ground the whole time, never floating. The oak and the hut keep "
+	                "the height they were put at, as in the game, which draws them where they were made.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnTheBank.x - 30.0f, 13.0f, k_OnTheBank.y - 22.0f},
+	                .look = {k_OnTheBank.x - 8.0f, 3.0f, k_OnTheBank.y - 22.0f}},
+	    .objects = {{.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_OnTheBank + glm::vec2(-8.0f, -18.0f),
+	                 .indestructible = true,
+	                 .inScript = true},
+	                {.type = AnimalInfo::Cow, .offset = k_OnTheBank + glm::vec2(-8.0f, -25.0f)},
+	                {.type = TreeInfo::Oak, .offset = k_OnTheBank + glm::vec2(-8.0f, -11.0f)},
+	                {.type = AbodeInfo::NorseHut, .offset = k_OnTheBank + glm::vec2(-8.0f, -34.0f), .yawDegrees = 90.0f}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnTheBank, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_opens_a_hole",
 	    .name = "A vortex out of the land opens a hole in it",
 	    .facet = Facet::Miracles,

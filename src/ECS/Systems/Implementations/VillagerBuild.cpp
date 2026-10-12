@@ -37,6 +37,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -676,7 +677,11 @@ uint32_t villager_build::Building(LivingAction& action)
 			{
 				tally->woodUsed += static_cast<float>(use);
 			}
-			// TODO(temple-builders): the wood its player's town has built with counts in the player's statistics
+			// The wood counts in its town's player's statistics
+			if (const auto* data = Entities().TryGet<const Town>(town))
+			{
+				player_statistics::CountWoodUsed(Entities(), data->owner, use);
+			}
 		}
 		// Building on while there is something to build and wood to build it with
 		if (construction::IsSiteValid(town, building))
