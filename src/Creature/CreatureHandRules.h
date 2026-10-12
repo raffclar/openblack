@@ -36,9 +36,9 @@ struct Holdable
 /// awake, though it may hold others too
 [[nodiscard]] bool ShowsInteractTip(PlayerNames player, PlayerNames owner, bool asleep);
 
-/// A press of the right button let go sooner than this, before the hand had time to stroke, is a click rather than a
-/// hold. It is as long as the hand must rest on the body before it strokes, so a press can't be both.
-constexpr float k_ClickMaxMs = creature_feedback::k_StrokeHoldMs;
+/// A press of the right button let go sooner than this is a click rather than a hold. The hand can't stroke or slap
+/// that soon.
+constexpr float k_ClickMaxMs = 450.0f;
 /// Whether a press of the right button on a creature was a click: let go quickly, having neither stroked nor slapped
 [[nodiscard]] bool IsClick(float heldMs, bool strokedOrSlapped);
 

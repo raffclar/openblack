@@ -243,15 +243,6 @@ TEST(CreatureFeedback, AStrokeLandsOnTheNearestPart)
 	EXPECT_FALSE(creature_feedback::k_RewardMirrored.at(1));
 }
 
-TEST(CreatureFeedback, StrokesNeedANewPartAndTime)
-{
-	using creature_feedback::BodyPart;
-	EXPECT_TRUE(creature_feedback::StrokeDue(std::nullopt, BodyPart::Head, 2000.0f));
-	EXPECT_FALSE(creature_feedback::StrokeDue(BodyPart::Head, BodyPart::Head, 5000.0f));
-	EXPECT_FALSE(creature_feedback::StrokeDue(BodyPart::Head, BodyPart::Belly, 1999.0f));
-	EXPECT_TRUE(creature_feedback::StrokeDue(BodyPart::Head, BodyPart::Belly, 2000.0f));
-}
-
 TEST(CreatureFeedback, SlapsAreClassedByHeightAndSpeed)
 {
 	constexpr float k_Height = 15.0f;

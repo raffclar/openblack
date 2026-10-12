@@ -15,6 +15,8 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
+#include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -23,19 +25,28 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
+#include "Camera/Camera.h"
+#include "Camera/CreatureCameraModel.h"
+#include "Camera/CreatureInteractCameraModel.h"
+#include "Camera/DefaultWorldCameraModel.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
+#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureScars.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -47,10 +58,8 @@ namespace feedback = openblack::creature_feedback;
 
 namespace
 {
-/// The hand's speed is eased over about this many seconds, so one jerky frame doesn't slap
-constexpr float k_SpeedEaseSeconds = 0.05f;
-/// The hand shows its slap this long
-constexpr float k_SlapShowMs = 300.0f;
+constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
+
 entt::entity PlayerHand()
 {
 	return Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
@@ -101,6 +110,31 @@ PartsOf(const Creature& creature, const CreatureAnimation& animation, const Tran
 	};
 }
 
+/// The heading the creature's body is drawn at, or the one it is turning to while it turns
+float HeadingOf(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
+{
+	if (const auto* walking = registry.TryGet<const CreatureLocomotion>(creature); walking != nullptr && walking->started)
+	{
+		const bool turning =
+		    walking->motion == CreatureLocomotion::Motion::Turning || walking->motion == CreatureLocomotion::Motion::Stepping;
+		return turning ? walking->targetHeading : walking->heading;
+	}
+	const auto ahead = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+	return creature_locomotion::HeadingOf({ahead.x, ahead.z});
+}
+
+/// The camera's place for the creature as it now stands
+std::optional<creature_interact::View> InteractViewOf(const ecs::Registry& registry, entt::entity creature)
+{
+	if (!registry.Valid(creature) || !registry.AllOf<Creature, Transform>(creature))
+	{
+		return std::nullopt;
+	}
+	const auto& transform = registry.Get<const Transform>(creature);
+	const auto height = feedback::k_HeightAtSizeOne * ShownSize(registry.Get<const Creature>(creature));
+	return creature_interact::ViewOf(transform.position, height, HeadingOf(registry, creature, transform));
+}
+
 /// Where a line of sight meets the upright plane through the creature that faces back along it
 std::optional<glm::vec3> OnPlaneThrough(const glm::vec3& centre, const glm::vec3& origin, const glm::vec3& direction)
 {
@@ -130,7 +164,69 @@ bool CreatureHandSystem::Grab()
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.AssignOrReplace<HandOnCreature>(PlayerHand(), HandOnCreature {.creature = *nearest});
 	registry.Remove<HandLastFeedback>(PlayerHand());
+	TakeCamera(*nearest);
 	return true;
+}
+
+void CreatureHandSystem::TakeCamera(entt::entity creature)
+{
+	if (!Locator::camera::has_value())
+	{
+		return;
+	}
+	auto& camera = Locator::camera::value();
+	auto& current = camera.GetModel();
+	// Already on a creature it stays; only the player's own camera, or Creature Mode's, gives way: not a fight's, a
+	// script's, the temple's or the editor's
+	if (dynamic_cast<CreatureInteractCameraModel*>(&current) != nullptr)
+	{
+		return;
+	}
+	auto* world = dynamic_cast<DefaultWorldCameraModel*>(&current);
+	if (world == nullptr && dynamic_cast<CreatureCameraModel*>(&current) == nullptr)
+	{
+		return;
+	}
+	_returnTo.reset();
+	if (world != nullptr)
+	{
+		_returnTo = creature_interact::View {.origin = world->GetTargetOrigin(), .focus = world->GetTargetFocus()};
+	}
+	auto model = std::make_unique<CreatureInteractCameraModel>(camera.GetOrigin(), camera.GetFocus());
+	model->SetTarget(InteractViewOf(Locator::entitiesRegistry::value(), creature));
+	_cameraModel = model.get();
+	_cameraModel->SetPlayerModel(camera.SetModel(std::move(model)));
+}
+
+void CreatureHandSystem::GiveCameraBack()
+{
+	auto* model = std::exchange(_cameraModel, nullptr);
+	const auto returnTo = std::exchange(_returnTo, std::nullopt);
+	if (model == nullptr || !Locator::camera::has_value())
+	{
+		return;
+	}
+	auto& camera = Locator::camera::value();
+	// Something else may have taken the camera over meanwhile, taking ours with it
+	if (&camera.GetModel() != model)
+	{
+		return;
+	}
+	auto player = model->TakePlayerModel();
+	if (player == nullptr)
+	{
+		return;
+	}
+	const auto origin = camera.GetOrigin();
+	const auto focus = camera.GetFocus();
+	auto* world = dynamic_cast<DefaultWorldCameraModel*>(player.get());
+	camera.SetModel(std::move(player));
+	// The player's camera starts again from where the camera now is and flies back to where it was going
+	if (world != nullptr && returnTo.has_value())
+	{
+		world->PlaceAt(origin, focus);
+		world->FlyBack(returnTo->origin, returnTo->focus, creature_interact::WooshesFlyingBack(origin, returnTo->origin));
+	}
 }
 
 bool CreatureHandSystem::MayHold(entt::entity creature) const
@@ -181,8 +277,35 @@ std::optional<entt::entity> CreatureHandSystem::CreatureUnderCursor() const
 	return picked;
 }
 
-std::optional<CreatureHandSystem::HandPose>
-CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor, float seconds)
+void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigin, const glm::vec3& rayDirection,
+                                uint8_t column)
+{
+	// The bruise and the lost life go to the player's own creature, where the hand's line of sight meets its skin
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	const auto own = Locator::playerSystem::value().GetPrimaryCreature(k_LocalPlayer);
+	if (!own.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* needs = registry.TryGet<CreatureNeeds>(*own))
+	{
+		needs->needs.life = feedback::LifeAfterBruise(needs->needs.life);
+	}
+	// TODO(creature): hard slaps on another god's creature bruise the player's own creature in the game, at the place
+	// hit on the slapped one's skin; only a bruise on the slapped creature itself is drawn here (docs/vanilla-bugs.md)
+	if (*own == creature)
+	{
+		creature_scars::MarkAlong(creature, rayOrigin, rayOrigin + rayDirection, 0, column);
+	}
+}
+
+std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm::vec3& rayOrigin,
+                                                                       const glm::vec3& rayDirection, glm::vec2 cursor,
+                                                                       float screenWidth, float seconds)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* contact = Locator::handSystem::has_value() ? registry.TryGet<HandOnCreature>(PlayerHand()) : nullptr;
@@ -194,6 +317,7 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 	if (!registry.Valid(creatureEntity) || !registry.AllOf<Creature, CreatureAnimation, Transform>(creatureEntity))
 	{
 		registry.Remove<HandOnCreature>(PlayerHand());
+		GiveCameraBack();
 		return std::nullopt;
 	}
 	const auto& creature = registry.Get<const Creature>(creatureEntity);
@@ -202,13 +326,20 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 	const auto ms = seconds * 1000.0f;
 	const auto height = feedback::k_HeightAtSizeOne * ShownSize(creature);
 	const auto centre = transform.position + glm::vec3(0.0f, height * 0.5f, 0.0f);
+	// The hand is drawn larger on a bigger creature, by the square root of its size
+	const auto handScale = std::sqrt(std::max(ShownSize(creature), 0.0f));
+
+	// The camera follows the creature, until the player has no creature
+	if (_cameraModel != nullptr)
+	{
+		const bool playerHasCreature =
+		    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPrimaryCreature(k_LocalPlayer).has_value();
+		_cameraModel->SetTarget(playerHasCreature ? InteractViewOf(registry, creatureEntity) : std::nullopt);
+	}
 
 	// Held by a command, the hand stays on the part it last stroked, or where it last slapped, whatever the cursor does
 	if (contact->byCommand)
 	{
-		contact->slapShowMs = std::max(contact->slapShowMs - ms, 0.0f);
-		contact->sinceStrokeMs += ms;
-		contact->sinceSlapMs += ms;
 		if (contact->lastPart.has_value())
 		{
 			if (const auto parts = PartsOf(creature, animation, transform))
@@ -217,7 +348,7 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 			}
 		}
 		return HandPose {
-		    .position = contact->lastPoint.value_or(centre), .onBody = true, .slapping = contact->slapShowMs > 0.0f};
+		    .position = contact->lastPoint.value_or(centre), .onBody = true, .cycle = contact->cycle, .scale = handScale};
 	}
 
 	// Where the hand is: on the body under the cursor, or beside it on the plane through the creature
@@ -226,59 +357,102 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 	const auto hit = feedback::RayHit(rayOrigin, rayDirection, body);
 	const auto touch = hit.has_value() ? std::optional(rayOrigin + (rayDirection * *hit)) : std::nullopt;
 	const auto point = onPlane.value_or(touch.value_or(centre));
-
+	const bool onBody = touch.has_value();
 	contact->heldMs += ms;
-	contact->sinceStrokeMs += ms;
-	contact->sinceSlapMs += ms;
-	contact->slapShowMs = std::max(contact->slapShowMs - ms, 0.0f);
-	contact->onBodyMs = touch.has_value() ? contact->onBodyMs + ms : 0.0f;
-	if (contact->lastPoint.has_value() && seconds > 0.0f)
+
+	// Strokes and slaps are weighed in steps at the screen's refresh rate, as the game weighed them once a frame
+	const auto step = feedback::Pace(contact->sinceStepMs, ms);
+	if (step.has_value() && *step > 0.0f)
 	{
-		const auto raw = glm::distance(point, *contact->lastPoint) / seconds;
-		const auto ease = std::clamp(seconds / k_SpeedEaseSeconds, 0.0f, 1.0f);
-		contact->speed += (raw - contact->speed) * ease;
+		Step(*contact, {.point = point,
+		                .touch = touch,
+		                .cursor = cursor,
+		                .screenWidth = screenWidth,
+		                .stepMs = *step,
+		                .rayOrigin = rayOrigin,
+		                .rayDirection = rayDirection});
 	}
-	const bool sweepsRight = cursor.x > contact->lastCursor.x;
-	contact->lastPoint = point;
-	contact->lastCursor = cursor;
+	return HandPose {.position = touch.value_or(point), .onBody = onBody, .cycle = contact->cycle, .scale = handScale};
+}
+
+void CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creatureEntity = contact.creature;
+	const auto& creature = registry.Get<const Creature>(creatureEntity);
+	const auto& animation = registry.Get<const CreatureAnimation>(creatureEntity);
+	const auto& transform = registry.Get<const Transform>(creatureEntity);
+	const auto height = feedback::k_HeightAtSizeOne * ShownSize(creature);
+	const bool onBody = input.touch.has_value();
+
+	auto& clocks = contact.clocks;
+	clocks.sinceTouch += input.stepMs;
+	clocks.ready += input.stepMs;
+	contact.slapReadyMs += input.stepMs;
+	// How fast the hand moves across the land, up and down not counting
+	const auto moved = contact.lastPoint.has_value() ? glm::xz(input.point) - glm::xz(*contact.lastPoint) : glm::vec2(0.0f);
+	contact.speed = glm::length(moved) / (input.stepMs / 1000.0f);
+	const bool cursorMoved = input.cursor.x != contact.lastCursor.x;
+	bool stroking = false;
 
 	auto& minds = Locator::creatureMindSystem::value();
-	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::xz(point))
+	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::xz(input.point))
 	                                                        : transform.position.y;
-	if (touch.has_value() && contact->sinceSlapMs >= feedback::k_SlapIntervalMs)
+	std::optional<feedback::Slap> slap;
+	if (feedback::SlapConsidered(onBody, contact.wasOnBody, input.cursor.x, contact.lastCursor.x, input.screenWidth * 0.5f) &&
+	    contact.slapReadyMs > feedback::k_SlapReadyMs)
 	{
-		if (const auto slap = feedback::ClassifySlap(point.y - ground, contact->speed, height, sweepsRight))
-		{
-			// The hand slaps either way, but it only counts when the creature can reel from it
-			contact->sinceSlapMs = 0.0f;
-			contact->slapShowMs = k_SlapShowMs;
-			contact->strokedOrSlapped = true;
-			if (minds.ForceAction(creatureEntity, slap->animation, slap->mirrored, std::nullopt,
-			                      feedback::k_SlapInterruptsAfter))
-			{
-				contact->sum = feedback::AfterSlap(contact->sum, slap->gentle);
-			}
-		}
+		slap = feedback::ClassifySlap(input.point.y - ground, contact.speed, height, input.cursor.x < contact.lastCursor.x);
 	}
-	const bool slow = contact->speed <= feedback::k_SlapSpeed * height;
-	if (touch.has_value() && slow && contact->onBodyMs > feedback::k_StrokeHoldMs)
+	if (slap.has_value())
 	{
-		if (const auto parts = PartsOf(creature, animation, transform))
+		if (feedback::CountSlap(contact.hardSlaps, *slap, onBody))
 		{
-			const auto part = feedback::NearestPart(*touch, *parts);
+			Bruise(creatureEntity, input.rayOrigin, input.rayDirection, feedback::BruiseColumn(contact.speed, height));
+		}
+		// The slap only counts when the creature can reel from it
+		if (minds.ForceAction(creatureEntity, slap->animation, slap->mirrored, std::nullopt, feedback::k_SlapInterruptsAfter))
+		{
+			clocks.sinceTouch = 0.0f;
+			clocks.ready = feedback::k_ReadyAfterTouchMs;
+			contact.sum = feedback::AfterSlap(contact.sum, slap->gentle);
+			contact.strokedOrSlapped = true;
+		}
+		clocks.contact = 0.0f;
+	}
+	else if (!onBody)
+	{
+		contact.lastPart.reset();
+	}
+	else
+	{
+		// Resting on the body long enough, the moving hand caresses it, and strokes the part it is nearest when one is due
+		clocks.contact += input.stepMs;
+		const auto parts =
+		    clocks.contact > feedback::k_StrokeHoldMs && cursorMoved ? PartsOf(creature, animation, transform) : std::nullopt;
+		if (parts.has_value())
+		{
+			stroking = true;
+			const auto part = feedback::NearestPart(*input.touch, *parts);
 			const auto index = static_cast<size_t>(part);
-			if (feedback::StrokeDue(contact->lastPart, part, contact->sinceStrokeMs) &&
+			if (feedback::StrokeDue(clocks, contact.lastPart, part, contact.sum) &&
 			    minds.ForceAction(creatureEntity, feedback::k_RewardAnimations.at(index), feedback::k_RewardMirrored.at(index),
 			                      feedback::RewardFace(part), feedback::k_StrokeInterruptsAfter))
 			{
-				contact->sum = feedback::AfterStroke(contact->sum);
-				contact->lastPart = part;
-				contact->sinceStrokeMs = 0.0f;
-				contact->strokedOrSlapped = true;
+				contact.lastPart = part;
+				clocks.sinceTouch = 0.0f;
+				clocks.ready = feedback::k_ReadyAfterTouchMs;
+				contact.slapReadyMs = 0.0f;
+				contact.sum = feedback::AfterStroke(contact.sum);
+				contact.strokedOrSlapped = true;
 			}
 		}
 	}
-	return HandPose {.position = touch.value_or(point), .onBody = touch.has_value(), .slapping = contact->slapShowMs > 0.0f};
+	const bool fast = contact.speed > feedback::k_SlapSpeed * height;
+	contact.cycle = feedback::NextCycle(contact.cycle, fast, stroking, onBody);
+	contact.wasOnBody = onBody;
+	contact.lastPoint = input.point;
+	contact.lastCursor = input.cursor;
 }
 
 void CreatureHandSystem::Release()
@@ -292,6 +466,7 @@ void CreatureHandSystem::Release()
 	const auto* contact = registry.TryGet<const HandOnCreature>(hand);
 	if (contact == nullptr)
 	{
+		GiveCameraBack();
 		return;
 	}
 	const auto creature = contact->creature;
@@ -299,9 +474,12 @@ void CreatureHandSystem::Release()
 	const auto delivered = feedback::Delivered(sum);
 	registry.Remove<HandOnCreature>(hand);
 	registry.AssignOrReplace<HandLastFeedback>(hand, HandLastFeedback {.sum = sum});
+	GiveCameraBack();
 	if (registry.Valid(creature) && Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().ReceiveFeedback(creature, delivered);
+		// Too slight to count, as a click is, the hand offers to focus on the creature
+		_focusTip = std::abs(delivered) <= feedback::k_SlightFeedback;
 	}
 }
 
@@ -348,6 +526,7 @@ bool CreatureHandSystem::Stroke(entt::entity creature, feedback::BodyPart part)
 	}
 	const auto index = static_cast<size_t>(part);
 	contact->lastPart = part;
+	contact->cycle = feedback::TouchCycle::Tickle;
 	if (!Locator::creatureMindSystem::value().ForceAction(creature, feedback::k_RewardAnimations.at(index),
 	                                                      feedback::k_RewardMirrored.at(index), feedback::RewardFace(part),
 	                                                      feedback::k_StrokeInterruptsAfter))
@@ -355,7 +534,9 @@ bool CreatureHandSystem::Stroke(entt::entity creature, feedback::BodyPart part)
 		return false;
 	}
 	contact->sum = feedback::AfterStroke(contact->sum);
-	contact->sinceStrokeMs = 0.0f;
+	contact->clocks.sinceTouch = 0.0f;
+	contact->clocks.ready = feedback::k_ReadyAfterTouchMs;
+	contact->slapReadyMs = 0.0f;
 	return true;
 }
 
@@ -371,21 +552,22 @@ bool CreatureHandSystem::Slap(entt::entity creature, float heightShare, bool gen
 	// As fast across the body as a gentle slap or a hard one is
 	const auto speed =
 	    (gentle ? (feedback::k_SlapSpeed + feedback::k_HardSlapSpeed) * 0.5f : feedback::k_HardSlapSpeed * 1.5f) * height;
-	const auto slap = feedback::ClassifySlap(heightShare * height, speed, height, sweepsRight);
+	const auto slap = feedback::ClassifySlap(heightShare * height, speed, height, !sweepsRight);
 	if (!slap.has_value())
 	{
 		return false;
 	}
 	contact->lastPart.reset();
 	contact->lastPoint = registry.Get<const Transform>(creature).position + glm::vec3(0.0f, heightShare * height, 0.0f);
-	contact->sinceSlapMs = 0.0f;
-	contact->slapShowMs = k_SlapShowMs;
+	contact->cycle = feedback::TouchCycle::Slap;
 	if (!Locator::creatureMindSystem::value().ForceAction(creature, slap->animation, slap->mirrored, std::nullopt,
 	                                                      feedback::k_SlapInterruptsAfter))
 	{
 		return false;
 	}
 	contact->sum = feedback::AfterSlap(contact->sum, slap->gentle);
+	contact->clocks.sinceTouch = 0.0f;
+	contact->clocks.ready = feedback::k_ReadyAfterTouchMs;
 	return true;
 }
 
