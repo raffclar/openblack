@@ -40,6 +40,7 @@
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/WorshipSites.h"
 #include "ECS/WorshipperRules.h"
 #include "GameWorshipSiteWorld.h"
@@ -115,6 +116,11 @@ void WorshipSiteSystem::TownChangedHands(entt::entity town)
 	{
 		if (auto* site = registry.TryGet<WorshipSite>(component.worshipSite))
 		{
+			// The site's icons of the miracles none of its other towns offer go
+			if (Locator::spellIconSystem::has_value())
+			{
+				Locator::spellIconSystem::value().TownLeftSite(component.worshipSite, town);
+			}
 			std::erase(site->towns, town);
 			std::erase_if(site->buildRequests, [town](const WorshipSite::BuildRequest& asked) { return asked.town == town; });
 		}
@@ -266,9 +272,15 @@ void WorshipSiteSystem::ProcessChants()
 			}
 			const auto& component = registry.Get<const WorshipSite>(site);
 			auto& chants = registry.Get<WorshipChants>(site);
-			// Spell icons are not made at the sites yet, so none charges
+			// Its charging icons share what the dancers chant, and those charged full send their miracles to the hand
+			auto icons = Locator::spellIconSystem::has_value() ? Locator::spellIconSystem::value().ChargesAt(site)
+			                                                   : std::vector<magic::WorshipIconCharge> {};
 			const float drawn =
-			    magic::ProcessWorshipTurn(chants, _world->ChantRules(component.tribe, component.player), Dancers(site), {});
+			    magic::ProcessWorshipTurn(chants, _world->ChantRules(component.tribe, component.player), Dancers(site), icons);
+			if (Locator::spellIconSystem::has_value())
+			{
+				Locator::spellIconSystem::value().ChargedAt(site, icons);
+			}
 			// The artefacts put down by it are powered up as its turn ends, every thousand turns
 			_world->PowerUpArtefacts(site, Dancers(site));
 			CountChantsUsed(site, drawn);
@@ -612,6 +624,11 @@ void WorshipSiteSystem::AddTown(entt::entity site, entt::entity town)
 	}
 	auto& towns = registry.Get<WorshipSite>(site).towns;
 	towns.insert(towns.begin(), town);
+	// The site keeps an icon for each miracle the town's hands show
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().TownJoinedSite(site, town);
+	}
 }
 
 void WorshipSiteSystem::AddTownIfMissing(entt::entity site, entt::entity town)

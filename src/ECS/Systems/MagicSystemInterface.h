@@ -216,6 +216,12 @@ public:
 	/// A seed summoned from an icon of a worship site into its player's hand, if it is free: the site charges it with its
 	/// cost to create, as much as it has, and tops up what it casts. The seed, or none.
 	virtual entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) = 0;
+	/// A miracle charged at an icon of a worship site goes into the site's player's hand, if it is free, holding the prayer
+	/// power the icon stored for it; the site tops up what it casts. The seed, or none.
+	virtual entt::entity TakeIconSeed(entt::entity /*site*/, SpellSeedType /*seed*/, int /*powerUp*/, float /*chants*/)
+	{
+		return entt::null;
+	}
 	/// The hand drops the miracle it holds, as a scribble or a shake does: what was started is called off and what the
 	/// seed still holds goes back to the player's worship
 	virtual void DiscardHeldSeed() = 0;

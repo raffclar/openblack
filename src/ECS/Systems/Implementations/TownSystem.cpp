@@ -45,6 +45,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -588,6 +589,11 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 	// It becomes the player's, gained after the towns they have already
 	component->owner = player;
 	component->gained = registry.Context().nextTownGained++;
+	// The miracles it offers go from its old player to its new one
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().TownChangedHands(town, previous);
+	}
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		Locator::worshipSiteSystem::value().TownChangedHands(town);

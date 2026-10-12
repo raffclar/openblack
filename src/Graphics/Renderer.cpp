@@ -5957,6 +5957,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawFarVillagerSmudges(desc);
 			DrawVillagerEyes(desc);
 			DrawGlobes(desc);
+			DrawIconSeeds(desc);
 			DrawHandMiracleBands(desc);
 			DrawTribalPower(desc);
 			DrawLightColumns(desc);

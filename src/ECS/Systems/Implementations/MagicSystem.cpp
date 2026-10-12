@@ -1820,6 +1820,33 @@ entt::entity MagicSystem::SummonSeedAtSite(entt::entity site, SpellSeedType seed
 	return worshipSite != nullptr ? Summon(worshipSite->player, seedType, powerUp, site) : entt::null;
 }
 
+entt::entity MagicSystem::TakeIconSeed(entt::entity site, SpellSeedType seedType, int powerUp, float chants)
+{
+	const auto& registry = EntityRegistry();
+	const auto* worshipSite = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
+	if (worshipSite == nullptr)
+	{
+		return entt::null;
+	}
+	const auto entity = GiveSeedToHand(worshipSite->player, seedType, powerUp, 1.0f);
+	if (entity == entt::null)
+	{
+		return entt::null;
+	}
+	auto& seed = EntityRegistry().Get<SpellSeed>(entity);
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Info(), seedType), powerUp);
+	// It holds what its icon stored, made at the site's icon, and comes from the player's worship
+	seed.worshipSite = site;
+	seed.chantStore = chants;
+	seed.power = magic::SeedPower(seed.chantStore, magic::GetChantsRequiredToCreate(Info(), type));
+	seed.origin = magic::SeedOrigin::Worship;
+	seed.hasIcon = true;
+	seed.ready = magic::ReadyAtOnce(seed.origin);
+	seed.turnsInHand = 0;
+	ShowHeldSeed();
+	return entity;
+}
+
 entt::entity MagicSystem::Summon(PlayerNames player, SpellSeedType seedType, int powerUp, entt::entity site)
 {
 	const auto entity = GiveSeedToHand(player, seedType, powerUp, 1.0f);
