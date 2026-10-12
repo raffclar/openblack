@@ -37,6 +37,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/PosedModel.h"
@@ -247,6 +248,11 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		}
 		// The apple barrel and its worm are only drawn: the cursor meets the land behind them
 		if (registry.AnyOf<AppleBarrel, AppleBarrelWorm>(entity))
+		{
+			continue;
+		}
+		// So are the lanterns at a temple's entrance, by its creature's pen: the cursor meets what is behind them
+		if (registry.AllOf<TempleLantern>(entity))
 		{
 			continue;
 		}
