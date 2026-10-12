@@ -106,5 +106,5 @@ TEST(ToolTipsForce, AForcedTooltipShowsAtOnceWithItsNumber)
 	EXPECT_EQ(shown->index, 120u);
 	EXPECT_EQ(shown->action, gui::ToolTipAction::None);
 	ASSERT_TRUE(shown->number.has_value());
-	EXPECT_FLOAT_EQ(*shown->number, 40.0f);
+	EXPECT_DOUBLE_EQ(*shown->number, 40.0);
 }

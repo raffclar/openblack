@@ -16,6 +16,7 @@
 
 #include <HNDFile.h>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 /// The tutorial's hand demonstrations: a recording of the player's interface played back through the player's own hand
 /// and camera, record by record as the game's time reaches each, holding at the marks the scripts wait for
@@ -44,6 +45,9 @@ struct HeldButtons
 };
 /// The buttons held once a record has played: each from its press to its release
 [[nodiscard]] HeldButtons AfterRecord(HeldButtons held, hnd::HNDMessage message);
+
+/// The velocity the hand was ready to throw at when a record was made, which a button's record gives back to the hand
+[[nodiscard]] glm::vec3 RecordedThrowVelocity(const hnd::HNDRecord& record);
 
 /// The camera hints are hidden for this many records at each end of the recording
 constexpr size_t k_HintlessRecords = 20;

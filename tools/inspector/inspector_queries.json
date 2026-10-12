@@ -444,6 +444,19 @@
   "query": "town.belief"
  },
  {
+  "description": "A town's miracles, its centre's stone hands and its site's icons",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The town's entity id (town.list)",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "town.spells"
+ },
+ {
   "description": "A town's people without a home, newest first",
   "kind": "list",
   "parameters": [
@@ -1286,7 +1299,7 @@
   "writes": true
  },
  {
-  "description": "A creature's walk in full: where it is going, the route it follows and the circles that route was planned round (what it walks round, each grown by its own reach)",
+  "description": "A creature's walk in full: where it is going, the state of its walk, the route it follows (its legs, straight or round a circle, and points along it) and the circles it walks round (each grown by its own reach)",
   "kind": "object",
   "parameters": [
    {
