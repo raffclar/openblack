@@ -60,6 +60,7 @@
 #include "Input/KeyBindings.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Temple/ChallengeRoomRules.h"
 
 using namespace openblack::gui;
 using openblack::Locator;
@@ -644,6 +645,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_painter.DrawTextWrapped(DialogRect {{0, 0}, DialogPainter::k_Size}, true, _message->text, 60,
 		                         glm::vec4(1.0f, 1.0f, 1.0f, _message->alpha));
 	}
+	DrawCaption(resolution);
 	// The game leaves the creature's panel and the tooltip out under a dialog
 	if (!menuOpen)
 	{
@@ -1443,6 +1445,30 @@ void GameInterface::DrawFightPanel(glm::u16vec2 resolution)
 		const auto name = creature_fight_hud::FitName(side.name, layout.nameWidth, widthOf);
 		_painter.DrawString(row.name + (2.0f * ReferenceScale(resolution.x, resolution.y)), name, layout.textSize, black);
 		_painter.DrawString(row.name, name, layout.textSize, white);
+	}
+}
+
+void GameInterface::DrawCaption(glm::u16vec2 resolution)
+{
+	if (!_caption.has_value())
+	{
+		return;
+	}
+	namespace rules = temple::challenge_room;
+	// The sizes are pixels of the default screen; each line is centred on the screen, the second a line's height below
+	// the first
+	const float scale = ReferenceScale(resolution.x, resolution.y);
+	const float size = rules::k_TextSize * scale;
+	const float shadow = rules::k_ShadowOffset * scale;
+	const float alpha = static_cast<float>(_caption->alpha) / 255.0f;
+	float top = rules::k_TextTop * scale;
+	for (const auto& line : _caption->lines)
+	{
+		const auto width = static_cast<int32_t>(_font.GetWidth(line, size));
+		const auto x = static_cast<float>((static_cast<int32_t>(resolution.x) - width) / 2);
+		_painter.DrawString({x, top}, line, size, glm::vec4(0.0f, 0.0f, 0.0f, alpha), scale > 1.0f);
+		_painter.DrawString({x + shadow, top + shadow}, line, size, glm::vec4(1.0f, 1.0f, 0.0f, alpha), scale > 1.0f);
+		top += size;
 	}
 }
 

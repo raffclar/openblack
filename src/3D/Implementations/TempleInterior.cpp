@@ -29,11 +29,13 @@
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/TempleChallengeRoom.h"
 #include "3D/TempleScrolls.h"
 #include "3D/TempleSigns.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
@@ -44,6 +46,7 @@
 #include "Creature/CreatureCave.h"
 #include "ECS/Archetypes/GlowArchetype.h"
 #include "ECS/ChallengeRecords.h"
+#include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Temple.h"
@@ -51,12 +54,14 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/DetailLevel.h"
@@ -266,6 +271,7 @@ void TempleInterior::SetInterface(gui::GameInterface* interface)
 	_interface = interface;
 	_scrolls.reset();
 	_signs.reset();
+	_challengeRoom.reset();
 	_text.clear();
 	if (_active)
 	{
@@ -303,6 +309,14 @@ void TempleInterior::CreateScrolls()
 		}
 	}
 	_toggles.Find(names);
+
+	// The challenge room finds its pictures, frames and buttons
+	_challengeRoom = std::make_unique<TempleChallengeRoom>();
+	const entt::id_type challengeMeshId = entt::hashed_string("temple/interior/challenge_l3d").value();
+	if (meshes.Contains(challengeMeshId))
+	{
+		_challengeRoom->Find(*meshes.Handle(challengeMeshId));
+	}
 }
 
 bool TempleInterior::HoldControl(bool pressed, float mouseY)
@@ -318,6 +332,10 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 		if (focus.has_value() && _cameraModel != nullptr)
 		{
 			_cameraModel->LookAtSubMesh(focus->position, focus->lookAt);
+			if (_challengeRoom != nullptr)
+			{
+				_challengeRoom->LookedAtScroll();
+			}
 			// Sent to look at a scroll, the camera starts the scroll's help
 			if (const auto content = _scrolls->GetFocusedContent(); content.has_value())
 			{
@@ -326,28 +344,96 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 			}
 		}
 	}
+	if (_challengeRoom != nullptr && _cameraModel != nullptr)
+	{
+		const auto hoveredChallengeSubMesh =
+		    hit.has_value() && hit->room == TempleRoom::Challenge ? hit->subMesh : std::optional<uint32_t> {};
+		TempleChallengeRoom::Outcome outcome;
+		held = _challengeRoom->Hold(pressed, hoveredChallengeSubMesh, _cameraModel->GetSubMeshZoom() == 1.0f, outcome) || held;
+		if (outcome.lookAt.has_value())
+		{
+			_cameraModel->LookAtSubMesh(outcome.lookAt->position, outcome.lookAt->lookAt);
+		}
+		if (outcome.replay.has_value() && !_replay.has_value())
+		{
+			ReplayChallenge(*outcome.replay);
+		}
+	}
 	return held;
+}
+
+void TempleInterior::ReplayChallenge(entt::entity record)
+{
+	// The screen fades to white with a woosh, and once it is white the player leaves the temple for the challenge
+	_replay = record;
+	if (_interface != nullptr)
+	{
+		_interface->GetScreenFade().FadeThrough(glm::vec3(1.0f));
+	}
+	if (Locator::audio::has_value())
+	{
+		constexpr std::array k_Wooshes {audio::SoundId::G_Woosh_01, audio::SoundId::G_Woosh_02, audio::SoundId::G_Woosh_03,
+		                                audio::SoundId::G_Woosh_04};
+		const auto ticks = machine_clock::Ticks();
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(k_Wooshes.at(static_cast<size_t>(ticks & 3))), std::nullopt);
+	}
+}
+
+void TempleInterior::LeaveToReplayChallenge()
+{
+	const auto record = *_replay;
+	_replay.reset();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(record) || !registry.AllOf<ecs::components::ChallengeRecord>(record))
+	{
+		Deactivate();
+		return;
+	}
+	const auto& challenge = registry.Get<ecs::components::ChallengeRecord>(record);
+	// Out on the island the camera goes back to where it was when the challenge's picture was taken, unless a script
+	// has taken the camera keys or the interface from the player
+	const auto& help = Locator::cameraHelpSystem::value().Get();
+	if (help.cameraKeys && help.placeKeys && challenge.position.has_value() && challenge.focus.has_value())
+	{
+		_leaveTo = std::make_pair(*challenge.position, *challenge.focus);
+	}
+	const auto number = challenge.challenge;
+	Deactivate();
+	// Then the challenge's reminder starts
+	chlapi::CHLApi::StartChallengeScript(number);
 }
 
 std::vector<uint32_t> TempleInterior::GetHiddenSubMeshes(TempleRoom room) const
 {
+	if (room == TempleRoom::Challenge && _challengeRoom != nullptr)
+	{
+		return _challengeRoom->GetHidden();
+	}
 	return room == TempleRoom::Main ? _toggles.GetHidden() : std::vector<uint32_t> {};
 }
 
 bool TempleInterior::IsControl(TempleRoom room, uint32_t subMesh) const
 {
 	return (room == TempleRoom::Main && _toggles.IsControl(subMesh)) ||
-	       (_scrolls != nullptr && _scrolls->IsControl(room, subMesh));
+	       (_scrolls != nullptr && _scrolls->IsControl(room, subMesh)) ||
+	       (room == TempleRoom::Challenge && _challengeRoom != nullptr && _challengeRoom->IsControl(subMesh));
 }
 
 bool TempleInterior::IsControlHeld() const
 {
-	return _toggles.IsHeld() || (_scrolls != nullptr && _scrolls->IsHeld());
+	return _toggles.IsHeld() || (_scrolls != nullptr && _scrolls->IsHeld()) ||
+	       (_challengeRoom != nullptr && _challengeRoom->IsHeld());
 }
 
 std::vector<TempleSubMeshTexture> TempleInterior::GetScrollTextures(TempleRoom room) const
 {
-	return _scrolls != nullptr ? _scrolls->GetTextures(room) : std::vector<TempleSubMeshTexture> {};
+	auto textures = _scrolls != nullptr ? _scrolls->GetTextures(room) : std::vector<TempleSubMeshTexture> {};
+	// The challenge room's pictures are drawn with their own textures too
+	if (room == TempleRoom::Challenge && _challengeRoom != nullptr)
+	{
+		std::ranges::copy(_challengeRoom->GetTextures(), std::back_inserter(textures));
+	}
+	return textures;
 }
 
 std::vector<TempleSubMeshGlow> TempleInterior::GetControlGlows(TempleRoom room) const
@@ -431,6 +517,45 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float seconds)
 	}
 }
 
+void TempleInterior::UpdateChallengeRoom()
+{
+	std::optional<gui::GameInterface::Caption> caption;
+	if (_challengeRoom != nullptr && IsRoomDrawn(TempleRoom::Challenge))
+	{
+		const auto& registry = Locator::entitiesRegistry::value();
+		_challengeRoom->Update(registry);
+		// While the camera is any way close to the picture last looked at, its challenge's title and how it went are
+		// written at the top of the screen, showing more the closer the camera is
+		const auto record = _challengeRoom->GetLookedAtRecord();
+		const float closeness = _cameraModel != nullptr ? _cameraModel->GetSubMeshZoom() : 0.0f;
+		if (record.has_value() && closeness != 0.0f && _interface != nullptr &&
+		    registry.AllOf<ecs::components::ChallengeRecord>(*record))
+		{
+			namespace rules = temple::challenge_room;
+			const auto& challenge = registry.Get<ecs::components::ChallengeRecord>(*record);
+			const auto& texts = _interface->GetTexts();
+			const auto helpText = [&texts](uint32_t number) {
+				const auto names = texts.GetHelpNames();
+				return number < names.size() ? std::u16string(texts.Get(names[number])) : std::u16string();
+			};
+			const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+			const auto millisecondsPerTurn = static_cast<uint32_t>(ecs::systems::TimeSystemInterface::k_TurnDuration.count());
+			const auto taken = rules::TimeTaken(challenge.startedTurn, challenge.doneTurn, turn, millisecondsPerTurn);
+			caption = gui::GameInterface::Caption {
+			    .lines = {helpText(challenge.title),
+			              rules::DetailsLine(texts.Get("HELP_TEXT_ROOM_CITADEL_CHALLENGE_ROOM_TIME"), taken,
+			                                 texts.Get("HELP_TEXT_ROOM_CITADEL_CHALLENGE_ROOM_PERCENTCOMPLETE"),
+			                                 challenge.success)},
+			    .alpha = rules::TextAlpha(closeness),
+			};
+		}
+	}
+	if (_interface != nullptr)
+	{
+		_interface->SetCaption(std::move(caption));
+	}
+}
+
 void TempleInterior::UpdateToolTips(float milliseconds)
 {
 	if (_interface == nullptr || _cameraModel == nullptr)
@@ -441,6 +566,8 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	const auto hit = GetCursorHit();
 	const auto scrolls = _scrolls != nullptr ? _scrolls->GetControls(_currentRoom) : std::vector<TempleScrolls::Control> {};
 	const auto toggles = _currentRoom == TempleRoom::Main ? _toggles.GetControls() : std::vector<TempleToggles::Control> {};
+	const bool inChallengeRoom = _currentRoom == TempleRoom::Challenge && _challengeRoom != nullptr;
+	const auto challenges = inChallengeRoom ? _challengeRoom->GetToolTipControls() : std::vector<TempleChallengeControl> {};
 	const TempleToolTipInput input {
 	    .room = _currentRoom,
 	    .inControl = _cameraModel->IsInControl() && !_transitionRoom.has_value(),
@@ -456,6 +583,9 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	    .hoveredSubMesh = hit.has_value() && hit->room == _currentRoom ? hit->subMesh : std::nullopt,
 	    .scrolls = scrolls,
 	    .toggles = toggles,
+	    .challenges = challenges,
+	    .challengeHighDetail = inChallengeRoom ? _challengeRoom->GetHighDetailPlace() : std::nullopt,
+	    .pictureLookedAt = inChallengeRoom && _challengeRoom->IsPictureLookedAt(),
 	};
 	UpdateTempleToolTip(_toolTip, input);
 
@@ -772,6 +902,11 @@ void TempleInterior::SetCurrentRoom(TempleRoom room)
 	if (_active && _enteredRoom != room)
 	{
 		_enteredRoom = room;
+		// Coming into the challenge room, no picture is looked at in high detail
+		if (room == TempleRoom::Challenge && _challengeRoom != nullptr)
+		{
+			_challengeRoom->Enter();
+		}
 		temple_help::GameScripts scripts;
 		temple_help::EnterRoom(scripts, room, temple_help::HelpSystemOn());
 	}
@@ -973,6 +1108,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			}
 		}
 
+		UpdateChallengeRoom();
 		UpdateToolTips(milliseconds);
 
 		// The main room takes the land's heights and brightness for the map every frame the main room is drawn
@@ -1035,6 +1171,12 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 	if (_leavingForMapPoint && _interface != nullptr && _interface->GetScreenFade().GetTurns() > 0)
 	{
 		RequestLeave();
+	}
+	// Once the screen is white the player leaves to replay the challenge
+	if (_active && _replay.has_value() && (_interface == nullptr || _interface->GetScreenFade().GetTurns() > 0))
+	{
+		_leaveRequested = false;
+		LeaveToReplayChallenge();
 	}
 	if (_leaveRequested)
 	{
@@ -1187,6 +1329,8 @@ void TempleInterior::Close()
 	_people.reset();
 	_scrolls.reset();
 	_signs.reset();
+	_challengeRoom.reset();
+	_replay.reset();
 	_text.clear();
 	if (_interface != nullptr)
 	{
@@ -1196,6 +1340,7 @@ void TempleInterior::Close()
 			_interface->GetMenu().Close();
 		}
 		_interface->SetMessage(std::nullopt);
+		_interface->SetCaption(std::nullopt);
 		_interface->GetMenu().SetInsideTemple(false);
 		// The tooltip ends with nothing to keep it
 		_interface->SetHandOnScreen(std::nullopt);

@@ -1252,6 +1252,47 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 1.0f}},
 	});
 
+	all.push_back({
+	    .id = "temple.challenge_room",
+	    .name = "The temple's challenge room with four challenges",
+	    .facet = Facet::Story,
+	    .description = "Four challenges are recorded as their scripts record them, each with its picture of a different "
+	                   "view of the land: The Sea and The Ogre under way, The Lost Brother done, and The Riddles a quest "
+	                   "half done. Then the player is put in the temple's challenge room.",
+	    .expected = "The scroll lists the four titles (four discovered, one completed). The first four pictures on the "
+	                "walls show the four views in low detail, in silver frames but The Riddles' gold one; every picture "
+	                "but The Lost Brother's has its replay button. Clicking a picture looks at it closely in high detail, "
+	                "with its title and its time and percentage at the top of the screen; clicking it again (or a button) "
+	                "fades to white with a woosh and leaves the temple to the challenge's view.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::RecordChallenge,
+	                  .delaySeconds = 1.0f,
+	                  .point = {0.0f, 0.0f},
+	                  .value = 1,
+	                  .amount = 0.25f,
+	                  .title = "HELP_TEXT_TITLE_01"},
+	                 {.kind = Kind::RecordChallenge,
+	                  .delaySeconds = 0.5f,
+	                  .point = {200.0f, -150.0f},
+	                  .value = 3,
+	                  .amount = 0.0f,
+	                  .title = "HELP_TEXT_TITLE_03"},
+	                 {.kind = Kind::RecordChallenge,
+	                  .delaySeconds = 0.5f,
+	                  .point = {-250.0f, 200.0f},
+	                  .value = 15,
+	                  .amount = 1.0f,
+	                  .title = "HELP_TEXT_TITLE_15"},
+	                 {.kind = Kind::RecordChallenge,
+	                  .delaySeconds = 0.5f,
+	                  .point = {150.0f, 250.0f},
+	                  .value = 16,
+	                  .amount = 0.5f,
+	                  .ctrl = true,
+	                  .title = "HELP_TEXT_TITLE_16"},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 0}},
+	});
+
 	// The camera looks out across the north edge of the player's influence: the bottom of the screen is inside it,
 	// the middle and the top beyond it
 	all.push_back({
@@ -2687,7 +2728,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
-	       kind == Kind::RunHelpMessage || IsPointerCommand(kind);
+	       kind == Kind::RunHelpMessage || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2714,7 +2755,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 99> k_Names {
+	constexpr std::array<std::string_view, 101> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2814,6 +2855,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "run text",
 	    "play hand demo",
 	    "reframe",
+	    "record challenge",
+	    "enter temple",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
