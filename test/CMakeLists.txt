@@ -306,6 +306,7 @@ openblack_setup_and_add_test(
   test_creature_footprints test_creature_footprints.cpp
 )
 openblack_setup_and_add_test(test_creature_fight test_creature_fight.cpp)
+openblack_setup_and_add_test(test_fight_marks test_fight_marks.cpp)
 openblack_setup_and_add_test(test_creature_fizz test_creature_fizz.cpp)
 openblack_setup_and_add_test(
   test_creature_fizz_look test_creature_fizz_look.cpp
@@ -835,3 +836,9 @@ openblack_setup_and_add_test(test_gesture_hints test_gesture_hints.cpp)
 openblack_setup_and_add_test(
   test_object_detail graphics/test_object_detail.cpp
 )
+openblack_setup_and_add_test(test_player_profiles test_player_profiles.cpp)
+openblack_setup_and_add_test(test_text_edit_rules gui/test_text_edit_rules.cpp)
+openblack_setup_and_add_test(test_new_player_box gui/test_new_player_box.cpp)
+openblack_setup_and_add_test(test_creature_names test_creature_names.cpp)
+openblack_setup_and_add_test(test_creature_help test_creature_help.cpp)
+openblack_setup_and_add_test(test_help_messages test_help_messages.cpp)

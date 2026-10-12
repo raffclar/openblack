@@ -24,6 +24,7 @@
 
 #include "Common/Zoomer.h"
 #include "DialogPainter.h"
+#include "TextEditRules.h"
 
 namespace openblack::gui
 {
@@ -79,6 +80,8 @@ public:
 	/// Typing while the control has the focus, true when it took it
 	virtual bool TextInput(std::u16string_view /*text*/) { return false; }
 	virtual bool KeyDown(int /*key*/) { return false; }
+	/// The control takes the keyboard's focus, or loses it
+	virtual void SetFocus(bool /*focused*/) {}
 
 	DialogRect rect;
 	bool visible {true};
@@ -274,23 +277,38 @@ private:
 	glm::ivec2 _pointer {-1, -1};
 };
 
-/// An edit box: a dark box of text the player types into when it has the focus
+/// An edit box: a bevelled box of white text the player types into while it has the focus. A blinking bar marks the
+/// caret and a pale band the selection, its text grey; the text scrolls to keep the caret in the box. The first click
+/// into the box as it takes the focus selects all of its text; dragging selects, and Shift with the arrows, Home and
+/// End moves the selection's end
 class EditBox final: public Control
 {
 public:
-	EditBox(DialogRect rect, std::u16string text, size_t maxLength);
+	/// The font measures the text, drawn size high
+	EditBox(const GameFont& font, DialogRect rect, std::u16string text, size_t maxLength,
+	        int size = DialogPainter::k_MidTextSize);
 	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
 	void MouseDown(glm::ivec2 point) override;
+	void Drag(glm::ivec2 point) override;
+	void Release(glm::ivec2 point) override;
 	bool TextInput(std::u16string_view text) override;
 	bool KeyDown(int key) override;
+	void SetFocus(bool focused) override;
 
-	[[nodiscard]] const std::u16string& GetText() const noexcept { return _text; }
+	[[nodiscard]] const std::u16string& GetText() const noexcept { return _state.text; }
+	/// Puts the text in, the caret after it and nothing selected
+	void SetText(std::u16string_view text);
 	std::function<void(const std::u16string&)> onChange;
 
 private:
-	std::u16string _text;
-	size_t _maxLength;
-	size_t _caret;
+	[[nodiscard]] int Width(std::u16string_view text) const;
+	[[nodiscard]] int CharacterAt(glm::ivec2 point) const;
+	/// The text scrolls to keep the caret in sight; the change is told
+	void Changed(bool textChanged);
+
+	const GameFont& _font;
+	text_edit::State _state;
+	int _size;
 };
 
 /// A colour picker: a strip of the palette's colours, or a brightness bar from black at the top through a colour at the
@@ -378,6 +396,7 @@ public:
 	[[nodiscard]] bool IsOnTop() const override { return GetRingOpening() > 0.0f; }
 
 	[[nodiscard]] int GetSymbol() const noexcept { return _symbol; }
+	void SetSymbol(int symbol) noexcept { _symbol = std::clamp(symbol, 0, k_SymbolCount - 1); }
 	[[nodiscard]] bool IsRingOpen() const noexcept { return _ringOpen; }
 	/// How far the ring has come up, 0 to 1
 	[[nodiscard]] float GetRingOpening() const noexcept { return std::clamp(_ring.GetValue(), 0.0f, 1.0f); }

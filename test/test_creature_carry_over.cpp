@@ -14,6 +14,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <system_error>
 
@@ -46,6 +47,14 @@ using namespace openblack::creature_carry_over;
 
 namespace
 {
+/// The current profile's creature file, as a profile made by the game names it
+constexpr std::string_view k_ProfileFile = "C4a4f6e63.erc";
+
+std::optional<std::string> ProfileFile()
+{
+	return std::string(k_ProfileFile);
+}
+
 creature_marks::Mark Wound()
 {
 	return {.u = 0x12, .v = 0x34, .skin = 2, .age = 5, .type = 6, .column = 3};
@@ -419,10 +428,10 @@ TEST_F(CreatureCarryOverSystem, ACreatureKeptByAnEarlierGameIsReadFromItsFile)
 	const TestFolder folder("carry_over_read");
 	creaturemind::MindFileData file;
 	file.name = u"Rex";
-	const auto path = KeptFilesIn(folder.Path(), ecs::systems::CreatureCarryOverSystem::k_ProfileFile).mind;
+	const auto path = KeptFilesIn(folder.Path(), k_ProfileFile).mind;
 	ASSERT_EQ(creaturemind::WriteFile(path, file), creaturemind::MindResult::Success);
 
-	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path());
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
 	EXPECT_EQ(carryOver.Kept(), nullptr);
 	// With no land to make it on, it is still read
 	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
@@ -435,10 +444,10 @@ TEST_F(CreatureCarryOverSystem, ACreatureKeptSinceTheGameStartedIsNotReplacedByI
 	const TestFolder folder("carry_over_kept");
 	creaturemind::MindFileData old;
 	old.name = u"Rex";
-	const auto path = KeptFilesIn(folder.Path(), ecs::systems::CreatureCarryOverSystem::k_ProfileFile).mind;
+	const auto path = KeptFilesIn(folder.Path(), k_ProfileFile).mind;
 	ASSERT_EQ(creaturemind::WriteFile(path, old), creaturemind::MindResult::Success);
 
-	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path());
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
 	auto kept = std::make_shared<creaturemind::MindFileData>();
 	kept->name = u"Spot";
 	carryOver.Keep(kept);

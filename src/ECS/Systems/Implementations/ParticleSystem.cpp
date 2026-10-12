@@ -1265,6 +1265,7 @@ void ParticleSystem::ProcessTurn()
 void ParticleSystem::Reset()
 {
 	_playerSymbols.clear();
+	_fightMarks.clear();
 	_effects.clear();
 	_explodeObject = k_NoEffect;
 	_gestureTrails = k_NoEffect;
@@ -1376,6 +1377,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 		{
 			particles::draw::AddPlayerSymbol(frame, symbol, sources);
 		}
+		particles::draw::AddFightMarks(frame, _fightMarks);
 	}
 	_drawStats = {
 	    .sprites = frame.sprites.size(),

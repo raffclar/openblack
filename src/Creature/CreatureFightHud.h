@@ -72,6 +72,4 @@ struct Layout
 /// The longest start of a name that fits a width, letters taken off its end one at a time
 [[nodiscard]] std::u16string_view FitName(std::u16string_view name, float width,
                                           const std::function<float(std::u16string_view)>& widthOf);
-/// The name a creature is shown by: its species', as creatures have no names of their own yet
-[[nodiscard]] std::u16string_view SpeciesName(CreatureType species);
 } // namespace openblack::creature_fight_hud

@@ -16,6 +16,7 @@
 #include <string_view>
 #include <utility>
 
+#include <SDL_keyboard.h>
 #include <SDL_keycode.h>
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
@@ -488,98 +489,168 @@ void List::Wheel(int steps)
 	ScrollTo(_scroll - static_cast<float>(steps * _size));
 }
 
-EditBox::EditBox(DialogRect rect, std::u16string text, size_t maxLength)
+EditBox::EditBox(const GameFont& font, DialogRect rect, std::u16string text, size_t maxLength, int size)
     : Control(rect)
-    , _text(std::move(text))
-    , _maxLength(maxLength)
-    , _caret(_text.size())
+    , _font(font)
+    , _state {.text = std::move(text), .maxLength = maxLength}
+    , _size(size)
 {
-	if (_text.size() > _maxLength)
+	SetText(std::u16string(_state.text));
+}
+
+int EditBox::Width(std::u16string_view text) const
+{
+	return static_cast<int>(_font.GetWidth(text, static_cast<float>(_size)));
+}
+
+int EditBox::CharacterAt(glm::ivec2 point) const
+{
+	return text_edit::CharacterAt(_state, rect.min.x, point.x, [this](std::u16string_view text) { return Width(text); });
+}
+
+void EditBox::Changed(bool textChanged)
+{
+	text_edit::Scroll(_state, rect.Width(), [this](std::u16string_view text) { return Width(text); });
+	if (textChanged && onChange)
 	{
-		_text.resize(_maxLength);
-		_caret = _maxLength;
+		onChange(_state.text);
 	}
 }
 
-void EditBox::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /*pressed*/) const
+void EditBox::SetText(std::u16string_view text)
+{
+	_state.text = std::u16string(text.substr(0, std::min(text.size(), _state.maxLength)));
+	const auto end = static_cast<int>(_state.text.size());
+	_state.caret = end;
+	_state.selectionStart = end;
+	_state.selectionEnd = end;
+	_state.scroll = 0;
+	Changed(false);
+}
+
+void EditBox::Draw(const DialogPainter& painter, bool /*hovered*/, bool focused, bool /*pressed*/) const
 {
 	if (!visible)
 	{
 		return;
 	}
-	constexpr auto k_Size = DialogPainter::k_MidTextSize;
 	painter.DrawBevelBox(rect, 1, DialogPainter::All, glm::vec4(1.0f));
-	const glm::ivec2 position {rect.min.x + 4, rect.Centre().y - (k_Size / 2)};
-	painter.DrawText(position, rect.Width() - 8, Justify::Left, _text, k_Size, TextColour(hovered && !focused, focused));
-	if (focused)
+	const auto text = std::u16string_view(_state.text);
+	const auto scroll = static_cast<size_t>(std::clamp(_state.scroll, 0, static_cast<int>(text.size())));
+	const auto shown = text.substr(scroll);
+	const int left = rect.min.x + 4;
+	const int top = rect.Centre().y - (_size / 2);
+	const int room = rect.Width() - 8;
+	painter.DrawText({left, top}, room, Justify::Left, shown, _size, DialogPainter::k_FocusColour);
+	if (!focused)
 	{
-		// A caret blinking twice a second
-		if ((machine_clock::Ticks() / 250u) % 2u == 0u)
+		return;
+	}
+	// Widths from the first character shown
+	const auto widthTo = [this, &text, scroll](int place) {
+		const auto end = static_cast<size_t>(std::clamp(place, static_cast<int>(scroll), static_cast<int>(text.size())));
+		return Width(text.substr(scroll, end - scroll));
+	};
+	const auto start = widthTo(_state.selectionStart);
+	const auto end = widthTo(_state.selectionEnd);
+	const auto caret = widthTo(_state.caret);
+	const auto low = std::min({start, end, room});
+	const auto high = std::min(std::max(start, end) + 1, room);
+	if (low >= high)
+	{
+		return;
+	}
+	const auto pale = glm::vec4(1.0f, 1.0f, 1.0f, 0.5f);
+	const auto band = [&painter, &pale, this](int from, int to) {
+		const auto y0 = static_cast<float>(rect.min.y + 2);
+		const auto y1 = static_cast<float>(rect.max.y - 2);
+		const auto x0 = static_cast<float>(from);
+		const auto x1 = static_cast<float>(to);
+		painter.DrawShape({glm::vec2(x0, y0), {x1, y0}, {x1, y1}, {x0, y1}}, {pale, pale, pale, pale});
+	};
+	// The caret shows every other fifth of a second
+	if ((machine_clock::Ticks() / 200u) % 2u == 1u && caret >= 0 && caret < room)
+	{
+		band(rect.min.x + 5 + caret, rect.min.x + 7 + caret);
+	}
+	if (_state.selectionStart != _state.selectionEnd)
+	{
+		band(left + low, rect.min.x + 5 + high);
+		const auto first =
+		    static_cast<size_t>(std::max(std::min(_state.selectionStart, _state.selectionEnd), static_cast<int>(scroll)));
+		const auto last =
+		    static_cast<size_t>(std::max(std::max(_state.selectionStart, _state.selectionEnd), static_cast<int>(scroll)));
+		if (first < last && last <= text.size())
 		{
-			const auto x =
-			    position.x + static_cast<int>(painter.GetTextWidth(std::u16string_view(_text).substr(0, _caret), k_Size));
-			painter.DrawLine({x, position.y + 2}, {x, position.y + k_Size - 2}, DialogPainter::k_FocusColour);
+			painter.DrawText({left + low, top}, room - low, Justify::Left, text.substr(first, last - first), _size,
+			                 DialogPainter::k_TextColour);
 		}
 	}
 }
 
-void EditBox::MouseDown(glm::ivec2 /*point*/)
+void EditBox::MouseDown(glm::ivec2 point)
 {
-	_caret = _text.size();
+	text_edit::MouseDown(_state, CharacterAt(point));
+	Changed(false);
+}
+
+void EditBox::Drag(glm::ivec2 point)
+{
+	text_edit::Drag(_state, CharacterAt(point));
+	Changed(false);
+}
+
+void EditBox::Release(glm::ivec2 point)
+{
+	text_edit::MouseUp(_state, CharacterAt(point));
+	Changed(false);
+}
+
+void EditBox::SetFocus(bool focused)
+{
+	text_edit::SetFocus(_state, focused);
+	Changed(false);
 }
 
 bool EditBox::TextInput(std::u16string_view text)
 {
 	for (const auto c : text)
 	{
-		if (_text.size() >= _maxLength || c < u' ')
-		{
-			break;
-		}
-		_text.insert(_caret++, 1, c);
+		text_edit::Type(_state, c);
 	}
-	if (onChange)
-	{
-		onChange(_text);
-	}
+	Changed(true);
 	return true;
 }
 
 bool EditBox::KeyDown(int key)
 {
+	const bool shift = (SDL_GetModState() & KMOD_SHIFT) != 0;
 	switch (key)
 	{
 	case SDLK_BACKSPACE:
-		if (_caret > 0)
-		{
-			_text.erase(--_caret, 1);
-		}
-		break;
+		text_edit::Type(_state, u'');
+		Changed(true);
+		return true;
 	case SDLK_DELETE:
-		if (_caret < _text.size())
-		{
-			_text.erase(_caret, 1);
-		}
-		break;
+		text_edit::Press(_state, text_edit::Key::Delete, shift);
+		Changed(true);
+		return true;
 	case SDLK_LEFT:
-		_caret = _caret > 0 ? _caret - 1 : 0;
-		return true;
+		text_edit::Press(_state, text_edit::Key::Left, shift);
+		break;
 	case SDLK_RIGHT:
-		_caret = std::min(_caret + 1, _text.size());
-		return true;
+		text_edit::Press(_state, text_edit::Key::Right, shift);
+		break;
 	case SDLK_HOME:
-		_caret = 0;
-		return true;
+		text_edit::Press(_state, text_edit::Key::Home, shift);
+		break;
 	case SDLK_END:
-		_caret = _text.size();
-		return true;
+		text_edit::Press(_state, text_edit::Key::End, shift);
+		break;
 	default:
 		return false;
 	}
-	if (onChange)
-	{
-		onChange(_text);
-	}
+	Changed(false);
 	return true;
 }
 

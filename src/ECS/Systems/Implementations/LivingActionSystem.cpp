@@ -47,6 +47,7 @@
 #include "VillagerDiscipleWork.h"
 #include "VillagerDisciples.h"
 #include "VillagerEaten.h"
+#include "VillagerFarmer.h"
 #include "VillagerFire.h"
 #include "VillagerFisherman.h"
 #include "VillagerFlock.h"
@@ -81,6 +82,7 @@ namespace villager_disciple = openblack::ecs::villager_disciple;
 namespace villager_disciple_work = openblack::ecs::villager_disciple_work;
 namespace villager_food = openblack::ecs::villager_food;
 namespace villager_forester = openblack::ecs::villager_forester;
+namespace villager_farmer = openblack::ecs::villager_farmer;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_housewife = openblack::ecs::villager_housewife;
 namespace villager_mourning = openblack::ecs::villager_mourning;
@@ -483,9 +485,24 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .exitState = &villager_worship::ExitGetFoodAtWorship,
     },
     /* RESTART_WORSHIPPING_CREATURE */ k_TodoEntry,
-    /* FARMER_ARRIVES_AT_FARM */ k_TodoEntry,
-    /* FARMER_PLANTS_CROP */ k_TodoEntry,
-    /* FARMER_DIGS_UP_CROP */ k_TodoEntry,
+    /* FARMER_ARRIVES_AT_FARM */
+    VillagerStateTableEntry {
+        .state = &villager_farmer::FarmerArrivesAtFarm,
+        .entryState = &villager_farmer::EnterFarming,
+        .exitState = &villager_farmer::ExitFarming,
+    },
+    /* FARMER_PLANTS_CROP */
+    VillagerStateTableEntry {
+        .state = &villager_farmer::FarmerPlantsCrop,
+        .entryState = &villager_farmer::EnterFarming,
+        .exitState = &villager_farmer::ExitFarming,
+    },
+    /* FARMER_DIGS_UP_CROP */
+    VillagerStateTableEntry {
+        .state = &villager_farmer::FarmerDigsUpCrop,
+        .entryState = &villager_farmer::EnterFarming,
+        .exitState = &villager_farmer::ExitFarming,
+    },
     /* MOVE_TO_FOOTBALL_PITCH_CONSTRUCTION */ k_TodoEntry,
     /* FOOTBALL_WALK_TO_POSITION */ k_TodoEntry,
     /* FOOTBALL_WAIT_FOR_KICK_OFF */ k_TodoEntry,

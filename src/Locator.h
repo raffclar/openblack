@@ -31,6 +31,11 @@ class GameRandomInterface;
 class RandomNumberManagerInterface;
 class TempleInteriorInterface;
 
+namespace player_profiles
+{
+struct Store;
+}
+
 namespace v120
 {
 struct InfoConstants;
@@ -141,6 +146,8 @@ class SharkSystemInterface;
 class VideoSystemInterface;
 class HelpTextSystemInterface;
 class HelpProfileSystemInterface;
+class CreatureHelpSystemInterface;
+class HelpMessageSystemInterface;
 class TipBubbleSystemInterface;
 class HandDemoSystemInterface;
 class AdvisorSystemInterface;
@@ -193,7 +200,8 @@ class InspectorSystemInterface;
 
 void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags);
 bool InitializeEngine(GraphicsBackend backend, bool vsync) noexcept;
-bool InitializeGame() noexcept;
+/// The game's services, the players' profiles kept as the store says
+bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
@@ -291,6 +299,8 @@ struct Locator
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
 	using helpProfileSystem = entt::locator<ecs::systems::HelpProfileSystemInterface>;
+	using creatureHelpSystem = entt::locator<ecs::systems::CreatureHelpSystemInterface>;
+	using helpMessageSystem = entt::locator<ecs::systems::HelpMessageSystemInterface>;
 	using tipBubbleSystem = entt::locator<ecs::systems::TipBubbleSystemInterface>;
 	using handDemoSystem = entt::locator<ecs::systems::HandDemoSystemInterface>;
 	using advisorSystem = entt::locator<ecs::systems::AdvisorSystemInterface>;

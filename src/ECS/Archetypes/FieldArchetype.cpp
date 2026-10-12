@@ -30,16 +30,13 @@ entt::entity FieldArchetype::Create(int townId, const glm::vec3& position, Field
 {
 	auto& registry = Locator::entitiesRegistry::value();
 
-	const auto& info = Locator::infoConstants::value().fieldType.at(static_cast<size_t>(type));
-
 	auto townTribe = registry.Get<Tribe>(registry.Context().towns[townId]);
 	auto abodeInfo = GAbodeInfo::Find(townTribe, AbodeNumber::Field);
 
 	auto entity = AbodeArchetype::Create(townId, position, abodeInfo, yAngleRadians, 1.0f, 0, 0);
-	// TODO(raffclar): the town's farmers sow their fields; until they do, a field starts sown and empty
-	const field_crop::Crop crop {.timesSown = static_cast<uint8_t>(info.timesToSow)};
-	registry.Assign<Field>(entity, townId, type, crop, Locator::gameRandom::value().GameRand(field_crop::k_TurnsPerGrowth),
-	                       field_crop::Settle {});
+	// A new field is bare: the town's farmers sow it
+	registry.Assign<Field>(entity, townId, type, field_crop::Crop {},
+	                       Locator::gameRandom::value().GameRand(field_crop::k_TurnsPerGrowth), field_crop::Settle {});
 	// The crop follows one of the trees' sways, picked by where the field happens to be in memory, so as
 	// good as at random
 	registry.Assign<Swayable>(

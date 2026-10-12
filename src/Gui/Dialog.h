@@ -86,6 +86,8 @@ public:
 	/// Names one of the tabs again
 	void SetTabLabel(size_t index, std::u16string label);
 	[[nodiscard]] Control* GetFocus() const noexcept { return _focused; }
+	/// Gives a control the keyboard's focus, or none; the control losing it and the one taking it are told
+	void SetFocus(Control* control);
 
 private:
 	[[nodiscard]] Control* HitTest(glm::ivec2 point) const;

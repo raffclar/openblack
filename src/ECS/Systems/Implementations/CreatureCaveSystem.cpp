@@ -25,7 +25,6 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CaveCreature.h"
-#include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMindTables.h"
@@ -200,7 +199,7 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		return std::nullopt;
 	}
 	creature_cave::Snapshot snapshot;
-	snapshot.name = creature_fight_hud::SpeciesName(body->species);
+	snapshot.name = body->name;
 	snapshot.strength = body->strength;
 	snapshot.fatness = body->fatness;
 	snapshot.alignment = body->alignment;
@@ -231,10 +230,6 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 	if (mind->learnt.has_value())
 	{
 		const auto& learnt = *mind->learnt;
-		if (!learnt.name.empty())
-		{
-			snapshot.name = learnt.name;
-		}
 		snapshot.creaturesKnown = learnt.creatures.size();
 		if (mind->desires.has_value())
 		{
