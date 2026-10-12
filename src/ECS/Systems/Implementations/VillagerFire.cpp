@@ -291,32 +291,13 @@ bool IsFireFightingState(VillagerStates state)
 	       state == VillagerStates::GetWaterToPutOutFire || state == VillagerStates::MoveAroundFire;
 }
 
-/// The villager goes back to what it remembered. Both the state it is in and the one it was walking to are left, so
-/// leaving a reaction it was walking to ends that reaction. When either refuses to be left it decides afresh what to
-/// do, without leaving them. Going into the remembered state clears the state it was walking to.
+/// The villager goes back to what it remembered, as any change of state goes: it may pause a second first, and a state
+/// that won't be gone into leaves it deciding what to do. Nothing is remembered afterwards. With nothing remembered it
+/// decides what to do rather than standing still for good.
 void PopFromPrevious(LivingAction& action)
 {
-	auto& living = Living();
 	const auto previous = State(action, LivingAction::Index::Previous);
-	const auto resume = static_cast<VillagerStates>(StateInfo(previous).resumeState);
-	const auto top = State(action, LivingAction::Index::Top);
-	// A state that is an end in itself is also the one it is heading for
-	const auto final = StateInfo(top).isFinalState != 0 ? top : State(action, LivingAction::Index::Final);
-	bool refused = living.VillagerCallExitState(action, LivingAction::Index::Top, resume);
-	if (final != top && living.VillagerCallExitState(action, LivingAction::Index::Final, resume))
-	{
-		refused = true;
-	}
-	if (refused)
-	{
-		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, true);
-	}
-	else
-	{
-		living.VillagerSetState(action, LivingAction::Index::Top, resume, true);
-		living.VillagerSetState(action, LivingAction::Index::Final, VillagerStates::InvalidState, true);
-		living.VillagerCallEntryState(action, LivingAction::Index::Top, top, resume);
-	}
+	SetTopState(action, villager_fire::StateToGoBackTo(static_cast<VillagerStates>(StateInfo(previous).resumeState)));
 	SetPrevious(action, VillagerStates::InvalidState);
 }
 
@@ -574,8 +555,13 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 	}
 	if (IsFireFightingState(FinalState(action)))
 	{
-		// A fireman already: back to its fight
+		// A fireman already: back to what it remembered, or to deciding afresh if that is a reaction, letting go of this
+		// one
 		PopFromPrevious(action);
+		if (StateInfo(FinalState(action)).isReactionState != 0)
+		{
+			SetTopState(action, VillagerStates::DecideWhatToDo);
+		}
 		if (FireStateOf(villager).reaction != 0)
 		{
 			StopReacting(villager);
@@ -822,6 +808,7 @@ bool villager_fire::EnterPutOutFire(LivingAction& action, VillagerStates from, V
 	auto& state = FireStateOf(villager);
 	auto& fires = Locator::fireSystem::value();
 	const bool valid = state.fire != entt::null && Entities().Valid(state.fire) && Entities().AllOf<Fire>(state.fire);
+	// Refused, the villager decides what to do instead (the change of state sees to that)
 	if (!valid || state.reaction == 0 || !ReactionAge(state.reaction).has_value())
 	{
 		if (!valid)
@@ -832,12 +819,11 @@ bool villager_fire::EnterPutOutFire(LivingAction& action, VillagerStates from, V
 		{
 			StopReacting(villager);
 		}
-		SetTopState(action, VillagerStates::DecideWhatToDo);
 		return false;
 	}
+	// Already one of the blaze's firemen, it is refused but stays listed, keeping its reaction
 	if (fires.IsFiremanOf(state.fire, villager))
 	{
-		SetTopState(action, VillagerStates::DecideWhatToDo);
 		return false;
 	}
 	fires.AddFireman(state.fire, villager);
@@ -974,7 +960,8 @@ void villager_fire::StopFireFighting(entt::entity villager)
 		SetTopState(*action, VillagerStates::DecideWhatToDo);
 		return;
 	}
-	auto next = static_cast<VillagerStates>(StateInfo(State(*action, LivingAction::Index::Previous)).resumeState);
+	auto next =
+	    StateToGoBackTo(static_cast<VillagerStates>(StateInfo(State(*action, LivingAction::Index::Previous)).resumeState));
 	if (IsFireFightingState(next))
 	{
 		next = VillagerStates::DecideWhatToDo;
@@ -987,7 +974,13 @@ void villager_fire::StopFireFighting(entt::entity villager)
 	}
 	else
 	{
+		// Walking there: both the walk and the fire state it was heading for are left, so it lets go of the reaction
+		const auto top = State(*action, LivingAction::Index::Top);
 		Living().VillagerCallExitState(*action, LivingAction::Index::Top, next);
+		if (FinalState(*action) != top)
+		{
+			Living().VillagerCallExitState(*action, LivingAction::Index::Final, next);
+		}
 		Living().VillagerSetState(*action, LivingAction::Index::Final, next, true);
 		SetPrevious(*action, VillagerStates::InvalidState);
 	}

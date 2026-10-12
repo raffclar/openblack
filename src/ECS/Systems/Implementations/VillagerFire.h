@@ -43,6 +43,13 @@ void SetupOnFire(entt::entity villager, entt::entity fire);
 [[nodiscard]] bool IsFireMan(entt::entity villager);
 /// A fireman stops fighting and goes back to what it was doing
 void StopFireFighting(entt::entity villager);
+/// The state a villager in the fire states goes back to, given the one its remembered state resumes in. Remembering
+/// nothing, it would resume in no state at all and stand still for good (as firemen did in the original game when the
+/// object behind their fire went); it decides what to do instead.
+[[nodiscard]] constexpr VillagerStates StateToGoBackTo(VillagerStates resume)
+{
+	return resume == VillagerStates::InvalidState ? VillagerStates::DecideWhatToDo : resume;
+}
 /// The fire a villager fights or runs from, none for anybody else
 [[nodiscard]] entt::entity FireOf(entt::entity villager);
 /// What a death is put down to: what killed the villager, the player who did it (none for nobody, counted as the neutral

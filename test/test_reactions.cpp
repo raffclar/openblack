@@ -39,6 +39,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/MapProduction.h"
+#include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
@@ -332,6 +333,68 @@ TEST_F(Reactions, AVillagerGoingFromAFireToFightItKeepsTheReactionItNeeds)
 	EXPECT_FALSE(villager_fire::ExitReaction(action, VillagerStates::MoveAroundFire));
 	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).reaction, 7u);
 	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 7u);
+	Locator::reactionSystem::reset();
+}
+
+TEST(VillagerFireRules, AFiremanRememberingNothingDecidesWhatToDoRatherThanStandingStill)
+{
+	EXPECT_EQ(villager_fire::StateToGoBackTo(VillagerStates::InvalidState), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(villager_fire::StateToGoBackTo(VillagerStates::PutOutFireByBeating), VillagerStates::PutOutFireByBeating);
+	EXPECT_EQ(villager_fire::StateToGoBackTo(VillagerStates::DecideWhatToDo), VillagerStates::DecideWhatToDo);
+}
+
+TEST_F(Reactions, AFiremanWhoseFiresObjectGoesWithNothingRememberedDecidesWhatToDo)
+{
+	// Beating a fire in its place, the earlier walk having used up what it remembered, when the object whose fire it
+	// reacted to goes
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	const auto villager = _villagers[0];
+	const auto gone = registry.Create();
+	registry.Destroy(gone);
+	auto& action = registry.Get<LivingAction>(villager);
+	action.states.at(static_cast<size_t>(LivingAction::Index::Top)) = static_cast<uint8_t>(VillagerStates::PutOutFireByBeating);
+	action.states.at(static_cast<size_t>(LivingAction::Index::Previous)) = static_cast<uint8_t>(VillagerStates::InvalidState);
+	registry.Assign<VillagerFireState>(villager, VillagerFireState {.fire = entt::null, .reactionTarget = gone, .reaction = 7});
+	EXPECT_TRUE(villager_fire::ReactionValidate(action));
+	EXPECT_EQ(StateOf(villager), VillagerStates::DecideWhatToDo);
+	Locator::reactionSystem::reset();
+}
+
+TEST_F(Reactions, AFiremanWalkingToAFireThatGoesLeavesTheBlazeAndLetsGoOfItsReaction)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& stateTable = _info->villagerStateTable;
+	for (const auto state : {VillagerStates::PutOutFireByBeating, VillagerStates::MoveAroundFire})
+	{
+		auto& row = stateTable.at(static_cast<size_t>(state));
+		row.isFinalState = 1;
+		row.isReactionState = 1;
+		row.resumeState = static_cast<int>(state);
+	}
+	Locator::infoConstants::emplace(*_info);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
+	const auto villager = _villagers[0];
+	const auto burning = registry.Create();
+	registry.Assign<Transform>(burning, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Fire>(burning).root = burning;
+	registry.Assign<FireGroup>(burning, FireGroup {.members = {burning}, .firemen = {villager}});
+	// Walking round the fire to its place to beat it from
+	auto& action = registry.Get<LivingAction>(villager);
+	action.states = {static_cast<uint8_t>(VillagerStates::MoveToPos), static_cast<uint8_t>(VillagerStates::MoveAroundFire),
+	                 static_cast<uint8_t>(VillagerStates::PutOutFireByBeating)};
+	registry.Assign<VillagerFireState>(villager, VillagerFireState {.fire = burning, .reactionTarget = burning, .reaction = 7});
+	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = 7, .type = Reaction::ReactToFire});
+	villager_fire::StopFireFighting(villager);
+	EXPECT_TRUE(registry.Get<const FireGroup>(burning).firemen.empty());
+	// It walks on, then decides what to do; leaving the fire state it was heading for lets go of the reaction
+	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
+	EXPECT_EQ(static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final))),
+	          VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).reaction, 0u);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::fireSystem::reset();
 	Locator::reactionSystem::reset();
 }
 
