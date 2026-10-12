@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <ranges>
@@ -242,6 +243,76 @@ void WorshipSiteSystem::SetCanHaveSites(entt::entity townOrTemple, bool can)
 		return;
 	}
 	Log(spdlog::level::err, "scripting", "Worship sites can only be allowed or stopped for a town or temple");
+}
+
+void WorshipSiteSystem::RemoveSites(entt::entity temple)
+{
+	auto& registry = _world->Entities();
+	auto* worship = registry.Valid(temple) ? registry.TryGet<const CitadelWorship>(temple) : nullptr;
+	if (worship == nullptr)
+	{
+		return;
+	}
+	std::vector<std::pair<uint32_t, entt::entity>> sites;
+	for (const auto site : worship->sites)
+	{
+		if (site != entt::null && registry.Valid(site))
+		{
+			sites.emplace_back(registry.Get<const WorshipSite>(site).made, site);
+		}
+	}
+	// The newest site goes first
+	std::ranges::sort(sites, std::greater {});
+	for (const auto& [made, site] : sites)
+	{
+		Remove(site);
+	}
+}
+
+void WorshipSiteSystem::Remove(entt::entity site)
+{
+	auto& registry = _world->Entities();
+	// Copied: the site's own record goes with it
+	const auto component = registry.Get<const WorshipSite>(site);
+	// Its altar goes first, then its dance: the dancers leave it while their towns still have the site, so they are
+	// counted out of its worship as they go
+	if (component.altar != entt::null && registry.Valid(component.altar))
+	{
+		_world->Remove(component.altar);
+	}
+	if (component.dance != entt::null && registry.Valid(component.dance))
+	{
+		_world->RemoveDance(component.dance);
+	}
+	// Its towns are left without a site, keeping their share of people at worship; the worshippers still going to it,
+	// hiding, resting or eating there find it gone at their next step
+	for (const auto town : component.towns)
+	{
+		if (registry.Valid(town))
+		{
+			if (auto* owner = registry.TryGet<Town>(town))
+			{
+				owner->worshipSite = entt::null;
+			}
+		}
+	}
+	// Its place round the temple is free
+	if (registry.Valid(component.temple))
+	{
+		if (auto* worship = registry.TryGet<CitadelWorship>(component.temple))
+		{
+			worship->sites.at(component.place) = entt::null;
+		}
+	}
+	_world->ArtefactsLeaveSite(site);
+	// Its food pot goes with the food in it, and its stored prayer power is lost with it
+	if (component.foodPot != entt::null && registry.Valid(component.foodPot))
+	{
+		_world->Remove(component.foodPot);
+	}
+	// A site still going up stops being a building site
+	_world->CloseBuildingSite(site);
+	_world->Remove(site);
 }
 
 void WorshipSiteSystem::UpdateTurn()
@@ -540,6 +611,7 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	                                       .player = templeOwner,
 	                                       .tribe = tribe,
 	                                       .place = static_cast<uint8_t>(*place),
+	                                       .made = worship.sitesMade++,
 	                                       .facing = facing,
 	                                   });
 	worship.sites.at(*place) = site;
