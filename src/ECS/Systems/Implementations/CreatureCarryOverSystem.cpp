@@ -59,9 +59,24 @@ std::optional<entt::entity> PlayersCreature()
 }
 } // namespace
 
-CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::path> folder)
+CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::path> folder, ProfileFile profileFile)
     : _folder(std::move(folder))
+    , _profileFile(std::move(profileFile))
 {
+}
+
+std::optional<creature_carry_over::KeptFiles> CreatureCarryOverSystem::Files() const
+{
+	if (!_folder.has_value() || !_profileFile)
+	{
+		return std::nullopt;
+	}
+	const auto file = _profileFile();
+	if (!file.has_value())
+	{
+		return std::nullopt;
+	}
+	return creature_carry_over::KeptFilesIn(*_folder, *file);
 }
 
 void CreatureCarryOverSystem::KeepPlayersCreature()
@@ -102,13 +117,14 @@ void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
 void CreatureCarryOverSystem::Write(const creaturemind::MindFileData& mind,
                                     const creaturemind::PhysiqueFileData& physique) const
 {
-	if (!_folder.has_value())
+	const auto kept = Files();
+	if (!kept.has_value())
 	{
 		return;
 	}
+	const auto& files = *kept;
 	std::error_code error;
 	std::filesystem::create_directories(*_folder, error);
-	const auto files = creature_carry_over::KeptFilesIn(*_folder, k_ProfileFile);
 	const auto written = creaturemind::WriteFile(files.mind, mind);
 	if (written != creaturemind::MindResult::Success)
 	{
@@ -120,16 +136,24 @@ void CreatureCarryOverSystem::Write(const creaturemind::MindFileData& mind,
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature's physique could not be written to {}",
 		                   files.physique.string());
+		return;
 	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the player's creature to {} and its physique beside it",
+	                   files.mind.string());
 }
 
 void CreatureCarryOverSystem::ReadIfNoneKept()
 {
-	if (_kept != nullptr || !_folder.has_value())
+	if (_kept != nullptr)
 	{
 		return;
 	}
-	const auto path = creature_carry_over::KeptFilesIn(*_folder, k_ProfileFile).mind;
+	const auto files = Files();
+	if (!files.has_value())
+	{
+		return;
+	}
+	const auto& path = files->mind;
 	std::error_code error;
 	if (!std::filesystem::exists(path, error))
 	{

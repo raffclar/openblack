@@ -31,6 +31,11 @@ class GameRandomInterface;
 class RandomNumberManagerInterface;
 class TempleInteriorInterface;
 
+namespace player_profiles
+{
+struct Store;
+}
+
 namespace v120
 {
 struct InfoConstants;
@@ -193,7 +198,8 @@ class InspectorSystemInterface;
 
 void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags);
 bool InitializeEngine(GraphicsBackend backend, bool vsync) noexcept;
-bool InitializeGame() noexcept;
+/// The game's services, the players' profiles kept as the store says
+bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);

@@ -806,3 +806,4 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_vortex_natives PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_vortex_pull_rules test_vortex_pull_rules.cpp)
+openblack_setup_and_add_test(test_player_profiles test_player_profiles.cpp)

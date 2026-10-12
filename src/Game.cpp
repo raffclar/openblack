@@ -399,6 +399,12 @@ Game::Game(Arguments&& args) noexcept
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
+    , _profileFolder(args.profileFolder)
+    // Any of these is a developer's or a tool's run; the game started plainly, or with only its window's size, mode,
+    // backend, detail and logging chosen, is the player's
+    , _automatedRun(args.startLevel != k_DefaultStartLevel || args.startTestbed || args.scenario.has_value() ||
+                    args.newGameStart.has_value() || args.skipLogos || args.inspectPort.has_value() || args.seed.has_value() ||
+                    !args.playVideo.empty() || args.numFramesToSimulate > 0 || args.requestScreenshot.has_value())
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	std::function<std::shared_ptr<spdlog::logger>(const std::string&)> createLogger;
@@ -2628,7 +2634,8 @@ bool Game::Initialize() noexcept
 		_startMap = fileSystem.GetPath<Path::Scripts>() / _startMap;
 	}
 
-	if (!InitializeGame())
+	const auto profiles = ProfileStore();
+	if (!InitializeGame(profiles))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;

@@ -15,9 +15,12 @@
 
 #include <SDL.h>
 #include <bgfx/bgfx.h>
+#include <spdlog/spdlog.h>
 
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/MusicPlayer.h"
+#include "Common/UserData.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -95,6 +98,28 @@ uint32_t Milliseconds()
 	return SDL_GetTicks();
 }
 } // namespace
+
+bool Game::HasPlayerProfiles() noexcept
+{
+	return Locator::playerProfileSystem::has_value() && Locator::playerProfileSystem::value().GetProfileCount() > 0;
+}
+
+player_profiles::Store Game::ProfileStore() const
+{
+	auto store = player_profiles::StoreFor(
+	    {.profileFolder = _profileFolder, .userFolder = user_data::Folder(), .automated = _automatedRun});
+	if (store.developer)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "A developer's run: playing as the profile \"{}\", its creature kept in {}",
+		                   player_profiles::k_DeveloperName,
+		                   store.creatureMinds.has_value() ? store.creatureMinds->generic_string() : "no folder");
+	}
+	else if (store.folder.has_value())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The players' profiles are kept in {}", store.folder->generic_string());
+	}
+	return store;
+}
 
 void Game::PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw)
 {
