@@ -1475,6 +1475,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::onWayToWorship>("onWayToWorship")
 	    .Field<&components::Town::congregationPos>("congregationPos")
 	    .Field<&components::Town::emergencyTurn>("emergencyTurn")
+	    .Field<&components::Town::worshipShareBeforeEmergency>("worshipShareBeforeEmergency")
 	    .Field<&components::Town::graveyard>("graveyard")
 	    .Field<&components::Town::creche>("creche")
 	    .Field<&components::Town::desiresChanged>("desiresChanged")

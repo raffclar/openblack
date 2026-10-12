@@ -56,6 +56,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/DetailLevel.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
 #include "InfoConstants.h"
@@ -231,7 +232,9 @@ TempleScrolls::Facts GatherScrollFacts()
 const std::vector<TemplePerson>& TempleInterior::GetPeople() const
 {
 	static const std::vector<TemplePerson> k_Nobody;
-	return _people != nullptr ? _people->GetDrawn() : k_Nobody;
+	// The lowest detail levels draw no worshippers
+	const bool shown = graphics::detail_level::For(Locator::config::value().detailLevel).templePeople;
+	return _people != nullptr && shown ? _people->GetDrawn() : k_Nobody;
 }
 
 void TempleInterior::SetInterface(gui::GameInterface* interface)

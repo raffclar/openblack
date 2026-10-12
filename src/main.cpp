@@ -56,7 +56,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("s,start-level", "Level that is loaded at start-up", cxxopts::value<std::string>()->default_value("Land1.txt"))
 		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
 		("V,vsync", "Enable Vertical Sync.")
-		("detail-level", "Graphics detail level of the original game, 0 to 6 (4 by default, 5 custom, 6 the highest).", cxxopts::value<uint16_t>()->default_value("4"))
+		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super.", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
 		("b,backend-type", "Which backend to use for rendering: Vulkan (VK), Direct3D12 (D3D12, DX12), Metal or Noop.", cxxopts::value<std::string>())
 		("n,num-frames-to-simulate", "Number of frames to simulate before quitting.", cxxopts::value<uint32_t>()->default_value("0"))
