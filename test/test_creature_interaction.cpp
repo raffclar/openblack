@@ -100,6 +100,30 @@ TEST(CreatureReach, HeightDoesNotMatter)
 	}
 }
 
+// The straight reach counts the height the stretched hand is at, unlike the reach along the ground
+TEST(CreatureReach, TheStraightReachCountsHeight)
+{
+	const auto points = FakeReach();
+	// Back corners weigh -0.4, the front ones 0.9: (0, 1.2, -11.8)
+	EXPECT_NEAR(creature_reach::StraightReach(points), std::sqrt((1.2f * 1.2f) + (11.8f * 11.8f)), k_Tolerance);
+	EXPECT_NEAR(creature_reach::MaxReach(points), 11.8f, k_Tolerance);
+}
+
+// A handful taken from a pile appears 0.95 of the straight reach from the creature, towards the pile, whether the pile
+// is nearer or further than that; right on the pile's point it appears at the creature
+TEST(CreatureReach, AHandfulAppearsMostOfTheReachTowardsThePile)
+{
+	const glm::vec2 creature {10.0f, 20.0f};
+	const auto near = creature_reach::HandfulPoint(creature, {13.0f, 24.0f}, 2.0f);
+	EXPECT_NEAR(near.x, 10.0f + (0.6f * 1.9f), k_Tolerance);
+	EXPECT_NEAR(near.y, 20.0f + (0.8f * 1.9f), k_Tolerance);
+	const auto far = creature_reach::HandfulPoint(creature, {10.0f, -80.0f}, 4.0f);
+	EXPECT_NEAR(far.x, 10.0f, k_Tolerance);
+	EXPECT_NEAR(far.y, 20.0f - 3.8f, k_Tolerance);
+	const auto onIt = creature_reach::HandfulPoint(creature, creature, 4.0f);
+	EXPECT_EQ(onIt, creature);
+}
+
 TEST(CreatureReach, TheOtherSideIsReachedMirrored)
 {
 	// Corners biased to the right (-x), as a right hand's are
@@ -225,6 +249,15 @@ TEST(CreatureObjectActions, AThrowIntoAStoreIsOverOnlyOnceTheThingHasComeDown)
 	EXPECT_TRUE(creature_object_actions::ThrowOver(true, false, true));
 	EXPECT_FALSE(creature_object_actions::ThrowOver(true, true, true));
 	EXPECT_TRUE(creature_object_actions::ThrowOver(true, true, false));
+}
+
+TEST(CreatureObjectActions, ACreatureBringsBackUpWhatCantBeEaten)
+{
+	EXPECT_FALSE(creature_object_actions::BringsBackUp(false, false));
+	// Sable, made indestructible for her lessons, and anything the scripts hold in a cutscene
+	EXPECT_TRUE(creature_object_actions::BringsBackUp(true, false));
+	EXPECT_TRUE(creature_object_actions::BringsBackUp(false, true));
+	EXPECT_TRUE(creature_object_actions::BringsBackUp(true, true));
 }
 
 TEST(CreatureFeedback, AStrokeLandsOnTheNearestPart)

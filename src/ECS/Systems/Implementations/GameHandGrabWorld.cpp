@@ -44,6 +44,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Transform.h"
@@ -75,6 +76,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/VillagerAge.h"
@@ -443,6 +445,11 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	{
 		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
 		return Locator::scriptHighlightSystem::value().Tap(object, ownHand);
+	}
+	// A reward chest is opened by its player's tap
+	if (Entities().AllOf<Reward>(object) && Locator::rewardSystem::has_value())
+	{
+		return Locator::rewardSystem::value().Tap(object, player);
 	}
 	// A stone hand on a village centre, or a worship site's icon, charges its miracle for the hand
 	if (Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsIcon(object))

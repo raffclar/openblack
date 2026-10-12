@@ -29,7 +29,8 @@ namespace openblack::ecs::systems
 class SpellIconSystem final: public SpellIconSystemInterface
 {
 public:
-	void TownHolds(entt::entity town, MagicType type) override;
+	bool TownHolds(entt::entity town, MagicType type) override;
+	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity town) const override;
 	void CentreWorking(entt::entity centre) override;
 	void TownChangedHands(entt::entity town, PlayerNames previous) override;
 	void TownJoinedSite(entt::entity site, entt::entity town) override;

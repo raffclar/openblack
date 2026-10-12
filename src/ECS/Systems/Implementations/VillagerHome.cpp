@@ -776,6 +776,13 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, Walk
 	registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
 	                MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
 	registry.Remove<WallHugObjectReference>(villager);
+	// A new walk may be tried both ways round again; one walking straight through no longer waits for its trial, unless
+	// it is there already
+	if (const auto* lookahead = registry.TryGet<const WallHugLookahead>(villager);
+	    lookahead != nullptr && (lookahead->tried || (way == WalkWay::StraightThrough && !AreWeThere(villager, goal))))
+	{
+		registry.Remove<WallHugLookahead>(villager);
+	}
 	if (way == WalkWay::StraightThrough)
 	{
 		// Aimed at the goal on its first step, then again only now and then

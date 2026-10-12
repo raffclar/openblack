@@ -245,6 +245,12 @@ void HelpTextSystem::InterruptAdvisors()
 	_voices.Interrupt(k_EvilAdvisor);
 }
 
+void HelpTextSystem::InterruptAdvisorsByEscape()
+{
+	_voices.Interrupt(k_GoodAdvisor, help::AdvisorVoices::InterruptedBy::Escape);
+	_voices.Interrupt(k_EvilAdvisor, help::AdvisorVoices::InterruptedBy::Escape);
+}
+
 int32_t HelpTextSystem::GetNarrator(uint32_t text) const
 {
 	return _texts != nullptr ? _texts->GetHelpText(text).narrator : 0;

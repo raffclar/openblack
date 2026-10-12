@@ -11,7 +11,6 @@
 
 #include <cstdint>
 
-#include <optional>
 #include <vector>
 
 #include "Creature/CreatureIdleMind.h"
@@ -22,10 +21,11 @@
 namespace openblack::creature_script_play
 {
 
-/// Numbers up to this one are the creature's static actions (a start, a loop and an end, as sitting); those after it
-/// are its individual actions, played once each time
+/// Numbers up to this one are the creature's static actions: number N plays the animations N - 1, N and N + 1 as a
+/// start, a loop and an end, as sitting down, sitting and getting up. Those after it are its individual actions, played
+/// once each time.
 constexpr int32_t k_LastStaticAction = 51;
-/// A static action's loop lasts this many seconds
+/// A static action's loop ends this long after its start begins
 constexpr float k_StaticActionSeconds = 10.0f;
 
 /// What a script last gave a creature to play
@@ -35,9 +35,11 @@ struct Request
 	uint32_t plays {0};
 };
 
-/// The agenda for what the script gave: the individual action that many times, then waiting until its body is free.
-/// None for a static action, whose start, loop and end openblack doesn't have the table of yet.
-[[nodiscard]] std::optional<std::vector<creature_mind::Step>> Agenda(const Request& request);
+/// The agenda for what the script gave: the action that many times, then waiting until its body is free. An individual
+/// action is played through each time; a static action starts (left to right half the time), loops until
+/// k_StaticActionSeconds after it started and ends. A static action with no start before it never begins, so the agenda
+/// never ends.
+[[nodiscard]] std::vector<creature_mind::Step> Agenda(const Request& request);
 
 /// Whether a creature has played what it was doing: its agenda is over, or it is only being idle. A creature busy with
 /// any agenda, its own or a script's, hasn't.

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -29,8 +30,11 @@ class SpellIconSystemInterface
 public:
 	virtual ~SpellIconSystemInterface() = default;
 
-	/// A land's script gives a town a magic type: its player may cast it, and its centre shows it
-	virtual void TownHolds(entt::entity town, MagicType type) = 0;
+	/// A land's script, or a reward, gives a town a magic type: its player may cast it, and its centre shows it. Whether
+	/// the town didn't hold it before.
+	virtual bool TownHolds(entt::entity town, MagicType type) = 0;
+	/// How many miracles a town's village centre shows on its hands; none when the town has no working centre
+	[[nodiscard]] virtual std::optional<size_t> CentreMiraclesShown(entt::entity town) const = 0;
 	/// A town's village centre stands working: its hands show what the town offers
 	virtual void CentreWorking(entt::entity centre) = 0;
 	/// A town has changed hands: what it offers goes from its old player to its new one

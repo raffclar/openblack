@@ -21,5 +21,6 @@ class PathfindingSystem final: public PathfindingSystemInterface
 {
 public:
 	void Update() override;
+	void ProcessLookahead() override;
 };
 } // namespace openblack::ecs::systems
