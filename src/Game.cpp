@@ -1066,6 +1066,9 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
+	// The shown tooltip's display time runs down only while the player may turn the camera
+	const bool displayTimeRuns = !Locator::cameraHelpSystem::has_value() ||
+	                             (Locator::cameraHelpSystem::value().Get().features & camera_help::feature::k_Rotate) != 0;
 	// As the player's own totem moves on the screen, the hand shows the share it is held at, over anything else
 	if (const auto tip = Locator::villageTotemSystem::has_value()
 	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(PlayerNames::PLAYER_ONE)
@@ -1091,7 +1094,7 @@ void Game::ProcessHandToolTipTurn()
 		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
 		{
 			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
-			toolTips.ProcessTurn();
+			toolTips.ProcessTurn(displayTimeRuns);
 			return;
 		}
 	}
@@ -1149,7 +1152,7 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
 		}
 	}
-	toolTips.ProcessTurn();
+	toolTips.ProcessTurn(displayTimeRuns);
 }
 
 bool Game::GameLogicLoop() noexcept

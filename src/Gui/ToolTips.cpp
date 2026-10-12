@@ -85,7 +85,7 @@ bool ToolTips::KeepIntelligently()
 	return true;
 }
 
-void ToolTips::ProcessTurn()
+void ToolTips::ProcessTurn(bool displayTimeRuns)
 {
 	// The help system picks this turn's tooltip and its text, then forgets this turn's submission
 	const bool submitted = std::exchange(_submitted, false);
@@ -112,7 +112,7 @@ void ToolTips::ProcessTurn()
 		_icon.reset();
 		return;
 	}
-	if (_displayLeft > 0)
+	if (_displayLeft > 0 && displayTimeRuns)
 	{
 		--_displayLeft;
 	}

@@ -93,8 +93,10 @@ public:
 	/// A tooltip of words only, shown in another tooltip's words with a number written into them (as a town's flag shows
 	/// its own desire under the tooltip for a need)
 	void SubmitInWords(uint32_t index, uint32_t words, float number);
-	/// Ends the turn: keeps the tooltip submitted, or one lingering after it was, and ends any other
-	void ProcessTurn();
+	/// Ends the turn: keeps the tooltip submitted, or one lingering after it was, and ends any other. The tooltip's
+	/// display time only runs down while the player may turn the camera: while a lesson takes turning away, a tooltip
+	/// shown keeps the others off, and isn't faded out for having been shown long enough.
+	void ProcessTurn(bool displayTimeRuns = true);
 	/// Fades the shown tooltip in or out
 	void Update(float seconds);
 
