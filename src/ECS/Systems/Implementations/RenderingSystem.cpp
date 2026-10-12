@@ -1145,76 +1145,139 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesTrees);
 	auto& registry = Locator::entitiesRegistry::value();
+	const auto& vegetation = Locator::vegetation::value();
+	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const float modelDetail = graphics::detail_level::ModelDetail(Locator::config::value().detailLevel);
+	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
+	using Group = PlacedTree::Group;
 
+	// Each tree as it is drawn this frame, gathered first, then laid out by mesh and detail
+	_placedTrees.clear();
+	registry.Each<const Mesh, const Transform, const Tree, const Swayable>(
+	    [&](entt::entity entity, const Mesh& mesh, const Transform& transform, const Tree& /*unused*/,
+	        const Swayable& swayable) {
+		    const auto slots = _treeSlots.find(mesh.id);
+		    if (slots == _treeSlots.end())
+		    {
+			    return;
+		    }
+		    auto modelMatrix = glm::mat4(transform.rotation);
+		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
+		    modelMatrix = glm::scale(modelMatrix, transform.scale);
+		    // A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
+		    // all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
+		    // vertices out to the horizon
+		    const auto placed = physics_draw::ModelMatrix(modelMatrix, registry.TryGet<const PhysicsDrawPose>(entity));
+		    if (!placed.has_value())
+		    {
+			    _placedTrees.push_back({.mesh = mesh.id,
+			                            .group = Group::Gone,
+			                            .data = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)},
+			                            .box = glm::mat4(0.0f)});
+			    return;
+		    }
+		    modelMatrix = *placed;
+
+		    // Drawn in less detail the further off it is, fading out, then not at all, unless something holds it
+		    auto group = Group::High;
+		    std::optional<uint8_t> fade;
+		    if (camera != nullptr && meshes.Contains(mesh.id) && object_detail::BandedNow(registry, entity))
+		    {
+			    const auto choice = ChooseDetail(meshes.Handle(mesh.id)->GetBoundingBox(), 0.0f, modelMatrix, transform.scale.x,
+			                                     object_detail::Disappears(registry, entity, false), *camera, modelDetail);
+			    if (!choice.mesh.has_value())
+			    {
+				    group = Group::Gone;
+			    }
+			    else
+			    {
+				    group = static_cast<Group>(*choice.mesh);
+				    fade = choice.alpha;
+			    }
+		    }
+
+		    // A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
+		    // keeping its height
+		    glm::vec4 burning(0.0f);
+		    if (Locator::fireSystem::has_value())
+		    {
+			    if (const auto look = Locator::fireSystem::value().GetBurningTreeLook(entity))
+			    {
+				    burning = {static_cast<float>(look->grey) / 256.0f, look->alphaReference / 255.0f, 0.0f, 0.0f};
+				    modelMatrix = glm::scale(modelMatrix, glm::vec3(look->scale, 1.0f, look->scale));
+			    }
+		    }
+		    if (fade.has_value())
+		    {
+			    burning.z = 1.0f - (static_cast<float>(*fade) / 255.0f);
+			    group = Group::Fading;
+		    }
+		    // Out of the land it neither sways nor bends: it is drawn as it is held or as the physics places it
+		    const auto place = registry.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
+		                           ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
+		                           : TreePlace::InTheLand;
+		    auto drawnMatrix = openblack::physics::objects::SwaysAndBends(place)
+		                           ? vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y,
+		                                                      slots->second.height, swayable.swaySlot)
+		                           : modelMatrix;
+		    // In its least detail a tree is a paper cut-out standing turned to the camera, which neither sways nor bends,
+		    // unless it moves in the physics
+		    if (camera != nullptr && (group == Group::Low || group == Group::Fading) && !registry.AllOf<InPhysics>(entity))
+		    {
+			    drawnMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x,
+			                                                     camera->GetOrigin(), camera->GetFocus());
+		    }
+		    if (group != Group::Gone)
+		    {
+			    _renderContext.drawnObjects.push_back({.entity = entity, .model = drawnMatrix});
+		    }
+		    glm::mat4 boxMatrix(0.0f);
+		    if (drawBoundingBox && meshes.Contains(mesh.id))
+		    {
+			    const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
+			    boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
+		    }
+		    _placedTrees.push_back(
+		        {.mesh = mesh.id, .group = group, .data = {.modelMatrix = drawnMatrix, .burning = burning}, .box = boxMatrix});
+	    });
+
+	// Laid out within each mesh's instances by detail, each run drawn in its own
+	std::ranges::stable_sort(_placedTrees, {}, [](const PlacedTree& tree) { return std::tuple(tree.mesh, tree.group); });
 	for (auto& [meshId, slots] : _treeSlots)
 	{
 		slots.filled = 0;
 	}
-	const auto& vegetation = Locator::vegetation::value();
-
-	// Set the transforms of the trees, swaying or bent away from the hand
+	_renderContext.treeRuns.clear();
 	bool fits = true;
-	registry.Each<const Mesh, const Transform, const Tree, const Swayable>([this, &registry, &fits, drawBoundingBox,
-	                                                                        &vegetation](entt::entity entity, const Mesh& mesh,
-	                                                                                     const Transform& transform,
-	                                                                                     const Tree& /*unused*/,
-	                                                                                     const Swayable& swayable) {
-		const auto slots = _treeSlots.find(mesh.id);
-		if (!fits || slots == _treeSlots.end() || slots->second.filled >= slots->second.count)
+	const auto low = graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::Low);
+	for (const auto& tree : _placedTrees)
+	{
+		const auto slots = _treeSlots.find(tree.mesh);
+		if (slots->second.filled >= slots->second.count)
 		{
 			fits = false;
-			return;
+			break;
 		}
-
 		const uint32_t idx = slots->second.offset + slots->second.filled;
-		auto modelMatrix = glm::mat4(transform.rotation);
-		modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
-		modelMatrix = glm::scale(modelMatrix, transform.scale);
-		// A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
-		// all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
-		// vertices out to the horizon
-		const auto placed = physics_draw::ModelMatrix(modelMatrix, registry.TryGet<const PhysicsDrawPose>(entity));
-		if (!placed.has_value())
-		{
-			_renderContext.treeInstanceData[idx] = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)};
-			++slots->second.filled;
-			return;
-		}
-		modelMatrix = *placed;
-		// A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
-		// keeping its height
-		glm::vec4 burning(0.0f);
-		if (Locator::fireSystem::has_value())
-		{
-			if (const auto look = Locator::fireSystem::value().GetBurningTreeLook(entity))
-			{
-				burning = {static_cast<float>(look->grey) / 256.0f, look->alphaReference / 255.0f, 0.0f, 0.0f};
-				modelMatrix = glm::scale(modelMatrix, glm::vec3(look->scale, 1.0f, look->scale));
-			}
-		}
-		_renderContext.treeInstanceData[idx].burning = burning;
-		// Out of the land it neither sways nor bends: it is drawn as it is held or as the physics places it
-		const auto place = registry.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
-		                       ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
-		                       : TreePlace::InTheLand;
-		_renderContext.treeInstanceData[idx].modelMatrix =
-		    openblack::physics::objects::SwaysAndBends(place)
-		        ? vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y, slots->second.height,
-		                                   swayable.swaySlot)
-		        : modelMatrix;
-		_renderContext.drawnObjects.push_back({.entity = entity, .model = _renderContext.treeInstanceData[idx].modelMatrix});
-
+		_renderContext.treeInstanceData[idx] = tree.data;
 		if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
 		{
-			auto l3dMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
-			auto box = l3dMesh->GetBoundingBox();
-			auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
-
-			// Store bounding box matrix in the second half of the instance data array
-			_renderContext.treeInstanceData[idx + (_renderContext.treeInstanceData.size() / 2)].modelMatrix = boxMatrix;
+			// Bounding box matrices in the second half of the instance data
+			_renderContext.treeInstanceData[idx + (_renderContext.treeInstanceData.size() / 2)].modelMatrix = tree.box;
 		}
 		++slots->second.filled;
-	});
+		const bool fading = tree.group == Group::Fading;
+		const bool gone = tree.group == Group::Gone;
+		const auto level =
+		    fading || gone ? low : graphics::mesh_detail::LevelBit(static_cast<graphics::mesh_detail::Mesh>(tree.group));
+		auto& runs = _renderContext.treeRuns;
+		if (runs.empty() || runs.back().mesh != tree.mesh || runs.back().level != level || runs.back().fading != fading ||
+		    runs.back().gone != gone)
+		{
+			runs.push_back({.mesh = tree.mesh, .first = idx, .count = 0, .level = level, .fading = fading, .gone = gone});
+		}
+		++runs.back().count;
+	}
 
 	if (fits && !_renderContext.treeInstanceData.empty())
 	{

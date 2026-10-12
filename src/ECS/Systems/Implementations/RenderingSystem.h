@@ -77,6 +77,24 @@ private:
 		RenderContext::ObjectInstance instance;
 	};
 	std::vector<HeldThing> _heldThings;
+	/// A tree as it is drawn this frame, before the trees are laid out by mesh and detail
+	struct PlacedTree
+	{
+		/// From the most detail down, then fading out, then too far off to be drawn
+		enum class Group : uint8_t
+		{
+			High,
+			Standard,
+			Low,
+			Fading,
+			Gone,
+		};
+		entt::id_type mesh;
+		Group group;
+		RenderContext::TreeInstanceData data;
+		glm::mat4 box;
+	};
+	std::vector<PlacedTree> _placedTrees;
 	/// The things drawn by the distance bands that are fading out this frame, by how opaque, and those too far off to be
 	/// drawn at all: their other draws (a building's part built, a graveyard's graves) follow them
 	std::unordered_map<entt::entity, uint8_t> _fadingThings;

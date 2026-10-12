@@ -128,12 +128,29 @@ struct RenderContext
 	{
 		glm::mat4 modelMatrix;
 		/// While it has a fire on it: x the grey of 256 its light is scaled by, no brighter than the trees' brightness,
-		/// and y the alpha below which its foliage is cut away, of 1; 0 for none
+		/// and y the alpha below which its foliage is cut away, of 1; 0 for none. z: while it fades out in the distance,
+		/// how much of it is faded, of 1.
 		glm::vec4 burning {0.0f};
 	};
 
 	/// CPU-side buffer of tree instance data
 	std::vector<TreeInstanceData> treeInstanceData;
+	/// The trees of a mesh drawn in one detail this frame, one after another in the tree instances: within each mesh's
+	/// instances those of the most detail first, then less, then those fading out, then those too far off to be drawn,
+	/// which are there only for what the land keeps of them
+	struct TreeRun
+	{
+		entt::id_type mesh {0};
+		uint32_t first {0};
+		uint32_t count {0};
+		/// The detail they are drawn in, as the bit their mesh's parts name it by (see graphics::mesh_detail::LevelBit)
+		uint8_t level {1};
+		/// Blended by each one's alpha, with the blended things
+		bool fading {false};
+		/// Not drawn at all
+		bool gone {false};
+	};
+	std::vector<TreeRun> treeRuns;
 
 	/// Stores information for rendering which is prepared at \ref PrepareDraw.
 	std::map<entt::id_type, InstancedDrawDesc> instancedDrawDescs;

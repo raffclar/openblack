@@ -6143,12 +6143,18 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                   | BGFX_STATE_MSAA               //
 				    ;
 
-				// Instance meshes
-				for (const auto& [meshId, placers] : renderCtx.treeInstancedDrawDescs)
+				// The trees of each mesh, a draw for each detail they are drawn in: each with the parts of its detail. Those
+				// fading out in the distance are blended by each one's alpha with the blended things.
+				const auto opaqueState = submitDesc.state;
+				for (const auto& run : renderCtx.treeRuns)
 				{
-					auto mesh = meshManager.Handle(meshId);
-					submitDesc.instanceDesc = std::make_unique<graphics::InstanceDesc>(renderCtx.treeInstanceUniformBuffer,
-					                                                                   placers.offset, placers.count);
+					if (run.gone || run.count == 0 || !meshManager.Contains(run.mesh))
+					{
+						continue;
+					}
+					auto mesh = meshManager.Handle(run.mesh);
+					submitDesc.instanceDesc =
+					    std::make_unique<graphics::InstanceDesc>(renderCtx.treeInstanceUniformBuffer, run.first, run.count);
 					const static auto identity = glm::mat4(1.0f);
 					submitDesc.modelMatrices = &identity;
 					submitDesc.matrixCount = 1;
@@ -6157,8 +6163,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.landLightScale = _treeBrightness;
 					submitDesc.snow = !inTemple;
 					submitDesc.program = vegetationShaderInstanced;
+					submitDesc.detailLevel = run.level;
+					submitDesc.viewId = run.fading ? TranslucentView(desc.viewId) : desc.viewId;
+					submitDesc.state = run.fading ? opaqueState | BGFX_STATE_BLEND_ALPHA : opaqueState;
+					submitDesc.sortDepth =
+					    run.fading ? zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(run.first).modelMatrix[3]),
+					                              desc.camera->GetOrigin())
+					               : 0;
 					DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				}
+				submitDesc.detailLevel = 1;
+				submitDesc.viewId = desc.viewId;
+				submitDesc.state = opaqueState;
+				submitDesc.sortDepth = 0;
 
 				// Draw tree bounding boxes if enabled
 				if (renderCtx.boundingBox && renderCtx.treeInstanceCount > 0)
