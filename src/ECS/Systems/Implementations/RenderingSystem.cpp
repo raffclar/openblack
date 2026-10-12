@@ -928,8 +928,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	if (fits && !_renderContext.instanceUniforms.empty())
 	{
 		const auto size = static_cast<uint32_t>(_renderContext.instanceUniforms.size() * sizeof(RenderContext::ObjectInstance));
-		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0,
-		             bgfx::makeRef(_renderContext.instanceUniforms.data(), size));
+		// Copied, never referenced: bgfx's render thread reads the update while the next frame refills (and may grow,
+		// freeing the old storage) these instances
+		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0, bgfx::copy(_renderContext.instanceUniforms.data(), size));
 	}
 	for (auto& [meshId, desc] : _renderContext.instancedDrawDescs)
 	{
@@ -1352,9 +1353,10 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		const auto size =
 		    static_cast<uint32_t>(_renderContext.treeInstanceData.size() * sizeof(RenderContext::TreeInstanceData));
 
-		// Update the buffer with the combined data
+		// Update the buffer with the combined data, copied: bgfx's render thread reads it while the next frame refills
+		// (and may grow) the trees' instances
 		bgfx::update(toBgfx(_renderContext.treeInstanceUniformBuffer), 0,
-		             bgfx::makeRef(_renderContext.treeInstanceData.data(), size));
+		             bgfx::copy(_renderContext.treeInstanceData.data(), size));
 	}
 	return fits;
 }
