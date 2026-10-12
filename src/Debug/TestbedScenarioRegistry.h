@@ -94,6 +94,8 @@ enum class Facet : uint8_t
 	Sky,
 	/// The player's two advisors, the good one and the evil one
 	Advisors,
+	/// The story's set pieces, such as the game's end as the player's temple falls
+	Story,
 	/// The tutorial's lessons: the hand's demonstrations and the help texts that go with them
 	Tutorial,
 
@@ -534,6 +536,9 @@ struct Command
 		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
+		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
+		/// loses the last of its life. Needs no creature
+		DestroyTemple,
 		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
 		/// does: a static action's start, loop and end, or an individual action
 		ScriptPlay,

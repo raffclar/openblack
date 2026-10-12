@@ -12,6 +12,13 @@
 #include <cstdint>
 
 #include <chrono>
+#include <span>
+#include <string_view>
+
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+
+#include "Gui/ScriptTexts.h"
 
 namespace openblack::ecs::systems
 {
@@ -54,7 +61,20 @@ public:
 	virtual void SetCloseClipping(bool close) = 0;
 	[[nodiscard]] virtual bool IsCloseClipping() const = 0;
 
-	/// As a new land opens: no fade, no bars, no close clipping
+	/// Writes words across the screen in a box, its corner and size shares of the screen's width and height and its
+	/// lines' height a share of the screen's height, in the colour last set, fading in over `fadeSeconds` or shown at
+	/// once for none
+	virtual void WriteText(std::u16string_view words, glm::vec2 corner, glm::vec2 extent, float size, float fadeSeconds) = 0;
+	/// The colour the texts written from now on are drawn in, black until a script sets one; it lasts from land to land
+	virtual void SetTextColour(glm::u8vec3 colour) = 0;
+	/// Fades every text on the screen out over `seconds`, or takes them away at once for none
+	virtual void FadeAllTexts(float seconds) = 0;
+	/// Moves the texts' fades on by the game's time of a frame, taking away those that have faded out
+	virtual void UpdateTexts(int32_t milliseconds) = 0;
+	/// The texts on the screen, the newest first, in the order they are drawn
+	[[nodiscard]] virtual std::span<const gui::script_text::ScreenText> GetTexts() const = 0;
+
+	/// As a new land opens: no fade, no bars, no close clipping, and the texts are taken away
 	virtual void Reset() = 0;
 	/// Moves the fade on by a game turn
 	virtual void ProcessTurn() = 0;

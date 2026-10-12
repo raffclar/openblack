@@ -1877,6 +1877,13 @@ bool Game::Update() noexcept
 	if (Locator::temple::has_value())
 	{
 		Locator::temple::value().Update(deltaTime);
+		// Leaving the save game room the player was kept in once the game was over ends the game.
+		// TODO(game-over): the game goes back to its front end here, which openblack doesn't have during play yet, so
+		// it closes as the menu's quit does
+		if (Locator::temple::value().TakeGameEnded())
+		{
+			RequestQuit();
+		}
 	}
 	Locator::cameraBookmarkSystem::value().Update(deltaTime);
 	// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
@@ -2056,6 +2063,11 @@ bool Game::Update() noexcept
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
 	                                        Locator::camera::value().GetOrigin());
 	Locator::cinematicDirectorSystem::value().Update(gameTime);
+	// The scripts' words on the screen fade by the game's time, and stand still while a video plays
+	if (!Locator::videoSystem::has_value() || !Locator::videoSystem::value().IsPlaying())
+	{
+		Locator::cinematicDirectorSystem::value().UpdateTexts(static_cast<int32_t>(clock.GetFrameGameTime().count()));
+	}
 	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();

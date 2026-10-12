@@ -229,6 +229,8 @@ private:
 	/// The scripts' dialogue: its see-through box above the bottom cinema bar with the "Continue" cue, then the hand's
 	/// helper icons, then the dialogue's words
 	void DrawDialogue(glm::u16vec2 resolution, int barPixels);
+	/// The words the scripts write across the screen, the newest first
+	void DrawScriptTexts(glm::u16vec2 resolution);
 	/// The camera's helper icons by the hand and, in a demonstration, its mouse
 	void DrawHandTricons(glm::u16vec2 resolution);
 	/// The row of hints of the gestures the hand waits for: each gesture's picture and the dots running along it (the

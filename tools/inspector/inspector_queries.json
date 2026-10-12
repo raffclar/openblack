@@ -1248,7 +1248,7 @@
   "query": "view.zones"
  },
  {
-  "description": "The fade, the wide screen and whether the interface is shown",
+  "description": "The fade, the wide screen, whether the interface is shown, and the words the scripts write on the screen",
   "kind": "object",
   "parameters": [],
   "query": "view.cinematic"

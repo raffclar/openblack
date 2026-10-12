@@ -767,6 +767,12 @@ bool TempleInterior::ReleaseOutsideScriptCamera()
 
 void TempleInterior::GoToRoom(TempleRoom room)
 {
+	// Kept in a room once the game is over, going anywhere else takes the player out of the temple
+	if (_active && _lock.Leaves(room))
+	{
+		RequestLeave();
+		return;
+	}
 	if (_active && _cameraModel != nullptr)
 	{
 		if (room != _currentRoom)
@@ -1080,10 +1086,37 @@ void TempleInterior::Activate(TempleRoom room)
 	CreateScrolls();
 }
 
+void TempleInterior::EnterLockedRoom(TempleRoom room)
+{
+	_lock.Lock(room);
+	if (_active)
+	{
+		GoToRoom(room);
+	}
+	else
+	{
+		Activate(room);
+	}
+}
+
 void TempleInterior::Deactivate()
 {
 	if (!_active)
 	{
+		return;
+	}
+	// Leaving the room the player was kept in ends the game: the screen goes black rather than out to the island
+	if (_lock.GetRoom().has_value())
+	{
+		_lock.Left();
+		Close();
+		if (_interface != nullptr)
+		{
+			_interface->GetScreenFade().FadeFrom(1.0f, glm::vec3(0.0f));
+		}
+		temple_help::GameScripts scripts;
+		temple_help::Leave(scripts);
+		_leaveTo.reset();
 		return;
 	}
 	Close();
@@ -1114,6 +1147,7 @@ void TempleInterior::CloseForNewLand()
 		return;
 	}
 	// The new land places the camera and starts its own help, so nothing of the walk out is wanted
+	_lock.Clear();
 	Close();
 	_leaveTo.reset();
 }

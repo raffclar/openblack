@@ -119,6 +119,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -412,6 +413,7 @@ void Runner::Start(const Scenario& scenario)
 	_timeline = {};
 	_creatures.clear();
 	_objects.clear();
+	_temples.clear();
 	_throwsDue.clear();
 	for (const auto& setup : scenario.throws)
 	{
@@ -813,6 +815,7 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 		{
 			ecs::construction::SetBuilt(temple, *setup.built);
 		}
+		_temples.push_back(temple);
 	}
 	if (!Locator::animalSystem::has_value())
 	{
@@ -1461,6 +1464,16 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::DestroyTemple)
+	{
+		const bool known = command.value < _temples.size();
+		if (known && Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().Start(_temples.at(command.value));
+		}
+		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
+		return;
+	}
 	if (command.kind == Kind::RunText)
 	{
 		// Not alone on its line and not waiting for a click, as the lessons' texts are shown
@@ -1661,6 +1674,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTapObject:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
+	case Kind::DestroyTemple:
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:

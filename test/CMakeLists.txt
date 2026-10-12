@@ -858,3 +858,5 @@ openblack_setup_and_add_test(test_shepherd_rules test_shepherd_rules.cpp)
 openblack_setup_and_add_test(
   test_creature_object_beliefs test_creature_object_beliefs.cpp
 )
+openblack_setup_and_add_test(test_script_texts gui/test_script_texts.cpp)
+openblack_setup_and_add_test(test_temple_game_over test_temple_game_over.cpp)

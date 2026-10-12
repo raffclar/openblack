@@ -193,6 +193,8 @@
 #include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
+#include "Gui/ScriptTexts.h"
+#include "Gui/TextDatabase.h"
 #include "Hand/HandTrace.h"
 #include "Help/AdvisorModel.h"
 #include "Help/AdvisorVoices.h"
@@ -1939,15 +1941,29 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		        return result;
 	        }));
 	provider->Add(
-	    Query("cinematic", "The fade, the wide screen and whether the interface is shown"),
+	    Query("cinematic",
+	          "The fade, the wide screen, whether the interface is shown, and the words the scripts write on the screen"),
 	    Serve<Locator::cinematicDirectorSystem>(
 	        "the cinematics", [](const ecs::systems::CinematicDirectorSystemInterface& director, const QueryContext&) {
+		        auto texts = Json::array();
+		        for (const auto& text : director.GetTexts())
+		        {
+			        texts.push_back({{"words", gui::ToUtf8(text.words)},
+			                         {"corner", {text.corner.x, text.corner.y}},
+			                         {"extent", {text.extent.x, text.extent.y}},
+			                         {"size", text.size},
+			                         {"colour", {text.colour.r, text.colour.g, text.colour.b}},
+			                         {"alpha", text.alpha},
+			                         {"target", text.target},
+			                         {"rate", text.rate}});
+		        }
 		        return Json {{"fade_finished", director.IsFadeFinished()},
 		                     {"fade_colour", director.GetFadeColour()},
 		                     {"wide_screen", director.IsWideScreenOn()},
 		                     {"wide_screen_fraction", director.GetWideScreenFraction()},
 		                     {"interface_active", director.IsInterfaceActive()},
-		                     {"close_clipping", director.IsCloseClipping()}};
+		                     {"close_clipping", director.IsCloseClipping()},
+		                     {"texts", texts}};
 	        }));
 	provider->Add(
 	    Query("draw_list",
