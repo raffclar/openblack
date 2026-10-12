@@ -23,6 +23,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "CameraModel.h"
 #include "Common/Zoomer.h"
+#include "TemplePress.h"
 
 namespace openblack
 {
@@ -278,6 +279,7 @@ private:
 
 	// The press the mouse is held from
 	bool _wasPressed {false};
+	temple_press::HeldFromOutside _heldFromOutside;
 	bool _dialogOpen {false};
 	bool _overPool {false};
 	bool _pressingPool {false};

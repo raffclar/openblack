@@ -531,11 +531,16 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 		input.button = 1;
 	}
 	input.mouse = glm::vec2(actions.GetMousePosition());
+	// A press held since before the player came in isn't one inside
+	input.button = static_cast<uint8_t>(_heldFromOutside.Filter(static_cast<temple_press::Button>(input.button)));
 	// A press on one of the room's controls goes to the control, which the room's camera then doesn't see
 	if (Locator::temple::value().HoldControl(input.button != 0, input.mouse.y))
 	{
 		input.button = 0;
 	}
+	// Under the temple's fade the camera doesn't take a held press
+	input.button = static_cast<uint8_t>(
+	    temple_press::UnderFade(static_cast<temple_press::Button>(input.button), Locator::temple::value().GetFadeAmount()));
 	if (Locator::windowing::has_value())
 	{
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
@@ -723,10 +728,16 @@ void TempleCameraModel::UpdateIntro(float dt, const Input& input)
 	const auto key = path->SampleAt(std::chrono::milliseconds(static_cast<int64_t>(_introTime * 1000.0f)));
 	_target = {key.position, key.focus};
 	const float duration = static_cast<float>(path->GetDuration().count()) * 0.001f;
-	// The player takes over half a second after the path ends, or with a click
-	if (_introTime > duration + 0.5f || (input.button != 0 && !_wasPressed))
+	// The player takes over half a second after the path ends, or with a click, which covers the cut with the
+	// temple's fade
+	if (_introTime > duration + 0.5f)
 	{
 		_nextState = control;
+	}
+	if (input.button != 0 && !_wasPressed)
+	{
+		_nextState = control;
+		Locator::temple::value().CoverSkippedFlight();
 	}
 
 	// The path eases into where the player takes over over its last second
