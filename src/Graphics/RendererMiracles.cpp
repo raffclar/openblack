@@ -468,37 +468,37 @@ const Texture2D* Renderer::HandFlowTexture() const
 	return _handFlowTexture.get();
 }
 
-void Renderer::DrawHandGlow(const DrawSceneDesc& desc, uint32_t handDepth) const
+std::optional<Renderer::HandGlowLook> Renderer::HandGlowOf(const DrawSceneDesc& desc) const
 {
 	using ecs::components::Hand;
-	if (!desc.drawHand || desc.viewId == RenderPass::Reflection || !Locator::rendereringSystem::has_value())
+	using ecs::components::HandMiracleFx;
+	if (!desc.drawHand || desc.viewId == RenderPass::Reflection)
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto* flow = HandFlowTexture();
-	const auto pose = PoseOfHand(desc.entities);
-	if (!pose.has_value() || !pose->fx->glowing || flow == nullptr || pose->bones.empty())
+	if (flow == nullptr)
 	{
-		return;
+		return std::nullopt;
 	}
-	// The hand drawn again over itself, added in its player's colour at four fifths: the flow's sheet, an eighth of it
-	// at a time, running backwards over it
-	const bool facesTurned = desc.cullBack != Locator::rendereringSystem::value().GetContext().handMirrored;
-	L3DMeshSubmitDesc submitDesc = {};
-	submitDesc.viewId = TranslucentPassOf(desc.viewId);
-	submitDesc.program = _shaderManager->GetShader("Object");
-	submitDesc.modelMatrices = pose->bones.data();
-	submitDesc.matrixCount = static_cast<uint8_t>(std::min<size_t>(pose->bones.size(), UINT8_MAX));
-	submitDesc.state = k_AddedState | (facesTurned ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW);
-	submitDesc.tint = glm::vec4(ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(PlayerNames::PLAYER_ONE))),
-	                            visuals::k_GlowShare);
-	submitDesc.skinTexture = &flow->GetNativeHandle();
-	submitDesc.uvScale = visuals::k_GlowCellSize;
-	submitDesc.uvOffset = visuals::GlowUvOffset(pose->fx->glowFrame);
-	submitDesc.groundShadows = false;
-	// Just after the hand
-	submitDesc.sortDepth = handDepth > 0 ? handDepth - 1 : 0;
-	DrawMesh(*Locator::resources::value().GetMeshes().Handle(Hand::k_MeshId), submitDesc, std::numeric_limits<uint8_t>::max());
+	std::optional<HandGlowLook> look;
+	desc.entities.Each<const Hand, const HandMiracleFx>([&](const Hand&, const HandMiracleFx& fx) {
+		if (look.has_value() || !fx.glowing)
+		{
+			return;
+		}
+		// The flow's sheet, an eighth of it at a time, running backwards over the hand in its player's colour at four
+		// fifths
+		const auto rgb = ecs::components::Player::k_Colours.at(static_cast<size_t>(PlayerNames::PLAYER_ONE));
+		look = HandGlowLook {
+		    .flow = flow,
+		    .uvOffset = visuals::GlowUvOffset(fx.glowFrame),
+		    .uvScale = visuals::k_GlowCellSize,
+		    .colour = ColourOf(rgb) * k_ByteMax,
+		    .alpha = visuals::GlowAlpha(),
+		};
+	});
+	return look;
 }
 
 void Renderer::DrawTribalPower(const DrawSceneDesc& desc) const

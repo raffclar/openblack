@@ -45,3 +45,16 @@ TEST(ModelLight, TheTemplesLightInsideTheTemple)
 	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Night, temple), glm::vec3(1000.0f, 1010.0f, 1000.0f));
 	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, k_Day, glm::vec3(0.0f)), model_light::k_Temple);
 }
+
+TEST(ModelLight, PosedModelsAreLitFromTwoFifthsUp)
+{
+	const glm::vec3 light {0.0f, 1.0f, 0.0f};
+	// Facing away or edge on, two fifths of the light, the fraction dropped
+	EXPECT_EQ(model_light::PosedFactor({0.0f, -1.0f, 0.0f}, light), 102.0f);
+	EXPECT_EQ(model_light::PosedFactor({1.0f, 0.0f, 0.0f}, light), 102.0f);
+	// A fifth facing it: 1.3 times a fifth and two fifths, 0.66 of 255 is 168.3
+	EXPECT_EQ(model_light::PosedFactor({0.0f, 0.2f, 0.0f}, light), 168.0f);
+	// Full light from a little under half facing it on
+	EXPECT_EQ(model_light::PosedFactor({0.0f, 0.47f, 0.0f}, light), 255.0f);
+	EXPECT_EQ(model_light::PosedFactor({0.0f, 1.0f, 0.0f}, light), 255.0f);
+}

@@ -167,6 +167,9 @@ public:
 		bool unlit {false};
 		/// The sun lights the mesh at every detail level, as it does the creatures and the hand
 		bool alwaysLit {false};
+		/// The mesh is shaded as the game shades the models it lights as it poses them, the glow over a hand holding a
+		/// miracle among them: 1.3 n.l + 0.4, from 0.4 to 1, in place of the usual model light
+		bool posedModelLight {false};
 		/// Where the model light is for this mesh in place of where it is this frame, as the creature in the temple's
 		/// creature room is lit from the room's fire
 		std::optional<glm::vec3> modelLight;

@@ -1272,6 +1272,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				    *program, desc.groundShadows && detail_level::For(Locator::config::value().detailLevel).objectShadows &&
 				                  mainView && !inTemple && !desc.isSky && !desc.drawAll && desc.morphTargets == nullptr);
 			}
+			if (has(MeshUniform::LightRule))
+			{
+				// x: 1 for the light the game gives the models it lights as it poses them
+				const glm::vec4 u_lightRule {desc.posedModelLight ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+				setUniform(MeshUniform::LightRule, &u_lightRule);
+			}
 			if (has(MeshUniform::ObjectLook))
 			{
 				// xyz: the object's own colour, w: its alpha; w 0 for none, which is lit by the land as usual
@@ -6388,8 +6394,34 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
 				submitDesc.state = (opaqueState & ~BGFX_STATE_CULL_MASK) | cullBack;
 				drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
+				// Holding a miracle, the game draws the hand once more over itself: the same hand at the same depth, in the
+				// flow's sheet and its player's colour, shaded as it is posed and added over it without writing depth
+				if (const auto glow = HandGlowOf(desc))
+				{
+					auto glowPlacers = hand->second;
+					glowPlacers.uvOffset = glow->uvOffset;
+					glowPlacers.additiveShare.reset();
+					glowPlacers.instanceAlpha = false;
+					constexpr uint64_t k_Kept = ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z | BGFX_STATE_WRITE_A |
+					                              BGFX_STATE_DEPTH_TEST_MASK | BGFX_STATE_BLEND_MASK);
+					submitDesc.state = (opaqueState & k_Kept) | BGFX_STATE_DEPTH_TEST_GEQUAL |
+					                   BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | cullBack;
+					// Just after the hand in the sort
+					submitDesc.sortDepth = submitDesc.sortDepth > 0 ? submitDesc.sortDepth - 1 : 0;
+					submitDesc.skinTexture = &glow->flow->GetNativeHandle();
+					submitDesc.uvScale = glow->uvScale;
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glow->colour, .alpha = glow->alpha};
+					submitDesc.posedModelLight = true;
+					// Nothing of it is left out by its alpha
+					submitDesc.alphaThreshold = 0.0f;
+					drawInstances(hand->first, glowPlacers, false, glowPlacers.offset, glowPlacers.count, nullptr, morph);
+					submitDesc.alphaThreshold.reset();
+					submitDesc.posedModelLight = false;
+					submitDesc.objectLook.reset();
+					submitDesc.uvScale = 1.0f;
+					submitDesc.skinTexture = nullptr;
+				}
 				submitDesc.state = opaqueState;
-				DrawHandGlow(desc, submitDesc.sortDepth);
 				submitDesc.viewId = desc.viewId;
 				submitDesc.sortDepth = 0;
 			}
