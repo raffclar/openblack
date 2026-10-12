@@ -182,5 +182,8 @@ public:
 	virtual void Activate() = 0;
 	virtual void Activate(TempleRoom room) = 0;
 	virtual void Deactivate() = 0;
+	/// Closes the temple at once as its land goes, before the land's entities do: everything its rooms made goes with
+	/// it, and the island's camera and drawing come back, without the walk out to the island
+	virtual void CloseForNewLand() = 0;
 };
 } // namespace openblack

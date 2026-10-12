@@ -3847,6 +3847,12 @@ void Game::LoadTestbed() noexcept
 
 void Game::PrepareNewLand()
 {
+	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
+	// creature's room's flames and smoke, keeps entities of the land after they have gone
+	if (Locator::temple::has_value())
+	{
+		Locator::temple::value().CloseForNewLand();
+	}
 	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
 	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment
 	if (Locator::creatureCarryOverSystem::has_value())
