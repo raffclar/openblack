@@ -227,6 +227,7 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 	mind.learnt.file = std::make_shared<const creaturemind::MindFileData>(file);
 	mind.developmentPhase = static_cast<uint32_t>(std::max(file.developmentPhase, 0));
 	mind.attitudeToPlayer = std::clamp(file.attitudeToPlayer, -1.0f, 1.0f);
+	mind.turnsLookedAt = file.turnsLookedAt;
 	mind.speciesRow = file.speciesRow;
 	mind.strength = file.physique.strength;
 	mind.size = file.physique.size;
@@ -235,7 +236,8 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 }
 
 creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::Desires& desires, const Learnt& learnt,
-                                                       uint32_t developmentPhase, float attitudeToPlayer, uint32_t speciesRow)
+                                                       uint32_t developmentPhase, float attitudeToPlayer,
+                                                       uint32_t turnsLookedAt, uint32_t speciesRow)
 {
 	const auto& knowledge = learnt.knowledge;
 	auto file = learnt.file != nullptr ? *learnt.file : Skeleton(knowledge.skillsSeen.size(), knowledge.miraclesSeen.size());
@@ -324,6 +326,7 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 	Sightings(knowledge.skillsSeen, file.actionsSeen);
 	Sightings(knowledge.miraclesSeen, file.miraclesSeen);
 	file.attitudeToPlayer = attitudeToPlayer;
+	file.turnsLookedAt = turnsLookedAt;
 	file.known[0] = KnownList(knowledge.skillsKnown, file.known[0]);
 	file.known[1] = KnownList(knowledge.miraclesKnown, file.known[1]);
 	file.before11.reset();

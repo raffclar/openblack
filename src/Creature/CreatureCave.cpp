@@ -100,9 +100,8 @@ TempleScrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
 		                     : std::nullopt,
 		});
 	}
-	// TODO(raffclar): the temples, flocks and forests it knows about are counted from what it believes about the things it
-	// has come across, which creatures don't keep yet
-	facts.known = {static_cast<int32_t>(snapshot.creaturesKnown.size()), 0, 0, 0};
+	facts.known = {static_cast<int32_t>(snapshot.creaturesKnown.size()), static_cast<int32_t>(snapshot.templesKnown),
+	               static_cast<int32_t>(snapshot.flocksKnown), static_cast<int32_t>(snapshot.forestsKnown)};
 	// The miracles it knows about that the game has a text for having learnt, by each one's own text, with how far it has
 	// learnt each cut short
 	for (size_t i = k_FirstScrollMiracle; i < snapshot.miracles.size(); ++i)

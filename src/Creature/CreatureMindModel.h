@@ -83,6 +83,8 @@ struct LoadedMind
 	Learnt learnt;
 	uint32_t developmentPhase {0};
 	float attitudeToPlayer {0.0f};
+	/// The game turns its player looked at it
+	uint32_t turnsLookedAt {0};
 	uint32_t speciesRow {0};
 	/// The body as the file keeps it, for the body to take up
 	float strength {0.0f};
@@ -96,6 +98,7 @@ struct LoadedMind
 /// A mind written as a file of the current version, over the file it was loaded from when there was one, so that
 /// what the mind doesn't use is kept
 [[nodiscard]] creaturemind::MindFileData ToFile(const creature_desires::Desires& desires, const Learnt& learnt,
-                                                uint32_t developmentPhase, float attitudeToPlayer, uint32_t speciesRow);
+                                                uint32_t developmentPhase, float attitudeToPlayer, uint32_t turnsLookedAt,
+                                                uint32_t speciesRow);
 
 } // namespace openblack::creature_mind_model
