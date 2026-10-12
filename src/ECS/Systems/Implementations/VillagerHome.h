@@ -42,6 +42,8 @@ enum class WalkWay : uint8_t
 /// Walks the villager to a point, then on into a state: it goes into its walk and the state it walks to together, then
 /// sets off. False when the state it is in won't let it go or the state it would walk to won't have it.
 bool SetupMoveTo(components::LivingAction& action, glm::vec2 goal, VillagerStates final, WalkWay way = WalkWay::RoundThings);
+/// Whether the villager is closer to a point than the step its walk makes in a turn, at the speed it walks
+bool AreWeThere(entt::entity villager, glm::vec2 point);
 /// The villager's walk to a goal starts afresh, whatever state it is in meanwhile; its states are left as they are
 void SetupMobileMoveTo(components::LivingAction& action, glm::vec2 goal, WalkWay way = WalkWay::RoundThings);
 /// Whether the villager's walk has put it on a goal

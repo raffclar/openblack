@@ -55,8 +55,6 @@ void ProcessFoodSpeedUp(entt::entity villager);
 uint32_t GotoFoodReaction(components::LivingAction& action);
 /// At the food it picks up what it can carry; hungry, it eats it; otherwise it may take it to the store
 uint32_t ArrivesAtFoodReaction(components::LivingAction& action);
-/// Leaving the food for anything but another reaction, it stops reacting
-bool ExitFoodReaction(components::LivingAction& action, VillagerStates next);
 
 uint32_t GotoStoragePitForFood(components::LivingAction& action);
 uint32_t ArrivesAtStoragePitForFood(components::LivingAction& action);
