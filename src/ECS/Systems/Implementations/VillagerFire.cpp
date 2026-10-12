@@ -321,11 +321,16 @@ void PopFromPrevious(LivingAction& action)
 	SetPrevious(action, VillagerStates::InvalidState);
 }
 
+/// The villager lets go of the reaction it took up, so the living about a fire can take it up again in their time
 void StopReacting(entt::entity villager)
 {
 	auto& state = FireStateOf(villager);
 	state.reaction = 0;
 	state.reactionTarget = entt::null;
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().StopReacting(villager);
+	}
 }
 
 /// Whether a thing can still be reacted to: it exists, and a villager is not dying
@@ -379,13 +384,6 @@ std::optional<uint32_t> ReactionAge(uint32_t reaction)
 const ReactionInfo& FireReaction()
 {
 	return Locator::infoConstants::value().reaction.at(static_cast<size_t>(Reaction::ReactToFire));
-}
-
-/// The reaction an object's fire makes, 0 for none
-uint32_t ReactionOf(entt::entity object)
-{
-	const auto* fire = Entities().TryGet<const Fire>(object);
-	return fire != nullptr ? fire->reaction : 0;
 }
 
 /// Where a villager stands to beat a fire: on the line from where the fire burns out through the villager, beyond the
@@ -452,7 +450,7 @@ glm::vec2& GoalOf(entt::entity villager)
 }
 } // namespace
 
-uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity object)
+uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity object, uint32_t reaction)
 {
 	auto& registry = Entities();
 	auto& fires = Locator::fireSystem::value();
@@ -468,7 +466,8 @@ uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity o
 	const float priority = urgency * static_cast<float>(info.priority);
 	constexpr float k_Most = 255.0f;
 	const auto result = static_cast<uint8_t>(priority < k_Most ? map_coords::FtoL(priority) : 255);
-	const auto age = ReactionAge(ReactionOf(object));
+	// The age of the reaction weighed, which a fire spreads as soon as it makes it
+	const auto age = ReactionAge(reaction);
 	if (age.has_value() && *age < k_NewReactionTurns && distance < info.minDistanceToRunAwayFromObject)
 	{
 		return result;
@@ -505,7 +504,7 @@ uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity o
 	return 0;
 }
 
-void villager_fire::SetupReactToFire(entt::entity villager, entt::entity object)
+void villager_fire::SetupReactToFire(entt::entity villager, entt::entity object, uint32_t reaction)
 {
 	auto& registry = Entities();
 	auto* action = registry.TryGet<LivingAction>(villager);
@@ -522,7 +521,8 @@ void villager_fire::SetupReactToFire(entt::entity villager, entt::entity object)
 	}
 	villager_home::LeaveHome(villager);
 	SetTopState(*action, VillagerStates::ReactToFire);
-	FireStateOf(villager).reaction = ReactionOf(object);
+	// The reaction it takes up, which a fire spreads as soon as it makes it
+	FireStateOf(villager).reaction = reaction;
 }
 
 uint32_t villager_fire::ReactToFire(LivingAction& action)

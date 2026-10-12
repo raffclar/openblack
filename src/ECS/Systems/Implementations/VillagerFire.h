@@ -28,11 +28,11 @@ struct LivingAction;
 namespace openblack::ecs::villager_fire
 {
 
-/// How urgently a villager reacts to an object's fire, 0 to 255; 0 when it shouldn't, or when a fireman takes the fire
-/// into the blaze it already fights
-[[nodiscard]] uint8_t ReactToFirePriority(entt::entity villager, entt::entity object);
-/// A villager takes up the reaction to an object's fire
-void SetupReactToFire(entt::entity villager, entt::entity object);
+/// How urgently a villager reacts to a reaction to an object's fire, 0 to 255; 0 when it shouldn't, or when a fireman
+/// takes the fire into the blaze it already fights
+[[nodiscard]] uint8_t ReactToFirePriority(entt::entity villager, entt::entity object, uint32_t reaction);
+/// A villager takes up a reaction to an object's fire
+void SetupReactToFire(entt::entity villager, entt::entity object, uint32_t reaction);
 /// A villager the heat of an object's fire reaches runs from it; with none, from its own fire
 void SetupOnFire(entt::entity villager, entt::entity fire);
 /// Whether a villager is running from a fire

@@ -19,6 +19,7 @@
 
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
@@ -40,6 +41,7 @@
 #include "ECS/MapProduction.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
+#include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerReactions.h"
 
 using namespace openblack;
@@ -267,6 +269,61 @@ TEST_F(Reactions, VillagersStopAfterTheirTimeAndGoBack)
 	}
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
 	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const LivingReaction>(_villagers[0]).reaction, 0u);
+}
+
+TEST_F(Reactions, AVillagerLettingGoOfAReactionKeepsWhatItDoesAndWaitsItsTimeFromThen)
+{
+	for (int turn = 0; turn < 5; ++turn)
+	{
+		_reactions.ProcessTurn();
+	}
+	_reactions.Create(Miracle());
+	auto& registry = Locator::entitiesRegistry::value();
+	ASSERT_NE(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
+	_reactions.StopReacting(_villagers[0]);
+	const auto& state = registry.Get<const LivingReaction>(_villagers[0]);
+	EXPECT_EQ(state.reaction, 0u);
+	EXPECT_EQ(state.type, Reaction::None);
+	// It goes on with what it was doing; only the reaction is let go
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::LookingAtObjectReaction);
+	// Its wait before taking up the kind again counts from the fifth turn, when it let go
+	const auto& memory = registry.Get<const VillagerReactionMemory>(_villagers[0]).memory;
+	EXPECT_EQ(memory.LastReacted(static_cast<uint32_t>(Reaction::LookAtNiceSpell)), 5u);
+}
+
+TEST_F(Reactions, AVillagerKeepsTheFireReactionItTookUpAndLetsGoOfItLeavingTheFire)
+{
+	// The fire's reaction is spread as soon as it is made, before the fire knows it: the villager keeps the one it took
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& stateTable = _info->villagerStateTable;
+	stateTable.at(static_cast<size_t>(VillagerStates::ReactToFire)).isReactionState = 1;
+	stateTable.at(static_cast<size_t>(VillagerStates::ReactToFire)).availableForReaction = 1;
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	const auto villager = _villagers[0];
+	const auto burning = registry.Create();
+	registry.Assign<Transform>(burning, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = 7, .type = Reaction::ReactToFire});
+	villager_fire::SetupReactToFire(villager, burning, 7);
+	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).reaction, 7u);
+	EXPECT_EQ(StateOf(villager), VillagerStates::ReactToFire);
+	// Leaving the fire for something that isn't a reaction, it lets go of the reaction, so it can take up the fire
+	// again in its time
+	auto& action = registry.Get<LivingAction>(villager);
+	villager_fire::ExitReaction(action, VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).reaction, 0u);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::reactionSystem::reset();
+}
+
+TEST(ReactionRules, LettingGoOfAKindBringsItUpToNowOnlyWhenRemembered)
+{
+	openblack::magic::villager_reaction::Memory memory;
+	ASSERT_TRUE(memory.MayReactAgain(1, 10, 0));
+	memory.Refresh(1, 50);
+	EXPECT_EQ(memory.LastReacted(1), 50u);
+	// A kind it doesn't remember isn't remembered by letting go of it
+	memory.Refresh(2, 60);
+	EXPECT_EQ(memory.LastReacted(2), 0u);
 }
 
 TEST_F(Reactions, VillagersFleeAFrighteningMiracle)
