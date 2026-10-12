@@ -190,7 +190,8 @@ void AddForests(std::vector<Scenario>& all)
 	            "Forest on grass",
 	            {0.0f, 40.0f},
 	            "A forest cast on the testbed's grass north of the middle.",
-	            "The seed falls with a trail of blue blobs and lands; 18 trees are planted at once on a spiral from 2 to "
+	            "The red seed falls spinning under a trail of glowing blobs in the player's colour and lands; 18 trees are "
+	            "planted at once on a spiral from 2 to "
 	            "11 out, of beech, birch and cedar, and grow from nothing each turn, those further out to a smaller size, "
 	            "the middle ones over about nine seconds. Sparkles burst and vortices spin at three and a half seconds; "
 	            "at five and a half, 5 flocks of 10 butterflies circle up over the trees and fade away by 16 seconds. "
