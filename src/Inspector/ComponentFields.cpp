@@ -993,6 +993,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandGrab::spring>("spring")
 	    .Field<&components::HandGrab::springOn>("springOn")
 	    .Field<&components::HandGrab::springPending>("springPending")
+	    .Field<&components::HandGrab::recordedThrow>("recordedThrow")
 	    .Field<&components::HandGrab::lastTarget>("lastTarget")
 	    .Field<&components::HandGrab::scoopSource>("scoopSource")
 	    .Field<&components::HandGrab::scoopTurns>("scoopTurns")
