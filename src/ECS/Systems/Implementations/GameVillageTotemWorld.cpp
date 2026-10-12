@@ -26,6 +26,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -57,8 +58,7 @@ ecs::Registry& GameVillageTotemWorld::Entities()
 
 entt::id_type GameVillageTotemWorld::IconMeshFor(PlayerNames player) const
 {
-	// The player's creature shows the icon mesh its species' info names; without one it is the hand
-	auto icon = MeshId::BuildingSpellHand;
+	std::optional<MeshId> creatureIcon;
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (const auto creature = PrimaryCreature(player); creature.has_value())
 	{
@@ -66,9 +66,10 @@ entt::id_type GameVillageTotemWorld::IconMeshFor(PlayerNames player) const
 		const auto& info = Locator::infoConstants::value();
 		if (body != nullptr && creature::InfoRow(body->species) < info.creature.size())
 		{
-			icon = info.creature.at(creature::InfoRow(body->species)).totemIcon;
+			creatureIcon = info.creature.at(creature::InfoRow(body->species)).totemIcon;
 		}
 	}
+	const auto icon = village_totem::IconMesh(creatureIcon);
 	return resources::HashIdentifier(icon);
 }
 
