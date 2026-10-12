@@ -177,27 +177,25 @@ TEST(ScriptHighlightRules, TheBeatBlendsBetweenTurnsFromFourTenthsToOne)
 	EXPECT_NEAR(PulseShare(rising, 1.0f), 1.0, 1e-6);
 }
 
-TEST(ScriptHighlightRules, OnlyTheTopOfTheBeatShowsAYellowBeam)
+TEST(ScriptHighlightRules, TheYellowBeamBeatsWithTheScroll)
 {
 	EXPECT_EQ(BeamColour(HighlightInfo::Silver, 0.7), 0x14b4dcffu);
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.99), 0x00ffff00u);
+	// The beat runs from 0.4 to 1, so the beam's alpha runs from 32 to 80
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.4), 0x20ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.7), 0x38ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.99), 0x4fffff00u);
 	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 1.0), 0x50ffff00u);
 	// A plain scroll's beam is the gold one's
-	EXPECT_EQ(BeamColour(HighlightInfo::Scroll, 1.0), 0x50ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Scroll, 0.7), 0x38ffff00u);
 }
 
-TEST(ScriptHighlightRules, TheYellowBeamShowsOnlyAtTheStartOfATurnAfterAWholeBeat)
+TEST(ScriptHighlightRules, TheYellowBeamShowsAllThroughATurn)
 {
-	// The turn before was a whole 1: at the turn's very start the beam shows, a moment later it has gone
-	const Pulse afterTop {.phase = 3.6f, .level = 0.95f, .previous = 1.0f};
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(afterTop, 0.0f)), 0x50ffff00u);
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(afterTop, 0.01f)), 0x00ffff00u);
-	// Rising to a whole 1, the turn's fraction never reaches it
-	const Pulse toTop {.phase = 3.1416f, .level = 1.0f, .previous = 0.9f};
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(toTop, 0.99f)), 0x00ffff00u);
-	// The float just short of 1 isn't enough, as it isn't for the game
-	const Pulse justShort {.phase = 3.0f, .level = 0.99999994f, .previous = 0.99999994f};
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(justShort, 0.0f)), 0x00ffff00u);
+	// Between two turns the beam follows the blended beat, never dropping out
+	const Pulse rising {.phase = 1.0f, .level = 0.5f, .previous = 0.25f};
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(rising, 0.0f)), 0x2cffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(rising, 0.5f)), 0x32ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(rising, 0.99f)), 0x37ffff00u);
 }
 
 TEST(ScriptHighlightRules, TheBeatReachesAWholeOneOnlyRightAtItsTop)

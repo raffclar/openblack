@@ -18,7 +18,7 @@ namespace openblack::script::switches
 /// The switches a change of control sets; a switch left empty is left as it is
 struct SwitchChanges
 {
-	/// The leashes are drawn
+	/// The scripts' switch for the leashes (see leash_rope::Shown)
 	std::optional<bool> leashesDrawn;
 	/// The challenge scrolls are drawn (the signs always are)
 	std::optional<bool> highlightsDrawn;
@@ -28,8 +28,8 @@ struct SwitchChanges
 	bool operator==(const SwitchChanges&) const = default;
 };
 
-/// A script takes the camera: out in the world its shots show neither the leashes nor the scrolls; inside the temple
-/// nothing changes
+/// A script takes the camera: out in the world the scrolls go and the leashes' switch goes off (the ropes then hide in
+/// its cinema bars and while the hand is put away); inside the temple nothing changes
 [[nodiscard]] constexpr SwitchChanges CameraTaken(bool insideTemple)
 {
 	if (insideTemple)

@@ -47,6 +47,12 @@ enum class RenderPass : uint8_t
 	Main,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
+	/// The collars of the leashes the gestures' hints offer, each in a view of its own over its hint's square
+	GestureHintCollar0,
+	GestureHintCollar1,
+	GestureHintCollar2,
+	/// The gestures' hints along the bottom of the screen, over the scene and under the cinema bars
+	GestureHints,
 	/// The cinema bars over the scene: the advisors near the screen are drawn over them
 	CinemaBars,
 	/// The advisors near the screen, drawn over the whole scene with its depth cleared
@@ -76,6 +82,10 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Sky Pass",                    //
     "Main Pass",                   //
     "Translucent Pass",            //
+    "Gesture Hint Collar 0 Pass",  //
+    "Gesture Hint Collar 1 Pass",  //
+    "Gesture Hint Collar 2 Pass",  //
+    "Gesture Hints Pass",          //
     "Cinema Bars Pass",            //
     "Advisors Pass",               //
     "Interface Pass",              //

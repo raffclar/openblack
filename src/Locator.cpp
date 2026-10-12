@@ -23,8 +23,8 @@
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
+#include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
-#include "Common/UserData.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/MapProduction.h"
@@ -52,6 +52,7 @@
 #include "ECS/Systems/Implementations/CreatureFizzSystem.h"
 #include "ECS/Systems/Implementations/CreatureHairSystem.h"
 #include "ECS/Systems/Implementations/CreatureHandSystem.h"
+#include "ECS/Systems/Implementations/CreatureHelpSystem.h"
 #include "ECS/Systems/Implementations/CreatureLocomotionSystem.h"
 #include "ECS/Systems/Implementations/CreatureMindSystem.h"
 #include "ECS/Systems/Implementations/CreatureModeSystem.h"
@@ -73,12 +74,14 @@
 #include "ECS/Systems/Implementations/HandDemoSystem.h"
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
+#include "ECS/Systems/Implementations/HelpMessageSystem.h"
 #include "ECS/Systems/Implementations/HelpProfileSystem.h"
 #include "ECS/Systems/Implementations/HelpSpeechSystem.h"
 #include "ECS/Systems/Implementations/HelpTextSystem.h"
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
+#include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #include "ECS/Systems/Implementations/TipBubbleSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
@@ -175,6 +178,7 @@ using openblack::ecs::systems::CreatureFightSystem;
 using openblack::ecs::systems::CreatureFizzSystem;
 using openblack::ecs::systems::CreatureHairSystem;
 using openblack::ecs::systems::CreatureHandSystem;
+using openblack::ecs::systems::CreatureHelpSystem;
 using openblack::ecs::systems::CreatureLocomotionSystem;
 using openblack::ecs::systems::CreatureMindSystem;
 using openblack::ecs::systems::CreatureModeSystem;
@@ -197,6 +201,7 @@ using openblack::ecs::systems::HandDemoSystem;
 using openblack::ecs::systems::HandGrabSystem;
 using openblack::ecs::systems::HandSystem;
 using openblack::ecs::systems::HeartbeatSystem;
+using openblack::ecs::systems::HelpMessageSystem;
 using openblack::ecs::systems::HelpProfileSystem;
 using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::HelpTextSystem;
@@ -209,6 +214,7 @@ using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
 using openblack::ecs::systems::MistSystem;
+using openblack::ecs::systems::ObjectDrawListSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
@@ -293,7 +299,7 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	return true;
 }
 
-bool openblack::InitializeGame() noexcept
+bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 {
 	Locator::terrainSystem::emplace<UnloadedIsland>();
 	Locator::resources::emplace<Resources>();
@@ -309,7 +315,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
-	Locator::playerProfileSystem::emplace<PlayerProfileSystem>();
+	Locator::playerProfileSystem::emplace<PlayerProfileSystem>(profiles);
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::time::emplace<TimeSystem>();
@@ -355,6 +361,8 @@ bool openblack::InitializeGame() noexcept
 	Locator::videoSystem::emplace<VideoSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
 	Locator::helpProfileSystem::emplace<HelpProfileSystem>();
+	Locator::creatureHelpSystem::emplace<CreatureHelpSystem>();
+	Locator::helpMessageSystem::emplace<HelpMessageSystem>();
 	Locator::tipBubbleSystem::emplace<TipBubbleSystem>();
 	Locator::handDemoSystem::emplace<HandDemoSystem>();
 	Locator::advisorSystem::emplace<AdvisorSystem>();
@@ -369,7 +377,9 @@ bool openblack::InitializeGame() noexcept
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
-	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(user_data::CreatureMindFolder());
+	// The player's creature is kept under their profile's file
+	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
+	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
 	Locator::forestSystem::emplace<ForestSystem>();
@@ -431,6 +441,8 @@ void InitializeLevelWith(const LandSource& land)
 	// A land starts with no camera zones
 	Locator::cameraZoneSystem::emplace<CameraZoneSystem>();
 	Locator::terrainSystem::emplace<LandIsland>(land);
+	// The things on the land's blocks that are drawn, near to far
+	Locator::objectDrawListSystem::emplace<ObjectDrawListSystem>();
 	Locator::cameraPathSystem::emplace<CameraPathSystem>();
 }
 } // namespace
@@ -489,6 +501,7 @@ void openblack::ShutDownServices()
 	Locator::worshipSiteSystem::reset();
 	Locator::resourceStoreSystem::reset();
 	Locator::animatedStaticSystem::reset();
+	Locator::objectDrawListSystem::reset();
 	Locator::appleBarrelSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
@@ -507,6 +520,8 @@ void openblack::ShutDownServices()
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();
+	Locator::creatureHelpSystem::reset();
+	Locator::helpMessageSystem::reset();
 	Locator::tipBubbleSystem::reset();
 	Locator::handDemoSystem::reset();
 	Locator::influenceSystem::reset();

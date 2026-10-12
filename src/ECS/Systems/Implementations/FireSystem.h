@@ -15,6 +15,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "Fire/FireModel.h"
 
@@ -38,7 +39,7 @@ public:
 
 	void ProcessTurn() override;
 	void MarkBurnPoint() override;
-	void Update(float seconds) override;
+	void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 	void Reset() override;
 
 	void ApplyBurn(entt::entity object, float burn, std::optional<PlayerNames> player) override;
@@ -108,7 +109,8 @@ private:
 	};
 	std::array<SoundSlot, 2> _soundSlots {};
 	float _farthestSlot {0.0f};
-	float _frameTime {0.0f};
+	/// The flames, steam and smoke step as the game's frames did
+	frame_pace::Pace _pace;
 };
 
 } // namespace openblack::ecs::systems

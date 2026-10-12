@@ -175,6 +175,10 @@ public:
 	virtual void RequestLeave() = 0;
 	/// Fades the screen to white over a second, as the temple does before the player leaves it for the island
 	virtual void FadeToWhite() = 0;
+	/// Covers the screen again as the player cuts a room's flight in short, fading away over a second
+	virtual void CoverSkippedFlight() = 0;
+	/// How much the temple's fade covers the screen: above 1 it is wholly covered for that much longer
+	[[nodiscard]] virtual float GetFadeAmount() const = 0;
 	/// Carries out what the frame asked of the temple, and moves on what goes on in its rooms by themselves
 	virtual void Update(std::chrono::microseconds dt) = 0;
 	/// How far the creature's room's waterfall has slid down it, the offset of its texture
@@ -182,5 +186,8 @@ public:
 	virtual void Activate() = 0;
 	virtual void Activate(TempleRoom room) = 0;
 	virtual void Deactivate() = 0;
+	/// Closes the temple at once as its land goes, before the land's entities do: everything its rooms made goes with
+	/// it, and the island's camera and drawing come back, without the walk out to the island
+	virtual void CloseForNewLand() = 0;
 };
 } // namespace openblack

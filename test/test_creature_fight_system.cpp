@@ -47,6 +47,7 @@ public:
 	void Remove(uint32_t) override {}
 	void SetInitiator(uint32_t, entt::entity) override {}
 	[[nodiscard]] bool IsActive(uint32_t) const override { return false; }
+	void StopReacting(entt::entity) override {}
 	[[nodiscard]] bool HasReaction(entt::entity) const override { return false; }
 	void ProcessTurn() override {}
 	void Reset() override {}

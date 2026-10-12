@@ -162,6 +162,8 @@ openblack_setup_and_add_test(test_draw_order graphics/test_draw_order.cpp)
 openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
 openblack_setup_and_add_test(test_mesh_detail graphics/test_mesh_detail.cpp)
 openblack_setup_and_add_test(test_detail_level graphics/test_detail_level.cpp)
+openblack_setup_and_add_test(test_land_detail graphics/test_land_detail.cpp)
+target_link_libraries(test_land_detail PRIVATE lnd)
 openblack_setup_and_add_test(
   test_sea_reflection graphics/test_sea_reflection.cpp
 )
@@ -243,6 +245,7 @@ openblack_setup_and_add_test(test_fish_farm test_fish_farm.cpp)
 openblack_setup_and_add_test(test_snow_cover test_snow_cover.cpp)
 openblack_setup_and_add_test(test_snowfall test_snowfall.cpp)
 openblack_setup_and_add_test(test_water_rings test_water_rings.cpp)
+openblack_setup_and_add_test(test_frame_pace test_frame_pace.cpp)
 openblack_setup_and_add_test(test_flat_land test_flat_land.cpp)
 openblack_setup_and_add_test(test_creature_body test_creature_body.cpp)
 openblack_setup_and_add_test(test_creature_removal test_creature_removal.cpp)
@@ -303,6 +306,7 @@ openblack_setup_and_add_test(
   test_creature_footprints test_creature_footprints.cpp
 )
 openblack_setup_and_add_test(test_creature_fight test_creature_fight.cpp)
+openblack_setup_and_add_test(test_fight_marks test_fight_marks.cpp)
 openblack_setup_and_add_test(test_creature_fizz test_creature_fizz.cpp)
 openblack_setup_and_add_test(
   test_creature_fizz_look test_creature_fizz_look.cpp
@@ -325,6 +329,9 @@ openblack_setup_and_add_test(
   test_creature_status_panel test_creature_status_panel.cpp
 )
 openblack_setup_and_add_test(test_creature_mode test_creature_mode.cpp)
+openblack_setup_and_add_test(
+  test_creature_attention test_creature_attention.cpp
+)
 target_link_libraries(test_flat_land PRIVATE lnd)
 target_link_libraries(test_testbed_scenarios PRIVATE lnd)
 openblack_setup_and_add_test(test_town_desire test_town_desire.cpp)
@@ -828,3 +835,22 @@ openblack_setup_and_add_test(
   test_planned_building_rules test_planned_building_rules.cpp
 )
 openblack_setup_and_add_test(test_creature_touch test_creature_touch.cpp)
+openblack_setup_and_add_test(test_gesture_hints test_gesture_hints.cpp)
+openblack_setup_and_add_test(
+  test_object_detail graphics/test_object_detail.cpp
+)
+openblack_setup_and_add_test(test_player_profiles test_player_profiles.cpp)
+openblack_setup_and_add_test(test_text_edit_rules gui/test_text_edit_rules.cpp)
+openblack_setup_and_add_test(test_new_player_box gui/test_new_player_box.cpp)
+openblack_setup_and_add_test(test_creature_names test_creature_names.cpp)
+openblack_setup_and_add_test(test_creature_help test_creature_help.cpp)
+openblack_setup_and_add_test(test_help_messages test_help_messages.cpp)
+openblack_setup_and_add_test(test_object_draw_list test_object_draw_list.cpp)
+openblack_setup_and_add_test(
+  test_building_site_list test_building_site_list.cpp
+)
+openblack_setup_and_add_test(test_hand_trace hand/test_hand_trace.cpp)
+openblack_setup_and_add_test(
+  test_script_guide_ogre_natives test_script_guide_ogre_natives.cpp
+)
+target_link_libraries(test_script_guide_ogre_natives PRIVATE ScriptLibrary helpdude)

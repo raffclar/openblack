@@ -561,6 +561,33 @@ void draw::AddPlayerSymbol(Frame& frame, const PlayerSymbol& symbol, const Sourc
 	}
 }
 
+void draw::AddFightMarks(Frame& frame, std::span<const FightMark> marks)
+{
+	if (marks.empty())
+	{
+		return;
+	}
+	static constexpr auto k_Sheet = entt::hashed_string("raw/blobs");
+	static constexpr auto k_SheetAlpha = entt::hashed_string("raw/blobsa");
+	// Added to what is behind, writing no depth
+	const auto material = frame.MaterialIndex(
+	    {.texture = k_Sheet.value(), .alphaTexture = k_SheetAlpha.value(), .mode = Mode::AlphaTexturedAlphaAdditiveNz});
+	for (const auto& mark : marks)
+	{
+		const auto firstItem = static_cast<uint32_t>(frame.items.size());
+		// Square, facing the screen, unturned and centred on where it sits
+		frame.items.push_back(
+		    {.kind = ItemKind::Sprite, .index = static_cast<uint32_t>(frame.sprites.size()), .sortPoint = mark.position});
+		frame.sprites.push_back({.positionHalfWidth = glm::vec4(mark.position, mark.halfSize),
+		                         .shape = glm::vec4(mark.halfSize, 0.0f, 0.0f, 0.0f),
+		                         .uv = mark.uv,
+		                         .colour = mark.colour,
+		                         .flags = glm::vec4(0.0f)});
+		frame.spriteMaterials.push_back(material);
+		frame.groups.push_back({.path = DrawPath::Sorted, .origin = mark.position, .firstItem = firstItem, .itemCount = 1});
+	}
+}
+
 void draw::AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> vertices, std::span<const uint32_t> triangles,
                          const glm::vec3& sortPoint, LightSheet::Look look)
 {

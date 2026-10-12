@@ -112,6 +112,8 @@ struct Context
 	float windowSeconds {0.0f};
 	/// The feedback last credited to it, for the debug readouts
 	std::optional<float> credited;
+	/// The source of the desire that says why it did it, which its lessons tell of; k_NoTellingSource when none does
+	uint32_t source {61};
 };
 /// How much feedback now counts for a context: fully while running, then less until its window closes; nothing for an
 /// action that can't be learnt from
@@ -139,11 +141,14 @@ constexpr uint32_t k_NoTellingSource = k_LastTellingSource + 1;
 /// source that has driven its desire most (none when no source has driven it) and the desire's first source both say
 /// nothing of why it wants it. Asked before the drives are counted afresh.
 [[nodiscard]] bool RemembersPlan(const creature_desires::DesireState& desire);
+/// The source that says why the creature wants what a plan it takes up serves: the source that has driven the desire
+/// most, else the desire's first source; none when neither says why (and then the plan isn't remembered)
+[[nodiscard]] std::optional<uint32_t> PlanSource(const creature_desires::DesireState& desire);
 /// Starts counting the sources' drive afresh, as the creature switches to a plan its planner chose
 void ResetDrives(creature_desires::DesireState& desire);
 /// The creature takes up a plan its planner chose for the desire: whether the plan is remembered, which the drives
 /// decide before they are counted afresh
-[[nodiscard]] bool TakeUpChosenPlan(creature_desires::DesireState& desire);
+[[nodiscard]] std::optional<uint32_t> TakeUpChosenPlan(creature_desires::DesireState& desire);
 
 /// How the creature feels about another creature
 struct CreatureAttitude

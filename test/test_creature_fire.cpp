@@ -203,6 +203,21 @@ TEST(CreatureFireLearning, ForcedPlanIsRememberedUnlessNothingSaysWhy)
 	EXPECT_FALSE(creature_learning::RemembersPlan(desire));
 }
 
+TEST(CreatureFireLearning, APlanRemembersTheSourceThatSaysWhy)
+{
+	using creature_learning::k_LastTellingSource;
+	creature_desires::DesireState desire;
+	EXPECT_FALSE(creature_learning::PlanSource(desire).has_value());
+	desire.sources.push_back({.type = k_LastTellingSource + 5, .drive = 0.0f});
+	desire.sources.push_back({.type = 3, .drive = 2.0f});
+	// The source that drove it most
+	EXPECT_EQ(creature_learning::PlanSource(desire), 3u);
+	// Else the first source
+	desire.sources[1].type = k_LastTellingSource + 2;
+	desire.sources[0].type = 7;
+	EXPECT_EQ(creature_learning::PlanSource(desire), 7u);
+}
+
 TEST(CreatureFireLearning, AChosenPlanIsRememberedByTheDrivesBeforeTheyAreCountedAfresh)
 {
 	using creature_learning::k_LastTellingSource;
@@ -210,10 +225,10 @@ TEST(CreatureFireLearning, AChosenPlanIsRememberedByTheDrivesBeforeTheyAreCounte
 	desire.sources.push_back({.type = k_LastTellingSource + 5, .drive = 0.0f});
 	desire.sources.push_back({.type = 3, .drive = 2.0f});
 	// The source that drove it most says why, and is asked before its drive goes
-	EXPECT_TRUE(creature_learning::TakeUpChosenPlan(desire));
+	EXPECT_TRUE(creature_learning::TakeUpChosenPlan(desire).has_value());
 	EXPECT_EQ(desire.sources[1].drive, 0.0f);
 	// With every drive gone, only the first source has its say, which says nothing
-	EXPECT_FALSE(creature_learning::TakeUpChosenPlan(desire));
+	EXPECT_FALSE(creature_learning::TakeUpChosenPlan(desire).has_value());
 }
 
 TEST(CreatureFire, EveryExecutorsTargetIsCountedAmongTheKinds)

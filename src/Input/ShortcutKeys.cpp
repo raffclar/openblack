@@ -28,6 +28,7 @@
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "GameActionMapInterface.h"
@@ -128,6 +129,12 @@ void ShortcutKeys::Update()
 
 	// TODO(raffclar): Zoom To Creature and the creature's room key belong to the creature mode work, and the leash keys
 	// to the leash work, which read them themselves.
+
+	// The Help key asks the advisors about what is in the hand or under it
+	if (pressed(BindableActionMap::HELP) && Locator::helpMessageSystem::has_value())
+	{
+		Locator::helpMessageSystem::value().HelpQuery();
+	}
 
 	// The villagers' names and details are toggled, as the game does
 	ToggleVillagerLabels(pressed(BindableActionMap::SHOW_VILLAGER_NAMES), pressed(BindableActionMap::SHOW_VILLAGER_DETAILS));

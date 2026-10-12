@@ -36,6 +36,7 @@
 #include "Graphics/DescriptorSetTally.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandShadow.h"
+#include "Graphics/LandDetail.h"
 #include "Graphics/PartialBuildCap.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
@@ -388,6 +389,9 @@ private:
 	void DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint) const;
 	/// The leashes' ropes, each a ribbon lit by the land beneath it, and their shadows on the land
 	void DrawLeashes(const DrawSceneDesc& desc) const;
+	/// The collars of the leashes the gestures' hints offer, each over its hint's square, seen through a camera of its
+	/// own
+	void DrawGestureHintCollars(const DrawSceneDesc& desc) const;
 	/// Takes up the creatures' skins where they have been painted again, before their bodies are drawn with them; drops
 	/// those of creatures no longer on the land
 	void UploadCreatureSkins(const DrawSceneDesc& drawDesc) const;
@@ -441,6 +445,21 @@ private:
 	mutable uint32_t _groundShadowsOnObjects {0};
 	/// Each land block's first entry in the lists, and how many shadows reach it, by the block's index
 	mutable std::vector<glm::vec2> _groundShadowBlocks;
+	/// The land's level of detail this frame, from the camera of the view: the lines across the ground, and how each
+	/// block is drawn and which of its sides are stitched to coarser neighbours, by the block's index. The land
+	/// mirrored under the sea is drawn with the same.
+	struct LandDetailFrame
+	{
+		land_detail::Lines lines;
+		land_detail::ViewLine meshNear;
+		land_detail::ViewLine meshFar;
+		land_detail::ViewLine texture;
+		std::vector<land_detail::BlockDetail> blocks;
+		std::vector<uint8_t> coarserSides;
+		/// The indices of the blocks at x - 1, z - 1, z + 1 and x + 1, -1 where there is none
+		std::vector<glm::vec4> neighbours;
+	};
+	mutable LandDetailFrame _landDetail;
 	/// A counted part of a shadow's bodies: a submesh, its first point and whether it covers only every second row of
 	/// samples
 	struct GroundShadowPart
@@ -557,6 +576,8 @@ private:
 	[[nodiscard]] glm::vec4 GetModelLight() const;
 	/// Rebuilds the land's light for this frame from the palette; the texture of it
 	TextureHandle UpdateLandLight() const;
+	/// Works out the land's level of detail for this frame from the view's camera (see land_detail)
+	void UpdateLandDetail(const DrawSceneDesc& drawDesc) const;
 	/// The land's light, or a texture to bind in its place before it is first built
 	[[nodiscard]] TextureHandle GetLandLightTexture() const;
 	std::unique_ptr<Mesh> _plane;

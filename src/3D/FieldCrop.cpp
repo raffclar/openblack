@@ -42,31 +42,56 @@ bool IsRipe(const Crop& crop, const Type& type)
 	return crop.age >= type.ageRipe;
 }
 
-bool RemoveFood(Crop& crop, const Type& type, float ratioBeforeRipe, float amount)
+Harvest RemoveFood(Crop& crop, const Type& type, float ratioBeforeRipe, float amount)
 {
 	// Nothing is taken from a field with no food, or not yet sown
-	if (crop.food == 0.0f || static_cast<float>(crop.timesSown) < type.timesToSow)
+	if (crop.food == 0.0f || !IsSown(crop, type))
 	{
-		return false;
+		return {};
 	}
 	const auto truncated = [](float value) { return static_cast<int64_t>(value); };
-	auto removed = truncated(amount);
-	if (crop.age < type.ageRipe)
+	const auto asked = truncated(amount);
+	auto removed = asked;
+	if (!IsRipe(crop, type))
 	{
 		removed = truncated(amount * ratioBeforeRipe + static_cast<float>(removed));
 	}
 	if (static_cast<float>(removed) < crop.food)
 	{
 		crop.food -= static_cast<float>(removed);
+		return {.given = static_cast<uint32_t>(asked), .emptied = false};
+	}
+	// Emptied: an unripe crop gives only the share it loses, and stays sown; a ripe one gives all it had and must be
+	// sown again
+	if (!IsRipe(crop, type))
+	{
+		crop.food = 0.0f;
+		return {.given = static_cast<uint32_t>(truncated(amount * ratioBeforeRipe)), .emptied = true};
+	}
+	const auto given = static_cast<uint32_t>(truncated(crop.food));
+	crop.food = 0.0f;
+	crop.timesSown = 0;
+	crop.age = 0.0f;
+	return {.given = given, .emptied = true};
+}
+
+bool PlantCrop(Crop& crop, const Type& type)
+{
+	if (IsSown(crop, type))
+	{
 		return false;
 	}
-	crop.food = 0.0f;
-	if (crop.age >= type.ageRipe)
-	{
-		crop.timesSown = 0;
-		crop.age = 0.0f;
-	}
+	++crop.timesSown;
 	return true;
+}
+
+Activity ActivityOf(const Crop& crop, const Type& type)
+{
+	if (!IsSown(crop, type))
+	{
+		return Activity::Sowing;
+	}
+	return crop.age >= type.ageGrowth ? Activity::Grown : Activity::Growing;
 }
 
 float ClampAlignment(float sum)

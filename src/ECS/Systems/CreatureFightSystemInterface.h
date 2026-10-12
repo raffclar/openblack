@@ -125,6 +125,9 @@ public:
 	/// opponent's body. Whether it was taken.
 	virtual bool GestureSpecialMove() = 0;
 	virtual bool GestureSpell(MagicType type) = 0;
+	/// Once a frame: the sparkles marking the player's queued moves flicker on and are handed to the particles to draw,
+	/// seen from the camera
+	virtual void DrawMarks(float /*realMs*/, const glm::vec3& /*eye*/) {}
 
 	/// Whether a creature in a fight is blocking now
 	[[nodiscard]] virtual bool IsBlocking(entt::entity /*creature*/) const { return false; }

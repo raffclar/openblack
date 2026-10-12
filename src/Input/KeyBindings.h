@@ -97,7 +97,7 @@ using KeyBindingTable = std::array<KeyBinding, k_KeyBindingCount>;
 /// The game's defaults, in the order its options screen lists them. Where the game names the right Ctrl or Shift, it
 /// treats either side's key as the same one.
 inline constexpr KeyBindingTable k_DefaultKeyBindings {{
-	{BindableActionMap::HELP,                   "Help",                        BindCategory::Interface, KeyChord {SDL_SCANCODE_F1},     MouseInput::None,         BindStatus::NotYetImplemented},
+	{BindableActionMap::HELP,                   "Help",                        BindCategory::Interface, KeyChord {SDL_SCANCODE_F1},     MouseInput::None,         BindStatus::Implemented},
 	{BindableActionMap::MOVE,                   "Move",                        BindCategory::Hand,      std::nullopt,                   MouseInput::LeftButton,   BindStatus::Implemented},
 	{BindableActionMap::ACTION,                 "Action",                      BindCategory::Hand,      std::nullopt,                   MouseInput::RightButton,  BindStatus::Implemented},
 	{BindableActionMap::ZOOM_OUT,               "Zoom Out",                    BindCategory::Camera,    std::nullopt,                   MouseInput::WheelDown,    BindStatus::Implemented},

@@ -78,13 +78,18 @@ public:
 	void Escape() override;
 	void RequestLeave() override { _leaveRequested = true; }
 	void FadeToWhite() override;
+	void CoverSkippedFlight() override;
+	[[nodiscard]] float GetFadeAmount() const override;
 	void Update(std::chrono::microseconds dt) override;
 	[[nodiscard]] glm::vec2 GetWaterfallSlide() const override;
 	void Activate() override { Activate(TempleRoom::Main); }
 	void Activate(TempleRoom room) override;
 	void Deactivate() override;
+	void CloseForNewLand() override;
 
 private:
+	/// Takes down what the temple made for the visit and gives the camera and drawing back to the island
+	void Close();
 	/// Looks through the camera model's lens, or the configured one without
 	void ApplyLens() const;
 

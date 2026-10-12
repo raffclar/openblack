@@ -379,6 +379,41 @@ LNDResult LNDFile::Write(const std::filesystem::path& filepath) noexcept
 	return WriteFile(stream);
 }
 
+std::optional<LNDLowResolutionTexels> openblack::lnd::GetTexels(const LNDLowResolutionTexture& texture) noexcept
+{
+	// A DirectDraw surface description: its size, then the height and width at 8 and 12 and the pixel format's four
+	// letters at 80; the blocks follow it
+	constexpr size_t k_DescriptionSize = 124;
+	constexpr size_t k_HeightAt = 8;
+	constexpr size_t k_WidthAt = 12;
+	constexpr size_t k_FourCcAt = 80;
+	const auto& bytes = texture.texels;
+	if (bytes.size() < k_DescriptionSize)
+	{
+		return std::nullopt;
+	}
+	const auto read32 = [&](size_t at) {
+		return static_cast<uint32_t>(bytes[at]) | static_cast<uint32_t>(bytes[at + 1]) << 8 |
+		       static_cast<uint32_t>(bytes[at + 2]) << 16 | static_cast<uint32_t>(bytes[at + 3]) << 24;
+	};
+	const auto height = read32(k_HeightAt);
+	const auto width = read32(k_WidthAt);
+	const bool dxt3 = bytes[k_FourCcAt] == 'D' && bytes[k_FourCcAt + 1] == 'X' && bytes[k_FourCcAt + 2] == 'T' &&
+	                  bytes[k_FourCcAt + 3] == '3';
+	// A DXT3 block holds 4 by 4 texels in 16 bytes
+	const size_t blockBytes = static_cast<size_t>(width / 4) * (height / 4) * 16;
+	if (read32(0) != k_DescriptionSize || !dxt3 || width == 0 || height == 0 || width > 4096 || height > 4096 ||
+	    width % 4 != 0 || height % 4 != 0 || bytes.size() < k_DescriptionSize + blockBytes)
+	{
+		return std::nullopt;
+	}
+	return LNDLowResolutionTexels {
+	    .width = static_cast<uint16_t>(width),
+	    .height = static_cast<uint16_t>(height),
+	    .blocks = std::span(bytes).subspan(k_DescriptionSize, blockBytes),
+	};
+}
+
 void LNDFile::AddLowResolutionTexture(const LNDLowResolutionTexture& texture) noexcept
 {
 	_lowResolutionTextures.emplace_back(texture);

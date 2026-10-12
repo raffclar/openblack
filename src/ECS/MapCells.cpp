@@ -18,10 +18,105 @@
 using namespace openblack::ecs::map_cells;
 using openblack::map_coords::FtoL;
 
+namespace
+{
+constexpr size_t k_Blocks = static_cast<size_t>(k_BlocksPerSide) * k_BlocksPerSide;
+
+std::optional<size_t> BlockIndex(glm::ivec2 block)
+{
+	if (block.x < 0 || block.y < 0 || block.x >= k_BlocksPerSide || block.y >= k_BlocksPerSide)
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(block.x) * k_BlocksPerSide + static_cast<size_t>(block.y);
+}
+} // namespace
+
+BlockLists::BlockLists()
+    : _blocks(k_Blocks)
+    , _onLand(k_Blocks, true)
+{
+}
+
+void BlockLists::SetLandBlocks(std::span<const glm::ivec2> blocks)
+{
+	std::ranges::fill(_onLand, false);
+	for (const auto block : blocks)
+	{
+		if (const auto index = BlockIndex(block))
+		{
+			_onLand.at(*index) = true;
+		}
+	}
+	_landBlocksKnown = true;
+}
+
+BlockLists::List& BlockLists::ListOf(glm::ivec2 cell)
+{
+	const auto index = BlockIndex({cell.x >= 0 ? cell.x / k_BlockCells : -1, cell.y >= 0 ? cell.y / k_BlockCells : -1});
+	return index.has_value() && _onLand.at(*index) ? _blocks.at(*index) : _off;
+}
+
+void BlockLists::Insert(glm::ivec2 cell, entt::entity entity)
+{
+	auto& list = ListOf(cell);
+	list.lastOut = entt::null;
+	if (list.lastIn != entity)
+	{
+		list.things.push_back(entity);
+		list.lastIn = entity;
+	}
+}
+
+void BlockLists::Remove(glm::ivec2 cell, entt::entity entity)
+{
+	auto& list = ListOf(cell);
+	list.lastIn = entt::null;
+	if (list.lastOut == entity)
+	{
+		return;
+	}
+	list.lastOut = entity;
+	if (list.things.empty())
+	{
+		return;
+	}
+	// The last takes the place of the one taken out; one not found drops the last all the same
+	if (const auto found = std::ranges::find(list.things, entity); found != list.things.end())
+	{
+		*found = list.things.back();
+	}
+	list.things.pop_back();
+}
+
+std::span<const entt::entity> BlockLists::OnBlock(glm::ivec2 block) const
+{
+	const auto index = BlockIndex(block);
+	if (!index.has_value() || !_onLand.at(*index))
+	{
+		return {};
+	}
+	return _blocks.at(*index).things;
+}
+
+void BlockLists::Clear()
+{
+	for (auto& list : _blocks)
+	{
+		list = {};
+	}
+	_off = {};
+}
+
 CellLists::CellLists(uint32_t cellsPerSide)
     : _cellsPerSide(cellsPerSide)
     , _cells(static_cast<size_t>(cellsPerSide) * cellsPerSide)
 {
+}
+
+glm::ivec2 CellLists::CellAt(uint32_t cell) const
+{
+	return {static_cast<int32_t>(cell / _cellsPerSide), static_cast<int32_t>(cell % _cellsPerSide)};
 }
 
 std::optional<uint32_t> CellLists::IndexOf(glm::ivec2 cell) const
@@ -52,10 +147,12 @@ void CellLists::Insert(uint32_t cell, entt::entity entity, Placement placement)
 		lists.mobile.insert(lists.mobile.begin(), entity);
 		break;
 	}
+	_blocks.Insert(CellAt(cell), entity);
 }
 
 void CellLists::Remove(uint32_t cell, entt::entity entity)
 {
+	_blocks.Remove(CellAt(cell), entity);
 	auto& lists = _cells.at(cell);
 	if (const auto found = std::ranges::find(lists.fixed, entity); found != lists.fixed.end())
 	{
@@ -96,6 +193,7 @@ void CellLists::Clear()
 		_cells.at(cell).mobile.clear();
 	}
 	_used.clear();
+	_blocks.Clear();
 }
 
 Outline openblack::ecs::map_cells::OutlineOfBox(glm::vec3 position, const glm::mat3& rotation, float scale, glm::vec3 boxCentre,

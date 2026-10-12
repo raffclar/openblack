@@ -29,6 +29,8 @@
 #include "GameFont.h"
 #include "GameMenu.h"
 #include "Hand/HandTricons.h"
+#include "MenuBackdrop.h"
+#include "NewPlayerBox.h"
 #include "ScreenFade.h"
 #include "SkipBox.h"
 #include "TattooEditorDialog.h"
@@ -90,6 +92,8 @@ public:
 	void Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow);
 
 	[[nodiscard]] GameMenu& GetMenu() noexcept { return *_menu; }
+	/// Whether the advisors' words were drawn at the last frame drawn, which the gestures' hints fade out for
+	[[nodiscard]] bool WereDialogueWordsDrawn() const noexcept { return _dialogueWordsDrawn; }
 
 	/// Asks the player how to start the new game, offering to keep the old creature only when the current profile has
 	/// one. The box takes the mouse and every key until answered.
@@ -100,6 +104,19 @@ public:
 	[[nodiscard]] const SkipBox& GetSkipBox() const noexcept { return *_skipBox; }
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept { return _menu->IsOpen() || _skipBox->IsActive(); }
+
+	/// Asks a new player for their name, over the front end's swirling backdrop; Cancel shows only when someone has a
+	/// profile. checkName says whether a name may be taken
+	void ShowNewPlayerBox(bool canCancel, NewPlayerBox::CheckName checkName);
+	/// The new player's box takes the mouse and the keyboard; true when it took the event
+	bool ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	[[nodiscard]] NewPlayerBox& GetNewPlayerBox() noexcept { return *_newPlayerBox; }
+	/// The new player's screen: the backdrop, swirling on by the frame's milliseconds, the box and the pointer, under
+	/// black of an alpha
+	void DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, float frameMilliseconds,
+	                         uint8_t black);
+	/// The menu greets the player by their profile's name and shows its creature's name and symbol
+	void SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol);
 
 	/// The tattoo editor's dialog, shown while the tattoo editor is open
 	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }
@@ -214,6 +231,9 @@ private:
 	void DrawDialogue(glm::u16vec2 resolution, int barPixels);
 	/// The camera's helper icons by the hand and, in a demonstration, its mouse
 	void DrawHandTricons(glm::u16vec2 resolution);
+	/// The row of hints of the gestures the hand waits for: each gesture's picture and the dots running along it (the
+	/// leashes' collars over them are drawn with the scene)
+	void DrawGestureHints(glm::u16vec2 resolution);
 	/// One word of the dialogue, cut to the box's top and bottom
 	void DrawDialogueRun(const help::TextRun& run);
 	/// The villagers' labels: placed in turn so none covers another, then drawn the furthest first
@@ -249,6 +269,10 @@ private:
 	std::unique_ptr<graphics::Texture2D> _gatheringText;
 	/// The gestures' pictures, sixteen to a sheet, which a tip's gesture codes show
 	std::array<std::unique_ptr<graphics::Texture2D>, 2> _gestureSheets;
+	/// The sprite sheet the gestures' hints' running dots are cut from
+	std::unique_ptr<graphics::Texture2D> _hintDotSheet;
+	/// Whether the advisors' words were drawn at the last frame
+	bool _dialogueWordsDrawn {false};
 	/// The good advisor's font f1 and the evil one's f3, which their words in the dialogue are in
 	std::optional<FontFace> _goodAdvisorFont;
 	std::optional<FontFace> _evilAdvisorFont;
@@ -262,6 +286,12 @@ private:
 	std::unique_ptr<SkipBox> _skipBox;
 	std::optional<new_game_choice::Choice> _skipBoxAnswer;
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
+	std::unique_ptr<NewPlayerBox> _newPlayerBox;
+	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates
+	std::unique_ptr<graphics::Texture2D> _backdrop;
+	std::optional<menu_backdrop::Swirls> _backdropSwirls;
+	std::array<menu_backdrop::Layer, menu_backdrop::k_Layers> _backdropLayers {};
+	menu_backdrop::Pace _backdropPace;
 	/// Whether the left mouse button is down, as the tattoo editor's dialog has seen it
 	bool _leftButtonDown {false};
 	std::optional<Message> _message;

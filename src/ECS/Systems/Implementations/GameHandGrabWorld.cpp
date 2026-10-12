@@ -60,6 +60,7 @@
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
+#include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
@@ -670,21 +671,12 @@ std::optional<hand_grab::HandGrabWorldInterface::FieldFacts> GameHandGrabWorld::
 
 void GameHandGrabWorld::TakeFromField(entt::entity field, uint32_t amount)
 {
-	auto* data = Locator::entitiesRegistry::value().TryGet<Field>(field);
-	const auto* info = Info();
-	if (data == nullptr || info == nullptr)
+	if (!Locator::entitiesRegistry::value().AllOf<Field>(field) || !Locator::fieldSystem::has_value())
 	{
 		return;
 	}
-	const auto& type = info->fieldType.at(static_cast<size_t>(data->type));
-	const field_crop::Type crop {.ageGrowth = type.ageGrowth, .ageRipe = type.ageRecolt, .timesToSow = type.timesToSow};
-	if (field_crop::RemoveFood(data->crop, crop, type.ratioBeforeRipe, static_cast<float>(amount)) &&
-	    Locator::fireSystem::has_value())
-	{
-		// An emptied field's fire goes out
-		Locator::fireSystem::value().SetTemperature(field, 0.0f, entt::null);
-	}
-	// TODO(fields): the game also marks two of the town's flags when a field is emptied; their meaning isn't known
+	// The field system puts out an emptied field's fire and has its town look again at what it wants
+	Locator::fieldSystem::value().RemoveFood(field, static_cast<float>(amount));
 }
 
 entt::entity GameHandGrabWorld::MakeHandful(PotInfo type, glm::vec3 position, uint32_t amount, bool poisoned)

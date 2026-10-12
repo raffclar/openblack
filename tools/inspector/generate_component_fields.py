@@ -46,6 +46,7 @@ SOURCES = ROOT / "src"
 # give, which are registered here
 BY_HAND = {
     "openblack::creature_fight::MoveQueue": ["openblack::creature_fight::QueuedMove"],
+    "openblack::creature_fight::marks::MarkList": ["openblack::creature_fight::marks::Mark"],
     "openblack::DayNightClock": [],
     "openblack::Zoomer": [],
     "openblack::animals::Zoomer": [],

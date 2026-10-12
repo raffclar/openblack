@@ -165,6 +165,10 @@ bool CreatureHandSystem::Grab()
 	registry.AssignOrReplace<HandOnCreature>(PlayerHand(), HandOnCreature {.creature = *nearest});
 	registry.Remove<HandLastFeedback>(PlayerHand());
 	TakeCamera(*nearest);
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().HandTookHold(*nearest);
+	}
 	return true;
 }
 

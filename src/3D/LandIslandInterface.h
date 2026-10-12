@@ -81,6 +81,12 @@ public:
 	[[nodiscard]] virtual const graphics::Texture2D& GetCellColourMap() const = 0;
 	/// The blocks' painted textures (see block_texture), a layer for each block in the order of GetBlocks
 	[[nodiscard]] virtual const graphics::Texture2D& GetBlockTextures() const = 0;
+	/// The coarse texture pages the landscape file keeps, a layer each, or null when it has none. The coarse land
+	/// (detail level 0) draws every block from them.
+	[[nodiscard]] virtual const graphics::Texture2D* GetCoarsePages() const { return nullptr; }
+	/// Where a block's coarse texture is on the pages: x the layer, yz where its square starts (0 to 1 across the
+	/// page), w 1; all 0 when there are no pages
+	[[nodiscard]] virtual glm::vec4 GetCoarsePageSlot(size_t /*block*/) const { return glm::vec4(0.0f); }
 	[[nodiscard]] virtual const graphics::FrameBuffer& GetFootprintFramebuffer() const = 0;
 	/// What of the land's alpha the rivers' channels leave, laid out as the footprints are
 	[[nodiscard]] virtual const graphics::FrameBuffer& GetLandAlphaFramebuffer() const = 0;
