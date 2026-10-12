@@ -27,6 +27,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
+#include "ECS/BuildingConstruction.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
@@ -168,23 +169,37 @@ uint32_t CellOfMetres(float metres)
 	return static_cast<uint32_t>(whole) >> 16;
 }
 
-/// Every other town, the players' in the order each gained them and then the neutral ones, with the box its buildings
-/// and fields cover
-std::vector<planned_building::OtherTown> OtherTowns(entt::entity town)
+/// Every town in the game's order: the players' towns, player by player in the order each gained them, then the
+/// neutral ones
+std::vector<entt::entity> TownsInOrder()
 {
 	auto& registry = Entities();
 	std::vector<std::tuple<std::tuple<bool, uint8_t, uint32_t, uint32_t>, entt::entity>> order;
 	registry.Each<const Town>([&](entt::entity entity, const Town& data) {
-		if (entity != town)
-		{
-			order.emplace_back(
-			    std::tuple(data.owner == PlayerNames::NEUTRAL, static_cast<uint8_t>(data.owner), data.gained, data.id), entity);
-		}
+		order.emplace_back(
+		    std::tuple(data.owner == PlayerNames::NEUTRAL, static_cast<uint8_t>(data.owner), data.gained, data.id), entity);
 	});
 	std::ranges::stable_sort(order, {}, [](const auto& each) { return std::get<0>(each); });
-	std::vector<planned_building::OtherTown> others;
+	std::vector<entt::entity> towns;
+	towns.reserve(order.size());
 	for (const auto& [rank, entity] : order)
 	{
+		towns.push_back(entity);
+	}
+	return towns;
+}
+
+/// Every other town, in the game's order, with the box its buildings and fields cover
+std::vector<planned_building::OtherTown> OtherTowns(entt::entity town)
+{
+	auto& registry = Entities();
+	std::vector<planned_building::OtherTown> others;
+	for (const auto entity : TownsInOrder())
+	{
+		if (entity == town)
+		{
+			continue;
+		}
 		const auto& data = registry.Get<const Town>(entity);
 		const auto* at = registry.TryGet<const Transform>(entity);
 		if (at == nullptr)
@@ -295,15 +310,14 @@ bool TakesNewHouse(entt::entity town, entt::entity plan)
 	return planned_building::IsClearToBuild(footprint, DryLandAt(transform.position), reach);
 }
 
-/// A planned building goes up where it was planned, with nothing of it built and a site for its builders. The town's
-/// people gather elsewhere if it stands on their gathering place.
-bool Start(entt::entity town, entt::entity plan)
+/// A planned building goes up where it was planned, with nothing of it built and a site for its builders wanting them
+/// by a desire. The town's people gather elsewhere if it stands on their gathering place. The building, if it went up.
+entt::entity Start(entt::entity town, entt::entity plan, float siteDesire)
 {
 	auto& registry = Entities();
 	if (registry.AllOf<PlannedTemple>(plan))
 	{
-		construction::StartPlannedTemple(plan, 0.0f);
-		return true;
+		return construction::StartPlannedTemple(plan, siteDesire);
 	}
 	const auto planned = registry.Get<const PlannedAbode>(plan);
 	const auto transform = registry.Get<const Transform>(plan);
@@ -313,15 +327,33 @@ bool Start(entt::entity town, entt::entity plan)
 	                                                         transform.scale.x, 0, 0, 0.0f);
 	if (building == entt::null)
 	{
-		return false;
+		return entt::null;
 	}
 	if (Locator::townSystem::has_value())
 	{
 		Locator::townSystem::value().BuildingCreated(town, glm::xz(transform.position),
 		                                             systems::object_measures::TwoDRadius(registry, building));
 	}
-	construction::OpenSite(building, 0.0f);
-	return true;
+	construction::OpenSite(building, siteDesire);
+	return building;
+}
+
+/// The reach across the ground of a plan's model: its larger half width, scaled
+float PlanReach(entt::entity plan)
+{
+	auto& registry = Entities();
+	if (registry.AllOf<PlannedTemple>(plan))
+	{
+		return construction::PlannedTempleReach(plan);
+	}
+	const auto meshId = resources::HashIdentifier(InfoOf(registry.Get<const PlannedAbode>(plan).info).meshId);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(meshId))
+	{
+		return 0.0f;
+	}
+	const auto half = meshes.Handle(meshId)->GetBoundingBox().Size() * 0.5f;
+	return building_construction::ModelReach({half.x, half.z}, registry.Get<const Transform>(plan).scale.x);
 }
 
 } // namespace
@@ -341,11 +373,80 @@ bool town_planning::AskThisTurn(entt::entity town)
 bool town_planning::StartBestHouse(entt::entity town)
 {
 	const auto plan = BestPlan(town, AbodeType::LivingQuarters);
-	return plan.has_value() && Entities().AllOf<PlannedAbode>(*plan) && TakesNewHouse(town, *plan) && Start(town, *plan);
+	return plan.has_value() && Entities().AllOf<PlannedAbode>(*plan) && TakesNewHouse(town, *plan) &&
+	       Start(town, *plan, 0.0f) != entt::null;
 }
 
 bool town_planning::StartBestCivicBuilding(entt::entity town)
 {
 	const auto plan = BestPlan(town, AbodeType::Civic);
-	return plan.has_value() && Start(town, *plan);
+	return plan.has_value() && Start(town, *plan, 0.0f) != entt::null;
+}
+
+std::vector<entt::entity> town_planning::StartPlannedAt(glm::vec3 place, float scriptDesire)
+{
+	auto& registry = Entities();
+	const auto towns = TownsInOrder();
+	std::vector<std::vector<building_construction::PlannedCandidate>> candidates;
+	std::vector<std::vector<entt::entity>> plans;
+	candidates.reserve(towns.size());
+	plans.reserve(towns.size());
+	for (const auto town : towns)
+	{
+		auto& list = plans.emplace_back();
+		auto& near = candidates.emplace_back();
+		for (const auto plan : registry.Get<const Town>(town).planned)
+		{
+			if (!registry.Valid(plan) || !registry.AnyOf<PlannedAbode, PlannedTemple>(plan))
+			{
+				continue;
+			}
+			const auto& at = registry.Get<const Transform>(plan).position;
+			list.push_back(plan);
+			near.push_back({.position = {at.x, at.z}, .reach = PlanReach(plan)});
+		}
+	}
+	const auto chosen = planned_building::StartedByScript(candidates, {place.x, place.z});
+	std::vector<entt::entity> started;
+	for (size_t i = 0; i < towns.size(); ++i)
+	{
+		if (!chosen[i].has_value())
+		{
+			continue;
+		}
+		const auto building = Start(towns[i], plans[i][*chosen[i]], building_construction::SiteDesire(scriptDesire));
+		if (building != entt::null)
+		{
+			started.push_back(building);
+		}
+	}
+	return started;
+}
+
+void town_planning::PlanAgain(entt::entity building)
+{
+	auto& registry = Entities();
+	const auto* abode = registry.TryGet<const Abode>(building);
+	const auto* transform = registry.TryGet<const Transform>(building);
+	if (abode == nullptr || transform == nullptr || abode->info == AbodeInfo::None)
+	{
+		return;
+	}
+	const auto town = registry.Context().towns.find(abode->townId);
+	if (town == registry.Context().towns.end() || !registry.Valid(town->second))
+	{
+		return;
+	}
+	// On the land where it stood, as the land's script places a plan
+	auto position = transform->position;
+	if (Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded())
+	{
+		position.y = Locator::terrainSystem::value().GetHeightAt(glm::xz(position));
+	}
+	const auto plan = archetypes::AbodeArchetype::CreatePlan(
+	    abode->townId, position, abode->info, planned_building::YAngleOf(transform->rotation), transform->scale.x);
+	if (plan != entt::null)
+	{
+		registry.Get<PlannedAbode>(plan).wasBuilt = construction::IsBuilt(building);
+	}
 }
