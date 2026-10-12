@@ -7,10 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <chrono>
 #include <memory>
 
 #include <glm/mat4x4.hpp>
+#include <glm/trigonometric.hpp>
 #include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
@@ -137,4 +140,18 @@ TEST(CameraProjection, ANewAspectKeepsTheLensAndTheClipPlanes)
 		EXPECT_FALSE(KeptByDepth(Clip(*camera, 3.5f * 0.99f))) << aspect;
 		EXPECT_TRUE(KeptByDepth(Clip(*camera, 3.5f * 1.01f))) << aspect;
 	}
+}
+
+// On the default 800x600 screen the game draws the land across the whole window: 70 degrees across its width and,
+// with a 4:3 shape, about 55.4 degrees from top to bottom. Nothing is cut to a wide-screen picture; only a script's
+// cinema bars cover the top and bottom.
+TEST(CameraProjection, TheDefaultScreenSeesTheWholeFourByThreeView)
+{
+	Camera camera;
+	camera.SetProjectionMatrixPerspective(70.0f, 800.0f / 600.0f, 1.0f);
+	const auto projection = camera.GetProjectionMatrix(Camera::Projection::Normal);
+	const auto halfWidth = std::tan(glm::radians(35.0f));
+	EXPECT_NEAR(projection[0][0], 1.0f / halfWidth, 1e-5f);
+	EXPECT_NEAR(projection[1][1], 1.0f / (halfWidth * 0.75f), 1e-5f);
+	EXPECT_NEAR(glm::degrees(2.0f * std::atan(1.0f / projection[1][1])), 55.42f, 0.01f);
 }

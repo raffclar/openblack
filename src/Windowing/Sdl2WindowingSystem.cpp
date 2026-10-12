@@ -12,6 +12,7 @@
 #include "Sdl2WindowingSystem.h"
 
 #include <optional>
+#include <string>
 
 #include <SDL_syswm.h>
 #include <spdlog/spdlog.h>
@@ -72,6 +73,13 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 
 	SDL_ShowCursor(SDL_DISABLE);
 	SDL_SetHint(SDL_HINT_VIDEO_EXTERNAL_CONTEXT, "1");
+	// A second press makes a double click only within the system's small box round the first, as the game's window
+	// took them (SDL's own allowance is far wider); the time between them is the system's already
+#if defined(_WIN32)
+	SDL_SetHint(SDL_HINT_MOUSE_DOUBLE_CLICK_RADIUS, std::to_string(GetSystemMetrics(SM_CXDOUBLECLK) / 2).c_str());
+#else
+	SDL_SetHint(SDL_HINT_MOUSE_DOUBLE_CLICK_RADIUS, "2");
+#endif
 
 	uint32_t flags = SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | extraFlags;
 	if (displayMode == DisplayMode::Fullscreen)

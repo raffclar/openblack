@@ -12,6 +12,8 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/LandIslandInterface.h"
+#include "CameraZones.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -54,8 +56,22 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> CreatureCameraModel::U
 	const auto ease = creature_follow::EaseSeconds(_seconds);
 	_seconds += seconds;
 	_view = creature_follow::Clamped(_view);
+	auto origin = creature_follow::Origin(_focus, _view);
+	// Where it would go outside the fence, it stops where its line of sight crosses the fence, and the player's own
+	// camera takes over from there
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+		const auto inside = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, _focus);
+		if (inside != origin)
+		{
+			origin = inside;
+			_leaveRequested = true;
+			_stoppedAtFence = true;
+		}
+	}
 	return CameraInterpolationUpdateInfo {
-	    .origin = creature_follow::Origin(_focus, _view),
+	    .origin = origin,
 	    .focus = _focus,
 	    .duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float>(ease)),
 	};

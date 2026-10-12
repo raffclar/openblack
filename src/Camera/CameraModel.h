@@ -88,6 +88,9 @@ public:
 	[[nodiscard]] virtual glm::vec3 GetTargetFocus() const = 0;
 	[[nodiscard]] virtual std::chrono::seconds GetIdleTime() const = 0;
 	[[nodiscard]] virtual std::optional<Lens> GetLens() const { return std::nullopt; }
+	/// Whether where the camera goes is kept within the world's ball round the middle of the map, as for every camera of
+	/// the game
+	[[nodiscard]] virtual bool HeldInsideTheWorld() const { return true; }
 	/// What the camera does with the mouse, which the hand shows: the hints the cursor's place offers, and what a
 	/// drag of the land has turned into
 	[[nodiscard]] virtual HandCues GetHandCues() const { return {}; }

@@ -323,6 +323,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
     LocatorCoverage {"villageTotemSystem", "living.totems"},
+    LocatorCoverage {"spellIconSystem", "town.spells"},
     LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
     LocatorCoverage {"videoSystem", "view.video"},
@@ -644,7 +645,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 	              }));
 	provider->Add(Query("ocean", "The sea's textures"),
 	              Serve<Locator::oceanSystem>("the sea", [](const OceanInterface& ocean, const QueryContext& /*c*/) {
-		              return Json {{"diffuse_texture", ocean.GetDiffuseTexture()}, {"alpha_texture", ocean.GetAlphaTexture()}};
+		              return Json {{"texture", ocean.GetTexture()}};
 	              }));
 	provider->Add(Query("weather", "The climate: whether it runs, its storms and the season"),
 	              Serve<Locator::weatherSystem>(
@@ -2607,7 +2608,7 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	        }));
 	provider->Add(
 	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "
-	                    "its time to show, the point it points at and its scroll"),
+	                    "its time to show, the point it points at, its scroll and whether the hand is on it or grips it"),
 	    Serve<Locator::tipBubbleSystem>(
 	        "the tip bubble", [](const ecs::systems::TipBubbleSystemInterface& bubble, const QueryContext& /*c*/) -> Json {
 		        const auto& scroll = bubble.GetScroll();
@@ -2622,7 +2623,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		            {"content_height", scroll.contentHeight},
 		            {"line_height", scroll.lineHeight},
 		            {"more_above", scroll.moreAbove},
-		            {"more_below", scroll.moreBelow}};
+		            {"more_below", scroll.moreBelow},
+		            {"under_hand", bubble.IsUnderHand()},
+		            {"gripped", bubble.IsGripped()}};
 	        }));
 	provider->Add(Query("hand_demo",
 	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "

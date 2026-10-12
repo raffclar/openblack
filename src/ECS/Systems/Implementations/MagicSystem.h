@@ -164,6 +164,7 @@ public:
 	entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) override;
 	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
+	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int powerUp, float chants) override;
 	void DiscardHeldSeed() override;
 
 	void UpdateHand(const HandFrame& frame, float seconds) override;

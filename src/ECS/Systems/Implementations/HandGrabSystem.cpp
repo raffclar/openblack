@@ -423,7 +423,7 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		// Letting go onto the land counts as one more turn for what the hand keeps of the player's influence past the
 		// border, before the throw
 		_world->HeldThingUsedOnLand(_world->HandPlayer());
-		LetGo(*grab, grab->springOn ? grab->spring.Velocity() : glm::vec3(0.0f), false);
+		LetGo(*grab, hand_grab::ThrowVelocity(grab->recordedThrow, grab->springOn, grab->spring.Velocity()), false);
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
@@ -1117,6 +1117,8 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	}
 	if (grab->springOn)
 	{
+		// The spring's own throw takes the place of a recorded one as soon as it moves the hand
+		grab->recordedThrow.reset();
 		grab->spring.Step(target);
 		return grab->spring.Position();
 	}
@@ -1172,6 +1174,14 @@ void HandGrabSystem::ProcessTurn()
 	if (_world->InInfluence(_world->HandPlayer(), _world->PoseOf(grab->object).origin))
 	{
 		_world->HeatHeld(grab->object);
+	}
+}
+
+void HandGrabSystem::SetRecordedThrow(glm::vec3 velocity)
+{
+	if (auto* grab = Grab(); grab != nullptr)
+	{
+		grab->recordedThrow = velocity;
 	}
 }
 
