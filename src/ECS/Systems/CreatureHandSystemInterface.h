@@ -39,6 +39,8 @@ public:
 		creature_feedback::TouchCycle cycle;
 		/// How much larger the hand is drawn, with the creature's size
 		float scale;
+		/// The way the back of the hand faces, turned to the body or upright
+		glm::vec3 up;
 	};
 
 	virtual ~CreatureHandSystemInterface() = default;

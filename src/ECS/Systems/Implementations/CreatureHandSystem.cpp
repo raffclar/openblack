@@ -347,8 +347,12 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 				contact->lastPoint = parts->at(static_cast<size_t>(*contact->lastPart));
 			}
 		}
-		return HandPose {
-		    .position = contact->lastPoint.value_or(centre), .onBody = true, .cycle = contact->cycle, .scale = handScale};
+		const auto position = contact->lastPoint.value_or(centre);
+		return HandPose {.position = position,
+		                 .onBody = true,
+		                 .cycle = contact->cycle,
+		                 .scale = handScale,
+		                 .up = TurnHand(*contact, true, false, glm::vec3(0.0f), transform.position, seconds)};
 	}
 
 	// Where the hand is: on the body under the cursor, or beside it on the plane through the creature
@@ -372,7 +376,46 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 		                .rayOrigin = rayOrigin,
 		                .rayDirection = rayDirection});
 	}
-	return HandPose {.position = touch.value_or(point), .onBody = onBody, .cycle = contact->cycle, .scale = handScale};
+	// The hand turns to the body where it touches it, as the cursor moves across the screen
+	const bool cursorMovedAcross = contact->frameCursorX.has_value() && *contact->frameCursorX != cursor.x;
+	contact->frameCursorX = cursor.x;
+	const auto normal = touch.has_value() ? feedback::SurfaceNormal(*touch, body) : glm::vec3(0.0f, 1.0f, 0.0f);
+	const auto up = TurnHand(*contact, onBody, cursorMovedAcross, normal, transform.position, seconds);
+	const auto position = touch.value_or(point);
+
+	// The creature looks at the hand, or at the camera with the hand near its middle
+	if (const auto parts = PartsOf(creature, animation, transform); parts.has_value() && Locator::camera::has_value())
+	{
+		const auto middle = parts->at(static_cast<size_t>(feedback::BodyPart::Groin));
+		const auto look = feedback::HeldLookPoint(position, middle, Locator::camera::value().GetOrigin(), rayDirection, height);
+		registry.Get<CreatureAnimation>(creatureEntity).lookAt = look;
+		if (auto* eyes = registry.TryGet<CreatureEyes>(creatureEntity))
+		{
+			eyes->lookAt = look;
+		}
+	}
+	return HandPose {.position = position, .onBody = onBody, .cycle = contact->cycle, .scale = handScale, .up = up};
+}
+
+glm::vec3 CreatureHandSystem::TurnHand(HandOnCreature& contact, bool onBody, bool cursorMovedAcross, const glm::vec3& normal,
+                                       const glm::vec3& creaturePosition, float seconds)
+{
+	const auto camera = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : creaturePosition;
+	if (!contact.upStarted)
+	{
+		// Taking hold, the hand starts with its back to the camera
+		const auto start = feedback::HandUpOnTakingHold(creaturePosition, camera);
+		contact.up.Reset(start);
+		contact.up.SetDestination(start, feedback::k_HandStartSeconds);
+		contact.upStarted = true;
+	}
+	if (const auto glide = feedback::HandUpGlideTo(onBody, cursorMovedAcross, normal, creaturePosition, camera))
+	{
+		contact.up.SetDestination(glide->destination, glide->seconds);
+	}
+	contact.up.Update(seconds);
+	const auto up = contact.up.GetValue();
+	return glm::length(up) > 0.0f ? glm::normalize(up) : glm::vec3(0.0f, 1.0f, 0.0f);
 }
 
 void CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)

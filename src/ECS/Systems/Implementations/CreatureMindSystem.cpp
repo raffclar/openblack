@@ -72,6 +72,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
@@ -1306,7 +1307,14 @@ void CreatureMindSystem::ProcessTurn()
 		    // Looking about, the head turns to the most interesting thing in sight, or ahead
 		    mind.lookingAbout = commands.lookAbout;
 		    const auto focus = ScriptFocusPoint(registry, entity, mind);
-		    if (focus.has_value())
+		    // Held by the player's hand, it looks where the hand has it look (CreatureHandSystem)
+		    const bool heldByHand = Locator::creatureHandSystem::has_value() &&
+		                            Locator::creatureHandSystem::value().GetCreature() == std::optional(entity);
+		    if (heldByHand)
+		    {
+			    // Left as the hand set it this frame
+		    }
+		    else if (focus.has_value())
 		    {
 			    // A script's focus holds the head whatever the creature is doing
 			    animation.lookAt = focus;
@@ -1338,7 +1346,7 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    animation.lookAt.reset();
 		    }
-		    if (eyes != nullptr)
+		    if (eyes != nullptr && !heldByHand)
 		    {
 			    eyes->lookAt = animation.lookAt;
 		    }
@@ -1469,6 +1477,25 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	}
 	mind->secondsAlone = 0.0f;
 	mind->lastFeedback = CreatureMindState::Feedback {.value = feedback, .activity = mind->idle.activity};
+	// Let go of, however slightly it was stroked or slapped, it stops whatever it was doing: it stops walking, puts down
+	// what it was doing with a thing, drops its agenda and gets up out of a sitting or lying pose. An action it is playing,
+	// such as reeling from the last slap, plays on.
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		Locator::creatureLocomotionSystem::value().Stop(creature);
+	}
+	mind->idle.agenda.clear();
+	mind->idle.step = 0;
+	mind->idle.stepStarted = false;
+	if (auto* body = registry.TryGet<CreatureAnimation>(creature);
+	    body != nullptr && body->body.kind == creature_layers::BodyAction::Kind::Sequence)
+	{
+		body->body = creature_layers::EndLoop(body->body);
+	}
 	// Too slight to count, it only looks at the player
 	if (std::abs(feedback) <= creature_feedback::k_SlightFeedback)
 	{
@@ -1482,21 +1509,6 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	UpdateAttitudeFromFeedback(creature, feedback);
 	mind->feedbackSeconds = 0.0f;
 	mind->feedbackWasStroke = feedback > 0.0f;
-	// Slapped, it stops whatever it was doing
-	if (feedback < 0.0f)
-	{
-		if (Locator::creatureObjectActionSystem::has_value())
-		{
-			Locator::creatureObjectActionSystem::value().Cancel(creature);
-		}
-		if (Locator::creatureLocomotionSystem::has_value())
-		{
-			Locator::creatureLocomotionSystem::value().Stop(creature);
-		}
-		mind->idle.agenda.clear();
-		mind->idle.step = 0;
-		mind->idle.stepStarted = false;
-	}
 	LearnFromFeedback(creature, *mind, feedback);
 	// It shows how it feels as soon as it is free, unless it is doing something again as it was stroked for
 	mind->idle.showDesireSeconds = 0.0f;
@@ -1554,10 +1566,8 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
 	body->body = *played;
-	// What it was doing is over; it decides afresh once the action has played
-	Abandon(*mind);
-	mind->idle.agenda.resize(std::min(mind->idle.agenda.size(), mind->idle.step));
-	mind->idle.stepStarted = false;
+	// Only the body is taken: the mind goes on with what it was doing once the action has played, as its agenda waits for
+	// a busy body. Deciding afresh now would end the action at once, as a new plan stops what the body plays.
 	return true;
 }
 

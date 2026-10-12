@@ -371,6 +371,8 @@ private:
 	/// Which way the hand faces across the land, and its up, easing to the slope under it
 	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
 	Zoomer3 _handUp {glm::vec3(0.0f, 1.0f, 0.0f)};
+	/// How the hand stands facing along its heading on level land, from which it is stood on a slope or a creature's body
+	glm::mat3 _handOnLevelLand {1.0f};
 	int _handLastCursorX {0};
 	/// Whether the hand held its up last frame, gripping the land
 	bool _handUpWasHeld {false};

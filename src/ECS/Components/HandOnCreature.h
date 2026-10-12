@@ -15,6 +15,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/Zoomer.h"
 #include "Creature/CreatureFeedback.h"
 
 namespace openblack::ecs::components
@@ -49,6 +50,12 @@ struct HandOnCreature
 	/// creature from a hold
 	float heldMs {0.0f};
 	bool strokedOrSlapped {false};
+	/// The hand's up, easing round to the body or upright (see creature_feedback::HandUpGlideTo), set going on the first
+	/// frame held
+	Zoomer3 up {glm::vec3(0.0f, 1.0f, 0.0f)};
+	bool upStarted {false};
+	/// The cursor's place across the screen at the last frame, which tells whether it moved across this frame
+	std::optional<float> frameCursorX;
 };
 
 /// On the player's hand once it has let go of a creature: the sum of strokes and slaps it let go with, which the
