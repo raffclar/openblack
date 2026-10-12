@@ -173,6 +173,9 @@ public:
 		bool innerWalls {false};
 		/// How far the inner walls stand in whatever the material, when given: a temple's
 		std::optional<float> innerWallInset;
+		/// The detail the mesh is drawn in, as the bit its parts name it by (see graphics::mesh_detail::LevelBit): only its
+		/// parts of that detail are drawn. Its most detailed by default.
+		uint8_t detailLevel {1};
 		/// Only the submeshes of this status are drawn, in place of those of status 0: a building's scaffold
 		std::optional<uint32_t> onlyStatus;
 		/// Only the submeshes of status one up to this are drawn, in place of those of status 0: a graveyard's graves

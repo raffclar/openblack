@@ -13,6 +13,7 @@
 #include <map>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <glm/mat4x4.hpp>
@@ -58,10 +59,12 @@ private:
 		float height;
 		/// The instances are villagers whose bones go into the bone palette
 		bool bonePalette {false};
+		/// How many, from the last back, are of things too far off to be drawn this frame
+		uint32_t gone {0};
 	};
 	std::unordered_map<entt::id_type, InstanceSlots> _instanceSlots;
 	std::unordered_map<entt::id_type, InstanceSlots> _treeSlots;
-	/// The villagers fading out in the distance, by their low mesh
+	/// The things fading out in the distance, by the mesh they are drawn as
 	std::unordered_map<entt::id_type, InstanceSlots> _fadingSlots;
 	/// The first villager ever seen too far away to be drawn sets the size of every far villager's smudge
 	std::optional<float> _farSmudgeScale;
@@ -74,5 +77,9 @@ private:
 		RenderContext::ObjectInstance instance;
 	};
 	std::vector<HeldThing> _heldThings;
+	/// The things drawn by the distance bands that are fading out this frame, by how opaque, and those too far off to be
+	/// drawn at all: their other draws (a building's part built, a graveyard's graves) follow them
+	std::unordered_map<entt::entity, uint8_t> _fadingThings;
+	std::unordered_set<entt::entity> _goneThings;
 };
 } // namespace openblack::ecs::systems

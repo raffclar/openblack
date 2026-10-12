@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <map>
 #include <memory>
 #include <optional>
@@ -77,6 +79,12 @@ struct RenderContext
 		bool bonePalette {false};
 		/// How many of the instances are placed this frame, from the first
 		uint32_t filled {0};
+		/// How many of the instances, from the last back, are of things too far off to be drawn this frame: they are
+		/// placed only for what they leave on the land (their footprints)
+		uint32_t gone {0};
+		/// The model's parts differ by the detail its instances are drawn in (see graphics::mesh_detail::PartDrawn): each
+		/// instance is drawn by itself, with the parts of its own detail (see RenderContext::instanceLevels)
+		bool partsByLevel {false};
 		/// The grey the instances are drawn in, in the temple's light: in the main pass, then in the reflection. The
 		/// temple's walking worshippers.
 		std::optional<glm::vec2> templeGrey;
@@ -107,6 +115,9 @@ struct RenderContext
 		glm::vec4 look {0.0f};
 	};
 	std::vector<ObjectInstance> instanceUniforms;
+	/// By instance, the detail it is drawn in this frame, as the bit its model's parts name it by (see
+	/// graphics::mesh_detail::LevelBit): only read for models whose parts differ by it
+	std::vector<uint8_t> instanceLevels;
 	/// The bones of the villagers drawn this frame, refilled with the instances, and the texture the vertex shader reads
 	/// them from (see graphics::bone_palette)
 	std::vector<glm::vec4> bonePalette;
@@ -127,8 +138,8 @@ struct RenderContext
 	/// Stores information for rendering which is prepared at \ref PrepareDraw.
 	std::map<entt::id_type, InstancedDrawDesc> instancedDrawDescs;
 	std::map<entt::id_type, InstancedDrawDesc> treeInstancedDrawDescs;
-	/// The villagers fading out of sight in the distance, by the low mesh they are drawn as: blended by each one's alpha,
-	/// after the opaque things
+	/// The things fading out of sight in the distance, by the mesh they are drawn as (a villager's low mesh): blended by
+	/// each one's alpha, after the opaque things
 	std::map<entt::id_type, InstancedDrawDesc> fadingDrawDescs;
 	/// A villager too far away to be drawn as a mesh, which shows only as a dark smudge standing on a wide blob
 	struct FarVillager
@@ -207,6 +218,8 @@ struct RenderContext
 		std::optional<float> innerWallInset;
 		/// A standing graveyard's graves: those of its model's parts numbered one up to this are drawn over the rest
 		std::optional<uint32_t> gravesShown;
+		/// It is fading out in the distance: blended by the alpha in its instances' looks, with the blended things
+		bool fading {false};
 	};
 	std::vector<PartialBuildDraw> partialBuilds;
 	std::vector<ObjectInstance> partialBuildInstances;
