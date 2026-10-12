@@ -173,6 +173,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		count.first->second.count++;
 		// The things whose shadows Black & White bakes into the land (IsCastShadowAtNight), and its features
 		count.first->second.castsShadow |= registry.AnyOf<Abode, Feature, MobileStatic, StoragePit>(entity);
+		// A temple's parts cast theirs too once it is built, none while it is going up
+		count.first->second.castsShadow |= registry.AllOf<Temple>(entity) && !registry.AllOf<BuildProgress>(entity);
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);

@@ -17,6 +17,7 @@ struct Abode;
 struct AnimalPose;
 struct AnimatedStaticPose;
 struct AtHome;
+struct BuildProgress;
 struct CreatureMorph;
 struct DetailMeshes;
 struct Feature;
@@ -25,6 +26,7 @@ struct MobileStatic;
 struct MorphWithTerrain;
 struct ShownRoots;
 struct StoragePit;
+struct Temple;
 struct TempleInteriorPart;
 struct Transform;
 struct Translucent;
@@ -47,7 +49,8 @@ constexpr bool k_ChangesDrawLayout = [] {
 	       std::is_same_v<C, Abode> || std::is_same_v<C, Feature> || std::is_same_v<C, MobileStatic> ||
 	       std::is_same_v<C, StoragePit> || std::is_same_v<C, Unlit> || std::is_same_v<C, CreatureMorph> ||
 	       std::is_same_v<C, Translucent> || std::is_same_v<C, AnimalPose> || std::is_same_v<C, AnimatedStaticPose> ||
-	       std::is_same_v<C, DetailMeshes> || std::is_same_v<C, ShownRoots>;
+	       std::is_same_v<C, DetailMeshes> || std::is_same_v<C, ShownRoots> || std::is_same_v<C, Temple> ||
+	       std::is_same_v<C, BuildProgress>;
 }();
 
 } // namespace openblack::ecs
