@@ -36,6 +36,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
@@ -45,6 +46,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipSiteConstruction.h"
 #include "Game.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -157,9 +159,9 @@ void CallForLeftoverWood(entt::entity pile)
 	                  .playerless = true});
 }
 
-/// A building's site goes: its builders are let go of it, and of a temple's piles of wood, those with wood in them stay
-/// on as piles of their own for anyone to take from, and the empty ones go
-void CloseSite(entt::entity building)
+} // namespace
+
+void construction::CloseSite(entt::entity building)
 {
 	auto& registry = Entities();
 	auto* site = registry.TryGet<BuildingSite>(building);
@@ -186,12 +188,15 @@ void CloseSite(entt::entity building)
 	registry.Remove<BuildingSite>(building);
 }
 
+namespace
+{
+
 /// A building is finished: no longer under construction, its site gone. A temple's heart is whole again.
 void Finish(entt::entity building)
 {
 	auto& registry = Entities();
 	registry.Remove<BuildProgress>(building);
-	CloseSite(building);
+	construction::CloseSite(building);
 	if (registry.AllOf<Temple>(building))
 	{
 		if (auto* life = registry.TryGet<ObjectLife>(building))
@@ -304,6 +309,15 @@ void construction::BuildBy(entt::entity building, float amount)
 	{
 		return;
 	}
+	// A worship site goes up with its altar, and its worship sites keep count of it
+	if (registry.AllOf<WorshipSite>(building))
+	{
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().BuildBy(building, amount);
+		}
+		return;
+	}
 	Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
 }
 
@@ -385,12 +399,60 @@ void construction::OpenSite(entt::entity building, float desire)
 	}
 }
 
+void construction::OpenWorshipSite(entt::entity site, entt::entity town, float desire)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(site))
+	{
+		return;
+	}
+	// One site serves every town asked to build it; its pile of wood is made when the first wood comes
+	if (auto* open = registry.TryGet<BuildingSite>(site))
+	{
+		open->desire = desire;
+	}
+	else
+	{
+		auto& made = registry.Assign<BuildingSite>(site);
+		made.desire = desire;
+		made.places = PlacesRound(site);
+	}
+	// A site added to a town changes what it wants
+	if (Locator::townSystem::has_value() && registry.Valid(town) && registry.AllOf<Town>(town))
+	{
+		Locator::townSystem::value().MarkDesiresChanged(town);
+	}
+}
+
 void construction::MakeSitePiles(entt::entity building)
 {
 	auto& registry = Entities();
 	auto* site = registry.TryGet<BuildingSite>(building);
+	if (site == nullptr)
+	{
+		return;
+	}
+	// A worship site's one pile stands at a point of its model, turned as the site is
+	if (const auto* worship = registry.TryGet<const WorshipSite>(building))
+	{
+		auto& pile = site->piles.front();
+		if (registry.Valid(pile) && registry.AllOf<Pot>(pile))
+		{
+			return;
+		}
+		const auto& at = registry.Get<const Transform>(building).position;
+		const auto ground = worship_site_construction::PilePlace({at.x, at.z}, worship->facing);
+		auto position = glm::vec3(ground.x, at.y, ground.y);
+		if (Locator::terrainSystem::has_value())
+		{
+			position.y = Locator::terrainSystem::value().GetHeightAt(ground);
+		}
+		pile = archetypes::PotArchetype::CreateEmpty(position, worship->facing, PotInfo::MagicWood);
+		registry.Assign<SitePile>(pile);
+		return;
+	}
 	const auto* temple = registry.TryGet<const Temple>(building);
-	if (site == nullptr || temple == nullptr)
+	if (temple == nullptr)
 	{
 		return;
 	}

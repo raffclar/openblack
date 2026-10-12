@@ -516,18 +516,20 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 
 	// The hand grips the land, which the temple has none of: its camera takes the clicks
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	// While a script's cinema bars have taken the interface, the buttons' presses don't reach the hand
+	const bool handTakesPresses = hand_visibility::TakesPresses(Locator::cinematicDirectorSystem::value().IsInterfaceActive());
 	// Holding the right button on a creature holds the hand to it to stroke or slap it; clicking it puts the leash on.
 	// While the player's creature fights, clicks on the creatures and the arena's ground direct the fight instead.
 	auto& creatureHand = Locator::creatureHandSystem::value();
 	auto& fights = Locator::creatureFightSystem::value();
 	auto& magic = Locator::magicSystem::value();
-	// The left button taps a one-shot bubble under the hand into it, before the creatures and the land
+	// The left button catches another player's fireball under the hand, before the creatures and the land
 	bool magicTookPress = false;
 	// The hand holds one thing at a time: a thing it picked up, or a miracle
 	auto* handGrab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
 	const bool handHoldsThing = handGrab != nullptr && handGrab->IsBusy();
-	if (!inTemple && !handHoldsThing && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
-	    !middleMouseButton && !Locator::debugGui::value().IsMouseOverWindow())
+	if (handTakesPresses && !inTemple && !handHoldsThing && event.type == SDL_MOUSEBUTTONDOWN &&
+	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton && !Locator::debugGui::value().IsMouseOverWindow())
 	{
 		magicTookPress = magic.TapAction();
 	}
@@ -545,7 +547,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		[[maybe_unused]] const auto tapped = handGrab->Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		// Let go with an empty hand that did nothing with the press, it clicks the thing or the place under it, for the
 		// scripts; not while the game is paused
-		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
+		if (handTakesPresses && !_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
 		{
 			handGrab->ClickReleased(Locator::time::value().GetTurn());
 		}
@@ -557,8 +559,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	if (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT))
 	{
 		magic.ReleaseAction();
+		// Let go quickly on a one-shot bubble, its miracle goes into the hand
+		magic.ReleaseOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
 	}
-	if (!inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
+	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
 	{
 		_actionPressTaken = magic.IsHandBusy() && magic.PressAction();
@@ -566,6 +570,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		if (!_actionPressTaken && handHoldsThing)
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		}
+		// With an empty hand, a one-shot bubble under it takes the press before anything behind it
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
+		{
+			_actionPressTaken = magic.PressOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 		if (!_actionPressTaken)
 		{
@@ -621,7 +630,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 	}
-	if (!magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
+	if (handTakesPresses && !magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
 	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton)
 	{
 		const auto screenSize = Locator::windowing::value().GetSize();
@@ -858,6 +867,27 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	{
 		_mousePosition = glm::ivec2(*drawing * (size.y / gesture::k_ReferenceHeight));
 	}
+}
+
+bool Game::HandOverThing() const
+{
+	// In the temple the hand only ever wiggles
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return false;
+	}
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().OrbUnderHand().has_value())
+	{
+		return true;
+	}
+	if (!Locator::pickingSystem::has_value())
+	{
+		return false;
+	}
+	// Only a thing with a model of its own: a fish farm, found through its fish, has none
+	const auto picked = Locator::pickingSystem::value().GetPick().object;
+	return picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
+	       Locator::entitiesRegistry::value().AllOf<ecs::components::Mesh>(*picked);
 }
 
 void Game::PickUnderCursor(float seconds)
@@ -2312,6 +2342,12 @@ bool Game::Update() noexcept
 			case Pose::Zoom:
 				cycle = HandCycle::Zoom;
 				break;
+			}
+			// Hovering over a thing, a one-shot bubble or a building as much as anything else, the hand feels it, over the
+			// camera hints it offers elsewhere
+			if (!_handCameraState && HandOverThing())
+			{
+				cycle = HandCycle::Stroke;
 			}
 			// On a creature, it strokes it or shows its slap
 			if (_handOnCreature.has_value())

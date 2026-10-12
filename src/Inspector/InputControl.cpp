@@ -597,8 +597,8 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		if (action != "release" && StringMember(params, "button").value_or("left") == "left")
 		{
 			// The commonest surprise: the left button never picks things up
-			answer["note"] = "the left button grips and drags the land and taps miracles; the hand takes things with the "
-			                 "right button (Action): see input.state's pick.grab";
+			answer["note"] = "the left button grips and drags the land; the hand takes things, one-shot miracle bubbles "
+			                 "included, with the right button (Action): see input.state's pick.grab";
 		}
 		return QueryResult::Value(std::move(answer));
 	}
