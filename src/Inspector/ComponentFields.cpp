@@ -71,6 +71,7 @@
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -479,6 +480,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::bank>("bank")
 	    .Field<&components::AudioEmitter::group>("group");
 	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
+	Reflect<components::BlendedByMaterial> {context};
 	Reflect<components::Lover>(context).Field<&components::Lover::partner>("partner");
 	Reflect<components::BreederSpot>(context).Field<&components::BreederSpot::spot>("spot");
 	Reflect<components::BuildingDamage>(context)
@@ -1335,7 +1337,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Reward::madeAt>("madeAt")
 	    .Field<&components::Reward::goesIntoMap>("goesIntoMap")
 	    .Field<&components::Reward::dustMilliseconds>("dustMilliseconds")
-	    .Field<&components::Reward::dust>("dust");
+	    .Field<&components::Reward::dust>("dust")
+	    .Field<&components::Reward::opened>("opened")
+	    .Field<&components::Reward::turnsLeft>("turnsLeft")
+	    .Field<&components::Reward::clipPlace>("clipPlace");
 	Reflect<components::RewardOnLand> {context};
 	Reflect<components::RisingSoul>(context)
 	    .Field<&components::RisingSoul::mesh>("mesh")

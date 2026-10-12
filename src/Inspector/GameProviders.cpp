@@ -1260,13 +1260,16 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		    });
 		    return items;
 	    }));
-	provider->Add(Query("rewards", "The rewards on their way to the land or lying on it", {}, ResultKind::List),
+	provider->Add(Query("rewards", "The rewards on their way to the land, lying on it, or opened", {}, ResultKind::List),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		              Json items = Json::array();
 		              registry.Each<const Reward>([&items, &registry](entt::entity entity, const Reward& reward) {
 			              auto item = Listed(registry, entity);
 			              item["type"] = static_cast<int>(reward.type);
 			              item["state"] = static_cast<int>(reward.state);
+			              item["opened"] = reward.opened;
+			              item["turns_left"] = reward.turnsLeft;
+			              item["clip_place"] = reward.clipPlace;
 			              item["landing_point"] = Point(reward.landingPoint);
 			              items.push_back(std::move(item));
 		              });

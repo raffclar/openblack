@@ -23,6 +23,8 @@ class RewardSystem final: public RewardSystemInterface
 public:
 	entt::entity Create(glm::vec3 position, RewardObjectInfo type, std::optional<PlayerNames> player, entt::entity town,
 	                    bool fromSky) override;
+	bool Tap(entt::entity chest, PlayerNames player) override;
+	[[nodiscard]] bool IsOpened(entt::entity chest) const override;
 	void Update(float milliseconds) override;
 	void ProcessTurn() override;
 	void CollectDrawFrame(particles::draw::Frame& frame) const override;

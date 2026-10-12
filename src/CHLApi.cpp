@@ -7973,8 +7973,12 @@ void IsActive() // 361 IS_ACTIVE
 		Pushb(dispenser->timer.active);
 		return;
 	}
-	// A reward is active once the player has tapped it open.
-	// TODO(script-natives): openblack's rewards can't be tapped open yet, so none is ever active
+	// A reward is active once the player has tapped it open
+	if (registry.AllOf<ecs::components::Reward>(object))
+	{
+		Pushb(Locator::rewardSystem::has_value() && Locator::rewardSystem::value().IsOpened(object));
+		return;
+	}
 	// Nothing else is ever active
 	Pushb(false);
 }
