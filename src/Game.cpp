@@ -959,9 +959,6 @@ void Game::UpdateHandInterface()
 	{
 		return;
 	}
-	// Outside it, the tooltip is drawn by the hand, which is at the cursor
-	_interface->SetHandOnScreen(Locator::debugGui::value().IsMouseOverWindow() ? std::nullopt
-	                                                                           : std::optional(glm::vec2(_mousePosition)));
 	// Nor is the panel shown while a script has the cinema bars in
 	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
 	{
@@ -992,6 +989,34 @@ void Game::UpdateHandInterface()
 		// The reward is the hand's, which it keeps showing after letting go until it takes hold again
 		_interface->SetCreaturePanel(creature_panel::FromNeeds(needs->needs, reward));
 	}
+}
+
+void Game::UpdateHandToolTipAnchor()
+{
+	// The temple places the hand's tooltip itself
+	if (!_interface || !Locator::windowing::has_value() || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		return;
+	}
+	// Not while the pointer is over a debug window
+	if (Locator::debugGui::value().IsMouseOverWindow())
+	{
+		_interface->SetHandOnScreen(std::nullopt);
+		return;
+	}
+	const auto handEntity =
+	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	const auto* handTransform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity);
+	if (handTransform == nullptr)
+	{
+		_interface->SetHandOnScreen(std::nullopt);
+		return;
+	}
+	// At the hand as drawn this frame, wherever the pointer is
+	const auto& camera = Locator::camera::value();
+	const auto hand = gui::world_tooltip::HandOnScreen(camera.GetViewProjectionMatrix(), camera.GetNearClip(),
+	                                                   handTransform->position, Locator::windowing::value().GetSize());
+	_interface->SetHandOnScreen(hand.has_value() ? std::optional(glm::vec2(*hand)) : std::nullopt);
 }
 
 std::optional<glm::vec2> Game::OnScreen(glm::vec3 point) const
@@ -1111,6 +1136,13 @@ void Game::ProcessHandToolTipTurn()
 			const auto held = gui::world_tooltip::HeldAmount(*amount);
 			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
 		}
+	}
+	// While a held miracle pours, the hand offers nothing of what is under the pointer
+	if (Locator::magicSystem::has_value() &&
+	    !gui::world_tooltip::OffersOverToolTips(Locator::magicSystem::value().GetHandCastState().state))
+	{
+		toolTips.ProcessTurn();
+		return;
 	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
 	if (!_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
@@ -2518,6 +2550,8 @@ bool Game::Update() noexcept
 		}
 		// The camera's helper icons by the hand, where it is drawn this frame, now that it is posed
 		UpdateHandTricons(IsHandDrawn(), std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+		// The tooltip by the drawn hand too, which stays with it while it is held still and the pointer moves on
+		UpdateHandToolTipAnchor();
 		// Taking or letting go of a seed cross-fades the drawn hand, and the seed's in-hand effect sits in its fingers
 		{
 			const auto handEntity = Locator::handSystem::value()

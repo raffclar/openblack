@@ -449,6 +449,8 @@ private:
 	void ProcessHandToolTipTurn();
 	void ProcessTurnCheering();
 	/// Where a point of the world is on the screen, in whole pixels, when it is on it
+	/// Hangs the hand's tooltip by the hand as drawn this frame
+	void UpdateHandToolTipAnchor();
 	[[nodiscard]] std::optional<glm::vec2> OnScreen(glm::vec3 point) const;
 	/// The floating numbers move on by some seconds
 	void UpdateFloatingNumbers(float seconds);
