@@ -161,3 +161,28 @@ TEST(ChallengeRecords, TheReminderIsGivenItsArgumentsInTheOrderTheScriptGaveThem
 	EXPECT_EQ(arguments[0].value.uintVal, 1u);
 	EXPECT_EQ(arguments[1].value.uintVal, 2u);
 }
+
+TEST(ChallengeRecords, TheScrollListsThemInTheOrderTheyStarted)
+{
+	openblack::ecs::Registry registry;
+	auto second = LostBrotherSnapshot(1.0f, 0.0f, 0);
+	second.challenge = 7;
+	second.title = 1200;
+	auto third = LostBrotherSnapshot(0.9999f, 0.0f, 0);
+	third.challenge = 8;
+	third.title = 1300;
+	records::Record(registry, LostBrotherSnapshot(0.2f, 0.0f, 0), snapshots::Call::Start, 1, {});
+	records::Record(registry, second, snapshots::Call::Start, 2, {});
+	records::Record(registry, third, snapshots::Call::Start, 3, {});
+	// Updating the first keeps it first
+	records::Record(registry, LostBrotherSnapshot(0.5f, 0.0f, 0), snapshots::Call::Update, 4, {});
+
+	const auto listing = records::List(registry);
+	EXPECT_EQ(listing.discovered, 3);
+	// Only a success of exactly one is done
+	EXPECT_EQ(listing.completed, 1);
+	EXPECT_EQ(listing.titles, (std::vector<uint32_t> {k_Title, 1200, 1300}));
+	const auto ordered = records::InOrder(registry);
+	ASSERT_EQ(ordered.size(), 3u);
+	EXPECT_EQ(registry.Get<ChallengeRecord>(ordered[2]).challenge, 8u);
+}

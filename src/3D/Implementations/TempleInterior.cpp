@@ -43,6 +43,7 @@
 #include "Common/MachineClock.h"
 #include "Creature/CreatureCave.h"
 #include "ECS/Archetypes/GlowArchetype.h"
+#include "ECS/ChallengeRecords.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Temple.h"
@@ -232,6 +233,14 @@ TempleScrolls::Facts GatherScrollFacts()
 	facts.wonders = world.wonders;
 	facts.disciples = world.disciples;
 	facts.discipleKinds = world.discipleKinds;
+	// The challenge room's scroll lists the player's challenges as their scripts recorded them
+	if (Locator::entitiesRegistry::has_value())
+	{
+		auto listing = ecs::challenge_records::List(Locator::entitiesRegistry::value());
+		facts.challengesDiscovered = listing.discovered;
+		facts.challengesCompleted = listing.completed;
+		facts.challenges = std::move(listing.titles);
+	}
 	// The save game room's time played counts from the game's start, as the machine's clock is read
 	facts.timePlayed = std::chrono::seconds(machine_clock::Ticks() / 1000u);
 	// The creature's scrolls tell of the player's own creature, and are blank without one
