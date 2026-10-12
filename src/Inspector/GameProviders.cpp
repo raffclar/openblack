@@ -189,6 +189,7 @@
 #include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
+#include "Hand/HandTrace.h"
 #include "Help/AdvisorModel.h"
 #include "Help/AdvisorVoices.h"
 #include "Help/DialogueText.h"
@@ -1466,6 +1467,128 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		            {"object", Id(pick.object)}, {"point", Optional(pick.point)},        {"land", Optional(pick.land)},
 		            {"distance", pick.distance}, {"hover_object", Id(pick.hoverObject)}, {"hover_seconds", pick.hoverSeconds}};
 	        }));
+	provider->Add(
+	    Query("hand_trace",
+	          "The player's hand frame by frame, for hand bugs: start keeps the last frames (frames, 600 by default) of every "
+	          "part of the frame that put the hand somewhere, where it was placed, drawn and showed, on the screen too, and "
+	          "what it did; read returns them (the last few with last) and the jumps among them: frames where the hand "
+	          "moved on the screen more than threshold pixels (12) further than the cursor, came_back when it returned "
+	          "within return_within frames (4); stop forgets them",
+	          {{.name = "action", .type = "string", .description = "start, read (the default) or stop", .required = false},
+	           {.name = "frames", .type = "integer", .description = "With start: how many frames to keep", .required = false},
+	           {.name = "last", .type = "integer", .description = "With read: only the last frames", .required = false},
+	           {.name = "threshold",
+	            .type = "number",
+	            .description = "With read: the pixels beyond the cursor's move that make a jump",
+	            .required = false},
+	           {.name = "return_within",
+	            .type = "integer",
+	            .description = "With read: the frames a jump may take to come back",
+	            .required = false},
+	           {.name = "jumps_only",
+	            .type = "boolean",
+	            .description = "With read: only the jumps, each with the frames around it",
+	            .required = false}}),
+	    [](const QueryContext& context) {
+		    if (!Locator::handSystem::has_value() || Locator::handSystem::value().GetTrace() == nullptr)
+		    {
+			    return QueryResult::Error("the hands keep no trace");
+		    }
+		    auto& trace = *Locator::handSystem::value().GetTrace();
+		    const auto action = context.params.value("action", std::string("read"));
+		    if (action == "start")
+		    {
+			    const auto frames = context.params.value("frames", 600);
+			    if (frames < 1 || frames > 100000)
+			    {
+				    return QueryResult::Error("frames is 1 to 100000");
+			    }
+			    trace.Enable(static_cast<size_t>(frames));
+			    return QueryResult::Value(Json {{"tracing", true}, {"frames", frames}});
+		    }
+		    if (action == "stop")
+		    {
+			    trace.Disable();
+			    return QueryResult::Value(Json {{"tracing", false}});
+		    }
+		    if (action != "read")
+		    {
+			    return QueryResult::Error("action is start, read or stop");
+		    }
+		    auto frames = trace.Frames();
+		    const auto threshold = context.params.value("threshold", 12.0f);
+		    const auto returnWithin = static_cast<size_t>(std::max(context.params.value("return_within", 4), 0));
+		    const auto jumps = hand_trace::FindJumps(frames, threshold, returnWithin);
+		    const auto vec = [](glm::vec3 v) { return Json {v.x, v.y, v.z}; };
+		    const auto frameJson = [&vec](const hand_trace::Frame& frame) {
+			    Json writes = Json::array();
+			    for (const auto& write : frame.Writes())
+			    {
+				    writes.push_back({{"by", std::string(write.writer)}, {"at", vec(write.position)}});
+			    }
+			    return Json {{"frame", frame.frame},
+			                 {"seconds", frame.seconds},
+			                 {"cursor", {frame.cursor.x, frame.cursor.y}},
+			                 {"placed", vec(frame.placed)},
+			                 {"drawn", vec(frame.drawn)},
+			                 {"visible", vec(frame.visible)},
+			                 {"screen", frame.screen.has_value() ? Json {frame.screen->x, frame.screen->y} : Json(nullptr)},
+			                 {"wrist", vec(frame.wrist)},
+			                 {"wrist_screen", frame.wristScreen.has_value() ? Json {frame.wristScreen->x, frame.wristScreen->y}
+			                                                                : Json(nullptr)},
+			                 {"stage", frame.stage},
+			                 {"busy", frame.busy},
+			                 {"held", frame.held.has_value() ? Json(*frame.held) : Json(nullptr)},
+			                 {"picked", frame.picked.has_value() ? Json(*frame.picked) : Json(nullptr)},
+			                 {"cursor_land", frame.cursorLand.has_value() ? vec(*frame.cursorLand) : Json(nullptr)},
+			                 {"rest_on_thing", frame.restOnThing.has_value() ? vec(*frame.restOnThing) : Json(nullptr)},
+			                 {"writes", std::move(writes)},
+			                 {"writes_lost", frame.writesLost}};
+		    };
+		    Json jumpItems = Json::array();
+		    for (const auto& jump : jumps)
+		    {
+			    jumpItems.push_back({{"frame", jump.frame},
+			                         {"pixels", jump.pixels},
+			                         {"beyond_cursor", jump.beyondCursor},
+			                         {"came_back", jump.cameBack},
+			                         {"last_writer", std::string(jump.writer)}});
+		    }
+		    Json items = Json::array();
+		    if (context.params.value("jumps_only", false))
+		    {
+			    // Each jump with the two frames before it and the few it may take to come back
+			    std::vector<bool> keep(frames.size(), false);
+			    for (const auto& jump : jumps)
+			    {
+				    const auto from = jump.index >= 2 ? jump.index - 2 : 0;
+				    for (size_t i = from; i < frames.size() && i <= jump.index + returnWithin; ++i)
+				    {
+					    keep[i] = true;
+				    }
+			    }
+			    for (size_t i = 0; i < frames.size(); ++i)
+			    {
+				    if (keep[i])
+				    {
+					    items.push_back(frameJson(frames[i]));
+				    }
+			    }
+		    }
+		    else
+		    {
+			    const auto last = static_cast<size_t>(std::max(context.params.value("last", 0), 0));
+			    const size_t first = last > 0 && last < frames.size() ? frames.size() - last : 0;
+			    for (size_t i = first; i < frames.size(); ++i)
+			    {
+				    items.push_back(frameJson(frames[i]));
+			    }
+		    }
+		    return QueryResult::Value(Json {{"tracing", trace.Enabled()},
+		                                    {"kept", frames.size()},
+		                                    {"jumps", std::move(jumpItems)},
+		                                    {"frames", std::move(items)}});
+	    });
 	provider->Add(Query("input", "The mouse and the hands as the game's actions see them"),
 	              Serve<Locator::gameActionSystem>(
 	                  "the game's actions", [](const input::GameActionInterface& actions, const QueryContext& /*c*/) {

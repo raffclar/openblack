@@ -60,6 +60,10 @@ namespace ecs::components
 {
 struct Transform;
 }
+namespace ecs::systems
+{
+class HandGrabSystemInterface;
+}
 
 enum class LoggingSubsystem : uint8_t
 {
@@ -352,6 +356,8 @@ private:
 	glm::vec3 _handGripPoint {0.0f, 0.0f, 0.0f};
 	/// The fade from where the hand was to where it is now held, as it grips the land or lets go
 	HandCrossFade _handCrossFade;
+	/// What the hand did as its pose was last chosen, to fade its pose when that changes
+	std::optional<magic::hand_hold::HandStage> _handPoseStage;
 	/// The hand's tap after it knocked on a house: it stays upright where it knocked while the tap plays through once.
 	/// Holding something puts it off, and it starts over once the hand lets go.
 	struct HandKnock
@@ -404,6 +410,10 @@ private:
 	[[nodiscard]] std::chrono::milliseconds CameraStepTime() const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
+	/// The hand's debugging trace keeps the frame: where the hand was placed and drawn, where it shows, on the screen
+	/// too, and what it was doing
+	void EndHandTrace(const glm::vec3& placed, const ecs::components::Transform& hand, magic::hand_hold::HandStage stage,
+	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
 	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
