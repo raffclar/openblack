@@ -15,6 +15,9 @@
 #include <array>
 #include <iterator>
 #include <limits>
+#include <numbers>
+#include <optional>
+#include <vector>
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
@@ -477,6 +480,59 @@ TurnedRound TurnRound(glm::ivec2 position, glm::ivec2 step, uint16_t gameAngle)
 	    .step = {-step.x, 0},
 	    .gameAngle = static_cast<uint16_t>((gameAngle - k_HalfTurn) & gutils::k_GameAngleMask),
 	};
+}
+
+bool ShutInByCircles(glm::vec2 point, std::span<const BlockingCircle> circles)
+{
+	// Each join between overlapping circles turns some angle about the point; going once round a ring of joins adds up
+	// to a whole turn when the ring goes round the point, else to nothing. The angles summed along a tree of joins from
+	// one circle give each circle a bearing, so any other join closes a ring whose sum is that join's angle less the
+	// difference of the bearings at its ends.
+	constexpr float k_HalfTurnRadians = std::numbers::pi_v<float>;
+	const size_t count = circles.size();
+	const auto overlap = [&circles](size_t a, size_t b) {
+		const glm::vec2 apart = circles[b].centre - circles[a].centre;
+		const float reach = circles[a].radius + circles[b].radius;
+		return Dot(apart, apart) < reach * reach;
+	};
+	const auto turn = [&circles, point](size_t a, size_t b) {
+		const glm::vec2 from = circles[a].centre - point;
+		const glm::vec2 to = circles[b].centre - point;
+		return std::atan2(from.x * to.y - from.y * to.x, Dot(from, to));
+	};
+	std::vector<std::optional<float>> bearing(count);
+	std::vector<size_t> queue;
+	for (size_t root = 0; root < count; ++root)
+	{
+		if (bearing[root].has_value())
+		{
+			continue;
+		}
+		bearing[root] = 0.0f;
+		queue.assign(1, root);
+		for (size_t next = 0; next < queue.size(); ++next)
+		{
+			const size_t a = queue[next];
+			for (size_t b = 0; b < count; ++b)
+			{
+				if (b == a || !overlap(a, b))
+				{
+					continue;
+				}
+				const float along = *bearing[a] + turn(a, b);
+				if (!bearing[b].has_value())
+				{
+					bearing[b] = along;
+					queue.push_back(b);
+				}
+				else if (std::abs(along - *bearing[b]) > k_HalfTurnRadians)
+				{
+					return true;
+				}
+			}
+		}
+	}
+	return false;
 }
 
 uint16_t HeadingRound(glm::ivec2 position, glm::ivec2 centre, bool clockwise)

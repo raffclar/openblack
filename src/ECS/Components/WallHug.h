@@ -73,6 +73,9 @@ struct WallHugLookahead
 	int32_t spareAsItGoes {0};
 	int32_t spareTurnedRound {0};
 	bool turnedRound {false};
+	/// Whether turning round would have put it where a closed ring of overlapping circles shuts it in, so it was not
+	/// turned round (openblack's own rule)
+	bool landingShutIn {false};
 };
 
 struct WallHug

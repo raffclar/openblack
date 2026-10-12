@@ -152,6 +152,43 @@ Blockers BlockersAround(const ecs::Registry& registry, glm::ivec2 coords)
 	return blockers;
 }
 
+/// Every circle that may stand round a map position: those of the things in its cell and the eight round it, and the
+/// water and the land's edge round its cell
+std::vector<wall_hug::BlockingCircle> CirclesNear(const ecs::Registry& registry, glm::ivec2 coords)
+{
+	auto circles = BlockersAround(registry, coords).circles;
+	std::erase_if(circles, [](const wall_hug::BlockingCircle& circle) { return !circle.landscape; });
+	if (!Locator::entitiesMap::has_value())
+	{
+		return circles;
+	}
+	const glm::ivec2 cell {map_coords::CellOf(coords.x), map_coords::CellOf(coords.y)};
+	std::vector<entt::entity> seen;
+	for (int dz = -1; dz <= 1; ++dz)
+	{
+		for (int dx = -1; dx <= 1; ++dx)
+		{
+			const glm::ivec2 around = cell + glm::ivec2(dx, dz);
+			if (around.x < 0 || around.y < 0 || around.x >= MapInterface::k_GridSize.x ||
+			    around.y >= MapInterface::k_GridSize.y)
+			{
+				continue;
+			}
+			for (const auto thing : Locator::entitiesMap::value().GetFixedInGridCell(MapInterface::CellId(around)))
+			{
+				if (std::ranges::find(seen, thing) != seen.end())
+				{
+					continue;
+				}
+				seen.push_back(thing);
+				const auto shape = thing_circles::CirclesOf(registry, thing);
+				circles.insert(circles.end(), shape.begin(), shape.end());
+			}
+		}
+	}
+	return circles;
+}
+
 /// A walker heading straight on looks along its step for the nearest circle in the cell of a map position (see
 /// WallHugRules.h), and heads for it, or for nothing in reach
 void ScanLine(ecs::Registry& registry, entt::entity entity, glm::ivec2 position, glm::ivec2 step, glm::ivec2 coords)
@@ -737,7 +774,11 @@ void PathfindingSystem::ProcessLookahead()
 	lookahead = &registry.Get<WallHugLookahead>(*next);
 	lookahead->spareAsItGoes = asItGoes.turnsToSpare;
 	lookahead->spareTurnedRound = turnedRound.turnsToSpare;
-	lookahead->turnedRound = wall_hug::TurnedRoundIsBetter(turnedRound, asItGoes);
+	// Turned round, it would jump to where it lands: never into a ring of overlapping circles that shuts it in, where
+	// it would loop for good (a deviation from the game, which turns it round all the same)
+	const auto landing = wall_hug::TurnRound(wallHug->position, wallHug->step, wallHug->gameAngle).position;
+	lookahead->landingShutIn = wall_hug::ShutInByCircles(wall_hug::ToPoint(landing), CirclesNear(registry, landing));
+	lookahead->turnedRound = wall_hug::TurnedRoundIsBetter(turnedRound, asItGoes) && !lookahead->landingShutIn;
 	if (lookahead->turnedRound)
 	{
 		TurnRound(registry, walker);

@@ -231,6 +231,11 @@ struct TurnedRound
 };
 [[nodiscard]] TurnedRound TurnRound(glm::ivec2 position, glm::ivec2 step, uint16_t gameAngle);
 
+/// Whether a point is shut in by a closed ring of overlapping circles (openblack's own rule, not the game's): the
+/// circles that overlap one another are joined middle to middle, and the point is shut in when some ring of such joins
+/// goes round it. A walker turned round onto such a point would loop there for good, so it is not turned round.
+[[nodiscard]] bool ShutInByCircles(glm::vec2 point, std::span<const BlockingCircle> circles);
+
 /// The heading of a walker going round a circle that stays the way it goes after its trial: a quarter turn round from
 /// facing the circle's middle, the way it goes round
 [[nodiscard]] uint16_t HeadingRound(glm::ivec2 position, glm::ivec2 centre, bool clockwise);
