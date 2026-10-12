@@ -70,3 +70,19 @@ TEST(WorldToolTips, PilesAndHeldAmounts)
 	EXPECT_EQ(HeldAmount(7).index, k_HeldAmount);
 	EXPECT_EQ(Compose(k_HeldAmount, u"Amount: %3.0f", 7.0, std::nullopt), u"Amount:   7");
 }
+
+TEST(WorldToolTips, AScaffoldOverAPlannedGraveyardNamesIt)
+{
+	// A planned graveyard's text for building it is the game's "Graveyard" tooltip text
+	EXPECT_EQ(ScaffoldDrop(k_FirstToolTipText + k_Graveyard), std::optional(k_Graveyard));
+	EXPECT_EQ(ScaffoldDrop(std::nullopt), std::optional(k_Build));
+}
+
+TEST(WorldToolTips, OnlyTheGamesTooltipTextsAreTooltips)
+{
+	EXPECT_EQ(ToolTipOfText(k_FirstToolTipText), std::optional(0u));
+	EXPECT_EQ(ToolTipOfText(k_FirstToolTipText + k_ToolTipCount - 1), std::optional(k_ToolTipCount - 1));
+	EXPECT_FALSE(ToolTipOfText(k_FirstToolTipText - 1).has_value());
+	EXPECT_FALSE(ToolTipOfText(k_FirstToolTipText + k_ToolTipCount).has_value());
+	EXPECT_FALSE(ScaffoldDrop(0u).has_value());
+}

@@ -6386,11 +6386,11 @@ void SetSkeleton() // 291 SET_SKELETON
 	{
 		for (const auto member : ContainerMembers(registry, object))
 		{
-			villager_skeleton::Set(member, enable);
+			villager_skeleton::SetByScript(member, enable);
 		}
 		return;
 	}
-	villager_skeleton::Set(object, enable);
+	villager_skeleton::SetByScript(object, enable);
 }
 
 void IsSkeleton() // 292 IS_SKELETON
