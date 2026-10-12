@@ -95,4 +95,11 @@ enum class Status : uint8_t
 
 /// Whether a throw is over: its animation has played out, and, thrown into a store, what it threw has stopped flying
 [[nodiscard]] bool ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying);
+
+/// Whether a creature about to swallow what it holds brings it back up instead, uneaten: a thing made indestructible,
+/// or one the scripts hold while they own the widescreen bars, can't be eaten. The creature then lets it fall and is
+/// sick, and isn't hungry for a while.
+[[nodiscard]] bool BringsBackUp(bool indestructible, bool heldDuringCutscene);
+/// How long a creature that brought its food back up isn't hungry for
+constexpr float k_NotHungryAfterBringingUpSeconds = 20.0f;
 } // namespace openblack::creature_object_actions

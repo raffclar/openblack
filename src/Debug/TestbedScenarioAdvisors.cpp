@@ -24,6 +24,8 @@ using Action = Command::AdvisorAction;
 
 constexpr size_t k_Good = 0;
 constexpr size_t k_Evil = 1;
+/// A message set of the help that says two texts through a help script
+constexpr size_t k_TwoTextsMessage = 97;
 
 Command Tell(size_t advisor, Action action, float delay, glm::vec2 point = glm::vec2(0.0f), uint32_t anim = 0)
 {
@@ -100,5 +102,30 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .framing = AdvisorsFraming(),
 	    .commands = {Tell(k_Good, Action::Appear, 0.5f), Tell(k_Evil, Action::Appear, 0.0f), Tell(k_Good, Action::Vanish, 5.0f),
 	                 Tell(k_Evil, Action::Vanish, 0.0f)},
+	});
+	all.push_back({
+	    .id = "advisors.escape_in_cut_scene",
+	    .name = "Escape in a script's cut scene",
+	    .facet = Facet::Advisors,
+	    .description = "A script's cinema bars slide in after half a second and stay in for thirty seconds, then slide out. "
+	                   "Press Escape while they are in, then again once they are gone.",
+	    .expected = "While the bars are in, Escape does nothing: the menu stays shut and the game runs on. Once they have "
+	                "gone, Escape opens the game's menu.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = AdvisorsFraming(),
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::WideScreen, .delaySeconds = 30.0f, .value = 0}},
+	});
+	all.push_back({
+	    .id = "advisors.escape_help_script",
+	    .name = "Escape stops a help script holding the dialogue",
+	    .facet = Facet::Advisors,
+	    .description = "After half a second the help runs one of its messages, two texts the advisors say, through a help "
+	                   "script that takes the dialogue. Press Escape while it runs.",
+	    .expected = "Escape stops the help script: its text goes, the advisors are cut short and go home, and the game's "
+	                "menu opens.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = AdvisorsFraming(),
+	    .commands = {{.kind = Kind::RunHelpMessage, .delaySeconds = 0.5f, .value = k_TwoTextsMessage}},
 	});
 }

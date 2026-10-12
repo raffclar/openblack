@@ -28,6 +28,13 @@ TEST(PhysicsObjects, ATreePutDownGentlyOnLandTakesRootAgain)
 	EXPECT_EQ(TreeLandingOf(false, true, true, false), TreeLanding::Dies);
 }
 
+TEST(PhysicsObjects, ATreeReplantedOrAForestMiracleTreePutDownStandsOnTheLand)
+{
+	EXPECT_TRUE(StandsOnLandAfter(TreeLanding::Replanted));
+	EXPECT_TRUE(StandsOnLandAfter(TreeLanding::Stays));
+	EXPECT_FALSE(StandsOnLandAfter(TreeLanding::Dies));
+}
+
 TEST(PhysicsObjects, AReplantedTreeJoinsTheForestOfTheNearestTree)
 {
 	ForestSearch search;

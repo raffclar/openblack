@@ -16,8 +16,13 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Components/Transform.h"
+#include "ECS/Map.h"
+#include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
@@ -99,6 +104,75 @@ std::optional<std::pair<uint8_t, bool>> RecordedButton(hnd::HNDMessage message)
 		return std::pair {static_cast<uint8_t>(SDL_BUTTON_RIGHT), false};
 	default:
 		return std::nullopt;
+	}
+}
+/// Where a thing is, as a recording's places are kept
+map_coords::MapCoords PlaceOf(const ecs::Registry& registry, entt::entity thing)
+{
+	const auto& position = registry.Get<const ecs::components::Transform>(thing).position;
+	return map_coords::FromMetres({position.x, position.z});
+}
+
+/// A recorded click on a thing lands on the same kind of thing near the same place in the world as it is now: the thing
+/// under the hand if it is that, else the nearest such thing within reach of the recorded place; and on no thing when
+/// the recording had none under the hand
+void RetargetClick(const hnd::HNDRecord& record)
+{
+	if (!hand_demo::ClickCanRetarget(record.message) || !Locator::pickingSystem::has_value() ||
+	    !Locator::entitiesRegistry::has_value() || !Locator::entitiesMap::has_value())
+	{
+		return;
+	}
+	auto& picking = Locator::pickingSystem::value();
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::optional<hand_demo::ThingUnderHand> underHand;
+	if (const auto object = picking.GetPick().object;
+	    object.has_value() && registry.Valid(*object) && registry.AllOf<ecs::components::Transform>(*object))
+	{
+		// A thing the scripts don't see as one is of no kind a recording names
+		underHand =
+		    hand_demo::ThingUnderHand {.kind = ecs::script_find::KindOf(registry, *object).value_or(ecs::script_find::Kind {}),
+		                               .at = PlaceOf(registry, *object)};
+	}
+	switch (hand_demo::TargetOfClick(record, underHand))
+	{
+	case hand_demo::ClickTarget::UnderHand:
+		return;
+	case hand_demo::ClickTarget::NoThing:
+		picking.RetargetObject(std::nullopt, 0.0f);
+		return;
+	case hand_demo::ClickTarget::NearestOfKind:
+		break;
+	}
+	const auto& map = Locator::entitiesMap::value();
+	const auto found =
+	    ecs::script_find::FindNearest(hand_demo::RecordedPlace(record), hand_demo::k_RetargetReach, [&](glm::ivec2 cell) {
+		    std::vector<ecs::script_find::Candidate> candidates;
+		    for (const auto thing : map.GetAllInCell(cell))
+		    {
+			    if (!registry.Valid(thing) || !registry.AllOf<ecs::components::Transform>(thing))
+			    {
+				    continue;
+			    }
+			    const auto kind = ecs::script_find::KindOf(registry, thing);
+			    const auto at = PlaceOf(registry, thing);
+			    if (kind.has_value() && hand_demo::TakesRecordedClick(record, *kind, at))
+			    {
+				    candidates.push_back({.entity = thing, .at = at});
+			    }
+		    }
+		    return candidates;
+	    });
+	// None found near, the click stays on what is under the hand
+	// TODO(tutorial-polish): the game also passes over a thing it can't be clicked on (a building with nothing built yet,
+	// a dying villager), the click then landing on no thing; and it measures a worship site from its totem
+	if (found != entt::null)
+	{
+		picking.RetargetObject(found, record.objectDistance);
+		if (const auto logger = spdlog::get("game"); logger != nullptr)
+		{
+			SPDLOG_LOGGER_DEBUG(logger, "A replayed click lands on entity {}, of its recorded kind", entt::to_integral(found));
+		}
 	}
 }
 } // namespace
@@ -213,8 +287,7 @@ void HandDemoSystem::Apply(const std::vector<hand_demo::Played>& played)
 			// A button goes down or up where the cursor last was. The hand is given back the throw it was ready to make
 			// when this was recorded, so a recorded throw flies as it did when it was recorded, however the replayed
 			// hand moved
-			// TODO(advisor-help): the game also sends a click on a thing to the nearest of the same kind within 3 m
-			// when the one under the hand isn't it
+			RetargetClick(*record);
 			if (Locator::handGrabSystem::has_value())
 			{
 				Locator::handGrabSystem::value().SetRecordedThrow(hand_demo::RecordedThrowVelocity(*record));

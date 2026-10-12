@@ -79,8 +79,10 @@ public:
 	static std::unique_ptr<GameInterface> Create(std::u16string_view playerName, MenuSettings settings);
 	~GameInterface();
 
-	/// Takes Escape, and every key press and mouse event while the menu is open. True when the event was taken.
+	/// Takes every key press and mouse event while the menu or a dialog is open. True when the event was taken.
 	bool ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	/// The game's menu opens, as Escape in play opens it
+	void OpenMenu();
 	/// What the player last chose in the menu, once
 	GameMenu::Action TakeAction();
 	/// Whether the menu's settings changed since last asked
@@ -229,6 +231,8 @@ private:
 	/// The scripts' dialogue: its see-through box above the bottom cinema bar with the "Continue" cue, then the hand's
 	/// helper icons, then the dialogue's words
 	void DrawDialogue(glm::u16vec2 resolution, int barPixels);
+	/// The words the scripts write across the screen, the newest first
+	void DrawScriptTexts(glm::u16vec2 resolution);
 	/// The camera's helper icons by the hand and, in a demonstration, its mouse
 	void DrawHandTricons(glm::u16vec2 resolution);
 	/// The row of hints of the gestures the hand waits for: each gesture's picture and the dots running along it (the

@@ -25,6 +25,7 @@
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
 #include "Temple/TemplePeople.h"
+#include "Temple/TempleRoomLock.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -84,6 +85,8 @@ public:
 	[[nodiscard]] glm::vec2 GetWaterfallSlide() const override;
 	void Activate() override { Activate(TempleRoom::Main); }
 	void Activate(TempleRoom room) override;
+	void EnterLockedRoom(TempleRoom room) override;
+	[[nodiscard]] bool TakeGameEnded() override { return _lock.TakeEnded(); }
 	void Deactivate() override;
 	void CloseForNewLand() override;
 
@@ -97,6 +100,8 @@ private:
 	/// The room the player last came into on this visit, whose help was asked for then
 	std::optional<TempleRoom> _enteredRoom;
 	bool _leaveRequested {false};
+	/// The room the player is kept in once the game is over
+	temple::RoomLock _lock;
 	/// The temple starts in the main room unless told of another
 	TempleRoom _currentRoom {TempleRoom::Main};
 	std::optional<TempleRoom> _transitionRoom;

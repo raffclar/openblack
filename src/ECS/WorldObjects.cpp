@@ -619,11 +619,11 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	{
 		return;
 	}
-	const float amount = ecs::town_aggression::AggressionFromDamage(damage, kind->aggressorValue);
-	if (amount == 0.0f)
+	if (!ecs::town_aggression::CountsAsAttack(damage))
 	{
 		return;
 	}
+	const float amount = ecs::town_aggression::AggressionFromDamage(damage, kind->aggressorValue);
 	auto* aggression = registry.TryGet<TownAggression>(town);
 	if (aggression == nullptr)
 	{

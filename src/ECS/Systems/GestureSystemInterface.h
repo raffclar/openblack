@@ -124,6 +124,10 @@ public:
 	/// Once a frame, by the game's time: the hints fade while the advisors' words show, and while they show their dots
 	/// run and their collars turn
 	virtual void StepHints(float seconds, bool wordsShowing) = 0;
+	/// A gesture's shape shown on the land as if it had just been drawn and recognised, without anyone drawing it (a
+	/// reward showing the gesture of a power-up): its square, so many metres across, laid on the land from a corner
+	/// towards the east and south
+	virtual void ShowGestureOnLand(GestureType /*gesture*/, glm::vec3 /*corner*/, float /*size*/) {}
 };
 
 } // namespace openblack::ecs::systems

@@ -40,6 +40,7 @@ public:
 	void ClearAllText() override;
 	void CloseDialogue() override;
 	void InterruptAdvisors() override;
+	void InterruptAdvisorsByEscape() override;
 	[[nodiscard]] int32_t GetNarrator(uint32_t text) const override;
 	[[nodiscard]] std::u16string GetWords(uint32_t text) const override;
 	[[nodiscard]] const help::TextFrame* Layout(glm::ivec2 screen, int barPixels, const help::WidthFn& widthFn) const override;

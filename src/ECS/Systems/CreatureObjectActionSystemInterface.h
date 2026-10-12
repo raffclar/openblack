@@ -91,6 +91,9 @@ public:
 	[[nodiscard]] virtual bool CanPickUp(entt::entity object) const = 0;
 	/// Whether a creature can knock something down: trees, homes and things
 	[[nodiscard]] virtual bool CanDestroy(entt::entity target) const = 0;
+	/// How far a creature's hand gets at its furthest stretch when picking up, measured straight, from where the hand
+	/// takes hold in its reaching animations; none when its species has nothing to reach with or isn't posed yet
+	[[nodiscard]] virtual std::optional<float> PickUpStraightReach(entt::entity /*creature*/) const { return std::nullopt; }
 };
 
 } // namespace openblack::ecs::systems

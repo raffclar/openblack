@@ -76,6 +76,8 @@ public:
 	virtual void CloseDialogue() = 0;
 	/// Both advisors are cut short in what they say
 	virtual void InterruptAdvisors() = 0;
+	/// Both advisors are cut short by the player's Escape, which picks among more interruption lines
+	virtual void InterruptAdvisorsByEscape() = 0;
 	/// Who says a help text, a narrator of the help texts' script; a number past the last gives the first text's
 	[[nodiscard]] virtual int32_t GetNarrator(uint32_t text) const = 0;
 	/// The words of a help text, as the game keeps them; a number past the last gives the first text's, and there are none

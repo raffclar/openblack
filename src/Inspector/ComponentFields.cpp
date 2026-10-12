@@ -72,6 +72,7 @@
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -381,7 +382,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Abode::inhabitants>("inhabitants")
 	    .Field<&components::Abode::couple>("couple")
 	    .Field<&components::Abode::presentAtHome>("presentAtHome")
-	    .Field<&components::Abode::info>("info");
+	    .Field<&components::Abode::info>("info")
+	    .Field<&components::Abode::putUpForMending>("putUpForMending");
 	Reflect<components::Alignment>(context)
 	    .Field<&components::Alignment::value>("value")
 	    .Field<&components::Alignment::pending>("pending");
@@ -480,6 +482,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::bank>("bank")
 	    .Field<&components::AudioEmitter::group>("group");
 	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
+	Reflect<components::BlendedByMaterial> {context};
 	Reflect<components::Lover>(context).Field<&components::Lover::partner>("partner");
 	Reflect<components::BreederSpot>(context).Field<&components::BreederSpot::spot>("spot");
 	Reflect<components::BuildingDamage>(context)
@@ -1342,7 +1345,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Reward::madeAt>("madeAt")
 	    .Field<&components::Reward::goesIntoMap>("goesIntoMap")
 	    .Field<&components::Reward::dustMilliseconds>("dustMilliseconds")
-	    .Field<&components::Reward::dust>("dust");
+	    .Field<&components::Reward::dust>("dust")
+	    .Field<&components::Reward::opened>("opened")
+	    .Field<&components::Reward::turnsLeft>("turnsLeft")
+	    .Field<&components::Reward::clipPlace>("clipPlace");
 	Reflect<components::RewardOnLand> {context};
 	Reflect<components::RisingSoul>(context)
 	    .Field<&components::RisingSoul::mesh>("mesh")
@@ -1792,6 +1798,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WallHugObjectReference::centre>("centre")
 	    .Field<&components::WallHugObjectReference::radius>("radius")
 	    .Field<&components::WallHugObjectReference::entryDistance>("entryDistance");
+	Reflect<components::WallHugLookahead>(context)
+	    .Field<&components::WallHugLookahead::tried>("tried")
+	    .Field<&components::WallHugLookahead::spareAsItGoes>("spareAsItGoes")
+	    .Field<&components::WallHugLookahead::spareTurnedRound>("spareTurnedRound")
+	    .Field<&components::WallHugLookahead::turnedRound>("turnedRound")
+	    .Field<&components::WallHugLookahead::landingShutIn>("landingShutIn");
 	Reflect<components::WallHug>(context)
 	    .Field<&components::WallHug::goal>("goal")
 	    .Field<&components::WallHug::step>("step")
@@ -2192,6 +2204,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::sequence>("sequence")
 	    .Field<&openblack::creature_mind::Step::untilRested>("untilRested")
 	    .Field<&openblack::creature_mind::Step::holdLoop>("holdLoop")
+	    .Field<&openblack::creature_mind::Step::mirrorAtRandom>("mirrorAtRandom")
 	    .Field<&openblack::creature_mind::Step::closedEyes>("closedEyes")
 	    .Field<&openblack::creature_mind::Step::effect>("effect")
 	    .Field<&openblack::creature_mind::Step::object>("object")

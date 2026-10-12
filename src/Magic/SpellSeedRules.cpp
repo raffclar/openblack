@@ -57,6 +57,15 @@ bool magic::ShownWithSpell(const SeedWithSpell& seed)
 	return !seed.castInHand && !seed.keptInHand && seed.followsSpell && !seed.spellClosedDown && seed.hasIcon;
 }
 
+bool magic::DrawnWithSpell(const SeedWithSpell& seed, bool forest)
+{
+	if (forest)
+	{
+		return !seed.castInHand && !seed.keptInHand && seed.followsSpell && !seed.spellClosedDown;
+	}
+	return ShownWithSpell(seed);
+}
+
 bool magic::ClosesOutOfInfluence(bool shown, bool inInfluence, bool closedDown)
 {
 	return shown && !inInfluence && !closedDown;
