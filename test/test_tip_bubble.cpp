@@ -268,49 +268,6 @@ TEST(TipBubble, OnScreenByTheSignsBall)
 	EXPECT_TRUE(OnScreen({.centre = {0.0f, 0.0f, -0.5f}, .radius = 2.0f, .origin = {0.0f, 0.0f, 1.0f}}, view));
 }
 
-namespace
-{
-/// Ten pixels a character at any size, the blank that adds no space free
-float Measure(std::u16string_view text, float /*size*/)
-{
-	float width = 0.0f;
-	for (const auto c : text)
-	{
-		width += c == 0xF8FE ? 0.0f : 10.0f;
-	}
-	return width;
-}
-} // namespace
-
-TEST(TipBubble, WrapBreaksAtTheLastBlankThatFits)
-{
-	// 100 pixels: ten characters
-	EXPECT_EQ(Wrap(u"short", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"short"}));
-	EXPECT_EQ(Wrap(u"one two three four", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"one two", u"three four"}));
-	// The line breaks at the last blank, those before it trimmed
-	EXPECT_EQ(Wrap(u"aaaa    bbbbbbb", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"aaaa", u"bbbbbbb"}));
-	// A blank starting a line after a line break stays
-	EXPECT_EQ(Wrap(u"ab\n cd", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"ab", u" cd"}));
-}
-
-TEST(TipBubble, WrapBreaksAfterAHyphenOrWhereItMust)
-{
-	EXPECT_EQ(Wrap(u"well-known words", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"well-known", u"words"}));
-	EXPECT_EQ(Wrap(u"abcdefghijklmnop", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"abcdefghij", u"klmnop"}));
-	// Not a character fits: nothing more
-	EXPECT_TRUE(Wrap(u"abc", 5.0f, 19.0f, Measure).empty());
-}
-
-TEST(TipBubble, WrapEndsLinesAtLineBreaks)
-{
-	EXPECT_EQ(Wrap(u"ab\ncd", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"ab", u"cd"}));
-	// Both of a CR LF break the line: an empty line between
-	EXPECT_EQ(Wrap(u"ab\r\ncd", 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"ab", u"", u"cd"}));
-	// The blank that adds no space is a place to break too
-	const std::u16string tilde = u"aaaaaa" + std::u16string(1, char16_t {0xF8FE}) + u"bbbbbbbbb";
-	EXPECT_EQ(Wrap(tilde, 100.0f, 19.0f, Measure), (std::vector<std::u16string> {u"aaaaaa", u"bbbbbbbbb"}));
-}
-
 TEST(TipBubble, ItsPixelSizesTakeTheDefaultScreensShare)
 {
 	// At 2.4 times the default screen's pixels (2560 by 1440 and wider) every size is 2.4 times the game's

@@ -834,8 +834,9 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	const auto& title = _texts.GetHelpText(tip::k_TitleText).text;
 	const std::array<std::u16string_view, 3> items {tipText, u" ", title};
 	const tip::WidthFn measure = [this](std::u16string_view text, float size) { return BubbleTextWidth(text, size); };
-	const tip::WrapFn wrap = [&measure](std::u16string_view text, float width, float size) {
-		return tip::Wrap(text, width, size, measure);
+	const tip::WrapFn wrap = [this](std::u16string_view text, float width, float size) {
+		const auto lines = _font.Wrap(text, size, width);
+		return std::vector<std::u16string>(lines.begin(), lines.end());
 	};
 	// A tip's control codes show the player's bindings
 	std::span<const input::KeyBinding> bindings;
@@ -965,27 +966,7 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 
 float GameInterface::BubbleTextWidth(std::u16string_view text, float size) const
 {
-	// Every character's advance, the line breaks' too; the blank that adds no space has none; a missing one is a '?'
-	constexpr char16_t k_Tilde = 0xF8FE;
-	const float scale = size / static_cast<float>(_font.GetHeight());
-	float width = 0.0f;
-	for (const auto c : text)
-	{
-		if (c == k_Tilde)
-		{
-			continue;
-		}
-		const auto* glyph = _font.Find(c);
-		if (glyph == nullptr)
-		{
-			glyph = _font.Find(u'?');
-		}
-		if (glyph != nullptr)
-		{
-			width += (glyph->left + glyph->ink + glyph->right) * scale;
-		}
-	}
-	return width;
+	return _font.GetWidth(text, size);
 }
 
 void GameInterface::DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour)

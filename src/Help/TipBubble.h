@@ -123,13 +123,6 @@ using WrapFn = std::function<std::vector<std::u16string>(std::u16string_view tex
 /// The width of a line of text at a size
 using WidthFn = std::function<float(std::u16string_view text, float size)>;
 
-/// The lines a text wraps into at a width, measured by `measure` (which counts the line breaks' own widths too, as the
-/// game does while it looks for where to break). A line grows four characters at a time until it is too wide, then
-/// breaks at the rightmost blank (dropped, with the blanks before it) or after the rightmost hyphen at which it fits,
-/// else after as many characters as fit; a line break in it then ends it there. Blanks starting a line stay. Nothing
-/// more comes once not even a character fits.
-[[nodiscard]] std::vector<std::u16string> Wrap(std::u16string_view text, float width, float size, const WidthFn& measure);
-
 /// A picture code in a tip: "$g<n>" shows gesture n, "$m<n>" the control that does action n (numbered as the key
 /// bindings' actions). Each takes two lines of the bubble instead of words.
 struct InlineCode

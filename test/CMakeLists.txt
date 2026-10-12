@@ -106,6 +106,7 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_sound_effect PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
+openblack_setup_and_add_test(test_text_wrap gui/test_text_wrap.cpp)
 openblack_setup_and_add_test(test_skip_box gui/test_skip_box.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)
 openblack_setup_and_add_test(test_screen_fade gui/test_screen_fade.cpp)
