@@ -2066,6 +2066,53 @@ void AddMind(std::vector<Scenario>& all)
 	                 {.kind = Kind::SeeSkill, .creature = 0, .delaySeconds = 4.0f, .value = k_FirstSkill},
 	                 {.kind = Kind::SeeSkill, .creature = 0, .delaySeconds = 4.0f, .value = k_FirstSkill}},
 	});
+
+	// A tiger a little tired, held so, which sleeps a while once it lies down
+	auto drowsy = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	drowsy.needs.exhaustion = 0.5f;
+	all.push_back({
+	    .id = "mind.replan_mid_action",
+	    .name = "Changing its plan in the middle of an action",
+	    .facet = Facet::Mind,
+	    .description = "A tiger starts showing it is hungry (an action played once); half a second in it is told to "
+	                   "sleep, which changes its plan.",
+	    .expected = "It shows it is hungry to the end of the animation, then lies down and sleeps. It doesn't snap out of "
+	                "the action the moment its plan changes.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {drowsy},
+	    .commands = {Play(Kind::PlayAction, 0, animations::k_Hungry, 1.0f, true), Act(Kind::Sleep, 0, 0.5f, false)},
+	});
+
+	all.push_back({
+	    .id = "mind.replan_from_sitting",
+	    .name = "Changing its plan while sitting",
+	    .facet = Facet::Mind,
+	    .description = "A tiger sits down; four seconds later, sitting, it is told to sleep, which changes its plan.",
+	    .expected = "It gets up through the end of sitting, then lies down and sleeps. It doesn't jump from sitting "
+	                "straight into lying down.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {drowsy},
+	    .commands = {Act(Kind::SitDown, 0, 1.0f, true), Act(Kind::Sleep, 0, 4.0f, false)},
+	});
+
+	// Worn out, held so, but not yet wanting to sleep when the hand takes hold
+	auto worn = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	worn.needs.exhaustion = 0.75f;
+	worn.desires = {{.desire = Desire::Tiredness, .fraction = 0.0f}};
+	all.push_back({
+	    .id = "mind.held_while_tired",
+	    .name = "Tired while held by the hand",
+	    .facet = Facet::Mind,
+	    .description = "The hand takes hold of a worn out tiger by stroking it; once held, its desire to sleep is set as "
+	                   "strong as it gets. The hand strokes it twice more over twelve seconds, then lets go.",
+	    .expected = "While the hand holds it, it never lies down to sleep: a held creature's mind stands still, choosing "
+	                "nothing. Once let go it lies down and sleeps.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {worn},
+	    .commands = {Stroke(0, creature_feedback::BodyPart::Head, 1.0f), setDesire(Desire::Tiredness, 1.0f, 0.5f),
+	                 Stroke(0, creature_feedback::BodyPart::Belly, 6.0f), Stroke(0, creature_feedback::BodyPart::Head, 6.0f),
+	                 Act(Kind::HandLetGo, 0, 1.0f, true)},
+	});
 }
 
 void AddParticles(std::vector<Scenario>& all)

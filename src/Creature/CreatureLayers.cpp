@@ -200,7 +200,8 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 		body.timeMs += milliseconds;
 		if (body.timeMs >= length)
 		{
-			body.phase = BodyAction::Phase::Loop;
+			// Told to end while still starting, it goes from its start straight into its end
+			body.phase = body.endWanted ? BodyAction::Phase::End : BodyAction::Phase::Loop;
 			body.timeMs = 0.0f;
 		}
 		break;

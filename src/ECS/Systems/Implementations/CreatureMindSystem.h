@@ -126,7 +126,8 @@ private:
 	/// script controls it, its radius, and a chance for what varies
 	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
 
-	/// Plans an activity in place of what the creature was doing, getting it up and stopping it first
+	/// Plans an activity in place of what the creature was doing: it stops walking and gets up out of a pose first, while
+	/// an action it is playing plays on and the new agenda waits for it
 	bool Replan(entt::entity creature, creature_mind::Activity activity, std::vector<creature_mind::Step> agenda);
 	/// The creature sees a miracle it reacted to, and learns from it
 	void WatchMiracle(entt::entity creature, size_t miracle);
