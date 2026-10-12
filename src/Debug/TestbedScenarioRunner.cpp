@@ -68,6 +68,8 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Footpath.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Physics.h"
@@ -461,6 +463,7 @@ void Runner::Start(const Scenario& scenario)
 	}
 	PlaceObjects(scenario, _middle);
 	PlaceHighlights(scenario, _middle);
+	PlaceFootpaths(scenario, _middle);
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
@@ -648,6 +651,10 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			    }
 		    });
 	}
+	if (environment.drawFootpaths && Locator::config::has_value())
+	{
+		Locator::config::value().drawFootpaths = true;
+	}
 	if (environment.cursor && Locator::windowing::has_value())
 	{
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
@@ -683,6 +690,59 @@ void Runner::PlaceHighlights(const Scenario& scenario, glm::vec2 middle)
 			}
 		}
 		_objects.push_back(highlight);
+	}
+}
+
+void Runner::PlaceFootpaths(const Scenario& scenario, glm::vec2 middle)
+{
+	using ecs::components::Footpath;
+	using ecs::components::FootpathLink;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& land = Locator::terrainSystem::value();
+	// Where an object stands on the map, in whole map units: a fish farm on its map cell's middle
+	const auto placeOf = [&registry](entt::entity object) {
+		if (const auto* farm = registry.TryGet<const ecs::components::FishFarm>(object))
+		{
+			return farm->place;
+		}
+		const auto& position = registry.Get<const ecs::components::Transform>(object).position;
+		return glm::ivec2(map_coords::ToFixed(position.x), map_coords::ToFixed(position.z));
+	};
+	const auto nodeAt = [&land](glm::ivec2 place) {
+		const glm::vec2 ground {map_coords::ToMetres(place.x), map_coords::ToMetres(place.y)};
+		return Footpath::Node {.position = {ground.x, land.GetHeightAt(ground), ground.y}, .place = place};
+	};
+	for (const auto& setup : scenario.footpaths)
+	{
+		const auto entity = registry.Create();
+		auto& footpath = registry.Assign<Footpath>(entity);
+		if (setup.startsAt.has_value() && *setup.startsAt < _objects.size() && registry.Valid(_objects[*setup.startsAt]))
+		{
+			footpath.nodes.push_back(nodeAt(placeOf(_objects[*setup.startsAt])));
+		}
+		for (const auto offset : setup.nodes)
+		{
+			const auto point = MapPoint(middle, offset);
+			footpath.nodes.push_back(nodeAt({map_coords::ToFixed(point.x), map_coords::ToFixed(point.y)}));
+		}
+		for (const auto index : setup.leadsFrom)
+		{
+			if (index >= _objects.size() || !registry.Valid(_objects[index]))
+			{
+				continue;
+			}
+			const auto object = _objects[index];
+			if (auto* link = registry.TryGet<FootpathLink>(object))
+			{
+				link->footpaths.push_back(static_cast<Footpath::Id>(entity));
+			}
+			else
+			{
+				const auto place = placeOf(object);
+				registry.Assign<FootpathLink>(object, nodeAt(place).position,
+				                              std::vector<Footpath::Id> {static_cast<Footpath::Id>(entity)});
+			}
+		}
 	}
 }
 

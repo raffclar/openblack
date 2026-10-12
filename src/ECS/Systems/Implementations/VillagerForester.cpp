@@ -64,6 +64,7 @@
 #include "Locator.h"
 #include "ObjectMeasures.h"
 #include "VillagerBuild.h"
+#include "VillagerFootpath.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
 
@@ -145,10 +146,9 @@ bool MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 }
 
 /// The same along the town's paths
-bool MoveOnPathsTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
+bool MoveOnPathsTo(LivingAction& action, entt::entity place, glm::vec2 goal, VillagerStates final)
 {
-	// TODO(villager-jobs-1): along the town's footpaths where there are any; villagers don't walk footpaths yet
-	return MoveTo(action, goal, final);
+	return villager_footpath::SetupMoveToOnFootpath(action, place, goal, final);
 }
 
 /// How far the villager walks in a turn, in metres, and in the map's whole units
@@ -443,7 +443,7 @@ uint32_t villager_forester::GotoBigForest(LivingAction& action, entt::entity big
 {
 	const auto villager = EntityOf(action);
 	const auto at = work::BigForestArrivePosition(GroundOf(bigForest), GroundOf(villager), RadiusOf(bigForest));
-	MoveOnPathsTo(action, at, final);
+	MoveOnPathsTo(action, bigForest, at, final);
 	return 1;
 }
 

@@ -45,6 +45,7 @@
 #include "Locator.h"
 #include "VillagerBuild.h"
 #include "VillagerDisciples.h"
+#include "VillagerFootpath.h"
 #include "VillagerHome.h"
 
 using namespace openblack;
@@ -324,16 +325,16 @@ uint32_t villager_disciple_work::CheckSupplyWorkshop(LivingAction& action)
 	const auto& person = Entities().Get<const Villager>(villager);
 	if (person.woodHeld != 0)
 	{
-		villager_home::SetupMoveTo(action, villager_home::ArrivePosition(*workshop),
-		                           VillagerStates::ArrivesAtWorkshopForDropOff);
+		villager_footpath::SetupMoveToOnFootpath(action, *workshop, villager_home::ArrivePosition(*workshop),
+		                                         VillagerStates::ArrivesAtWorkshopForDropOff);
 		return 1;
 	}
 	const auto pit = construction::StoragePitOf(person.town);
 	if (pit.has_value() && Entities().Valid(*pit) &&
 	    Locator::resourceStoreSystem::value().GetResource(*pit, ResourceType::Wood) > 0)
 	{
-		villager_home::SetupMoveTo(action, villager_home::ArrivePosition(*pit),
-		                           VillagerStates::ArrivesAtStoragePitForWorkshopMaterials);
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePosition(*pit),
+		                                         VillagerStates::ArrivesAtStoragePitForWorkshopMaterials);
 		return 1;
 	}
 	return 0;
@@ -352,7 +353,7 @@ uint32_t villager_disciple_work::ArrivesAtWorkshopForDropOff(LivingAction& actio
 		const auto door = villager_home::ArrivePosition(*workshop);
 		if (!AreWeThere(villager, door))
 		{
-			villager_home::SetupMoveTo(action, door, VillagerStates::ArrivesAtWorkshopForDropOff);
+			villager_footpath::SetupMoveToOnFootpath(action, *workshop, door, VillagerStates::ArrivesAtWorkshopForDropOff);
 			return 1;
 		}
 		// It puts down all its wood and the workshop takes it
@@ -381,7 +382,8 @@ uint32_t villager_disciple_work::ArrivesAtStoragePitForWorkshopMaterials(LivingA
 		const auto door = villager_home::ArrivePosition(*pit);
 		if (!AreWeThere(villager, door))
 		{
-			villager_home::SetupMoveTo(action, door, VillagerStates::ArrivesAtStoragePitForWorkshopMaterials);
+			villager_footpath::SetupMoveToOnFootpath(action, *pit, door,
+			                                         VillagerStates::ArrivesAtStoragePitForWorkshopMaterials);
 			return 1;
 		}
 		const auto* info = VillagerInfoOf(person);

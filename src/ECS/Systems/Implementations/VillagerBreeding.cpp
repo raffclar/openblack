@@ -65,6 +65,7 @@
 #include "Locator.h"
 #include "VillagerAnimate.h"
 #include "VillagerFood.h"
+#include "VillagerFootpath.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
 
@@ -72,6 +73,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 namespace villager_breeding = openblack::ecs::villager_breeding;
 namespace villager_home = openblack::ecs::villager_home;
+namespace villager_footpath = openblack::ecs::villager_footpath;
 namespace villager_age = openblack::ecs::villager_age;
 namespace villager_food = openblack::ecs::villager_food;
 namespace world_objects = openblack::ecs::world_objects;
@@ -301,8 +303,8 @@ bool ChildGotoCreche(LivingAction& action)
 	{
 		return false;
 	}
-	// TODO(villagers): along the town's footpaths where there are any; openblack has no footpath walking yet
-	villager_home::SetupMoveTo(action, villager_home::ArrivePosition(creche), VillagerStates::ChildAtCreche);
+	villager_footpath::SetupMoveToOnFootpath(action, creche, villager_home::ArrivePosition(creche),
+	                                         VillagerStates::ChildAtCreche);
 	return true;
 }
 
@@ -674,8 +676,7 @@ bool villager_breeding::SetupBreederDisciple(LivingAction& action)
 	{
 		spot = BreederSpotByHome(PositionOf(home), villager_home::ArrivePosition(home), world_objects::SizeOf(home).radius,
 		                         GameInt(), GameFloat());
-		// TODO(villagers): along the town's footpaths where there are any
-		villager_home::SetupMoveTo(action, spot, VillagerStates::BreederDisciple);
+		villager_footpath::SetupMoveToOnFootpath(action, home, spot, VillagerStates::BreederDisciple);
 	}
 	else
 	{

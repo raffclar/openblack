@@ -106,6 +106,8 @@ private:
 	void SetUpEnvironment(const Environment& environment);
 	void PlaceHighlights(const Scenario& scenario, glm::vec2 middle);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
+	/// Lays the scenario's footpaths and links them to the objects they lead from
+	void PlaceFootpaths(const Scenario& scenario, glm::vec2 middle);
 	/// The scenario's temples and its flocks of the land's birds
 	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);

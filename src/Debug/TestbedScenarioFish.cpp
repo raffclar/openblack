@@ -95,6 +95,39 @@ std::vector<ObjectSetup> ShoreFarmAndFisherman()
 	};
 }
 
+/// The same farm, hut and pit with the footpaths a land's footpath file would lay between them: the farm's path from
+/// the farm's own place out to the pit, and the hut's path from its door to the pit; the fisherman starts by the hut,
+/// too far from the farm's path to join it, so he goes by way of the pit
+std::vector<ObjectSetup> ShoreFarmWithFootpaths()
+{
+	return {
+	    {.type = AbodeInfo::NorseHut, .offset = k_ShoreFarm + glm::vec2(-30.0f, -60.0f), .yawDegrees = 180.0f},
+	    {.type = FishFarmInfo::Normal, .offset = k_ShoreFarm},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_ShoreFarm + glm::vec2(25.0f, -30.0f), .storedFood = 0},
+	    {.type = VillagerInfo::NorseFishermanMale, .offset = k_ShoreFarm + glm::vec2(-30.0f, -70.0f), .joinTown = true},
+	};
+}
+
+std::vector<FootpathSetup> ShoreFootpaths()
+{
+	const auto at = [](float x, float z) { return k_ShoreFarm + glm::vec2(x, z); };
+	return {
+	    // From the farm (object 1), a centimetre north, then bending round to the pit's side
+	    {.startsAt = 1, .nodes = {at(0.0f, 0.01f), at(4.0f, -8.0f), at(12.0f, -16.0f), at(18.0f, -22.0f)}, .leadsFrom = {1, 2}},
+	    // From the hut's door (object 0) to the pit
+	    {.nodes = {at(-30.0f, -54.0f), at(-15.0f, -48.0f), at(0.0f, -38.0f), at(12.0f, -30.0f), at(18.0f, -24.0f)},
+	     .leadsFrom = {0, 2}},
+	};
+}
+
+/// From above the middle of the paths, looking north over the farm to the lake
+Framing OverTheFootpaths()
+{
+	return {.shot = Shot::Placed,
+	        .eye = {k_ShoreFarm.x - 5.0f, 45.0f, k_ShoreFarm.y - 75.0f},
+	        .look = {k_ShoreFarm.x - 5.0f, 0.0f, k_ShoreFarm.y - 25.0f}};
+}
+
 /// Low over the shore, looking north across the farm's map cell to the lake
 Framing OverTheShoreFarm()
 {
@@ -113,13 +146,30 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	    .description = "A fish farm in the last map cell of land on the lake's southern shore, its town's hut and empty "
 	                   "storage pit on the bank behind it, and one fisherman of the town. Seen low from the shore, looking "
 	                   "north over the farm's map cell to the lake.",
-	    .expected = "The town wants food, so the fisherman walks to the farm and fishes there, his clip starting again "
-	                "every 4.3 seconds, facing the water. Once he carries nearly all the food he can, he takes it to the "
-	                "storage pit and comes back. (openblack has no villager footpaths yet: he walks straight to the "
-	                "middle of the farm's map cell, steps to a random spot and faces that way instead.)",
+	    .expected = "The town wants food, so the fisherman walks to the middle of the farm's map cell, then on to a spot "
+	                "up to 2.5 m from it either way, and fishes there, his clip starting again every 4.3 seconds. As in "
+	                "the game, nothing turns him to the water: he fishes facing the way his short walk from the middle "
+	                "went. Once he carries nearly all the food he can, he takes it to the storage pit and comes back.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = OverTheShoreFarm(),
 	    .objects = ShoreFarmAndFisherman(),
+	});
+
+	all.push_back({
+	    .id = "villagers.footpaths",
+	    .name = "A fisherman walking footpaths",
+	    .facet = Facet::Movement,
+	    .description = "The lake-shore fish farm, its town's hut and empty storage pit, with a footpath from the farm out "
+	                   "to the pit and one from the hut's door to the pit (drawn with the Footpaths debug lines). The "
+	                   "fisherman starts by the hut, more than 40 m from the farm's path. Seen from above the paths.",
+	    .expected = "The town wants food, so the fisherman sets off for the farm by way of the pit: he walks the hut's "
+	                "path to the pit, then the farm's path out to the farm, node by node, heading for each node on the "
+	                "way a little to one side of it and for the last one exactly. He stops on the farm's middle, steps "
+	                "to a random spot up to 2.5 m away and fishes facing that way, as in the game.",
+	    .environment = {.dispenserGrid = false, .drawFootpaths = true},
+	    .framing = OverTheFootpaths(),
+	    .objects = ShoreFarmWithFootpaths(),
+	    .footpaths = ShoreFootpaths(),
 	});
 
 	all.push_back({

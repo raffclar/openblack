@@ -36,7 +36,7 @@ bool SetupMoveToOnFootpath(components::LivingAction& action, entt::entity buildi
 /// Walking a footpath: on reaching each node it heads for the next, until the path ends and it goes into the state it
 /// was heading for
 uint32_t MoveOnPath(components::LivingAction& action);
-/// It leaves the path behind
+/// It leaves the path behind, whatever it goes into next (false: it never refuses to go)
 bool ExitMoveOnPath(components::LivingAction& action, VillagerStates next);
 
 /// A building's footpaths go over to another building put up in its place, or to the plan a destroyed one leaves

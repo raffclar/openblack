@@ -345,7 +345,8 @@ bool villager_footpath::ExitMoveOnPath(LivingAction& action, VillagerStates /*ne
 {
 	auto& registry = Entities();
 	registry.Remove<FootpathWalk>(registry.ToEntity(action));
-	return true;
+	// It never holds the villager back
+	return false;
 }
 
 void villager_footpath::HandOverFootpaths(entt::entity from, entt::entity to)

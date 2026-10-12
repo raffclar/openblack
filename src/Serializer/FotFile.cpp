@@ -19,6 +19,8 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/Forest.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
@@ -73,6 +75,8 @@ entt::entity BuildingAt(const ecs::Registry& registry, const map_coords::MapCoor
 	registry.Each<const Field>([&](entt::entity entity, const Field&) { consider(entity); });
 	registry.Each<const FishFarm>([&](entt::entity entity, const FishFarm&) { consider(entity); });
 	registry.Each<const WorshipSite>([&](entt::entity entity, const WorshipSite&) { consider(entity); });
+	registry.Each<const BigForest>([&](entt::entity entity, const BigForest&) { consider(entity); });
+	registry.Each<const Temple>([&](entt::entity entity, const Temple&) { consider(entity); });
 	registry.Each<const PlannedAbode>([&](entt::entity entity, const PlannedAbode&) { consider(entity); });
 	registry.Each<const PlannedTemple>([&](entt::entity entity, const PlannedTemple&) { consider(entity); });
 	return found;

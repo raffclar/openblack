@@ -127,6 +127,8 @@ struct Environment
 	std::optional<bool> aprilFools;
 	/// The grid of every miracle's dispenser the testbed lays out in front of the camera stays, or is cleared away
 	bool dispenserGrid {true};
+	/// The footpaths are drawn as lines, as the debug menu's Footpaths box draws them
+	bool drawFootpaths {false};
 	/// The player's prayer power, for watching a maintained miracle run out of it; the testbed's plenty when not given
 	std::optional<float> prayer;
 	/// The player's alignment, -1 evil to 1 good, as the scenario starts; neutral when not given
@@ -653,6 +655,15 @@ struct HighlightSetup
 	bool active {false};
 };
 
+/// A footpath as a land's footpath file lays one: its nodes in order, at points from the middle of the map, starting
+/// on an object's own place if given; and the objects whose footpaths it is, as the file's links give them
+struct FootpathSetup
+{
+	std::optional<size_t> startsAt;
+	std::vector<glm::vec2> nodes;
+	std::vector<size_t> leadsFrom;
+};
+
 struct Scenario
 {
 	/// Unique and never changed, for picking it from the command line or a test
@@ -674,6 +685,8 @@ struct Scenario
 	std::vector<MiracleCast> miracles;
 	/// The scrolls and signs scripts put up, made after the objects
 	std::vector<HighlightSetup> highlights;
+	/// The footpaths between the objects, laid once they are made
+	std::vector<FootpathSetup> footpaths;
 	std::vector<Command> commands;
 	/// After the last command, the commands go round again from this one
 	std::optional<size_t> repeatFrom;
