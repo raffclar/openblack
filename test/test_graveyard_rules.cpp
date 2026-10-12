@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <initializer_list>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -15,6 +16,7 @@
 #include "ECS/GraveyardRules.h"
 
 using namespace openblack::graveyard;
+using openblack::AbodeType;
 
 TEST(GraveyardRules, EachDeathCountsOneMoreBurialUntilTheGraveyardIsFull)
 {
@@ -66,7 +68,29 @@ TEST(GraveyardRules, ABodyLiesLessLongWhenItsTownHadAWorkingGraveyard)
 TEST(GraveyardRules, TheFirstOtherWorkingGraveyardTakesOverFromTheTownsOwn)
 {
 	const std::vector<OtherBuilding> others {
-	    {.workingGraveyard = false}, {.workingGraveyard = true}, {.workingGraveyard = true}};
+	    {.working = false, .takesOver = true}, {.working = true, .takesOver = true}, {.working = true, .takesOver = true}};
+	const auto takesOver = GraveyardAfterLoss(true, others);
+	ASSERT_TRUE(takesOver.has_value());
+	EXPECT_EQ(*takesOver, 1u);
+}
+
+TEST(GraveyardRules, AnyWorkingCivicBuildingButTheWonderTakesOverAsTheOriginalDoes)
+{
+	EXPECT_TRUE(TakesOverAsGraveyard(AbodeType::Graveyard));
+	for (const auto civic :
+	     {AbodeType::Totem, AbodeType::StoragePit, AbodeType::Creche, AbodeType::Workshop, AbodeType::TownCentre,
+	      AbodeType::Citadel, AbodeType::FootballPitch, AbodeType::SpellDispenser, AbodeType::Field, AbodeType::Civic})
+	{
+		EXPECT_TRUE(TakesOverAsGraveyard(civic)) << static_cast<uint32_t>(civic);
+	}
+	for (const auto other : {AbodeType::Wonder, AbodeType::General, AbodeType::LivingQuarters, AbodeType::Windmill})
+	{
+		EXPECT_FALSE(TakesOverAsGraveyard(other)) << static_cast<uint32_t>(other);
+	}
+	// A working field newer than the next graveyard is the one taking over
+	const std::vector<OtherBuilding> others {{.working = true, .takesOver = false},
+	                                         {.working = true, .takesOver = TakesOverAsGraveyard(AbodeType::Field)},
+	                                         {.working = true, .takesOver = true}};
 	const auto takesOver = GraveyardAfterLoss(true, others);
 	ASSERT_TRUE(takesOver.has_value());
 	EXPECT_EQ(*takesOver, 1u);
@@ -74,14 +98,14 @@ TEST(GraveyardRules, TheFirstOtherWorkingGraveyardTakesOverFromTheTownsOwn)
 
 TEST(GraveyardRules, NoOtherWorkingGraveyardLeavesTheTownWithoutOne)
 {
-	const std::vector<OtherBuilding> others {{.workingGraveyard = false}, {.workingGraveyard = false}};
+	const std::vector<OtherBuilding> others {{.working = false, .takesOver = true}, {.working = true, .takesOver = false}};
 	EXPECT_FALSE(GraveyardAfterLoss(true, others).has_value());
 	EXPECT_FALSE(GraveyardAfterLoss(true, {}).has_value());
 }
 
 TEST(GraveyardRules, LosingASpareGraveyardLeavesTheTownWithoutOneAsInTheOriginal)
 {
-	const std::vector<OtherBuilding> others {{.workingGraveyard = true}};
+	const std::vector<OtherBuilding> others {{.working = true, .takesOver = true}};
 	EXPECT_FALSE(GraveyardAfterLoss(false, others).has_value());
 }
 

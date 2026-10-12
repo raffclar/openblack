@@ -17,6 +17,8 @@
 #include "ECS/GraveyardRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
+#include "ECS/WorldObjects.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 
 namespace openblack::graveyards
@@ -46,16 +48,25 @@ entt::entity TownOfBuilding(entt::entity building)
 	return found != towns.end() && registry.Valid(found->second) ? found->second : entt::null;
 }
 
-bool IsWorkingGraveyard(entt::entity building)
+/// Whether the building working as a town's graveyard works. It is usually a graveyard, but may be another civic
+/// building that took over from one
+bool Works(entt::entity building)
 {
-	const auto& registry = Entities();
-	return registry.Valid(building) && registry.AllOf<Graveyard>(building) && ecs::villager_home::IsFunctional(building);
+	return building != entt::null && Entities().Valid(building) && ecs::villager_home::IsFunctional(building);
+}
+
+/// Whether the building takes over as its town's graveyard when the graveyard goes
+bool TakesOver(entt::entity building)
+{
+	const auto* info = ecs::world_objects::AbodeInfoOf(building);
+	return info != nullptr && graveyard::TakesOverAsGraveyard(info->abodeType);
 }
 
 /// The graveyard counts one more burial, if it has a town and works, until it is full; its graves follow
 void CountBurial(entt::entity graveyard)
 {
 	auto& registry = Entities();
+	// Only a graveyard counts burials: another building standing in as the town's graveyard counts none
 	auto* yard = registry.TryGet<Graveyard>(graveyard);
 	if (yard == nullptr || TownOfBuilding(graveyard) == entt::null || !ecs::villager_home::IsFunctional(graveyard))
 	{
@@ -114,11 +125,20 @@ void Lost(entt::entity graveyard)
 {
 	auto& registry = Entities();
 	const auto town = TownOfBuilding(graveyard);
-	if (town == entt::null || !registry.AllOf<Graveyard>(graveyard))
+	if (town == entt::null)
 	{
 		return;
 	}
 	auto& data = registry.Get<Town>(town);
+	if (!registry.AllOf<Graveyard>(graveyard))
+	{
+		// Another building standing in as the town's graveyard goes: the town is left with none
+		if (data.graveyard == graveyard)
+		{
+			data.graveyard = entt::null;
+		}
+		return;
+	}
 	std::vector<entt::entity> others;
 	std::vector<graveyard::OtherBuilding> facts;
 	for (const auto building : data.abodes)
@@ -126,7 +146,7 @@ void Lost(entt::entity graveyard)
 		if (building != graveyard && registry.Valid(building))
 		{
 			others.push_back(building);
-			facts.push_back({.workingGraveyard = IsWorkingGraveyard(building)});
+			facts.push_back({.working = Works(building), .takesOver = TakesOver(building)});
 		}
 	}
 	const auto takesOver = graveyard::GraveyardAfterLoss(data.graveyard == graveyard, facts);
@@ -135,7 +155,7 @@ void Lost(entt::entity graveyard)
 
 bool HasWorkingGraveyard(entt::entity town)
 {
-	return IsWorkingGraveyard(GraveyardOf(town));
+	return Works(GraveyardOf(town));
 }
 
 entt::entity GraveyardOf(entt::entity town)

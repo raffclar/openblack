@@ -51,6 +51,20 @@ Numbered HeldAmount(uint32_t amount)
 	return {.index = k_HeldAmount, .first = static_cast<double>(amount), .second = std::nullopt};
 }
 
+std::optional<uint32_t> ToolTipOfText(uint32_t text)
+{
+	if (text < k_FirstToolTipText || text - k_FirstToolTipText >= k_ToolTipCount)
+	{
+		return std::nullopt;
+	}
+	return text - k_FirstToolTipText;
+}
+
+std::optional<uint32_t> ScaffoldDrop(std::optional<uint32_t> plannedBuildText)
+{
+	return plannedBuildText.has_value() ? ToolTipOfText(*plannedBuildText) : std::optional(k_Build);
+}
+
 std::u16string Compose(uint32_t index, std::u16string_view words, double first, std::optional<double> second)
 {
 	if (!second.has_value())

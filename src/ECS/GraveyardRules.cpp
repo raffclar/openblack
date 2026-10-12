@@ -32,7 +32,8 @@ std::optional<size_t> GraveyardAfterLoss(bool lostWasTheTowns, std::span<const O
 	{
 		return std::nullopt;
 	}
-	const auto found = std::ranges::find_if(others, [](const OtherBuilding& other) { return other.workingGraveyard; });
+	const auto found =
+	    std::ranges::find_if(others, [](const OtherBuilding& other) { return other.working && other.takesOver; });
 	if (found == others.end())
 	{
 		return std::nullopt;
