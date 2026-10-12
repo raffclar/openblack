@@ -27,6 +27,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera.h"
+#include "CameraLens.h"
 #include "Common/MachineClock.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -877,8 +878,11 @@ void TempleCameraModel::UpdateLook(float dt, const Input& input)
 	}
 	if (input.button != 0 && Locator::windowing::has_value())
 	{
-		const float width = static_cast<float>(Locator::windowing::value().GetSize().x);
-		const float across = 2.0f * std::tan(glm::radians(k_FieldOfView) * 0.5f);
+		const auto size = glm::vec2(Locator::windowing::value().GetSize());
+		const float width = size.x;
+		// What the lens sees across this screen: wider on a screen wider than 4:3, so the look still follows the mouse
+		const float across =
+		    2.0f * std::tan(camera_lens::HorizontalFieldOfView(glm::radians(k_FieldOfView), size.x / size.y) * 0.5f);
 		_look = _lookAtPress + across * (_pressMouse - input.mouse) / width;
 	}
 
