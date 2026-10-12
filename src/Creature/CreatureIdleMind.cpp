@@ -48,6 +48,28 @@ void FinishStep(IdleMind& mind)
 	mind.sitEnding = false;
 }
 
+/// One turn of watching the camera, the turn it starts on counting as the first: it turns to the camera when it is more
+/// than a quarter turn away, and is done once whole seconds of turns more than the step's seconds have gone by, or the
+/// camera is right overhead or out of sight
+void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
+{
+	if (!senses.camera.has_value() || senses.camera->groundDistance < k_WatchCameraOverhead || !(senses.seconds > 0.0f))
+	{
+		FinishStep(mind);
+		return;
+	}
+	if (std::abs(senses.camera->turn) > k_WatchCameraTurn)
+	{
+		commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = senses.camera->point};
+	}
+	const auto turnsPerSecond = std::lround(1.0f / senses.seconds);
+	const auto turns = std::lround(mind.stepSeconds / senses.seconds) + 1;
+	if (turns / turnsPerSecond > static_cast<long>(step.seconds) || senses.camera->distance > k_WatchCameraFurthest)
+	{
+		FinishStep(mind);
+	}
+}
+
 /// A start, loop and end held for some seconds
 Step Static(std::array<size_t, 3> sequence, float seconds)
 {
@@ -627,7 +649,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	{
 		commands.lookAbout = step.kind == Step::Kind::Wait && !step.gaze.has_value();
 		// Nothing starts while the body still plays an action
-		if (step.kind != Step::Kind::Wait && senses.bodyBusy)
+		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && senses.bodyBusy)
 		{
 			return commands;
 		}
@@ -684,6 +706,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			// The water lands at once, and the step is done
 			commands.douse = step.object;
 			FinishStep(mind);
+			break;
+		case Step::Kind::Observe:
+			// Taken in at once
+			commands.effect = Effect::Observed;
+			commands.effectObject = step.object;
+			FinishStep(mind);
+			break;
+		case Step::Kind::WatchCamera:
+			WatchCamera(mind, step, senses, commands);
 			break;
 		case Step::Kind::Wait:
 		case Step::Kind::WaitInMap:
@@ -795,8 +826,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		break;
 	case Step::Kind::Douse:
+	case Step::Kind::Observe:
 		// Done as it starts
 		FinishStep(mind);
+		break;
+	case Step::Kind::WatchCamera:
+		WatchCamera(mind, step, senses, commands);
 		break;
 	case Step::Kind::WaitInMap:
 		if (!senses.objectInMap.has_value())

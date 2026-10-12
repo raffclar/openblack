@@ -163,3 +163,15 @@ TEST(AnimalMove, ABirdKeepsOverTheLand)
 	// Off the map
 	EXPECT_FALSE(OverLandAllTheWay({20.0f, 20.0f}, {-200.0f, 20.0f}, everywhere));
 }
+
+TEST(AnimalMove, AScriptSeesItThereOnlyStrictlyWithinAStep)
+{
+	// A step of 5 map units: 3, 4 away is 5 away, not there; 3, 3 away is
+	EXPECT_FALSE(AreWeThere({0, 0}, {3, 4}, 5));
+	EXPECT_TRUE(AreWeThere({0, 0}, {3, 3}, 5));
+	EXPECT_TRUE(AreWeThere({10, 10}, {10, 10}, 1));
+	// Standing still, it is never there, even on the spot
+	EXPECT_FALSE(AreWeThere({10, 10}, {10, 10}, 0));
+	// While the moves' own arrival counts one exactly a step away
+	EXPECT_TRUE(WithinStep({0, 0}, {3, 4}, 5));
+}

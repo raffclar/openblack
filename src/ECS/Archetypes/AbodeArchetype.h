@@ -19,8 +19,9 @@ namespace openblack::ecs::archetypes
 class AbodeArchetype
 {
 public:
+	/// A building of a town, standing as much built as given: one not all built is under construction and doesn't work yet
 	static entt::entity Create(uint32_t townId, const glm::vec3& position, AbodeInfo type, float yAngleRadians, float scale,
-	                           uint32_t foodAmount, uint32_t woodAmount);
+	                           uint32_t foodAmount, uint32_t woodAmount, float built = 1.0f);
 	/// A building a town is to build later, planned where it will stand; none without a town
 	static entt::entity CreatePlan(uint32_t townId, const glm::vec3& position, AbodeInfo type, float yAngleRadians,
 	                               float scale);

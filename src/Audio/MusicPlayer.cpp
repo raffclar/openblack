@@ -72,6 +72,7 @@ bool MusicPlayer::Play(const MusicPlayOptions& options)
 	channel.sync = options.sync;
 	channel.pitchPercent = options.pitchPercent;
 	channel.onFinished = options.onFinished;
+	channel.onCue = options.onCue;
 	if (options.position)
 	{
 		const auto& bank = *options.bank;
@@ -147,6 +148,11 @@ void MusicPlayer::Start(size_t index, uint32_t startChunk)
 	}
 	channel.nextChunk = chunk - 1;
 	channel.playingChunk = chunk;
+	// The cues' clock starts at the start of the chunk playback starts in, and no cue has been passed yet: cues in
+	// chunks before it are all passed at the first check
+	channel.cueStartChunk = chunk;
+	channel.cueStartFrames = skipFrames;
+	channel.cueChecked = {};
 	if (channel.stream != MusicBackend::k_InvalidStream &&
 	    _backend.QueueChunk(channel.stream, *channel.bank, channel.nextChunk, skipFrames))
 	{
@@ -260,8 +266,62 @@ void MusicPlayer::Update(std::chrono::microseconds dt)
 	while (_tickTime >= k_Tick)
 	{
 		_tickTime -= k_Tick;
+		CueTick();
 		VolumeTick();
 	}
+}
+
+// Only the channel heard passes its cues; a channel that isn't current keeps its clock running and catches up on the
+// cues it missed once it is current again
+void MusicPlayer::CueTick()
+{
+	if (_current == k_NoChannel)
+	{
+		return;
+	}
+	auto& channel = _channels.at(static_cast<size_t>(_current));
+	if (!channel.active || !channel.onCue || channel.bank->cues.empty() || channel.stream == MusicBackend::k_InvalidStream)
+	{
+		return;
+	}
+	const auto now = CuePositionAfter(channel.cueStartChunk, channel.cueStartFrames + _backend.GetFramesPlayed(channel.stream));
+	// The handler may play or stop music and so free the channel: the bank and handler are held for the calls
+	const auto bank = channel.bank;
+	const auto onCue = channel.onCue;
+	const auto passed = CuesPassed(bank->cues, channel.cueChecked, now);
+	channel.cueChecked = now;
+	for (const auto cue : passed)
+	{
+		if (const auto logger = spdlog::get("audio"); logger != nullptr)
+		{
+			SPDLOG_LOGGER_DEBUG(logger, "Music {} passes cue {} (now at chunk {}, frame {})", bank->path, cue, now.chunk,
+			                    now.frame);
+		}
+		onCue(cue);
+	}
+}
+
+MusicCuePosition openblack::audio::CuePositionAfter(uint32_t startChunk, uint64_t framesHeard)
+{
+	return {
+	    .chunk = startChunk + static_cast<uint32_t>(framesHeard / k_CueChunkFrames),
+	    .frame = static_cast<uint32_t>(framesHeard % k_CueChunkFrames),
+	};
+}
+
+std::vector<std::string_view> openblack::audio::CuesPassed(std::span<const MusicCue> cues, MusicCuePosition from,
+                                                           MusicCuePosition to)
+{
+	std::vector<std::string_view> passed;
+	for (const auto& cue : cues)
+	{
+		const auto at = MusicCuePosition {.chunk = cue.chunk, .frame = cue.frame};
+		if (at > from && at <= to)
+		{
+			passed.emplace_back(cue.text);
+		}
+	}
+	return passed;
 }
 
 // The current channel rises to its target, at once unless it fades in. Every other channel, and the current one

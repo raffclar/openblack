@@ -465,6 +465,7 @@ private:
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();
+	void ProcessTurnCheering();
 	/// Where a point of the world is on the screen, in whole pixels, when it is on it
 	[[nodiscard]] std::optional<glm::vec2> OnScreen(glm::vec3 point) const;
 	/// The floating numbers move on by some seconds

@@ -462,28 +462,57 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_FALSE(WantsToFight(0.7f, 1.0f, 50.0f, 1.0f, 30.0f));
 }
 
-TEST(CreatureFightHud, LayoutAndColours)
+TEST(CreatureFightHud, AtTheDefaultScreenThePanelIsFlushInTheCorner)
 {
-	const auto layout = creature_fight_hud::Compute({1400, 1050});
-	EXPECT_NEAR(layout.box.max.x - layout.box.min.x, 660.0f, 1e-3f);
-	EXPECT_NEAR(layout.box.max.y - layout.box.min.y, 135.0f, 1e-3f);
-	// A wider screen as tall: the box keeps its 4:3 size in the corner
-	const auto wide = creature_fight_hud::Compute({2800, 1050});
-	EXPECT_NEAR(wide.box.max.x - wide.box.min.x, 660.0f, 1e-3f);
-	EXPECT_EQ(wide.box.min, layout.box.min);
-	for (const auto& row : layout.rows)
-	{
-		EXPECT_GT(row.health.max.y - row.health.min.y, row.stamina.max.y - row.stamina.min.y);
-		EXPECT_LE(row.stamina.max.y, layout.box.max.y);
-		EXPECT_GE(row.name.x, layout.box.min.x);
-	}
-	EXPECT_LT(layout.rows[0].stamina.max.y, layout.rows[1].name.y);
-	const creature_fight_hud::Rect bar {.min = {10.0f, 0.0f}, .max = {110.0f, 5.0f}};
-	EXPECT_FLOAT_EQ(creature_fight_hud::Filled(bar, 0.25f).max.x, 35.0f);
-	EXPECT_FLOAT_EQ(creature_fight_hud::Filled(bar, 2.0f).max.x, 110.0f);
-	EXPECT_EQ(creature_fight_hud::BarColour(1.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
-	EXPECT_EQ(creature_fight_hud::BarColour(0.5f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
-	EXPECT_EQ(creature_fight_hud::BarColour(0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+	const auto layout = creature_fight_hud::Compute({800, 600});
+	EXPECT_EQ(layout.unit, 8);
+	EXPECT_EQ(layout.box.min, glm::vec2(0.0f, 0.0f));
+	EXPECT_EQ(layout.box.max, glm::vec2(264.0f, 72.0f));
+	EXPECT_FLOAT_EQ(layout.textSize, 24.0f);
+	EXPECT_FLOAT_EQ(layout.nameWidth, 240.0f);
+	// Health over the lower stamina bar, the name to their right
+	EXPECT_EQ(layout.rows[0].health.min, glm::vec2(8.0f, 8.0f));
+	EXPECT_EQ(layout.rows[0].health.max, glm::vec2(208.0f, 24.0f));
+	EXPECT_EQ(layout.rows[0].stamina.min, glm::vec2(8.0f, 20.0f));
+	EXPECT_EQ(layout.rows[0].stamina.max, glm::vec2(208.0f, 32.0f));
+	EXPECT_EQ(layout.rows[0].name, glm::vec2(216.0f, 8.0f));
+	EXPECT_EQ(layout.rows[1].health.min, glm::vec2(8.0f, 36.0f));
+	EXPECT_EQ(layout.rows[1].stamina.max, glm::vec2(208.0f, 60.0f));
+	EXPECT_EQ(layout.rows[1].name, glm::vec2(216.0f, 36.0f));
+}
+
+TEST(CreatureFightHud, ThePanelGrowsWithTheScreensHeightOnly)
+{
+	// A seventieth of the height in whole pixels, the same on a 4:3 screen and a wide one as tall
+	const auto layout = creature_fight_hud::Compute({1440, 1080});
+	const auto wide = creature_fight_hud::Compute({3440, 1080});
+	EXPECT_EQ(layout.unit, 15);
+	EXPECT_EQ(layout.box.max, glm::vec2(495.0f, 135.0f));
+	EXPECT_EQ(wide.box.max, layout.box.max);
+	// Three and a half units between the rows, cut to whole pixels; one and a half down to the stamina bar
+	EXPECT_FLOAT_EQ(layout.rows[1].health.min.y, 67.0f);
+	EXPECT_FLOAT_EQ(layout.rows[0].stamina.min.y, 15.0f + 22.0f);
+}
+
+TEST(CreatureFightHud, BarColours)
+{
+	EXPECT_EQ(creature_fight_hud::HealthColour(0.0f), glm::u8vec3(255, 0, 0));
+	EXPECT_EQ(creature_fight_hud::HealthColour(0.25f), glm::u8vec3(255, 127, 0));
+	EXPECT_EQ(creature_fight_hud::HealthColour(0.5f), glm::u8vec3(255, 255, 0));
+	EXPECT_EQ(creature_fight_hud::HealthColour(0.75f), glm::u8vec3(127, 255, 0));
+	EXPECT_EQ(creature_fight_hud::HealthColour(1.0f), glm::u8vec3(0, 255, 0));
+	EXPECT_EQ(creature_fight_hud::HealthColour(2.0f), glm::u8vec3(0, 255, 0));
+	EXPECT_EQ(creature_fight_hud::StaminaColour(0.0f), glm::u8vec3(32, 128, 255));
+	EXPECT_EQ(creature_fight_hud::StaminaColour(1.0f), glm::u8vec3(127, 128, 255));
+	EXPECT_EQ(creature_fight_hud::StaminaColour(0.5f), glm::u8vec3(79, 128, 255));
+}
+
+TEST(CreatureFightHud, ALongNameIsCutToFit)
+{
+	const auto tenEach = [](std::u16string_view text) { return 10.0f * static_cast<float>(text.size()); };
+	EXPECT_EQ(creature_fight_hud::FitName(u"Bartholomew", 50.0f, tenEach), u"Barth");
+	EXPECT_EQ(creature_fight_hud::FitName(u"Rex", 50.0f, tenEach), u"Rex");
+	EXPECT_EQ(creature_fight_hud::FitName(u"", 50.0f, tenEach), u"");
 	EXPECT_EQ(creature_fight_hud::SpeciesName(CreatureType::Tiger), u"Tiger");
 	EXPECT_EQ(creature_fight_hud::SpeciesName(CreatureType::Unknown), u"Creature");
 }

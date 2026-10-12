@@ -14,10 +14,27 @@
 #include <algorithm>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_access.hpp>
 #include <glm/vec4.hpp>
 
 namespace openblack::screen_pick
 {
+
+View FourByThreeMiddle(View view)
+{
+	const float middleWidth = view.resolution.y * 4.0f / 3.0f;
+	if (!(middleWidth < view.resolution.x))
+	{
+		return view;
+	}
+	// The middle's edges are where the clip x reaches its w: across is stretched by the screen's width over the middle's
+	const float stretch = view.resolution.x / middleWidth;
+	view.worldToClip = glm::row(view.worldToClip, 0, glm::row(view.worldToClip, 0) * stretch);
+	view.xScale *= stretch;
+	view.cursor.x = (view.cursor.x - (view.resolution.x - middleWidth) * 0.5f);
+	view.resolution.x = middleWidth;
+	return view;
+}
 namespace
 {
 // The view's sides a corner is beyond, as bits: in front of the near plane, past the right, left, top and bottom edges

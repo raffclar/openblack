@@ -15,6 +15,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "ECS/ScriptWeatherRules.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 
 #ifndef LOCATOR_IMPLEMENTATIONS
@@ -61,6 +62,8 @@ public:
 	void RemoveMiracleStorm(entt::entity storm) override;
 	entt::entity CreateWeatherThing(const ScriptStorm& storm) override;
 	bool ChangeWeatherThing(entt::entity thing, const std::function<void(components::Storm&)>& change) override;
+	bool MoveWeatherThing(entt::entity thing, glm::vec3 destination) override;
+	bool SetWeatherThingSpeed(entt::entity thing, float speed) override;
 	bool SetWeatherThingAffectedByWind(entt::entity thing, bool affected) override;
 
 	void Update(uint32_t turn) override;
@@ -84,6 +87,8 @@ private:
 
 	void UpdateStorms();
 	void ProcessWeatherThings();
+	/// The wind that blows a weather thing's storm where it is: the air's and the climates'
+	[[nodiscard]] script_weather::Wind DriftWindAt(const glm::vec3& position);
 	void ProcessClimate(entt::entity entity, bool newDay);
 	void ProcessTemperature(components::Climate& climate) const;
 	void ProcessRain(components::Climate& climate);

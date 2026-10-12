@@ -53,6 +53,7 @@
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -645,7 +646,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 	              }));
 	provider->Add(Query("ocean", "The sea's textures"),
 	              Serve<Locator::oceanSystem>("the sea", [](const OceanInterface& ocean, const QueryContext& /*c*/) {
-		              return Json {{"diffuse_texture", ocean.GetDiffuseTexture()}, {"alpha_texture", ocean.GetAlphaTexture()}};
+		              return Json {{"texture", ocean.GetTexture()}};
 	              }));
 	provider->Add(Query("weather", "The climate: whether it runs, its storms and the season"),
 	              Serve<Locator::weatherSystem>(
@@ -928,7 +929,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              return QueryResult::Value(std::move(result));
 	              }));
 	provider->Add(Query("animal",
-	                    "An animal: its kind, state, clip, flock and town, its kind's radius, where it moves to, whether "
+	                    "An animal: its kind, state (and the game's number of the state it is in for itself), clip, flock "
+	                    "and town, its kind's radius, where it moves to, whether "
 	                    "a creature fears it, and a grazer's needs",
 	                    {IdParameter("The animal's entity id")}),
 	              Serve<Locator::animalSystem>(
@@ -943,6 +945,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  Json result = {{"id", ToId(*entity)},
 		                                 {"kind", static_cast<int>(animal.type)},
 		                                 {"state", static_cast<int>(animal.state)},
+		                                 {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
 		                                 {"turns_in_state", animal.turnsInState},
 		                                 {"clip", static_cast<int>(animal.animation)},
 		                                 {"speed", animal.move.speed},
@@ -2091,8 +2094,43 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              if (Locator::creatureCaveSystem::has_value())
 		              {
 			              const auto& cave = Locator::creatureCaveSystem::value();
-			              result["cave"] = {
-			                  {"open", cave.IsOpen()}, {"in_temple", cave.InTemple()}, {"creature", Id(cave.GetCreature())}};
+			              result["cave"] = {{"open", cave.IsOpen()},
+			                                {"in_temple", cave.InTemple()},
+			                                {"creature", Id(cave.GetCreature())},
+			                                {"creature_shown", cave.IsCreatureShown()},
+			                                {"copy", Id(cave.GetCaveCreature())}};
+			              // The copy of the creature by the cave's fire, and what it is doing
+			              const auto& registry = Locator::entitiesRegistry::value();
+			              if (const auto copy = cave.GetCaveCreature(); copy.has_value() && registry.Valid(*copy))
+			              {
+				              const auto* self = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
+				              const auto* state = registry.TryGet<const ecs::components::CaveCreature>(*copy);
+				              const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
+				              const auto* animation = registry.TryGet<const ecs::components::CreatureAnimation>(*copy);
+				              if (self != nullptr && state != nullptr && transform != nullptr && animation != nullptr)
+				              {
+					              const auto& s = state->state;
+					              result["cave"]["copy_state"] = {
+					                  {"size", self->size},
+					                  {"position", Point(transform->position)},
+					                  {"heading", s.heading},
+					                  {"rest", s.rest == cave_creature::Rest::Sleep ? "sleep" : "sit"},
+					                  {"turning", s.turn.has_value()},
+					                  {"wanted_heading", s.wantedHeading.has_value() ? Json(*s.wantedHeading) : Json(nullptr)},
+					                  {"zoomed", s.zoomed},
+					                  {"body_animation", creature_layers::IsPlaying(animation->body)
+					                                         ? Json(creature_layers::CurrentAnimation(animation->body))
+					                                         : Json(nullptr)},
+					                  {"body_time_ms", animation->body.timeMs},
+					                  {"mirrored", animation->body.mirrored},
+					                  {"gesture", animation->gesture.animation.has_value() ? Json(*animation->gesture.animation)
+					                                                                       : Json(nullptr)},
+					                  {"looks_at", animation->lookAt.has_value() ? Point(*animation->lookAt) : Json(nullptr)},
+					                  {"light", Point(state->light)},
+					                  {"fidgets", s.fidgets},
+					              };
+				              }
+			              }
 		              }
 		              if (Locator::creatureHandSystem::has_value())
 		              {
@@ -2608,7 +2646,7 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	        }));
 	provider->Add(
 	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "
-	                    "its time to show, the point it points at and its scroll"),
+	                    "its time to show, the point it points at, its scroll and whether the hand is on it or grips it"),
 	    Serve<Locator::tipBubbleSystem>(
 	        "the tip bubble", [](const ecs::systems::TipBubbleSystemInterface& bubble, const QueryContext& /*c*/) -> Json {
 		        const auto& scroll = bubble.GetScroll();
@@ -2623,7 +2661,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		            {"content_height", scroll.contentHeight},
 		            {"line_height", scroll.lineHeight},
 		            {"more_above", scroll.moreAbove},
-		            {"more_below", scroll.moreBelow}};
+		            {"more_below", scroll.moreBelow},
+		            {"under_hand", bubble.IsUnderHand()},
+		            {"gripped", bubble.IsGripped()}};
 	        }));
 	provider->Add(Query("hand_demo",
 	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "

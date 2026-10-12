@@ -685,8 +685,10 @@ public:
 		return {};
 	}
 	[[nodiscard]] std::string Current() const override { return current; }
+	[[nodiscard]] bool IsSkirmish() const override { return skirmish; }
 
 	std::string current;
+	bool skirmish {false};
 	std::optional<LoadHow> lastHow;
 	std::vector<std::string> newGames;
 };
@@ -930,6 +932,17 @@ TEST(InspectorLevels, LoadByNameFreshOrAsTheStoryChangesLand)
 	EXPECT_FALSE(Refused(inspector, R"({"query": "level.load", "params": {"name": "Broken"}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "level.load", "params": {"name": "Nope"}})").empty());
 	EXPECT_EQ(Ask(inspector, R"({"query": "level.testbed"})")["land"], "testbed");
+}
+
+// The land loaded now says whether it is played as a skirmish, in which losing a temple doesn't end the game
+TEST(InspectorLevels, CurrentSaysWhetherTheLandIsASkirmish)
+{
+	FakeLevels levels;
+	Inspector inspector;
+	inspector.Add(MakeLevelProvider(levels));
+	EXPECT_EQ(Ask(inspector, R"({"query": "level.current"})")["skirmish"], false);
+	levels.skirmish = true;
+	EXPECT_EQ(Ask(inspector, R"({"query": "level.current"})")["skirmish"], true);
 }
 
 // A new game on the first land, the start-of-game question answered at once or left to the game

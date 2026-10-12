@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -54,6 +55,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
+#include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
@@ -65,6 +67,7 @@
 #include "Audio/GameMusic.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/HelpSpeech.h"
+#include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -76,6 +79,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureHandRules.h"
+#include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FrameStatsLog.h"
 #include "Debug/TestbedDispenserGrid.h"
@@ -220,12 +224,14 @@
 #include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
+#include "Graphics/TexelDepth.h"
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
+#include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -541,6 +547,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		magicTookPress = magic.TapAction();
 	}
+	// Letting go of the Action button lets go of the tip bubble
+	if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::tipBubbleSystem::value().LetGo();
+	}
 	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
 	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
 	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
@@ -578,6 +590,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		if (!_actionPressTaken && handHoldsThing)
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		}
+		// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && Locator::tipBubbleSystem::has_value() &&
+		    Locator::tipBubbleSystem::value().IsUnderHand())
+		{
+			Locator::tipBubbleSystem::value().Grip();
+			_actionPressTaken = true;
 		}
 		// With an empty hand, a one-shot bubble under it takes the press before anything behind it
 		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
@@ -1073,6 +1092,9 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
+	// The shown tooltip's display time runs down only while the player may turn the camera
+	const bool displayTimeRuns = !Locator::cameraHelpSystem::has_value() ||
+	                             (Locator::cameraHelpSystem::value().Get().features & camera_help::feature::k_Rotate) != 0;
 	// As the player's own totem moves on the screen, the hand shows the share it is held at, over anything else
 	if (const auto tip = Locator::villageTotemSystem::has_value()
 	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(PlayerNames::PLAYER_ONE)
@@ -1081,6 +1103,11 @@ void Game::ProcessHandToolTipTurn()
 	    OnScreen(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem).position).has_value())
 	{
 		toolTips.Force(ecs::village_totem::k_ShareToolTip, tip->percent);
+	}
+	// Let go of the creature having told it next to nothing, the hand offers to focus on it, over anything else
+	if (Locator::creatureHandSystem::value().TakeFocusTip())
+	{
+		toolTips.Force(creature_leash_orders::k_FocusCreatureTip, 1.0f);
 	}
 	// As the hand takes food or wood from a pile, it shows the amount it holds, over anything else
 	if (Locator::handGrabSystem::has_value())
@@ -1098,7 +1125,7 @@ void Game::ProcessHandToolTipTurn()
 		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
 		{
 			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
-			toolTips.ProcessTurn();
+			toolTips.ProcessTurn(displayTimeRuns);
 			return;
 		}
 	}
@@ -1153,7 +1180,27 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
 		}
 	}
-	toolTips.ProcessTurn();
+	toolTips.ProcessTurn(displayTimeRuns);
+}
+
+void Game::ProcessTurnCheering()
+{
+	// While the turning lesson asks for it, the advisors cheer the player's turning of the camera on
+	if (!Locator::cameraHelpSystem::has_value() || !Locator::gameRandom::has_value() || !Locator::chlapi::has_value())
+	{
+		return;
+	}
+	auto& help = Locator::cameraHelpSystem::value().Get();
+	auto& random = Locator::gameRandom::value();
+	const help::turn_cheer::Random draws {
+	    .upTo = [&random](float x) { return random.LocalFloatRand(x); },
+	    .below = [&random](int32_t n) { return random.LocalRand(n); },
+	};
+	if (const auto line = help::turn_cheer::ProcessTurn(help.turnCheering, help.turnSpeed, GetTurn(), draws))
+	{
+		Locator::chlapi::value().PlayBankSoundEffect(static_cast<int32_t>(audio::ScriptSoundBank::HelpSprites), *line,
+		                                             std::nullopt);
+	}
 }
 
 bool Game::GameLogicLoop() noexcept
@@ -1197,10 +1244,17 @@ bool Game::GameLogicLoop() noexcept
 	// The influence asked during the turn is measured from where the hands were at it
 	Locator::influenceSystem::value().SetInGameTurn(true);
 	ProcessHandToolTipTurn();
+	ProcessTurnCheering();
 
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();
 
+	// A script's two-thing camera lets go of a thing that has gone
+	if (auto* scriptCamera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	    scriptCamera != nullptr)
+	{
+		scriptCamera->LetGoOfGoneThings();
+	}
 	// The players' temples take their turn first: one whose heart lost all its life moves on through its destruction
 	if (Locator::templeDestructionSystem::has_value())
 	{
@@ -1694,7 +1748,7 @@ bool Game::Update() noexcept
 	if (Locator::creatureCaveSystem::has_value())
 	{
 		auto creatureCave = profiler.BeginScoped(Profiler::Stage::CreatureCaveUpdate);
-		Locator::creatureCaveSystem::value().Update();
+		Locator::creatureCaveSystem::value().Update(std::chrono::duration<float, std::milli>(deltaTime));
 	}
 	if (Locator::tattooEditorSystem::has_value())
 	{
@@ -1713,6 +1767,11 @@ bool Game::Update() noexcept
 			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
 		}
 		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
+	}
+	// The lens glides on the game's time, and holds while the player is in the temple, whose own lens it has
+	if (!(Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		camera.UpdateLens(std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
 	}
 	if (demoCamera.has_value())
 	{
@@ -1767,6 +1826,8 @@ bool Game::Update() noexcept
 	}
 	// The clouds drift with the wind, then every mist and cloud animates
 	Locator::cloudSystem::value().Update(gameTime);
+	// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
+	Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), camera.GetOrigin());
 	// The static the fizzing creatures are drawn through slides across them
@@ -2175,7 +2236,7 @@ bool Game::Update() noexcept
 						if (hands.GetCreature().has_value())
 						{
 							_handOnCreature = hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
-							                               HandStepSeconds());
+							                               static_cast<float>(screenSize.x), HandStepSeconds());
 						}
 						if (_handOnCreature.has_value())
 						{
@@ -2361,9 +2422,18 @@ bool Game::Update() noexcept
 			// On a creature, it strokes it or shows its slap
 			if (_handOnCreature.has_value())
 			{
-				cycle = _handOnCreature->slapping ? HandCycle::Slap
-				        : _handOnCreature->onBody ? HandCycle::Stroke
-				                                  : HandCycle::Wiggle;
+				switch (_handOnCreature->cycle)
+				{
+				case creature_feedback::TouchCycle::Wiggle:
+					cycle = HandCycle::Wiggle;
+					break;
+				case creature_feedback::TouchCycle::Tickle:
+					cycle = HandCycle::Tickle;
+					break;
+				case creature_feedback::TouchCycle::Slap:
+					cycle = HandCycle::Slap;
+					break;
+				}
 			}
 			// Pulling a thing free, the hand takes the pose the thing is held with
 			std::optional<ecs::systems::HandGrabSystemInterface::PullPose> pull;
@@ -2424,7 +2494,9 @@ bool Game::Update() noexcept
 			{
 				const auto distance = glm::distance(camera.GetOrigin(), handTransform->position);
 				// The game mirrors the mesh's left hand along its x axis to make a right hand
-				const auto scale = _handAnimation->ScaleAtDistance(distance);
+				// Held to a creature, it is drawn larger with the creature's size
+				const auto scale =
+				    _handAnimation->ScaleAtDistance(distance) * (_handOnCreature.has_value() ? _handOnCreature->scale : 1.0f);
 				handTransform->scale = glm::vec3(config.rightHandedHand ? -scale : scale, scale, scale);
 				// Showing it turns the camera as it drags the land, the hand is drawn a third of its height higher, the
 				// place it holds staying where it is
@@ -2745,7 +2817,9 @@ bool Game::Initialize() noexcept
 		if (const auto sheet = fileSystem.GetPath<filesystem::Path::Data>() / fmt::format("{}.raw", name);
 		    fileSystem.Exists(sheet))
 		{
-			textureManager.Load(fmt::format("raw/{}", name), resources::Texture2DLoader::FromDiskTag {}, sheet);
+			// Loaded with its alpha by the game, so both keep four bits a channel
+			textureManager.Load(fmt::format("raw/{}", name), resources::Texture2DLoader::FromDiskTag {}, sheet,
+			                    graphics::texel_depth::Depth::FourBits);
 		}
 	}
 
@@ -3002,6 +3076,19 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("one-off meshes");
+	// The info tables come before the game's interface, whose tooltips take their priorities and times from them
+	{
+		InfoFile infoFile;
+		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
+		if (!result)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
+			return false;
+		}
+		Locator::infoConstants::reset(result.release());
+	}
+
+	_startupTimer->Step("info tables");
 	// The game's menu, which greets the player by their profile's name and shows their creature's name and their
 	// symbol; before a first start's player has a profile, by the name they log in with
 	{
@@ -3229,18 +3316,6 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("sound and music banks");
-	{
-		InfoFile infoFile;
-		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
-		if (!result)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
-			return false;
-		}
-		Locator::infoConstants::reset(result.release());
-	}
-
-	_startupTimer->Step("info tables");
 	// The temple's leashes are drawn with the leash texture and its alpha
 	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
 	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
@@ -3281,24 +3356,55 @@ bool Game::Initialize() noexcept
 			}
 		}
 	}
-	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
+	// The sea's texture, its colours and alpha together
+	try
+	{
+		textureManager.Load(sea_texture::k_Id.value(), resources::Texture2DLoader::FromDiskWithAlphaTag {},
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_ColourFile,
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side);
+	}
+	catch (std::runtime_error& err)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+	}
+	// Each texture is kept at the depth the game keeps it: colours with an alpha file and the alphas four bits a channel,
+	// colours without one five bits a channel, and the small pictures the game reads as numbers as they are
+	std::vector<std::filesystem::path> rawFiles;
+	std::unordered_set<std::string> rawStems;
+	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&rawFiles, &rawStems](const std::filesystem::path& f) {
 		// The game ships a grey ice map it never loads, cut short of a whole texture
 		constexpr std::string_view k_UnusedTexture = "s_iceenvmapgrey.raw";
 		if (string_utils::LowerCase(f.extension().string()) == ".raw" &&
 		    string_utils::LowerCase(f.filename().string()) != k_UnusedTexture)
 		{
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
-			try
-			{
-				RegisterFile(textureManager, fmt::format("raw/{}", f.stem().string()), f,
-				             resources::Texture2DLoader::FromDiskTag {}, f);
-			}
-			catch (std::runtime_error& err)
-			{
-				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-			}
+			rawFiles.push_back(f);
+			rawStems.insert(string_utils::LowerCase(f.stem().string()));
 		}
 	});
+	for (const auto& f : rawFiles)
+	{
+		// The people's shadow is a grey picture the game draws as an alpha
+		constexpr std::string_view k_GreyAlpha = "human_shadow";
+		const auto stem = string_utils::LowerCase(f.stem().string());
+		const bool isAlpha = stem == k_GreyAlpha || (stem.ends_with('a') && rawStems.contains(stem.substr(0, stem.size() - 1)));
+		const auto bytes = GameFileBytes(f);
+		if (!bytes)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't find {}", f.generic_string());
+			continue;
+		}
+		const auto kind = graphics::texel_depth::Classify(*bytes, rawStems.contains(stem + "a"), isAlpha);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
+		try
+		{
+			textureManager.RegisterLoad(fmt::format("raw/{}", f.stem().string()), *bytes,
+			                            resources::Texture2DLoader::FromDiskTag {}, f, graphics::texel_depth::DepthOf(kind));
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	}
 
 	_startupTimer->Step("raw textures");
 	// The texture every creature's hair is drawn with, and its alpha beside it
@@ -3312,7 +3418,8 @@ bool Game::Initialize() noexcept
 		}
 		try
 		{
-			textureManager.Load(id, resources::Texture2DLoader::FromDiskTag {}, path);
+			// The game loads the hair with its alpha, so both keep four bits a channel
+			textureManager.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, graphics::texel_depth::Depth::FourBits);
 		}
 		catch (std::runtime_error& err)
 		{
@@ -3613,10 +3720,12 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	RenderLoadingFrame();
 
 	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
+	// The script is matched by where its file is found, however its path was given
+	const auto scriptFile = Level::ResolveScriptPath(path);
 	bool skirmish = false;
-	Locator::resources::value().GetLevels().Each([&path, &skirmish](entt::id_type /*id*/, const Level& level) {
+	Locator::resources::value().GetLevels().Each([&scriptFile, &skirmish](entt::id_type /*id*/, const Level& level) {
 		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
-		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
+		                        Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
 	});
 	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
 	_landPath = path;

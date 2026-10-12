@@ -241,6 +241,8 @@ std::optional<CameraState> GameCamera::State() const
 	    .rotation = glm::degrees(camera.GetRotation()),
 	    .forward = camera.GetForward(),
 	    .horizontalFieldOfView = camera.GetHorizontalFieldOfView(),
+	    .verticalFieldOfView = camera.GetVerticalFieldOfView(),
+	    .lens = camera.GetLens(),
 	    .nearClip = camera.GetNearClip(),
 	    .model = std::string(ModelName(camera.GetModel())),
 	    .heldByPath = PathHoldsCamera(),
@@ -850,14 +852,20 @@ std::string GameLevels::Current() const
 	std::string name = path.stem().string();
 	if (Locator::resources::has_value())
 	{
-		Locator::resources::value().GetLevels().Each([&name, &path](entt::id_type /*id*/, const Level& level) {
-			if (level.GetScriptPath().lexically_normal() == path.lexically_normal())
+		const auto script = Level::ResolveScriptPath(path);
+		Locator::resources::value().GetLevels().Each([&name, &script](entt::id_type /*id*/, const Level& level) {
+			if (Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), script))
 			{
 				name = level.GetName();
 			}
 		});
 	}
 	return name;
+}
+
+bool GameLevels::IsSkirmish() const
+{
+	return Locator::entitiesRegistry::has_value() && Locator::entitiesRegistry::value().Context().skirmish;
 }
 
 // Pictures of the screen

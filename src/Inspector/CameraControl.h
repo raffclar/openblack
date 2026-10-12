@@ -32,7 +32,10 @@ struct CameraState
 	/// Its angles in degrees
 	glm::vec3 rotation {0.0f};
 	glm::vec3 forward {0.0f};
+	/// The views across and up and down the screen, and the lens (the view across a 4:3 screen), in radians
 	float horizontalFieldOfView {0.0f};
+	float verticalFieldOfView {0.0f};
+	float lens {0.0f};
 	float nearClip {0.0f};
 	/// What moves the camera: the world's camera, Creature Mode's, a fight's, the temple's, the editor's
 	std::string model;

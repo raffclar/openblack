@@ -216,6 +216,9 @@ private:
 	void DrawCreaturePanel(glm::u16vec2 resolution);
 	/// The fight's panel, at the top left of the screen
 	void DrawFightPanel(glm::u16vec2 resolution);
+	/// A bar of the creature's panels in screen pixels: its framed box, its fill from its left (or its middle, with a line
+	/// there) brightening towards where it ends, and shadows inside its frame
+	void DrawStatBar(const creature_panel::Rect& bar, float fill, glm::u8vec3 colour, bool fromMiddle);
 	/// The full-screen video playing, between the interface and the scripts' fade. Returns how wide the black bars at
 	/// its sides are, on a screen wider than its 16:9 picture (none otherwise, and none without a video)
 	int DrawVideo(glm::u16vec2 resolution);
