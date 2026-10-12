@@ -18,6 +18,8 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
+#include "3D/LandBlock.h"
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -249,6 +251,19 @@ std::vector<uint32_t> MapProduction::CellsFor(entt::entity entity, const Kind& k
 
 void MapProduction::File(entt::entity entity, const Kind& kind) const
 {
+	// The land's blocks are known before anything goes on them
+	if (!_lists.Blocks().LandBlocksKnown() && Locator::terrainSystem::has_value())
+	{
+		std::vector<glm::ivec2> blocks;
+		for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+		{
+			if (block.GetLndBlock() != nullptr)
+			{
+				blocks.push_back(block.GetBlockPosition());
+			}
+		}
+		_lists.Blocks().SetLandBlocks(blocks);
+	}
 	auto cells = CellsFor(entity, kind);
 	for (const auto cell : cells)
 	{
@@ -313,6 +328,18 @@ std::vector<entt::entity> MapProduction::GetAllInCell(glm::ivec2 cell) const
 	FileMade();
 	const auto index = _lists.IndexOf(cell);
 	return index.has_value() ? _lists.All(*index) : std::vector<entt::entity> {};
+}
+
+std::span<const entt::entity> MapProduction::GetOnBlock(glm::ivec2 block) const
+{
+	FileMade();
+	return _lists.Blocks().OnBlock(block);
+}
+
+std::span<const entt::entity> MapProduction::GetOffBlocks() const
+{
+	FileMade();
+	return _lists.Blocks().OffBlocks();
 }
 
 void MapProduction::Sync()

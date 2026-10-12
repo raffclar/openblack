@@ -57,11 +57,59 @@ enum class Placement : uint8_t
 	MobileFront,
 };
 
+/// A land block is this many cells a side
+inline constexpr int32_t k_BlockCells = 16;
+/// The land has at most this many blocks a side
+inline constexpr int32_t k_BlocksPerSide = 32;
+
+/// What stands on each of the land's blocks, in the order the game keeps it for drawing. Every time a thing goes into a
+/// cell it goes to the back of its block's list, unless it was the last to go into that block; every time it is taken
+/// out of a cell, the last of the block's list takes its place, unless it was the last taken out of that block. So a
+/// building covering several cells of a block is in its list once. Things in cells of no block the land has (open sea)
+/// go to one list of their own. A thing taken out of a block it isn't in drops the last of the block's list, as the
+/// game's does; that can't happen while things go in and come out through the cells.
+class BlockLists
+{
+public:
+	BlockLists();
+
+	/// The blocks the land has, by their column and row; until told, every block holds its own. Set before anything
+	/// goes in.
+	void SetLandBlocks(std::span<const glm::ivec2> blocks);
+	[[nodiscard]] bool LandBlocksKnown() const { return _landBlocksKnown; }
+
+	void Insert(glm::ivec2 cell, entt::entity entity);
+	void Remove(glm::ivec2 cell, entt::entity entity);
+	/// The things on a block the land has, none for one it hasn't
+	[[nodiscard]] std::span<const entt::entity> OnBlock(glm::ivec2 block) const;
+	/// The things in cells of no block the land has
+	[[nodiscard]] std::span<const entt::entity> OffBlocks() const { return _off.things; }
+	void Clear();
+
+private:
+	struct List
+	{
+		std::vector<entt::entity> things;
+		entt::entity lastIn {entt::null};
+		entt::entity lastOut {entt::null};
+	};
+	[[nodiscard]] List& ListOf(glm::ivec2 cell);
+
+	std::vector<List> _blocks;
+	std::vector<bool> _onLand;
+	bool _landBlocksKnown {false};
+	List _off;
+};
+
 /// The two lists of every cell of the map
 class CellLists
 {
 public:
 	explicit CellLists(uint32_t cellsPerSide = map_coords::k_MapCells);
+
+	/// What stands on each land block, kept as things go in and come out of the cells
+	[[nodiscard]] const BlockLists& Blocks() const { return _blocks; }
+	[[nodiscard]] BlockLists& Blocks() { return _blocks; }
 
 	/// A cell's index, x times the cells a side plus z; none off the map
 	[[nodiscard]] std::optional<uint32_t> IndexOf(glm::ivec2 cell) const;
@@ -84,8 +132,11 @@ private:
 		std::vector<entt::entity> mobile;
 	};
 
+	[[nodiscard]] glm::ivec2 CellAt(uint32_t cell) const;
+
 	uint32_t _cellsPerSide;
 	std::vector<Cell> _cells;
+	BlockLists _blocks;
 	/// The cells that have had anything in them, the only ones there is anything to clear
 	std::vector<uint32_t> _used;
 };

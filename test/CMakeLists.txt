@@ -803,3 +803,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_object_detail graphics/test_object_detail.cpp
 )
+openblack_setup_and_add_test(test_object_draw_list test_object_draw_list.cpp)
