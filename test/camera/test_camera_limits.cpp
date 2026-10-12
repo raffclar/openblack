@@ -174,3 +174,37 @@ TEST(CameraLimits, ADomesRoofPushesTheCameraOutFromItsMiddle)
 	const auto off = PushOffTheGround(land, nearby, false, origin, origin + glm::vec3(0.0f, 0.0f, 50.0f));
 	EXPECT_FALSE(off.pushed);
 }
+
+TEST(CameraLimits, WhereTheCameraGoesIsKeptWithinTheWorldsBall)
+{
+	// Inside the ball of 3500 round the middle of the map at the sea's level, or on it, it stays
+	EXPECT_FALSE(KeepInsideTheWorld({2560.0f, 3000.0f, 2560.0f}).has_value());
+	EXPECT_FALSE(KeepInsideTheWorld({2560.0f, 3500.0f, 2560.0f}).has_value());
+	// High over the middle, it is sent straight down to 3499
+	const auto high = KeepInsideTheWorld({2560.0f, 5000.0f, 2560.0f});
+	ASSERT_TRUE(high.has_value());
+	EXPECT_FLOAT_EQ(high->y, 3499.0f);
+	EXPECT_FLOAT_EQ(high->x, 2560.0f);
+	// Out over the edge of the map the ball is lower: 3000 across from the middle it allows only ~1803 up
+	const auto outward = KeepInsideTheWorld({2560.0f + 3000.0f, 2000.0f, 2560.0f});
+	ASSERT_TRUE(outward.has_value());
+	EXPECT_NEAR(glm::distance(*outward, k_WorldCentre), 3499.0f, 0.01f);
+	EXPECT_NEAR(outward->y / (outward->x - 2560.0f), 2000.0f / 3000.0f, 1e-5f);
+	// The map's corners lie outside it, even at the sea's level
+	EXPECT_TRUE(KeepInsideTheWorld({0.0f, 0.0f, 0.0f}).has_value());
+	EXPECT_FALSE(KeepInsideTheWorld({2560.0f + 3400.0f, 0.0f, 2560.0f}).has_value());
+}
+
+TEST(CameraLimits, TheEaseDoublesForEachWayTheLimitsMovedTheCamera)
+{
+	// Settled, 0.3 seconds; twice that when what it looks at was moved, twice again when the camera was too
+	EXPECT_FLOAT_EQ(EaseSeconds(5.0f, false, false), 0.3f);
+	EXPECT_FLOAT_EQ(EaseSeconds(5.0f, false, true), 0.6f);
+	EXPECT_FLOAT_EQ(EaseSeconds(5.0f, true, false), 0.6f);
+	EXPECT_FLOAT_EQ(EaseSeconds(5.0f, true, true), 1.2f);
+	// Just after a flight began it eases from 1.5 seconds, coming down to those by 1.5 seconds on
+	EXPECT_FLOAT_EQ(EaseSeconds(0.0f, false, false), 1.5f);
+	EXPECT_NEAR(EaseSeconds(0.75f, false, false), 0.9f, 1e-6f);
+	EXPECT_NEAR(EaseSeconds(0.75f, true, true), 1.35f, 1e-6f);
+	EXPECT_FLOAT_EQ(EaseSeconds(1.5f, false, false), 0.3f);
+}

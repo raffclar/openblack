@@ -26,59 +26,17 @@ using namespace openblack::creature_route;
 namespace
 {
 constexpr float k_Pi = std::numbers::pi_v<float>;
-constexpr int32_t k_LatticePerSide = static_cast<int32_t>(static_cast<float>(k_CellsPerSide) * k_CellSize / k_LatticeStep);
 /// Searching outwards for somewhere to stand: in this many directions, this much further each time
 constexpr int32_t k_SearchDirections = 16;
 constexpr float k_SearchStep = 0.5f;
-/// Checking the way between two points is clear, every this many units
-constexpr float k_ClearStep = 1.0f;
-constexpr float k_Tiny = 1e-4f;
-/// What is in the way is kept by blocks of 8 by 8 cells
-constexpr float k_BlockSize = 80.0f;
-constexpr int32_t k_BlocksPerSide = 64;
-/// A destination's ring lies inside a circle when it is this much inside its edge
-constexpr float k_RingAllowance = 0.001f;
-
-int32_t BlockKey(int32_t x, int32_t z)
-{
-	return (z * (k_BlocksPerSide + 2)) + x;
-}
-
-glm::ivec2 BlockOf(glm::vec2 point)
-{
-	return {static_cast<int32_t>(std::floor(point.x / k_BlockSize)), static_cast<int32_t>(std::floor(point.y / k_BlockSize))};
-}
-
-/// Whether the whole ring about a destination, out to a distance, lies inside a circle
-bool RingInsideCircle(const Circle& circle, glm::vec2 destination, float ringMax)
-{
-	const auto inside = circle.radius - ringMax - k_RingAllowance;
-	if (inside < 0.0f)
-	{
-		return false;
-	}
-	const auto offset = destination - circle.centre;
-	return glm::dot(offset, offset) < inside * inside;
-}
+constexpr float k_ShortestLeg = 0.001f;
 
 bool Standable(Ground ground)
 {
 	return ground == Ground::Open || ground == Ground::Water;
 }
 
-float Cross(glm::vec2 a, glm::vec2 b)
-{
-	return (a.x * b.y) - (a.y * b.x);
-}
-
-glm::vec2 Rotate(glm::vec2 v, float angle)
-{
-	const auto c = std::cos(angle);
-	const auto s = std::sin(angle);
-	return {(v.x * c) - (v.y * s), (v.x * s) + (v.y * c)};
-}
-
-float HeadingAlong(glm::vec2 from, glm::vec2 to)
+float HeadingBetween(glm::vec2 from, glm::vec2 to)
 {
 	const auto d = to - from;
 	return std::atan2(-d.x, -d.y);
@@ -236,329 +194,91 @@ float creature_route::DistanceToSegment(glm::vec2 point, glm::vec2 from, glm::ve
 	return glm::distance(point, from + (t * along));
 }
 
-Planner::Planner(Request request)
-    : _request(std::move(request))
+float creature_route::ArcLength(const Circle& circle, Way way, glm::vec2 from, glm::vec2 to)
 {
+	auto start = std::atan2(from.y - circle.centre.y, from.x - circle.centre.x);
+	auto end = std::atan2(to.y - circle.centre.y, to.x - circle.centre.x);
+	if (way == Way::Anticlockwise)
+	{
+		if (end < start)
+		{
+			end += 2.0f * k_Pi;
+		}
+		return (end - start) * circle.radius;
+	}
+	if (start < end)
+	{
+		start += 2.0f * k_Pi;
+	}
+	return (start - end) * circle.radius;
 }
 
-glm::vec2 Planner::PointOf(int64_t key) const
+float creature_route::LengthOf(const Leg& leg)
 {
-	const auto i = static_cast<int32_t>(key / k_LatticePerSide);
-	const auto j = static_cast<int32_t>(key % k_LatticePerSide);
-	return {(static_cast<float>(i) + 0.5f) * k_LatticeStep, (static_cast<float>(j) + 0.5f) * k_LatticeStep};
+	if (leg.arc && leg.round.has_value())
+	{
+		return ArcLength(*leg.round, leg.roundWay, leg.from, leg.to);
+	}
+	return glm::distance(leg.from, leg.to);
 }
 
-int64_t Planner::KeyOf(int32_t i, int32_t j) const
+namespace
 {
-	return (static_cast<int64_t>(i) * k_LatticePerSide) + j;
+/// The angles round an arc's circle where it starts and ends, the end taken round past the start the way it goes
+std::array<float, 2> ArcAngles(const Leg& leg)
+{
+	const auto& circle = *leg.round;
+	auto start = std::atan2(leg.from.y - circle.centre.y, leg.from.x - circle.centre.x);
+	auto end = std::atan2(leg.to.y - circle.centre.y, leg.to.x - circle.centre.x);
+	if (leg.roundWay == Way::Anticlockwise)
+	{
+		if (end < start)
+		{
+			end += 2.0f * k_Pi;
+		}
+	}
+	else if (start < end)
+	{
+		start += 2.0f * k_Pi;
+	}
+	return {start, end};
 }
 
-void Planner::Add(Circle circle)
+float ArcAngleAt(const Leg& leg, float distance)
 {
-	// A circle the creature stands in reaches just to it, and one about a point right under it is no use
-	const auto fromCreature = glm::distance(_request.start, circle.centre);
-	if (fromCreature < k_TooCloseToCentre)
+	const auto length = LengthOf(leg);
+	const auto [start, end] = ArcAngles(leg);
+	return length > 0.0f ? start + ((distance / length) * (end - start)) : start;
+}
+} // namespace
+
+glm::vec2 creature_route::PointAlong(const Leg& leg, float distance)
+{
+	if (leg.arc && leg.round.has_value())
 	{
-		return;
+		const auto angle = ArcAngleAt(leg, distance);
+		return leg.round->centre + (leg.round->radius * glm::vec2(std::cos(angle), std::sin(angle)));
 	}
-	circle.radius = std::min(circle.radius, fromCreature);
-	if (RingInsideCircle(circle, _request.destination, _request.maxDistance))
-	{
-		_unreachable = true;
-	}
-	const auto index = static_cast<uint32_t>(_circles.size());
-	_circles.push_back(circle);
-	const auto low = BlockOf(circle.centre - glm::vec2(circle.radius));
-	const auto high = BlockOf(circle.centre + glm::vec2(circle.radius));
-	for (auto z = std::max(low.y, -1); z <= std::min(high.y, k_BlocksPerSide); ++z)
-	{
-		for (auto x = std::max(low.x, -1); x <= std::min(high.x, k_BlocksPerSide); ++x)
-		{
-			_blocks[BlockKey(x + 1, z + 1)].push_back(index);
-		}
-	}
+	const auto length = glm::distance(leg.from, leg.to);
+	// A straight leg too short to measure keeps the creature at its start
+	return length > k_ShortestLeg ? leg.from + ((leg.to - leg.from) * (distance / length)) : leg.from;
 }
 
-void Planner::Gather(glm::vec2 point)
+float creature_route::HeadingAlong(const Leg& leg, float distance)
 {
-	if (!_request.cellObstacles)
+	if (leg.arc && leg.round.has_value())
 	{
-		return;
+		const auto angle = ArcAngleAt(leg, distance);
+		const auto tangent = leg.roundWay == Way::Anticlockwise ? glm::vec2(-std::sin(angle), std::cos(angle))
+		                                                        : glm::vec2(std::sin(angle), -std::cos(angle));
+		return std::atan2(-tangent.x, -tangent.y);
 	}
-	const auto cell = glm::ivec2(static_cast<int32_t>(std::floor(point.x / k_CellSize)),
-	                             static_cast<int32_t>(std::floor(point.y / k_CellSize)));
-	if (cell.x < 0 || cell.y < 0 || cell.x >= k_CellsPerSide || cell.y >= k_CellsPerSide ||
-	    !_cellsGathered.insert((cell.y * k_CellsPerSide) + cell.x).second)
-	{
-		return;
-	}
-	std::vector<Circle> found;
-	_request.cellObstacles(cell, found);
-	for (const auto& circle : found)
-	{
-		Add(circle);
-	}
-}
-
-bool Planner::InsideAnyNear(glm::vec2 point) const
-{
-	const auto block = BlockOf(point);
-	const auto found = _blocks.find(BlockKey(block.x + 1, block.y + 1));
-	if (found == _blocks.end())
-	{
-		return false;
-	}
-	return std::ranges::any_of(found->second, [this, point](uint32_t index) {
-		const auto& circle = _circles[index];
-		return glm::distance(point, circle.centre) < circle.radius;
-	});
-}
-
-bool Planner::Passable(const WalkableLand& land, glm::vec2 point)
-{
-	if (!land.IsValid(point, k_Clearance))
-	{
-		return false;
-	}
-	Gather(point);
-	return !InsideAnyNear(point);
-}
-
-bool Planner::IsGoal(glm::vec2 point) const
-{
-	const auto distance = glm::distance(point, _request.destination);
-	return distance <= _request.maxDistance + k_LatticeStep && distance >= _request.minDistance - k_LatticeStep;
-}
-
-float Planner::Estimate(glm::vec2 point) const
-{
-	return std::max(glm::distance(point, _request.destination) - _request.maxDistance, 0.0f);
-}
-
-bool Planner::Clear(const WalkableLand& land, glm::vec2 from, glm::vec2 to)
-{
-	const auto length = glm::distance(from, to);
-	const auto samples = std::max(static_cast<int32_t>(std::ceil(length / k_ClearStep)), 1);
-	std::vector<int32_t> blocks;
-	for (int32_t k = 0; k <= samples; ++k)
-	{
-		const auto point = from + ((to - from) * (static_cast<float>(k) / static_cast<float>(samples)));
-		if (k > 0 && !land.IsValid(point, k_Clearance))
-		{
-			return false;
-		}
-		Gather(point);
-		const auto block = BlockOf(point);
-		const auto key = BlockKey(block.x + 1, block.y + 1);
-		if (std::ranges::find(blocks, key) == blocks.end())
-		{
-			blocks.push_back(key);
-		}
-	}
-	return std::ranges::none_of(blocks, [this, from, to](int32_t key) {
-		const auto found = _blocks.find(key);
-		return found != _blocks.end() && std::ranges::any_of(found->second, [this, from, to](uint32_t index) {
-			       const auto& circle = _circles[index];
-			       return DistanceToSegment(circle.centre, from, to) < circle.radius;
-		       });
-	});
-}
-
-glm::vec2 Planner::ArrivalFrom(glm::vec2 from) const
-{
-	const auto offset = from - _request.destination;
-	const auto distance = glm::length(offset);
-	if (distance <= k_Tiny || _request.ontoDestination)
-	{
-		return _request.destination;
-	}
-	return _request.destination + (offset / distance * std::clamp(distance, _request.minDistance, _request.maxDistance));
-}
-
-void Planner::Finish(const WalkableLand& land, int64_t goal)
-{
-	std::vector<glm::vec2> points;
-	for (auto key = goal; key >= 0; key = _nodes.at(key).parent)
-	{
-		points.push_back(PointOf(key));
-	}
-	std::ranges::reverse(points);
-	points.insert(points.begin(), _request.start);
-	points.push_back(ArrivalFrom(points.back()));
-	const auto straight = Straighten(points, [this, &land](glm::vec2 from, glm::vec2 to) { return Clear(land, from, to); });
-	_route = RoundCorners(straight, _request.cornerRadius, k_Pi / 18.0f);
-	_status = Status::Found;
-	_nodes.clear();
-	_open = {};
-}
-
-Planner::Status Planner::Step(const WalkableLand& land, size_t budget)
-{
-	if (_status != Status::Planning)
-	{
-		return _status;
-	}
-	if (!_started)
-	{
-		_started = true;
-		for (const auto& circle : _request.obstacles)
-		{
-			Add(circle);
-		}
-		Gather(_request.start);
-		Gather(_request.destination);
-		if (_unreachable)
-		{
-			_status = Status::Failed;
-			return _status;
-		}
-		const auto arrival = ArrivalFrom(_request.start);
-		if (glm::distance(_request.start, _request.destination) <= _request.maxDistance || Clear(land, _request.start, arrival))
-		{
-			_route = {_request.start, arrival};
-			_status = Status::Found;
-			return _status;
-		}
-		const auto i = static_cast<int32_t>(std::floor(_request.start.x / k_LatticeStep));
-		const auto j = static_cast<int32_t>(std::floor(_request.start.y / k_LatticeStep));
-		const auto key = KeyOf(i, j);
-		_nodes.emplace(key, Node {.cost = 0.0f, .parent = -1, .closed = false});
-		_open.push({.estimate = Estimate(PointOf(key)), .key = key});
-	}
-
-	constexpr std::array<std::array<int32_t, 2>, 8> k_Neighbours {
-	    {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}}};
-	for (size_t searched = 0; searched < budget && !_open.empty(); ++searched)
-	{
-		const auto top = _open.top();
-		_open.pop();
-		auto& node = _nodes.at(top.key);
-		if (node.closed)
-		{
-			continue;
-		}
-		node.closed = true;
-		++_searched;
-		const auto point = PointOf(top.key);
-		if (IsGoal(point))
-		{
-			Finish(land, top.key);
-			return _status;
-		}
-		const auto i = static_cast<int32_t>(top.key / k_LatticePerSide);
-		const auto j = static_cast<int32_t>(top.key % k_LatticePerSide);
-		for (const auto [di, dj] : k_Neighbours)
-		{
-			const auto ni = i + di;
-			const auto nj = j + dj;
-			if (ni < 0 || nj < 0 || ni >= k_LatticePerSide || nj >= k_LatticePerSide)
-			{
-				continue;
-			}
-			const auto nextKey = KeyOf(ni, nj);
-			const auto nextPoint = PointOf(nextKey);
-			auto [next, inserted] =
-			    _nodes.try_emplace(nextKey, Node {.cost = std::numeric_limits<float>::max(), .parent = -1, .closed = false});
-			if (next->second.closed)
-			{
-				continue;
-			}
-			if (inserted && !Passable(land, nextPoint))
-			{
-				next->second.closed = true;
-				continue;
-			}
-			const auto cost = node.cost + (k_LatticeStep * ((di != 0 && dj != 0) ? std::numbers::sqrt2_v<float> : 1.0f));
-			if (cost < next->second.cost)
-			{
-				next->second.cost = cost;
-				next->second.parent = top.key;
-				_open.push({.estimate = cost + Estimate(nextPoint), .key = nextKey});
-			}
-		}
-		if (_searched >= _request.searchLimit || _unreachable)
-		{
-			break;
-		}
-	}
-	if (_open.empty() || _searched >= _request.searchLimit || _unreachable)
-	{
-		_status = Status::Failed;
-		_nodes.clear();
-		_open = {};
-	}
-	return _status;
-}
-
-std::vector<glm::vec2> creature_route::Straighten(const std::vector<glm::vec2>& points,
-                                                  const std::function<bool(glm::vec2, glm::vec2)>& clear)
-{
-	if (points.size() <= 2)
-	{
-		return points;
-	}
-	std::vector<glm::vec2> result {points.front()};
-	size_t anchor = 0;
-	while (anchor + 1 < points.size())
-	{
-		auto reach = anchor + 1;
-		while (reach + 1 < points.size() && clear(points[anchor], points[reach + 1]))
-		{
-			++reach;
-		}
-		result.push_back(points[reach]);
-		anchor = reach;
-	}
-	return result;
-}
-
-std::vector<glm::vec2> creature_route::RoundCorners(const std::vector<glm::vec2>& points, float radius, float maxStepAngle)
-{
-	if (points.size() <= 2 || radius <= 0.0f || maxStepAngle <= 0.0f)
-	{
-		return points;
-	}
-	std::vector<glm::vec2> result {points.front()};
-	for (size_t i = 1; i + 1 < points.size(); ++i)
-	{
-		const auto before = points[i] - points[i - 1];
-		const auto after = points[i + 1] - points[i];
-		const auto beforeLength = glm::length(before);
-		const auto afterLength = glm::length(after);
-		if (beforeLength <= k_Tiny || afterLength <= k_Tiny)
-		{
-			continue;
-		}
-		const auto in = before / beforeLength;
-		const auto out = after / afterLength;
-		const auto turn = std::acos(std::clamp(glm::dot(in, out), -1.0f, 1.0f));
-		if (turn <= k_Tiny || turn >= k_Pi - k_Tiny)
-		{
-			result.push_back(points[i]);
-			continue;
-		}
-		// Each arc may use up to half of the segments either side of its corner
-		const auto halfTan = std::tan(turn / 2.0f);
-		const auto tangent = std::min(radius * halfTan, 0.5f * std::min(beforeLength, afterLength));
-		const auto arcRadius = tangent / halfTan;
-		const auto enter = points[i] - (in * tangent);
-		const float direction = Cross(in, out) > 0.0f ? 1.0f : -1.0f;
-		const glm::vec2 inward = direction * glm::vec2(-in.y, in.x);
-		const auto centre = enter + (inward * arcRadius);
-		const auto steps = std::max(static_cast<int32_t>(std::ceil(turn / maxStepAngle)), 1);
-		for (int32_t k = 0; k <= steps; ++k)
-		{
-			const auto angle = direction * turn * static_cast<float>(k) / static_cast<float>(steps);
-			result.push_back(centre + Rotate(enter - centre, angle));
-		}
-	}
-	result.push_back(points.back());
-	return result;
+	return HeadingBetween(leg.from, leg.to);
 }
 
 float Route::SegmentLength() const
 {
-	return Finished() ? 0.0f : glm::distance(points[segment], points[segment + 1]);
+	return Finished() ? 0.0f : LengthOf(legs[segment]);
 }
 
 float Route::Remaining() const
@@ -569,51 +289,83 @@ float Route::Remaining() const
 float Route::RemainingTotal() const
 {
 	auto total = Remaining();
-	for (auto i = segment + 1; i + 1 < points.size(); ++i)
+	for (auto i = segment + 1; i < legs.size(); ++i)
 	{
-		total += glm::distance(points[i], points[i + 1]);
+		total += LengthOf(legs[i]);
 	}
 	return total;
 }
 
 glm::vec2 Route::Position() const
 {
-	if (points.empty())
+	if (legs.empty())
 	{
 		return {};
 	}
 	if (Finished())
 	{
-		return points.back();
+		return legs.back().to;
 	}
-	const auto length = SegmentLength();
-	return length > 0.0f ? points[segment] + ((points[segment + 1] - points[segment]) * (travelled / length)) : points[segment];
+	return PointAlong(legs[segment], travelled);
+}
+
+glm::vec2 Route::End() const
+{
+	return legs.empty() ? glm::vec2(0.0f) : legs.back().to;
 }
 
 float Route::Heading() const
 {
-	if (points.size() < 2)
+	if (legs.empty())
 	{
 		return 0.0f;
 	}
-	const auto from = std::min(segment, points.size() - 2);
-	return HeadingAlong(points[from], points[from + 1]);
+	if (Finished())
+	{
+		return HeadingAlong(legs.back(), LengthOf(legs.back()));
+	}
+	return HeadingAlong(legs[segment], travelled);
 }
 
 float Route::TurnAtEnd() const
 {
-	if (OnLastSegment() || Finished())
+	if (OnLastSegment())
 	{
 		return 0.0f;
 	}
-	const auto here = Heading();
-	const auto next = HeadingAlong(points[segment + 1], points[segment + 2]);
+	const auto here = HeadingAlong(legs[segment], LengthOf(legs[segment]));
+	const auto next = HeadingAlong(legs[segment + 1], 0.0f);
 	auto turn = std::fmod(next - here + k_Pi, 2.0f * k_Pi);
 	if (turn < 0.0f)
 	{
 		turn += 2.0f * k_Pi;
 	}
 	return turn - k_Pi;
+}
+
+std::vector<glm::vec2> Route::Points(float maxStepAngle) const
+{
+	std::vector<glm::vec2> points;
+	for (const auto& leg : legs)
+	{
+		if (points.empty())
+		{
+			points.push_back(leg.from);
+		}
+		if (leg.arc && leg.round.has_value() && maxStepAngle > 0.0f)
+		{
+			const auto [start, end] = ArcAngles(leg);
+			const auto steps = std::max(static_cast<int32_t>(std::ceil(std::abs(end - start) / maxStepAngle)), 1);
+			const auto length = LengthOf(leg);
+			for (int32_t k = 1; k <= steps; ++k)
+			{
+				points.push_back(PointAlong(leg, length * static_cast<float>(k) / static_cast<float>(steps)));
+			}
+			continue;
+		}
+		points.push_back(leg.to);
+	}
+	return points;
 }
 
 Advanced creature_route::Advance(Route& route, float distance)

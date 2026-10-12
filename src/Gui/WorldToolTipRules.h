@@ -23,9 +23,10 @@ namespace openblack::gui::world_tooltip
 
 /// "Enter Temple", over the way into the player's own temple, by the Apply button
 constexpr uint32_t k_EnterTemple = 88;
-/// "%3.0f Belief Left", over a village centre the player holds the most belief in
+/// "%3.0f Belief Left", over any village centre: the belief the town holds in the player beyond any other player's
 constexpr uint32_t k_BeliefLeft = 89;
-/// "%3.0f Belief Needed", over a village centre the player does not hold the most belief in
+/// "%3.0f Belief Needed": the words the belief tooltip shows instead while another player is ahead in the town, with
+/// how far behind the player is
 constexpr uint32_t k_BeliefNeeded = 109;
 /// "Amount: %3.0f", forced as the hand takes food or wood from a pile
 constexpr uint32_t k_HeldAmount = 119;
@@ -71,9 +72,20 @@ struct Numbered
 };
 
 /// A village centre's belief tooltip, from how much more the town believes in the player than in the player it believes
-/// in most besides: the belief left the player before another takes the town, or once they trail, what is needed to
-/// catch up
-[[nodiscard]] Numbered Belief(float margin);
+/// in most besides, in thousandths. It is always the "Belief Left" tooltip, whoever is ahead; only its words change
+/// when it is drawn (see Worded).
+[[nodiscard]] Numbered Belief(double margin);
+
+/// The words a tooltip is drawn with and the number written into them
+struct Wording
+{
+	uint32_t words;
+	double number;
+};
+
+/// The words and number a numbered tooltip is drawn with: the belief tooltip reads "Belief Needed" with the shortfall
+/// while the player trails in the town; every other tooltip keeps its own words and number
+[[nodiscard]] Wording Worded(uint32_t index, double number);
 
 /// A temple's health is its heart's life, 0 to 1, as a percentage
 [[nodiscard]] Numbered TempleHealth(float life);

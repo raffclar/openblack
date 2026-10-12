@@ -51,7 +51,7 @@ BY_HAND = {
     "openblack::animals::Zoomer": [],
     "openblack::hand_grab::HandSpring": [],
     "openblack::sky_dome::Follow": [],
-    "openblack::creature_route::Planner": [],
+    "openblack::creature_route::Follower": ["openblack::creature_route::Route"],
 }
 
 # Namespaces of libraries, whose types aren't followed

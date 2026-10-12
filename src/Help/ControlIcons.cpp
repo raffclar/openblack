@@ -211,20 +211,28 @@ std::optional<ActionPicture> ActionIcon(std::span<const int> codes, std::span<co
 		{
 			continue;
 		}
-		if (const auto click = ClickFor(code, bindings); click.has_value())
+		if (auto shown = PictureFor(code, bindings, keyName); shown.has_value())
 		{
-			picture = *click;
-			continue;
-		}
-		if (const auto* binding = Find(code, bindings); binding != nullptr)
-		{
-			if (auto text = KeyText(*binding, keyName); text.has_value())
-			{
-				picture = std::move(*text);
-			}
+			picture = std::move(*shown);
 		}
 	}
 	return picture;
+}
+
+std::optional<ActionPicture> PictureFor(int action, std::span<const KeyBinding> bindings, const KeyNameFn& keyName)
+{
+	if (const auto click = ClickFor(action, bindings); click.has_value())
+	{
+		return *click;
+	}
+	if (const auto* binding = Find(action, bindings); binding != nullptr)
+	{
+		if (auto text = KeyText(*binding, keyName); text.has_value())
+		{
+			return std::move(*text);
+		}
+	}
+	return std::nullopt;
 }
 
 MouseCell CellFor(MouseClick click, int row, uint32_t tickMs)

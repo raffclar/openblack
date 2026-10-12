@@ -16,14 +16,18 @@
 namespace openblack::gui::world_tooltip
 {
 
-Numbered Belief(float margin)
+Numbered Belief(double margin)
 {
-	const double scaled = static_cast<double>(margin) * k_BeliefScale;
-	if (scaled < 0.0)
+	return {.index = k_BeliefLeft, .first = margin * k_BeliefScale, .second = std::nullopt};
+}
+
+Wording Worded(uint32_t index, double number)
+{
+	if (index == k_BeliefLeft && number < 0.0)
 	{
-		return {.index = k_BeliefNeeded, .first = -scaled, .second = std::nullopt};
+		return {.words = k_BeliefNeeded, .number = -number};
 	}
-	return {.index = k_BeliefLeft, .first = scaled, .second = std::nullopt};
+	return {.words = index, .number = number};
 }
 
 Numbered TempleHealth(float life)
