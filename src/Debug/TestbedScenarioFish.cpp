@@ -113,11 +113,10 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	    .description = "A fish farm in the last map cell of land on the lake's southern shore, its town's hut and empty "
 	                   "storage pit on the bank behind it, and one fisherman of the town. Seen low from the shore, looking "
 	                   "north over the farm's map cell to the lake.",
-	    .expected = "The town wants food, so the fisherman walks to the middle of the farm's map cell, then on to a spot "
-	                "up to 2.5 m from it either way, and fishes there, his clip starting again every 4.3 seconds. As in "
-	                "the game, nothing turns him to the water: he fishes facing the way his short walk from the middle "
-	                "went, here a little west of the middle, so along the shore. Once he carries nearly all the food he "
-	                "can, he takes it to the storage pit and comes back.",
+	    .expected = "The town wants food, so the fisherman walks to the farm and fishes there, his clip starting again "
+	                "every 4.3 seconds, facing the water. Once he carries nearly all the food he can, he takes it to the "
+	                "storage pit and comes back. (openblack has no villager footpaths yet: he walks straight to the "
+	                "middle of the farm's map cell, steps to a random spot and faces that way instead.)",
 	    .environment = {.dispenserGrid = false},
 	    .framing = OverTheShoreFarm(),
 	    .objects = ShoreFarmAndFisherman(),
