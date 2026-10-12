@@ -137,8 +137,10 @@
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
+#include "LHScriptX/FeatureScriptCommands.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Magic/ScriptCast.h"
 #include "Magic/SpellRules.h"
 #include "TestbedDispenserGrid.h"
 #include "Windowing/WindowingInterface.h"
@@ -517,6 +519,18 @@ void Runner::Start(const Scenario& scenario)
 	for (const auto& miracle : scenario.miracles)
 	{
 		_miracles.push_back({.nextAt = miracle.delaySeconds, .letGoAt = std::nullopt, .spell = entt::null});
+	}
+	// The storms a land's setup script places, in the island's global climate
+	if (Locator::weatherSystem::has_value())
+	{
+		for (const auto& storm : scenario.landStorms)
+		{
+			const auto at = MapPoint(_middle, storm.offset);
+			const auto to = MapPoint(_middle, storm.destination);
+			lhscriptx::FeatureScriptCommands::CreateWeatherStorm(
+			    0, {at.x, land.GetHeightAt(at), at.y}, storm.age, storm.cloudCount, std::string(storm.shape),
+			    std::string(storm.clouds), std::string(storm.weather), storm.speed, {to.x, land.GetHeightAt(to), to.y});
+		}
 	}
 	for (size_t i = 0; i < scenario.particles.size(); ++i)
 	{
@@ -2366,6 +2380,16 @@ entt::entity Runner::CastMiracle(size_t index)
 	}
 	const auto hand2 = MapPoint(_middle, setup.handOffset);
 	const glm::vec3 hand {hand2.x, land.GetHeightAt(hand2) + setup.handHeight, hand2.y};
+	// As a script casts it: the neutral player's, from the hand's place, on the creature when its seed is cast on things
+	if (setup.script.has_value())
+	{
+		const auto scripted = magic::MakeScriptCast(magic::GetMagicEffectInfo(info, setup.type).initialChants, point, hand,
+		                                            setup.script->radius, setup.script->seconds, setup.script->curl);
+		const bool onObject =
+		    target.has_value() && seed != SpellSeedType::None && magic::GetSpellSeedInfo(info, seed).castOnObject != 0;
+		return onObject ? magic.CastOnObject(setup.type, PlayerNames::NEUTRAL, *target, scripted.cast, scripted.info)
+		                : magic.CastAtPoint(setup.type, PlayerNames::NEUTRAL, scripted.point, scripted.cast, scripted.info);
+	}
 	const auto toward = point - hand;
 	const particles::ProcessInfo process {
 	    .handPosition = hand,

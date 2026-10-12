@@ -131,3 +131,69 @@ TEST(ScriptWeather, ChangingAStormDrawsTheForkWaitThenTheFlashWait)
 	EXPECT_FLOAT_EQ(storm.boltTimer, 5.0f);
 	EXPECT_FLOAT_EQ(storm.thunderTimer, 1.5f);
 }
+
+TEST(ScriptWeather, ALandStormReadsItsShapeCloudsAndWeather)
+{
+	// The first storm of the Three Gods playground
+	const auto storm =
+	    weather::ParseLandStorm("160.00,176.00,10.00,460.00,1.00,1.10", "0.12,500.00,0.00,0.00,0.00,0.00", "0,0,8,93,-3,39");
+	EXPECT_FLOAT_EQ(storm.innerRadius, 160.0f);
+	EXPECT_FLOAT_EQ(storm.outerRadius, 176.0f);
+	EXPECT_FLOAT_EQ(storm.fadeSeconds, 10.0f);
+	EXPECT_FLOAT_EQ(storm.lastsFor, 460.0f);
+	EXPECT_FLOAT_EQ(storm.strength, 1.0f);
+	EXPECT_FLOAT_EQ(storm.rainSpeed, 1.1f);
+	EXPECT_FLOAT_EQ(storm.cloudShade, 0.12f);
+	EXPECT_FLOAT_EQ(storm.cloudHeight, 500.0f);
+	EXPECT_EQ(storm.boltWait, glm::vec2(0.0f));
+	EXPECT_EQ(storm.thunderWait, glm::vec2(0.0f));
+	EXPECT_EQ(storm.effect.temperature, 8);
+	EXPECT_EQ(storm.effect.rain, 93);
+	EXPECT_EQ(storm.effect.snow, 0);
+	EXPECT_EQ(storm.effect.overcast, 0);
+	EXPECT_EQ(storm.effect.windX, -3);
+	EXPECT_EQ(storm.effect.windZ, 39);
+	EXPECT_EQ(storm.effect.snowCover, 0);
+}
+
+TEST(ScriptWeather, ALandStormsLightningWaitsAreForksThenFlashes)
+{
+	const auto storm = weather::ParseLandStorm("", "0.5,160,1,2,3,4", "");
+	EXPECT_EQ(storm.boltWait, glm::vec2(1.0f, 2.0f));
+	EXPECT_EQ(storm.thunderWait, glm::vec2(3.0f, 4.0f));
+}
+
+TEST(ScriptWeather, ALandStormsWeatherNumbersSpillIntoTheBytesAfterThem)
+{
+	// The cloud and snow are overwritten by the temperature and rain stored after them; the wind along spills on
+	const auto storm = weather::ParseLandStorm("", "", "50,20,8,-1,-3,-39");
+	EXPECT_EQ(storm.effect.temperature, 8);
+	EXPECT_EQ(storm.effect.rain, -1);
+	EXPECT_EQ(storm.effect.snow, -1);
+	EXPECT_EQ(storm.effect.overcast, -1);
+	EXPECT_EQ(storm.effect.windX, -3);
+	EXPECT_EQ(storm.effect.windZ, -39);
+	EXPECT_EQ(storm.effect.snowCover, -1);
+	EXPECT_EQ(storm.effect.stamp, 0xff);
+}
+
+TEST(ScriptWeather, ALandStormKeepsWhatItsListsLeaveOut)
+{
+	const auto storm = weather::ParseLandStorm("300, 400", "0.25 ,90", "5,x");
+	EXPECT_FLOAT_EQ(storm.innerRadius, 300.0f);
+	EXPECT_FLOAT_EQ(storm.outerRadius, 400.0f);
+	EXPECT_FLOAT_EQ(storm.fadeSeconds, 10.0f);
+	EXPECT_FLOAT_EQ(storm.lastsFor, 100.0f);
+	EXPECT_FLOAT_EQ(storm.strength, 1.0f);
+	EXPECT_FLOAT_EQ(storm.rainSpeed, 1.0f);
+	// Reading stops where a number isn't followed straight by a comma
+	EXPECT_FLOAT_EQ(storm.cloudShade, 0.25f);
+	EXPECT_FLOAT_EQ(storm.cloudHeight, 160.0f);
+	// Only the cloud is read, and its upper bytes clear the wind across, the wind along and the snow cover
+	EXPECT_EQ(storm.effect.temperature, 10);
+	EXPECT_EQ(storm.effect.rain, 100);
+	EXPECT_EQ(storm.effect.snow, 0);
+	EXPECT_EQ(storm.effect.overcast, 5);
+	EXPECT_EQ(storm.effect.windX, 0);
+	EXPECT_EQ(storm.effect.windZ, 0);
+}

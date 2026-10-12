@@ -805,11 +805,18 @@ void FeatureScriptCommands::CreateWeatherClimateWind(int32_t index, float windX,
 	Locator::weatherSystem::value().SetClimateWind(index, windX, windZ, angle);
 }
 
-void FeatureScriptCommands::CreateWeatherStorm(int32_t, glm::vec3, float, int32_t, const std::string&, const std::string&,
-                                               const std::string&, float, glm::vec3)
+void FeatureScriptCommands::CreateWeatherStorm(int32_t climateIndex, glm::vec3 position, float age, int32_t cloudCount,
+                                               const std::string& shape, const std::string& clouds, const std::string& weather,
+                                               float speed, glm::vec3 destination)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A storm placed in a climate, on the ground at its place and part way through its life, heading for its destination
+	auto storm = ecs::script_weather::ParseLandStorm(shape, clouds, weather);
+	storm.position = position;
+	storm.destination = destination;
+	storm.age = age;
+	storm.speed = speed;
+	storm.cloudCount = cloudCount;
+	Locator::weatherSystem::value().AddLandStorm(climateIndex, storm);
 }
 
 void FeatureScriptCommands::BrushSize(float, float)
