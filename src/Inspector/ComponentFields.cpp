@@ -35,6 +35,7 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureEyes.h"
+#include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureFizz.h"
 #include "Creature/CreatureHair.h"
@@ -1042,14 +1043,16 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::HandOnCreature>(context)
 	    .Field<&components::HandOnCreature::creature>("creature")
 	    .Field<&components::HandOnCreature::sum>("sum")
-	    .Field<&components::HandOnCreature::onBodyMs>("onBodyMs")
-	    .Field<&components::HandOnCreature::sinceStrokeMs>("sinceStrokeMs")
-	    .Field<&components::HandOnCreature::sinceSlapMs>("sinceSlapMs")
+	    .Field<&components::HandOnCreature::clocks>("clocks")
+	    .Field<&components::HandOnCreature::slapReadyMs>("slapReadyMs")
 	    .Field<&components::HandOnCreature::lastPart>("lastPart")
+	    .Field<&components::HandOnCreature::sinceStepMs>("sinceStepMs")
 	    .Field<&components::HandOnCreature::lastPoint>("lastPoint")
 	    .Field<&components::HandOnCreature::lastCursor>("lastCursor")
+	    .Field<&components::HandOnCreature::wasOnBody>("wasOnBody")
 	    .Field<&components::HandOnCreature::speed>("speed")
-	    .Field<&components::HandOnCreature::slapShowMs>("slapShowMs")
+	    .Field<&components::HandOnCreature::hardSlaps>("hardSlaps")
+	    .Field<&components::HandOnCreature::cycle>("cycle")
 	    .Field<&components::HandOnCreature::byCommand>("byCommand")
 	    .Field<&components::HandOnCreature::heldMs>("heldMs")
 	    .Field<&components::HandOnCreature::strokedOrSlapped>("strokedOrSlapped");
@@ -1915,6 +1918,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_eyes::Blink::state>("state")
 	    .Field<&openblack::creature_eyes::Blink::timerMs>("timerMs")
 	    .Field<&openblack::creature_eyes::Blink::intervalMs>("intervalMs");
+	Reflect<openblack::creature_feedback::HardSlaps>(context, ValueOnly {})
+	    .Field<&openblack::creature_feedback::HardSlaps::band>("band")
+	    .Field<&openblack::creature_feedback::HardSlaps::count>("count");
+	Reflect<openblack::creature_feedback::StrokeClocks>(context, ValueOnly {})
+	    .Field<&openblack::creature_feedback::StrokeClocks::sinceTouch>("sinceTouch")
+	    .Field<&openblack::creature_feedback::StrokeClocks::ready>("ready")
+	    .Field<&openblack::creature_feedback::StrokeClocks::contact>("contact");
 	Reflect<openblack::creature_fight::Arena>(context, ValueOnly {})
 	    .Field<&openblack::creature_fight::Arena::centre>("centre")
 	    .Field<&openblack::creature_fight::Arena::radius>("radius");

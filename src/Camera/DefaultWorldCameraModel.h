@@ -47,6 +47,9 @@ public:
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) final;
 	void HandleActions(std::chrono::microseconds dt) final;
 	void SetFlight(glm::vec3 origin, glm::vec3 focus) final;
+	/// Flies back to where it was, as when the camera is given back after the hand lets go of a creature: as SetFlight,
+	/// wooshing only when asked
+	void FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
