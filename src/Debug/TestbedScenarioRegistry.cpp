@@ -2383,6 +2383,7 @@ std::vector<Scenario> Build()
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
 	AddTownGrowthScenarios(all);
+	AddTutorialScenarios(all);
 	return all;
 }
 
@@ -2482,7 +2483,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
-	       IsPointerCommand(kind);
+	       kind == Kind::RunText || kind == Kind::PlayHandDemo || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2490,7 +2491,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",      "Expressions",   "Senses",  "Needs",  "Growth",  "Appearance", "Light",     "Movement", "Footprints",
 	    "Audio",     "Objects",       "Hand",    "Leash",  "Combat",  "Mind",       "Particles", "Editor",   "Miracles",
-	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",
+	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",  "Tutorial",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2509,7 +2510,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 93> k_Names {
+	constexpr std::array<std::string_view, 95> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2603,6 +2604,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand tap",
 	    "tell an advisor",
 	    "walk home",
+	    "run text",
+	    "play hand demo",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

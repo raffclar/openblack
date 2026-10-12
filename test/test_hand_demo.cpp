@@ -231,3 +231,95 @@ TEST(HandDemoPlayback, AButtonIsHeldFromItsPressToItsRelease)
 	held = AfterRecord(held, hnd::HNDMessage::ActionButtonUp);
 	EXPECT_FALSE(held.action);
 }
+
+namespace
+{
+/// A recorded press on the storage pit, as the wood lesson's recording has one: type 16 (a store), subtype 5, a little
+/// over 1830 by 2642 metres
+hnd::HNDRecord PressOnStore()
+{
+	hnd::HNDRecord record;
+	record.message = hnd::HNDMessage::ActionButtonDown;
+	record.objectType = static_cast<uint32_t>(script::ObjectType::Store);
+	record.objectSubtype = 5;
+	record.objectPosition = {.x = map_coords::ToFixed(1830.0f), .z = map_coords::ToFixed(2642.0f), .altitude = 0.0f};
+	record.objectDistance = 40.0f;
+	return record;
+}
+
+map_coords::MapCoords At(float x, float z)
+{
+	return map_coords::FromMetres({x, z});
+}
+
+ecs::script_find::Kind Store(uint32_t subtype)
+{
+	return {.type = script::ObjectType::Store, .subtype = subtype};
+}
+} // namespace
+
+TEST(HandDemo, OnlyTheActionButtonAndTheUnusedMessageRetarget)
+{
+	EXPECT_TRUE(ClickCanRetarget(hnd::HNDMessage::ActionButtonDown));
+	EXPECT_TRUE(ClickCanRetarget(hnd::HNDMessage::ActionButtonUp));
+	EXPECT_TRUE(ClickCanRetarget(hnd::HNDMessage::Other));
+	EXPECT_FALSE(ClickCanRetarget(hnd::HNDMessage::Move));
+	EXPECT_FALSE(ClickCanRetarget(hnd::HNDMessage::MoveButtonDown));
+	EXPECT_FALSE(ClickCanRetarget(hnd::HNDMessage::MoveButtonUp));
+	EXPECT_FALSE(ClickCanRetarget(hnd::HNDMessage::DoubleClick));
+}
+
+TEST(HandDemo, AClickRecordedOnNothingLandsOnNothing)
+{
+	hnd::HNDRecord record;
+	record.message = hnd::HNDMessage::ActionButtonDown;
+	record.objectSubtype = hnd::k_NoObject;
+	const ThingUnderHand under {.kind = Store(5), .at = At(1830.0f, 2642.0f)};
+	EXPECT_EQ(TargetOfClick(record, under), ClickTarget::NoThing);
+	EXPECT_EQ(TargetOfClick(record, std::nullopt), ClickTarget::NoThing);
+}
+
+TEST(HandDemo, AClickStaysOnTheRecordedKindUnderTheHandNearTheRecordedPlace)
+{
+	const auto record = PressOnStore();
+	EXPECT_EQ(TargetOfClick(record, ThingUnderHand {.kind = Store(5), .at = At(1832.0f, 2642.0f)}), ClickTarget::UnderHand);
+}
+
+TEST(HandDemo, AClickLooksForTheRecordedKindWhenTheHandIsOverSomethingElse)
+{
+	const auto record = PressOnStore();
+	EXPECT_EQ(TargetOfClick(record, std::nullopt), ClickTarget::NearestOfKind);
+	// Another subtype, another type, or the right kind 3 metres or more away
+	EXPECT_EQ(TargetOfClick(record, ThingUnderHand {.kind = Store(2), .at = At(1830.0f, 2642.0f)}), ClickTarget::NearestOfKind);
+	EXPECT_EQ(TargetOfClick(record, ThingUnderHand {.kind = {.type = script::ObjectType::Rock, .subtype = 5},
+	                                                .at = At(1830.0f, 2642.0f)}),
+	          ClickTarget::NearestOfKind);
+	EXPECT_EQ(TargetOfClick(record, ThingUnderHand {.kind = Store(5), .at = At(1833.1f, 2642.0f)}), ClickTarget::NearestOfKind);
+	// The thing under the hand is compared exactly: a recorded "any" subtype is no match for it
+	auto any = record;
+	any.objectSubtype = ecs::script_find::k_AnySubtype;
+	EXPECT_EQ(TargetOfClick(any, ThingUnderHand {.kind = Store(5), .at = At(1830.0f, 2642.0f)}), ClickTarget::NearestOfKind);
+}
+
+TEST(HandDemo, AThingWithNoSubtypeUnderTheHandMatchesARecordedNone)
+{
+	auto record = PressOnStore();
+	record.objectSubtype = ecs::script_find::k_NoSubtype;
+	const ThingUnderHand under {.kind = {.type = script::ObjectType::Store}, .at = At(1830.0f, 2642.0f)};
+	EXPECT_EQ(TargetOfClick(record, under), ClickTarget::UnderHand);
+}
+
+TEST(HandDemo, TheClickMovesToAThingOfTheKindWithinThreeMetres)
+{
+	const auto record = PressOnStore();
+	EXPECT_TRUE(TakesRecordedClick(record, Store(5), At(1832.0f, 2642.0f)));
+	EXPECT_TRUE(TakesRecordedClick(record, Store(5), At(1832.9f, 2642.0f)));
+	EXPECT_FALSE(TakesRecordedClick(record, Store(5), At(1833.5f, 2642.0f)));
+	EXPECT_FALSE(TakesRecordedClick(record, Store(2), At(1830.0f, 2642.0f)));
+	// A thing with no subtype is never one the search asks for, unless any will do
+	EXPECT_FALSE(TakesRecordedClick(record, {.type = script::ObjectType::Store}, At(1830.0f, 2642.0f)));
+	auto any = record;
+	any.objectSubtype = ecs::script_find::k_AnySubtype;
+	EXPECT_TRUE(TakesRecordedClick(any, Store(2), At(1830.0f, 2642.0f)));
+	EXPECT_TRUE(TakesRecordedClick(any, {.type = script::ObjectType::Store}, At(1830.0f, 2642.0f)));
+}

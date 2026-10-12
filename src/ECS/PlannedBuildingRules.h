@@ -123,6 +123,35 @@ struct FootprintCell
 [[nodiscard]] std::vector<std::optional<size_t>>
 StartedByScript(std::span<const std::vector<building_construction::PlannedCandidate>> towns, glm::vec2 place);
 
+/// One of a town's buildings, as the town looks each turn for one to put up for mending
+struct MendCandidate
+{
+	/// It has a site already, or the town has put it up for mending before and it hasn't been made whole since
+	bool skipped {false};
+	/// How much it wants repairing
+	float desireToBeRepaired {0.0f};
+};
+
+/// What a town puts up for mending this turn: one of its buildings, or one of its finished buildings that went from the
+/// land and is only a plan again
+struct MendChoice
+{
+	enum class Kind : uint8_t
+	{
+		Building,
+		Plan,
+	};
+	Kind kind;
+	size_t index;
+};
+
+/// Once a turn a town puts up at most one thing for mending: of its plans that had been finished before they went, and
+/// of its buildings with no site that it hasn't put up already, the one wanting repair most, more than nothing. The plans
+/// are looked at first and the earlier wins a tie, so a building must want it more than every plan; when a building is
+/// chosen no plan is started that turn.
+[[nodiscard]] std::optional<MendChoice> ChooseToMend(std::span<const float> planDesires,
+                                                     std::span<const MendCandidate> buildings);
+
 /// How far round a building stands, in radians from 0 to a full turn, from the turn it was given on the land
 [[nodiscard]] float YAngleOf(const glm::mat3& rotation);
 

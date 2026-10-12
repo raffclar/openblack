@@ -329,6 +329,11 @@ entt::entity Start(entt::entity town, entt::entity plan, float siteDesire)
 	{
 		return entt::null;
 	}
+	// A finished building put up again from its plan counts as put up for mending until it is whole
+	if (planned.wasBuilt)
+	{
+		registry.Get<Abode>(building).putUpForMending = true;
+	}
 	if (Locator::townSystem::has_value())
 	{
 		Locator::townSystem::value().BuildingCreated(town, glm::xz(transform.position),
@@ -421,6 +426,64 @@ std::vector<entt::entity> town_planning::StartPlannedAt(glm::vec3 place, float s
 		}
 	}
 	return started;
+}
+
+float town_planning::PlanDesireToBeRepaired(entt::entity plan)
+{
+	const auto* planned = Entities().TryGet<const PlannedAbode>(plan);
+	if (planned == nullptr || !planned->wasBuilt || planned->info == AbodeInfo::None)
+	{
+		return 0.0f;
+	}
+	return InfoOf(planned->info).desireToBeRepaired;
+}
+
+void town_planning::MendBest(entt::entity town)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return;
+	}
+	const auto& data = registry.Get<const Town>(town);
+	std::vector<entt::entity> plans;
+	std::vector<float> planDesires;
+	for (const auto plan : data.planned)
+	{
+		if (registry.Valid(plan) && registry.AnyOf<PlannedAbode, PlannedTemple>(plan))
+		{
+			plans.push_back(plan);
+			planDesires.push_back(PlanDesireToBeRepaired(plan));
+		}
+	}
+	std::vector<entt::entity> buildings;
+	std::vector<planned_building::MendCandidate> candidates;
+	for (const auto building : data.abodes)
+	{
+		const auto* abode = registry.TryGet<const Abode>(building);
+		if (abode == nullptr)
+		{
+			continue;
+		}
+		buildings.push_back(building);
+		candidates.push_back({
+		    .skipped = abode->putUpForMending || construction::BroughtWoodSite(building) != nullptr,
+		    .desireToBeRepaired = construction::DesireToBeRepaired(building),
+		});
+	}
+	const auto chosen = planned_building::ChooseToMend(planDesires, candidates);
+	if (!chosen.has_value())
+	{
+		return;
+	}
+	if (chosen->kind == planned_building::MendChoice::Kind::Building)
+	{
+		const auto building = buildings[chosen->index];
+		registry.Get<Abode>(building).putUpForMending = true;
+		construction::OpenSite(building, 0.0f);
+		return;
+	}
+	Start(town, plans[chosen->index], 0.0f);
 }
 
 void town_planning::PlanAgain(entt::entity building)
