@@ -68,3 +68,12 @@ float model_light::Factor(const glm::vec3& normal, const glm::vec3& localLight, 
 	const float intensity = std::nearbyint(255.0f * glm::dot(normal, localLight));
 	return intensity < 0.0f ? ambient : ambient + std::floor((255.0f - ambient) * intensity / 256.0f);
 }
+
+float model_light::PosedFactor(const glm::vec3& normal, const glm::vec3& localLight)
+{
+	constexpr float k_Gain = 1.3f;
+	constexpr float k_Floor = 0.4f;
+	const float facing = glm::dot(normal, localLight);
+	// The fraction dropped, as the game does turning it into a whole number
+	return std::floor(std::min((facing < 0.0f ? 0.0f : facing * k_Gain) + k_Floor, 1.0f) * 255.0f);
+}
