@@ -5984,8 +5984,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			// The translucent meshes blend over the opaque ones, each in its own place in the sort
 			submitDesc.viewId = translucentViewId;
-			// The things fading out in the distance, a draw for each mesh, blended by each one's alpha: the villagers
-			// posed from the bone palette, the things posed one by one with them
+			// The things fading out in the distance, each blended by its alpha in its own place in the sort: the
+			// villagers posed from the bone palette, the things posed one by one with them
 			{
 				const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
 				for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
@@ -5996,9 +5996,17 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					{
 						continue;
 					}
-					const auto position = glm::vec3(renderCtx.instanceUniforms.at(placers.offset).model[3]);
-					submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
-					drawPlaced(meshId, placers, false, placers.bonePalette ? &palettePose : nullptr);
+					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
+					{
+						const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
+						submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
+						if (placers.partsByLevel)
+						{
+							submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+						}
+						drawInstances(meshId, placers, false, instance, 1, placers.bonePalette ? &palettePose : nullptr);
+					}
+					submitDesc.detailLevel = 1;
 				}
 				for (const auto& build : renderCtx.partialBuilds)
 				{
