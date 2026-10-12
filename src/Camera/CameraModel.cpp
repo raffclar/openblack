@@ -14,6 +14,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "DefaultWorldCameraModel.h"
+#include "DoubleClickFlight.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -35,10 +36,9 @@ std::unique_ptr<CameraModel> CameraModel::CreateModel(CameraModel::Model model)
 CameraModel::FlightPath CameraModel::CharterFlight(glm::vec3 destinationOrigin, glm::vec3 destinationFocus,
                                                    glm::vec3 currentOrigin, float heightFactor)
 {
-	const auto delta = destinationOrigin - currentOrigin;
-	auto halfWayPoint = currentOrigin + delta / 2.0f;
-	const auto halfWayAltitude = Locator::terrainSystem::value().GetHeightAt(glm::xz(halfWayPoint));
-	halfWayPoint.y += glm::max(glm::length(glm::xz(delta)) * heightFactor, halfWayAltitude);
-
+	// Half way, risen by a share of the way across, and at least a little over the land there
+	const auto& land = Locator::terrainSystem::value();
+	const auto halfWayPoint = camera_fly::HalfWayPoint(destinationOrigin, currentOrigin, heightFactor,
+	                                                   [&land](glm::vec2 point) { return land.GetHeightAt(point); });
 	return {destinationOrigin, destinationFocus, std::make_optional<glm::vec3>(halfWayPoint)};
 }

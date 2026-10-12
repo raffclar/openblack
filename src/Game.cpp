@@ -825,7 +825,8 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 			return std::nullopt;
 		}
 		const auto [eye, nearPoint] = camera.OnNearPlane(pixel / size);
-		return Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint, true);
+		return Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint,
+		                                                      ecs::systems::PickingSystemInterface::Sea::Anywhere);
 	};
 	// A point of the screen as far in front of the camera as another point
 	frame.view.atDepthOf = [rayAt, forward = camera.GetForward()](glm::vec2 pixel, glm::vec3 sameDepthAs) {

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <limits>
 #include <optional>
 
@@ -63,10 +65,20 @@ public:
 	[[nodiscard]] virtual std::optional<glm::vec3> LandAlong(glm::vec3 from, glm::vec3 to) const = 0;
 	/// The same, else where the line meets the sea's level going down, no further than 7500 across from the camera
 	[[nodiscard]] virtual std::optional<glm::vec3> LandOrSeaAlong(glm::vec3 from, glm::vec3 to, glm::vec3 camera) const = 0;
-	/// The land under a pixel, from the camera through the pixel's point on the near plane, with the sea or without it,
-	/// at the land's height there and within reach of the map's middle
-	[[nodiscard]] virtual std::optional<glm::vec3> LandUnderPixel(glm::vec3 camera, glm::vec3 nearPoint,
-	                                                              bool withSea) const = 0;
+	/// Whether the sea's level counts under a pixel where there is no land
+	enum class Sea : uint8_t
+	{
+		/// Only the land
+		No,
+		/// The sea too, no further than 7500 across from the camera, as the camera feels for what is ahead of it
+		NearCamera,
+		/// The sea too, anywhere the line goes down, kept within reach of the map's middle, as the interface picks
+		Anywhere,
+	};
+	/// The land under a pixel, from the camera through the pixel's point on the near plane, at the land's height there:
+	/// only the land, or the sea too where there is none (see `Sea`). The land alone and the sea anywhere are kept within
+	/// reach of the map's middle.
+	[[nodiscard]] virtual std::optional<glm::vec3> LandUnderPixel(glm::vec3 camera, glm::vec3 nearPoint, Sea sea) const = 0;
 
 	/// The interface's pick at a frame as it is drawn: the drawn object under the cursor, weighed against the land
 	virtual void PickUnderCursor(const Frame& frame) = 0;
