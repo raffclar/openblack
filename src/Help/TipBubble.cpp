@@ -60,99 +60,6 @@ glm::vec2 Pixel(float x, float y)
 }
 } // namespace
 
-namespace
-{
-/// The blanks a line breaks at: white space and the blank that adds no space
-bool IsBlank(char16_t c)
-{
-	constexpr char16_t k_Tilde = 0xF8FE;
-	return c == u' ' || (c >= u'\t' && c <= u'\r') || c == k_Tilde;
-}
-
-bool IsLineBreak(char16_t c)
-{
-	return c == u'\r' || c == u'\n';
-}
-
-std::u16string_view TrimBlanksAtEnd(std::u16string_view text)
-{
-	while (!text.empty() && IsBlank(text.back()))
-	{
-		text.remove_suffix(1);
-	}
-	return text;
-}
-} // namespace
-
-std::vector<std::u16string> Wrap(std::u16string_view text, float width, float size, const WidthFn& measure)
-{
-	constexpr size_t k_GrowBy = 4;
-	std::vector<std::u16string> lines;
-	const auto fits = [&](std::u16string_view line) { return measure(line, size) <= width; };
-	while (!text.empty())
-	{
-		std::u16string_view line;
-		size_t next = 0;
-		if (fits(text))
-		{
-			line = text;
-			next = text.size();
-		}
-		else
-		{
-			// Grown until too wide
-			size_t grown = 0;
-			while (grown < text.size())
-			{
-				grown = std::min(grown + k_GrowBy, text.size());
-				if (!fits(text.substr(0, grown)))
-				{
-					break;
-				}
-			}
-			// The rightmost blank or hyphen at which it fits, else as many characters as fit
-			for (size_t at = grown - 1; at > 0 && next == 0; --at)
-			{
-				if (IsBlank(text[at]))
-				{
-					if (const auto before = TrimBlanksAtEnd(text.substr(0, at)); !before.empty() && fits(before))
-					{
-						line = before;
-						next = at + 1;
-					}
-				}
-				else if (text[at] == u'-' && at != grown - 1 && fits(text.substr(0, at + 1)))
-				{
-					line = text.substr(0, at + 1);
-					next = at + 1;
-				}
-			}
-			for (size_t count = grown - 1; count > 0 && next == 0; --count)
-			{
-				if (fits(text.substr(0, count)))
-				{
-					line = text.substr(0, count);
-					next = count;
-				}
-			}
-			if (next == 0)
-			{
-				break;
-			}
-		}
-		// A line break ends the line there
-		if (const auto found = std::ranges::find_if(line, IsLineBreak); found != line.end())
-		{
-			const auto at = static_cast<size_t>(found - line.begin());
-			line = line.substr(0, at);
-			next = at + 1;
-		}
-		lines.emplace_back(line);
-		text.remove_prefix(next);
-	}
-	return lines;
-}
-
 Sizes FarSizes(const Sizes& near)
 {
 	const float halfWidth = near.width * 0.5f;
@@ -161,6 +68,60 @@ Sizes FarSizes(const Sizes& near)
 	    .height = near.height * 0.5f * k_Seventh,
 	    .margin = halfWidth * k_FarMarginShare,
 	    .lineHeight = near.lineHeight * k_Seventh,
+	};
+}
+
+std::optional<InlineCode> ReadCode(std::u16string_view text)
+{
+	if (text.size() < 2 || text[0] != u'$' || (text[1] != u'g' && text[1] != u'm'))
+	{
+		return std::nullopt;
+	}
+	const auto kind = text[1] == u'g' ? InlineCode::Kind::Gesture : InlineCode::Kind::Control;
+	// Read as a C string to integer: blanks, a sign, then digits
+	auto rest = text.substr(2);
+	while (!rest.empty() && (rest.front() == u' ' || (rest.front() >= u'\t' && rest.front() <= u'\r')))
+	{
+		rest.remove_prefix(1);
+	}
+	bool negative = false;
+	if (!rest.empty() && (rest.front() == u'-' || rest.front() == u'+'))
+	{
+		negative = rest.front() == u'-';
+		rest.remove_prefix(1);
+	}
+	int number = 0;
+	while (!rest.empty() && rest.front() >= u'0' && rest.front() <= u'9')
+	{
+		number = (number * 10) + (rest.front() - u'0');
+		rest.remove_prefix(1);
+	}
+	return InlineCode {.kind = kind, .number = negative ? -number : number};
+}
+
+std::vector<Piece> SplitCodes(std::u16string_view item)
+{
+	// A code is read from at most its first four characters when the text starts with it
+	constexpr size_t k_CodeLength = 4;
+	if (const auto code = ReadCode(item.substr(0, k_CodeLength)); code.has_value())
+	{
+		return {Piece {.kind = Piece::Kind::Code, .words = {}, .code = *code}};
+	}
+	auto at = item.find(u"$g");
+	if (at == std::u16string_view::npos)
+	{
+		at = item.find(u"$m");
+	}
+	if (at == std::u16string_view::npos)
+	{
+		return {Piece {.kind = Piece::Kind::Words, .words = item, .code = {}}};
+	}
+	const auto rest = item.substr(at);
+	return {
+	    Piece {.kind = Piece::Kind::Code, .words = {}, .code = ReadCode(rest).value_or(InlineCode {})},
+	    Piece {.kind = Piece::Kind::Gap, .words = {}, .code = {}},
+	    Piece {.kind = Piece::Kind::Words, .words = item.substr(0, at), .code = {}},
+	    Piece {.kind = Piece::Kind::Code, .words = {}, .code = ReadCode(rest.substr(0, k_CodeLength)).value_or(InlineCode {})},
 	};
 }
 
@@ -375,10 +336,95 @@ void AddLines(std::vector<Line>& out, const std::vector<std::u16string>& lines, 
 		y += size;
 	}
 }
+
+/// A picture code takes two lines, and the words above it start seven tenths of a line higher
+constexpr float k_IconLines = 2.0f;
+constexpr float k_GapLines = 0.7f;
+/// A gesture's cell on its sheet
+constexpr float k_GestureCell = 0.25f;
+/// A control's picture is given by its middle row a fifth of its size above the middle of its two lines
+constexpr float k_ControlRaise = 0.2f;
+/// Fainter than this a control's picture isn't drawn
+constexpr int k_FaintestControl = 4;
+
+/// A gesture's picture centred between the bounds' margins from a top down, cut to their rows; none where it can't fit
+/// across or down, or lies wholly outside them
+void AddGesture(std::vector<GestureIcon>& out, int gesture, float top, float size, const WordBounds& bounds, glm::vec4 colour)
+{
+	if (bounds.right - bounds.left < size || bounds.clipBottom - bounds.clipTop < size || bounds.clipBottom < top)
+	{
+		return;
+	}
+	const int cell = gesture % k_GestureCells;
+	const float middle = (bounds.left + bounds.right) * 0.5f;
+	GestureIcon icon {
+	    .sheet = gesture / k_GestureCells,
+	    .min = {middle - (size * 0.5f), top},
+	    .max = {middle + (size * 0.5f), top + size},
+	    .uvMin = {static_cast<float>(cell % 4) * k_GestureCell, static_cast<float>(cell / 4) * k_GestureCell},
+	    .uvMax = {},
+	    .colour = colour,
+	};
+	icon.uvMax = icon.uvMin + glm::vec2(k_GestureCell);
+	const float above = (bounds.clipTop - top) / size;
+	if (above >= 1.0f)
+	{
+		return;
+	}
+	if (above > 0.0f)
+	{
+		icon.min.y = bounds.clipTop;
+		icon.uvMin.y += above * k_GestureCell;
+	}
+	const float below = (top + size - bounds.clipBottom) / size;
+	if (below >= 1.0f)
+	{
+		return;
+	}
+	if (below > 0.0f)
+	{
+		icon.max.y = bounds.clipBottom;
+		icon.uvMax.y -= below * k_GestureCell;
+	}
+	out.push_back(icon);
+}
+
+/// A control's picture over two lines from a top down, only when wholly inside the box; it fades in over the top third
+/// of the box and out from the bottom line to the box's bottom
+void AddControl(std::vector<ControlIcon>& out, int action, float top, float size, const WordBounds& bounds, float boxBottom)
+{
+	const float bottom = top + size;
+	if (top <= bounds.clipTop || bottom >= boxBottom)
+	{
+		return;
+	}
+	float fade = 1.0f;
+	if (top < bounds.fadeTopEnd)
+	{
+		fade = std::clamp((top - bounds.clipTop) / (bounds.fadeTopEnd - bounds.clipTop), 0.0f, 1.0f);
+	}
+	if (bottom > bounds.fadeBottomStart)
+	{
+		fade *= std::clamp((bottom - boxBottom) / (bounds.fadeBottomStart - boxBottom), 0.0f, 1.0f);
+	}
+	const auto alpha = static_cast<int>(fade * 255.0f);
+	if (alpha < k_FaintestControl)
+	{
+		return;
+	}
+	const auto whole = static_cast<int>(size);
+	out.push_back({
+	    .action = action,
+	    .right = static_cast<int>(((bounds.left + bounds.right) * 0.5f) + (size * 0.5f)),
+	    .top = static_cast<int>(((top + bottom) * 0.5f) - (size * k_ControlRaise)) - (whole / 2),
+	    .size = whole,
+	    .alpha = static_cast<float>(alpha) / 255.0f,
+	});
+}
 } // namespace
 
 Words LayOutWords(const Placement& placement, std::span<const std::u16string_view> items, float scrollPixels, float alpha,
-                  const WrapFn& wrap, const WidthFn& widthOf)
+                  const WrapFn& wrap, const WidthFn& widthOf, const ControlShownFn& controlShown)
 {
 	const float x0 = placement.min.x;
 	const float y0 = placement.min.y;
@@ -409,23 +455,71 @@ Words LayOutWords(const Placement& placement, std::span<const std::u16string_vie
 	};
 	const auto shadowAlpha = static_cast<int>(k_ShadowAlpha * alpha);
 	const auto wordsAlpha = static_cast<int>(255.0f * alpha);
+	const float iconSize = size * k_IconLines;
 
 	Words words;
 	float y = bottomLine + scrollPixels;
 	for (const auto item : items)
 	{
-		const auto lines = wrap(item, bounds.right - bounds.left, size);
-		const float itemHeight = static_cast<float>(lines.size()) * size;
-		y -= itemHeight;
-		words.contentHeight += itemHeight;
-		AddLines(words.shadows, lines, y + shadow, size, shadowAlpha, shadowBounds, widthOf);
-		AddLines(words.lines, lines, y, size, wordsAlpha, bounds, widthOf);
+		for (const auto& piece : SplitCodes(item))
+		{
+			switch (piece.kind)
+			{
+			case Piece::Kind::Words:
+			{
+				const auto lines = wrap(piece.words, bounds.right - bounds.left, size);
+				const float itemHeight = static_cast<float>(lines.size()) * size;
+				y -= itemHeight;
+				words.contentHeight += itemHeight;
+				AddLines(words.shadows, lines, y + shadow, size, shadowAlpha, shadowBounds, widthOf);
+				AddLines(words.lines, lines, y, size, wordsAlpha, bounds, widthOf);
+				break;
+			}
+			case Piece::Kind::Gap:
+				y -= size * k_GapLines;
+				words.contentHeight += size * k_GapLines;
+				break;
+			case Piece::Kind::Code:
+				if (piece.code.kind == InlineCode::Kind::Gesture)
+				{
+					if (piece.code.number <= 0 || piece.code.number >= k_GestureCount)
+					{
+						break;
+					}
+					y -= iconSize;
+					words.contentHeight += iconSize;
+					AddGesture(words.gestures, piece.code.number, y + shadow, iconSize, shadowBounds,
+					           {0.0f, 0.0f, 0.0f, static_cast<float>(shadowAlpha) / 255.0f});
+					AddGesture(words.gestures, piece.code.number, y, iconSize, bounds,
+					           {1.0f, 1.0f, 1.0f, static_cast<float>(wordsAlpha) / 255.0f});
+					break;
+				}
+				if (!controlShown || !controlShown(piece.code.number))
+				{
+					break;
+				}
+				y -= iconSize;
+				words.contentHeight += iconSize;
+				AddControl(words.controls, piece.code.number, y, iconSize, bounds, y1);
+				break;
+			}
+		}
 		if (y < y0)
 		{
 			break;
 		}
 	}
 	return words;
+}
+
+ControlBox PlaceControl(const ControlIcon& icon, float width, float gap)
+{
+	const auto left = static_cast<int>(static_cast<float>(icon.right) - (width + gap));
+	const auto right = static_cast<int>(static_cast<float>(left) + width);
+	return {
+	    .min = {static_cast<float>(left), static_cast<float>(icon.top)},
+	    .max = {static_cast<float>(right), static_cast<float>(icon.top + icon.size)},
+	};
 }
 
 void ClampScroll(Scroll& scroll, const Placement& placement)
@@ -443,6 +537,41 @@ void ClampScroll(Scroll& scroll, const Placement& placement)
 	scroll.lines = std::max(scroll.lines, 0.0f);
 	scroll.moreBelow = scroll.lines > 1.0f;
 	scroll.moreAbove = scroll.lines < most - 1.0f;
+}
+
+void FollowHand(Scroll& scroll, float pointerY)
+{
+	if (scroll.lineHeight == 0.0f)
+	{
+		return;
+	}
+	const float from = scroll.handY.value_or(pointerY);
+	scroll.lines += (pointerY - from) / scroll.lineHeight;
+	scroll.handY = pointerY;
+}
+
+void LetGo(Scroll& scroll)
+{
+	scroll.handY.reset();
+}
+
+bool Inside(const Placement& placement, glm::vec2 pointer)
+{
+	return pointer.x > placement.min.x && pointer.x < placement.max.x && pointer.y > placement.min.y &&
+	       pointer.y < placement.max.y;
+}
+
+bool HandOnBubble(const Placement& placement, glm::vec2 pointer, const UnderHand& under)
+{
+	if (!Inside(placement, pointer))
+	{
+		return false;
+	}
+	if (under.objectDepth.has_value() && *under.objectDepth <= placement.depth)
+	{
+		return false;
+	}
+	return !under.landDepth.has_value() || *under.landDepth >= placement.depth;
 }
 
 bool OnScreen(const Ball& ball, const View& view)

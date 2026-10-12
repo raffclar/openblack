@@ -206,6 +206,14 @@ TEST(HandDemo, NoHintsNearEitherEnd)
 	EXPECT_EQ(played.back().hints, 0u);
 }
 
+// A button's record gives the hand back the throw it was ready to make: its velocity is the first three numbers
+TEST(HandDemo, ARecordCarriesTheThrowTheHandWasReadyToMake)
+{
+	hnd::HNDRecord record;
+	record.heldPlacement = {73.9941f, 5.2013f, -52.1485f, 0.0f, 0.0f, 0.0f, 1966.6f, 17.5f, 2364.8f, 0.3f, 1.1f, -0.1f};
+	EXPECT_EQ(hand_demo::RecordedThrowVelocity(record), glm::vec3(73.9941f, 5.2013f, -52.1485f));
+}
+
 TEST(HandDemoPlayback, AButtonIsHeldFromItsPressToItsRelease)
 {
 	HeldButtons held;

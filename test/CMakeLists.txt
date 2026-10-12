@@ -106,6 +106,7 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_sound_effect PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
+openblack_setup_and_add_test(test_text_wrap gui/test_text_wrap.cpp)
 openblack_setup_and_add_test(test_skip_box gui/test_skip_box.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)
 openblack_setup_and_add_test(test_screen_fade gui/test_screen_fade.cpp)
@@ -210,6 +211,7 @@ target_link_libraries(test_footprint_paint PRIVATE lnd)
 target_link_libraries(test_block_texture PRIVATE lnd)
 openblack_setup_and_add_test(test_land_vertex test_land_vertex.cpp)
 openblack_setup_and_add_test(test_sea_rows test_sea_rows.cpp)
+openblack_setup_and_add_test(test_texel_depth test_texel_depth.cpp)
 openblack_setup_and_add_test(test_day_night_clock test_day_night_clock.cpp)
 openblack_setup_and_add_test(test_mists test_mists.cpp)
 openblack_setup_and_add_test(test_clouds test_clouds.cpp)
@@ -786,6 +788,21 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(
   test_double_click_flight camera/test_double_click_flight.cpp
+)
+openblack_setup_and_add_test(test_spell_icons test_spell_icons.cpp)
+openblack_setup_and_add_test(
+  test_script_stones_natives test_script_stones_natives.cpp
+)
+target_link_libraries(test_script_stones_natives PRIVATE ScriptLibrary helpdude)
+openblack_setup_and_add_test(test_shape_shadows graphics/test_shape_shadows.cpp)
+openblack_setup_and_add_test(
+  test_land_shadow_casters test_land_shadow_casters.cpp
+)
+openblack_setup_and_add_test(
+  test_level_script_match test_level_script_match.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_development test_creature_development.cpp
 )
 openblack_setup_and_add_test(test_turn_cheer help/test_turn_cheer.cpp)
 openblack_setup_and_add_test(

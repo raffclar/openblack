@@ -274,7 +274,8 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std:
 }
 
 Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
-                                                         const std::filesystem::path& alphaPath, uint16_t side) const
+                                                         const std::filesystem::path& alphaPath, uint16_t side,
+                                                         graphics::texel_depth::Depth depth) const
 {
 	auto& fileSystem = Locator::filesystem::value();
 	const auto colours = rawimage::DecodeRgb(fileSystem.ReadAll(rawTexturePath), side, side);
@@ -290,6 +291,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
 		const auto& rgb = colours->pixels.at(i);
 		texels.insert(texels.end(), {rgb[0], rgb[1], rgb[2], alpha->pixels.at(i)});
 	}
+	graphics::texel_depth::Reduce(texels, depth);
 	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
 	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));

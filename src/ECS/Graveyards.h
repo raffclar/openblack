@@ -21,20 +21,23 @@ namespace openblack::graveyards
 /// A graveyard building is made: it keeps its burials, and starts working at once when it stands built
 void Made(entt::entity graveyard);
 
-/// A graveyard starts working (built, or finished by its builders): the town takes it as its own when it has none, and
-/// it counts a burial straight away, so a new graveyard shows its first grave
+/// A graveyard starts working (built, finished by its builders, or repaired whole): the town takes it as its own when it has
+/// none, and it counts a burial straight away, so a new graveyard shows its first grave
 void StartsWorking(entt::entity graveyard);
 
-/// One of a town's people has died: its graveyard, if it has one, counts a burial
+/// One of a town's people has died: its graveyard, if it has one, counts a burial. As in the original game, a civic
+/// building standing in as the town's graveyard is counted on as if it were one, and shows its scaffold from then on.
 void TownPersonDied(entt::entity town);
 
-/// A graveyard goes: when it was its town's own, the first other working graveyard of the town takes over
+/// A graveyard goes: when it was its town's own, the first other working civic building of the town (any but a wonder)
+/// takes over as its graveyard, as in the original game. Another building standing in as the town's graveyard going
+/// leaves the town with none.
 void Lost(entt::entity graveyard);
 
-/// Whether the town has a graveyard of its own and it works
+/// Whether the town has a graveyard of its own and it works (a civic building standing in as one counts)
 [[nodiscard]] bool HasWorkingGraveyard(entt::entity town);
 
-/// The town's own graveyard, none when it has none
+/// The town's own graveyard (or the civic building standing in as one), none when it has none
 [[nodiscard]] entt::entity GraveyardOf(entt::entity town);
 
 /// How many of a graveyard model's graves are shown: none for anything else

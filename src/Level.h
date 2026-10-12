@@ -34,6 +34,13 @@ public:
 	static bool IsLevelFile(const std::filesystem::path& path);
 	static Level ParseLevel(const std::filesystem::path& path, Level::LandType landType);
 
+	/// Where a map script is found, searched for as the file system finds every file and made absolute, so that a land
+	/// started from a path relative to the game folder, the working folder or a search path can be told apart from others
+	[[nodiscard]] static std::filesystem::path ResolveScriptPath(const std::filesystem::path& path);
+	/// Whether two map script paths, each already resolved to where its file is, name the same script. The game's data
+	/// comes from a case-blind file system, so letter case doesn't count, nor do dot steps.
+	[[nodiscard]] static bool IsSameScript(const std::filesystem::path& first, const std::filesystem::path& second);
+
 private:
 	std::string _name;
 	std::filesystem::path _scriptPath;

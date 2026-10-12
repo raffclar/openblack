@@ -25,6 +25,7 @@ constexpr uint32_t k_Scroll = 0xEE2 - 0xE73;
 constexpr uint32_t k_ZoomOut = 0xE8B - 0xE73;
 constexpr uint32_t k_WorldRoom = 0xE9B - 0xE73;
 constexpr uint32_t k_Stat = 20;
+constexpr uint32_t k_OtherStat = 21;
 
 /// Most tooltips' info, and one stat that matters more
 std::array<ToolTipInfo, ToolTips::k_Count> Info()
@@ -32,6 +33,7 @@ std::array<ToolTipInfo, ToolTips::k_Count> Info()
 	std::array<ToolTipInfo, ToolTips::k_Count> info {};
 	info.fill({.priority = 0.5f, .displayTime = 1.0f, .displayTimeAfterFocus = 0.0f});
 	info.at(k_Stat) = {.priority = 0.9f, .displayTime = 1.0f, .displayTimeAfterFocus = 1.0f};
+	info.at(k_OtherStat) = {.priority = 0.9f, .displayTime = 1.0f, .displayTimeAfterFocus = 0.0f};
 	return info;
 }
 
@@ -69,6 +71,41 @@ TEST(ToolTips, FadeInOverOneMoreSecondEachTimeShown)
 	// The second time it takes two seconds
 	Show(toolTips, k_Move, 5);
 	EXPECT_NEAR(toolTips.GetShown()->alpha, 0.25f, 1e-4f);
+}
+
+TEST(ToolTips, FadeInTakesAtMostEightySeconds)
+{
+	ToolTips toolTips(Info());
+	for (int i = 0; i < 100; ++i)
+	{
+		Show(toolTips, k_Move, 1);
+		toolTips.ProcessTurn();
+	}
+	// Shown a hundred times, it still fades in over 80 seconds: a tenth of a second is an 800th of the way
+	Show(toolTips, k_Move, 1);
+	EXPECT_NEAR(toolTips.GetShown()->alpha, 0.1f / 80.0f, 1e-6f);
+}
+
+TEST(ToolTips, ImportantOnesShowAtOnceHoweverOftenShown)
+{
+	// A village centre's belief and population, both stats, take turns a second each for as long as the hand is over it
+	constexpr uint32_t k_Population = k_Stat + 1;
+	auto info = Info();
+	info.at(k_Stat).displayTimeAfterFocus = 0.0f;
+	info.at(k_Population) = info.at(k_Stat);
+	ToolTips toolTips(info);
+	for (int second = 0; second < 300; ++second)
+	{
+		for (int turn = 0; turn < 25; ++turn)
+		{
+			toolTips.Submit(k_Stat, ToolTipAction::None, ToolTipArrows::k_None);
+			toolTips.Submit(k_Population, ToolTipAction::None, ToolTipArrows::k_None);
+			toolTips.ProcessTurn();
+			toolTips.Update(0.04f);
+			ASSERT_TRUE(toolTips.GetShown().has_value());
+			ASSERT_EQ(toolTips.GetShown()->alpha, 1.0f) << second << " " << turn;
+		}
+	}
 }
 
 TEST(ToolTips, FadeOutOnceReadAtTheIntelligentLevel)
@@ -140,6 +177,65 @@ TEST(ToolTips, DisplayTimeRunsOnlyWhileItIsAllowedTo)
 	const auto running = showMoveThenAsk(true);
 	ASSERT_TRUE(running.has_value());
 	EXPECT_EQ(running->index, k_ZoomIn);
+}
+
+TEST(ToolTips, OneSecondOfDisplayTimeHoldsForTwoAndAHalfSecondsOfTurns)
+{
+	ToolTips toolTips(Info());
+	// Display time counts 25 game turns a second and turns come 10 a second, so a 1 s tooltip holds for 2.5 s
+	for (int turn = 0; turn < 25; ++turn)
+	{
+		toolTips.Submit(k_Move, ToolTipAction::Select, ToolTipArrows::k_None);
+		toolTips.Submit(k_ZoomIn, ToolTipAction::Select, ToolTipArrows::k_None);
+		toolTips.ProcessTurn();
+		ASSERT_TRUE(toolTips.GetShown().has_value()) << turn;
+		ASSERT_EQ(toolTips.GetShown()->index, k_Move) << turn;
+	}
+	toolTips.Submit(k_Move, ToolTipAction::Select, ToolTipArrows::k_None);
+	toolTips.Submit(k_ZoomIn, ToolTipAction::Select, ToolTipArrows::k_None);
+	toolTips.ProcessTurn();
+	ASSERT_TRUE(toolTips.GetShown().has_value());
+	EXPECT_EQ(toolTips.GetShown()->index, k_ZoomIn);
+}
+
+TEST(ToolTips, TwoStatsSubmittedTogetherTakeTurnsAndKeepTheirOwnNumbers)
+{
+	// As a village centre submits its belief then its population every turn: the first shows for its display time
+	// with its own number, then the second takes over with its own, and so on
+	ToolTips toolTips(Info());
+	const auto turn = [&toolTips] {
+		toolTips.SubmitNumbered(k_Stat, ToolTipAction::None, -12.0, std::nullopt);
+		toolTips.SubmitNumbered(k_OtherStat, ToolTipAction::None, 7.0, 30.0);
+		toolTips.ProcessTurn();
+		toolTips.Update(0.1f);
+	};
+	const int displayTurns = static_cast<int>(ToolTips::k_TurnsPerSecond);
+	for (int i = 0; i < displayTurns; ++i)
+	{
+		turn();
+		const auto shown = toolTips.GetShown();
+		ASSERT_TRUE(shown.has_value()) << i;
+		EXPECT_EQ(shown->index, k_Stat) << i;
+		ASSERT_TRUE(shown->number.has_value()) << i;
+		EXPECT_DOUBLE_EQ(*shown->number, -12.0) << i;
+		EXPECT_FALSE(shown->second.has_value()) << i;
+	}
+	turn();
+	auto shown = toolTips.GetShown();
+	ASSERT_TRUE(shown.has_value());
+	EXPECT_EQ(shown->index, k_OtherStat);
+	ASSERT_TRUE(shown->number.has_value());
+	EXPECT_DOUBLE_EQ(*shown->number, 7.0);
+	ASSERT_TRUE(shown->second.has_value());
+	EXPECT_DOUBLE_EQ(*shown->second, 30.0);
+	for (int i = 0; i < displayTurns; ++i)
+	{
+		turn();
+	}
+	shown = toolTips.GetShown();
+	ASSERT_TRUE(shown.has_value());
+	EXPECT_EQ(shown->index, k_Stat);
+	EXPECT_DOUBLE_EQ(*shown->number, -12.0);
 }
 
 TEST(ToolTips, LingerAfterFocusWhenTheirInfoSaysSo)
