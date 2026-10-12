@@ -205,6 +205,7 @@ public:
 	void SetPlayer(EffectId id, int player) override;
 	void SetPower(EffectId id, float power) override;
 	void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> symbols) override;
+	void SetFightMarks(std::vector<particles::draw::FightMark> marks) override { _fightMarks = std::move(marks); }
 	void SetDrawPath(EffectId id, particles::draw::DrawPath path) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
 	void SetInTemple(EffectId id) override;
@@ -288,6 +289,7 @@ private:
 	EffectId _handManaPath {k_NoEffect};
 	/// The players' symbols drawn by themselves this frame
 	std::vector<particles::draw::PlayerSymbol> _playerSymbols;
+	std::vector<particles::draw::FightMark> _fightMarks;
 	/// The textures by the name a creator spells them with: the sheet and its alpha
 	std::map<std::string, std::pair<entt::id_type, entt::id_type>, std::less<>> _textures;
 	/// Every texture's name in lower case, to its spelling on disk

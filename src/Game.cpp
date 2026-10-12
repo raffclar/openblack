@@ -1907,6 +1907,9 @@ bool Game::Update() noexcept
 		// The fight animations play, blows land and the fighters move as their animations carry them
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
 		Locator::creatureFightSystem::value().Update(gameTime);
+		// The sparkles marking the player's queued fight moves
+		Locator::creatureFightSystem::value().DrawMarks(
+		    std::chrono::duration<float, std::milli>(clock.GetFrameRealTime()).count(), camera.GetOrigin());
 	}
 	{
 		// The animals are drawn between their last two turns, their models posed by their clips

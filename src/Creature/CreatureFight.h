@@ -21,6 +21,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "FightMarks.h"
+
 /// Creature fights: two creatures duel inside a circular arena. Each plays a small set of fight states (starting,
 /// standing in its stance, acting, blocking, casting, reeling, fainting) fed by a queue of up to twelve moves. The
 /// player fills the queue by clicking the opponent's body high, in the middle or low, their own creature to block, or
@@ -453,6 +455,8 @@ struct Fighter
 	/// The spell being cast
 	std::optional<uint32_t> spell;
 	MoveQueue queue;
+	/// The sparkles marking the moves the player queued, in step with the queue
+	marks::MarkList marks;
 	float health {1.0f};
 	float stamina {1.0f};
 	Control control {Control::Computer};
