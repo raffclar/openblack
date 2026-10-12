@@ -1000,7 +1000,7 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		return frame.target;
 	}
 	grab->handSize = frame.handSize;
-	_throwScreenScale = hand_grab::ThrowScreenScale(frame.screenHeight);
+	_throwScreenScale = hand_grab::ThrowScreenScale(frame.screenSize);
 	grab->handPoint = frame.cursorGround;
 	// Clicks are forgotten as the game's turns go by
 	if (auto* clicked = Clicked(); clicked != nullptr)

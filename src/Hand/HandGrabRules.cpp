@@ -339,9 +339,13 @@ bool hand_grab::IsFastRelease(glm::vec3 velocity)
 	return glm::dot(velocity, velocity) > k_FastReleaseSpeedSquared;
 }
 
-float hand_grab::ThrowScreenScale(float screenHeight)
+float hand_grab::ThrowScreenScale(glm::vec2 screenSize)
 {
-	return screenHeight > 0.0f ? screenHeight / k_ThrowReferenceHeight : 1.0f;
+	if (screenSize.x <= 0.0f || screenSize.y <= 0.0f)
+	{
+		return 1.0f;
+	}
+	return std::min(screenSize.y, screenSize.x * 0.75f) / k_ThrowReferenceHeight;
 }
 
 glm::vec3 hand_grab::ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity,

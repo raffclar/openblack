@@ -15,6 +15,7 @@
 #include <string_view>
 
 #include <glm/mat3x3.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
@@ -298,11 +299,13 @@ struct TugResult
 /// Whether a release is fast enough that only a tree is laid along the slope as it leaves the hand
 [[nodiscard]] bool IsFastRelease(glm::vec3 velocity);
 /// The screen height the game's throws are matched to: its 800x600 default. The hand follows the cursor, and a pixel is a
-/// fixed share of the camera's height of view, so the same movement in pixels sweeps the hand less on a taller screen.
+/// fixed share of the camera's view, so the same movement in pixels sweeps the hand less on a bigger screen.
 inline constexpr float k_ThrowReferenceHeight = 600.0f;
-/// How much the hand's speed is scaled for its throw on a screen of this many pixels high, so that a mouse movement of
-/// the same number of pixels throws as hard as at the reference height
-[[nodiscard]] float ThrowScreenScale(float screenHeight);
+/// How much the hand's speed is scaled for its throw on a screen of this size in pixels, so that a mouse movement of the
+/// same number of pixels throws as hard as on the reference screen. A pixel's angle follows the height of the screen's
+/// 4:3 middle: the height itself on 4:3 and wider screens (whose view keeps the 4:3 height), three quarters of the width
+/// on narrower ones (whose view keeps the 4:3 width)
+[[nodiscard]] float ThrowScreenScale(glm::vec2 screenSize);
 /// The velocity a throw leaves the hand at: a hand demonstration's recorded throw while it stands, else the spring's,
 /// scaled for the screen, while the spring is on, else none; never faster than the most a throw can be
 [[nodiscard]] glm::vec3 ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity,

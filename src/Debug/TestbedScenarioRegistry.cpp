@@ -1614,8 +1614,9 @@ void AddHand(std::vector<Scenario>& all)
 	    .facet = Facet::Hand,
 	    .description = "The hand picks up a rock, makes ready to throw low on the screen and flings it with a quick "
 	                   "upward sweep of the pointer, in real time.",
-	    .expected = "Each rock leaves the hand at the hand's speed, the same at any frame rate (the inspector's HandGrab "
-	                "lastThrow), and flies on the order of a hundred metres before it lands.",
+	    .expected = "The rock leaves the hand at the hand's speed scaled for the screen (the height of its 4:3 middle "
+	                "over 600; the inspector's HandGrab lastThrow), the same at any frame rate, and flies on the order "
+	                "of a hundred metres or more before it lands.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},
@@ -2628,7 +2629,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
-	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage || IsPointerCommand(kind);
+	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
+	       kind == Kind::RunHelpMessage || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2636,7 +2638,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",      "Expressions",   "Senses",  "Needs",  "Growth",  "Appearance", "Light",     "Movement", "Footprints",
 	    "Audio",     "Objects",       "Hand",    "Leash",  "Combat",  "Mind",       "Particles", "Editor",   "Miracles",
-	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",  "Story", "Tutorial",
+	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",  "Story",    "Tutorial",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
