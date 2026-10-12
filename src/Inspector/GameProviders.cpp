@@ -645,7 +645,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 	              }));
 	provider->Add(Query("ocean", "The sea's textures"),
 	              Serve<Locator::oceanSystem>("the sea", [](const OceanInterface& ocean, const QueryContext& /*c*/) {
-		              return Json {{"diffuse_texture", ocean.GetDiffuseTexture()}, {"alpha_texture", ocean.GetAlphaTexture()}};
+		              return Json {{"texture", ocean.GetTexture()}};
 	              }));
 	provider->Add(Query("weather", "The climate: whether it runs, its storms and the season"),
 	              Serve<Locator::weatherSystem>(

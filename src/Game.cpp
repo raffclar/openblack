@@ -54,6 +54,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
+#include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
@@ -3280,6 +3281,18 @@ bool Game::Initialize() noexcept
 				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 			}
 		}
+	}
+	// The sea's texture, its colours and alpha together, four bits a channel as the game keeps it
+	try
+	{
+		textureManager.Load(sea_texture::k_Id.value(), resources::Texture2DLoader::FromDiskWithAlphaTag {},
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_ColourFile,
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side,
+		                    graphics::texel_depth::Depth::FourBits);
+	}
+	catch (std::runtime_error& err)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
 		// The game ships a grey ice map it never loads, cut short of a whole texture
