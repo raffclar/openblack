@@ -98,6 +98,21 @@ struct ScriptClipStep
 	return {.playsLeft = playsLeft, .then = playsLeft == 0 ? VillagerStates::InScript : VillagerStates::ScriptPlayAnim};
 }
 
+/// Whether a script can put a villager into a state: it is alive and on the land, not held, flying or carried off. A
+/// drowning villager can be: a script that makes a villager over the sea takes it into its hands at once, so it stays
+/// where it was made instead of drowning.
+[[nodiscard]] constexpr bool CanTakeScriptState(bool onLand, bool dead)
+{
+	return onLand && !dead;
+}
+
+/// Whether the natives that set a villager's state or send it walking take it: as for any script state, and not while
+/// it is drowning, which they leave alone
+[[nodiscard]] constexpr bool CanBeDirected(bool onLand, bool dead, bool drowning)
+{
+	return CanTakeScriptState(onLand, dead) && !drowning;
+}
+
 /// Whether a villager put into a state by a script carries on with the walk it was on: only the walking states walk.
 /// Put into any other, the villager stops where it is, as its new state takes no steps.
 [[nodiscard]] constexpr bool KeepsWalking(VillagerStates state)
