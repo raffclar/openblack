@@ -59,6 +59,8 @@ struct Town
 	std::optional<glm::vec2> congregationPos;
 	/// The turn its latest emergency was called, 0 when it is in none
 	uint32_t emergencyTurn {0};
+	/// Its worship share when an emergency stopped its worship, given back once the emergency is over; 0 when none
+	float worshipShareBeforeEmergency {0.0f};
 	/// Its own graveyard, where its dead are counted: the first of its graveyards to work, none until then
 	entt::entity graveyard {entt::null};
 	/// Its crèche, where its children spend their days: the first of its crèches to work, none until then. When it goes
