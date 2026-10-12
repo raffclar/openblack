@@ -854,3 +854,4 @@ openblack_setup_and_add_test(
   test_script_guide_ogre_natives test_script_guide_ogre_natives.cpp
 )
 target_link_libraries(test_script_guide_ogre_natives PRIVATE ScriptLibrary helpdude)
+openblack_setup_and_add_test(test_shepherd_rules test_shepherd_rules.cpp)

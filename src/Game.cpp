@@ -2344,6 +2344,9 @@ bool Game::Update() noexcept
 						if (_handOnCreature.has_value())
 						{
 							handTransform.position = _handOnCreature->position;
+							// Its back turns to the body it rests on, or stands it upright beside it
+							handTransform.rotation =
+							    hand_orientation::StandOnSlope(_handOnLevelLand, _handHeading, _handOnCreature->up);
 							TraceHand("on creature", handTransform.position);
 						}
 					}
@@ -2516,7 +2519,10 @@ bool Game::Update() noexcept
 			using HandState = HandAnimation::State;
 			using HandCycle = HandAnimation::Cycle;
 			using hand_navigation_pose::Pose;
-			const auto state = _handCameraState ? HandState::Camera : HandState::Normal;
+			// Held to a creature the hand is in its own state, which plays its cycle without leaning
+			const auto state = _handOnCreature.has_value() ? HandState::Creature
+			                   : _handCameraState          ? HandState::Camera
+			                                               : HandState::Normal;
 			auto cycle = HandCycle::Wiggle;
 			switch (_handPose)
 			{
@@ -4864,6 +4870,7 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	}
 	const auto up = _handUp.GetValue();
 	const auto onLevelLand = TurnToHeading(facingCamera, cameraHeading, _handHeading);
+	_handOnLevelLand = onLevelLand;
 	handTransform.rotation = glm::length(up) > 0.0f ? StandOnSlope(onLevelLand, _handHeading, up) : onLevelLand;
 	// Scooping, the hand faces along its heading on level land and is tipped down towards what it scoops from
 	if (Locator::handGrabSystem::has_value())

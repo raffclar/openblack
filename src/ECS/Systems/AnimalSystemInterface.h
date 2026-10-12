@@ -84,6 +84,15 @@ public:
 	[[nodiscard]] virtual glm::vec3 MovementOf(entt::entity animal) const = 0;
 	/// The point a flock's leader wanders about, moved
 	virtual void SetFlockCentre(entt::entity flock, glm::vec2 centre) = 0;
+	/// A shepherd moves its flock's place: the leader heads for the new place at once, wherever it was going
+	virtual void MoveFlockPlace(entt::entity flock, glm::ivec2 place) = 0;
+	/// An animal leaves its flock for a new flock of its own, about where it stands, as wide and as close as the one it
+	/// left, which goes once no one is left in it. The new flock.
+	virtual entt::entity SeparateIntoOwnFlock(entt::entity animal) = 0;
+	/// An animal a shepherd has taken walks to the shepherd and lies dead there, as food taken to the store
+	virtual void SendToSlaughter(entt::entity animal, glm::vec2 goal) = 0;
+	/// An animal's speed now, in whole map units a turn
+	[[nodiscard]] virtual uint16_t SpeedOf(entt::entity animal) const = 0;
 	/// The flock's leader, its first animal still there, none for an empty flock
 	[[nodiscard]] virtual entt::entity LeaderOf(entt::entity flock) const = 0;
 	/// The flock's animals, oldest first

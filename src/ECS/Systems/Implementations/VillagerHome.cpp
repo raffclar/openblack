@@ -788,6 +788,11 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, Walk
 	}
 }
 
+bool villager_home::WalkIsOverAt(entt::entity villager, glm::vec2 goal)
+{
+	return walk_arrival::WalkIsOver(WalkStateOf(villager), WalkPositionOf(villager), wall_hug::ToWhole(goal));
+}
+
 void villager_home::ArriveHome(entt::entity villager)
 {
 	auto& registry = WorldRegistry();
