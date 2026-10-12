@@ -34,6 +34,7 @@
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
+#include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
@@ -1132,6 +1133,17 @@ void LeashSystem::ProcessTurn()
 			continue;
 		}
 		const auto position = glm::vec2(transform->position.x, transform->position.z);
+		// On the first land a young creature of the local player's is kept near its home while off the leash
+		if (mind != nullptr && Locator::playerSystem::has_value() &&
+		    creature_development::KeptAtHome({
+		        .stage = mind->developmentPhase,
+		        .leashed = leashes.worn.has_value(),
+		        .localPlayers = body->owner == Locator::playerSystem::value().GetLocalPlayer(),
+		        .land = registry.Context().mapScriptGlobals.landNumber,
+		    }))
+		{
+			ConfineToHome(entity, creature_development::k_YoungHomeRadius);
+		}
 		const bool moving =
 		    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity);
 

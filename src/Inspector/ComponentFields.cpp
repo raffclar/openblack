@@ -658,6 +658,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::underway>("underway")
 	    .Field<&components::CreatureMindState::developmentPhase>("developmentPhase")
 	    .Field<&components::CreatureMindState::desiresPhase>("desiresPhase")
+	    .Field<&components::CreatureMindState::inDevelopmentScript>("inDevelopmentScript")
 	    .Field<&components::CreatureMindState::paused>("paused")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")
