@@ -92,6 +92,8 @@ struct CreatureMindState
 
 	/// While paused, the mind leaves the body alone to be posed by hand
 	bool paused {false};
+	/// The player's hand took hold of it: once it has turned to the player it shows what it wants, and the help says it
+	bool showDesireOnHold {false};
 
 	/// What it has learnt and remembers, set up with the desires (from its mind file when it has one)
 	std::optional<creature_mind_model::Learnt> learnt;

@@ -20,6 +20,8 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureDesires.h"
+
 /// The good advisor's messages about the player's creature: what it learnt, its troubles, what it wants, why it failed,
 /// and short prompts on how to look after it. Each kind of message has its own text range, its own way of being said,
 /// and its own rules for waiting its turn. A message the creature can't be told about now may wait on a stack and be
@@ -311,5 +313,26 @@ enum class Prompt : uint8_t
 /// The most wanted of the creature's active desires, by its number: the first of those of greatest value above 0, else
 /// desire 0
 [[nodiscard]] size_t DominantDesire(std::span<const float> values, std::span<const bool> active);
+
+/// When the player's hand takes hold of the creature it shows the desire behind what it did lately that the player's
+/// feedback would be credited to, or else the desire its plan serves; only a desire with a way of being shown is shown
+/// (and then told of)
+[[nodiscard]] std::optional<creature_desires::Desire> DesireShownOnHold(std::optional<creature_desires::Desire> credited,
+                                                                        std::optional<creature_desires::Desire> planned);
+
+/// The miscellaneous messages of being stroked or slapped while too young to learn from it
+constexpr uint32_t k_StrokedTooYoung = 4;
+constexpr uint32_t k_SlappedTooYoung = 5;
+/// Stroked (or not slapped) or slapped, too young to learn anything from it
+[[nodiscard]] Message TooYoungToLearn(float feedback);
+/// What the creature learnt from the player's feedback for something it did: that it now thinks better or worse of
+/// doing it to things like that (by the desire it served), when the lesson split what it knows of such things, else
+/// that the reason it did it (by the source) is a better or worse one
+[[nodiscard]] Message FeedbackLesson(float feedback, bool opinionChanged, creature_desires::Desire desire, uint32_t source);
+
+/// A spell, by its place in the game's spell table, took hold of the creature, or wore off it
+[[nodiscard]] Message SpellMessage(bool tookHold, uint32_t spell);
+/// The creature fumbled a miracle it hadn't learnt well enough
+constexpr uint32_t k_FumbledMiracle = 1;
 
 } // namespace openblack::creature_help
