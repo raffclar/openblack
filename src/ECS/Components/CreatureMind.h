@@ -81,6 +81,9 @@ struct CreatureMindState
 	/// the stage they were last set for. Until the game's story moves it on, a creature starts fully grown up.
 	uint32_t developmentPhase {k_FullyGrownUp};
 	std::optional<uint32_t> desiresPhase;
+	/// A lesson script of growing up is running for it, from when the script says so until it says it is over. The
+	/// game's help about the creature waits meanwhile, except the help about its stage.
+	bool inDevelopmentScript {false};
 
 	/// While paused, the mind leaves the body alone to be posed by hand
 	bool paused {false};
