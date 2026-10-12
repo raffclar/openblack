@@ -56,7 +56,7 @@ public:
 	void StartFading(entt::entity animal) override;
 
 	[[nodiscard]] bool IsAvailableForReaction(entt::entity animal) const override;
-	bool SetupFleeFromObject(entt::entity entity, entt::entity object) override;
+	bool SetupFleeFromObject(entt::entity entity, entt::entity object, Reaction reaction) override;
 	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
 	void StopReaction(entt::entity animal) override;
 

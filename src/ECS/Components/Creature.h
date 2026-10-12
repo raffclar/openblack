@@ -50,6 +50,8 @@ struct Creature
 	/// Whether a miracle that takes the last of its life knocks it out; a script can make it unable to die, when such a
 	/// miracle gives it back all its life instead
 	bool canDie {true};
+	/// The help text a script named it with, whose words are its name; none until a script names it
+	std::optional<uint32_t> nameText;
 };
 
 /// The size its body is shown at: its own size, or the smaller one while it is in its temple's pen. Whatever goes by

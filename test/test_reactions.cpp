@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -98,7 +99,8 @@ protected:
 		Locator::entitiesMap::emplace<MapProduction>();
 		Locator::livingActionSystem::emplace<ecs::systems::LivingActionSystem>();
 		_info = std::make_unique<InfoConstants>();
-		for (const auto type : {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield})
+		for (const auto type :
+		     {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield, Reaction::FleeFromObject})
 		{
 			auto& reaction = _info->reaction.at(static_cast<size_t>(type));
 			reaction.priority = type == Reaction::FleeFromSpell ? 150 : 120;
@@ -511,4 +513,43 @@ TEST(ShieldRules, WhatIsSurelyWithinAShield)
 	EXPECT_TRUE(WithinPhysicalShield(dome, 10.0f, 4.9f));
 	EXPECT_FALSE(WithinPhysicalShield(dome, 10.0f, 5.0f));
 	EXPECT_FALSE(WithinPhysicalShield(dome, 20.0f, 0.0f));
+}
+
+// A script makes a thing for the living around it to run from: the villagers near it flee as from a frightening miracle
+TEST_F(Reactions, VillagersFleeAThingToFlee)
+{
+	_reactions.ProcessTurn();
+	_reactions.Create({.initiator = _creature,
+	                   .type = Reaction::FleeFromObject,
+	                   .player = PlayerNames::NEUTRAL,
+	                   .position = k_Here,
+	                   .playerless = true});
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::FleeingFromObjectReaction);
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::FleeingFromObjectReaction);
+	// Out of its reach
+	EXPECT_EQ(StateOf(_villagers[2]), VillagerStates::DecideWhatToDo);
+}
+
+// A creature's reaction goes where the creature goes, moving the way it faces
+TEST_F(Reactions, ACreaturesReactionFollowsIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& locomotion = registry.Assign<CreatureLocomotion>(_creature);
+	locomotion.started = true;
+	locomotion.heading = 1.0f;
+	const auto id = _reactions.Create({.initiator = _creature,
+	                                   .type = Reaction::FleeFromObject,
+	                                   .player = PlayerNames::NEUTRAL,
+	                                   .position = k_Here,
+	                                   .playerless = true});
+	const glm::vec3 moved = k_Here + glm::vec3(20.0f, 0.0f, -10.0f);
+	registry.Get<Transform>(_creature).position = moved;
+	_reactions.ProcessTurn();
+	const auto reaction = _reactions.Find(id);
+	ASSERT_TRUE(reaction.has_value());
+	EXPECT_EQ(reaction->source.position, moved);
+	const auto facing = creature_locomotion::DirectionOf(1.0f) * 10.0f;
+	EXPECT_FLOAT_EQ(reaction->velocity.x, facing.x);
+	EXPECT_FLOAT_EQ(reaction->velocity.y, 0.0f);
+	EXPECT_FLOAT_EQ(reaction->velocity.z, facing.y);
 }

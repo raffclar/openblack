@@ -1493,7 +1493,7 @@ bool AnimalSystem::IsAvailableForReaction(entt::entity entity) const
 	}
 }
 
-bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object)
+bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object, Reaction reaction)
 {
 	auto& registry = EntityRegistry();
 	auto* animal = registry.TryGet<Animal>(entity);
@@ -1503,7 +1503,7 @@ bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object)
 	}
 	// It takes up the flee whatever the object; with the object gone its next step gives the flee up
 	animal->fleeing = object;
-	animal->fleeReaction = Reaction::ReactToFire;
+	animal->fleeReaction = reaction;
 	SetState(*animal, AnimalState::FleeingFromObject);
 	return true;
 }

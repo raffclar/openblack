@@ -492,7 +492,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Creature::penSize>("penSize")
 	    .Field<&components::Creature::autoScale>("autoScale")
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")
-	    .Field<&components::Creature::canDie>("canDie");
+	    .Field<&components::Creature::canDie>("canDie")
+	    .Field<&components::Creature::nameText>("nameText");
 	Reflect<components::CreatureArena>(context)
 	    .Field<&components::CreatureArena::place>("place")
 	    .Field<&components::CreatureArena::radius>("radius")

@@ -120,4 +120,19 @@ struct Angles
 [[nodiscard]] float BeliefForPlayer(bool town, std::optional<float> townBelief, std::optional<PlayerNames> owner,
                                     PlayerNames player);
 
+/// A creature's speed as a script sets it is the share of its top speed it is asked to go at, from none to all of it
+[[nodiscard]] float CreatureSpeedFraction(float speed);
+
+/// A creature a script makes from another is as big and as strong as that one's own size and strength times the scale
+/// the script gives
+struct CopiedBody
+{
+	float size;
+	float strength;
+};
+[[nodiscard]] CopiedBody CopyBody(float size, float strength, float scale);
+/// Who a creature a script makes from another belongs to: the first of the seven players, in order, who has no creature
+/// of their own; none when every one has
+[[nodiscard]] std::optional<PlayerNames> OwnerOfCopy(std::span<const bool> playersHaveCreatures);
+
 } // namespace openblack::script::property_rules

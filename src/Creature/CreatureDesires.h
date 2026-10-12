@@ -214,6 +214,17 @@ void SetSource(Desires& desires, uint32_t type, float value);
 /// The value of the first of a desire's sources of a type
 [[nodiscard]] std::optional<float> SourceValue(const DesireState& desire, uint32_t type);
 
+/// Sources of these kinds are left as they are when everything driving a desire is made full: anger from being hurt,
+/// and wanting to restore its health from its life
+inline constexpr std::array<uint32_t, 2> k_SourcesNeverMadeFull {sources::k_AngerFromDamage, sources::k_RestoreHealthFromLife};
+/// Everything driving a desire is made full: each kind of source it has (but those above) is set to 1, wherever in the
+/// desires a source of that kind is
+void MakeSourcesFull(Desires& desires, Desire desire);
+
+/// A script sets how much the creature wants a desire, kept from 0 to 1. Asked for exactly all of it, everything
+/// driving the desire is made full too.
+void SetValueFromScript(Desires& desires, Desire desire, float value);
+
 /// The action a creature plays to show a desire, for the desires it can show
 [[nodiscard]] std::optional<size_t> EmoteFor(Desire desire);
 /// The strongest activated desire the creature can show, if any is above a minimum

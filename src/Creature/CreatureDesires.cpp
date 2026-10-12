@@ -233,6 +233,27 @@ void creature_desires::SetSource(Desires& desires, uint32_t type, float value)
 	}
 }
 
+void creature_desires::MakeSourcesFull(Desires& desires, Desire desire)
+{
+	// Setting a kind of source changes it in every desire, this one's own list included, so the list is copied first
+	for (const auto& source : std::vector(desires[desire].sources))
+	{
+		if (std::ranges::find(k_SourcesNeverMadeFull, source.type) == k_SourcesNeverMadeFull.end())
+		{
+			SetSource(desires, source.type, 1.0f);
+		}
+	}
+}
+
+void creature_desires::SetValueFromScript(Desires& desires, Desire desire, float value)
+{
+	desires[desire].value = std::clamp(value, 0.0f, 1.0f);
+	if (value == 1.0f)
+	{
+		MakeSourcesFull(desires, desire);
+	}
+}
+
 void creature_desires::ChangeSource(Desires& desires, uint32_t type, float amount)
 {
 	for (auto& desire : desires.desires)

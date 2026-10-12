@@ -57,15 +57,8 @@ creature_spell_mind::Cheat creature_spell_mind::SetCheatDominant(creature_desire
 	// It is wanted above all, the others as little as any can be, and everything that drives it is full
 	const auto dominate = [&desires, &setup](Desire which) {
 		MakeFullyDominantOverOthers(desires, which, setup.floor);
-		auto& state = desires[which];
-		for (const auto& source : std::vector(state.sources))
-		{
-			if (std::ranges::find(k_SourcesNotMaximised, source.type) == k_SourcesNotMaximised.end())
-			{
-				creature_desires::SetSource(desires, source.type, 1.0f);
-			}
-		}
-		state.activated = true;
+		creature_desires::MakeSourcesFull(desires, which);
+		desires[which].activated = true;
 	};
 	// Compassion makes it want to make friends above all too
 	if (desire == Desire::Compassion)

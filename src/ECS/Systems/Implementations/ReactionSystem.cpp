@@ -28,6 +28,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
@@ -80,6 +81,8 @@ namespace
 {
 /// Whole seconds of game turns, at the game's ten turns a second
 constexpr uint32_t k_TurnsPerSecond = 10;
+/// A creature's way of moving, as those fleeing it see it: ten metres the way it faces
+constexpr float k_CreatureFacingMetres = 10.0f;
 
 /// The seed in the hand that cast a miracle, if the miracle has one
 SpellSeed* SeedOf(ecs::Registry& registry, entt::entity spell)
@@ -135,7 +138,7 @@ const GLivingInfo* LivingInfoOf(const ecs::Registry& registry, entt::entity enti
 }
 
 /// Whether a reaction reaches a kind of living thing: villagers and creatures every kind; animals, so far, only things
-/// flying at them and fires, both of which they flee
+/// flying at them, fires and things to flee, all of which they flee
 // TODO(animals): the other reactions animals take up (predators and the others whose priority the animal doesn't zero)
 // belong to the animals' own behaviour, which openblack doesn't run yet
 bool Reaches(const ecs::Registry& registry, entt::entity entity, Reaction type)
@@ -144,7 +147,8 @@ bool Reaches(const ecs::Registry& registry, entt::entity entity, Reaction type)
 	{
 		return true;
 	}
-	return (type == Reaction::ReactToFlyingObject || type == Reaction::ReactToFire) && registry.AllOf<Animal>(entity);
+	return (type == Reaction::ReactToFlyingObject || type == Reaction::ReactToFire || type == Reaction::FleeFromObject) &&
+	       registry.AllOf<Animal>(entity);
 }
 
 /// Whether a kind of living thing reacts to a kind of reaction at all, by its table's flags in the reactions' order
@@ -622,15 +626,16 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 			return;
 		}
 	}
-	// An animal flees a fire at once, and takes up a flying thing's reaction only when the thing is near enough to flee
+	// An animal flees a fire or a thing to flee at once, and takes up a flying thing's reaction only when the thing is near
+	// enough to flee
 	if (registry.AllOf<Animal>(living))
 	{
 		const auto* entry =
 		    Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(source.initiator) : nullptr;
 		const bool flees =
 		    Locator::animalSystem::has_value() &&
-		    ((source.type == Reaction::ReactToFire &&
-		      Locator::animalSystem::value().SetupFleeFromObject(living, source.initiator)) ||
+		    (((source.type == Reaction::ReactToFire || source.type == Reaction::FleeFromObject) &&
+		      Locator::animalSystem::value().SetupFleeFromObject(living, source.initiator, source.type)) ||
 		     (source.type == Reaction::ReactToFlyingObject && entry != nullptr && entry->body != nullptr &&
 		      Locator::animalSystem::value().SetupReactToFlyingObject(living, source.initiator, entry->body->Speed())));
 		if (!flees)
@@ -785,11 +790,13 @@ void ReactionSystem::ProcessTurn()
 	{
 		ShutDown(id);
 	}
-	// A reaction to a flying thing, or to a villager held in the hand, is where the thing is now
+	// A reaction to a flying thing, to a villager held in the hand, or to a creature, is where the thing is now; a
+	// creature moves the way it faces, as far as matters to those fleeing it
 	for (auto& reaction : _reactions)
 	{
-		const bool follows =
-		    reaction.source.type == Reaction::ReactToFlyingObject || reaction.source.type == Reaction::ReactToVillagerInHand;
+		const bool creature = registry.Valid(reaction.source.initiator) && registry.AllOf<Creature>(reaction.source.initiator);
+		const bool follows = creature || reaction.source.type == Reaction::ReactToFlyingObject ||
+		                     reaction.source.type == Reaction::ReactToVillagerInHand;
 		if (!follows || !registry.Valid(reaction.source.initiator))
 		{
 			continue;
@@ -797,6 +804,12 @@ void ReactionSystem::ProcessTurn()
 		if (const auto* transform = registry.TryGet<const Transform>(reaction.source.initiator))
 		{
 			reaction.source.position = transform->position;
+		}
+		const auto* locomotion = creature ? registry.TryGet<const CreatureLocomotion>(reaction.source.initiator) : nullptr;
+		if (locomotion != nullptr && locomotion->started)
+		{
+			const auto facing = creature_locomotion::DirectionOf(locomotion->heading) * k_CreatureFacingMetres;
+			reaction.velocity = {facing.x, 0.0f, facing.y};
 		}
 	}
 	// One reaction a turn, in turn, grows, ends once its time is up, or is spread again
