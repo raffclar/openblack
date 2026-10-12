@@ -521,7 +521,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	auto& creatureHand = Locator::creatureHandSystem::value();
 	auto& fights = Locator::creatureFightSystem::value();
 	auto& magic = Locator::magicSystem::value();
-	// The left button taps a one-shot bubble under the hand into it, before the creatures and the land
+	// The left button catches another player's fireball under the hand, before the creatures and the land
 	bool magicTookPress = false;
 	// The hand holds one thing at a time: a thing it picked up, or a miracle
 	auto* handGrab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
@@ -557,6 +557,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	if (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT))
 	{
 		magic.ReleaseAction();
+		// Let go quickly on a one-shot bubble, its miracle goes into the hand
+		magic.ReleaseOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
 	}
 	if (!inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
@@ -566,6 +568,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		if (!_actionPressTaken && handHoldsThing)
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		}
+		// With an empty hand, a one-shot bubble under it takes the press before anything behind it
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
+		{
+			_actionPressTaken = magic.PressOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 		if (!_actionPressTaken)
 		{
@@ -858,6 +865,27 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	{
 		_mousePosition = glm::ivec2(*drawing * (size.y / gesture::k_ReferenceHeight));
 	}
+}
+
+bool Game::HandOverThing() const
+{
+	// In the temple the hand only ever wiggles
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return false;
+	}
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().OrbUnderHand().has_value())
+	{
+		return true;
+	}
+	if (!Locator::pickingSystem::has_value())
+	{
+		return false;
+	}
+	// Only a thing with a model of its own: a fish farm, found through its fish, has none
+	const auto picked = Locator::pickingSystem::value().GetPick().object;
+	return picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
+	       Locator::entitiesRegistry::value().AllOf<ecs::components::Mesh>(*picked);
 }
 
 void Game::PickUnderCursor(float seconds)
@@ -2315,6 +2343,12 @@ bool Game::Update() noexcept
 			case Pose::Zoom:
 				cycle = HandCycle::Zoom;
 				break;
+			}
+			// Hovering over a thing, a one-shot bubble or a building as much as anything else, the hand feels it, over the
+			// camera hints it offers elsewhere
+			if (!_handCameraState && HandOverThing())
+			{
+				cycle = HandCycle::Stroke;
 			}
 			// On a creature, it strokes it or shows its slap
 			if (_handOnCreature.has_value())
