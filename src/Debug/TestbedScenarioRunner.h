@@ -189,12 +189,15 @@ private:
 	std::vector<entt::entity> _temples;
 	/// When each of the scenario's throws is next due, in seconds; none once done
 	std::vector<std::optional<float>> _throwsDue;
-	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet
+	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet; and
+	/// the walk it is on: where to and the game turn it set off, until it gets there
 	struct ObjectWalk
 	{
 		std::optional<float> nextAt;
 		bool outwards {true};
 		bool dropped {false};
+		glm::vec2 goal {0.0f};
+		std::optional<uint32_t> setOffTurn;
 	};
 	std::vector<ObjectWalk> _walks;
 	/// The scenario's particle effects, and the seconds since each was last started

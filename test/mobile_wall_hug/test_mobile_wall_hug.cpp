@@ -597,3 +597,88 @@ TEST_F(WalkerToGoal, AScriptsWalkGoesStraightThroughThingsInTheWay)
 	// Its 16 m at a fifth of a metre a turn, in a straight line
 	EXPECT_EQ(walk.turns, 80u);
 }
+
+/// A walker that went round a circle on its way, given a trial of both ways round as one that came up against a fence
+/// is
+class WalkerTrial: public WalkerToGoal
+{
+protected:
+	/// Walks from a point towards a goal beyond the circle until it starts round the circle; the way it went round
+	ecs::components::MoveStateClockwise WalkUntilRound(glm::vec2 from, glm::vec2 goal)
+	{
+		using namespace openblack::ecs::components;
+		auto& registry = Locator::entitiesRegistry::value();
+		Locator::entitiesMap::value().Sync();
+		registry.Get<Transform>(_walker).position = glm::vec3(from.x, 0.0f, from.y);
+		auto& wallHug = registry.Get<WallHug>(_walker);
+		registry.Assign<MoveStateLinearTag>(_walker);
+		wallHug.speed = 2.0f;
+		wallHug.step = {0, 0};
+		wallHug.goal = goal;
+		for (int turn = 0; turn < 200 && !registry.AllOf<MoveStateOrbitTag>(_walker); ++turn)
+		{
+			Locator::pathfindingSystem::value().Update();
+		}
+		EXPECT_TRUE(registry.AllOf<MoveStateOrbitTag>(_walker));
+		return registry.Get<const MoveStateOrbitTag>(_walker).clockwise;
+	}
+
+	/// Its trial, taken at the end of the turn
+	const ecs::components::WallHugLookahead& Trial()
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		registry.Assign<ecs::components::WallHugLookahead>(_walker);
+		Locator::pathfindingSystem::value().ProcessLookahead();
+		return registry.Get<const ecs::components::WallHugLookahead>(_walker);
+	}
+
+	static constexpr glm::vec2 k_From {2149.5f, 2235.0f};
+	/// Beyond the 3.41 m circle at 2150, 2250, a little to the side the walker goes round
+	static constexpr glm::vec2 k_Goal {2147.0f, 2255.41f};
+};
+
+// Going round the short way, the trial finds no better way: the walker keeps going, having had its trial
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerTrial, AWalkerGoingTheShortWayRoundKeepsGoing)
+{
+	Load("goal_beside_circle.txt");
+	const auto way = WalkUntilRound(k_From, k_Goal);
+	const auto& trial = Trial();
+	EXPECT_TRUE(trial.tried);
+	EXPECT_FALSE(trial.turnedRound);
+	EXPECT_GE(trial.spareAsItGoes, 0);
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const ecs::components::MoveStateOrbitTag>(_walker).clockwise, way);
+}
+
+// Going round the long way, the trial finds the other way sooner and turns the walker round, and it gets there
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerTrial, AWalkerGoingTheLongWayRoundIsTurnedRound)
+{
+	using namespace openblack::ecs::components;
+	Load("goal_beside_circle.txt");
+	const auto way = WalkUntilRound(k_From, k_Goal);
+	// Sent the other way round
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto other =
+	    way == MoveStateClockwise::Clockwise ? MoveStateClockwise::CounterClockwise : MoveStateClockwise::Clockwise;
+	registry.Get<MoveStateOrbitTag>(_walker).clockwise = other;
+	auto& wallHug = registry.Get<WallHug>(_walker);
+	wallHug.gameAngle = ecs::wall_hug::HeadingRound(wallHug.position, ecs::wall_hug::ToWhole({2150.0f, 2250.0f}),
+	                                                other == MoveStateClockwise::Clockwise);
+	wallHug.step = ecs::wall_hug::StepAlong(wallHug.gameAngle, ecs::wall_hug::WholeSpeed(wallHug.speed));
+
+	const auto& trial = Trial();
+	EXPECT_TRUE(trial.tried);
+	EXPECT_TRUE(trial.turnedRound);
+	EXPECT_GT(trial.spareTurnedRound, trial.spareAsItGoes);
+	EXPECT_EQ(registry.Get<const MoveStateOrbitTag>(_walker).clockwise, way);
+	// The stand-ins are gone
+	EXPECT_EQ(registry.Size<Villager>(), 1u);
+
+	uint32_t turns = 0;
+	for (; turns < 2000 && !registry.AnyOf<MoveStateFinalStepTag, MoveStateArrivedTag>(_walker); ++turns)
+	{
+		Locator::pathfindingSystem::value().Update();
+	}
+	EXPECT_LT(turns, 2000u);
+}

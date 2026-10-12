@@ -1039,6 +1039,43 @@ void AddMovement(std::vector<Scenario>& all)
 	    .commands = chase,
 	    .repeatFrom = 1,
 	});
+
+	// A ring of fence round a pen, with two villagers walking to the far side of it, one aiming a little to each side
+	constexpr glm::vec2 k_Pen {-60.0f, -40.0f};
+	constexpr float k_PenRadius = 12.0f;
+	constexpr int k_PenPieces = 24;
+	std::vector<ObjectSetup> pen;
+	for (const auto& point : Circle(k_Pen, k_PenRadius, k_PenPieces))
+	{
+		// Each piece runs round the ring
+		const glm::vec2 out = point - k_Pen;
+		const float yaw = glm::degrees(std::atan2(out.y, out.x)) + 90.0f;
+		pen.push_back({.type = MobileStaticInfo::CeltFenceShort, .offset = point, .yawDegrees = yaw});
+	}
+	pen.push_back({.type = VillagerInfo::CelticForesterMale,
+	               .offset = k_Pen + glm::vec2(-2.0f, -25.0f),
+	               .walkTo = k_Pen + glm::vec2(4.0f, 25.0f),
+	               .walkAfterSeconds = 2.0f,
+	               .walkRepeatSeconds = 300.0f});
+	pen.push_back({.type = VillagerInfo::CelticHousewifeFemale,
+	               .offset = k_Pen + glm::vec2(2.0f, -25.0f),
+	               .walkTo = k_Pen + glm::vec2(-4.0f, 25.0f),
+	               .walkAfterSeconds = 2.0f,
+	               .walkRepeatSeconds = 300.0f});
+	all.push_back({
+	    .id = "movement.villager_fence_pen",
+	    .name = "Villagers walking round a fenced pen",
+	    .facet = Facet::Movement,
+	    .description = "A ring of fence round a pen stands between two villagers and the points they walk to beyond it, "
+	                   "one a little to each side. Meeting the fence, each walker's way is tried both ways round, once "
+	                   "a turn for one walker, and it is turned round if the other way gets there sooner. They walk "
+	                   "there and back every five minutes; the scenario log gives each walk's game turns.",
+	    .expected = "Each villager goes round the fence on the side nearer its goal and gets there in a few hundred "
+	                "turns, rather than going round and round the pen. The inspector shows a WallHugLookahead on a "
+	                "walker that has had its trial (turns to spare each way, and whether it was turned round).",
+	    .framing = {.shot = Shot::Overview, .include = {k_Pen + glm::vec2(-30.0f, -30.0f), k_Pen + glm::vec2(30.0f, 30.0f)}},
+	    .objects = pen,
+	});
 }
 
 void AddFootprints(std::vector<Scenario>& all)

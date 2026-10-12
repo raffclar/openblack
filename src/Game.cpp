@@ -1569,6 +1569,8 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::templeDestructionSystem::value().EndTurn();
 	}
+	// Then one walker that came up against water, the land's edge or a fence tries its walk both ways round
+	Locator::pathfindingSystem::value().ProcessLookahead();
 
 	// Each turn ends with the camera taking the alignment of the player of most influence at its eye
 	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);

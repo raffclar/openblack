@@ -1792,6 +1792,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WallHugObjectReference::centre>("centre")
 	    .Field<&components::WallHugObjectReference::radius>("radius")
 	    .Field<&components::WallHugObjectReference::entryDistance>("entryDistance");
+	Reflect<components::WallHugLookahead>(context)
+	    .Field<&components::WallHugLookahead::tried>("tried")
+	    .Field<&components::WallHugLookahead::spareAsItGoes>("spareAsItGoes")
+	    .Field<&components::WallHugLookahead::spareTurnedRound>("spareTurnedRound")
+	    .Field<&components::WallHugLookahead::turnedRound>("turnedRound")
+	    .Field<&components::WallHugLookahead::landingShutIn>("landingShutIn");
 	Reflect<components::WallHug>(context)
 	    .Field<&components::WallHug::goal>("goal")
 	    .Field<&components::WallHug::step>("step")

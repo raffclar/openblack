@@ -120,6 +120,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
@@ -2257,6 +2258,8 @@ void Runner::UpdateVillagerWalks()
 				const auto goal = MapPoint(_middle, walk.outwards ? *setup.walkTo : setup.offset);
 				ecs::villager_home::SetupMoveTo(registry.Get<ecs::components::LivingAction>(entity), goal, setup.walkFinal);
 				Log(fmt::format("Villager {} walks {}", i, walk.outwards ? "out" : "back"));
+				walk.goal = goal;
+				walk.setOffTurn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 				walk.outwards = !walk.outwards;
 				walk.nextAt =
 				    setup.walkRepeatSeconds.has_value() ? std::optional(*walk.nextAt + *setup.walkRepeatSeconds) : std::nullopt;
@@ -2265,6 +2268,12 @@ void Runner::UpdateVillagerWalks()
 					walk.outwards = false;
 				}
 			}
+		}
+		// How long each walk took, in game turns, for comparing walks round things in the way
+		if (walk.setOffTurn.has_value() && Locator::time::has_value() && ecs::villager_home::WalkIsOverAt(entity, walk.goal))
+		{
+			Log(fmt::format("Villager {} got there in {} turns", i, Locator::time::value().GetTurn() - *walk.setOffTurn));
+			walk.setOffTurn.reset();
 		}
 		if (setup.worshipAt.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
 		    Locator::teleportSystem::has_value() && Locator::terrainSystem::has_value())
