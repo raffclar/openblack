@@ -115,6 +115,13 @@ public:
 		siteDesires[site] = desire;
 	}
 	void CloseBuildingSite(entt::entity site) override { closedSites.push_back(site); }
+	void CloseTownsBuildingSite(entt::entity site, entt::entity town) override { closedTownSites.push_back({site, town}); }
+	void RemoveSpellIcons(entt::entity site) override
+	{
+		// Whether the site's altar still stood as its icons went
+		const auto altar = _registry.Get<const WorshipSite>(site).altar;
+		removedIcons.emplace_back(site, _registry.Valid(altar));
+	}
 	void RemoveDance(entt::entity dance) override
 	{
 		// The towns that still had a site as its dance went
@@ -141,8 +148,11 @@ public:
 	std::vector<std::pair<entt::entity, entt::entity>> openedSites;
 	std::unordered_map<entt::entity, float> siteDesires;
 	std::vector<entt::entity> closedSites;
+	std::vector<std::pair<entt::entity, entt::entity>> closedTownSites;
 	/// The dances removed, each with the towns that still had a site as it went
 	std::vector<std::pair<entt::entity, std::vector<entt::entity>>> removedDances;
+	/// The sites whose icons went, and whether the site's altar still stood then
+	std::vector<std::pair<entt::entity, bool>> removedIcons;
 	std::vector<entt::entity> artefactsLeft;
 	std::vector<entt::entity> removed;
 	std::unordered_map<entt::entity, float> potAngles;
@@ -558,8 +568,10 @@ TEST(WorshipSiteSystem, ATownAskedToBuildItsSiteHasItAsABuildingSiteUntilItIsBui
 	f.system->TempleBuilt(temple);
 	const auto site = f.registry.Get<const components::Town>(town).worshipSite;
 	ASSERT_TRUE(site != entt::null);
-	ASSERT_EQ(f.world->openedSites.size(), 1u);
+	// Given the site, the town is asked to build it; the standing temple then asks again with its boost
+	ASSERT_EQ(f.world->openedSites.size(), 2u);
 	EXPECT_EQ(f.world->openedSites.front(), std::make_pair(site, town));
+	EXPECT_EQ(f.world->openedSites.back(), std::make_pair(site, town));
 	EXPECT_FLOAT_EQ(f.world->siteDesires.at(site), 0.0f);
 	EXPECT_TRUE(f.world->closedSites.empty());
 
@@ -569,22 +581,41 @@ TEST(WorshipSiteSystem, ATownAskedToBuildItsSiteHasItAsABuildingSiteUntilItIsBui
 	EXPECT_EQ(f.world->closedSites.front(), site);
 	// Built, no town is asked again
 	f.system->SetCanHaveSites(temple, true);
-	EXPECT_EQ(f.world->openedSites.size(), 1u);
+	EXPECT_EQ(f.world->openedSites.size(), 2u);
 }
 
-TEST(WorshipSiteSystem, ASiteGoingUpStopsBeingABuildingSiteWhenNoTownIsLeftToBuildIt)
+TEST(WorshipSiteSystem, ATownLeavingItsPlayerClosesOnlyItsOwnBuildingSiteAtTheSiteGoingUp)
 {
 	Fixture f;
-	const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto first = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto second = f.Town(1, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -80.0f});
 	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
 	f.system->AddTemple(temple, 0.0f, true);
-	const auto site = f.registry.Get<const components::Town>(town).worshipSite;
+	const auto site = f.registry.Get<const components::Town>(first).worshipSite;
 	ASSERT_TRUE(site != entt::null);
-	ASSERT_FALSE(f.world->openedSites.empty());
-	f.registry.Get<components::Town>(town).owner = PlayerNames::NEUTRAL;
-	f.system->TownChangedHands(town);
-	ASSERT_EQ(f.world->closedSites.size(), 1u);
-	EXPECT_EQ(f.world->closedSites.front(), site);
+	EXPECT_EQ(site, f.registry.Get<const components::Town>(second).worshipSite);
+	// Both towns of the tribe are asked to build it, each with a building site of its own there
+	const auto opened = [&f, site](entt::entity town) {
+		return std::ranges::find(f.world->openedSites, std::make_pair(site, town)) != f.world->openedSites.end();
+	};
+	EXPECT_TRUE(opened(first));
+	EXPECT_TRUE(opened(second));
+	EXPECT_EQ(f.registry.Get<const WorshipSite>(site).buildRequests.size(), 2u);
+
+	f.registry.Get<components::Town>(first).owner = PlayerNames::NEUTRAL;
+	f.system->TownChangedHands(first);
+	ASSERT_EQ(f.world->closedTownSites.size(), 1u);
+	EXPECT_EQ(f.world->closedTownSites.front(), std::make_pair(site, first));
+	EXPECT_TRUE(f.world->closedSites.empty());
+	// The other town still builds it
+	const auto& requests = f.registry.Get<const WorshipSite>(site).buildRequests;
+	ASSERT_EQ(requests.size(), 1u);
+	EXPECT_EQ(requests.front().town, second);
+
+	f.registry.Get<components::Town>(second).owner = PlayerNames::NEUTRAL;
+	f.system->TownChangedHands(second);
+	ASSERT_EQ(f.world->closedTownSites.size(), 2u);
+	EXPECT_EQ(f.world->closedTownSites.back(), std::make_pair(site, second));
 }
 
 TEST(WorshipSiteSystem, ATempleLosesItsSitesNewestFirstWithAllOfEachAndItsTownsKeepTheirShare)
@@ -618,6 +649,8 @@ TEST(WorshipSiteSystem, ATempleLosesItsSitesNewestFirstWithAllOfEachAndItsTownsK
 	EXPECT_EQ(f.world->removedDances[1].first, norseSite.dance);
 	EXPECT_EQ(f.world->removedDances[1].second, std::vector<entt::entity> {norseTown});
 	EXPECT_EQ(f.world->artefactsLeft, (std::vector<entt::entity> {celtic, norse}));
+	// Each site's icons go first of all, before its altar
+	EXPECT_EQ(f.world->removedIcons, (std::vector<std::pair<entt::entity, bool>> {{celtic, true}, {norse, true}}));
 	// Both stop being building sites, as neither was finished
 	EXPECT_EQ(std::ranges::count(f.world->closedSites, celtic), 1);
 	EXPECT_EQ(std::ranges::count(f.world->closedSites, norse), 1);

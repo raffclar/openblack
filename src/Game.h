@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <glm/mat4x4.hpp>
@@ -26,6 +27,7 @@
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
 #include "Common/LoadTimer.h"
+#include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
 #include "Creature/CreatureFight.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -59,6 +61,10 @@ class LoadingScreen;
 namespace ecs::components
 {
 struct Transform;
+}
+namespace ecs::systems
+{
+class HandGrabSystemInterface;
 }
 
 enum class LoggingSubsystem : uint8_t
@@ -98,6 +104,9 @@ struct ScenarioRequest
 	/// asked for while the game runs (from the debug inspector) only runs
 	bool benchmark {true};
 };
+
+/// The land a new game starts on, unless another is asked for
+inline constexpr std::string_view k_DefaultStartLevel = "Land1.txt";
 
 struct Arguments
 {
@@ -145,6 +154,9 @@ struct Arguments
 	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
 	/// connected, from the start, or never
 	input::LockMode inspectInputLock {input::LockMode::Auto};
+	/// Where the players' profiles and their creatures are kept instead of the game's own folder, as for a first start on
+	/// a clean folder; none for the game's own (or, for a developer's or a tool's run, a profile of its own)
+	std::optional<std::filesystem::path> profileFolder;
 };
 
 class Game
@@ -274,8 +286,14 @@ private:
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,
 	/// the sea's reflection and the camera's shape follow it, on whichever screen is up
 	void FollowWindowSize();
-	/// Whether the player has a profile: openblack keeps none yet, so it counts as having one
-	[[nodiscard]] static bool HasPlayerProfiles() noexcept { return true; }
+	/// Whether the player has a profile. A first start has none: the pre-intro plays, the tips start from the first, the
+	/// intro can't be skipped and the new player's box asks for a name before the first land
+	[[nodiscard]] static bool HasPlayerProfiles() noexcept;
+	/// Where the players' profiles are kept for this run
+	[[nodiscard]] player_profiles::Store ProfileStore() const;
+	/// A first start: the new player's box asks for the player's name before the first land loads. False when the
+	/// window was closed meanwhile
+	bool AskForNewPlayer();
 
 	/// Clears the last land's entities, weather and effects before a new one loads
 	void PrepareNewLand();
@@ -311,6 +329,10 @@ private:
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
+	/// Where the players' profiles are kept instead of the game's own folder
+	std::optional<std::filesystem::path> _profileFolder;
+	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
+	bool _automatedRun {false};
 	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
@@ -352,6 +374,8 @@ private:
 	glm::vec3 _handGripPoint {0.0f, 0.0f, 0.0f};
 	/// The fade from where the hand was to where it is now held, as it grips the land or lets go
 	HandCrossFade _handCrossFade;
+	/// What the hand did as its pose was last chosen, to fade its pose when that changes
+	std::optional<magic::hand_hold::HandStage> _handPoseStage;
 	/// The hand's tap after it knocked on a house: it stays upright where it knocked while the tap plays through once.
 	/// Holding something puts it off, and it starts over once the hand lets go.
 	struct HandKnock
@@ -404,6 +428,10 @@ private:
 	[[nodiscard]] std::chrono::milliseconds CameraStepTime() const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
+	/// The hand's debugging trace keeps the frame: where the hand was placed and drawn, where it shows, on the screen
+	/// too, and what it was doing
+	void EndHandTrace(const glm::vec3& placed, const ecs::components::Transform& hand, magic::hand_hold::HandStage stage,
+	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
 	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
@@ -447,7 +475,10 @@ private:
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();
+	void ProcessTurnCheering();
 	/// Where a point of the world is on the screen, in whole pixels, when it is on it
+	/// Hangs the hand's tooltip by the hand as drawn this frame
+	void UpdateHandToolTipAnchor();
 	[[nodiscard]] std::optional<glm::vec2> OnScreen(glm::vec3 point) const;
 	/// The floating numbers move on by some seconds
 	void UpdateFloatingNumbers(float seconds);

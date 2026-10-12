@@ -154,6 +154,50 @@ TEST(ToolTips, KeepOthersOffForTheirDisplayTime)
 	EXPECT_EQ(toolTips.GetShown()->index, k_ZoomIn);
 }
 
+TEST(ToolTips, DisplayTimeRunsOnlyWhileItIsAllowedTo)
+{
+	// Shown well past its display time, a tooltip still keeps another off while its time isn't running, and gives way
+	// once it is
+	const auto showMoveThenAsk = [](bool displayTimeRuns) {
+		ToolTips toolTips(Info());
+		for (int i = 0; i < 40; ++i)
+		{
+			toolTips.Submit(k_Move, ToolTipAction::Select, ToolTipArrows::k_None);
+			toolTips.ProcessTurn(displayTimeRuns);
+			toolTips.Update(0.1f);
+		}
+		toolTips.Submit(k_ZoomIn, ToolTipAction::Select, ToolTipArrows::k_None);
+		toolTips.Submit(k_Move, ToolTipAction::Select, ToolTipArrows::k_None);
+		toolTips.ProcessTurn(displayTimeRuns);
+		return toolTips.GetShown();
+	};
+	const auto held = showMoveThenAsk(false);
+	ASSERT_TRUE(held.has_value());
+	EXPECT_EQ(held->index, k_Move);
+	const auto running = showMoveThenAsk(true);
+	ASSERT_TRUE(running.has_value());
+	EXPECT_EQ(running->index, k_ZoomIn);
+}
+
+TEST(ToolTips, OneSecondOfDisplayTimeHoldsForTwoAndAHalfSecondsOfTurns)
+{
+	ToolTips toolTips(Info());
+	// Display time counts 25 game turns a second and turns come 10 a second, so a 1 s tooltip holds for 2.5 s
+	for (int turn = 0; turn < 25; ++turn)
+	{
+		toolTips.Submit(k_Move, ToolTipAction::Select, ToolTipArrows::k_None);
+		toolTips.Submit(k_ZoomIn, ToolTipAction::Select, ToolTipArrows::k_None);
+		toolTips.ProcessTurn();
+		ASSERT_TRUE(toolTips.GetShown().has_value()) << turn;
+		ASSERT_EQ(toolTips.GetShown()->index, k_Move) << turn;
+	}
+	toolTips.Submit(k_Move, ToolTipAction::Select, ToolTipArrows::k_None);
+	toolTips.Submit(k_ZoomIn, ToolTipAction::Select, ToolTipArrows::k_None);
+	toolTips.ProcessTurn();
+	ASSERT_TRUE(toolTips.GetShown().has_value());
+	EXPECT_EQ(toolTips.GetShown()->index, k_ZoomIn);
+}
+
 TEST(ToolTips, TwoStatsSubmittedTogetherTakeTurnsAndKeepTheirOwnNumbers)
 {
 	// As a village centre submits its belief then its population every turn: the first shows for its display time

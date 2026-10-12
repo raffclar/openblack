@@ -106,8 +106,7 @@ uint32_t ecs::villager_teleport::GoTowardsTeleportReaction(LivingAction& action)
 		return 1;
 	}
 	// Otherwise its walk to the stone starts afresh, still in this state, to end in what it was to do
-	ecs::villager_home::SetupMobileMoveTo(action, {stone.x, stone.z},
-	                                      living.VillagerGetState(action, LivingAction::Index::Final));
+	ecs::villager_home::SetupMobileMoveTo(action, {stone.x, stone.z});
 	return 1;
 }
 

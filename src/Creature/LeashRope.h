@@ -127,4 +127,26 @@ struct Ribbon
 /// The triangles of a ribbon, corner indices from the first of its corners
 [[nodiscard]] std::array<uint16_t, k_RibbonIndexCount> RibbonIndices();
 
+/// What decides whether the rope of a held leash is drawn this frame
+struct Showing
+{
+	/// The scripts' switch for the leashes: off while a script has the camera, or as a script sets it
+	bool scriptShows {true};
+	/// The cinema bars are in, brought in by a script
+	bool scriptCinema {false};
+	/// The leash is held by the player at this computer
+	bool local {true};
+	/// The player's hand is put away
+	bool handHidden {false};
+	/// The player's hand has picked up the rope of a leash tied to something, which is drawn as two ropes of its own
+	bool handHoldsTiedRope {false};
+	/// How far the leashed creature has fizzed out of sight, 0 to 1
+	float creatureFizz {0.0f};
+};
+/// Another player's leash isn't drawn once their creature has fizzed this far out of sight
+constexpr float k_HiddenFizz = 0.4f;
+/// Whether the rope is drawn. The scripts' switch alone hides nothing: it only lets the rope show through a script's
+/// cinema bars and while the player's hand is put away. The player's own rope always shows over their creature fizzing.
+[[nodiscard]] bool Shown(const Showing& showing);
+
 } // namespace openblack::leash_rope

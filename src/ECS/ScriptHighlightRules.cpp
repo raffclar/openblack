@@ -43,7 +43,7 @@ constexpr float k_GlowOutOfReach = 1.4f;
 /// The beat's least share, and how much more it rises
 constexpr float k_PulseLeast = 0.4f;
 constexpr float k_PulseRise = 0.6f;
-/// The silver beam's colour; the others' colour, and their alpha a whole beat
+/// The silver beam's colour; the others' colour, and their alpha at the top of the beat
 constexpr uint32_t k_SilverBeam = 0x14b4dcff;
 constexpr uint32_t k_YellowBeam = 0x00ffff00;
 constexpr uint32_t k_YellowBeamAlpha = 0x50;
@@ -60,23 +60,32 @@ void StepPulse(Pulse& pulse, float millisecondsPerTurn)
 		pulse.phase -= k_TwoPi;
 	}
 	pulse.previous = pulse.level;
-	pulse.level = (1.0f - std::cos(pulse.phase)) * 0.5f;
+	// Worked out in full precision and only then kept as a float, so the beat reaches a whole 1 as the game's does
+	pulse.level = static_cast<float>((1.0 - std::cos(static_cast<double>(pulse.phase))) * 0.5);
 }
 
-float PulseShare(const Pulse& pulse, float turnFraction)
+double PulseShare(const Pulse& pulse, float turnFraction)
 {
-	const float blended = std::clamp(((pulse.level - pulse.previous) * turnFraction) + pulse.previous, 0.0f, 1.0f);
-	return (blended * k_PulseRise) + k_PulseLeast;
+	// Worked out in full precision throughout: whether the share reaches a whole 1 decides the yellow beam
+	const double previous = pulse.previous;
+	const double blended = std::clamp(((pulse.level - previous) * turnFraction) + previous, 0.0, 1.0);
+	return (blended * static_cast<double>(k_PulseRise)) + static_cast<double>(k_PulseLeast);
 }
 
-uint32_t BeamColour(HighlightInfo kind, float pulseShare)
+bool BeamShown(HighlightInfo kind, bool active)
+{
+	return active && !IsTipSign(kind);
+}
+
+uint32_t BeamColour(HighlightInfo kind, double pulseShare)
 {
 	if (kind == HighlightInfo::Silver)
 	{
 		return k_SilverBeam;
 	}
-	// The beat is truncated to a whole number before it is scaled, so the beam only shows at the top of the beat
-	const auto alpha = static_cast<uint8_t>(static_cast<uint32_t>(static_cast<int32_t>(pulseShare)) * k_YellowBeamAlpha);
+	// The beam beats with the scroll, from 0.4 to all of its strength. The game cuts the beat to a whole number before
+	// scaling it, which leaves the beam unseen; openblack scales it first (see docs/deviations.md)
+	const auto alpha = static_cast<uint8_t>(static_cast<int32_t>(pulseShare * static_cast<double>(k_YellowBeamAlpha)));
 	return (static_cast<uint32_t>(alpha) << 24u) | k_YellowBeam;
 }
 

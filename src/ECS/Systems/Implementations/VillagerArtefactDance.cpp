@@ -64,7 +64,7 @@ void WalkThenWait(LivingAction& action, glm::vec2 goal)
 	auto& living = Locator::livingActionSystem::value();
 	if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, VillagerStates::WaitForArtifactDance))
 	{
-		ecs::villager_home::SetupMobileMoveTo(action, goal, VillagerStates::WaitForArtifactDance);
+		ecs::villager_home::SetupMobileMoveTo(action, goal);
 	}
 }
 } // namespace
@@ -154,7 +154,7 @@ uint32_t ecs::villager_artefact_dance::ArtefactDance(LivingAction& action)
 			auto& living = Locator::livingActionSystem::value();
 			if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, VillagerStates::ArtifactDance))
 			{
-				villager_home::SetupMobileMoveTo(action, *slot, VillagerStates::ArtifactDance);
+				villager_home::SetupMobileMoveTo(action, *slot);
 			}
 			return 1;
 		}

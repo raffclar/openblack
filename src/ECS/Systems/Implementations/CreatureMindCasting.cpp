@@ -27,6 +27,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "Creature/CreatureCastMoves.h"
+#include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureRoute.h"
@@ -34,14 +35,17 @@
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureThrow.h"
 #include "Creature/CreatureWatching.h"
+#include "Creature/LeashRules.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -51,10 +55,13 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -150,11 +157,11 @@ std::vector<cast_moves::CollideCircle> ModelCircles(const ecs::Registry& registr
 	return cast_moves::CollideCircles({half.x, half.z}, Flat(centre), turn);
 }
 
-/// Whether a thing standing in a cell of the land keeps it from being clear for a creature to get away to: the trees and
-/// fields always by the circles they keep clear, anything else fixed when the creature must go round it (a building,
-/// feature or static thing when as tall as a tenth of the creature or burning, a dead tree only burning), and nothing
-/// that moves
-bool CellBlocked(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z)
+/// Whether a thing standing in a cell of the land keeps it from being clear for a creature to go to: a temple always; the
+/// trees and fields always by the circles they keep clear, anything else fixed when the creature must go round it (a
+/// building, feature or static thing when as tall as a tenth of the creature or burning, a dead tree only burning), and
+/// nothing that moves; and, when asked, anything living, the creature itself included
+bool CellBlocked(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks = false)
 {
 	if (!Locator::entitiesMap::has_value() || x < 0 || z < 0)
 	{
@@ -167,7 +174,15 @@ bool CellBlocked(const ecs::Registry& registry, entt::entity creature, int32_t x
 		return Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity);
 	};
 	const auto blocks = [&](entt::entity entity) {
-		if (!registry.Valid(entity) || registry.AllOf<Forest>(entity))
+		if (!registry.Valid(entity))
+		{
+			return false;
+		}
+		if (registry.AllOf<Temple>(entity) || (livingBlocks && registry.AnyOf<Villager, Creature, Animal>(entity)))
+		{
+			return true;
+		}
+		if (registry.AllOf<Forest>(entity))
 		{
 			return false;
 		}
@@ -271,6 +286,31 @@ std::optional<uint32_t> CreatureMindSystem::CastMagicOf(uint32_t action)
 	return magic;
 }
 
+std::optional<glm::vec2> mind_detail::ClearAreaFor(const ecs::Registry& registry, entt::entity creature, glm::vec2 point,
+                                                   float width, bool livingBlocks)
+{
+	if (!Locator::creatureLocomotionSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+	const auto found = cast_moves::FindClearArea(point, width, [&](int32_t x, int32_t z) {
+		return land.At(x, z) == creature_route::Ground::Open && !CellBlocked(registry, creature, x, z, livingBlocks);
+	});
+	// Kept within an area, a place outside it is no use
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	if (found.has_value() && leashes != nullptr)
+	{
+		const bool leashed = leashes->worn.has_value();
+		if (creature_leash::IsConfined(leashes->confinementRadius, leashed, !leashed || leashes->worn->works) &&
+		    glm::distance(*found, Flat(leashes->confinementCentre)) > leashes->confinementRadius)
+		{
+			return std::nullopt;
+		}
+	}
+	return found;
+}
+
 std::optional<std::pair<float, float>> mind_detail::MiracleSightings(const CreatureMindState& mind,
                                                                      const creature_mind_tables::Tables& tables,
                                                                      CreatureType species, MagicType magic)
@@ -368,6 +408,11 @@ bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt:
 		auto* casting = registry.TryGet<CreatureCasting>(creature);
 		(casting != nullptr ? *casting : registry.Assign<CreatureCasting>(creature)).fizzle =
 		    CreatureCasting::Fizzle {.target = target, .magicType = type};
+		if (Locator::creatureHelpSystem::has_value())
+		{
+			Locator::creatureHelpSystem::value().Raise(
+			    creature, {.kind = creature_help::Kind::MessedUpAction, .parameter = creature_help::k_FumbledMiracle});
+		}
 		++mind->learnt->knowledge.miraclesSeen[magicType].count;
 		return false;
 	}

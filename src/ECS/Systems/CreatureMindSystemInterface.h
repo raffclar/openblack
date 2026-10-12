@@ -11,6 +11,7 @@
 
 #include <cstddef>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -87,13 +88,17 @@ public:
 	/// stops what it was doing if slapped, warms or cools to the player, and shows its pleasure or sorrow next. Feedback
 	/// too slight to count only has it look at the player.
 	virtual void ReceiveFeedback(entt::entity creature, float feedback) = 0;
+	/// The player's hand took hold of the creature: its mind stands still while held, it turns to face the player, and
+	/// once its body is free it shows what it wants
+	virtual void HandTookHold(entt::entity /*creature*/) {}
 	/// Feedback that only moves how the creature feels about its player (as being hit by what its player threw does):
 	/// it takes the player to want compassion or anger, and warms or cools to the player, from -1 to 1
 	virtual void UpdateAttitudeFromFeedback(entt::entity /*creature*/, float /*feedback*/) {}
 	/// Every source of a type in the creature's desires goes up or down by an amount
 	virtual void ChangeDesireSource(entt::entity /*creature*/, uint32_t /*type*/, float /*amount*/) {}
 	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through
-	/// what it plays; a face can be pulled with it. Returns whether it played.
+	/// what it plays; a face can be pulled with it, which is pulled even when the action can't play. Returns whether it
+	/// played.
 	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
 	                         float interruptsAfter) = 0;
 
@@ -179,6 +184,9 @@ public:
 	/// a script's control it chooses nothing for itself, standing about once the agenda is over, until the script lets
 	/// it go. Returns whether it could.
 	virtual bool CarryOutForScript(entt::entity /*creature*/, std::vector<creature_mind::Step> /*agenda*/) { return false; }
+	/// A script has the creature keep its head turned to a thing or a point until it lets it go (nothing lets it go); it
+	/// lets go by itself once the thing is gone or the script lets the creature go
+	virtual void SetScriptFocus(entt::entity /*creature*/, std::optional<creature_mind::Gaze> /*focus*/) {}
 	/// A script forces an action of the game's table on the creature, by its row, done to a thing and with another, as
 	/// it stages a scene: the script takes control of it, and it carries the action out as an order from its player.
 	/// Returns whether the action could be carried out.
@@ -198,8 +206,17 @@ public:
 	/// A script makes a desire the creature's only one for some seconds, or takes it away again
 	virtual void SetOnlyDesire(entt::entity /*creature*/, creature_desires::Desire /*desire*/, float /*seconds*/) {}
 	virtual void ClearOnlyDesire(entt::entity /*creature*/) {}
+	/// A script changes the creature's desires: how much it wants them, whether they are active and how much it can
+	/// want them at most. A creature whose mind hasn't thought yet has them set up first, the ones its stage of growing
+	/// up brings already active, so that what the script sets stands.
+	virtual void ChangeDesires(entt::entity /*creature*/, const std::function<void(creature_desires::Desires&)>& /*change*/) {}
+	/// A script sets how pressing what the creature carries out now is, which a plan of its own must beat to replace it
+	virtual void SetAgendaPriority(entt::entity /*creature*/, float /*priority*/) {}
 	/// The creature is told to point out the lesson highlight about it, if there is one; whether one was found
 	virtual bool PointOutHighlight(entt::entity /*creature*/) { return false; }
+	/// The story moves the creature to a stage of growing up: its desires become the ones its stages so far bring, none
+	/// stays held back, and it drops the plan it was carrying out
+	virtual void MoveToStage(entt::entity /*creature*/, uint32_t /*stage*/) {}
 };
 
 } // namespace openblack::ecs::systems

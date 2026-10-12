@@ -9,7 +9,10 @@
 
 #include "WorldToolTipRules.h"
 
+#include <algorithm>
 #include <array>
+
+#include <glm/vec4.hpp>
 
 #include "Common/FixedFormat.h"
 
@@ -88,6 +91,28 @@ std::u16string Compose(uint32_t index, std::u16string_view words, double first, 
 	}
 	const std::array<double, 2> values {first, *second};
 	return fixed_format::WithNumbers(words, values);
+}
+
+std::optional<glm::ivec2> HandOnScreen(const glm::mat4& worldToClip, float nearClip, glm::vec3 hand, glm::ivec2 screen)
+{
+	const auto clip = worldToClip * glm::vec4(hand, 1.0f);
+	if (clip.w < nearClip)
+	{
+		return std::nullopt;
+	}
+	// Whole pixels, the fractions cut off
+	return glm::ivec2 {static_cast<int>((clip.x / clip.w + 1.0f) * static_cast<float>(screen.x) * 0.5f),
+	                   static_cast<int>((1.0f - clip.y / clip.w) * static_cast<float>(screen.y) * 0.5f)};
+}
+
+glm::ivec2 KeptOnScreen(glm::ivec2 hand, glm::ivec2 screen, int size)
+{
+	return {std::clamp(hand.x, 0, std::max(screen.x - size, 0)), std::clamp(hand.y, 0, std::max(screen.y - size, 0))};
+}
+
+bool OffersOverToolTips(magic::CastInput::State cast)
+{
+	return cast != magic::CastInput::State::Locked;
 }
 
 } // namespace openblack::gui::world_tooltip

@@ -7,10 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#include <array>
 #include <numbers>
 
-#include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/WorshipSiteConstruction.h"
@@ -49,17 +47,4 @@ TEST(WorshipSiteConstruction, ASiteStoresWoodOnlyWhileItGoesUp)
 	EXPECT_FALSE(wsc::Stores(ResourceType::Wood, false));
 	EXPECT_TRUE(wsc::Stores(ResourceType::Food, false));
 	EXPECT_TRUE(wsc::Stores(ResourceType::Any, false));
-}
-
-TEST(WorshipSiteConstruction, ASiteIsABuildingSiteOfTheTownsAskedToBuildItUntilBuilt)
-{
-	const auto first = static_cast<entt::entity>(3);
-	const auto second = static_cast<entt::entity>(7);
-	const auto other = static_cast<entt::entity>(9);
-	const std::array asked {first, second};
-	EXPECT_TRUE(wsc::IsSiteOf(asked, first, false));
-	EXPECT_TRUE(wsc::IsSiteOf(asked, second, false));
-	EXPECT_FALSE(wsc::IsSiteOf(asked, other, false));
-	EXPECT_FALSE(wsc::IsSiteOf(asked, first, true));
-	EXPECT_FALSE(wsc::IsSiteOf(asked, entt::null, false));
 }

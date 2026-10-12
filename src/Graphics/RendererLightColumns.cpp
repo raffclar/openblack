@@ -20,14 +20,17 @@
 #include "3D/L3DMesh.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/LightColumn.h"
 #include "Graphics/ShaderManager.h"
@@ -68,26 +71,8 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 	using namespace ecs::components;
 	const auto& column = *meshes.Handle(columnId);
 	const auto& influence = Locator::influenceSystem::value();
-	const auto eye = desc.camera->GetOrigin();
-	const auto* program = _shaderManager->GetShader("Object");
-	const auto translucent = TranslucentPassOf(desc.viewId);
-
 	const auto draw = [&](const glm::vec3& position, PlayerNames owner, uint8_t alpha) {
-		const auto model = light_column::Model(position, eye);
-		L3DMeshSubmitDesc submitDesc = {};
-		submitDesc.viewId = translucent;
-		submitDesc.program = program;
-		submitDesc.modelMatrices = &model;
-		submitDesc.matrixCount = 1;
-		submitDesc.state = k_AddedState;
-		submitDesc.alphaThreshold = 0.0f;
-		submitDesc.tint = light_column::Tint(ColourOf(owner), alpha);
-		// The column is its owner's colour alone: neither the land's light and colour nor the distance haze are added to
-		// it, and the creatures' and the hand's shadows don't fall on it
-		submitDesc.landLightAndHaze = false;
-		submitDesc.groundShadows = false;
-		submitDesc.sortDepth = zsort::Depth(position, eye);
-		DrawMesh(column, submitDesc, std::numeric_limits<uint8_t>::max());
+		DrawLightShaft(desc, column, position, light_column::Tint(ColourOf(owner), alpha));
 	};
 
 	// Over each village centre, at the middle of its model, in its town's player's colour
@@ -122,4 +107,61 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 		    Locator::heartbeatSystem::has_value() ? Locator::heartbeatSystem::value().Pulse(temple.owner, turnFraction) : 0.0f;
 		draw(transform.position, temple.owner, light_column::TempleAlpha(pulse));
 	});
+}
+
+void Renderer::DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position,
+                              const glm::vec4& tint) const
+{
+	const auto eye = desc.camera->GetOrigin();
+	const auto model = light_column::Model(position, eye);
+	L3DMeshSubmitDesc submitDesc = {};
+	submitDesc.viewId = TranslucentPassOf(desc.viewId);
+	submitDesc.program = _shaderManager->GetShader("Object");
+	submitDesc.modelMatrices = &model;
+	submitDesc.matrixCount = 1;
+	submitDesc.state = k_AddedState;
+	submitDesc.alphaThreshold = 0.0f;
+	submitDesc.tint = tint;
+	// The shaft is its colour alone: neither the land's light and colour nor the distance haze are added to it, and the
+	// creatures' and the hand's shadows don't fall on it
+	submitDesc.landLightAndHaze = false;
+	submitDesc.groundShadows = false;
+	submitDesc.sortDepth = zsort::Depth(position, eye);
+	DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+}
+
+void Renderer::DrawScrollBeams(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !Locator::scriptHighlightSystem::has_value())
+	{
+		return;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto beamId = resources::HashIdentifier(MeshId::SpellBlastCentre);
+	if (!meshes.Contains(beamId))
+	{
+		return;
+	}
+	const auto& beam = *meshes.Handle(beamId);
+	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
+	const double pulseShare =
+	    ecs::script_highlights::PulseShare(Locator::scriptHighlightSystem::value().GetPulse(), turnFraction);
+
+	// A started scroll stands in a beam the same shape as the temple's column, rising from its model's middle. A
+	// beam with no strength this frame would add nothing, so it isn't sent
+	desc.entities.Each<const ecs::components::ScriptHighlight>(
+	    [&](const ecs::components::ScriptHighlight& highlight) {
+		    if (!ecs::script_highlights::BeamShown(highlight.kind, highlight.active))
+		    {
+			    return;
+		    }
+		    const uint32_t colour = ecs::script_highlights::BeamColour(highlight.kind, pulseShare);
+		    if ((colour >> 24u) == 0)
+		    {
+			    return;
+		    }
+		    DrawLightShaft(desc, beam, highlight.centre,
+		                   light_column::Tint(colour & 0xFFFFFFu, static_cast<uint8_t>(colour >> 24u)));
+	    },
+	    entt::exclude<ecs::components::HiddenByState>);
 }

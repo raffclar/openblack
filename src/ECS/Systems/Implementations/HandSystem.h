@@ -10,6 +10,7 @@
 #pragma once
 
 #include "ECS/Systems/HandSystemInterface.h"
+#include "Hand/HandTrace.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -26,8 +27,10 @@ public:
 	[[nodiscard]] std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)>
 	GetPlayerHandPositions() const noexcept override;
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) override;
+	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
 
 private:
 	std::array<entt::entity, 2> _hands;
+	hand_trace::HandTrace _trace;
 };
 } // namespace openblack::ecs::systems

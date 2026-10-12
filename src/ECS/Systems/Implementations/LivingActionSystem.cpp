@@ -1246,6 +1246,12 @@ bool LivingActionSystem::EnterState(LivingAction& action, VillagerStates state, 
 	{
 		return false;
 	}
+	// A new top state lets go of the state the villager was heading for first: whatever it goes on to next is set after
+	// this, as a walk sets where it is heading once it is walking
+	if (VillagerGetState(action, LivingAction::Index::Final) != VillagerStates::InvalidState)
+	{
+		SetStateDirectly(action, LivingAction::Index::Final, VillagerStates::InvalidState);
+	}
 	SetStateDirectly(action, LivingAction::Index::Top, state);
 	return true;
 }

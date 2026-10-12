@@ -59,34 +59,57 @@ std::optional<entt::entity> PlayersCreature()
 }
 } // namespace
 
-CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::path> folder)
+CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::path> folder, ProfileFile profileFile)
     : _folder(std::move(folder))
+    , _profileFile(std::move(profileFile))
 {
+}
+
+std::optional<creature_carry_over::KeptFiles> CreatureCarryOverSystem::Files() const
+{
+	if (!_folder.has_value() || !_profileFile)
+	{
+		return std::nullopt;
+	}
+	const auto file = _profileFile();
+	if (!file.has_value())
+	{
+		return std::nullopt;
+	}
+	return creature_carry_over::KeptFilesIn(*_folder, *file);
 }
 
 void CreatureCarryOverSystem::KeepPlayersCreature()
 {
-	const auto creature = PlayersCreature();
-	if (!creature.has_value() || !Locator::creatureMindSystem::has_value())
+	if (const auto creature = PlayersCreature(); creature.has_value())
+	{
+		KeepCreature(*creature);
+	}
+}
+
+void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr || body->owner != LocalPlayer() || !Locator::creatureMindSystem::has_value())
 	{
 		return;
 	}
-	auto file = Locator::creatureMindSystem::value().SaveMind(*creature);
+	auto file = Locator::creatureMindSystem::value().SaveMind(creature);
 	if (!file.has_value())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature {} has no mind yet to keep for the next land",
-		                   entt::to_integral(*creature));
+		                   entt::to_integral(creature));
 		return;
 	}
 	// Its physique is saved beside its mind: its body as it is now, but for the alignment, as no spell made it
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto now = ecs::creature_body_file::Capture(registry, *creature);
+	const auto now = ecs::creature_body_file::Capture(registry, creature);
 	const creature_spells::SavedBody nowValues {
 	    .size = now.size.value_or(1.0f), .strength = now.strength, .alignment = now.alignment.value_or(0.0f)};
-	const auto* spells = registry.TryGet<const CreatureSpells>(*creature);
+	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
 	const auto saved = spells != nullptr ? creature_spells::ValuesToSave(spells->spells, nowValues) : nowValues;
 	const auto physique = creature_mind_body::ToPhysiqueFile(now, file->speciesRow, saved.alignment);
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Kept the player's creature {} for the next land", entt::to_integral(*creature));
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Kept the player's creature {} for the next land", entt::to_integral(creature));
 	Write(*file, physique);
 	Keep(std::make_shared<const creaturemind::MindFileData>(std::move(*file)));
 }
@@ -94,13 +117,14 @@ void CreatureCarryOverSystem::KeepPlayersCreature()
 void CreatureCarryOverSystem::Write(const creaturemind::MindFileData& mind,
                                     const creaturemind::PhysiqueFileData& physique) const
 {
-	if (!_folder.has_value())
+	const auto kept = Files();
+	if (!kept.has_value())
 	{
 		return;
 	}
+	const auto& files = *kept;
 	std::error_code error;
 	std::filesystem::create_directories(*_folder, error);
-	const auto files = creature_carry_over::KeptFilesIn(*_folder, k_ProfileFile);
 	const auto written = creaturemind::WriteFile(files.mind, mind);
 	if (written != creaturemind::MindResult::Success)
 	{
@@ -112,16 +136,24 @@ void CreatureCarryOverSystem::Write(const creaturemind::MindFileData& mind,
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature's physique could not be written to {}",
 		                   files.physique.string());
+		return;
 	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the player's creature to {} and its physique beside it",
+	                   files.mind.string());
 }
 
 void CreatureCarryOverSystem::ReadIfNoneKept()
 {
-	if (_kept != nullptr || !_folder.has_value())
+	if (_kept != nullptr)
 	{
 		return;
 	}
-	const auto path = creature_carry_over::KeptFilesIn(*_folder, k_ProfileFile).mind;
+	const auto files = Files();
+	if (!files.has_value())
+	{
+		return;
+	}
+	const auto& path = files->mind;
 	std::error_code error;
 	if (!std::filesystem::exists(path, error))
 	{

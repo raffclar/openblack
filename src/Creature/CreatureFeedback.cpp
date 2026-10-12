@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <utility>
 
 #include <glm/geometric.hpp>
 
@@ -35,12 +36,34 @@ BodyPart creature_feedback::NearestPart(const glm::vec3& touch, std::span<const 
 	return static_cast<BodyPart>(best);
 }
 
-bool creature_feedback::StrokeDue(std::optional<BodyPart> last, BodyPart part, float msSinceLast)
+std::optional<float> creature_feedback::Pace(float& sinceStep, float frameMs)
 {
-	return last != part && msSinceLast >= k_StrokeIntervalMs;
+	sinceStep += frameMs;
+	if (sinceStep < 1000.0f / k_StepsPerSecond)
+	{
+		return std::nullopt;
+	}
+	return std::exchange(sinceStep, 0.0f);
 }
 
-std::optional<Slap> creature_feedback::ClassifySlap(float handHeight, float speed, float creatureHeight, bool sweepsRight)
+float creature_feedback::StrokeWaitMs(float sum)
+{
+	return (1.0f - sum) * k_StrokeWaitMs;
+}
+
+bool creature_feedback::StrokeDue(const StrokeClocks& clocks, std::optional<BodyPart> last, BodyPart part, float sum)
+{
+	// The game compares the wait in whole milliseconds
+	return last != part && std::trunc(StrokeWaitMs(sum)) <= clocks.sinceTouch && clocks.ready >= k_ReadyForStrokeMs;
+}
+
+bool creature_feedback::SlapConsidered(bool onBody, bool wasOnBody, float cursorX, float lastCursorX, float screenMiddle)
+{
+	const bool crossesMiddle = (cursorX - screenMiddle) * (lastCursorX - screenMiddle) < 0.0f;
+	return (onBody && !wasOnBody) || crossesMiddle;
+}
+
+std::optional<Slap> creature_feedback::ClassifySlap(float handHeight, float speed, float creatureHeight, bool sweepsLeft)
 {
 	if (creatureHeight <= 0.0f || speed <= k_SlapSpeed * creatureHeight)
 	{
@@ -51,13 +74,66 @@ std::optional<Slap> creature_feedback::ClassifySlap(float handHeight, float spee
 	{
 		return std::nullopt;
 	}
-	auto animation = height < k_FeetBelow ? k_SlapFeet : height < k_WaistBelow ? k_SlapWaist : k_SlapHead;
+	const auto band = height < k_FeetBelow ? SlapBand::Feet : height < k_WaistBelow ? SlapBand::Waist : SlapBand::Head;
+	auto animation = band == SlapBand::Feet ? k_SlapFeet : band == SlapBand::Waist ? k_SlapWaist : k_SlapHead;
 	const bool gentle = speed < k_HardSlapSpeed * creatureHeight;
 	if (gentle)
 	{
 		animation += k_GentleOffset;
 	}
-	return Slap {.animation = animation, .gentle = gentle, .mirrored = sweepsRight};
+	return Slap {.animation = animation, .band = band, .gentle = gentle, .mirrored = sweepsLeft};
+}
+
+bool creature_feedback::CountSlap(HardSlaps& slaps, const Slap& slap, bool onBody)
+{
+	if (slap.band != slaps.band)
+	{
+		slaps = {.band = slap.band, .count = 0};
+	}
+	if (slap.gentle)
+	{
+		return false;
+	}
+	++slaps.count;
+	if (!onBody || slaps.count < k_HardSlapsToBruise)
+	{
+		return false;
+	}
+	slaps.count = 0;
+	return true;
+}
+
+uint8_t creature_feedback::BruiseColumn(float speed, float creatureHeight)
+{
+	const auto hard = k_HardSlapSpeed * creatureHeight;
+	if (hard <= 0.0f)
+	{
+		return 7;
+	}
+	const auto past = std::clamp(static_cast<int>((speed - hard) * 5.0f / hard), 0, 7);
+	return static_cast<uint8_t>(7 - past);
+}
+
+float creature_feedback::LifeAfterBruise(float life)
+{
+	return life > k_BruiseLife ? std::max(life - k_BruiseLife, k_BruiseLife) : life;
+}
+
+TouchCycle creature_feedback::NextCycle(TouchCycle cycle, bool fast, bool stroking, bool onBody)
+{
+	if (fast)
+	{
+		cycle = TouchCycle::Slap;
+	}
+	if (stroking)
+	{
+		cycle = TouchCycle::Tickle;
+	}
+	if (!onBody && cycle == TouchCycle::Tickle)
+	{
+		cycle = TouchCycle::Wiggle;
+	}
+	return cycle;
 }
 
 float creature_feedback::AfterStroke(float sum)

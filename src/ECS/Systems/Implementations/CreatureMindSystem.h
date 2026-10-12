@@ -20,6 +20,7 @@
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -54,6 +55,7 @@ public:
 	bool SitDown(entt::entity creature) override;
 	void StandUp(entt::entity creature) override;
 	void ReceiveFeedback(entt::entity creature, float feedback) override;
+	void HandTookHold(entt::entity creature) override;
 	void UpdateAttitudeFromFeedback(entt::entity creature, float feedback) override;
 	void ChangeDesireSource(entt::entity creature, uint32_t type, float amount) override;
 	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
@@ -79,6 +81,7 @@ public:
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
+	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
 	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
 	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
 	[[nodiscard]] float GetInteractionMagnitude(entt::entity creature) const override;
@@ -86,6 +89,9 @@ public:
 	[[nodiscard]] uint32_t GetActionCount(entt::entity creature, uint32_t action) const override;
 	void SetOnlyDesire(entt::entity creature, creature_desires::Desire desire, float seconds) override;
 	void ClearOnlyDesire(entt::entity creature) override;
+	void ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change) override;
+	void SetAgendaPriority(entt::entity creature, float priority) override;
+	void MoveToStage(entt::entity creature, uint32_t stage) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
 private:
@@ -108,6 +114,8 @@ private:
 	bool FightForScript(entt::entity creature, entt::entity opponent);
 	/// Learns what feedback teaches, from what the creature did lately
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
+	/// Held by the player's hand, it shows what it wants once its body is free
+	void ShowDesireOnHold(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& animation);
 	/// Plans the desires due this turn for one creature
 	/// Plans the desires due this turn for one creature, or all of them, at most once a turn
 	void PlanCreature(entt::entity creature, components::CreatureMindState& mind, bool everyDesire = false);

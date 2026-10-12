@@ -147,6 +147,12 @@ public:
 		/// whose land light, land colour and haze it takes, w its shade of 255 in place of the sun's on each vertex. w 0 for
 		/// none.
 		glm::vec4 shadeAt {0.0f};
+		/// Inside the temple, the mesh fades with the temple's depth fog: a model once where it stands, the lightmapped
+		/// walls at each vertex. Off for the hand, which the game leaves unfogged.
+		bool templeFog {false};
+		/// The temple's origin, for a room's mesh: its walls without a lightmap are fogged once each at their first
+		/// vertex, placed from here as the game reads it in the temple's own space
+		std::optional<glm::vec3> fogFromFirstVertex;
 		/// The temple's light, which the lightmapped submeshes are multiplied by, and which is added to every submesh
 		/// that doesn't glow, as the game adds the vertices' specular
 		glm::vec3 lightMultiply {1.0f};
@@ -157,6 +163,9 @@ public:
 		bool unlit {false};
 		/// The sun lights the mesh at every detail level, as it does the creatures and the hand
 		bool alwaysLit {false};
+		/// Where the model light is for this mesh in place of where it is this frame, as the creature in the temple's
+		/// creature room is lit from the room's fire
+		std::optional<glm::vec3> modelLight;
 		/// The land's light and colour where the mesh stands and the world's distance haze reach it. Off for a mesh drawn
 		/// in a colour of its own alone, with nothing added over it, as the columns of light over the temples and the
 		/// village centres are
@@ -173,6 +182,9 @@ public:
 		bool innerWalls {false};
 		/// How far the inner walls stand in whatever the material, when given: a temple's
 		std::optional<float> innerWallInset;
+		/// The detail the mesh is drawn in, as the bit its parts name it by (see graphics::mesh_detail::LevelBit): only its
+		/// parts of that detail are drawn. Its most detailed by default.
+		uint8_t detailLevel {1};
 		/// Only the submeshes of this status are drawn, in place of those of status 0: a building's scaffold
 		std::optional<uint32_t> onlyStatus;
 		/// Only the submeshes of status one up to this are drawn, in place of those of status 0: a graveyard's graves

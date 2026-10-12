@@ -40,6 +40,8 @@ public:
 	                          entt::entity town) override;
 	void JoinFlock(entt::entity animal, entt::entity flock) override;
 	bool SetScriptState(entt::entity animal, LivingStates state) override;
+	void ScriptMoveTo(entt::entity animal, glm::vec2 point) override;
+	[[nodiscard]] std::optional<uint8_t> FinalGameStateOf(entt::entity animal) const override;
 	void SetScale(entt::entity animal, float scale) override;
 	[[nodiscard]] float RadiusOf(entt::entity animal) const override;
 	[[nodiscard]] glm::vec3 MovementOf(entt::entity animal) const override;
@@ -60,7 +62,7 @@ public:
 	void StartFading(entt::entity animal) override;
 
 	[[nodiscard]] bool IsAvailableForReaction(entt::entity animal) const override;
-	bool SetupFleeFromObject(entt::entity entity, entt::entity object) override;
+	bool SetupFleeFromObject(entt::entity entity, entt::entity object, Reaction reaction) override;
 	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
 	void StopReaction(entt::entity animal) override;
 

@@ -87,7 +87,7 @@ bool move_to_object::SetupMoveToObject(LivingAction& action, entt::entity thing,
 	const auto goal = villager_work::EdgeWorkingPosition(GroundOf(thing), GroundOf(villager),
 	                                                     systems::object_measures::TwoDRadius(registry, thing),
 	                                                     systems::object_measures::TwoDRadius(registry, villager));
-	villager_home::SetupMobileMoveTo(action, goal, final, villager_home::WalkWay::StraightThrough);
+	villager_home::SetupMobileMoveTo(action, goal, villager_home::WalkWay::StraightThrough);
 	return true;
 }
 

@@ -47,6 +47,21 @@ TEST(ScriptCreate, TheScriptsNumberTheTypesAsTheGameDoes)
 	EXPECT_EQ(static_cast<int32_t>(SpellSeedType::Water), 9);
 }
 
+TEST(ScriptCreate, OnlyMarkersAndMobileStaticsKeepTheScriptsHeight)
+{
+	// A marker (type 1) and a mobile static (type 8) keep the height the script gave; villagers (4), children (5) and
+	// the rest stand on the land under the place asked for
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::Marker), 1);
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::MobileStatic), 8);
+	EXPECT_TRUE(KeepsScriptHeight(ScriptType::Marker));
+	EXPECT_TRUE(KeepsScriptHeight(ScriptType::MobileStatic));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Villager));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::VillagerChild));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Rock));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Creature));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Ball));
+}
+
 TEST(ScriptCreate, AnglesAreGivenInDegrees)
 {
 	EXPECT_FLOAT_EQ(AngleFromDegrees(0.0f), 0.0f);
@@ -70,6 +85,31 @@ TEST(ScriptCreate, ASubtypeMustNumberARow)
 	EXPECT_TRUE(IsRow(2, 3));
 	EXPECT_FALSE(IsRow(3, 3));
 	EXPECT_FALSE(IsRow(0, 0));
+}
+
+TEST(ScriptCreate, ARandomVillagerOfATribeIsOneOfItsSevenKinds)
+{
+	// The villagers' table: nine tribes of seven kinds, then the kinds of no tribe
+	constexpr std::size_t k_Rows = 84;
+	EXPECT_EQ(TribeVillagerRow(0, 0, k_Rows), 0u);
+	EXPECT_EQ(TribeVillagerRow(0, 6, k_Rows), 6u);
+	// The Norse (tribe 7): their housewife to their trader
+	EXPECT_EQ(TribeVillagerRow(7, 0, k_Rows), static_cast<uint32_t>(VillagerInfo::NorseHousewifeFemale));
+	EXPECT_EQ(TribeVillagerRow(7, 6, k_Rows), static_cast<uint32_t>(VillagerInfo::NorseTraderMale));
+	EXPECT_FALSE(TribeVillagerRow(-1, 0, k_Rows).has_value());
+	EXPECT_FALSE(TribeVillagerRow(0, 7, k_Rows).has_value());
+	EXPECT_FALSE(TribeVillagerRow(12, 0, k_Rows).has_value());
+}
+
+TEST(ScriptCreate, AScriptsVillagerIsMadeInNoTown)
+{
+	// A grown-up a year past growing up, a child ten, and neither in a town until the script attaches it to one
+	const auto grownUp = ScriptVillagerOf(false, 13);
+	EXPECT_EQ(grownUp.age, 14u);
+	EXPECT_FALSE(grownUp.joinsTown);
+	const auto child = ScriptVillagerOf(true, 13);
+	EXPECT_EQ(child.age, 10u);
+	EXPECT_FALSE(child.joinsTown);
 }
 
 TEST(ScriptCreate, MiraclesAreNumberedAsTheGameNumbersThem)

@@ -719,6 +719,11 @@ bool creature_fight::PlayerMove(Fighter& fighter, const Move& move, bool replace
 		fighter.control = Control::Player;
 	}
 	fighter.computerWaitMs = k_ComputerWaitsMs;
+	// A move made in place of the queue keeps only its own sparkle
+	if (replace)
+	{
+		fighter.marks.KeepNewest();
+	}
 	return fighter.queue.Push(move, replace);
 }
 
@@ -735,6 +740,7 @@ std::optional<Order> creature_fight::TakeOrder(Fighter& fighter, bool inRange)
 		if (front->move.kind == Move::Kind::Block)
 		{
 			fighter.queue.Pop();
+			fighter.marks.PopFront();
 		}
 		return Order {.kind = Order::Kind::EndBlock};
 	}
@@ -774,6 +780,7 @@ std::optional<Order> creature_fight::TakeOrder(Fighter& fighter, bool inRange)
 		break;
 	}
 	fighter.queue.Pop();
+	fighter.marks.PopFront();
 	return order;
 }
 

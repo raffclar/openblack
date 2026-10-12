@@ -77,8 +77,17 @@ public:
 		std::vector<Desire> desires;
 		/// What the creature thinks of its god, from -1 to 1, if anything
 		std::optional<float> opinionOfGod;
-		/// How much attention its god has paid it, from 0 to 1
-		float attention {0.0f};
+		/// How much attention its god has paid it, of the five HELP_TEXT_HOW_MUCH texts from 0
+		int32_t attention {0};
+		/// Each other creature it knows: its name, what it thinks of it, from -1 to 1, and how much attention that
+		/// creature has paid it, of the five HELP_TEXT_HOW_MUCH texts, if any
+		struct KnownCreature
+		{
+			std::u16string name;
+			float opinion {0.0f};
+			std::optional<int32_t> attention;
+		};
+		std::vector<KnownCreature> creatures;
 		/// Whether it thinks it knows its god's dominant desire
 		bool knowsGodsDesire {false};
 		/// The creatures, temples, flocks and forests it knows about
@@ -88,7 +97,8 @@ public:
 		/// The miracles it knows of, the text of each and how much of it it has learnt
 		struct Miracle
 		{
-			std::string_view text;
+			/// The number of the game's help text for having learnt it
+			uint32_t text;
 			int32_t percent;
 			/// Its place in the game's table of miracles, and how far it is learnt, 0 to 100, which the medals and
 			/// seeds by the magic plinths show

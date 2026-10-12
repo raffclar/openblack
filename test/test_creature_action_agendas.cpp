@@ -103,7 +103,7 @@ TEST(CreatureActionAgendas, SleepingAtHomeWalksHomeFacesDownTheSlopeAndSleepsUnt
 TEST(CreatureActionAgendas, LookingSomethingOverGoesNearItFacesItAndWatchesItsFoot)
 {
 	const auto agenda = ExamineByLooking(3, 10.0f, 40.0f);
-	ASSERT_EQ(agenda.size(), 3);
+	ASSERT_EQ(agenda.size(), 4);
 	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::GoNearObject);
 	// The thing's height when it is taller than two and a half of its own
 	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 40.0f);
@@ -113,6 +113,28 @@ TEST(CreatureActionAgendas, LookingSomethingOverGoesNearItFacesItAndWatchesItsFo
 	EXPECT_FLOAT_EQ(agenda[2].seconds, 1.1f);
 	ASSERT_TRUE(agenda[2].gaze.has_value());
 	EXPECT_TRUE(agenda[2].gaze->bottom);
+	// Then it takes in what kind of thing it is
+	EXPECT_EQ(agenda[3].kind, Step::Kind::Observe);
+	EXPECT_EQ(agenda[3].object, 3u);
+}
+
+// Taking in what a thing is happens at once, as the step starts, and says which thing it was
+TEST(CreatureActionAgendas, TakingInAThingIsDoneAtOnce)
+{
+	IdleMind mind;
+	Plan(mind, Activity::Planned, {{.kind = Step::Kind::Observe, .object = 3}});
+	const auto commands = Think(mind, {.seconds = 0.1f, .choosesNext = false}, NeverFirst);
+	EXPECT_EQ(commands.effect, Effect::Observed);
+	EXPECT_EQ(commands.effectObject, 3u);
+	EXPECT_EQ(mind.step, 1u);
+}
+
+// A kind of thing it has looked over is a hundredth as interesting, unless the thing is up to something interesting
+TEST(CreatureActionAgendas, LookedOverKindsAreFarLessInteresting)
+{
+	EXPECT_FLOAT_EQ(CuriosityShare(false, false), 1.0f);
+	EXPECT_FLOAT_EQ(CuriosityShare(true, false), 0.01f);
+	EXPECT_FLOAT_EQ(CuriosityShare(true, true), 1.0f);
 }
 
 // "force Guide CREATURE_SMILE_AT_FRIEND MyCreature" and "force MyCreature CREATURE_WAVE_AT_OBJECT Guide"
@@ -195,4 +217,66 @@ TEST(CreatureActionAgendas, PointingOutAHighlightCallsAFarCameraFirst)
 	const auto* point = plan_actions::For("PointOutHighlight");
 	ASSERT_NE(point, nullptr);
 	EXPECT_FALSE(plan_actions::Possible(*point, {}));
+}
+
+// "force CreatureGuardian CREATURE_SLEEP_BY_OBJECT CreatureGuardian": it walks to the clear place it found until within
+// its own radius, may yawn, faces down the slope, sleeps until rested and gets up with a grimace
+TEST(CreatureActionAgendas, SleepingByAThingGoesToItsClearPlaceFirst)
+{
+	const auto agenda = SleepByObject({30.0f, 40.0f}, 6.0f, AlwaysFirst);
+	ASSERT_EQ(agenda.size(), 5);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::ToPoint);
+	EXPECT_EQ(agenda[0].movement.point, glm::vec2(30.0f, 40.0f));
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 6.0f);
+	EXPECT_EQ(agenda[1].animation, animations::k_Tired);
+	EXPECT_TRUE(agenda[1].sleepyEyes);
+	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::FaceDownSlope);
+	EXPECT_TRUE(agenda[3].untilRested);
+	EXPECT_EQ(agenda[3].effect, Effect::Slept);
+	EXPECT_EQ(agenda[4].animation, animations::k_Confused);
+	EXPECT_EQ(agenda[4].face, creature_face::Cue::Grimace);
+	// Half the time without the yawn
+	EXPECT_EQ(SleepByObject({}, 6.0f, NeverFirst).size(), 4);
+}
+
+// Only scripts make it sleep by a thing for now; without a clear place it sleeps at home, and without either it can't
+TEST(CreatureActionAgendas, SleepingByAThingFallsBackToHome)
+{
+	const auto* sleep = plan_actions::For("SleepByObject");
+	ASSERT_NE(sleep, nullptr);
+	plan_actions::Situation situation {.controlledByScript = true, .radius = 6.0f, .height = 15.0f};
+	EXPECT_FALSE(plan_actions::Agenda(*sleep, 3, {}, situation, NeverFirst).has_value());
+	situation.home = glm::vec2(100.0f, 200.0f);
+	const auto atHome = plan_actions::Agenda(*sleep, 3, {}, situation, NeverFirst);
+	ASSERT_TRUE(atHome.has_value());
+	EXPECT_EQ(atHome->front().movement.point, glm::vec2(100.0f, 200.0f));
+	situation.clearArea = glm::vec2(10.0f, 20.0f);
+	const auto byThing = plan_actions::Agenda(*sleep, 3, {}, situation, NeverFirst);
+	ASSERT_TRUE(byThing.has_value());
+	EXPECT_EQ(byThing->front().movement.point, glm::vec2(10.0f, 20.0f));
+	situation.controlledByScript = false;
+	EXPECT_FALSE(plan_actions::Possible(*sleep, situation));
+}
+
+// "force CreatureGuardian CREATURE_EAT_FROM_MAGIC_FOOD_PILE FoodFound": it walks up to the pile, faces it, takes a
+// handful of food from it and eats that, leaving the pile where it is
+TEST(CreatureActionAgendas, EatingFromAPileTakesAHandfulFromIt)
+{
+	const auto* eat = plan_actions::For("EatFromFoodPile");
+	ASSERT_NE(eat, nullptr);
+	EXPECT_EQ(eat->target, plan_actions::Target::MagicFoodPile);
+	const auto agenda = plan_actions::Agenda(*eat, 9, {50.0f, 60.0f}, {.radius = 6.0f, .thingRadius = 4.0f}, NeverFirst);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 4);
+	EXPECT_EQ((*agenda)[0].movement.kind, Movement::Kind::ToPoint);
+	EXPECT_EQ((*agenda)[0].movement.point, glm::vec2(50.0f, 60.0f));
+	EXPECT_FLOAT_EQ((*agenda)[0].movement.maxDistance, 12.0f);
+	EXPECT_EQ((*agenda)[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ((*agenda)[1].movement.object, 9u);
+	EXPECT_FLOAT_EQ((*agenda)[1].seconds, 0.1f);
+	EXPECT_EQ((*agenda)[2].order.kind, ObjectOrder::Kind::TakeFromPile);
+	EXPECT_EQ((*agenda)[2].order.object, 9u);
+	EXPECT_EQ((*agenda)[2].effect, Effect::TookFromPile);
+	EXPECT_EQ((*agenda)[3].order.kind, ObjectOrder::Kind::Eat);
+	EXPECT_EQ((*agenda)[3].effect, Effect::Eat);
 }

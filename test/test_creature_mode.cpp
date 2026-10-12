@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <numbers>
+#include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -384,8 +385,11 @@ TEST(CreatureCave, FactsTellOfTheMind)
 	snapshot.likes = {
 	    {.desire = Desire::Play, .level = 4}, {.desire = Desire::Hunger, .level = 1}, {.desire = Desire::Poo, .level = 0}};
 	snapshot.attitudeToPlayer = 0.5f;
-	snapshot.secondsAlone = creature_cave::k_AttentionFadeSeconds / 4.0f;
-	snapshot.creaturesKnown = 2;
+	// Looked at for three fifths of its life
+	snapshot.needs.turns = 500;
+	snapshot.turnsLookedAt = 300;
+	snapshot.creaturesKnown = {{.name = u"Ape", .howNice = -0.5f, .attention = 0.0f},
+	                           {.name = u"Cow", .howNice = 0.9f, .attention = 0.45f}};
 	const auto facts = creature_cave::FactsOf(snapshot);
 	// The personality in the scroll's order, and only the desires it tells of
 	ASSERT_EQ(facts.desires.size(), 2u);
@@ -394,9 +398,52 @@ TEST(CreatureCave, FactsTellOfTheMind)
 	EXPECT_EQ(facts.desires[1].text, "HELP_TEXT_ROOM_PERSONALITY_PLAYFUL");
 	EXPECT_EQ(facts.desires[1].attitude, 4);
 	EXPECT_FLOAT_EQ(*facts.opinionOfGod, 0.5f);
-	EXPECT_FLOAT_EQ(facts.attention, 0.75f);
+	EXPECT_EQ(facts.attention, 3);
 	EXPECT_EQ(facts.known[0], 2);
+	// Each creature it knows, and the attention it paid only once it has paid some
+	ASSERT_EQ(facts.creatures.size(), 2u);
+	EXPECT_EQ(facts.creatures[0].name, u"Ape");
+	EXPECT_FLOAT_EQ(facts.creatures[0].opinion, -0.5f);
+	EXPECT_FALSE(facts.creatures[0].attention.has_value());
+	EXPECT_EQ(facts.creatures[1].attention, 2);
 	EXPECT_FALSE(creature_cave::PersonalityText(Desire::Poo).has_value());
+}
+
+TEST(CreatureCave, ItSaysWhatItThinksOfItsGodOnlyOnceItsGodHasLookedAtIt)
+{
+	creature_cave::Snapshot snapshot;
+	snapshot.attitudeToPlayer = 0.5f;
+	snapshot.needs.turns = 100;
+	auto facts = creature_cave::FactsOf(snapshot);
+	EXPECT_FALSE(facts.opinionOfGod.has_value());
+	EXPECT_EQ(facts.attention, 0);
+	snapshot.turnsLookedAt = 1;
+	facts = creature_cave::FactsOf(snapshot);
+	EXPECT_FLOAT_EQ(*facts.opinionOfGod, 0.5f);
+	// Before it has lived a turn, nothing was paid
+	snapshot.needs.turns = 0;
+	EXPECT_FALSE(creature_cave::FactsOf(snapshot).opinionOfGod.has_value());
+}
+
+TEST(CreatureCave, FactsTellOfTheStrongerOfAngerAndCompassion)
+{
+	using creature_desires::Desire;
+	creature_cave::Snapshot snapshot;
+	snapshot.likes = {{.desire = Desire::Anger, .level = 2}, {.desire = Desire::Compassion, .level = 3}};
+	const auto told = [&snapshot](float anger, float compassion) {
+		snapshot.anger = anger;
+		snapshot.compassion = compassion;
+		std::vector<std::string_view> texts;
+		for (const auto& desire : creature_cave::FactsOf(snapshot).desires)
+		{
+			texts.push_back(desire.text);
+		}
+		return texts;
+	};
+	EXPECT_EQ(told(0.6f, 0.2f), std::vector<std::string_view> {"HELP_TEXT_ROOM_PERSONALITY_ANGRY"});
+	EXPECT_EQ(told(0.2f, 0.6f), std::vector<std::string_view> {"HELP_TEXT_ROOM_PERSONALITY_COMPASSIONATE"});
+	// Felt just as strongly, the scroll tells of neither
+	EXPECT_TRUE(told(0.4f, 0.4f).empty());
 }
 
 TEST(CreatureCave, FactsTellOfSkillsAndMiracles)
@@ -404,21 +451,22 @@ TEST(CreatureCave, FactsTellOfSkillsAndMiracles)
 	creature_cave::Snapshot snapshot;
 	// The scroll tells of the skills after building
 	snapshot.skills = {{"build", true}, {"field", true}, {"totem", false}, {"store", true}, {"fish", false}, {"dance", true}};
-	// It tells of each miracle the creature knows about that the game has a text for, however little it has learnt it,
-	// its percentage cut short
-	snapshot.miracles = {{.name = "none", .knownAbout = true},
-	                     {.name = "fireball", .knownAbout = true, .learnt = 40.9f},
-	                     {.name = "lightning", .knownAbout = false},
-	                     {.name = "heal", .knownAbout = true, .hasLearntText = false, .learnt = 100.0f},
-	                     {.name = "food", .knownAbout = true, .learnt = 0.0f}};
+	// It tells of each miracle the creature knows about that the game has a text for, by that miracle's own text (two
+	// miracles may share one), however little it has learnt it, its percentage cut short
+	snapshot.miracles = {{.name = "none", .knownAbout = true, .learntText = 902},
+	                     {.name = "fireball", .knownAbout = true, .learntText = 903, .learnt = 40.9f},
+	                     {.name = "lightning", .knownAbout = false, .learntText = 904},
+	                     {.name = "heal", .knownAbout = true, .learnt = 100.0f},
+	                     {.name = "food", .knownAbout = true, .learntText = 903, .learnt = 0.0f}};
 	const auto facts = creature_cave::FactsOf(snapshot);
 	EXPECT_EQ(facts.actionsKnown, (std::array<bool, 5> {true, false, true, false, true}));
 	ASSERT_EQ(facts.miracles.size(), 2u);
-	EXPECT_EQ(facts.miracles[0].text, "HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_02");
+	EXPECT_EQ(facts.miracles[0].text, 903u);
 	EXPECT_EQ(facts.miracles[0].percent, 40);
 	EXPECT_EQ(facts.miracles[0].miracle, 1u);
 	EXPECT_FLOAT_EQ(facts.miracles[0].learnt, 40.9f);
-	EXPECT_EQ(facts.miracles[1].text, "HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_05");
+	EXPECT_EQ(facts.miracles[1].text, 903u);
+	EXPECT_EQ(facts.miracles[1].miracle, 4u);
 	EXPECT_EQ(facts.miracles[1].percent, 0);
 }
 

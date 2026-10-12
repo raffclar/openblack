@@ -171,17 +171,50 @@ TEST(ScriptHighlightRules, ThePulseGoesRoundOnceInAboutThirteenTurns)
 TEST(ScriptHighlightRules, TheBeatBlendsBetweenTurnsFromFourTenthsToOne)
 {
 	const Pulse low {.phase = 0.0f, .level = 0.0f, .previous = 0.0f};
-	EXPECT_FLOAT_EQ(PulseShare(low, 0.5f), 0.4f);
+	EXPECT_NEAR(PulseShare(low, 0.5f), 0.4, 1e-6);
 	const Pulse rising {.phase = 0.0f, .level = 1.0f, .previous = 0.0f};
-	EXPECT_FLOAT_EQ(PulseShare(rising, 0.5f), 0.7f);
-	EXPECT_FLOAT_EQ(PulseShare(rising, 1.0f), 1.0f);
+	EXPECT_NEAR(PulseShare(rising, 0.5f), 0.7, 1e-6);
+	EXPECT_NEAR(PulseShare(rising, 1.0f), 1.0, 1e-6);
 }
 
-TEST(ScriptHighlightRules, OnlyTheTopOfTheBeatShowsAYellowBeam)
+TEST(ScriptHighlightRules, TheYellowBeamBeatsWithTheScroll)
 {
-	EXPECT_EQ(BeamColour(HighlightInfo::Silver, 0.7f), 0x14b4dcffu);
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.99f), 0x00ffff00u);
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 1.0f), 0x50ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Silver, 0.7), 0x14b4dcffu);
+	// The beat runs from 0.4 to 1, so the beam's alpha runs from 32 to 80
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.4), 0x20ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.7), 0x38ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.99), 0x4fffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 1.0), 0x50ffff00u);
+	// A plain scroll's beam is the gold one's
+	EXPECT_EQ(BeamColour(HighlightInfo::Scroll, 0.7), 0x38ffff00u);
+}
+
+TEST(ScriptHighlightRules, TheYellowBeamShowsAllThroughATurn)
+{
+	// Between two turns the beam follows the blended beat, never dropping out
+	const Pulse rising {.phase = 1.0f, .level = 0.5f, .previous = 0.25f};
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(rising, 0.0f)), 0x2cffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(rising, 0.5f)), 0x32ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, PulseShare(rising, 0.99f)), 0x37ffff00u);
+}
+
+TEST(ScriptHighlightRules, TheBeatReachesAWholeOneOnlyRightAtItsTop)
+{
+	Pulse pulse {.phase = 3.1415f - 0.5f, .level = 0.0f, .previous = 0.0f};
+	StepPulse(pulse, 100.0f);
+	EXPECT_EQ(pulse.level, 1.0f);
+	pulse = {.phase = 3.14f - 0.5f, .level = 0.0f, .previous = 0.0f};
+	StepPulse(pulse, 100.0f);
+	EXPECT_LT(pulse.level, 1.0f);
+}
+
+TEST(ScriptHighlightRules, OnlyAStartedScrollStandsInABeam)
+{
+	EXPECT_TRUE(BeamShown(HighlightInfo::Silver, true));
+	EXPECT_TRUE(BeamShown(HighlightInfo::Gold, true));
+	EXPECT_TRUE(BeamShown(HighlightInfo::Scroll, true));
+	EXPECT_FALSE(BeamShown(HighlightInfo::Gold, false));
+	EXPECT_FALSE(BeamShown(HighlightInfo::DidYouKnowSign, true));
 }
 
 TEST(ScriptHighlightRules, AHighlightSpinsHalfATurnASecond)

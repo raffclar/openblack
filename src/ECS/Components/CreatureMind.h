@@ -12,9 +12,11 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <vector>
 
 #include <MindFile.h>
+#include <entt/entity/entity.hpp>
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
@@ -44,9 +46,15 @@ struct CreatureMindState
 	creature_look::Target look {};
 	/// Whether the head turns to what it watches this turn
 	bool lookingAbout {false};
+	/// What a script has it keep its head turned to, whatever it is doing, until the script lets it go: a thing (looked
+	/// at where it stands) or a point
+	std::optional<creature_mind::Gaze> scriptFocus;
 
 	/// Seconds since the player last paid it any attention
 	float secondsAlone {0.0f};
+	/// Game turns its player's camera was looking at it, which over the turns it has lived is the attention its god has
+	/// paid it
+	uint32_t turnsLookedAt {0};
 	/// Seconds since the player last stroked or slapped it, and which
 	std::optional<float> feedbackSeconds;
 	bool feedbackWasStroke {false};
@@ -81,9 +89,14 @@ struct CreatureMindState
 	/// the stage they were last set for. Until the game's story moves it on, a creature starts fully grown up.
 	uint32_t developmentPhase {k_FullyGrownUp};
 	std::optional<uint32_t> desiresPhase;
+	/// A lesson script of growing up is running for it, from when the script says so until it says it is over. The
+	/// game's help about the creature waits meanwhile, except the help about its stage.
+	bool inDevelopmentScript {false};
 
 	/// While paused, the mind leaves the body alone to be posed by hand
 	bool paused {false};
+	/// The player's hand took hold of it: once it has turned to the player it shows what it wants, and the help says it
+	bool showDesireOnHold {false};
 
 	/// What it has learnt and remembers, set up with the desires (from its mind file when it has one)
 	std::optional<creature_mind_model::Learnt> learnt;
@@ -97,6 +110,11 @@ struct CreatureMindState
 	/// A step of the plan saw to what its desire wanted, as putting out a fire does once it is out: the desire is less
 	/// when the plan ends, even for an action that doesn't lessen it by itself
 	bool desireSeenTo {false};
+	/// The kinds of thing (as its beliefs sort them) it has had a good look at, which it is far less curious about since
+	std::set<uint32_t> observedKinds;
+	/// The food it took from a pile and is picking up, and the pile, which gives the food up once it has picked it up
+	entt::entity takenFood {entt::null};
+	entt::entity takenFrom {entt::null};
 	/// The agenda carrying out the plan, and the last agenda remembered for feedback, by the idle mind's count of them
 	uint32_t planSerial {0};
 	uint32_t agendaSeen {0};

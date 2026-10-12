@@ -135,6 +135,60 @@ glm::vec3 script_camera::FollowOrigin(const FollowedThing& thing, FollowSettings
 	return PointFromDistanceHeadingAndPitch(thing.point, settings.viewingDistance, heading, settings.pitch);
 }
 
+float script_camera::CreatureFacing(float bodyTurn)
+{
+	return bodyTurn + k_FullTurn - k_CreatureFacingOffset;
+}
+
+bool script_camera::IsWrongFacing(float facing)
+{
+	return !(facing < k_HighestFacing);
+}
+
+View script_camera::FaceView(const FacedThing& thing, float distance)
+{
+	const glm::vec3 focus {thing.position.x, thing.position.y + (thing.height * 0.5f), thing.position.z};
+	float heading = thing.facing;
+	while (heading > k_FullTurn)
+	{
+		heading -= k_FullTurn;
+	}
+	return {.origin = PointFromDistanceHeadingAndPitch(focus, distance, heading, k_FacePitch), .focus = focus};
+}
+
+float script_camera::DualSeconds(float secondsSinceBegun)
+{
+	if (secondsSinceBegun > k_DualBlendSeconds)
+	{
+		return k_DualEndSeconds;
+	}
+	return (k_DualEndSeconds - k_DualStartSeconds) * (secondsSinceBegun / k_DualBlendSeconds) + k_DualStartSeconds;
+}
+
+View script_camera::DualView(const DualThing& first, const DualThing& second, DualSettings& settings)
+{
+	const auto& a = first.position;
+	const auto& b = second.position;
+	const float averageHeight = (first.height + second.height) * 0.5f;
+	const float tallest = first.height > second.height ? first.height : second.height;
+	const glm::vec3 focus {(b.x + a.x) * 0.5f, ((b.y + a.y) * 0.5f) + (averageHeight * 0.5f), (b.z + a.z) * 0.5f};
+	settings.pitch = settings.pitch > k_DualLowestPitch ? settings.pitch : k_DualLowestPitch;
+	// Worked through at the FPU's precision, kept as a float at the end
+	const double dx = static_cast<double>(a.x) - b.x;
+	const double dz = static_cast<double>(a.z) - b.z;
+	const auto distance =
+	    static_cast<float>(((std::sqrt((dx * dx) + (dz * dz)) + second.radius + first.radius) * settings.zoom) +
+	                       (static_cast<double>(tallest) * k_DualHeightFactor));
+	// The heading is turned with the line from the first thing to the second
+	const glm::vec3 across = b - a;
+	float heading = settings.heading;
+	if (std::abs(static_cast<double>(across.x)) > k_DualSameSpot || std::abs(static_cast<double>(across.z)) > k_DualSameSpot)
+	{
+		heading = settings.heading - static_cast<float>(std::atan2(across.x, -across.z));
+	}
+	return {.origin = PointFromDistanceHeadingAndPitch(focus, distance, heading, settings.pitch), .focus = focus};
+}
+
 ScriptCameraModel::ScriptCameraModel(const glm::vec3& origin, const glm::vec3& focus, GroundHeight groundAt)
     : _groundAt(std::move(groundAt))
 {
@@ -175,6 +229,7 @@ void ScriptCameraModel::MoveFocus(const glm::vec3& focus, float seconds)
 void ScriptCameraModel::StopFollowing()
 {
 	_followed = nullptr;
+	_followedId.reset();
 	// A heading kept relative to the thing starts again from straight behind it
 	if (_follow.relativeHeading)
 	{
@@ -185,11 +240,22 @@ void ScriptCameraModel::StopFollowing()
 void ScriptCameraModel::StopLookingAt()
 {
 	_lookedAt = nullptr;
+	_lookedAtId.reset();
 }
 
-void ScriptCameraModel::FollowAndLookAt(ThingLookup thing, float distance)
+std::optional<uint32_t> ScriptCameraModel::GetFocusedThing() const
 {
-	_followed = std::move(thing);
+	if (InDualView())
+	{
+		return std::nullopt;
+	}
+	return _lookedAtId.has_value() ? _lookedAtId : _followedId;
+}
+
+void ScriptCameraModel::FollowAndLookAt(Subject thing, float distance)
+{
+	_followed = std::move(thing.lookup);
+	_followedId = _followed ? std::optional(thing.id) : std::nullopt;
 	if (_followed)
 	{
 		const auto view = HeadingAndPitchFromPoints(DestinationOf(_origin), DestinationOf(_focus));
@@ -200,9 +266,10 @@ void ScriptCameraModel::FollowAndLookAt(ThingLookup thing, float distance)
 	SnapToFollowed();
 }
 
-void ScriptCameraModel::Follow(ThingLookup thing)
+void ScriptCameraModel::Follow(Subject thing)
 {
-	_followed = std::move(thing);
+	_followed = std::move(thing.lookup);
+	_followedId = _followed ? std::optional(thing.id) : std::nullopt;
 	if (_followed)
 	{
 		const auto view = HeadingAndPitchFromPoints(DestinationOf(_origin), DestinationOf(_focus));
@@ -218,10 +285,11 @@ void ScriptCameraModel::Follow(ThingLookup thing)
 	SnapToFollowed();
 }
 
-void ScriptCameraModel::LookAt(ThingLookup thing)
+void ScriptCameraModel::LookAt(Subject thing)
 {
 	StopTrack();
-	_lookedAt = std::move(thing);
+	_lookedAt = std::move(thing.lookup);
+	_lookedAtId = _lookedAt ? std::optional(thing.id) : std::nullopt;
 }
 
 void ScriptCameraModel::StopTrack()
@@ -245,7 +313,8 @@ void ScriptCameraModel::RunTrack(std::shared_ptr<const edt::EDTTrack> track)
 
 void ScriptCameraModel::PassGameTime(std::chrono::milliseconds gameTime)
 {
-	if (_track != nullptr)
+	// Under a two-thing camera the track holds where it is
+	if (_track != nullptr && _duals.empty())
 	{
 		_trackTime += gameTime;
 	}
@@ -261,6 +330,69 @@ void ScriptCameraModel::UpdateTrack()
 	// Put there still: the glides start from rest at the track's point
 	Place(_origin, origin);
 	Place(_focus, focus);
+}
+
+void ScriptCameraModel::StartDualView(DualSubject first, DualSubject second)
+{
+	// The same two things again change nothing
+	if (!_duals.empty() && _duals.back().first.id == first.id && _duals.back().second.id == second.id)
+	{
+		return;
+	}
+	_duals.push_back({.first = std::move(first), .second = std::move(second), .settings = {}});
+	_seconds = 0.0f;
+}
+
+void ScriptCameraModel::UpdateDualView(DualSubject first, DualSubject second)
+{
+	if (_duals.empty())
+	{
+		return;
+	}
+	auto& dual = _duals.back();
+	dual.first = std::move(first);
+	dual.second = std::move(second);
+	dual.lastFirst.reset();
+	dual.lastSecond.reset();
+}
+
+void ScriptCameraModel::LetGoOfGoneThings()
+{
+	const auto gone = [](const DualSubject& subject) { return !subject.lookup || !subject.lookup().has_value(); };
+	std::erase_if(_duals, [&gone](const Dual& dual) { return gone(dual.first) || gone(dual.second); });
+}
+
+bool ScriptCameraModel::ReleaseDualView()
+{
+	if (_duals.empty())
+	{
+		return false;
+	}
+	_duals.pop_back();
+	_seconds = 0.0f;
+	return true;
+}
+
+void ScriptCameraModel::UpdateDual()
+{
+	auto& dual = _duals.back();
+	// A thing gone is framed where it was last seen until the turn lets go of it
+	if (auto first = dual.first.lookup ? dual.first.lookup() : std::nullopt; first.has_value())
+	{
+		dual.lastFirst = first;
+	}
+	if (auto second = dual.second.lookup ? dual.second.lookup() : std::nullopt; second.has_value())
+	{
+		dual.lastSecond = second;
+	}
+	if (!dual.lastFirst.has_value() || !dual.lastSecond.has_value())
+	{
+		return;
+	}
+	const float seconds = DualSeconds(_seconds);
+	const auto view = DualView(*dual.lastFirst, *dual.lastSecond, dual.settings);
+	Send(_focus, view.focus, seconds);
+	Send(_origin, view.origin, seconds);
 }
 
 void ScriptCameraModel::SetFollowSettings(float distance, float zoomTimeScale, float heading, bool relativeHeading)
@@ -293,11 +425,13 @@ void ScriptCameraModel::UpdateFollowing()
 	if (_followed && !followed.has_value())
 	{
 		_followed = nullptr;
+		_followedId.reset();
 	}
 	auto lookedAt = _lookedAt ? _lookedAt() : std::nullopt;
 	if (_lookedAt && !lookedAt.has_value())
 	{
 		_lookedAt = nullptr;
+		_lookedAtId.reset();
 	}
 	_follow.viewingDistance =
 	    _follow.viewingDistance > k_FollowNearest ? std::min(_follow.viewingDistance, k_FollowFarthest) : k_FollowNearest;
@@ -314,7 +448,8 @@ void ScriptCameraModel::UpdateFollowing()
 
 bool ScriptCameraModel::Arrived() const
 {
-	if (_track != nullptr)
+	// A two-thing camera has arrived when its glides have; the script's track is held under it
+	if (_track != nullptr && _duals.empty())
 	{
 		return _track->position.duration <= _trackTime.count();
 	}
@@ -327,12 +462,19 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> ScriptCameraModel::Upd
 {
 	const float seconds = std::min(std::chrono::duration<float>(dt).count(), k_MaxFrameSeconds);
 	_seconds += seconds;
-	// A track puts the camera where it has got to before any following sends it on
-	if (_track != nullptr)
+	if (!_duals.empty())
 	{
-		UpdateTrack();
+		UpdateDual();
 	}
-	UpdateFollowing();
+	else
+	{
+		// A track puts the camera where it has got to before any following sends it on
+		if (_track != nullptr)
+		{
+			UpdateTrack();
+		}
+		UpdateFollowing();
+	}
 	for (auto& zoomer : _origin)
 	{
 		zoomer.Update(seconds);

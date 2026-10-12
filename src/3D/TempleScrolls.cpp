@@ -443,9 +443,9 @@ TempleScrolls::Facts TempleScrolls::Facts::Mock()
 	creature.known = {0, 1, 2, 3};
 	creature.fightBalance = 0.2f;
 	creature.miracles = {
-	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_02", 12, 1, 12.0f},
-	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_03", 9, 2, 9.0f},
-	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_10", 97, 9, 97.0f},
+	    {903, 12, 1, 12.0f},
+	    {904, 9, 2, 9.0f},
+	    {910, 97, 9, 97.0f},
 	};
 	facts.creature = creature;
 	return facts;
@@ -456,6 +456,11 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 {
 	TempleScrollText text(font);
 	const auto get = [&texts](std::string_view name) { return texts.Get(name); };
+	// A help text by its number, empty when there is none
+	const auto helpText = [&texts, &get](uint32_t number) {
+		const auto names = texts.GetHelpNames();
+		return number < names.size() ? get(names[number]) : std::u16string_view();
+	};
 	const auto number = [&](std::string_view name, int32_t value) { text.Add(TempleScrollText::WithNumber(get(name), value)); };
 	const auto named = [&](std::string_view name, std::u16string_view value) {
 		text.Add(TempleScrollText::WithString(get(name), value));
@@ -464,6 +469,10 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 	const auto alignment = [&](float value) {
 		const auto n = std::clamp(static_cast<int32_t>((value + 1.0f) * 0.5f * 6.9999995f), 0, 6);
 		return get(fmt::format("HELP_TEXT_ALIGNMENT_{:02}", n + 1));
+	};
+	// The game's five texts for how much attention, from 0
+	const auto howMuch = [&](int32_t level) {
+		return get(fmt::format("HELP_TEXT_HOW_MUCH_{:02}", std::clamp(level, 0, 4) + 1));
 	};
 	const auto* creature = facts.creature ? &*facts.creature : nullptr;
 	// The texts about the player's creature are a blank line without one
@@ -587,17 +596,23 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 		{
 			named("HELP_TEXT_ROOM_PERSONALITY_ATTITUDE_TO_PLAYER", alignment(*creature->opinionOfGod));
 		}
-		named("HELP_TEXT_ROOM_PERSONALITY_HOW_MUCH_ATTENTION_PLAYER_HAS_GIVEN_ME",
-		      get(fmt::format("HELP_TEXT_HOW_MUCH_{:02}",
-		                      std::clamp(static_cast<int32_t>(creature->attention * 5.0f), 0, 4) + 1)));
+		named("HELP_TEXT_ROOM_PERSONALITY_HOW_MUCH_ATTENTION_PLAYER_HAS_GIVEN_ME", howMuch(creature->attention));
 		if (creature->knowsGodsDesire)
 		{
 			// Always "I want to impress somebody.", whatever the desire
 			named("HELP_TEXT_ROOM_PERSONALITY_PERCEIVED_PLAYER_DESIRE",
 			      get("HELP_TEXT_CREATURE_CURRENT_DESIRE_FIRST_PERSON_01"));
-			text.AddNewLine();
 		}
-		// TODO(raffclar): What it thinks of each creature it knows of
+		text.AddNewLine();
+		for (const auto& known : creature->creatures)
+		{
+			named("HELP_TEXT_ROOM_PERSONALITY_ATTITUDE_TO_CREATURE_START", known.name);
+			named("HELP_TEXT_ROOM_PERSONALITY_ATTITUDE_TO_CREATURE_END", alignment(known.opinion));
+			if (known.attention)
+			{
+				named("HELP_TEXT_ROOM_PERSONALITY_ATTITUDE_TO_CREATURE_HOW_WELL_I_KNOW_HIM", howMuch(*known.attention));
+			}
+		}
 		text.AddNewLine();
 		number("HELP_TEXT_ROOM_PERSONALITY_BELIEFS_ABOUT_CREATURES", creature->known[0]);
 		number("HELP_TEXT_ROOM_PERSONALITY_BELIEFS_ABOUT_CITADELS", creature->known[1]);
@@ -612,7 +627,7 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 		{
 			for (const auto& miracle : creature->miracles)
 			{
-				text.Add(get(miracle.text));
+				text.Add(helpText(miracle.text));
 				text.Add(gui::ToUtf16(fmt::format("{}%", miracle.percent)));
 				text.AddNewLine();
 			}

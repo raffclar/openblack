@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <glm/vec2.hpp>
 
 #include "CameraHelpEvents.h"
@@ -45,6 +47,9 @@ public:
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) final;
 	void HandleActions(std::chrono::microseconds dt) final;
 	void SetFlight(glm::vec3 origin, glm::vec3 focus) final;
+	/// Flies back to where it was, as when the camera is given back after the hand lets go of a creature: as SetFlight,
+	/// wooshing only when asked
+	void FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
@@ -197,6 +202,8 @@ private:
 	bool _selfTiltEase {false};
 	/// Put back inside the fence, the camera ignores its controls until every one of them is let go
 	bool _heldBack {false};
+	/// The angle the player turned the camera by this frame, in radians, none when the player didn't turn it
+	std::optional<float> _turnedThisFrame;
 	/// The self-tilting camera goes back over where it stood at the start of the frame: it tilted itself, or nothing was
 	/// asked of it
 	bool _keepsToItsPlace {true};

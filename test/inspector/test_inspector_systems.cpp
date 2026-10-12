@@ -109,6 +109,8 @@ public:
 	{
 		return cell == glm::ivec2(12, 34) ? contents : std::vector<entt::entity> {};
 	}
+	[[nodiscard]] std::span<const entt::entity> GetOnBlock(glm::ivec2 /*block*/) const override { return {}; }
+	[[nodiscard]] std::span<const entt::entity> GetOffBlocks() const override { return {}; }
 	void Sync() override {}
 	void Refile(entt::entity /*entity*/) override {}
 

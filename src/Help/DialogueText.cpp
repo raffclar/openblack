@@ -10,6 +10,8 @@
 #include "DialogueText.h"
 
 #include <algorithm>
+#include <iterator>
+#include <string>
 #include <utility>
 
 #include "ClickCue.h"
@@ -30,6 +32,15 @@ constexpr float k_ClickSeconds = 0.5f;
 constexpr int k_DrawAlways = 2;
 constexpr int k_DrawNever = 0;
 } // namespace
+
+std::u16string ScriptWordsText(std::string_view words)
+{
+	std::u16string text(1, u'*');
+	text.reserve(words.size() + 1);
+	std::ranges::transform(words, std::back_inserter(text),
+	                       [](char c) { return static_cast<char16_t>(static_cast<unsigned char>(c)); });
+	return text;
+}
 
 float ReadSpeedFactor(float readSpeed)
 {
@@ -55,21 +66,17 @@ DialogueText::DialogueText(int screenHeight, bool biggerText, Settings settings,
 {
 }
 
-bool DialogueText::RunText(bool singleLine, uint32_t number, int32_t withInteraction)
+bool DialogueText::RunText(bool singleLine, uint32_t number, int32_t withInteraction, float value)
 {
 	const bool valid = number < k_HelpTextCount;
 	if (!valid)
 	{
 		number = 0;
 	}
-	if (singleLine || _display.IsSingleLine())
-	{
-		ClearAllText();
-	}
-	_display.SetSingleLine(singleLine);
+	StartLine(singleLine);
 
 	const auto text = _queries.text ? _queries.text(number) : Text {};
-	AddText(text, number, withInteraction);
+	AddText(text.text, value, text.narrator, number, withInteraction);
 
 	const auto voice = _queries.voice ? _queries.voice(number) : std::nullopt;
 	if (!voice)
@@ -90,11 +97,26 @@ bool DialogueText::RunText(bool singleLine, uint32_t number, int32_t withInterac
 	return valid;
 }
 
-void DialogueText::AddText(const Text& text, uint32_t number, int32_t withInteraction)
+void DialogueText::TempText(bool singleLine, std::string_view words, int32_t withInteraction)
+{
+	StartLine(singleLine);
+	AddText(ScriptWordsText(words), 0.0f, k_NarratorScriptWords, 0, withInteraction);
+}
+
+void DialogueText::StartLine(bool singleLine)
+{
+	if (singleLine || _display.IsSingleLine())
+	{
+		ClearAllText();
+	}
+	_display.SetSingleLine(singleLine);
+}
+
+void DialogueText::AddText(std::u16string_view text, float value, int32_t narrator, uint32_t number, int32_t withInteraction)
 {
 	// The display's own important flag is not used: the gate is worked out here from the text last shown
-	_display.Add(std::u16string(text.text), 0.0f, text.narrator, true);
-	StartReadingTime(text.text);
+	_display.Add(std::u16string(text), value, narrator, true);
+	StartReadingTime(text);
 	_waitClick = withInteraction == 1;
 	_noClick = withInteraction == 2;
 	_clickCueSeconds = 0.0f;

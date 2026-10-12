@@ -23,5 +23,6 @@ LandData LandData::FromLnd(const lnd::LNDFile& lnd)
 	const auto& extra = lnd.GetExtra();
 	data.noise.assign(extra.noise.texels.begin(), extra.noise.texels.end());
 	data.bump.assign(extra.bump.texels.begin(), extra.bump.texels.end());
+	data.coarsePages = lnd.GetLowResolutionTextures();
 	return data;
 }

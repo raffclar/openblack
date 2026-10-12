@@ -62,6 +62,31 @@ bool IsRow(uint32_t subtype, std::size_t rows)
 	return static_cast<std::size_t>(subtype) < rows;
 }
 
+std::optional<uint32_t> TribeVillagerRow(int32_t tribe, uint32_t draw, std::size_t rows)
+{
+	if (tribe < 0 || draw >= k_VillagersPerTribe)
+	{
+		return std::nullopt;
+	}
+	const auto row = static_cast<std::size_t>(tribe) * k_VillagersPerTribe + draw;
+	if (row >= rows)
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(row);
+}
+
+bool KeepsScriptHeight(ObjectType type)
+{
+	return type == ObjectType::Marker || type == ObjectType::MobileStatic;
+}
+
+ScriptVillager ScriptVillagerOf(bool child, uint32_t grownUpAge)
+{
+	constexpr uint32_t k_ChildAge = 10;
+	return {.age = child ? k_ChildAge : grownUpAge + 1, .joinsTown = false};
+}
+
 std::optional<MagicType> MagicTypeFromScript(int32_t number)
 {
 	if (number < 0 || number >= k_MagicTypeCount)

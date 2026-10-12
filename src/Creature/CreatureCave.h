@@ -50,13 +50,24 @@ struct Snapshot
 		size_t level;
 	};
 	std::vector<Like> likes;
-	/// What it thinks of its god, -1 to 1, and seconds since the god last paid it any attention
+	/// How strongly it feels its anger and its compassion now, whether they are activated or not: the scroll tells only
+	/// of the stronger of the two
+	float anger {0.0f};
+	float compassion {0.0f};
+	/// What it thinks of its god, -1 to 1, and the game turns its god looked at it, which over the turns it has lived
+	/// (in its needs) is the attention it has been paid
 	float attitudeToPlayer {0.0f};
-	float secondsAlone {0.0f};
+	uint32_t turnsLookedAt {0};
 	/// It thinks it knows its god's dominant desire
 	bool knowsGodsDesire {false};
-	/// Other creatures it knows of
-	size_t creaturesKnown {0};
+	/// Each other creature it knows of: its name, how nice it finds it, -1 to 1, and how much attention it has paid it
+	struct KnownCreature
+	{
+		std::u16string name;
+		float howNice {0.0f};
+		float attention {0.0f};
+	};
+	std::vector<KnownCreature> creaturesKnown;
 	/// The opinion of each action, -1 to 1, by its name
 	struct Opinion
 	{
@@ -77,8 +88,9 @@ struct Snapshot
 		std::string name;
 		/// It has seen the miracle and knows about it
 		bool knownAbout {false};
-		/// The game has a text for having learnt it, without which the creature's room leaves it out
-		bool hasLearntText {true};
+		/// The number of the game's help text for having learnt it, which the creature's room shows it by; without one
+		/// (0) the room leaves it out
+		uint32_t learntText {0};
 		/// How far it has learnt it, 0 to 100
 		float learnt {0.0f};
 	};
@@ -86,9 +98,6 @@ struct Snapshot
 	/// How it leans in its fights, from -1 (defensive) to 1 (aggressive)
 	float fightBalance {0.0f};
 };
-
-/// The god's attention fades over this many seconds of leaving the creature alone
-constexpr float k_AttentionFadeSeconds = 300.0f;
 
 /// The scrolls' facts about the creature: the percentages cut short as the game does, the age in its hours of game time
 /// (which the scroll calls years), and the personality's desires with how much it feels each

@@ -154,10 +154,11 @@ TEST(GameFont, DecodesTheGlyphsAtHalfSize)
 		}
 		return result;
 	};
-	// Each pixel of the atlas is the average of four of the glyph
+	// Each pixel of the atlas is how many of four of the glyph are set, kept in four bits as the game does: 0, 4, 8, 12
+	// or 15 fifteenths
 	EXPECT_EQ(coverage(u'A'), (std::vector<int> {255, 255}));
-	EXPECT_EQ(coverage(u'B'), (std::vector<int> {127, 127}));
-	EXPECT_EQ(coverage(u'?'), (std::vector<int> {127, 63}));
+	EXPECT_EQ(coverage(u'B'), (std::vector<int> {136, 136}));
+	EXPECT_EQ(coverage(u'?'), (std::vector<int> {136, 68}));
 	EXPECT_EQ(coverage(u'W'), (std::vector<int> {255, 255, 255, 255}));
 	EXPECT_TRUE(coverage(u' ').empty());
 }
@@ -522,12 +523,13 @@ TEST(GameMenu, PlayersNameTheirCreatureAndPickASymbol)
 	Click(f.menu, ButtonCentre(3));
 	Click(f.menu, TabCentre(2));
 
-	// The creature's name box takes the focus and the keyboard
+	// The creature's name box takes the focus and the keyboard; the first click into it selects the whole name, which
+	// typing replaces
 	Click(f.menu, {400, 390});
 	f.menu.TextInput(u"AB");
-	EXPECT_EQ(f.menu.GetSettings().creatureName, u"aaaAB");
+	EXPECT_EQ(f.menu.GetSettings().creatureName, u"AB");
 	f.menu.KeyDown(SDLK_BACKSPACE);
-	EXPECT_EQ(f.menu.GetSettings().creatureName, u"aaaA");
+	EXPECT_EQ(f.menu.GetSettings().creatureName, u"A");
 
 	// Holding the button down on the symbol brings up the others to pick from, once they are all the way up
 	const SymbolPicture picture({.min = {368, 295}, .max = {432, 359}}, 15);

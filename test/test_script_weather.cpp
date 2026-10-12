@@ -18,6 +18,59 @@ namespace weather = openblack::ecs::script_weather;
 using openblack::ecs::components::Storm;
 } // namespace
 
+TEST(ScriptWeather, AClimateBlowsFullyWithinItsInnerRadiusAndFadesToItsOuter)
+{
+	const weather::ClimateWind climate {
+	    .centre = {100.0f, 100.0f}, .innerRadius = 10.0f, .outerRadius = 30.0f, .windX = 20.0f, .windZ = 0.0f};
+	EXPECT_FLOAT_EQ(*weather::ClimateShare(climate, {105.0f, 100.0f}), 1.0f);
+	EXPECT_FLOAT_EQ(*weather::ClimateShare(climate, {120.0f, 100.0f}), 0.5f);
+	EXPECT_FLOAT_EQ(*weather::ClimateShare(climate, {130.0f, 100.0f}), 0.0f);
+	EXPECT_FALSE(weather::ClimateShare(climate, {131.0f, 100.0f}).has_value());
+	// Inside the square round its reach but beyond its reach
+	EXPECT_FALSE(weather::ClimateShare(climate, {125.0f, 125.0f}).has_value());
+}
+
+TEST(ScriptWeather, TheGlobalClimatesWindCountsTwiceOverTheIsland)
+{
+	// The global climate covers the whole map at full strength: its wind is added first and again among the climates
+	const weather::ClimateWind global {
+	    .centre = {2560.0f, 2560.0f}, .innerRadius = 5120.0f, .outerRadius = 5120.0f, .windX = 24.0f, .windZ = -3.5f};
+	const std::vector<weather::ClimateWind> climates {global};
+	const auto wind = weather::DriftWind({.x = 10, .z = 0}, global, climates, {1000.0f, 1000.0f});
+	EXPECT_EQ(wind.x, 10 + 24 + 24);
+	// Each part is cut towards nought
+	EXPECT_EQ(wind.z, -3 + -3);
+}
+
+TEST(ScriptWeather, ALocalClimatesShareIsCutToAWholeNumberAsItIsAdded)
+{
+	const weather::ClimateWind global {
+	    .centre = {0.0f, 0.0f}, .innerRadius = 0.0f, .outerRadius = 0.0f, .windX = 0.0f, .windZ = 0.0f};
+	const std::vector<weather::ClimateWind> climates {
+	    {.centre = {0.0f, 0.0f}, .innerRadius = 10.0f, .outerRadius = 30.0f, .windX = 21.0f, .windZ = 0.0f}};
+	// Half its wind of 21 is 10.5, cut to 10
+	const auto wind = weather::DriftWind({.x = 0, .z = 0}, global, climates, {20.0f, 0.0f});
+	EXPECT_EQ(wind.x, 10);
+	EXPECT_EQ(wind.z, 0);
+}
+
+TEST(ScriptWeather, TheWindsSumIsHeldWithinAByte)
+{
+	const weather::ClimateWind global {
+	    .centre = {0.0f, 0.0f}, .innerRadius = 0.0f, .outerRadius = 0.0f, .windX = 100.0f, .windZ = -100.0f};
+	const auto wind = weather::DriftWind({.x = 100, .z = -100}, global, {}, {500.0f, 500.0f});
+	EXPECT_EQ(wind.x, 127);
+	EXPECT_EQ(wind.z, -128);
+}
+
+TEST(ScriptWeather, AStormTheWindBlowsMovesAHundredthOfItsWindATurn)
+{
+	const auto moved = weather::Drift({100.0f, 5.0f, 200.0f}, {.x = 50, .z = -20});
+	EXPECT_FLOAT_EQ(moved.x, 100.5f);
+	EXPECT_FLOAT_EQ(moved.y, 5.0f);
+	EXPECT_FLOAT_EQ(moved.z, 199.8f);
+}
+
 TEST(ScriptWeather, TheLostBrothersDrizzle)
 {
 	// The sick brother's storm: "degrees 15 rainfall 1 snowfall 0 overcast 1 fallspeed 2", "time 120 fade 40",

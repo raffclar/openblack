@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -69,6 +70,12 @@ public:
 	/// A script sets what an animal does: held still, or going about with its flock. False for anything else, which
 	/// openblack's animals can't do yet.
 	virtual bool SetScriptState(entt::entity animal, LivingStates state) = 0;
+	/// A script sends an animal to a point on the land, where it is held still for the script; one already there is held
+	/// at once. One held in a hand, carried off or flying through the air isn't sent.
+	virtual void ScriptMoveTo(entt::entity animal, glm::vec2 point) = 0;
+	/// The game's number for the state an animal is in for itself: the state it is in, or, while it is on its way into
+	/// another (moving somewhere, or waiting for a clip to end), that one. None for what isn't an animal.
+	[[nodiscard]] virtual std::optional<uint8_t> FinalGameStateOf(entt::entity animal) const = 0;
 	/// A new size for an animal
 	virtual void SetScale(entt::entity animal, float scale) = 0;
 	/// An animal's radius across the ground: the larger half of its model's width and depth, scaled
@@ -113,9 +120,10 @@ public:
 	/// Whether an animal may take up a reaction: not held, flying or carried, and not dying, dead, brought down or holding
 	/// still while a clip plays
 	[[nodiscard]] virtual bool IsAvailableForReaction([[maybe_unused]] entt::entity animal) const { return false; }
-	/// An animal flees from an object with no test, as it flees a fire: false only when it isn't an animal. With the
-	/// object gone it gives up on its next step.
-	virtual bool SetupFleeFromObject([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity object)
+	/// An animal flees from an object with no test, as it flees a fire, by the distances of the kind of reaction it
+	/// takes up: false only when it isn't an animal. With the object gone it gives up on its next step.
+	virtual bool SetupFleeFromObject([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity object,
+	                                 [[maybe_unused]] Reaction reaction)
 	{
 		return false;
 	}

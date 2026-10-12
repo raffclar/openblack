@@ -65,59 +65,65 @@ std::span<const glm::mat4> posed_model::BonesOf(const ecs::Registry& registry, e
 	return rest;
 }
 
-void posed_model::Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
-                        const glm::mat4& model, std::vector<glm::vec3>& corners)
+namespace
 {
-	const auto& subMesh = *mesh.GetSubMeshes()[index];
-	const auto& geometry = subMesh.GetBodyGeometry();
-	corners.clear();
-	corners.reserve(geometry.positions.size());
-
-	// A creature's body is its base mesh moved towards the meshes of how evil or good, thin or fat and weak or strong
-	// it is drawn
-	std::array<const graphics::L3DSubMesh*, 3> morphs {};
-	const creature_morph::Morph* morph = nullptr;
-	if (const auto* creature = registry.TryGet<const Creature>(entity))
+/// Places a submesh's vertices one at a time as the model is drawn this frame
+class VertexPlacer
+{
+public:
+	VertexPlacer(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
+	             const glm::mat4& model, std::span<const glm::mat4> bones)
+	    : _geometry(mesh.GetSubMeshes()[index]->GetBodyGeometry())
+	    , _model(model)
+	    , _bones(bones)
+	    , _followsLand(registry.AllOf<MorphWithTerrain>(entity))
 	{
-		if (const auto* shape = registry.TryGet<const CreatureMorph>(entity))
+		// A creature's body is its base mesh moved towards the meshes of how evil or good, thin or fat and weak or strong
+		// it is drawn
+		if (const auto* creature = registry.TryGet<const Creature>(entity))
 		{
-			auto& meshes = Locator::resources::value().GetMeshes();
-			const auto ids = creature_morph::MeshesOf(creature->species, shape->drawn,
-			                                          [&meshes](entt::id_type id) { return meshes.Contains(id); });
-			const auto subMeshOf = [&meshes, index](entt::id_type id) -> const graphics::L3DSubMesh* {
-				const auto& subs = meshes.Handle(id)->GetSubMeshes();
-				return index < subs.size() ? subs[index].get() : nullptr;
-			};
-			morphs = {subMeshOf(ids.evilGood), subMeshOf(ids.thinFat), subMeshOf(ids.weakStrong)};
-			morph = &shape->drawn;
+			if (const auto* shape = registry.TryGet<const CreatureMorph>(entity))
+			{
+				auto& meshes = Locator::resources::value().GetMeshes();
+				const auto ids = creature_morph::MeshesOf(creature->species, shape->drawn,
+				                                          [&meshes](entt::id_type id) { return meshes.Contains(id); });
+				const auto subMeshOf = [&meshes, index](entt::id_type id) -> const graphics::L3DSubMesh* {
+					const auto& subs = meshes.Handle(id)->GetSubMeshes();
+					return index < subs.size() ? subs[index].get() : nullptr;
+				};
+				_morphs = {subMeshOf(ids.evilGood), subMeshOf(ids.thinFat), subMeshOf(ids.weakStrong)};
+				_morph = &shape->drawn;
+			}
 		}
 	}
-	const auto bones = posed_model::BonesOf(registry, entity, mesh);
-	const bool followsLand = registry.AllOf<MorphWithTerrain>(entity);
-	const glm::vec3 origin(model[3]);
-	const glm::vec3 up(model[1]);
-	const float scale = glm::length(glm::vec3(model[0]));
-	for (size_t i = 0; i < geometry.positions.size(); ++i)
+
+	[[nodiscard]] size_t Count() const { return _geometry.positions.size(); }
+
+	[[nodiscard]] glm::vec3 operator()(size_t i) const
 	{
-		auto position = geometry.positions[i];
-		if (morph != nullptr)
+		const auto& positions = _geometry.positions;
+		auto position = positions[i];
+		if (_morph != nullptr)
 		{
 			const auto partner = [&](const graphics::L3DSubMesh* other) {
-				const auto& positions = other != nullptr ? other->GetBodyGeometry().positions : geometry.positions;
-				return i < positions.size() ? positions[i] : geometry.positions[i];
+				const auto& others = other != nullptr ? other->GetBodyGeometry().positions : positions;
+				return i < others.size() ? others[i] : positions[i];
 			};
-			position = creature_morph::Blend(position, partner(morphs[0]), partner(morphs[1]), partner(morphs[2]), *morph);
+			position = creature_morph::Blend(position, partner(_morphs[0]), partner(_morphs[1]), partner(_morphs[2]), *_morph);
 		}
 		glm::vec4 local(position, 1.0f);
-		if (i < geometry.bones.size() && geometry.bones[i] != graphics::L3DSubMesh::k_NoBone &&
-		    geometry.bones[i] < bones.size())
+		const auto& bones = _geometry.bones;
+		if (i < bones.size() && bones[i] != graphics::L3DSubMesh::k_NoBone && bones[i] < _bones.size())
 		{
-			local = bones[geometry.bones[i]] * local;
+			local = _bones[bones[i]] * local;
 		}
-		auto world = glm::vec3(model * local);
-		if (followsLand)
+		auto world = glm::vec3(_model * local);
+		if (_followsLand)
 		{
 			// Each corner moves along the model's up by how much higher the land is under it than under its origin
+			const glm::vec3 origin(_model[3]);
+			const glm::vec3 up(_model[1]);
+			const float scale = glm::length(glm::vec3(_model[0]));
 			const float rise = HeightAt({world.x, world.z}) - HeightAt({origin.x, origin.z});
 			if (up.x == 0.0f && up.z == 0.0f)
 			{
@@ -128,8 +134,66 @@ void posed_model::Place(const ecs::Registry& registry, entt::entity entity, cons
 				world += up * (rise / scale);
 			}
 		}
-		corners.push_back(world);
+		return world;
 	}
+
+private:
+	const graphics::L3DSubMesh::BodyGeometry& _geometry;
+	glm::mat4 _model;
+	std::span<const glm::mat4> _bones;
+	bool _followsLand;
+	std::array<const graphics::L3DSubMesh*, 3> _morphs {};
+	const creature_morph::Morph* _morph {nullptr};
+};
+} // namespace
+
+void posed_model::Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
+                        const glm::mat4& model, std::vector<glm::vec3>& corners)
+{
+	Place(registry, entity, mesh, index, model, posed_model::BonesOf(registry, entity, mesh), corners);
+}
+
+void posed_model::Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
+                        const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners)
+{
+	const VertexPlacer place(registry, entity, mesh, index, model, bones);
+	corners.clear();
+	corners.reserve(place.Count());
+	for (size_t i = 0; i < place.Count(); ++i)
+	{
+		corners.push_back(place(i));
+	}
+}
+
+std::optional<glm::vec3> posed_model::PointOnSkin(const ecs::Registry& registry, entt::entity entity,
+                                                  const graphics::L3DMesh& mesh, const glm::mat4& model, const SkinPoint& point)
+{
+	if (point.subMesh >= mesh.GetSubMeshes().size())
+	{
+		return std::nullopt;
+	}
+	const auto& indices = mesh.GetSubMeshes()[point.subMesh]->GetBodyGeometry().indices;
+	if (static_cast<size_t>(point.firstIndex) + 2 >= indices.size())
+	{
+		return std::nullopt;
+	}
+	const VertexPlacer place(registry, entity, mesh, point.subMesh, model, posed_model::BonesOf(registry, entity, mesh));
+	std::array<glm::vec3, 3> corners {};
+	for (size_t c = 0; c < corners.size(); ++c)
+	{
+		const auto vertex = indices[point.firstIndex + c];
+		if (vertex >= place.Count())
+		{
+			return std::nullopt;
+		}
+		corners.at(c) = place(vertex);
+	}
+	return SkinPointPosition(corners, point.s, point.t);
+}
+
+glm::vec3 posed_model::SkinPointPosition(const std::array<glm::vec3, 3>& corners, float s, float t)
+{
+	return corners[0] + ((corners[1] - corners[0]) * s) + ((corners[2] - corners[0]) * t);
 }
 
 bool posed_model::IsDrawn(const graphics::L3DSubMesh& subMesh)
@@ -185,7 +249,7 @@ std::optional<posed_model::SkinHit> posed_model::NearestSkinHit(const ecs::Regis
 				}
 			}
 		}
-		nearest = SkinHit {.hit = *hit, .uvs = {uvAt(0), uvAt(1), uvAt(2)}, .skin = skin};
+		nearest = SkinHit {.hit = *hit, .uvs = {uvAt(0), uvAt(1), uvAt(2)}, .skin = skin, .subMesh = static_cast<uint32_t>(s)};
 	}
 	return nearest;
 }

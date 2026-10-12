@@ -9,6 +9,8 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cmath>
+
 #include <chrono>
 #include <numbers>
 #include <optional>
@@ -241,7 +243,7 @@ TEST(ScriptCamera, ItFollowsAThingAtOnceWithNoGlideUntilSentElsewhere)
 	const auto thing = [&at]() {
 		return std::optional(script_camera::FollowedThing {.point = at, .gameAngle = std::nullopt, .height = 1.0f});
 	};
-	model.FollowAndLookAt(thing, 3.0f);
+	model.FollowAndLookAt({.id = 7, .lookup = thing}, 3.0f);
 	model.SetFollowSettings(3.0f, 0.0f, 0.0f, false);
 	at += glm::vec3(4.0f, 0.0f, 0.0f);
 	Camera camera;
@@ -256,6 +258,29 @@ TEST(ScriptCamera, ItFollowsAThingAtOnceWithNoGlideUntilSentElsewhere)
 	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
 	EXPECT_NEAR(glm::distance(model.GetTargetOrigin(), glm::vec3(980.0f, 50.0f, 980.0f)), 0.0f, 1e-4f);
 	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), lastSeen), 0.0f, 1e-4f);
+}
+
+TEST(ScriptCamera, ItIsAboutTheThingItLooksAtElseTheOneItFollows)
+{
+	ScriptCameraModel model({990.0f, 20.0f, 990.0f}, {1000.0f, 5.0f, 1000.0f}, FlatLand);
+	bool followedThere = true;
+	const auto followed = [&followedThere]() {
+		return followedThere ? std::optional(script_camera::FollowedThing {.point = {1000.0f, 5.0f, 1000.0f}}) : std::nullopt;
+	};
+	const auto lookedAt = []() { return std::optional(script_camera::FollowedThing {.point = {1010.0f, 5.0f, 1000.0f}}); };
+	EXPECT_FALSE(model.GetFocusedThing().has_value());
+	model.Follow({.id = 3, .lookup = followed});
+	EXPECT_EQ(model.GetFocusedThing(), 3u);
+	model.LookAt({.id = 5, .lookup = lookedAt});
+	EXPECT_EQ(model.GetFocusedThing(), 5u);
+	// Sent to look at a point, it is about what it follows again
+	model.MoveFocus({1000.0f, 0.0f, 990.0f}, 1.0f);
+	EXPECT_EQ(model.GetFocusedThing(), 3u);
+	// Once the followed thing is gone, about nothing
+	followedThere = false;
+	Camera camera;
+	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
+	EXPECT_FALSE(model.GetFocusedThing().has_value());
 }
 
 TEST(ScriptCamera, ATrackPutsTheCameraWhereItsWaysHaveGotToAtTheFramesTime)
@@ -310,4 +335,134 @@ TEST(ScriptCamera, NoTrackRunsNothing)
 	model.RunTrack(nullptr);
 	EXPECT_FALSE(model.OnTrack());
 	EXPECT_TRUE(model.Arrived());
+}
+
+TEST(ScriptCamera, ACameraFacingAThingLooksAtItsMiddleFromTheWayItFaces)
+{
+	const script_camera::FacedThing thing {.position = {100.0f, 10.0f, 200.0f}, .height = 8.0f, .facing = 0.0f};
+	const auto view = script_camera::FaceView(thing, 30.0f);
+	EXPECT_FLOAT_EQ(view.focus.y, 14.0f);
+	// Heading 0 is along +z, a tenth of a radian up
+	EXPECT_NEAR(view.origin.x, 100.0f, 1e-4f);
+	EXPECT_NEAR(view.origin.y, 14.0f + (30.0f * std::sin(0.1f)), 1e-4f);
+	EXPECT_NEAR(view.origin.z, 200.0f + (30.0f * std::cos(0.1f)), 1e-4f);
+	// A facing beyond a turn is brought within one
+	const auto turned = script_camera::FaceView({.position = thing.position, .height = 8.0f, .facing = 1.0f}, 30.0f);
+	const auto wound = script_camera::FaceView(
+	    {.position = thing.position, .height = 8.0f, .facing = 1.0f + script_camera::k_FullTurn}, 30.0f);
+	EXPECT_NEAR(glm::distance(turned.origin, wound.origin), 0.0f, 1e-3f);
+	EXPECT_NEAR(turned.origin.x - 100.0f, 30.0f * std::cos(0.1f) * std::sin(1.0f), 1e-3f);
+}
+
+TEST(ScriptCamera, ACreaturesFacingIsItsBodysTurnPlusATurnLessTwoAndAHalf)
+{
+	EXPECT_NEAR(script_camera::CreatureFacing(1.0f), 1.0f + script_camera::k_FullTurn - 2.5f, 1e-6f);
+	EXPECT_FALSE(script_camera::IsWrongFacing(3.0f * script_camera::k_FullTurn));
+	EXPECT_TRUE(script_camera::IsWrongFacing(4.0f * script_camera::k_FullTurn));
+}
+
+TEST(ScriptCamera, TheTwoThingCamerasGlidesShortenOverItsFirstSecondAndAHalf)
+{
+	EXPECT_FLOAT_EQ(script_camera::DualSeconds(0.0f), 2.0f);
+	EXPECT_FLOAT_EQ(script_camera::DualSeconds(0.75f), 1.5f);
+	EXPECT_FLOAT_EQ(script_camera::DualSeconds(1.5f), 1.0f);
+	EXPECT_FLOAT_EQ(script_camera::DualSeconds(3.0f), 1.0f);
+}
+
+TEST(ScriptCamera, TheTwoThingCameraFramesBothFromTheSideOfTheLineBetweenThem)
+{
+	const script_camera::DualThing first {.position = {0.0f, 0.0f, 0.0f}, .height = 10.0f, .radius = 5.0f};
+	const script_camera::DualThing second {.position = {100.0f, 0.0f, 0.0f}, .height = 20.0f, .radius = 6.0f};
+	script_camera::DualSettings settings;
+	const auto view = script_camera::DualView(first, second, settings);
+	// Between them, raised by a quarter of their heights
+	EXPECT_FLOAT_EQ(view.focus.x, 50.0f);
+	EXPECT_FLOAT_EQ(view.focus.y, 7.5f);
+	EXPECT_FLOAT_EQ(view.focus.z, 0.0f);
+	// As far as they are apart plus their radii, then 1.4 times the taller's height
+	EXPECT_NEAR(glm::distance(view.origin, view.focus), 111.0f + 28.0f, 1e-3f);
+	// An eighth of a turn round from the line between them, which runs along +x (a quarter turn), and an eighth of a half
+	// turn up
+	const auto expected = script_camera::PointFromDistanceHeadingAndPitch(view.focus, 139.0f, -std::numbers::pi_v<float> / 4.0f,
+	                                                                      std::numbers::pi_v<float> / 8.0f);
+	EXPECT_NEAR(glm::distance(view.origin, expected), 0.0f, 1e-3f);
+
+	// It looks down at least a thirteenth of a half turn
+	settings.pitch = 0.0f;
+	static_cast<void>(script_camera::DualView(first, second, settings));
+	EXPECT_FLOAT_EQ(settings.pitch, script_camera::k_DualLowestPitch);
+
+	// Two things in the same spot keep the heading as it is
+	script_camera::DualSettings same;
+	const auto together = script_camera::DualView(first, first, same);
+	const auto unturned =
+	    script_camera::PointFromDistanceHeadingAndPitch(together.focus, 10.0f + 14.0f, same.heading, same.pitch);
+	EXPECT_NEAR(glm::distance(together.origin, unturned), 0.0f, 1e-3f);
+}
+
+TEST(ScriptCamera, ATwoThingCameraTakesOverUntilLetGoOrAThingIsGone)
+{
+	Camera camera;
+	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
+	bool secondThere = true;
+	const auto subject = [](uint32_t id, glm::vec3 at, const bool* there) {
+		return ScriptCameraModel::DualSubject {.id = id, .lookup = [at, there]() -> std::optional<script_camera::DualThing> {
+			                                       if (there != nullptr && !*there)
+			                                       {
+				                                       return std::nullopt;
+			                                       }
+			                                       return script_camera::DualThing {
+			                                           .position = at, .height = 10.0f, .radius = 5.0f};
+		                                       }};
+	};
+	model.StartDualView(subject(1, {2400.0f, 0.0f, 2400.0f}, nullptr), subject(2, {2440.0f, 0.0f, 2400.0f}, &secondThere));
+	EXPECT_TRUE(model.InDualView());
+	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
+	// It is sent to frame both, and hasn't arrived
+	EXPECT_NEAR(model.GetTargetFocus().x, 2420.0f, 1e-3f);
+	EXPECT_FALSE(model.Arrived());
+	for (int i = 0; i < 40; ++i)
+	{
+		static_cast<void>(model.Update(std::chrono::milliseconds(100), camera));
+	}
+	EXPECT_TRUE(model.Arrived());
+
+	// The same two again change nothing; others take over on top, and letting go goes back to the one below
+	model.StartDualView(subject(1, {2400.0f, 0.0f, 2400.0f}, nullptr), subject(2, {2440.0f, 0.0f, 2400.0f}, &secondThere));
+	model.StartDualView(subject(1, {2400.0f, 0.0f, 2400.0f}, nullptr), subject(3, {2400.0f, 0.0f, 2480.0f}, nullptr));
+	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
+	EXPECT_NEAR(model.GetTargetFocus().z, 2440.0f, 1e-3f);
+	EXPECT_TRUE(model.ReleaseDualView());
+	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
+	EXPECT_NEAR(model.GetTargetFocus().x, 2420.0f, 1e-3f);
+	EXPECT_TRUE(model.InDualView());
+
+	// A thing gone is framed where it was last seen until the turn lets go of it; then the script's own camera holds
+	// where it was sent
+	secondThere = false;
+	const auto held = model.GetTargetFocus();
+	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
+	EXPECT_TRUE(model.InDualView());
+	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), held), 0.0f, 1e-4f);
+	model.LetGoOfGoneThings();
+	EXPECT_FALSE(model.InDualView());
+	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
+	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), held), 0.0f, 1e-4f);
+	EXPECT_FALSE(model.ReleaseDualView());
+}
+
+TEST(ScriptCamera, ATrackHoldsUnderATwoThingCamera)
+{
+	Camera camera;
+	ScriptCameraModel model({2400.0f, 60.0f, 2500.0f}, {2400.0f, 10.0f, 2550.0f}, FlatLand);
+	model.RunTrack(StraightTrack());
+	const auto thing = [](glm::vec3 at) {
+		return [at]() { return std::optional(script_camera::DualThing {.position = at, .height = 1.0f, .radius = 1.0f}); };
+	};
+	model.StartDualView({.id = 1, .lookup = thing({2400.0f, 0.0f, 2400.0f})},
+	                    {.id = 2, .lookup = thing({2410.0f, 0.0f, 2400.0f})});
+	model.PassGameTime(std::chrono::milliseconds(5000));
+	EXPECT_TRUE(model.ReleaseDualView());
+	// Its time didn't run while it was held, so it hasn't arrived at its end
+	EXPECT_FALSE(model.Arrived());
 }

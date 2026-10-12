@@ -90,6 +90,8 @@ public:
 
 	/// Model space matrices of the hand's bones, in the form L3DMesh::GetBoneMatrices gives the rest pose
 	[[nodiscard]] const std::vector<glm::mat4>& GetBoneMatrices() const { return _boneMatrices; }
+	/// The next pose fades in from the pose last drawn, as when the hand changes what it does
+	void FadeFromLastPose() { StartFade(); }
 	[[nodiscard]] const Animation* GetAnimation(size_t specIndex) const;
 
 	/// The hand is scaled so its rest pose bones span 3.2 units from top to bottom, growing past 150 units from the

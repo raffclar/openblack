@@ -15,6 +15,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/LandIslandInterface.h"
+#include "CameraLens.h"
 #include "CameraLimits.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -48,7 +49,12 @@ Camera::~Camera() = default;
 
 float Camera::GetHorizontalFieldOfView() const
 {
-	return _xFov;
+	return camera_lens::HorizontalFieldOfView(_xFov, _aspect);
+}
+
+float Camera::GetVerticalFieldOfView() const
+{
+	return camera_lens::VerticalFieldOfView(_xFov, _aspect);
 }
 
 glm::mat4 Camera::GetRotationMatrix() const
@@ -127,15 +133,37 @@ Camera::NearPlanePoint Camera::OnNearPlane(glm::vec2 screenCoord, Interpolation 
 Camera& Camera::SetProjectionMatrixPerspective(float xFov, float aspect, float nearClip)
 {
 	_xFov = glm::radians(xFov);
+	// A lens set outright stops any glide
+	_lens.SetPosition(_xFov);
 	_aspect = aspect;
 	return SetNearClip(nearClip);
+}
+
+Camera& Camera::SetLens(float radians, float seconds)
+{
+	_lens.SetDestination(radians, 0.0f, seconds);
+	if (_lens.Value() != _xFov)
+	{
+		_xFov = _lens.Value();
+		SetNearClip(_nearClip);
+	}
+	return *this;
+}
+
+void Camera::UpdateLens(float seconds)
+{
+	_lens.Update(seconds);
+	if (_lens.Value() != _xFov)
+	{
+		_xFov = _lens.Value();
+		SetNearClip(_nearClip);
+	}
 }
 
 Camera& Camera::SetNearClip(float nearClip)
 {
 	_nearClip = nearClip;
-	const float yFov = (glm::atan(glm::tan(_xFov / 2.0f) / _aspect)) * 2.0f;
-	_projectionMatrix = glm::infinitePerspective(yFov, _aspect, _nearClip);
+	_projectionMatrix = glm::infinitePerspective(GetVerticalFieldOfView(), _aspect, _nearClip);
 	_projectionMatrixReversedZ = k_ReverseZMatrix * _projectionMatrix;
 
 	return *this;

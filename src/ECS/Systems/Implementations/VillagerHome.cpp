@@ -737,13 +737,35 @@ entt::entity NearbyTownToJoin(entt::entity villager)
 }
 } // namespace
 
-void villager_home::SetupMoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
+namespace
 {
-	SetupMobileMoveTo(action, goal, final);
-	SetTopState(action, VillagerStates::MoveToPos);
+/// The state a villager walks in: its kind's own walking state
+VillagerStates WalkingStateOf(entt::entity villager)
+{
+	const auto* person = WorldRegistry().TryGet<const Villager>(villager);
+	if (person == nullptr || !Locator::infoConstants::has_value())
+	{
+		return VillagerStates::MoveToPos;
+	}
+	// TODO(villagers): on a structure it walks in the state for that; openblack has no villagers on structures yet
+	return static_cast<VillagerStates>(InfoOf(*person).moveState);
+}
+} // namespace
+
+bool villager_home::SetupMoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final, WalkWay way)
+{
+	// It goes into the walk and the state it walks to at once, so the states it leaves hear where it is heading, and it
+	// never stops for a second before setting off. The walk itself is laid out only once it is walking.
+	if (!Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, WalkingStateOf(EntityOf(action)),
+	                                                                                final))
+	{
+		return false;
+	}
+	SetupMobileMoveTo(action, goal, way);
+	return true;
 }
 
-void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final, WalkWay way)
+void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, WalkWay way)
 {
 	auto& registry = WorldRegistry();
 	const auto villager = EntityOf(action);
@@ -764,7 +786,6 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, Vill
 	{
 		registry.Assign<MoveStateLinearTag>(villager);
 	}
-	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Final, final, true);
 }
 
 bool villager_home::WalkIsOverAt(entt::entity villager, glm::vec2 goal)

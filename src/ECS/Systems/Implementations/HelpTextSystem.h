@@ -34,11 +34,14 @@ public:
 	void Reset() override;
 	void Update(const Frame& frame) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;
+	bool RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction) override;
+	void TempText(bool singleLine, std::string_view words, int32_t withInteraction) override;
 	[[nodiscard]] bool IsTextRead() const override;
 	void ClearAllText() override;
 	void CloseDialogue() override;
 	void InterruptAdvisors() override;
 	[[nodiscard]] int32_t GetNarrator(uint32_t text) const override;
+	[[nodiscard]] std::u16string GetWords(uint32_t text) const override;
 	[[nodiscard]] const help::TextFrame* Layout(glm::ivec2 screen, int barPixels, const help::WidthFn& widthFn) const override;
 	[[nodiscard]] help::AdvisorVoices& GetVoices() override { return _voices; }
 	[[nodiscard]] const help::AdvisorVoices& GetVoices() const override { return _voices; }

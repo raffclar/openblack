@@ -285,6 +285,41 @@ bool AnimalSystem::SetScriptState(entt::entity entity, LivingStates state)
 	return true;
 }
 
+void AnimalSystem::ScriptMoveTo(entt::entity entity, glm::vec2 point)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	// Only an animal out in the world is sent: not one held in a hand, carried off or flying through the air
+	if (animal == nullptr || EntityRegistry().AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
+	{
+		return;
+	}
+	// TODO(town-script-natives): the game also leaves one drowning where it is; openblack's animals don't drown yet
+	const auto goal = Fixed(point);
+	if (animals::AreWeThere(animal->move.position, goal, animal->move.speed))
+	{
+		SetTopState(*animal, AnimalState::InScript);
+		return;
+	}
+	SetupMoveTo(*animal, point, 0.0f, AnimalState::InScript);
+}
+
+std::optional<uint8_t> AnimalSystem::FinalGameStateOf(entt::entity entity) const
+{
+	const auto* animal = EntityRegistry().TryGet<const Animal>(entity);
+	if (animal == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto current = GameStateOf(animal->state);
+	if (Locator::infoConstants::value().animalStateTable.at(current).isFinalState != 0)
+	{
+		return static_cast<uint8_t>(current);
+	}
+	// Waiting for a clip to end, it is on its way into the state after the clip; otherwise into where it is going's
+	return static_cast<uint8_t>(
+	    GameStateOf(animal->state == AnimalState::WaitForClip ? animal->afterClip : animal->finalState));
+}
+
 entt::entity AnimalSystem::CreateSpellAnimal(AnimalInfo type, glm::vec2 position, float heightAboveLand, uint16_t angle,
                                              PlayerNames owner, entt::entity flockEntity, entt::entity spell)
 {
@@ -1560,7 +1595,7 @@ bool AnimalSystem::IsAvailableForReaction(entt::entity entity) const
 	}
 }
 
-bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object)
+bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object, Reaction reaction)
 {
 	auto& registry = EntityRegistry();
 	auto* animal = registry.TryGet<Animal>(entity);
@@ -1570,7 +1605,7 @@ bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object)
 	}
 	// It takes up the flee whatever the object; with the object gone its next step gives the flee up
 	animal->fleeing = object;
-	animal->fleeReaction = Reaction::ReactToFire;
+	animal->fleeReaction = reaction;
 	SetState(*animal, AnimalState::FleeingFromObject);
 	return true;
 }

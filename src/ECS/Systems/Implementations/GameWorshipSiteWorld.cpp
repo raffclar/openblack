@@ -34,6 +34,7 @@
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
@@ -210,11 +211,24 @@ void GameWorshipSiteWorld::CloseBuildingSite(entt::entity site)
 	construction::CloseSite(site);
 }
 
+void GameWorshipSiteWorld::CloseTownsBuildingSite(entt::entity site, entt::entity town)
+{
+	construction::CloseTownsSite(site, town);
+}
+
 void GameWorshipSiteWorld::RemoveDance(entt::entity dance)
 {
 	if (Locator::danceSystem::has_value())
 	{
 		Locator::danceSystem::value().Destroy(dance);
+	}
+}
+
+void GameWorshipSiteWorld::RemoveSpellIcons(entt::entity site)
+{
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().SiteRemoved(site);
 	}
 }
 
