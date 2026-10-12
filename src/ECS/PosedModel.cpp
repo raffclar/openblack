@@ -68,6 +68,12 @@ std::span<const glm::mat4> posed_model::BonesOf(const ecs::Registry& registry, e
 void posed_model::Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
                         const glm::mat4& model, std::vector<glm::vec3>& corners)
 {
+	Place(registry, entity, mesh, index, model, posed_model::BonesOf(registry, entity, mesh), corners);
+}
+
+void posed_model::Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
+                        const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners)
+{
 	const auto& subMesh = *mesh.GetSubMeshes()[index];
 	const auto& geometry = subMesh.GetBodyGeometry();
 	corners.clear();
@@ -92,7 +98,6 @@ void posed_model::Place(const ecs::Registry& registry, entt::entity entity, cons
 			morph = &shape->drawn;
 		}
 	}
-	const auto bones = posed_model::BonesOf(registry, entity, mesh);
 	const bool followsLand = registry.AllOf<MorphWithTerrain>(entity);
 	const glm::vec3 origin(model[3]);
 	const glm::vec3 up(model[1]);

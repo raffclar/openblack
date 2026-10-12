@@ -11,6 +11,10 @@
 
 #include <cstdint>
 
+#include <vector>
+
+#include <entt/entity/entity.hpp>
+
 #include "3D/FieldCrop.h"
 #include "Enums.h"
 
@@ -27,6 +31,8 @@ struct Field
 	uint32_t growthTurn;
 	/// The crop's height as it is drawn, easing towards where its food puts it
 	field_crop::Settle height;
+	/// The villagers farming it now, each once; the more there are the less it wants more
+	std::vector<entt::entity> farmers;
 };
 
 } // namespace openblack::ecs::components

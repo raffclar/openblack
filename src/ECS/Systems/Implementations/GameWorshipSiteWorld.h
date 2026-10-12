@@ -38,6 +38,7 @@ public:
 	void OpenBuildingSite(entt::entity site, entt::entity town, float desire) override;
 	void CloseBuildingSite(entt::entity site) override;
 	void CloseTownsBuildingSite(entt::entity site, entt::entity town) override;
+	void RemoveSpellIcons(entt::entity site) override;
 	void RemoveDance(entt::entity dance) override;
 	void ArtefactsLeaveSite(entt::entity site) override;
 	void Remove(entt::entity object) override;

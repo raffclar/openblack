@@ -936,7 +936,7 @@
   "query": "living.action"
  },
  {
-  "description": "An animal: its kind, state, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, and a grazer's needs",
+  "description": "An animal: its kind, state (and the game's number of the state it is in for itself), clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, and a grazer's needs",
   "kind": "object",
   "parameters": [
    {
@@ -1474,7 +1474,7 @@
   "query": "help.profile"
  },
  {
-  "description": "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, its time to show, the point it points at and its scroll",
+  "description": "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, its time to show, the point it points at, its scroll and whether the hand is on it or grips it",
   "kind": "object",
   "parameters": [],
   "query": "help.bubble"

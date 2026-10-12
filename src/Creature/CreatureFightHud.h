@@ -10,6 +10,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -19,22 +20,12 @@
 
 #include "Enums.h"
 
-/// The panel shown over the screen during a fight: a see-through box at the top left, a row for each creature with its
-/// name over a bar of its fight health and a thinner bar of its stamina. The bars run green to yellow while more than
-/// half full and yellow to red below.
+/// The panel shown during a fight, flush in the screen's top left corner: a shade that fades out from that corner, and
+/// a row for each fighter with its fight health bar over its stamina bar and its name to their right. Everything is
+/// measured in a unit of a seventieth of the screen's height, whole pixels, so the panel is the same share of every
+/// screen's height and keeps to the left edge on wide screens. There are no numbers, and it never fades.
 namespace openblack::creature_fight_hud
 {
-/// The box is this share of the screen wide and high
-constexpr float k_WidthShare = 33.0f / 70.0f;
-constexpr float k_HeightShare = 9.0f / 70.0f;
-/// The box's distance from the screen's corner and the space inside it, as shares of a row's height
-constexpr float k_MarginShare = 0.15f;
-constexpr float k_PaddingShare = 0.12f;
-/// The name's size, and the health and stamina bars' heights, as shares of a row's height
-constexpr float k_TextShare = 0.36f;
-constexpr float k_HealthShare = 0.22f;
-constexpr float k_StaminaShare = 0.1f;
-
 struct Values
 {
 	struct Side
@@ -54,11 +45,18 @@ struct Rect
 
 struct Layout
 {
+	/// The unit everything is measured in: a seventieth of the screen's height, in whole pixels
+	int unit {0};
+	/// The shade, darkest at its top left corner
 	Rect box;
 	float textSize {0.0f};
+	/// How wide a name may be before it is cut short
+	float nameWidth {0.0f};
 	struct Row
 	{
+		/// The name's top left
 		glm::vec2 name;
+		/// The health bar, drawn over the lower stamina bar, which it overlaps
 		Rect health;
 		Rect stamina;
 	};
@@ -67,10 +65,11 @@ struct Layout
 
 /// Where everything goes on a screen of a resolution, in pixels
 [[nodiscard]] Layout Compute(glm::u16vec2 resolution);
-/// A bar's part filled, from its left, for a value from 0 to 1
-[[nodiscard]] Rect Filled(const Rect& bar, float value);
-/// A bar's colour for a value from 0 to 1
-[[nodiscard]] glm::vec4 BarColour(float value);
-/// The name a creature is shown by: its species', as creatures have no names of their own yet
-[[nodiscard]] std::u16string_view SpeciesName(CreatureType species);
+/// The health bar's colour, as 0-255 channels: red when empty, yellow at half, green when full, in whole steps
+[[nodiscard]] glm::u8vec3 HealthColour(float health);
+/// The stamina bar's colour, as 0-255 channels: blue, a little paler the more stamina there is
+[[nodiscard]] glm::u8vec3 StaminaColour(float stamina);
+/// The longest start of a name that fits a width, letters taken off its end one at a time
+[[nodiscard]] std::u16string_view FitName(std::u16string_view name, float width,
+                                          const std::function<float(std::u16string_view)>& widthOf);
 } // namespace openblack::creature_fight_hud

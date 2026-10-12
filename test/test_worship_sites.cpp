@@ -116,6 +116,12 @@ public:
 	}
 	void CloseBuildingSite(entt::entity site) override { closedSites.push_back(site); }
 	void CloseTownsBuildingSite(entt::entity site, entt::entity town) override { closedTownSites.push_back({site, town}); }
+	void RemoveSpellIcons(entt::entity site) override
+	{
+		// Whether the site's altar still stood as its icons went
+		const auto altar = _registry.Get<const WorshipSite>(site).altar;
+		removedIcons.emplace_back(site, _registry.Valid(altar));
+	}
 	void RemoveDance(entt::entity dance) override
 	{
 		// The towns that still had a site as its dance went
@@ -145,6 +151,8 @@ public:
 	std::vector<std::pair<entt::entity, entt::entity>> closedTownSites;
 	/// The dances removed, each with the towns that still had a site as it went
 	std::vector<std::pair<entt::entity, std::vector<entt::entity>>> removedDances;
+	/// The sites whose icons went, and whether the site's altar still stood then
+	std::vector<std::pair<entt::entity, bool>> removedIcons;
 	std::vector<entt::entity> artefactsLeft;
 	std::vector<entt::entity> removed;
 	std::unordered_map<entt::entity, float> potAngles;
@@ -641,6 +649,8 @@ TEST(WorshipSiteSystem, ATempleLosesItsSitesNewestFirstWithAllOfEachAndItsTownsK
 	EXPECT_EQ(f.world->removedDances[1].first, norseSite.dance);
 	EXPECT_EQ(f.world->removedDances[1].second, std::vector<entt::entity> {norseTown});
 	EXPECT_EQ(f.world->artefactsLeft, (std::vector<entt::entity> {celtic, norse}));
+	// Each site's icons go first of all, before its altar
+	EXPECT_EQ(f.world->removedIcons, (std::vector<std::pair<entt::entity, bool>> {{celtic, true}, {norse, true}}));
 	// Both stop being building sites, as neither was finished
 	EXPECT_EQ(std::ranges::count(f.world->closedSites, celtic), 1);
 	EXPECT_EQ(std::ranges::count(f.world->closedSites, norse), 1);

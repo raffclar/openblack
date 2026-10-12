@@ -212,6 +212,42 @@ TEST(ScreenPick, APointIsInViewOnAPixelOfTheScreen)
 	EXPECT_FALSE(screen_pick::PointOnScreen(view, across(800.5f)));
 }
 
+// A wide screen's 4:3 middle sees what a 4:3 screen as tall sees through the same view up and down
+TEST(ScreenPick, TheFourByThreeMiddleOfAWideScreenSeesWhatAFourByThreeScreenSees)
+{
+	const auto make = [](glm::vec2 resolution) {
+		const auto projection = glm::perspectiveRH_NO(glm::radians(55.0f), resolution.x / resolution.y, 1.0f, 1000.0f);
+		const auto view = glm::lookAtRH(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		return screen_pick::View {.worldToClip = projection * view,
+		                          .resolution = resolution,
+		                          .near = 1.0f,
+		                          .xScale = projection[0][0],
+		                          .camera = glm::vec3(0.0f)};
+	};
+	const auto fourByThree = make({1440.0f, 1080.0f});
+	// A 4:3 screen is its own middle
+	const auto same = screen_pick::FourByThreeMiddle(fourByThree);
+	EXPECT_EQ(same.resolution, fourByThree.resolution);
+	EXPECT_EQ(same.worldToClip, fourByThree.worldToClip);
+	for (const auto& wide : {make({1920.0f, 1080.0f}), make({5120.0f, 1440.0f})})
+	{
+		const auto middle = screen_pick::FourByThreeMiddle(wide);
+		EXPECT_FLOAT_EQ(middle.resolution.x / middle.resolution.y, 4.0f / 3.0f);
+		EXPECT_NEAR(middle.xScale, fourByThree.xScale, 1e-5f);
+		for (const float x : {0.0f, 5.0f, 6.5f, 7.0f, 7.5f, 9.0f, 12.0f, -7.5f})
+		{
+			const glm::vec3 point {x, 0.0f, -10.0f};
+			EXPECT_EQ(screen_pick::PointOnScreen(middle, point), screen_pick::PointOnScreen(fourByThree, point)) << x;
+			EXPECT_EQ(screen_pick::SphereOnScreen(middle, point, 1.0f, point),
+			          screen_pick::SphereOnScreen(fourByThree, point, 1.0f, point))
+			    << x;
+		}
+		// The wide screen itself sees further to the side
+		EXPECT_TRUE(screen_pick::PointOnScreen(wide, {9.0f, 0.0f, -10.0f}));
+		EXPECT_FALSE(screen_pick::PointOnScreen(middle, {9.0f, 0.0f, -10.0f}));
+	}
+}
+
 TEST(ScreenPick, ATriangleFacingTheCameraIsHitAtItsDepth)
 {
 	const auto view = View();

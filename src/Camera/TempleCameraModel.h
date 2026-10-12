@@ -23,6 +23,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "CameraModel.h"
 #include "Common/Zoomer.h"
+#include "TemplePress.h"
 
 namespace openblack
 {
@@ -189,6 +190,8 @@ private:
 		std::optional<uint32_t> doorBack;
 		/// Where on the screen the creature's room's targets are, in pixels down from the top
 		std::array<std::optional<glm::vec2>, CreatureCaveTargets::k_Count> caveTargets;
+		/// The cursor is over the creature's body in its room, which makes the creature the target whatever else is
+		bool overCaveCreature {false};
 	};
 
 	void Step(float dt, const Input& input);
@@ -202,6 +205,8 @@ private:
 	[[nodiscard]] static std::optional<glm::vec3> CaveMeshPoint(uint32_t index);
 	/// Zooms the camera to a target of the creature's room
 	void ZoomToCaveTarget(CreatureCaveTargets::Target target);
+	/// Leaving the creature in its room closes the tattoo editor open on it
+	void LeaveCaveCreature();
 	/// Zoomed back to no target at once
 	void ResetCaveTargets();
 	/// A room of pictures' camera's work in every state: the turn, lean and height ease after their targets
@@ -278,6 +283,7 @@ private:
 
 	// The press the mouse is held from
 	bool _wasPressed {false};
+	temple_press::HeldFromOutside _heldFromOutside;
 	bool _dialogOpen {false};
 	bool _overPool {false};
 	bool _pressingPool {false};

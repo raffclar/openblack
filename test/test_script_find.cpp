@@ -191,3 +191,15 @@ TEST(ScriptFind, KindsOfThings)
 	expect(sign, ScriptType::Highlight, 1u);
 	EXPECT_FALSE(script_find::KindOf(registry, nothing).has_value());
 }
+
+TEST(ScriptFind, ATownNumberIsCutTowardsNought)
+{
+	EXPECT_EQ(script_find::TownIdFromScript(0.0f), 0u);
+	EXPECT_EQ(script_find::TownIdFromScript(4.9f), 4u);
+	EXPECT_EQ(script_find::TownIdFromScript(12.0f), 12u);
+	// A negative number below one is nought; below that it wraps round to a number no town has
+	EXPECT_EQ(script_find::TownIdFromScript(-0.5f), 0u);
+	EXPECT_EQ(script_find::TownIdFromScript(-1.0f), 0xFFFFFFFFu);
+	// Out of range, as the game's conversion gives it
+	EXPECT_EQ(script_find::TownIdFromScript(3.0e9f), 0x80000000u);
+}

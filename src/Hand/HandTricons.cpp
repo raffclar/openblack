@@ -43,9 +43,7 @@ constexpr int k_GlowAlpha = 255;
 
 float IconHalfSize(float horizontalProjectionScale, glm::ivec2 screenSize)
 {
-	// The width of a 4:3 screen as tall as this one, when that is narrower
-	const auto width = std::min(static_cast<float>(screenSize.x), static_cast<float>(screenSize.y) * 4.0f / 3.0f);
-	return horizontalProjectionScale * width * 0.5f / k_FocalDivisor;
+	return horizontalProjectionScale * static_cast<float>(screenSize.x) * 0.5f / k_FocalDivisor;
 }
 
 uint32_t Shown(uint32_t icons, bool toolTipsOn, bool handStateShowsIcons)

@@ -60,7 +60,8 @@ struct CreatureLeash
 	std::optional<Worn> worn;
 	/// The leash picked to put on next, at the citadel or by the hotkeys
 	LeashType selected {LeashType::Rope};
-	/// Whether the rope is drawn
+	/// The scripts' switch for the leashes, off while a script has the camera. It hides nothing alone: it lets the
+	/// rope show through a script's cinema bars and while the hand is put away (see leash_rope::Shown)
 	bool drawn {true};
 
 	/// How the creature is being led: not at all, or walking to the hand

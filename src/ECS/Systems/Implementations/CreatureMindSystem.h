@@ -79,6 +79,7 @@ public:
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
+	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
 	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
 	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
 	[[nodiscard]] float GetInteractionMagnitude(entt::entity creature) const override;
@@ -86,6 +87,7 @@ public:
 	[[nodiscard]] uint32_t GetActionCount(entt::entity creature, uint32_t action) const override;
 	void SetOnlyDesire(entt::entity creature, creature_desires::Desire desire, float seconds) override;
 	void ClearOnlyDesire(entt::entity creature) override;
+	void MoveToStage(entt::entity creature, uint32_t stage) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
 private:

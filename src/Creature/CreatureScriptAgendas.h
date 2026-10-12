@@ -34,7 +34,7 @@ constexpr float k_LookForeverSeconds = 86400.0f;
 /// Looking at a thing without going up to it: watching its foot for 1.1 seconds and up to 1.2 more
 constexpr float k_LookButDontApproachSeconds = 1.1f;
 constexpr float k_LookButDontApproachExtraSeconds = 1.2f;
-/// Looking at the camera lasts five seconds
+/// Looking at the camera lasts until more than five whole seconds of turns have gone by (sixty turns at ten a second)
 constexpr float k_LookAtCameraSeconds = 5.0f;
 /// Pointing at a thing lasts five seconds, and at the camera one; pointing never lasts less than a second
 constexpr float k_PointAtThingSeconds = 5.0f;
@@ -47,7 +47,8 @@ constexpr float k_FacePlaceSeconds = 0.1f;
 [[nodiscard]] std::vector<Step> LookForever(uint32_t thing);
 /// Turning to face a thing and watching its foot a little while; chance is from 0 to 1 and picks how long
 [[nodiscard]] std::vector<Step> LookButDontApproach(uint32_t thing, float chance);
-/// Watching the camera for five seconds, curious, for a creature with a player; done at once for one without
+/// Watching the camera, curious, turning to it when it is more than a quarter turn away, for six seconds or until the
+/// camera is overhead or more than 100 away, for a creature with a player; done at once for one without
 [[nodiscard]] std::vector<Step> LookAtCamera(bool hasPlayer);
 /// Pointing at a thing for five seconds wherever it goes, amazed
 [[nodiscard]] std::vector<Step> PointAtThing(uint32_t thing);
@@ -58,6 +59,8 @@ constexpr float k_FacePlaceSeconds = 0.1f;
 [[nodiscard]] std::vector<Step> SitDownAt(uint32_t place, glm::vec2 point, float radius, const Random& random);
 /// Turning to face a point, watching it, as a script asks
 [[nodiscard]] std::vector<Step> FaceForScript(glm::vec3 point);
+/// Turning to face a thing, as a script asks: it turns, holding still two seconds once it does
+[[nodiscard]] std::vector<Step> FaceThingForScript(uint32_t thing);
 
 /// A creature a script sends to a point walks there in two goes, watching the point. With no distance given, it first
 /// gets within a sixth of the way (at least its height, and no more than 0.7 of its height and 22), then within its

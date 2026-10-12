@@ -284,7 +284,7 @@ struct FrameInput
 	Screen screen {};     ///< The screen the advisors are laid out on: their Stage's layout
 	glm::ivec2 mouse {0}; ///< The mouse position in pixels of that layout
 	/// How much smaller across the screen than the camera alone would draw them the advisors are drawn near the screen:
-	/// their Stage's share
+	/// 1 while the camera keeps the 4:3 screen's view up and down on wider screens
 	float share {1.0f};
 	uint32_t tickMs {0};     ///< GetTickCount (the GoInvisible flicker)
 	bool wideScreen {false}; ///< Read by Feel and the mouse zone

@@ -33,6 +33,10 @@ public:
 	/// Once a frame, by the game time, which stops while the game is paused: the bodies are reshaped where they have
 	/// changed enough, posed, and their eyes placed
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// Poses a copy of a creature's body some milliseconds on (see components::CreatureCopy): shaped as its creature is,
+	/// by its own animations, its eyes looking where its head does and blinking. Nothing happens to an entity that isn't
+	/// a copy, or whose creature is gone.
+	virtual void PoseCopy(entt::entity copy, float milliseconds) = 0;
 
 	/// Where a bone of a creature is in one of its animations at a time, played left to right or not, in its mesh's space,
 	/// the animation blended as the body is drawn; nothing when the creature has no such animation or bone, or hasn't been

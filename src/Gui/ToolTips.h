@@ -72,7 +72,8 @@ public:
 	static constexpr uint32_t k_Count = 170;
 	/// Tooltips at least this high in priority are "important": numbers and stats, always shown
 	static constexpr float k_ImportantPriority = 0.9f;
-	/// The turns a second the counters of how long a tooltip is shown are in
+	/// Game turns counted per second of a tooltip's display times. Turns come 10 a second whatever the frame rate, so a
+	/// tooltip holds for 2.5 times its display time, as in the original
 	static constexpr float k_TurnsPerSecond = 25.0f;
 	/// The most seconds a tooltip ever takes to fade in
 	static constexpr uint32_t k_MaxTimesShown = 80;
@@ -94,8 +95,10 @@ public:
 	/// A tooltip of words only, shown in another tooltip's words with a number written into them (as a town's flag shows
 	/// its own desire under the tooltip for a need); kept, as a numbered one, only while it is the one shown
 	void SubmitInWords(uint32_t index, uint32_t words, float number);
-	/// Ends the turn: keeps the tooltip submitted, or one lingering after it was, and ends any other
-	void ProcessTurn();
+	/// Ends the turn: keeps the tooltip submitted, or one lingering after it was, and ends any other. The tooltip's
+	/// display time only runs down while the player may turn the camera: while a lesson takes turning away, a tooltip
+	/// shown keeps the others off, and isn't faded out for having been shown long enough.
+	void ProcessTurn(bool displayTimeRuns = true);
 	/// Fades the shown tooltip in or out
 	void Update(float seconds);
 

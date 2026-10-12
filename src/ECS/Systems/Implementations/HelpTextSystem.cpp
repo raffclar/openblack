@@ -250,6 +250,11 @@ int32_t HelpTextSystem::GetNarrator(uint32_t text) const
 	return _texts != nullptr ? _texts->GetHelpText(text).narrator : 0;
 }
 
+std::u16string HelpTextSystem::GetWords(uint32_t text) const
+{
+	return _texts != nullptr ? _texts->GetHelpText(text).text : std::u16string {};
+}
+
 void HelpTextSystem::Update(const Frame& frame)
 {
 	_clockMs += static_cast<int32_t>(frame.gameMs);
@@ -268,6 +273,19 @@ void HelpTextSystem::Update(const Frame& frame)
 bool HelpTextSystem::RunText(bool singleLine, uint32_t text, int32_t withInteraction)
 {
 	return _dialogue ? _dialogue->RunText(singleLine, text, withInteraction) : false;
+}
+
+bool HelpTextSystem::RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction)
+{
+	return _dialogue ? _dialogue->RunText(singleLine, text, withInteraction, number) : false;
+}
+
+void HelpTextSystem::TempText(bool singleLine, std::string_view words, int32_t withInteraction)
+{
+	if (_dialogue)
+	{
+		_dialogue->TempText(singleLine, words, withInteraction);
+	}
 }
 
 bool HelpTextSystem::IsTextRead() const
