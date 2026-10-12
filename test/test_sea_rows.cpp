@@ -169,6 +169,18 @@ TEST(SeaRows, RowsAreTwoPixelsApart)
 	    sea_rows::MakeRows({.top = 0.0f, .bottom = 719.0f, .inverseDepthTop = 0.001f, .inverseDepthBottom = 0.1f}).softTop);
 }
 
+// The ripple's pattern is the game's on its default screen, 800 wide, and runs over the same share of the view on any
+// other: as the camera keeps the game's horizontal field of view, a row of a wider screen spans less of it
+TEST(SeaRows, TheRipplesPatternCoversTheShareOfTheViewItDoesOnTheDefaultScreen)
+{
+	EXPECT_FLOAT_EQ(sea_rows::RippleRowsPerRow(800.0f), 1.0f);
+	for (const float width : {640.0f, 1280.0f, 1920.0f, 2560.0f, 3440.0f, 5120.0f})
+	{
+		// The whole width of rows down the screen spans as many of the pattern's rows as 800 rows of the default screen
+		EXPECT_FLOAT_EQ(width * sea_rows::RippleRowsPerRow(width), 800.0f) << width;
+	}
+}
+
 TEST(SeaRows, TheRippleStepsOnAtTheScreenRefreshWhateverTheFrameRate)
 {
 	using std::chrono::milliseconds;
