@@ -72,6 +72,25 @@ void CountBuilt(BuildingsBuilt& built, AbodeType type)
 	}
 }
 
+bool IsCivicBuilding(AbodeType type)
+{
+	switch (type)
+	{
+	case AbodeType::Totem:
+	case AbodeType::StoragePit:
+	case AbodeType::Creche:
+	case AbodeType::Workshop:
+	case AbodeType::Wonder:
+	case AbodeType::Graveyard:
+	case AbodeType::TownCentre:
+	case AbodeType::FootballPitch:
+	case AbodeType::SpellDispenser:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool TownPassesItsBuildings(uint32_t turn, uint32_t every)
 {
 	return every != 0 && turn % every == 0;

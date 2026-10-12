@@ -154,6 +154,18 @@ TEST(StatisticsBuildings, OnlyASettledBuildingAPlayerPutsOutCountsAsDestroyed)
 	EXPECT_FALSE(CountsAsDestroyed(false, k_SettledAge));
 }
 
+TEST(StatisticsBuildings, CivicBuildingsLeaveOutTemplesAndFields)
+{
+	EXPECT_TRUE(IsCivicBuilding(AbodeType::StoragePit));
+	EXPECT_TRUE(IsCivicBuilding(AbodeType::TownCentre));
+	EXPECT_TRUE(IsCivicBuilding(AbodeType::Wonder));
+	EXPECT_TRUE(IsCivicBuilding(AbodeType::SpellDispenser));
+	EXPECT_FALSE(IsCivicBuilding(AbodeType::Citadel));
+	EXPECT_FALSE(IsCivicBuilding(AbodeType::Field));
+	EXPECT_FALSE(IsCivicBuilding(AbodeType::LivingQuarters));
+	EXPECT_FALSE(IsCivicBuilding(AbodeType::Windmill));
+}
+
 TEST(StatisticsDisciples, OnlyTheEightWorkingKindsAreCounted)
 {
 	EXPECT_EQ(DiscipleMadeIndex(VillagerDisciple::Farmer), 0u);

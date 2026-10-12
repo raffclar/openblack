@@ -96,6 +96,10 @@ inline constexpr uint32_t k_SettledAge = 200;
 /// building has settled, so a building put up and knocked down at once doesn't count
 [[nodiscard]] bool CountsAsDestroyed(bool byAPlayer, uint32_t age);
 
+/// Whether a kind of building counts among a town's civic buildings: its totem, storage pit, creche, workshop,
+/// graveyard, village centre, football pitch, miracle dispenser and its wonders, but not a temple or a field
+[[nodiscard]] bool IsCivicBuilding(AbodeType type);
+
 /// The disciples made of each kind, as the game counts them: farmers, foresters, fishermen, builders, breeders, traders,
 /// missionaries and craftsmen. Protection, worship and the other kinds aren't counted.
 using DisciplesMade = std::array<uint32_t, 8>;
