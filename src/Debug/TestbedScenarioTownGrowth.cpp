@@ -65,6 +65,7 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "huts stop being started once there is room for a tenth more than the town's people. The crèche is "
 	                "started only once the town wants a civic building. A hut destroyed by the inspector "
 	                "(edit.destroy) is planned again by the town where it stood, and built again when the town wants it.",
+	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_PlannedCreche, k_Hut, k_PlannedHuts[0]}, .distance = 0.6f},
 	    .objects = std::move(objects),
 	});
