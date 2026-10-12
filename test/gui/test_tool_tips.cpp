@@ -25,6 +25,7 @@ constexpr uint32_t k_Scroll = 0xEE2 - 0xE73;
 constexpr uint32_t k_ZoomOut = 0xE8B - 0xE73;
 constexpr uint32_t k_WorldRoom = 0xE9B - 0xE73;
 constexpr uint32_t k_Stat = 20;
+constexpr uint32_t k_OtherStat = 21;
 
 /// Most tooltips' info, and one stat that matters more
 std::array<ToolTipInfo, ToolTips::k_Count> Info()
@@ -32,6 +33,7 @@ std::array<ToolTipInfo, ToolTips::k_Count> Info()
 	std::array<ToolTipInfo, ToolTips::k_Count> info {};
 	info.fill({.priority = 0.5f, .displayTime = 1.0f, .displayTimeAfterFocus = 0.0f});
 	info.at(k_Stat) = {.priority = 0.9f, .displayTime = 1.0f, .displayTimeAfterFocus = 1.0f};
+	info.at(k_OtherStat) = {.priority = 0.9f, .displayTime = 1.0f, .displayTimeAfterFocus = 0.0f};
 	return info;
 }
 
@@ -169,6 +171,46 @@ TEST(ToolTips, OneSecondOfDisplayTimeHoldsForTwoAndAHalfSecondsOfTurns)
 	toolTips.ProcessTurn();
 	ASSERT_TRUE(toolTips.GetShown().has_value());
 	EXPECT_EQ(toolTips.GetShown()->index, k_ZoomIn);
+}
+
+TEST(ToolTips, TwoStatsSubmittedTogetherTakeTurnsAndKeepTheirOwnNumbers)
+{
+	// As a village centre submits its belief then its population every turn: the first shows for its display time
+	// with its own number, then the second takes over with its own, and so on
+	ToolTips toolTips(Info());
+	const auto turn = [&toolTips] {
+		toolTips.SubmitNumbered(k_Stat, ToolTipAction::None, -12.0, std::nullopt);
+		toolTips.SubmitNumbered(k_OtherStat, ToolTipAction::None, 7.0, 30.0);
+		toolTips.ProcessTurn();
+		toolTips.Update(0.1f);
+	};
+	const int displayTurns = static_cast<int>(ToolTips::k_TurnsPerSecond);
+	for (int i = 0; i < displayTurns; ++i)
+	{
+		turn();
+		const auto shown = toolTips.GetShown();
+		ASSERT_TRUE(shown.has_value()) << i;
+		EXPECT_EQ(shown->index, k_Stat) << i;
+		ASSERT_TRUE(shown->number.has_value()) << i;
+		EXPECT_DOUBLE_EQ(*shown->number, -12.0) << i;
+		EXPECT_FALSE(shown->second.has_value()) << i;
+	}
+	turn();
+	auto shown = toolTips.GetShown();
+	ASSERT_TRUE(shown.has_value());
+	EXPECT_EQ(shown->index, k_OtherStat);
+	ASSERT_TRUE(shown->number.has_value());
+	EXPECT_DOUBLE_EQ(*shown->number, 7.0);
+	ASSERT_TRUE(shown->second.has_value());
+	EXPECT_DOUBLE_EQ(*shown->second, 30.0);
+	for (int i = 0; i < displayTurns; ++i)
+	{
+		turn();
+	}
+	shown = toolTips.GetShown();
+	ASSERT_TRUE(shown.has_value());
+	EXPECT_EQ(shown->index, k_Stat);
+	EXPECT_DOUBLE_EQ(*shown->number, -12.0);
 }
 
 TEST(ToolTips, LingerAfterFocusWhenTheirInfoSaysSo)

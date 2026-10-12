@@ -283,6 +283,9 @@ struct TugResult
 [[nodiscard]] bool IsThrow(glm::vec3 velocity, bool byCreature);
 /// Whether a release is fast enough that only a tree is laid along the slope as it leaves the hand
 [[nodiscard]] bool IsFastRelease(glm::vec3 velocity);
+/// The velocity a throw leaves the hand at: a hand demonstration's recorded throw while it stands, else the spring's
+/// while the spring is on, else none; never faster than the most a throw can be
+[[nodiscard]] glm::vec3 ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity);
 /// Whether a pot let go at a velocity is poured out where it is
 [[nodiscard]] bool PotPours(glm::vec3 velocity);
 /// The twist a throw gets from how far the hand moved since letting go, for a body of a mass at a speed: a turning force

@@ -26,6 +26,7 @@
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
@@ -35,6 +36,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/WorldObjects.h"
 #include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
@@ -206,4 +208,27 @@ void GameWorshipSiteWorld::OpenBuildingSite(entt::entity site, entt::entity town
 void GameWorshipSiteWorld::CloseBuildingSite(entt::entity site)
 {
 	construction::CloseSite(site);
+}
+
+void GameWorshipSiteWorld::RemoveDance(entt::entity dance)
+{
+	if (Locator::danceSystem::has_value())
+	{
+		Locator::danceSystem::value().Destroy(dance);
+	}
+}
+
+void GameWorshipSiteWorld::ArtefactsLeaveSite(entt::entity site)
+{
+	Locator::entitiesRegistry::value().Each<TownArtefact>([site](entt::entity /*unused*/, TownArtefact& artefact) {
+		if (artefact.site == site)
+		{
+			artefact.inSite = false;
+		}
+	});
+}
+
+void GameWorshipSiteWorld::Remove(entt::entity object)
+{
+	world_objects::Remove(object);
 }

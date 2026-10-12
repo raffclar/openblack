@@ -40,6 +40,7 @@
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -221,6 +222,29 @@ void Finish(entt::entity building)
 	}
 }
 
+/// A built building is repaired whole: its site for the repair goes, it is drawn whole again, and a town's building
+/// starts working again as it did when it was first built
+void Repaired(entt::entity building)
+{
+	auto& registry = Entities();
+	registry.Remove<RepairSite>(building);
+	construction::CloseSite(building);
+	if (Locator::buildingDamageSystem::has_value())
+	{
+		Locator::buildingDamageSystem::value().Repaired(building);
+	}
+	if (!TownOf(building).has_value())
+	{
+		return;
+	}
+	// A repaired graveyard counts a burial and takes its town back if the town has none
+	graveyards::StartsWorking(building);
+	// A repaired crèche takes its town back if the town has none
+	creches::StartsWorking(building);
+	// TODO(villager-life): a repaired house takes its people in again and its town reacts to it working
+	registry.SetDirty();
+}
+
 void Apply(entt::entity building, building_construction::Progress progress)
 {
 	if (progress.finished)
@@ -305,7 +329,7 @@ void construction::SetBuilt(entt::entity building, float built)
 void construction::BuildBy(entt::entity building, float amount)
 {
 	const auto& registry = Entities();
-	if (!registry.Valid(building) || IsBuilt(building))
+	if (!registry.Valid(building))
 	{
 		return;
 	}
@@ -318,7 +342,23 @@ void construction::BuildBy(entt::entity building, float amount)
 		}
 		return;
 	}
-	Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
+	if (!IsBuilt(building))
+	{
+		Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
+		return;
+	}
+	// A built building short of its full life is mended instead, and repaired once whole
+	const float life = world_objects::LifeOf(building);
+	const auto mending = building_construction::RepairBy(life, amount);
+	if (mending.life == life)
+	{
+		return;
+	}
+	world_objects::IncreaseLife(building, mending.life - life);
+	if (mending.repaired)
+	{
+		Repaired(building);
+	}
 }
 
 namespace

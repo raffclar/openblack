@@ -89,10 +89,11 @@ public:
 	/// worshipping): a tooltip that has one shows the latest number given
 	void Force(uint32_t index, float number);
 	/// A tooltip with a number or two written into its words, by the mouse button it shows; forced to show at once or
-	/// submitted as any other
-	void SubmitNumbered(uint32_t index, ToolTipAction action, float number, std::optional<float> second, bool force = false);
+	/// submitted as any other. Only the tooltip being shown keeps its numbers: one turned away leaves the shown one's
+	/// numbers as they are.
+	void SubmitNumbered(uint32_t index, ToolTipAction action, double number, std::optional<double> second, bool force = false);
 	/// A tooltip of words only, shown in another tooltip's words with a number written into them (as a town's flag shows
-	/// its own desire under the tooltip for a need)
+	/// its own desire under the tooltip for a need); kept, as a numbered one, only while it is the one shown
 	void SubmitInWords(uint32_t index, uint32_t words, float number);
 	/// Ends the turn: keeps the tooltip submitted, or one lingering after it was, and ends any other
 	void ProcessTurn();
@@ -107,9 +108,9 @@ public:
 		/// From 0 to 1
 		float alpha;
 		/// The number its words show, for one given a number
-		std::optional<float> number;
+		std::optional<double> number;
 		/// The second number its words show, for one given two
-		std::optional<float> second;
+		std::optional<double> second;
 		/// The tooltip whose words it shows instead of its own, for one given other words
 		std::optional<uint32_t> words;
 	};
@@ -153,8 +154,8 @@ private:
 	struct Numbered
 	{
 		uint32_t index;
-		float number;
-		std::optional<float> second;
+		double number;
+		std::optional<double> second;
 		std::optional<uint32_t> words;
 	};
 	std::optional<Numbered> _number;
