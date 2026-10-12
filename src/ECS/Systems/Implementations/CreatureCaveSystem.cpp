@@ -43,15 +43,17 @@ namespace
 {
 /// Whether the game has a text for a creature having learnt a miracle, by the miracle's place in its table; the creature
 /// room's scroll and plinths leave out those it has none for
-bool HasLearntText(size_t miracle)
+/// The number of the game's help text for a creature having learnt a miracle, 0 for none
+uint32_t LearntText(size_t miracle)
 {
 	if (!Locator::infoConstants::has_value())
 	{
-		return true;
+		return 0;
 	}
 	const auto& info = Locator::infoConstants::value();
-	return miracle < info.magicEffect.size() &&
-	       static_cast<int>(magic::GetMagicEffectInfo(info, static_cast<MagicType>(miracle)).creatureLearntEnum) != 0;
+	return miracle < info.magicEffect.size()
+	           ? static_cast<uint32_t>(magic::GetMagicEffectInfo(info, static_cast<MagicType>(miracle)).creatureLearntEnum)
+	           : 0;
 }
 } // namespace
 
@@ -194,6 +196,9 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		snapshot.creaturesKnown = learnt.creatures.size();
 		if (mind->desires.has_value())
 		{
+			const auto& desires = mind->desires->desires;
+			snapshot.anger = desires.at(static_cast<size_t>(creature_desires::Desire::Anger)).value;
+			snapshot.compassion = desires.at(static_cast<size_t>(creature_desires::Desire::Compassion)).value;
 			for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
 			{
 				const auto& state = mind->desires->desires.at(d);
@@ -230,7 +235,7 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 				snapshot.miracles.push_back({
 				    .name = rule.name,
 				    .knownAbout = i < knowledge.miraclesKnown.size() && knowledge.miraclesKnown[i],
-				    .hasLearntText = HasLearntText(i),
+				    .learntText = LearntText(i),
 				    .learnt = CreatureCaveTrophies::PercentLearnt(seen, needed),
 				});
 			}
