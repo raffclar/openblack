@@ -47,6 +47,21 @@ TEST(ScriptCreate, TheScriptsNumberTheTypesAsTheGameDoes)
 	EXPECT_EQ(static_cast<int32_t>(SpellSeedType::Water), 9);
 }
 
+TEST(ScriptCreate, OnlyMarkersAndMobileStaticsKeepTheScriptsHeight)
+{
+	// A marker (type 1) and a mobile static (type 8) keep the height the script gave; villagers (4), children (5) and
+	// the rest stand on the land under the place asked for
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::Marker), 1);
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::MobileStatic), 8);
+	EXPECT_TRUE(KeepsScriptHeight(ScriptType::Marker));
+	EXPECT_TRUE(KeepsScriptHeight(ScriptType::MobileStatic));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Villager));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::VillagerChild));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Rock));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Creature));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Ball));
+}
+
 TEST(ScriptCreate, AnglesAreGivenInDegrees)
 {
 	EXPECT_FLOAT_EQ(AngleFromDegrees(0.0f), 0.0f);
