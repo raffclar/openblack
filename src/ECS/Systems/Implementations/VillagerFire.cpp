@@ -615,9 +615,8 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 	auto& state = FireStateOf(villager);
 	auto target = ToCoords(state.walkTarget);
 	const auto here = PositionOf(villager);
-	// Standing where it was going: on with what it was going to do there
-	const auto at = ToCoords(Across(here));
-	if (at.x == target.x && at.z == target.z)
+	// Within a step of where it was going, at the speed it walks: on with what it was going to do there
+	if (villager_home::AreWeThere(villager, state.walkTarget))
 	{
 		PopFromPrevious(action);
 		SetPrevious(action, VillagerStates::DecideWhatToDo);
