@@ -1633,6 +1633,27 @@ void AddHand(std::vector<Scenario>& all)
 	                  .value = static_cast<size_t>(SpellSeedType::CreatureSpellBig)},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.83f, 0.45f}}},
 	});
+
+	// The camera looks down on an oak from about 150 m, as in play, the pointer on its crown
+	all.push_back({
+	    .id = "hand.tree_tug",
+	    .name = "Pulling a tree out of the ground",
+	    .facet = Facet::Hand,
+	    .description = "Seen from about 150 m up, the hand grips a large oak by its crown, pulls it up the screen until "
+	                   "it comes out of the ground, carries it a little, then puts it down.",
+	    .expected = "The hand hovers on the crown, drops to the trunk as it takes hold, and the oak leans and stretches "
+	                "towards the pull. When it comes out, leaving its roots hole, the hand and the oak move together to "
+	                "under the pointer; the hand never leaves the tree.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 110.0f, -80.0f}, .look = {0.0f, 4.0f, 20.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, 20.0f}, .scale = 1.6f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.47f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.25f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
