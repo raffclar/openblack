@@ -29,6 +29,8 @@ SAMPLER2D(s8_landAlpha, 8);
 SAMPLER2D(s12_snowNoise, 12);
 // The ring an open vortex lays over the land around its hole
 SAMPLER2D(s13_vortexRing, 13);
+// The coarse texture pages the landscape file keeps, a layer each: the coarse land (detail level 0) draws from them
+SAMPLER2DARRAY(s15_coarsePages, 15);
 
 // The land under the snow lying on it: whiter the deeper the snow over each texel of the noise, from its own colour to
 // a grey that is blue-white where it lies thickest. Where no corner of its cell has more than a little snow, none shows.
@@ -56,8 +58,15 @@ vec3 LandUnderSnow(vec3 colour, vec2 xz)
 	return colour * (16.0f - level) / 16.0f + vec3_splat(floor(white * level / 16.0f) / 15.0f);
 }
 
-// x: the block's layer of s0_blockTextures
+// x: the block's layer of s0_blockTextures, z: its texture (0 full, 1 the coarse one faded in over the full one, 2
+// coarse)
 uniform vec4 u_block;
+// The layers of the neighbouring blocks: x the block at x - 1, y at z - 1, z at z + 1, w at x + 1; -1 where there is
+// none
+uniform vec4 u_blockNeighbours;
+// x: the layer of the block's coarse page, yz: where its square starts on it (0 to 1), w: 1 when the block is drawn from
+// the page (the coarse land), 0 when its coarse texture is sampled from its own painted one
+uniform vec4 u_coarsePage;
 // y: how bright the land's light is, a half for the land mirrored under the sea
 // z: the small bump detail's strength
 // w: 1 to draw the land's textures alone, unlit and with no sea, as the temple's map is textured with
@@ -72,14 +81,16 @@ uniform vec4 u_islandExtent;
 
 // Texels along a side of a block's texture
 #define BLOCK_TEXELS 256.0f
+// Units along a side of a block
+#define BLOCK_UNITS 160.0f
 
 // A texel of the block's texture with the footprints painted into it, as the game paints them: the footprints' colour
 // mixed into the block's 4-bit colour by how much they cover it, each channel rounded down to 4 bits again. The block
 // keeps its coast alpha. blockTexel is the texel along the block texture's axes (z, then x); islandUv is where the
 // footprints have the same point.
-vec4 PaintedTexel(vec2 blockTexel, vec2 islandUv)
+vec4 PaintedTexelOf(float layer, vec2 blockTexel, vec2 islandUv)
 {
-	vec4 land = texture2DArrayLod(s0_blockTextures, vec3((blockTexel + 0.5f) / BLOCK_TEXELS, u_block.x), 0.0f);
+	vec4 land = texture2DArrayLod(s0_blockTextures, vec3((blockTexel + 0.5f) / BLOCK_TEXELS, layer), 0.0f);
 	vec4 footprints = texture2DLod(s3_footprints, islandUv, 0.0f);
 	// The mix's exact result is a whole number of 255ths of a level: a thousandth of a level absorbs the rounding of
 	// what is stored without lifting any result to the next level
@@ -93,6 +104,11 @@ vec4 PaintedTexel(vec2 blockTexel, vec2 islandUv)
 		levels = floor(levels * shade / 256.0f + 0.001f);
 	}
 	return vec4(levels / 15.0f, land.a);
+}
+
+vec4 PaintedTexel(vec2 blockTexel, vec2 islandUv)
+{
+	return PaintedTexelOf(u_block.x, blockTexel, islandUv);
 }
 
 // The block's painted texture filtered across its texels: the four nearest texels, each painted, blended by distance
@@ -123,14 +139,123 @@ vec4 PaintedBlock(vec2 blockUv, vec2 islandUv)
 	return mix(mix(texels[0], texels[1], blend.x), mix(texels[2], texels[3], blend.x), blend.y);
 }
 
+// Where a point of the island is on the island's textures, as the vertices give it
+vec2 IslandUvAt(vec2 xz)
+{
+	vec2 uv = (xz - u_islandExtent.xy) / (u_islandExtent.zw - u_islandExtent.xy);
+	#if !BGFX_SHADER_LANGUAGE_GLSL
+		uv.y = 1.0f - uv.y;
+	#endif
+	return uv;
+}
+
+// A texel of a block's painted texture, its colour and alpha as whole 4-bit levels. blockOrigin is the block's lowest x
+// and z, blockTexel the texel along the texture's axes (z, then x).
+vec4 PaintedLevels(float layer, vec2 blockOrigin, vec2 blockTexel)
+{
+	vec2 xz = blockOrigin + (blockTexel.yx + 0.5f) * (u_blockPositionAndSize.wz / BLOCK_TEXELS);
+	vec4 texel = PaintedTexelOf(layer, blockTexel, IslandUvAt(xz));
+	return floor(texel * 15.0f + 0.5f);
+}
+
+// The texel of the block's texture a texel of its coarse texture (1 to 62) is sampled from, along one side: 62 samples
+// across 256 texels, each on a multiple of four (see land_detail::CoarseSourceTexel)
+float CoarseSource(float coarseTexel)
+{
+	float index = clamp(coarseTexel, 1.0f, 62.0f) - 1.0f;
+	return floor(index * 67650.0f / 65536.0f) * 4.0f;
+}
+
+// Two blocks' texels shared across their edge, each 4-bit level halved and rounded down
+vec4 SharedLevels(vec4 a, vec4 b)
+{
+	return floor((a + b) * 0.5f);
+}
+
+// A texel of the block's coarse texture, in 4-bit levels, coarse.x along z and coarse.y along x (0 to 63). The two
+// texels at each edge are shared with the neighbouring block's: the two blocks' edge samples, averaged. Along z first,
+// then along x with the neighbour's own sample.
+vec4 CoarseLevels(vec2 coarse)
+{
+	vec2 origin = u_blockPositionAndSize.xy;
+	vec2 source = vec2(CoarseSource(coarse.x), CoarseSource(coarse.y));
+	vec4 levels = PaintedLevels(u_block.x, origin, source);
+	if (coarse.x <= 1.0f && u_blockNeighbours.y >= 0.0f)
+	{
+		levels = SharedLevels(levels, PaintedLevels(u_blockNeighbours.y, origin - vec2(0.0f, BLOCK_UNITS),
+		                                            vec2(CoarseSource(62.0f), source.y)));
+	}
+	else if (coarse.x >= 62.0f && u_blockNeighbours.z >= 0.0f)
+	{
+		levels = SharedLevels(levels, PaintedLevels(u_blockNeighbours.z, origin + vec2(0.0f, BLOCK_UNITS),
+		                                            vec2(CoarseSource(1.0f), source.y)));
+	}
+	if (coarse.y <= 1.0f && u_blockNeighbours.x >= 0.0f)
+	{
+		levels = SharedLevels(levels, PaintedLevels(u_blockNeighbours.x, origin - vec2(BLOCK_UNITS, 0.0f),
+		                                            vec2(source.x, CoarseSource(62.0f))));
+	}
+	else if (coarse.y >= 62.0f && u_blockNeighbours.w >= 0.0f)
+	{
+		levels = SharedLevels(levels, PaintedLevels(u_blockNeighbours.w, origin + vec2(BLOCK_UNITS, 0.0f),
+		                                            vec2(source.x, CoarseSource(1.0f))));
+	}
+	return levels;
+}
+
+// The block's coarse texture, 64 texels square, filtered across its texels. It lies a texel in from its edge, 62
+// texels across the block (see land_detail::CoarseTexelPosition).
+vec4 CoarseBlock(vec2 blockUv)
+{
+	vec2 position = 256.0f / 255.0f + blockUv * 62.0f - 0.5f;
+	vec2 first = clamp(floor(position), vec2_splat(0.0f), vec2_splat(62.0f));
+	vec2 blend = clamp(position - first, vec2_splat(0.0f), vec2_splat(1.0f));
+	vec4 low = mix(CoarseLevels(first), CoarseLevels(first + vec2(1.0f, 0.0f)), blend.x);
+	vec4 high = mix(CoarseLevels(first + vec2(0.0f, 1.0f)), CoarseLevels(first + 1.0f), blend.x);
+	return mix(low, high, blend.y) / 15.0f;
+}
+
+// A texel of the block's coarse page, as whole 4-bit levels: the page is held at 16 bits a texel, each channel cut to
+// its top 4 bits
+vec4 PageLevels(vec2 texel)
+{
+	vec4 colour = texture2DArrayLod(s15_coarsePages, vec3((texel + 0.5f) / 256.0f, u_coarsePage.x), 0.0f);
+	return floor(floor(colour * 255.0f + 0.5f) / 16.0f);
+}
+
+// The block's coarse texture from its square of its page, filtered across the page's texels
+vec4 CoarsePage(vec2 blockUv)
+{
+	vec2 position = u_coarsePage.yz * 256.0f + 256.0f / 255.0f + blockUv * 62.0f - 0.5f;
+	vec2 first = floor(position);
+	vec2 blend = position - first;
+	vec4 low = mix(PageLevels(first), PageLevels(first + vec2(1.0f, 0.0f)), blend.x);
+	vec4 high = mix(PageLevels(first + vec2(0.0f, 1.0f)), PageLevels(first + 1.0f), blend.x);
+	return mix(low, high, blend.y) / 15.0f;
+}
+
 void main()
 {
 	// unpack uniforms
 	float skyType = u_skyAndBump.x;
 	float smallBumpMapStrength = u_skyAndBump.z;
 
-	// The block's texture with the footprints painted into it, filtered across its texels
-	vec4 block = PaintedBlock(v_texcoord0.xy, v_texcoord1.xy);
+	// The block's texture with the footprints painted into it, filtered across its texels. Beyond the texture line the
+	// block's coarse texture is drawn over it, faded in across the line's band, and alone further out. Each layer is
+	// blended by its alpha.
+	vec4 block = vec4_splat(0.0f);
+	if (u_block.z < 1.5f)
+	{
+		block = PaintedBlock(v_texcoord0.xy, v_texcoord1.xy);
+	}
+	if (u_block.z > 0.5f)
+	{
+		vec4 coarse = u_coarsePage.w > 0.5f ? CoarsePage(v_texcoord0.xy) : CoarseBlock(v_texcoord0.xy);
+		float coarseAlpha = (u_block.z > 1.5f ? 1.0f : v_texcoord0.z) * coarse.a;
+		float alpha = 1.0f - (1.0f - block.a) * (1.0f - coarseAlpha);
+		vec3 colour = coarse.rgb * coarseAlpha + block.rgb * block.a * (1.0f - coarseAlpha);
+		block = vec4(alpha > 0.0f ? colour / alpha : coarse.rgb, alpha);
+	}
 	vec4 col = vec4(block.rgb, 1.0f);
 
 	// The trees' moving shadows, when they are asked for, darken the land under the light. Four filtered taps across a
@@ -181,6 +306,11 @@ void main()
 	vec2 smallBumpUv = v_texcoord0.xy * 12.0f;
 	vec3 smallBump = texture2D(s2_smallBump, smallBumpUv).rgb * v_smallBumpFade.x;
 	float bumpAlpha = texture2D(s1_smallBumpAlpha, smallBumpUv).r * v_smallBumpFade.y * smallBumpMapStrength;
+	// A block drawn with its coarse texture has no small bump detail
+	if (u_block.z > 1.5f)
+	{
+		bumpAlpha = 0.0f;
+	}
 	vec3 land = min(col.rgb + v_haze.rgb, vec3_splat(1.0f));
 	vec3 detail = min(smallBump + v_haze.rgb, vec3_splat(1.0f));
 	// The rivers' channels lower the coast alpha where they run, so the sea shows through as their water
@@ -197,7 +327,8 @@ void main()
 	}
 	// The moving shadows of the creatures, the hand and the high-detail villagers are laid over all of it in black,
 	// after the land is drawn
-	if (u_groundShadowBlock.y > 0.0f && v_shadowCoord.w > 0.0f)
+	// The coarse land, drawn from its pages, takes none
+	if (u_groundShadowBlock.y > 0.0f && v_shadowCoord.w > 0.0f && u_coarsePage.w < 0.5f)
 	{
 		premultiplied.rgb = premultiplied.rgb * GroundShadowsOnLand(v_world, v_shadowCoord.w);
 	}

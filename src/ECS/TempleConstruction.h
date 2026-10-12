@@ -23,6 +23,10 @@ namespace openblack::ecs::construction
 /// near enough, starts going up with nothing of it built and a site for its builders. The temple it started, if any.
 std::optional<entt::entity> StartPlannedAt(glm::vec3 place, float scriptDesire);
 
+/// A planned temple starts going up where it was planned, with nothing of it built and a site for its builders wanting
+/// them by a desire; it is no longer among its town's plans. The temple.
+entt::entity StartPlannedTemple(entt::entity plan, float siteDesire);
+
 /// How much of an object is built, 0 to 1: all of anything not under construction
 [[nodiscard]] float BuiltOf(entt::entity object);
 

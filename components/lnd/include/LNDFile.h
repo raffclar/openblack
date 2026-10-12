@@ -12,6 +12,8 @@
 #include <array>
 #include <filesystem>
 #include <iosfwd>
+#include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -63,6 +65,17 @@ struct LNDLowResolutionTexture
 	LNDLowResolutionTextureHeader header;
 	std::vector<uint8_t> texels;
 };
+
+/// The picture of a low resolution texture: DXT3 (BC2) blocks, behind the surface description the file keeps them with
+struct LNDLowResolutionTexels
+{
+	uint16_t width;
+	uint16_t height;
+	std::span<const uint8_t> blocks;
+};
+
+/// The picture of a low resolution texture, or nothing when it isn't a whole DXT3 picture
+[[nodiscard]] std::optional<LNDLowResolutionTexels> GetTexels(const LNDLowResolutionTexture& texture) noexcept;
 
 struct LNDCell
 {

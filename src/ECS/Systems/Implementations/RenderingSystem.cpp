@@ -12,6 +12,7 @@
 #include "RenderingSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -66,6 +67,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Graveyards.h"
+#include "ECS/ObjectDetail.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
@@ -85,6 +87,7 @@
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Physics/DamageMesh.h"
 #include "Physics/ObjectRules.h"
@@ -94,6 +97,7 @@
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
+namespace object_detail = openblack::ecs::object_detail;
 using openblack::physics::objects::TreePlace;
 
 namespace
@@ -113,24 +117,60 @@ entt::id_type DrawnMeshOf(entt::entity entity, const Mesh& mesh)
 	           : mesh.id;
 }
 
-/// Which of a villager's meshes it is drawn as this frame, by how deep into the view the middle of its standard mesh's
-/// bounding sphere is, drawn by `model`
-openblack::graphics::mesh_detail::Choice ChooseDetail(const DetailMeshes& detail, const glm::mat4& model, float scale,
-                                                      bool disappears, const openblack::Camera& camera, float modelDetail)
+/// How a thing is drawn this frame by how deep into the view the middle of `box` is, drawn by `model`: the box of its
+/// own mesh, or of a villager's standard mesh. Whether it fades out is only asked of one that has come that far.
+template <typename Disappears>
+openblack::graphics::mesh_detail::Choice ChooseDetail(const openblack::AxisAlignedBoundingBox& box, float importance,
+                                                      const glm::mat4& model, float scale, Disappears&& disappears,
+                                                      const openblack::Camera& camera, float modelDetail)
 {
 	namespace mesh_detail = openblack::graphics::mesh_detail;
-	const auto& meshes = entt::locator<openblack::resources::ResourcesInterface>::value().GetMeshes();
-	const auto bounding = detail.meshes.at(static_cast<size_t>(mesh_detail::Mesh::Standard));
-	if (!meshes.Contains(bounding))
-	{
-		return {.mesh = mesh_detail::Mesh::High, .alpha = std::nullopt};
-	}
-	const auto box = meshes.Handle(bounding)->GetBoundingBox();
 	const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
 	const float depth = mesh_detail::ViewDepth(centre, camera.GetOrigin(), camera.GetForward());
-	const float reach = mesh_detail::Reach(detail.importance, mesh_detail::ScaledRadius(box.Size(), scale), modelDetail);
-	return mesh_detail::Choose(depth, reach, disappears);
+	const float reach = mesh_detail::Reach(importance, mesh_detail::ScaledRadius(box.Size(), scale), modelDetail);
+	const auto choice = mesh_detail::Choose(depth, reach, true);
+	if ((choice.alpha.has_value() || !choice.mesh.has_value()) && !disappears())
+	{
+		return mesh_detail::Choose(depth, reach, false);
+	}
+	return choice;
 }
+
+/// Whether a model's parts differ by the detail it is drawn in, of those ever drawn
+bool PartsDifferByLevel(entt::id_type meshId)
+{
+	const auto& meshes = entt::locator<openblack::resources::ResourcesInterface>::value().GetMeshes();
+	if (!meshes.Contains(meshId))
+	{
+		return false;
+	}
+	return std::ranges::any_of(meshes.Handle(meshId)->GetSubMeshes(), [](const auto& subMesh) {
+		const auto flags = subMesh->GetFlags();
+		return !subMesh->IsPhysics() && flags.isWindow == 0 &&
+		       openblack::graphics::mesh_detail::PartsDifferByLevel(static_cast<uint8_t>(flags.lodMask));
+	});
+}
+
+/// Whether a thing is a village centre
+bool IsTownCentre(const openblack::ecs::Registry& registry, entt::entity entity)
+{
+	const auto* abode = registry.TryGet<const Abode>(entity);
+	if (abode == nullptr || !openblack::Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& infos = openblack::Locator::infoConstants::value().abode;
+	const auto type = static_cast<size_t>(abode->type);
+	return type < infos.size() && infos.at(type).abodeType == openblack::AbodeType::TownCentre;
+}
+
+/// Whether a thing is drawn as a paper cut-out turned to the camera when far off: a field's crop, unless it moves in
+/// the physics
+bool IsPaper(const openblack::ecs::Registry& registry, entt::entity entity)
+{
+	return registry.AllOf<Field>(entity) && !registry.AllOf<InPhysics>(entity);
+}
+
 /// The model of the roots drawn under the trees out of the land
 entt::id_type RootsMesh()
 {
@@ -162,6 +202,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
 	std::unordered_map<entt::id_type, uint32_t> fadingCounts;
+	_meshBoxes.clear();
 
 	auto prepMesh = [&registry, &meshIds, &instanceCount](entt::entity entity, entt::id_type drawnMesh, const Mesh& mesh,
 	                                                      bool morphWithTerrain) {
@@ -196,7 +237,14 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		const auto* detail = registry.TryGet<const DetailMeshes>(entity);
 		if (detail == nullptr || morphWithTerrain)
 		{
-			prepMesh(entity, DrawnMeshOf(entity, mesh), mesh, morphWithTerrain);
+			const auto drawnMesh = DrawnMeshOf(entity, mesh);
+			prepMesh(entity, drawnMesh, mesh, morphWithTerrain);
+			// A thing drawn in less detail further off has room among those fading out too
+			if (detail == nullptr && openblack::ecs::object_detail::Banded(registry, entity))
+			{
+				++fadingCounts[drawnMesh];
+				++instanceCount;
+			}
 			return;
 		}
 		// One drawn in less detail further off has room in each of its meshes, and among those fading out
@@ -251,6 +299,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    .end();
 		_renderContext.instanceUniformBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(instanceCount, layout));
 		_renderContext.instanceUniforms.resize(instanceCount);
+		_renderContext.instanceLevels.resize(instanceCount);
 	}
 
 	// Determine uniform buffer offsets and instance count for draw
@@ -273,6 +322,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.translucent = desc.translucent;
 		drawDesc->second.additiveShare = desc.additiveShare;
 		drawDesc->second.instanceAlpha = desc.instanceAlpha;
+		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);
 		_instanceSlots.emplace(meshId, InstanceSlots {.offset = offset,
 		                                              .count = desc.count,
 		                                              .filled = 0,
@@ -281,20 +331,30 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                              .bonePalette = desc.villagers});
 		offset += desc.count;
 	}
-	// The villagers fading out in the distance, blended by their own alpha
+	// The things fading out in the distance, blended by their own alpha, drawn as the others of their mesh are
 	_renderContext.fadingDrawDescs.clear();
 	_fadingSlots.clear();
 	for (const auto& [meshId, count] : fadingCounts)
 	{
+		const auto found = meshIds.find(meshId);
+		const auto desc = found != meshIds.end() ? std::optional(found->second) : std::nullopt;
+		const bool villagers = !desc.has_value() || desc->villagers;
+		const bool perEntity = !desc.has_value() || desc->perEntity;
 		const auto [drawDesc, inserted] = _renderContext.fadingDrawDescs.emplace(
-		    std::piecewise_construct, std::forward_as_tuple(meshId), std::forward_as_tuple(offset, count, false));
-		drawDesc->second.perEntity = true;
-		drawDesc->second.bonePalette = true;
+		    std::piecewise_construct, std::forward_as_tuple(meshId),
+		    std::forward_as_tuple(offset, count, desc.has_value() && desc->morphWithTerrain));
+		drawDesc->second.perEntity = perEntity;
+		drawDesc->second.bonePalette = villagers;
+		drawDesc->second.unlit = desc.has_value() && desc->unlit;
 		drawDesc->second.instanceAlpha = true;
-		drawDesc->second.hiddenFromReflection = true;
-		_fadingSlots.emplace(
-		    meshId, InstanceSlots {
-		                .offset = offset, .count = count, .filled = 0, .perEntity = true, .height = 0.0f, .bonePalette = true});
+		drawDesc->second.hiddenFromReflection = villagers;
+		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);
+		_fadingSlots.emplace(meshId, InstanceSlots {.offset = offset,
+		                                            .count = count,
+		                                            .filled = 0,
+		                                            .perEntity = perEntity,
+		                                            .height = 0.0f,
+		                                            .bonePalette = villagers});
 		offset += count;
 	}
 
@@ -385,12 +445,15 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	for (auto& [meshId, slots] : _instanceSlots)
 	{
 		slots.filled = 0;
+		slots.gone = 0;
 	}
 	for (auto& [meshId, slots] : _fadingSlots)
 	{
 		slots.filled = 0;
 	}
 	_renderContext.farVillagers.clear();
+	_fadingThings.clear();
+	_goneThings.clear();
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	const float modelDetail = graphics::detail_level::ModelDetail(Locator::config::value().detailLevel);
 
@@ -424,43 +487,100 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 
-		    // A villager is drawn in less detail the further off it is, fades out, then shows only as a smudge on a blob
-		    // while it stands above the sea. One flying in the physics or one a script keeps in view never fades, and one
-		    // a script draws in high detail is drawn in full however far off.
+		    // A thing on the land is drawn in less detail the further off it is, fades out, then isn't drawn; a villager
+		    // then shows only as a smudge on a blob while it stands above the sea. One flying in the physics or one that
+		    // is kept in view never fades, and one a script draws in high detail is drawn in full however far off.
 		    auto drawnMesh = DrawnMeshOf(entity, mesh);
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
+		    auto level = graphics::mesh_detail::Mesh::High;
+		    bool gone = false;
 		    const auto* detail = registry.TryGet<const DetailMeshes>(entity);
 		    if (detail != nullptr && registry.AllOf<HighDetail>(entity) && !registry.AllOf<MorphWithTerrain>(entity))
 		    {
 			    drawnMesh = detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::High));
 		    }
-		    else if (detail != nullptr && camera != nullptr && !registry.AllOf<MorphWithTerrain>(entity))
+		    else if (camera != nullptr && (detail == nullptr || !registry.AllOf<MorphWithTerrain>(entity)) &&
+		             object_detail::Banded(registry, entity) &&
+		             (detail != nullptr || object_detail::BandedNow(registry, entity)))
 		    {
-			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x,
-			                                     !registry.AnyOf<InPhysics, NeverFades>(entity), *camera, modelDetail);
-			    if (!choice.mesh.has_value())
+			    // A villager's bands are by its standard mesh's box, any other thing's by its own
+			    const auto bounding = detail != nullptr
+			                              ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard))
+			                              : drawnMesh;
+			    if (const auto& box = MeshBox(bounding); box.has_value())
 			    {
-				    const auto position = glm::vec3(modelMatrix[3]);
-				    if (placed.has_value() && position.y > graphics::ground_blobs::k_LowestHeight)
+				    const auto choice = ChooseDetail(
+				        *box, detail != nullptr ? detail->importance : 0.0f, modelMatrix, transform.scale.x,
+				        [&registry, entity] {
+					        return object_detail::Disappears(registry, entity, IsTownCentre(registry, entity));
+				        },
+				        *camera, modelDetail);
+				    if (!choice.mesh.has_value())
 				    {
-					    _renderContext.farVillagers.push_back(
-					        {.entity = entity, .position = position, .scale = transform.scale.x});
-					    _farSmudgeScale = _farSmudgeScale.value_or(transform.scale.x);
+					    if (detail == nullptr)
+					    {
+						    gone = true;
+						    _goneThings.insert(entity);
+					    }
+					    else if (!registry.AllOf<Villager>(entity))
+					    {
+						    // Any other thing of several meshes, an animal, leaves nothing behind
+						    return;
+					    }
+					    else
+					    {
+						    const auto position = glm::vec3(modelMatrix[3]);
+						    if (placed.has_value() && position.y > graphics::ground_blobs::k_LowestHeight)
+						    {
+							    _renderContext.farVillagers.push_back(
+							        {.entity = entity, .position = position, .scale = transform.scale.x});
+							    _farSmudgeScale = _farSmudgeScale.value_or(transform.scale.x);
+						    }
+						    return;
+					    }
 				    }
+				    else
+				    {
+					    level = *choice.mesh;
+					    if (detail != nullptr)
+					    {
+						    drawnMesh = detail->meshes.at(static_cast<size_t>(level));
+					    }
+					    if (choice.alpha.has_value())
+					    {
+						    slotMap = &_fadingSlots;
+						    fade = choice.alpha;
+						    _fadingThings.emplace(entity, *choice.alpha);
+					    }
+				    }
+			    }
+		    }
+
+		    // A thing too far off to be drawn keeps a place at the back of its mesh's instances, only for what it leaves on
+		    // the land
+		    if (gone)
+		    {
+			    const auto slots = _instanceSlots.find(drawnMesh);
+			    if (!fits || slots == _instanceSlots.end() || slots->second.filled + slots->second.gone >= slots->second.count)
+			    {
+				    fits = false;
 				    return;
 			    }
-			    drawnMesh = detail->meshes.at(static_cast<size_t>(*choice.mesh));
-			    if (choice.alpha.has_value())
+			    const uint32_t idx = slots->second.offset + slots->second.count - 1 - slots->second.gone;
+			    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+			    if (drawBoundingBox)
 			    {
-				    slotMap = &_fadingSlots;
-				    fade = choice.alpha;
+				    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model =
+				                                                                                               glm::mat4(0.0f)};
 			    }
+			    ++slots->second.gone;
+			    return;
 		    }
 
 		    // A mesh the draw lists don't have room for, which has changed since they were made
 		    const auto slots = slotMap->find(drawnMesh);
-		    if (!fits || slots == slotMap->end() || slots->second.filled >= slots->second.count)
+		    if (!fits || slots == slotMap->end() || slots->second.filled + slots->second.gone >= slots->second.count)
 		    {
 			    fits = false;
 			    return;
@@ -517,7 +637,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    const auto cropMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
 				    const float cropHeight = cropMesh->GetBoundingBox().Size().y * transform.scale.y;
 				    modelMatrix[3].y += field_crop::Sink(field->height.position) * cropHeight;
-				    if (const auto* swayable = registry.TryGet<const Swayable>(entity); swayable != nullptr && crop->sways)
+				    // Far off, drawn in its least detail, a crop is a paper cut-out standing turned to the camera, which
+				    // doesn't sway
+				    if (level == graphics::mesh_detail::Mesh::Low && IsPaper(registry, entity) && camera != nullptr)
+				    {
+					    modelMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x,
+					                                                     camera->GetOrigin(), camera->GetFocus());
+				    }
+				    else if (const auto* swayable = registry.TryGet<const Swayable>(entity); swayable != nullptr && crop->sways)
 				    {
 					    modelMatrix = vegetation.GetFieldMatrix(modelMatrix, transform.scale.y, swayable->swaySlot);
 				    }
@@ -648,6 +775,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    instanceModel[0].w = static_cast<float>(slots->second.filled);
 		    }
 		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
+		    _renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
 		    // A villager's bones go into the palette, as its clip poses it or as its model rests, and its instance says
 		    // where they start
 		    if (slots->second.bonePalette)
@@ -794,6 +922,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	{
 		const auto slots = _instanceSlots.find(meshId);
 		desc.filled = slots != _instanceSlots.end() ? slots->second.filled : 0;
+		desc.gone = slots != _instanceSlots.end() ? slots->second.gone : 0;
 	}
 	for (auto& [meshId, desc] : _renderContext.fadingDrawDescs)
 	{
@@ -920,10 +1049,14 @@ void RenderingSystem::UploadPartialBuilds()
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	registry.Each<const Mesh, const Transform>([&](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		const auto share = buildings.PartialShare(entity);
-		if (!share.has_value() || !meshes.Contains(mesh.id))
+		if (!share.has_value() || !meshes.Contains(mesh.id) || _goneThings.contains(entity))
 		{
 			return;
 		}
+		const auto fading = _fadingThings.find(entity);
+		const auto look = fading != _fadingThings.end()
+		                      ? glm::vec4(0.0f, 0.0f, -(1.0f - (static_cast<float>(fading->second) / 255.0f)), 0.0f)
+		                      : glm::vec4(0.0f);
 		const auto model = meshes.Handle(mesh.id);
 		const float halfHeight = 0.5f * model->GetBoundingBox().Size().y;
 		const auto build = physics::damage::PartialBuildOf(*share, transform.position.y, halfHeight, transform.scale.y);
@@ -952,31 +1085,38 @@ void RenderingSystem::UploadPartialBuilds()
 		    // A temple's inner walls stand in further than other buildings', whatever their material
 		    .innerWallInset =
 		        registry.AllOf<Temple>(entity) ? std::optional(building_construction::k_TempleInnerWallInset) : std::nullopt,
+		    .fading = fading != _fadingThings.end(),
 		};
-		_renderContext.partialBuildInstances.push_back({.model = matrix});
+		_renderContext.partialBuildInstances.push_back({.model = matrix, .look = look});
 		// The scaffold sinks along its up axis while the building rises out of the land
 		const glm::vec3 up = transform.rotation[1];
 		draw.scaffoldInstance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size());
 		_renderContext.partialBuildInstances.push_back(
-		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix});
+		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix, .look = look});
 		_renderContext.partialBuilds.push_back(draw);
 	});
 	// A standing building shows its model's numbered parts up to a number over its model drawn with the others; one going
 	// up or broken shows none
 	const auto showParts = [&](entt::entity entity, const Mesh& mesh, const Transform& transform, uint32_t parts) {
-		if (parts == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id))
+		if (parts == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id) ||
+		    _goneThings.contains(entity))
 		{
 			return;
 		}
+		const auto fading = _fadingThings.find(entity);
 		_renderContext.partialBuilds.push_back({
 		    .meshId = mesh.id,
 		    .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
 		    .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
 		    .gravesShown = parts,
+		    .fading = fading != _fadingThings.end(),
 		});
 		_renderContext.partialBuildInstances.push_back(
 		    {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
-		              glm::scale(glm::mat4(1.0f), transform.scale)});
+		              glm::scale(glm::mat4(1.0f), transform.scale),
+		     .look = fading != _fadingThings.end()
+		                 ? glm::vec4(0.0f, 0.0f, -(1.0f - (static_cast<float>(fading->second) / 255.0f)), 0.0f)
+		                 : glm::vec4(0.0f)});
 	};
 	// A graveyard shows the graves of its burials
 	registry.Each<const Graveyard, const Mesh, const Transform>(
@@ -1020,76 +1160,166 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesTrees);
 	auto& registry = Locator::entitiesRegistry::value();
+	const auto& vegetation = Locator::vegetation::value();
+	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const float modelDetail = graphics::detail_level::ModelDetail(Locator::config::value().detailLevel);
+	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
+	using Group = PlacedTree::Group;
+	// Every far tree turns the same way, by the camera's heading
+	const auto paperTurn =
+	    camera != nullptr ? graphics::mesh_detail::PaperTurn(camera->GetOrigin(), camera->GetFocus()) : glm::mat3(1.0f);
 
+	// Each tree as it is drawn this frame, gathered first, then laid out by mesh and detail
+	_placedTrees.clear();
+	registry.Each<const Mesh, const Transform, const Tree, const Swayable>(
+	    [&](entt::entity entity, const Mesh& mesh, const Transform& transform, const Tree& /*unused*/,
+	        const Swayable& swayable) {
+		    const auto slots = _treeSlots.find(mesh.id);
+		    if (slots == _treeSlots.end())
+		    {
+			    return;
+		    }
+		    auto modelMatrix = glm::mat4(transform.rotation);
+		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
+		    modelMatrix = glm::scale(modelMatrix, transform.scale);
+		    // A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
+		    // all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
+		    // vertices out to the horizon
+		    const auto placed = physics_draw::ModelMatrix(modelMatrix, registry.TryGet<const PhysicsDrawPose>(entity));
+		    if (!placed.has_value())
+		    {
+			    _placedTrees.push_back({.mesh = mesh.id,
+			                            .slots = &slots->second,
+			                            .group = Group::Gone,
+			                            .data = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)},
+			                            .box = glm::mat4(0.0f)});
+			    return;
+		    }
+		    modelMatrix = *placed;
+
+		    // Drawn in less detail the further off it is, fading out, then not at all, unless something holds it
+		    auto group = Group::High;
+		    std::optional<uint8_t> fade;
+		    if (const auto& box = MeshBox(mesh.id);
+		        camera != nullptr && box.has_value() && object_detail::BandedNow(registry, entity))
+		    {
+			    const auto choice = ChooseDetail(
+			        *box, 0.0f, modelMatrix, transform.scale.x,
+			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *camera, modelDetail);
+			    if (!choice.mesh.has_value())
+			    {
+				    // Too far off to be drawn: kept only for what the land keeps of it
+				    _placedTrees.push_back({.mesh = mesh.id,
+				                            .slots = &slots->second,
+				                            .group = Group::Gone,
+				                            .data = {.modelMatrix = modelMatrix, .burning = glm::vec4(0.0f)},
+				                            .box = glm::mat4(0.0f)});
+				    return;
+			    }
+			    group = static_cast<Group>(*choice.mesh);
+			    fade = choice.alpha;
+		    }
+
+		    // A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
+		    // keeping its height
+		    glm::vec4 burning(0.0f);
+		    if (Locator::fireSystem::has_value())
+		    {
+			    if (const auto look = Locator::fireSystem::value().GetBurningTreeLook(entity))
+			    {
+				    burning = {static_cast<float>(look->grey) / 256.0f, look->alphaReference / 255.0f, 0.0f, 0.0f};
+				    modelMatrix = glm::scale(modelMatrix, glm::vec3(look->scale, 1.0f, look->scale));
+			    }
+		    }
+		    if (fade.has_value())
+		    {
+			    burning.z = 1.0f - (static_cast<float>(*fade) / 255.0f);
+			    group = Group::Fading;
+		    }
+		    // In its least detail a tree is a paper cut-out standing turned to the camera, which neither sways nor bends,
+		    // unless it moves in the physics. Otherwise out of the land it neither sways nor bends: it is drawn as it is held
+		    // or as the physics places it.
+		    glm::mat4 drawnMatrix;
+		    if (camera != nullptr && (group == Group::Low || group == Group::Fading) && !registry.AllOf<InPhysics>(entity))
+		    {
+			    drawnMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x, paperTurn);
+		    }
+		    else
+		    {
+			    const auto place = registry.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
+			                           ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
+			                           : TreePlace::InTheLand;
+			    drawnMatrix = openblack::physics::objects::SwaysAndBends(place)
+			                      ? vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y,
+			                                                 slots->second.height, swayable.swaySlot)
+			                      : modelMatrix;
+		    }
+		    _renderContext.drawnObjects.push_back({.entity = entity, .model = drawnMatrix});
+		    glm::mat4 boxMatrix(0.0f);
+		    if (drawBoundingBox && meshes.Contains(mesh.id))
+		    {
+			    const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
+			    boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
+		    }
+		    _placedTrees.push_back({.mesh = mesh.id,
+		                            .slots = &slots->second,
+		                            .group = group,
+		                            .data = {.modelMatrix = drawnMatrix, .burning = burning},
+		                            .box = boxMatrix});
+	    });
+
+	// Laid out within each mesh's instances by detail, each run drawn in its own: counted by mesh and detail first, then
+	// each tree put in its place
+	constexpr size_t k_Groups = static_cast<size_t>(Group::Gone) + 1;
+	for (auto& [meshId, slots] : _treeSlots)
+	{
+		slots.treeGroups = {};
+	}
+	for (const auto& tree : _placedTrees)
+	{
+		++tree.slots->treeGroups.at(static_cast<size_t>(tree.group));
+	}
+	_renderContext.treeRuns.clear();
+	bool fits = true;
+	const auto low = graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::Low);
 	for (auto& [meshId, slots] : _treeSlots)
 	{
 		slots.filled = 0;
-	}
-	const auto& vegetation = Locator::vegetation::value();
-
-	// Set the transforms of the trees, swaying or bent away from the hand
-	bool fits = true;
-	registry.Each<const Mesh, const Transform, const Tree, const Swayable>([this, &registry, &fits, drawBoundingBox,
-	                                                                        &vegetation](entt::entity entity, const Mesh& mesh,
-	                                                                                     const Transform& transform,
-	                                                                                     const Tree& /*unused*/,
-	                                                                                     const Swayable& swayable) {
-		const auto slots = _treeSlots.find(mesh.id);
-		if (!fits || slots == _treeSlots.end() || slots->second.filled >= slots->second.count)
+		uint32_t first = slots.offset;
+		for (size_t group = 0; group < k_Groups; ++group)
 		{
-			fits = false;
-			return;
-		}
-
-		const uint32_t idx = slots->second.offset + slots->second.filled;
-		auto modelMatrix = glm::mat4(transform.rotation);
-		modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
-		modelMatrix = glm::scale(modelMatrix, transform.scale);
-		// A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
-		// all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
-		// vertices out to the horizon
-		const auto placed = physics_draw::ModelMatrix(modelMatrix, registry.TryGet<const PhysicsDrawPose>(entity));
-		if (!placed.has_value())
-		{
-			_renderContext.treeInstanceData[idx] = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)};
-			++slots->second.filled;
-			return;
-		}
-		modelMatrix = *placed;
-		// A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
-		// keeping its height
-		glm::vec4 burning(0.0f);
-		if (Locator::fireSystem::has_value())
-		{
-			if (const auto look = Locator::fireSystem::value().GetBurningTreeLook(entity))
+			const auto count = slots.treeGroups.at(group);
+			slots.treeGroups.at(group) = first;
+			if (count == 0)
 			{
-				burning = {static_cast<float>(look->grey) / 256.0f, look->alphaReference / 255.0f, 0.0f, 0.0f};
-				modelMatrix = glm::scale(modelMatrix, glm::vec3(look->scale, 1.0f, look->scale));
+				continue;
 			}
+			const auto drawn = static_cast<Group>(group);
+			const bool fading = drawn == Group::Fading;
+			const bool gone = drawn == Group::Gone;
+			const auto level =
+			    fading || gone ? low : graphics::mesh_detail::LevelBit(static_cast<graphics::mesh_detail::Mesh>(group));
+			_renderContext.treeRuns.push_back(
+			    {.mesh = meshId, .first = first, .count = count, .level = level, .fading = fading, .gone = gone});
+			first += count;
+			slots.filled += count;
 		}
-		_renderContext.treeInstanceData[idx].burning = burning;
-		// Out of the land it neither sways nor bends: it is drawn as it is held or as the physics places it
-		const auto place = registry.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
-		                       ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
-		                       : TreePlace::InTheLand;
-		_renderContext.treeInstanceData[idx].modelMatrix =
-		    openblack::physics::objects::SwaysAndBends(place)
-		        ? vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y, slots->second.height,
-		                                   swayable.swaySlot)
-		        : modelMatrix;
-		_renderContext.drawnObjects.push_back({.entity = entity, .model = _renderContext.treeInstanceData[idx].modelMatrix});
-
+		fits = fits && slots.filled <= slots.count;
+	}
+	for (const auto& tree : _placedTrees)
+	{
+		if (!fits)
+		{
+			break;
+		}
+		const uint32_t idx = tree.slots->treeGroups.at(static_cast<size_t>(tree.group))++;
+		_renderContext.treeInstanceData[idx] = tree.data;
 		if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
 		{
-			auto l3dMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
-			auto box = l3dMesh->GetBoundingBox();
-			auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
-
-			// Store bounding box matrix in the second half of the instance data array
-			_renderContext.treeInstanceData[idx + (_renderContext.treeInstanceData.size() / 2)].modelMatrix = boxMatrix;
+			// Bounding box matrices in the second half of the instance data
+			_renderContext.treeInstanceData[idx + (_renderContext.treeInstanceData.size() / 2)].modelMatrix = tree.box;
 		}
-		++slots->second.filled;
-	});
+	}
 
 	if (fits && !_renderContext.treeInstanceData.empty())
 	{
@@ -1101,4 +1331,16 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		             bgfx::makeRef(_renderContext.treeInstanceData.data(), size));
 	}
 	return fits;
+}
+
+const std::optional<openblack::AxisAlignedBoundingBox>& RenderingSystem::MeshBox(entt::id_type mesh)
+{
+	const auto found = _meshBoxes.find(mesh);
+	if (found != _meshBoxes.end())
+	{
+		return found->second;
+	}
+	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
+	return _meshBoxes.emplace(mesh, meshes.Contains(mesh) ? std::optional(meshes.Handle(mesh)->GetBoundingBox()) : std::nullopt)
+	    .first->second;
 }

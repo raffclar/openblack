@@ -43,6 +43,9 @@ void ShareSet(entt::entity town);
 void TownTurn(entt::entity town, uint32_t turn);
 /// A villager taken from the world is forgotten by the towns and sites counting it
 void Forget(entt::entity villager);
+/// A villager leaving its town alive is no longer counted among those on their way to the town's worship site, and one
+/// counted at worship leaves the site and its dance
+void LeaveTown(entt::entity villager);
 
 /// Whether a villager is worshipping or on its way to
 [[nodiscard]] bool IsAtOrOnTheWayToWorshipSite(entt::entity villager);

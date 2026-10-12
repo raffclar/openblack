@@ -165,3 +165,52 @@ TEST(MeshDetail, LowerDetailSettingsSwapSooner)
 		EXPECT_FLOAT_EQ(detail_level::ModelDetail(level), detail_level::ModelDetail(detail_level::k_Default));
 	}
 }
+
+TEST(MeshDetail, EachChoiceIsAPartBit)
+{
+	EXPECT_EQ(mesh_detail::LevelBit(Mesh::High), 1);
+	EXPECT_EQ(mesh_detail::LevelBit(Mesh::Standard), 2);
+	EXPECT_EQ(mesh_detail::LevelBit(Mesh::Low), 4);
+	// A tree's near part, middle part and far card, and a part drawn at every choice
+	EXPECT_TRUE(mesh_detail::PartDrawn(1, Mesh::High));
+	EXPECT_FALSE(mesh_detail::PartDrawn(1, Mesh::Low));
+	EXPECT_TRUE(mesh_detail::PartDrawn(2, Mesh::Standard));
+	EXPECT_TRUE(mesh_detail::PartDrawn(4, Mesh::Low));
+	EXPECT_FALSE(mesh_detail::PartDrawn(4, Mesh::Standard));
+	for (const auto mesh : {Mesh::High, Mesh::Standard, Mesh::Low})
+	{
+		EXPECT_TRUE(mesh_detail::PartDrawn(7, mesh));
+		EXPECT_FALSE(mesh_detail::PartDrawn(0, mesh));
+	}
+}
+
+TEST(MeshDetail, OnlyPartsOfSomeChoicesMakeAModelDifferByThem)
+{
+	EXPECT_FALSE(mesh_detail::PartsDifferByLevel(7));
+	// Never drawn at all, as a physics part
+	EXPECT_FALSE(mesh_detail::PartsDifferByLevel(0));
+	EXPECT_TRUE(mesh_detail::PartsDifferByLevel(1));
+	EXPECT_TRUE(mesh_detail::PartsDifferByLevel(4));
+	EXPECT_TRUE(mesh_detail::PartsDifferByLevel(6));
+}
+
+TEST(MeshDetail, PaperTurnsWithTheCameraHeading)
+{
+	const glm::vec3 position {100.0f, 5.0f, 200.0f};
+	// Looking along +z: the face (the model's z) points back along -z, the model's x along -x
+	const auto along = mesh_detail::PaperMatrix(position, 2.0f, {0.0f, 50.0f, 0.0f}, {0.0f, 0.0f, 100.0f});
+	EXPECT_NEAR(along[2].x, 0.0f, 1e-5f);
+	EXPECT_NEAR(along[2].z, -2.0f, 1e-5f);
+	EXPECT_NEAR(along[0].x, -2.0f, 1e-5f);
+	EXPECT_NEAR(along[0].z, 0.0f, 1e-5f);
+	// Upright, at its own place and scale, whatever the camera's height
+	EXPECT_FLOAT_EQ(along[1].y, 2.0f);
+	EXPECT_EQ(glm::vec3(along[3]), position);
+	// Looking along +x: the face points back along -x
+	const auto across = mesh_detail::PaperMatrix(position, 1.0f, {0.0f, 0.0f, 0.0f}, {10.0f, -20.0f, 0.0f});
+	EXPECT_NEAR(across[2].x, -1.0f, 1e-5f);
+	EXPECT_NEAR(across[2].z, 0.0f, 1e-5f);
+	// The same heading wherever the eye stands
+	const auto moved = mesh_detail::PaperMatrix(position, 1.0f, {500.0f, 0.0f, 3.0f}, {510.0f, 0.0f, 3.0f});
+	EXPECT_NEAR(moved[2].x, across[2].x, 1e-5f);
+}

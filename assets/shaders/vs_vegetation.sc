@@ -58,7 +58,8 @@ void main()
     {
         added = min(added + LandColourCellAt(origin.xz), vec3_splat(255.0));
     }
-    v_haze = vec4(added / 255.0, 0.0);
+    // How much of a tree fading out in the distance is faded, carried with the haze
+    v_haze = vec4(added / 255.0, i_data4.z);
     // The snow on the tree: where its texture is read, how much of it shows of 255, and its own light, which unlike the
     // tree's is shaded by the model light
     v_snow = vec4_splat(0.0);

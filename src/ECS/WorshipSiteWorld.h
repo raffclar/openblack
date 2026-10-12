@@ -66,6 +66,8 @@ public:
 	virtual void OpenBuildingSite(entt::entity /*site*/, entt::entity /*town*/, float /*desire*/) {}
 	/// A site's building site goes: no town builds it any more
 	virtual void CloseBuildingSite(entt::entity /*site*/) {}
+	/// A site's spell icons go, with the seeds out from them and what they were charging
+	virtual void RemoveSpellIcons(entt::entity /*site*/) {}
 	/// A site's dance goes: each of its dancers leaves it and decides afresh what to do
 	virtual void RemoveDance(entt::entity /*dance*/) {}
 	/// The artefacts put down by a site are no longer among its own; they stay where they are

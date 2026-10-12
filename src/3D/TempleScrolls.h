@@ -88,7 +88,8 @@ public:
 		/// The miracles it knows of, the text of each and how much of it it has learnt
 		struct Miracle
 		{
-			std::string_view text;
+			/// The number of the game's help text for having learnt it
+			uint32_t text;
 			int32_t percent;
 			/// Its place in the game's table of miracles, and how far it is learnt, 0 to 100, which the medals and
 			/// seeds by the magic plinths show

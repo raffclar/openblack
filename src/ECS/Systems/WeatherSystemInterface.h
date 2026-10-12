@@ -122,6 +122,12 @@ public:
 	virtual bool ChangeWeatherThing(entt::entity thing, const std::function<void(components::Storm&)>& change) = 0;
 	/// Whether the wind blows a weather thing's storm along. False when the thing is not a weather thing.
 	virtual bool SetWeatherThingAffectedByWind(entt::entity thing, bool affected) = 0;
+	/// A weather thing's storm sets off for a place, at its speed; false for a thing that is no weather thing. A storm that
+	/// has ended takes no notice.
+	virtual bool MoveWeatherThing(entt::entity thing, glm::vec3 destination) = 0;
+	/// How fast a weather thing's storm travels to where it is going, metres a second; false for a thing that is no
+	/// weather thing. A storm that has ended takes no notice.
+	virtual bool SetWeatherThingSpeed(entt::entity thing, float speed) = 0;
 
 	/// One game turn
 	virtual void Update(uint32_t turn) = 0;

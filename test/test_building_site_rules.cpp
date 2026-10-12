@@ -10,6 +10,8 @@
 #include <cmath>
 
 #include <array>
+#include <numbers>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -234,4 +236,153 @@ TEST(BuildingSiteRules, AFinishedTemplesEmptyPilesGoAndThoseWithWoodCallTheVilla
 	EXPECT_EQ(WhenSiteCloses(0), LeftoverPile::Remove);
 	EXPECT_EQ(WhenSiteCloses(1), LeftoverPile::CallForWood);
 	EXPECT_EQ(WhenSiteCloses(600), LeftoverPile::CallForWood);
+}
+
+TEST(BuildingSiteRules, AStandardSitesPileLiesBeyondTheBuildingAwayFromItsDoor)
+{
+	const glm::vec2 building {100.0f, 200.0f};
+	const glm::vec2 door {97.0f, 196.0f}; // five metres off
+	constexpr float k_Eighth = std::numbers::pi_v<float> / 4.0f;
+
+	// A draw of a sixteenth of a turn cancels the turn: straight on from the door through the building
+	const auto straight = StandardPilePlace(building, door, FixedFloat(k_Eighth / 2.0f));
+	const glm::vec2 out = straight.position - building;
+	EXPECT_NEAR(glm::length(out), 9.0f, 1e-3f);
+	const glm::vec2 away = glm::normalize(building - door);
+	EXPECT_NEAR(glm::dot(glm::normalize(out), away), 1.0f, 1e-4f);
+
+	// The point is laid out along a game angle (2048 to a turn), so it is only that close.
+	// The extreme draws turn it an eighth of a turn's half either way, at the same distance, and it always faces back
+	const auto left = StandardPilePlace(building, door, FixedFloat(0.0f));
+	const auto right = StandardPilePlace(building, door, FixedFloat(k_Eighth));
+	for (const auto& pile : {left, right})
+	{
+		const glm::vec2 offset = pile.position - building;
+		EXPECT_NEAR(glm::length(offset), 9.0f, 1e-3f);
+		EXPECT_NEAR(glm::dot(glm::normalize(offset), away), std::cos(k_Eighth / 2.0f), 5e-3f);
+	}
+	const glm::vec2 l = left.position - building;
+	const glm::vec2 r = right.position - building;
+	const float leftSide = away.x * l.y - away.y * l.x;
+	const float rightSide = away.x * r.y - away.y * r.x;
+	EXPECT_LT(leftSide * rightSide, 0.0f);
+	EXPECT_NEAR(left.yAngle - straight.yAngle, k_Eighth / 2.0f, 1e-5f);
+	EXPECT_NEAR(straight.yAngle - right.yAngle, k_Eighth / 2.0f, 1e-5f);
+}
+
+TEST(BuildingSiteRules, TheRepairSiteWantedMostIsChosen)
+{
+	EXPECT_EQ(BestRepairSite({}), std::nullopt);
+	// Sites put up for new buildings are never chosen, however much they're wanted
+	const std::array<RepairCandidate, 4> sites {
+	    RepairCandidate {.repair = false, .desireToBeRepaired = 5.0f},
+	    RepairCandidate {.repair = true, .desireToBeRepaired = 0.25f},
+	    RepairCandidate {.repair = true, .desireToBeRepaired = 0.75f},
+	    RepairCandidate {.repair = true, .desireToBeRepaired = 0.75f},
+	};
+	// The earlier one on a tie
+	EXPECT_EQ(BestRepairSite(sites), 2u);
+	// One not wanted at all is never chosen
+	const std::array<RepairCandidate, 2> unwanted {
+	    RepairCandidate {.repair = true, .desireToBeRepaired = 0.0f},
+	    RepairCandidate {.repair = true, .desireToBeRepaired = -1.0f},
+	};
+	EXPECT_EQ(BestRepairSite(unwanted), std::nullopt);
+}
+
+namespace
+{
+/// A villager's states as the pairing rules see them: what it does now and what it works towards, each state either
+/// building work or not, and either something to work towards (final) or a state passed through on the way
+struct FakeState
+{
+	bool building;
+	bool final;
+};
+constexpr FakeState k_Deciding {.building = false, .final = true};
+constexpr FakeState k_Walking {.building = false, .final = false};
+constexpr FakeState k_Pausing {.building = false, .final = false};
+constexpr FakeState k_Arriving {.building = true, .final = true};
+constexpr FakeState k_Building {.building = true, .final = true};
+constexpr FakeState k_FetchingWood {.building = true, .final = true};
+constexpr FakeState k_Sleeping {.building = false, .final = true};
+
+/// Counts a site's workers over one villager's changes of state, leaving and joining by the rules
+struct FakeBuilder
+{
+	FakeState top = k_Deciding;
+	FakeState towards = k_Deciding;
+	int32_t workers = 0;
+
+	[[nodiscard]] FakeState WorkingTowards() const { return top.final ? top : towards; }
+
+	void Leave(FakeState next)
+	{
+		if (WorkingTowards().building && LeavesWorkers(next.building, next.final))
+		{
+			--workers;
+		}
+	}
+
+	void Join(FakeState previous, FakeState next)
+	{
+		if (next.building && JoinsWorkers(previous.building))
+		{
+			++workers;
+		}
+	}
+
+	/// Goes straight into a state
+	void Set(FakeState next)
+	{
+		Leave(next);
+		const auto previous = WorkingTowards();
+		Join(previous, next);
+		top = next;
+	}
+
+	/// Passes through one state on its way to another
+	void SetVia(FakeState current, FakeState destination)
+	{
+		Leave(destination);
+		const auto previous = WorkingTowards();
+		Join(previous, current);
+		top = current;
+		Join(previous, destination);
+		towards = destination;
+	}
+};
+} // namespace
+
+TEST(BuildingSiteRules, AWorkerIsCountedOnceWhateverBuildingWorkItDoes)
+{
+	FakeBuilder builder;
+	// Walks to the site, arrives, pauses on the way into building, fetches wood, walks back and builds again
+	builder.SetVia(k_Walking, k_Arriving);
+	EXPECT_EQ(builder.workers, 1);
+	builder.Set(builder.towards);
+	builder.SetVia(k_Pausing, k_Building);
+	builder.Set(builder.towards);
+	builder.SetVia(k_Walking, k_FetchingWood);
+	builder.Set(builder.towards);
+	builder.SetVia(k_Walking, k_Building);
+	builder.Set(builder.towards);
+	EXPECT_EQ(builder.workers, 1);
+	// Walking off with nothing new to work towards keeps it counted
+	builder.Set(k_Walking);
+	EXPECT_EQ(builder.workers, 1);
+	// Going home to sleep lets it go, and only once
+	builder.Set(k_Sleeping);
+	EXPECT_EQ(builder.workers, 0);
+	builder.Set(k_Deciding);
+	EXPECT_EQ(builder.workers, 0);
+}
+
+TEST(BuildingSiteRules, JoiningAndLeavingWorkers)
+{
+	EXPECT_TRUE(JoinsWorkers(false));
+	EXPECT_FALSE(JoinsWorkers(true));
+	EXPECT_TRUE(LeavesWorkers(false, true));
+	EXPECT_FALSE(LeavesWorkers(false, false));
+	EXPECT_FALSE(LeavesWorkers(true, true));
 }

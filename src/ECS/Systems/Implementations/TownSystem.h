@@ -49,6 +49,7 @@ public:
 	town_homes::NewHome LookForBetterHome(entt::entity villager) override;
 	[[nodiscard]] bool HasRoomForNewcomer(entt::entity town) const override;
 	void RemoveDeadVillager(entt::entity villager) override;
+	void RemoveVillager(entt::entity villager) override;
 	[[nodiscard]] std::vector<entt::entity> ChildrenOf(entt::entity town, entt::entity mother) const override;
 	[[nodiscard]] bool CheckForClearArea(glm::vec2 point, float radius, ClearAreaFilter filter,
 	                                     entt::entity ignore) const override;

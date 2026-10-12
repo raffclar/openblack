@@ -39,6 +39,14 @@ uniform vec4 u_inset;
 uniform vec4 u_uvOffset;
 // xyz: a colour of the object's own, 0 to 255, in place of the land's light; w: its alpha, 0 for no colour of its own
 uniform vec4 u_objectLook;
+// The point a model is fogged at in the temple, in place of its own position: xyz the point, w 1 to use it. The temple's
+// walls without a lightmap are fogged once each, at their first vertex.
+uniform vec4 u_fogAt;
+#ifdef USE_LIGHTMAP
+// The temple's light's colour added to its walls, or a control's glow, and how much darker the light makes them
+uniform vec4 u_glow;
+uniform vec4 u_darkening;
+#endif // USE_LIGHTMAP
 // A piece drawn on another object, as a detailed villager's eyes are: xyz the point whose land light, land colour and
 // haze it takes (the villager's), w its shade of 255 in place of the sun's on each vertex. w 0 for none.
 uniform vec4 u_shadeAt;
@@ -208,8 +216,20 @@ void main()
 		colour = floor(colour * tint / 256.0f);
 	}
 #endif // USE_INSTANCING
-	// The distance haze, once for the object at its origin: its colour fades and the haze's is added after the texture
-	float hazeT = HazeT(mul(u_view, vec4(lightOrigin, 1.0f)).z);
+	// The distance haze, once for the object at its origin: its colour fades and the haze's is added after the texture.
+	// The temple fogs a model where it stands, or where the draw says.
+	vec3 fogOrigin = lightOrigin;
+	if (InTempleFog())
+	{
+#ifdef USE_INSTANCING
+		fogOrigin = model[3].xyz;
+#endif // USE_INSTANCING
+		if (u_fogAt.w > 0.5f)
+		{
+			fogOrigin = u_fogAt.xyz;
+		}
+	}
+	float hazeT = HazeT(mul(u_view, vec4(fogOrigin, 1.0f)).z);
 	colour = HazeDiffuse(colour, HazeFactor(hazeT));
 	// The haze is added with the land's colour where the object stands, each channel at most white
 	vec3 added = HazeColour(hazeT);
@@ -265,6 +285,18 @@ void main()
 		// Unlit meshes keep the land's colour, unshaded by the sun
 		v_color0 = vec4(colour / 255.0f, 1.0f);
 	}
+#endif // USE_LIGHTMAP
+#ifdef USE_LIGHTMAP
+	// The temple's lightmapped walls are drawn unlit, in the temple's light with its colour or a glow added, and fogged
+	// at each vertex
+	vec3 wallDiffuse = floor((vec3_splat(1.0f) - u_darkening.rgb) * 255.0f + 0.5f);
+	vec3 wallAdded = floor(u_glow.rgb * 255.0f + 0.5f);
+	if (InTempleFog())
+	{
+		TempleFogVertex(mul(u_view, v_position).z, wallDiffuse, wallAdded);
+	}
+	v_color0 = vec4(wallDiffuse / 255.0f, 1.0f);
+	v_haze.rgb = wallAdded / 255.0f;
 #endif // USE_LIGHTMAP
 	// The cap over a cut building's walls is unlit, in three quarters of the object's colour in whole steps
 	if (u_inset.y > 0.5f)

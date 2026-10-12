@@ -50,12 +50,16 @@ struct Pulse
 
 /// A turn of the beat, of a turn's milliseconds
 void StepPulse(Pulse& pulse, float millisecondsPerTurn);
-/// The beat between two turns, from 0.4 to 1
-[[nodiscard]] float PulseShare(const Pulse& pulse, float turnFraction);
+/// The beat between two turns, from 0.4 to 1, in full precision
+[[nodiscard]] double PulseShare(const Pulse& pulse, float turnFraction);
 
-/// The colour of the beam a started scroll stands in, as 0xAARRGGBB: a pale blue one for silver; a yellow one for the
-/// others, whose alpha is the whole part of the beat (so nearly always none)
-[[nodiscard]] uint32_t BeamColour(HighlightInfo kind, float pulseShare);
+/// A started scroll stands in a beam of light; a sign never has one
+[[nodiscard]] bool BeamShown(HighlightInfo kind, bool active);
+/// The colour of the beam a started scroll stands in, as 0xAARRGGBB: a faint pale blue one for silver; a yellow one for
+/// the others, whose alpha is the whole part of the beat times 80. The beat only reaches a whole 1 on the rare turn
+/// whose level is exactly 1 and then only on a frame at the very start of the next turn, so the yellow beam is nearly
+/// never seen
+[[nodiscard]] uint32_t BeamColour(HighlightInfo kind, double pulseShare);
 
 /// An angle brought to a turn, as the game brings it, by whole turns towards none
 [[nodiscard]] float WrapAngle(float radians);

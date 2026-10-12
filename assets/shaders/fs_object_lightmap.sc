@@ -8,21 +8,18 @@ SAMPLER2D(s_lightmap, 3);
 SAMPLER2D(s_reflection, 4);
 #endif // USE_REFLECTION
 uniform vec4 u_skyAlphaThreshold;
-// The temple's controls glow under the cursor: the game adds the colour as the vertices' specular, after the texture
-// stages. Those that don't glow have the temple's light's colour added instead.
-uniform vec4 u_glow;
-// How much darker the temple's light makes each colour, the vertices' diffuse the texture is multiplied by
-uniform vec4 u_darkening;
 
 // The game draws the lit parts of the temple unlit, with the lightmap on the second texture stage: the texture times
-// the lightmap, doubled, which saturates, and the texture's alpha
+// the vertices' colour (the temple's light, fogged) and the lightmap, doubled, which saturates, and the texture's alpha.
+// The vertices' added colour comes after the texture stages: the temple's light's colour, or the glow of a control
+// under the cursor, fogged.
 
 void main()
 {
 	vec4 diffuseTex = texture2D(s_diffuse, v_texcoord0.xy);
 	vec3 lightmap = texture2D(s_lightmap, v_texcoord0.zw).rgb;
-	vec3 colour = min(diffuseTex.rgb * (vec3_splat(1.0f) - u_darkening.rgb) * lightmap * 2.0f, vec3_splat(1.0f));
-	colour = min(colour + u_glow.rgb, vec3_splat(1.0f));
+	vec3 colour = min(diffuseTex.rgb * v_color0.rgb * lightmap * 2.0f, vec3_splat(1.0f));
+	colour = min(colour + v_haze.rgb, vec3_splat(1.0f));
 #ifdef USE_REFLECTION
 	// The game draws the main room mirrored through its floor, then blends the floor over it by the floor's alpha.
 	// The reflection pass is drawn from the mirrored camera with the same projection, so it lines up on the screen.

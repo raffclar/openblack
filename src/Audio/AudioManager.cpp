@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include <MusicCues.h>
 #include <PackFile.h>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -438,6 +439,11 @@ void AudioManager::StopSoundEffect(entt::id_type id)
 	}
 }
 
+bool AudioManager::IsSoundEffectPlaying(entt::id_type id) const
+{
+	return FindPlaying(entt::null, 0, id, 0) != entt::null;
+}
+
 entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectOptions& options)
 {
 	auto& sounds = Locator::resources::value().GetSounds();
@@ -804,6 +810,10 @@ std::shared_ptr<const MusicBank> AudioManager::LoadMusicBank(const std::string& 
 	}
 	bank->musicMaxDistance = first.maxDist;
 	bank->chunkCount = static_cast<uint32_t>(headers.size());
+	for (auto& cue : pack::ReadMusicCues(headers))
+	{
+		bank->cues.push_back({.chunk = cue.chunk, .frame = cue.frame, .text = std::move(cue.text)});
+	}
 	bank->chunkSampleRates.reserve(headers.size());
 	std::vector<std::pair<uint64_t, uint32_t>> spans;
 	spans.reserve(headers.size());

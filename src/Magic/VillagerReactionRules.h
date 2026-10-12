@@ -77,6 +77,9 @@ public:
 	bool MayReactAgain(uint32_t type, uint32_t turn, uint32_t cooldown);
 	/// The villager switched to a kind of reaction now
 	void Record(uint32_t type, uint32_t turn);
+	/// The villager let go of a kind of reaction now: when it remembers the kind, it remembers it as now; a kind it has
+	/// forgotten stays forgotten
+	void Refresh(uint32_t type, uint32_t turn);
 	/// When the villager last took up a kind of reaction, 0 for not lately
 	[[nodiscard]] uint32_t LastReacted(uint32_t type) const;
 

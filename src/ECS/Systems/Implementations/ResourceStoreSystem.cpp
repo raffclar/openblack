@@ -154,10 +154,10 @@ entt::entity StorePile(entt::entity pit, entt::entity& slot, PotInfo type, size_
 	return slot;
 }
 
-/// A building going up whose site keeps its wood in piles: a temple's
+/// A building with a site for its builders, going up or being mended, which takes wood brought for it onto its site
 bool IsBuildingSite(entt::entity object)
 {
-	return Entities().AllOf<Temple, BuildingSite>(object);
+	return Entities().AllOf<BuildingSite>(object);
 }
 
 /// The town an abode belongs to
@@ -846,11 +846,18 @@ Pot* LivePile(entt::entity pile)
 	return registry.Valid(pile) ? registry.TryGet<Pot>(pile) : nullptr;
 }
 
-/// A building going up whose site keeps its wood in piles: a temple's
+/// A building going up whose site keeps its wood in six piles: a temple's
 BuildingSite* PiledSite(entt::entity object)
 {
 	auto& registry = Entities();
 	return registry.AllOf<Temple>(object) ? registry.TryGet<BuildingSite>(object) : nullptr;
+}
+
+/// Any other building with a site, going up or being mended, keeps its wood in the site's one pile
+BuildingSite* StandardSite(entt::entity object)
+{
+	auto& registry = Entities();
+	return registry.AllOf<Abode>(object) ? registry.TryGet<BuildingSite>(object) : nullptr;
 }
 
 TownResourceTally* TallyOf(entt::entity town)
@@ -973,9 +980,26 @@ uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type
 	{
 		return 0;
 	}
+	// A building with a site takes wood, and only wood, into the site's one pile, made for the first wood
+	if (StandardSite(object) != nullptr && (type == ResourceType::Wood || type == ResourceType::Any))
+	{
+		uint32_t added = 0;
+		if (type == ResourceType::Wood)
+		{
+			construction::MakeSitePiles(object);
+			if (LivePile(StandardSite(object)->piles.front()) != nullptr)
+			{
+				added = AddToPile(StandardSite(object)->piles.front(), type, amount, false);
+			}
+		}
+		if (auto* tally = TallyOf(construction::TownOfSite(object)))
+		{
+			tally->woodAtSites += static_cast<float>(added);
+		}
+		return added;
+	}
 	if (auto* abode = registry.TryGet<Abode>(object))
 	{
-		// TODO(temple-builders): an abode going up takes wood into its site's pile; openblack's abodes have no sites yet
 		if (registry.AllOf<StoragePit>(object))
 		{
 			return AddToStore(object, type, amount, std::nullopt, false, at);
@@ -1046,6 +1070,25 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	if (registry.AllOf<Temple>(object))
 	{
 		return 0;
+	}
+	// A building with a site gives wood from the site's one pile, and its town counts that much less wood at its sites
+	if (auto* site = StandardSite(object); site != nullptr && (type == ResourceType::Wood || type == ResourceType::Any))
+	{
+		uint32_t removed = 0;
+		if (auto* pot = LivePile(site->piles.front()); pot != nullptr && type == ResourceType::Wood)
+		{
+			removed = std::min(amount, pot->amount);
+			pot->amount -= removed;
+			if (pot->amount == 0)
+			{
+				pot->poisoned = false;
+			}
+		}
+		if (auto* tally = TallyOf(construction::TownOfSite(object)))
+		{
+			tally->woodAtSites -= static_cast<float>(removed);
+		}
+		return removed;
 	}
 	if (auto* abode = registry.TryGet<Abode>(object))
 	{

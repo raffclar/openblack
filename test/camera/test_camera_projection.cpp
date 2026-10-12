@@ -7,10 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <chrono>
 #include <memory>
 
 #include <glm/mat4x4.hpp>
+#include <glm/trigonometric.hpp>
 #include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
@@ -121,20 +124,92 @@ TEST(CameraProjection, ItsMovementIsGivenBackWhole)
 	EXPECT_NEAR(camera.GetOrigin().x, 100.0f, 1e-3f);
 }
 
-// A resized window changes the camera's shape only: the field of view across the width and the clip planes stay
+// A resized window changes the camera's shape only: the lens and the clip planes stay. On 4:3 and narrower screens
+// the lens spans the width; wider screens keep the 4:3 screen's view up and down
 TEST(CameraProjection, ANewAspectKeepsTheLensAndTheClipPlanes)
 {
 	const auto camera = MakeCamera(3.5f);
-	const auto across = camera->GetProjectionMatrix(Camera::Projection::Normal)[0][0];
-	for (const float aspect : {4.0f / 3.0f, 16.0f / 9.0f, 32.0f / 9.0f})
+	const float across = 1.0f / std::tan(glm::radians(70.0f) / 2.0f);
+	for (const float aspect : {5.0f / 4.0f, 4.0f / 3.0f, 16.0f / 9.0f, 32.0f / 9.0f})
 	{
 		camera->SetAspect(aspect);
 		const auto projection = camera->GetProjectionMatrix(Camera::Projection::Normal);
-		EXPECT_FLOAT_EQ(projection[0][0], across) << aspect;
-		EXPECT_FLOAT_EQ(projection[1][1], across * aspect) << aspect;
+		EXPECT_FLOAT_EQ(camera->GetLens(), glm::radians(70.0f)) << aspect;
+		if (aspect <= 4.0f / 3.0f)
+		{
+			EXPECT_NEAR(projection[0][0], across, 1e-5f) << aspect;
+			EXPECT_NEAR(projection[1][1], across * aspect, 1e-5f) << aspect;
+		}
+		else
+		{
+			EXPECT_NEAR(projection[1][1], across * 4.0f / 3.0f, 1e-5f) << aspect;
+			EXPECT_NEAR(projection[0][0], across * 4.0f / 3.0f / aspect, 1e-5f) << aspect;
+		}
 		EXPECT_FLOAT_EQ(camera->GetNearClip(), 3.5f) << aspect;
 		EXPECT_FLOAT_EQ(camera->GetAspect(), aspect) << aspect;
 		EXPECT_FALSE(KeptByDepth(Clip(*camera, 3.5f * 0.99f))) << aspect;
 		EXPECT_TRUE(KeptByDepth(Clip(*camera, 3.5f * 1.01f))) << aspect;
 	}
+}
+
+// A script's lens glides to a new field of view across a 4:3 screen over its time, and the perspective follows it
+TEST(CameraProjection, TheLensGlidesToANewFieldOfView)
+{
+	const auto camera = MakeCamera(1.0f);
+	camera->SetAspect(4.0f / 3.0f);
+	const float normal = glm::radians(70.0f);
+	EXPECT_FLOAT_EQ(camera->GetHorizontalFieldOfView(), normal);
+	const float wide = 100.0f * 0.017453292f;
+	camera->SetLens(wide, 2.0f);
+	EXPECT_FLOAT_EQ(camera->GetHorizontalFieldOfView(), normal);
+	EXPECT_FLOAT_EQ(camera->GetLensDestination(), wide);
+	camera->UpdateLens(1.0f);
+	const float halfway = camera->GetHorizontalFieldOfView();
+	EXPECT_GT(halfway, normal);
+	EXPECT_LT(halfway, wide);
+	// Wider lenses see more across the width
+	EXPECT_LT(camera->GetProjectionMatrix(Camera::Projection::Normal)[0][0], 1.0f / std::tan(normal / 2.0f));
+	camera->UpdateLens(1.0f);
+	EXPECT_FLOAT_EQ(camera->GetHorizontalFieldOfView(), wide);
+	EXPECT_NEAR(camera->GetProjectionMatrix(Camera::Projection::Normal)[0][0], 1.0f / std::tan(wide / 2.0f), 1e-5f);
+	// Without a time it changes at once
+	camera->SetLens(normal, 0.0f);
+	EXPECT_FLOAT_EQ(camera->GetHorizontalFieldOfView(), normal);
+}
+
+// On a 16:9 screen a script's lens keeps its 4:3 look: the screen sees up and down what a 4:3 screen sees through the
+// lens, all through the glide, and more at the sides
+TEST(CameraProjection, AScriptLensOnAWideScreenKeepsItsFourByThreeLook)
+{
+	const auto camera = MakeCamera(1.0f);
+	const float aspect = 16.0f / 9.0f;
+	const auto upAt4By3 = [](float lens) { return (4.0f / 3.0f) / std::tan(lens / 2.0f); };
+	const float normal = glm::radians(70.0f);
+	const float wide = glm::radians(100.0f);
+	camera->SetLens(wide, 2.0f);
+	for (int step = 0; step <= 2; ++step)
+	{
+		const float lens = camera->GetLens();
+		const auto projection = camera->GetProjectionMatrix(Camera::Projection::Normal);
+		EXPECT_NEAR(projection[1][1], upAt4By3(lens), 1e-5f) << step;
+		EXPECT_NEAR(projection[0][0], upAt4By3(lens) / aspect, 1e-5f) << step;
+		EXPECT_GT(camera->GetHorizontalFieldOfView(), lens) << step;
+		camera->UpdateLens(1.0f);
+	}
+	EXPECT_FLOAT_EQ(camera->GetLens(), wide);
+	EXPECT_GT(camera->GetLens(), normal);
+}
+
+// On the default 800x600 screen the game draws the land across the whole window: 70 degrees across its width and,
+// with a 4:3 shape, about 55.4 degrees from top to bottom. Nothing is cut to a wide-screen picture; only a script's
+// cinema bars cover the top and bottom.
+TEST(CameraProjection, TheDefaultScreenSeesTheWholeFourByThreeView)
+{
+	Camera camera;
+	camera.SetProjectionMatrixPerspective(70.0f, 800.0f / 600.0f, 1.0f);
+	const auto projection = camera.GetProjectionMatrix(Camera::Projection::Normal);
+	const auto halfWidth = std::tan(glm::radians(35.0f));
+	EXPECT_NEAR(projection[0][0], 1.0f / halfWidth, 1e-5f);
+	EXPECT_NEAR(projection[1][1], 1.0f / (halfWidth * 0.75f), 1e-5f);
+	EXPECT_NEAR(glm::degrees(2.0f * std::atan(1.0f / projection[1][1])), 55.42f, 0.01f);
 }

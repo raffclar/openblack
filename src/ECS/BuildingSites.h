@@ -39,6 +39,14 @@ namespace openblack::ecs::construction
 /// How much the site wants villagers, 0 to 1
 [[nodiscard]] float DesireForVillagers(entt::entity building);
 
+/// How much a built building wants mending, 0 to 1: an abode of a town only once it is worn down to its town's mark and,
+/// where people live, while someone lives there; nothing else is mended by builders
+[[nodiscard]] float DesireToBeRepaired(entt::entity building);
+/// Whether a site was opened to mend a building already built
+[[nodiscard]] bool IsRepairSite(entt::entity building);
+/// How much a mending site wants its builders: its want of villagers by its building's want of mending
+[[nodiscard]] float SiteDesireToBeRepaired(entt::entity building);
+
 /// The wood lying at the site
 [[nodiscard]] uint32_t WoodAtSite(entt::entity building);
 /// What the site counts the building worth in wood

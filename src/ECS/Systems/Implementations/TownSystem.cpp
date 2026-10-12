@@ -282,6 +282,22 @@ void TownSystem::RemoveDeadVillager(entt::entity villager)
 	town_homes::RemoveDeadVillager(registry, villager);
 }
 
+void TownSystem::RemoveVillager(entt::entity villager)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* person = registry.TryGet<Villager>(villager);
+	if (person == nullptr || person->town == entt::null)
+	{
+		return;
+	}
+	// Worship first, while its town is still known
+	ecs::villager_worship::LeaveTown(villager);
+	town_homes::RemoveVillagerFromTown(registry, GameHomes(), villager);
+	// TODO(town-script-natives): when nobody is left the game starts the town's empty-town countdown, which openblack
+	// doesn't keep
+	registry.Get<Villager>(villager).mother = entt::null;
+}
+
 std::vector<entt::entity> TownSystem::ChildrenOf(entt::entity town, entt::entity mother) const
 {
 	return town_homes::ChildrenOf(Locator::entitiesRegistry::value(), town, mother);

@@ -61,6 +61,12 @@ struct View
 /// by cutting the fraction off towards nothing)
 [[nodiscard]] bool PointOnScreen(const View& view, glm::vec3 point);
 
+/// The middle of a screen wider than 4:3, as tall as the screen and 4:3 in shape, as a view of its own: what a 4:3
+/// screen shows of the same camera, since a wider screen keeps the 4:3 screen's view up and down and only adds picture
+/// at its sides. A 4:3 or narrower screen is its own view. The scripts ask what is in view in it, so that what they see
+/// does not depend on the shape of the player's screen.
+[[nodiscard]] View FourByThreeMiddle(View view);
+
 /// A corner of a triangle in clip space with its texture coordinates
 struct ClipCorner
 {

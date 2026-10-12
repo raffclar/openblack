@@ -16,6 +16,7 @@
 #include <string_view>
 #include <utility>
 
+#include "Graphics/LandDetail.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack
@@ -63,6 +64,8 @@ struct EngineConfig
 	bool debugVillagerStates {false};
 	/// Each miracle dispenser is labelled with its miracle
 	bool showDispenserNames {true};
+	/// The Creature Cave's ImGui screen of the creature's facts and lessons, a debugging aid shown only when asked for
+	bool showCreatureCaveScreen {false};
 
 	bool viewDetailOverlay {false};
 	bool drawSky {true};
@@ -96,6 +99,8 @@ struct EngineConfig
 	float cameraNearClip {1.0f};
 	/// The game's graphics detail level, 0 to 6, read once at start-up (see graphics::detail_level)
 	uint8_t detailLevel {4};
+	/// Debug: the land's detail lines in place of the detail level's (see graphics::land_detail)
+	std::optional<graphics::land_detail::Lines> landDetailLines;
 
 	float guiScale {1.0f};
 

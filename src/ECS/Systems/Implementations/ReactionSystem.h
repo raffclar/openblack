@@ -35,6 +35,7 @@ public:
 	void RemoveFrom(entt::entity initiator) override;
 	void RemoveFrom(entt::entity initiator, Reaction type) override;
 	void Remove(uint32_t id) override;
+	void StopReacting(entt::entity living) override;
 	void SetInitiator(uint32_t id, entt::entity initiator) override;
 	[[nodiscard]] bool IsActive(uint32_t id) const override;
 	[[nodiscard]] bool HasReaction(entt::entity initiator) const override;

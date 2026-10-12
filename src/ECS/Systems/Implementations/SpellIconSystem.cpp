@@ -337,6 +337,25 @@ void SpellIconSystem::TownLeftSite(entt::entity site, entt::entity town)
 	}
 }
 
+void SpellIconSystem::SiteRemoved(entt::entity site)
+{
+	auto& registry = Entities();
+	auto* list = registry.Valid(site) ? registry.TryGet<SiteIcons>(site) : nullptr;
+	if (list == nullptr)
+	{
+		return;
+	}
+	// Copied: each icon takes itself off the site's list as it goes
+	const auto icons = list->icons;
+	for (const auto icon : icons)
+	{
+		if (registry.Valid(icon))
+		{
+			Destroy(icon);
+		}
+	}
+}
+
 void SpellIconSystem::Destroy(entt::entity icon)
 {
 	auto& registry = Entities();
@@ -345,6 +364,12 @@ void SpellIconSystem::Destroy(entt::entity icon)
 		if (auto* list = registry.Valid(component->site) ? registry.TryGet<SiteIcons>(component->site) : nullptr)
 		{
 			std::erase(list->icons, icon);
+		}
+		// The seed made from it goes with it, from the hand or from the miracle it cast
+		if (const auto seed = component->seedOut;
+		    registry.Valid(seed) && registry.AllOf<SpellSeed>(seed) && Locator::magicSystem::has_value())
+		{
+			Locator::magicSystem::value().DeleteSeed(seed);
 		}
 	}
 	registry.Destroy(icon);

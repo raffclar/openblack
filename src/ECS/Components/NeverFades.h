@@ -12,7 +12,8 @@
 namespace openblack::ecs::components
 {
 
-/// A script asked for the thing to stay in view: however far off it is, it is never faded out and left undrawn
+/// A script made the thing, or asked for it to stay in view: however far off it is, it is never faded out and left
+/// undrawn
 struct NeverFades
 {
 };

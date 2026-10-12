@@ -42,6 +42,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
@@ -66,6 +67,8 @@ constexpr float k_HugDistance = 40.0f;
 constexpr float k_AtPlace = 0.2f;
 /// Within this of the building a builder is touching it
 constexpr float k_Touching = 0.001f;
+/// A closing site's workers step back to this far beyond the building's edge
+constexpr float k_StepBackFromClosedSite = 2.0f;
 /// A builder turns to face the building at this speed
 constexpr int32_t k_FaceBuildingStep = 0x80;
 /// What a state function answers while its villager is still on its way to a store
@@ -507,6 +510,26 @@ uint32_t villager_build::CheckSatisfyToBuild(LivingAction& action)
 	return site.has_value() && SetupBuildingObject(action, *site) == 1 ? 1 : 0;
 }
 
+uint32_t villager_build::CheckSatisfyToRepair(LivingAction& action)
+{
+	const auto town = TownOf(VillagerOf(action));
+	if (town == entt::null)
+	{
+		return 0;
+	}
+	// The town's mending site that wants its builders most
+	const auto sites = construction::SitesOfTown(town);
+	std::vector<building_site::RepairCandidate> candidates;
+	candidates.reserve(sites.size());
+	for (const auto building : sites)
+	{
+		candidates.push_back({.repair = construction::IsRepairSite(building),
+		                      .desireToBeRepaired = construction::SiteDesireToBeRepaired(building)});
+	}
+	const auto best = building_site::BestRepairSite(candidates);
+	return best.has_value() && SetupBuildingObject(action, sites[*best]) == 1 ? 1 : 0;
+}
+
 uint32_t villager_build::CheckNeededForBuilding(LivingAction& action)
 {
 	const auto town = TownOf(VillagerOf(action));
@@ -515,6 +538,35 @@ uint32_t villager_build::CheckNeededForBuilding(LivingAction& action)
 		return 0;
 	}
 	return CheckSatisfyToBuild(action);
+}
+
+namespace
+{
+/// With no site to take up, the villager's town starts a planned building, at most once a turn, and the villager tries
+/// again
+uint32_t SatisfyByStartingPlanned(LivingAction& action, bool (*start)(entt::entity))
+{
+	if (villager_build::CheckNeededForBuilding(action) == 1)
+	{
+		return 1;
+	}
+	const auto town = TownOf(VillagerOf(action));
+	if (town == entt::null || !town_planning::AskThisTurn(town))
+	{
+		return 0;
+	}
+	return start(town) && villager_build::CheckNeededForBuilding(action) == 1 ? 1 : 0;
+}
+} // namespace
+
+uint32_t villager_build::CheckSatisfyAbodes(LivingAction& action)
+{
+	return SatisfyByStartingPlanned(action, &town_planning::StartBestHouse);
+}
+
+uint32_t villager_build::CheckSatisfyCivicBuildings(LivingAction& action)
+{
+	return SatisfyByStartingPlanned(action, &town_planning::StartBestCivicBuilding);
 }
 
 uint32_t villager_build::ArrivesAtStoragePitForBuildingMaterials(LivingAction& action)
@@ -677,7 +729,7 @@ uint32_t villager_build::ReenterBuildingState(LivingAction& action)
 	return 1;
 }
 
-bool villager_build::EnterBuilding(LivingAction& action, VillagerStates previous, VillagerStates)
+bool villager_build::EnterBuilding(LivingAction& action, VillagerStates workedTowards, VillagerStates)
 {
 	const auto villager = EntityOf(action);
 	const auto& person = VillagerOf(action);
@@ -685,7 +737,7 @@ bool villager_build::EnterBuilding(LivingAction& action, VillagerStates previous
 	{
 		return false;
 	}
-	if (!IsBuildingState(previous))
+	if (building_site::JoinsWorkers(IsBuildingState(workedTowards)))
 	{
 		construction::AddWorker(person.buildingSite, villager);
 	}
@@ -696,7 +748,8 @@ bool villager_build::ExitBuilding(LivingAction& action, VillagerStates next)
 {
 	const auto villager = EntityOf(action);
 	auto& person = VillagerOf(action);
-	if (!IsBuildingState(next))
+	const bool nextIsFinal = Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(next)).isFinalState != 0;
+	if (building_site::LeavesWorkers(IsBuildingState(next), nextIsFinal))
 	{
 		const auto town = TownOf(person);
 		if (town != entt::null && construction::IsSiteValid(town, person.buildingSite))
@@ -707,6 +760,31 @@ bool villager_build::ExitBuilding(LivingAction& action, VillagerStates next)
 	}
 	// Leaving is never held up
 	return false;
+}
+
+void villager_build::LetGoOfSite(entt::entity building, std::span<const entt::entity> workers)
+{
+	auto& registry = Entities();
+	const auto& living = Locator::livingActionSystem::value();
+	const auto centre = GroundOf(building);
+	const float clear = construction::BuildingRadius(building) + k_StepBackFromClosedSite;
+	for (const auto villager : workers)
+	{
+		auto* action = registry.TryGet<LivingAction>(villager);
+		if (action == nullptr || !registry.AllOf<Villager, Transform>(villager) ||
+		    living.VillagerGetFinalState(*action) == VillagerStates::Dying)
+		{
+			continue;
+		}
+		const auto at = GroundOf(villager);
+		if (gutils::GetDistanceInMetres(at, centre) >= clear)
+		{
+			SetTopState(*action, VillagerStates::DecideWhatToDo);
+			continue;
+		}
+		const auto away = gutils::GetPointFromAngle(gutils::Get3DAngleFromXZ(centre, at), clear);
+		MoveTo(*action, centre + glm::vec2(away.x, away.z), VillagerStates::DecideWhatToDo);
+	}
 }
 
 uint32_t villager_build::ScriptInCrowd(LivingAction& action)

@@ -690,6 +690,19 @@ void villager_worship::Forget(entt::entity villager)
 	registry.Each<WorshipSite>([villager](WorshipSite& site) { std::erase(site.worshippers, villager); });
 }
 
+void villager_worship::LeaveTown(entt::entity villager)
+{
+	// Only the town's list forgets it on its way; it keeps walking to the site
+	if (const auto town = TownOf(villager); town != entt::null)
+	{
+		std::erase(Entities().Get<Town>(town).onWayToWorship, villager);
+	}
+	if (IsCountedAtWorship(villager))
+	{
+		RemoveFromWorshipSite(villager);
+	}
+}
+
 bool villager_worship::IsAtOrOnTheWayToWorshipSite(entt::entity villager)
 {
 	const auto& registry = Entities();

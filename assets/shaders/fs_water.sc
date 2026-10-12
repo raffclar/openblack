@@ -2,11 +2,10 @@ $input v_texcoord0, v_texcoord1
 
 #include <bgfx_shader.sh>
 
-// The sea's colour and alpha textures, and what lies under the sea: the mirrored sky and land, drawn with the same
-// projection as the view
+// The sea's texture, its colours in rgb and its alpha in a, and what lies under the sea: the mirrored sky and land, drawn
+// with the same projection as the view
 SAMPLER2D(s_diffuse, 0);
-SAMPLER2D(s_alpha, 1);
-SAMPLER2D(s_reflection, 2);
+SAMPLER2D(s_reflection, 1);
 
 // rgb: the sea's colour, the land's light at full luminosity
 uniform vec4 u_seaColour;
@@ -121,8 +120,9 @@ void main()
 	}
 
 	// The sea's texture in the sea's colour, blended by its alpha over what lies under the sea
-	vec3 sea = u_seaColour.rgb * texture2D(s_diffuse, uv).rgb;
+	vec4 texel = texture2D(s_diffuse, uv);
+	vec3 sea = u_seaColour.rgb * texel.rgb;
 	vec3 beneath = texture2D(s_reflection, reflectionUv).rgb;
-	float alpha = texture2D(s_alpha, uv).r * rowAlpha;
+	float alpha = texel.a * rowAlpha;
 	gl_FragColor = vec4(mix(beneath, sea, alpha), 1.0f);
 }
