@@ -54,7 +54,7 @@ struct Player
 	/// The harm each player's miracles did to what is this player's, by player number: their crushing and hitting, and the
 	/// burning they would do. A creature's miracles aren't counted.
 	std::array<float, 8> damageFrom {};
-	/// Where, what and the turn the player last cast a miracle, and how many of each magic type they have cast
+	/// Where, what and the turn the player last cast a miracle
 	struct Cast
 	{
 		glm::vec3 position {0.0f};
@@ -62,20 +62,8 @@ struct Player
 		uint32_t turn {0};
 	};
 	std::optional<Cast> lastCast;
-	std::array<uint32_t, k_MagicTypeCount> castsOfType {};
 	/// A script made the things the player's hand throws fly without the air's drag
 	uint32_t windResistance {0};
-	/// How many of the player's people have died, how many people the player has been put down for killing, and how
-	/// many the player has sacrificed
-	uint32_t villagersLost {0};
-	uint32_t villagersKilled {0};
-	uint32_t sacrifices {0};
-	/// The food the player's people have eaten
-	uint32_t foodUsed {0};
-	/// The children born to the player's people
-	uint32_t births {0};
-	/// All the prayer power the player's worship sites have given
-	float totalChantsUsed {0.0f};
 	Miracles miracles;
 
 	/// Each player's colour, 0xAARRGGBB, by player number; the neutral player's is black

@@ -180,24 +180,6 @@ uint32_t villager_mourning::MournDeadPerson(LivingAction& action)
 	return 1;
 }
 
-bool villager_mourning::ExitMourning(LivingAction& action, VillagerStates next)
-{
-	// Walking on to another of the reaction's states keeps it too
-	const auto& table = Locator::infoConstants::value().villagerStateTable;
-	const auto final = Locator::livingActionSystem::value().VillagerGetState(action, LivingAction::Index::Final);
-	if (table.at(static_cast<size_t>(next)).isReactionState != 0 ||
-	    (final != VillagerStates::InvalidState && table.at(static_cast<size_t>(final)).isReactionState != 0))
-	{
-		return false;
-	}
-	if (auto* state = Entities().TryGet<LivingReaction>(EntityOf(action)); state != nullptr)
-	{
-		state->reaction = 0;
-		state->type = Reaction::None;
-	}
-	return false;
-}
-
 bool villager_mourning::ValidateMourning(LivingAction& action)
 {
 	const auto villager = EntityOf(action);

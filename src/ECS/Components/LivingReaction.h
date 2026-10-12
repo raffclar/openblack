@@ -30,8 +30,6 @@ struct LivingReaction
 	/// A creature's memory of the kinds it reacted to lately; a villager's is its VillagerReactionMemory, which the
 	/// shields' reactions share
 	magic::villager_reaction::Memory creatureMemory;
-	/// A villager's state before it began reacting, which it goes back to
-	VillagerStates previousState {VillagerStates::InvalidState};
 };
 
 } // namespace openblack::ecs::components

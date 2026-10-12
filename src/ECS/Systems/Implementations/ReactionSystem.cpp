@@ -605,12 +605,12 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		{
 			memory.Record(type, _turn);
 			Stop(entity, *state, false);
-			Start(reaction, entity, *state);
+			Start(reaction, entity, *state, true);
 		}
 	}
 }
 
-void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction& state)
+void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction& state, bool takingOver)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& source = reaction.source;
@@ -649,7 +649,7 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		Impress(reaction, living, registry.Get<const Transform>(living).position);
 		return;
 	}
-	const bool wasReacting = state.reaction != 0;
+	const bool wasReacting = takingOver || state.reaction != 0;
 	state.reaction = reaction.id;
 	state.type = reaction.source.type;
 	state.startTurn = _turn;

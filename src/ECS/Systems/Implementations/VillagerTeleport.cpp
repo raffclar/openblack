@@ -23,59 +23,18 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/WallHugRules.h"
-#include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
 #include "VillagerHome.h"
+#include "VillagerReactions.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
 
-namespace
-{
-
-const GVillagerStateTableInfo* TableOf(VillagerStates state)
-{
-	if (!Locator::infoConstants::has_value())
-	{
-		return nullptr;
-	}
-	const auto& table = Locator::infoConstants::value().villagerStateTable;
-	const auto index = static_cast<size_t>(state);
-	return index < table.size() ? &table.at(index) : nullptr;
-}
-} // namespace
-
-VillagerStates ecs::villager_teleport::PreviousToKeep(VillagerStates final)
-{
-	// A state the table marks keeps whatever was kept before: nothing, for a villager not reacting yet
-	const auto* row = TableOf(final);
-	const bool keepsPrevious = row != nullptr && (row->keepsPreviousState != 0 || row->isReactionState != 0);
-	return magic::teleport::PreviousToKeep(final, VillagerStates::InvalidState, keepsPrevious);
-}
-
 void ecs::villager_teleport::StopReacting(LivingAction& action, entt::entity villager)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* traveller = registry.TryGet<const TeleportTraveller>(villager);
-	const auto kept = traveller != nullptr ? traveller->previousState : VillagerStates::InvalidState;
-	registry.Remove<TeleportTraveller>(villager);
-	// It no longer reacts to the stone
-	if (auto* reacting = registry.TryGet<LivingReaction>(villager))
-	{
-		reacting->reaction = 0;
-		reacting->type = Reaction::None;
-	}
-	// The state to come back to from the one it kept, and if what it is to end up doing says so, deciding afresh
-	const auto* row = TableOf(kept);
-	const auto comeBackTo = row != nullptr ? static_cast<VillagerStates>(row->resumeState) : VillagerStates::InvalidState;
-	auto& living = Locator::livingActionSystem::value();
-	living.VillagerSetState(action, LivingAction::Index::Top, magic::teleport::StateAfterReacting(comeBackTo), true);
-	if (const auto* finalRow = TableOf(living.VillagerGetState(action, LivingAction::Index::Final));
-	    finalRow != nullptr && finalRow->isReactionState != 0)
-	{
-		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, true);
-	}
+	Locator::entitiesRegistry::value().Remove<TeleportTraveller>(villager);
+	ecs::systems::villager_reactions::StopReacting(action);
 }
 
 uint32_t ecs::villager_teleport::GoTowardsTeleportReaction(LivingAction& action)

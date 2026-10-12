@@ -55,6 +55,9 @@ public:
 	/// Goes into a state on the way to another, as the game sets both at once. Whether it went.
 	virtual bool VillagerSetCurrentAndDestinationState(components::LivingAction& action, VillagerStates current,
 	                                                   VillagerStates destination) const = 0;
+	/// Goes into a state as any change of state goes (it may pause a second first, and a state that won't have it leaves
+	/// it deciding what to do). False, with nothing changed, when the states it is in won't let it go.
+	virtual bool VillagerChangeTopState(components::LivingAction& action, VillagerStates state) const = 0;
 	/// Lets the clip the villager plays now play to its end, then goes into the next state
 	virtual void VillagerPlayAnimThenSetState(components::LivingAction& action, VillagerStates next) const = 0;
 	/// Goes on into the state the villager works towards
