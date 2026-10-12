@@ -383,6 +383,16 @@ struct BgfxCallback: public bgfx::CallbackI
 	void screenShot(const char* filePath, uint32_t width, uint32_t height, uint32_t pitch, const void* data, uint32_t size,
 	                bool yflip) override
 	{
+		if (graphics::CapturedFrames::InMemory(filePath))
+		{
+			const auto* pixels = static_cast<const uint8_t*>(data);
+			captured.Keep(filePath, {.width = width,
+			                         .height = height,
+			                         .pitch = pitch,
+			                         .yflip = yflip,
+			                         .bgra = std::vector<uint8_t>(pixels, pixels + size)});
+			return;
+		}
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Taking a screenshot...");
 
 		const auto path = std::filesystem::path(filePath);
@@ -417,6 +427,8 @@ struct BgfxCallback: public bgfx::CallbackI
 
 	/// The pictures bgfx gave up or couldn't write, told from its render thread
 	graphics::ScreenshotFailures failures;
+	/// The pictures asked for in memory
+	graphics::CapturedFrames captured;
 	/// The descriptor sets the last frame counted took under Vulkan, for the report if the renderer runs out of them
 	std::atomic<uint32_t> recentDescriptorSets {0};
 };
@@ -6650,7 +6662,7 @@ void Renderer::Frame() noexcept
 	{
 		WatchDescriptorSets(*sets);
 	}
-	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures);
+	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->captured);
 }
 
 void Renderer::WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept
@@ -6744,4 +6756,9 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 std::optional<std::string> Renderer::TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept
 {
 	return _bgfxCallback->failures.Take(filepath.string());
+}
+
+std::optional<graphics::CapturedFrame> Renderer::TakeCapturedFrame(const std::filesystem::path& filepath) noexcept
+{
+	return _bgfxCallback->captured.Take(filepath.string());
 }

@@ -310,8 +310,10 @@ entt::entity GameScriptHighlightWorld::TipShown() const
 	return Locator::tipBubbleSystem::has_value() ? Locator::tipBubbleSystem::value().GetSign() : entt::null;
 }
 
-void GameScriptHighlightWorld::ReplayChallenge(uint32_t /*challenge*/)
+void GameScriptHighlightWorld::ReplayChallenge(uint32_t challenge)
 {
-	// TODO(script-natives): the temple's log of challenges (the scripts' snapshots) isn't in openblack yet; a started
-	// scroll tapped again plays its challenge's last message from it
+	if (Locator::vm::has_value() && Locator::dialogueControlSystem::has_value())
+	{
+		chlapi::CHLApi::StartChallengeReminder(challenge);
+	}
 }

@@ -125,3 +125,39 @@ TEST(ChallengeRecords, TheAlignmentIsScaledThenDampedByTheWayThePlayerLeans)
 	EXPECT_FLOAT_EQ(records::AlignmentChange(0.5f, -0.4f, 0.1f), -0.04f * 1.25f);
 	EXPECT_FLOAT_EQ(records::AlignmentChange(-0.5f, -0.4f, 0.1f), -0.04f * 0.75f);
 }
+
+TEST(ChallengeRecords, ANewRecordAlwaysTakesItsPicture)
+{
+	openblack::ecs::Registry registry;
+	// Even a plain update that makes the record takes the picture
+	const auto outcome = records::Record(registry, LostBrotherSnapshot(0.0f, 0.0f, 4255), snapshots::Call::Update, 100, {});
+	EXPECT_TRUE(outcome.takesPicture);
+}
+
+TEST(ChallengeRecords, LaterSnapshotsTakeThePictureOnlyWithTheCamera)
+{
+	openblack::ecs::Registry registry;
+	records::Record(registry, LostBrotherSnapshot(0.0f, 0.0f, 4255), snapshots::Call::Start, 100, {});
+	EXPECT_FALSE(records::Record(registry, LostBrotherSnapshot(0.2f, 0.0f, 1), snapshots::Call::Update, 110, {}).takesPicture);
+	EXPECT_TRUE(records::Record(registry, LostBrotherSnapshot(0.3f, 0.0f, 1), snapshots::Call::Start, 120, {}).takesPicture);
+	auto picture = LostBrotherSnapshot(0.4f, 0.0f, 1);
+	picture.takingPicture = false;
+	EXPECT_FALSE(records::Record(registry, picture, snapshots::Call::Picture, 130, {}).takesPicture);
+	picture.takingPicture = true;
+	EXPECT_TRUE(records::Record(registry, picture, snapshots::Call::Picture, 140, {}).takesPicture);
+}
+
+TEST(ChallengeRecords, TheReminderIsGivenItsArgumentsInTheOrderTheScriptGaveThem)
+{
+	ChallengeRecord record;
+	snapshots::Value first;
+	first.value.uintVal = 1;
+	snapshots::Value second;
+	second.value.uintVal = 2;
+	// Kept the last given first
+	record.arguments = {second, first};
+	const auto arguments = records::ReminderArguments(record);
+	ASSERT_EQ(arguments.size(), 2u);
+	EXPECT_EQ(arguments[0].value.uintVal, 1u);
+	EXPECT_EQ(arguments[1].value.uintVal, 2u);
+}

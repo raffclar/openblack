@@ -69,6 +69,35 @@ private:
 	std::unordered_map<std::string, std::string> _failures;
 };
 
+/// A picture of a frame kept in memory rather than written out: BGRA8 pixels, rows pitch bytes apart, the bottom row
+/// first when yflip
+struct CapturedFrame
+{
+	uint32_t width {0};
+	uint32_t height {0};
+	uint32_t pitch {0};
+	bool yflip {false};
+	std::vector<uint8_t> bgra;
+};
+
+/// The pictures asked for in memory, by the path they were asked for under (one starting with k_Prefix). Kept from the
+/// render thread, taken from the game's.
+class CapturedFrames
+{
+public:
+	/// A picture asked for at a path starting with this is kept in memory, not written to a file
+	static constexpr std::string_view k_Prefix = "memory:";
+	[[nodiscard]] static bool InMemory(std::string_view path) { return path.starts_with(k_Prefix); }
+
+	void Keep(std::string path, CapturedFrame frame);
+	/// The picture asked for at a path, once; none while it may still come
+	[[nodiscard]] std::optional<CapturedFrame> Take(const std::string& path);
+
+private:
+	std::mutex _mutex;
+	std::unordered_map<std::string, CapturedFrame> _frames;
+};
+
 /// Writes BGRA8 pixels, rows pitch bytes apart, to a PNG without their alpha. The file is written aside and renamed once
 /// whole, so that whoever waits for it never reads half of it. Why not, if it couldn't.
 [[nodiscard]] std::string WriteScreenshotPng(const std::filesystem::path& path, uint32_t width, uint32_t height, uint32_t pitch,
@@ -103,8 +132,8 @@ public:
 	/// Draws the frame being made aside, at the window's size, for a picture written to path once read back
 	void Begin(const std::filesystem::path& path, glm::u16vec2 size);
 	/// Once bgfx has taken the frame it numbers frame: gives the window its passes back and writes the pictures whose
-	/// pixels are back, recording those that couldn't be written
-	void FrameEnded(uint32_t frame, ScreenshotFailures& failures);
+	/// pixels are back (or keeps those asked for in memory), recording those that couldn't be written
+	void FrameEnded(uint32_t frame, ScreenshotFailures& failures, CapturedFrames& kept);
 
 private:
 	struct Capture
