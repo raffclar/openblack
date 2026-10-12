@@ -262,15 +262,26 @@ std::optional<entt::entity> construction::StartPlannedAt(glm::vec3 place, float 
 	{
 		return std::nullopt;
 	}
-	const auto plan = plans[*found];
+	return StartPlannedTemple(plans[*found], building_construction::SiteDesire(scriptDesire));
+}
+
+entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesire)
+{
+	auto& registry = Entities();
 	const auto planned = registry.Get<const PlannedTemple>(plan);
 	const auto transform = registry.Get<const Transform>(plan);
+	// It is no longer among its town's plans
+	if (const auto town = registry.Context().towns.find(static_cast<uint32_t>(planned.townId));
+	    planned.townId >= 0 && town != registry.Context().towns.end())
+	{
+		std::erase(registry.Get<Town>(town->second).planned, plan);
+	}
 	registry.Destroy(plan);
 	// The temple's heart goes up where it was planned, with nothing of it built, and a site for its builders
 	const auto temple =
 	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
 	registry.Get<Temple>(temple).town = planned.townId;
-	OpenSite(temple, building_construction::SiteDesire(scriptDesire));
+	OpenSite(temple, siteDesire);
 	return temple;
 }
 

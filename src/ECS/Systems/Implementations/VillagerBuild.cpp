@@ -42,6 +42,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
@@ -535,6 +536,35 @@ uint32_t villager_build::CheckNeededForBuilding(LivingAction& action)
 		return 0;
 	}
 	return CheckSatisfyToBuild(action);
+}
+
+namespace
+{
+/// With no site to take up, the villager's town starts a planned building, at most once a turn, and the villager tries
+/// again
+uint32_t SatisfyByStartingPlanned(LivingAction& action, bool (*start)(entt::entity))
+{
+	if (villager_build::CheckNeededForBuilding(action) == 1)
+	{
+		return 1;
+	}
+	const auto town = TownOf(VillagerOf(action));
+	if (town == entt::null || !town_planning::AskThisTurn(town))
+	{
+		return 0;
+	}
+	return start(town) && villager_build::CheckNeededForBuilding(action) == 1 ? 1 : 0;
+}
+} // namespace
+
+uint32_t villager_build::CheckSatisfyAbodes(LivingAction& action)
+{
+	return SatisfyByStartingPlanned(action, &town_planning::StartBestHouse);
+}
+
+uint32_t villager_build::CheckSatisfyCivicBuildings(LivingAction& action)
+{
+	return SatisfyByStartingPlanned(action, &town_planning::StartBestCivicBuilding);
 }
 
 uint32_t villager_build::ArrivesAtStoragePitForBuildingMaterials(LivingAction& action)

@@ -38,6 +38,11 @@ namespace openblack::ecs::villager_build
 uint32_t CheckSatisfyToBuild(components::LivingAction& action);
 /// The town wants a home or a civic building: with any site it takes up the best one. 1 when it did.
 uint32_t CheckNeededForBuilding(components::LivingAction& action);
+/// The town wants homes: with any site the villager takes up the best one; with none, once a turn its town starts the
+/// planned house it wants most and the villager tries again. 1 when it took one up.
+uint32_t CheckSatisfyAbodes(components::LivingAction& action);
+/// The town wants civic buildings: the same, its town starting the planned civic building it wants most
+uint32_t CheckSatisfyCivicBuildings(components::LivingAction& action);
 /// The town wants its buildings mended: the villager takes up the town's mending site that wants builders most
 uint32_t CheckSatisfyToRepair(components::LivingAction& action);
 

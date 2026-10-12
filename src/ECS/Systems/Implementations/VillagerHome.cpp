@@ -338,10 +338,9 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 		    case TownDesireInfo::ToRepair:
 			    return villager_build::CheckSatisfyToRepair(action);
 		    case TownDesireInfo::ForAbodes:
+			    return villager_build::CheckSatisfyAbodes(action);
 		    case TownDesireInfo::ForCivicBuilding:
-			    // TODO(temple-builders): with no site to work at, the town asks for a new abode or its best planned
-			    // building and the villager tries again; towns don't plan their buildings yet
-			    return villager_build::CheckNeededForBuilding(action);
+			    return villager_build::CheckSatisfyCivicBuildings(action);
 		    default:
 			    return 0;
 		    }

@@ -24,6 +24,7 @@
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
@@ -106,14 +107,16 @@ entt::entity AbodeArchetype::CreatePlan(uint32_t townId, const glm::vec3& positi
 	}
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, position, glm::mat3(glm::eulerAngleY(-yAngleRadians)), glm::vec3(scale));
-	registry.Assign<PlannedAbode>(entity, townId, type);
+	registry.Assign<PlannedAbode>(entity, PlannedAbode {.townId = townId, .info = type, .yAngle = yAngleRadians});
+	// It joins its town's plans, after those planned before it
+	registry.Get<Town>(registry.Context().towns.at(townId)).planned.push_back(entity);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town {} plans building {} at {}", townId, static_cast<int>(type),
 	                    glm::to_string(position));
 	return entity;
 }
 
 entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, AbodeInfo type, float yAngleRadians,
-                                    float scale, uint32_t foodAmount, uint32_t woodAmount)
+                                    float scale, uint32_t foodAmount, uint32_t woodAmount, float built)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 
@@ -157,6 +160,11 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	const auto& transform =
 	    registry.Assign<Transform>(entity, position, glm::mat3(glm::eulerAngleY(-yAngleRadians)), glm::vec3(scale));
 	registry.Assign<Abode>(entity, info.abodeNumber, townId, foodAmount, woodAmount).info = type;
+	// Under construction until all of it is built: it doesn't work until then
+	if (built < 1.0f)
+	{
+		registry.Assign<BuildProgress>(entity, built < 0.0f ? 0.0f : built);
+	}
 	// It joins its town's buildings, the newest first
 	if (const auto town = registry.Context().towns.find(townId); town != registry.Context().towns.end())
 	{

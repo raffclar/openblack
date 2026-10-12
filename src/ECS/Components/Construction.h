@@ -38,6 +38,8 @@ struct PlannedAbode
 {
 	uint32_t townId;
 	AbodeInfo info;
+	/// How far round it will be turned, in radians
+	float yAngle {0.0f};
 };
 
 /// A building going up with a site for its builders: how much the town wants it built, which a script may force, and its

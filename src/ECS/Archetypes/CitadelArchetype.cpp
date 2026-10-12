@@ -21,6 +21,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -83,5 +84,11 @@ entt::entity CitadelArchetype::CreatePlan(int32_t townId, const glm::vec3& posit
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, position, Rotation(yAngle), size);
 	registry.Assign<PlannedTemple>(entity, PlannedTemple {.townId = townId, .owner = playerOwner, .yAngle = yAngle});
+	// A temple planned for a town joins its plans, after those planned before it
+	if (const auto town = registry.Context().towns.find(static_cast<uint32_t>(townId));
+	    townId >= 0 && town != registry.Context().towns.end())
+	{
+		registry.Get<Town>(town->second).planned.push_back(entity);
+	}
 	return entity;
 }
