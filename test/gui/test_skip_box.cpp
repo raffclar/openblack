@@ -27,6 +27,7 @@ using openblack::new_game_choice::AnswerAtOnce;
 using openblack::new_game_choice::AvailableChoice;
 using openblack::new_game_choice::Choice;
 using openblack::new_game_choice::ClampChoice;
+using openblack::new_game_choice::FirstLandStartsStory;
 using openblack::new_game_choice::IsAvailable;
 using openblack::new_game_choice::NewGameStart;
 using openblack::new_game_choice::ParseNewGameStart;
@@ -127,6 +128,13 @@ TEST(NewGameChoice, TheDevelopersStartAnswersAtOnce)
 	}
 	EXPECT_EQ(AnswerAtOnce(ParseNewGameStart("old"), true), Choice::KeepOldCreature);
 	EXPECT_EQ(AnswerAtOnce(ParseNewGameStart("old"), false), Choice::SkipCreatureTutorial);
+}
+
+// A story land started first begins the story and asks the question; a playground started first does neither
+TEST(NewGameChoice, APlaygroundStartsNoStory)
+{
+	EXPECT_TRUE(FirstLandStartsStory(false));
+	EXPECT_FALSE(FirstLandStartsStory(true));
 }
 
 TEST(NewGameChoice, SelectionsAreBroughtIntoRange)

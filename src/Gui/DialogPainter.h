@@ -163,6 +163,9 @@ public:
 	/// The same, drawn from the full height glyphs when `sharp` and the size is more than half their height: for text
 	/// scaled up past the size the game drew it at on its default screen
 	void DrawString(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 colour, bool sharp) const;
+	/// A line of text a size high in pixels, from its top left in pixels, blending from one colour at its top to another
+	/// at its bottom
+	void DrawString(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 top, glm::vec4 bottom) const;
 	/// The font's glyphs at their full height (GameFont::GetFullAtlas), which text the layout scales up is drawn from;
 	/// without, all text is drawn from the half height glyphs
 	void SetFullGlyphs(const graphics::Texture2D* texture) noexcept { _fullFontTexture = texture; }

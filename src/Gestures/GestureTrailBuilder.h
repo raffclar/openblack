@@ -75,4 +75,11 @@ struct TrailView
                                                                 const ScreenBox& boxInPixels, const TrailSymbol& symbol,
                                                                 const TrailView& view);
 
+/// A gesture's shape shown on the land without being drawn, as a reward shows the gesture of a power-up: its trail has
+/// this many points
+inline constexpr size_t k_LandGesturePoints = 80;
+/// The trail of a gesture's shape laid on the land: its square, so many metres across, laid from a corner towards the
+/// east and south, each point at the land's height under it. The path and the shape are the same.
+[[nodiscard]] particles::GestureTrail LandGestureTrail(const TrailSymbol& symbol, glm::vec3 corner, float size,
+                                                       const std::function<float(float x, float z)>& landHeight);
 } // namespace openblack::gesture

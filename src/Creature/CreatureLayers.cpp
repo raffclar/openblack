@@ -151,7 +151,7 @@ std::optional<BodyAction> creature_layers::PlayOnce(const BodyAction& body, size
 }
 
 std::optional<BodyAction> creature_layers::PlaySequence(const BodyAction& body, size_t start, size_t loop, size_t end,
-                                                        bool holdLoop)
+                                                        bool holdLoop, bool mirrored)
 {
 	if (IsPlaying(body))
 	{
@@ -161,7 +161,7 @@ std::optional<BodyAction> creature_layers::PlaySequence(const BodyAction& body, 
 	                   .phase = BodyAction::Phase::Start,
 	                   .animations = {start, loop, end},
 	                   .timeMs = 0.0f,
-	                   .mirrored = false,
+	                   .mirrored = mirrored,
 	                   .endWanted = false,
 	                   .holdLoop = holdLoop};
 }

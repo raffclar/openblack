@@ -62,6 +62,22 @@ struct WallHugObjectReference
 	uint32_t entryDistance {0};
 };
 
+/// A walker that came up against water, the land's edge or a fence while going round: once a turn the game takes one
+/// such walker and tries out its walk both ways round, turning it round if the other way is better. A walker is tried
+/// once until it next leaves a circle, stops hugging or sets off on a new walk.
+struct WallHugLookahead
+{
+	/// Whether its trial has been made (else it waits for one)
+	bool tried {false};
+	/// How the trial went: the turns to spare each way (-1 for never getting there), and whether it was turned round
+	int32_t spareAsItGoes {0};
+	int32_t spareTurnedRound {0};
+	bool turnedRound {false};
+	/// Whether turning round would have put it where a closed ring of overlapping circles shuts it in, so it was not
+	/// turned round (openblack's own rule)
+	bool landingShutIn {false};
+};
+
 struct WallHug
 {
 	glm::vec2 goal;

@@ -51,6 +51,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownHomes.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/VillagerRoutine.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -499,6 +500,8 @@ void TownSystem::ProcessTurn()
 	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	for (const auto townEntity : towns)
 	{
+		// It puts up at most one of its buildings, or a finished one that went, for mending
+		town_planning::MendBest(townEntity);
 		const bool inEmergency = IsInStateOfEmergency(townEntity);
 		// Out of an emergency, its storage pit or village centre on fire calls one
 		bool burning = false;

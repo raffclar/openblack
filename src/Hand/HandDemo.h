@@ -11,12 +11,16 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <span>
 #include <vector>
 
 #include <HNDFile.h>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "3D/MapCoords.h"
+#include "ECS/ScriptFind.h"
 
 /// The tutorial's hand demonstrations: a recording of the player's interface played back through the player's own hand
 /// and camera, record by record as the game's time reaches each, holding at the marks the scripts wait for
@@ -48,6 +52,44 @@ struct HeldButtons
 
 /// The velocity the hand was ready to throw at when a record was made, which a button's record gives back to the hand
 [[nodiscard]] glm::vec3 RecordedThrowVelocity(const hnd::HNDRecord& record);
+
+/// What a replayed click on a thing lands on
+enum class ClickTarget : uint8_t
+{
+	/// Whatever is under the hand now
+	UnderHand,
+	/// No thing at all, whatever is under the hand: the recording had none under it
+	NoThing,
+	/// The nearest thing of the recorded kind near the recorded place, if there is one; else whatever is under the hand
+	NearestOfKind,
+};
+
+/// A thing under the hand: its kind as the scripts see it, and where it is
+struct ThingUnderHand
+{
+	ecs::script_find::Kind kind;
+	map_coords::MapCoords at;
+};
+
+/// How far from the recorded place a click looks for a thing of the recorded kind, in metres
+constexpr float k_RetargetReach = 3.0f;
+
+/// Whether a record's click may land on a thing other than the one under the hand: the action button going down or up,
+/// and the one message the recordings never use
+[[nodiscard]] bool ClickCanRetarget(hnd::HNDMessage message);
+
+/// Where a recorded click lands. With a thing recorded, the click stays on the thing under the hand only when that is of
+/// exactly the recorded kind (a thing with no subtype matching only a recorded "none") and less than the reach from the
+/// recorded place
+[[nodiscard]] ClickTarget TargetOfClick(const hnd::HNDRecord& record, const std::optional<ThingUnderHand>& underHand);
+
+/// The recorded place of the thing a click was on
+[[nodiscard]] map_coords::MapCoords RecordedPlace(const hnd::HNDRecord& record);
+
+/// Whether a thing may take a recorded click instead of the one under the hand: of the recorded type, of its subtype or
+/// any when the recording says any, and no farther than the reach from the recorded place
+[[nodiscard]] bool TakesRecordedClick(const hnd::HNDRecord& record, const ecs::script_find::Kind& kind,
+                                      const map_coords::MapCoords& at);
 
 /// The camera hints are hidden for this many records at each end of the recording
 constexpr size_t k_HintlessRecords = 20;

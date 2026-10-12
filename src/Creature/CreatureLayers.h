@@ -133,9 +133,10 @@ struct BodyAction
 [[nodiscard]] size_t CurrentAnimation(const BodyAction& body);
 /// An action that plays once, unless the body already plays one: nothing starts while one plays
 [[nodiscard]] std::optional<BodyAction> PlayOnce(const BodyAction& body, size_t animation, bool mirrored);
-/// A start, loop and end, unless the body already plays an action; the loop can hold its last frame
+/// A start, loop and end, unless the body already plays an action; the loop can hold its last frame, and the whole can
+/// play left to right
 [[nodiscard]] std::optional<BodyAction> PlaySequence(const BodyAction& body, size_t start, size_t loop, size_t end,
-                                                     bool holdLoop = false);
+                                                     bool holdLoop = false, bool mirrored = false);
 /// A sequence's loop ends and its end plays
 [[nodiscard]] BodyAction EndLoop(BodyAction body);
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no

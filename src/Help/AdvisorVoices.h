@@ -115,9 +115,18 @@ public:
 	[[nodiscard]] bool IsActive(int advisor) const { return _advisors.at(static_cast<size_t>(advisor)).active; }
 	/// Either advisor was given a line and is talking or just stopped
 	[[nodiscard]] bool AnyTalking();
-	/// The advisor is cut short, as a click cutting a text does: one that is saying a line picks one of five
-	/// interruption lines, but stopping its line leaves it no longer the speaker, so the interruption is never heard
-	void Interrupt(int advisor);
+	/// Who cuts an advisor short
+	enum class InterruptedBy : uint8_t
+	{
+		/// A click cutting a text, or the dialogue changing hands
+		Text,
+		/// The player's Escape outside a cut scene
+		Escape,
+	};
+	/// The advisor is cut short: one that is saying a line picks an interruption line, but stopping its line leaves it
+	/// no longer the speaker, so the interruption is never heard. A text picks one of five lines; Escape picks one of
+	/// eight other lines half the time, else one of the five
+	void Interrupt(int advisor, InterruptedBy by = InterruptedBy::Text);
 
 	/// Once a frame for an advisor whose body is updated, before its gestures: nullopt unless it is the speaker and a
 	/// line has started. The line's time is the computer's clock since it started until the sound reports a play

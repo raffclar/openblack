@@ -191,6 +191,7 @@ public:
 	[[nodiscard]] HandResult GetLastHandResult() const override { return _lastHandResult; }
 	void PlaceHandEffect(glm::vec3 point, float handScale) override;
 	[[nodiscard]] bool IsHandInInfluence() const override;
+	[[nodiscard]] std::optional<magic::HeldCastAtPointer> HeldCastAt(std::optional<entt::entity> pointed) const override;
 
 	bool SendSpellEvent(entt::entity spell, const particles::SpellEventInfo& event) override;
 	float ForcePayForSpell(entt::entity spell, float cost) override;

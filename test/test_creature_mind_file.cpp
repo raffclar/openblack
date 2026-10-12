@@ -60,6 +60,7 @@ MindFileData SampleMind()
 	mind.actionsSeen = {{.count = 3, .turn = 10}};
 	mind.miraclesSeen = {{.count = 1, .turn = 20}, {.count = 0, .turn = 0}};
 	mind.attitudeToPlayer = 0.3f;
+	mind.turnsLookedAt = 1234;
 	mind.playerDesires = std::vector<float>(40, 0.5f);
 	mind.townDesires = std::vector<float>(17, 0.25f);
 	mind.known = {std::vector<MindKnownAction> {{.id = 0}}, std::vector<MindKnownAction> {{.id = 1}}};
@@ -222,11 +223,13 @@ TEST(CreatureMindFile, ModelKeepsAFileItWasLoadedFrom)
 	const auto loaded = creature_mind_model::FromFile(mind, fresh, freshLearnt);
 	EXPECT_EQ(loaded.learnt.name, u"Tester");
 	EXPECT_EQ(loaded.developmentPhase, 13u);
+	// The turns its player looked at it come back with it
+	EXPECT_EQ(loaded.turnsLookedAt, 1234u);
 	EXPECT_TRUE(loaded.learnt.knowledge.skillsKnown[0]);
 	EXPECT_TRUE(loaded.learnt.knowledge.miraclesKnown[1]);
 	EXPECT_EQ(loaded.learnt.episodes[0][1].size(), 1u);
 	const auto saved = creature_mind_model::ToFile(loaded.desires, loaded.learnt, loaded.developmentPhase,
-	                                               loaded.attitudeToPlayer, loaded.speciesRow);
+	                                               loaded.attitudeToPlayer, loaded.turnsLookedAt, loaded.speciesRow);
 	EXPECT_EQ(Write(saved), Write(mind));
 }
 
@@ -234,7 +237,7 @@ TEST(CreatureMindFile, FreshMindWritesACurrentFile)
 {
 	creature_desires::Desires desires;
 	const auto learnt = creature_mind_model::Fresh(desires, 328, {});
-	const auto file = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 3);
+	const auto file = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 0, 3);
 	const auto bytes = Write(file);
 	MindFileData read;
 	ASSERT_EQ(Read(bytes, read), MindResult::Success);

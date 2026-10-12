@@ -22,6 +22,7 @@ struct CreatureMorph;
 struct DetailMeshes;
 struct Feature;
 struct Mesh;
+struct BlendedByMaterial;
 struct MobileStatic;
 struct MorphWithTerrain;
 struct ShownRoots;
@@ -50,7 +51,7 @@ constexpr bool k_ChangesDrawLayout = [] {
 	       std::is_same_v<C, StoragePit> || std::is_same_v<C, Unlit> || std::is_same_v<C, CreatureMorph> ||
 	       std::is_same_v<C, Translucent> || std::is_same_v<C, AnimalPose> || std::is_same_v<C, AnimatedStaticPose> ||
 	       std::is_same_v<C, DetailMeshes> || std::is_same_v<C, ShownRoots> || std::is_same_v<C, Temple> ||
-	       std::is_same_v<C, BuildProgress>;
+	       std::is_same_v<C, BuildProgress> || std::is_same_v<C, BlendedByMaterial>;
 }();
 
 } // namespace openblack::ecs

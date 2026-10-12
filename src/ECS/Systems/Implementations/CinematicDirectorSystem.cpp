@@ -12,6 +12,7 @@
 #include "CinematicDirectorSystem.h"
 
 #include <utility>
+#include <vector>
 
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -108,4 +109,31 @@ void CinematicDirectorSystem::ProcessTurn()
 void CinematicDirectorSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
 	_bars.Update(gameTime.count(), WideScreenTime());
+}
+
+void CinematicDirectorSystem::WriteText(std::u16string_view words, glm::vec2 corner, glm::vec2 extent, float size,
+                                        float fadeSeconds)
+{
+	_texts.insert(_texts.begin(), gui::script_text::Write(words, corner, extent, size, fadeSeconds, _textColour));
+}
+
+void CinematicDirectorSystem::FadeAllTexts(float seconds)
+{
+	for (auto& text : _texts)
+	{
+		gui::script_text::FadeOut(text, seconds);
+	}
+}
+
+void CinematicDirectorSystem::UpdateTexts(int32_t milliseconds)
+{
+	std::erase_if(_texts, [milliseconds](auto& text) { return !gui::script_text::Step(text, milliseconds); });
+}
+
+void CinematicDirectorSystem::Reset()
+{
+	// The scripts' text colour stays as it was
+	const auto colour = _textColour;
+	*this = CinematicDirectorSystem {};
+	_textColour = colour;
 }

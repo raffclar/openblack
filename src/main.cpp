@@ -53,7 +53,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("W,width", "Window resolution in the x axis.", cxxopts::value<uint16_t>()->default_value("1280"))
 		("H,height", "Window resolution in the y axis.", cxxopts::value<uint16_t>()->default_value("1024"))
 		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
-		("s,start-level", "Level that is loaded at start-up", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
+		("s,start-level", "Level that is loaded at start-up: a script in Scripts, such as Land2.txt, or a playground such as Playgrounds/construct.txt, which starts without the story", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
 		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
 		("V,vsync", "Enable Vertical Sync.")
 		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super.", cxxopts::value<uint16_t>()->default_value("4"))

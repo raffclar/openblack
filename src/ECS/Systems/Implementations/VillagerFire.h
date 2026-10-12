@@ -43,6 +43,10 @@ void SetupOnFire(entt::entity villager, entt::entity fire);
 [[nodiscard]] bool IsFireMan(entt::entity villager);
 /// A fireman stops fighting and goes back to what it was doing
 void StopFireFighting(entt::entity villager);
+/// A villager whose fire reaction ends (its fire cooled or went) goes back to what it remembered, through the usual
+/// change of state, so the fire states it leaves let it go from the blaze's firemen; if that leaves it heading for a
+/// reaction it decides afresh. Then it lets go of the reaction.
+void EndReaction(components::LivingAction& action);
 /// The state a villager in the fire states goes back to, given the one its remembered state resumes in. Remembering
 /// nothing, it would resume in no state at all and stand still for good (as firemen did in the original game when the
 /// object behind their fire went); it decides what to do instead.

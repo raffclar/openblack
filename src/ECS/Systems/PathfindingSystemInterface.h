@@ -14,6 +14,10 @@ namespace openblack::ecs::systems
 class PathfindingSystemInterface
 {
 public:
+	/// Every walker takes its turn's walk
 	virtual void Update() = 0;
+	/// At the end of the turn, one walker that came up against water, the land's edge or a fence while going round
+	/// tries its walk both ways round, and is turned round if the other way is better
+	virtual void ProcessLookahead() = 0;
 };
 } // namespace openblack::ecs::systems

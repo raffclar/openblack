@@ -421,6 +421,14 @@ void villager_reactions::Stop(entt::entity villager, LivingReaction& state, bool
 		}
 		return;
 	}
+	// The fire states remember what the villager was doing themselves, and leaving them must take it off its blaze's
+	// firemen: it goes back the fire's way
+	if (state.type == Reaction::ReactToFire)
+	{
+		state.previousState = VillagerStates::InvalidState;
+		villager_fire::EndReaction(*action);
+		return;
+	}
 	// Back to the state it was in, or the one that state goes back to; anything else has it decide afresh
 	auto resume = state.previousState != VillagerStates::InvalidState
 	                  ? static_cast<VillagerStates>(StateInfo(state.previousState).resumeState)

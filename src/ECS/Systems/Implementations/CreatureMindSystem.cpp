@@ -45,6 +45,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureReach.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureThrow.h"
@@ -560,7 +561,8 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 	if (commands.startSequence.has_value())
 	{
 		const auto& sequence = *commands.startSequence;
-		if (auto body = creature_layers::PlaySequence(animation.body, sequence[0], sequence[1], sequence[2], commands.holdLoop))
+		if (auto body = creature_layers::PlaySequence(animation.body, sequence[0], sequence[1], sequence[2], commands.holdLoop,
+		                                              commands.mirrored))
 		{
 			animation.body = *body;
 		}
@@ -943,9 +945,21 @@ std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity c
 	const float size = body != nullptr ? body->size : 1.0f;
 	const auto held = Locator::resourceStoreSystem::value().GetResource(pile, ResourceType::Food);
 	const auto amount = std::min(static_cast<uint32_t>(size * k_FoodPerSize), held);
-	const auto food =
-	    ecs::archetypes::PotArchetype::Create(transform->position, 0.0f, PotInfo::WheatInHand, static_cast<int32_t>(amount),
-	                                          NearestTown(registry, transform->position));
+	// The handful appears on the ground beside the creature, most of its reach towards the pile, at the creature's own
+	// height
+	glm::vec3 at = transform->position;
+	const auto* pileTransform = registry.TryGet<const Transform>(pile);
+	const auto reach = Locator::creatureObjectActionSystem::has_value()
+	                       ? Locator::creatureObjectActionSystem::value().PickUpStraightReach(creature)
+	                       : std::nullopt;
+	if (pileTransform != nullptr && reach.has_value())
+	{
+		const auto point = creature_reach::HandfulPoint({transform->position.x, transform->position.z},
+		                                                {pileTransform->position.x, pileTransform->position.z}, *reach);
+		at = {point.x, transform->position.y, point.y};
+	}
+	const auto food = ecs::archetypes::PotArchetype::Create(at, 0.0f, PotInfo::WheatInHand, static_cast<int32_t>(amount),
+	                                                        NearestTown(registry, transform->position));
 	if (food == entt::null)
 	{
 		return std::nullopt;
@@ -1170,11 +1184,20 @@ void CreatureMindSystem::ProcessTurn()
 			    mind.desiresPhase = mind.developmentPhase;
 		    }
 		    mind.secondsAlone += k_TurnSeconds;
-		    // Only a creature's own player pays it attention
-		    if (creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
-		        creature_attention::IsLookingAt(view->origin, view->focus, transform.position))
+		    // What it believed about things now gone is forgotten, and going into another cell it notes the nearest temple
+		    ForgetGoneThings(mind);
+		    NoteNearestTemple(mind, transform);
+		    const bool held = HeldByHand(entity);
+		    // Only a creature's own player pays it attention, and not while the hand holds it; nor do its eyes sweep about
+		    // it then
+		    if (!held)
 		    {
-			    ++mind.turnsLookedAt;
+			    if (creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
+			        creature_attention::IsLookingAt(view->origin, view->focus, transform.position))
+			    {
+				    ++mind.turnsLookedAt;
+			    }
+			    SweepEyes(creature, mind, animation, transform);
 		    }
 		    if (mind.feedbackSeconds.has_value())
 		    {
@@ -1182,7 +1205,7 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    // Held by the player's hand its mind stands still, but for showing what it wants once it has turned to the
 		    // player
-		    if (HeldByHand(entity))
+		    if (held)
 		    {
 			    if (mind.showDesireOnHold)
 			    {

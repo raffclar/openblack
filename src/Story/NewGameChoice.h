@@ -100,6 +100,13 @@ struct NewGameStart
 	return AvailableChoice(*start->answer, currentProfileHasCreature);
 }
 
+/// Whether the game's first land starts the story: its scripts and the start-of-game question. A playground is started
+/// as the playground menu starts one, with the scripts made ready but none of the story begun and nothing asked.
+[[nodiscard]] constexpr bool FirstLandStartsStory(bool playground) noexcept
+{
+	return !playground;
+}
+
 /// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)
 /// or "old" (keep the old creature) or "cow" (debug: start with the Cow); nothing for anything else
 [[nodiscard]] constexpr std::optional<NewGameStart> ParseNewGameStart(std::string_view text) noexcept

@@ -8,9 +8,11 @@
  *******************************************************************************/
 
 #include <array>
+#include <numbers>
 #include <optional>
 #include <vector>
 
+#include <glm/gtx/euler_angles.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/PlannedBuildingRules.h"
@@ -218,4 +220,70 @@ TEST(PlannedBuildingRules, ANewHouseNeedsDryLandAndRoomFromTheBuildingsAboutIt)
 	EXPECT_FALSE(IsClearToBuild(open, false, 6.0f));
 	EXPECT_FALSE(IsClearToBuild(blocked, true, 6.0f));
 	EXPECT_TRUE(IsClearToBuild(blocked, true, 5.9f));
+}
+
+TEST(PlannedBuildingRules, AScriptNamingAPlaceHasEachTownStartItsOwnNearestPlan)
+{
+	using building_construction::PlannedCandidate;
+	constexpr glm::vec2 k_Place {100.0f, 100.0f};
+	const std::vector<std::vector<PlannedCandidate>> towns {
+	    // A house 3 m off with a 2.5 m reach is within a metre beyond its reach; the one further in is nearer still
+	    {PlannedCandidate {.position = {103.0f, 100.0f}, .reach = 2.5f},
+	     PlannedCandidate {.position = {101.0f, 100.0f}, .reach = 2.5f}},
+	    // Too far for its reach
+	    {PlannedCandidate {.position = {110.0f, 100.0f}, .reach = 2.5f}},
+	    // No plans at all
+	    {},
+	    // Another town's plan at the same place is started too; the later of two equally near
+	    {PlannedCandidate {.position = {100.0f, 102.0f}, .reach = 2.0f},
+	     PlannedCandidate {.position = {102.0f, 100.0f}, .reach = 2.0f}},
+	};
+	const auto started = StartedByScript(towns, k_Place);
+	ASSERT_EQ(started.size(), towns.size());
+	EXPECT_EQ(started[0], 1u);
+	EXPECT_EQ(started[1], std::nullopt);
+	EXPECT_EQ(started[2], std::nullopt);
+	EXPECT_EQ(started[3], 1u);
+}
+
+TEST(PlannedBuildingRules, ABuildingPlannedAgainKeepsTheTurnItWasPlacedWith)
+{
+	constexpr float k_FullTurn = 2.0f * std::numbers::pi_v<float>;
+	for (const float angle : {0.0f, 0.5f, 1.5f, 3.0f, 4.776f, 6.2f})
+	{
+		const auto rotation = glm::mat3(glm::eulerAngleY(-angle));
+		EXPECT_NEAR(YAngleOf(rotation), angle, 1.0e-4f) << angle;
+	}
+	// A turn past a full one, or backwards, reads as the same turn within one full turn
+	EXPECT_NEAR(YAngleOf(glm::mat3(glm::eulerAngleY(-(k_FullTurn + 1.0f)))), 1.0f, 1.0e-4f);
+	EXPECT_NEAR(YAngleOf(glm::mat3(glm::eulerAngleY(1.0f))), k_FullTurn - 1.0f, 1.0e-4f);
+}
+
+TEST(PlannedBuilding, ATownPutsUpTheBuildingWantingMendingMostOverItsFinishedPlans)
+{
+	const std::array<float, 2> plans {0.4f, 0.6f};
+	const std::array<MendCandidate, 3> buildings {MendCandidate {.desireToBeRepaired = 0.5f},
+	                                              MendCandidate {.skipped = true, .desireToBeRepaired = 0.9f},
+	                                              MendCandidate {.desireToBeRepaired = 0.7f}};
+	// The building must want it more than every plan; one with a site or put up already is passed over
+	const auto chosen = ChooseToMend(plans, buildings);
+	ASSERT_TRUE(chosen.has_value());
+	EXPECT_EQ(chosen->kind, MendChoice::Kind::Building);
+	EXPECT_EQ(chosen->index, 2u);
+}
+
+TEST(PlannedBuilding, AFinishedPlanIsStartedWhenNoBuildingWantsMendingMore)
+{
+	// A tie goes to the earlier, and a plan wins a tie with a building
+	const std::array<float, 3> plans {0.0f, 0.6f, 0.6f};
+	const std::array<MendCandidate, 1> buildings {MendCandidate {.desireToBeRepaired = 0.6f}};
+	const auto chosen = ChooseToMend(plans, buildings);
+	ASSERT_TRUE(chosen.has_value());
+	EXPECT_EQ(chosen->kind, MendChoice::Kind::Plan);
+	EXPECT_EQ(chosen->index, 1u);
+	// Nothing wanting it at all puts nothing up
+	const std::array<float, 1> none {0.0f};
+	const std::array<MendCandidate, 1> whole {MendCandidate {}};
+	EXPECT_FALSE(ChooseToMend(none, whole).has_value());
+	EXPECT_FALSE(ChooseToMend({}, {}).has_value());
 }
