@@ -73,6 +73,62 @@ TEST(CreatureScriptAgendas, OnlyACreatureWithAPlayerLooksAtTheCamera)
 	ASSERT_TRUE(owned[0].gaze.has_value());
 	EXPECT_TRUE(owned[0].gaze->camera);
 	EXPECT_EQ(owned[0].face, creature_face::Cue::Curiosity);
+	EXPECT_EQ(owned[0].kind, Step::Kind::WatchCamera);
+}
+
+namespace
+{
+Senses Watching(float distance, float turn)
+{
+	return {.seconds = 0.1f,
+	        .choosesNext = false,
+	        .camera =
+	            Senses::CameraView {.distance = distance, .groundDistance = distance, .point = {5.0f, 6.0f}, .turn = turn}};
+}
+} // namespace
+
+// "force MyCreature CREATURE_LOOK_AT_CAMERA MyCreature": it watches the camera until whole seconds of turns pass five,
+// the turn it starts on counting as the first: sixty turns at ten a second
+TEST(CreatureScriptAgendas, WatchingTheCameraLastsSixtyTurns)
+{
+	IdleMind mind;
+	Plan(mind, Activity::Told, LookAtCamera(true));
+	int turns = 0;
+	while (mind.step < mind.agenda.size() && turns < 100)
+	{
+		static_cast<void>(Think(mind, Watching(20.0f, 0.0f), NoRandom));
+		++turns;
+	}
+	EXPECT_EQ(turns, 60);
+}
+
+// More than a quarter turn away from the camera it turns to face it, every turn it is still that far round
+TEST(CreatureScriptAgendas, WatchingTheCameraTurnsToItPastAQuarterTurn)
+{
+	IdleMind mind;
+	Plan(mind, Activity::Told, LookAtCamera(true));
+	EXPECT_FALSE(Think(mind, Watching(20.0f, 1.5f), NoRandom).move.has_value());
+	const auto behind = Think(mind, Watching(20.0f, -2.0f), NoRandom);
+	ASSERT_TRUE(behind.move.has_value());
+	EXPECT_EQ(behind.move->kind, Movement::Kind::TurnToFace);
+	EXPECT_EQ(behind.move->point, glm::vec2(5.0f, 6.0f));
+	EXPECT_TRUE(Think(mind, Watching(20.0f, 3.0f), NoRandom).move.has_value());
+}
+
+// The camera more than 100 away or right overhead ends the look, as does the camera going away (no player)
+TEST(CreatureScriptAgendas, WatchingTheCameraEndsWhenItIsOutOfReach)
+{
+	for (const auto& senses : {Watching(100.5f, 0.0f), Watching(0.05f, 0.0f), Senses {.seconds = 0.1f, .choosesNext = false}})
+	{
+		IdleMind mind;
+		Plan(mind, Activity::Told, LookAtCamera(true));
+		static_cast<void>(Think(mind, senses, NoRandom));
+		EXPECT_EQ(mind.step, 1u);
+	}
+	IdleMind mind;
+	Plan(mind, Activity::Told, LookAtCamera(true));
+	static_cast<void>(Think(mind, Watching(100.0f, 0.0f), NoRandom));
+	EXPECT_EQ(mind.step, 0u);
 }
 
 // Pointing at a thing lasts five seconds and follows it; at the camera, a second at the camera's height, turning first

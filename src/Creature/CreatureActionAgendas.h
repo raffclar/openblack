@@ -34,8 +34,20 @@ constexpr uint32_t k_AngryBeforeHurlingLots = 6;
 constexpr uint32_t k_YawnBeforeSleepingLots = 2;
 constexpr float k_FurthestFromHomeToSleep = 5.0f;
 
+/// Sleeping by a thing, at a clear place found about it: walking there until within its own radius, half the time a
+/// sleepy yawn, facing down the slope, sleeping until rested and getting up dazed with a grimace
+[[nodiscard]] std::vector<Step> SleepByObject(glm::vec2 place, float radius, const Random& random);
+/// The clear place is as wide as four times the creature's height
+constexpr float k_SleepByObjectHeights = 4.0f;
+
+/// Eating from a pile of food: walking to the pile until within a fifth more than both their radii, turning to face it
+/// a tenth of a second, taking a handful of food from it, and eating that
+[[nodiscard]] std::vector<Step> EatFromPile(uint32_t pile, glm::vec2 pilePoint, float pileRadius, float radius);
+constexpr float k_EatFromPileReach = 1.2f;
+constexpr float k_FacePileSeconds = 0.1f;
+
 /// Looking something over: going near it (two and a half times its height away, or the thing's height when that is
-/// more), turning to face it for two seconds and watching its foot for 1.1 more
+/// more), turning to face it for two seconds, watching its foot for 1.1 more, then taking in what kind of thing it is
 [[nodiscard]] std::vector<Step> ExamineByLooking(uint32_t thing, float height, float thingHeight);
 constexpr float k_ExamineHeights = 2.5f;
 constexpr float k_ExamineFaceSeconds = 2.0f;
@@ -75,4 +87,9 @@ constexpr size_t k_LookAtMeAnimation = 69;
 constexpr float k_CallCameraSeconds = 1.0f;
 constexpr float k_PointOutSeconds = 1.0f;
 constexpr float k_AfterPointingOutSeconds = 2.0f;
+
+/// Having had a good look at a kind of thing, a creature is only a hundredth as keen to satisfy its curiosity with a
+/// thing of that kind, unless the thing is doing something it finds interesting
+constexpr float k_ObservedCuriosityShare = 0.01f;
+[[nodiscard]] float CuriosityShare(bool observedKind, bool doingSomethingInteresting);
 } // namespace openblack::creature_mind

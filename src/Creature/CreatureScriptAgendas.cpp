@@ -69,9 +69,9 @@ std::vector<Step> openblack::creature_mind::LookAtCamera(bool hasPlayer)
 		// Without a player there is no camera of its own to look at: it is done at once
 		return {{.kind = Step::Kind::Wait, .seconds = 0.0f}};
 	}
-	// TODO(opening-skip): the game also turns it to the camera when it is more than a quarter turn away, and stops
-	// looking early once the camera is more than 100 away or has been still for a while; only the look is kept here
-	return {{.kind = Step::Kind::Wait,
+	// TODO(creature-actions-3): the game also ends the look early once a count its player's camera keeps passes five
+	// seconds of turns; what that count counts is not known yet
+	return {{.kind = Step::Kind::WatchCamera,
 	         .seconds = k_LookAtCameraSeconds,
 	         .face = creature_face::Cue::Curiosity,
 	         .gaze = Gaze {.camera = true}}};
