@@ -73,6 +73,41 @@ TEST(ToolTips, FadeInOverOneMoreSecondEachTimeShown)
 	EXPECT_NEAR(toolTips.GetShown()->alpha, 0.25f, 1e-4f);
 }
 
+TEST(ToolTips, FadeInTakesAtMostEightySeconds)
+{
+	ToolTips toolTips(Info());
+	for (int i = 0; i < 100; ++i)
+	{
+		Show(toolTips, k_Move, 1);
+		toolTips.ProcessTurn();
+	}
+	// Shown a hundred times, it still fades in over 80 seconds: a tenth of a second is an 800th of the way
+	Show(toolTips, k_Move, 1);
+	EXPECT_NEAR(toolTips.GetShown()->alpha, 0.1f / 80.0f, 1e-6f);
+}
+
+TEST(ToolTips, ImportantOnesShowAtOnceHoweverOftenShown)
+{
+	// A village centre's belief and population, both stats, take turns a second each for as long as the hand is over it
+	constexpr uint32_t k_Population = k_Stat + 1;
+	auto info = Info();
+	info.at(k_Stat).displayTimeAfterFocus = 0.0f;
+	info.at(k_Population) = info.at(k_Stat);
+	ToolTips toolTips(info);
+	for (int second = 0; second < 300; ++second)
+	{
+		for (int turn = 0; turn < 25; ++turn)
+		{
+			toolTips.Submit(k_Stat, ToolTipAction::None, ToolTipArrows::k_None);
+			toolTips.Submit(k_Population, ToolTipAction::None, ToolTipArrows::k_None);
+			toolTips.ProcessTurn();
+			toolTips.Update(0.04f);
+			ASSERT_TRUE(toolTips.GetShown().has_value());
+			ASSERT_EQ(toolTips.GetShown()->alpha, 1.0f) << second << " " << turn;
+		}
+	}
+}
+
 TEST(ToolTips, FadeOutOnceReadAtTheIntelligentLevel)
 {
 	ToolTips toolTips(Info());
