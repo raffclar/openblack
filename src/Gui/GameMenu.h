@@ -32,7 +32,7 @@ struct MenuSettings
 	/// 0 to 1
 	float sfxVolume {1.0f};
 	float musicVolume {1.0f};
-	/// HELP_TEXT_DIALOG_DETAIL_00 to _04, Minimum to Maximum Detail
+	/// HELP_TEXT_DIALOG_DETAIL_00 to _04, Minimum to Maximum Detail (graphics::detail_level)
 	int detail {4};
 	bool autoSave {true};
 	bool pushScrolling {false};

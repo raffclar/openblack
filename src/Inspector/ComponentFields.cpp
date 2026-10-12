@@ -142,6 +142,7 @@
 #include "ECS/Components/MistDome.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/NeverFades.h"
 #include "ECS/Components/ObjectGlow.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
@@ -167,6 +168,7 @@
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/StoragePit.h"
@@ -622,11 +624,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLocomotion::destination>("destination")
 	    .Field<&components::CreatureLocomotion::ring>("ring")
 	    .Field<&components::CreatureLocomotion::ontoDestination>("ontoDestination")
-	    .Field<&components::CreatureLocomotion::planner>("planner")
-	    .Field<&components::CreatureLocomotion::route>("route")
-	    .Field<&components::CreatureLocomotion::plannedRound>("plannedRound")
+	    .Field<&components::CreatureLocomotion::follower>("follower")
+	    .Field<&components::CreatureLocomotion::firstSearchTurn>("firstSearchTurn")
 	    .Field<&components::CreatureLocomotion::routeReady>("routeReady")
-	    .Field<&components::CreatureLocomotion::planningMs>("planningMs")
 	    .Field<&components::CreatureLocomotion::failed>("failed")
 	    .Field<&components::CreatureLocomotion::facingOnly>("facingOnly")
 	    .Field<&components::CreatureLocomotion::following>("following")
@@ -661,6 +661,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::underway>("underway")
 	    .Field<&components::CreatureMindState::developmentPhase>("developmentPhase")
 	    .Field<&components::CreatureMindState::desiresPhase>("desiresPhase")
+	    .Field<&components::CreatureMindState::inDevelopmentScript>("inDevelopmentScript")
 	    .Field<&components::CreatureMindState::paused>("paused")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")
@@ -952,6 +953,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ForestMember::growing>("growing")
 	    .Field<&components::ForestMember::listed>("listed");
 	Reflect<components::Graveyard>(context).Field<&components::Graveyard::burials>("burials");
+	Reflect<components::StandInGraves>(context)
+	    .Field<&components::StandInGraves::count>("count")
+	    .Field<&components::StandInGraves::partsShown>("partsShown");
 	Reflect<components::WalkingSkeleton> {context};
 	Reflect<components::GripLandscapeParticle>(context)
 	    .Field<&components::GripLandscapeParticle::centre>("centre")
@@ -993,6 +997,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandGrab::spring>("spring")
 	    .Field<&components::HandGrab::springOn>("springOn")
 	    .Field<&components::HandGrab::springPending>("springPending")
+	    .Field<&components::HandGrab::recordedThrow>("recordedThrow")
 	    .Field<&components::HandGrab::lastTarget>("lastTarget")
 	    .Field<&components::HandGrab::scoopSource>("scoopSource")
 	    .Field<&components::HandGrab::scoopTurns>("scoopTurns")
@@ -1177,6 +1182,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::MobileObject>(context).Field<&components::MobileObject::type>("type");
 	Reflect<components::Rock> {context};
 	Reflect<components::MorphWithTerrain>(context).Field<&components::MorphWithTerrain::dummy>("dummy");
+	Reflect<components::NeverFades> {context};
 	Reflect<components::ObjectGlow>(context)
 	    .Field<&components::ObjectGlow::rgb>("rgb")
 	    .Field<&components::ObjectGlow::turnsUnset>("turnsUnset");
@@ -1372,6 +1378,32 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellDispenser::effect>("effect")
 	    .Field<&components::SpellDispenser::building>("building");
 	Reflect<components::TestbedDispenser> {context};
+	Reflect<components::TownMagic>(context).Field<&components::TownMagic::held>("held");
+	Reflect<components::TownCentreIcon>(context)
+	    .Field<&components::TownCentreIcon::centre>("centre")
+	    .Field<&components::TownCentreIcon::town>("town")
+	    .Field<&components::TownCentreIcon::hand>("hand")
+	    .Field<&components::TownCentreIcon::seed>("seed")
+	    .Field<&components::TownCentreIcon::powerUps>("powerUps");
+	Reflect<components::CentreHands>(context).Field<&components::CentreHands::hands>("hands");
+	Reflect<components::SiteIcons>(context).Field<&components::SiteIcons::icons>("icons");
+	Reflect<components::WorshipIcon>(context)
+	    .Field<&components::WorshipIcon::site>("site")
+	    .Field<&components::WorshipIcon::seed>("seed")
+	    .Field<&components::WorshipIcon::charging>("charging")
+	    .Field<&components::WorshipIcon::powerUp>("powerUp")
+	    .Field<&components::WorshipIcon::charger>("charger")
+	    .Field<&components::WorshipIcon::chargeStartTurn>("chargeStartTurn")
+	    .Field<&components::WorshipIcon::store>("store")
+	    .Field<&components::WorshipIcon::seedOut>("seedOut");
+	Reflect<components::IconSeed>(context)
+	    .Field<&components::IconSeed::seed>("seed")
+	    .Field<&components::IconSeed::middle>("middle")
+	    .Field<&components::IconSeed::powerUp>("powerUp")
+	    .Field<&components::IconSeed::spin>("spin")
+	    .Field<&components::IconSeed::ringSpin>("ringSpin")
+	    .Field<&components::IconSeed::phialFrame>("phialFrame")
+	    .Field<&components::IconSeed::phialPhase>("phialPhase");
 	Reflect<components::SpellSeed>(context)
 	    .Field<&components::SpellSeed::seedType>("seedType")
 	    .Field<&components::SpellSeed::powerUp>("powerUp")
@@ -1473,6 +1505,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::onWayToWorship>("onWayToWorship")
 	    .Field<&components::Town::congregationPos>("congregationPos")
 	    .Field<&components::Town::emergencyTurn>("emergencyTurn")
+	    .Field<&components::Town::worshipShareBeforeEmergency>("worshipShareBeforeEmergency")
 	    .Field<&components::Town::graveyard>("graveyard")
 	    .Field<&components::Town::creche>("creche")
 	    .Field<&components::Town::desiresChanged>("desiresChanged")
@@ -1745,12 +1778,14 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CitadelWorship::sites>("sites")
 	    .Field<&components::CitadelWorship::facing>("facing")
 	    .Field<&components::CitadelWorship::cannotMakeSites>("cannotMakeSites")
-	    .Field<&components::CitadelWorship::standing>("standing");
+	    .Field<&components::CitadelWorship::standing>("standing")
+	    .Field<&components::CitadelWorship::sitesMade>("sitesMade");
 	Reflect<components::WorshipSite>(context)
 	    .Field<&components::WorshipSite::temple>("temple")
 	    .Field<&components::WorshipSite::player>("player")
 	    .Field<&components::WorshipSite::tribe>("tribe")
 	    .Field<&components::WorshipSite::place>("place")
+	    .Field<&components::WorshipSite::made>("made")
 	    .Field<&components::WorshipSite::facing>("facing")
 	    .Field<&components::WorshipSite::towns>("towns")
 	    .Field<&components::WorshipSite::altar>("altar")
@@ -2068,8 +2103,18 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_route::Circle>(context, ValueOnly {})
 	    .Field<&openblack::creature_route::Circle::centre>("centre")
 	    .Field<&openblack::creature_route::Circle::radius>("radius");
+	Reflect<openblack::creature_route::Leg>(context, ValueOnly {})
+	    .Field<&openblack::creature_route::Leg::from>("from")
+	    .Field<&openblack::creature_route::Leg::to>("to")
+	    .Field<&openblack::creature_route::Leg::arc>("arc")
+	    .Field<&openblack::creature_route::Leg::heading>("heading")
+	    .Field<&openblack::creature_route::Leg::way>("way")
+	    .Field<&openblack::creature_route::Leg::onStartCircle>("onStartCircle")
+	    .Field<&openblack::creature_route::Leg::cost>("cost")
+	    .Field<&openblack::creature_route::Leg::round>("round")
+	    .Field<&openblack::creature_route::Leg::roundWay>("roundWay");
 	Reflect<openblack::creature_route::Route>(context, ValueOnly {})
-	    .Field<&openblack::creature_route::Route::points>("points")
+	    .Field<&openblack::creature_route::Route::legs>("legs")
 	    .Field<&openblack::creature_route::Route::segment>("segment")
 	    .Field<&openblack::creature_route::Route::travelled>("travelled");
 	Reflect<openblack::creature_script_play::Request>(context, ValueOnly {})

@@ -22,6 +22,7 @@
 #include "3D/MapCoords.h"
 #include "Animals/GrazerRules.h"
 #include "Camera/Camera.h"
+#include "Common/StringUtils.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
@@ -55,6 +56,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -107,18 +109,14 @@ std::tuple<Tribe, VillagerNumber> GetVillagerTribeAndNumber(const std::string& v
 	}
 }
 
+/// The player a land's script names, in any case; a name that is no player's is the neutral player
 PlayerNames GetPlayerName(const std::string& name)
 {
-	PlayerNames player;
-	try
+	if (const auto player = k_PlayerLookup.find(string_utils::UpperCase(name)); player != k_PlayerLookup.end())
 	{
-		player = k_PlayerLookup.at(name);
+		return player->second;
 	}
-	catch (...)
-	{
-		std::throw_with_nested(std::runtime_error(fmt::format("Could not recognize player name: {}", name)));
-	}
-	return player;
+	return PlayerNames::NEUTRAL;
 }
 
 /// The object the land's script made last
@@ -290,7 +288,13 @@ void FeatureScriptCommands::SetTownBelief(int32_t townId, const std::string& pla
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& registryContext = registry.Context();
 
-	const auto town = registryContext.towns.at(townId);
+	// A town the land never made has no belief to set
+	const auto found = registryContext.towns.find(townId);
+	if (found == registryContext.towns.end())
+	{
+		return;
+	}
+	const auto town = found->second;
 	auto& impression =
 	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
 	magic::town_belief::SetInPlayer(impression.belief, GetPlayerName(playerOwner), belief);
@@ -300,7 +304,14 @@ void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& 
 {
 	// TODO(town-ownership): in a multiplayer game the cap of a player in a town of one tribe is raised to 2 on one map
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto town = registry.Context().towns.at(townId);
+	// A town the land never made has no cap to set
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(townId);
+	if (found == towns.end())
+	{
+		return;
+	}
+	const auto town = found->second;
 	auto& impression =
 	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
 	const auto player = static_cast<size_t>(GetPlayerName(playerOwner));
@@ -366,14 +377,48 @@ void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position,
 
 void FeatureScriptCommands::CreateTownSpell(int32_t townId, const std::string& spellName)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId, spellName);
+	// The old form names a seed: the town holds the seed's plain miracle, which its centre shows
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	const auto town = towns.find(static_cast<uint32_t>(townId));
+	if (town == towns.end() || !Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto seed = magic::FindSpellSeedByName(info, spellName);
+	if (!seed.has_value())
+	{
+		return;
+	}
+	Locator::spellIconSystem::value().TownHolds(town->second, magic::GetSpellSeedInfo(info, *seed).magicTypes[0]);
 }
 
 void FeatureScriptCommands::CreateNewTownSpell(int32_t townId, const std::string& spellName)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId, spellName);
+	// The town holds the named miracle, and the plain miracle of its seed too when the name is a power-up of it
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	const auto town = towns.find(static_cast<uint32_t>(townId));
+	if (town == towns.end() || !Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto type = magic::FindMagicTypeByName(info, spellName);
+	if (!type.has_value() || *type == MagicType::None)
+	{
+		return;
+	}
+	const auto seed = magic::FindFirstSpellSeedForMagicType(info, *type);
+	if (!seed.has_value())
+	{
+		return;
+	}
+	auto& icons = Locator::spellIconSystem::value();
+	icons.TownHolds(town->second, *type);
+	icons.TownHolds(town->second,
+	                magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, *seed), magic::k_BasePowerUpLevel));
 }
 
 void FeatureScriptCommands::CreateTownCentreSpellIcon(int32_t param1, const std::string& param2)
@@ -651,15 +696,15 @@ void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t param2, i
 void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName, CreatureType creatureType,
                                                    const std::string& creatureMind, glm::vec3 position)
 {
-	auto playerType =
-	    std::distance(k_PlayerNamesStrs.begin(), std::find(k_PlayerNamesStrs.begin(), k_PlayerNamesStrs.end(), playerName));
+	// A name that is no player's, such as an eighth player's, makes the creature the neutral player's
+	const auto player = GetPlayerName(playerName);
 	auto yAngleRadians = glm::radians(180.0f);
 	auto& resources = Locator::resources::value();
 	auto& creatureMindManager = resources.GetCreatureMinds();
 	auto creatureMindPath = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / creatureMind;
 	auto loadResult = creatureMindManager.Load(creatureMind, resources::CreatureMindLoader::FromDiskTag {}, creatureMindPath);
 	auto creatureMindId = loadResult.first->first;
-	CreatureArchetype::Create(position, static_cast<PlayerNames>(playerType), creatureType, creatureMindId, yAngleRadians,
+	CreatureArchetype::Create(position, player, creatureType, creatureMindId, yAngleRadians,
 	                          CreatureArchetype::StartScale(creatureType), CreatureArchetype::StartBody(creatureType));
 }
 

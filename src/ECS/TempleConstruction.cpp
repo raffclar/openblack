@@ -36,15 +36,18 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipSiteConstruction.h"
 #include "Game.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -157,9 +160,9 @@ void CallForLeftoverWood(entt::entity pile)
 	                  .playerless = true});
 }
 
-/// A building's site goes: its builders are let go of it, and of a temple's piles of wood, those with wood in them stay
-/// on as piles of their own for anyone to take from, and the empty ones go
-void CloseSite(entt::entity building)
+} // namespace
+
+void construction::CloseSite(entt::entity building)
 {
 	auto& registry = Entities();
 	auto* site = registry.TryGet<BuildingSite>(building);
@@ -186,12 +189,15 @@ void CloseSite(entt::entity building)
 	registry.Remove<BuildingSite>(building);
 }
 
+namespace
+{
+
 /// A building is finished: no longer under construction, its site gone. A temple's heart is whole again.
 void Finish(entt::entity building)
 {
 	auto& registry = Entities();
 	registry.Remove<BuildProgress>(building);
-	CloseSite(building);
+	construction::CloseSite(building);
 	if (registry.AllOf<Temple>(building))
 	{
 		if (auto* life = registry.TryGet<ObjectLife>(building))
@@ -214,6 +220,29 @@ void Finish(entt::entity building)
 		// TODO(villager-life): a finished house takes its people in and its town reacts to the new building
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "A building other than a temple was finished without its town's reaction");
 	}
+}
+
+/// A built building is repaired whole: its site for the repair goes, it is drawn whole again, and a town's building
+/// starts working again as it did when it was first built
+void Repaired(entt::entity building)
+{
+	auto& registry = Entities();
+	registry.Remove<RepairSite>(building);
+	construction::CloseSite(building);
+	if (Locator::buildingDamageSystem::has_value())
+	{
+		Locator::buildingDamageSystem::value().Repaired(building);
+	}
+	if (!TownOf(building).has_value())
+	{
+		return;
+	}
+	// A repaired graveyard counts a burial and takes its town back if the town has none
+	graveyards::StartsWorking(building);
+	// A repaired crèche takes its town back if the town has none
+	creches::StartsWorking(building);
+	// TODO(villager-life): a repaired house takes its people in again and its town reacts to it working
+	registry.SetDirty();
 }
 
 void Apply(entt::entity building, building_construction::Progress progress)
@@ -300,11 +329,36 @@ void construction::SetBuilt(entt::entity building, float built)
 void construction::BuildBy(entt::entity building, float amount)
 {
 	const auto& registry = Entities();
-	if (!registry.Valid(building) || IsBuilt(building))
+	if (!registry.Valid(building))
 	{
 		return;
 	}
-	Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
+	// A worship site goes up with its altar, and its worship sites keep count of it
+	if (registry.AllOf<WorshipSite>(building))
+	{
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().BuildBy(building, amount);
+		}
+		return;
+	}
+	if (!IsBuilt(building))
+	{
+		Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
+		return;
+	}
+	// A built building short of its full life is mended instead, and repaired once whole
+	const float life = world_objects::LifeOf(building);
+	const auto mending = building_construction::RepairBy(life, amount);
+	if (mending.life == life)
+	{
+		return;
+	}
+	world_objects::IncreaseLife(building, mending.life - life);
+	if (mending.repaired)
+	{
+		Repaired(building);
+	}
 }
 
 namespace
@@ -385,12 +439,60 @@ void construction::OpenSite(entt::entity building, float desire)
 	}
 }
 
+void construction::OpenWorshipSite(entt::entity site, entt::entity town, float desire)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(site))
+	{
+		return;
+	}
+	// One site serves every town asked to build it; its pile of wood is made when the first wood comes
+	if (auto* open = registry.TryGet<BuildingSite>(site))
+	{
+		open->desire = desire;
+	}
+	else
+	{
+		auto& made = registry.Assign<BuildingSite>(site);
+		made.desire = desire;
+		made.places = PlacesRound(site);
+	}
+	// A site added to a town changes what it wants
+	if (Locator::townSystem::has_value() && registry.Valid(town) && registry.AllOf<Town>(town))
+	{
+		Locator::townSystem::value().MarkDesiresChanged(town);
+	}
+}
+
 void construction::MakeSitePiles(entt::entity building)
 {
 	auto& registry = Entities();
 	auto* site = registry.TryGet<BuildingSite>(building);
+	if (site == nullptr)
+	{
+		return;
+	}
+	// A worship site's one pile stands at a point of its model, turned as the site is
+	if (const auto* worship = registry.TryGet<const WorshipSite>(building))
+	{
+		auto& pile = site->piles.front();
+		if (registry.Valid(pile) && registry.AllOf<Pot>(pile))
+		{
+			return;
+		}
+		const auto& at = registry.Get<const Transform>(building).position;
+		const auto ground = worship_site_construction::PilePlace({at.x, at.z}, worship->facing);
+		auto position = glm::vec3(ground.x, at.y, ground.y);
+		if (Locator::terrainSystem::has_value())
+		{
+			position.y = Locator::terrainSystem::value().GetHeightAt(ground);
+		}
+		pile = archetypes::PotArchetype::CreateEmpty(position, worship->facing, PotInfo::MagicWood);
+		registry.Assign<SitePile>(pile);
+		return;
+	}
 	const auto* temple = registry.TryGet<const Temple>(building);
-	if (site == nullptr || temple == nullptr)
+	if (temple == nullptr)
 	{
 		return;
 	}

@@ -62,6 +62,16 @@ public:
 	virtual entt::entity MakeFoodPot(glm::vec3 position, float yAngle) = 0;
 	/// The site's turn powers up the artefacts put down by it, every so many turns, by how many dance at it
 	virtual void PowerUpArtefacts(entt::entity /*site*/, uint32_t /*dancers*/) {}
+	/// A site going up becomes a building site of a town asked to build it, wanting builders by a desire
+	virtual void OpenBuildingSite(entt::entity /*site*/, entt::entity /*town*/, float /*desire*/) {}
+	/// A site's building site goes: no town builds it any more
+	virtual void CloseBuildingSite(entt::entity /*site*/) {}
+	/// A site's dance goes: each of its dancers leaves it and decides afresh what to do
+	virtual void RemoveDance(entt::entity /*dance*/) {}
+	/// The artefacts put down by a site are no longer among its own; they stay where they are
+	virtual void ArtefactsLeaveSite(entt::entity /*site*/) {}
+	/// A thing of a site (the site itself, its altar, its food pot with what is in it) goes from the world
+	virtual void Remove(entt::entity object) = 0;
 };
 
 } // namespace openblack::ecs::worship_site

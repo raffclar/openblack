@@ -31,6 +31,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -45,6 +46,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -478,19 +480,16 @@ void TownSystem::ProcessTurn()
 	registry.Each<const Town>([&towns](entt::entity town, const Town&) { towns.push_back(town); });
 	const auto& infos = Locator::infoConstants::value().abode;
 	const auto* fire = Locator::fireSystem::has_value() ? &Locator::fireSystem::value() : nullptr;
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	for (const auto townEntity : towns)
 	{
-		if (IsInStateOfEmergency(townEntity))
-		{
-			// TODO(villagers): an attack on the town renews it, and its worship stops while it lasts
-			continue;
-		}
-		// Its storage pit or village centre on fire calls one; otherwise one that ran its time is over
+		const bool inEmergency = IsInStateOfEmergency(townEntity);
+		// Out of an emergency, its storage pit or village centre on fire calls one
 		bool burning = false;
 		for (const auto abode : registry.Get<const Town>(townEntity).abodes)
 		{
 			const auto* data = registry.TryGet<const Abode>(abode);
-			if (data == nullptr || fire == nullptr)
+			if (inEmergency || fire == nullptr || data == nullptr)
 			{
 				continue;
 			}
@@ -501,14 +500,31 @@ void TownSystem::ProcessTurn()
 				break;
 			}
 		}
-		if (burning)
+		const auto* aggression = registry.TryGet<const TownAggression>(townEntity);
+		const auto& town = registry.Get<const Town>(townEntity);
+		const auto outcome = villager_routine::EmergencyTurn({
+		    .inEmergency = inEmergency,
+		    .attackedThisTurn = aggression != nullptr && aggression->record.lastTurn == turn,
+		    .storeOrCentreBurning = burning,
+		    .worshipShare = town.worshipShare,
+		    .worshipShareBefore = town.worshipShareBeforeEmergency,
+		});
+		if (outcome.call)
 		{
 			SetInStateOfEmergency(townEntity);
-			continue;
 		}
-		registry.Get<Town>(townEntity).emergencyTurn = 0;
+		if (outcome.setWorshipShare.has_value() && Locator::villageTotemSystem::has_value())
+		{
+			// Its worshippers leave the worship site while it lasts, and come back after
+			Locator::villageTotemSystem::value().SetTownShare(townEntity, *outcome.setWorshipShare);
+		}
+		auto& changed = registry.Get<Town>(townEntity);
+		changed.worshipShareBeforeEmergency = outcome.worshipShareBefore;
+		if (outcome.end)
+		{
+			changed.emergencyTurn = 0;
+		}
 	}
-	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	// Every tenth turn each town short of worshippers sends more
 	if (Locator::worshipSiteSystem::has_value())
 	{
@@ -588,6 +604,11 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 	// It becomes the player's, gained after the towns they have already
 	component->owner = player;
 	component->gained = registry.Context().nextTownGained++;
+	// The miracles it offers go from its old player to its new one
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().TownChangedHands(town, previous);
+	}
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		Locator::worshipSiteSystem::value().TownChangedHands(town);

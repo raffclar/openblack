@@ -54,6 +54,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
+#include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
@@ -189,6 +190,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -216,6 +218,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
@@ -516,20 +519,28 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 
 	// The hand grips the land, which the temple has none of: its camera takes the clicks
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	// While a script's cinema bars have taken the interface, the buttons' presses don't reach the hand
+	const bool handTakesPresses = hand_visibility::TakesPresses(Locator::cinematicDirectorSystem::value().IsInterfaceActive());
 	// Holding the right button on a creature holds the hand to it to stroke or slap it; clicking it puts the leash on.
 	// While the player's creature fights, clicks on the creatures and the arena's ground direct the fight instead.
 	auto& creatureHand = Locator::creatureHandSystem::value();
 	auto& fights = Locator::creatureFightSystem::value();
 	auto& magic = Locator::magicSystem::value();
-	// The left button taps a one-shot bubble under the hand into it, before the creatures and the land
+	// The left button catches another player's fireball under the hand, before the creatures and the land
 	bool magicTookPress = false;
 	// The hand holds one thing at a time: a thing it picked up, or a miracle
 	auto* handGrab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
 	const bool handHoldsThing = handGrab != nullptr && handGrab->IsBusy();
-	if (!inTemple && !handHoldsThing && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
-	    !middleMouseButton && !Locator::debugGui::value().IsMouseOverWindow())
+	if (handTakesPresses && !inTemple && !handHoldsThing && event.type == SDL_MOUSEBUTTONDOWN &&
+	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton && !Locator::debugGui::value().IsMouseOverWindow())
 	{
 		magicTookPress = magic.TapAction();
+	}
+	// Letting go of the Action button lets go of the tip bubble
+	if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::tipBubbleSystem::value().LetGo();
 	}
 	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
 	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
@@ -545,7 +556,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		[[maybe_unused]] const auto tapped = handGrab->Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		// Let go with an empty hand that did nothing with the press, it clicks the thing or the place under it, for the
 		// scripts; not while the game is paused
-		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
+		if (handTakesPresses && !_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
 		{
 			handGrab->ClickReleased(Locator::time::value().GetTurn());
 		}
@@ -557,8 +568,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	if (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT))
 	{
 		magic.ReleaseAction();
+		// Let go quickly on a one-shot bubble, its miracle goes into the hand
+		magic.ReleaseOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
 	}
-	if (!inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
+	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
 	{
 		_actionPressTaken = magic.IsHandBusy() && magic.PressAction();
@@ -566,6 +579,18 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		if (!_actionPressTaken && handHoldsThing)
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		}
+		// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && Locator::tipBubbleSystem::has_value() &&
+		    Locator::tipBubbleSystem::value().IsUnderHand())
+		{
+			Locator::tipBubbleSystem::value().Grip();
+			_actionPressTaken = true;
+		}
+		// With an empty hand, a one-shot bubble under it takes the press before anything behind it
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
+		{
+			_actionPressTaken = magic.PressOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 		if (!_actionPressTaken)
 		{
@@ -621,7 +646,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 	}
-	if (!magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
+	if (handTakesPresses && !magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
 	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton)
 	{
 		const auto screenSize = Locator::windowing::value().GetSize();
@@ -861,6 +886,27 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	}
 }
 
+bool Game::HandOverThing() const
+{
+	// In the temple the hand only ever wiggles
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return false;
+	}
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().OrbUnderHand().has_value())
+	{
+		return true;
+	}
+	if (!Locator::pickingSystem::has_value())
+	{
+		return false;
+	}
+	// Only a thing with a model of its own: a fish farm, found through its fish, has none
+	const auto picked = Locator::pickingSystem::value().GetPick().object;
+	return picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
+	       Locator::entitiesRegistry::value().AllOf<ecs::components::Mesh>(*picked);
+}
+
 void Game::PickUnderCursor(float seconds)
 {
 	if (!Locator::pickingSystem::has_value() || !Locator::windowing::has_value())
@@ -1050,7 +1096,7 @@ void Game::ProcessHandToolTipTurn()
 		if (const auto amount = Locator::handGrabSystem::value().TakeAmountToolTip(); amount.has_value())
 		{
 			const auto held = gui::world_tooltip::HeldAmount(*amount);
-			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, static_cast<float>(held.first), std::nullopt, true);
+			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
 		}
 	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
@@ -1100,11 +1146,8 @@ void Game::ProcessHandToolTipTurn()
 			}
 			else
 			{
-				toolTips.SubmitNumbered(
-				    submission.numbers.index, submission.action, static_cast<float>(submission.numbers.first),
-				    submission.numbers.second.has_value() ? std::optional(static_cast<float>(*submission.numbers.second))
-				                                          : std::nullopt,
-				    submission.force);
+				toolTips.SubmitNumbered(submission.numbers.index, submission.action, submission.numbers.first,
+				                        submission.numbers.second, submission.force);
 			}
 		}
 	}
@@ -2328,6 +2371,12 @@ bool Game::Update() noexcept
 				cycle = HandCycle::Zoom;
 				break;
 			}
+			// Hovering over a thing, a one-shot bubble or a building as much as anything else, the hand feels it, over the
+			// camera hints it offers elsewhere
+			if (!_handCameraState && HandOverThing())
+			{
+				cycle = HandCycle::Stroke;
+			}
 			// On a creature, it strokes it or shows its slap
 			if (_handOnCreature.has_value())
 			{
@@ -2971,6 +3020,19 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("one-off meshes");
+	// The info tables come before the game's interface, whose tooltips take their priorities and times from them
+	{
+		InfoFile infoFile;
+		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
+		if (!result)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
+			return false;
+		}
+		Locator::infoConstants::reset(result.release());
+	}
+
+	_startupTimer->Step("info tables");
 	// The game's menu, which greets the player by their profile's name: openblack has no profiles, so by the name
 	// they log in with
 	{
@@ -2982,6 +3044,7 @@ bool Game::Initialize() noexcept
 		settings.sfxVolume = audio.GetSfxVolume();
 		settings.musicVolume = audio.GetMusicVolume();
 		settings.leftHandedHand = !Locator::config::value().rightHandedHand;
+		settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
 		_interface = gui::GameInterface::Create(gui::ToUtf16(user != nullptr ? user : "Player"), std::move(settings));
 		if (!_interface)
 		{
@@ -3190,18 +3253,6 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("sound and music banks");
-	{
-		InfoFile infoFile;
-		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
-		if (!result)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
-			return false;
-		}
-		Locator::infoConstants::reset(result.release());
-	}
-
-	_startupTimer->Step("info tables");
 	// The temple's leashes are drawn with the leash texture and its alpha
 	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
 	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
@@ -3241,6 +3292,18 @@ bool Game::Initialize() noexcept
 				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 			}
 		}
+	}
+	// The sea's texture, its colours and alpha together, four bits a channel as the game keeps it
+	try
+	{
+		textureManager.Load(sea_texture::k_Id.value(), resources::Texture2DLoader::FromDiskWithAlphaTag {},
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_ColourFile,
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side,
+		                    graphics::texel_depth::Depth::FourBits);
+	}
+	catch (std::runtime_error& err)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
 		// The game ships a grey ice map it never loads, cut short of a whole texture
@@ -3568,10 +3631,12 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	RenderLoadingFrame();
 
 	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
+	// The script is matched by where its file is found, however its path was given
+	const auto scriptFile = Level::ResolveScriptPath(path);
 	bool skirmish = false;
-	Locator::resources::value().GetLevels().Each([&path, &skirmish](entt::id_type /*id*/, const Level& level) {
+	Locator::resources::value().GetLevels().Each([&scriptFile, &skirmish](entt::id_type /*id*/, const Level& level) {
 		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
-		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
+		                        Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
 	});
 	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
 	_landPath = path;
@@ -4605,6 +4670,11 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	magic.UpdateHand(frame, HandStepSeconds());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
+	// The seeds above the stone hands and worship icons spin as the globes' do
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().Update(deltaSeconds);
+	}
 }
 
 void Game::PlayHandGrabSound()

@@ -17,11 +17,11 @@ SAMPLER2D(s3_footprints, 3);
 SAMPLER2D(s4_groundShadowData, 4);
 #define GROUND_SHADOW_DATA s4_groundShadowData
 #include "ground_shadow.sh"
-// Where the shadows of rocks and buildings (and of trees drawn moving) cover the island, laid out as the footprints are
+// Where the trees' shadows cover the island when they are drawn moving, laid out as the footprints are
 SAMPLER2D(s5_objectShadows, 5);
-// The trees' and big forests' shadows baked into the land: what each texel's 4-bit colour is scaled by, over 256, laid
-// out as the footprints are
-SAMPLER2D(s14_treeShadows, 14);
+// The shadows baked into the land, of the buildings, rocks and other things and of the trees and big forests: what each
+// texel's 4-bit colour is scaled by, over 256, laid out as the footprints are
+SAMPLER2D(s14_landShadows, 14);
 // What of the land's alpha the rivers' channels leave, laid out as the footprints are
 SAMPLER2D(s8_landAlpha, 8);
 
@@ -62,8 +62,8 @@ uniform vec4 u_block;
 // z: the small bump detail's strength
 // w: 1 to draw the land's textures alone, unlit and with no sea, as the temple's map is textured with
 uniform vec4 u_skyAndBump;
-// x: darkness of the objects' shadows where they fully cover a texel, 0 without them
-// yz: size of a texel of s5_objectShadows, w: 1 when the land takes the trees' baked shadows (s14_treeShadows)
+// x: darkness of the trees' moving shadows where they fully cover a texel, 0 without them
+// yz: size of a texel of s5_objectShadows, w: 1 when the land takes the baked shadows (s14_landShadows)
 uniform vec4 u_objectShadows;
 // zw: the block's size in units
 uniform vec4 u_blockPositionAndSize;
@@ -84,11 +84,12 @@ vec4 PaintedTexel(vec2 blockTexel, vec2 islandUv)
 	// The mix's exact result is a whole number of 255ths of a level: a thousandth of a level absorbs the rounding of
 	// what is stored without lifting any result to the next level
 	vec3 levels = floor((land.rgb * (1.0f - footprints.a) + footprints.rgb) * 15.0f + 0.001f);
-	// The trees' shadows are baked into each texel: its 4-bit colour scaled and rounded down. Where an object's shadow
-	// drawn this frame covers the texel, that shadow (darker than any tree's) stands for both.
-	if (u_objectShadows.w > 0.5f && texture2DLod(s5_objectShadows, islandUv, 0.0f).r < 0.5f)
+	// The shadows are baked into each texel: its 4-bit colour scaled and rounded down. Where a tree's moving shadow
+	// drawn this frame covers the texel, that shadow (as dark as any baked one) stands for both.
+	bool moving = u_objectShadows.x > 0.0f && texture2DLod(s5_objectShadows, islandUv, 0.0f).r >= 0.5f;
+	if (u_objectShadows.w > 0.5f && !moving)
 	{
-		float shade = floor(texture2DLod(s14_treeShadows, islandUv, 0.0f).r * 255.0f + 0.5f);
+		float shade = floor(texture2DLod(s14_landShadows, islandUv, 0.0f).r * 255.0f + 0.5f);
 		levels = floor(levels * shade / 256.0f + 0.001f);
 	}
 	return vec4(levels / 15.0f, land.a);
@@ -132,15 +133,18 @@ void main()
 	vec4 block = PaintedBlock(v_texcoord0.xy, v_texcoord1.xy);
 	vec4 col = vec4(block.rgb, 1.0f);
 
-	// The objects' shadows are baked into the land's textures over the footprints, under the light. The game counts
-	// how many of eight samples in each texel are covered; four filtered taps across a texel soften the edges as much.
-	vec2 texel = u_objectShadows.yz * 0.5f;
-	float objectShadow = 0.25f * (
-		texture2D(s5_objectShadows, v_texcoord1.xy + vec2(-texel.x, -texel.y)).r +
-		texture2D(s5_objectShadows, v_texcoord1.xy + vec2(texel.x, -texel.y)).r +
-		texture2D(s5_objectShadows, v_texcoord1.xy + vec2(-texel.x, texel.y)).r +
-		texture2D(s5_objectShadows, v_texcoord1.xy + vec2(texel.x, texel.y)).r);
-	col.rgb = col.rgb * (1.0f - objectShadow * u_objectShadows.x);
+	// The trees' moving shadows, when they are asked for, darken the land under the light. Four filtered taps across a
+	// texel soften their edges as the game's eight samples a texel would.
+	if (u_objectShadows.x > 0.0f)
+	{
+		vec2 texel = u_objectShadows.yz * 0.5f;
+		float objectShadow = 0.25f * (
+			texture2D(s5_objectShadows, v_texcoord1.xy + vec2(-texel.x, -texel.y)).r +
+			texture2D(s5_objectShadows, v_texcoord1.xy + vec2(texel.x, -texel.y)).r +
+			texture2D(s5_objectShadows, v_texcoord1.xy + vec2(-texel.x, texel.y)).r +
+			texture2D(s5_objectShadows, v_texcoord1.xy + vec2(texel.x, texel.y)).r);
+		col.rgb = col.rgb * (1.0f - objectShadow * u_objectShadows.x);
+	}
 
 	// The snow lies over all of it, under the light
 	if (u_snow.x > 0.5f)

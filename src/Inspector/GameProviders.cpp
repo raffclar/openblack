@@ -323,6 +323,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
     LocatorCoverage {"villageTotemSystem", "living.totems"},
+    LocatorCoverage {"spellIconSystem", "town.spells"},
     LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
     LocatorCoverage {"videoSystem", "view.video"},
@@ -644,7 +645,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 	              }));
 	provider->Add(Query("ocean", "The sea's textures"),
 	              Serve<Locator::oceanSystem>("the sea", [](const OceanInterface& ocean, const QueryContext& /*c*/) {
-		              return Json {{"diffuse_texture", ocean.GetDiffuseTexture()}, {"alpha_texture", ocean.GetAlphaTexture()}};
+		              return Json {{"texture", ocean.GetTexture()}};
 	              }));
 	provider->Add(Query("weather", "The climate: whether it runs, its storms and the season"),
 	              Serve<Locator::weatherSystem>(
@@ -2270,8 +2271,9 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		return QueryResult::Value({{"result", k_Results.at(static_cast<size_t>(result))}});
 	});
 	provider->Add(Query("route",
-	                    "A creature's walk in full: where it is going, the route it follows and the circles that route was "
-	                    "planned round (what it walks round, each grown by its own reach)",
+	                    "A creature's walk in full: where it is going, the state of its walk, the route it follows (its legs, "
+	                    "straight or round a circle, and points along it) and the circles it walks round (each grown by "
+	                    "its own reach)",
 	                    {IdParameter("The creature")}),
 	              [](const QueryContext& context) {
 		              const auto* registry = Registry();
@@ -2285,21 +2287,41 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              {
 			              return QueryResult::Error("that isn't a creature that walks");
 		              }
+		              const auto& route = locomotion->follower.GetRoute();
 		              Json points = Json::array();
-		              for (const auto& point : locomotion->route.points)
+		              for (const auto& point : route.Points(glm::radians(5.0f)))
 		              {
 			              points.push_back({point.x, point.y});
 		              }
-		              Json circles = Json::array();
-		              for (const auto& circle : locomotion->plannedRound)
+		              Json legs = Json::array();
+		              for (const auto& leg : route.legs)
 		              {
-			              circles.push_back({{"centre", {circle.centre.x, circle.centre.y}}, {"radius", circle.radius}});
+			              Json item {{"from", {leg.from.x, leg.from.y}}, {"to", {leg.to.x, leg.to.y}}, {"arc", leg.arc}};
+			              if (leg.round.has_value())
+			              {
+				              item["centre"] = {leg.round->centre.x, leg.round->centre.y};
+				              item["radius"] = leg.round->radius;
+				              item["clockwise"] = leg.roundWay == creature_route::Way::Clockwise;
+			              }
+			              legs.push_back(std::move(item));
+		              }
+		              Json circles = Json::array();
+		              for (const auto& obstacle : locomotion->follower.GetObstacles().All())
+		              {
+			              if (obstacle.active)
+			              {
+				              circles.push_back({{"centre", {obstacle.circle.centre.x, obstacle.circle.centre.y}},
+				                                 {"radius", obstacle.circle.radius},
+				                                 {"thing", Optional(obstacle.thing)}});
+			              }
 		              }
 		              return QueryResult::Value({{"destination", Optional(locomotion->destination)},
 		                                         {"motion", static_cast<int>(locomotion->motion)},
 		                                         {"radius", locomotion->radius},
 		                                         {"failed", locomotion->failed},
-		                                         {"segment", locomotion->route.segment},
+		                                         {"state", static_cast<int>(locomotion->follower.GetState())},
+		                                         {"segment", route.segment},
+		                                         {"legs", std::move(legs)},
 		                                         {"points", std::move(points)},
 		                                         {"circles", std::move(circles)}});
 	              });
@@ -2586,7 +2608,7 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	        }));
 	provider->Add(
 	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "
-	                    "its time to show, the point it points at and its scroll"),
+	                    "its time to show, the point it points at, its scroll and whether the hand is on it or grips it"),
 	    Serve<Locator::tipBubbleSystem>(
 	        "the tip bubble", [](const ecs::systems::TipBubbleSystemInterface& bubble, const QueryContext& /*c*/) -> Json {
 		        const auto& scroll = bubble.GetScroll();
@@ -2601,7 +2623,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		            {"content_height", scroll.contentHeight},
 		            {"line_height", scroll.lineHeight},
 		            {"more_above", scroll.moreAbove},
-		            {"more_below", scroll.moreBelow}};
+		            {"more_below", scroll.moreBelow},
+		            {"under_hand", bubble.IsUnderHand()},
+		            {"gripped", bubble.IsGripped()}};
 	        }));
 	provider->Add(Query("hand_demo",
 	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "

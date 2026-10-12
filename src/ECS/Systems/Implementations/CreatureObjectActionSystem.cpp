@@ -53,7 +53,9 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Graveyards.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -244,6 +246,14 @@ void Consume(ecs::Registry& registry, entt::entity food)
 {
 	if (const auto* villager = registry.TryGet<const Villager>(food))
 	{
+		// A living villager eaten dies: its town's graveyard counts it among its burials, though no body is left. One
+		// already dead was counted when it died.
+		if (!registry.AllOf<VillagerDeath>(food))
+		{
+			// TODO(villager-death-aftermath): the rest of the town and players hearing of the death (no cause), and the
+			// creature's player counting a villager killed
+			graveyards::TownPersonDied(villager->town);
+		}
 		if (auto* abode = registry.TryGet<Abode>(villager->abode))
 		{
 			std::erase(abode->inhabitants, food);

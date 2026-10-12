@@ -216,6 +216,12 @@ public:
 	/// A seed summoned from an icon of a worship site into its player's hand, if it is free: the site charges it with its
 	/// cost to create, as much as it has, and tops up what it casts. The seed, or none.
 	virtual entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) = 0;
+	/// A miracle charged at an icon of a worship site goes into the site's player's hand, if it is free, holding the prayer
+	/// power the icon stored for it; the site tops up what it casts. The seed, or none.
+	virtual entt::entity TakeIconSeed(entt::entity /*site*/, SpellSeedType /*seed*/, int /*powerUp*/, float /*chants*/)
+	{
+		return entt::null;
+	}
 	/// The hand drops the miracle it holds, as a scribble or a shake does: what was started is called off and what the
 	/// seed still holds goes back to the player's worship
 	virtual void DiscardHeldSeed() = 0;
@@ -224,9 +230,16 @@ public:
 
 	/// Once a frame, before any press or release
 	virtual void UpdateHand(const HandFrame& frame, float seconds) = 0;
-	/// The left button tapped: a bubble under the cursor goes into the hand. Whether one did, so the hand doesn't grip
-	/// the land with the press.
+	/// The left button tapped: another player's fireball under the cursor is caught into the hand. Whether one was, so the
+	/// hand doesn't grip the land with the press.
 	virtual bool TapAction() = 0;
+	/// The action button went down with an empty hand: a one-shot bubble under the hand, within the player's influence,
+	/// takes the press. Whether one did, so nothing behind it is taken.
+	virtual bool PressOrb(uint32_t nowMs, uint32_t turn) = 0;
+	/// The action button came up: let go quickly, the bubble pressed is tapped and its miracle goes into the hand
+	virtual void ReleaseOrb(uint32_t nowMs, uint32_t turn) = 0;
+	/// The one-shot bubble under the hand now, if any
+	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;
 	/// The action button went down with a miracle in the hand: it is armed, locked on or cast. Whether the miracles took
 	/// the press, so the creatures don't.
 	virtual bool PressAction() = 0;

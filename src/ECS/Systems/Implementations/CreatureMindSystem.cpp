@@ -1696,3 +1696,26 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 	}
 	ReleaseCast(creature);
 }
+
+void CreatureMindSystem::MoveToStage(entt::entity creature, uint32_t stage)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr)
+	{
+		return;
+	}
+	mind->developmentPhase = stage;
+	// Its desires are set for the stage at once, even for the stage it is at already; a mind yet to think sets them up
+	// for the stage when it first does
+	if (mind->desires.has_value())
+	{
+		creature_desires::ActivateForPhase(*mind->desires, Phases(), stage);
+		mind->desiresPhase = stage;
+	}
+	else
+	{
+		mind->desiresPhase.reset();
+	}
+	Abandon(*mind);
+}

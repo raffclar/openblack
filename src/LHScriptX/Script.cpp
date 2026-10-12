@@ -13,6 +13,7 @@
 #include <ranges>
 
 #include <glm/vec2.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
 #include "FeatureScriptCommands.h"
@@ -39,7 +40,14 @@ void Script::Load(const std::string& source, const std::function<void()>& afterC
 
 			if (!IsCommand(identifier))
 			{
-				throw std::runtime_error("unknown command: " + identifier);
+				// A word the game doesn't know is passed over, as is everything after it up to the next command it
+				// knows, so a misspelt line is ignored and the rest of the land still loads
+				if (const auto logger = spdlog::get("scripting"); logger != nullptr)
+				{
+					SPDLOG_LOGGER_WARN(logger, "LHScriptX: skipping unknown command {}", identifier);
+				}
+				this->AdvanceToken(lexer);
+				continue;
 			}
 
 			token = this->AdvanceToken(lexer);
@@ -70,13 +78,18 @@ void Script::Load(const std::string& source, const std::function<void()>& afterC
 				}
 			}
 
-			if (!token->IsOP(Operator::RightParentheses))
+			// A command ends at its ')' or, when that was left out, at the end of its line
+			const bool closedByLineEnd = token->IsEOL() || token->IsEOF();
+			if (!closedByLineEnd && !token->IsOP(Operator::RightParentheses))
 			{
 				throw std::runtime_error("missing )");
 			}
 
 			// move token to whatever is after ')'
-			this->AdvanceToken(lexer);
+			if (!closedByLineEnd)
+			{
+				this->AdvanceToken(lexer);
+			}
 
 			RunCommand(identifier, args);
 			if (afterCommand)

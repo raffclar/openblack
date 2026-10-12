@@ -9,14 +9,13 @@
 
 #include "LoadingScreenRules.h"
 
-#include <cwctype>
-
 #include <algorithm>
 
 #include <fmt/format.h>
 #include <glm/common.hpp>
 
 #include "Gui/ScreenFit.h"
+#include "Gui/TextWrap.h"
 
 namespace openblack::loading
 {
@@ -25,8 +24,6 @@ namespace
 {
 /// The tips' texts follow one another in the text scripts, the first of them named this with a number from 1
 constexpr std::string_view k_TipTextPrefix = "HELP_TEXT_TOTD_";
-/// The mark the game puts in place of words it can't show
-constexpr char16_t k_HiddenWord = u'\xF8FE';
 /// The front end's boxes are laid out on this
 constexpr int32_t k_LayoutWidth = 800;
 constexpr int32_t k_LayoutHeight = 600;
@@ -95,7 +92,7 @@ std::u16string BlankControlCodes(std::u16string_view text)
 		}
 		for (; i < blanked.size(); ++i)
 		{
-			if (std::iswspace(static_cast<wint_t>(blanked[i])) != 0 || blanked[i] == k_HiddenWord)
+			if (gui::text_wrap::IsSpace(blanked[i]) || blanked[i] == gui::text_wrap::k_Tilde)
 			{
 				break;
 			}

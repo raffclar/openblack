@@ -97,6 +97,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Hand/HandGrabRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
@@ -1467,6 +1468,11 @@ void MagicSystem::ProcessTurn()
 	}
 	for (const auto entity : std::vector<entt::entity>(_spells.begin(), _spells.end()))
 	{
+		// The seed it was cast from has its turn first
+		if (const auto* before = FindSpell(entity))
+		{
+			KeepSeedInInfluence(entity, *before);
+		}
 		auto* spell = FindSpell(entity);
 		if (spell == nullptr || !Process(entity, *spell))
 		{
@@ -1487,16 +1493,8 @@ void MagicSystem::Update(float /*seconds*/)
 	{
 		Locator::audio::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
 	}
-	// A seed out of the hand stays with its miracle
-	registry.Each<SpellSeed, Transform>([&](entt::entity, const SpellSeed& seed, Transform& transform) {
-		if (seed.followsSpell)
-		{
-			if (const auto* spell = FindSpell(seed.spell))
-			{
-				transform.position = spell->position;
-			}
-		}
-	});
+	// A seed out of the hand stays with its miracle, shown over it or not
+	ShowSeedsWithSpells();
 	// The held seed itself is placed in the hand as the hand is posed, and its in-hand effect with it
 	// (PlaceHandEffect)
 	if (_held.has_value() && registry.Valid(*_held))
@@ -1551,6 +1549,7 @@ void MagicSystem::Reset()
 	_held.reset();
 	_input = {};
 	_actionDown = false;
+	_orbPress.reset();
 	_pour = {};
 	_rainWatchers.clear();
 	_circle.reset();
@@ -1818,6 +1817,33 @@ entt::entity MagicSystem::SummonSeedAtSite(entt::entity site, SpellSeedType seed
 	const auto& registry = EntityRegistry();
 	const auto* worshipSite = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
 	return worshipSite != nullptr ? Summon(worshipSite->player, seedType, powerUp, site) : entt::null;
+}
+
+entt::entity MagicSystem::TakeIconSeed(entt::entity site, SpellSeedType seedType, int powerUp, float chants)
+{
+	const auto& registry = EntityRegistry();
+	const auto* worshipSite = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
+	if (worshipSite == nullptr)
+	{
+		return entt::null;
+	}
+	const auto entity = GiveSeedToHand(worshipSite->player, seedType, powerUp, 1.0f);
+	if (entity == entt::null)
+	{
+		return entt::null;
+	}
+	auto& seed = EntityRegistry().Get<SpellSeed>(entity);
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Info(), seedType), powerUp);
+	// It holds what its icon stored, made at the site's icon, and comes from the player's worship
+	seed.worshipSite = site;
+	seed.chantStore = chants;
+	seed.power = magic::SeedPower(seed.chantStore, magic::GetChantsRequiredToCreate(Info(), type));
+	seed.origin = magic::SeedOrigin::Worship;
+	seed.hasIcon = true;
+	seed.ready = magic::ReadyAtOnce(seed.origin);
+	seed.turnsInHand = 0;
+	ShowHeldSeed();
+	return entity;
 }
 
 entt::entity MagicSystem::Summon(PlayerNames player, SpellSeedType seedType, int powerUp, entt::entity site)
@@ -2284,15 +2310,62 @@ bool MagicSystem::TapAction()
 	{
 		return false;
 	}
-	if (const auto orb = OrbAlong(_hand.rayOrigin, _hand.rayDirection))
-	{
-		return TapOrb(*orb);
-	}
 	if (const auto ball = FireBallAlong(_hand.rayOrigin, _hand.rayDirection))
 	{
 		return CatchFireBall(*ball);
 	}
 	return false;
+}
+
+std::optional<entt::entity> MagicSystem::OrbUnderHand() const
+{
+	if (!_hand.overWorld)
+	{
+		return std::nullopt;
+	}
+	return OrbAlong(_hand.rayOrigin, _hand.rayDirection);
+}
+
+bool MagicSystem::EmptyHandInInfluence() const
+{
+	// The hand is this computer's player's
+	return _hand.point.has_value() && _world.HandInInfluence(PlayerNames::PLAYER_ONE, *_hand.point);
+}
+
+bool MagicSystem::PressOrb(uint32_t nowMs, uint32_t turn)
+{
+	_orbPress.reset();
+	if (!Locator::infoConstants::has_value() || _held.has_value())
+	{
+		return false;
+	}
+	const auto orb = OrbUnderHand();
+	// Out of the player's influence the hand neither taps nor takes a bubble
+	if (!orb.has_value() || !EmptyHandInInfluence())
+	{
+		return false;
+	}
+	// A bubble is something the hand can take: the press starts taking it, and only a quick release taps it
+	// TODO(hand): held past the tap's time, the hand takes the bubble itself, to carry and throw like any other thing
+	_orbPress = OrbPress {.orb = *orb, .pressMs = nowMs, .pressTurn = turn};
+	return true;
+}
+
+void MagicSystem::ReleaseOrb(uint32_t nowMs, uint32_t turn)
+{
+	if (!_orbPress.has_value())
+	{
+		return;
+	}
+	const auto press = *_orbPress;
+	_orbPress.reset();
+	const bool quick = hand_grab::ElapsedMs(nowMs, press.pressMs, turn, press.pressTurn) <= hand_grab::k_GrabWaitMs;
+	if (!quick || _held.has_value() || !EntityRegistry().Valid(press.orb) ||
+	    !EntityRegistry().AllOf<OneOffSpellSeed>(press.orb) || !EmptyHandInInfluence())
+	{
+		return;
+	}
+	TapOrb(press.orb);
 }
 
 std::optional<entt::entity> MagicSystem::FireBallAlong(glm::vec3 origin, glm::vec3 direction) const

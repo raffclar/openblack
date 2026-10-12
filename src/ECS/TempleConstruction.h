@@ -34,14 +34,25 @@ std::optional<entt::entity> StartPlannedAt(glm::vec3 place, float scriptDesire);
 /// gets a site for its builders if it has none
 void SetBuilt(entt::entity building, float built);
 
-/// Builders add to how much of a building under construction is built, finishing it at all of it
+/// Builders add to how much of a building under construction is built, finishing it at all of it. On a built building
+/// short of its full life they add to its life instead, and once it is whole it is repaired: a repaired town building
+/// starts working again as when it was built (a graveyard counts a burial and takes its town back).
 void BuildBy(entt::entity building, float amount);
 
 /// A building going up gets a site for its builders, with a desire, its builders' places worked out round its model and,
 /// for a temple, its six piles of wood
 void OpenSite(entt::entity building, float desire);
 
-/// A temple's site makes again those of its six piles of wood that have gone
+/// A worship site going up becomes a building site of a town asked to build it, wanting builders by a desire; its
+/// builders' places are worked out round its model
+void OpenWorshipSite(entt::entity site, entt::entity town, float desire);
+
+/// A temple's site makes again those of its six piles of wood that have gone; a worship site's makes its one pile if it
+/// has none
 void MakeSitePiles(entt::entity building);
+
+/// A building's site goes: its builders are let go of it, and of its piles of wood, those with wood in them stay on as
+/// piles of their own for anyone to take from, and the empty ones go
+void CloseSite(entt::entity building);
 
 } // namespace openblack::ecs::construction
