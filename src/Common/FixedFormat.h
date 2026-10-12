@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -23,5 +24,9 @@ namespace openblack::fixed_format
 /// A text with a number written into it: each "%f" in it, with any width and digits after the point ("%3.0f"), is the
 /// number, and "%%" is a percent sign. Anything else is left as it is.
 [[nodiscard]] std::u16string WithNumber(std::u16string_view text, double value);
+
+/// A text with several numbers written into it: the first "%f" is the first number, the next the second, and so on.
+/// Past the last, the last is written again.
+[[nodiscard]] std::u16string WithNumbers(std::u16string_view text, std::span<const double> values);
 
 } // namespace openblack::fixed_format

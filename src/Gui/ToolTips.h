@@ -87,6 +87,9 @@ public:
 	/// A tooltip forced to show at once, with a number written into its words (as the share of a town's people
 	/// worshipping): a tooltip that has one shows the latest number given
 	void Force(uint32_t index, float number);
+	/// A tooltip with a number or two written into its words, by the mouse button it shows; forced to show at once or
+	/// submitted as any other
+	void SubmitNumbered(uint32_t index, ToolTipAction action, float number, std::optional<float> second, bool force = false);
 	/// A tooltip of words only, shown in another tooltip's words with a number written into them (as a town's flag shows
 	/// its own desire under the tooltip for a need)
 	void SubmitInWords(uint32_t index, uint32_t words, float number);
@@ -104,6 +107,8 @@ public:
 		float alpha;
 		/// The number its words show, for one given a number
 		std::optional<float> number;
+		/// The second number its words show, for one given two
+		std::optional<float> second;
 		/// The tooltip whose words it shows instead of its own, for one given other words
 		std::optional<uint32_t> words;
 	};
@@ -148,6 +153,7 @@ private:
 	{
 		uint32_t index;
 		float number;
+		std::optional<float> second;
 		std::optional<uint32_t> words;
 	};
 	std::optional<Numbered> _number;

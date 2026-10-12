@@ -475,6 +475,7 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 		return false;
 	}
 	Take(grab, handful, false);
+	_amountToolTip = first;
 	if (grab.state != HandGrab::State::Holding)
 	{
 		return false;
@@ -653,6 +654,7 @@ bool HandGrabSystem::Scoop(HandGrab& grab)
 	}
 	const auto took = _world->TakeFromPile(grab.scoopSource, taken);
 	registry.Get<Pot>(grab.object).amount += took;
+	_amountToolTip = registry.Get<Pot>(grab.object).amount;
 	_world->ResizePot(grab.object);
 	// A pile scooped empty stops streaming and sounding; the scoop ends with the next turn
 	if (!Exists(grab.scoopSource))

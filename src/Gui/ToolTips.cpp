@@ -151,13 +151,19 @@ void ToolTips::Force(uint32_t index, float number)
 {
 	// Words only, with no mouse; the number is kept even when the tooltip isn't taken up
 	Submit(index, ToolTipAction::None, ToolTipArrows::k_None, true);
-	_number = Numbered {.index = index, .number = number, .words = std::nullopt};
+	_number = Numbered {.index = index, .number = number, .second = std::nullopt, .words = std::nullopt};
 }
 
 void ToolTips::SubmitInWords(uint32_t index, uint32_t words, float number)
 {
 	Submit(index, ToolTipAction::None, ToolTipArrows::k_None);
-	_number = Numbered {.index = index, .number = number, .words = words};
+	_number = Numbered {.index = index, .number = number, .second = std::nullopt, .words = words};
+}
+
+void ToolTips::SubmitNumbered(uint32_t index, ToolTipAction action, float number, std::optional<float> second, bool force)
+{
+	Submit(index, action, ToolTipArrows::k_None, force);
+	_number = Numbered {.index = index, .number = number, .second = second, .words = std::nullopt};
 }
 
 std::optional<ToolTips::Shown> ToolTips::GetShown() const
@@ -173,5 +179,6 @@ std::optional<ToolTips::Shown> ToolTips::GetShown() const
 	              .arrows = _icon->arrows,
 	              .alpha = alpha,
 	              .number = numbered ? std::optional(_number->number) : std::nullopt,
+	              .second = numbered ? _number->second : std::nullopt,
 	              .words = numbered ? _number->words : std::nullopt};
 }

@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <span>
 
 namespace openblack::fixed_format
 {
@@ -50,8 +51,14 @@ std::string Fixed(double value, int width, int precision)
 
 std::u16string WithNumber(std::u16string_view text, double value)
 {
+	return WithNumbers(text, std::span<const double>(&value, 1));
+}
+
+std::u16string WithNumbers(std::u16string_view text, std::span<const double> values)
+{
 	std::u16string written;
 	written.reserve(text.size() + 8);
+	size_t used = 0;
 	for (size_t i = 0; i < text.size(); ++i)
 	{
 		if (text[i] != u'%' || i + 1 >= text.size())
@@ -89,6 +96,8 @@ std::u16string WithNumber(std::u16string_view text, double value)
 			written.push_back(text[i]);
 			continue;
 		}
+		const double value = values.empty() ? 0.0 : values[std::min(used, values.size() - 1)];
+		++used;
 		for (const char c : Fixed(value, width, precision.value_or(6)))
 		{
 			written.push_back(static_cast<char16_t>(c));

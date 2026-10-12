@@ -84,6 +84,9 @@ public:
 	/// Why a press of the Action button on a thing wouldn't take it (out of the influence, a thing the hand can't hold,
 	/// a script holding it out of reach...); empty when it would
 	[[nodiscard]] virtual std::string WhyNotTake(entt::entity object) const = 0;
+	/// The amount of food or wood the hand has just taken from a pile, which the hand shows for the player; it is given
+	/// once, and none until the hand takes some more
+	[[nodiscard]] virtual std::optional<uint32_t> TakeAmountToolTip() { return std::nullopt; }
 	/// How what it holds hangs: its hold, how far below the hand its model hangs, and how far it spreads out of the hand
 	struct HeldPose
 	{
