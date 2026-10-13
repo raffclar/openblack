@@ -198,6 +198,8 @@ enum class Thing : uint8_t
 	DeadTree,
 	/// A standing tree
 	Tree,
+	/// A magic mushroom growing on the land
+	MagicMushroom,
 	/// Any other static: only the toys among them are picked up
 	Static,
 	/// Statics with kinds of their own that no hand holds

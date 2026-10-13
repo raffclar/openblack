@@ -181,6 +181,8 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 		return KindRule::Bird;
 	case Thing::Pile:
 		return KindRule::Pile;
+	case Thing::MagicMushroom:
+		return KindRule::Mushroom;
 	case Thing::Villager:
 	case Thing::Animal:
 	case Thing::MobileObject:
@@ -196,7 +198,8 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 
 bool creature_object_actions::Holdable(Thing thing)
 {
-	return thing != Thing::Other && thing != Thing::Creature && thing != Thing::Lantern && thing != Thing::Shield;
+	return thing != Thing::Other && thing != Thing::Creature && thing != Thing::Lantern && thing != Thing::Shield &&
+	       thing != Thing::MagicMushroom;
 }
 
 bool creature_object_actions::MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts)

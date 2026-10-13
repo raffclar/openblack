@@ -411,6 +411,19 @@ TEST(CreatureObjectActions, OfOtherStaticsOnlyTheToysArePickedUp)
 	EXPECT_TRUE(creature_object_actions::Holdable(Thing::Vortex));
 }
 
+TEST(CreatureObjectActions, AMagicMushroomIsPickedUpUnlessAScriptSaidNo)
+{
+	using creature_object_actions::KindRule;
+	using creature_object_actions::Thing;
+	EXPECT_EQ(creature_object_actions::RuleOf(Thing::MagicMushroom), KindRule::Mushroom);
+	const creature_object_actions::KindFacts mushroom {.rule = KindRule::Mushroom, .holdable = false};
+	EXPECT_TRUE(creature_object_actions::MayPickUpKind(mushroom, {.townArtefact = true, .inMapOrHeldByCreature = false}));
+	EXPECT_FALSE(creature_object_actions::MayPickUpKind(mushroom, {.cannotBePickedUp = true}));
+	// No hand holds one, so none is given or caught
+	EXPECT_FALSE(creature_object_actions::Holdable(Thing::MagicMushroom));
+	EXPECT_FALSE(creature_object_actions::MayTakeKindFromHand(mushroom, {}));
+}
+
 TEST(CreatureObjectActions, OnlyWhatAHandCanHoldIsGivenOrCaught)
 {
 	using creature_object_actions::KindRule;

@@ -53,6 +53,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -1417,6 +1418,11 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 		if (registry.AllOf<Tree>(object))
 		{
 			return Thing::Tree;
+		}
+		if (const auto* feature = registry.TryGet<const Feature>(object);
+		    feature != nullptr && feature->type == FeatureInfo::MagicMushroom)
+		{
+			return Thing::MagicMushroom;
 		}
 		if (const auto* still = registry.TryGet<const MobileStatic>(object))
 		{
