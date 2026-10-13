@@ -260,6 +260,9 @@ struct ObjectSetup
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
 	/// A villager belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A villager goes to make love with the scenario's object of this index once the walk delay is up, as a breeder
+	/// sends one: both walk to meet and kiss there
+	std::optional<size_t> mateWith;
 	/// A villager is put down on the nearest teleport stone after this many seconds, as the hand drops one, and jumps at
 	/// once to the stone nearest where it was walking
 	std::optional<float> dropOnStoneSeconds;

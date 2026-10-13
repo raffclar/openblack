@@ -139,6 +139,25 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .objects = std::move(finishing),
 	});
 
+	// Two couples sent to make love, one side by side and one face to face, as a breeder sends a villager
+	all.push_back({
+	    .id = "villagers.kissing",
+	    .name = "Villagers meeting to kiss",
+	    .facet = Facet::Objects,
+	    .description = "Two grown couples on open land: the man of each is sent to make love with his woman a second in, "
+	                   "as a breeder sends one. The first couple stand eight metres apart side by side, the second "
+	                   "twelve metres apart facing each other.",
+	    .expected = "Each pair walk towards each other to meet halfway, stopping a little apart, turn to face each "
+	                "other and kiss, each in their own kiss, then go about their business when their time together is "
+	                "up.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-6.0f, -2.0f}, {6.0f, 10.0f}}, .distance = 0.6f},
+	    .objects = {{.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, 0.0f}, .mateWith = 1},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {4.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 2.0f}, .yawDegrees = 0.0f, .mateWith = 3},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 14.0f}, .yawDegrees = 180.0f}},
+	});
+
 	// A town whose store has run out of food, with fields to farm
 	std::vector<ObjectSetup> hungry {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
