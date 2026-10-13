@@ -50,6 +50,9 @@ public:
 	virtual bool Grab() = 0;
 	/// Whether the player's hand may take hold of the creature to stroke and slap it
 	[[nodiscard]] virtual bool MayHold(entt::entity creature) const = 0;
+	/// Whether the empty hand over the creature offers to interact with it, given whether the hand is within the
+	/// player's influence (asked at the creature)
+	[[nodiscard]] virtual bool ShowsInteractTip(entt::entity creature, bool handInInfluence) const = 0;
 	/// Whether the hand held to a creature by the button would, let go now, have been clicked on it rather than held
 	[[nodiscard]] virtual bool IsClick() const = 0;
 	/// Once a frame while held to a creature, with the line of sight through the cursor, the cursor on the screen, the

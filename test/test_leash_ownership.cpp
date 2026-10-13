@@ -233,16 +233,58 @@ TEST(CreatureHand, TheHandHoldsAnyPlayersCreature)
 
 TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureAnywhereAndOthersInTheInfluence)
 {
+	using creature_hand::Holdable;
 	using creature_hand::ShowsInteractTip;
+	const Holdable own {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger};
+	const Holdable other {.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tiger};
 	// The player's own creature, inside the influence or out
-	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false, true));
-	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false, false));
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, false, true));
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, false, false));
 	// Another player's creature only inside it
-	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE, false, true));
-	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE, false, false));
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, other, false, true));
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, other, false, false));
 	// A creature of no player never
-	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::NEUTRAL, false, true));
-	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, true, true));
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, Holdable {.species = CreatureType::Tiger}, false, true));
+}
+
+TEST(CreatureHand, TheInteractTipIsNeverForACreatureUnderAScriptsControl)
+{
+	using creature_hand::Holdable;
+	using creature_hand::ShowsInteractTip;
+	const Holdable own {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .scriptControlled = true};
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, false, true));
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, false, false));
+}
+
+TEST(CreatureHand, ASleepingCreatureStillShowsTheInteractTip)
+{
+	using creature_hand::Holdable;
+	using creature_hand::ShowsInteractTip;
+	const Holdable own {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true};
+	const Holdable other {.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tiger, .frozen = true};
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, false, false));
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, false, true));
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, other, false, true));
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, other, false, false));
+}
+
+TEST(CreatureHand, ACreatureAlreadyHeldOffersNoInteractTipWithinTheInfluence)
+{
+	using creature_hand::Holdable;
+	using creature_hand::ShowsInteractTip;
+	const Holdable own {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger};
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, true, true));
+	// Outside it the own creature is offered whatever holds it
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, true, false));
+	// One that wouldn't take hold isn't held by the hand in the first place, and is offered
+	const Holdable asleep {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true};
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, asleep, true, true));
+}
+
+TEST(CreatureHand, ACreatureUnderAScriptsControlCantBeHeld)
+{
+	EXPECT_FALSE(
+	    creature_hand::MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .scriptControlled = true}));
 }
 
 TEST(CreatureHand, AQuickPressIsAClickAndALongOneAHold)

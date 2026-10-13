@@ -11,17 +11,31 @@
 
 using namespace openblack;
 
-bool creature_hand::MayHold(const Holdable& creature)
+bool creature_hand::TakesHold(const Holdable& creature)
 {
 	// The game also keeps the hand off a creature part way into one particular action of its own; that action isn't
 	// known here
 	return creature.owner != PlayerNames::NEUTRAL && creature.species != CreatureType::Ogre && !creature.asleep &&
-	       !creature.frozen;
+	       !creature.frozen && !creature.scriptControlled;
 }
 
-bool creature_hand::ShowsInteractTip(PlayerNames player, PlayerNames owner, bool asleep, bool handInInfluence)
+bool creature_hand::MayHold(const Holdable& creature)
 {
-	return player != PlayerNames::NEUTRAL && owner != PlayerNames::NEUTRAL && (owner == player || handInInfluence) && !asleep;
+	return TakesHold(creature);
+}
+
+bool creature_hand::ShowsInteractTip(PlayerNames player, const Holdable& creature, bool held, bool handInInfluence)
+{
+	if (player == PlayerNames::NEUTRAL || creature.owner == PlayerNames::NEUTRAL || creature.scriptControlled)
+	{
+		return false;
+	}
+	// Within the influence a creature that would take hold offers it unless a hand already holds it
+	if (handInInfluence && TakesHold(creature))
+	{
+		return !held;
+	}
+	return creature.owner == player || handInInfluence;
 }
 
 bool creature_hand::IsClick(float heldMs, bool strokedOrSlapped)
