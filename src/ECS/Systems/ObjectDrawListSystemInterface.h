@@ -28,9 +28,10 @@ namespace openblack::ecs::systems
 
 /// The land's draw list: the things on the land's blocks that are drawn. The blocks in view are walked from near to far
 /// up to 700 units off, each adding what stands on it, until the list holds 2999 things; anything else on the land's
-/// blocks isn't drawn. The list is made again when the blocks in view change, when asked, or after ten turns, so a
-/// thing that comes onto the blocks in between waits for it. Things not standing in the map's cells (held, flying in
-/// the physics) and those drawn on their own (the temple, things drawn in high detail) aren't the list's to decide.
+/// blocks isn't drawn. The list is made again when a block in view starts or stops to show land triangles, when asked,
+/// or after ten turns, so a thing that comes onto the blocks in between waits for it. Things not standing in the map's
+/// cells (held, flying in the physics) and those drawn on their own (the temple, things drawn in high detail) aren't the
+/// list's to decide.
 class ObjectDrawListSystemInterface
 {
 public:

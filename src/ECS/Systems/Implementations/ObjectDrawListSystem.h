@@ -54,11 +54,19 @@ private:
 		object_draw_list::Block block;
 		/// Its column and row
 		glm::ivec2 at {0};
+		/// Its place in the land's blocks
+		size_t landIndex {0};
 		bool inView {false};
+		/// It showed triangles when it was last in view
+		bool shown {false};
+		/// Its triangles at full detail, three corner indices each
+		std::vector<uint16_t> triangles;
 	};
 
 	/// The land's blocks as the list sees them, read once a land
 	void LoadBlocks();
+	/// Whether one or more triangles of a block in view show, with its cells at the heights they have now
+	[[nodiscard]] static bool Shows(const LandBlock& block, const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye);
 	void MakeList();
 	void OnPhysicsEnded(entt::registry& registry, entt::entity entity);
 

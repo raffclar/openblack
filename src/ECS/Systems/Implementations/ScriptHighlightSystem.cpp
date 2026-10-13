@@ -288,10 +288,15 @@ void ScriptHighlightSystem::UpdateFrame(float frameMilliseconds, float /*turnFra
 {
 	auto& registry = _world->Entities();
 	RemoveLoneGlows();
+	const auto frame = _world->DrawFrame();
 	bool moved = false;
 	registry.Each<ScriptHighlight>(
-	    [this, &registry, &moved, frameMilliseconds, camera](entt::entity entity, ScriptHighlight& highlight) {
-		    const bool drawn = Drawn(highlight);
+	    [this, &registry, &moved, frame, frameMilliseconds, camera](entt::entity entity, ScriptHighlight& highlight) {
+		    // The game draws a highlight only in the frames where its list of the things to draw selects it. In the other
+		    // frames the highlight does not show, spin or step its effects.
+		    const bool listed = _world->InDrawList(entity);
+		    const bool selected = object_draw_list::Drawn(frame, listed, highlight.onScreen);
+		    const bool drawn = selected && Drawn(highlight);
 		    const bool hidden = registry.AllOf<HiddenByState>(entity);
 		    if (drawn == hidden)
 		    {
@@ -310,6 +315,10 @@ void ScriptHighlightSystem::UpdateFrame(float frameMilliseconds, float /*turnFra
 			    UpdateHighlight(entity, highlight, frameMilliseconds, camera);
 			    moved = true;
 		    }
+		    if (selected && frame.drawAll)
+		    {
+			    highlight.onScreen = OnScreenAfterDraw(entity, highlight, drawn);
+		    }
 		    UpdateGlow(entity, highlight, drawn && rules::GlowShown(highlight.kind, highlight.active), camera);
 		    UpdateSparks(entity, drawn, frameMilliseconds);
 	    });
@@ -317,6 +326,17 @@ void ScriptHighlightSystem::UpdateFrame(float frameMilliseconds, float /*turnFra
 	{
 		registry.SetDirty();
 	}
+}
+
+bool ScriptHighlightSystem::OnScreenAfterDraw(entt::entity entity, const ScriptHighlight& highlight, bool drawn) const
+{
+	// A highlight that the scripts hide, a started scroll and a gold scroll with its sparks stay selected in each frame
+	if (!drawn || (highlight.active && !rules::IsTipSign(highlight.kind)) || highlight.sparks.has_value())
+	{
+		return true;
+	}
+	const auto& standing = _world->Entities().Get<Transform>(entity).position;
+	return _world->OnScreen(standing, highlight.centre, highlight.radius);
 }
 
 void ScriptHighlightSystem::UpdateHighlight(entt::entity entity, ScriptHighlight& highlight, float frameMilliseconds,

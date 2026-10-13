@@ -56,6 +56,9 @@ public:
 	ecs::Registry registry;
 	std::vector<ThingBelow> below;
 	uint32_t turn {0};
+	object_draw_list::Frame drawFrame {.rebuilt = true, .drawAll = true};
+	bool inDrawList {true};
+	bool onScreen {true};
 	bool scrollsDrawn {true};
 	uint32_t nextEffect {1};
 	std::vector<std::pair<ParticleType, glm::vec3>> started;
@@ -100,6 +103,12 @@ public:
 	[[nodiscard]] uint32_t Turn() const override { return turn; }
 	[[nodiscard]] float MillisecondsPerTurn() const override { return 100.0f; }
 	[[nodiscard]] bool ScrollsDrawn() const override { return scrollsDrawn; }
+	[[nodiscard]] object_draw_list::Frame DrawFrame() const override { return drawFrame; }
+	[[nodiscard]] bool InDrawList(entt::entity /*highlight*/) const override { return inDrawList; }
+	[[nodiscard]] bool OnScreen(glm::vec3 /*origin*/, glm::vec3 /*centre*/, float /*radius*/) const override
+	{
+		return onScreen;
+	}
 	uint32_t StartEffect(ParticleType type, glm::vec3 at) override
 	{
 		started.emplace_back(type, at);
@@ -411,6 +420,55 @@ TEST(ScriptHighlights, ASignSpinsAtItsOwnSizeUntilTappedThenFacesTheCamera)
 	EXPECT_NEAR(facing, FacingAngle(camera, {0.0f, 0.0f, 0.0f}), 1e-5f);
 	system->UpdateFrame(500.0f, 0.0f, camera);
 	EXPECT_FLOAT_EQ(world->registry.Get<ScriptHighlight>(sign).yAngle, facing);
+}
+
+// The game draws a sign only in the frames where its list of the things to draw selects it. Each sign keeps its own
+// angle: a sign out of the list does not spin.
+TEST(ScriptHighlights, ASignSpinsOnlyInTheFramesThatDrawIt)
+{
+	auto [world, system] = Make();
+	const auto sign = system->Create(k_Sign, {0.0f, 0.0f, 0.0f}, 0);
+	const glm::vec3 camera {0.0f, 20.0f, 40.0f};
+	const auto angle = [&world, sign]() { return world->registry.Get<ScriptHighlight>(sign).yAngle; };
+
+	// Out of the list: no spin, and it does not show
+	world->inDrawList = false;
+	system->UpdateFrame(500.0f, 0.0f, camera);
+	EXPECT_FLOAT_EQ(angle(), 0.0f);
+	EXPECT_TRUE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
+
+	// In the list, in a full frame, but off the screen: it spins in that frame
+	world->inDrawList = true;
+	world->onScreen = false;
+	system->UpdateFrame(500.0f, 0.0f, camera);
+	EXPECT_NEAR(angle(), glm::half_pi<float>(), 1e-5f);
+	EXPECT_FALSE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
+
+	// The frames that draw only the things on the screen leave it
+	world->drawFrame = {.rebuilt = false, .drawAll = false};
+	system->UpdateFrame(500.0f, 0.0f, camera);
+	EXPECT_NEAR(angle(), glm::half_pi<float>(), 1e-5f);
+	EXPECT_TRUE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
+
+	// On the screen in the next full frame, it spins in each frame after it
+	world->drawFrame = {.rebuilt = false, .drawAll = true};
+	world->onScreen = true;
+	system->UpdateFrame(500.0f, 0.0f, camera);
+	world->drawFrame = {.rebuilt = false, .drawAll = false};
+	system->UpdateFrame(500.0f, 0.0f, camera);
+	EXPECT_NEAR(angle(), glm::half_pi<float>() * 3.0f, 1e-5f);
+}
+
+// A started scroll stays selected in the frames that draw only the things on the screen
+TEST(ScriptHighlights, AStartedScrollStaysSelectedOffTheScreen)
+{
+	auto [world, system] = Make();
+	const auto scroll = system->Create(k_Silver, {0.0f, 0.0f, 0.0f}, 52);
+	system->SetActive(scroll, true);
+	world->scrollsDrawn = true;
+	world->onScreen = false;
+	system->UpdateFrame(16.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	EXPECT_TRUE(world->registry.Get<ScriptHighlight>(scroll).onScreen);
 }
 
 TEST(ScriptHighlights, AGoneHighlightEndsItsEffects)

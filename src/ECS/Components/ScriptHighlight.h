@@ -52,6 +52,8 @@ struct ScriptHighlight
 	/// A gold scroll's sparks, and the things they are drawn as (none while one waits to start)
 	std::optional<script_highlights::Sparks> sparks;
 	std::array<entt::entity, script_highlights::k_Sparks> sparkSprites = NoSparkSprites();
+	/// It was on the screen in the last frame where the game drew all of its list
+	bool onScreen {false};
 
 	[[nodiscard]] static constexpr std::array<entt::entity, script_highlights::k_Sparks> NoSparkSprites()
 	{

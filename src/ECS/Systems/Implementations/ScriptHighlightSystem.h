@@ -60,6 +60,8 @@ private:
 	[[nodiscard]] float ReachAcross(entt::entity entity) const;
 	/// Whether it is drawn now: a sign always, a scroll while the scripts show them
 	[[nodiscard]] bool Drawn(const components::ScriptHighlight& highlight) const;
+	/// True when the game keeps the highlight selected in the frames where it draws only the things on the screen
+	[[nodiscard]] bool OnScreenAfterDraw(entt::entity entity, const components::ScriptHighlight& highlight, bool drawn) const;
 	/// A frame of one highlight
 	void UpdateHighlight(entt::entity entity, components::ScriptHighlight& highlight, float frameMilliseconds,
 	                     glm::vec3 camera);
