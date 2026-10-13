@@ -185,3 +185,14 @@ TEST(LeashRules, LessonsOfWhatThePlayerShows)
 	EXPECT_FLOAT_EQ(good[1].change, 1.0f);
 	EXPECT_TRUE(LessonsFor(LeashType::Rope, false).empty());
 }
+
+TEST(LeashRules, ATautHeldRopePullsUnlessAnOrderOrAScriptHasTheCreature)
+{
+	constexpr Pull k_Taut {.tension = 0.9f};
+	EXPECT_TRUE(Pulls(k_Taut));
+	EXPECT_FALSE(Pulls({.tension = 0.8f}));
+	EXPECT_FALSE(Pulls({.tension = 0.9f, .works = false}));
+	EXPECT_FALSE(Pulls({.tension = 0.9f, .tied = true}));
+	EXPECT_FALSE(Pulls({.tension = 0.9f, .orderInForce = true}));
+	EXPECT_FALSE(Pulls({.tension = 0.9f, .scriptControlled = true}));
+}

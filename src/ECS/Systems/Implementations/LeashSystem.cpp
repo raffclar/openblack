@@ -54,6 +54,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Hand.h"
@@ -61,6 +62,7 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -336,10 +338,13 @@ orders::Body BodyOf(const Registry& registry, entt::entity creature)
 {
 	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
 	const auto* needs = registry.TryGet<const CreatureNeeds>(creature);
+	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
 	return {
 	    .leashWorks = leashes != nullptr && leashes->worn.has_value() && leashes->worn->works,
 	    .life = needs != nullptr ? needs->needs.life : 1.0f,
 	    .exhaustion = needs != nullptr ? needs->needs.exhaustion : 0.0f,
+	    .frozen = spells != nullptr && spells->pausedMind,
+	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	};
 }
 
@@ -1265,9 +1270,29 @@ void LeashSystem::ProcessTurn()
 		auto* mind = MindOf(registry, entity);
 		const auto* body = registry.TryGet<const Creature>(entity);
 		const auto* transform = registry.TryGet<const Transform>(entity);
-		// Fighting or knocked out, the leash doesn't pull it about
-		if (body == nullptr || transform == nullptr || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
+		// Knocked out, the leash doesn't pull it about
+		if (body == nullptr || transform == nullptr || registry.AllOf<CreatureKnockedOut>(entity))
 		{
+			continue;
+		}
+		const bool scriptControlled = registry.AllOf<ScriptControlled>(entity);
+		// Fighting, only the held rope pulled taut reaches it: that takes it out of the fight with no winner and off to
+		// the hand
+		if (registry.AllOf<CreatureFighting>(entity))
+		{
+			if (leashes.worn.has_value() &&
+			    leash::Pulls({.tension = leashes.worn->rope.tension,
+			                  .works = leashes.worn->works,
+			                  .tied = leashes.worn->tiedTo.has_value(),
+			                  .orderInForce = leashes.order.has_value(),
+			                  .scriptControlled = scriptControlled}) &&
+			    Locator::creatureFightSystem::has_value())
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is pulled out of its fight by the leash",
+				                   entt::to_integral(entity));
+				Locator::creatureFightSystem::value().AbortFight(entity);
+				Pull(entity);
+			}
 			continue;
 		}
 		const auto position = glm::vec2(transform->position.x, transform->position.z);
@@ -1364,8 +1389,8 @@ void LeashSystem::ProcessTurn()
 
 		if (worn.tiedTo.has_value())
 		{
-			// Strayed beyond the leash's length, it walks back to what it is tied to
-			if (worn.works && !moving &&
+			// Strayed beyond the leash's length, it walks back to what it is tied to, unless a script controls it
+			if (worn.works && !moving && !scriptControlled &&
 			    leash::OutsideArea(position, glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z),
 			                       worn.rope.slackLength) &&
 			    Locator::creatureLocomotionSystem::has_value())
@@ -1377,8 +1402,12 @@ void LeashSystem::ProcessTurn()
 			continue;
 		}
 
-		// Held in the hand: a taut rope pulls it to the hand, unless it is carrying out an order
-		if (worn.works && leash::ShouldPull(worn.rope.tension) && !leashes.order.has_value())
+		// Held in the hand: a taut rope pulls it to the hand, unless it is carrying out an order or a script controls it
+		if (leash::Pulls({.tension = worn.rope.tension,
+		                  .works = worn.works,
+		                  .tied = false,
+		                  .orderInForce = leashes.order.has_value(),
+		                  .scriptControlled = scriptControlled}))
 		{
 			Pull(entity);
 		}
@@ -1781,7 +1810,7 @@ bool LeashSystem::OrderOn(PlayerNames player, entt::entity object)
 bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!orders::TakesOrders(BodyOf(registry, creature)))
+	if (!orders::TakesGroundOrders(BodyOf(registry, creature)))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders now", entt::to_integral(creature));
 		return false;
