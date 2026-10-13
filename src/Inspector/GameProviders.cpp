@@ -42,6 +42,8 @@
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "Creature/CreatureDesires.h"
+#include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
 #include "ECS/ArtefactRules.h"
@@ -56,6 +58,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHelp.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -2526,6 +2529,74 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              {
 			              result["skin_revision"] = skin->revision;
 			              result["skin_system"] = Locator::creatureSkinSystem::has_value();
+		              }
+		              return QueryResult::Value(std::move(result));
+	              }));
+	provider->Add(Query("leash",
+	                    "A creature's leash (the local player's creature by default): the leashes it knows, the one worn and "
+	                    "picked, whether it works, is tied and to what, its rope (ends, lengths, tension) and whether the rope "
+	                    "pulls the creature now, the order it carries out, the desire the leash makes rule it, and the local "
+	                    "player's hand on the rope (away, over or holding)",
+	                    {{.name = "id", .type = "integer", .description = "The creature's entity id"}}),
+	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) {
+		              if (!Locator::leashSystem::has_value())
+		              {
+			              return QueryResult::Error("no leash system");
+		              }
+		              const auto& leash = Locator::leashSystem::value();
+		              const auto local = Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer()
+		                                                                    : PlayerNames::PLAYER_ONE;
+		              auto entity = EntityParam(context.params);
+		              if (!context.params.contains("id"))
+		              {
+			              entity = leash.PlayersCreature(local);
+		              }
+		              if (!entity.has_value() || !registry.AllOf<Creature>(*entity))
+		              {
+			              return QueryResult::Error("no creature with that id");
+		              }
+		              const auto creature = *entity;
+		              Json result = {{"id", ToId(creature)},
+		                             {"rope_hand", static_cast<int>(leash.RopeHand(local))},
+		                             {"rope_hand_name",
+		                              std::array {"away", "over", "holding"}.at(static_cast<size_t>(leash.RopeHand(local)))}};
+		              const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+		              if (leashes == nullptr)
+		              {
+			              result["leashed"] = false;
+			              return QueryResult::Value(std::move(result));
+		              }
+		              result["known"] = {leashes->known.test(0), leashes->known.test(1), leashes->known.test(2)};
+		              result["selected"] = static_cast<int>(leashes->selected);
+		              result["leashed"] = leashes->worn.has_value();
+		              result["control"] = static_cast<int>(leashes->control);
+		              result["pull"] = leashes->pull;
+		              result["order_target"] = Optional(leash.OrderTarget(creature));
+		              if (Locator::creatureMindSystem::has_value())
+		              {
+			              const auto ruling = Locator::creatureMindSystem::value().DominantDesire(creature);
+			              result["ruling_desire"] =
+			                  ruling.has_value() ? Json(std::string(creature_desires::Name(*ruling))) : Json(nullptr);
+		              }
+		              if (leashes->worn.has_value())
+		              {
+			              const auto& worn = *leashes->worn;
+			              const auto& rope = worn.rope;
+			              result["type"] = static_cast<int>(worn.type);
+			              result["works"] = worn.works;
+			              result["tied_to"] = Id(worn.tiedTo);
+			              result["held_rope"] = worn.held.has_value();
+			              result["rope"] = {{"start", {rope.start.x, rope.start.y, rope.start.z}},
+			                                {"end", {rope.end.x, rope.end.y, rope.end.z}},
+			                                {"slack_length", rope.slackLength},
+			                                {"max_length", rope.maxLength},
+			                                {"tension", rope.tension}};
+			              result["pulls"] =
+			                  creature_leash::Pulls({.tension = rope.tension,
+			                                         .works = worn.works,
+			                                         .tied = worn.tiedTo.has_value(),
+			                                         .orderInForce = leashes->order.has_value(),
+			                                         .scriptControlled = registry.AllOf<ScriptControlled>(creature)});
 		              }
 		              return QueryResult::Value(std::move(result));
 	              }));
