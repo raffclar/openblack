@@ -6899,11 +6899,12 @@ void GetInteractionMagnitude() // 270 GET_INTERACTION_MAGNITUDE
 
 void IsCreatureAvailable() // 271 IS_CREATURE_AVAILABLE
 {
-	// The five bonus creatures are only there once unlocked; any other species always is
-	// TODO(creature-swap): the bonus creatures were unlocked by a program outside the game, which openblack has no
-	// equivalent of yet, so none is unlocked: as on a machine that never ran it (see the handover's decision)
+	// The five bonus creatures are only there once unlocked; any other species always is. The game's unlocks came from
+	// a program outside it, so none is unlocked unless the debug option says so, as on a normal install
 	const auto species = Pop().intVal;
-	Pushb(creature_swap::IsAvailable(species, creature_swap::Unlocked {}));
+	const auto unlocked =
+	    Locator::config::has_value() ? Locator::config::value().unlockedBonusCreatures : creature_swap::Unlocked {};
+	Pushb(creature_swap::IsAvailable(species, unlocked));
 }
 
 void CreateHighlight() // 272 CREATE_HIGHLIGHT

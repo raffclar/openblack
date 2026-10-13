@@ -42,6 +42,7 @@
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "Creature/BonusCreatures.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
 #include "ECS/ArtefactRules.h"
@@ -531,6 +532,20 @@ std::string_view KindName(ecs::PhysicsEntry::Kind kind)
 
 // The engine's services
 
+/// The names of the breeder's bonus creatures the debug option unlocks
+Json UnlockedBonusCreatureNames(const creature_swap::Unlocked& unlocked)
+{
+	auto names = Json::array();
+	for (size_t i = 0; i < creature_swap::k_BonusCount; ++i)
+	{
+		if (unlocked.test(i))
+		{
+			names.push_back(std::string(creature_swap::NameOf(static_cast<creature_swap::Bonus>(i))));
+		}
+	}
+	return names;
+}
+
 std::unique_ptr<ProviderInterface> EngineProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("engine");
@@ -548,6 +563,7 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		          {"bounding_boxes", config.drawBoundingBoxes}}},
 		        {"shadows", {{"creatures", config.drawCreatureShadows}, {"dynamic_trees", config.dynamicTreeShadows}}},
 		        {"wireframe", config.wireframe},
+		        {"unlocked_bonus_creatures", UnlockedBonusCreatureNames(config.unlockedBonusCreatures)},
 		        {"time_of_day", config.timeOfDay},
 		        {"resolution", {config.resolution.x, config.resolution.y}},
 		        {"vsync", config.vsync},

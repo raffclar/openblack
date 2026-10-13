@@ -768,6 +768,123 @@ void AddGrowth(std::vector<Scenario>& all)
 	});
 }
 
+/// The first land's Creature Breeder, run by the game's own script at the same places of the map as on the first land
+/// (the testbed spans the whole map), each as high above the land as there; the kennels are a marker, as on the second
+/// and fifth lands. The player's Cow stands by; the scenario clicks the kennels' scroll, and the breeder offers the
+/// bonus creatures the debug option takes as unlocked
+void AddBreederOffers(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// The first land's breeder places, from the middle of the map, and how far above the land each is there
+	constexpr glm::vec2 k_BreederStart {-661.839f, 850.803f};
+	constexpr glm::vec2 k_SoapBox {-663.838f, 849.415f};
+	constexpr glm::vec2 k_Kennels {-660.73f, 851.21f};
+	constexpr glm::vec2 k_CreaturePlace {-667.115f, 843.713f};
+	const auto marker = [](glm::vec2 point, float height = 0.0f) {
+		return Argument {.kind = Argument::Kind::Marker, .point = point, .height = height};
+	};
+	const Command runBreeder {
+	    .kind = Kind::RunScript,
+	    .delaySeconds = 0.5f,
+	    .script = "CreatureBreeder",
+	    // Land, the breeder's start, the soap box, the kennels, where the creatures stand, then two camera shots
+	    .scriptArguments = {{.kind = Argument::Kind::Number, .number = 1.0f},
+	                        marker(k_BreederStart),
+	                        marker(k_SoapBox),
+	                        marker(k_Kennels),
+	                        marker(k_CreaturePlace),
+	                        marker({-671.651f, 844.151f}, 4.151f),
+	                        marker({-653.575f, 856.752f}, -1.247f),
+	                        marker({-696.66f, 839.907f}, 12.69f),
+	                        marker({-674.738f, 851.945f}, 0.719f)},
+	    // As the first land sets them up: the player's creature, and no swap at the breeder yet
+	    .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                      {"GlobalCurrentCreature", {.number = -1.0f}},
+	                      {"GlobalOldCreature", {.number = -1.0f}},
+	                      {"BreederRunning", {.number = 0.0f}},
+	                      {"NrOfChoosenCreature", {.number = 0.0f}},
+	                      {"GlobalReset", {.number = 0.0f}}},
+	};
+	// The kennels' scroll goes up ten seconds in; the pointer at the middle of the screen, which looks at it, clicks it
+	// with the Action button
+	const std::vector<Command> commands {
+	    runBreeder,
+	    {.kind = Kind::PointerTo, .delaySeconds = 11.0f, .point = {0.5f, 0.5f}},
+	    {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	    {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	};
+	const auto offer = [&](std::string_view id, std::string_view name, std::string_view description, std::string_view expected,
+	                       creature_swap::Unlocked unlocked) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Story,
+		    .description = description,
+		    .expected = expected,
+		    .environment = {.dispenserGrid = false, .unlockedBonusCreatures = unlocked},
+		    .framing = {.shot = Shot::Placed,
+		                .eye = {k_Kennels.x - 20.0f, 10.0f, k_Kennels.y - 22.0f},
+		                .look = {k_Kennels.x, 6.0f, k_Kennels.y}},
+		    .creatures = {Content(CreatureType::Cow, k_CreaturePlace + glm::vec2 {10.0f, -12.0f}, 0.0f, "player's cow")},
+		    .commands = commands,
+		});
+	};
+	creature_swap::Unlocked leopard;
+	leopard.set(static_cast<size_t>(creature_swap::Bonus::Leopard));
+	auto leopardAndHorse = leopard;
+	leopardAndHorse.set(static_cast<size_t>(creature_swap::Bonus::Horse));
+	offer("creature.breeder_offer", "The Creature Breeder offers all five bonus creatures",
+	      "All five bonus creatures taken as unlocked (the debug option). The first land's breeder script runs at its "
+	      "places; the player's Cow stands by. Twelve seconds in the kennels' scroll is clicked.",
+	      "The breeder walks to the soap box and the camera to him; sparkles and the Leopard, Horse, Mandrill, Gorilla and "
+	      "Rhino appear one beside the next; between the first and the last the breeder says \"Look. I have these "
+	      "wondrous Creatures you can choose from.\" A scroll stands over each. Click one with the Cow near to choose it; "
+	      "click it again to swap. The offer ends after a swap or after 60 to 120 seconds, the others vanishing.",
+	      creature_swap::Unlocked {}.set());
+	offer("creature.breeder_offer_one", "The Creature Breeder offers one bonus creature",
+	      "Only the Leopard taken as unlocked; otherwise as creature.breeder_offer.",
+	      "The Leopard alone appears, with its scroll; the camera takes in it and the breeder, who says the line for one "
+	      "creature.",
+	      leopard);
+	offer("creature.breeder_offer_two", "The Creature Breeder offers two bonus creatures",
+	      "The Leopard and the Horse taken as unlocked; otherwise as creature.breeder_offer.",
+	      "The Leopard and the Horse appear side by side, each with a scroll, and the breeder says \"Look. I have these "
+	      "wondrous Creatures you can choose from.\"",
+	      leopardAndHorse);
+
+	// The swap a quest offers at its end, as The Lost Flock offers its sheep: the game's own SwapCreatures script over a
+	// sheep of nobody's, the player's Cow nearby. The pointer looks at the sheep and clicks it twice with the Action
+	// button: once to choose it, and once more, after the Cow has come over, to swap
+	auto sheep = Content(CreatureType::Sheep, {15.0f, 0.0f}, 270.0f, "the flock's sheep");
+	sheep.owner = PlayerNames::NEUTRAL;
+	all.push_back({
+	    .id = "creature.field_swap",
+	    .name = "A quest's offer of its creature, as The Lost Flock's sheep",
+	    .facet = Facet::Story,
+	    .description = "The game's SwapCreatures script runs over a sheep of nobody's, the player's Cow 25 away. Three "
+	                   "seconds in the sheep is clicked; twelve seconds later it is clicked again.",
+	    .expected = "A scroll stands over the sheep, which looks at the camera. At the first click the scroll goes, the "
+	                "Cow walks over and the two look each other over, the good advisor saying the reminder. At the second "
+	                "click a cinema shows both: sparkles, both point at each other, the swap with its beams and the swap "
+	                "sound, then the evil advisor says the sheep is now the player's. The offer starts again over the "
+	                "Cow, so they can swap back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {5.0f, 22.0f, -50.0f}, .look = {15.0f, 8.0f, 0.0f}},
+	    .creatures = {Content(CreatureType::Cow, {-10.0f, 0.0f}, 90.0f, "player's cow"), sheep},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SwapCreatures",
+	                  .scriptArguments = {{.kind = Argument::Kind::Creature, .index = 1}},
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                                    {"GlobalReset", {.number = 0.0f}}}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 12.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -811,6 +928,7 @@ void AddStory(std::vector<Scenario>& all)
 	    // Room 3 is the main room, the one the entrance leads to
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
 	});
+	AddBreederOffers(all);
 }
 
 void AddAppearance(std::vector<Scenario>& all)
@@ -2519,6 +2637,27 @@ void AddMind(std::vector<Scenario>& all)
 		                .amount = amount};
 	};
 
+	// Facing away from the camera, their minds free, while a script's cinema bars come and go
+	const auto awayOwned = Content(CreatureType::Tiger, {-20.0f, 0.0f}, 180.0f, "player's");
+	auto awayNeutral = Content(CreatureType::Cow, {20.0f, 0.0f}, 180.0f, "no player's");
+	awayNeutral.owner = PlayerNames::NEUTRAL;
+	all.push_back({
+	    .id = "mind.cut_scene_look",
+	    .name = "Creatures looking at the camera in a cut scene",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger and a cow with no player stand facing away from the camera, their minds free. "
+	                   "A script's cinema bars slide in at once (before any help script can take the dialogue, whose "
+	                   "release would take the bars away), and twenty-five seconds later out again.",
+	    .expected = "As the bars come in both stop what they were doing. The tiger turns round to the camera and looks at "
+	                "it, curious; now and then it first points at the camera, waves, talks, or looks confused and talks, "
+	                "and keeps on looking until the bars go. The cow doesn't turn but may point, wave and talk. Once the "
+	                "bars are out each finishes the look it is in and goes back to its own life.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {awayOwned, awayNeutral},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.0f, .value = 1},
+	                 {.kind = Kind::WideScreen, .delaySeconds = 25.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "mind.reward_villagers",
 	    .name = "Learning: reward eating villagers, punish eating food",
@@ -3051,6 +3190,28 @@ bool ValidOffset(glm::vec2 offset)
 	return std::abs(offset.x) <= k_MaxOffset && std::abs(offset.y) <= k_MaxOffset;
 }
 
+/// A script run names a script, and every object, creature and marker it hands over is the scenario's and on the map
+bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
+{
+	const auto fits = [&scenario](const ScriptArgument& argument) {
+		switch (argument.kind)
+		{
+		case ScriptArgument::Kind::Number:
+			return true;
+		case ScriptArgument::Kind::Marker:
+			return ValidOffset(argument.point);
+		case ScriptArgument::Kind::Object:
+			return argument.index < scenario.objects.size();
+		case ScriptArgument::Kind::Creature:
+			return argument.index < scenario.creatures.size();
+		}
+		return false;
+	};
+	return !command.script.empty() && std::ranges::all_of(command.scriptArguments, fits) &&
+	       std::ranges::all_of(command.scriptGlobals,
+	                           [&fits](const auto& global) { return !global.first.empty() && fits(global.second); });
+}
+
 /// What is wrong with what a command acts on, if anything: the object it picks up must be of a kind a creature may pick
 /// up (a thing, pot, animal, villager, static, tree or magic mushroom), what it knocks down a thing or a tree, the
 /// part it strokes, the way it looks something over and the leash put on real ones
@@ -3109,7 +3270,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::RecordChallenge || kind == Kind::EnterTemple ||
-	       kind == Kind::HandTake || IsPointerCommand(kind);
+	       kind == Kind::HandTake || kind == Kind::RunScript || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -3136,7 +3297,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 105> k_Names {
+	constexpr std::array<std::string_view, 106> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3242,6 +3403,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "swap minds",
 	    "record challenge",
 	    "enter temple",
+	    "run script",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -3483,6 +3645,10 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if (const auto problem = CommandProblem(command, scenario.objects); !problem.empty())
 		{
 			problems.push_back(fmt::format("{}: {}", what, problem));
+		}
+		if (command.kind == Kind::RunScript && !ScriptArgumentsFit(command, scenario))
+		{
+			problems.push_back(fmt::format("{}: runs no script, or hands it what the scenario hasn't", what));
 		}
 		if (!ValidOffset(command.point) || command.delaySeconds < 0.0f || !InRange(command.hour, 0.0f, k_HoursPerDay))
 		{
