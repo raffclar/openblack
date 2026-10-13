@@ -153,6 +153,32 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_throws_out_the_last_crossing",
+	    .name = "A vortex into the land throws out the last crossing",
+	    .facet = Facet::Miracles,
+	    .description = "A vortex into a land opens on the flat plane after a second, as Land 2's opens when the player "
+	                   "arrives, reading the crossing file as the last vortex out of a land left it in this profile's "
+	                   "saved games (play Land 1 to its vortex first, or any scenario whose vortex takes things). A hut "
+	                   "stands 40 m off; the animals gather 30 m to the south.",
+	    .expected = "Everything the last vortex out of a land took comes out, a thing every fifth of a second, each where it "
+	                "lay about that vortex, thrown out about 16 m from the middle: villagers, animals of every kind at "
+	                "their ages, trees, rocks and other statics at the height they were put down at (one for a pile of "
+	                "identical ones), a rock that was a player's artefact still that player's artefact of the same worth, "
+	                "and miracle globes holding the same miracle. Then new villagers until 30 have come out.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 40.0f, 50.0f, k_OnThePlane.y - 70.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(40.0f, 0.0f), .yawDegrees = 90.0f}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = k_OnThePlane,
+	                  .delaySeconds = 1.0f,
+	                  .gatheringOffset = k_OnThePlane + glm::vec2(0.0f, -30.0f),
+	                  .flockDistance = 27.0f,
+	                  .flockRadius = 48.0f}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_opens_a_hole",
 	    .name = "A vortex out of the land opens a hole in it",
 	    .facet = Facet::Miracles,
