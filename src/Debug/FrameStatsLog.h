@@ -33,6 +33,9 @@ public:
 	/// After each frame, with how long the frame took and the profiler that timed its stages
 	void Frame(float milliseconds, const openblack::Profiler& profiler);
 
+	/// The log shows each frame that takes this time or more, with its stages
+	static constexpr float k_SpikeMilliseconds = 10.0f;
+
 private:
 	void Report();
 
@@ -47,6 +50,8 @@ private:
 	double _waitRenderTotal {0.0};
 	uint64_t _drawCallTotal {0};
 	uint32_t _reports {0};
+	uint64_t _frameNumber {0};
+	int64_t _lastResourceCount {0};
 };
 
 } // namespace openblack::debug

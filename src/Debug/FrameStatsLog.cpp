@@ -30,6 +30,8 @@ FrameStatsLog::FrameStatsLog(uint32_t interval, bool views)
 void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profiler)
 {
 	_frames.Add(milliseconds);
+	++_frameNumber;
+	std::string spikeStages;
 
 	// The stages timed in this frame: those that started since the frame did
 	const auto& entry = profiler.GetEntries().at(profiler.GetEntryIndex(0));
@@ -41,6 +43,10 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 			const auto ms = std::chrono::duration<double, std::milli>(stage.end - stage.start).count();
 			_stageTotals.at(i) += ms;
 			_stageMax.at(i) = std::max(_stageMax.at(i), ms);
+			if (milliseconds >= k_SpikeMilliseconds && ms >= 0.25)
+			{
+				spikeStages += fmt::format(" {}={:.2f}", openblack::Profiler::k_StageNames.at(i), ms);
+			}
 		}
 	}
 
@@ -51,6 +57,20 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 	_submitTotal += static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu;
 	_waitRenderTotal += static_cast<double>(stats->waitRender) * toMsCpu;
 	_drawCallTotal += stats->numDraw;
+	const auto made = static_cast<int64_t>(stats->numTextures) + stats->numVertexBuffers + stats->numIndexBuffers +
+	                  stats->numDynamicVertexBuffers + stats->numDynamicIndexBuffers + stats->numPrograms;
+	const auto newResources = made - _lastResourceCount;
+	_lastResourceCount = made;
+	if (milliseconds >= k_SpikeMilliseconds)
+	{
+		// A slow frame: which stages took its time, and what the renderer waited for
+		SPDLOG_LOGGER_INFO(
+		    spdlog::get("game"),
+		    "Frame spike: frame {} took {:.2f} ms; render submit {:.2f} wait {:.2f}; {} draws; {} new resources; "
+		    "stages (ms):{}",
+		    _frameNumber, milliseconds, static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
+		    static_cast<double>(stats->waitRender) * toMsCpu, stats->numDraw, newResources, spikeStages);
+	}
 	if (_views)
 	{
 		for (uint16_t i = 0; i < stats->numViews; ++i)
