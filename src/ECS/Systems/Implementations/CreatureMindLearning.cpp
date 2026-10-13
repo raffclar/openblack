@@ -71,7 +71,9 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/LandForest.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
@@ -1539,6 +1541,73 @@ std::optional<creature_activity::PartFacts> PartFactsOf(const ecs::Registry& reg
 	// field, which openblack does not keep on a field yet.
 	return std::nullopt;
 }
+
+/// A hungry creature does not eat a thing of a town for which it learnt a compassion worth more than this
+constexpr float k_MostCompassionToEatFrom = 0.1f;
+
+/// Whether a creature can act on a thing at all. The living and miracles can always have an action. A whole thing, a
+/// worship site and a thing without data cannot. Any other thing lets a creature act on it when its data says so.
+// TODO(creature-belief-lists): the game keeps the heart and the other parts of a temple as things of their own, which a
+// creature can act on when their data lets it. Here the temple is one thing, the whole thing, and has no action.
+bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
+{
+	if (registry.AnyOf<Villager, Animal, Creature, ecs::components::Spell>(thing))
+	{
+		return true;
+	}
+	if (registry.AnyOf<WorshipSite, Town, Temple, Flock, ForestTurns>(thing))
+	{
+		return false;
+	}
+	const auto* info = ecs::world_objects::InfoOf(thing);
+	return info != nullptr && info->canCreatureInteractWithMe != 0;
+}
+
+/// The town of a thing: the town of a villager, a building, a field or a fish farm, of a pile in a storage pit, or of
+/// a village totem. None for any other thing.
+std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::entity thing,
+                                        std::optional<entt::entity> belongsTo)
+{
+	const auto town = [&registry](entt::entity found) {
+		return registry.Valid(found) && registry.AllOf<Town>(found) ? std::optional(found) : std::nullopt;
+	};
+	if (registry.AnyOf<Villager, Abode, Field>(thing) && !registry.AllOf<WorshipSite>(thing))
+	{
+		return belongsTo.has_value() ? town(*belongsTo) : std::nullopt;
+	}
+	if (const auto* farm = registry.TryGet<const FishFarm>(thing))
+	{
+		return town(farm->town);
+	}
+	if (const auto* totem = registry.TryGet<const VillageTotem>(thing))
+	{
+		const auto* centre = registry.Valid(totem->townCentre) ? registry.TryGet<const Abode>(totem->townCentre) : nullptr;
+		if (centre != nullptr)
+		{
+			const auto& towns = registry.Context().towns;
+			const auto found = towns.find(centre->townId);
+			return found != towns.end() ? town(found->second) : std::nullopt;
+		}
+		return std::nullopt;
+	}
+	if (registry.AllOf<Pot>(thing))
+	{
+		std::optional<entt::entity> pit;
+		registry.Each<const StoragePit>([&](entt::entity entity, const StoragePit& store) {
+			if (store.foodPile == thing || std::ranges::find(store.woodPiles, thing) != store.woodPiles.end())
+			{
+				pit = entity;
+			}
+		});
+		if (const auto* abode = pit.has_value() ? registry.TryGet<const Abode>(*pit) : nullptr)
+		{
+			const auto& towns = registry.Context().towns;
+			const auto found = towns.find(abode->townId);
+			return found != towns.end() ? town(found->second) : std::nullopt;
+		}
+	}
+	return std::nullopt;
+}
 } // namespace
 
 std::optional<CreatureMindSystem::ChosenActivity>
@@ -1600,6 +1669,43 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 		}
 	}
 	return parts;
+}
+
+bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing))
+	{
+		return false;
+	}
+	if (desire == Desire::Hunger)
+	{
+		if (const auto town = TownOfThing(registry, thing, BelongsTo(thing)))
+		{
+			ComeAcross(mind, *town);
+			if (ActivityUsefulness(creature, mind, Desire::Compassion, *town) > k_MostCompassionToEatFrom)
+			{
+				return false;
+			}
+		}
+	}
+	return LetsCreatureAct(registry, thing);
+}
+
+std::vector<creature_planner::ObjectCandidate>
+CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindState& mind, Desire desire,
+                                          const std::function<bool(entt::entity)>& suitsAction)
+{
+	std::vector<creature_planner::ObjectCandidate> found;
+	for (const auto& belief : mind.beliefs.InListOrder())
+	{
+		if (belief.thing == creature || !SuitsDesire(creature, mind, desire, belief.thing) || !suitsAction(belief.thing))
+		{
+			continue;
+		}
+		found.push_back(GoalWorth(creature, mind, desire, belief.thing, std::nullopt));
+	}
+	return found;
 }
 
 creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity creature, const CreatureMindState& mind,
@@ -1874,13 +1980,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			}
 			else
 			{
-				for (const auto& thing : Gather(registry, executor->target, creature, position))
-				{
-					if (suits(thing.entity))
-					{
-						found.push_back(worth(thing.entity));
-					}
-				}
+				found = BelievedThingsToActOn(creature, mind, desire, suits);
 			}
 			return mostUseful(found);
 		};
@@ -2399,38 +2499,42 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	{
 		return;
 	}
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (transform == nullptr)
+	// It looks for the thing of the same kind that is most useful to act on, in the lists of what it believes in
+	const auto* known = context->object.has_value() ? mind.beliefs.Find(static_cast<entt::entity>(*context->object)) : nullptr;
+	const auto kind = known != nullptr ? known->kind : context->belief->type;
+	const auto found = BelievedThingsToActOn(creature, mind, desire, [&](entt::entity thing) {
+		const auto* belief = mind.beliefs.Find(thing);
+		return belief != nullptr && belief->kind == kind && Accepts(registry, executor->target, thing, creature);
+	});
+	std::optional<creature_planner::ObjectCandidate> best;
+	for (const auto& thing : found)
+	{
+		if (thing.usefulness > (best.has_value() ? best->usefulness : 0.0f))
+		{
+			best = thing;
+		}
+	}
+	if (!best.has_value())
 	{
 		return;
 	}
-	const glm::vec2 position {transform->position.x, transform->position.z};
-	for (const auto& found : Gather(registry, executor->target, creature, position))
+	const creature_planner::Plan again {
+	    .desire = desire,
+	    .action = context->action,
+	    .object = best->id,
+	    // As pressing as the planner would find it, so that something more pressing can still take over
+	    .priority =
+	        creature_planner::Priority(desires[desire].value, best->activityUsefulness,
+	                                   creature_planner::ActionPriority(learnt.opinions.at(context->action)),
+	                                   best->actedOnUsefulness.value_or(creature_planner::k_DefaultUsefulness), std::nullopt),
+	};
+	creature_plan_actions::Situation situation;
+	if (Locator::camera::has_value())
 	{
-		const auto belief = BeliefOf(registry, found.entity, creature);
-		if (belief.has_value() && belief->type == context->belief->type)
-		{
-			const auto goal = GoalWorth(creature, mind, desire, found.entity, std::nullopt);
-			const creature_planner::Plan again {
-			    .desire = desire,
-			    .action = context->action,
-			    .object = entt::to_integral(found.entity),
-			    // As pressing as the planner would find it, so that something more pressing can still take over
-			    .priority = creature_planner::Priority(desires[desire].value, goal.activityUsefulness,
-			                                           creature_planner::ActionPriority(learnt.opinions.at(context->action)),
-			                                           goal.actedOnUsefulness.value_or(creature_planner::k_DefaultUsefulness),
-			                                           std::nullopt),
-			};
-			creature_plan_actions::Situation situation;
-			if (Locator::camera::has_value())
-			{
-				const auto eye = Locator::camera::value().GetOrigin();
-				situation.camera = glm::vec2(eye.x, eye.z);
-			}
-			Adopt(creature, mind, again, situation);
-			return;
-		}
+		const auto eye = Locator::camera::value().GetOrigin();
+		situation.camera = glm::vec2(eye.x, eye.z);
 	}
+	Adopt(creature, mind, again, situation);
 }
 
 void CreatureMindSystem::LearnTurn()

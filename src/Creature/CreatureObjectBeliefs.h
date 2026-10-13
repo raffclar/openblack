@@ -37,6 +37,10 @@ inline constexpr uint32_t k_KindCount = 24;
 inline constexpr std::array<uint32_t, k_KindCount> k_Capacity {40,  50,  20,  100, 50,  100, 100, 100, 100, 30,  100, 40,
                                                                100, 100, 100, 100, 100, 100, 100, 100, 1,   100, 40,  20};
 
+/// A creature keeps its beliefs in two lists. The first list holds the whole things that a desire can be about:
+/// towns, forests, temples, creatures and flocks. The second list holds all other things.
+[[nodiscard]] bool InListOfWholeThings(uint32_t kind);
+
 /// What a creature believes about one thing: its kind and where it was when the creature last came across it
 struct Belief
 {
@@ -94,6 +98,9 @@ public:
 	[[nodiscard]] std::vector<Belief> PartsOf(entt::entity whole) const;
 	/// Every belief, the newest first
 	[[nodiscard]] std::vector<Belief> NewestFirst() const;
+	/// Every belief in the order that the creature looks through its two lists: the list of whole things first, then
+	/// the list of all other things. Each list has the newest belief first.
+	[[nodiscard]] std::vector<Belief> InListOrder() const;
 	/// How many beliefs it holds of a kind, and in all
 	[[nodiscard]] size_t Count(uint32_t kind) const;
 	[[nodiscard]] size_t Size() const { return _index.size(); }

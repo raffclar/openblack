@@ -81,9 +81,18 @@ constexpr uint32_t k_Animal = 7;
 constexpr uint32_t k_Creature = 8;
 constexpr uint32_t k_Spell = 10;
 constexpr uint32_t k_Field = 11;
+/// A rock that lies about
+constexpr uint32_t k_Rock = 12;
+constexpr uint32_t k_Poo = 13;
+constexpr uint32_t k_MagicFood = 14;
 constexpr uint32_t k_Feature = 15;
+/// A pot or a pile of food or wood
+constexpr uint32_t k_Pot = 16;
+/// Any other thing that lies about and can move
+constexpr uint32_t k_MobileObject = 19;
 constexpr uint32_t k_Other = 21;
 constexpr uint32_t k_Flock = 22;
+constexpr uint32_t k_TotemStatue = 23;
 } // namespace belief_types
 /// What a kind of thing is called, for the debug readouts
 [[nodiscard]] const char* BeliefName(uint32_t type);

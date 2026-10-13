@@ -15,7 +15,16 @@
 #include <algorithm>
 #include <functional>
 
+#include "CreatureDecisionTree.h"
+
 using namespace openblack::creature_object_beliefs;
+
+bool openblack::creature_object_beliefs::InListOfWholeThings(uint32_t kind)
+{
+	namespace kinds = creature_tree::belief_types;
+	return kind == kinds::k_Town || kind == kinds::k_Forest || kind == kinds::k_Citadel || kind == kinds::k_Creature ||
+	       kind == kinds::k_Flock;
+}
 
 Store::Added Store::Add(entt::entity thing, uint32_t kind, glm::vec3 place)
 {
@@ -116,6 +125,13 @@ std::vector<Belief> Store::NewestFirst() const
 {
 	auto all = All();
 	std::ranges::sort(all, std::ranges::greater {}, &Belief::order);
+	return all;
+}
+
+std::vector<Belief> Store::InListOrder() const
+{
+	auto all = NewestFirst();
+	std::ranges::stable_partition(all, [](const Belief& belief) { return InListOfWholeThings(belief.kind); });
 	return all;
 }
 

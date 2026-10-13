@@ -180,6 +180,31 @@ TEST(CreatureObjectBeliefs, ItKnowsThePartsOfAWholeThingNewestFirst)
 	EXPECT_EQ(store.PartsOf(Thing(1))[0].thing, Thing(2));
 }
 
+TEST(CreatureObjectBeliefs, ItLooksThroughTheWholeThingsFirstThenTheOtherThingsEachNewestFirst)
+{
+	constexpr uint32_t k_Town = 0;
+	constexpr uint32_t k_Villager = 6;
+	constexpr uint32_t k_Creature = 8;
+	constexpr uint32_t k_Pot = 16;
+	Store store;
+	store.Add(Thing(1), k_Villager, {});
+	store.Add(Thing(2), k_Town, {});
+	store.Add(Thing(3), k_Pot, {});
+	store.Add(Thing(4), k_Creature, {});
+	store.Add(Thing(5), k_Flock, {});
+	const auto order = store.InListOrder();
+	ASSERT_EQ(order.size(), 5u);
+	EXPECT_EQ(order[0].thing, Thing(5));
+	EXPECT_EQ(order[1].thing, Thing(4));
+	EXPECT_EQ(order[2].thing, Thing(2));
+	EXPECT_EQ(order[3].thing, Thing(3));
+	EXPECT_EQ(order[4].thing, Thing(1));
+	EXPECT_TRUE(InListOfWholeThings(k_Forest));
+	EXPECT_TRUE(InListOfWholeThings(k_Temple));
+	EXPECT_FALSE(InListOfWholeThings(k_Villager));
+	EXPECT_FALSE(InListOfWholeThings(4));
+}
+
 TEST(CreatureObjectBeliefs, ItsEyesSweepASquareThatGrowsWithItsSize)
 {
 	// The odd number below the root of sixty times its size and a hundred and sixty, squared

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <random>
 #include <span>
@@ -184,6 +185,17 @@ private:
 	                                                                          const components::CreatureMindState& mind,
 	                                                                          creature_desires::Desire desire,
 	                                                                          const ChosenActivity& activity);
+	/// Whether a thing that the creature has a belief about suits a desire that is not about a whole thing. The thing
+	/// must let a creature act on it. A hungry creature does not eat a thing of a town that it feels much compassion for.
+	/// The creature comes across that town when it examines the rule.
+	[[nodiscard]] bool SuitsDesire(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
+	                               entt::entity thing);
+	/// The things that the creature has beliefs about and that an action of a desire can act on, each with its worth.
+	/// The function examines the two lists of beliefs in their order: the whole things first, then the other things,
+	/// each list with the newest belief first.
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate>
+	BelievedThingsToActOn(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
+	                      const std::function<bool(entt::entity)>& suitsAction);
 	/// What a thing is worth to a creature as the goal of a plan for a desire, and what that worth counts for in the
 	/// plan's priority. With a whole thing that the desire is about, the thing is a part of that whole thing.
 	[[nodiscard]] creature_planner::ObjectCandidate GoalWorth(entt::entity creature, const components::CreatureMindState& mind,
