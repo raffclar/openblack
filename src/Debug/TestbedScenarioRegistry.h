@@ -619,6 +619,10 @@ struct Command
 		/// The player is put in a room of the temple (value, by the temple's rooms: 0 the challenge room). Needs no
 		/// creature
 		EnterTemple,
+		/// The explorers' boat film plays as a script's PLAY_JC_SPECIAL 6 plays it on Land 1, moved to the testbed: its
+		/// dry dock at the point (from the middle of the map) on the land there, and its sailing starting in the lake's
+		/// north-east corner. Needs no creature
+		PlayBoatFilm,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

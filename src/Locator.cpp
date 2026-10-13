@@ -36,6 +36,7 @@
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
 #include "ECS/Systems/Implementations/AppleBarrelSystem.h"
+#include "ECS/Systems/Implementations/BoatLaunchSystem.h"
 #include "ECS/Systems/Implementations/BuildingDamageSystem.h"
 #include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
@@ -163,6 +164,7 @@ using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::AnimatedStaticSystem;
 using openblack::ecs::systems::AppleBarrelSystem;
 using openblack::ecs::systems::ArtefactSystem;
+using openblack::ecs::systems::BoatLaunchSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
@@ -355,6 +357,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::helpSpeechSystem::emplace<HelpSpeechSystem>();
 	Locator::highDetailSystem::emplace<HighDetailSystem>();
 	Locator::introSystem::emplace<IntroSystem>();
+	Locator::boatLaunchSystem::emplace<BoatLaunchSystem>();
 	Locator::walkPathSystem::emplace<WalkPathSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
 	Locator::sharkSystem::emplace<SharkSystem>();
@@ -514,6 +517,7 @@ void openblack::ShutDownServices()
 	Locator::helpSpeechSystem::reset();
 	Locator::highDetailSystem::reset();
 	Locator::introSystem::reset();
+	Locator::boatLaunchSystem::reset();
 	Locator::walkPathSystem::reset();
 	Locator::danceSystem::reset();
 	Locator::sharkSystem::reset();

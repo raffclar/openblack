@@ -207,6 +207,9 @@ struct RenderContext
 		glm::mat4 castModel;
 	};
 	std::vector<HighDetailDraw> highDetailDraws;
+	/// The explorers' boat while it is pushed down the beach, which casts its shadow from the same far sun onto the land
+	/// and the things on it
+	std::vector<HighDetailDraw> filmShadowDraws;
 	/// The things held in a hand this frame, with the model each is drawn with and its matrix (as castModel too): each
 	/// joins the shadow of the hand holding it
 	std::vector<HighDetailDraw> inHandDraws;

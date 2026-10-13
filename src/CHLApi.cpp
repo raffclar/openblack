@@ -142,6 +142,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
@@ -7608,9 +7609,12 @@ void PlayJcSpecial() // 326 PLAY_JC_SPECIAL
 		Locator::introSystem::value().Play(special);
 		return;
 	case 3:
-	case 6:
-		// TODO(opening): the clouds' effect, which no script uses, and the missionaries' boat
+		// TODO(opening): the clouds' effect, which no script uses
 		NotImplemented(special);
+		return;
+	case 6:
+		// The explorers push their boat into the sea and sail away
+		Locator::boatLaunchSystem::value().Play();
 		return;
 	default:
 		// The others do nothing

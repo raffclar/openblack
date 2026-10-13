@@ -75,6 +75,7 @@
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/BlendedByMaterial.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -489,6 +490,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::group>("group");
 	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
 	Reflect<components::BlendedByMaterial> {context};
+	Reflect<components::BoatFilmPart>(context)
+	    .Field<&components::BoatFilmPart::role>("role")
+	    .Field<&components::BoatFilmPart::index>("index")
+	    .Field<&components::BoatFilmPart::clipTime>("clipTime")
+	    .Field<&components::BoatFilmPart::castsShadow>("castsShadow");
+	Reflect<components::DrawnMatrix>(context).Field<&components::DrawnMatrix::model>("model");
 	Reflect<components::Lover>(context).Field<&components::Lover::partner>("partner");
 	Reflect<components::BreederSpot>(context).Field<&components::BreederSpot::spot>("spot");
 	Reflect<components::BuildingDamage>(context)

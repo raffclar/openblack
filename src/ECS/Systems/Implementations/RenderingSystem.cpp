@@ -32,6 +32,7 @@
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/BlendedByMaterial.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -200,6 +201,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool instanceAlpha;
 		/// Every instance is a posed villager
 		bool villagers;
+		/// Every instance is a thing of the explorers' boat film
+		bool film;
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
 	std::unordered_map<entt::id_type, uint32_t> fadingCounts;
@@ -214,12 +217,14 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .translucent = false,
 		                                                                     .additiveShare = std::nullopt,
 		                                                                     .instanceAlpha = false,
-		                                                                     .villagers = true}));
+		                                                                     .villagers = true,
+		                                                                     .film = true}));
 		count.first->second.count++;
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
 		count.first->second.villagers &= registry.AllOf<VillagerPose>(entity) && !morphWithTerrain;
+		count.first->second.film &= registry.AllOf<BoatFilmPart>(entity);
 		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
 		{
 			count.first->second.translucent = true;
@@ -321,8 +326,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.perEntity = desc.perEntity;
 		// The villagers of a mesh are drawn together, their bones read from the bone palette
 		drawDesc->second.bonePalette = desc.villagers;
-		// The sea doesn't reflect villagers
-		drawDesc->second.hiddenFromReflection = desc.villagers;
+		// The sea doesn't reflect villagers, nor the explorers' boat film, which is drawn after the reflection
+		drawDesc->second.hiddenFromReflection = desc.villagers || desc.film;
 		// Blended by its materials, over the opaque things
 		drawDesc->second.materialBlending = desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
@@ -469,6 +474,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.entityDraws.clear();
 	_renderContext.drawnObjects.clear();
 	_renderContext.highDetailDraws.clear();
+	_renderContext.filmShadowDraws.clear();
 	_renderContext.inHandDraws.clear();
 	_renderContext.bonePalette.clear();
 	_heldThings.clear();
@@ -489,6 +495,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto modelMatrix = glm::mat4(rotation);
 		    modelMatrix = glm::translate(modelMatrix, drawnAt * rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
+		    // A thing a film moves by a whole matrix is drawn by it
+		    if (const auto* exact = registry.TryGet<const DrawnMatrix>(entity); exact != nullptr)
+		    {
+			    modelMatrix = exact->model;
+		    }
 		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
 		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
@@ -856,6 +867,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 			    _renderContext.highDetailDraws.push_back(
 			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = castModel});
+		    }
+		    if (const auto* film = registry.TryGet<const BoatFilmPart>(entity);
+		        film != nullptr && film->castsShadow && look.z != 1.0f)
+		    {
+			    _renderContext.filmShadowDraws.push_back(
+			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = modelMatrix});
 		    }
 		    if (registry.AllOf<InHand>(entity) && look.z != 1.0f)
 		    {

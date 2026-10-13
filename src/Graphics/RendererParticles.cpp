@@ -37,6 +37,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -178,6 +179,11 @@ void Renderer::CollectParticles() const
 	if (Locator::dynamicsSystem::has_value())
 	{
 		Locator::dynamicsSystem::value().CollectDrawFrame(_particleFrame);
+	}
+	// The explorers' boat's wake
+	if (Locator::boatLaunchSystem::has_value())
+	{
+		Locator::boatLaunchSystem::value().CollectDrawFrame(_particleFrame);
 	}
 }
 

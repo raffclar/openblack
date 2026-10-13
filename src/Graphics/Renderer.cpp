@@ -4899,12 +4899,12 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 			casters.push_back(caster);
 		}
 
-		// The high-detail villagers', cast from the fixed far sun onto the ground beneath them, on the land only
-		for (const auto& draw : renderCtx.highDetailDraws)
-		{
+		// The high-detail villagers', cast from the fixed far sun onto the ground beneath them, on the land only; and the
+		// explorers' boat's as it is pushed down the beach, cast the same way onto the land and the things on it
+		const auto castFromSun = [&](const ecs::systems::RenderContext::HighDetailDraw& draw, bool onObjects) {
 			if (!meshManager.Contains(draw.mesh))
 			{
-				continue;
+				return;
 			}
 			const auto* mesh = &*meshManager.Handle(draw.mesh);
 			const auto& model = draw.castModel;
@@ -4914,7 +4914,7 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 			const auto alpha = GroundShadow::Alpha(glm::distance(camera, glm::vec3(standsAt.x, ground, standsAt.z)), radius);
 			if (alpha == 0)
 			{
-				continue;
+				return;
 			}
 			// The body in the pose of the clip it plays
 			const auto& rest = mesh->GetBoneMatrices();
@@ -4936,10 +4936,18 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 			    .standsAt = standsAt,
 			    .cast = {.light = GroundShadow::k_Sun, .level = standsAt.y, .ground = ground},
 			    .alpha = alpha,
-			    .onObjects = false,
+			    .onObjects = onObjects,
 			};
 			caster.bodies.at(0) = {.mesh = mesh, .model = model, .pose = pose, .morph = nullptr, .secondRowsOnly = false};
 			casters.push_back(caster);
+		};
+		for (const auto& draw : renderCtx.highDetailDraws)
+		{
+			castFromSun(draw, false);
+		}
+		for (const auto& draw : renderCtx.filmShadowDraws)
+		{
+			castFromSun(draw, true);
 		}
 	}
 

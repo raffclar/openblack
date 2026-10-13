@@ -150,6 +150,8 @@ private:
 	[[nodiscard]] std::string GiveAdvisorCommand(const Command& command) const;
 	/// Records a challenge as its script would, its picture of a view the camera is put at first
 	[[nodiscard]] std::string RecordChallenge(const Command& command) const;
+	/// The explorers' boat film played on the testbed, the dry dock at the command's point
+	[[nodiscard]] std::string PlayBoatFilm(const Command& command) const;
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
 	std::string HandTapObject(size_t index);
