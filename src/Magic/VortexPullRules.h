@@ -17,12 +17,14 @@
 #include <glm/vec2.hpp>
 
 #include "3D/MapCoords.h"
+#include "Enums.h"
 
 // How a fully open vortex that leads away from the land pulls things in. Each turn it looks through the land's cells
 // in a spiral out from its own, as far as it reaches that turn: its whole radius on every third turn and half of it on
 // the others, so things near its middle are taken three times as often. A creature is only taken when a script lets it
 // through and it is on the leash (or a script is moving it), and then only once it comes close to the middle, where it
-// sparkles away. Pure rules, tested without the game.
+// sparkles away. A thing flying in the physics that strikes it while it is fully open is taken as it flies. Pure rules, tested
+// without the game.
 
 namespace openblack::vortex
 {
@@ -50,5 +52,9 @@ inline constexpr float k_CreatureSparkleSeconds = 3.0f;
 /// How near the middle a creature must come: the share of the radius of the vortex's model across the land, the larger
 /// of how far its model reaches along x and along z, scaled
 [[nodiscard]] float CreatureTakenDistance(float modelReachX, float modelReachZ, float scale);
+
+/// Whether a vortex takes a thing that struck it as it flew: only a vortex that leads away, only while fully open, and
+/// only a thing still flying in the physics that the vortex would draw in from the land
+[[nodiscard]] bool TakesWhatStrikesIt(VortexType type, VortexStateType state, bool hitterFlying, bool hitterMayBeTaken);
 
 } // namespace openblack::vortex

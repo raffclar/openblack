@@ -88,6 +88,11 @@ public:
 	/// the thing's position (the land under the cursor for none), until the next frame is drawn
 	virtual void RetargetObject(std::optional<entt::entity> object, float distance) = 0;
 
+	/// The land behind the hand: where the line from the camera through the hand's middle, as the hand is posed for this
+	/// frame, meets the land or the sea near the camera. None when it meets neither or there is no hand.
+	virtual void FindBehindHand(glm::vec3 camera, std::optional<glm::vec3> handMiddle) = 0;
+	[[nodiscard]] virtual std::optional<glm::vec3> GetBehindHand() const = 0;
+
 	/// Where a line meets an object's model as it is drawn, the hand feeling it: the nearest triangle ahead of the line's
 	/// start, and its normal turned along the line
 	[[nodiscard]] virtual std::optional<screen_pick::MeshHit> FeelModel(entt::entity object, glm::vec3 origin,

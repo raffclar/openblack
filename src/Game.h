@@ -38,6 +38,7 @@
 #include "Input/HandPointer.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
+#include "LandChange.h"
 #include "Magic/HandHoldPoser.h"
 #include "Story/NewGameChoice.h"
 #include "Windowing/SizeFollower.h"
@@ -209,10 +210,16 @@ public:
 	/// Loads a land's map script, keeping the challenge's scripts running, as the story's own change of land does. The
 	/// tips screen shows while it loads, as for a new game; a script's own map command shows the "please wait" banner
 	/// instead, after five seconds
-	bool LoadMap(const std::filesystem::path& path,
-	             loading::LoadingClock::Mode look = loading::LoadingClock::Mode::Tips) noexcept;
+	bool LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look = loading::LoadingClock::Mode::Tips,
+	             land_change::Kind change = land_change::Kind::Story) noexcept;
 	/// Loads a land as the land menu does: the challenge's scripts start again from scratch before the land loads
-	bool LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept;
+	bool LoadMapWithFreshScripts(const std::filesystem::path& path,
+	                             land_change::Kind change = land_change::Kind::FreshScripts) noexcept;
+	/// A land picked from the land menu: a playground land starts a skirmish, a new game on it; any other land is loaded
+	/// with the challenge's scripts started again
+	bool LoadFromLandMenu(const std::filesystem::path& path) noexcept;
+	/// Whether a land's script is one of the playground lands, played as a skirmish
+	[[nodiscard]] static bool IsPlaygroundLand(const std::filesystem::path& path);
 	void LoadLandscape(const std::filesystem::path& path);
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
@@ -300,14 +307,19 @@ private:
 	/// window was closed meanwhile
 	bool AskForNewPlayer();
 
-	/// Clears the last land's entities, weather and effects before a new one loads
-	/// Clears the last land for the next. The testbed is a workbench outside the game: nothing is carried onto it or off
-	/// it, so each testbed load starts as the first one after launch does.
-	void PrepareNewLand(bool toTestbed);
+	/// Clears the last land for the next, keeping what the reason for the change keeps. The testbed is a workbench
+	/// outside the game: nothing is carried onto it or off it, so each testbed load starts as the first one after launch
+	/// does.
+	void PrepareNewLand(land_change::Kind change);
 	/// What every land starts with once its landscape is loaded: the sky's clock, a player and the land's physics
 	void SetUpLandscape();
-	/// Starts the game clock, the atmosphere's sounds and the music on the new land
-	void StartNewLand();
+	/// Starts the game clock, the atmosphere's sounds and the music on the new land. The story moving on keeps the game's
+	/// clock running and restarts only its turns
+	void StartNewLand(land_change::Kind change);
+	/// A new game's player starts as good or evil as their profile last kept them
+	void StartPlayerAtProfileAlignment();
+	/// Every so often as they play, the player's alignment is kept with their profile for their next new game
+	void KeepAlignmentInProfile();
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};

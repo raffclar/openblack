@@ -195,3 +195,23 @@ TEST(LeashRope, AnotherPlayersRopeGoesAsTheirCreatureFizzesAway)
 	EXPECT_FALSE(Shown({.local = false, .creatureFizz = k_HiddenFizz}));
 	EXPECT_TRUE(Shown({.local = true, .creatureFizz = 1.0f}));
 }
+
+TEST(LeashRope, HangingFromAHandAboveItIsSlackAtTheCollarButNotAtTheHand)
+{
+	// The collar on the land, the hand 12 m up and away: the rope hangs from the hand, its weight stretching the top
+	// segments, while the end at the collar lies slack. The tension is taken at the collar, the rope's start.
+	const glm::vec3 collar {100.0f, 1.0f, 100.0f};
+	const auto hand = collar + glm::vec3(8.0f, 9.0f, 0.0f);
+	auto rope = Create(collar, hand, k_Slack, k_Max, {});
+	for (int frame = 0; frame < 300; ++frame)
+	{
+		Step(rope, collar, hand, 1.0f / 30.0f, Flat);
+	}
+	EXPECT_LT(rope.tension, 0.8f);
+	auto reversed = Create(hand, collar, k_Slack, k_Max, {});
+	for (int frame = 0; frame < 300; ++frame)
+	{
+		Step(reversed, hand, collar, 1.0f / 30.0f, Flat);
+	}
+	EXPECT_GT(reversed.tension, rope.tension);
+}

@@ -43,6 +43,7 @@ public:
 	void StartScript(std::string_view name) override;
 	void Remove(entt::entity object) override;
 	void RemoveWorshipSites(entt::entity temple) override;
+	void EndHeartbeatHold(PlayerNames player) override;
 };
 
 } // namespace openblack::ecs::systems

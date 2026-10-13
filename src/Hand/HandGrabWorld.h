@@ -52,6 +52,9 @@ public:
 
 	/// The thing the interface picks under the cursor, none over the land or nothing
 	[[nodiscard]] virtual std::optional<entt::entity> ObjectUnderCursor() const = 0;
+	/// With nothing under the cursor, the thing standing nearest the land behind the hand that the hand reaches for (see
+	/// hand_reach), none when nothing is near enough
+	[[nodiscard]] virtual std::optional<entt::entity> ObjectNearHand() const = 0;
 	/// Whether a point is in a player's influence
 	[[nodiscard]] virtual bool InInfluence(PlayerNames player, glm::vec3 point) const = 0;
 	/// Whether the hand, at its point, is in its player's influence: while it keeps any of it past the border it is

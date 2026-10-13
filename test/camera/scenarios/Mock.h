@@ -155,6 +155,8 @@ public:
 	void PickUnderCursor(const Frame& /*unused*/) override {}
 	[[nodiscard]] const Pick& GetPick() const override { return _pick; }
 	void RetargetObject(std::optional<entt::entity> /*unused*/, float /*unused*/) override {}
+	void FindBehindHand(glm::vec3 /*unused*/, std::optional<glm::vec3> /*unused*/) override {}
+	[[nodiscard]] std::optional<glm::vec3> GetBehindHand() const override { return std::nullopt; }
 	[[nodiscard]] std::optional<openblack::screen_pick::MeshHit> FeelModel(entt::entity /*unused*/, glm::vec3 /*unused*/,
 	                                                                       glm::vec3 /*unused*/) const override
 	{

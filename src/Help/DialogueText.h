@@ -75,7 +75,7 @@ public:
 		std::function<std::optional<DialogueVoice>(uint32_t number)> voice;
 		/// The game turn. Unset: 0
 		std::function<uint32_t()> turn;
-		/// The game clock in milliseconds, which runs at the game's speed. Unset: 0
+		/// The real time in milliseconds, whatever the game's speed and while it is paused. Unset: 0
 		std::function<int32_t()> nowMs;
 		/// Inside the temple times are in milliseconds rather than turns. Unset: false
 		std::function<bool()> inTemple;

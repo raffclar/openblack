@@ -119,7 +119,8 @@ private:
 		auto& atom = effect.NewAtom(collection, nullptr, {});
 		atom.position = entry->position;
 		atom.rotation = entry->rotation;
-		atom.velocity = entry->velocity;
+		// The particle itself starts still: the velocity the thing was taken with only steers its moves
+		atom.velocity = glm::vec3(0.0f);
 		atom.carried = carried;
 		carried->atom = &atom;
 		carried->position = atom.position;

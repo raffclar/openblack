@@ -53,6 +53,8 @@ public:
 	virtual void EditCurrentProfile(std::u16string_view creatureName, int symbol) = 0;
 	/// Keeps the options the player set with the profile played
 	virtual void SetCurrentSettings(const player_profiles::Settings& settings) = 0;
+	/// Keeps how good or evil the player is now with the profile played, for their next new game to start them there
+	virtual void SetCurrentAlignment(double alignment) = 0;
 };
 
 } // namespace openblack::ecs::systems

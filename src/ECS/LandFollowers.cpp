@@ -9,11 +9,14 @@
 
 #include "LandFollowers.h"
 
+#include <utility>
+
 #include "3D/LandIslandInterface.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -99,6 +102,40 @@ void Follow(Registry& registry, const LandIslandInterface& land, std::span<const
 		}
 	}
 	registry.SetDirty();
+}
+
+float PlacedHeightOf(glm::vec3 position, float ground, const components::PlacedHeight* kept)
+{
+	return kept != nullptr && kept->position == position ? kept->height : position.y - ground;
+}
+
+void KeepPlacedHeights(Registry& registry, const LandIslandInterface& land, glm::vec2 lowest, glm::vec2 highest)
+{
+	std::vector<std::pair<entt::entity, components::PlacedHeight>> kept;
+	registry.Each<const components::MobileStatic, const components::Transform>(
+	    [&](entt::entity entity, const components::MobileStatic& /*unused*/, const components::Transform& transform) {
+		    const glm::vec2 at {transform.position.x, transform.position.z};
+		    if (at.x < lowest.x || at.y < lowest.y || at.x > highest.x || at.y > highest.y)
+		    {
+			    return;
+		    }
+		    // One flying or held isn't on the land; one still where it kept its height keeps the first
+		    if (registry.AnyOf<components::InPhysics, components::InHand>(entity))
+		    {
+			    return;
+		    }
+		    const auto* placed = registry.TryGet<const components::PlacedHeight>(entity);
+		    if (placed != nullptr && placed->position == transform.position)
+		    {
+			    return;
+		    }
+		    kept.emplace_back(entity, components::PlacedHeight {.height = transform.position.y - land.GetHeightAt(at),
+		                                                        .position = transform.position});
+	    });
+	for (const auto& [entity, placed] : kept)
+	{
+		registry.AssignOrReplace<components::PlacedHeight>(entity, placed);
+	}
 }
 
 } // namespace openblack::ecs::land_followers

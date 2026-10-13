@@ -91,6 +91,24 @@ struct TiedTown
 /// A rope pulled harder than this pulls the creature to the hand
 constexpr float k_PullTension = 0.8f;
 [[nodiscard]] bool ShouldPull(float tension);
+/// What decides whether a held rope pulls the creature this turn
+struct Pull
+{
+	float tension {0.0f};
+	/// The leash works, as scripts set
+	bool works {true};
+	/// The leash is tied to something rather than held in the hand
+	bool tied {false};
+	/// The creature is carrying out an order given with the leash
+	bool orderInForce {false};
+	/// A script controls the creature
+	bool scriptControlled {false};
+	/// The creature is taking something the hand gives it
+	bool takingFromHand {false};
+};
+/// A rope held in the hand and pulled taut pulls the creature to the hand, taking it out of whatever it is doing, a
+/// fight included; not while it carries out a leash order, takes something from the hand, or a script controls it
+[[nodiscard]] bool Pulls(const Pull& pull);
 
 /// Pulled away from the same desire's action a second time, the desire is held back for this many seconds a pull
 constexpr float k_SuppressSecondsPerPull = 30.0f;

@@ -428,6 +428,9 @@ struct MiracleCast
 	std::optional<float> holdBeforePress;
 	/// Cast as a script casts it, from the hand's place, rather than as a seed in the hand would
 	std::optional<ScriptSpell> script;
+	/// A shield is broken this many seconds after it is cast, as by a blow its caster can't pay for: its people react to
+	/// its fall and it closes down. A testbed set-up step.
+	std::optional<float> breakSeconds;
 };
 
 /// Something a creature is told to do, in turn with the scenario's other commands

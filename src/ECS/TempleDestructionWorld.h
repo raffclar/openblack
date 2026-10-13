@@ -85,6 +85,8 @@ public:
 	virtual void Remove(entt::entity object) = 0;
 	/// The temple's worship sites all go at once
 	virtual void RemoveWorshipSites(entt::entity temple) = 0;
+	/// The player's heart is no longer held by their temple's destruction
+	virtual void EndHeartbeatHold(PlayerNames player) = 0;
 };
 
 } // namespace openblack::ecs::temple_world

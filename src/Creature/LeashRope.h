@@ -18,8 +18,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-/// The leash's rope: a chain of masses on springs between the hand (or what the leash is tied to) and the creature's
-/// collar. It sags under its own weight, swings, is kept off the ground, and is drawn as a ribbon facing the camera with
+/// The leash's rope: a chain of masses on springs from the creature's collar (its start) to the hand (or what the leash
+/// is tied to). It sags under its own weight, swings, is kept off the ground, and is drawn as a ribbon facing the camera with
 /// a shadow strip on the land beneath it. How hard the rope is pulled, from slack to fully taut, is its tension.
 namespace openblack::leash_rope
 {
@@ -38,7 +38,7 @@ constexpr float k_Drag = 0.1f;
 constexpr float k_MinDragLength = 0.5f;
 constexpr float k_Gravity = -7.848f;
 constexpr float k_Mass = 0.8f;
-constexpr float k_MaxSpeed = 150.0f;
+constexpr float k_MaxSpeed = 300.0f;
 /// The masses keep this much over the ground beyond the ribbon's half width
 constexpr float k_GroundClearance = 0.5f;
 /// The ends are kept within the world: x and z from -1000 to 6120, height from 0 to 6120
@@ -74,7 +74,7 @@ struct Rope
 	float slackLength {32.5f};
 	float maxLength {77.0f};
 	Look look {};
-	/// How hard the rope is pulled at its start, 0 slack to 1 taut
+	/// How hard the rope is pulled at its start (the collar), 0 slack to 1 taut
 	float tension {0.0f};
 };
 
