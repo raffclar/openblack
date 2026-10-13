@@ -73,6 +73,22 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "animals.walk_pace",
+	    .name = "Birds: wingbeats keeping pace with the flight",
+	    .facet = Facet::Animals,
+	    .description = "A flock of ten doves wandering up to 20 m about a point 30 m north of a camera on the ground, "
+	                   "looking up at them. Run it at a high frame rate to see the flapping at hundreds of frames a "
+	                   "second. (Every animal moving with a clip that keeps pace with the ground plays it the same way; "
+	                   "the testbed's own animals other than birds stand unposed, so the doves show it.)",
+	    .expected = "A flying dove flaps at the same beat for its speed at 30, 100 or 500 frames a second: the clip keeps "
+	                "pace with the distance flown instead of slowing as the frame rate rises. Gliding or standing, its "
+	                "clips play by the clock as before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -5.0f}, .look = {0.0f, 25.0f, 30.0f}},
+	    .birdFlocks = {{.kind = AnimalInfo::Dove, .offset = {0.0f, 30.0f}, .reach = 20.0f}},
+	});
+
+	all.push_back({
 	    .id = "birds.seagulls_lake",
 	    .name = "Birds: seagulls over the lake",
 	    .facet = Facet::Animals,

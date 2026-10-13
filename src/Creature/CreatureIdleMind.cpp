@@ -598,6 +598,8 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.sitEnding = false;
 	mind.wakeWanted = false;
 	mind.gaveUp = false;
+	// Taking up something else, its eyes look as usual again
+	mind.eyesToClear = mind.eyesHeld;
 }
 
 void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Random& random)
@@ -704,14 +706,19 @@ void WatchHand(IdleMind& mind, const Step& step, const Senses& senses, Commands&
 }
 
 /// A turn of watching a flying thing: the limit is picked afresh each turn, before anything else is looked at
-void WatchFlying(IdleMind& mind, const Step& step, const Senses& senses, const Random& random)
+void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	const auto limit =
-	    static_cast<float>(random(game_random::k_FloatRandRange)) * step.extraSeconds * game_random::k_FloatRandScale +
-	    step.seconds;
+	    static_cast<float>(random(game_random::k_FloatRandRange)) * k_WatchFlyingExtraSeconds * game_random::k_FloatRandScale +
+	    k_WatchFlyingSeconds;
 	++mind.watchTurns;
+	if (!(senses.seconds > 0.0f))
+	{
+		FinishStep(mind);
+		return;
+	}
 	const auto turnsPerSecond = static_cast<uint32_t>(std::lround(1.0f / senses.seconds));
-	if (!KeepsWatchingFlying(mind.watchTurns, turnsPerSecond, limit, senses.objectFlying.value_or(false)))
+	if (!KeepsWatchingFlying(mind.watchTurns, turnsPerSecond, limit, senses.objectInTheAir))
 	{
 		FinishStep(mind);
 	}
@@ -767,6 +774,24 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		mind.stepSeconds = 0.0f;
 		// Each step pulls the face it is meant to as it starts, held for as long as the face goes with
 		commands.face = PullFace(mind, step.face, senses, random);
+		if (step.heldEyes.has_value())
+		{
+			commands.eyes = *step.heldEyes;
+			mind.eyesHeld = true;
+			mind.eyesToClear = false;
+		}
+		else if (mind.eyesToClear)
+		{
+			commands.eyes = Eyes::Normal;
+			mind.eyesHeld = false;
+			mind.eyesToClear = false;
+		}
+		if (step.flutterEyelids)
+		{
+			// Its eyes go back to their usual blinking once it takes up something else
+			commands.blinkIntervalMs = k_FlutterBlinkIntervalMs;
+			mind.eyesHeld = true;
+		}
 		switch (step.kind)
 		{
 		case Step::Kind::Action:
@@ -821,6 +846,18 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.douse = step.object;
 			FinishStep(mind);
 			break;
+		case Step::Kind::Shatter:
+			commands.shatter = step.object;
+			FinishStep(mind);
+			break;
+		case Step::Kind::Repair:
+			commands.repair = step.object;
+			FinishStep(mind);
+			break;
+		case Step::Kind::UseUp:
+			commands.useUp = step.object;
+			FinishStep(mind);
+			break;
 		case Step::Kind::Observe:
 			// Taken in at once
 			commands.effect = Effect::Observed;
@@ -841,7 +878,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::WatchFlying:
 			mind.watchTurns = 0;
-			WatchFlying(mind, step, senses, random);
+			WatchFlying(mind, senses, random);
 			break;
 		case Step::Kind::WatchHand:
 			mind.watchTurns = 0;
@@ -890,6 +927,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Static:
 	{
 		commands.lookAbout = senses.bodyLooping && !step.closedEyes;
+		// Sitting rests it a little every turn until it is told to get up
+		commands.restSitting = !mind.sitEnding && step.sequence[1] == animations::k_Sit;
 		const bool done = mind.wakeWanted || (step.untilRested ? senses.rested : mind.stepSeconds >= step.seconds);
 		if (!senses.bodyBusy)
 		{
@@ -970,6 +1009,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		break;
 	case Step::Kind::Douse:
+	case Step::Kind::Shatter:
+	case Step::Kind::Repair:
+	case Step::Kind::UseUp:
 	case Step::Kind::Observe:
 		// Done as it starts
 		FinishStep(mind);
@@ -984,7 +1026,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		break;
 	case Step::Kind::WatchFlying:
-		WatchFlying(mind, step, senses, random);
+		WatchFlying(mind, senses, random);
 		break;
 	case Step::Kind::WatchHand:
 		WatchHand(mind, step, senses, commands);

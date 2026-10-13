@@ -9,6 +9,10 @@
 
 #include "CreatureObjectActions.h"
 
+#include <algorithm>
+
+#include <glm/geometric.hpp>
+
 using namespace openblack;
 using namespace openblack::creature_object_actions;
 
@@ -38,6 +42,8 @@ std::string_view creature_object_actions::Name(Kind kind)
 		return "Catching";
 	case Kind::TakeFromHand:
 		return "Taking from the hand";
+	case Kind::Kick:
+		return "Kicking";
 	}
 	return "Nothing";
 }
@@ -59,6 +65,7 @@ Hands creature_object_actions::HandsFor(Kind kind)
 		return Hands::Empty;
 	case Kind::Point:
 	case Kind::Catch:
+	case Kind::Kick:
 		return Hands::Either;
 	}
 	return Hands::Either;
@@ -99,6 +106,7 @@ TownAttitude creature_object_actions::AttitudeTo(Kind kind, bool targetIsVillage
 	case Kind::Point:
 	case Kind::Catch:
 	case Kind::TakeFromHand:
+	case Kind::Kick:
 		break;
 	}
 	return TownAttitude::None;
@@ -116,6 +124,24 @@ float creature_object_actions::AttitudeSeconds(TownAttitude attitude)
 		break;
 	}
 	return 0.0f;
+}
+
+glm::vec2 creature_object_actions::LeanOf(float plusX, float minusX, float plusZ, float minusZ, float radius)
+{
+	const auto across = radius + radius;
+	const auto lean = [across](float plus, float minus) {
+		return std::clamp((plus - minus) * k_LeanShare / across, -k_MostLean, k_MostLean);
+	};
+	return {lean(plusX, minusX), lean(plusZ, minusZ)};
+}
+
+glm::vec3 creature_object_actions::KickVelocity(glm::vec2 forward, glm::vec2 lean, float size)
+{
+	// Straight up plus straight ahead, the up part changed by how the creature leans the way it faces
+	const glm::vec3 direction {forward.x, 1.0f + glm::dot(forward, lean), forward.y};
+	const auto length = glm::length(direction);
+	const auto unit = length > 0.0f ? direction / length : direction;
+	return unit * (k_KickSpeedPerSize * size);
 }
 
 bool creature_object_actions::ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying)
@@ -166,6 +192,7 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 	switch (thing)
 	{
 	case Thing::Other:
+	case Thing::Fixture:
 	case Thing::Creature:
 	case Thing::Lantern:
 	case Thing::Shield:
@@ -217,8 +244,92 @@ std::optional<creature_object_actions::Toy> creature_object_actions::ToyOf(MeshI
 
 bool creature_object_actions::Holdable(Thing thing)
 {
-	return thing != Thing::Other && thing != Thing::Creature && thing != Thing::Lantern && thing != Thing::Shield &&
-	       thing != Thing::MagicMushroom;
+	return thing != Thing::Other && thing != Thing::Fixture && thing != Thing::Creature && thing != Thing::Lantern &&
+	       thing != Thing::Shield && thing != Thing::MagicMushroom;
+}
+
+bool creature_object_actions::IsLiving(Thing thing)
+{
+	return thing == Thing::Villager || thing == Thing::Animal || thing == Thing::Bird || thing == Thing::Creature;
+}
+
+bool creature_object_actions::CanBeStoned(Thing thing, bool dead)
+{
+	switch (thing)
+	{
+	case Thing::Villager:
+	case Thing::Animal:
+	case Thing::Bird:
+	case Thing::Creature:
+		return !dead;
+	case Thing::Rock:
+	case Thing::Bonfire:
+	case Thing::DeadTree:
+	case Thing::Static:
+	case Thing::MagicMushroom:
+	case Thing::Shield:
+	case Thing::Fixture:
+		return true;
+	case Thing::Other:
+	case Thing::Ball:
+	case Thing::Creed:
+	case Thing::MobileObject:
+	case Thing::Pot:
+	case Thing::Pile:
+	case Thing::Tree:
+	case Thing::Lantern:
+	case Thing::Vortex:
+	case Thing::TeleportStone:
+		return false;
+	}
+	return false;
+}
+
+bool creature_object_actions::DoesThrowingDamage(Thing thing, bool toy)
+{
+	switch (thing)
+	{
+	case Thing::Rock:
+	case Thing::Bonfire:
+	case Thing::DeadTree:
+	case Thing::Static:
+	case Thing::Vortex:
+	case Thing::TeleportStone:
+		return !toy;
+	default:
+		return false;
+	}
+}
+
+bool creature_object_actions::CanBeThrownToImpress(Thing thing, float thingHeight, float creatureWeight)
+{
+	if (IsLiving(thing) || thing == Thing::Vortex || thing == Thing::TeleportStone)
+	{
+		return false;
+	}
+	return thingHeight < creatureWeight * k_ThrowToImpressWeightShare;
+}
+
+bool creature_object_actions::CanBeThrownInTheSea(Thing thing)
+{
+	switch (thing)
+	{
+	case Thing::Ball:
+	case Thing::Creed:
+	case Thing::MobileObject:
+	case Thing::Pot:
+	case Thing::Pile:
+	case Thing::Rock:
+	case Thing::Bonfire:
+	case Thing::DeadTree:
+	case Thing::Static:
+	case Thing::Vortex:
+	case Thing::TeleportStone:
+	case Thing::Tree:
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool creature_object_actions::MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts)

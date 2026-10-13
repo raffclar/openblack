@@ -90,8 +90,6 @@ private:
 	[[nodiscard]] float InfoWeight(entt::entity object) const;
 	/// The model of a static, from its row of the tables; none for anything else
 	[[nodiscard]] std::optional<MeshId> StaticModel(entt::entity object) const;
-	/// Any creature's leash tied to an object lets go, as the object starts to move
-	void LetGoOfLeashesTiedTo(entt::entity object);
 	/// A toy a player's hand let go may set the player's creature thinking of playing with it, whether it landed or flew
 	void ConsiderToyPlay(entt::entity object, const FromHand& release);
 	/// The kind of an object as the physics sees it now

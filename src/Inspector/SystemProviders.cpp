@@ -152,6 +152,14 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "wait_in_map";
 	case Kind::Douse:
 		return "douse";
+	case Kind::Shatter:
+		return "shatter";
+	case Kind::WatchFlying:
+		return "watch_flying";
+	case Kind::Repair:
+		return "repair";
+	case Kind::UseUp:
+		return "use_up";
 	case Kind::WatchCamera:
 		return "watch_camera";
 	case Kind::Observe:
@@ -162,8 +170,6 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "overlay";
 	case Kind::Inspect:
 		return "inspect";
-	case Kind::WatchFlying:
-		return "watch_flying";
 	case Kind::WatchHand:
 		return "watch_hand";
 	}

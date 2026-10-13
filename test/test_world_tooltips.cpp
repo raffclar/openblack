@@ -194,3 +194,30 @@ TEST(WorldToolTips, WhatAHeldSeedMayBeCastOn)
 	EXPECT_TRUE(MayCastOn(SpellSeedType::Fire, {.fireBall = true}));
 	EXPECT_FALSE(MayCastOn(SpellSeedType::Food, {.fireBall = true, .castOnByKind = true}));
 }
+
+TEST(WorldToolTips, TheTemplesHealthAndTheVillageCentresTipsShowAnywhere)
+{
+	for (const auto subject : {Subject::Temple, Subject::VillageCentre, Subject::OwnCreature})
+	{
+		EXPECT_FALSE(NeedsInfluence(subject));
+		EXPECT_TRUE(Shows(subject, true));
+		EXPECT_TRUE(Shows(subject, false));
+	}
+}
+
+TEST(WorldToolTips, WhatTheHandCouldTakeOrTapShowsOnlyInTheInfluence)
+{
+	for (const auto subject :
+	     {Subject::TempleEntrance, Subject::Store, Subject::Pile, Subject::DesireFlag, Subject::OthersCreature})
+	{
+		EXPECT_TRUE(NeedsInfluence(subject));
+		EXPECT_TRUE(Shows(subject, true));
+		EXPECT_FALSE(Shows(subject, false));
+	}
+}
+
+TEST(WorldToolTips, TheWayIntoTheOwnBuiltTempleShowsOnlyInTheInfluence)
+{
+	EXPECT_TRUE(OffersEnterTemple(true, true, true));
+	EXPECT_FALSE(OffersEnterTemple(true, true, false));
+}

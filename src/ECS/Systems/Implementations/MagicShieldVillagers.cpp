@@ -613,7 +613,7 @@ void MagicShieldSystem::ProcessVillagers()
 			const auto* memory = registry.TryGet<const VillagerReactionMemory>(villager);
 			const auto elapsed =
 			    turn - (memory != nullptr ? memory->memory.LastReacted(static_cast<uint32_t>(current.type)) : 0);
-			if (static_cast<int32_t>(elapsed) <= static_cast<int32_t>(ReactTurnsFor(villager, found->second)))
+			if (static_cast<int32_t>(elapsed) <= ReactTurnsFor(villager, found->second))
 			{
 				return;
 			}

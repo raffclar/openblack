@@ -49,6 +49,7 @@
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
+#include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "DebugGuiInterface.h"
@@ -399,6 +400,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 		if (auto* villager = registry.TryGet<ecs::components::Villager>(entity))
 		{
 			villager->life = std::clamp(*object.life, 0.0f, 1.0f);
+		}
+		// A building is hurt down to it, as anything that hurts it does, which opens a site for its repair
+		if (registry.AllOf<ecs::components::Abode>(entity))
+		{
+			static_cast<void>(ecs::world_objects::ReduceLife(entity, 1.0f - std::clamp(*object.life, 0.0f, 1.0f)));
 		}
 		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
 		{
@@ -1889,6 +1895,18 @@ void Runner::Give(const Command& command)
 		             ? "playing"
 		             : "can't";
 		break;
+	case Kind::DoAction:
+	{
+		const auto* tables = minds.GetTables();
+		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
+		const auto target = ObjectAt(command.object);
+		const auto with = command.with.has_value() ? ObjectAt(*command.with) : std::nullopt;
+		result = !action.has_value()                                     ? "no such action"
+		         : !target.has_value()                                   ? "no such object"
+		         : minds.ScriptDoAction(*entity, *action, *target, with) ? fmt::format("doing {}", command.action)
+		                                                                 : "can't";
+		break;
+	}
 	case Kind::SwapMinds:
 		if (const auto other = CreatureAt(command.value))
 		{
@@ -2322,10 +2340,11 @@ void Runner::UpdateCamera()
 	switch (*_shot)
 	{
 	case Shot::Testbed:
-		// As the testbed leaves it: 120 units south of the middle and 60 up, looking at the middle
+		// As the testbed leaves it: south of the middle and up, looking north just east of the middle
 		placement = CameraPlacement {
-		    .origin = {_middle.x, land.GetHeightAt(_middle) + 60.0f, _middle.y - 120.0f},
-		    .focus = {_middle.x, land.GetHeightAt(_middle), _middle.y},
+		    .origin = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle) + flat_land::k_CameraHeight,
+		               _middle.y - flat_land::k_CameraBack},
+		    .focus = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle), _middle.y},
 		};
 		break;
 	case Shot::Overview:
