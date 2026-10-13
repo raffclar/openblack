@@ -17,6 +17,7 @@
 #include <numeric>
 
 #include "Common/GUtilsDistance.h"
+#include "Gui/ScreenFit.h"
 
 using namespace openblack;
 using namespace openblack::disciple;
@@ -249,6 +250,18 @@ std::optional<uint32_t> disciple::SymbolCell(VillagerDisciple type)
 	default:
 		return std::nullopt;
 	}
+}
+
+float disciple::SymbolSize(float distance, int32_t screenWidth, int32_t screenHeight)
+{
+	// The game's symbol is 16 pixels across half the screen's width, at half that size
+	constexpr float k_SymbolPixels = 16.0f;
+	constexpr float k_LeastSize = 0.0001f;
+	// The camera shows the same view across a 4:3 screen, or the 4:3 middle of a wider one, as the game does across its
+	// 4:3 screen, so the symbol's pixels are measured against the half of that middle's width, and grown with it
+	const float scale = gui::ReferenceScale(screenWidth, screenHeight);
+	const float halfWidth = std::max(scale * static_cast<float>(gui::k_ReferenceWidth) * 0.5f, 1.0f);
+	return std::max(distance * (k_SymbolPixels * scale / halfWidth) * 0.5f, k_LeastSize);
 }
 
 std::optional<uint32_t> disciple::MadeSample(VillagerDisciple type, float playerAlignment, float chance)

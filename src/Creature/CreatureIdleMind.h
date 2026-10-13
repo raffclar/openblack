@@ -300,7 +300,8 @@ struct Step
 		Douse,
 		/// Watching its player's camera: turning to it whenever it is more than a quarter turn away, until whole seconds
 		/// of turns more than the step's seconds have gone by, or the camera is right overhead or more than 100 away. A
-		/// creature without a player is done at once.
+		/// creature without a player is done at once. With the step's turns set it watches for that many turns whatever
+		/// the camera does, turning to it unless it is right overhead.
 		WatchCamera,
 		/// Taking in what the step's object is, done at once
 		Observe,
@@ -308,12 +309,14 @@ struct Step
 		/// other creature; then it plays the step's animation (not while its body plays another), starting the beam
 		/// between them, and turn by turn it takes on the shape the swap gives it until it has
 		SwapMind,
-		/// Playing an animation (the step's) on top of the body, such as talking, done once it has played out; when one
-		/// already plays, it waits for that one instead
-		BodyGesture,
+		/// Playing the step's animation on top of the body, as talking: it starts unless something already plays there,
+		/// and the step is done once nothing plays on top of the body
+		Overlay,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
+	/// Watching the camera for a set number of turns, rather than until the camera goes or the step's seconds are up
+	std::optional<uint32_t> turns;
 	size_t animation {0};
 	/// Played with drooping, slowly blinking eyes, as if just woken up
 	bool sleepyEyes {false};
@@ -430,8 +433,6 @@ struct Senses
 	/// Whether the body plays an action or is on the move, and whether it is in the loop of an action, such as sitting
 	bool bodyBusy {false};
 	bool bodyLooping {false};
-	/// Whether an animation plays on top of the body
-	bool gesturePlaying {false};
 	/// Whether it is on its way somewhere or turning, and where it stands
 	bool moving {false};
 	/// How going near, getting away from or turning to face an object, or drawing a gesture, is going, by the
@@ -472,6 +473,8 @@ struct Senses
 		bool settled {false};
 	};
 	SwapView swap {};
+	/// Whether something plays on top of the body, as talking or nodding
+	bool overlayPlaying {false};
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -506,6 +509,8 @@ struct Commands
 	std::optional<ObjectOrder> object;
 	/// A gesture to draw, by its number
 	std::optional<uint32_t> gesture;
+	/// An animation to play on top of the body
+	std::optional<size_t> playOverlay;
 	/// A miracle to cast, and whether to let go of the one it holds
 	std::optional<CastOrder> cast;
 	bool releaseCast {false};
@@ -518,8 +523,6 @@ struct Commands
 	bool finishSpells {false};
 	bool startSwapBeam {false};
 	bool easeSwap {false};
-	/// An animation to play on top of the body
-	std::optional<size_t> bodyGesture;
 };
 
 /// random(n) is a whole number from 0 to n - 1

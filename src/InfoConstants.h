@@ -991,43 +991,12 @@ struct GMagicStormAndTornadoInfo: GMagicRadiusSpellInfo
 	float rainAmount;
 };
 
+/// The texts of one kind of the advisors' remarks, ended by a 0
 struct GHelpSpritesGuidance
 {
-	uint32_t field0x0;
-	uint32_t field0x4;
-	uint32_t field0x8;
-	uint32_t field0xc;
-	uint32_t field0x10;
-	uint32_t field0x14;
-	uint32_t field0x18;
-	uint32_t field0x1c;
-	uint32_t field0x20;
-	uint32_t field0x24;
-	uint32_t field0x28;
-	uint32_t field0x2c;
-	uint32_t field0x30;
-	uint32_t field0x34;
-	uint32_t field0x38;
-	uint32_t field0x3c;
-	uint32_t field0x40;
-	uint32_t field0x44;
-	uint32_t field0x48;
-	uint32_t field0x4c;
-	uint32_t field0x50;
-	uint32_t field0x54;
-	uint32_t field0x58;
-	uint32_t field0x5c;
-	uint32_t field0x60;
-	uint32_t field0x64;
-	uint32_t field0x68;
-	uint32_t field0x6c;
-	uint32_t field0x70;
-	uint32_t field0x74;
-	uint32_t field0x78;
-	uint32_t field0x7c;
-	uint32_t field0x80;
-	uint32_t field0x84;
+	std::array<uint32_t, 34> texts;
 };
+static_assert(sizeof(GHelpSpritesGuidance) == 0x88);
 
 struct GFeatureInfo: GMultiMapFixedInfo
 {
@@ -1206,7 +1175,8 @@ struct GVillagerStateTableInfo
 	float lifeDrain;
 	/// The help text telling what a villager in the state is doing, as its details show it
 	uint32_t helpText;
-	uint32_t field0x100;
+	/// The text the Help key gives about a villager in the state, 0 for none
+	uint32_t queryText;
 };
 
 struct GVillagerInfo: GLivingInfo

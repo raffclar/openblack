@@ -42,6 +42,7 @@
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "Creature/BonusCreatures.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
 #include "ECS/ArtefactRules.h"
@@ -63,6 +64,7 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LivingAction.h"
@@ -132,6 +134,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -344,6 +347,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"helpProfileSystem", "help.profile"},
     LocatorCoverage {"creatureHelpSystem", "help.creature"},
     LocatorCoverage {"helpMessageSystem", "help.messages"},
+    LocatorCoverage {"guidanceSystem", "help.guidance"},
     LocatorCoverage {"tipBubbleSystem", "help.bubble"},
     LocatorCoverage {"handDemoSystem", "help.hand_demo"},
     LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
@@ -531,6 +535,20 @@ std::string_view KindName(ecs::PhysicsEntry::Kind kind)
 
 // The engine's services
 
+/// The names of the breeder's bonus creatures the debug option unlocks
+Json UnlockedBonusCreatureNames(const creature_swap::Unlocked& unlocked)
+{
+	auto names = Json::array();
+	for (size_t i = 0; i < creature_swap::k_BonusCount; ++i)
+	{
+		if (unlocked.test(i))
+		{
+			names.push_back(std::string(creature_swap::NameOf(static_cast<creature_swap::Bonus>(i))));
+		}
+	}
+	return names;
+}
+
 std::unique_ptr<ProviderInterface> EngineProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("engine");
@@ -548,6 +566,7 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		          {"bounding_boxes", config.drawBoundingBoxes}}},
 		        {"shadows", {{"creatures", config.drawCreatureShadows}, {"dynamic_trees", config.dynamicTreeShadows}}},
 		        {"wireframe", config.wireframe},
+		        {"unlocked_bonus_creatures", UnlockedBonusCreatureNames(config.unlockedBonusCreatures)},
 		        {"time_of_day", config.timeOfDay},
 		        {"resolution", {config.resolution.x, config.resolution.y}},
 		        {"vsync", config.vsync},
@@ -2551,7 +2570,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		}
 		auto& fights = Locator::creatureFightSystem::value();
 		using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
-		constexpr std::array<std::string_view, 5> k_Results {"started", "no_opponent", "busy", "too_weak", "no_arena"};
+		constexpr std::array<std::string_view, 6> k_Results {"started",  "no_opponent", "busy",
+		                                                     "too_weak", "no_arena",    "refused"};
 		const auto started = fights.StartFight(*creature, *opponent);
 		const auto index = std::min(static_cast<size_t>(started), k_Results.size() - 1);
 		if (started != Start::Started)
@@ -3009,6 +3029,36 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 			        }
 		        }
 		        return Json {{"started", started}, {"sets_said", sent}};
+	        }));
+	provider->Add(
+	    Query("guidance",
+	          "The advisors' remarks on what the player does (towns attacked, buildings wrecked, alignment drifting, the "
+	          "moon): the ones asked for lately (kind, text, turn, whether the advisors got to say it), the turns until "
+	          "the moon is looked at again, and the player's guidance (each kind's last turn, the alignment's drift, the "
+	          "one-offs said)",
+	          {}, ResultKind::Object),
+	    Serve<Locator::guidanceSystem>(
+	        "the guidance", [](const ecs::systems::GuidanceSystemInterface& system, const QueryContext& /*c*/) -> Json {
+		        Json remarks = Json::array();
+		        for (const auto& remark : system.GetRemarks())
+		        {
+			        remarks.push_back({{"kind", static_cast<int>(remark.kind)},
+			                           {"text", remark.text},
+			                           {"turn", remark.turn},
+			                           {"started", remark.started}});
+		        }
+		        Json heard = nullptr;
+		        if (Locator::entitiesRegistry::has_value())
+		        {
+			        Locator::entitiesRegistry::value().Each<const ecs::components::GuidanceHeard>(
+			            [&heard](entt::entity entity, const ecs::components::GuidanceHeard& guidance) {
+				            heard = {{"player", entt::to_integral(entity)},
+				                     {"last_turns", guidance.lastTurn},
+				                     {"alignment_drift", guidance.alignmentDrift},
+				                     {"one_offs_said", guidance.oneOffSaid}};
+			            });
+		        }
+		        return Json {{"remarks", remarks}, {"moon_wait", system.GetMoonWait()}, {"heard", heard}};
 	        }));
 	provider->Add(
 	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "

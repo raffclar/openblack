@@ -11,6 +11,7 @@
 
 #include <vector>
 
+#include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureIdleMind.h"
@@ -67,6 +68,61 @@ TEST(CreatureSwap, AnUnlockedBonusCreatureIsAvailable)
 	EXPECT_EQ(BonusOf(14), Bonus::Mandrill);
 	EXPECT_EQ(BonusOf(16), Bonus::Gorilla);
 	EXPECT_FALSE(BonusOf(11).has_value());
+}
+
+// The debug option names the bonus creatures to unlock: all, none, or a list of names
+TEST(CreatureSwap, TheDebugOptionNamesTheBonusCreatures)
+{
+	EXPECT_EQ(ParseUnlocked("all"), Unlocked {}.set());
+	EXPECT_EQ(ParseUnlocked("ALL"), Unlocked {}.set());
+	EXPECT_EQ(ParseUnlocked("none"), Unlocked {});
+	const auto two = ParseUnlocked("Leopard, rhino");
+	ASSERT_TRUE(two.has_value());
+	EXPECT_TRUE(IsAvailable(3, *two));
+	EXPECT_TRUE(IsAvailable(15, *two));
+	EXPECT_FALSE(IsAvailable(6, *two));
+	EXPECT_FALSE(IsAvailable(14, *two));
+	EXPECT_FALSE(IsAvailable(16, *two));
+	EXPECT_FALSE(ParseUnlocked("leopard,tiger").has_value());
+	EXPECT_FALSE(ParseUnlocked("").has_value());
+	for (size_t i = 0; i < k_BonusCount; ++i)
+	{
+		const auto one = ParseUnlocked(NameOf(static_cast<Bonus>(i)));
+		ASSERT_TRUE(one.has_value());
+		EXPECT_EQ(one->count(), 1U);
+		EXPECT_TRUE(one->test(i));
+	}
+}
+
+// While the bodies change, a beam runs between them every third game turn
+TEST(CreatureSwap, ABeamRunsEveryThirdTurn)
+{
+	EXPECT_TRUE(IsBeamTurn(0));
+	EXPECT_FALSE(IsBeamTurn(1));
+	EXPECT_FALSE(IsBeamTurn(2));
+	EXPECT_TRUE(IsBeamTurn(3));
+	EXPECT_TRUE(IsBeamTurn(3000));
+}
+
+// A beam lasts a second and a half, leaves and arrives along the line between the two points, and fades in to 40 to 74
+TEST(CreatureSwap, ABeamRunsAlongTheLineBetweenTheBodies)
+{
+	const auto beam = Beam({0.0f, 2.0f, 0.0f}, {3.0f, 2.0f, 4.0f}, 0);
+	EXPECT_EQ(beam.start, glm::vec3(0.0f, 2.0f, 0.0f));
+	EXPECT_EQ(beam.end, glm::vec3(3.0f, 2.0f, 4.0f));
+	EXPECT_NEAR(beam.startTangent.x, 0.6f, 1e-3f);
+	EXPECT_NEAR(beam.startTangent.y, 0.0f, 1e-6f);
+	EXPECT_NEAR(beam.startTangent.z, 0.8f, 1e-3f);
+	EXPECT_EQ(beam.startTangent, beam.endTangent);
+	EXPECT_FLOAT_EQ(beam.life, 1.5f);
+	EXPECT_FLOAT_EQ(beam.speed, 1.0f);
+	EXPECT_EQ(beam.alpha, 40);
+	EXPECT_EQ(Beam({}, {1.0f, 0.0f, 0.0f}, k_BeamAlphaDraws - 1).alpha, 74);
+	// Two points all but the same: straight up
+	const auto still = Beam({1.0f, 1.0f, 1.0f}, {1.001f, 1.0f, 1.0f}, 5);
+	EXPECT_NEAR(still.startTangent.y, 1.0f, 1e-3f);
+	EXPECT_FLOAT_EQ(still.startTangent.x, 0.0f);
+	EXPECT_EQ(still.alpha, 45);
 }
 
 // Each turn the body closes 4% of the gap to its new size and alignment

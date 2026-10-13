@@ -158,8 +158,8 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "observe";
 	case Kind::SwapMind:
 		return "swap_mind";
-	case Kind::BodyGesture:
-		return "body_gesture";
+	case Kind::Overlay:
+		return "overlay";
 	}
 	return "unknown";
 }

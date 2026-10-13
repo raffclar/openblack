@@ -269,7 +269,7 @@ TEST(CreatureKindActions, BeingHighWithoutSittingDown)
 	EXPECT_EQ(agenda[0].kind, Step::Kind::WatchCamera);
 	EXPECT_FLOAT_EQ(agenda[0].seconds, 3.0f);
 	EXPECT_EQ(agenda[0].face, creature_face::Cue::Amazed);
-	EXPECT_EQ(agenda[1].kind, Step::Kind::BodyGesture);
+	EXPECT_EQ(agenda[1].kind, Step::Kind::Overlay);
 	EXPECT_EQ(agenda[1].animation, k_Talk);
 	EXPECT_FLOAT_EQ(agenda[2].seconds, 2.0f);
 	EXPECT_EQ(agenda[2].heldEyes, Eyes::Stoned);
@@ -280,7 +280,7 @@ TEST(CreatureKindActions, BeingHighWithoutSittingDown)
 	EXPECT_FLOAT_EQ(agenda[6].seconds, 1.1f);
 	EXPECT_EQ(agenda[7].animation, k_HighConfused);
 	EXPECT_EQ(agenda[8].kind, Step::Kind::WatchCamera);
-	EXPECT_EQ(agenda[9].kind, Step::Kind::BodyGesture);
+	EXPECT_EQ(agenda[9].kind, Step::Kind::Overlay);
 	EXPECT_EQ(agenda[10].animation, k_HighDazed);
 }
 
