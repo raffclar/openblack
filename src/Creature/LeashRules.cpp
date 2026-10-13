@@ -131,7 +131,8 @@ bool creature_leash::ShouldPull(float tension)
 
 bool creature_leash::Pulls(const Pull& pull)
 {
-	return pull.works && !pull.tied && !pull.orderInForce && !pull.scriptControlled && ShouldPull(pull.tension);
+	return pull.works && !pull.tied && !pull.orderInForce && !pull.scriptControlled && !pull.takingFromHand &&
+	       ShouldPull(pull.tension);
 }
 
 std::optional<float> creature_leash::RecordPull(PullMemory& memory, Desire desire)

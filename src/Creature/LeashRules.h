@@ -103,9 +103,11 @@ struct Pull
 	bool orderInForce {false};
 	/// A script controls the creature
 	bool scriptControlled {false};
+	/// The creature is taking something the hand gives it
+	bool takingFromHand {false};
 };
 /// A rope held in the hand and pulled taut pulls the creature to the hand, taking it out of whatever it is doing, a
-/// fight included; not while it carries out a leash order, nor while a script controls it
+/// fight included; not while it carries out a leash order, takes something from the hand, or a script controls it
 [[nodiscard]] bool Pulls(const Pull& pull);
 
 /// Pulled away from the same desire's action a second time, the desire is held back for this many seconds a pull

@@ -1276,6 +1276,8 @@ void LeashSystem::ProcessTurn()
 			continue;
 		}
 		const bool scriptControlled = registry.AllOf<ScriptControlled>(entity);
+		const bool takingFromHand =
+		    Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsTakingFromHand(entity);
 		// Fighting, only the held rope pulled taut reaches it: that takes it out of the fight with no winner and off to
 		// the hand
 		if (registry.AllOf<CreatureFighting>(entity))
@@ -1285,7 +1287,8 @@ void LeashSystem::ProcessTurn()
 			                  .works = leashes.worn->works,
 			                  .tied = leashes.worn->tiedTo.has_value(),
 			                  .orderInForce = leashes.order.has_value(),
-			                  .scriptControlled = scriptControlled}) &&
+			                  .scriptControlled = scriptControlled,
+			                  .takingFromHand = takingFromHand}) &&
 			    Locator::creatureFightSystem::has_value())
 			{
 				SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is pulled out of its fight by the leash",
@@ -1407,7 +1410,8 @@ void LeashSystem::ProcessTurn()
 		                  .works = worn.works,
 		                  .tied = false,
 		                  .orderInForce = leashes.order.has_value(),
-		                  .scriptControlled = scriptControlled}))
+		                  .scriptControlled = scriptControlled,
+		                  .takingFromHand = takingFromHand}))
 		{
 			Pull(entity);
 		}

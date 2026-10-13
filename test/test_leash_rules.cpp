@@ -195,4 +195,5 @@ TEST(LeashRules, ATautHeldRopePullsUnlessAnOrderOrAScriptHasTheCreature)
 	EXPECT_FALSE(Pulls({.tension = 0.9f, .tied = true}));
 	EXPECT_FALSE(Pulls({.tension = 0.9f, .orderInForce = true}));
 	EXPECT_FALSE(Pulls({.tension = 0.9f, .scriptControlled = true}));
+	EXPECT_FALSE(Pulls({.tension = 0.9f, .takingFromHand = true}));
 }
