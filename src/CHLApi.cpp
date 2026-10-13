@@ -202,6 +202,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingOnScreen.h"
 #include "ECS/TownDesire.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/TownPlaythings.h"
@@ -1145,58 +1146,6 @@ void SpiritPointGameThing() // 010 SPIRIT_POINT_GAME_THING
 	}
 }
 
-/// The view the scripts ask what is in: the camera as it is now and the window's size, only the 4:3 middle of a wider
-/// screen so that the scripts see what they would on a 4:3 screen; none without a window
-static std::optional<screen_pick::View> ScriptScreenView()
-{
-	if (!Locator::camera::has_value() || !Locator::windowing::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto size = Locator::windowing::value().GetSize();
-	if (size.x <= 0 || size.y <= 0)
-	{
-		return std::nullopt;
-	}
-	const auto& camera = Locator::camera::value();
-	return screen_pick::FourByThreeMiddle({
-	    .worldToClip = camera.GetViewProjectionMatrix(),
-	    .resolution = glm::vec2(size),
-	    .near = camera.GetNearClip(),
-	    .xScale = camera.GetProjectionMatrix()[0][0],
-	    .camera = glm::vec3(glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current))[3]),
-	});
-}
-
-/// Whether a thing shows on the screen: a thing with a model by its model's bounding sphere, anything else by the point
-/// it stands at
-static bool ThingOnScreen(const screen_pick::View& view, entt::entity thing)
-{
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* transform = registry.TryGet<const Transform>(thing);
-	if (transform == nullptr)
-	{
-		return false;
-	}
-	if (const auto* mesh = registry.TryGet<const ecs::components::Mesh>(thing); mesh != nullptr)
-	{
-		if (!Locator::resources::has_value() || !Locator::resources::value().GetMeshes().Contains(mesh->id))
-		{
-			return false;
-		}
-		const auto box = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox();
-		// The sphere about the model's box: its centre placed as the thing is, its radius the half diagonal times the
-		// thing's size
-		const auto centre = transform->position + transform->rotation * (transform->scale * box.Center());
-		const float radius = glm::length(box.Size() * 0.5f) * transform->scale.x;
-		return screen_pick::SphereOnScreen(view, centre, radius, transform->position);
-	}
-	// Where it stands, across the land as a map position holds it
-	const auto at = glm::vec3(map_coords::Quantise(transform->position.x), transform->position.y,
-	                          map_coords::Quantise(transform->position.z));
-	return screen_pick::PointOnScreen(view, at);
-}
-
 void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW
 {
 	const auto object = PopObject();
@@ -1205,14 +1154,14 @@ void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
 	}
-	const auto view = ScriptScreenView();
-	Pushb(valid && !PlayerInsideTemple() && view.has_value() && ThingOnScreen(*view, object));
+	const auto view = ecs::thing_on_screen::ScreenView();
+	Pushb(valid && !PlayerInsideTemple() && view.has_value() && ecs::thing_on_screen::OnScreen(*view, object));
 }
 
 void PosFieldOfView() // 012 POS_FIELD_OF_VIEW
 {
 	const auto position = PopVec();
-	const auto view = ScriptScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView();
 	Pushb(!PlayerInsideTemple() && view.has_value() && screen_pick::PointOnScreen(*view, position));
 }
 

@@ -1552,6 +1552,12 @@
   "query": "help.messages"
  },
  {
+  "description": "The advisors' remarks on what the player does (towns attacked, buildings wrecked, alignment drifting, the moon): the ones asked for lately (kind, text, turn, whether the advisors got to say it), the turns until the moon is looked at again, and the player's guidance (each kind's last turn, the alignment's drift, the one-offs said)",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.guidance"
+ },
+ {
   "description": "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, its time to show, the point it points at, its scroll and whether the hand is on it or grips it",
   "kind": "object",
   "parameters": [],
