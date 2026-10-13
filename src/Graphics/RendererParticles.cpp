@@ -553,7 +553,15 @@ void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::dra
 void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
-	if ((desc.viewId != RenderPass::Main && !reflection) || _particleFrame.items.empty())
+	if (desc.viewId != RenderPass::Main && !reflection)
+	{
+		return;
+	}
+	if (_warmingUp)
+	{
+		WarmUpParticleSprites(desc);
+	}
+	if (_particleFrame.items.empty())
 	{
 		return;
 	}
@@ -766,6 +774,39 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		const bool inSkyPass =
 		    command.kind == ItemKind::Sprite || command.kind == ItemKind::Chain || command.kind == ItemKind::Surface;
 		submit(command, inSkyPass ? skyViewId : translucentViewId);
+	}
+}
+
+void Renderer::WarmUpParticleSprites(const DrawSceneDesc& desc) const
+{
+	// A sprite of no size and no colour for each way that sprites blend
+	std::vector<uint64_t> states;
+	for (uint32_t mode = 0; mode < render_modes::k_ModeCount; ++mode)
+	{
+		const auto state = BlendState(static_cast<render_modes::Mode>(mode));
+		if (std::ranges::find(states, state) == states.end())
+		{
+			states.push_back(state);
+		}
+	}
+	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
+	const auto count = static_cast<uint32_t>(states.size());
+	if (bgfx::getAvailInstanceDataBuffer(count, k_Stride) < count)
+	{
+		return;
+	}
+	bgfx::InstanceDataBuffer instances {};
+	bgfx::allocInstanceDataBuffer(&instances, count, k_Stride);
+	std::fill_n(reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data), count,
+	            particles::sprites::SpriteInstance {});
+	const auto* program = _shaderManager->GetShader("ParticleInstanced");
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		bgfx::setState(states.at(i));
+		_plane->GetVertexBuffer().Bind();
+		bgfx::setInstanceDataBuffer(&instances, i, 1);
+		program->Submit(viewId);
 	}
 }
 

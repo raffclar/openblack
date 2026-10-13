@@ -939,3 +939,4 @@ openblack_setup_and_add_test(test_camera_rays camera/test_camera_rays.cpp)
 openblack_setup_and_add_test(
   test_instance_light_point graphics/test_instance_light_point.cpp
 )
+openblack_setup_and_add_test(test_warm_up_views graphics/test_warm_up_views.cpp)

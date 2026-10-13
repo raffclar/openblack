@@ -78,7 +78,7 @@ RenderingSystemTemple::~RenderingSystemTemple() = default;
 
 void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 
 	// Count number of instances
 	uint32_t instanceCount = 0;
@@ -319,7 +319,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 
 void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 
 	// Store offsets of uniforms for descs
 	std::map<entt::id_type, uint32_t> uniformOffsets;
