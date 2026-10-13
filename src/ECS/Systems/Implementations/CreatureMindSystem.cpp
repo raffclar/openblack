@@ -1998,6 +1998,11 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
+	// The action that its body plays continues at two times the usual speed
+	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
+	{
+		body->body = creature_layers::Hurry(body->body);
+	}
 	Abandon(*mind);
 	ReleaseCast(creature);
 	if (!Replan(creature, creature_mind::Activity::Planned,

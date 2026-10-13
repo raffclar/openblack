@@ -24,6 +24,8 @@ namespace
 /// Every animation but the stand plays this fast at size 0, and this much more slowly for each size bigger
 constexpr float k_PlaybackRateAtSizeZero = 1.6f;
 constexpr float k_PlaybackSlowingPerSize = 0.425f;
+/// A hurried body plays its action at this many times the usual speed
+constexpr float k_HurriedRate = 2.0f;
 /// Faces run back to their start this much more slowly when no other face is wanted
 constexpr float k_FaceRelaxSlowing = 4.0f;
 /// A face pulled with no time given is held for an hour
@@ -175,6 +177,15 @@ BodyAction creature_layers::EndLoop(BodyAction body)
 	return body;
 }
 
+BodyAction creature_layers::Hurry(BodyAction body)
+{
+	if (IsPlaying(body))
+	{
+		body.hurried = true;
+	}
+	return body;
+}
+
 BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration)
 {
 	if (!IsPlaying(body))
@@ -185,6 +196,10 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 	if (body.timedByPlayer)
 	{
 		return body;
+	}
+	if (body.hurried)
+	{
+		milliseconds *= k_HurriedRate;
 	}
 	const auto length = static_cast<float>(duration.value_or(0));
 	const auto stand = [] { return BodyAction {}; };

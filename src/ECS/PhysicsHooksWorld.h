@@ -158,7 +158,7 @@ public:
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity object) const = 0;
 	/// A creature's action catches a thing, with no mind to choose it
 	virtual void Catch(entt::entity creature, entt::entity object) = 0;
-	/// The creature stops where it is
+	/// The creature stops where it is, and the action that its body plays continues at two times the usual speed
 	virtual void StopCreature(entt::entity creature) = 0;
 
 	// Villagers
