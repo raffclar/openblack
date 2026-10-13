@@ -211,6 +211,9 @@ public:
 	/// pointer's, or none held while the player's devices are kept out
 	[[nodiscard]] virtual glm::ivec2 GetPointerPosition() const { return glm::ivec2(GetMousePosition()); }
 	[[nodiscard]] virtual uint32_t GetPointerButtons() const { return 0; }
+	/// Whether the pointer is known yet: the player's cursor has been over the window, or a script or the debug inspector
+	/// holds the pointer. Until then the pointer the game reports only rests in the middle of the window
+	[[nodiscard]] virtual bool IsPointerKnown() const { return true; }
 	/// A key held by a script or the debug inspector rather than on the keyboard, by its SDL scancode: it stays held until
 	/// its own key-up comes, though the keyboard says it is up
 	virtual void HoldScriptedKey([[maybe_unused]] int scancode, [[maybe_unused]] bool held) {}

@@ -2045,9 +2045,10 @@ void AddHand(std::vector<Scenario>& all)
 	    .description = "A food store in the middle of the view is looked at from a little way up and the pointer is left "
 	                   "alone. Run it as the game starts (ob-build run --scenario hand.spawn_point) without touching the "
 	                   "mouse.",
-	    .expected = "From the first frame the hand is under the cursor, or in the middle of the window over the food "
-	                "store when the cursor isn't over the window; never far off towards the top left corner, gliding "
-	                "back only once the mouse moves.",
+	    .expected = "From the first frame the hand is under the cursor when the cursor is over the window. When the "
+	                "cursor has never been over the window the pointer is the window's top left corner, as in the "
+	                "original, so the hand is off along the line through that corner until the cursor comes over the "
+	                "window. An agent holding the input puts it under the middle of the window, over the food store.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, -40.0f}, .look = {0.0f, 0.0f, 10.0f}},
 	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, 10.0f}}},
@@ -2253,6 +2254,21 @@ void AddLeash(std::vector<Scenario>& all)
 	                 OnObject(Kind::TieLeash, 0, 1, 2.0f, false), Go(Kind::WalkTo, 0, {120.0f, 60.0f}, 1.0f, false),
 	                 Act(Kind::TakeOffLeash, 0, 8.0f)},
 	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "leash.tied_thrown",
+	    .name = "Tied to a thrown rock",
+	    .facet = Facet::Leash,
+	    .description = "A tiger on the learning leash is tied to a rock of nobody's, which is then thrown off to the "
+	                   "east, every eight seconds.",
+	    .expected = "The leash stays tied to the rock as it flies and after it lands: the rope runs from the rock "
+	                "throughout and never goes back to the hand.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 10.0f}, {60.0f, 10.0f}, {0.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {-30.0f, 10.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false)},
+	    .throws = {{.object = 0, .height = 4.0f, .velocity = {12.0f, 8.0f, 0.0f}, .delaySeconds = 3.0f, .repeatSeconds = 8.0f}},
 	});
 
 	all.push_back({

@@ -131,8 +131,6 @@ public:
 	[[nodiscard]] virtual bool IsOnFire(entt::entity object) const = 0;
 	virtual void CreateReaction(const systems::ReactionSystemInterface::Source& source) = 0;
 	virtual void RemoveReactions(entt::entity initiator, Reaction type) = 0;
-	/// Every creature's leash tied to the object lets go of it
-	virtual void UntieLeashesTiedTo(entt::entity object) = 0;
 	[[nodiscard]] virtual bool IsComputerPlayer(PlayerNames player) const = 0;
 	/// A dead tree that came to rest covers the ground as it lies
 	virtual void FitDeadTreeObstacle(entt::entity deadTree) = 0;
