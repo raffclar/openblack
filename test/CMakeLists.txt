@@ -882,3 +882,6 @@ openblack_setup_and_add_test(test_creature_giving test_creature_giving.cpp)
 openblack_setup_and_add_test(
   test_villager_walk_rules test_villager_walk_rules.cpp
 )
+openblack_setup_and_add_test(
+  test_temple_villagers_survey temple/test_temple_villagers_survey.cpp
+)
