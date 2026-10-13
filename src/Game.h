@@ -37,6 +37,7 @@
 #include "Input/HandPointer.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
+#include "LandChange.h"
 #include "Magic/HandHoldPoser.h"
 #include "Story/NewGameChoice.h"
 #include "Windowing/SizeFollower.h"
@@ -206,10 +207,11 @@ public:
 	/// Loads a land's map script, keeping the challenge's scripts running, as the story's own change of land does. The
 	/// tips screen shows while it loads, as for a new game; a script's own map command shows the "please wait" banner
 	/// instead, after five seconds
-	bool LoadMap(const std::filesystem::path& path,
-	             loading::LoadingClock::Mode look = loading::LoadingClock::Mode::Tips) noexcept;
+	bool LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look = loading::LoadingClock::Mode::Tips,
+	             land_change::Kind change = land_change::Kind::Story) noexcept;
 	/// Loads a land as the land menu does: the challenge's scripts start again from scratch before the land loads
-	bool LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept;
+	bool LoadMapWithFreshScripts(const std::filesystem::path& path,
+	                             land_change::Kind change = land_change::Kind::FreshScripts) noexcept;
 	void LoadLandscape(const std::filesystem::path& path);
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
@@ -297,10 +299,10 @@ private:
 	/// window was closed meanwhile
 	bool AskForNewPlayer();
 
-	/// Clears the last land's entities, weather and effects before a new one loads
-	/// Clears the last land for the next. The testbed is a workbench outside the game: nothing is carried onto it or off
-	/// it, so each testbed load starts as the first one after launch does.
-	void PrepareNewLand(bool toTestbed);
+	/// Clears the last land for the next, keeping what the reason for the change keeps. The testbed is a workbench
+	/// outside the game: nothing is carried onto it or off it, so each testbed load starts as the first one after launch
+	/// does.
+	void PrepareNewLand(land_change::Kind change);
 	/// What every land starts with once its landscape is loaded: the sky's clock, a player and the land's physics
 	void SetUpLandscape();
 	/// Starts the game clock, the atmosphere's sounds and the music on the new land

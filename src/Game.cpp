@@ -3714,7 +3714,7 @@ bool Game::Run() noexcept
 		// A first start: the new player is asked their name before the first land; closing the window meanwhile ends
 		// the game at its first frame
 		AskForNewPlayer();
-		if (!LoadMap(_startMap))
+		if (!LoadMap(_startMap, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame))
 		{
 			return false;
 		}
@@ -3942,7 +3942,7 @@ bool Game::Run() noexcept
 	return true;
 }
 
-bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look) noexcept
+bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change) noexcept
 {
 	const ecs::systems::InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
@@ -3958,7 +3958,7 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	const auto data = fileSystem.ReadAll(path);
 	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 
-	PrepareNewLand(false);
+	PrepareNewLand(change);
 	timer.Step("reset");
 	RenderLoadingFrame();
 
@@ -4024,7 +4024,7 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	return true;
 }
 
-bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
+bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) noexcept
 {
 	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
 	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
@@ -4054,7 +4054,7 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 			                    err.what());
 		}
 	}
-	return LoadMap(path);
+	return LoadMap(path, loading::LoadingClock::Mode::Tips, change);
 }
 
 void Game::LoadTestbed() noexcept
@@ -4066,7 +4066,7 @@ void Game::LoadTestbed() noexcept
 		Locator::vm::value().StopAllTasks();
 	}
 	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
-	PrepareNewLand(true);
+	PrepareNewLand(land_change::Kind::Testbed);
 	_landPath = k_TestbedLandPath;
 	RenderLoadingFrame();
 	InitializeLevel(flat_land::Build());
@@ -4108,8 +4108,9 @@ void Game::LoadTestbed() noexcept
 	}
 }
 
-void Game::PrepareNewLand(bool toTestbed)
+void Game::PrepareNewLand(land_change::Kind change)
 {
+	const bool toTestbed = change == land_change::Kind::Testbed;
 	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
 	// creature's room's flames and smoke, keeps entities of the land after they have gone
 	if (Locator::temple::has_value())
@@ -4313,7 +4314,7 @@ bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noex
 	_startTestbed = false;
 	// A new game always begins on the first land
 	const auto land = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "Land1.txt";
-	if (!LoadMapWithFreshScripts(land))
+	if (!LoadMapWithFreshScripts(land, land_change::Kind::NewGame))
 	{
 		return false;
 	}

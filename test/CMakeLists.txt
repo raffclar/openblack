@@ -884,3 +884,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_hand_pointer input/test_hand_pointer.cpp)
 openblack_setup_and_add_test(test_shared_index_lists test_shared_index_lists.cpp)
+openblack_setup_and_add_test(test_land_change test_land_change.cpp)
