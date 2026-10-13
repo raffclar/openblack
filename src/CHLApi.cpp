@@ -72,11 +72,14 @@
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/ChallengePictures.h"
 #include "ECS/ChallengeRecords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/ChallengePicture.h"
+#include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -210,6 +213,7 @@
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Graphics/RendererInterface.h"
 #include "Gui/ScriptTexts.h"
 #include "Hand/HandClickRules.h"
 #include "Hand/ScriptHandState.h"
@@ -882,6 +886,34 @@ bool CHLApi::StartHelpScript(std::string_view name)
 		}
 	}
 	Locator::vm::value().StartScript(std::string(name), k_SinglePlayerScripts);
+	return true;
+}
+
+bool CHLApi::StartChallengeReminder(uint32_t challenge)
+{
+	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
+	auto& dialogue = Locator::dialogueControlSystem::value();
+	if (const auto owner = dialogue.GetOwner(); owner != 0 && TaskType(owner) == lhvm::ScriptType::Help)
+	{
+		StopHelpScripts();
+	}
+	if (dialogue.GetOwner() != 0)
+	{
+		return false;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto found = ecs::challenge_records::Find(registry, challenge);
+	if (!found.has_value())
+	{
+		return false;
+	}
+	const auto& record = registry.Get<ecs::components::ChallengeRecord>(*found);
+	auto& lhvm = Locator::vm::value();
+	for (const auto& argument : ecs::challenge_records::ReminderArguments(record))
+	{
+		lhvm.Push(argument.value, argument.type);
+	}
+	lhvm.StartScript(record.reminderScript, k_SinglePlayerScripts);
 	return true;
 }
 
@@ -3545,6 +3577,16 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 	        },
 	};
 	const auto outcome = ecs::challenge_records::Record(registry, snapshot, call, turn, references);
+	if (outcome.takesPicture && Locator::rendererInterface::has_value())
+	{
+		// The picture is of the screen as the player sees it now
+		auto* picture = registry.TryGet<ecs::components::ChallengePicture>(outcome.record);
+		if (picture == nullptr)
+		{
+			picture = &registry.Assign<ecs::components::ChallengePicture>(outcome.record);
+		}
+		Locator::rendererInterface::value().RequestScreenshot(ecs::challenge_pictures::Ask(*picture, outcome.record));
+	}
 	if (!outcome.alignment.has_value() || !Locator::alignmentSystem::has_value() || !Locator::infoConstants::has_value())
 	{
 		return;
@@ -7875,9 +7917,8 @@ void MusicPlayed350() // 350 MUSIC_PLAYED
 
 void UpdateSnapshotPicture() // 351 UPDATE_SNAPSHOT_PICTURE
 {
-	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Picture);
-	// TODO(raffclar): the picture of the challenge's record (Land 1 milestone #46)
-	NotImplemented();
+	KeepChallengeRecord(PopChallengeSnapshot(script::challenge_snapshots::Call::Picture),
+	                    script::challenge_snapshots::Call::Picture);
 }
 
 void StopScriptsInFilesExcluding() // 352 STOP_SCRIPTS_IN_FILES_EXCLUDING

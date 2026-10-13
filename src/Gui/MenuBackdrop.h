@@ -89,5 +89,7 @@ struct Pace
 };
 /// The milliseconds the swirls turn by this frame, none on a frame they don't
 [[nodiscard]] std::optional<int> StepPace(Pace& pace, float frameMilliseconds);
+/// A frame's milliseconds from the clock at the last frame the backdrop was drawn and now: none on its first frame
+[[nodiscard]] float FrameMilliseconds(std::optional<uint32_t> last, uint32_t now);
 
 } // namespace openblack::gui::menu_backdrop

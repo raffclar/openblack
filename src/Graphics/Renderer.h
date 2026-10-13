@@ -90,6 +90,8 @@ public:
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
+	[[nodiscard]] std::optional<graphics::CapturedFrame>
+	TakeCapturedFrame(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }

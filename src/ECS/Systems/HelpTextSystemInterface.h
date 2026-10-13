@@ -53,9 +53,22 @@ public:
 
 	virtual ~HelpTextSystemInterface() = default;
 
+	/// The player's choices for the texts, from the options
+	struct TextChoices
+	{
+		/// 0 shows no texts, 1 only the important ones, 2 all of them
+		int textDraw {1};
+		/// The newest text at the top of the box rather than the bottom
+		bool topToBottom {false};
+		/// From 0 (slow) to 1 (fast)
+		float readSpeed {0.5f};
+	};
+
 	/// Starts the dialogue with the game's help texts, for a screen of a height, which sets the size of the text
 	virtual void Start(const gui::TextDatabase& texts, int screenHeight) = 0;
 	[[nodiscard]] virtual bool IsStarted() const = 0;
+	/// The player's choices for the texts, kept for a dialogue started later
+	virtual void SetTextChoices(const TextChoices& choices) = 0;
 	/// No texts and no voices, as a new land opens
 	virtual void Reset() = 0;
 

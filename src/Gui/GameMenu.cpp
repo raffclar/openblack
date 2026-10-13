@@ -196,11 +196,45 @@ std::optional<std::pair<int, bool>> MouseCell(Mouse mouse)
 }
 } // namespace
 
+openblack::player_profiles::Settings openblack::gui::ToProfileSettings(const MenuSettings& settings)
+{
+	return {.toolTips = settings.toolTips,
+	        .storyText = settings.storyText,
+	        .helpLevel = settings.helpLevel,
+	        .creatureHelp = settings.creatureHelp,
+	        .readSpeed = settings.readSpeed,
+	        .textFromBottom = settings.textFromBottom,
+	        .leftHanded = settings.leftHandedHand,
+	        .pushScrolling = settings.pushScrolling,
+	        .autoSave = settings.autoSave};
+}
+
+void openblack::gui::TakeProfileSettings(MenuSettings& settings, const openblack::player_profiles::Settings& kept)
+{
+	settings.toolTips = kept.toolTips;
+	settings.storyText = kept.storyText;
+	settings.helpLevel = kept.helpLevel;
+	settings.creatureHelp = kept.creatureHelp;
+	settings.readSpeed = kept.readSpeed;
+	settings.textFromBottom = kept.textFromBottom;
+	settings.leftHandedHand = kept.leftHanded;
+	settings.pushScrolling = kept.pushScrolling;
+	settings.autoSave = kept.autoSave;
+}
+
 GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16string_view playerName, MenuSettings settings)
-    : _font(font)
+    : _texts(texts)
+    , _font(font)
     , _playerName(playerName)
     , _yes(texts.Get("HELP_TEXT_REQUESTER_BOXES_01"))
     , _no(texts.Get("HELP_TEXT_REQUESTER_BOXES_02"))
+    , _ok(texts.Get("HELP_TEXT_REQUESTER_BOXES_04"))
+    , _back(texts.Get("HELP_TEXT_DIALOG_BACK"))
+    , _restart(texts.Get("HELP_TEXT_FRONT_END_12"))
+    , _restartQuestion(texts.Get("HELP_TEXT_DIALOG_RESTART_WARNING"))
+    , _restartNotice(texts.Get("HELP_TEXT_DIALOG_RESTART"))
+    , _deleteQuestion(texts.Get("HELP_TEXT_DIALOG_AERYOUSUREDELETE"))
+    , _newGameQuestion(texts.Get("HELP_TEXT_DIALOG_ADDITION_20"))
     , _quitQuestion(texts.Get("HELP_TEXT_DIALOG_QUIT_QUESTION"))
     , _quitGameQuestion(texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"))
     , _settings(std::move(settings))
@@ -247,12 +281,12 @@ std::vector<Dialog::Tab> GameMenu::OptionsTabs(const TextDatabase& texts, Page s
 	// Room, which goes back as Back does.
 	(void)selected;
 	return {
-	    {.label = _insideTemple ? _worldRoomTab : _mainMenuTab, .onSelect = [this] { Back(); }},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_OPTIONS")), .onSelect = [this] { ShowPage(Page::Options); }},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_PLAYERLIST")), .onSelect = [this] { ShowPage(Page::Players); }},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_FRONT_END_06")), .onSelect = [this] { ShowPage(Page::Advanced); }},
+	    {.label = _insideTemple ? _worldRoomTab : _mainMenuTab, .onSelect = [this] { PickTab(Page::Main); }},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_OPTIONS")), .onSelect = [this] { PickTab(Page::Options); }},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_PLAYERLIST")), .onSelect = [this] { PickTab(Page::Players); }},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_FRONT_END_06")), .onSelect = [this] { PickTab(Page::Advanced); }},
 	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_CONTROLOPTIONS")),
-	     .onSelect = [this] { ShowPage(Page::Controls); }},
+	     .onSelect = [this] { PickTab(Page::Controls); }},
 	};
 }
 
@@ -285,7 +319,7 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 	    {"HELP_TEXT_DIALOG_ADDITION_169", [this] { Settle(Action::StartSkirmish); }},
 	    {"HELP_TEXT_DIALOG_JOINGONLINE", [this] { Settle(Action::JoinOnline); }},
 	    {"HELP_TEXT_DIALOG_OPTIONS", [this] { ShowPage(Page::Options); }},
-	    {"HELP_TEXT_DIALOG_QUIT", [this] { Ask(_quitQuestion); }},
+	    {"HELP_TEXT_DIALOG_QUIT", [this] { Ask(_quitQuestion, Action::Quit); }},
 	}};
 	for (size_t i = 0; i < k_ButtonCount; ++i)
 	{
@@ -357,7 +391,7 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	// Inside the temple there is no Quit arrow: the player leaves the options by Back or the World Room tab
 	_optionsQuit = &page.Add<BigButton>(_font, glm::ivec2(730, 530), k_BackSize,
 	                                    std::u16string(texts.Get("HELP_TEXT_DIALOG_QUIT")), LabelSide::Left, Look::RightArrow);
-	_optionsQuit->onClick = [this] { Ask(_quitGameQuestion); };
+	_optionsQuit->onClick = [this] { Ask(_quitGameQuestion, Action::Quit); };
 }
 
 void GameMenu::BuildPlayers(const TextDatabase& texts)
@@ -368,16 +402,28 @@ void GameMenu::BuildPlayers(const TextDatabase& texts)
 	page.Add<StaticText>(DialogRect {.min = {100, 60}, .max = {700, 120}},
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_SELECT_A_PLAYER")), Layout::Wrapped);
 
-	// openblack has no profiles of its own: the player is the only one
+	// The profiles, the one played picked; picking another plays as it from now on
 	auto& players = page.Add<List>(_font, DialogRect {.min = {200, 120}, .max = {600, 280}}, k_Mid, true, false, true);
 	players.SetItems({{.text = _playerName, .mouseCell = std::nullopt, .mouseMirrored = false}});
 	players.SetSelection(0);
+	players.onClick = [this, &players] {
+		if (const auto picked = players.GetSelection(); picked.has_value())
+		{
+			PickPlayer(*picked);
+		}
+	};
+	_players = &players;
+	_playerNames = {_playerName};
+	_currentPlayer = 0;
+	_originalPlayer = 0;
+	_originalName = _playerName;
 
 	page.Add<StaticText>(DialogRect {.min = {170, 295}, .max = {360, 359}},
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_PLAYER")), Layout::Right);
 	page.Add<StaticText>(DialogRect {.min = {440, 295}, .max = {630, 359}},
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_SYMBOL")), Layout::Left);
 	auto& symbol = page.Add<SymbolPicture>(DialogRect {.min = {368, 295}, .max = {432, 359}}, _settings.symbol);
+	_symbolPicture = &symbol;
 	symbol.onChange = [this](int value) {
 		_settings.symbol = value;
 		SettingsChanged();
@@ -387,28 +433,208 @@ void GameMenu::BuildPlayers(const TextDatabase& texts)
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_CREATURENAME")), Layout::Right, k_Mid);
 	// The name box takes 29 characters
 	auto& name = page.Add<EditBox>(_font, DialogRect {.min = {200, 370}, .max = {600, 410}}, _settings.creatureName, 29, k_Mid);
+	_creatureNameBox = &name;
 	name.onChange = [this](const std::u16string& text) {
 		_settings.creatureName = text;
 		SettingsChanged();
 	};
 
-	// TODO(raffclar): profiles, tattoos and new games
-	const std::array<std::tuple<int, const char*, Action>, 4> buttons = {{
-	    {209, "HELP_TEXT_DIALOG_CREATENEWPLAYER", Action::CreatePlayer},
-	    {324, "HELP_TEXT_DIALOG_DELETEPLAYER", Action::DeletePlayer},
-	    {444, "HELP_TEXT_DIALOG_EDITTATOO", Action::EditTattoo},
-	    {559, "HELP_TEXT_DIALOG_STARTGAME", Action::StartNewGame},
+	// The square buttons; UpdatePlayersPage spreads them out
+	const std::array<std::pair<const char*, std::function<void()>>, 4> buttons = {{
+	    {"HELP_TEXT_DIALOG_CREATENEWPLAYER",
+	     [this] {
+		     KeepPlayerEdits();
+		     Settle(Action::CreatePlayer);
+	     }},
+	    {"HELP_TEXT_DIALOG_DELETEPLAYER",
+	     [this] {
+		     // Asks about the profile picked, by its name
+		     if (!_currentPlayer.has_value())
+		     {
+			     return;
+		     }
+		     auto question = _deleteQuestion;
+		     if (const auto found = question.find(u"%s"); found != std::u16string::npos)
+		     {
+			     question.replace(found, 2, _playerNames.at(*_currentPlayer));
+		     }
+		     Ask(std::move(question), Action::DeletePlayer);
+	     }},
+	    {"HELP_TEXT_DIALOG_EDITTATOO",
+	     [this] {
+		     KeepPlayerEdits();
+		     Settle(Action::EditTattoo);
+	     }},
+	    {"HELP_TEXT_DIALOG_STARTGAME", [this] { Ask(_newGameQuestion, Action::StartNewGame); }},
 	}};
-	for (const auto& [x, label, action] : buttons)
+	for (size_t i = 0; i < buttons.size(); ++i)
 	{
-		page.Add<BigButton>(_font, glm::ivec2(x, k_CheckBoxTop), 25, std::u16string(texts.Get(label)), LabelSide::Below,
-		                    Look::Square)
-		    .onClick = [this, action] { Settle(action); };
+		auto& button = page.Add<BigButton>(_font, glm::ivec2(0, k_CheckBoxTop), 25,
+		                                   std::u16string(texts.Get(buttons.at(i).first)), LabelSide::Below, Look::Square);
+		button.onClick = buttons.at(i).second;
+		_playerButtons.at(i) = &button;
 	}
 
-	page.Add<BigButton>(_font, k_BackPosition, k_BackSize, std::u16string(texts.Get("HELP_TEXT_DIALOG_BACK")), LabelSide::Right,
-	                    Look::LeftArrow)
-	    .onClick = [this] { Back(); };
+	_playersBack = &page.Add<BigButton>(_font, k_BackPosition, k_BackSize, _back, LabelSide::Right, Look::LeftArrow);
+	_playersBack->onClick = [this] { PlayersBack(); };
+	UpdatePlayersPage();
+}
+
+void GameMenu::UpdatePlayersPage()
+{
+	// Back becomes Restart once leaving the page starts the game again, and Edit Tattoo hides then too
+	const bool restart = IsRestartPending();
+	_playersBack->label = restart ? _restart : _back;
+	const bool tattoo = _tattooAvailable && !restart;
+	_playerButtons.at(2)->visible = tattoo;
+	// The square buttons spread out over the page, three or four of them
+	constexpr std::array k_ThreeLefts = {188, 388, 0, 588};
+	constexpr std::array k_FourLefts = {138, 305, 471, 638};
+	for (size_t i = 0; i < _playerButtons.size(); ++i)
+	{
+		const auto left = tattoo ? k_FourLefts.at(i) : k_ThreeLefts.at(i);
+		auto& rect = _playerButtons.at(i)->rect;
+		rect = {.min = {left, rect.min.y}, .max = {left + rect.Width(), rect.max.y}};
+	}
+}
+
+void GameMenu::SetPlayers(std::vector<std::u16string> names, std::optional<size_t> current)
+{
+	std::vector<List::Item> items;
+	items.reserve(names.size());
+	for (const auto& name : names)
+	{
+		items.push_back({.text = name, .mouseCell = std::nullopt, .mouseMirrored = false});
+	}
+	_players->SetItems(std::move(items));
+	_playerNames = std::move(names);
+	_currentPlayer = current.has_value() && *current < _playerNames.size() ? current : std::nullopt;
+	_players->SetSelection(_currentPlayer);
+	// The profile the game was started as may have gone: leaving the page then starts the game again
+	const auto original = std::ranges::find(_playerNames, _originalName);
+	_originalPlayer = original != _playerNames.end() && !_originalName.empty()
+	                      ? std::optional(static_cast<size_t>(original - _playerNames.begin()))
+	                      : std::nullopt;
+	if (_page != Page::Players)
+	{
+		// Shown afresh, the page starts from the profile played
+		_originalPlayer = _currentPlayer;
+		_originalName = _currentPlayer.has_value() ? _playerNames.at(*_currentPlayer) : std::u16string {};
+		_mustRestart = false;
+	}
+	UpdatePlayersPage();
+}
+
+void GameMenu::ShowPlayer(std::u16string_view creatureName, int symbol, const player_profiles::Settings& settings)
+{
+	_settings.creatureName = creatureName;
+	_settings.symbol = symbol;
+	_creatureNameBox->SetText(creatureName);
+	_symbolPicture->SetSymbol(symbol);
+	TakeProfileSettings(_settings, settings);
+	// The other pages show the profile's options
+	const auto page = _page;
+	BuildOptions(_texts);
+	BuildAdvanced(_texts);
+	_optionsQuit->visible = !_insideTemple;
+	_page = page;
+}
+
+void GameMenu::SetTattooAvailable(bool available)
+{
+	_tattooAvailable = available;
+	UpdatePlayersPage();
+}
+
+void GameMenu::PickPlayer(size_t index)
+{
+	if (index >= _playerNames.size())
+	{
+		return;
+	}
+	// The edits are kept with the profile played before another is
+	KeepPlayerEdits();
+	const bool changed = _currentPlayer != index;
+	_currentPlayer = index;
+	UpdatePlayersPage();
+	if (changed)
+	{
+		_pickedPlayer = index;
+		Settle(Action::PickPlayer);
+	}
+}
+
+void GameMenu::PrepareDeletion()
+{
+	if (!_currentPlayer.has_value())
+	{
+		return;
+	}
+	_playerToDelete = _playerNames.at(*_currentPlayer);
+	auto remaining = _playerNames;
+	remaining.erase(remaining.begin() + static_cast<std::ptrdiff_t>(*_currentPlayer));
+	// Deleting the profile the game was started as forgets it: the first left is played, and leaving the page then
+	// starts the game again. With none left the new player's box asks for one.
+	if (_playerToDelete == _originalName)
+	{
+		_originalName.clear();
+		_mustRestart = !remaining.empty();
+	}
+	const auto original = std::ranges::find(remaining, _originalName);
+	if (original != remaining.end() && !_originalName.empty())
+	{
+		_pickedPlayer = static_cast<size_t>(original - remaining.begin());
+	}
+	else
+	{
+		_pickedPlayer = remaining.empty() ? std::nullopt : std::optional<size_t>(0);
+	}
+}
+
+void GameMenu::KeepPlayerEdits()
+{
+	_playerEdits = PlayerEdits {.creatureName = _settings.creatureName, .symbol = _settings.symbol};
+}
+
+void GameMenu::PlayersBack()
+{
+	KeepPlayerEdits();
+	if (_mustRestart)
+	{
+		Tell(_restartNotice, Action::Restart);
+	}
+	else if (IsRestartPending())
+	{
+		Ask(_restartQuestion, Action::Restart);
+	}
+	else
+	{
+		Back();
+	}
+}
+
+void GameMenu::PickTab(Page page)
+{
+	if (_page == Page::Players && page != Page::Players && IsRestartPending())
+	{
+		KeepPlayerEdits();
+		Ask(_restartQuestion, Action::Restart);
+		return;
+	}
+	if (page == Page::Main)
+	{
+		Back();
+	}
+	else
+	{
+		ShowPage(page);
+	}
+}
+
+const std::u16string& GameMenu::GetQuestionText() const
+{
+	static const std::u16string k_None;
+	return _question.has_value() ? _question->text : k_None;
 }
 
 void GameMenu::BuildAdvanced(const TextDatabase& texts)
@@ -532,13 +758,13 @@ void GameMenu::BuildControls(const TextDatabase& texts)
 	    .onClick = [this] { Back(); };
 }
 
-void GameMenu::Ask(std::u16string text)
+void GameMenu::Ask(std::u16string text, Action yes)
 {
 	// A question with a Yes and a No: the question in the middle of a 500 by 200 box
 	auto answers = std::make_unique<Dialog>();
 	answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
 	answers->Add<BigButton>(_font, glm::ivec2(200, 338), k_ArrowSize, _yes, LabelSide::Right, Look::LeftArrow).onClick =
-	    [this] { Settle(Action::Quit); };
+	    [this, yes] { Settle(yes); };
 	answers->Add<BigButton>(_font, glm::ivec2(568, 338), k_ArrowSize, _no, LabelSide::Left, Look::RightArrow).onClick = [this] {
 		Settle(Action::None);
 	};
@@ -547,8 +773,31 @@ void GameMenu::Ask(std::u16string text)
 	CurrentDialog().Reset();
 }
 
+void GameMenu::Tell(std::u16string text, Action ok)
+{
+	// A message with an OK button 150 by 32 under it, in the same box as a question
+	auto answers = std::make_unique<Dialog>();
+	answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
+	answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, k_Mid).onClick = [this, ok] { Settle(ok); };
+	_question = Question {.text = std::move(text), .answers = std::move(answers), .fade = Zoomer()};
+	_question->fade.SetDestination(1.0f, k_FadeInSeconds);
+	CurrentDialog().Reset();
+}
+
 void GameMenu::Settle(Action action)
 {
+	switch (action)
+	{
+	case Action::DeletePlayer:
+		PrepareDeletion();
+		[[fallthrough]];
+	case Action::StartNewGame:
+	case Action::Restart:
+		KeepPlayerEdits();
+		break;
+	default:
+		break;
+	}
 	_action = action;
 	// The question goes once the click on its answer is over
 	_answered = _question.has_value();
@@ -557,6 +806,18 @@ void GameMenu::Settle(Action action)
 void GameMenu::ShowPage(Page page)
 {
 	CurrentDialog().Reset();
+	if (_page == Page::Players && page != Page::Players)
+	{
+		KeepPlayerEdits();
+	}
+	if (page == Page::Players && _page != Page::Players)
+	{
+		// Shown afresh, the page starts from the profile played
+		_originalPlayer = _currentPlayer;
+		_originalName = _currentPlayer.has_value() ? _playerNames.at(*_currentPlayer) : std::u16string {};
+		_mustRestart = false;
+		UpdatePlayersPage();
+	}
 	_page = page;
 	CurrentDialog().Reset();
 }
@@ -604,6 +865,10 @@ void GameMenu::Open()
 
 void GameMenu::Close()
 {
+	if (_page == Page::Players)
+	{
+		KeepPlayerEdits();
+	}
 	_open = false;
 	_question.reset();
 	CurrentDialog().Reset();
@@ -694,6 +959,10 @@ void GameMenu::KeyDown(int key)
 {
 	if (_open && !_question)
 	{
+		if (_page == Page::Players && (key == SDLK_RETURN || key == SDLK_KP_ENTER))
+		{
+			KeepPlayerEdits();
+		}
 		CurrentDialog().KeyDown(key);
 	}
 }
@@ -708,6 +977,15 @@ GameMenu::Action GameMenu::Escape()
 	{
 		_question.reset();
 		return Action::None;
+	}
+	if (_page == Page::Players)
+	{
+		KeepPlayerEdits();
+		// Leaving the page would start the game again: Escape does nothing
+		if (IsRestartPending())
+		{
+			return Action::None;
+		}
 	}
 	if (_page != Page::Main && !_insideTemple)
 	{
