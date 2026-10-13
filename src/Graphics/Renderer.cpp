@@ -74,10 +74,12 @@
 #include "Creature/CreatureSkin.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/AbodeKnock.h"
+#include "ECS/BoatLaunchRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
@@ -1241,7 +1243,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// The distance haze is the world's, not the sky's or the temple's. The temple has a depth fog of its own.
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				const bool hazed = desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple;
+				const bool hazed = desc.landLightAndHaze && desc.hazed && !desc.isSky && !desc.drawAll && !inTemple;
 				if (inTemple && desc.templeFog)
 				{
 					const auto& fog = Locator::temple::value().GetFog();
@@ -4608,6 +4610,43 @@ TextureHandle Renderer::GetLandLightTexture() const
 	return _landLightTexture.value_or(_groundShadowData->GetNativeHandle());
 }
 
+void Renderer::DrawFilmReflections(const DrawSceneDesc& desc) const
+{
+	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	if (desc.viewId != RenderPass::Reflection || renderCtx.filmReflections.empty())
+	{
+		return;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	for (const auto& boat : renderCtx.filmReflections)
+	{
+		if (!meshes.Contains(boat.mesh))
+		{
+			continue;
+		}
+		L3DMeshSubmitDesc submitDesc = {};
+		submitDesc.viewId = desc.viewId;
+		submitDesc.program = _shaderManager->GetShader("Object");
+		submitDesc.state = BGFX_STATE_WRITE_MASK | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
+		submitDesc.modelMatrices = &boat.model;
+		submitDesc.matrixCount = 1;
+		submitDesc.useMaterialBlending = true;
+		submitDesc.useMaterialCulling = true;
+		submitDesc.mirrored = desc.cullBack;
+		submitDesc.detailLevel = boat.detailLevel;
+		// In one flat colour of its own at every vertex, unshaded by the sun, with the land's colour where it is added
+		// over it, and neither faded nor coloured by the distance haze
+		submitDesc.objectLook =
+		    L3DMeshSubmitDesc::ObjectLook {.colour = ecs::boat_launch::SeaReflectionColour(), .alpha = 1.0f};
+		submitDesc.unlit = true;
+		submitDesc.alwaysLit = true;
+		submitDesc.hazed = false;
+		submitDesc.snow = false;
+		submitDesc.groundShadows = false;
+		DrawMesh(*meshes.Handle(boat.mesh), submitDesc, std::numeric_limits<uint8_t>::max());
+	}
+}
+
 void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 {
 	if (desc.viewId != RenderPass::Main || !Locator::entitiesRegistry::has_value())
@@ -6174,9 +6213,16 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					return;
 				}
+				// The sea mirrors none of the explorers' boat film this way, even one sharing its model with things it
+				// mirrors
+				const bool reflection = desc.viewId == RenderPass::Reflection;
+				if (reflection && desc.entities.AllOf<ecs::components::BoatFilmPart>(entity))
+				{
+					return;
+				}
 				const auto holding = drawHolding(instance);
 				if (!holding.has_value() || !meshManager.Contains(holding->first) ||
-				    (desc.viewId == RenderPass::Reflection && holding->second->hiddenFromReflection))
+				    (reflection && holding->second->hiddenFromReflection))
 				{
 					return;
 				}
@@ -6380,6 +6426,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawChimneySmoke(desc);
 			DrawShieldDomes(desc);
 			DrawDestructionGhosts(desc);
+			DrawFilmReflections(desc);
 			DrawParticles(desc);
 			DrawIntroLight(desc);
 			DrawInfluenceBorder(desc);

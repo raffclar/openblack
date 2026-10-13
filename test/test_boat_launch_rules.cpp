@@ -259,3 +259,10 @@ TEST(BoatLaunchRules, TheWakeRunsBackFromTheBowAndFades)
 	EXPECT_FALSE(rules::WakeAt(1199, boat).shown);
 	EXPECT_TRUE(rules::WakeAt(1200, boat).shown);
 }
+
+TEST(BoatLaunchRules, TheSeaMirrorsTheBoatInADarkBlueOfItsOwn)
+{
+	// Red and green at 0x30, blue at 0x70, opaque
+	EXPECT_EQ(rules::k_SeaReflectionColour >> 24, 0xFFu);
+	ExpectNear(rules::SeaReflectionColour(), {48.0f, 48.0f, 112.0f});
+}

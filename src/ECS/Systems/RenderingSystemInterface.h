@@ -210,6 +210,15 @@ struct RenderContext
 	/// The explorers' boat while it is pushed down the beach, which casts its shadow from the same far sun onto the land
 	/// and the things on it
 	std::vector<HighDetailDraw> filmShadowDraws;
+	/// The explorers' boat, which the sea mirrors however far off it is (none of the rest of its film): its model, its
+	/// matrix, and the detail its parts are mirrored at, the one it was drawn at the frame before
+	struct FilmReflection
+	{
+		entt::id_type mesh;
+		glm::mat4 model;
+		uint8_t detailLevel;
+	};
+	std::vector<FilmReflection> filmReflections;
 	/// The things held in a hand this frame, with the model each is drawn with and its matrix (as castModel too): each
 	/// joins the shadow of the hand holding it
 	std::vector<HighDetailDraw> inHandDraws;

@@ -40,8 +40,15 @@ inline constexpr glm::vec3 k_SailingStart {std::bit_cast<float>(0x44B61148u), 0.
 inline constexpr std::string_view k_LaunchClip = "boat1.anm";
 inline constexpr std::string_view k_SailingClip = "boat2.anm";
 
-/// The boat's colour as it is drawn before the land and the sea, 0xAARRGGBB
-inline constexpr uint32_t k_BoatColour = 0xFF303070u;
+/// The sea mirrors the boat, and nothing else of the film, in this colour of its own (0xAARRGGBB): flat, unshaded by
+/// the sun and unfaded by the haze, with the land's colour where the boat is added, however far off it is
+inline constexpr uint32_t k_SeaReflectionColour = 0xFF303070u;
+/// That colour's red, green and blue, 0 to 255
+[[nodiscard]] constexpr glm::vec3 SeaReflectionColour() noexcept
+{
+	return {static_cast<float>((k_SeaReflectionColour >> 16) & 0xFFu), static_cast<float>((k_SeaReflectionColour >> 8) & 0xFFu),
+	        static_cast<float>(k_SeaReflectionColour & 0xFFu)};
+}
 
 /// The milliseconds the sailors push before the boat starts to move
 inline constexpr int32_t k_PushFor = 3000;

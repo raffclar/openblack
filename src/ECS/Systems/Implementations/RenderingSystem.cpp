@@ -19,6 +19,7 @@
 #include <span>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 
 #include <glm/gtx/transform.hpp>
 
@@ -326,7 +327,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.perEntity = desc.perEntity;
 		// The villagers of a mesh are drawn together, their bones read from the bone palette
 		drawDesc->second.bonePalette = desc.villagers;
-		// The sea doesn't reflect villagers, nor the explorers' boat film, which is drawn after the reflection
+		// The sea doesn't reflect villagers, nor the explorers' boat film, which it mirrors in a look of its own
 		drawDesc->second.hiddenFromReflection = desc.villagers || desc.film;
 		// Blended by its materials, over the opaque things
 		drawDesc->second.materialBlending = desc.translucent;
@@ -358,7 +359,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.bonePalette = villagers;
 		drawDesc->second.unlit = desc.has_value() && desc->unlit;
 		drawDesc->second.instanceAlpha = true;
-		drawDesc->second.hiddenFromReflection = villagers;
+		// The sea doesn't reflect villagers, nor the explorers' boat film, which it mirrors in a look of its own
+		drawDesc->second.hiddenFromReflection = villagers || (desc.has_value() && desc->film);
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);
 		_fadingSlots.emplace(meshId, InstanceSlots {.offset = offset,
 		                                            .count = count,
@@ -475,6 +477,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.drawnObjects.clear();
 	_renderContext.highDetailDraws.clear();
 	_renderContext.filmShadowDraws.clear();
+	_renderContext.filmReflections.clear();
+	auto lastFilmLevels = std::exchange(_filmReflectionLevels, {});
 	_renderContext.inHandDraws.clear();
 	_renderContext.bonePalette.clear();
 	_heldThings.clear();
@@ -482,7 +486,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &meshes, &fits, drawBoundingBox, camera, modelDetail,
+	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, drawBoundingBox, camera, modelDetail,
 	     drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // A villager is drawn gliding between its turns and turning after the way it faces; one held by the opening's
 		    // hand is drawn in its grip
@@ -504,6 +508,21 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
 		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
+
+		    // The sea mirrors the explorers' boat, and no other part of its film, wherever it is and however far off, at the
+		    // detail it was drawn at the frame before
+		    const auto* filmPart = registry.TryGet<const BoatFilmPart>(entity);
+		    const bool mirroredBoat = filmPart != nullptr && filmPart->role == BoatFilmPart::Role::Boat;
+		    if (mirroredBoat)
+		    {
+			    const auto last = lastFilmLevels.find(entity);
+			    const auto lastLevel = last != lastFilmLevels.end()
+			                               ? last->second
+			                               : graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High);
+			    _filmReflectionLevels[entity] = lastLevel;
+			    _renderContext.filmReflections.push_back(
+			        {.mesh = DrawnMeshOf(entity, mesh), .model = modelMatrix, .detailLevel = lastLevel});
+		    }
 
 		    // A thing on the land is drawn in less detail the further off it is, fades out, then isn't drawn; a villager
 		    // then shows only as a smudge on a blob while it stands above the sea. One flying in the physics or one that
@@ -584,6 +603,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    }
 				    }
 			    }
+		    }
+
+		    if (mirroredBoat && !gone)
+		    {
+			    _filmReflectionLevels[entity] = graphics::mesh_detail::LevelBit(level);
 		    }
 
 		    // A thing too far off to be drawn keeps a place at the back of its mesh's instances, only for what it leaves on
