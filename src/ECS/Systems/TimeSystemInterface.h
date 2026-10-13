@@ -38,6 +38,10 @@ public:
 
 	/// Starts the game clock from turn 0, as a map starts
 	virtual void StartGameClock(bool paused) = 0;
+	/// The turn count starts again from 0 while the game clock runs on, as the story moving to its next land has it. The
+	/// clock keeps its speed and whether it is paused. Far ahead of the new turn, the next turn gives up the time it is
+	/// ahead by; and the frame clock, going back with the turn, gives its next frame no time.
+	virtual void RestartTurns() = 0;
 	/// Whether the game is to play a turn now
 	[[nodiscard]] virtual bool IsTurnDue() = 0;
 	/// The turn number goes up as a turn starts, unless the game is paused

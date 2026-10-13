@@ -37,6 +37,8 @@ public:
 	virtual void KeepForNextLand() = 0;
 	/// Nothing is kept: the next land's players' hearts start calm
 	virtual void ForgetKept() = 0;
+	/// The destruction of the player's temple has ended: their heart beats as the danger has it again
+	virtual void EndDestruction(PlayerNames player) = 0;
 };
 
 } // namespace openblack::ecs::systems

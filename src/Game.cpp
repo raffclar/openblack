@@ -2031,17 +2031,17 @@ bool Game::Update() noexcept
 	{
 		// The animals are drawn between their last two turns, their models posed by their clips
 		auto animals = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
-		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
+		Locator::animalSystem::value().Update(clock.GetFrameGameTime(), clock.GetTurnFraction());
 		// The clips the villagers' states play go on, and the sounds of their frames play
-		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
+		Locator::livingActionSystem::value().UpdatePoses(clock.GetFrameGameTime(), clock.GetTurnFraction());
 		// The sharks swim between their last two turns and leave their wakes
 		Locator::sharkSystem::value().Update(gameTime, clock.GetTurnFraction());
 		// The opening's light falls and its hand lifts the boy and sets him down, by the frame's game time
 		Locator::introSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
-		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
+		Locator::animatedStaticSystem::value().Update(clock.GetFrameGameTime());
 		// The apple barrel goes to the local player's storage pit nearest their temple and its worm wriggles on
-		Locator::appleBarrelSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
+		Locator::appleBarrelSystem::value().Update(clock.GetFrameGameTime());
 	}
 	{
 		// The creatures are drawn moving between the last two turns
@@ -4032,7 +4032,7 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 		StartPlayerAtProfileAlignment();
 	}
 	RenderLoadingFrame();
-	StartNewLand();
+	StartNewLand(change);
 	timer.Step("start");
 	EndLoadingScreen();
 	return true;
@@ -4115,7 +4115,7 @@ void Game::LoadTestbed() noexcept
 	    .SetOrigin({middle.x, ground + k_TestbedCameraHeight, middle.y - k_TestbedCameraBack})
 	    .SetFocus({middle.x, ground, middle.y});
 
-	StartNewLand();
+	StartNewLand(land_change::Kind::Testbed);
 
 	// The testbed has no temple to give its player influence, so a source of influence over its middle gives them the
 	// reach a citadel would: the miracles cast only in influence may be cast there, and nowhere beyond. Their worship
@@ -4247,8 +4247,18 @@ void Game::PrepareNewLand(land_change::Kind change)
 			break;
 		}
 	}
-	// The scripts start again, and the help's texts and voices with them
-	Locator::helpTextSystem::value().Reset();
+	// The help's texts stay through the story's change of land, still to be read: the game's turns start again from
+	// nothing on the next land, so a text timed by turns reads as read only once they pass its end on the last land, and
+	// is clicked away only once they pass when it came. Its voices stop with every other sound. When the scripts start
+	// again, the texts go with them
+	if (rules.helpTextsKept)
+	{
+		Locator::helpTextSystem::value().StopVoices();
+	}
+	else
+	{
+		Locator::helpTextSystem::value().Reset();
+	}
 	Locator::guidanceSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
@@ -4267,10 +4277,6 @@ void Game::PrepareNewLand(land_change::Kind change)
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
-	if (Locator::animatedStaticSystem::has_value())
-	{
-		Locator::animatedStaticSystem::value().Reset();
-	}
 	if (Locator::objectDrawListSystem::has_value())
 	{
 		Locator::objectDrawListSystem::value().Reset();
@@ -4356,13 +4362,24 @@ void Game::KeepAlignmentInProfile()
 	}
 }
 
-void Game::StartNewLand()
+void Game::StartNewLand(land_change::Kind change)
 {
 	_lastGameLoopTime = machine_clock::Ticks();
 	_turnDeltaTime = 0ns;
-	// The game starts running, as Black & White does
-	Locator::time::value().StartGameClock(false);
-	SetGameSpeed(Game::k_TurnDurationMultiplierNormal);
+	auto& clock = Locator::time::value();
+	if (land_change::RulesFor(change).gameClockRunsOn)
+	{
+		// The story's next land counts its turns from 0 again, but the game's clock runs on through the change at the
+		// speed it had. The clock is then far ahead of the new turns, and the next turn gives that time up as it does
+		// whenever the game falls more than two seconds behind
+		clock.RestartTurns();
+	}
+	else
+	{
+		// The game starts running, at the normal speed, as Black & White does
+		clock.StartGameClock(false);
+		SetGameSpeed(Game::k_TurnDurationMultiplierNormal);
+	}
 
 	if (!_atmosAudio)
 	{

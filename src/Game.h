@@ -313,8 +313,9 @@ private:
 	void PrepareNewLand(land_change::Kind change);
 	/// What every land starts with once its landscape is loaded: the sky's clock, a player and the land's physics
 	void SetUpLandscape();
-	/// Starts the game clock, the atmosphere's sounds and the music on the new land
-	void StartNewLand();
+	/// Starts the game clock, the atmosphere's sounds and the music on the new land. The story moving on keeps the game's
+	/// clock running and restarts only its turns
+	void StartNewLand(land_change::Kind change);
 	/// A new game's player starts as good or evil as their profile last kept them
 	void StartPlayerAtProfileAlignment();
 	/// Every so often as they play, the player's alignment is kept with their profile for their next new game
