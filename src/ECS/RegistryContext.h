@@ -24,6 +24,7 @@
 #include "Components/Stream.h"
 #include "Components/Town.h"
 #include "Components/VillageLight.h"
+#include "Enums.h"
 
 namespace openblack::ecs
 {
@@ -41,6 +42,9 @@ struct RegistryContext
 	/// The scripts let the player go into their temple by tapping its entrance. They allow it until they say otherwise, and
 	/// every land starts allowing it again.
 	bool scriptLetsTempleBeEntered {true};
+	/// Each player's temple entrances take the cursor from the first turn a temple of theirs stands fully built on this
+	/// land, until the land is left
+	std::array<bool, static_cast<size_t>(PlayerNames::_COUNT)> templeEntrancesTakeCursor {};
 	/// The game is over: the local player's temple is being destroyed
 	bool gameOver {false};
 	/// A skirmish: a playground land played rather than the story's. Losing a temple doesn't end it. openblack plays no

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/UndrawnPicks.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -43,6 +44,10 @@ private:
 	std::vector<screen_pick::Candidate> _candidates;
 	std::vector<entt::entity> _candidateEntities;
 	std::vector<glm::mat4> _candidateModels;
+	std::vector<entt::id_type> _candidateMeshes;
+	std::vector<entt::entity> _drawnEntities;
+	std::vector<undrawn_picks::Shape> _undrawnShapes;
+	std::vector<undrawn_picks::Turn> _testOrder;
 	std::vector<screen_pick::ClipCorner> _corners;
 	std::vector<glm::vec3> _placed;
 	std::vector<glm::vec2> _uvs;

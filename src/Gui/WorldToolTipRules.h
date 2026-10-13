@@ -29,6 +29,12 @@ namespace openblack::gui::world_tooltip
 
 /// "Enter Temple", over the way into the player's own temple, by the Apply button
 constexpr uint32_t k_EnterTemple = 88;
+/// Over the way into a temple, the hand offers to enter it only for the player's own temple, standing fully built, and
+/// only while the hand is within the player's influence
+[[nodiscard]] constexpr bool OffersEnterTemple(bool ownTemple, bool templeBuilt, bool handInInfluence)
+{
+	return ownTemple && templeBuilt && handInInfluence;
+}
 /// "%3.0f Belief Left", over any village centre: the belief the town holds in the player beyond any other player's
 constexpr uint32_t k_BeliefLeft = 89;
 /// "%3.0f Belief Needed": the words the belief tooltip shows instead while another player is ahead in the town, with
