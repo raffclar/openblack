@@ -20,6 +20,7 @@
 #include "ECS/AbodeKnock.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -44,6 +45,17 @@ constexpr std::array<audio::SoundId, ecs::abode_knock::k_KnockSounds> k_KnockSou
 bool AbodeKnockSystem::Tap(entt::entity abodeEntity, glm::vec3 handPoint, bool ownHand)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// A miracle dispenser is a building of its town too, with nobody living in it
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(abodeEntity))
+	{
+		if (!Locator::infoConstants::has_value())
+		{
+			return false;
+		}
+		const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(dispenser->building));
+		return Knock(info.abodeType, 1.0f, registry.Valid(dispenser->town) ? dispenser->town : entt::null, {}, handPoint,
+		             ownHand);
+	}
 	const auto* abode = registry.TryGet<const Abode>(abodeEntity);
 	const auto* info = ecs::world_objects::AbodeInfoOf(abodeEntity);
 	if (abode == nullptr || info == nullptr)
@@ -51,25 +63,34 @@ bool AbodeKnockSystem::Tap(entt::entity abodeEntity, glm::vec3 handPoint, bool o
 		return false;
 	}
 	const auto* progress = registry.TryGet<const BuildProgress>(abodeEntity);
-	if (!ecs::abode_knock::IsTappable(info->abodeType, progress != nullptr ? progress->built : 1.0f))
+	const auto& towns = registry.Context().towns;
+	const auto town = towns.find(abode->townId);
+	// Copied, as the people coming out leave the building
+	const auto inhabitants = abode->inhabitants;
+	return Knock(info->abodeType, progress != nullptr ? progress->built : 1.0f,
+	             town != towns.end() && registry.Valid(town->second) ? town->second : entt::null, inhabitants, handPoint,
+	             ownHand);
+}
+
+bool AbodeKnockSystem::Knock(AbodeType type, float built, entt::entity town, std::span<const entt::entity> inhabitants,
+                             glm::vec3 handPoint, bool ownHand)
+{
+	if (!ecs::abode_knock::IsTappable(type, built))
 	{
 		return false;
 	}
 
 	// Every house of the building's town shows how many live in it
-	const auto& towns = registry.Context().towns;
-	const auto town = towns.find(abode->townId);
-	_knockedTown = town != towns.end() && registry.Valid(town->second) ? town->second : entt::null;
+	_knockedTown = town;
 	_readoutMs = ecs::abode_knock::Knock(_readoutMs);
 
 	// Everyone inside comes out, whoever's town it is
-	const auto inhabitants = abode->inhabitants;
 	for (const auto villager : inhabitants)
 	{
 		ecs::villager_home::SetStateWhenTappedOnAbode(villager);
 	}
 
-	if (!ecs::abode_knock::KnocksBack(info->abodeType))
+	if (!ecs::abode_knock::KnocksBack(type))
 	{
 		return true;
 	}
