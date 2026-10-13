@@ -194,6 +194,8 @@ TEST(CreatureReactionRules, WhatItDoes)
 	EXPECT_EQ(hand->plan->action, "LookAtHand");
 	EXPECT_EQ(hand->plan->desire, Desire::Curiosity);
 	EXPECT_TRUE(hand->plan->onSelf);
+	// Its watch of the hand is set to a minute and up to another
+	EXPECT_TRUE(hand->longHandWatch);
 
 	const auto totem = rules::SetupFor(Reaction::ReactToHandUsingTotem, false);
 	ASSERT_TRUE(totem.has_value() && totem->plan.has_value());

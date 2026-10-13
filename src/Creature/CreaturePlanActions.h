@@ -128,6 +128,8 @@ enum class Build : uint8_t
 	InspectCreature,
 	/// Looking at a thing flying through the air
 	LookAtFlyingObject,
+	/// Looking at the player's hand
+	LookAtHand,
 	/// An action whose agenda can never be made
 	Never,
 };

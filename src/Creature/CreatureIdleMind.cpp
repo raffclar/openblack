@@ -673,8 +673,36 @@ bool creature_mind::KeepsWatchingFlying(uint32_t turns, uint32_t turnsPerSecond,
 	return flying && static_cast<float>(turns / turnsPerSecond) < limit;
 }
 
+bool creature_mind::WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint32_t turnsPerSecond)
+{
+	const auto limit = std::min(static_cast<float>(limitTurns / turnsPerSecond), k_LongestHandWatchSeconds);
+	return static_cast<float>(turns / turnsPerSecond) > limit;
+}
+
 namespace
 {
+/// A turn of watching the player's hand
+void WatchHand(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
+{
+	++mind.watchTurns;
+	if (!senses.hand.has_value() || !(senses.seconds > 0.0f))
+	{
+		FinishStep(mind);
+		return;
+	}
+	bool turning = senses.moving;
+	if (senses.hand->groundDistance >= k_WatchCameraOverhead && std::abs(senses.hand->turn) > k_WatchCameraTurn)
+	{
+		commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = senses.hand->point};
+		turning = true;
+	}
+	const auto turnsPerSecond = static_cast<uint32_t>(std::lround(1.0f / senses.seconds));
+	if (!turning && WatchedHandEnough(mind.watchTurns, step.turns.value_or(0), turnsPerSecond))
+	{
+		FinishStep(mind);
+	}
+}
+
 /// A turn of watching a flying thing: the limit is picked afresh each turn, before anything else is looked at
 void WatchFlying(IdleMind& mind, const Step& step, const Senses& senses, const Random& random)
 {
@@ -815,6 +843,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			mind.watchTurns = 0;
 			WatchFlying(mind, step, senses, random);
 			break;
+		case Step::Kind::WatchHand:
+			mind.watchTurns = 0;
+			WatchHand(mind, step, senses, commands);
+			break;
 		case Step::Kind::Inspect:
 		{
 			// The time is picked as the step starts, and counted in whole turns from the next
@@ -953,6 +985,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::WatchFlying:
 		WatchFlying(mind, step, senses, random);
+		break;
+	case Step::Kind::WatchHand:
+		WatchHand(mind, step, senses, commands);
 		break;
 	case Step::Kind::Inspect:
 		if (mind.inspectTurns > 0)

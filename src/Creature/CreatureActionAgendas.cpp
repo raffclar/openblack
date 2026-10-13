@@ -175,6 +175,14 @@ std::vector<Step> creature_mind::LookAtFlyingObject(uint32_t thing, const Random
 	return agenda;
 }
 
+std::vector<Step> creature_mind::LookAtHand()
+{
+	return {{.kind = Step::Kind::WatchHand,
+	         .turns = k_LookAtHandTurns,
+	         .face = creature_face::Cue::Curiosity,
+	         .gaze = Gaze {.hand = true}}};
+}
+
 std::vector<Step> creature_mind::SmileAt(uint32_t friendly, float height, float chance, const Random& random)
 {
 	const Gaze look {.object = friendly};

@@ -138,7 +138,14 @@ struct Setup
 	std::optional<size_t> skill;
 	/// A source of its desires, by the game's numbering, moved by an amount
 	std::optional<std::pair<uint32_t, float>> desireSource;
+	/// It watches the hand for a minute and up to another (as turns), rather than its plan's own while, which the watch
+	/// caps at five seconds
+	bool longHandWatch {false};
 };
+
+/// Watching the hand pick something up, the creature's watch is set to this many seconds and a draw of up to as many
+/// more
+inline constexpr float k_HandPickUpWatchSeconds = 60.0f;
 
 /// Ordinary skills of the game's table a creature learns by watching the hand: working a totem and filling a storage pit
 inline constexpr size_t k_UseTotemSkill = 2;

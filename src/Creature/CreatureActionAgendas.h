@@ -70,6 +70,11 @@ constexpr float k_PointAtFlyingSeconds = 2.0f;
 constexpr float k_WatchFlyingSeconds = 2.0f;
 constexpr float k_WatchFlyingExtraSeconds = 2.0f;
 
+/// Looking at the player's hand: watching it, curious, its head on the hand, for whole seconds more than those of a
+/// turn and a half, unless the hand picking something up has the creature watch longer (five seconds at most)
+[[nodiscard]] std::vector<Step> LookAtHand();
+constexpr uint32_t k_LookAtHandTurns = 15;
+
 /// Smiling at a friend: going near it (three times its height away) and facing it four seconds and up to four more,
 /// smiling at it with fluttering eyelids; then half the time a happy jump
 [[nodiscard]] std::vector<Step> SmileAt(uint32_t friendly, float height, float chance, const Random& random);

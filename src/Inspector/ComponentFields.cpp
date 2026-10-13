@@ -2222,6 +2222,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Gaze::object>("object")
 	    .Field<&openblack::creature_mind::Gaze::bottom>("bottom")
 	    .Field<&openblack::creature_mind::Gaze::itself>("itself")
+	    .Field<&openblack::creature_mind::Gaze::hand>("hand")
 	    .Field<&openblack::creature_mind::Gaze::point>("point")
 	    .Field<&openblack::creature_mind::Gaze::camera>("camera");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})

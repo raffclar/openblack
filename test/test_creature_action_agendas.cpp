@@ -230,6 +230,60 @@ TEST(CreatureActionAgendas, WatchingAFlyingThingLastsWhileItFliesUpToFourSeconds
 	EXPECT_EQ(mind.step, 1u);
 }
 
+// "LookAtHand": watching the player's hand, curious, its head on the hand, for a turn and a half of its own
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, LookingAtTheHandWatchesIt)
+{
+	const auto agenda = LookAtHand();
+	ASSERT_EQ(agenda.size(), 1);
+	EXPECT_EQ(agenda[0].kind, Step::Kind::WatchHand);
+	EXPECT_EQ(agenda[0].turns, std::optional<uint32_t>(15));
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Curiosity);
+	ASSERT_TRUE(agenda[0].gaze.has_value());
+	EXPECT_TRUE(agenda[0].gaze->hand);
+	ASSERT_NE(plan_actions::For("LookAtHand"), nullptr);
+	EXPECT_EQ(plan_actions::For("LookAtHand")->build, plan_actions::Build::LookAtHand);
+}
+
+// The watch is done once its whole seconds pass those of its turns, five at most; never while it turns to the hand
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, WatchingTheHandLastsItsTurnsUpToFiveSeconds)
+{
+	// A turn and a half is one whole second: done on the twentieth turn
+	EXPECT_FALSE(WatchedHandEnough(19, 15, 10));
+	EXPECT_TRUE(WatchedHandEnough(20, 15, 10));
+	// A minute or more is five seconds: done on the sixtieth
+	EXPECT_FALSE(WatchedHandEnough(59, 900, 10));
+	EXPECT_TRUE(WatchedHandEnough(60, 900, 10));
+
+	IdleMind mind;
+	Plan(mind, Activity::Planned, LookAtHand());
+	creature_mind::Senses senses {.seconds = 0.1f, .choosesNext = false};
+	senses.hand = creature_mind::Senses::CameraView {.distance = 30.0f, .groundDistance = 20.0f, .point = {0.0f, 20.0f}};
+	uint32_t turns = 0;
+	while (mind.step == 0 && turns < 100)
+	{
+		const auto commands = Think(mind, senses, NeverFirst);
+		EXPECT_FALSE(commands.move.has_value());
+		++turns;
+	}
+	EXPECT_EQ(turns, 20u);
+	// More than a quarter turn away it turns to the hand, and isn't done while it turns
+	Plan(mind, Activity::Planned, LookAtHand());
+	senses.hand->turn = 2.0f;
+	for (int i = 0; i < 30; ++i)
+	{
+		const auto commands = Think(mind, senses, NeverFirst);
+		ASSERT_TRUE(commands.move.has_value());
+		EXPECT_EQ(commands.move->kind, Movement::Kind::TurnToFace);
+	}
+	EXPECT_EQ(mind.step, 0u);
+	// Without a player there is no hand to watch
+	senses.hand.reset();
+	(void)Think(mind, senses, NeverFirst);
+	EXPECT_EQ(mind.step, 1u);
+}
+
 // A kind of thing it has looked over is a hundredth as interesting, unless the thing is up to something interesting
 TEST(CreatureActionAgendas, LookedOverKindsAreFarLessInteresting)
 {

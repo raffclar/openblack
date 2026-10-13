@@ -164,7 +164,8 @@ std::optional<Setup> creature_reaction::SetupFor(Reaction type, bool thingInTheA
 		              .comesAcross = true,
 		              .plan = Plan {.desire = Desire::Curiosity, .action = "LookAtFlyingObject"}};
 	case Reaction::ReactToHandPickUp:
-		return Setup {.plan = Plan {.desire = Desire::Curiosity, .action = "LookAtHand", .onSelf = true}};
+		return Setup {.plan = Plan {.desire = Desire::Curiosity, .action = "LookAtHand", .onSelf = true},
+		              .longHandWatch = true};
 	case Reaction::ReactToHandUsingTotem:
 		return Setup {.comesAcross = true,
 		              .plan = Plan {.desire = Desire::Curiosity, .action = "ExamineByLooking"},

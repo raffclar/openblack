@@ -258,6 +258,8 @@ struct Gaze
 	bool bottom {false};
 	/// The thing itself where it is, as up in the air, rather than its top or foot
 	bool itself {false};
+	/// The player's hand nearest the creature
+	bool hand {false};
 	std::optional<glm::vec3> point;
 	bool camera {false};
 };
@@ -309,6 +311,11 @@ struct Step
 		/// while the thing is still flying and the whole seconds it has watched come under a limit picked afresh each
 		/// turn, from the step's seconds to the step's extra seconds more
 		WatchFlying,
+		/// Watching the player's hand: each turn, from the one it starts on, it turns to face the hand when it is more
+		/// than a quarter turn away (unless right under it), and once it isn't turning it is done when the whole
+		/// seconds it has watched come to more than those of the step's turns, at most five; a creature without a
+		/// player is done at once
+		WatchHand,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -464,6 +471,8 @@ struct Senses
 		float turn {0.0f};
 	};
 	std::optional<CameraView> camera;
+	/// The player's hand nearest it, seen the same way, while a step watches it; none for a creature without a player
+	std::optional<CameraView> hand;
 	/// A swap of minds: whether no spell is on it or on the other creature any more, and whether its body has taken on
 	/// the shape the swap gives it
 	struct SwapView
@@ -634,4 +643,9 @@ void ChooseNext(IdleMind& mind, const Senses& senses, const Random& random);
 /// Whether a creature goes on watching a flying thing: while the thing is still flying and the whole seconds of the
 /// turns it has watched come under the limit
 [[nodiscard]] bool KeepsWatchingFlying(uint32_t turns, uint32_t turnsPerSecond, float limit, bool flying);
+/// Whether a creature watching the hand has watched long enough: its whole seconds are more than the whole seconds of
+/// the step's turns, but never more than five
+[[nodiscard]] bool WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint32_t turnsPerSecond);
+/// The longest a creature watches the hand, in whole seconds
+constexpr float k_LongestHandWatchSeconds = 5.0f;
 } // namespace openblack::creature_mind
