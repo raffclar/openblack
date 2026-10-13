@@ -218,7 +218,8 @@ private:
 	/// power-up grown up enough
 	bool MayCast(entt::entity creature, const components::CreatureMindState& mind, uint32_t action, bool powerUp);
 	/// What the creature casts for an action, the gesture it draws first and its height
-	std::optional<creature_plan_actions::CastInfo> CastInfoFor(entt::entity creature, uint32_t action);
+	std::optional<creature_plan_actions::CastInfo> CastInfoFor(entt::entity creature, uint32_t action,
+	                                                           std::optional<entt::entity> target);
 	/// How often the creature has seen a miracle and how often it needs to have seen it to cast it
 	[[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(entt::entity creature, MagicType type);
 	/// A fizzled try, shown as it next chooses what to do

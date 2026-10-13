@@ -1267,7 +1267,10 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		}
 		point = *at;
 	}
-	const auto cast = creature_plan_actions::IsCast(*executor) ? CastInfoFor(creature, action) : std::nullopt;
+	const auto cast = creature_plan_actions::IsCast(*executor)
+	                      ? CastInfoFor(creature, action,
+	                                    object.has_value() ? std::optional(static_cast<entt::entity>(*object)) : std::nullopt)
+	                      : std::nullopt;
 	// Only what varies by chance draws one
 	auto situated = situation;
 	if (situation.instrument.has_value())
@@ -1858,7 +1861,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			}
 			const auto actionIndex = creature_mind_tables::FindAction(*tables, plan.action);
 			const auto cast = creature_plan_actions::IsCast(*executor) && actionIndex.has_value()
-			                      ? CastInfoFor(creature, *actionIndex)
+			                      ? CastInfoFor(creature, *actionIndex, plan.object)
 			                      : std::nullopt;
 			agenda = creature_plan_actions::Agenda(
 			    *executor, plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt, point,

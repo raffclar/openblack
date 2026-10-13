@@ -26,10 +26,12 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
+#include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureSpellCasting.h"
 #include "Creature/CreatureSpellMind.h"
@@ -63,6 +65,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "InfoConstants.h"
@@ -93,9 +96,6 @@ constexpr float k_SameDestination = 0.1f;
 /// It heads for what it goes near within this share of a whole turn, measured in the game's 2048 to a turn
 constexpr int32_t k_AngleUnits = 2048;
 constexpr int32_t k_HeadingTolerance = 6;
-/// A fizzled try: embarrassed, then one time in two sad too, its sadness growing by up to this much
-constexpr size_t k_Embarrassed = 73;
-constexpr float k_SadnessFromFizzle = 0.3f;
 /// A creature goes round a thing at least this share of its height
 constexpr float k_LowObjectShare = 0.1f;
 /// The miracles a creature casts are numbered from the first to the last magic type
@@ -354,10 +354,12 @@ bool CreatureMindSystem::MayCast(entt::entity creature, const CreatureMindState&
 	return CanPayFor(creature, static_cast<MagicType>(*magic));
 }
 
-std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(entt::entity creature, uint32_t action)
+std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(entt::entity creature, uint32_t action,
+                                                                               std::optional<entt::entity> target)
 {
 	const auto magic = CastMagicOf(action);
-	const auto* body = Entities().TryGet<const Creature>(creature);
+	const auto& registry = Entities();
+	const auto* body = registry.TryGet<const Creature>(creature);
 	if (!magic.has_value() || body == nullptr)
 	{
 		return std::nullopt;
@@ -366,9 +368,28 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 	const auto type = static_cast<MagicType>(*magic);
 	// The miracle's own gesture, power-ups too: none in the game's tables
 	const auto gesture = magic::GetMagicInfo(info, type).gestureType;
-	return creature_plan_actions::CastInfo {.magicType = *magic,
-	                                        .gesture = static_cast<uint32_t>(gesture),
-	                                        .height = cast_moves::k_HeightOfSizeOne * ShownSize(*body)};
+	creature_plan_actions::CastInfo cast {
+	    .magicType = *magic,
+	    .gesture = static_cast<uint32_t>(gesture),
+	    .height = cast_moves::k_HeightOfSizeOne * ShownSize(*body),
+	    .targetLiving = target.has_value() && registry.Valid(*target) && Locator::creatureObjectActionSystem::has_value() &&
+	                    creature_object_actions::IsLiving(Locator::creatureObjectActionSystem::value().KindOf(*target).thing)};
+	// The creature casts a fireball from a clear area near it, as wide as five times its radius. Living things in the
+	// area do not block it.
+	const auto* tables = GetTables();
+	const auto* executor = tables != nullptr && action < tables->actions.size()
+	                           ? creature_plan_actions::For(tables->actions[action].name)
+	                           : nullptr;
+	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastFireball)
+	{
+		if (const auto at = object_measures::PositionOf(registry, creature))
+		{
+			cast.clearArea = mind_detail::ClearAreaFor(
+			    registry, creature, Flat(*at),
+			    creature_mind::k_FireballClearRadii * object_measures::TwoDRadius(registry, creature), false);
+		}
+	}
+	return cast;
 }
 
 bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt::entity target)
@@ -442,16 +463,12 @@ void CreatureMindSystem::ShowFizzle(entt::entity creature, CreatureMindState& mi
 	const auto fizzle = *casting->fizzle;
 	casting->fizzle.reset();
 	// Embarrassed, then one time in two sad as well, and sadder for it
-	std::vector<creature_mind::Step> agenda {{.kind = creature_mind::Step::Kind::Action, .animation = k_Embarrassed}};
-	if (Random(2) == 0)
+	auto reaction = creature_mind::ReactToFizzle([this](uint32_t range) { return Random(range); }, Chance());
+	if (reaction.sadness.has_value() && mind.desires.has_value())
 	{
-		agenda.push_back({.kind = creature_mind::Step::Kind::Action, .animation = creature_layers::animations::k_Sad});
-		if (mind.desires.has_value())
-		{
-			creature_desires::ChangeSource(*mind.desires, creature_desires::sources::k_Sadness, Chance() * k_SadnessFromFizzle);
-		}
+		creature_desires::ChangeSource(*mind.desires, creature_desires::sources::k_Sadness, *reaction.sadness);
 	}
-	if (!Replan(creature, creature_mind::Activity::Planned, std::move(agenda)))
+	if (!Replan(creature, creature_mind::Activity::Planned, std::move(reaction.agenda)))
 	{
 		return;
 	}
@@ -914,7 +931,7 @@ bool CreatureMindSystem::TellCast(entt::entity creature, MagicType type, entt::e
 			continue;
 		}
 		// Told by the debug tools, it goes about the casting as it would by itself, without weighing other plans
-		auto cast = CastInfoFor(creature, action);
+		auto cast = CastInfoFor(creature, action, target);
 		auto agenda = creature_plan_actions::Agenda(
 		    *executor, entt::to_integral(target),
 		    object_measures::PositionOf(registry, target).has_value() ? Flat(*object_measures::PositionOf(registry, target))
