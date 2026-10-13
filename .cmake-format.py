@@ -87,7 +87,14 @@ with section("parse"):
                                             'TYPE': 1,
                                             'AS_HEADERS': 0,
                                             'VARYING_DEF': 1},
-                                 'pargs': {'flags': [], 'nargs': '*'}}
+                                 'pargs': {'flags': [], 'nargs': '*'}},
+        'openblack_compile_shaders': {'kwargs': {'INCLUDE_DIRS': '+',
+                                                 'OUTPUT_DIR': 1,
+                                                 'OUT_FILES_VAR': 1,
+                                                 'SHADERS': '+',
+                                                 'TYPE': 1,
+                                                 'VARYING_DEF': 1},
+                                      'pargs': {'flags': [], 'nargs': '*'}}
     }
 
 # -----------------------------
