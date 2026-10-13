@@ -1447,7 +1447,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ScriptHighlight::centre>("centre")
 	    .Field<&components::ScriptHighlight::radius>("radius")
 	    .Field<&components::ScriptHighlight::sparks>("sparks")
-	    .Field<&components::ScriptHighlight::sparkSprites>("sparkSprites");
+	    .Field<&components::ScriptHighlight::sparkSprites>("sparkSprites")
+	    .Field<&components::ScriptHighlight::onScreen>("onScreen");
 	Reflect<components::ScriptHighlightGlow>(context).Field<&components::ScriptHighlightGlow::highlight>("highlight");
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
 	Reflect<components::ScriptStateArguments>(context)

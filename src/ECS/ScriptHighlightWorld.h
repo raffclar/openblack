@@ -22,6 +22,7 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/ScriptHighlightRules.h"
 #include "Enums.h"
+#include "Scenery/ObjectDrawList.h"
 
 namespace openblack
 {
@@ -73,6 +74,12 @@ public:
 	[[nodiscard]] virtual float MillisecondsPerTurn() const = 0;
 	/// The scripts' switch that shows the scrolls; the signs always show
 	[[nodiscard]] virtual bool ScrollsDrawn() const = 0;
+	/// The things of the land's draw list that the game draws this frame (see object_draw_list)
+	[[nodiscard]] virtual object_draw_list::Frame DrawFrame() const = 0;
+	/// True when the land's draw list has the highlight
+	[[nodiscard]] virtual bool InDrawList(entt::entity highlight) const = 0;
+	/// True when a thing is on the screen this frame (see object_draw_list::SphereOnScreen)
+	[[nodiscard]] virtual bool OnScreen(glm::vec3 origin, glm::vec3 centre, float radius) const = 0;
 
 	/// A particle effect of a type at a point, at full strength; 0 for none
 	virtual uint32_t StartEffect(ParticleType type, glm::vec3 at) = 0;

@@ -30,6 +30,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
@@ -160,6 +161,37 @@ float GameScriptHighlightWorld::MillisecondsPerTurn() const
 bool GameScriptHighlightWorld::ScrollsDrawn() const
 {
 	return !Locator::chlapi::has_value() || Locator::chlapi::value().IsHighlightDrawOn();
+}
+
+object_draw_list::Frame GameScriptHighlightWorld::DrawFrame() const
+{
+	// Without a camera or a land, the list draws every thing
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	if (drawList == nullptr || !drawList->GetView().has_value())
+	{
+		return {.rebuilt = true, .drawAll = true};
+	}
+	return drawList->GetFrame();
+}
+
+bool GameScriptHighlightWorld::InDrawList(entt::entity highlight) const
+{
+	if (!Locator::objectDrawListSystem::has_value())
+	{
+		return true;
+	}
+	const auto& drawList = Locator::objectDrawListSystem::value();
+	return !drawList.GetView().has_value() || drawList.Listed(highlight);
+}
+
+bool GameScriptHighlightWorld::OnScreen(glm::vec3 origin, glm::vec3 centre, float radius) const
+{
+	if (!Locator::objectDrawListSystem::has_value())
+	{
+		return true;
+	}
+	const auto& view = Locator::objectDrawListSystem::value().GetView();
+	return !view.has_value() || object_draw_list::SphereOnScreen(*view, origin, centre, radius);
 }
 
 uint32_t GameScriptHighlightWorld::StartEffect(ParticleType type, glm::vec3 at)
