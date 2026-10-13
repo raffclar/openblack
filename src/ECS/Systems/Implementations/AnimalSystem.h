@@ -127,7 +127,7 @@ private:
 	/// Whether a point is within the reach of an animal's herd's home: never for an animal with no herd
 	[[nodiscard]] bool WithinDomain(const components::Animal& animal, glm::ivec2 point) const;
 	[[nodiscard]] std::optional<animals::grazers::HerdSize> HerdSizeOf(const components::Animal& animal) const;
-	[[nodiscard]] uint32_t AgeOf(const components::Grazer& grazer) const;
+	[[nodiscard]] uint32_t AgeOf(const components::Animal& animal) const;
 	/// Whether an animal sees to its needs before it does what its state does
 	[[nodiscard]] static bool SeesToNeedsIn(components::AnimalState state);
 

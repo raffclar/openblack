@@ -286,3 +286,15 @@ TEST(VortexCrossingLines, StaticsOfAKindJustWhereAnotherStandsAreWrittenWithIt)
 	registry.Assign<Tree>(tree, Tree {.type = TreeInfo::Oak});
 	EXPECT_TRUE(vortex_crossing::IdenticalStatics(registry, tree, FakeWorld()).empty());
 }
+
+TEST(VortexCrossingLines, EveryAnimalIsWrittenWithItsAge)
+{
+	Registry registry;
+	// A bird as much as a grazer: every animal was born on a turn of its own
+	const auto bird = Thing(registry, {1000.0f, k_Ground + 30.0f, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	auto& animal = registry.Assign<Animal>(bird);
+	animal.type = AnimalInfo::Dove;
+	animal.birthTurn = villager_age::BirthTurnFor(30000, 3);
+	EXPECT_EQ(LineText(registry, bird),
+	          fmt::format("CREATE_NEW_ANIMAL(\"0.00,0.00\", {}, -1, -1, 3)\n", static_cast<int>(AnimalInfo::Dove)));
+}

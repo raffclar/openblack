@@ -958,6 +958,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                                 {"state", static_cast<int>(animal.state)},
 		                                 {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
 		                                 {"turns_in_state", animal.turnsInState},
+		                                 {"birth_turn", animal.birthTurn},
 		                                 {"clip", static_cast<int>(animal.animation)},
 		                                 {"speed", animal.move.speed},
 		                                 {"flock", Id(animal.flock)},
@@ -973,8 +974,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			                  result["grazer"] = {{"hunger", grazer->needs.hunger},
 			                                      {"sleep", grazer->needs.sleep},
 			                                      {"breed", grazer->needs.breed},
-			                                      {"meals", grazer->meals},
-			                                      {"birth_turn", grazer->birthTurn}};
+			                                      {"meals", grazer->meals}};
 		                  }
 		                  return QueryResult::Value(std::move(result));
 	                  }));

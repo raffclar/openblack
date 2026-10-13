@@ -109,14 +109,11 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 	if (const auto* animal = registry.TryGet<const Animal>(thing))
 	{
 		const auto* flock = registry.Valid(animal->flock) ? registry.TryGet<const Flock>(animal->flock) : nullptr;
-		const auto* grazer = registry.TryGet<const Grazer>(thing);
-		// TODO(vortex-crossing): the ages of the animals that aren't grazers aren't kept
-		const uint32_t age = grazer != nullptr ? villager_age::AgeOf(world.turn, grazer->birthTurn) : 0;
 		return AnimalLine {.offset = offset,
 		                   .type = static_cast<int32_t>(animal->type),
 		                   .flock = flock != nullptr ? flock->scriptId.value_or(-1) : -1,
 		                   .town = flock != nullptr ? TownNumber(registry, flock->town) : -1,
-		                   .age = age};
+		                   .age = villager_age::AgeOf(world.turn, animal->birthTurn)};
 	}
 	if (const auto* pot = registry.TryGet<const Pot>(thing))
 	{

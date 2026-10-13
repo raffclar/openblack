@@ -56,6 +56,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -189,6 +190,8 @@ entt::entity AnimalSystem::CreateBird(AnimalInfo type, glm::vec2 position, uint3
 	const auto entity =
 	    ecs::archetypes::AnimalArchetype::Create(type, point, gutils::ConvertGameAngleTo3D(0), scale, PlayerNames::NEUTRAL);
 	auto& animal = registry.Get<Animal>(entity);
+	// Born as long ago as its age, which also set its size
+	animal.birthTurn = villager_age::BirthTurnFor(Locator::time::value().GetTurn(), bornAt);
 	animal.height = height;
 	animal.goalHeight = height;
 	animal.move.position = Fixed(position);
@@ -335,6 +338,8 @@ entt::entity AnimalSystem::CreateSpellAnimal(AnimalInfo type, glm::vec2 position
 	const auto entity =
 	    ecs::archetypes::AnimalArchetype::Create(type, point, gutils::ConvertGameAngleTo3D(angle), scale, owner);
 	auto& animal = registry.Get<Animal>(entity);
+	// Born as long ago as its age, which also set its size
+	animal.birthTurn = villager_age::BirthTurnFor(Locator::time::value().GetTurn(), bornAt);
 	animal.flock = flockEntity;
 	animal.height = heightAboveLand;
 	animal.goalHeight = heightAboveLand;

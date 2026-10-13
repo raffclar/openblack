@@ -416,12 +416,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::previousHeading>("previousHeading")
 	    .Field<&components::Animal::heading>("heading")
 	    .Field<&components::Animal::life>("life")
+	    .Field<&components::Animal::birthTurn>("birthTurn")
 	    .Field<&components::Animal::deadTurns>("deadTurns");
 	Reflect<components::Grazer>(context)
 	    .Field<&components::Grazer::needs>("needs")
 	    .Field<&components::Grazer::sleepingCell>("sleepingCell")
-	    .Field<&components::Grazer::meals>("meals")
-	    .Field<&components::Grazer::birthTurn>("birthTurn");
+	    .Field<&components::Grazer::meals>("meals");
 	Reflect<components::TempleBirds>(context)
 	    .Field<&components::TempleBirds::flock>("flock")
 	    .Field<&components::TempleBirds::look>("look");
