@@ -108,6 +108,17 @@ std::optional<Desire> creature_leash::ForcedDesireFor(LeashType type)
 	return std::nullopt;
 }
 
+bool creature_leash::ImpressesTown(const TiedTown& town)
+{
+	if (town.leash == LeashType::Evil || town.impressing)
+	{
+		return false;
+	}
+	// A village of its player's that believes in them more than half as much as in anyone else is firmly theirs
+	const bool firmlyOwned = town.ownersTown && (!town.creatureHasPlayer || town.beliefInOwner > 0.5f * town.mostOtherBelief);
+	return !firmlyOwned;
+}
+
 uint32_t creature_leash::MiracleSightingWeight(bool learningLeash)
 {
 	return learningLeash ? 3 : 1;
@@ -208,12 +219,13 @@ bool creature_leash::OutsideArea(const glm::vec2& position, const glm::vec2& cen
 	return radius > 0.0f && glm::distance(position, centre) > radius;
 }
 
-float creature_leash::AttitudeChange(LeashType type, uint32_t turnsTogether)
+bool creature_leash::AttitudeDue(std::optional<uint32_t> lastTurn, uint32_t turn)
 {
-	if (turnsTogether == 0 || turnsTogether % k_AttitudeTurns != 0)
-	{
-		return 0.0f;
-	}
+	return !lastTurn.has_value() || turn - *lastTurn > k_AttitudeTurns;
+}
+
+float creature_leash::AttitudeChange(LeashType type)
+{
 	switch (type)
 	{
 	case LeashType::Evil:

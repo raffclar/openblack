@@ -27,6 +27,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "Locator.h"
@@ -274,13 +275,13 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity))
 	{
 		const auto& hooks = mind->leash;
-		ImGui::Text(
-		    "Mind: %s%s, miracles count x%u, %zu shown, %zu to act on",
-		    hooks.forcedDesire.has_value()
-		        ? fmt::format("forced {} {:.0f}", creature_desires::Name(*hooks.forcedDesire), hooks.forcedValue).c_str()
-		        : "no forced desire",
-		    hooks.learningInHand ? ", copies in hand" : "", hooks.miracleSightingWeight, hooks.shown.size(),
-		    hooks.actOn.size());
+		const auto dominant = Locator::creatureMindSystem::has_value()
+		                          ? Locator::creatureMindSystem::value().DominantDesire(entity)
+		                          : std::nullopt;
+		const auto wants = dominant.has_value() ? std::string(creature_desires::Name(*dominant)) : std::string("nothing yet");
+		ImGui::Text("Mind: wants %s most%s, miracles count x%u, %zu shown, %zu to act on", wants.c_str(),
+		            hooks.learningInHand ? ", copies in hand" : "", hooks.miracleSightingWeight, hooks.shown.size(),
+		            hooks.actOn.size());
 	}
 
 	if (ImGui::Button("Place leash posts at the hand"))

@@ -1701,8 +1701,10 @@ void AddLeash(std::vector<Scenario>& all)
 	    .facet = Facet::Leash,
 	    .description = "A tiger is put on the learning leash, then the aggression leash, then the compassion leash, a "
 	                   "while each, and the leash is taken off. Move the hand about to lead it.",
-	    .expected = "A rope runs from the hand to its collar, coloured for each leash; on the aggression leash it wants "
-	                "to be angry, on the compassion leash to be kind, and on the learning leash it watches the player.",
+	    .expected = "A rope runs from the hand to its collar, coloured for each leash; on the aggression leash anger is "
+	                "what it wants most, on the compassion leash kindness and making friends, and on the learning leash "
+	                "it watches the player. Taken off, the last of these moods stays until the learning leash is picked "
+	                "while it is worn.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 40.0f})},
 	    .commands = {Leash(0, LeashType::Rope, 1.0f), Leash(0, LeashType::Evil, 10.0f), Leash(0, LeashType::Good, 10.0f),

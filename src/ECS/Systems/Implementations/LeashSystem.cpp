@@ -46,6 +46,7 @@
 #include "Creature/LeashRules.h"
 #include "Creature/TempleLeashes.h"
 #include "ECS/Archetypes/LeashMarkerArchetype.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
@@ -57,6 +58,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/SkinOverride.h"
@@ -64,6 +66,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
@@ -352,6 +355,26 @@ bool Force(entt::entity creature, const ForcedPlan& plan)
 {
 	return Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().ForcePlan(creature, plan);
 }
+
+/// The village a leash is tied to: by its centre, or by the totem standing on its centre
+std::optional<entt::entity> TownTiedTo(const Registry& registry, entt::entity object)
+{
+	auto centre = object;
+	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
+	{
+		centre = totem->townCentre;
+	}
+	const auto* abode = registry.TryGet<const Abode>(centre);
+	if (abode == nullptr || abode->type != AbodeNumber::TownCentre)
+	{
+		return std::nullopt;
+	}
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(abode->townId);
+	return found != towns.end() && registry.Valid(found->second) && registry.TryGet<const Town>(found->second) != nullptr
+	           ? std::optional(found->second)
+	           : std::nullopt;
+}
 } // namespace
 
 bool LeashSystem::Knows(entt::entity creature, LeashType type) const
@@ -559,12 +582,9 @@ void LeashSystem::TakeOff(entt::entity creature)
 	leashes->control = CreatureLeash::Control::Idle;
 	leashes->pull = 0.0f;
 	leashes->confinementRadius = 0.0f;
-	leashes->turnsWithOther = 0;
 	if (auto* mind = MindOf(registry, creature))
 	{
 		mind->leash.obeying = false;
-		mind->leash.forcedDesire.reset();
-		mind->leash.forcedValue = 0.0f;
 		mind->leash.learningInHand = false;
 		mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
 	}
@@ -667,6 +687,20 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 	{
 		leashes->worn->type = type;
 		leashes->worn->rope.look = leash::LookFor(type);
+		// Picked while it is worn, the learning leash lets go of the desire a leash made dominant, and the others make
+		// theirs dominant at once
+		if (Locator::creatureMindSystem::has_value())
+		{
+			auto& minds = Locator::creatureMindSystem::value();
+			if (const auto desire = leash::ForcedDesireFor(type); desire.has_value())
+			{
+				minds.MakeDesireDominant(creature, *desire, leash::k_ForcedDesireSeconds, false);
+			}
+			else
+			{
+				minds.EndDominantDesire(creature);
+			}
+		}
 	}
 	// Its player's posts show the leash picked
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -706,7 +740,6 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	worn.rope.maxLength = lengths.max;
 	worn.ropeStarted = false;
 	leashes->control = CreatureLeash::Control::Idle;
-	leashes->turnsWithOther = 0;
 
 	// The two tying sounds in turn
 	PlaySound(_secondAttachSound ? audio::SoundId::G_LeashAttach_01_2 : audio::SoundId::G_LeashAttach_01_1, std::nullopt);
@@ -737,7 +770,6 @@ void LeashSystem::UntieToHand(entt::entity creature)
 	}
 	leashes->worn->tiedTo.reset();
 	leashes->worn->ropeStarted = false;
-	leashes->turnsWithOther = 0;
 }
 
 void LeashSystem::SetWorks(entt::entity creature, bool works)
@@ -1078,6 +1110,90 @@ void LeashSystem::PlacePostsAtTemples()
 	_postsPlaced = true;
 }
 
+void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& worn)
+{
+	if (!Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	auto& minds = Locator::creatureMindSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr)
+	{
+		return;
+	}
+	// Tied to a village, it is made to want to impress it. On the compassion leash its own desire takes over at once.
+	if (worn.tiedTo.has_value())
+	{
+		if (const auto town = TownTiedTo(registry, *worn.tiedTo); town.has_value())
+		{
+			const auto& data = registry.Get<const Town>(*town);
+			const auto* impression = registry.TryGet<const TownImpression>(*town);
+			leash::TiedTown tied {
+			    .leash = worn.type,
+			    .impressing = minds.DominantDesire(creature) == creature_desires::Desire::Impress,
+			    .creatureHasPlayer = body->owner != PlayerNames::NEUTRAL,
+			    .ownersTown = data.owner == body->owner,
+			};
+			if (impression != nullptr && tied.creatureHasPlayer)
+			{
+				const auto& beliefs = impression->belief.belief;
+				const auto mine = static_cast<size_t>(body->owner);
+				tied.beliefInOwner = beliefs.at(mine);
+				for (size_t player = 0; player < beliefs.size(); ++player)
+				{
+					if (player != mine)
+					{
+						tied.mostOtherBelief = std::max(tied.mostOtherBelief, beliefs.at(player));
+					}
+				}
+			}
+			if (leash::ImpressesTown(tied))
+			{
+				minds.MakeDesireDominant(creature, creature_desires::Desire::Impress, leash::k_ImpressTownSeconds, false);
+			}
+		}
+	}
+	// The aggression and compassion leashes make their desire dominant every turn they are worn
+	if (const auto desire = leash::ForcedDesireFor(worn.type); desire.has_value())
+	{
+		minds.MakeDesireDominant(creature, *desire, leash::k_ForcedDesireSeconds, false);
+	}
+	if (!worn.tiedTo.has_value() || registry.TryGet<const Creature>(*worn.tiedTo) == nullptr)
+	{
+		return;
+	}
+	// Tied to another creature: on the aggression leash it gets angry too when near enough, unless anger already rules
+	// it
+	const auto other = *worn.tiedTo;
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto* otherAt = registry.TryGet<const Transform>(other);
+	if (worn.type == LeashType::Evil && at != nullptr && otherAt != nullptr &&
+	    minds.DominantDesire(other) != creature_desires::Desire::Anger &&
+	    glm::distance(at->position, otherAt->position) < leash::k_AngerOtherReach * CreatureHeight(*body))
+	{
+		minds.MakeDesireDominant(other, creature_desires::Desire::Anger, leash::k_ForcedDesireSeconds, false);
+	}
+	// And the two warm or cool to each other, now and then
+	auto* mind = MindOf(registry, creature);
+	auto* otherMind = MindOf(registry, other);
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	if (otherMind == nullptr || !leash::AttitudeDue(otherMind->leash.attitudeTurn, turn))
+	{
+		return;
+	}
+	otherMind->leash.attitudeTurn = turn;
+	if (const auto change = leash::AttitudeChange(worn.type); change != 0.0f)
+	{
+		if (mind != nullptr)
+		{
+			mind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(other), .change = change});
+		}
+		otherMind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(creature), .change = change});
+	}
+}
+
 void LeashSystem::Pull(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1207,7 +1323,6 @@ void LeashSystem::ProcessTurn()
 			if (mind != nullptr)
 			{
 				mind->leash.obeying = false;
-				mind->leash.forcedDesire.reset();
 				mind->leash.learningInHand = false;
 				mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
 			}
@@ -1261,45 +1376,13 @@ void LeashSystem::ProcessTurn()
 		// The leash's feelings, every turn
 		if (mind != nullptr)
 		{
-			mind->leash.forcedDesire = leash::ForcedDesireFor(worn.type);
-			mind->leash.forcedValue = mind->leash.forcedDesire.has_value() ? leash::k_ForcedDesireValue : 0.0f;
 			mind->leash.learningInHand = worn.type == LeashType::Rope && !worn.tiedTo.has_value();
 			mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(worn.type == LeashType::Rope);
 		}
+		UpdateMoods(entity, worn);
 
 		if (worn.tiedTo.has_value())
 		{
-			const auto object = *worn.tiedTo;
-			// Tied to someone else's village, or its own, on any leash but aggression, it wants to impress it
-			if (registry.TryGet<const Town>(object) != nullptr && worn.type != LeashType::Evil && mind != nullptr)
-			{
-				mind->leash.forcedDesire = creature_desires::Desire::Impress;
-				mind->leash.forcedValue = leash::k_ImpressTownValue;
-			}
-			// Tied to another creature: anger spreads on the aggression leash, and they warm or cool to each other
-			if (registry.TryGet<const Creature>(object) != nullptr)
-			{
-				++leashes.turnsWithOther;
-				auto* otherMind = MindOf(registry, object);
-				const auto otherAt = registry.Get<const Transform>(object).position;
-				if (worn.type == LeashType::Evil && otherMind != nullptr &&
-				    glm::distance(transform->position, otherAt) < leash::k_AngerOtherReach * CreatureHeight(*body))
-				{
-					otherMind->leash.forcedDesire = creature_desires::Desire::Anger;
-					otherMind->leash.forcedValue = leash::k_ForcedDesireValue;
-				}
-				if (const auto change = leash::AttitudeChange(worn.type, leashes.turnsWithOther); change != 0.0f)
-				{
-					if (mind != nullptr)
-					{
-						mind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(object), .change = change});
-					}
-					if (otherMind != nullptr)
-					{
-						otherMind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(entity), .change = change});
-					}
-				}
-			}
 			// Strayed beyond the leash's length, it walks back to what it is tied to
 			if (worn.works && !moving &&
 			    leash::OutsideArea(position, glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z),

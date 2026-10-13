@@ -667,7 +667,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLeash::control>("control")
 	    .Field<&components::CreatureLeash::pull>("pull")
 	    .Field<&components::CreatureLeash::pulls>("pulls")
-	    .Field<&components::CreatureLeash::turnsWithOther>("turnsWithOther")
 	    .Field<&components::CreatureLeash::confinementCentre>("confinementCentre")
 	    .Field<&components::CreatureLeash::confinementRadius>("confinementRadius")
 	    .Field<&components::CreatureLeash::home>("home")
@@ -2136,8 +2135,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_leash::Lesson::desire>("desire")
 	    .Field<&openblack::creature_leash::Lesson::change>("change");
 	Reflect<openblack::creature_leash::MindHooks>(context, ValueOnly {})
-	    .Field<&openblack::creature_leash::MindHooks::forcedDesire>("forcedDesire")
-	    .Field<&openblack::creature_leash::MindHooks::forcedValue>("forcedValue")
+	    .Field<&openblack::creature_leash::MindHooks::attitudeTurn>("attitudeTurn")
 	    .Field<&openblack::creature_leash::MindHooks::obeying>("obeying")
 	    .Field<&openblack::creature_leash::MindHooks::learningInHand>("learningInHand")
 	    .Field<&openblack::creature_leash::MindHooks::miracleSightingWeight>("miracleSightingWeight")

@@ -83,8 +83,6 @@ struct CreatureLeash
 	float pull {0.0f};
 	/// How often it has been pulled away from acting on each desire
 	creature_leash::PullMemory pulls {};
-	/// Turns leashed to another creature
-	uint32_t turnsWithOther {0};
 
 	/// The area the creature is kept within, none when the radius is 0
 	glm::vec3 confinementCentre {0.0f};
