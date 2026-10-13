@@ -34,6 +34,13 @@ constexpr size_t k_PickMe = 74;
 constexpr float k_FollowSeconds = 8.0f;
 constexpr float k_GazeSeconds = 6.0f;
 
+/// A chance from 0 to 1 in fine steps, from the whole-number random
+float RandomFraction(const creature_mind::Random& random)
+{
+	constexpr uint32_t k_Steps = 1U << 24U;
+	return static_cast<float>(random(k_Steps)) / static_cast<float>(k_Steps);
+}
+
 constexpr std::array k_Executors {
     Executor {.action = "EatAfterExamining", .target = Target::Food, .build = Build::Eat, .activity = Activity::Eat},
     Executor {.action = "EatAlive", .target = Target::LiveFood, .build = Build::Eat, .activity = Activity::Eat},
@@ -52,6 +59,14 @@ constexpr std::array k_Executors {
               .target = Target::StoragePit,
               .use = Target::PickableTree,
               .build = Build::GiveWoodToStore},
+    Executor {.action = "GiveWoodFromTreeToBuildingSite",
+              .target = Target::BuildingBeingBuilt,
+              .use = Target::PickableTree,
+              .build = Build::GiveWoodToStore},
+    Executor {.action = "HelpRepairHouse",
+              .target = Target::NeedsRepair,
+              .use = Target::PickableTree,
+              .build = Build::HelpRepairHouse},
     Executor {.action = "PlantTree",
               .target = Target::Anything,
               .use = Target::PlantableTree,
@@ -73,15 +88,26 @@ constexpr std::array k_Executors {
               .target = Target::Pickable,
               .build = Build::PracticeThrow,
               .activity = Activity::PlayWithObject},
+    Executor {
+        .action = "BreakRock", .target = Target::PickableRock, .build = Build::BreakRock, .activity = Activity::PlayWithObject},
+    // Stamping on a rock, which breaks in two
+    Executor {.action = "SmashStoneInHalf", .target = Target::Rock, .build = Build::Destroy},
+    // Toys: stroking a cuddly one, taking one home, throwing a die
+    // The game's data names stroking a toy "StrokToy"
+    Executor {.action = "StrokToy", .target = Target::CuddlyToy, .build = Build::StrokeToy},
+    Executor {.action = "TakeToyHome", .target = Target::ToyAwayFromHome, .build = Build::TakeToyHome},
+    Executor {.action = "ThrowDie", .target = Target::Die, .build = Build::ThrowDie, .activity = Activity::PlayWithObject},
+    Executor {.action = "PlayThrowingGameWithPlayer",
+              .use = Target::Toy,
+              .build = Build::ThrowToPlayer,
+              .activity = Activity::PlayWithObject},
     Executor {.action = "ThrowAround",
               .target = Target::AnyLiving,
               .build = Build::PracticeThrow,
               .activity = Activity::PlayWithObject},
-    // TODO(creature-kind-actions): the game kicks the ball about two to four times, going up to it each time; kicking a
-    // thing isn't here yet, so it throws the ball somewhere nearby
     Executor {.action = "KickBallAround",
               .target = Target::ToyBall,
-              .build = Build::ThrowAbout,
+              .build = Build::KickBallAround,
               .activity = Activity::PlayWithObject},
     // TODO(creature-kind-actions): the game walks to the nearest coast it hasn't visited and throws the thing into the
     // nearest sea it hasn't visited, by the creature's map of where it has been, which isn't here yet; until then it
@@ -274,6 +300,36 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 			return std::nullopt;
 		}
 		return creature_mind::ThrowToyAt(*situation.instrument, *object, objectPoint, situation.height, random);
+	case Build::HelpRepairHouse:
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::HelpRepairHouse(situation.handFull ? std::nullopt : situation.instrument, *object,
+		                                      *situation.instrument);
+	case Build::ThrowToPlayer:
+		if (!situation.playerHand.has_value() || !situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::ThrowToPlayer(*situation.instrument, *situation.playerHand, situation.handFull);
+	case Build::StrokeToy:
+		return creature_mind::StrokeToy(*object);
+	case Build::TakeToyHome:
+		if (!situation.home.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::TakeToyHome(*object, *situation.home, situation.height, random,
+		                                  [&random] { return RandomFraction(random); });
+	case Build::ThrowDie:
+		return creature_mind::ThrowDie(situation.handFull ? std::nullopt : object, *object, situation.position,
+		                               situation.height, random);
+	case Build::BreakRock:
+		return creature_mind::BreakRock(situation.handFull ? std::nullopt : object, *object, situation.position,
+		                                situation.height);
+	case Build::KickBallAround:
+		return creature_mind::KickBallAround(*object, random);
 	case Build::GetHigh:
 		return creature_mind::GetHigh(situation.holdingMushroom ? std::nullopt : object, *object);
 	case Build::PracticeThrow:

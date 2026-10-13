@@ -202,25 +202,31 @@ glm::vec3 MiddleOf(const ecs::Registry& registry, entt::entity entity)
 	return meshes.Handle(mesh->id)->GetBoundingBox().Center() * transform->scale;
 }
 
+/// Where a bone is in an animation at a time, in the creature's own space at the world's scale
+std::optional<glm::vec3> BoneAt(entt::entity creature, const Transform& transform, uint32_t bone, size_t animation,
+                                float timeMs)
+{
+	const auto at = Locator::creatureAnimationSystem::value().BoneInAnimation(creature, animation, timeMs, bone, false);
+	return at.has_value() ? std::optional(*at * transform.scale) : std::nullopt;
+}
+
 /// Where the right hand is in an animation at a time, in the creature's own space at the world's scale
 std::optional<glm::vec3> HandAt(entt::entity creature, const Transform& transform, const CreatureRig::ActionPoints& points,
                                 size_t animation, float timeMs)
 {
-	const auto bone =
-	    Locator::creatureAnimationSystem::value().BoneInAnimation(creature, animation, timeMs, points.rightHand, false);
-	return bone.has_value() ? std::optional(*bone * transform.scale) : std::nullopt;
+	return BoneAt(creature, transform, points.rightHand, animation, timeMs);
 }
 
-/// Where the hand takes hold in each of four reaching animations
-std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const Transform& transform,
-                                                   const CreatureRig::ActionPoints& points,
+/// Where the bone it acts with gets to in each of four reaching animations: the right hand reaching to pick something
+/// up, the right foot striking a blow
+std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const Transform& transform, uint32_t bone,
                                                    const std::array<size_t, creature_reach::k_CornerCount>& animations,
                                                    float timeMs)
 {
 	creature_reach::Points reach {};
 	for (size_t i = 0; i < animations.size(); ++i)
 	{
-		const auto hand = HandAt(creature, transform, points, animations.at(i), timeMs);
+		const auto hand = BoneAt(creature, transform, bone, animations.at(i), timeMs);
 		if (!hand.has_value())
 		{
 			return std::nullopt;
@@ -328,6 +334,50 @@ void BringBackUp(entt::entity creature, entt::entity food)
 		});
 		minds.Puke(creature);
 	}
+}
+
+/// The foot meets what the creature kicks: a thing that can fly flies off ahead of the creature, already flying or set
+/// flying from where it lies, credited to the creature's player and passing through the creature as it starts. What it
+/// does to buildings, fences, standing trees and creatures isn't here: only things that can fly are kicked.
+/// The kick of such a thing makes no sound: the game's sound for it is keyed so that it rarely matches anything (see
+/// docs/vanilla-bugs.md).
+void KickAway(entt::entity creature, const Creature& body, const Transform& transform, entt::entity target)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(target) || !Locator::dynamicsSystem::has_value() || registry.AllOf<Immovable>(target))
+	{
+		return;
+	}
+	auto& dynamics = Locator::dynamicsSystem::value();
+	if (!dynamics.CanBecomePhysicsObject(target))
+	{
+		return;
+	}
+	// It kicks the way it faces, leaning with the land under it
+	const glm::vec2 at {transform.position.x, transform.position.z};
+	const auto radius = object_measures::TwoDRadius(registry, creature);
+	const auto height = [](glm::vec2 point) {
+		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+	};
+	const auto lean =
+	    creature_object_actions::LeanOf(height(at + glm::vec2(radius, 0.0f)), height(at - glm::vec2(radius, 0.0f)),
+	                                    height(at + glm::vec2(0.0f, radius)), height(at - glm::vec2(0.0f, radius)), radius);
+	const auto ahead = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+	const auto velocity = creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, ShownSize(body));
+	if (auto* entry = dynamics.Find(target); entry != nullptr && entry->body != nullptr)
+	{
+		entry->body->velocity = velocity;
+		return;
+	}
+	auto* entry =
+	    dynamics.InitialisePhysics(target, {.velocity = velocity, .thrower = creature, .player = body.owner, .add = true})
+	        .entry;
+	if (entry == nullptr)
+	{
+		return;
+	}
+	dynamics.SettleOnLand(*entry, false, true);
+	dynamics.RaiseClearOfWhatIsUnder(*entry);
 }
 
 /// A villager picked up stops wherever it was walking
@@ -567,7 +617,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		const bool pickingUp = action.kind == Kind::PickUp;
 		action.eventMs = pickingUp ? points->pickUpMs : points->destroyMs;
 		action.reach =
-		    MeasureReach(creature, transform, *points,
+		    MeasureReach(creature, transform, pickingUp ? points->rightHand : points->rightFoot,
 		                 pickingUp ? creature_reach::k_PickUpAnimations : creature_reach::k_DestroyAnimations, action.eventMs);
 		if (!action.reach.has_value())
 		{
@@ -980,6 +1030,15 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		{
 			Fail(action, "it can't be knocked down");
 		}
+		else if (action.kind == Kind::Kick &&
+		         ((held != nullptr && held->object == *action.target) || registry.AllOf<InHand>(*action.target)))
+		{
+			Fail(action, "it is in a hand");
+		}
+		else if (action.kind == Kind::Kick && DurationOf(creature, creature_object_actions::k_KickAnimation) <= 0.0f)
+		{
+			Fail(action, "its species can't kick");
+		}
 	}
 	if (action.status == Status::Running && action.kind == Kind::Throw)
 	{
@@ -1035,6 +1094,10 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 			break;
 		case Kind::Catch:
 			now = StartCatch(creature, action, *points);
+			break;
+		case Kind::Kick:
+			single(creature_object_actions::k_KickAnimation, points->kickMs);
+			action.mirrored = false;
 			break;
 		case Kind::TakeFromHand:
 		{
@@ -1211,6 +1274,11 @@ bool CreatureObjectActionSystem::ThrowTaking(entt::entity creature, const glm::v
 bool CreatureObjectActionSystem::Destroy(entt::entity creature, entt::entity target)
 {
 	return Start(creature, {.kind = Kind::Destroy, .target = target});
+}
+
+bool CreatureObjectActionSystem::Kick(entt::entity creature, entt::entity target)
+{
+	return Start(creature, {.kind = Kind::Kick, .target = target});
 }
 
 bool CreatureObjectActionSystem::PointAt(entt::entity creature, const glm::vec3& point)
@@ -1575,7 +1643,7 @@ bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	return registry.Valid(target) && registry.AllOf<Transform>(target) &&
-	       registry.AnyOf<Tree, Abode, MobileObject, Ball>(target);
+	       registry.AnyOf<Tree, Abode, MobileObject, MobileStatic, Ball>(target);
 }
 
 std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entity creature) const
@@ -1603,7 +1671,8 @@ std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entit
 	}
 	auto unscaled = *transform;
 	unscaled.scale = glm::vec3(1.0f);
-	const auto reach = MeasureReach(creature, unscaled, *points, creature_reach::k_PickUpAnimations, points->pickUpMs);
+	const auto reach =
+	    MeasureReach(creature, unscaled, points->rightHand, creature_reach::k_PickUpAnimations, points->pickUpMs);
 	if (!reach.has_value())
 	{
 		return std::nullopt;
@@ -1973,6 +2042,10 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			action.status = Status::Contact;
 			break;
 		}
+		case Kind::Kick:
+			KickAway(creature, body, transform, *action.target);
+			action.status = Status::Contact;
+			break;
 		case Kind::Keep:
 		case Kind::Point:
 		case Kind::Catch:

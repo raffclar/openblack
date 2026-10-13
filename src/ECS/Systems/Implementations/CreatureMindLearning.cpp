@@ -70,6 +70,7 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
@@ -93,8 +94,11 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "MagicLiving.h"
@@ -150,6 +154,8 @@ constexpr float k_HeightOfSizeOne = 15.0f;
 constexpr float k_HurtEnoughToHeal = 0.7f;
 /// A pile of food this many times a storage pit's radius from it is the storage pit's
 constexpr float k_StoragePitReach = 1.1f;
+/// A toy further than this from its creature's home is one it may take home
+constexpr float k_ToyAwayFromHome = 50.0f;
 
 /// The actions that cast a power-up of a miracle, which only a creature grown up enough tries
 bool IsPowerUpCast(std::string_view action)
@@ -329,6 +335,44 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return hands != nullptr && creature_object_actions::CanBeThrownInTheSea(hands->KindOf(entity).thing);
 	case Target::ThrowableToImpress:
 		return !heldByOther && hands != nullptr && hands->CanThrowToImpress(self, entity) && hands->CanPickUp(self, entity);
+	case Target::PickableRock:
+	case Target::Rock:
+	{
+		if (hands == nullptr || (target == Target::PickableRock && heldByOther))
+		{
+			return false;
+		}
+		const auto thing = hands->KindOf(entity).thing;
+		const bool rock = thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
+		return rock && (target == Target::Rock || hands->CanPickUp(self, entity));
+	}
+	case Target::BuildingBeingBuilt:
+	{
+		// Of the towns' buildings and worship sites (the temple isn't one): still going up, or damaged and below its
+		// full life
+		if (!registry.AnyOf<Abode, WorshipSite>(entity) || registry.AllOf<Temple>(entity))
+		{
+			return false;
+		}
+		const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		return (progress != nullptr && progress->built < 1.0f) ||
+		       (registry.AllOf<RepairSite>(entity) && ecs::world_objects::LifeOf(entity) < 1.0f);
+	}
+	case Target::NeedsRepair:
+		// Only a town's buildings say they want repair, while below their full life
+		return registry.AllOf<Abode>(entity) && !registry.AllOf<Temple>(entity) && ecs::world_objects::LifeOf(entity) < 1.0f;
+	case Target::CuddlyToy:
+		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity) == creature_object_actions::Toy::Cuddly;
+	case Target::Die:
+		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity) == creature_object_actions::Toy::Die;
+	case Target::ToyAwayFromHome:
+	{
+		// Only a static toy: the football is never taken home
+		const auto home = ecs::creature_home::HomeOf(registry, self);
+		const auto at = PointOf(registry, entity);
+		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity).has_value() && home.has_value() &&
+		       at.has_value() && gutils::GetDistanceInMetres(*home, glm::vec3(at->x, home->y, at->y)) > k_ToyAwayFromHome;
+	}
 	case Target::PickableTree:
 		return !heldByOther && registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanPickUp(self, entity);
 	case Target::PlantableTree:
@@ -408,7 +452,8 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		    [&](entt::entity entity, const Ball&, const Transform& at) { consider(entity, at); });
 	}
 	const bool statics = pickable || target == Target::Toy || target == Target::ToyBall || sea || target == Target::Stonable ||
-	                     target == Target::ThrowingDamage || anything;
+	                     target == Target::ThrowingDamage || target == Target::PickableRock || target == Target::Rock ||
+	                     target == Target::CuddlyToy || target == Target::Die || target == Target::ToyAwayFromHome || anything;
 	if (statics)
 	{
 		registry.Each<const MobileStatic, const Transform>(
@@ -425,6 +470,18 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	{
 		registry.Each<const Feature, const Transform>(
 		    [&](entt::entity entity, const Feature&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::NeedsRepair)
+	{
+		registry.Each<const Abode, const Transform>(
+		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::BuildingBeingBuilt)
+	{
+		registry.Each<const Abode, const Transform>(
+		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
+		registry.Each<const WorshipSite, const Transform>(
+		    [&](entt::entity entity, const WorshipSite&, const Transform& at) { consider(entity, at); });
 	}
 	const bool fire = target == Target::Burning || target == Target::Unburnt;
 	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything || fire || pickable || sea ||
@@ -1761,6 +1818,21 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	if (const auto* at = registry.TryGet<const Transform>(creature))
 	{
 		situation.position = {at->position.x, at->position.z};
+		// Only the local player's hands are about to throw to
+		const bool local = body != nullptr && Locator::playerSystem::has_value() &&
+		                   body->owner == Locator::playerSystem::value().GetLocalPlayer();
+		if (local && Locator::handSystem::has_value())
+		{
+			for (const auto& hand : Locator::handSystem::value().GetPlayerHandPositions())
+			{
+				if (hand.has_value() &&
+				    (!situation.playerHand.has_value() ||
+				     glm::distance(*hand, at->position) < glm::distance(*situation.playerHand, at->position)))
+				{
+					situation.playerHand = hand;
+				}
+			}
+		}
 	}
 	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
 	{

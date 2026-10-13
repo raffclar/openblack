@@ -401,6 +401,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 		{
 			villager->life = std::clamp(*object.life, 0.0f, 1.0f);
 		}
+		// A building is hurt down to it, as anything that hurts it does, which opens a site for its repair
+		if (registry.AllOf<ecs::components::Abode>(entity))
+		{
+			static_cast<void>(ecs::world_objects::ReduceLife(entity, 1.0f - std::clamp(*object.life, 0.0f, 1.0f)));
+		}
 		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
 		{
 			animal->life = std::clamp(*object.life, 0.0f, 1.0f);

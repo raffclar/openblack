@@ -72,9 +72,20 @@ enum class Target : uint8_t
 	PlantableTree,
 	/// What it can pick up and throw to impress
 	ThrowableToImpress,
+	/// A rock (bonfires too) it can pick up, or any rock
+	PickableRock,
+	Rock,
+	/// A cuddly toy, a die, or a toy (but not the football) more than 50 from the creature's home
+	CuddlyToy,
+	Die,
+	ToyAwayFromHome,
+	/// A building still going up, or one damaged and wanting repair that has lost some of its life; or a house (any of a
+	/// town's buildings) below its full life
+	BuildingBeingBuilt,
+	NeedsRepair,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::ThrowableToImpress) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::NeedsRepair) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -147,6 +158,18 @@ enum class Build : uint8_t
 	ThrowToy,
 	/// Picking up the thing, unless it holds a magic mushroom, and eating it
 	GetHigh,
+	/// Kicking the ball about a few times
+	KickBallAround,
+	/// Practising a throw with the rock, and breaking it in two as it flies
+	BreakRock,
+	/// Stroking a cuddly toy, taking a toy home, throwing a die
+	StrokeToy,
+	TakeToyHome,
+	ThrowDie,
+	/// Picking up the toy it uses and throwing it to its player's hand
+	ThrowToPlayer,
+	/// Bringing a tree to a house and mending the house with it
+	HelpRepairHouse,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -206,6 +229,8 @@ struct Situation
 	/// Where the thing it uses is, and its radius on the ground
 	glm::vec2 instrumentPoint {0.0f};
 	float instrumentRadius {0.0f};
+	/// Where the nearest of its player's hands is, none when its player has no hand here
+	std::optional<glm::vec3> playerHand;
 	/// Where the camera is, whether the creature has a player (whose camera it can look to), whether a script controls
 	/// it, its radius on the ground, and a chance from 0 to 1 for what varies
 	std::optional<glm::vec3> eye;

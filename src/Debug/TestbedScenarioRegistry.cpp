@@ -1747,6 +1747,44 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.give_wood_site",
+	    .name = "Giving a tree to a damaged building as wood",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, a birch to its left and its town's hut off to the east, hurt to six tenths of its "
+	                   "life so that its town wants it mended. A script tells it to give wood from the birch to the "
+	                   "building's site.",
+	    .expected = "It walks to the birch and pulls it up, carries it towards the hut until it is near enough to throw, "
+	                "turns to face it with a look of compassion and throws the tree in: the tree is gone and the hut's "
+	                "site has the wood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {90.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-20.0f, -15.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {90.0f, 0.0f}, .life = 0.6f}},
+	    .commands = {{.kind = Kind::DoAction,
+	                  .delaySeconds = 1.0f,
+	                  .object = 1,
+	                  .action = "GiveWoodFromTreeToBuildingSite",
+	                  .with = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.repair_house",
+	    .name = "Helping repair a house",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, a birch to its left and its town's hut off to the east, hurt to six tenths of its "
+	                   "life. A script tells it to help repair the hut with the birch.",
+	    .expected = "It walks to the birch and picks it up, walks right up to the hut, turns to it and puts the tree "
+	                "down by it; the hut gets a fifth of its life back (to eight tenths) and the tree is gone.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {90.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-20.0f, -15.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {90.0f, 0.0f}, .life = 0.6f}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "HelpRepairHouse", .with = 0}},
+	});
+
+	all.push_back({
 	    .id = "objects.plant_tree",
 	    .name = "Planting a tree by something",
 	    .facet = Facet::Objects,
@@ -1789,6 +1827,113 @@ void AddObjects(std::vector<Scenario>& all)
 	          .object = 4,
 	          .action = "ThrowBallAtObject",
 	          .with = 2}},
+	});
+
+	all.push_back({
+	    .id = "objects.kick_ball",
+	    .name = "Kicking a ball about",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a toy ball in front of it. A script tells it to kick the ball about.",
+	    .expected = "It walks up to the ball, turns to it and kicks it: the ball flies off ahead of it, half upwards, and "
+	                "bounces away. A quarter of the time it then points at the ball a second, else it waits up to a "
+	                "second. It goes after the ball and kicks it again, two to four times in all, sometimes jumping for "
+	                "joy at the end. The kicks make no sound.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 10.0f}, {20.0f, -150.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "KickBallAround"}},
+	});
+
+	all.push_back({
+	    .id = "objects.break_rock",
+	    .name = "Breaking a rock",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a rock in front of it. A script tells it to break the rock.",
+	    .expected = "It picks the rock up and throws it off to one side; as the rock flies it breaks into two halves, "
+	                "which fly on as it flew and come down apart.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {80.0f, 80.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BreakRock"}},
+	});
+
+	all.push_back({
+	    .id = "objects.smash_stone",
+	    .name = "Smashing a stone in half",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a rock in front of it. A script tells it to smash the stone in half.",
+	    .expected = "Angry, it reaches for the rock with a blow and stamps on it: the rock breaks into two halves with a "
+	                "smashing sound.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "SmashStoneInHalf"}},
+	});
+
+	all.push_back({
+	    .id = "objects.stroke_toy",
+	    .name = "Stroking a cuddly toy",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a cuddly toy in front of it. A script tells it to stroke the toy.",
+	    .expected = "With a look of compassion it picks the toy up and strokes it in its hand, looking at it, then keeps "
+	                "holding it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyCuddly, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StrokToy"}},
+	});
+
+	all.push_back({
+	    .id = "objects.throw_die",
+	    .name = "Throwing a die",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a die in front of it. A script tells it to throw the die.",
+	    .expected = "It picks the die up and throws it a little way off to one side, watches it fly, amazed, until it "
+	                "lands (three to four seconds at most), then jumps for joy two times in three, else looks sad.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyDie, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "ThrowDie"}},
+	});
+
+	{
+		constexpr glm::vec2 k_ToyTemple {-300.0f, 100.0f};
+		constexpr float k_ToyTempleTurn = 36.0f;
+		all.push_back({
+		    .id = "objects.take_toy_home",
+		    .name = "Taking a toy home",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger of the player's, whose temple stands far to the west, with a toy ball in front "
+		                   "of it. A script tells it to take the toy home.",
+		    .expected = "With a look of compassion it picks the ball up, walks to its home, the pen before the temple, "
+		                "and sets the ball down within five of it; now and then it tosses it away instead.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -k_Reach}}},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "TakeToyHome"}},
+		});
+	}
+
+	all.push_back({
+	    .id = "objects.throw_to_player",
+	    .name = "Throwing a toy to the player",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger of the player's with a toy ball in front of it. A script tells it to play a throwing "
+	                   "game with the player; keep the hand in view.",
+	    .expected = "It picks the ball up and throws it at the player's hand, where the hand was as it set about it, "
+	                "looking at it; then it jumps for joy.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 4.0f, .action = "PlayThrowingGameWithPlayer", .with = 0}},
 	});
 
 	auto stoner = Content(CreatureType::Tiger, {0.0f, 0.0f});
