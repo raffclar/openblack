@@ -78,6 +78,7 @@
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
+#include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
@@ -1023,8 +1024,6 @@ void Game::UpdateHandInterface()
 	_interface->SetCreaturePanel(std::nullopt);
 	// The temple places the hand's tooltip itself
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	// The fighters' health and stamina, while a fight is on
-	_interface->SetFightPanel(inTemple ? std::nullopt : Locator::creatureFightSystem::value().GetPanel());
 	if (inTemple)
 	{
 		return;
@@ -1931,6 +1930,13 @@ bool Game::Update() noexcept
 	Locator::highDetailSystem::value().Update();
 	if (_interface)
 	{
+		// The fighters' health and stamina while a fight is on, wanted afresh every frame whether or not the hand is out
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const bool scriptHasCamera =
+		    Locator::scriptControlSystem::has_value() && Locator::scriptControlSystem::value().GetCameraOwner() != 0;
+		_interface->SetFightPanel(creature_fight_hud::PanelAllowed(inTemple, scriptHasCamera)
+		                              ? Locator::creatureFightSystem::value().GetPanel()
+		                              : std::nullopt);
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		if (std::exchange(_restartRequested, false))

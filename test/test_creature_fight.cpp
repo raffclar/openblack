@@ -593,3 +593,13 @@ TEST(CreatureFight, ACreatureAgreesToFightOnlyOneOfASizeAndControlledAsItIs)
 	EXPECT_FALSE(AgreesToFight(10.0f, 10.0f, false, true, false));
 	EXPECT_FALSE(AgreesToFight(10.0f, 10.0f, false, false, true));
 }
+
+// The fighters' panel shows only under the player's own camera: a script taking the camera for a cut scene hides it, as
+// the temple does; the cinema bars by themselves don't
+TEST(CreatureFightHud, PanelOnlyUnderThePlayersCamera)
+{
+	EXPECT_TRUE(creature_fight_hud::PanelAllowed(false, false));
+	EXPECT_FALSE(creature_fight_hud::PanelAllowed(false, true));
+	EXPECT_FALSE(creature_fight_hud::PanelAllowed(true, false));
+	EXPECT_FALSE(creature_fight_hud::PanelAllowed(true, true));
+}
