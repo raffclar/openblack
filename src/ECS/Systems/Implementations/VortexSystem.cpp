@@ -610,6 +610,7 @@ void VortexSystem::StartCrossingFile(entt::entity vortex)
 {
 	_crossing.close();
 	_crossingVortex = entt::null;
+	_written.clear();
 	if (!Locator::playerProfileSystem::has_value())
 	{
 		return;
@@ -635,7 +636,8 @@ void VortexSystem::StartCrossingFile(entt::entity vortex)
 
 void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 {
-	if (!_crossing.is_open())
+	// Each thing once
+	if (!_crossing.is_open() || !_written.insert(thing).second)
 	{
 		return;
 	}
@@ -661,6 +663,11 @@ void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 		        const auto& name = magic::GetMagicEffectInfo(info, record.magicType).debugString;
 		        return std::string(name.begin(), std::ranges::find(name, '\0'));
 	        },
+	    .filedAsStatic =
+	        [](entt::entity object) {
+		        const auto* objectInfo = world_objects::InfoOf(object);
+		        return objectInfo != nullptr && objectInfo->type == ObjectType::MobileStatic;
+	        },
 	};
 	auto place = map_coords::FromMetres({vortex.centre.x, vortex.centre.z});
 	place.altitude = vortex.altitude;
@@ -669,6 +676,13 @@ void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 		const auto text = vortex::crossing::Text(*line);
 		_crossing.write(text.data(), static_cast<std::streamsize>(text.size()));
 		_crossing.flush();
+		if (std::holds_alternative<vortex::crossing::MobileStaticLine>(*line))
+		{
+			for (const auto identical : ecs::vortex_crossing::IdenticalStatics(registry, thing, world))
+			{
+				_written.insert(identical);
+			}
+		}
 	}
 }
 

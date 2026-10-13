@@ -12,6 +12,7 @@
 #include <fstream>
 #include <memory>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 
 #include "3D/MapCoords.h"
@@ -90,6 +91,9 @@ private:
 	/// The crossing file, written by the vortex that last started leading away while it lasts
 	std::ofstream _crossing;
 	entt::entity _crossingVortex {entt::null};
+	/// What the file has been written for already: each thing is written once, and a static thing's fellows standing
+	/// just where it stood count as written with it
+	std::unordered_set<entt::entity> _written;
 };
 
 } // namespace openblack::ecs::systems

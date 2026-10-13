@@ -18,10 +18,13 @@
 #include <glm/mat4x4.hpp>
 
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
@@ -181,4 +184,35 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 		                     .zAngle = angles.z};
 	}
 	return std::nullopt;
+}
+
+std::vector<entt::entity> ecs::vortex_crossing::IdenticalStatics(const Registry& registry, entt::entity thing,
+                                                                 const World& world)
+{
+	std::vector<entt::entity> identical;
+	const auto* still = registry.Valid(thing) ? registry.TryGet<const MobileStatic>(thing) : nullptr;
+	const auto* transform = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
+	if (still == nullptr || transform == nullptr)
+	{
+		return identical;
+	}
+	const auto& at = transform->position;
+	const auto place = MapPlace(at, world.ground({at.x, at.z}));
+	registry.Each<const MobileStatic, const Transform>(
+	    [&](entt::entity other, const MobileStatic& otherStill, const Transform& otherTransform) {
+		    // Only those lying on the land are found there: not one flying, held or being taken
+		    if (other == thing || otherStill.type != still->type ||
+		        registry.AnyOf<InPhysics, InHand, CarriedByTornado>(other) || !world.filedAsStatic(other))
+		    {
+			    return;
+		    }
+		    const auto& position = otherTransform.position;
+		    const auto otherPlace = MapPlace(position, world.ground({position.x, position.z}));
+		    // The very same place across the land and the very same height above it
+		    if (otherPlace.x == place.x && otherPlace.z == place.z && otherPlace.altitude == place.altitude)
+		    {
+			    identical.push_back(other);
+		    }
+	    });
+	return identical;
 }

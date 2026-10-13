@@ -17,6 +17,7 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
@@ -51,6 +52,7 @@ vortex_crossing::World FakeWorld()
 	    .player = [](entt::entity) { return std::optional<PlayerNames> {}; },
 	    .magicName = [](SpellSeedType seed,
 	                    int powerUp) { return fmt::format("MAGIC_{}_{}", static_cast<int>(seed), powerUp); },
+	    .filedAsStatic = [](entt::entity) { return true; },
 	};
 }
 
@@ -261,4 +263,26 @@ TEST(VortexCrossingLines, TheReaderTakesEveryKindsLine)
 		const auto text = LineText(registry, thing);
 		EXPECT_TRUE(ReaderTakes(Read(text))) << text;
 	}
+}
+
+TEST(VortexCrossingLines, StaticsOfAKindJustWhereAnotherStandsAreWrittenWithIt)
+{
+	Registry registry;
+	const auto rock = [&registry](glm::vec3 position, MobileStaticInfo type) {
+		const auto entity = Thing(registry, position, glm::mat3(1.0f), 1.0f);
+		registry.Assign<MobileStatic>(entity, type);
+		return entity;
+	};
+	const auto first = rock({1000.0f, k_Ground, 2000.0f}, MobileStaticInfo::Rock);
+	const auto twin = rock({1000.0f, k_Ground, 2000.0f}, MobileStaticInfo::Rock);
+	// Another kind, a little higher, a little across, or flying, is not the same
+	rock({1000.0f, k_Ground, 2000.0f}, MobileStaticInfo::DeadTree);
+	rock({1000.0f, k_Ground + 0.5f, 2000.0f}, MobileStaticInfo::Rock);
+	rock({1000.5f, k_Ground, 2000.0f}, MobileStaticInfo::Rock);
+	registry.Assign<InPhysics>(rock({1000.0f, k_Ground, 2000.0f}, MobileStaticInfo::Rock));
+	EXPECT_EQ(vortex_crossing::IdenticalStatics(registry, first, FakeWorld()), std::vector<entt::entity> {twin});
+	// Only statics have fellows
+	const auto tree = Thing(registry, {1000.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<Tree>(tree, Tree {.type = TreeInfo::Oak});
+	EXPECT_TRUE(vortex_crossing::IdenticalStatics(registry, tree, FakeWorld()).empty());
 }
