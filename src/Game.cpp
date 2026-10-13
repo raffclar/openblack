@@ -114,6 +114,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/Map.h"
+#include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -1950,6 +1951,8 @@ bool Game::Update() noexcept
 			return false; // Quit event
 		}
 	}
+
+	KeepAlignmentInProfile();
 
 	// The frame's game time: none while paused, quicker or slower with the game speed
 	auto& clock = Locator::time::value();
@@ -4017,6 +4020,11 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	}
 
 	timer.Step("forests");
+	// A new game starts the player as good or evil as their profile last kept them, once the land is set up
+	if (land_change::RulesFor(change).alignmentFromProfile)
+	{
+		StartPlayerAtProfileAlignment();
+	}
 	RenderLoadingFrame();
 	StartNewLand();
 	timer.Step("start");
@@ -4119,9 +4127,10 @@ void Game::PrepareNewLand(land_change::Kind change)
 		Locator::temple::value().CloseForNewLand();
 	}
 	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
-	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment. Nothing is
-	// carried onto the testbed or off it: its creatures never replace the player's own kept creature, and its players
-	// start afresh each time, with none of the last scenario's alignment, miracles or statistics.
+	// to load it again, a new game's included: it is the creature the profile keeps. The players keep what is theirs
+	// rather than the land's, such as their alignment, from one land to the next of a game; a new game makes them
+	// afresh. Nothing is carried onto the testbed or off it: its creatures never replace the player's own kept creature,
+	// and its players start afresh each time, with none of the last scenario's alignment, miracles or statistics.
 	const bool carryOver = !toTestbed && _landPath != k_TestbedLandPath;
 	if (Locator::creatureCarryOverSystem::has_value())
 	{
@@ -4133,7 +4142,7 @@ void Game::PrepareNewLand(land_change::Kind change)
 	}
 	if (Locator::playerSystem::has_value())
 	{
-		if (carryOver)
+		if (carryOver && rules.playersCarried)
 		{
 			Locator::playerSystem::value().KeepForNextLand();
 		}
@@ -4275,6 +4284,37 @@ void Game::PrepareNewLand(land_change::Kind change)
 	auto& config = Locator::config::value();
 	const auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
 	Locator::camera::value().SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip);
+}
+
+void Game::StartPlayerAtProfileAlignment()
+{
+	if (!Locator::playerProfileSystem::has_value() || !Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	const auto alignment = profile_alignment::Starting(profile.has_value() ? profile->alignment : 0.0);
+	auto& players = Locator::playerSystem::value();
+	const auto local = players.GetLocalPlayer();
+	Locator::alignmentSystem::value().SetPlayerAlignment(local, alignment);
+	// The player's statistics note the alignment they start the game at
+	player_statistics::Made(players.GetPlayer(local));
+}
+
+void Game::KeepAlignmentInProfile()
+{
+	// The player's alignment is kept with their profile every so often as they play, never the testbed's
+	if (_landPath.empty() || _landPath == k_TestbedLandPath || !Locator::playerProfileSystem::has_value() ||
+	    !Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto& players = Locator::playerSystem::value();
+	if (players.KeepAlignmentAt(Locator::time::value().GetTurn()))
+	{
+		Locator::playerProfileSystem::value().SetCurrentAlignment(
+		    Locator::alignmentSystem::value().GetPlayerAlignment(players.GetLocalPlayer()));
+	}
 }
 
 void Game::StartNewLand()

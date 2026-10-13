@@ -307,6 +307,10 @@ private:
 	void SetUpLandscape();
 	/// Starts the game clock, the atmosphere's sounds and the music on the new land
 	void StartNewLand();
+	/// A new game's player starts as good or evil as their profile last kept them
+	void StartPlayerAtProfileAlignment();
+	/// Every so often as they play, the player's alignment is kept with their profile for their next new game
+	void KeepAlignmentInProfile();
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
