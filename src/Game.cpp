@@ -159,6 +159,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -1535,6 +1536,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::helpMessageSystem::has_value())
 	{
 		Locator::helpMessageSystem::value().ProcessTurn();
+	}
+	// The advisors' guidance: a new land's first stamps, and a look at the moon at night
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().ProcessTurn();
 	}
 	// The help's count of what the player has done moves on a turn, and its tip bubble stays while its sign shows
 	if (Locator::helpProfileSystem::has_value())
@@ -4099,6 +4105,7 @@ void Game::PrepareNewLand()
 	}
 	// The scripts start again, and the help's texts and voices with them
 	Locator::helpTextSystem::value().Reset();
+	Locator::guidanceSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints, nor a scare of its fish

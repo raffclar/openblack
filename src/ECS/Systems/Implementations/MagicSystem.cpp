@@ -506,7 +506,10 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 		// applied it
 		if (outcome.aggression && !appliedByNothing)
 		{
-			ecs::world_objects::AttackTown(outcome.entity, outcome.damaged + outcome.burnt, source.player);
+			const auto& things = Locator::entitiesRegistry::value();
+			const bool appliedByCreature =
+			    source.appliedBy.has_value() && things.Valid(*source.appliedBy) && things.AllOf<Creature>(*source.appliedBy);
+			ecs::world_objects::AttackTown(outcome.entity, outcome.damaged + outcome.burnt, source.player, appliedByCreature);
 		}
 		// A player's miracle, not a creature's, is remembered against them by the player whose object it harmed
 		const auto owner = ecs::world_objects::PlayerOf(outcome.entity);

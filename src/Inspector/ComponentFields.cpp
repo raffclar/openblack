@@ -1066,7 +1066,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::GroundMark>(context)
 	    .Field<&components::GroundMark::millisecondsLeft>("millisecondsLeft")
 	    .Field<&components::GroundMark::alpha>("alpha");
-	Reflect<components::GuidanceHeard>(context).Field<&components::GuidanceHeard::lastTurn>("lastTurn");
+	Reflect<components::GuidanceHeard>(context)
+	    .Field<&components::GuidanceHeard::lastTurn>("lastTurn")
+	    .Field<&components::GuidanceHeard::alignmentDrift>("alignmentDrift")
+	    .Field<&components::GuidanceHeard::oneOffSaid>("oneOffSaid");
 	Reflect<components::Hand>(context)
 	    .Field<&components::Hand::rightHanded>("rightHanded")
 	    .Field<&components::Hand::renderType>("renderType")

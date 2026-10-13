@@ -28,6 +28,7 @@ public:
 	bool RunMessage(uint32_t first, uint32_t last, help_messages::Script script,
 	                std::optional<std::pair<uint32_t, float>> townNeed = std::nullopt) override;
 	bool RunMessageSet(size_t set, std::optional<help_messages::Texts> thing = std::nullopt) override;
+	void TriggerCategory(uint32_t category) override;
 	void HelpQuery() override;
 	void ProcessTurn() override;
 
