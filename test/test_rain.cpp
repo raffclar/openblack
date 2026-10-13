@@ -111,3 +111,60 @@ TEST(Rain, StreaksFadeInAndOut)
 	EXPECT_EQ(ends[0], glm::vec3(1.0f, -50.0f, 2.0f));
 	EXPECT_EQ(ends[1], glm::vec3(4.0f, 160.0f, -2.0f));
 }
+
+TEST(Rain, AWeakRainShowsNoStreaks)
+{
+	// A rain of 6 percent has a strength of 5, which is too weak for streaks
+	EXPECT_EQ(rain::Strength(6), 5);
+	EXPECT_FALSE(rain::TileOf({0.0f, 0.0f}, 6, {0.0f, 0.0f}).has_value());
+	EXPECT_EQ(rain::Strength(7), 6);
+	EXPECT_TRUE(rain::TileOf({0.0f, 0.0f}, 7, {0.0f, 0.0f}).has_value());
+	EXPECT_EQ(rain::Strength(1000), 255);
+}
+
+TEST(Rain, OnlyAHeavyRainSplashes)
+{
+	// A rain of 51 percent has a strength of 44, and a rain of 52 percent a strength of 45
+	EXPECT_FALSE(rain::SplashAlpha(rain::Strength(51)).has_value());
+	ASSERT_TRUE(rain::SplashAlpha(rain::Strength(52)).has_value());
+	EXPECT_EQ(*rain::SplashAlpha(45), 130);
+	EXPECT_EQ(*rain::SplashAlpha(88), 255);
+	EXPECT_EQ(*rain::SplashAlpha(255), 255);
+}
+
+TEST(Rain, SplashesInTheGamesOrder)
+{
+	FakeRandom random {.values = {10.0f, 150.0f, 0.2f}};
+	std::vector<glm::vec2> heightsAsked;
+	const rain::HeightAt heightAt = [&heightsAsked](glm::vec2 point) {
+		heightsAsked.push_back(point);
+		return 7.0f;
+	};
+	const auto ring = rain::Splash({240.0f, 400.0f}, 0x82102030u, random.Get(), heightAt);
+	// The z comes first, then the x, then the size
+	ASSERT_EQ(random.asked.size(), 3u);
+	EXPECT_EQ(random.asked[0], std::make_pair(0.0f, 160.0f));
+	EXPECT_EQ(random.asked[1], std::make_pair(0.0f, 160.0f));
+	EXPECT_EQ(random.asked[2], std::make_pair(0.0f, 0.3f));
+	EXPECT_FLOAT_EQ(ring.position.z, 400.0f + 10.0f - 80.0f);
+	EXPECT_FLOAT_EQ(ring.position.x, 240.0f + 150.0f - 80.0f);
+	// One unit above the ground under it
+	ASSERT_EQ(heightsAsked.size(), 1u);
+	EXPECT_EQ(heightsAsked[0], glm::vec2(ring.position.x, ring.position.z));
+	EXPECT_FLOAT_EQ(ring.position.y, 8.0f);
+	// A round ring that grows at the usual rate, unturned
+	EXPECT_FLOAT_EQ(ring.growth, 0.7f);
+	EXPECT_EQ(ring.age, 0u);
+	EXPECT_FLOAT_EQ(ring.angle, 0.0f);
+	EXPECT_FLOAT_EQ(ring.aspect, 1.0f);
+	EXPECT_FLOAT_EQ(ring.rate, 1.0f);
+	EXPECT_EQ(ring.cell, 0x30);
+	EXPECT_EQ(ring.argb, 0x82102030u);
+}
+
+TEST(Rain, FarBlocksComeFirst)
+{
+	const glm::vec3 eye {0.0f, 30.0f, 0.0f};
+	EXPECT_FLOAT_EQ(rain::DrawKey({30.0f, 40.0f}, 30.0f, eye), 2500.0f);
+	EXPECT_GT(rain::DrawKey({0.0f, 300.0f}, 0.0f, eye), rain::DrawKey({0.0f, 100.0f}, 0.0f, eye));
+}

@@ -48,3 +48,18 @@ TEST(FramePace, SlowFramesStepOnceEachAndALongFrameLeavesNoStepsOwed)
 	EXPECT_EQ(frame_pace::Step(pace, milliseconds(50), milliseconds(0)), milliseconds(1));
 	EXPECT_EQ(frame_pace::Step(pace, milliseconds(50), milliseconds(0)), milliseconds(0));
 }
+
+TEST(FramePace, AnEffectThatIgnoresTheGameTimeIsDueSixtyTimesASecond)
+{
+	frame_pace::Pace pace;
+	int32_t due = 0;
+	for (int32_t frame = 0; frame < 999; ++frame)
+	{
+		due += frame_pace::Due(pace, milliseconds(1)) ? 1 : 0;
+	}
+	EXPECT_EQ(due, 59);
+	// A slow frame is due once, and leaves no steps owed
+	frame_pace::Pace slow;
+	EXPECT_TRUE(frame_pace::Due(slow, milliseconds(500)));
+	EXPECT_FALSE(frame_pace::Due(slow, milliseconds(1)));
+}

@@ -32,5 +32,8 @@ struct Pace
 /// The game time an effect moves on by after a frame of this real and game time; nothing on a frame it doesn't step
 [[nodiscard]] std::chrono::milliseconds Step(Pace& pace, std::chrono::milliseconds frameRealTime,
                                              std::chrono::milliseconds frameGameTime);
+/// Whether an effect that the game made once a frame steps after a frame of this real time. Use it for an effect that
+/// steps while the game is paused too, such as the splashes that the rain makes.
+[[nodiscard]] bool Due(Pace& pace, std::chrono::milliseconds frameRealTime);
 
 } // namespace openblack::frame_pace

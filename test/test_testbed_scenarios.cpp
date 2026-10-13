@@ -108,6 +108,8 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	                       "appearance.eyes",
 	                       "light.shadows",
 	                       "light.reflections",
+	                       "light.rain_splashes",
+	                       "light.rain_splashes_night",
 	                       "movement.course",
 	                       "movement.route_obstacles",
 	                       "movement.trampling",

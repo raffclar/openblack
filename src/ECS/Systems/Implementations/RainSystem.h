@@ -11,6 +11,7 @@
 
 #include <array>
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/RainSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -26,8 +27,9 @@ public:
 	RainSystem();
 
 	void Reset() override;
-	void Update(float seconds, const glm::vec3& camera) override;
-	[[nodiscard]] std::vector<rain::Tile> TakeTiles(const glm::vec3& camera) override;
+	void Update(float seconds, std::chrono::milliseconds frameRealTime, const glm::vec3& camera) override;
+	[[nodiscard]] std::vector<rain::Tile> TakeTiles(const rain::View& view) override;
+	[[nodiscard]] uint64_t GetSplashCount() const override { return _splashCount; }
 	[[nodiscard]] std::span<const rain::Streak> GetStreaks() const override { return _streaks; }
 	[[nodiscard]] float GetHeight() const override { return _fall.height; }
 	[[nodiscard]] rain::Fall GetFall() const override { return _fall; }
@@ -37,6 +39,10 @@ private:
 	rain::Fall _fall;
 	/// Whether the streaks were drawn since the last update, which moves them on only then
 	bool _drawn {false};
+	/// The splashes come at most once for each refresh of the screen
+	frame_pace::Pace _splashPace;
+	bool _splashesDue {false};
+	uint64_t _splashCount {0};
 };
 
 } // namespace openblack::ecs::systems
