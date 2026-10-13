@@ -32,6 +32,9 @@ public:
 
 	Released TaskStopped(Camera& camera, uint32_t task) override;
 
+	void StoreCameraDetails(const CameraDetails& details) override { _cameraDetails = details; }
+	[[nodiscard]] const CameraDetails& GetCameraDetails() const override { return _cameraDetails; }
+
 	void Reset() override;
 
 private:
@@ -40,6 +43,7 @@ private:
 
 	uint32_t _cameraOwner {0};
 	uint32_t _gameSpeedOwner {0};
+	CameraDetails _cameraDetails;
 };
 
 } // namespace openblack::ecs::systems

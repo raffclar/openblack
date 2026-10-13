@@ -63,6 +63,8 @@ struct HandGrab
 	float pullSeconds {0.0f};
 	/// It still pulls at the thing: the thing hasn't come free
 	bool pulling {false};
+	/// The hand grips the thing from the press. It grips all things but a big forest, also before they come free.
+	bool grips {false};
 	/// The pull on a rooted thing once the fade is over, leaning and stretching it
 	std::optional<hand_grab::Tug> tug;
 	/// How far it stretches towards the hand

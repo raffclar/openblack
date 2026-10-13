@@ -172,8 +172,8 @@ public:
 	virtual std::optional<entt::entity> TreeFromBigForest(entt::entity /*bigForest*/) { return std::nullopt; }
 	/// A tree pulled out of the ground leaves its roots in a hole, with a puff of smoke
 	virtual void LeaveRootsHole(entt::entity tree) = 0;
-	/// Make the land's draw list again on the next frame
-	virtual void RemakeDrawList() = 0;
+	/// Make the land's draw list again on the next frames, this number of frames
+	virtual void RemakeDrawList(uint32_t frames) = 0;
 	/// A pot taken stops calling the people to it
 	virtual void RemovePotReaction(entt::entity pot) = 0;
 	/// A pot let go over the land calls the people to it again, when it calls nobody yet, for the player letting it go

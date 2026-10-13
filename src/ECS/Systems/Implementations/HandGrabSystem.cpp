@@ -389,6 +389,8 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 	// Something in flight isn't pulled: it is caught once the button has been held a while, as is a thing the hand can't
 	// pull at (a big forest). Anything else is pulled at, until it comes free.
 	grab->pulling = !_world->IsFlying(*object) && hand_grab::Tuggable(KindOf(*object));
+	// The hand grips all things that it can pull at from the press, also a thing in flight
+	grab->grips = hand_grab::Tuggable(KindOf(*object));
 	// The first frame of the pull never pulls
 	grab->waits = true;
 	return true;
@@ -823,7 +825,7 @@ glm::vec3 HandGrabSystem::Pull(HandGrab& grab, const Frame& frame)
 			// Make the land's draw list again when the hand pulls a living thing free
 			if (const auto kind = KindOf(object); kind == GrabKind::Villager || kind == GrabKind::Animal)
 			{
-				_world->RemakeDrawList();
+				_world->RemakeDrawList(1);
 			}
 			grab.pulling = false;
 		}
@@ -1010,6 +1012,11 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, bool forced)
 
 void HandGrabSystem::Empty(HandGrab& grab)
 {
+	// The hand lets go of a thing that it gripped and did not take. The land's draw list is made again for two frames.
+	if (grab.state == HandGrab::State::Grabbing && grab.grips)
+	{
+		_world->RemakeDrawList(2);
+	}
 	// Whatever it offered, it offers no more
 	ForgetOffer(grab);
 	grab.offerTurn.Reset(0.0f);
@@ -1019,6 +1026,7 @@ void HandGrabSystem::Empty(HandGrab& grab)
 	grab.object = entt::null;
 	grab.waits = false;
 	grab.pulling = false;
+	grab.grips = false;
 	grab.pullSeconds = 0.0f;
 	grab.tug.reset();
 	grab.rise = 0.0f;

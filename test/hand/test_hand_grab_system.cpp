@@ -180,7 +180,11 @@ public:
 		return tree;
 	}
 	void LeaveRootsHole(entt::entity tree) override { holes.push_back(tree); }
-	void RemakeDrawList() override { ++drawListsRemade; }
+	void RemakeDrawList(uint32_t frames) override
+	{
+		++drawListsRemade;
+		drawListFrames.push_back(frames);
+	}
 	void RemovePotReaction(entt::entity) override {}
 	void SetUpPotReaction(entt::entity pot, PlayerNames) override { potReactionsSetUp.push_back(pot); }
 	[[nodiscard]] Pose PoseOf(entt::entity object) const override
@@ -382,6 +386,7 @@ public:
 	std::vector<std::pair<entt::entity, entt::entity>> treesGiven;
 	std::vector<entt::entity> holes;
 	int drawListsRemade {0};
+	std::vector<uint32_t> drawListFrames;
 	std::vector<entt::entity> poured;
 	std::vector<entt::entity> potReactionsSetUp;
 	std::map<entt::entity, FieldFacts> fields;
@@ -872,7 +877,46 @@ TEST_F(HandGrabSystemWithWorld, AVillagerPulledFreeMakesTheDrawListAgain)
 		Frame(10, {0.0f, 50.0f, 0.0f});
 	}
 	ASSERT_TRUE(system->GetHeld().has_value());
-	EXPECT_EQ(world->drawListsRemade, 1);
+	EXPECT_EQ(world->drawListFrames, std::vector<uint32_t> {1u});
+}
+
+TEST_F(HandGrabSystemWithWorld, AVillagerLetGoBeforeItComesFreeMakesTheDrawListAgainForTwoFrames)
+{
+	const auto villager = world->registry.Create();
+	world->registry.Assign<Transform>(villager, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Villager>(villager);
+	world->sizes[villager] = {.radius = 0.5f, .height = 2.0f};
+	world->underCursor = villager;
+	EXPECT_TRUE(Press());
+	Frame(10);
+	ASSERT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->drawListFrames.empty());
+	// The player lets go of the button before the villager comes free
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_EQ(world->drawListFrames, std::vector<uint32_t> {2u});
+}
+
+TEST_F(HandGrabSystemWithWorld, AQuickClickOnAVillagerMakesTheDrawListAgainForTwoFrames)
+{
+	const auto villager = world->registry.Create();
+	world->registry.Assign<Transform>(villager, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Villager>(villager);
+	world->sizes[villager] = {.radius = 0.5f, .height = 2.0f};
+	world->underCursor = villager;
+	EXPECT_TRUE(Press());
+	Release();
+	EXPECT_EQ(world->drawListFrames, std::vector<uint32_t> {2u});
+}
+
+TEST_F(HandGrabSystemWithWorld, ABigForestLetGoBeforeItGivesATreeDoesNotMakeTheDrawListAgain)
+{
+	const auto forest = world->AddBigForest({0.0f, 0.0f, 0.0f});
+	world->underCursor = forest;
+	EXPECT_TRUE(Press());
+	Frame(100);
+	Release();
+	EXPECT_TRUE(world->drawListFrames.empty());
 }
 
 TEST_F(HandGrabSystemWithWorld, ABigForestGivesATreeOnceTheButtonHasBeenHeldAWhile)

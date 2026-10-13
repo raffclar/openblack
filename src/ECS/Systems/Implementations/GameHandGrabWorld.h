@@ -76,7 +76,7 @@ public:
 	void TreeUprooted(PlayerNames player, entt::entity tree) override;
 	std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) override;
 	void LeaveRootsHole(entt::entity tree) override;
-	void RemakeDrawList() override;
+	void RemakeDrawList(uint32_t frames) override;
 	void RemovePotReaction(entt::entity pot) override;
 	void SetUpPotReaction(entt::entity pot, PlayerNames player) override;
 	[[nodiscard]] Pose PoseOf(entt::entity object) const override;

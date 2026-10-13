@@ -24,6 +24,7 @@ class HighDetailSystem final: public HighDetailSystemInterface
 public:
 	void Make(entt::entity thing) override;
 	void Release(entt::entity thing) override;
+	bool ReleaseAll() override;
 	bool Order(entt::entity thing, high_detail_rules::ThingSpecial special, bool on) override;
 	void Update() override;
 	void PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProjection) override;
