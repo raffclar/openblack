@@ -3712,7 +3712,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 109> k_Names {
+	constexpr std::array<std::string_view, 110> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
