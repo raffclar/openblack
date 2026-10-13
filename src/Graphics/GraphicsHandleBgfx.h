@@ -72,6 +72,16 @@ inline DynamicVertexBufferHandle fromBgfx(bgfx::DynamicVertexBufferHandle handle
 	return {handle.idx};
 }
 
+inline bgfx::DynamicIndexBufferHandle toBgfx(DynamicIndexBufferHandle handle)
+{
+	return {static_cast<uint16_t>(handle.id)};
+}
+
+inline DynamicIndexBufferHandle fromBgfx(bgfx::DynamicIndexBufferHandle handle)
+{
+	return {handle.idx};
+}
+
 inline bgfx::TextureHandle toBgfx(TextureHandle handle)
 {
 	return {static_cast<uint16_t>(handle.id)};
