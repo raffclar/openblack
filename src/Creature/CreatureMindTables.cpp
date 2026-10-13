@@ -89,6 +89,7 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .lessonDivisor = initial.field0x54,
 		    .learnable = initial.field0x28 != 0,
 		    .distanceWeight = initial.field0x58,
+		    .aboutSomething = initial.field0x20 != 0,
 		};
 		tables.texts.at(d) = {
 		    .desire = Text(initial.field0xb0),

@@ -218,30 +218,49 @@ TEST(CreaturePlanner, PriorityAndSwitching)
 
 TEST(CreaturePlanner, PlansTheMostUsefulGoal)
 {
+	// The worth already counts the distance: the most worth wins, the first of equals
 	const std::vector<creature_planner::ObjectCandidate> objects {
-	    {.id = 1, .distance = 10.0f, .usefulness = 0.0f},
-	    {.id = 2, .distance = 150.0f, .usefulness = 0.82f},
+	    {.id = 1, .usefulness = 0.05f, .actedOnUsefulness = 0.05f},
+	    {.id = 2, .usefulness = 0.08f, .actedOnUsefulness = 0.08f},
+	    {.id = 3, .usefulness = 0.08f, .actedOnUsefulness = 0.08f},
 	};
 	const std::vector<creature_planner::ActionCandidate> actions {{.action = 12, .needsObject = true}};
-	const auto plan = creature_planner::PlanDesire(Desire::Hunger, 1.0f, objects, 0.05f, actions);
+	const auto plan = creature_planner::PlanDesire(Desire::Hunger, 1.0f, objects, actions);
 	ASSERT_TRUE(plan.has_value());
 	EXPECT_EQ(plan->object, 2u);
-	EXPECT_FLOAT_EQ(plan->goalUsefulness, 0.82f);
-	// Without anything learnt the nearer wins
-	const std::vector<creature_planner::ObjectCandidate> unknown {
-	    {.id = 1, .distance = 10.0f},
-	    {.id = 2, .distance = 150.0f},
+	EXPECT_FLOAT_EQ(plan->goalUsefulness, 0.08f);
+	// The thing acted on counts once, the default standing for what the desire is about
+	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(1.0f, std::nullopt, plan->actionPriority, 0.08f, std::nullopt));
+	// Nothing worth anything is never a goal, and an action that needs one can't be planned without it
+	const std::vector<creature_planner::ObjectCandidate> worthless {{.id = 1}, {.id = 2}};
+	EXPECT_FALSE(creature_planner::PlanDesire(Desire::Hunger, 1.0f, worthless, actions).has_value());
+	EXPECT_FALSE(creature_planner::PlanDesire(Desire::Hunger, 1.0f, {}, actions).has_value());
+}
+
+TEST(CreaturePlanner, WeighsWhatADesireIsAbout)
+{
+	const std::vector<creature_planner::ActionCandidate> actions {{.action = 7, .needsObject = true}};
+	// Compassion counts the town it is about, and the default for what it acts on
+	const std::vector<creature_planner::ObjectCandidate> townThings {
+	    {.id = 4, .usefulness = 0.06f, .activityUsefulness = 0.09f},
 	};
-	EXPECT_EQ(creature_planner::PlanDesire(Desire::Hunger, 1.0f, unknown, 0.05f, actions)->object, 1u);
-	// An action that needs a goal can't be planned without one
-	EXPECT_FALSE(creature_planner::PlanDesire(Desire::Hunger, 1.0f, {}, 0.05f, actions).has_value());
+	const auto plan = creature_planner::PlanDesire(Desire::Compassion, 0.5f, townThings, actions);
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(0.5f, 0.09f, plan->actionPriority,
+	                                                           creature_planner::k_DefaultUsefulness, std::nullopt));
+	// Only anger, of the desires about something, counts what it acts on as well
+	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Anger, true));
+	EXPECT_FALSE(creature_planner::CountsActedOn(Desire::Impress, true));
+	EXPECT_FALSE(creature_planner::CountsActedOn(Desire::BeFriends, true));
+	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Hunger, false));
+	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Curiosity, false));
 }
 
 TEST(CreaturePlanner, OpinionBreaksTies)
 {
 	const std::vector<creature_planner::ActionCandidate> actions {{.action = 1, .opinion = 1.0f, .turnsSinceDone = 0},
 	                                                              {.action = 2, .opinion = -1.0f, .turnsSinceDone = 0}};
-	EXPECT_EQ(creature_planner::PlanDesire(Desire::Rest, 0.5f, {}, 0.02f, actions)->action, 1u);
+	EXPECT_EQ(creature_planner::PlanDesire(Desire::Rest, 0.5f, {}, actions)->action, 1u);
 }
 
 TEST(CreaturePlanner, GoesRoundTheEligibleDesires)
@@ -309,6 +328,37 @@ TEST(CreaturePlanner, ChoosesOnlyWhatIsPressingEnough)
 }
 
 // Learning from feedback
+
+TEST(CreatureLearning, WhatADesireWasAbout)
+{
+	// What the plan says it was about, else the thing acted on for a desire about something in itself, else nothing
+	EXPECT_EQ(creature_learning::ActivityOf(true, 5u, 9u), 9u);
+	EXPECT_EQ(creature_learning::ActivityOf(false, 5u, 9u), 9u);
+	EXPECT_EQ(creature_learning::ActivityOf(true, 5u, std::nullopt), 5u);
+	EXPECT_FALSE(creature_learning::ActivityOf(false, 5u, std::nullopt).has_value());
+}
+
+TEST(CreatureLearning, LessonsAboutThings)
+{
+	const creature_tree::Belief cow {.type = creature_tree::belief_types::k_Animal};
+	const creature_tree::Belief town {.type = creature_tree::belief_types::k_Town};
+	constexpr uint32_t k_Self = 1;
+	// Eating a cow for hunger: what it acted on only
+	const creature_learning::Context eat {.object = 7u, .belief = cow};
+	EXPECT_FALSE(creature_learning::ThingLessonsFor(eat, k_Self).activity);
+	EXPECT_TRUE(creature_learning::ThingLessonsFor(eat, k_Self).actedOn);
+	// Helping a town by acting on one of its things: both
+	const creature_learning::Context help {.object = 7u, .belief = cow, .activity = 3u, .activityBelief = town};
+	EXPECT_TRUE(creature_learning::ThingLessonsFor(help, k_Self).activity);
+	EXPECT_TRUE(creature_learning::ThingLessonsFor(help, k_Self).actedOn);
+	// Acting on the very thing the desire is about: only that
+	const creature_learning::Context befriend {.object = 3u, .belief = town, .activity = 3u, .activityBelief = town};
+	EXPECT_TRUE(creature_learning::ThingLessonsFor(befriend, k_Self).activity);
+	EXPECT_FALSE(creature_learning::ThingLessonsFor(befriend, k_Self).actedOn);
+	// Acting on itself teaches nothing about acting on such things
+	const creature_learning::Context itself {.object = k_Self, .belief = cow};
+	EXPECT_FALSE(creature_learning::ThingLessonsFor(itself, k_Self).actedOn);
+}
 
 TEST(CreatureLearning, LessonFactor)
 {

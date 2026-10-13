@@ -22,10 +22,11 @@
 
 /// How a creature decides what to do. Each desire it has gets a plan: the thing to act on (the goal), and the action to
 /// take. The goal is the thing the creature finds most useful for the desire, by what its decision trees have learnt,
-/// the nearer the better. Among the actions that satisfy the desire, its opinion of each and how long since it last did
-/// it break the ties. A plan's priority is the desire's strength times how useful the goal and the action are. Two
-/// desires are planned again each game turn, and the creature changes what it is doing only for a plan more than twice
-/// as pressing as the one it carries out.
+/// the nearer the better: a thing the desire is about by what it has learnt of such things as the point of a desire,
+/// anything else by what it has learnt of acting on them. Among the actions that satisfy the desire, its opinion of each and
+/// how long since it last did it break the ties. A plan's priority is the desire's strength times how useful the goal and the
+/// action are. Two desires are planned again each game turn, and the creature changes what it is doing only for a plan more
+/// than twice as pressing as the one it carries out.
 namespace openblack::creature_planner
 {
 /// The farthest a goal counts as being, and how much a held thing is preferred
@@ -66,11 +67,19 @@ struct ObjectCandidate
 {
 	/// The thing's entity number
 	uint32_t id {0};
-	float distance {0.0f};
-	bool held {false};
-	/// How useful the creature has learnt it is for the desire
-	float usefulness {k_DefaultUsefulness};
+	/// How much it is worth acting on for the desire, the distance to it already counted: the goal is the one worth the
+	/// most, and only something worth more than nothing can be a goal
+	float usefulness {0.0f};
+	/// What it counts for in the plan's priority: as what the desire is about, and as what is acted on; the default
+	/// usefulness for either it doesn't count as
+	std::optional<float> activityUsefulness;
+	std::optional<float> actedOnUsefulness;
 };
+
+/// Whether a desire's plan counts what it acts on in its priority. A desire that is about something in itself (a town to
+/// help, a creature to befriend) counts only that, but for anger, which counts both; every other desire counts what it
+/// acts on.
+[[nodiscard]] bool CountsActedOn(creature_desires::Desire desire, bool aboutSomething);
 
 /// An action that satisfies a desire, by its row in the game's action table
 struct ActionCandidate
@@ -101,9 +110,9 @@ struct Plan
 	std::optional<uint32_t> instrument;
 };
 
-/// The best plan for a desire of a strength: the goal by distance and usefulness, then the action most wanted
+/// The best plan for a desire of a strength: the goal worth the most, the first of equals, then the action most wanted
 [[nodiscard]] std::optional<Plan> PlanDesire(creature_desires::Desire desire, float strength,
-                                             std::span<const ObjectCandidate> objects, float distanceWeight,
+                                             std::span<const ObjectCandidate> objects,
                                              std::span<const ActionCandidate> actions);
 
 /// A plan forced on the creature, by a reaction or a catch, scores the most a score can be, so that no plan of its own is

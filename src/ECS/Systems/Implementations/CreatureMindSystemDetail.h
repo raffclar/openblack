@@ -51,6 +51,11 @@ namespace openblack::ecs::systems::mind_detail
 /// What a creature knows of a thing, as far as the world here tells it
 [[nodiscard]] std::optional<creature_tree::Belief> BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                             entt::entity self);
+/// What a plan's desire was about, for the lessons feedback teaches: what the plan says it was about, else for a desire
+/// about something in itself the thing it acted on, else nothing
+[[nodiscard]] std::optional<uint32_t> LessonActivity(const creature_mind_tables::Tables& tables,
+                                                     creature_desires::Desire desire, std::optional<uint32_t> object,
+                                                     std::optional<uint32_t> about);
 /// How useful the creature has learnt a food is to eat, 0.1 when nothing is known
 [[nodiscard]] float FoodUsefulness(const ecs::Registry& registry, const components::CreatureMindState& mind, entt::entity self,
                                    entt::entity food);

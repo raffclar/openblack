@@ -161,6 +161,11 @@ private:
 	/// outside it, or it has no belief about the thing
 	[[nodiscard]] float ObjectToActOnUsefulness(entt::entity creature, const components::CreatureMindState& mind,
 	                                            creature_desires::Desire desire, entt::entity object);
+	/// What a thing is worth to a creature as the goal of a plan for a desire, and what that worth counts for in the
+	/// plan's priority; for compassion, how much the town it is about is worth
+	[[nodiscard]] creature_planner::ObjectCandidate GoalWorth(entt::entity creature, const components::CreatureMindState& mind,
+	                                                          creature_desires::Desire desire, entt::entity thing,
+	                                                          std::optional<float> townUsefulness);
 	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
 	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
 	bool Douse(entt::entity creature, entt::entity object);
@@ -172,6 +177,8 @@ private:
 	/// It comes across a thing: its belief about it is brought up to date, or made, and a new one leads it on to what the
 	/// thing belongs to
 	void ComeAcross(components::CreatureMindState& mind, entt::entity thing);
+	/// Where it believes a thing is: where it last came across it; nothing when it has never come across it
+	[[nodiscard]] static std::optional<glm::vec3> BelievedPlace(const components::CreatureMindState& mind, entt::entity thing);
 	/// It forgets what it believed about things gone from the world
 	void ForgetGoneThings(components::CreatureMindState& mind);
 	/// Gone into another map cell, it comes across the temple nearest it if that is another than the last

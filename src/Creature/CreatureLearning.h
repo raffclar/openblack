@@ -73,6 +73,9 @@ struct DesireRules
 	bool learnable {false};
 	/// How much distance counts against a goal
 	float distanceWeight {0.02f};
+	/// Whether the desire is about something in itself (a town to help, a creature to befriend), which its plan chooses
+	/// by what the creature has learnt of such things, rather than by what it has learnt of acting on them
+	bool aboutSomething {false};
 };
 using AllDesireRules = std::array<DesireRules, k_DesireCount>;
 
@@ -101,9 +104,10 @@ struct Context
 	/// What it acted on, and what it knew of it
 	std::optional<uint32_t> object;
 	std::optional<creature_tree::Belief> belief;
-	/// What it used, and what it knew of that
-	std::optional<uint32_t> used;
-	std::optional<creature_tree::Belief> usedBelief;
+	/// What the desire was about, for a desire about something in itself (a town to help, a creature to befriend), and
+	/// what it knew of that
+	std::optional<uint32_t> activity;
+	std::optional<creature_tree::Belief> activityBelief;
 	/// Still doing it, or how long ago it finished
 	bool running {true};
 	float secondsSince {0.0f};
@@ -115,6 +119,18 @@ struct Context
 	/// The source of the desire that says why it did it, which its lessons tell of; k_NoTellingSource when none does
 	uint32_t source {61};
 };
+/// What a plan's desire was about, for the lessons feedback teaches: what the plan says it was about, else for a desire
+/// about something in itself the thing it acted on, else nothing
+[[nodiscard]] std::optional<uint32_t> ActivityOf(bool aboutSomething, std::optional<uint32_t> object,
+                                                 std::optional<uint32_t> about);
+/// The lessons feedback teaches about things: what the desire was about, as the point of the desire; and what it acted
+/// on, when that was something else and not the creature itself, as a thing to act on
+struct ThingLessons
+{
+	bool activity {false};
+	bool actedOn {false};
+};
+[[nodiscard]] ThingLessons ThingLessonsFor(const Context& context, uint32_t self);
 /// How much feedback now counts for a context: fully while running, then less until its window closes; nothing for an
 /// action that can't be learnt from
 [[nodiscard]] float LearningPriority(const Context& context);

@@ -136,6 +136,24 @@ std::optional<size_t> creature_learning::BestContext(std::span<const Context> co
 	return best;
 }
 
+std::optional<uint32_t> creature_learning::ActivityOf(bool aboutSomething, std::optional<uint32_t> object,
+                                                      std::optional<uint32_t> about)
+{
+	if (about.has_value())
+	{
+		return about;
+	}
+	return aboutSomething ? object : std::nullopt;
+}
+
+creature_learning::ThingLessons creature_learning::ThingLessonsFor(const Context& context, uint32_t self)
+{
+	return {
+	    .activity = context.activityBelief.has_value(),
+	    .actedOn = context.belief.has_value() && context.object != context.activity && context.object != self,
+	};
+}
+
 void creature_learning::Remember(std::vector<Context>& contexts, Context context)
 {
 	// Whatever was running has finished now

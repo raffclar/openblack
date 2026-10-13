@@ -197,6 +197,8 @@ public:
 		std::optional<std::vector<creature_mind::Step>> agenda;
 		/// The thing used, if any
 		std::optional<entt::entity> instrument;
+		/// What the desire is about, if anything: what the thing acted on belongs to, say
+		std::optional<entt::entity> activityObject;
 	};
 	/// The creature gives up what it was doing for the plan, which nothing it wants replaces until it is done. Returns
 	/// whether it could be carried out.
