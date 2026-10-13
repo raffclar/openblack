@@ -179,7 +179,6 @@ public:
 	[[nodiscard]] bool IsOnFire(entt::entity) const override { return false; }
 	void CreateReaction(const ReactionSystemInterface::Source&) override {}
 	void RemoveReactions(entt::entity, Reaction) override {}
-	void UntieLeashesTiedTo(entt::entity) override {}
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames) const override { return false; }
 	void FitDeadTreeObstacle(entt::entity) override {}
 

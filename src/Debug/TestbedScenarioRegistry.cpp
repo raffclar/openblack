@@ -2038,6 +2038,21 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.tied_thrown",
+	    .name = "Tied to a thrown rock",
+	    .facet = Facet::Leash,
+	    .description = "A tiger on the learning leash is tied to a rock of nobody's, which is then thrown off to the "
+	                   "east, every eight seconds.",
+	    .expected = "The leash stays tied to the rock as it flies and after it lands: the rope runs from the rock "
+	                "throughout and never goes back to the hand.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 10.0f}, {60.0f, 10.0f}, {0.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {-30.0f, 10.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false)},
+	    .throws = {{.object = 0, .height = 4.0f, .velocity = {12.0f, 8.0f, 0.0f}, .delaySeconds = 3.0f, .repeatSeconds = 8.0f}},
+	});
+
+	all.push_back({
 	    .id = "leash.tie_by_hand",
 	    .name = "Ordering and tying with the hand",
 	    .facet = Facet::Leash,
