@@ -87,6 +87,7 @@
 #include "Graphics/DetailLevel.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
+#include "Graphics/InstanceLightPoint.h"
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
@@ -778,6 +779,31 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
+		    // A lantern on the Norse gate shows only while the gate is in the draw list and on screen. It takes the land's
+		    // light of the point where the gate stands, and no snow.
+		    std::optional<glm::vec2> lightOffset;
+		    if (const auto* lantern = registry.TryGet<const GateLantern>(entity); lantern != nullptr)
+		    {
+			    const auto* gatePose =
+			        registry.Valid(lantern->gate) ? registry.TryGet<const AnimatedStaticPose>(lantern->gate) : nullptr;
+			    const auto* gateTransform =
+			        registry.Valid(lantern->gate) ? registry.TryGet<const Transform>(lantern->gate) : nullptr;
+			    if (gatePose == nullptr || gateTransform == nullptr)
+			    {
+				    look.z = 1.0f;
+			    }
+			    else
+			    {
+				    const auto lanternLook = openblack::animated_static::GateLanternLook(
+				        gatePose->inDrawList, gatePose->onScreen,
+				        glm::vec2(gateTransform->position.x, gateTransform->position.z),
+				        glm::vec2(transform.position.x, transform.position.z));
+				    look.z = lanternLook.shown ? look.z : 1.0f;
+				    look.w = lanternLook.snowCap;
+				    lightOffset = lanternLook.lightOffset;
+			    }
+		    }
+
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
 		    if (!placed.has_value())
 		    {
@@ -810,6 +836,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (registry.AllOf<AnimalPose>(entity))
 		    {
 			    instanceModel[0].w = static_cast<float>(slots->second.filled);
+		    }
+		    if (lightOffset.has_value())
+		    {
+			    graphics::instance_light::SetLightOffset(instanceModel, *lightOffset);
 		    }
 		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
 		    _renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);

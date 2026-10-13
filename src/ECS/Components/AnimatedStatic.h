@@ -57,4 +57,11 @@ struct PlinthStone
 	bool pickable {false};
 };
 
+/// A lantern that the Norse gate holds up. The gate draws it with the land's light of the point where the gate stands,
+/// and only while the gate shows on screen. The cursor does not find it.
+struct GateLantern
+{
+	entt::entity gate {entt::null};
+};
+
 } // namespace openblack::ecs::components

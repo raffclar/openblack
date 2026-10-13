@@ -31,9 +31,9 @@ using namespace openblack::ecs::components;
 namespace
 {
 /// The Norse gate holds up two town lanterns, 15 units either side of it and 30 up, each with a village light. They
-/// stand unturned and aren't part of the gate. The gate is taken by value, as making the lanterns can move the
-/// registry's storage.
-void CreateNorseGateLanterns(const Transform gate)
+/// stand unturned and are not part of the gate. The gate draws them. The gate is taken by value, because the new
+/// lanterns can move the storage of the registry.
+void CreateNorseGateLanterns(entt::entity gateEntity, const Transform gate)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto mesh = resources::HashIdentifier(MeshId::ObjectTownLight);
@@ -43,6 +43,7 @@ void CreateNorseGateLanterns(const Transform gate)
 		const auto lantern = registry.Create();
 		registry.Assign<Transform>(lantern, position, glm::mat3(1.0f), glm::vec3(1.0f));
 		registry.Assign<Mesh>(lantern, mesh, static_cast<int8_t>(0), static_cast<int8_t>(1));
+		registry.Assign<GateLantern>(lantern, gateEntity);
 		VillageLightArchetype::Create(position, VillageLight::Kind::Town);
 	}
 }
@@ -70,7 +71,7 @@ entt::entity AnimatedStaticArchetype::Create(const glm::vec3& position, Animated
 
 	if (info.meshId == MeshId::BuildingNorseGate)
 	{
-		CreateNorseGateLanterns(transform);
+		CreateNorseGateLanterns(entity, transform);
 	}
 
 	return entity;

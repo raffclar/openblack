@@ -79,6 +79,19 @@ void testbed_scenarios::AddGateScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.creature_gate_lanterns",
+	    .name = "The lanterns on the creatures' gate",
+	    .facet = Facet::Objects,
+	    .description = "The Norse gate stands as on the first land. The camera looks at the two town lanterns that the "
+	                   "gate holds up, 15 units to each side of it and 30 units above it.",
+	    .expected = "Each lantern has the same land light and land colour as the middle of the gate, not the light of "
+	                "the land below the lantern. The lanterns show only while the gate shows. The cursor does not find "
+	                "them: it finds the gate or the land behind them.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -70.0f}, .look = {0.0f, 25.0f, 0.0f}},
+	    .objects = {{.type = AnimatedStaticInfo::NorseGate, .yawDegrees = k_Turn}},
+	});
+
+	all.push_back({
 	    .id = "objects.creature_gate_close",
 	    .name = "The creatures' gate opens and closes again",
 	    .facet = Facet::Objects,
