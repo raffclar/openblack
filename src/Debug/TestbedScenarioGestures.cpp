@@ -179,4 +179,24 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	                 Draw(GestureType::Scribble)},
 	    .repeatFrom = 0,
 	});
+	all.push_back({
+	    .id = "story.hidden_phone_box",
+	    .name = "The square wave starts the hidden phone box",
+	    .facet = Facet::Story,
+	    .description = "The land counts as Land 1 of the story. Your tiger learns the aggression and compassion leashes, "
+	                   "and its leash comes off. The hand draws the leash gesture (a square spiral), which opens the "
+	                   "leash picker. Then the hand draws the square wave.",
+	    .expected = "The square wave shows no trail, plays no chime and shows no hint. The hidden script starts. A phone "
+	                "box comes up at the script's point, east of the middle of the map, with a 3D ring. The two "
+	                "advisors appear and say four lines. After 20 seconds the phone box plays its first messages. Click "
+	                "the phone box: a storm comes, the camera goes to the box, the box opens and plays a message.",
+	    .environment = {.dispenserGrid = false, .landNumber = 1},
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Tiger()},
+	    .commands = {{.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Evil},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Good},
+	                 {.kind = Kind::TakeOffLeash, .creature = 0, .delaySeconds = 1.0f},
+	                 Draw(GestureType::SquareSpirial, 1.0f),
+	                 Draw(GestureType::SquareWave)},
+	});
 }

@@ -676,6 +676,12 @@ void Runner::Stop()
 		Locator::config::value().unlockedBonusCreatures = *_unlockedBefore;
 	}
 	_unlockedBefore.reset();
+	// The land's number is as it was
+	if (_landNumberBefore.has_value() && Locator::entitiesRegistry::has_value())
+	{
+		Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = *_landNumberBefore;
+	}
+	_landNumberBefore.reset();
 	// The mouse is the player's again
 	_sweep.reset();
 	if (Locator::gameActionSystem::has_value())
@@ -828,6 +834,15 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			_unlockedBefore = unlocked;
 		}
 		unlocked = *environment.unlockedBonusCreatures;
+	}
+	if (environment.landNumber.has_value() && Locator::entitiesRegistry::has_value())
+	{
+		auto& landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+		if (!_landNumberBefore.has_value())
+		{
+			_landNumberBefore = landNumber;
+		}
+		landNumber = *environment.landNumber;
 	}
 	if (environment.cursor && Locator::windowing::has_value())
 	{

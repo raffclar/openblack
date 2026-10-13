@@ -150,6 +150,9 @@ struct Environment
 	/// The Creature Breeder's bonus creatures taken as unlocked while the scenario runs, as the debug option takes them;
 	/// the option is put back when it stops
 	std::optional<creature_swap::Unlocked> unlockedBonusCreatures;
+	/// The land's number, as a land's script sets it, while the scenario runs, such as 1 for the first land of the
+	/// story. The runner puts the testbed's number back when the scenario stops.
+	std::optional<int32_t> landNumber;
 };
 
 /// Where the camera looks as the scenario starts
