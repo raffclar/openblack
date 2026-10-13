@@ -74,6 +74,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -572,6 +573,13 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 		                                              commands.mirrored))
 		{
 			animation.body = *body;
+		}
+	}
+	if (commands.playOverlay.has_value())
+	{
+		if (auto gesture = creature_layers::PlayGesture(animation.gesture, *commands.playOverlay))
+		{
+			animation.gesture = *gesture;
 		}
 	}
 	if (commands.relaxFace)
@@ -1170,6 +1178,15 @@ void CreatureMindSystem::ProcessTurn()
 	        ? std::optional(View {.origin = Locator::camera::value().GetOrigin(), .focus = Locator::camera::value().GetFocus()})
 	        : std::nullopt;
 
+	// Whether the cinema bars are in for a cut scene, and which script task brought them
+	const bool barsIn =
+	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
+	const auto barsOwner = barsIn ? Locator::cinematicDirectorSystem::value().GetWideScreenOwner() : 0u;
+	const auto* lookTables = GetTables();
+	const auto cutSceneLook = lookTables != nullptr
+	                              ? creature_mind_tables::FindAction(*lookTables, creature_mind::k_CutSceneLookAction)
+	                              : std::nullopt;
+
 	registry.Each<const Creature, CreatureMindState, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, CreatureMindState& mind, CreatureAnimation& animation,
 	        const Transform& transform) {
@@ -1291,6 +1308,19 @@ void CreatureMindSystem::ProcessTurn()
 				    PlanCreature(entity, mind, true);
 			    }
 		    }
+		    // A script's cut scene makes every creature free to think for itself look at the camera, again and again
+		    // until the cut scene is over; what it is doing then plays out to its end
+		    if (!scripted && cutSceneLook.has_value())
+		    {
+			    const bool looking =
+			        mind.planActive && mind.planner.current.has_value() && mind.planner.current->action == *cutSceneLook;
+			    if (creature_mind::StartsLookAtCameraInCutScene(barsIn, barsOwner, looking))
+			    {
+				    ForcePlan(entity, {.desire = creature_desires::Desire::ObeyPlayer,
+				                       .action = creature_mind::k_CutSceneLookAction,
+				                       .object = entity});
+			    }
+		    }
 		    const bool moving =
 		        Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity);
 		    if (mind.idle.step < mind.idle.agenda.size())
@@ -1328,6 +1358,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .choosesNext = !scripted,
 		        .camera = CameraViewOf(registry, entity, mind.idle),
 		        .swap = SwapViewOf(entity),
+		        .overlayPlaying = animation.gesture.animation.has_value(),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    Apply(commands, animation, eyes);

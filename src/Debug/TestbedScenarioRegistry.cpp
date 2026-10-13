@@ -2381,6 +2381,27 @@ void AddMind(std::vector<Scenario>& all)
 		                .amount = amount};
 	};
 
+	// Facing away from the camera, their minds free, while a script's cinema bars come and go
+	const auto awayOwned = Content(CreatureType::Tiger, {-20.0f, 0.0f}, 180.0f, "player's");
+	auto awayNeutral = Content(CreatureType::Cow, {20.0f, 0.0f}, 180.0f, "no player's");
+	awayNeutral.owner = PlayerNames::NEUTRAL;
+	all.push_back({
+	    .id = "mind.cut_scene_look",
+	    .name = "Creatures looking at the camera in a cut scene",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger and a cow with no player stand facing away from the camera, their minds free. "
+	                   "A script's cinema bars slide in at once (before any help script can take the dialogue, whose "
+	                   "release would take the bars away), and twenty-five seconds later out again.",
+	    .expected = "As the bars come in both stop what they were doing. The tiger turns round to the camera and looks at "
+	                "it, curious; now and then it first points at the camera, waves, talks, or looks confused and talks, "
+	                "and keeps on looking until the bars go. The cow doesn't turn but may point, wave and talk. Once the "
+	                "bars are out each finishes the look it is in and goes back to its own life.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {awayOwned, awayNeutral},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.0f, .value = 1},
+	                 {.kind = Kind::WideScreen, .delaySeconds = 25.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "mind.reward_villagers",
 	    .name = "Learning: reward eating villagers, punish eating food",

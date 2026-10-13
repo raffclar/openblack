@@ -1679,8 +1679,9 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::WideScreen)
 	{
-		// Held by a script, as the land's scripts hold them
-		constexpr uint32_t k_ScriptOwner = 1;
+		// Held by a script, as the land's scripts hold them, under a number no script task has: a task of that number
+		// stopping would take the bars away with it
+		constexpr uint32_t k_ScriptOwner = std::numeric_limits<uint32_t>::max();
 		if (Locator::cinematicDirectorSystem::has_value())
 		{
 			Locator::cinematicDirectorSystem::value().SetWideScreen(command.value != 0, k_ScriptOwner);
