@@ -10,6 +10,7 @@
 #include "WorldObjects.h"
 
 #include <algorithm>
+#include <optional>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -44,6 +45,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -52,6 +54,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
@@ -272,16 +275,26 @@ world_objects::Size world_objects::SizeOf(entt::entity object)
 	Size size {.radius = k_DefaultRadius, .height = k_DefaultHeight};
 	const auto* transform = registry.TryGet<const Transform>(object);
 	const auto* mesh = registry.TryGet<const Mesh>(object);
-	if (transform == nullptr || mesh == nullptr || !Locator::resources::has_value())
+	// A one-shot miracle's globe is drawn by the miracles' own pass, with its dome's model
+	std::optional<entt::id_type> model;
+	if (mesh != nullptr)
+	{
+		model = mesh->id;
+	}
+	else if (registry.AllOf<OneOffSpellSeed>(object))
+	{
+		model = OneOffSpellSeed::k_MeshId.value();
+	}
+	if (transform == nullptr || !model.has_value() || !Locator::resources::has_value())
 	{
 		return size;
 	}
 	auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(mesh->id))
+	if (!meshes.Contains(*model))
 	{
 		return size;
 	}
-	const auto box = meshes.Handle(mesh->id)->GetBoundingBox().Size() * transform->scale;
+	const auto box = meshes.Handle(*model)->GetBoundingBox().Size() * transform->scale;
 	size.radius = std::max(box.x, box.z) * 0.5f;
 	size.height = box.y;
 	return size;
@@ -818,6 +831,21 @@ bool world_objects::CanBeCrushed(entt::entity object)
 	}
 	return registry.AnyOf<Villager, Creature, Animal, Abode, Tree, DeadTree, Feature, Field, AnimatedStatic, BigForest,
 	                      MobileStatic, Flowers>(object);
+}
+
+PlayerNames world_objects::IconPlayer(const Registry& registry, entt::entity icon)
+{
+	if (const auto* hand = registry.TryGet<const TownCentreIcon>(icon))
+	{
+		const auto* town = registry.Valid(hand->town) ? registry.TryGet<const Town>(hand->town) : nullptr;
+		return town != nullptr ? town->owner : PlayerNames::NEUTRAL;
+	}
+	if (const auto* site = registry.TryGet<const WorshipIcon>(icon))
+	{
+		const auto* component = registry.Valid(site->site) ? registry.TryGet<const WorshipSite>(site->site) : nullptr;
+		return component != nullptr ? component->player : PlayerNames::NEUTRAL;
+	}
+	return PlayerNames::NEUTRAL;
 }
 
 std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)

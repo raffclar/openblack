@@ -15,10 +15,12 @@
 #include <fmt/format.h>
 
 #include "3D/CreatureBody.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMiracleReactions.h"
+#include "Creature/CreatureReactionRules.h"
 #include "Creature/CreatureWatching.h"
 #include "CreatureMindSystem.h"
 #include "ECS/Components/Creature.h"
@@ -37,6 +39,8 @@ namespace
 constexpr float k_HeightOfSizeOne = 15.0f;
 /// Seeing a nasty miracle adds this much to its fear
 constexpr float k_FearOfScaryMagic = 0.5f;
+/// Game turns a second
+constexpr uint32_t k_TurnsPerSecond = 10;
 /// The magic type no creature learns by watching
 constexpr size_t k_NotLearnt = static_cast<size_t>(MagicType::LightningBoltPowerUpTwo);
 } // namespace
@@ -118,15 +122,31 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	{
 		ComeAcross(*mind, thing);
 	}
-	if (setup.plan.has_value() && (setup.plan->onSelf || there))
+	// A plan done only to a thing of some use drops nothing for one the plan already acts on or one of no use
+	const bool wanted =
+	    !setup.plan.has_value() || !setup.plan->onlyIfUseful ||
+	    (there &&
+	     !(mind->planner.current.has_value() && mind->planner.current->object == std::optional(entt::to_integral(thing))) &&
+	     ObjectToActOnUsefulness(creature, *mind, setup.plan->desire, thing) > 0.0f);
+	if (setup.plan.has_value() && (setup.plan->onSelf || there) && wanted)
 	{
-		// TODO(creature-reaction-holding): looking at a flying thing has no agenda yet (pointing at it half the time,
-		// then watching it); until it has, the creature keeps to what it was doing rather than stand idle
-		if (setup.plan->action != "LookAtFlyingObject")
+		ForceActivity(creature, {.desire = setup.plan->desire,
+		                         .action = setup.plan->action,
+		                         .actionObject = setup.plan->onSelf ? creature : thing});
+	}
+	// The hand's pick-up sets the watch it was just given to a minute and up to another
+	if (setup.longHandWatch)
+	{
+		const auto seconds = static_cast<float>(Random(game_random::k_FloatRandRange)) *
+		                         creature_reaction::k_HandPickUpWatchSeconds * game_random::k_FloatRandScale +
+		                     creature_reaction::k_HandPickUpWatchSeconds;
+		const auto turns = static_cast<uint32_t>(seconds * static_cast<float>(k_TurnsPerSecond));
+		for (auto& step : mind->idle.agenda)
 		{
-			ForceActivity(creature, {.desire = setup.plan->desire,
-			                         .action = setup.plan->action,
-			                         .actionObject = setup.plan->onSelf ? creature : thing});
+			if (step.kind == creature_mind::Step::Kind::WatchHand)
+			{
+				step.turns = turns;
+			}
 		}
 	}
 	if (setup.skill.has_value())
@@ -137,4 +157,22 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	{
 		creature_desires::ChangeSource(*mind->desires, setup.desireSource->first, setup.desireSource->second);
 	}
+}
+
+bool CreatureMindSystem::NoticeCreatureToInspect(entt::entity creature, entt::entity other, uint32_t turn, uint32_t waitTurns)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr || !registry.Valid(other))
+	{
+		return false;
+	}
+	ComeAcross(*mind, other);
+	auto* belief = mind->beliefs.Find(other);
+	if (belief == nullptr || !creature_reaction::InspectDue(belief->inspected, turn, waitTurns))
+	{
+		return false;
+	}
+	belief->inspected = turn;
+	return true;
 }

@@ -44,6 +44,8 @@ struct DiscipleHeld
 {
 	/// The work it had as it was picked up, which it goes back to when let go near nothing
 	VillagerDisciple atPickUp {VillagerDisciple::None};
+	/// The town of a trader. This is the town at the time of the pick-up, or the last town that the hand showed to it.
+	entt::entity tradeTown {entt::null};
 	/// Its first turn on the ground has been dealt with
 	bool touchedDown {false};
 };

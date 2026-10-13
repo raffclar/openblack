@@ -57,20 +57,6 @@ constexpr float k_MinSegmentSpan = 0.1f;
 [[nodiscard]] std::optional<float> TouchDepth(std::span<const ScreenPoint> points, glm::ivec2 cursor, float screenWidth,
                                               float halfWidth);
 
-/// What else the hand is over, which the rope must be in front of to be the thing under the hand
-struct Under
-{
-	/// The thing picked under the cursor, and its depth; a creature always comes before the rope
-	bool object {false};
-	bool creature {false};
-	float objectDepth {0.0f};
-	/// The land under the cursor and its depth, none over the sky
-	std::optional<float> landDepth;
-};
-/// Whether the rope touched at a depth is what the hand is over: a creature under the cursor always wins, another thing
-/// only when it is behind the rope, and the land when it is behind the rope
-[[nodiscard]] bool RopeIsUnder(float ropeDepth, const Under& under);
-
 /// The leash's lengths once the hand lets go of its rope: as long as the hand is from what it is tied to, and never less
 /// than twice its radius on the ground; half of that at rest
 [[nodiscard]] creature_leash::Lengths LengthsOnLettingGo(const glm::vec3& hand, const glm::vec3& tied, float tiedRadius);

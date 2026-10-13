@@ -42,6 +42,8 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Animals/BirdRules.h"
+#include "Animals/GrazerRules.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
@@ -389,6 +391,36 @@ std::string_view HandResultName(ecs::systems::MagicSystemInterface::HandResult r
 	return "";
 }
 
+/// An animal as the scenario gives it: a living one as a land's script makes it, or one that stays at its position
+entt::entity PlaceAnimal(AnimalInfo type, const ObjectSetup& object, glm::vec3 position, float yaw)
+{
+	if (!Locator::animalSystem::has_value())
+	{
+		return ecs::archetypes::AnimalArchetype::Create(type, position, yaw, object.scale, PlayerNames::NEUTRAL);
+	}
+	auto& animalSystem = Locator::animalSystem::value();
+	const glm::vec2 point {position.x, position.z};
+	entt::entity animal = entt::null;
+	if (object.living && animals::grazers::IsGrazer(type))
+	{
+		animal = animalSystem.CreateGrazer(type, point, 0, entt::null, entt::null);
+	}
+	else if (object.living && animals::birds::IsLandBird(type))
+	{
+		animal = animalSystem.CreateBird(type, point, 0, entt::null);
+	}
+	if (animal != entt::null)
+	{
+		return animal;
+	}
+	if (object.living)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: animal kind {} cannot live yet, it stays where it is put",
+		                   static_cast<int>(type));
+	}
+	return animalSystem.CreateStillAnimal(type, position, yaw, object.scale);
+}
+
 /// A villager's or animal's life and poison as the scenario gives them
 void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 {
@@ -417,6 +449,12 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 				Locator::animalSystem::value().SetDying(entity);
 			}
 		}
+	}
+	if (auto* villager = registry.TryGet<ecs::components::Villager>(entity);
+	    villager != nullptr && (object.woodHeld != 0 || object.foodHeld != 0))
+	{
+		villager->woodHeld = object.woodHeld;
+		villager->foodHeld = object.foodHeld;
 	}
 	if (object.poisoned)
 	{
@@ -962,7 +1000,7 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, AnimalInfo>)
 			    {
-				    return ecs::archetypes::AnimalArchetype::Create(type, position, yaw, 1.0f, PlayerNames::NEUTRAL);
+				    return PlaceAnimal(type, object, position, yaw);
 			    }
 			    else if constexpr (std::is_same_v<T, MobileStaticInfo>)
 			    {
@@ -1420,6 +1458,12 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return fmt::format("{} wood poured at ({:.1f}, {:.1f}): {}", amount, at.x, at.y,
 		                   loose() > before ? "left on the land as a new pile" : "taken in");
 	}
+	case Kind::HandRelease:
+		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
+		{
+			return "the hand holds nothing";
+		}
+		return command.velocity == glm::vec3(0.0f) ? "put down" : "thrown";
 	default:
 		return {};
 	}
@@ -1747,7 +1791,7 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake || command.kind == Kind::HandPour)
+	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2083,6 +2127,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTapObject:
 	case Kind::HandTake:
 	case Kind::HandPour:
+	case Kind::HandRelease:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:

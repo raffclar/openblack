@@ -39,6 +39,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
@@ -371,6 +372,15 @@ creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::en
 		facts.thrownFromHand = entry != nullptr && entry->Has(ecs::PhysicsEntry::k_FromHand);
 		facts.inTheAir = ecs::villager_physics::IsActuallyInTheAir(thing);
 	}
+	if (source.type == Reaction::ReactToCreature)
+	{
+		const auto* leash = registry.TryGet<const CreatureLeash>(creature);
+		facts.orderedByPlayer = leash != nullptr && leash->order.has_value();
+		facts.hasOpponent =
+		    Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().OpponentOf(creature).has_value();
+		const auto* plan = CurrentPlanOf(registry, creature);
+		facts.planActsOnThing = plan != nullptr && there && plan->object == std::optional(entt::to_integral(thing));
+	}
 	if (source.type == Reaction::ReactToHandPickUp && there)
 	{
 		const auto* grab = registry.TryGet<const HandGrab>(thing);
@@ -379,6 +389,18 @@ creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::en
 		                  (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow);
 	}
 	return facts;
+}
+
+/// How many turns a creature waits before it looks the same creature over again, by its species
+uint32_t InspectWaitTurns(const ecs::Registry& registry, entt::entity creature)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return 0;
+	}
+	const auto& rows = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(registry.Get<const Creature>(creature).species);
+	return row < rows.size() ? creature_reaction::InspectWaitTurns(rows.at(row).inspectCreatureSeconds, k_TurnsPerSecond) : 0;
 }
 
 /// What a creature does on taking up a reaction, for the kinds whose rules are its own; none for fire, teleport stones and
@@ -448,8 +470,35 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 			return false;
 		}
 	}
-	// TODO(raffclar): the game also keeps a creature reactions are turned off for by script, one in the dance editor, one
-	// forced into an action by fainting or a teleport, and a few more states, from reacting; none of them is modelled
+	// Nor does one a script has told to take no notice, or controls, one carrying out its player's order, one in a fight
+	// or whose opponent is, or one out cold in a faint
+	// TODO(creature-reactions-2): the game also keeps out a creature in the dance editor, one standing on a building,
+	// one being teleported, one dying, and one in two more states not mapped yet
+	if (registry.AnyOf<CreatureReactionsOff, ScriptControlled>(entity))
+	{
+		return false;
+	}
+	if (const auto* leash = registry.TryGet<const CreatureLeash>(entity); leash != nullptr && leash->order.has_value())
+	{
+		return false;
+	}
+	if (PlanIs(registry, entity, "Fight"))
+	{
+		return false;
+	}
+	if (Locator::creatureFightSystem::has_value())
+	{
+		if (const auto opponent = Locator::creatureFightSystem::value().OpponentOf(entity);
+		    opponent.has_value() && registry.Valid(*opponent) && PlanIs(registry, *opponent, "Fight"))
+		{
+			return false;
+		}
+	}
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity);
+	    mind != nullptr && mind->idle.activity == creature_mind::Activity::Faint)
+	{
+		return false;
+	}
 	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity);
 	    mind != nullptr && mind->learnt.has_value() && mind->learnt->mimicry.has_value())
 	{
@@ -756,9 +805,16 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		const auto random = [](uint32_t range) {
 			return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : 0u;
 		};
-		if (const auto kind = creature_reaction::Priority(reaction.source.type,
-		                                                  CreatureFactsOf(registry, living, reaction, *info, _turn), random);
-		    kind.has_value())
+		auto facts = CreatureFactsOf(registry, living, reaction, *info, _turn);
+		// Free to look another creature over, it comes across it, and is due a look once long enough has gone by since the
+		// last, which it notes as it weighs it
+		if (reaction.source.type == Reaction::ReactToCreature && !creature_reaction::BlocksInspecting(facts) &&
+		    Locator::creatureMindSystem::has_value())
+		{
+			facts.inspectDue = Locator::creatureMindSystem::value().NoticeCreatureToInspect(
+			    living, reaction.source.initiator, _turn, InspectWaitTurns(registry, living));
+		}
+		if (const auto kind = creature_reaction::Priority(reaction.source.type, facts, random); kind.has_value())
 		{
 			return villager_reaction::Priority(*kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 		}
@@ -770,8 +826,6 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
 	// A villager weighs a creature by how its town feels about it; an animal heeds one as its table says
-	// TODO(creature-reactions-2): a creature weighs another by rules of its own that aren't ported yet; until then it takes
-	// no notice of it
 	if (reaction.source.type == Reaction::ReactToCreature)
 	{
 		if (registry.AllOf<Animal>(living))
@@ -1171,6 +1225,11 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	// A miracle from a seed teaches only the first creature that learns from it
 	auto* seed = SeedOf(registry, source.initiator);
 	const bool seedSpent = seed != nullptr && seed->learnedFrom;
+	// TODO(creature-reactions-2): the game ignores outright (holding nothing, looking at nothing, learning nothing) a
+	// miracle a spell icon cast without a seed; a nasty one still makes it run or look first. Miracles here don't keep
+	// what cast them. On any leash, a creature seeing a nasty miracle it knows is also set to cast it at the first thing
+	// other than itself within 64 cells of the hand, carried out by the leash later; that needs the leash's waiting
+	// action, which isn't here yet. Both: bw1-decomp docs/openblack/creature/creature_reactions.md
 	if (source.type == Reaction::FleeFromSpell)
 	{
 		const bool learnable = (byCreature || (!computer && source.player != PlayerNames::NEUTRAL)) && !seedSpent;

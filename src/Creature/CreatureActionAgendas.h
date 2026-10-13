@@ -53,6 +53,26 @@ constexpr float k_ExamineHeights = 2.5f;
 constexpr float k_ExamineFaceSeconds = 2.0f;
 constexpr float k_ExamineWatchSeconds = 1.1f;
 
+/// Looking another creature over: going near it (four times its own height away), turning to face it a tenth of a
+/// second, curious, then watching it, curious, for five seconds and up to ten more, after which it has looked it over
+[[nodiscard]] std::vector<Step> InspectCreature(uint32_t other, float height);
+constexpr float k_InspectHeights = 4.0f;
+constexpr float k_InspectFaceSeconds = 0.1f;
+constexpr float k_InspectSeconds = 5.0f;
+constexpr float k_InspectExtraSeconds = 10.0f;
+
+/// Looking at a thing flying through the air: half the time it first points at it two seconds, amazed, then it watches
+/// it, amazed, while it flies, for up to two seconds and a draw of up to two more each turn; its head follows the thing
+/// where it is, unless the creature holds it
+[[nodiscard]] std::vector<Step> LookAtFlyingObject(uint32_t thing, const Random& random);
+constexpr uint32_t k_PointAtFlyingLots = 2;
+constexpr float k_PointAtFlyingSeconds = 2.0f;
+
+/// Looking at the player's hand: watching it, curious, its head on the hand, for whole seconds more than those of a
+/// turn and a half, unless the hand picking something up has the creature watch longer (five seconds at most)
+[[nodiscard]] std::vector<Step> LookAtHand();
+constexpr uint32_t k_LookAtHandTurns = 15;
+
 /// Smiling at a friend: going near it (three times its height away) and facing it four seconds and up to four more,
 /// smiling at it with fluttering eyelids; then half the time a happy jump
 [[nodiscard]] std::vector<Step> SmileAt(uint32_t friendly, float height, float chance, const Random& random);

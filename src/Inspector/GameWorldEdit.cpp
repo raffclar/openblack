@@ -25,10 +25,12 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerWorship.h"
 #include "ECS/WorldObjects.h"
 #include "Editor/EditorEntities.h"
 #include "Locator.h"
@@ -202,6 +204,11 @@ std::string GameWorldEdit::Remove(entt::entity entity, RemoveHow how)
 	{
 		ecs::creature_removal::RemoveFromGame(entity);
 		return {};
+	}
+	// A villager leaves the worship of its town first. Thus the worship site removes it from the dancers.
+	if (registry.AllOf<Villager>(entity))
+	{
+		ecs::villager_worship::LeaveTown(entity);
 	}
 	// Out of the physics and silent first, then out of the world as the game takes things out
 	if (Locator::dynamicsSystem::has_value())

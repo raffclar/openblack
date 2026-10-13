@@ -1507,17 +1507,16 @@ CreatureLeash::Worn* LeashSystem::HeldLeash(PlayerNames player)
 	return worn != nullptr && worn->held.has_value() ? worn : nullptr;
 }
 
-void LeashSystem::UpdateRopeHover(PlayerNames player, const RopeFrame& frame)
+std::optional<float> LeashSystem::RopeUnderCursor(PlayerNames player, const RopeFrame& frame)
 {
 	if (player != k_LocalPlayer || _ropeHand == leash_snap::Hand::Holding)
 	{
-		return;
+		return std::nullopt;
 	}
-	_ropeHand = leash_snap::Hand::Away;
 	const auto* worn = TiedLeash(player);
 	if (worn == nullptr || frame.screenSize.x <= 0.0f || frame.screenSize.y <= 0.0f)
 	{
-		return;
+		return std::nullopt;
 	}
 	// The rope as seen on the screen
 	std::array<leash_snap::ScreenPoint, leash_rope::k_PointCount> points {};
@@ -1535,11 +1534,16 @@ void LeashSystem::UpdateRopeHover(PlayerNames player, const RopeFrame& frame)
 		    .inFront = true,
 		};
 	}
-	const auto depth = leash_snap::TouchDepth(points, frame.cursor, frame.screenSize.x, worn->rope.look.halfWidth);
-	if (depth.has_value() && leash_snap::RopeIsUnder(*depth, frame.under))
+	return leash_snap::TouchDepth(points, frame.cursor, frame.screenSize.x, worn->rope.look.halfWidth);
+}
+
+void LeashSystem::SetRopeHovered(PlayerNames player, bool hovered)
+{
+	if (player != k_LocalPlayer || _ropeHand == leash_snap::Hand::Holding)
 	{
-		_ropeHand = leash_snap::Hand::Over;
+		return;
 	}
+	_ropeHand = hovered ? leash_snap::Hand::Over : leash_snap::Hand::Away;
 }
 
 leash_snap::Hand LeashSystem::RopeHand(PlayerNames player) const
@@ -1631,27 +1635,17 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	}
 	// A press the leash took as a double tap was acted on as it came
 	const bool doubleTap = std::exchange(_lastPressDouble, false);
-	// The temple's leash posts along the ray come first
-	const auto direction = glm::normalize(rayDirection);
-	std::optional<entt::entity> post;
-	float nearest = k_TapReach;
-	registry.Each<const LeashPost, const Transform>([&](entt::entity entity, const LeashPost& at, const Transform&) {
-		// Only the leashes hanging there can be tapped, where they hang even when the picked one is carried
-		if (at.owner != player || !at.hung)
+	// A leash of the player's hanging at their temple, picked under the cursor (by its ball where it hangs, even when the
+	// picked one is carried), is tapped
+	if (Locator::pickingSystem::has_value())
+	{
+		const auto& picked = Locator::pickingSystem::value().GetPick().object;
+		const auto* post = picked.has_value() && registry.Valid(*picked) ? registry.TryGet<const LeashPost>(*picked) : nullptr;
+		if (post != nullptr && post->owner == player && post->hung)
 		{
+			TapPost(*picked);
 			return;
 		}
-		if (const auto along = RayBall(rayOrigin, direction, at.point, temple_leashes::k_TapRadius);
-		    along.has_value() && *along < nearest)
-		{
-			nearest = *along;
-			post = entity;
-		}
-	});
-	if (post.has_value())
-	{
-		TapPost(*post);
-		return;
 	}
 	if (!creature.has_value() || doubleTap)
 	{

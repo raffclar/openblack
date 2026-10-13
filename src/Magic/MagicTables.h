@@ -113,6 +113,10 @@ template <class T>
 /// A spell seed's record
 [[nodiscard]] const GSpellSeedInfo& GetSpellSeedInfo(const InfoConstants& info, SpellSeedType seed);
 
+/// The model a seed shows spinning in its globe or above its icon, none for a seed that shows no model. The flying
+/// flock's is a bat for an owner evil enough, otherwise a dove.
+[[nodiscard]] std::optional<MeshId> GetSeedModel(const InfoConstants& info, SpellSeedType seed, float ownerAlignment);
+
 /// The power-up level the seed casts the magic type at: k_BasePowerUpLevel for its plain miracle (and for a magic type
 /// it does not cast), else 0 to 2. Like the original, an empty power-up slot matches magic type none.
 [[nodiscard]] int GetPowerUpFromMagicType(const GSpellSeedInfo& seed, MagicType type);

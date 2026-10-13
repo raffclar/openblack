@@ -22,7 +22,8 @@
 /// What the hand reaches for when the Action button is pressed with nothing under the cursor. Every frame the game finds
 /// the land behind the hand's middle (the middle of the box round its posed bones) as the camera sees it. Pressed with no
 /// object picked under the cursor, the hand takes the thing standing nearest that point across the ground, if it is
-/// within 5 metres of it and no further from it than the land under the cursor is.
+/// within 5 metres of it and no further from it than the land under the cursor is. When the land behind the hand is
+/// water, a fish farm whose fish show under the cursor's point is taken first: the interface never picks a farm itself.
 namespace openblack::hand_reach
 {
 

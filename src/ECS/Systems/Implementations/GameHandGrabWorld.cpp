@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <vector>
 
+#include <LNDFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
@@ -45,6 +46,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
@@ -59,6 +61,7 @@
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -97,6 +100,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
+#include "Magic/MagicTables.h"
 #include "Magic/ResourcePiles.h"
 #include "Physics/Body.h"
 #include "Physics/LivingRules.h"
@@ -178,6 +182,25 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectUnderCursor() const
 	return Locator::pickingSystem::value().GetPick().object;
 }
 
+namespace
+{
+/// Whether a point is over a cell of water, a cell off the map or without land counting as water
+bool OverWater(glm::vec3 point)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return true;
+	}
+	const auto cell = map_coords::CellOf(point);
+	if (!map_coords::InBounds(cell))
+	{
+		return true;
+	}
+	const auto* landCell = Locator::terrainSystem::value().FindCell(glm::u16vec2(cell));
+	return landCell == nullptr || landCell->properties.hasWater != 0;
+}
+} // namespace
+
 std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
 {
 	if (!Locator::pickingSystem::has_value() || !Locator::entitiesMap::has_value())
@@ -193,6 +216,14 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
 	const auto behindHand = map_coords::FromMetres({behind->x, behind->z});
 	// The point the interface picked, the map's corner when it picked none
 	const auto picked = picking.GetPick().point;
+	// With the hand over water, a fish farm whose fish show under the picked point is taken first, as a farm has no model
+	if (OverWater(*behind) && picked.has_value() && Locator::fishFarmSystem::has_value())
+	{
+		if (const auto farm = Locator::fishFarmSystem::value().FarmWithFishAt({picked->x, picked->z}))
+		{
+			return farm;
+		}
+	}
 	const auto cursor = picked.has_value() ? map_coords::FromMetres({picked->x, picked->z}) : map_coords::MapCoords {};
 	// The things in the cells about the point, as a search meets them; broken pieces of buildings are passed by
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -218,6 +249,11 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
 	}
 	const auto nearest = hand_reach::Nearest(behindHand, cursor, places);
 	return nearest.has_value() ? std::optional<entt::entity>(things[*nearest]) : std::nullopt;
+}
+
+std::optional<glm::vec3> GameHandGrabWorld::PickedPoint() const
+{
+	return Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
 }
 
 bool GameHandGrabWorld::InInfluence(PlayerNames player, glm::vec3 point) const
@@ -477,6 +513,25 @@ bool GameHandGrabWorld::HoldsLeash(PlayerNames player)
 	       leashes.HolderPoint(*creature).has_value();
 }
 
+void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
+{
+	const auto* info = Info();
+	const auto* component = Entities().TryGet<const OneOffSpellSeed>(globe);
+	if (info == nullptr || component == nullptr || !Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto* data = Entities().TryGet<Player>(Locator::playerSystem::value().GetPlayer(player));
+	if (data == nullptr)
+	{
+		return;
+	}
+	// The miracle the globe holds at its power-up counts as ever enabled for the player, though it enables nothing
+	const auto type =
+	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(*info, component->seedType), component->powerUp);
+	player_miracles::MarkMagicTypeEverEnabled(data->miracles, type);
+}
+
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
 {
 	// A rock tall enough breaks when tapped
@@ -497,6 +552,11 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	{
 		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
 		return Locator::scriptHighlightSystem::value().Tap(object, ownHand);
+	}
+	// A one-shot miracle's globe gives the hand its miracle
+	if (Entities().AllOf<OneOffSpellSeed>(object) && Locator::magicSystem::has_value())
+	{
+		return Locator::magicSystem::value().TapGlobe(object);
 	}
 	// A reward chest is opened by its player's tap
 	if (Entities().AllOf<Reward>(object) && Locator::rewardSystem::has_value())

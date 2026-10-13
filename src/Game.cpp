@@ -79,7 +79,6 @@
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureFightHud.h"
-#include "Creature/CreatureHandRules.h"
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FrameStatsLog.h"
@@ -95,7 +94,6 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureLeash.h"
-#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/FloatingNumber.h"
@@ -431,6 +429,11 @@ std::optional<entt::entity> ScriptCameraCreature()
 /// While the hand keeps some of the player's influence past the border it counts as inside however far out it is.
 bool HandInInfluence()
 {
+	// One answer for what the hand offers and what it does
+	if (Locator::handGrabSystem::has_value())
+	{
+		return Locator::handGrabSystem::value().IsInInfluence();
+	}
 	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
 	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, *point);
 }
@@ -644,8 +647,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			Locator::leashSystem::value().LetGoOfRope(PlayerNames::PLAYER_ONE, Locator::pickingSystem::value().GetPick().point);
 		}
 		magic.ReleaseAction();
-		// Let go quickly on a one-shot bubble, its miracle goes into the hand
-		magic.ReleaseOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		// Let go quickly on a fireball, it is tapped
+		magic.ReleaseFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
 	}
 	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
@@ -682,10 +685,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		{
 			_actionPressTaken = true;
 		}
-		// With an empty hand, a one-shot bubble under it takes the press before anything behind it
+		// With an empty hand, a fireball under it takes the press. A one-shot globe is taken hold of as any thing is.
 		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
 		{
-			_actionPressTaken = magic.PressOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
+			_actionPressTaken = magic.PressFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 		if (!_actionPressTaken)
 		{
@@ -1002,6 +1005,41 @@ bool Game::HandOverThing() const
 	       Locator::entitiesRegistry::value().AnyOf<ecs::components::Mesh, ecs::components::OneOffSpellSeed>(*picked);
 }
 
+void Game::ResolveScreenShapes()
+{
+	// The pick's last step, once the interface is drawn: the help's text bubble and the tied leash's rope under the cursor
+	// are weighed against what the frame picked, and the bubble and the rope learn whether they have the cursor
+	if (!Locator::pickingSystem::has_value() || !Locator::camera::has_value() || !Locator::windowing::has_value())
+	{
+		return;
+	}
+	ecs::systems::PickingSystemInterface::ScreenShapes shapes;
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		const auto& bubble = Locator::tipBubbleSystem::value();
+		shapes.textBubble = bubble.GetUnderPointer();
+		shapes.textBubblePoint = bubble.GetAnchor().value_or(glm::vec3(0.0f));
+	}
+	if (Locator::leashSystem::has_value())
+	{
+		shapes.rope = Locator::leashSystem::value().RopeUnderCursor(
+		    PlayerNames::PLAYER_ONE, {.viewProjection = Locator::camera::value().GetViewProjectionMatrix(),
+		                              .screenSize = static_cast<glm::vec2>(Locator::windowing::value().GetSize()),
+		                              .cursor = Locator::gameActionSystem::value().GetPointerPosition()});
+	}
+	auto& picking = Locator::pickingSystem::value();
+	picking.ResolveScreenShapes(shapes);
+	const auto& pick = picking.GetPick();
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		Locator::tipBubbleSystem::value().SetUnderHand(pick.textBubble);
+	}
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().SetRopeHovered(PlayerNames::PLAYER_ONE, pick.rope);
+	}
+}
+
 void Game::PickUnderCursor(float seconds)
 {
 	if (!Locator::pickingSystem::has_value() || !Locator::windowing::has_value())
@@ -1293,11 +1331,8 @@ void Game::ProcessHandToolTipTurn()
 	}
 	else if (over.has_value() && shown && overToolTips)
 	{
-		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
-		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);
-		const bool asleep = mind != nullptr && creature_mind::IsAsleep(mind->idle);
-		if (creature != nullptr &&
-		    creature_hand::ShowsInteractTip(PlayerNames::PLAYER_ONE, creature->owner, asleep, HandInInfluence()))
+		if (Locator::creatureHandSystem::has_value() &&
+		    Locator::creatureHandSystem::value().ShowsInteractTip(*over, HandInInfluence()))
 		{
 			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
 		}
@@ -2259,29 +2294,6 @@ bool Game::Update() noexcept
 					if (!Locator::debugGui::value().StealsFocus())
 					{
 						auto& leashes = Locator::leashSystem::value();
-						// Whether the hand is over the rope of the tied leash, which comes before the land and things
-						// behind it
-						{
-							const auto& pick = Locator::pickingSystem::value().GetPick();
-							const auto viewProjection = camera.GetViewProjectionMatrix();
-							const auto& registry = Locator::entitiesRegistry::value();
-							ecs::systems::LeashSystemInterface::RopeFrame frame {
-							    .viewProjection = viewProjection,
-							    .screenSize = static_cast<glm::vec2>(screenSize),
-							    .cursor = _mousePosition,
-							};
-							if (pick.object.has_value() && registry.Valid(*pick.object))
-							{
-								frame.under.object = true;
-								frame.under.creature = registry.AllOf<ecs::components::Creature>(*pick.object);
-								frame.under.objectDepth = pick.distance;
-							}
-							if (pick.land.has_value())
-							{
-								frame.under.landDepth = (viewProjection * glm::vec4(*pick.land, 1.0f)).w;
-							}
-							leashes.UpdateRopeHover(PlayerNames::PLAYER_ONE, frame);
-						}
 						leashes.HandleInput(rayOrigin, rayDirection, _actionPressTaken);
 						_actionPressTaken = false;
 					}
@@ -2568,8 +2580,10 @@ bool Game::Update() noexcept
 				UpdateMagicHand(handTransform.position,
 				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 			}
+			// A fireball pressed long enough is taken, which catches it
+			Locator::magicSystem::value().HoldFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
 			{
-				// The globes and the hand show their miracles
+				// The hand and the piles show their miracles
 				auto miracleFx = profiler.BeginScoped(Profiler::Stage::MiracleFxUpdate);
 				Locator::miracleFxSystem::value().Update(
 				    std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
@@ -2624,6 +2638,12 @@ bool Game::Update() noexcept
 				};
 				holdingSeed = _handHold.Pose(heldThing, holdFrame, _handAnimation.get(), *handTransform);
 			}
+		}
+		{
+			// The globes show their miracles where they are now, a globe in the hand where the hand holds it, each turned
+			// to face the camera as it is drawn
+			auto miracleGlobes = profiler.BeginScoped(Profiler::Stage::MiracleGlobesUpdate);
+			Locator::miracleFxSystem::value().UpdateGlobes(std::chrono::duration<float>(gameTime).count());
 		}
 
 		// Animate the hand: gripping while it drags the land, otherwise its normal pose. Turning the camera with the
@@ -3939,6 +3959,7 @@ bool Game::Run() noexcept
 			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, machine_clock::Ticks(),
 			                 Locator::debugGui::value().IsMouseOverWindow());
 		}
+		ResolveScreenShapes();
 
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::GuiDraw);

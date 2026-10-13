@@ -276,6 +276,9 @@ struct ObjectSetup
 	std::optional<glm::vec2> worshipAt;
 	/// A villager's, animal's or building's life, 0 (dead) to 1, full when not given; a building is hurt down to it
 	std::optional<float> life;
+	/// A villager carries this much wood and food, which slows it, none when not given
+	int16_t woodHeld {0};
+	int16_t foodHeld {0};
 	/// A tree belongs to the land's forest of this number, none for 0; and grows to this size, its scale when not given
 	uint32_t forest {0};
 	std::optional<float> fullSize;
@@ -283,6 +286,10 @@ struct ObjectSetup
 	bool poisoned {false};
 	/// Made indestructible, as a script makes one
 	bool indestructible {false};
+	/// An animal lives as a land's script makes it: at a random age, in a herd or flock of its own, and free to move.
+	/// Only the grazers and the land's birds can live. Other kinds, and all animals without this flag, stay at their
+	/// position. They show the clip of an animal that a script holds still.
+	bool living {false};
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes
 	bool inScript {false};
 	/// A villager is made a disciple of this work, as a land's script makes one
@@ -673,6 +680,9 @@ struct Command
 		/// A land's script (script, by its name) starts as a script's "run script" starts it, given its arguments in
 		/// order (scriptArguments); the scripts' globals named are set first (scriptGlobals). Needs no creature
 		RunScript,
+		/// The player's hand releases the thing that it holds, as a release of the Action button does. With no velocity, the
+		/// hand puts the thing on the land below it. Else, the hand throws the thing at the velocity. No creature is necessary.
+		HandRelease,
 		/// The player's hand lets go of a handful of wood (value, how much) slowly over a point of the land (point, from
 		/// the middle of the map), pouring it there as a slow let-go does. Needs no creature
 		HandPour,
@@ -692,6 +702,8 @@ struct Command
 	bool waitUntilFree {false};
 	/// The point gone to, fled from or faced, from the middle of the map
 	glm::vec2 point {0.0f};
+	/// The velocity at which the player's hand throws the thing that it releases
+	glm::vec3 velocity {0.0f};
 	/// The animation played, the creature followed or fought, the band of a blow (high, middle, low), the step
 	/// (forward, back, right, left), or whether it fights by itself (1) or not
 	size_t value {0};
@@ -943,6 +955,8 @@ void AddHandLookScenarios(std::vector<Scenario>& all);
 /// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
 void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+/// Villagers walking side by side, each at the speed its life, load, town and state give
+void AddVillagerSpeedScenarios(std::vector<Scenario>& all);
 void AddDiscipleScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);

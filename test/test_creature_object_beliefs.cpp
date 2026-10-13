@@ -231,3 +231,17 @@ TEST(CreatureObjectBeliefs, ItSeesAThirdOfACircleEitherSideOfTheWayItLooks)
 	// Whatever is in its own cell it always sees
 	EXPECT_TRUE(CanSee(0x400, 0, true));
 }
+
+// When it last looked another creature over is kept with its belief, through coming across it again, and starts afresh
+// for a new belief
+TEST(CreatureObjectBeliefs, ItKeepsWhenItLastLookedACreatureOver)
+{
+	constexpr uint32_t k_Creature = 8;
+	Store store;
+	EXPECT_FALSE(store.Add(Thing(1), k_Creature, {}).belief->inspected.has_value());
+	store.Find(Thing(1))->inspected = 600;
+	store.Add(Thing(1), k_Creature, {1.0f, 0.0f, 1.0f});
+	EXPECT_EQ(store.Find(Thing(1))->inspected, 600u);
+	store.Forget(Thing(1));
+	EXPECT_FALSE(store.Add(Thing(1), k_Creature, {}).belief->inspected.has_value());
+}

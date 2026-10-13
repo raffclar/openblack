@@ -19,8 +19,10 @@
 
 #include "Common/GameRandom.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -35,6 +37,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ReactionRules.h"
@@ -310,6 +313,22 @@ TEST_F(Reactions, VillagersInReachTakeUpANiceMiracleAndBelieveOnce)
 	EXPECT_FLOAT_EQ(town.belief.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)),
 	                std::min(belief, openblack::magic::town_belief::k_DefaultCap));
 	EXPECT_FLOAT_EQ(town.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), 0.0f);
+}
+
+TEST_F(Reactions, AVillagerTooWeakToWalkTakesUpNoMiracle)
+{
+	for (auto& villager : _info->villager)
+	{
+		villager.lifeWhenCrawlsWounded = 0.15f;
+	}
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	// The one right by the miracle crawls, the next only limps
+	registry.Get<Villager>(_villagers[0]).life = 0.15f;
+	registry.Get<Villager>(_villagers[1]).life = 0.2f;
+	_reactions.Create(Miracle());
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::LookingAtObjectReaction);
 }
 
 TEST_F(Reactions, VillagersStopAfterTheirTimeAndGoBack)
@@ -652,6 +671,27 @@ TEST_F(Reactions, TheCreatureIsImpressedByItsOwnPlayersMiracle)
 	ASSERT_NE(impression, nullptr);
 	EXPECT_FLOAT_EQ(impression->byOwnPlayer, 2.0f * 4.0f);
 	EXPECT_FLOAT_EQ(impression->byOtherCreatures, 0.0f);
+}
+
+// A creature a script has told to take no notice, one a script controls, and one carrying out its player's order take
+// up no reaction, so aren't impressed by one
+TEST_F(Reactions, ACreatureToldToTakeNoNoticeOrBusyWithAnOrderIsNotImpressed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto impressed = [&]() {
+		const auto* impression = registry.TryGet<const CreatureImpression>(_creature);
+		return impression != nullptr && impression->byOwnPlayer > 0.0f;
+	};
+	registry.Assign<CreatureReactionsOff>(_creature);
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	registry.Remove<CreatureReactionsOff>(_creature);
+	registry.Assign<CreatureLeash>(_creature).order = CreatureLeash::Order {};
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	registry.Remove<CreatureLeash>(_creature);
+	_reactions.Create(Miracle());
+	EXPECT_TRUE(impressed());
 }
 
 TEST_F(Reactions, AnotherPlayersMiracleImpressesACreatureNotAtAllWhoeverCastIt)
@@ -1056,6 +1096,91 @@ TEST_F(Reactions, AReactionVillagersDontActOutYetEndsWithoutMovingThem)
 	EXPECT_EQ(SlotOf(villager, LivingAction::Index::Final), k_Job);
 	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const LivingReaction>(villager).reaction, 0u);
 	Locator::reactionSystem::reset();
+}
+
+namespace
+{
+/// Gives every kind of villager the same made-up speeds: a walk, a run three times as fast, and loads that slow it
+void GiveSpeeds(InfoConstants& info)
+{
+	for (auto& villager : info.villager)
+	{
+		villager.speedGroup = {.speedDefault = SpeedState {1000},
+		                       .speedFleeing = SpeedState {3000},
+		                       .speed2 = SpeedState {1000},
+		                       .speed3 = SpeedState {1000},
+		                       .speed4 = SpeedState {500},
+		                       .speed5 = SpeedState {2500}};
+		villager.maxWoodCarried = 100;
+		villager.maxTraderWoodCarried = 200;
+		villager.maxFoodCarried = 100;
+		villager.maxTraderFoodCarried = 200;
+		villager.speedModWhenFullLoadOfWood = 0.75f;
+		villager.speedModWhenFullLoadOfFood = 0.85f;
+		villager.foodPowerupIncrease = 1.0f;
+	}
+	info.villagerStateTable.at(static_cast<size_t>(VillagerStates::FleeingAndLookingAtObjectReaction)).speedIndex = 1;
+}
+
+[[nodiscard]] int32_t WholeSpeedOf(entt::entity villager)
+{
+	return ecs::wall_hug::WholeSpeed(Locator::entitiesRegistry::value().Get<const WallHug>(villager).speed);
+}
+} // namespace
+
+TEST_F(Reactions, AVillagerWalksAtTheSpeedOfTheStateItIsWalkingTo)
+{
+	GiveSpeeds(*_info);
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	auto& action = registry.Get<LivingAction>(villager);
+	// Walking to decide what to do it walks; walking to watch something it runs, three times as fast
+	ASSERT_TRUE(villager_home::SetupMoveTo(action, glm::vec2(600.0f, 600.0f), VillagerStates::DecideWhatToDo));
+	const auto walk = WholeSpeedOf(villager);
+	ASSERT_GT(walk, 0);
+	ASSERT_TRUE(
+	    villager_home::SetupMoveTo(action, glm::vec2(600.0f, 600.0f), VillagerStates::FleeingAndLookingAtObjectReaction));
+	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
+	EXPECT_NEAR(static_cast<float>(WholeSpeedOf(villager)), static_cast<float>(walk) * 3.0f, 3.0f);
+}
+
+TEST_F(Reactions, ALoadSlowsAVillagerByHowFullItIsForItsKindOfWork)
+{
+	GiveSpeeds(*_info);
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	auto& action = registry.Get<LivingAction>(villager);
+	const auto walk = [&] {
+		villager_home::SetupMoveTo(action, glm::vec2(600.0f, 600.0f), VillagerStates::DecideWhatToDo);
+		return static_cast<float>(WholeSpeedOf(villager));
+	};
+	const float unladen = walk();
+	// A full load of wood slows it to three quarters, a full load of food to 85%
+	registry.Get<Villager>(villager).woodHeld = 100;
+	EXPECT_NEAR(walk(), unladen * 0.75f, 2.0f);
+	registry.Get<Villager>(villager).woodHeld = 0;
+	registry.Get<Villager>(villager).foodHeld = 100;
+	EXPECT_NEAR(walk(), unladen * 0.85f, 2.0f);
+	// A trader carries twice as much, so the same food is only half a load and doesn't slow it
+	registry.Assign<Disciple>(villager).type = VillagerDisciple::Trader;
+	EXPECT_NEAR(walk(), unladen, 1.0f);
+}
+
+TEST_F(Reactions, AVillagerLettingGoOfAReactionKeepsItsSpeed)
+{
+	GiveSpeeds(*_info);
+	Locator::infoConstants::emplace(*_info);
+	_reactions.Create(Miracle(Reaction::FleeFromSpell));
+	auto& registry = Locator::entitiesRegistry::value();
+	ASSERT_NE(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
+	auto& wallHug = registry.Get<WallHug>(_villagers[0]);
+	wallHug.speed = GetSpeedStateSpeed(SpeedState {2000});
+	const auto running = WholeSpeedOf(_villagers[0]);
+	_reactions.StopReacting(_villagers[0]);
+	// It runs on at the speed it had until its state next changes
+	EXPECT_EQ(WholeSpeedOf(_villagers[0]), running);
 }
 
 TEST_F(Reactions, VillagersHeedTheHandPickingUpOrSomethingCrushedWithoutTakingItUpOrBelieving)

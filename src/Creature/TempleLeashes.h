@@ -78,8 +78,6 @@ struct Glow
 [[nodiscard]] Glow GlowOf(bool picked, uint8_t alpha);
 /// The glow is this many metres across
 constexpr float k_GlowSize = 2.0f;
-/// A leash is tapped within this many metres of where it hangs
-constexpr float k_TapRadius = 1.0f;
 
 /// Carried in the hand, the picked leash is drawn at half the hand's scale times this, shifted along the hand by these
 /// shares of that

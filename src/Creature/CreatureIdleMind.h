@@ -249,6 +249,8 @@ enum class Effect : uint8_t
 	TookFromPile,
 	/// Has taken what the player's hand gave it (the step's object), and decides what to do with it
 	TookFromHand,
+	/// Has looked another creature (the effect's object) over, and waits a while before it does again
+	Inspected,
 };
 
 /// How the eyes should look
@@ -270,6 +272,10 @@ struct Gaze
 {
 	std::optional<uint32_t> object;
 	bool bottom {false};
+	/// The thing itself where it is, as up in the air, rather than its top or foot
+	bool itself {false};
+	/// The player's hand nearest the creature
+	bool hand {false};
 	std::optional<glm::vec3> point;
 	bool camera {false};
 };
@@ -302,10 +308,6 @@ struct Step
 		Douse,
 		/// Breaking the step's object, a rock, in two at once; when it isn't a rock, the rest of the agenda is given up
 		Shatter,
-		/// Watching the step's object fly, the turn it starts on counting as the first: done once it is no longer
-		/// really in the air, or by the whole seconds watched: not in the first three, half the time each turn in the
-		/// fourth, at four at the latest (see WatchingFlyingGoesOn)
-		WatchFlying,
 		/// Mending the step's object, a building, by a fifth of its life at once
 		Repair,
 		/// Doing away with the step's object at once, as with the tree used up mending a building
@@ -324,9 +326,24 @@ struct Step
 		/// Playing the step's animation on top of the body, as talking: it starts unless something already plays there,
 		/// and the step is done once nothing plays on top of the body
 		Overlay,
+		/// Looking another creature (the step's object) over: as it starts it picks a time of the step's seconds and up
+		/// to the step's extra seconds more, counted in whole turns from the next, after which it has looked it over
+		Inspect,
+		/// Watching a thing flying through the air (the step's object): each turn, from the one it starts on, it goes on
+		/// while the thing is still really in the air and the whole seconds it has watched come under a limit picked
+		/// afresh each turn, from two seconds to two seconds more: not in the first three seconds, half the time each
+		/// turn in the fourth, never after
+		WatchFlying,
+		/// Watching the player's hand: each turn, from the one it starts on, it turns to face the hand when it is more
+		/// than a quarter turn away (unless right under it), and once it isn't turning it is done when the whole
+		/// seconds it has watched come to more than those of the step's turns, at most five; a creature without a
+		/// player is done at once
+		WatchHand,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
+	/// Up to how many seconds more an inspect step may last, picked as it starts
+	float extraSeconds {0.0f};
 	/// Watching the camera for a set number of turns, rather than until the camera goes or the step's seconds are up
 	std::optional<uint32_t> turns;
 	size_t animation {0};
@@ -389,6 +406,10 @@ struct IdleMind
 	/// A cast step: whether its miracle has been cast, and the turns it is held for yet
 	bool castDone {false};
 	uint32_t castTurns {0};
+	/// An inspect step: the turns it watches for yet
+	uint32_t inspectTurns {0};
+	/// A step watching a flying thing: the turns it has watched it
+	uint32_t watchTurns {0};
 };
 
 /// The needs it might see to, and the means at hand
@@ -481,6 +502,8 @@ struct Senses
 		float turn {0.0f};
 	};
 	std::optional<CameraView> camera;
+	/// The player's hand nearest it, seen the same way, while a step watches it; none for a creature without a player
+	std::optional<CameraView> hand;
 	/// A swap of minds: whether no spell is on it or on the other creature any more, and whether its body has taken on
 	/// the shape the swap gives it
 	struct SwapView
@@ -556,12 +579,9 @@ using Random = std::function<uint32_t(uint32_t)>;
 /// Fluttering its eyelids, the creature blinks every 0.625 to 1.875 seconds
 constexpr int32_t k_FlutterBlinkIntervalMs = 1250;
 
-/// Watching a thing fly goes on, after so many whole seconds of watching, while they are fewer than two seconds and a
-/// chance of up to two more drawn each turn: always within the first three seconds, half the time in the fourth, never
-/// after
-[[nodiscard]] bool WatchingFlyingGoesOn(uint32_t wholeSeconds, const Random& random);
-constexpr uint32_t k_WatchFlyingSeconds = 2;
-constexpr uint32_t k_WatchFlyingMoreSeconds = 2;
+/// The limit of a watch of a flying thing: two seconds, and a draw of up to two more each turn
+constexpr float k_WatchFlyingSeconds = 2.0f;
+constexpr float k_WatchFlyingExtraSeconds = 2.0f;
 
 /// Being idle: wait a second or two looking about, then a tired yawn with sleepy eyes, twice
 [[nodiscard]] std::vector<Step> BeIdle(const Random& random);
@@ -657,4 +677,12 @@ void ChooseNext(IdleMind& mind, const Senses& senses, const Random& random);
                                                              const Random& random);
 /// One game turn of the mind
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random);
+/// Whether a creature goes on watching a flying thing: while the thing is still flying and the whole seconds of the
+/// turns it has watched come under the limit
+[[nodiscard]] bool KeepsWatchingFlying(uint32_t turns, uint32_t turnsPerSecond, float limit, bool flying);
+/// Whether a creature watching the hand has watched long enough: its whole seconds are more than the whole seconds of
+/// the step's turns, but never more than five
+[[nodiscard]] bool WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint32_t turnsPerSecond);
+/// The longest a creature watches the hand, in whole seconds
+constexpr float k_LongestHandWatchSeconds = 5.0f;
 } // namespace openblack::creature_mind

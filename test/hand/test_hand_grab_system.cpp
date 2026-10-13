@@ -22,6 +22,7 @@
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Transform.h"
@@ -57,6 +58,15 @@ public:
 		return rock;
 	}
 
+	entt::entity AddGlobe(glm::vec3 position)
+	{
+		const auto globe = registry.Create();
+		registry.Assign<Transform>(globe, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<OneOffSpellSeed>(globe, OneOffSpellSeed {.seedType = SpellSeedType::Food, .position = position});
+		sizes[globe] = {.radius = 1.0f, .height = 2.0f};
+		return globe;
+	}
+
 	entt::entity AddTree(glm::vec3 position, float weight)
 	{
 		const auto tree = registry.Create();
@@ -81,7 +91,11 @@ public:
 	[[nodiscard]] PlayerNames HandPlayer() const override { return PlayerNames::PLAYER_ONE; }
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override { return underCursor; }
 	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override { return nearHand; }
-	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3) const override { return influence; }
+	[[nodiscard]] std::optional<glm::vec3> PickedPoint() const override { return pickedPoint; }
+	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3 point) const override
+	{
+		return influence && (!borderX.has_value() || point.x < *borderX);
+	}
 	void HeldThingUsedOnLand(PlayerNames player) override { usedOnLand.push_back(player); }
 	[[nodiscard]] bool InBounds(glm::vec3) const override { return true; }
 	[[nodiscard]] glm::vec3 LandNormalAt(glm::vec3) const override { return {0.0f, 1.0f, 0.0f}; }
@@ -116,6 +130,7 @@ public:
 	void CatchFirefly(entt::entity) override {}
 	void HeatHeld(entt::entity object) override { heated.push_back(object); }
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
+	void GlobeIntoHand(entt::entity globe, PlayerNames player) override { globesTaken.emplace_back(globe, player); }
 	void PlaySample(uint32_t sample, glm::vec3) override { samples.push_back(sample); }
 	bool TapThing(entt::entity object, glm::vec3, PlayerNames) override
 	{
@@ -342,6 +357,9 @@ public:
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> nearHand;
 	bool influence {true};
+	/// The point picked under the cursor, and with a border the influence reaches only west of it
+	std::optional<glm::vec3> pickedPoint {glm::vec3(0.0f)};
+	std::optional<float> borderX;
 	bool looseLeash {false};
 	/// The leash held loose in the hand takes taps as orders
 	bool leashTakesTaps {false};
@@ -355,6 +373,7 @@ public:
 	std::vector<ReactionRequest> reactions;
 	std::vector<entt::entity> heated;
 	std::vector<entt::entity> artefactsTaken;
+	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
 	std::vector<uint32_t> samples;
 	std::vector<entt::entity> tapped;
 	std::vector<entt::entity> villagersInHand;
@@ -525,6 +544,42 @@ TEST_F(HandGrabSystemWithWorld, AShortPressIsATap)
 	EXPECT_EQ(world->tapped.front(), rock);
 }
 
+// A one-shot miracle's globe is a loose thing: a quick press taps it (for its miracle), a held one carries it from the
+// side, hung seven tenths of its height below the hand
+TEST_F(HandGrabSystemWithWorld, AShortPressTapsAGlobe)
+{
+	const auto globe = world->AddGlobe({0.0f, 0.0f, 0.0f});
+	world->underCursor = globe;
+	EXPECT_TRUE(Press());
+	Frame(50);
+	const auto tapped = Release();
+	ASSERT_TRUE(tapped.has_value());
+	EXPECT_EQ(world->tapped, std::vector<entt::entity> {globe});
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->globesTaken.empty());
+}
+
+TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAGlobeFromTheSide)
+{
+	const auto globe = world->AddGlobe({0.0f, 0.0f, 0.0f});
+	world->underCursor = globe;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(*system->GetHeld(), globe);
+	EXPECT_TRUE(world->tapped.empty());
+	// The player has had its miracle within reach
+	ASSERT_EQ(world->globesTaken.size(), 1u);
+	EXPECT_EQ(world->globesTaken.front().first, globe);
+	const auto pose = system->GetHeldPose();
+	ASSERT_TRUE(pose.has_value());
+	EXPECT_EQ(pose->hold, HoldType::Side);
+	EXPECT_FLOAT_EQ(world->registry.Get<HandGrab>(world->hand).lowering, 0.7f * 2.0f);
+}
+
 TEST_F(HandGrabSystemWithWorld, WithTheLeashHeldAShortPressIsAnOrderInsteadOfATap)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
@@ -556,6 +611,82 @@ TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)
 	// Out of the influence or held by a script nothing is tapped; a boulder the hand can't lift is tapped at once
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), boulder);
+}
+
+// The influence is asked where the thing under the cursor stands, not where the hand rests on the land behind it
+TEST_F(HandGrabSystemWithWorld, ATakeAsksTheInfluenceWhereThePickedThingStands)
+{
+	world->borderX = 10.0f;
+	// Standing just inside, with the land the hand rests on outside: taken
+	const auto inside = world->AddRock({8.0f, 0.0f, 0.0f});
+	world->underCursor = inside;
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	EXPECT_TRUE(Press());
+	Release();
+	// Standing just outside, with the land the hand rests on inside: left, and not tapped
+	const auto outside = world->AddRock({12.0f, 0.0f, 0.0f});
+	world->underCursor = outside;
+	world->pickedPoint = glm::vec3(12.0f, 0.0f, 0.0f);
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	EXPECT_FALSE(Press());
+	EXPECT_EQ(std::ranges::count(world->tapped, outside), 0);
+}
+
+TEST_F(HandGrabSystemWithWorld, AScoopAsksTheInfluenceWhereThePileStands)
+{
+	world->borderX = 10.0f;
+	const auto AddPile = [this](float x) {
+		const auto pile = world->registry.Create();
+		world->registry.Assign<Transform>(pile, glm::vec3(x, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+		world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+		return pile;
+	};
+	// A pile just outside isn't scooped from, though the hand rests inside
+	const auto outside = AddPile(12.0f);
+	world->underCursor = outside;
+	world->pickedPoint = glm::vec3(12.0f, 0.0f, 0.0f);
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	EXPECT_FALSE(Press());
+	EXPECT_EQ(world->registry.Get<const Pot>(outside).amount, 1000u);
+	// A pile just inside is, though the hand rests outside
+	const auto inside = AddPile(8.0f);
+	world->underCursor = inside;
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	EXPECT_TRUE(Press());
+	EXPECT_EQ(world->registry.Get<const Pot>(inside).amount, 975u);
+}
+
+TEST_F(HandGrabSystemWithWorld, LettingGoAsksTheInfluenceAtThePointPicked)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	world->underCursor.reset();
+	world->borderX = 10.0f;
+	// Over a thing standing just outside, with the land the hand rests on inside: the press does nothing
+	world->pickedPoint = glm::vec3(12.0f, 0.0f, 0.0f);
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_TRUE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->released.empty());
+	// Over a thing standing just inside, with the land the hand rests on outside: thrown
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_EQ(world->released.size(), 1u);
 }
 
 // The hand says why a press on a thing wouldn't take it, as the inspector shows it
