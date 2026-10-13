@@ -187,11 +187,8 @@ void HighDetailSystem::Update()
 	}
 }
 
-void HighDetailSystem::PlaceEyes(uint32_t drawTime, const glm::mat4& viewProjection)
+void HighDetailSystem::PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProjection)
 {
-	// The milliseconds of the game's clock since the eyes were last placed, none when the clock went back
-	const uint32_t elapsed = _eyesDrawTime.has_value() && drawTime >= *_eyesDrawTime ? drawTime - *_eyesDrawTime : 0;
-	_eyesDrawTime = drawTime;
 	if (!Locator::resources::has_value())
 	{
 		return;
@@ -200,44 +197,44 @@ void HighDetailSystem::PlaceEyes(uint32_t drawTime, const glm::mat4& viewProject
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto view = graphics::view_frustum::FromViewProjection(viewProjection);
 	auto& random = Locator::gameRandom::value();
-	registry.Each<HighDetail, const Mesh, const Transform>([&](entt::entity entity, HighDetail& detail, const Mesh& mesh,
-	                                                           const Transform& transform) {
-		detail.drawnEyes.reset();
-		if (!detail.eyes.has_value() || !detail.face.has_value() || !meshes.Contains(mesh.id))
-		{
-			return;
-		}
-		// Placed as its body is drawn, by its bones as posed or as its model rests, in the opening hand's grip while held
-		const auto* pose = registry.TryGet<const VillagerPose>(entity);
-		const auto drawnAt = rules::DrawnAt(detail.heldAt, DrawnPosition(transform.position, pose));
-		const auto rotation = DrawnRotation(transform.rotation, pose);
-		auto standing = glm::mat4(rotation);
-		standing = glm::translate(standing, drawnAt * rotation);
-		standing = glm::scale(standing, transform.scale);
-		const auto model = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(entity));
-		const auto detailed = meshes.Handle(mesh.id);
-		const auto& frames = detailed->GetBoneFrames();
-		if (!model.has_value() || frames.size() < 2)
-		{
-			return;
-		}
-		// Its eyes blink and look about only while it is in view
-		const auto box = detailed->GetBoundingBox();
-		const auto centre = glm::vec3(*model * glm::vec4(box.Center(), 1.0f));
-		if (!graphics::view_frustum::SeesSphere(view, centre,
-		                                        graphics::mesh_detail::ScaledRadius(box.Size(), transform.scale.x)))
-		{
-			return;
-		}
-		const auto& rest = detailed->GetBoneMatrices();
-		const auto& bones = pose != nullptr && pose->bones.size() == rest.size() ? pose->bones : rest;
-		if (frames[0].bone >= bones.size() || frames[1].bone >= bones.size())
-		{
-			return;
-		}
-		const float closed =
-		    villager_eyes::Step(*detail.eyes, _eyes, elapsed, [&random](float a, float b) { return random.CrtRandom(a, b); });
-		detail.drawnEyes = villager_eyes::Place(*detail.face, *model, {bones[frames[0].bone], bones[frames[1].bone]},
-		                                        {frames[0].frame, frames[1].frame}, detail.eyes->roll, closed);
-	});
+	registry.Each<HighDetail, const Mesh, const Transform>(
+	    [&](entt::entity entity, HighDetail& detail, const Mesh& mesh, const Transform& transform) {
+		    detail.drawnEyes.reset();
+		    if (!detail.eyes.has_value() || !detail.face.has_value() || !meshes.Contains(mesh.id))
+		    {
+			    return;
+		    }
+		    // Placed as its body is drawn, by its bones as posed or as its model rests, in the opening hand's grip while held
+		    const auto* pose = registry.TryGet<const VillagerPose>(entity);
+		    const auto drawnAt = rules::DrawnAt(detail.heldAt, DrawnPosition(transform.position, pose));
+		    const auto rotation = DrawnRotation(transform.rotation, pose);
+		    auto standing = glm::mat4(rotation);
+		    standing = glm::translate(standing, drawnAt * rotation);
+		    standing = glm::scale(standing, transform.scale);
+		    const auto model = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(entity));
+		    const auto detailed = meshes.Handle(mesh.id);
+		    const auto& frames = detailed->GetBoneFrames();
+		    if (!model.has_value() || frames.size() < 2)
+		    {
+			    return;
+		    }
+		    // Its eyes blink and look about only while it is in view
+		    const auto box = detailed->GetBoundingBox();
+		    const auto centre = glm::vec3(*model * glm::vec4(box.Center(), 1.0f));
+		    if (!graphics::view_frustum::SeesSphere(view, centre,
+		                                            graphics::mesh_detail::ScaledRadius(box.Size(), transform.scale.x)))
+		    {
+			    return;
+		    }
+		    const auto& rest = detailed->GetBoneMatrices();
+		    const auto& bones = pose != nullptr && pose->bones.size() == rest.size() ? pose->bones : rest;
+		    if (frames[0].bone >= bones.size() || frames[1].bone >= bones.size())
+		    {
+			    return;
+		    }
+		    const float closed = villager_eyes::Step(*detail.eyes, _eyes, frameGameMs,
+		                                             [&random](float a, float b) { return random.CrtRandom(a, b); });
+		    detail.drawnEyes = villager_eyes::Place(*detail.face, *model, {bones[frames[0].bone], bones[frames[1].bone]},
+		                                            {frames[0].frame, frames[1].frame}, detail.eyes->roll, closed);
+	    });
 }
