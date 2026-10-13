@@ -28,6 +28,7 @@ public:
 
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override;
 	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override;
+	[[nodiscard]] std::optional<glm::vec3> PickedPoint() const override;
 	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override;
 	[[nodiscard]] bool HandInInfluence(PlayerNames player, glm::vec3 hand) const override;
 	void HeldThingUsedOnLand(PlayerNames player) override;
@@ -54,6 +55,7 @@ public:
 	void HeatHeld(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
+	void GlobeIntoHand(entt::entity globe, PlayerNames player) override;
 	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity held) const override;
 	void SayCantPickUp(entt::entity creature) override;
 	bool GiveTo(entt::entity creature, entt::entity held, bool leftHand) override;

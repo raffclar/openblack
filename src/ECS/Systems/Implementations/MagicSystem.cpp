@@ -1551,7 +1551,7 @@ void MagicSystem::Reset()
 	_held.reset();
 	_input = {};
 	_actionDown = false;
-	_orbPress.reset();
+	_fireBallPress.reset();
 	_pour = {};
 	_rainWatchers.clear();
 	_circle.reset();
@@ -1871,9 +1871,13 @@ entt::entity MagicSystem::Summon(PlayerNames player, SpellSeedType seedType, int
 	return entity;
 }
 
-bool MagicSystem::TapOrb(entt::entity orb)
+bool MagicSystem::TapGlobe(entt::entity orb)
 {
 	auto& registry = EntityRegistry();
+	if (!registry.Valid(orb) || !registry.AllOf<OneOffSpellSeed>(orb))
+	{
+		return false;
+	}
 	const auto component = registry.Get<const OneOffSpellSeed>(orb);
 	if (GiveSeedToHand(PlayerNames::PLAYER_ONE, component.seedType, component.powerUp, component.multiplier) == entt::null)
 	{
@@ -2309,49 +2313,59 @@ bool MagicSystem::EmptyHandInInfluence() const
 	return _hand.point.has_value() && _world.HandInInfluence(PlayerNames::PLAYER_ONE, *_hand.point);
 }
 
-bool MagicSystem::PressOrb(uint32_t nowMs, uint32_t turn)
+bool MagicSystem::PressFireBall(uint32_t nowMs, uint32_t turn)
 {
-	_orbPress.reset();
+	_fireBallPress.reset();
 	if (!Locator::infoConstants::has_value() || _held.has_value())
 	{
 		return false;
 	}
-	// A bubble or a fireball under the hand
 	const auto picked = PickedUnderHand();
-	const auto orb =
-	    picked.has_value() && EntityRegistry().AnyOf<OneOffSpellSeed, MagicFireBall>(*picked) ? picked : std::nullopt;
-	// Out of the player's influence the hand neither taps nor takes them
-	if (!orb.has_value() || !EmptyHandInInfluence())
+	const auto ball = picked.has_value() && EntityRegistry().AllOf<MagicFireBall>(*picked) ? picked : std::nullopt;
+	// Out of the player's influence the hand neither taps nor takes it
+	if (!ball.has_value() || !EmptyHandInInfluence())
 	{
 		return false;
 	}
-	// The press starts taking it, and only a quick release taps it
-	// TODO(hand): held past the tap's time, the hand takes the bubble itself, to carry and throw like any other thing
-	_orbPress = OrbPress {.orb = *orb, .pressMs = nowMs, .pressTurn = turn};
+	// The press starts taking it: a quick release taps it, and held as long as a tap may last the hand takes it, which
+	// catches it the same way (a fireball is never held as a thing)
+	_fireBallPress = FireBallPress {.ball = *ball, .pressMs = nowMs, .pressTurn = turn};
 	return true;
 }
 
-void MagicSystem::ReleaseOrb(uint32_t nowMs, uint32_t turn)
+void MagicSystem::HoldFireBall(uint32_t nowMs, uint32_t turn)
 {
-	if (!_orbPress.has_value())
+	if (!_fireBallPress.has_value() ||
+	    hand_grab::ElapsedMs(nowMs, _fireBallPress->pressMs, turn, _fireBallPress->pressTurn) < hand_grab::k_GrabWaitMs)
 	{
 		return;
 	}
-	const auto press = *_orbPress;
-	_orbPress.reset();
+	const auto ball = _fireBallPress->ball;
+	_fireBallPress.reset();
+	if (!_held.has_value() && EntityRegistry().Valid(ball) && EntityRegistry().AllOf<MagicFireBall>(ball) &&
+	    EmptyHandInInfluence())
+	{
+		TapFireBall(ball);
+	}
+}
+
+void MagicSystem::ReleaseFireBall(uint32_t nowMs, uint32_t turn)
+{
+	if (!_fireBallPress.has_value())
+	{
+		return;
+	}
+	const auto press = *_fireBallPress;
+	_fireBallPress.reset();
 	const bool quick = hand_grab::ElapsedMs(nowMs, press.pressMs, turn, press.pressTurn) <= hand_grab::k_GrabWaitMs;
-	if (!quick || _held.has_value() || !EntityRegistry().Valid(press.orb) || !EmptyHandInInfluence())
+	if (!quick || _held.has_value() || !EntityRegistry().Valid(press.ball) || !EmptyHandInInfluence())
 	{
 		return;
 	}
-	// A bubble's miracle goes into the hand; another player's fireball is caught, the player's own slips through
-	if (EntityRegistry().AllOf<OneOffSpellSeed>(press.orb))
+	// Another player's fireball is caught; the player's own slips through
+	if (EntityRegistry().AllOf<MagicFireBall>(press.ball))
 	{
-		TapOrb(press.orb);
-	}
-	else if (EntityRegistry().AllOf<MagicFireBall>(press.orb))
-	{
-		TapFireBall(press.orb);
+		TapFireBall(press.ball);
 	}
 }
 

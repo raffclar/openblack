@@ -50,6 +50,7 @@ public:
 		MagicShieldsUpdate,
 		ForestsUpdate,
 		MiracleFxUpdate,
+		MiracleGlobesUpdate,
 		FireUpdate,
 		ExplosionUpdate,
 		ReactionsUpdate,
@@ -120,6 +121,7 @@ public:
 	    "Magic Shields",        //
 	    "Forests",              //
 	    "Miracle FX",           //
+	    "Miracle Globes",       //
 	    "Fire",                 //
 	    "Explosions",           //
 	    "Reactions",            //

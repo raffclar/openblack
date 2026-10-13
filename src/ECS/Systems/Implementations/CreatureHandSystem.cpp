@@ -40,6 +40,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/HandOnCreature.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureScars.h"
 #include "ECS/Registry.h"
@@ -152,6 +153,25 @@ std::optional<glm::vec3> OnPlaneThrough(const glm::vec3& centre, const glm::vec3
 	const auto along = glm::dot(centre - origin, normal) / facing;
 	return along > 0.0f ? std::optional(origin + (direction * along)) : std::nullopt;
 }
+
+/// What the hand needs to know about a creature to take hold of it; none for what isn't a creature
+std::optional<creature_hand::Holdable> HoldableOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
+	return creature_hand::Holdable {
+	    .owner = body->owner,
+	    .species = body->species,
+	    .asleep = mind != nullptr && creature_mind::IsAsleep(mind->idle),
+	    .frozen = spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Freeze),
+	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
+	};
+}
 } // namespace
 
 bool CreatureHandSystem::Grab()
@@ -235,28 +255,33 @@ void CreatureHandSystem::GiveCameraBack()
 
 bool CreatureHandSystem::MayHold(entt::entity creature) const
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
-	if (body == nullptr)
+	const auto holdable = HoldableOf(Locator::entitiesRegistry::value(), creature);
+	if (!holdable.has_value())
 	{
 		return false;
 	}
-	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
-	const creature_hand::Holdable holdable {
-	    .owner = body->owner,
-	    .species = body->species,
-	    .asleep = mind != nullptr && creature_mind::IsAsleep(mind->idle),
-	    .frozen = spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Freeze),
-	};
-	if (!creature_hand::MayHold(holdable))
+	if (!creature_hand::MayHold(*holdable, k_LocalPlayer))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
-		                   "The hand can't hold creature {}: it belongs to nobody, is an ogre, or is asleep or frozen",
+		                   "The hand can't hold creature {}: it isn't the player's own, is an ogre, or is asleep, frozen "
+		                   "or under a script's control",
 		                   entt::to_integral(creature));
 		return false;
 	}
 	return true;
+}
+
+bool CreatureHandSystem::ShowsInteractTip(entt::entity creature, bool handInInfluence) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto holdable = HoldableOf(registry, creature);
+	if (!holdable.has_value())
+	{
+		return false;
+	}
+	const auto* contact = Locator::handSystem::has_value() ? registry.TryGet<const HandOnCreature>(PlayerHand()) : nullptr;
+	const bool held = contact != nullptr && contact->creature == creature;
+	return creature_hand::ShowsInteractTip(k_LocalPlayer, *holdable, held, handInInfluence);
 }
 
 bool CreatureHandSystem::IsClick() const

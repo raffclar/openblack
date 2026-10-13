@@ -144,6 +144,9 @@ public:
 	virtual void LetGoByHand(entt::entity object, std::optional<PlayerNames> player, bool forced);
 	/// A thing a hand put down where it stood rather than threw
 	virtual void PutDownByHand(entt::entity object, std::optional<PlayerNames> player);
+	/// A hand (of the player or of a creature) released a thing, but did not put it on the land below it. The physics did
+	/// not accept the thing, or the thing flies.
+	virtual void NotPutDownByHand(entt::entity object);
 	/// A toy a player's hand let go: the player's creature may think of playing with it
 	virtual void ConsiderMimickingToyPlay(entt::entity toy, PlayerNames player);
 };

@@ -14,6 +14,7 @@
 #include <cstdlib>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <limits>
@@ -282,6 +283,25 @@ TEST_F(HandAnimationTest, HoldingASeedTakesAStillFrameAndFadesInAndOut)
 
 TEST_F(HandAnimationTest, StandardSizeSpansThreeUnitsTwo)
 {
-	// The rest pose's bones of Hand_Boned_Base2 span 536.75 units from top to bottom
-	EXPECT_NEAR(_animation.ScaleAtDistance(100.0f), 3.2f / 536.75f, 0.0001f);
+	// The rest bones of Hand_Boned_Base2 are 18.55 to 555.3 units below the origin. Thus the hand is 555.3 units tall.
+	EXPECT_NEAR(_animation.ScaleAtDistance(100.0f), 3.2f / 555.3f, 0.00001f);
+}
+
+TEST(HandRestHeight, CountsTheOriginAmongTheBones)
+{
+	const auto at = [](float y) {
+		glm::mat4 matrix(1.0f);
+		matrix[3].y = y;
+		return matrix;
+	};
+	// When all the bones are below the origin, the span starts at the origin
+	const std::array below {at(-18.5f), at(-555.3f), at(-100.0f)};
+	EXPECT_FLOAT_EQ(HandAnimation::RestHeight(below), 555.3f);
+	// When all the bones are above the origin, the span starts at the origin
+	const std::array above {at(2.0f), at(7.0f)};
+	EXPECT_FLOAT_EQ(HandAnimation::RestHeight(above), 7.0f);
+	// When the bones are on the two sides of the origin, the span goes from the lowest bone to the highest bone
+	const std::array across {at(-3.0f), at(4.0f)};
+	EXPECT_FLOAT_EQ(HandAnimation::RestHeight(across), 7.0f);
+	EXPECT_FLOAT_EQ(HandAnimation::RestHeight({}), 0.0f);
 }

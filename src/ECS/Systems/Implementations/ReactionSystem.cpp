@@ -749,12 +749,6 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		           ? ecs::villager_breeding::ReactToBreederPriority(living, reaction.source.initiator)
 		           : 0;
 	}
-	// A hunter frightens by rules of its own
-	if (reaction.source.type == Reaction::FleeFromPredator)
-	{
-		const auto kind = PredatorPriority(registry, living, reaction.source.initiator, *info);
-		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
-	}
 	// A creature weighs several kinds its own way: by whether it sees the thing, whether a person plays its player, and
 	// what it is doing
 	if (registry.AllOf<Creature>(living) && registry.AllOf<Transform>(living))
@@ -768,6 +762,12 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		{
 			return villager_reaction::Priority(*kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 		}
+	}
+	// A hunter frightens by rules of its own
+	if (reaction.source.type == Reaction::FleeFromPredator)
+	{
+		const auto kind = PredatorPriority(registry, living, reaction.source.initiator, *info);
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
 	// A villager weighs a creature by how its town feels about it; an animal heeds one as its table says
 	// TODO(creature-reactions-2): a creature weighs another by rules of its own that aren't ported yet; until then it takes

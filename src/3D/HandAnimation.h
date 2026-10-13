@@ -14,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <glm/mat4x4.hpp>
@@ -103,6 +104,9 @@ public:
 	[[nodiscard]] static float SizeAtDistance(float distanceFromCamera);
 	/// The scale of the hand mesh for a distance from the camera
 	[[nodiscard]] float ScaleAtDistance(float distanceFromCamera) const;
+	/// Returns the height that sets the size of the hand. This is the distance from the lowest to the highest rest
+	/// bone. The origin of the hand counts as a bone.
+	[[nodiscard]] static float RestHeight(std::span<const glm::mat4> restMatrices);
 
 	// Debug introspection
 	[[nodiscard]] State GetState() const { return _state; }
