@@ -2210,6 +2210,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_leash::MindHooks::miracleSightingWeight>("miracleSightingWeight")
 	    .Field<&openblack::creature_leash::MindHooks::shown>("shown")
 	    .Field<&openblack::creature_leash::MindHooks::actOn>("actOn")
+	    .Field<&openblack::creature_leash::MindHooks::actOnForced>("actOnForced")
+	    .Field<&openblack::creature_leash::MindHooks::actOnGroup>("actOnGroup")
 	    .Field<&openblack::creature_leash::MindHooks::attitudes>("attitudes");
 	Reflect<openblack::creature_leash::MindHooks::Attitude>(context, ValueOnly {})
 	    .Field<&openblack::creature_leash::MindHooks::Attitude::creature>("creature")

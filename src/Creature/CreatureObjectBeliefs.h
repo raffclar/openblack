@@ -43,6 +43,8 @@ struct Belief
 	entt::entity thing {entt::null};
 	uint32_t kind {0};
 	glm::vec3 place {0.0f};
+	/// The order in which the creature made its beliefs: a newer belief has a larger number
+	uint64_t serial {0};
 };
 
 /// A creature's beliefs about things, a fixed number of places for each kind
@@ -85,6 +87,8 @@ public:
 	[[nodiscard]] size_t Size() const { return _index.size(); }
 	/// Every belief, kind by kind, each kind in the order of its places
 	[[nodiscard]] std::vector<Belief> All() const;
+	/// Every belief, the newest first
+	[[nodiscard]] std::vector<Belief> NewestFirst() const;
 
 private:
 	struct Place
@@ -103,6 +107,7 @@ private:
 	};
 
 	std::array<Pool, k_KindCount> _pools {};
+	uint64_t _nextSerial {0};
 	std::unordered_map<entt::entity, Place> _index;
 };
 

@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -1430,11 +1431,17 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 
 	// Something shown on the leash is the only goal there is this turn, for every desire
 	std::optional<entt::entity> leashTarget;
+	std::vector<entt::entity> leashGroup;
+	const bool leashForced = mind.leash.actOnForced;
 	if (!mind.leash.actOn.empty())
 	{
 		leashTarget = static_cast<entt::entity>(mind.leash.actOn.back());
 		mind.leash.actOn.clear();
+		std::ranges::transform(mind.leash.actOnGroup, std::back_inserter(leashGroup),
+		                       [](uint32_t id) { return static_cast<entt::entity>(id); });
 	}
+	mind.leash.actOnForced = false;
+	mind.leash.actOnGroup.clear();
 	auto goals =
 	    leashTarget.has_value() || everyDesire
 	        ? std::vector<Desire> {}
@@ -1509,14 +1516,21 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			{
 				if (leashTarget.has_value())
 				{
-					if (Accepts(registry, target, *leashTarget, creature) &&
-					    (!town.has_value() || PartOfTown(registry, *leashTarget, *town)))
+					const auto suits = [&](entt::entity thing) {
+						return registry.Valid(thing) && Accepts(registry, target, thing, creature) &&
+						       (!town.has_value() || PartOfTown(registry, thing, *town)) &&
+						       (!leashForced || ObjectUsefulness(registry, learnt, mind, desire, thing, creature) > 0.0f);
+					};
+					// Made to act on a thing, it acts on the thing, or else on the first thing of its group that suits
+					const auto chosen = leashForced           ? creature_leash::ForcedTarget(*leashTarget, leashGroup, suits)
+					                    : suits(*leashTarget) ? std::optional(*leashTarget)
+					                                          : std::nullopt;
+					if (chosen.has_value())
 					{
-						const auto at = PointOf(registry, *leashTarget).value_or(position);
-						objects.push_back(
-						    {.id = entt::to_integral(*leashTarget),
-						     .distance = glm::distance(at, position),
-						     .usefulness = ObjectUsefulness(registry, learnt, mind, desire, *leashTarget, creature)});
+						const auto at = PointOf(registry, *chosen).value_or(position);
+						objects.push_back({.id = entt::to_integral(*chosen),
+						                   .distance = glm::distance(at, position),
+						                   .usefulness = ObjectUsefulness(registry, learnt, mind, desire, *chosen, creature)});
 					}
 				}
 				else
@@ -1857,11 +1871,28 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 	Abandon(*mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 	mind->leash.actOn = {entt::to_integral(object)};
+	mind->leash.actOnForced = true;
+	// The other things of its group that the creature believes in, newest belief first
+	mind->leash.actOnGroup.clear();
+	if (const auto group = BelongsTo(object); group.has_value() && *group != object)
+	{
+		for (const auto& belief : mind->beliefs.NewestFirst())
+		{
+			if (belief.thing != object && BelongsTo(belief.thing) == group)
+			{
+				mind->leash.actOnGroup.push_back(entt::to_integral(belief.thing));
+			}
+		}
+	}
+	const auto group = mind->leash.actOnGroup;
 	mind->plannedTurn = mind->turn + 1;
 	PlanCreature(creature, *mind);
 	mind->leash.actOn.clear();
-	if (!mind->planActive || !mind->planner.current.has_value() ||
-	    mind->planner.current->object != std::optional(entt::to_integral(object)))
+	mind->leash.actOnForced = false;
+	mind->leash.actOnGroup.clear();
+	const auto planned = mind->planner.current.has_value() ? mind->planner.current->object : std::nullopt;
+	if (!mind->planActive || !planned.has_value() ||
+	    (*planned != entt::to_integral(object) && std::ranges::find(group, *planned) == group.end()))
 	{
 		return std::nullopt;
 	}
