@@ -97,6 +97,20 @@ TEST(VillagerEyes, BetweenBlinksTheGapCountsDown)
 	EXPECT_TRUE(eyes.blink.blinking);
 }
 
+TEST(VillagerEyes, AFrameWithNoGameTimeKeepsTheEyesWhereTheyAre)
+{
+	// While the game is paused, the frame has no game time: the eyes do not start a blink and a blink stops
+	FakeRandom random {};
+	Eyes fresh {};
+	auto shared = k_Still;
+	EXPECT_FLOAT_EQ(Step(fresh, shared, 0, random), 0.0f);
+	EXPECT_FALSE(fresh.blink.blinking);
+	auto eyes = Blinking(25, 200);
+	EXPECT_FLOAT_EQ(Step(eyes, shared, 0, random), 25.0f * 0.02f);
+	EXPECT_EQ(eyes.blink.into, 25);
+	EXPECT_TRUE(random.asked.empty());
+}
+
 TEST(VillagerEyes, TheLidsCloseOver50MillisecondsHoldShutThenOpen)
 {
 	FakeRandom random {};

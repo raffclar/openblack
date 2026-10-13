@@ -73,6 +73,8 @@ struct Ease
 	float snap {0.0f};
 	/// Set when it is given a share, until it has arrived
 	bool moving {false};
+	/// The time on the real clock of its last move, in whole milliseconds. A new totem starts at 0.
+	uint32_t clockMs {0};
 };
 
 /// The statue is given a new share: it eases there from where it stands, taking the time its last share and the new one
@@ -80,6 +82,10 @@ struct Ease
 void SetShare(Ease& ease, float share);
 /// The statue moves on by the milliseconds that have passed
 void Step(Ease& ease, float milliseconds);
+/// The statue moves to a time on the real clock, in whole milliseconds. The clock does not stop for a pause and
+/// does not change with the game's speed. The statue moves by the time since its last move. A new statue counts
+/// from 0: its first move takes all the time since the clock started.
+void StepTo(Ease& ease, uint32_t realMs);
 /// Whether the statue has just arrived at its share; the moving flag is cleared, so this answers once per share
 [[nodiscard]] bool TakeArrival(Ease& ease);
 

@@ -58,6 +58,14 @@ void Step(Ease& ease, float milliseconds)
 	ease.elapsed = ease.duration;
 }
 
+void StepTo(Ease& ease, uint32_t realMs)
+{
+	// The unsigned difference stays correct when the clock wraps
+	const uint32_t milliseconds = realMs - ease.clockMs;
+	ease.clockMs = realMs;
+	Step(ease, static_cast<float>(milliseconds));
+}
+
 bool TakeArrival(Ease& ease)
 {
 	if (!ease.moving || std::abs(ease.share - ease.target) >= k_ArrivedWithin)

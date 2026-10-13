@@ -60,7 +60,6 @@
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/WaterRings.h"
-#include "Animals/AnimalAnimation.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
@@ -1436,6 +1435,8 @@ bool Game::GameLogicLoop() noexcept
 	}
 	// A town's storage pit or village centre on fire calls its people together
 	Locator::townSystem::value().ProcessTurn();
+	// A town totem that arrives at its share rings the village bell
+	Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 	Locator::chimneySmokeSystem::value().ProcessTurn();
 	// How far the players' influence reaches, and its border
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
@@ -2165,8 +2166,8 @@ bool Game::Update() noexcept
 	Locator::villageLightSystem::value().Update(gameTime);
 	// The disciples glow, and the one in or under the hand shows the symbol of its work
 	ecs::villager_disciple::UpdateMarks();
-	// The town totems ease to their shares
-	Locator::villageTotemSystem::value().Update(gameTime.count());
+	// The town totems move to their shares by the real clock, also while the game is paused
+	Locator::villageTotemSystem::value().Update(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 	// The owners' symbols float over their worthiest artefacts
 	Locator::artefactSystem::value().UpdateFrame(static_cast<float>(gameTime.count()));
 	// The flags over the towns' stores ease to their desires and turn to the camera
@@ -2899,8 +2900,8 @@ bool Game::Update() noexcept
 				// The villagers in view are posed for the camera the frame is drawn from
 				ShowInspectorCamera(true);
 				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
-				// and the eyes of those drawn in high detail blink, look about and are placed on their heads
-				Locator::highDetailSystem::value().PlaceEyes(animals::DrawTime(clock.GetTurn(), clock.GetTurnFraction()),
+				// The eyes of the villagers in high detail blink and turn by the game time of the frame, once each frame
+				Locator::highDetailSystem::value().PlaceEyes(static_cast<uint32_t>(clock.GetFrameGameTime().count()),
 				                                             Locator::camera::value().GetViewProjectionMatrix());
 				// The trees out of the land are drawn with their roots, as each now is
 				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
