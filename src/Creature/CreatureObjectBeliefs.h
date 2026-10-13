@@ -45,6 +45,11 @@ struct Belief
 	glm::vec3 place {0.0f};
 	/// For another creature: the game turn it last looked that creature over, none before it ever has
 	std::optional<uint32_t> inspected;
+	/// The thing that this thing is part of (a villager's town, a tree's forest), as the creature knew it when the belief
+	/// was new. None when the thing is part of nothing, or when the creature had no belief about the whole thing.
+	std::optional<entt::entity> partOf;
+	/// The order in which the beliefs were made: a newer belief has a larger number
+	uint64_t order {0};
 };
 
 /// A creature's beliefs about things, a fixed number of places for each kind
@@ -83,6 +88,12 @@ public:
 			Forget(thing);
 		}
 	}
+	/// Records that the thing is part of a whole thing, if the store has a belief about the thing
+	void JoinTo(entt::entity part, entt::entity whole);
+	/// The beliefs about the parts of a whole thing, the newest first
+	[[nodiscard]] std::vector<Belief> PartsOf(entt::entity whole) const;
+	/// Every belief, the newest first
+	[[nodiscard]] std::vector<Belief> NewestFirst() const;
 	/// How many beliefs it holds of a kind, and in all
 	[[nodiscard]] size_t Count(uint32_t kind) const;
 	[[nodiscard]] size_t Size() const { return _index.size(); }
@@ -107,6 +118,8 @@ private:
 
 	std::array<Pool, k_KindCount> _pools {};
 	std::unordered_map<entt::entity, Place> _index;
+	/// How many beliefs the store made
+	uint64_t _made {0};
 };
 
 /// How a creature's eyes sweep about it: the cells of a square around its own, its own cell first and then ring after

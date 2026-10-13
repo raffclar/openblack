@@ -99,7 +99,8 @@ struct Plan
 	creature_desires::Desire desire {creature_desires::Desire::Impress};
 	uint32_t action {0};
 	std::optional<uint32_t> object;
-	/// What the desire is about, for a desire that is about something in itself: the town its compassion helps
+	/// The whole thing that the desire is about, for a desire about something: a town for compassion, the town of the
+	/// villager that anger acts on
 	std::optional<uint32_t> about;
 	float goalUsefulness {k_DefaultUsefulness};
 	float actionPriority {0.0f};

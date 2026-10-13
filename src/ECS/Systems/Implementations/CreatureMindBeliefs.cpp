@@ -182,9 +182,14 @@ void CreatureMindSystem::ComeAcross(components::CreatureMindState& mind, entt::e
 	{
 		return;
 	}
+	// The belief about the thing is then joined to the belief about the whole thing, when the creature has one
 	if (const auto owner = BelongsTo(thing); owner.has_value() && *owner != thing)
 	{
 		ComeAcross(mind, *owner);
+		if (mind.beliefs.Find(*owner) != nullptr)
+		{
+			mind.beliefs.JoinTo(thing, *owner);
+		}
 	}
 }
 

@@ -13,6 +13,7 @@
 #include <cstdlib>
 
 #include <algorithm>
+#include <functional>
 
 using namespace openblack::creature_object_beliefs;
 
@@ -51,7 +52,7 @@ Store::Added Store::Add(entt::entity thing, uint32_t kind, glm::vec3 place)
 		slot = pool.oldest.value_or(0);
 		_index.erase(pool.slots.at(slot)->thing);
 	}
-	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place};
+	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place, .order = ++_made};
 	_index[thing] = Place {.kind = kind, .slot = slot};
 	return {.belief = &*pool.slots.at(slot), .isNew = true};
 }
@@ -94,6 +95,28 @@ bool Store::Forget(entt::entity thing)
 size_t Store::Count(uint32_t kind) const
 {
 	return kind < k_KindCount ? _pools.at(kind).used : 0;
+}
+
+void Store::JoinTo(entt::entity part, entt::entity whole)
+{
+	if (auto* belief = Find(part))
+	{
+		belief->partOf = whole;
+	}
+}
+
+std::vector<Belief> Store::PartsOf(entt::entity whole) const
+{
+	auto parts = NewestFirst();
+	std::erase_if(parts, [whole](const Belief& belief) { return belief.partOf != whole; });
+	return parts;
+}
+
+std::vector<Belief> Store::NewestFirst() const
+{
+	auto all = All();
+	std::ranges::sort(all, std::ranges::greater {}, &Belief::order);
+	return all;
 }
 
 std::vector<Belief> Store::All() const

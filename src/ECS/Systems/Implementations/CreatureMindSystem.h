@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "Common/RandomNumberManager.h"
+#include "Creature/CreatureActivity.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanActions.h"
@@ -165,11 +166,29 @@ private:
 	/// outside it, or it has no belief about the thing
 	[[nodiscard]] float ObjectToActOnUsefulness(entt::entity creature, const components::CreatureMindState& mind,
 	                                            creature_desires::Desire desire, entt::entity object);
+	/// The whole thing that a desire about something is about, and its usefulness with its distance included
+	struct ChosenActivity
+	{
+		entt::entity whole {entt::null};
+		creature_activity::Whole kind {creature_activity::Whole::Town};
+		float usefulness {0.0f};
+	};
+	/// Find the whole thing that a desire is about. Examine the whole things that the creature has beliefs about, the
+	/// newest belief first. The desire must be able to be about the thing. Take the first thing that is worth the most.
+	/// There is no result when no thing is worth more than nothing.
+	[[nodiscard]] std::optional<ChosenActivity> ChooseActivity(entt::entity creature, const components::CreatureMindState& mind,
+	                                                           creature_desires::Desire desire);
+	/// The parts of the whole thing that the creature can act on for the desire, the newest belief first, each with its
+	/// worth. The part of a creature is the creature.
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate> PartsToActOn(entt::entity creature,
+	                                                                          const components::CreatureMindState& mind,
+	                                                                          creature_desires::Desire desire,
+	                                                                          const ChosenActivity& activity);
 	/// What a thing is worth to a creature as the goal of a plan for a desire, and what that worth counts for in the
-	/// plan's priority; for compassion, how much the town it is about is worth
+	/// plan's priority. With a whole thing that the desire is about, the thing is a part of that whole thing.
 	[[nodiscard]] creature_planner::ObjectCandidate GoalWorth(entt::entity creature, const components::CreatureMindState& mind,
 	                                                          creature_desires::Desire desire, entt::entity thing,
-	                                                          std::optional<float> townUsefulness);
+	                                                          const std::optional<ChosenActivity>& activity);
 	/// Find the desire that a creature most wants to do about a different creature. The function does not examine the
 	/// desires in the list of excluded desires. There is no result when no desire has a value.
 	[[nodiscard]] std::optional<creature_desires::Desire>

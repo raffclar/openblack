@@ -212,13 +212,13 @@ bool IsDead(const ecs::Registry& registry, entt::entity creature, const creature
 	return name == k_DieAction || name == k_DeadForeverAction;
 }
 
-/// Whether a creature can be angry with a different creature. The other creature must not be dead. Its species must
-/// let creatures attack it.
+} // namespace
+
 // TODO(usefulness-use-tree): The game also refuses anger when one creature is in a list of the other creature.
 // It has two of these lists. One list contains the creatures that copy the action of the creature. These lists do not
 // exist in openblack.
-bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
-                    const creature_mind_tables::Tables& tables)
+bool ecs::systems::mind_detail::MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
+                                               const creature_mind_tables::Tables& tables)
 {
 	if (other == creature || IsDead(registry, other, tables) || !Locator::infoConstants::has_value())
 	{
@@ -228,6 +228,9 @@ bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::ent
 	const auto row = creature::InfoRow(registry.Get<const Creature>(other).species);
 	return row < rows.size() && rows.at(row).canCreatureAttackMe != 0;
 }
+
+namespace
+{
 
 /// Whether a desire can be about a different creature:
 /// - Anger can, if the creature can be angry with the other creature.
@@ -241,7 +244,7 @@ bool AppliesToCreature(const ecs::Registry& registry, Desire desire, entt::entit
 	case Desire::Impress:
 		return false;
 	case Desire::Anger:
-		return MayBeAngryWith(registry, other, creature, tables);
+		return ecs::systems::mind_detail::MayBeAngryWith(registry, other, creature, tables);
 	default:
 		return true;
 	}

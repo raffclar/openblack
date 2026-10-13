@@ -106,6 +106,9 @@ struct CreatureMindState
 
 	/// While paused, the mind leaves the body alone to be posed by hand
 	bool paused {false};
+	/// The creature can be angry with the things of its own player. At first it cannot. It can after it starts to copy
+	/// the player in an angry action on a thing of the player.
+	bool mayAttackOwnPlayer {false};
 	/// The player's hand took hold of it: once it has turned to the player it shows what it wants, and the help says it
 	bool showDesireOnHold {false};
 
