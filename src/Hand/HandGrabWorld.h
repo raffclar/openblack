@@ -160,6 +160,8 @@ public:
 	virtual void AnimalIntoOwnFlock(entt::entity animal) = 0;
 	/// A rock, static or dead tree taken stops being its town's artefact, remembering who took it
 	virtual void ArtefactTaken(entt::entity object, PlayerNames player) = 0;
+	/// A one-shot miracle's globe goes into the hand: the player has now had its miracle within reach
+	virtual void GlobeIntoHand(entt::entity /*globe*/, PlayerNames /*player*/) {}
 	/// Pulling up a tree moves the player's alignment
 	virtual void TreeUprooted(PlayerNames player, entt::entity tree) = 0;
 	/// A big forest gives a tree for the hand, taking a tree's wood from it (which may shrink it or use it up): a full

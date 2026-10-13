@@ -155,8 +155,12 @@ GrabKind HandGrabSystem::KindOf(entt::entity object) const
 	{
 		return GrabKind::BigForest;
 	}
-	// A one-shot miracle's bubble is the magic's to take
-	if (registry.AnyOf<OneOffSpellSeed, StreetLantern, TeleportStone>(object))
+	// A one-shot miracle's globe is held as any loose thing is: a quick press taps it for its miracle instead
+	if (registry.AllOf<OneOffSpellSeed>(object))
+	{
+		return GrabKind::MobileObject;
+	}
+	if (registry.AnyOf<StreetLantern, TeleportStone>(object))
 	{
 		return GrabKind::None;
 	}
@@ -908,6 +912,10 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	{
 		_world->PlaySample(k_TreeCreaks + _world->LocalRandom(k_TreeCreaksEach), position);
 		_world->TreeUprooted(player, object);
+	}
+	if (registry.AllOf<OneOffSpellSeed>(object))
+	{
+		_world->GlobeIntoHand(object, player);
 	}
 	if (registry.AllOf<Pot>(object))
 	{

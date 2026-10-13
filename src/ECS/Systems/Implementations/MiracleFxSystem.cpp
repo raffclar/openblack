@@ -139,7 +139,6 @@ void MiracleFxSystem::Update(float /*seconds*/, float gameSeconds)
 	{
 		return;
 	}
-	UpdateGlobes(gameSeconds);
 	// The hand's bands and glow keep to the game's time, stopping while it is paused
 	UpdateHand(gameSeconds);
 	UpdatePiles(gameSeconds);
@@ -190,6 +189,10 @@ void MiracleFxSystem::UpdatePiles(float gameSeconds)
 
 void MiracleFxSystem::UpdateGlobes(float seconds)
 {
+	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	{
+		return;
+	}
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& info = Locator::infoConstants::value();
 	auto& meshes = Locator::resources::value().GetMeshes();
