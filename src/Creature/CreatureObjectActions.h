@@ -210,11 +210,23 @@ enum class Thing : uint8_t
 	/// Statics with kinds of their own that a hand could hold but a creature never picks up
 	Vortex,
 	TeleportStone,
+	/// A thing built or set into the land that stones can knock about: a building, temple, totem or worship site, a
+	/// feature other than a magic mushroom, an animated static or flowers
+	Fixture,
 };
 /// How a creature decides on picking up a kind of thing
 [[nodiscard]] KindRule RuleOf(Thing thing);
 /// Whether a hand may hold a kind of thing at all
 [[nodiscard]] bool Holdable(Thing thing);
+/// Whether a kind of thing is alive: villagers, animals, birds and creatures
+[[nodiscard]] bool IsLiving(Thing thing);
+/// Whether a creature may throw things at a thing to knock it down: a living thing while it lives, and whatever is
+/// built or set into the land (shields too), but no tree, lantern, vortex or teleport stone, nor anything lying about
+[[nodiscard]] bool CanBeStoned(Thing thing, bool dead);
+/// Whether a thing does damage when a creature throws it: the statics, rocks and dead trees, but not the toys
+[[nodiscard]] bool DoesThrowingDamage(Thing thing, bool toy);
+/// Whether a creature may throw a thing into the sea in play: what lies about, the statics, rocks, dead trees and trees
+[[nodiscard]] bool CanBeThrownInTheSea(Thing thing);
 
 /// The toys among the statics, known by their models
 enum class Toy : uint8_t
@@ -231,6 +243,7 @@ enum class Toy : uint8_t
 /// What the kind of a thing says about its being picked up by a creature
 struct KindFacts
 {
+	Thing thing {Thing::Other};
 	KindRule rule {KindRule::Never};
 	/// A hand may hold it at all, so a hand may give it to a creature and a creature may catch it: villagers, animals,
 	/// things lying about, pots and piles, statics and rocks, dead trees and trees

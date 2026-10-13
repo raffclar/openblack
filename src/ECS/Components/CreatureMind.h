@@ -17,6 +17,7 @@
 
 #include <MindFile.h>
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
@@ -157,6 +158,11 @@ struct CreatureMindState
 	/// How often it has been told to hold things of each kind (by the game's belief types): it plays with what it holds
 	/// only the first times
 	std::map<uint32_t, uint32_t> heldKinds;
+	/// Where the thing stood that the player did something to which the creature last set about copying (the land's
+	/// corner until then): it takes no tree from near there to plant
+	glm::vec2 copiedAt {0.0f};
+	/// The trees it planted others by most recently, by entity number, oldest first: it never takes one of them to plant
+	std::vector<uint32_t> plantedBy;
 };
 
 } // namespace openblack::ecs::components

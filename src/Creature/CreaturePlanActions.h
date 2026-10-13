@@ -58,9 +58,21 @@ enum class Target : uint8_t
 	/// A toy it can pick up, or only a ball (the football or the toy ball)
 	Toy,
 	ToyBall,
+	/// Anything alive: villagers, animals, birds and creatures
+	AnyLiving,
+	/// What thrown things can knock down: the living while they live, and what is built or set into the land
+	Stonable,
+	/// What it can pick up that does damage when thrown: statics other than toys, rocks and dead trees
+	ThrowingDamage,
+	/// What it may throw into the sea in play
+	SeaThrowable,
+	/// A tree it can pick up, or one it can pick up to plant somewhere else: not one of the last trees it planted, nor
+	/// one near where the player did what it last copied
+	PickableTree,
+	PlantableTree,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::ToyBall) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::PlantableTree) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -122,6 +134,9 @@ enum class Build : uint8_t
 	SleepByObject,
 	/// Taking food from a pile and eating it
 	EatFromPile,
+	/// Giving the tree it uses to the store as wood, and planting the tree it uses by the thing
+	GiveWoodToStore,
+	PlantTree,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -131,6 +146,10 @@ struct Executor
 	/// The action's name in the game's table
 	std::string_view action;
 	Target target {Target::None};
+	/// What it uses to do the action, which it takes up first: the thing it throws, or the tree it plants or gives
+	Target use {Target::None};
+	/// The thing it is done to is never what it holds
+	bool notWhatItHolds {false};
 	Build build {Build::Emote};
 	/// The animation played, for the builds that play one
 	size_t animation {0};
@@ -170,6 +189,12 @@ struct Situation
 	/// its hand holds something already
 	std::optional<uint32_t> instrument;
 	bool handFull {false};
+	/// Whether what its hand holds is a tree, or a magic mushroom
+	bool holdingTree {false};
+	bool holdingMushroom {false};
+	/// Where the thing it uses is, and its radius on the ground
+	glm::vec2 instrumentPoint {0.0f};
+	float instrumentRadius {0.0f};
 	/// Where the camera is, whether the creature has a player (whose camera it can look to), whether a script controls
 	/// it, its radius on the ground, and a chance from 0 to 1 for what varies
 	std::optional<glm::vec3> eye;

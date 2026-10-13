@@ -15,6 +15,7 @@
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureFireAgenda.h"
+#include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureScriptAgendas.h"
 
@@ -45,6 +46,16 @@ constexpr std::array k_Executors {
     Executor {.action = "FishAndEat", .build = Build::FishAndEat, .activity = Activity::Eat},
     Executor {.action = "GiveFishToStoragePit", .target = Target::StoragePit, .build = Build::GiveFishToStore},
     Executor {.action = "TakeFishHome", .build = Build::TakeFishHome},
+    // Trees: given to a town's store as wood, or planted by something
+    Executor {.action = "GiveWoodFromTreeToStoragePit",
+              .target = Target::StoragePit,
+              .use = Target::PickableTree,
+              .build = Build::GiveWoodToStore},
+    Executor {.action = "PlantTree",
+              .target = Target::Anything,
+              .use = Target::PlantableTree,
+              .notWhatItHolds = true,
+              .build = Build::PlantTree},
     Executor {.action = "ExamineByPickingUp",
               .target = Target::Pickable,
               .build = Build::ExamineByPickingUp,
@@ -222,6 +233,27 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	{
 	case Build::Eat:
 		return creature_mind::Eat(*object);
+	case Build::GiveWoodToStore:
+	{
+		// Holding a tree, it gives that; with none to take either, it idles
+		std::optional<creature_mind::TreeToTake> take;
+		if (!situation.holdingTree)
+		{
+			if (!situation.instrument.has_value())
+			{
+				return creature_mind::BeIdle(random);
+			}
+			take = creature_mind::TreeToTake {
+			    .tree = *situation.instrument, .point = situation.instrumentPoint, .radius = situation.instrumentRadius};
+		}
+		return creature_mind::GiveWoodToStore(take, *object, situation.radius, situation.height);
+	}
+	case Build::PlantTree:
+		if (!situation.holdingTree && !situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::PlantTreeBy(situation.holdingTree ? std::nullopt : situation.instrument, *object);
 	case Build::EatFromPile:
 		// TODO(creature-actions-3): with something it can eat in its hand already, the game does something else; what
 		// isn't known yet, so it goes to the pile all the same

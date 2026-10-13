@@ -623,6 +623,9 @@ struct Command
 		/// The player is put in a room of the temple (value, by the temple's rooms: 0 the challenge room). Needs no
 		/// creature
 		EnterTemple,
+		/// A script tells the creature to do an action of the game's table (action, by its name) to the scenario's object,
+		/// with another of the scenario's objects (with) when given, as a script's creature action command does
+		DoAction,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -643,6 +646,9 @@ struct Command
 	float hour {12.0f};
 	/// The object picked up, knocked down or tied to, by its place in the scenario's objects
 	size_t object {0};
+	/// The action a script tells it to do, by its name in the game's table, and the object it does it with
+	std::string_view action;
+	std::optional<size_t> with;
 	/// The leash put on
 	LeashType leash {LeashType::Rope};
 	/// The part of the body stroked, by its place in the hand's parts (the head first)

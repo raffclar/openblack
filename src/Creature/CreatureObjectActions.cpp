@@ -166,6 +166,7 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 	switch (thing)
 	{
 	case Thing::Other:
+	case Thing::Fixture:
 	case Thing::Creature:
 	case Thing::Lantern:
 	case Thing::Shield:
@@ -217,8 +218,83 @@ std::optional<creature_object_actions::Toy> creature_object_actions::ToyOf(MeshI
 
 bool creature_object_actions::Holdable(Thing thing)
 {
-	return thing != Thing::Other && thing != Thing::Creature && thing != Thing::Lantern && thing != Thing::Shield &&
-	       thing != Thing::MagicMushroom;
+	return thing != Thing::Other && thing != Thing::Fixture && thing != Thing::Creature && thing != Thing::Lantern &&
+	       thing != Thing::Shield && thing != Thing::MagicMushroom;
+}
+
+bool creature_object_actions::IsLiving(Thing thing)
+{
+	return thing == Thing::Villager || thing == Thing::Animal || thing == Thing::Bird || thing == Thing::Creature;
+}
+
+bool creature_object_actions::CanBeStoned(Thing thing, bool dead)
+{
+	switch (thing)
+	{
+	case Thing::Villager:
+	case Thing::Animal:
+	case Thing::Bird:
+	case Thing::Creature:
+		return !dead;
+	case Thing::Rock:
+	case Thing::Bonfire:
+	case Thing::DeadTree:
+	case Thing::Static:
+	case Thing::MagicMushroom:
+	case Thing::Shield:
+	case Thing::Fixture:
+		return true;
+	case Thing::Other:
+	case Thing::Ball:
+	case Thing::Creed:
+	case Thing::MobileObject:
+	case Thing::Pot:
+	case Thing::Pile:
+	case Thing::Tree:
+	case Thing::Lantern:
+	case Thing::Vortex:
+	case Thing::TeleportStone:
+		return false;
+	}
+	return false;
+}
+
+bool creature_object_actions::DoesThrowingDamage(Thing thing, bool toy)
+{
+	switch (thing)
+	{
+	case Thing::Rock:
+	case Thing::Bonfire:
+	case Thing::DeadTree:
+	case Thing::Static:
+	case Thing::Vortex:
+	case Thing::TeleportStone:
+		return !toy;
+	default:
+		return false;
+	}
+}
+
+bool creature_object_actions::CanBeThrownInTheSea(Thing thing)
+{
+	switch (thing)
+	{
+	case Thing::Ball:
+	case Thing::Creed:
+	case Thing::MobileObject:
+	case Thing::Pot:
+	case Thing::Pile:
+	case Thing::Rock:
+	case Thing::Bonfire:
+	case Thing::DeadTree:
+	case Thing::Static:
+	case Thing::Vortex:
+	case Thing::TeleportStone:
+	case Thing::Tree:
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool creature_object_actions::MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts)

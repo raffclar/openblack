@@ -43,6 +43,7 @@
 #include "Creature/CreatureThrow.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -54,6 +55,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/Flowers.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -64,13 +66,16 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
@@ -1451,8 +1456,15 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 			}
 			return Thing::Static;
 		}
+		// What is built or set into the land: buildings, the temple, totems, worship sites, features, animated statics and
+		// flowers
+		if (registry.AnyOf<Abode, Temple, WorshipSite, VillageTotem, Feature, AnimatedStatic, Flowers>(object))
+		{
+			return Thing::Fixture;
+		}
 		return Thing::Other;
 	}();
+	facts.thing = thing;
 	facts.rule = creature_object_actions::RuleOf(thing);
 	facts.holdable = creature_object_actions::Holdable(thing);
 	return facts;

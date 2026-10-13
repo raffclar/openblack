@@ -58,6 +58,7 @@ public:
 	[[nodiscard]] bool CanPickUp(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] bool CanTakeFromHand(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] bool CanBeCaught(entt::entity object) const override;
+	[[nodiscard]] creature_object_actions::KindFacts KindOf(entt::entity object) const override { return KindFactsOf(object); }
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
 	[[nodiscard]] std::optional<float> PickUpStraightReach(entt::entity creature) const override;
 
