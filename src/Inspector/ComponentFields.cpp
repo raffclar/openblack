@@ -1116,6 +1116,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandGrab::waits>("waits")
 	    .Field<&components::HandGrab::pullSeconds>("pullSeconds")
 	    .Field<&components::HandGrab::pulling>("pulling")
+	    .Field<&components::HandGrab::grips>("grips")
 	    .Field<&components::HandGrab::tug>("tug")
 	    .Field<&components::HandGrab::stretch>("stretch")
 	    .Field<&components::HandGrab::holdDistance>("holdDistance")
