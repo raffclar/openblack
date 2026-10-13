@@ -875,10 +875,10 @@ void VortexSystem::RemoveTheTaken()
 void VortexSystem::PullCreature(entt::entity entity, const Creature& creature, const glm::vec3& position,
                                 const map_coords::MapCoords& centre)
 {
-	// TODO(vortex-crossing): a creature a script is moving may be taken too
-	constexpr bool k_MovedByScript = false;
+	// Taken when a script let it through and it is on the leash, or whenever a script controls it
 	const bool leashed = Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(entity);
-	if (!vortex::CreatureMayBeTaken(creature.mayGoThroughVortex, leashed, k_MovedByScript) ||
+	const bool scripted = Locator::entitiesRegistry::value().AllOf<components::ScriptControlled>(entity);
+	if (!vortex::CreatureMayBeTaken(creature.mayGoThroughVortex, leashed, scripted) ||
 	    !Locator::creatureFizzSystem::has_value())
 	{
 		return;
