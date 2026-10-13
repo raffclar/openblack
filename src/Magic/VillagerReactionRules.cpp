@@ -75,7 +75,7 @@ uint32_t villager_reaction::BurningInHandAgainTurns(float distance, float leastR
 
 uint8_t villager_reaction::TownCelebrationPriority(const CelebrationWatch& watch, uint32_t tablePriority)
 {
-	if (watch.disciple || watch.scripted || !watch.hasTown || !watch.madeByOwnTown)
+	if (watch.disciple || watch.dancing || !watch.hasTown || !watch.madeByOwnTown)
 	{
 		return 0;
 	}

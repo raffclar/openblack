@@ -49,19 +49,20 @@ struct Distance
 /// pitch
 [[nodiscard]] bool ReactedToWhenBuilt(openblack::AbodeType type);
 
-/// What a villager weighs when its town celebrates being won: whether it is a disciple, under a script, of a town at all,
+/// What a villager weighs when its town celebrates being won: whether it is a disciple, in a dance, of a town at all,
 /// and whether the celebration is made by its own town itself (a town with no town centre; one with a centre celebrates
 /// from the centre)
 struct CelebrationWatch
 {
 	bool disciple {false};
-	bool scripted {false};
+	bool dancing {false};
 	bool hasTown {false};
 	bool madeByOwnTown {false};
 };
 
-/// How urgently a villager heeds a town's celebration: by the celebration row's priority, only an ordinary villager of
-/// the town and only when the town itself made it. So a town celebrating from its centre draws none of its people.
+/// How urgently a villager heeds a town's celebration: by the celebration row's priority, only a villager of the town
+/// that isn't a disciple nor dancing, and only when the town itself made it. So a town celebrating from its centre draws
+/// none of its people.
 [[nodiscard]] uint8_t TownCelebrationPriority(const CelebrationWatch& watch, uint32_t tablePriority);
 
 /// How urgently a villager heeds a burning thing in the hand: by the row's priority when it is no further than the row's

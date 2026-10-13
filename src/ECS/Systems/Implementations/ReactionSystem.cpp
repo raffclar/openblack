@@ -486,7 +486,7 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		const auto* disciple = registry.TryGet<const Disciple>(living);
 		const auto kind = villager_reaction::TownCelebrationPriority(
 		    {.disciple = disciple != nullptr && disciple->type != VillagerDisciple::None,
-		     .scripted = registry.AllOf<ScriptControlled>(living),
+		     .dancing = registry.AllOf<Dancer>(living),
 		     .hasTown = villager.town != entt::null,
 		     .madeByOwnTown = villager.town != entt::null && villager.town == reaction.source.initiator},
 		    info->priority);

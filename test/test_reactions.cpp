@@ -1150,7 +1150,7 @@ TEST(ReactionRules, OnlyAnOrdinaryVillagerHeedsItsOwnTownCelebratingWithoutACent
 	// A town celebrating from its centre draws none of its people
 	EXPECT_EQ(TownCelebrationPriority({.hasTown = true, .madeByOwnTown = false}, 90), 0u);
 	EXPECT_EQ(TownCelebrationPriority({.disciple = true, .hasTown = true, .madeByOwnTown = true}, 90), 0u);
-	EXPECT_EQ(TownCelebrationPriority({.scripted = true, .hasTown = true, .madeByOwnTown = true}, 90), 0u);
+	EXPECT_EQ(TownCelebrationPriority({.dancing = true, .hasTown = true, .madeByOwnTown = true}, 90), 0u);
 	EXPECT_EQ(TownCelebrationPriority({}, 90), 0u);
 }
 
