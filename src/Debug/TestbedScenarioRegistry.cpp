@@ -2136,19 +2136,22 @@ void AddHand(std::vector<Scenario>& all)
 	    .name = "What the cursor picks, kind by kind",
 	    .facet = Facet::Hand,
 	    .description = "In a row on bare land, left to right: a person, a pig, an oak, a \"did you know\" sign, a silver "
-	                   "scroll, a fire dispenser floating its globe, and a lightning globe on its own. Move the pointer "
-	                   "round each and press the Action button on it.",
+	                   "scroll, a fire dispenser floating its globe, and a lightning globe on its own; behind them, a "
+	                   "vortex between the lands. Move the pointer round each and press the Action button on it.",
 	    .expected = "A person is picked anywhere in the circle their bounding ball makes, at that ball's near side; the "
 	                "pig, the oak and the sign only on their bodies. The scroll is picked on its model or a little "
 	                "round it, whichever is nearer. The dispenser is picked on its building and in a wide ball round "
 	                "its globe, and a press there knocks on it; on the globe itself the globe is picked, being pushed "
 	                "towards the camera, and a quick press puts its miracle in the hand. The loose globe is picked on "
-	                "its model or within a ball about its middle 1.2 times its size.",
+	                "its model or within a ball about its middle 1.2 times its size (moved by the middle of the miracle's "
+	                "model it shows). The vortex is picked anywhere within a ball at its middle seven tenths as wide as "
+	                "its cylinder, though the land in front of it wins.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -28.0f}, .look = {0.0f, 3.0f, 8.0f}},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-18.0f, 6.0f}, .inScript = true},
 	                {.type = AnimalInfo::Pig, .offset = {-13.0f, 6.0f}},
 	                {.type = TreeInfo::Oak, .offset = {-7.0f, 10.0f}}},
+	    .vortices = {{.type = VortexType::In, .offset = {0.0f, 45.0f}, .delaySeconds = 0.5f}},
 	    .dispensers = {{.type = MagicType::Fireball, .offset = {11.0f, 10.0f}},
 	                   {.type = MagicType::LightningBolt, .offset = {19.0f, 6.0f}, .bubbleHeight = 3.0f}},
 	    .highlights = {{.kind = 1, .offset = {-1.0f, 6.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}},

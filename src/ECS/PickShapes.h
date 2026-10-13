@@ -37,10 +37,32 @@ constexpr float k_DispenserBallHeight = 0.8f;
 constexpr float k_DispenserBallWidth = 1.5f;
 [[nodiscard]] Ball DispenserBall(glm::vec3 position, glm::vec3 halfExtents, float scale);
 
-/// A one-shot bubble's ball: about its model's middle, 1.2 times the bubble's scale (twice its miracle's picture,
-/// which is six tenths of the bubble's scale)
-constexpr float k_BubbleBallPerScale = 2.0f * 0.6f;
-[[nodiscard]] Ball BubbleBall(glm::vec3 modelMiddle, float scale);
+/// The ball round a miracle's picture (the seed shown in a globe, above an icon or over a chest): twice the picture's
+/// size, about where the picture is, moved by the middle of the seed's own model (as the model is made, neither turned
+/// nor scaled) for a seed that shows its model
+constexpr float k_PictureBallPerSize = 2.0f;
+[[nodiscard]] Ball PictureBall(glm::vec3 picture, float size, glm::vec3 seedModelMiddle);
+
+/// A one-shot bubble's picture is six tenths of the bubble's scale, so its ball is 1.2 times that scale, about the
+/// bubble's middle (and its seed's model's middle)
+constexpr float k_BubblePictureSize = 0.6f;
+[[nodiscard]] Ball BubbleBall(glm::vec3 modelMiddle, float scale, glm::vec3 seedModelMiddle);
+
+/// An icon's picture keeps the size it is made at, 1
+constexpr float k_IconPictureSize = 1.0f;
+
+/// A vortex between the lands is picked by a ball at its middle, seven tenths as wide as its cylinder's model across the
+/// land
+constexpr float k_VortexBallWidth = 0.7f;
+[[nodiscard]] Ball VortexBall(glm::vec3 centre, glm::vec3 cylinderHalfExtents);
+
+/// A teleport stone is picked by a ball of 3 m about it, while its miracle is held in the hand
+constexpr float k_TeleportBallRadius = 3.0f;
+[[nodiscard]] Ball TeleportBall(glm::vec3 position);
+
+/// A leash hanging at a temple is picked by a ball of 1 m about where it hangs
+constexpr float k_LeashPostBallRadius = 1.0f;
+[[nodiscard]] Ball LeashPostBall(glm::vec3 hangingPoint);
 
 /// Where a one-shot bubble's model is for the pick: moved from where it is drawn towards the camera by its width across
 /// the land, so that its near side wins over what stands just in front of it

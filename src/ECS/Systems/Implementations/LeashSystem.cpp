@@ -1631,27 +1631,17 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	}
 	// A press the leash took as a double tap was acted on as it came
 	const bool doubleTap = std::exchange(_lastPressDouble, false);
-	// The temple's leash posts along the ray come first
-	const auto direction = glm::normalize(rayDirection);
-	std::optional<entt::entity> post;
-	float nearest = k_TapReach;
-	registry.Each<const LeashPost, const Transform>([&](entt::entity entity, const LeashPost& at, const Transform&) {
-		// Only the leashes hanging there can be tapped, where they hang even when the picked one is carried
-		if (at.owner != player || !at.hung)
+	// A leash of the player's hanging at their temple, picked under the cursor (by its ball where it hangs, even when the
+	// picked one is carried), is tapped
+	if (Locator::pickingSystem::has_value())
+	{
+		const auto& picked = Locator::pickingSystem::value().GetPick().object;
+		const auto* post = picked.has_value() && registry.Valid(*picked) ? registry.TryGet<const LeashPost>(*picked) : nullptr;
+		if (post != nullptr && post->owner == player && post->hung)
 		{
+			TapPost(*picked);
 			return;
 		}
-		if (const auto along = RayBall(rayOrigin, direction, at.point, temple_leashes::k_TapRadius);
-		    along.has_value() && *along < nearest)
-		{
-			nearest = *along;
-			post = entity;
-		}
-	});
-	if (post.has_value())
-	{
-		TapPost(*post);
-		return;
 	}
 	if (!creature.has_value() || doubleTap)
 	{

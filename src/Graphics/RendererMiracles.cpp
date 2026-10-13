@@ -42,6 +42,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/InstanceDesc.h"
 #include "Graphics/ShaderManager.h"
@@ -67,9 +68,6 @@ constexpr float k_ByteMax = 255.0f;
 constexpr int k_FreezeReceiveType = 0;
 /// The beam explosion's seed is added over what is behind it without writing depth
 constexpr auto k_AddedSeed = SpellSeedType::BeamExplosion;
-/// The flying flock's seed is a bat for a god evil enough, otherwise a dove
-constexpr auto k_DoveMesh = MeshId::AnimalSpellDove;
-constexpr auto k_BatMesh = MeshId::AnimalBat1;
 
 glm::vec3 ColourOf(uint32_t rgb)
 {
@@ -103,15 +101,9 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 	// The seed's model, for the seeds that show one, spinning at its mesh height above the middle: food and the phials
 	// shining with the environment map, the beam added over what is behind it, a phial running through its texture and
 	// drawn as its creature takes its spell
-	auto meshId = seed.mesh;
-	if (shown.seed == SpellSeedType::FlockFlying)
-	{
-		const auto* flock = magic::GetMagicInfoAs<GMagicFlockFlyingInfo>(info, seed.magicTypes[0]);
-		// A bat for an owner evil enough, otherwise a dove
-		meshId = flock != nullptr && shown.ownerAlignment < flock->alignmentSwitch ? k_BatMesh : k_DoveMesh;
-	}
-	const auto seedMesh = resources::HashIdentifier(meshId);
-	if (seed.useMesh != 0 && meshes.Contains(seedMesh))
+	const auto meshId = magic::GetSeedModel(info, shown.seed, shown.ownerAlignment);
+	const auto seedMesh = meshId.has_value() ? resources::HashIdentifier(*meshId) : entt::id_type {0};
+	if (meshId.has_value() && meshes.Contains(seedMesh))
 	{
 		const bool phial = visuals::IsPhialSeed(shown.seed);
 		int receiveType = -1;
@@ -326,31 +318,14 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		return;
 	}
 	using ecs::components::IconSeed;
-	using ecs::components::TownCentreIcon;
-	using ecs::components::WorshipIcon;
 	const auto& registry = desc.entities;
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const bool haveRing = meshes.Contains(ecs::components::OneOffSpellSeed::k_RingMeshId.value());
 	const auto eye = desc.camera->GetOrigin();
 	const auto* objectProgram = _shaderManager->GetShader("Object");
 	const auto translucent = TranslucentPassOf(desc.viewId);
-	// The player an icon shows its miracle for: its town's, or its worship site's
-	const auto playerOf = [&registry](entt::entity icon) {
-		if (const auto* hand = registry.TryGet<const TownCentreIcon>(icon))
-		{
-			const auto* town = registry.Valid(hand->town) ? registry.TryGet<const ecs::components::Town>(hand->town) : nullptr;
-			return town != nullptr ? town->owner : PlayerNames::NEUTRAL;
-		}
-		if (const auto* site = registry.TryGet<const WorshipIcon>(icon))
-		{
-			const auto* component =
-			    registry.Valid(site->site) ? registry.TryGet<const ecs::components::WorshipSite>(site->site) : nullptr;
-			return component != nullptr ? component->player : PlayerNames::NEUTRAL;
-		}
-		return PlayerNames::NEUTRAL;
-	};
 	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
-		const auto player = playerOf(icon);
+		const auto player = ecs::world_objects::IconPlayer(registry, icon);
 		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL
 		                            ? Locator::alignmentSystem::value().GetPlayerAlignment(player)
 		                            : 0.0f;

@@ -46,6 +46,11 @@ private:
 	void AddBubbles(glm::vec3 camera);
 	/// Adds the fireballs, which have no model, to the frame's pick
 	void AddFireBalls();
+	/// Adds the vortices between the lands and the teleport stones, picked by their balls alone, to the frame's pick
+	void AddVortices();
+	void AddTeleportStones();
+	/// Adds the leashes hanging at the temples, picked by their balls alone, to the frame's pick
+	void AddLeashPosts();
 
 	Pick _pick;
 	std::optional<glm::vec3> _behindHand;

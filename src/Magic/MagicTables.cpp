@@ -196,6 +196,21 @@ const GSpellSeedInfo& magic::GetSpellSeedInfo(const InfoConstants& info, SpellSe
 	return info.spellSeed.at(static_cast<size_t>(seed));
 }
 
+std::optional<MeshId> magic::GetSeedModel(const InfoConstants& info, SpellSeedType seed, float ownerAlignment)
+{
+	const auto& record = GetSpellSeedInfo(info, seed);
+	if (record.useMesh == 0)
+	{
+		return std::nullopt;
+	}
+	if (seed == SpellSeedType::FlockFlying)
+	{
+		const auto* flock = GetMagicInfoAs<GMagicFlockFlyingInfo>(info, record.magicTypes[0]);
+		return flock != nullptr && ownerAlignment < flock->alignmentSwitch ? MeshId::AnimalBat1 : MeshId::AnimalSpellDove;
+	}
+	return record.mesh;
+}
+
 int magic::GetPowerUpFromMagicType(const GSpellSeedInfo& seed, MagicType type)
 {
 	return GetPowerUpGesture(seed, type).level;
