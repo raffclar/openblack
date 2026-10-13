@@ -35,6 +35,7 @@
 #include "EngineConfig.h"
 #include "Graphics/UploadPacer.h"
 #include "Gui/LoadingScreenRules.h"
+#include "Gui/MenuPause.h"
 #include "Input/HandPointer.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
@@ -479,6 +480,8 @@ private:
 	/// developers' start), which leaves the land as it is rather than black at its start
 	bool AskNewGameChoice();
 	void HandleInterfaceAction();
+	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.
+	void CloseMenuForNewLand();
 	/// The options the player keeps with their profile take effect: the hand, the help, the texts and the tooltips
 	void ApplyPlayerSettings(const player_profiles::Settings& settings);
 	/// The Players page lists the profiles, the one played picked
@@ -540,9 +543,8 @@ private:
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
 	std::filesystem::path _landPath;
-	/// Whether the game was paused when the menu opened, which pauses it
-	bool _pausedBeforeMenu {true};
-	bool _menuWasOpen {false};
+	/// The pause that the menu holds while it is open
+	gui::MenuPause _menuPause;
 	/// The menu asked for the game to start again as the profile played
 	bool _restartRequested {false};
 	/// When the menu last closed, on the computer's clock
