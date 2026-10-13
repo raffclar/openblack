@@ -150,6 +150,8 @@ public:
 	}
 	/// Whether the creature is still about taking a thing from the hand: turning to the player or reaching for it
 	[[nodiscard]] virtual bool IsTakingFromHand(entt::entity /*creature*/) const { return false; }
+	/// Whether the creature lies dead, knocked out or doing one of the actions of lying dead for now or for good
+	[[nodiscard]] virtual bool IsLyingDead(entt::entity /*creature*/) { return false; }
 	/// A fire reaches the creature: it goes to put out a fire on something it cares for enough, once it has seen the
 	/// water miracle often enough to cast it, and runs from the burning thing otherwise
 	virtual void ReactToFire(entt::entity /*creature*/, entt::entity /*burning*/) {}

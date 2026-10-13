@@ -421,3 +421,14 @@ TEST(VillageTotemRules, TheIconIsTheCreaturesSpeciesIconOrTheHandWithoutOne)
 	EXPECT_EQ(vt::IconMesh(MeshId::BuildingPlayerIconCow), MeshId::BuildingPlayerIconCow);
 	EXPECT_EQ(static_cast<uint32_t>(vt::IconMesh(MeshId::BuildingPlayerIconCow)), 184U);
 }
+
+TEST(VillageTotemRules, TheSymbolsSitOverTheTopOfTheCarvingWhateverItsHeight)
+{
+	// Over the icon's place by the icon's whole height: a taller carving lifts the top with it
+	EXPECT_FLOAT_EQ(vt::TopY(30.0f, 11.5f), 41.5f);
+	EXPECT_FLOAT_EQ(vt::TopY(30.0f, 12.6f), 42.6f);
+	EXPECT_FLOAT_EQ(vt::TopY(30.0f, 7.9f), 37.9f);
+	// The icon stands on the plinth, so the top is the plinth's place, the icon's rise over it and the carving's height
+	const float plinthY = 26.0f;
+	EXPECT_FLOAT_EQ(vt::TopY(plinthY + vt::k_IconAbovePlinth, 11.5f), plinthY + 2.729f + 11.5f);
+}

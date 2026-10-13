@@ -43,6 +43,9 @@ public:
 		TooWeak,
 		/// There is no arena near enough, nor room for one
 		NoArena,
+		/// The other creature, asked first, won't fight it: it is less than half or more than twice its height, it lies
+		/// dead, or only one of the two is under a script's control
+		Refused,
 	};
 
 	virtual ~CreatureFightSystemInterface() = default;
@@ -64,6 +67,12 @@ public:
 	/// A creature taken out of the game leaves its fight at once, letting go of the arena it made; its opponent's fight
 	/// ends as a fight given up does, and it forgets the creature gone
 	virtual void Withdraw(entt::entity creature) { AbortFight(creature); }
+	/// The creature is taken out of its fight, as the leash pulling it away or an order does: the fight ends with no
+	/// winner. Both creatures finish the move they are making and stand, without celebrating or sulking, and each loses
+	/// from its life a quarter of the fight health it lost. A fight still being set up is simply left.
+	virtual void CallOff(entt::entity creature) { AbortFight(creature); }
+	/// Whether the creature is in a fight's setup, going to the arena before the duel: it takes no leash orders then
+	[[nodiscard]] virtual bool IsSettingUpFight(entt::entity /*creature*/) const { return false; }
 	[[nodiscard]] virtual bool IsFighting(entt::entity creature) const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> OpponentOf(entt::entity creature) const = 0;
 

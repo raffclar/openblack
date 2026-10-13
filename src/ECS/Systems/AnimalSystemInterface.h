@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -34,9 +35,9 @@ public:
 
 	/// A turn of every animal
 	virtual void ProcessTurn() = 0;
-	/// Each frame: the animals are drawn between their last two turns, each posed by its own clip as the game's clock
-	/// of the turn and the share of it gone tell
-	virtual void Update(uint32_t turn, float turnFraction) = 0;
+	/// Each frame: the animals are drawn between their last two turns, each posed by its own clip played on by the
+	/// frame's game time
+	virtual void Update(std::chrono::milliseconds frameGameTime, float turnFraction) = 0;
 	virtual void Reset() = 0;
 
 	/// A new flock with nobody in it yet, made at a point its leader's legs wander about
@@ -143,8 +144,10 @@ public:
 	[[nodiscard]] virtual bool IsFrighteningToCreature(entt::entity animal) const = 0;
 	/// Whether the player's hand may pick the animal up
 	[[nodiscard]] virtual bool CanPlayerPickUp(entt::entity animal) const = 0;
-	/// Whether a creature may pick the animal up, and stamp on it, a creature of the height given (metres)
-	[[nodiscard]] virtual bool CanBePickedUpByCreature(entt::entity animal) const = 0;
+	/// A bird's own say on whether a creature may pick it up: only when low enough over the land. None for the other
+	/// animals, which take the rules of things in general.
+	[[nodiscard]] virtual std::optional<bool> BirdCanBePickedUpByCreature(entt::entity animal) const = 0;
+	/// Whether a creature of the height given (metres) may stamp on the animal
 	[[nodiscard]] virtual bool CanBeStompedOnByCreature(entt::entity animal, float creatureHeight) const = 0;
 };
 

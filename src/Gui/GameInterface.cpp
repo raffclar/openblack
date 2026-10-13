@@ -46,6 +46,7 @@
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Gui/CinemaBars.h"
+#include "Gui/CinemaHides.h"
 #include "Gui/GlyphTexture.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/ScriptTexts.h"
@@ -666,7 +667,13 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawGestureHints(resolution);
 	const bool menuOpen =
 	    (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() || _newPlayerBox->IsActive();
-	DrawFloatingNumbers(resolution);
+	// A cut scene leaves some of the interface off the screen
+	const auto& cinema = Locator::cinematicDirectorSystem::value();
+	const cinema_hides::Bars cinemaBars {.in = cinema.IsWideScreenOn(), .heldByScript = cinema.GetWideScreenOwner() != 0};
+	if (cinema_hides::ShowsFloatingNumbers(cinemaBars))
+	{
+		DrawFloatingNumbers(resolution);
+	}
 	if (_message.has_value())
 	{
 		_painter.DrawTextWrapped(DialogRect {{0, 0}, DialogPainter::k_Size}, true, _message->text, 60,
@@ -677,8 +684,14 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	if (!menuOpen)
 	{
 		DrawFightPanel(resolution);
-		DrawCreaturePanel(resolution);
-		DrawToolTip(resolution);
+		if (cinema_hides::ShowsCreaturePanel(cinemaBars))
+		{
+			DrawCreaturePanel(resolution);
+		}
+		if (cinema_hides::ShowsToolTip(cinemaBars))
+		{
+			DrawToolTip(resolution);
+		}
 	}
 	if (_tattooEditor->IsVisible())
 	{

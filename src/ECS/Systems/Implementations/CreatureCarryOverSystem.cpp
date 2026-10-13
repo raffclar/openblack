@@ -71,7 +71,8 @@ std::optional<creature_carry_over::KeptFiles> CreatureCarryOverSystem::Files() c
 	{
 		return std::nullopt;
 	}
-	const auto file = _profileFile();
+	// The game's own file, once a game has started; before that the profile picked
+	const auto file = _gameFile.has_value() ? _gameFile : _profileFile();
 	if (!file.has_value())
 	{
 		return std::nullopt;
@@ -258,4 +259,14 @@ void CreatureCarryOverSystem::ProcessTurn()
 void CreatureCarryOverSystem::Reset()
 {
 	_arriving.clear();
+}
+
+void CreatureCarryOverSystem::StartGame()
+{
+	auto file = _profileFile ? _profileFile() : std::nullopt;
+	if (file != _gameFile)
+	{
+		_kept.reset();
+	}
+	_gameFile = std::move(file);
 }

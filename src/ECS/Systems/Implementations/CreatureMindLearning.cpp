@@ -62,6 +62,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/MiracleImpression.h"
@@ -212,6 +213,23 @@ uint32_t PlayerNumberOf(PlayerNames owner)
 }
 
 /// Whether a thing is the kind an action is done to
+/// Which toy the thing is: the football is a ball, and of the statics those with a toy's model
+std::optional<creature_object_actions::Toy> ToyOf(const ecs::Registry& registry, entt::entity entity)
+{
+	if (registry.AllOf<Ball>(entity))
+	{
+		return creature_object_actions::Toy::Ball;
+	}
+	const auto* still = registry.TryGet<const MobileStatic>(entity);
+	if (still == nullptr || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& statics = Locator::infoConstants::value().mobileStatic;
+	const auto kind = static_cast<size_t>(still->type);
+	return kind < statics.size() ? creature_object_actions::ToyOf(statics.at(kind).meshId) : std::nullopt;
+}
+
 bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, entt::entity self)
 {
 	if (entity == self || !registry.Valid(entity))
@@ -233,7 +251,11 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	case Target::LiveFood:
 		return !heldByOther && registry.AllOf<Villager>(entity) && FoodValueOf(entity).has_value();
 	case Target::Pickable:
-		return !heldByOther && registry.AnyOf<MobileObject, Ball>(entity) && hands != nullptr && hands->CanPickUp(entity);
+		return !heldByOther && hands != nullptr && hands->CanPickUp(self, entity);
+	case Target::Toy:
+		return !heldByOther && ToyOf(registry, entity).has_value() && hands != nullptr && hands->CanPickUp(self, entity);
+	case Target::ToyBall:
+		return !heldByOther && ToyOf(registry, entity) == creature_object_actions::Toy::Ball;
 	case Target::Destroyable:
 		return hands != nullptr && hands->CanDestroy(entity);
 	case Target::Tree:
@@ -322,14 +344,32 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 			consider(entity, Transform {.position = spell.position, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
 		});
 	}
-	// Pots and piles of food are only ever eaten
-	if (target == Target::Food || target == Target::MagicFoodPile)
+	// Of pots and piles, food is eaten, and any may be picked up
+	if (target == Target::Food || target == Target::MagicFoodPile || target == Target::Pickable)
 	{
 		registry.Each<const Pot, const Transform>(
 		    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
 	}
+	// Whatever else it may pick up: animals, the football, statics and rocks, dead trees, trees and mushrooms
+	const bool pickable = target == Target::Pickable;
+	if (pickable || target == Target::Toy || target == Target::ToyBall)
+	{
+		registry.Each<const Ball, const Transform>(
+		    [&](entt::entity entity, const Ball&, const Transform& at) { consider(entity, at); });
+		registry.Each<const MobileStatic, const Transform>(
+		    [&](entt::entity entity, const MobileStatic&, const Transform& at) { consider(entity, at); });
+	}
+	if (pickable)
+	{
+		registry.Each<const Animal, const Transform>(
+		    [&](entt::entity entity, const Animal&, const Transform& at) { consider(entity, at); });
+		registry.Each<const DeadTree, const Transform>(
+		    [&](entt::entity entity, const DeadTree&, const Transform& at) { consider(entity, at); });
+		registry.Each<const Feature, const Transform>(
+		    [&](entt::entity entity, const Feature&, const Transform& at) { consider(entity, at); });
+	}
 	const bool fire = target == Target::Burning || target == Target::Unburnt;
-	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything || fire)
+	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything || fire || pickable)
 	{
 		registry.Each<const Tree, const Transform>(
 		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
@@ -344,6 +384,10 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const StoragePit, const Transform>(
 		    [&](entt::entity entity, const StoragePit&, const Transform& at) { consider(entity, at); });
 	}
+	// A thing found in two of the lists counts once
+	std::ranges::sort(found, {}, &Found::entity);
+	const auto [first, last] = std::ranges::unique(found, {}, &Found::entity);
+	found.erase(first, last);
 	std::ranges::sort(found, {}, &Found::distance);
 	return found;
 }

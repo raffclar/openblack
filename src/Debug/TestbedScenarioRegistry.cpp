@@ -768,6 +768,123 @@ void AddGrowth(std::vector<Scenario>& all)
 	});
 }
 
+/// The first land's Creature Breeder, run by the game's own script at the same places of the map as on the first land
+/// (the testbed spans the whole map), each as high above the land as there; the kennels are a marker, as on the second
+/// and fifth lands. The player's Cow stands by; the scenario clicks the kennels' scroll, and the breeder offers the
+/// bonus creatures the debug option takes as unlocked
+void AddBreederOffers(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// The first land's breeder places, from the middle of the map, and how far above the land each is there
+	constexpr glm::vec2 k_BreederStart {-661.839f, 850.803f};
+	constexpr glm::vec2 k_SoapBox {-663.838f, 849.415f};
+	constexpr glm::vec2 k_Kennels {-660.73f, 851.21f};
+	constexpr glm::vec2 k_CreaturePlace {-667.115f, 843.713f};
+	const auto marker = [](glm::vec2 point, float height = 0.0f) {
+		return Argument {.kind = Argument::Kind::Marker, .point = point, .height = height};
+	};
+	const Command runBreeder {
+	    .kind = Kind::RunScript,
+	    .delaySeconds = 0.5f,
+	    .script = "CreatureBreeder",
+	    // Land, the breeder's start, the soap box, the kennels, where the creatures stand, then two camera shots
+	    .scriptArguments = {{.kind = Argument::Kind::Number, .number = 1.0f},
+	                        marker(k_BreederStart),
+	                        marker(k_SoapBox),
+	                        marker(k_Kennels),
+	                        marker(k_CreaturePlace),
+	                        marker({-671.651f, 844.151f}, 4.151f),
+	                        marker({-653.575f, 856.752f}, -1.247f),
+	                        marker({-696.66f, 839.907f}, 12.69f),
+	                        marker({-674.738f, 851.945f}, 0.719f)},
+	    // As the first land sets them up: the player's creature, and no swap at the breeder yet
+	    .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                      {"GlobalCurrentCreature", {.number = -1.0f}},
+	                      {"GlobalOldCreature", {.number = -1.0f}},
+	                      {"BreederRunning", {.number = 0.0f}},
+	                      {"NrOfChoosenCreature", {.number = 0.0f}},
+	                      {"GlobalReset", {.number = 0.0f}}},
+	};
+	// The kennels' scroll goes up ten seconds in; the pointer at the middle of the screen, which looks at it, clicks it
+	// with the Action button
+	const std::vector<Command> commands {
+	    runBreeder,
+	    {.kind = Kind::PointerTo, .delaySeconds = 11.0f, .point = {0.5f, 0.5f}},
+	    {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	    {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	};
+	const auto offer = [&](std::string_view id, std::string_view name, std::string_view description, std::string_view expected,
+	                       creature_swap::Unlocked unlocked) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Story,
+		    .description = description,
+		    .expected = expected,
+		    .environment = {.dispenserGrid = false, .unlockedBonusCreatures = unlocked},
+		    .framing = {.shot = Shot::Placed,
+		                .eye = {k_Kennels.x - 20.0f, 10.0f, k_Kennels.y - 22.0f},
+		                .look = {k_Kennels.x, 6.0f, k_Kennels.y}},
+		    .creatures = {Content(CreatureType::Cow, k_CreaturePlace + glm::vec2 {10.0f, -12.0f}, 0.0f, "player's cow")},
+		    .commands = commands,
+		});
+	};
+	creature_swap::Unlocked leopard;
+	leopard.set(static_cast<size_t>(creature_swap::Bonus::Leopard));
+	auto leopardAndHorse = leopard;
+	leopardAndHorse.set(static_cast<size_t>(creature_swap::Bonus::Horse));
+	offer("creature.breeder_offer", "The Creature Breeder offers all five bonus creatures",
+	      "All five bonus creatures taken as unlocked (the debug option). The first land's breeder script runs at its "
+	      "places; the player's Cow stands by. Twelve seconds in the kennels' scroll is clicked.",
+	      "The breeder walks to the soap box and the camera to him; sparkles and the Leopard, Horse, Mandrill, Gorilla and "
+	      "Rhino appear one beside the next; between the first and the last the breeder says \"Look. I have these "
+	      "wondrous Creatures you can choose from.\" A scroll stands over each. Click one with the Cow near to choose it; "
+	      "click it again to swap. The offer ends after a swap or after 60 to 120 seconds, the others vanishing.",
+	      creature_swap::Unlocked {}.set());
+	offer("creature.breeder_offer_one", "The Creature Breeder offers one bonus creature",
+	      "Only the Leopard taken as unlocked; otherwise as creature.breeder_offer.",
+	      "The Leopard alone appears, with its scroll; the camera takes in it and the breeder, who says the line for one "
+	      "creature.",
+	      leopard);
+	offer("creature.breeder_offer_two", "The Creature Breeder offers two bonus creatures",
+	      "The Leopard and the Horse taken as unlocked; otherwise as creature.breeder_offer.",
+	      "The Leopard and the Horse appear side by side, each with a scroll, and the breeder says \"Look. I have these "
+	      "wondrous Creatures you can choose from.\"",
+	      leopardAndHorse);
+
+	// The swap a quest offers at its end, as The Lost Flock offers its sheep: the game's own SwapCreatures script over a
+	// sheep of nobody's, the player's Cow nearby. The pointer looks at the sheep and clicks it twice with the Action
+	// button: once to choose it, and once more, after the Cow has come over, to swap
+	auto sheep = Content(CreatureType::Sheep, {15.0f, 0.0f}, 270.0f, "the flock's sheep");
+	sheep.owner = PlayerNames::NEUTRAL;
+	all.push_back({
+	    .id = "creature.field_swap",
+	    .name = "A quest's offer of its creature, as The Lost Flock's sheep",
+	    .facet = Facet::Story,
+	    .description = "The game's SwapCreatures script runs over a sheep of nobody's, the player's Cow 25 away. Three "
+	                   "seconds in the sheep is clicked; twelve seconds later it is clicked again.",
+	    .expected = "A scroll stands over the sheep, which looks at the camera. At the first click the scroll goes, the "
+	                "Cow walks over and the two look each other over, the good advisor saying the reminder. At the second "
+	                "click a cinema shows both: sparkles, both point at each other, the swap with its beams and the swap "
+	                "sound, then the evil advisor says the sheep is now the player's. The offer starts again over the "
+	                "Cow, so they can swap back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {5.0f, 22.0f, -50.0f}, .look = {15.0f, 8.0f, 0.0f}},
+	    .creatures = {Content(CreatureType::Cow, {-10.0f, 0.0f}, 90.0f, "player's cow"), sheep},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SwapCreatures",
+	                  .scriptArguments = {{.kind = Argument::Kind::Creature, .index = 1}},
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                                    {"GlobalReset", {.number = 0.0f}}}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 12.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -811,6 +928,7 @@ void AddStory(std::vector<Scenario>& all)
 	    // Room 3 is the main room, the one the entrance leads to
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
 	});
+	AddBreederOffers(all);
 }
 
 void AddAppearance(std::vector<Scenario>& all)
@@ -1487,6 +1605,63 @@ void AddObjects(std::vector<Scenario>& all)
 	                 OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::Lob, 0, 0.5f, true), OnObject(Kind::PickUp, 0, 0, 1.0f),
 	                 Act(Kind::Discard, 0, 0.5f, true), Go(Kind::WalkTo, 0, {-20.0f, 0.0f}, 1.0f)},
 	    .repeatFrom = 0,
+	});
+
+	// A tiger a tenth of the size beside it, for whom a villager is too heavy
+	auto small = Posed(CreatureType::Tiger, {30.0f, 0.0f});
+	small.size = 0.1f;
+	all.push_back({
+	    .id = "objects.pickup_limits",
+	    .name = "What is too big or heavy to lift, and putting down what can't be moved",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, with a ball eight times the usual size to its front right and a villager to its "
+	                   "front left whom a script has made immovable, though she may be picked up. A tiger a tenth of the "
+	                   "size stands 30 m east with a villager in front of it. The small tiger tries to pick up its "
+	                   "villager; the big one tries to pick up the giant ball, then picks up the villager and puts her "
+	                   "down, then picks her up again and throws her to the west.",
+	    .expected = "The small tiger gives up at once: the villager weighs more than 0.8 of its weight. The big tiger "
+	                "gives up on the ball at once: its size and the ball's together are beyond its reach. It picks up "
+	                "the villager; each time it lets her go, put down or thrown, she goes straight down onto the land "
+	                "under its hand and stands there, never left in the air.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -15.0f}, {35.0f, -15.0f}, {-40.0f, 5.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}), small},
+	    .objects =
+	        {{.type = VillagerInfo::NorseHousewifeFemale,
+	          .offset = {-6.0f, -k_Reach},
+	          .indestructible = true,
+	          .inScript = true,
+	          .immovable = true},
+	         {.type = MobileObjectInfo::Ball, .offset = {12.0f, -k_Reach}, .scale = 8.0f},
+	         {.type = VillagerInfo::NorseHousewifeFemale, .offset = {30.0f, -3.0f}, .indestructible = true, .inScript = true}},
+	    .commands = {OnObject(Kind::PickUp, 1, 2, 1.0f), OnObject(Kind::PickUp, 0, 1, 1.0f), OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 Act(Kind::PutDown, 0, 1.0f, true), OnObject(Kind::PickUp, 0, 0, 2.0f),
+	                 Go(Kind::ThrowAt, 0, {-40.0f, -10.0f}, 1.0f), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 2.0f),
+	                 Go(Kind::TurnToFace, 0, {0.0f, -60.0f}, 0.0f)},
+	});
+
+	all.push_back({
+	    .id = "objects.pickup_kinds",
+	    .name = "The kinds of thing a creature picks up",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with, in front of it from left to right, a toy ball, a rock, an idol, a birch and a "
+	                   "magic mushroom. It picks up and throws the toy ball and then the rock to the west, tries to pick up "
+	                   "the idol, pulls up the birch and puts it down, then picks up the mushroom and puts it down.",
+	    .expected = "The toy ball and the rock are lifted and thrown. The idol is refused at once: of the statics only "
+	                "toys are picked up. The birch creaks as it comes out of the ground and is planted again where it is "
+	                "put down. The mushroom is lifted and put down.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {25.0f, -15.0f}, {-60.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {-12.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {-6.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::Idol, .offset = {0.0f, -k_Reach}},
+	                {.type = TreeInfo::Birch, .offset = {6.0f, -k_Reach}},
+	                {.type = FeatureInfo::MagicMushroom, .offset = {12.0f, -k_Reach}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Go(Kind::ThrowAt, 0, {-60.0f, -10.0f}, 0.5f),
+	                 OnObject(Kind::PickUp, 0, 1, 1.0f), Go(Kind::ThrowAt, 0, {-60.0f, 10.0f}, 4.0f),
+	                 OnObject(Kind::PickUp, 0, 2, 1.0f), OnObject(Kind::PickUp, 0, 3, 1.0f), Act(Kind::PutDown, 0, 1.0f, true),
+	                 OnObject(Kind::PickUp, 0, 4, 1.0f), Act(Kind::PutDown, 0, 1.0f, true)},
 	});
 
 	auto hungry = Posed(CreatureType::Tiger, {0.0f, 0.0f});
@@ -2365,6 +2540,101 @@ void AddCombat(std::vector<Scenario>& all)
 	    .creatures = {lion, small},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 1, 1, 0.2f)},
 	});
+
+	all.push_back({
+	    .id = "leash.pulled_out_of_fight",
+	    .name = "The leash pulls a creature out of its fight",
+	    .facet = Facet::Leash,
+	    .description = "The player's red tiger wears the learning leash held in the hand and fights a blue tiger, both "
+	                   "by themselves. Hold the hand near the red tiger, then move it well away so the rope pulls taut.",
+	    .expected = "With the hand near, the rope hangs slack and the duel goes on. Pulled taut, the red tiger is "
+	                "taken out of the fight: the fight is called off with no winner, the help says \"You pulled your "
+	                "Creature away from what he was trying to do.\" and the red tiger walks to the hand.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	// Big against small: the game never resizes a creature for a fight; it only refuses one outside half to twice its
+	// height
+	auto big = Fighter(left, 90.0f, "big tiger", PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
+	big.size = 1.5f;
+	auto smaller = Fighter(right, 270.0f, "small tiger", PlayerNames::PLAYER_TWO, 0.5f, 0.0f);
+	smaller.size = 0.8f;
+	all.push_back({
+	    .id = "combat.big_vs_small",
+	    .name = "A big creature fights a small one",
+	    .facet = Facet::Combat,
+	    .description = "A big tiger (size 1.5) fights a small one (size 0.8), just under twice its height, both by "
+	                   "themselves.",
+	    .expected = "The fight starts and both keep their sizes throughout: the arena is sized for the big one, its "
+	                "blows reach further and hit harder, and the small one has to step in to land its own.",
+	    .framing = ringside,
+	    .creatures = {big, smaller},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 Fight(Kind::FightAuto, 1, 1, 0.0f)},
+	});
+	auto tiny = Fighter(right, 270.0f, "tiny tiger", PlayerNames::PLAYER_TWO, 0.5f, 0.0f);
+	tiny.size = 0.6f;
+	all.push_back({
+	    .id = "combat.too_small",
+	    .name = "A creature too small to fight",
+	    .facet = Facet::Combat,
+	    .description = "A big tiger (size 1.5) is told to fight a tiny one (size 0.6), less than half its height.",
+	    .expected = "The tiny tiger refuses: no arena appears and neither moves to fight (the command reports "
+	                "\"refused\").",
+	    .framing = ringside,
+	    .creatures = {big, tiny},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f)},
+	});
+
+	// Miracles in a fight: the player's hurt tiger heals itself, then strikes its opponent with lightning
+	auto hurt = red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
+	hurt.needs.life = 0.3f;
+	all.push_back({
+	    .id = "combat.casting",
+	    .name = "Casting miracles in a fight",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger, hurt (life 0.3, so fight health 0.65), knows Heal and Lightning. In "
+	                   "the fight it is given Heal, as drawing Heal's gesture does, then Lightning, then Heal again; the "
+	                   "blue tiger fights by itself.",
+	    .expected = "Each miracle is cast from the fight stance: the creature raises its arms (start of the cast), "
+	                "casts as the start ends, holds the casting pose only a moment and lowers its arms. Heal is cast on "
+	                "itself and its fight health bar rises; Lightning strikes the blue tiger, which reels. Each cast "
+	                "takes from the red tiger's stamina (the blue bar); without enough stamina a cast does nothing.",
+	    .framing = ringside,
+	    .creatures = {hurt, blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands =
+	        {{.kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Heal)},
+	         {.kind = Kind::KnowMiracle,
+	          .creature = 0,
+	          .delaySeconds = 0.0f,
+	          .value = static_cast<size_t>(MagicType::LightningBolt)},
+	         Fight(Kind::StartFight, 0, 1, 0.5f),
+	         Fight(Kind::FightAuto, 1, 1, 0.2f),
+	         Fight(Kind::FightSpell, 0, static_cast<size_t>(MagicType::Heal), 8.0f),
+	         Fight(Kind::FightSpell, 0, static_cast<size_t>(MagicType::LightningBolt), 6.0f),
+	         Fight(Kind::FightSpell, 0, static_cast<size_t>(MagicType::Heal), 6.0f)},
+	});
+
+	// Forfeiting: there is no forfeit, but taking the creature away ends the fight with no winner
+	all.push_back({
+	    .id = "combat.forfeit",
+	    .name = "Taking a creature out of a fight",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger wears the leash held in the hand and fights a blue tiger, both by "
+	                   "themselves. Ten seconds into the duel the player gives a leash order to go to a point, as the "
+	                   "Action button outside the fight view does. Try it yourself too: pull the leash taut by moving "
+	                   "the hand well away from the red tiger.",
+	    .expected = "The fight is called off with no winner: both tigers finish the move they are making, play their "
+	                "finish and stand, without celebrating or sulking; the ring of light goes. The red tiger then walks "
+	                "to the point. Pulled away by the leash instead, the help says \"You pulled your Creature away from "
+	                "what he was trying to do.\"",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 0.5f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, -20.0f}, 16.0f, false)},
+	});
 }
 
 void AddMind(std::vector<Scenario>& all)
@@ -2380,6 +2650,27 @@ void AddMind(std::vector<Scenario>& all)
 		                .value = static_cast<size_t>(desire),
 		                .amount = amount};
 	};
+
+	// Facing away from the camera, their minds free, while a script's cinema bars come and go
+	const auto awayOwned = Content(CreatureType::Tiger, {-20.0f, 0.0f}, 180.0f, "player's");
+	auto awayNeutral = Content(CreatureType::Cow, {20.0f, 0.0f}, 180.0f, "no player's");
+	awayNeutral.owner = PlayerNames::NEUTRAL;
+	all.push_back({
+	    .id = "mind.cut_scene_look",
+	    .name = "Creatures looking at the camera in a cut scene",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger and a cow with no player stand facing away from the camera, their minds free. "
+	                   "A script's cinema bars slide in at once (before any help script can take the dialogue, whose "
+	                   "release would take the bars away), and twenty-five seconds later out again.",
+	    .expected = "As the bars come in both stop what they were doing. The tiger turns round to the camera and looks at "
+	                "it, curious; now and then it first points at the camera, waves, talks, or looks confused and talks, "
+	                "and keeps on looking until the bars go. The cow doesn't turn but may point, wave and talk. Once the "
+	                "bars are out each finishes the look it is in and goes back to its own life.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {awayOwned, awayNeutral},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.0f, .value = 1},
+	                 {.kind = Kind::WideScreen, .delaySeconds = 25.0f, .value = 0}},
+	});
 
 	all.push_back({
 	    .id = "mind.reward_villagers",
@@ -2856,6 +3147,7 @@ std::vector<Scenario> Build()
 	AddTempleVillagerScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
+	AddDiscipleScenarios(all);
 	AddHighlightScenarios(all);
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
@@ -2913,9 +3205,31 @@ bool ValidOffset(glm::vec2 offset)
 	return std::abs(offset.x) <= k_MaxOffset && std::abs(offset.y) <= k_MaxOffset;
 }
 
-/// What is wrong with what a command acts on, if anything: the object it picks up must be a thing, an animal or a
-/// villager, what it knocks down a thing or a tree, the part it strokes, the way it looks something over and the leash
-/// put on real ones
+/// A script run names a script, and every object, creature and marker it hands over is the scenario's and on the map
+bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
+{
+	const auto fits = [&scenario](const ScriptArgument& argument) {
+		switch (argument.kind)
+		{
+		case ScriptArgument::Kind::Number:
+			return true;
+		case ScriptArgument::Kind::Marker:
+			return ValidOffset(argument.point);
+		case ScriptArgument::Kind::Object:
+			return argument.index < scenario.objects.size();
+		case ScriptArgument::Kind::Creature:
+			return argument.index < scenario.creatures.size();
+		}
+		return false;
+	};
+	return !command.script.empty() && std::ranges::all_of(command.scriptArguments, fits) &&
+	       std::ranges::all_of(command.scriptGlobals,
+	                           [&fits](const auto& global) { return !global.first.empty() && fits(global.second); });
+}
+
+/// What is wrong with what a command acts on, if anything: the object it picks up must be of a kind a creature may pick
+/// up (a thing, pot, animal, villager, static, tree or magic mushroom), what it knocks down a thing or a tree, the
+/// part it strokes, the way it looks something over and the leash put on real ones
 std::string_view CommandProblem(const Command& command, std::span<const ObjectSetup> objects)
 {
 	const auto* object = command.object < objects.size() ? &objects[command.object] : nullptr;
@@ -2924,7 +3238,12 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 	case Kind::PickUp:
 		return object != nullptr &&
 		               (std::holds_alternative<MobileObjectInfo>(object->type) ||
-		                std::holds_alternative<AnimalInfo>(object->type) || std::holds_alternative<VillagerInfo>(object->type))
+		                std::holds_alternative<AnimalInfo>(object->type) ||
+		                std::holds_alternative<VillagerInfo>(object->type) || std::holds_alternative<PotInfo>(object->type) ||
+		                std::holds_alternative<MobileStaticInfo>(object->type) ||
+		                std::holds_alternative<TreeInfo>(object->type) ||
+		                (std::holds_alternative<FeatureInfo>(object->type) &&
+		                 std::get<FeatureInfo>(object->type) == FeatureInfo::MagicMushroom))
 		           ? ""
 		           : "picks up no thing";
 	case Kind::KnockDown:
@@ -2965,8 +3284,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
-	       kind == Kind::RunHelpMessage || kind == Kind::RecordChallenge || kind == Kind::EnterTemple ||
-	       kind == Kind::HandTake || IsPointerCommand(kind);
+	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
+	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2993,7 +3312,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 104> k_Names {
+	constexpr std::array<std::string_view, 107> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3048,6 +3367,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fight step",
 	    "fight special",
 	    "fight by itself",
+	    "fight miracle",
 	    "knock out",
 	    "bring round",
 	    "tie leash to creature",
@@ -3088,6 +3408,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "tell an advisor",
 	    "walk home",
 	    "run a help message",
+	    "end the guidance's waits",
 	    "destroy temple",
 	    "script play",
 	    "run text",
@@ -3098,6 +3419,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "swap minds",
 	    "record challenge",
 	    "enter temple",
+	    "run script",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -3340,6 +3662,10 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		{
 			problems.push_back(fmt::format("{}: {}", what, problem));
 		}
+		if (command.kind == Kind::RunScript && !ScriptArgumentsFit(command, scenario))
+		{
+			problems.push_back(fmt::format("{}: runs no script, or hands it what the scenario hasn't", what));
+		}
 		if (!ValidOffset(command.point) || command.delaySeconds < 0.0f || !InRange(command.hour, 0.0f, k_HoursPerDay))
 		{
 			problems.push_back(fmt::format("{}: point, delay or hour out of range", what));
@@ -3351,7 +3677,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		    (command.kind == Kind::SetMiracleSightings && (command.value >= k_Miracles || command.amount < 0.0f)) ||
 		    (command.kind == Kind::ShowFeeling && command.value >= creature_face::k_CueCount) ||
 		    (command.kind == Kind::SeeSkill && command.value >= k_Skills) ||
-		    ((command.kind == Kind::SeeMiracle || command.kind == Kind::KnowMiracle || command.kind == Kind::CastMiracle) &&
+		    ((command.kind == Kind::SeeMiracle || command.kind == Kind::KnowMiracle || command.kind == Kind::CastMiracle ||
+		      command.kind == Kind::FightSpell) &&
 		     command.value >= k_Miracles) ||
 		    (command.kind == Kind::CastMiracle &&
 		     (command.atCreature.has_value() ? *command.atCreature >= scenario.creatures.size()

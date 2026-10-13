@@ -688,8 +688,9 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 		const auto* morph = registry.TryGet<const CreatureMorph>(creature);
 		const float weight = living::CreatureMass(ShownSize(body), morph != nullptr ? morph->drawn.thinFat : 0.0f,
 		                                          morph != nullptr ? morph->drawn.weakStrong : 0.0f);
-		// The thing's own weight, not kept from nothing as its body's mass is
-		if (!(objectWeight < creature_catch::k_MostWeightShare * weight) || !world.CanPickUp(object))
+		// The thing's own weight, not kept from nothing as its body's mass is; only the thing's own state may keep it from
+		// being caught, not the rules for picking things up from the land
+		if (!(objectWeight < creature_catch::k_MostWeightShare * weight) || !world.CanBeCaught(object))
 		{
 			continue;
 		}

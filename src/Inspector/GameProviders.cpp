@@ -42,6 +42,9 @@
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "Creature/BonusCreatures.h"
+#include "Creature/CreatureDesires.h"
+#include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
 #include "ECS/ArtefactRules.h"
@@ -56,6 +59,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHelp.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -63,6 +67,7 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LivingAction.h"
@@ -132,6 +137,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -344,6 +350,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"helpProfileSystem", "help.profile"},
     LocatorCoverage {"creatureHelpSystem", "help.creature"},
     LocatorCoverage {"helpMessageSystem", "help.messages"},
+    LocatorCoverage {"guidanceSystem", "help.guidance"},
     LocatorCoverage {"tipBubbleSystem", "help.bubble"},
     LocatorCoverage {"handDemoSystem", "help.hand_demo"},
     LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
@@ -531,6 +538,20 @@ std::string_view KindName(ecs::PhysicsEntry::Kind kind)
 
 // The engine's services
 
+/// The names of the breeder's bonus creatures the debug option unlocks
+Json UnlockedBonusCreatureNames(const creature_swap::Unlocked& unlocked)
+{
+	auto names = Json::array();
+	for (size_t i = 0; i < creature_swap::k_BonusCount; ++i)
+	{
+		if (unlocked.test(i))
+		{
+			names.push_back(std::string(creature_swap::NameOf(static_cast<creature_swap::Bonus>(i))));
+		}
+	}
+	return names;
+}
+
 std::unique_ptr<ProviderInterface> EngineProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("engine");
@@ -548,6 +569,7 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		          {"bounding_boxes", config.drawBoundingBoxes}}},
 		        {"shadows", {{"creatures", config.drawCreatureShadows}, {"dynamic_trees", config.dynamicTreeShadows}}},
 		        {"wireframe", config.wireframe},
+		        {"unlocked_bonus_creatures", UnlockedBonusCreatureNames(config.unlockedBonusCreatures)},
 		        {"time_of_day", config.timeOfDay},
 		        {"resolution", {config.resolution.x, config.resolution.y}},
 		        {"vsync", config.vsync},
@@ -2529,6 +2551,74 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              }));
+	provider->Add(Query("leash",
+	                    "A creature's leash (the local player's creature by default): the leashes it knows, the one worn and "
+	                    "picked, whether it works, is tied and to what, its rope (ends, lengths, tension) and whether the rope "
+	                    "pulls the creature now, the order it carries out, the desire the leash makes rule it, and the local "
+	                    "player's hand on the rope (away, over or holding)",
+	                    {{.name = "id", .type = "integer", .description = "The creature's entity id"}}),
+	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) {
+		              if (!Locator::leashSystem::has_value())
+		              {
+			              return QueryResult::Error("no leash system");
+		              }
+		              const auto& leash = Locator::leashSystem::value();
+		              const auto local = Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer()
+		                                                                    : PlayerNames::PLAYER_ONE;
+		              auto entity = EntityParam(context.params);
+		              if (!context.params.contains("id"))
+		              {
+			              entity = leash.PlayersCreature(local);
+		              }
+		              if (!entity.has_value() || !registry.AllOf<Creature>(*entity))
+		              {
+			              return QueryResult::Error("no creature with that id");
+		              }
+		              const auto creature = *entity;
+		              Json result = {{"id", ToId(creature)},
+		                             {"rope_hand", static_cast<int>(leash.RopeHand(local))},
+		                             {"rope_hand_name",
+		                              std::array {"away", "over", "holding"}.at(static_cast<size_t>(leash.RopeHand(local)))}};
+		              const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+		              if (leashes == nullptr)
+		              {
+			              result["leashed"] = false;
+			              return QueryResult::Value(std::move(result));
+		              }
+		              result["known"] = {leashes->known.test(0), leashes->known.test(1), leashes->known.test(2)};
+		              result["selected"] = static_cast<int>(leashes->selected);
+		              result["leashed"] = leashes->worn.has_value();
+		              result["control"] = static_cast<int>(leashes->control);
+		              result["pull"] = leashes->pull;
+		              result["order_target"] = Optional(leash.OrderTarget(creature));
+		              if (Locator::creatureMindSystem::has_value())
+		              {
+			              const auto ruling = Locator::creatureMindSystem::value().DominantDesire(creature);
+			              result["ruling_desire"] =
+			                  ruling.has_value() ? Json(std::string(creature_desires::Name(*ruling))) : Json(nullptr);
+		              }
+		              if (leashes->worn.has_value())
+		              {
+			              const auto& worn = *leashes->worn;
+			              const auto& rope = worn.rope;
+			              result["type"] = static_cast<int>(worn.type);
+			              result["works"] = worn.works;
+			              result["tied_to"] = Id(worn.tiedTo);
+			              result["held_rope"] = worn.held.has_value();
+			              result["rope"] = {{"start", {rope.start.x, rope.start.y, rope.start.z}},
+			                                {"end", {rope.end.x, rope.end.y, rope.end.z}},
+			                                {"slack_length", rope.slackLength},
+			                                {"max_length", rope.maxLength},
+			                                {"tension", rope.tension}};
+			              result["pulls"] =
+			                  creature_leash::Pulls({.tension = rope.tension,
+			                                         .works = worn.works,
+			                                         .tied = worn.tiedTo.has_value(),
+			                                         .orderInForce = leashes->order.has_value(),
+			                                         .scriptControlled = registry.AllOf<ScriptControlled>(creature)});
+		              }
+		              return QueryResult::Value(std::move(result));
+	              }));
 	auto fight = Query("fight",
 	                   "Starts a fight between two creatures as the scripts and the leash start one, the first making the "
 	                   "arena; how it went and both creatures' fight state",
@@ -2551,7 +2641,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		}
 		auto& fights = Locator::creatureFightSystem::value();
 		using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
-		constexpr std::array<std::string_view, 5> k_Results {"started", "no_opponent", "busy", "too_weak", "no_arena"};
+		constexpr std::array<std::string_view, 6> k_Results {"started",  "no_opponent", "busy",
+		                                                     "too_weak", "no_arena",    "refused"};
 		const auto started = fights.StartFight(*creature, *opponent);
 		const auto index = std::min(static_cast<size_t>(started), k_Results.size() - 1);
 		if (started != Start::Started)
@@ -3009,6 +3100,36 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 			        }
 		        }
 		        return Json {{"started", started}, {"sets_said", sent}};
+	        }));
+	provider->Add(
+	    Query("guidance",
+	          "The advisors' remarks on what the player does (towns attacked, buildings wrecked, alignment drifting, the "
+	          "moon): the ones asked for lately (kind, text, turn, whether the advisors got to say it), the turns until "
+	          "the moon is looked at again, and the player's guidance (each kind's last turn, the alignment's drift, the "
+	          "one-offs said)",
+	          {}, ResultKind::Object),
+	    Serve<Locator::guidanceSystem>(
+	        "the guidance", [](const ecs::systems::GuidanceSystemInterface& system, const QueryContext& /*c*/) -> Json {
+		        Json remarks = Json::array();
+		        for (const auto& remark : system.GetRemarks())
+		        {
+			        remarks.push_back({{"kind", static_cast<int>(remark.kind)},
+			                           {"text", remark.text},
+			                           {"turn", remark.turn},
+			                           {"started", remark.started}});
+		        }
+		        Json heard = nullptr;
+		        if (Locator::entitiesRegistry::has_value())
+		        {
+			        Locator::entitiesRegistry::value().Each<const ecs::components::GuidanceHeard>(
+			            [&heard](entt::entity entity, const ecs::components::GuidanceHeard& guidance) {
+				            heard = {{"player", entt::to_integral(entity)},
+				                     {"last_turns", guidance.lastTurn},
+				                     {"alignment_drift", guidance.alignmentDrift},
+				                     {"one_offs_said", guidance.oneOffSaid}};
+			            });
+		        }
+		        return Json {{"remarks", remarks}, {"moon_wait", system.GetMoonWait()}, {"heard", heard}};
 	        }));
 	provider->Add(
 	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "

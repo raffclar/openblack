@@ -114,6 +114,8 @@ public:
 	virtual void ApplyEffect(entt::entity object, const magic::EffectValues& values, const magic::EffectSource& source) = 0;
 	/// A player did one of the deeds creatures copy at a point to an object
 	virtual void PlayerDid(size_t deed, glm::vec3 point, entt::entity object, PlayerNames player) = 0;
+	/// A blow of a player's (none for nobody's) left this share of a building's model: the advisors may remark on it
+	virtual void BuildingWrecked(entt::entity /*building*/, std::optional<PlayerNames> /*player*/, float /*remaining*/) {}
 };
 
 } // namespace openblack::ecs::building_world

@@ -47,6 +47,8 @@ public:
 	                        std::optional<std::pair<uint32_t, float>> townNeed = std::nullopt) = 0;
 	/// Says a set: counts it said, then its texts (a thing's set, the thing's texts) through its script
 	virtual bool RunMessageSet(size_t set, std::optional<help_messages::Texts> thing = std::nullopt) = 0;
+	/// A kind of help counts as given now
+	virtual void TriggerCategory(uint32_t category) = 0;
 	/// The Help key: about what is in the hand, else what the hand is over, else the ground
 	virtual void HelpQuery() = 0;
 	/// Once a game turn: the banter, while the help system is on

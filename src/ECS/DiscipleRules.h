@@ -144,6 +144,11 @@ struct Kind
 
 /// The cell of the hand's symbol sheet showing a disciple of a kind, eight to a row; none for a kind with no symbol
 [[nodiscard]] std::optional<uint32_t> SymbolCell(VillagerDisciple type);
+/// How big the symbol is drawn, as a sprite facing the camera this far from it, so that it is the same size on the
+/// screen wherever it is. The game made it 16 pixels wide over half the screen's width, which on bigger screens made it
+/// smaller; here it takes the same share of a 4:3 screen, or of the 4:3 middle of a wider one, as it does on the game's
+/// default 800 by 600 screen, where it is exactly the game's size. Never smaller than the least sprite size
+[[nodiscard]] float SymbolSize(float distance, int32_t screenWidth, int32_t screenHeight);
 
 /// The guidance bank's sample that says a disciple was made, none for a kind with nothing to say. A villager made to
 /// move house is said one of two ways, at random by `chance` (0 to 1), and an evil player's way differs.

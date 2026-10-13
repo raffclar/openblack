@@ -280,3 +280,14 @@ TEST(CreatureActionAgendas, EatingFromAPileTakesAHandfulFromIt)
 	EXPECT_EQ((*agenda)[3].order.kind, ObjectOrder::Kind::Eat);
 	EXPECT_EQ((*agenda)[3].effect, Effect::Eat);
 }
+
+// Throwing a ball at something throws a toy it can pick up; kicking one about is only done to a ball
+TEST(CreatureActionAgendas, BallGamesArePlayedWithToys)
+{
+	const auto* throwBall = plan_actions::For("ThrowBallAtObject");
+	ASSERT_NE(throwBall, nullptr);
+	EXPECT_EQ(throwBall->target, plan_actions::Target::Toy);
+	const auto* kick = plan_actions::For("KickBallAround");
+	ASSERT_NE(kick, nullptr);
+	EXPECT_EQ(kick->target, plan_actions::Target::ToyBall);
+}
