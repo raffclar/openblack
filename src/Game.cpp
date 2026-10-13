@@ -432,6 +432,11 @@ std::optional<entt::entity> ScriptCameraCreature()
 /// While the hand keeps some of the player's influence past the border it counts as inside however far out it is.
 bool HandInInfluence()
 {
+	// One answer for what the hand offers and what it does
+	if (Locator::handGrabSystem::has_value())
+	{
+		return Locator::handGrabSystem::value().IsInInfluence();
+	}
 	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
 	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, *point);
 }

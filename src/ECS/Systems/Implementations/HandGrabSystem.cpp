@@ -212,8 +212,12 @@ hand_grab::Holdable HandGrabSystem::HoldableOf(entt::entity object) const
 
 bool HandGrabSystem::HandInInfluence() const
 {
-	const auto* grab = _world->Entities().TryGet<const HandGrab>(_world->Hand());
-	return grab != nullptr && grab->handPoint.has_value() && _world->HandInInfluence(_world->HandPlayer(), *grab->handPoint);
+	// Asked at the point picked under the cursor: the position of the thing there, so a thing standing just inside the
+	// border is within reach even with the land behind it outside, and the other way round. While the hand keeps some of
+	// the player's influence past the border it counts as inside however far out it is. With nothing under the cursor at
+	// all the hand counts as inside, as for what it offers.
+	const auto point = _world->PickedPoint();
+	return !point.has_value() || _world->HandInInfluence(_world->HandPlayer(), *point);
 }
 
 hand_grab::Gate HandGrabSystem::GateOf(entt::entity object) const
@@ -426,9 +430,9 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 	}
 	case HandGrab::State::ReadyToThrow:
 	{
-		// Let go with its point on the land off the map or out of the player's influence, the hand keeps hold and its
-		// spring lets go of it
-		if (!grab->handPoint.has_value() || !_world->InBounds(*grab->handPoint) || !HandInInfluence())
+		// Let go with the point picked under the cursor off the map or out of the player's influence, the hand keeps hold
+		// and its spring lets go of it
+		if (const auto point = _world->PickedPoint(); !point.has_value() || !_world->InBounds(*point) || !HandInInfluence())
 		{
 			grab->state = HandGrab::State::Holding;
 			grab->springOn = false;
