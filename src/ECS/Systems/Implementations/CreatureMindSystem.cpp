@@ -384,6 +384,16 @@ std::optional<glm::vec3> LookWhileGoing(entt::entity entity, const Creature& cre
 	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 	// The direction the body faces, as the game keeps it: a quarter turn on from the map's
 	const auto heading = walk != nullptr && walk->started ? walk->heading : std::atan2(ahead.x, -ahead.z);
+	const auto groundAt = [](glm::vec2 at) {
+		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
+	};
+	// The creature keeps the height of the mover. The ground below it comes from the land now.
+	std::optional<glm::vec3> mover;
+	if (mind.noticedMover.has_value())
+	{
+		const auto& noticed = *mind.noticedMover;
+		mover = glm::vec3(noticed.at.x, groundAt(noticed.at) + noticed.height, noticed.at.y);
+	}
 	const auto point =
 	    creature_look::LookWhileGoing(*mind.goingLook, info,
 	                                  {
@@ -391,14 +401,16 @@ std::optional<glm::vec3> LookWhileGoing(entt::entity entity, const Creature& cre
 	                                      .heading = heading,
 	                                      .place = glm::vec2(place.x, place.z),
 	                                      .watched = mind.look.id.has_value() ? std::optional(mind.look.point) : std::nullopt,
+	                                      .mover = mover,
+	                                      .moverTurn = mind.noticedMover.has_value() ? mind.noticedMover->turn : 0,
+	                                      .turn = mind.turn,
 	                                      .turnsPerSecond = k_TurnsPerSecond,
 	                                  });
 	if (!point.has_value())
 	{
 		return std::nullopt;
 	}
-	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point->at) : 0.0f;
-	return glm::vec3(point->at.x, point->height.value_or(ground), point->at.y);
+	return glm::vec3(point->at.x, point->height.value_or(groundAt(point->at)), point->at.y);
 }
 
 void ApplyEyes(CreatureEyes* eyes, creature_mind::Eyes look)
@@ -1405,7 +1417,7 @@ void CreatureMindSystem::ProcessTurn()
 		    mind.secondsAlone += k_TurnSeconds;
 		    // What it believed about things now gone is forgotten, and going into another cell it notes the nearest temple
 		    ForgetGoneThings(mind);
-		    NoteNearestTemple(mind, transform);
+		    NoteNearestTemple(entity, mind, transform);
 		    const bool held = HeldByHand(entity);
 		    // Only a creature's own player pays it attention, and not while the hand holds it; nor do its eyes sweep about
 		    // it then
@@ -1416,7 +1428,7 @@ void CreatureMindSystem::ProcessTurn()
 			    {
 				    ++mind.turnsLookedAt;
 			    }
-			    SweepEyes(creature, mind, animation, transform);
+			    SweepEyes(entity, creature, mind, animation, transform);
 		    }
 		    if (mind.feedbackSeconds.has_value())
 		    {
@@ -1668,11 +1680,19 @@ void CreatureMindSystem::ProcessTurn()
 			    // A script's focus holds the head whatever the creature is doing
 			    animation.lookAt = focus;
 		    }
-		    else if (commands.gaze.has_value() && commands.gaze->whileGoing && commands.gaze->point.has_value())
+		    else if (commands.gaze.has_value() && commands.gaze->whileGoing)
 		    {
-			    // On the way to a place: the head looks at the place, at what it watches, or from side to side
+			    // On the way to a place: the head looks at the place, at what it watches, or from side to side. Without
+			    // a point of its own, the look uses the place that the creature walks to.
 			    const auto about = LookAbout(entity, creature, transform, mind, candidates);
-			    animation.lookAt = LookWhileGoing(entity, creature, transform, mind, *commands.gaze->point).value_or(about);
+			    auto place = commands.gaze->point;
+			    if (const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
+			        !place.has_value() && walk != nullptr && walk->destination.has_value())
+			    {
+				    place = glm::vec3(walk->destination->x, 0.0f, walk->destination->y);
+			    }
+			    animation.lookAt =
+			        place.has_value() ? LookWhileGoing(entity, creature, transform, mind, *place).value_or(about) : about;
 		    }
 		    else if (commands.gaze.has_value())
 		    {
@@ -2189,7 +2209,7 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 	// picked something up), not the reaction's own
 	// It comes across what it was given, then weighs it as a thing to act on for each desire it could serve; held, it
 	// counts as near as can be
-	ComeAcross(*mind, object);
+	ComeAcross(creature, *mind, object);
 	const auto& desires = *mind->desires;
 	const auto weigh = [&](Desire desire) {
 		return creature_giving::Weighed {.desire = desires[desire].value,

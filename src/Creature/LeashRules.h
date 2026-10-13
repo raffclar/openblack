@@ -43,6 +43,26 @@ struct Lengths
 /// Held in the hand, the leash is as long as the creature is big: with s fifteen times its size, slack is 0.7 s + 22
 /// and full length 3 s + 32
 [[nodiscard]] Lengths InHand(float creatureSize);
+
+/// The thing that a creature acts on when the player makes it act on a thing. It is the thing if the thing suits.
+/// If not, it is the first of the other things of the same group that suits. A group is, for example, the forest of a
+/// tree, the flock of an animal or the town of a villager.
+template <typename Thing, typename Suits>
+[[nodiscard]] std::optional<Thing> ForcedTarget(Thing thing, const std::vector<Thing>& group, Suits suits)
+{
+	if (suits(thing))
+	{
+		return thing;
+	}
+	for (const auto& other : group)
+	{
+		if (suits(other))
+		{
+			return other;
+		}
+	}
+	return std::nullopt;
+}
 /// Tied to something that stays put, the leash reaches one and a half times as far as the creature is from it, between
 /// 180 and 360, half of that at rest
 [[nodiscard]] Lengths TiedToStatic(float distance);
@@ -179,6 +199,11 @@ struct MindHooks
 	std::vector<Shown> shown;
 	/// Things it was told to act on, by entity number
 	std::vector<uint32_t> actOn;
+	/// Whether the player made it act on the last of these things now. Then it acts only on a thing that suits a desire
+	/// and is of use to it: the thing, or else the first in actOnGroup that does.
+	bool actOnForced {false};
+	/// The other things of the group of that thing, as the creature believes in them, newest belief first
+	std::vector<uint32_t> actOnGroup;
 	/// How much nicer it finds other creatures, by entity number
 	struct Attitude
 	{

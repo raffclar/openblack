@@ -13,6 +13,7 @@
 #include <cstdlib>
 
 #include <algorithm>
+#include <functional>
 
 using namespace openblack::creature_object_beliefs;
 
@@ -51,7 +52,7 @@ Store::Added Store::Add(entt::entity thing, uint32_t kind, glm::vec3 place)
 		slot = pool.oldest.value_or(0);
 		_index.erase(pool.slots.at(slot)->thing);
 	}
-	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place};
+	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place, .serial = _nextSerial++};
 	_index[thing] = Place {.kind = kind, .slot = slot};
 	return {.belief = &*pool.slots.at(slot), .isNew = true};
 }
@@ -94,6 +95,13 @@ bool Store::Forget(entt::entity thing)
 size_t Store::Count(uint32_t kind) const
 {
 	return kind < k_KindCount ? _pools.at(kind).used : 0;
+}
+
+std::vector<Belief> Store::NewestFirst() const
+{
+	auto all = All();
+	std::ranges::sort(all, std::ranges::greater {}, &Belief::serial);
+	return all;
 }
 
 std::vector<Belief> Store::All() const

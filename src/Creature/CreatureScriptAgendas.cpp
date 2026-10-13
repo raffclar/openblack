@@ -145,7 +145,9 @@ std::vector<Step> openblack::creature_mind::PointAtCamera(bool hasPlayer, glm::v
 std::vector<Step> openblack::creature_mind::SitDownAt(uint32_t place, glm::vec2 point, float radius, const Random& random)
 {
 	return {
-	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::ToPoint, .point = point, .maxDistance = radius}},
+	    {.kind = Step::Kind::Move,
+	     .movement = {.kind = Movement::Kind::ToPoint, .point = point, .maxDistance = radius},
+	     .gaze = GoingLook()},
 	    FaceThing(place, k_FacePlaceSeconds),
 	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::FaceDownSlope}},
 	    SitDown(random),

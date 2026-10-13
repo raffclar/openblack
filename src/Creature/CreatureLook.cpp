@@ -138,6 +138,18 @@ WhileGoing creature_look::StartWhileGoing(const WhileGoingInfo& info)
 	};
 }
 
+bool creature_look::Notices(bool itself, bool moving)
+{
+	return moving && !itself;
+}
+
+bool creature_look::IsRecent(uint32_t noticedTurn, uint32_t turn, float turnsPerSecond)
+{
+	// The count of turns goes round to zero after its largest value, as the game's count does
+	const auto window = static_cast<uint32_t>(std::trunc(k_MoverSeconds * turnsPerSecond));
+	return turn - noticedTurn < window;
+}
+
 std::optional<WhileGoingPoint> creature_look::LookWhileGoing(WhileGoing& state, const WhileGoingInfo& info,
                                                              const WhileGoingView& view)
 {
@@ -157,9 +169,14 @@ std::optional<WhileGoingPoint> creature_look::LookWhileGoing(WhileGoing& state, 
 	case WhileGoing::Look::Place:
 		break;
 	case WhileGoing::Look::Watched:
+		// What it watches comes first. Then the last moving thing that it noticed, if it noticed the thing recently.
 		if (view.watched.has_value())
 		{
 			point = {.at = glm::vec2(view.watched->x, view.watched->z), .height = view.watched->y};
+		}
+		else if (view.mover.has_value() && IsRecent(view.moverTurn, view.turn, view.turnsPerSecond))
+		{
+			point = {.at = glm::vec2(view.mover->x, view.mover->z), .height = view.mover->y};
 		}
 		break;
 	case WhileGoing::Look::Sweep:
