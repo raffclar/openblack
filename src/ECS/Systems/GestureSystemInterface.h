@@ -92,6 +92,8 @@ public:
 
 	/// Once a frame
 	virtual void Update(const Frame& frame) = 0;
+	/// Loads the game's gesture templates, if they are not loaded. The first update also loads them.
+	virtual void LoadTemplates() {}
 	/// A path drawn as if by the hand, for the testbed: the points, on the screen the path is measured on (768 pixels
 	/// high), are taken one a sample in place of the cursor's, as quickly as a hand would draw them, with the Action
 	/// button held throughout or not

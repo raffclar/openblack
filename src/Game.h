@@ -296,8 +296,12 @@ private:
 	void RenderLoadingFrame(bool drawNow = false);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen();
-	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources
+	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources. Then it does
+	/// the work of the first frame that the game can do before, and draws one more loading frame.
 	void FinishLoadingBehindScreen();
+	/// Does behind the loading screen the work that the first frames of a land do once: the land's shadows, the land
+	/// where creatures can walk, and the particle files
+	void PrepareFirstFrames();
 	/// Draws one frame outside the game's loop over a black screen and shows it
 	void PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw);
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,

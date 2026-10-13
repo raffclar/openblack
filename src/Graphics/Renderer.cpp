@@ -4472,16 +4472,9 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 		return;
 	}
 
-	// The game bakes the shadows of the buildings, rocks and other things, and of the trees and big forests, into the
-	// land as it paints it
-	const bool movingTrees = drawDesc.drawVegetation && Locator::config::value().dynamicTreeShadows;
-	if (!_landShadowBake)
-	{
-		_landShadowBake = std::make_unique<LandShadowBake>();
-	}
-	_landShadowBake->Update(!bgfx::getCaps()->originBottomLeft,
-	                        LandShadowBake::Casters {.shapes = true, .leaves = drawDesc.drawVegetation && !movingTrees});
+	BakeLandShadows(drawDesc.drawVegetation);
 	_landShadowsBaked = _landShadowBake->GetTexture() != nullptr;
+	const bool movingTrees = drawDesc.drawVegetation && Locator::config::value().dynamicTreeShadows;
 	if (!movingTrees)
 	{
 		return;
@@ -6724,6 +6717,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		debugMode |= BGFX_DEBUG_PROFILER;
 	}
 	bgfx::setDebug(debugMode);
+}
+
+void Renderer::BakeLandShadows(bool drawVegetation) const noexcept
+{
+	// The game bakes the shadows of the buildings, rocks and other things, and of the trees and big forests, into the
+	// land as it paints it. The trees' shadows that move with them are drawn each frame, not baked.
+	const bool movingTrees = drawVegetation && Locator::config::value().dynamicTreeShadows;
+	if (!_landShadowBake)
+	{
+		_landShadowBake = std::make_unique<LandShadowBake>();
+	}
+	_landShadowBake->Update(!bgfx::getCaps()->originBottomLeft,
+	                        LandShadowBake::Casters {.shapes = true, .leaves = drawVegetation && !movingTrees});
 }
 
 void Renderer::Frame() noexcept

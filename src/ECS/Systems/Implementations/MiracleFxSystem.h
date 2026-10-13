@@ -32,6 +32,7 @@ class MiracleFxSystem final: public MiracleFxSystemInterface
 {
 public:
 	void Update(float seconds, float gameSeconds) override;
+	void LoadMeshes() override;
 	void SeedInHand(int powerUp, int previousPowerUp) override;
 	void SeedLeftHand() override;
 	void SeedShakenOff() override;
@@ -55,7 +56,6 @@ private:
 	static void UpdatePiles(float gameSeconds);
 	/// A model of the game's data by its path, loaded once under an id
 	entt::id_type LoadMesh(entt::id_type id, std::string_view file);
-	void LoadMeshes();
 
 	/// A tribe's name, as the interface's text has it
 	[[nodiscard]] std::u16string TribeName(Tribe tribe) const;
