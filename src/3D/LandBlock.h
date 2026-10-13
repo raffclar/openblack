@@ -21,6 +21,7 @@
 
 #include "Graphics/LandDetail.h"
 #include "LandIslandInterface.h"
+#include "SharedIndexLists.h"
 
 namespace openblack
 {
@@ -70,12 +71,16 @@ public:
 	/// Fills the block's k_VertexCount vertices, its corners [x * 17 + z]
 	void BuildMesh(LandIslandInterface& island, std::span<LandVertex> vertices);
 	/// The block's triangles for a mesh and the sides it is stitched to coarser neighbours on, as indices of its
-	/// corners. Open-sea cells are left out only when dropOpenSea. Each set is made the first time it is asked for.
+	/// corners. Open-sea cells are left out only when dropOpenSea. Each set is made the first time it is asked for, and
+	/// shared with every other block of the island that draws the same triangles.
 	[[nodiscard]] const graphics::IndexBuffer& GetTriangles(graphics::land_detail::Mesh mesh, uint8_t coarserSides,
 	                                                        bool dropOpenSea) const;
 	/// Where the block's vertices are on the GPU: a run of the vertex buffer the island's blocks share, so a land of a
 	/// thousand blocks takes one of bgfx's buffers rather than a thousand
 	void SetVertices(const graphics::VertexBuffer& buffer, uint32_t firstVertex);
+	/// Where the block's triangle sets are kept: with the island's, so that blocks drawing the same triangles share one
+	/// of bgfx's index buffers. It must outlive the block's draws.
+	void SetTriangleSets(SharedIndexLists<graphics::IndexBuffer>& sets);
 	/// Binds the block's vertices for a draw
 	void BindVertices() const;
 	[[nodiscard]] const lnd::LNDCell* GetCells() const;
@@ -91,7 +96,9 @@ private:
 	static constexpr size_t k_TriangleSets = 3 * 16 * 2;
 
 	std::unique_ptr<lnd::LNDBlock> _block;
-	mutable std::array<std::unique_ptr<graphics::IndexBuffer>, k_TriangleSets> _triangles;
+	/// The block's sets once found among the island's
+	mutable std::array<const graphics::IndexBuffer*, k_TriangleSets> _triangles {};
+	SharedIndexLists<graphics::IndexBuffer>* _triangleSets {nullptr};
 	const graphics::VertexBuffer* _vertices {nullptr};
 	uint32_t _firstVertex {0};
 

@@ -49,19 +49,22 @@ const IndexBuffer& LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coars
 {
 	const size_t set = (static_cast<size_t>(mesh) * 16 + (coarserSides & 0xF)) * 2 + (dropOpenSea ? 1 : 0);
 	auto& triangles = _triangles.at(set);
-	if (!triangles)
+	if (triangles == nullptr)
 	{
 		assert(_block);
+		assert(_triangleSets != nullptr);
 		std::array<land_detail::CellFlags, land_detail::k_CornerCount> flags;
 		// Bit 1 of a cell's flags marks open sea, where the land isn't drawn
 		constexpr uint8_t k_OpenSeaFlag = 0x02;
 		std::ranges::transform(_block->cells, flags.begin(), [](const lnd::LNDCell& cell) {
 			return land_detail::CellFlags {.split = cell.properties.split != 0, .openSea = (cell.flags & k_OpenSeaFlag) != 0};
 		});
-		const auto indices = land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, flags);
-		// bgfx keeps a copy: the list is gone before it reads it
-		const auto* memory = bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t)));
-		triangles = std::make_unique<IndexBuffer>("LandBlockTriangles", memory, IndexBuffer::Type::Uint16);
+		triangles = &_triangleSets->Get(
+		    land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, flags), [](std::span<const uint16_t> indices) {
+			    // bgfx keeps a copy: the list is gone before it reads it
+			    const auto* memory = bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t)));
+			    return std::make_unique<IndexBuffer>("LandBlockTriangles", memory, IndexBuffer::Type::Uint16);
+		    });
 	}
 	return *triangles;
 }
@@ -70,6 +73,12 @@ void LandBlock::SetVertices(const VertexBuffer& buffer, uint32_t firstVertex)
 {
 	_vertices = &buffer;
 	_firstVertex = firstVertex;
+}
+
+void LandBlock::SetTriangleSets(SharedIndexLists<IndexBuffer>& sets)
+{
+	_triangleSets = &sets;
+	_triangles.fill(nullptr);
 }
 
 void LandBlock::BindVertices() const
@@ -128,7 +137,7 @@ glm::vec2 LandBlock::GetMapPosition() const
 void LandBlock::SetLndBlock(const lnd::LNDBlock& block)
 {
 	_block = std::make_unique<lnd::LNDBlock>(block);
-	std::ranges::for_each(_triangles, [](auto& triangles) { triangles.reset(); });
+	_triangles.fill(nullptr);
 }
 
 void LandBlock::SetCellAltitude(size_t index, uint8_t altitude)
