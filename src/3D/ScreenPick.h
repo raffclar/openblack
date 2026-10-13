@@ -141,6 +141,12 @@ struct Picked
 [[nodiscard]] std::optional<Picked> PickAmong(const View& view, std::span<const Candidate> candidates,
                                               const std::function<std::optional<float>(size_t)>& distanceOf);
 
+/// How far away the interface counts a thing it picks by its bounding sphere alone, without its triangles, as it picks
+/// people: from the camera to the point half its model's height (scaled) above its origin, less its sphere's radius and
+/// the near plane's distance. Such a thing is picked wherever the cursor is inside the circle its sphere makes on the
+/// screen, not only on its body.
+[[nodiscard]] float SphereDistance(const View& view, glm::vec3 origin, float halfHeight, float radius);
+
 /// The interface's choice between the object picked and the land under the cursor: the object is kept unless the land is
 /// nearer or as near and the land's point lies outside the object's footprint, the circle through its model's
 /// half-extents across x and z (unscaled) about its origin

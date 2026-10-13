@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <vector>
 
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
@@ -33,6 +34,7 @@
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
@@ -89,6 +91,7 @@
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "Hand/HandGrabRules.h"
+#include "Hand/HandReach.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -172,6 +175,48 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectUnderCursor() const
 		return std::nullopt;
 	}
 	return Locator::pickingSystem::value().GetPick().object;
+}
+
+std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
+{
+	if (!Locator::pickingSystem::has_value() || !Locator::entitiesMap::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& picking = Locator::pickingSystem::value();
+	const auto behind = picking.GetBehindHand();
+	if (!behind.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto behindHand = map_coords::FromMetres({behind->x, behind->z});
+	// The point the interface picked, the map's corner when it picked none
+	const auto picked = picking.GetPick().point;
+	const auto cursor = picked.has_value() ? map_coords::FromMetres({picked->x, picked->z}) : map_coords::MapCoords {};
+	// The things in the cells about the point, as a search meets them; broken pieces of buildings are passed by
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& map = Locator::entitiesMap::value();
+	const auto cells = hand_reach::CellsAround(behindHand);
+	std::vector<entt::entity> things;
+	std::vector<map_coords::MapCoords> places;
+	for (int32_t x = cells.first.x; x <= cells.last.x; ++x)
+	{
+		for (int32_t z = cells.first.y; z <= cells.last.y; ++z)
+		{
+			for (const auto entity : map.GetAllInCell({x, z}))
+			{
+				const auto* transform = registry.TryGet<const Transform>(entity);
+				if (transform == nullptr || registry.AllOf<BuildingPiece>(entity))
+				{
+					continue;
+				}
+				things.push_back(entity);
+				places.push_back(map_coords::FromMetres({transform->position.x, transform->position.z}));
+			}
+		}
+	}
+	const auto nearest = hand_reach::Nearest(behindHand, cursor, places);
+	return nearest.has_value() ? std::optional<entt::entity>(things[*nearest]) : std::nullopt;
 }
 
 bool GameHandGrabWorld::InInfluence(PlayerNames player, glm::vec3 point) const

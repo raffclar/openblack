@@ -238,6 +238,7 @@
 #include "Gui/LoadingScreen.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandFeel.h"
+#include "Hand/HandReach.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
@@ -2770,6 +2771,26 @@ bool Game::Update() noexcept
 				}
 				TraceHand("stage fade", handTransform->position);
 				EndHandTrace(placed, *handTransform, stage, grab);
+				// The land behind the hand's middle, as posed for this frame, which the hand reaches about when pressed
+				// with nothing under the cursor
+				if (Locator::pickingSystem::has_value())
+				{
+					std::optional<glm::vec3> middle;
+					if (const auto* hand = Locator::entitiesRegistry::value().TryGet<ecs::components::Hand>(handEntity))
+					{
+						const auto model = glm::translate(glm::mat4(1.0f), handTransform->position) *
+						                   glm::mat4(handTransform->rotation) *
+						                   glm::scale(glm::mat4(1.0f), handTransform->scale);
+						std::vector<glm::vec3> bonePlaces;
+						bonePlaces.reserve(hand->boneMatrices.size());
+						for (const auto& bone : hand->boneMatrices)
+						{
+							bonePlaces.emplace_back(model * bone[3]);
+						}
+						middle = hand_reach::Middle(bonePlaces);
+					}
+					Locator::pickingSystem::value().FindBehindHand(camera.GetOrigin(), middle);
+				}
 				_handHold.PlaceHandEffect(heldSeed, _handAnimation.get(), *handTransform, handSize);
 				// The trails' sheets of light and the chain behind the gesturing hand move on every frame
 				Locator::particleSystem::value().UpdateFrame(

@@ -1494,14 +1494,19 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		    return result;
 	    }));
 	provider->Add(
-	    Query("pick", "What the cursor picks: the object, the point and the land under it"),
-	    Serve<Locator::pickingSystem>(
-	        "the picking", [](const ecs::systems::PickingSystemInterface& picking, const QueryContext& /*c*/) {
-		        const auto& pick = picking.GetPick();
-		        return Json {
-		            {"object", Id(pick.object)}, {"point", Optional(pick.point)},        {"land", Optional(pick.land)},
-		            {"distance", pick.distance}, {"hover_object", Id(pick.hoverObject)}, {"hover_seconds", pick.hoverSeconds}};
-	        }));
+	    Query("pick", "What the cursor picks: the object, the point and the land under it, and the land behind the hand's "
+	                  "middle, about which a press with nothing under the cursor reaches"),
+	    Serve<Locator::pickingSystem>("the picking",
+	                                  [](const ecs::systems::PickingSystemInterface& picking, const QueryContext& /*c*/) {
+		                                  const auto& pick = picking.GetPick();
+		                                  return Json {{"object", Id(pick.object)},
+		                                               {"point", Optional(pick.point)},
+		                                               {"land", Optional(pick.land)},
+		                                               {"distance", pick.distance},
+		                                               {"hover_object", Id(pick.hoverObject)},
+		                                               {"hover_seconds", pick.hoverSeconds},
+		                                               {"behind_hand", Optional(picking.GetBehindHand())}};
+	                                  }));
 	provider->Add(
 	    Query("hand_trace",
 	          "The player's hand frame by frame, for hand bugs: start keeps the last frames (frames, 600 by default) of every "
