@@ -306,6 +306,10 @@ struct Step
 		/// really in the air, or by the whole seconds watched: not in the first three, half the time each turn in the
 		/// fourth, at four at the latest (see WatchingFlyingGoesOn)
 		WatchFlying,
+		/// Mending the step's object, a building, by a fifth of its life at once
+		Repair,
+		/// Doing away with the step's object at once, as with the tree used up mending a building
+		UseUp,
 		/// Watching its player's camera: turning to it whenever it is more than a quarter turn away, until whole seconds
 		/// of turns more than the step's seconds have gone by, or the camera is right overhead or more than 100 away. A
 		/// creature without a player is done at once. With the step's turns set it watches for that many turns whatever
@@ -528,6 +532,9 @@ struct Commands
 	std::optional<uint32_t> douse;
 	/// A rock to break in two, by its entity's number
 	std::optional<uint32_t> shatter;
+	/// A building to mend, and a thing to do away with, by their entities' numbers
+	std::optional<uint32_t> repair;
+	std::optional<uint32_t> useUp;
 	/// What the head looks at this turn, for a step that gives it something to look at
 	std::optional<Gaze> gaze;
 	/// A swap of minds: bring every spell on it to its end, start the beam to the other creature, take on a turn more of

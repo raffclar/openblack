@@ -504,3 +504,38 @@ TEST(CreatureKindActions, GivingWoodToABuildingSiteIsGivingWoodToAStore)
 	EXPECT_EQ(site->use, plan_actions::Target::PickableTree);
 	EXPECT_EQ(site->build, plan_actions::Build::GiveWoodToStore);
 }
+
+TEST(CreatureKindActions, HelpingRepairAHouseBringsATreeAndUsesItUp)
+{
+	const auto agenda = HelpRepairHouse(8u, 3, 8);
+	ASSERT_EQ(agenda.size(), 6);
+	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_EQ(agenda[1].movement.object, 3u);
+	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda[2].seconds, 0.1f);
+	EXPECT_EQ(agenda[3].order.kind, ObjectOrder::Kind::Discard);
+	EXPECT_EQ(agenda[3].order.animation, creature_throw::k_PutDown);
+	EXPECT_EQ(agenda[4].kind, Step::Kind::Repair);
+	EXPECT_EQ(agenda[4].object, 3u);
+	EXPECT_EQ(agenda[5].kind, Step::Kind::UseUp);
+	EXPECT_EQ(agenda[5].object, 8u);
+	// Holding something already, it puts that down instead, and the tree is used up all the same
+	EXPECT_EQ(HelpRepairHouse(std::nullopt, 3, 8).size(), 5);
+	EXPECT_EQ(plan_actions::For("HelpRepairHouse")->target, plan_actions::Target::NeedsRepair);
+}
+
+TEST(CreatureKindActions, ShatteringRepairingAndUsingUpAreDoneAtOnce)
+{
+	for (const auto kind : {Step::Kind::Shatter, Step::Kind::Repair, Step::Kind::UseUp})
+	{
+		IdleMind mind;
+		mind.agenda = {{.kind = kind, .object = 5}};
+		const auto commands = Think(mind, Senses {.seconds = 0.1f}, KindActionsFirst);
+		EXPECT_EQ(mind.step, 1u);
+		const auto& given = kind == Step::Kind::Shatter  ? commands.shatter
+		                    : kind == Step::Kind::Repair ? commands.repair
+		                                                 : commands.useUp;
+		EXPECT_EQ(given, 5u);
+	}
+}

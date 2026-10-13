@@ -358,6 +358,9 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return (progress != nullptr && progress->built < 1.0f) ||
 		       (registry.AllOf<RepairSite>(entity) && ecs::world_objects::LifeOf(entity) < 1.0f);
 	}
+	case Target::NeedsRepair:
+		// Only a town's buildings say they want repair, while below their full life
+		return registry.AllOf<Abode>(entity) && !registry.AllOf<Temple>(entity) && ecs::world_objects::LifeOf(entity) < 1.0f;
 	case Target::CuddlyToy:
 		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity) == creature_object_actions::Toy::Cuddly;
 	case Target::Die:
@@ -467,6 +470,11 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	{
 		registry.Each<const Feature, const Transform>(
 		    [&](entt::entity entity, const Feature&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::NeedsRepair)
+	{
+		registry.Each<const Abode, const Transform>(
+		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
 	}
 	if (target == Target::BuildingBeingBuilt)
 	{

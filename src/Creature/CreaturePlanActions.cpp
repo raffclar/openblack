@@ -63,6 +63,10 @@ constexpr std::array k_Executors {
               .target = Target::BuildingBeingBuilt,
               .use = Target::PickableTree,
               .build = Build::GiveWoodToStore},
+    Executor {.action = "HelpRepairHouse",
+              .target = Target::NeedsRepair,
+              .use = Target::PickableTree,
+              .build = Build::HelpRepairHouse},
     Executor {.action = "PlantTree",
               .target = Target::Anything,
               .use = Target::PlantableTree,
@@ -296,6 +300,13 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 			return std::nullopt;
 		}
 		return creature_mind::ThrowToyAt(*situation.instrument, *object, objectPoint, situation.height, random);
+	case Build::HelpRepairHouse:
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::HelpRepairHouse(situation.handFull ? std::nullopt : situation.instrument, *object,
+		                                      *situation.instrument);
 	case Build::ThrowToPlayer:
 		if (!situation.playerHand.has_value() || !situation.instrument.has_value())
 		{

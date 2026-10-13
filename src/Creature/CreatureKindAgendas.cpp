@@ -160,6 +160,26 @@ std::vector<Step> creature_mind::ThrowToPlayer(uint32_t toy, glm::vec3 hand, boo
 	return agenda;
 }
 
+std::vector<Step> creature_mind::HelpRepairHouse(std::optional<uint32_t> pickUp, uint32_t house, uint32_t tree)
+{
+	std::vector<Step> agenda;
+	if (pickUp.has_value())
+	{
+		agenda.push_back(PickUp(*pickUp));
+	}
+	agenda.push_back(
+	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::GoNearObject, .object = house, .maxDistance = 0.0f}});
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .seconds = k_FaceHouseSeconds,
+	                  .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = house},
+	                  .gaze = Gaze {.object = house}});
+	agenda.push_back(
+	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Discard, .animation = creature_throw::k_PutDown}});
+	agenda.push_back({.kind = Step::Kind::Repair, .object = house, .gaze = Gaze {.object = house}});
+	agenda.push_back({.kind = Step::Kind::UseUp, .object = tree});
+	return agenda;
+}
+
 std::vector<Step> creature_mind::KickBallAround(uint32_t ball, const Random& random)
 {
 	const Gaze watch {.object = ball};

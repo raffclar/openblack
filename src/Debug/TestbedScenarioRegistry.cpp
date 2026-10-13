@@ -1707,6 +1707,22 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.repair_house",
+	    .name = "Helping repair a house",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, a birch to its left and its town's hut off to the east, hurt to six tenths of its "
+	                   "life. A script tells it to help repair the hut with the birch.",
+	    .expected = "It walks to the birch and picks it up, walks right up to the hut, turns to it and puts the tree "
+	                "down by it; the hut gets a fifth of its life back (to eight tenths) and the tree is gone.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {90.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-20.0f, -15.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {90.0f, 0.0f}, .life = 0.6f}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "HelpRepairHouse", .with = 0}},
+	});
+
+	all.push_back({
 	    .id = "objects.plant_tree",
 	    .name = "Planting a tree by something",
 	    .facet = Facet::Objects,

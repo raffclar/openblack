@@ -156,6 +156,10 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "shatter";
 	case Kind::WatchFlying:
 		return "watch_flying";
+	case Kind::Repair:
+		return "repair";
+	case Kind::UseUp:
+		return "use_up";
 	case Kind::WatchCamera:
 		return "watch_camera";
 	case Kind::Observe:

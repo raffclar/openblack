@@ -83,6 +83,14 @@ constexpr uint32_t k_DieOutcomeLots = 3;
 /// throwing it at the player's hand, watching the hand; then a happy jump
 [[nodiscard]] std::vector<Step> ThrowToPlayer(uint32_t toy, glm::vec3 hand, bool handFull);
 
+/// Helping repair a house: unless its hand holds something, picking up the tree; going right up to the house, turning
+/// to face it a tenth of a second and putting down what it holds; mending the house by a fifth of its life, looking at
+/// it; then doing away with the tree
+[[nodiscard]] std::vector<Step> HelpRepairHouse(std::optional<uint32_t> pickUp, uint32_t house, uint32_t tree);
+constexpr float k_FaceHouseSeconds = 0.1f;
+/// What a creature's mending gives a building, of its life
+constexpr float k_RepairLife = 0.2f;
+
 /// Kicking a ball about: going up to it, turning to face it a tenth of a second, going right up to it again and kicking
 /// it, watching it; then a quarter of the time pointing at it a second, else waiting 0.4 to 1 second (in whole turns).
 /// It kicks it again after each, two times at the least, each time going on while the count is under two plus a chance

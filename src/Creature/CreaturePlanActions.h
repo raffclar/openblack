@@ -79,11 +79,13 @@ enum class Target : uint8_t
 	CuddlyToy,
 	Die,
 	ToyAwayFromHome,
-	/// A building still going up, or one damaged and wanting repair that has lost some of its life
+	/// A building still going up, or one damaged and wanting repair that has lost some of its life; or a house (any of a
+	/// town's buildings) below its full life
 	BuildingBeingBuilt,
+	NeedsRepair,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::BuildingBeingBuilt) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::NeedsRepair) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -166,6 +168,8 @@ enum class Build : uint8_t
 	ThrowDie,
 	/// Picking up the toy it uses and throwing it to its player's hand
 	ThrowToPlayer,
+	/// Bringing a tree to a house and mending the house with it
+	HelpRepairHouse,
 	/// An action whose agenda can never be made
 	Never,
 };

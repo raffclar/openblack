@@ -40,6 +40,7 @@
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
@@ -89,6 +90,7 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
@@ -1436,6 +1438,16 @@ void CreatureMindSystem::ProcessTurn()
 			    {
 				    GiveUp(mind.idle);
 			    }
+		    }
+		    // A building mended by a fifth of its life, and the tree used up mending it gone
+		    if (commands.repair.has_value() && registry.Valid(static_cast<entt::entity>(*commands.repair)))
+		    {
+			    static_cast<void>(
+			        ecs::world_objects::IncreaseLife(static_cast<entt::entity>(*commands.repair), creature_mind::k_RepairLife));
+		    }
+		    if (commands.useUp.has_value() && registry.Valid(static_cast<entt::entity>(*commands.useUp)))
+		    {
+			    ecs::world_objects::Remove(static_cast<entt::entity>(*commands.useUp));
 		    }
 		    if (commands.douse.has_value())
 		    {
