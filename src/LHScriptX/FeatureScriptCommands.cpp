@@ -50,6 +50,7 @@
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -1076,12 +1077,12 @@ void FeatureScriptCommands::CreateNewTownField(int32_t townId, glm::vec3 positio
 	FieldArchetype::Create(townId, position, townFieldType, rotation);
 }
 
-void FeatureScriptCommands::CreateSpellDispenser(int32_t, glm::vec3 position, const std::string& building,
+void FeatureScriptCommands::CreateSpellDispenser(int32_t townId, glm::vec3 position, const std::string& building,
                                                  const std::string& magicName, float rotation, float scale, float turns)
 {
 	// A dispenser building of that name holding the miracle of that name, turned on at once so it floats its first
-	// bubble now, then one every so many turns after each is taken; with no turns it floats only the first.
-	// TODO(script-create-objects): the game also gives it to the town of the number, or the nearest town
+	// bubble now, then one every so many turns after each is taken; with no turns it floats only the first. It belongs
+	// to the town of the number, or else the nearest town.
 	const auto type = GAbodeInfo::Find(building);
 	if (type == AbodeInfo::None || !Locator::magicSystem::has_value())
 	{
@@ -1093,6 +1094,12 @@ void FeatureScriptCommands::CreateSpellDispenser(int32_t, glm::vec3 position, co
 	{
 		return;
 	}
+	auto town = TownWithId(townId);
+	if (town == entt::null)
+	{
+		town = NearestTownAnywhere(position);
+	}
+	Locator::entitiesRegistry::value().Get<SpellDispenser>(dispenser).town = town;
 	const auto magicType = magic::FindMagicTypeByName(Locator::infoConstants::value(), magicName).value_or(MagicType::None);
 	magicSystem.SetDispenserMagic(dispenser, magicType, static_cast<uint32_t>(turns));
 	magicSystem.SetDispenserActive(dispenser, true);
