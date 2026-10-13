@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <chrono>
 #include <span>
 #include <vector>
 
@@ -27,10 +30,15 @@ public:
 
 	/// New streaks, falling as in calm air
 	virtual void Reset() = 0;
-	/// Once a frame: the rain's fall follows the storm nearest the camera, and the streaks move on if they were drawn
-	virtual void Update(float seconds, const glm::vec3& camera) = 0;
-	/// The rain to draw this frame over the land blocks about the camera; taking some counts the streaks as drawn
-	[[nodiscard]] virtual std::vector<rain::Tile> TakeTiles(const glm::vec3& camera) = 0;
+	/// Once a frame: the rain's fall follows the storm nearest the camera, and the streaks move on if they were drawn.
+	/// The real time of the frame tells when the rain makes its next splashes, which it also makes while the game is
+	/// paused.
+	virtual void Update(float seconds, std::chrono::milliseconds frameRealTime, const glm::vec3& camera) = 0;
+	/// The rain to draw this frame over the land blocks in view about the camera. When the splashes are due, the rain
+	/// also makes its splashes on these blocks. Taking some counts the streaks as drawn.
+	[[nodiscard]] virtual std::vector<rain::Tile> TakeTiles(const rain::View& view) = 0;
+	/// How many splashes the rain made since the last reset; when the rings are full, the rain makes none
+	[[nodiscard]] virtual uint64_t GetSplashCount() const = 0;
 	[[nodiscard]] virtual std::span<const rain::Streak> GetStreaks() const = 0;
 	/// How high the streaks reach over the ground
 	[[nodiscard]] virtual float GetHeight() const = 0;

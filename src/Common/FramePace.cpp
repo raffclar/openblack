@@ -19,15 +19,24 @@ namespace openblack::frame_pace
 std::chrono::milliseconds Step(Pace& pace, std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
 {
 	pace.gameSinceStep += frameGameTime;
+	if (!Due(pace, frameRealTime))
+	{
+		return std::chrono::milliseconds {0};
+	}
+	return std::exchange(pace.gameSinceStep, std::chrono::milliseconds {0});
+}
+
+bool Due(Pace& pace, std::chrono::milliseconds frameRealTime)
+{
 	pace.sinceStep += frameRealTime;
 	if (pace.sinceStep < Pace::k_StepInterval)
 	{
-		return std::chrono::milliseconds {0};
+		return false;
 	}
 	// One step a frame at most: a long frame leaves no steps owed, only its share of the next
 	pace.sinceStep = std::chrono::duration<float, std::milli>(
 	    std::fmod((pace.sinceStep - Pace::k_StepInterval).count(), Pace::k_StepInterval.count()));
-	return std::exchange(pace.gameSinceStep, std::chrono::milliseconds {0});
+	return true;
 }
 
 } // namespace openblack::frame_pace

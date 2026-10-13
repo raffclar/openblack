@@ -16,8 +16,11 @@
 #include <optional>
 #include <span>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "3D/WaterRings.h"
 
 /// The rain the game draws: one set of 128 streaks, each a line from under the ground up to the rain's height with a
 /// dashed row of the atmosphere texture scrolling down it. The set is repeated over every land block near the camera
@@ -81,6 +84,37 @@ struct Tile
 /// The rain over a block with its centre at `centre`, the most rain over its middle being `wettest` percent: none for
 /// a little rain or a block too far from the camera, and less of it from 100 units away
 [[nodiscard]] std::optional<Tile> TileOf(glm::vec2 centre, int32_t wettest, glm::vec2 camera);
+
+/// How the camera sees the land this frame
+struct View
+{
+	glm::vec3 eye {0.0f};
+	glm::mat4 viewProjection {1.0f};
+	float nearPlane {1.0f};
+};
+
+/// The game only looks at the rain over the land blocks in view that are nearer than this to the eye
+inline constexpr float k_BlockReach = 400.0f + 160.0f;
+/// A block's rain shows only when its most rain in percent is more than this
+inline constexpr int32_t k_LeastRain = 5;
+/// The strength of the rain over a block, 0 to 255, from its most rain in percent
+[[nodiscard]] int32_t Strength(int32_t wettest);
+/// The order in which the game draws the rain over the blocks: the block with the largest key comes first, so the
+/// blocks go from far to near. The key is the squared distance from the eye to the ground under the block's centre.
+[[nodiscard]] float DrawKey(glm::vec2 centre, float ground, glm::vec3 eye);
+
+/// Each frame, rain of this strength or less makes no splashes on a block
+inline constexpr int32_t k_LeastSplashStrength = 44;
+/// The opacity, 0 to 255, of the splashes on a block with rain of this strength; none for rain too light to splash
+[[nodiscard]] std::optional<uint8_t> SplashAlpha(int32_t strength);
+/// The level of the land's light that colours the splashes, of the 256 levels from dark to bright
+inline constexpr uint8_t k_SplashLight = 200;
+/// The ground's height at a point of the world's x and z, as the game finds it with the sea flat
+using HeightAt = std::function<float(glm::vec2)>;
+/// A splash of the rain: a small ring on the ground or on the sea at a random point of the block about `centre`. It is
+/// one unit above the ground and grows to a half width of 0.5 to 0.8 units. Its colour `argb` is 0xAARRGGBB. The random
+/// numbers come in the game's order: the z, then the x, then the size.
+[[nodiscard]] water_rings::Ring Splash(glm::vec2 centre, uint32_t argb, const Random& random, const HeightAt& heightAt);
 
 /// A streak's opacity, from an opacity of the tile's, as it fades in and out over its life
 [[nodiscard]] int32_t StreakAlpha(int32_t alpha, float phase);

@@ -29,14 +29,21 @@ constexpr float k_LowestHeight = 40.0f;
 constexpr float k_HighestHeight = 640.0f;
 constexpr float k_SlowestFall = 0.3f;
 constexpr float k_FastestFall = 5.0f;
-/// The least rain that shows, and the rain's opacity of 100 for each percent
-constexpr int32_t k_LeastRain = 5;
+/// The rain's strength of 100 for each percent
 constexpr int32_t k_Opacity = 88;
 /// Rain is drawn up to this far from the camera, thinning out from the nearer distance
 constexpr float k_Farthest = 400.0f;
 constexpr float k_Thinning = 100.0f;
 /// The streaks fade in and out over this much of their life
 constexpr float k_Fade = 0.05f;
+
+/// The length of a side of a land block
+constexpr float k_BlockSide = 160.0f;
+/// A splash is this far above the ground, and its half width grows to its size plus a random part of the variation
+constexpr float k_SplashHeight = 1.0f;
+constexpr float k_SplashGrowth = 0.5f;
+constexpr float k_SplashGrowthVariation = 0.3f;
+constexpr uint8_t k_SplashCell = 0x30;
 
 /// Drops what is left of a number past its whole part
 float Fraction(float value)
@@ -97,7 +104,12 @@ std::optional<Tile> TileOf(glm::vec2 centre, int32_t wettest, glm::vec2 camera)
 	{
 		return std::nullopt;
 	}
-	Tile tile {.centre = centre, .streaks = static_cast<int32_t>(k_Streaks), .alpha = std::min(wettest * k_Opacity / 100, 255)};
+	Tile tile {.centre = centre, .streaks = static_cast<int32_t>(k_Streaks), .alpha = Strength(wettest)};
+	// A weak rain shows no streaks
+	if (tile.alpha <= k_LeastRain)
+	{
+		return std::nullopt;
+	}
 	const auto offset = camera - centre;
 	const float distance = std::sqrt((offset.x * offset.x) + (offset.y * offset.y));
 	if (!(distance <= k_Farthest))
@@ -131,6 +143,40 @@ int32_t StreakAlpha(int32_t alpha, float phase)
 		return static_cast<int32_t>(static_cast<double>(alpha) * ((1.0 - static_cast<double>(phase)) * 20.0));
 	}
 	return alpha;
+}
+
+int32_t Strength(int32_t wettest)
+{
+	return std::min(wettest * k_Opacity / 100, 255);
+}
+
+float DrawKey(glm::vec2 centre, float ground, glm::vec3 eye)
+{
+	const glm::vec3 offset = glm::vec3(centre.x, ground, centre.y) - eye;
+	return (offset.x * offset.x) + (offset.y * offset.y) + (offset.z * offset.z);
+}
+
+std::optional<uint8_t> SplashAlpha(int32_t strength)
+{
+	if (strength <= k_LeastSplashStrength)
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint8_t>(std::clamp(strength * 255 / k_Opacity, 0, 255));
+}
+
+water_rings::Ring Splash(glm::vec2 centre, uint32_t argb, const Random& random, const HeightAt& heightAt)
+{
+	// The point is anywhere on the block
+	const float z = random(0.0f, k_BlockSide) + centre.y - (k_BlockSide * 0.5f);
+	const float x = random(0.0f, k_BlockSide) + centre.x - (k_BlockSide * 0.5f);
+	const float y = heightAt({x, z}) + k_SplashHeight;
+	return {
+	    .position = {x, y, z},
+	    .growth = random(0.0f, k_SplashGrowthVariation) + k_SplashGrowth,
+	    .cell = k_SplashCell,
+	    .argb = argb,
+	};
 }
 
 std::array<glm::vec3, 2> Ends(const Streak& streak, float height)

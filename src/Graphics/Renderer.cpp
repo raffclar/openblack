@@ -3506,7 +3506,8 @@ void Renderer::DrawRain(const DrawSceneDesc& desc) const
 	}
 	auto& rainSystem = Locator::rainSystem::value();
 	const auto origin = desc.camera->GetOrigin();
-	const auto tiles = rainSystem.TakeTiles(origin);
+	const auto tiles = rainSystem.TakeTiles(
+	    {.eye = origin, .viewProjection = desc.camera->GetViewProjectionMatrix(), .nearPlane = desc.camera->GetNearClip()});
 	if (tiles.empty())
 	{
 		return;
