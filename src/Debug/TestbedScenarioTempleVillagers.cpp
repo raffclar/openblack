@@ -27,11 +27,11 @@ constexpr glm::vec2 k_Centre {0.0f, 40.0f};
 constexpr glm::vec2 k_Temple {0.0f, -30.0f};
 /// The town's belief in the player, so that it stays theirs rather than going back to the neutral player
 constexpr float k_TownBelief = 1000.0f;
-/// Where the hand pours wood: at the edge of the town's worship site as it goes up, on its side towards the town, 44 m
-/// from the temple's middle but 15 m from the site's own middle, within its reach (its radius on the ground, 14.1 m,
-/// times 1.2); then a little further out, 20 m from the site's middle, beyond it
-constexpr glm::vec2 k_SiteEdge {0.0f, 14.0f};
-constexpr glm::vec2 k_BeyondTheSite {0.0f, 19.0f};
+/// Where the hand pours wood: at the edge of the town's worship site as it goes up, on its side away from the site's
+/// wood pile, 33 m from the temple's middle but 15 m from the site's own middle, within its reach (its radius on the
+/// ground, 14.1 m, times 1.2); then a little further out, 21 m from the site's middle, beyond it
+constexpr glm::vec2 k_SiteEdge {-15.0f, -1.0f};
+constexpr glm::vec2 k_BeyondTheSite {-21.0f, -1.0f};
 /// How much wood each pour lets go of
 constexpr size_t k_Handful = 300;
 /// The main room of the temple, by the temple's rooms
@@ -106,8 +106,8 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .name = "Wood poured on a worship site going up",
 	    .facet = Facet::Objects,
 	    .description = "The same town and temple, the town's worship site just started and not yet built. The player's "
-	                   "hand pours a handful of wood (300) at the site's edge on the town's side, well out from the "
-	                   "temple's middle, then another a few metres further out, beyond the site.",
+	                   "hand pours a handful of wood (300) at the site's edge, well out from the temple's middle, then another "
+	                   "a few metres further out, beyond the site.",
 	    .expected = "The first pour goes into the site's wood pile for its builders (the pile grows and no loose wood is left "
 	                "there), because a worship site takes what is poured within its reach of its own middle, not the "
 	                "temple's. The second, beyond that reach, is left on the land as a loose pile of wood.",

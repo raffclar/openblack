@@ -81,6 +81,7 @@
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
@@ -1363,10 +1364,13 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto at = MapPoint(_middle, command.point);
 		const glm::vec3 point {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
 		const auto amount = static_cast<uint32_t>(command.value);
-		const bool taken =
-		    Locator::resourceStoreSystem::value().PourAt(ResourceType::Wood, point, amount, false, command.player, false);
+		// What a store or pile didn't take is left as a new loose pile
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto loose = [&registry] { return registry.Size<ecs::components::MagicPile>(); };
+		const auto before = loose();
+		Locator::resourceStoreSystem::value().PourAt(ResourceType::Wood, point, amount, false, command.player, false);
 		return fmt::format("{} wood poured at ({:.1f}, {:.1f}): {}", amount, at.x, at.y,
-		                   taken ? "taken in" : "left on the land");
+		                   loose() > before ? "left on the land as a new pile" : "taken in");
 	}
 	default:
 		return {};
