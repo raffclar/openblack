@@ -13,6 +13,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
 #include "ECS/Components/Animal.h"
@@ -49,6 +50,9 @@ entt::entity AnimalArchetype::Create(AnimalInfo type, const glm::vec3& position,
 	animal.previousHeading = heading;
 	animal.position = position;
 	animal.previousPosition = position;
+	// Its walk starts where it stands, whoever made it
+	animal.move.position = {map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)};
+	animal.move.goal = animal.move.position;
 	animal.animation = info.defaultAnim;
 	return entity;
 }

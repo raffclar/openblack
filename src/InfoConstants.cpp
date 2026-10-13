@@ -158,7 +158,7 @@ void openblack::ApplyCreatureBalance(GCreatureInfo& creature, const DifferentCre
 	creature.secondsPerAgeTick = balance.secondsPerAgeTick;
 	creature.pooPerEnergy = balance.pooPerEnergy;
 	creature.field0x36c = balance.field0x54;
-	std::memcpy(creature.field0x374.data(), &balance.field0x58, sizeof(balance.field0x58));
+	creature.field0x374 = balance.field0x58;
 }
 
 void openblack::ApplyCreatureBalance(InfoConstants& info)

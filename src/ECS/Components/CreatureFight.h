@@ -80,6 +80,9 @@ struct CreatureFightRecord
 	/// Who chose its moves when its last fight ended, or as a script last set it; nobody before its first fight. Each
 	/// fight starts it afresh.
 	creature_fight::Control control {creature_fight::Control::None};
+	/// The game turn a blow in a fight last landed on it, blocked or not; the start of the game before any. Villagers
+	/// watching its fights cheer or despair by it.
+	uint32_t struckTurn {0};
 	/// Its fight health, from 0 to 1, as its last fight left it or a script last set it outside a fight; full before its
 	/// first fight. Each fight starts it afresh from the creature's life.
 	float health {1.0f};

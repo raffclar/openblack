@@ -418,6 +418,28 @@ AnimId villager_animation::FootballMatchPausedClip(const IntRandom& random)
 	                    AnimId::PWaitingForBall_2);
 }
 
+AnimId villager_animation::WatchFightClip(uint32_t supportedStruckSeconds, uint32_t otherStruckSeconds, const IntRandom& random)
+{
+	constexpr uint32_t k_RecentBlowSeconds = 15;
+	if (supportedStruckSeconds <= k_RecentBlowSeconds || otherStruckSeconds <= k_RecentBlowSeconds)
+	{
+		if (otherStruckSeconds < supportedStruckSeconds)
+		{
+			return random(2) != 0 ? AnimId::PCrowdWon_2 : AnimId::PCrowdWon;
+		}
+		return random(2) != 0 ? AnimId::PCrowdLost_2 : AnimId::PCrowdLost;
+	}
+	switch (random(3))
+	{
+	case 0:
+		return AnimId::PTalkingAndPointing;
+	case 1:
+		return AnimId::PTalkToNeighbour;
+	default:
+		return AnimId::PGossipMan;
+	}
+}
+
 AnimId villager_animation::FootballWatchMatchClip(std::optional<uint32_t> matchState, const IntRandom& random)
 {
 	if (!matchState.has_value())
