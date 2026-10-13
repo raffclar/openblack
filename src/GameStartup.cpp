@@ -37,6 +37,7 @@
 #include "Gui/StartupRules.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
+#include "Resources/ResourcesInterface.h"
 #include "Video/StillPicture.h"
 #include "Video/VideoRules.h"
 #include "Windowing/WindowingInterface.h"
@@ -393,12 +394,34 @@ void Game::RenderLoadingFrame()
 	SDL_PumpEvents();
 }
 
+void Game::FinishLoadingBehindScreen()
+{
+	auto& resources = Locator::resources::value();
+	if (resources.LoadingCount() == 0)
+	{
+		return;
+	}
+	// If the game uses a resource before the loading threads load it, the resource loads in the middle of a frame and
+	// makes that frame slow. Thus all the resources load before the first frame of the game, as in the original game.
+	const auto start = std::chrono::steady_clock::now();
+	const auto count = resources.LoadingCount();
+	while (resources.LoadingCount() > 0 && !_quitRequested)
+	{
+		resources.UpdateLoading(k_LoadingScreenLoadBudget, graphics::UploadPacer::Allowance {});
+		RenderLoadingFrame();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Load: {} prefetched resources finished behind the loading screen in {:.1f} ms",
+	                   count, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+}
+
 void Game::EndLoadingScreen()
 {
 	if (!_loadingScreen || !_loadingLook)
 	{
 		return;
 	}
+	FinishLoadingBehindScreen();
 	const auto look = *_loadingLook;
 	_loadingLook.reset();
 	// After the tips screen its tip goes before the game's first frame; the last loading frame stays up until then
