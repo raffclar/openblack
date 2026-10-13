@@ -439,6 +439,9 @@ struct MiracleCast
 	std::optional<float> holdBeforePress;
 	/// Cast as a script casts it, from the hand's place, rather than as a seed in the hand would
 	std::optional<ScriptSpell> script;
+	/// A shield is broken this many seconds after it is cast, as by a blow its caster can't pay for: its people react to
+	/// its fall and it closes down. A testbed set-up step.
+	std::optional<float> breakSeconds;
 };
 
 /// Something a creature is told to do, in turn with the scenario's other commands
@@ -663,6 +666,10 @@ struct Command
 		/// The player is put in a room of the temple (value, by the temple's rooms: 0 the challenge room). Needs no
 		/// creature
 		EnterTemple,
+		/// The explorers' boat film plays as a script's PLAY_JC_SPECIAL 6 plays it on Land 1, moved to the testbed: its
+		/// dry dock at the point (from the middle of the map) on the land there, and its sailing starting in the lake's
+		/// north-east corner. Needs no creature
+		PlayBoatFilm,
 		/// A land's script (script, by its name) starts as a script's "run script" starts it, given its arguments in
 		/// order (scriptArguments); the scripts' globals named are set first (scriptGlobals). Needs no creature
 		RunScript,
@@ -763,6 +770,8 @@ struct TempleSetup
 	float angle {0.0f};
 	/// How much of it is built, 0 to 1, for a temple still going up; built when not given
 	std::optional<float> built;
+	/// Its heart's life, 0 to 1, for a temple already hurt; whole when not given
+	std::optional<float> life;
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,

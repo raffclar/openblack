@@ -143,6 +143,8 @@ TEST(VortexCrossing, EachKindWritesItsLine)
 	          "CREATE_MOBILEOBJECT(\"0.00,0.00\", 6, 1234, 1000)\n");
 	EXPECT_EQ(Text(DeadTreeLine {.offset = Offset(0.0f, 0.0f), .player = "PLAYER_ONE", .row = 2, .life = 1.0f, .yAngle = 0.5f}),
 	          "CREATE_DEAD_TREE(\"0.00,0.00\", \"PLAYER_ONE\", 2, 1.000000, 0.000000, 0.500000, 0.000000)\n");
+	EXPECT_EQ(Text(OneOffSpellLine {.offset = Offset(-10.0f, 0.0f), .magic = "FOOD"}),
+	          "CREATE_ONE_SHOT_SPELL_PU(\"-10.00,0.00\", \"FOOD\")\n");
 }
 
 TEST(VortexCrossing, ThingsComeOutAboutSixteenMetresAwayByWholeCells)

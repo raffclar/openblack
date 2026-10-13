@@ -326,3 +326,14 @@ TEST(PlayerProfileSystem, WithNowhereToKeepThemThereAreNoProfiles)
 	EXPECT_FALSE(system.CreatureFile().has_value());
 	EXPECT_EQ(system.GetProfileCount(), 0u);
 }
+
+TEST(PlayerProfiles, AProfilesFolderIsNamedByItsKey)
+{
+	// Plain letters and digits each after an underscore, anything else as four hexadecimal digits
+	EXPECT_EQ(ProfileKey(u"Bob 2"), "_B_o_b0020_2");
+	EXPECT_EQ(ProfileKey(u"J\u00e9r\u00f4me!"), "_J00e9_r00f4_m_e0021");
+	EXPECT_EQ(ProfileKey(u""), "");
+	// It stops once it reaches its longest, finishing the character it is on
+	EXPECT_EQ(ProfileKey(std::u16string(200, u'a')).size(), k_LongestKey);
+	EXPECT_EQ(ProfileKey(std::u16string(1, u'a') + std::u16string(100, u'.')).size(), 254u);
+}

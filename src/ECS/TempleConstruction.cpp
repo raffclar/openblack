@@ -32,6 +32,7 @@
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
@@ -406,7 +407,26 @@ bool construction::IsBuilt(entt::entity object)
 void construction::SetBuilt(entt::entity building, float built)
 {
 	auto& registry = Entities();
-	if (!registry.Valid(building) || !(registry.AllOf<Temple>(building) || world_objects::IsBuilding(building)))
+	if (!registry.Valid(building))
+	{
+		return;
+	}
+	// A feature, such as the explorers' ark, keeps how much of it is built and nothing more: it has no town to build it
+	// and no site, and once all of it is built it stands whole
+	if (registry.AllOf<Feature>(building))
+	{
+		if (const auto progress = building_construction::SetBuilt(built); progress.finished)
+		{
+			registry.Remove<BuildProgress>(building);
+		}
+		else
+		{
+			registry.AssignOrReplace<BuildProgress>(building, progress.built);
+		}
+		registry.SetDirty();
+		return;
+	}
+	if (!(registry.AllOf<Temple>(building) || world_objects::IsBuilding(building)))
 	{
 		return;
 	}

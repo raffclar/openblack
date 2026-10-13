@@ -46,6 +46,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Particles/ParticleEffect.h"
+#include "Particles/ParticleMaths.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerFire.h"
 
@@ -381,7 +382,7 @@ void TornadoSystem::Update(float turnFraction)
 		    const auto& a = atom->previous;
 		    const auto& b = atom->current;
 		    transform.position = a.position + (b.position - a.position) * t;
-		    transform.rotation = a.rotation + (b.rotation - a.rotation) * t;
+		    transform.rotation = particles::maths::LerpRotation(a.rotation, b.rotation, t);
 	    });
 }
 

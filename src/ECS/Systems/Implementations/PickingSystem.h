@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/UndrawnPicks.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -30,16 +31,23 @@ public:
 	void PickUnderCursor(const Frame& frame) override;
 	[[nodiscard]] const Pick& GetPick() const override { return _pick; }
 	void RetargetObject(std::optional<entt::entity> object, float distance) override;
+	void FindBehindHand(glm::vec3 camera, std::optional<glm::vec3> handMiddle) override;
+	[[nodiscard]] std::optional<glm::vec3> GetBehindHand() const override { return _behindHand; }
 
 	[[nodiscard]] std::optional<screen_pick::MeshHit> FeelModel(entt::entity object, glm::vec3 origin,
 	                                                            glm::vec3 direction) const override;
 
 private:
 	Pick _pick;
+	std::optional<glm::vec3> _behindHand;
 	/// Room the pick reuses from frame to frame
 	std::vector<screen_pick::Candidate> _candidates;
 	std::vector<entt::entity> _candidateEntities;
 	std::vector<glm::mat4> _candidateModels;
+	std::vector<entt::id_type> _candidateMeshes;
+	std::vector<entt::entity> _drawnEntities;
+	std::vector<undrawn_picks::Shape> _undrawnShapes;
+	std::vector<undrawn_picks::Turn> _testOrder;
 	std::vector<screen_pick::ClipCorner> _corners;
 	std::vector<glm::vec3> _placed;
 	std::vector<glm::vec2> _uvs;

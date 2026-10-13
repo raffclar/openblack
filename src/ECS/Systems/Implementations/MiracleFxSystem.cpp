@@ -205,10 +205,12 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		globe.spin = std::fmod(globe.spin + magic::k_OrbSeedSpin * seconds, k_TwoPi);
 		globe.ringSpin = std::fmod(globe.ringSpin + visuals::k_RingSpin * seconds, k_TwoPi);
 		globe.glintFrame = visuals::StepGlint(globe.glintFrame, seconds);
-		// The dome's top faces the camera, turning about the middle of the globe
-		globe.middle = globe.position + centre * transform.scale;
+		// The dome's top faces the camera, turning about the middle of the globe where it is now, so that a globe thrown
+		// about turns where it flies
+		globe.middle = transform.position + transform.rotation * (centre * transform.scale);
 		transform.rotation = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
 		transform.position = globe.middle - transform.rotation * (centre * transform.scale);
+		globe.position = globe.middle - centre * transform.scale;
 		const auto& seed = magic::GetSpellSeedInfo(info, globe.seedType);
 		if (visuals::IsPhialSeed(globe.seedType))
 		{

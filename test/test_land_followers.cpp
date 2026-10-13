@@ -19,6 +19,7 @@
 #include "3D/LandIslandInterface.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -127,4 +128,35 @@ TEST(LandFollowers, AVillagerStandingWhereTheLandIsLevelledStaysOnIt)
 	EXPECT_FLOAT_EQ(registry.Get<Transform>(held).position.y, 30.0f);
 	EXPECT_FLOAT_EQ(registry.Get<Transform>(rock).position.y, 13.36f);
 	EXPECT_FLOAT_EQ(registry.Get<Transform>(faraway).position.y, 13.36f);
+}
+
+TEST(LandFollowers, AStaticThingKeepsTheHeightItWasPutDownAtWhileItLiesThere)
+{
+	Registry registry;
+	LevelledIsland land;
+	land.height = 10.0f;
+	const auto rock = Standing(registry, {100.0f, 12.0f, 100.0f});
+	registry.Assign<MobileStatic>(rock, MobileStaticInfo::Rock);
+	const auto flying = Standing(registry, {100.0f, 30.0f, 100.0f});
+	registry.Assign<MobileStatic>(flying, MobileStaticInfo::Rock);
+	registry.Assign<InPhysics>(flying);
+	const auto far = Standing(registry, {500.0f, 12.0f, 100.0f});
+	registry.Assign<MobileStatic>(far, MobileStaticInfo::Rock);
+	// Nothing kept: its height above the land now
+	EXPECT_FLOAT_EQ(PlacedHeightOf({100.0f, 12.0f, 100.0f}, 10.0f, registry.TryGet<PlacedHeight>(rock)), 2.0f);
+
+	KeepPlacedHeights(registry, land, {0.0f, 0.0f}, {200.0f, 200.0f});
+	EXPECT_TRUE(registry.AllOf<PlacedHeight>(rock));
+	EXPECT_FALSE(registry.AllOf<PlacedHeight>(flying));
+	EXPECT_FALSE(registry.AllOf<PlacedHeight>(far));
+	// The land is lowered under it, twice: it keeps the height it was put down at
+	land.height = 7.0f;
+	KeepPlacedHeights(registry, land, {0.0f, 0.0f}, {200.0f, 200.0f});
+	land.height = 4.0f;
+	const auto& position = registry.Get<Transform>(rock).position;
+	EXPECT_FLOAT_EQ(PlacedHeightOf(position, land.height, registry.TryGet<PlacedHeight>(rock)), 2.0f);
+	// Moved, it is put down again: its height above the land where it lies now
+	registry.Get<Transform>(rock).position = {110.0f, 9.0f, 100.0f};
+	EXPECT_FLOAT_EQ(PlacedHeightOf(registry.Get<Transform>(rock).position, land.height, registry.TryGet<PlacedHeight>(rock)),
+	                5.0f);
 }

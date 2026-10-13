@@ -17,6 +17,8 @@
 
 #include <glm/vec2.hpp>
 
+#include "Enums.h"
+
 /// The rules of a building going up: how much of it stands built, how a script or its builders add to it, and when it is
 /// finished. Free of the game's state so they can be tested on their own.
 namespace openblack::building_construction
@@ -47,6 +49,13 @@ struct Mending
 /// Builders working on a building that stands built mend it, while it is short of its full life: their work adds to its
 /// life, never beyond all of it, and it is repaired once its life is full. A whole building is left as it is.
 [[nodiscard]] Mending RepairBy(float life, float amount);
+
+/// A feature a script leaves short of built is drawn going up as a building is only if it is the ark's dry dock; any
+/// other feature is drawn whole whatever its built amount
+[[nodiscard]] constexpr bool FeatureDrawnGoingUp(FeatureInfo type)
+{
+	return type == FeatureInfo::ArkDryDock;
+}
 
 /// A script asks a town to build what it planned at a place with a desire, and the building site takes five times it
 inline constexpr float k_ScriptDesireScale = 5.0f;
