@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <iterator>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <LNDFile.h>
@@ -745,19 +746,34 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 		return std::nullopt;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* meshComponent = registry.Valid(object) ? registry.TryGet<const Mesh>(object) : nullptr;
+	if (!registry.Valid(object))
+	{
+		return std::nullopt;
+	}
 	auto& meshes = Locator::resources::value().GetMeshes();
-	if (meshComponent == nullptr || !meshes.Contains(meshComponent->id))
+	// The model as it was drawn this frame; a one-shot bubble, drawn by the miracles' own pass, where it is drawn (not
+	// moved towards the camera as for the pick)
+	std::optional<std::pair<entt::id_type, glm::mat4>> felt;
+	if (const auto* meshComponent = registry.TryGet<const Mesh>(object); meshComponent != nullptr)
+	{
+		const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
+		if (const auto found = std::ranges::find(drawn, object, &RenderContext::DrawnObject::entity); found != drawn.end())
+		{
+			felt = std::pair {meshComponent->id, found->model};
+		}
+	}
+	else if (const auto* transform = registry.TryGet<const Transform>(object);
+	         transform != nullptr && registry.AllOf<OneOffSpellSeed>(object))
+	{
+		auto model = glm::mat4(transform->rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform->scale)));
+		model[3] = glm::vec4(transform->position, 1.0f);
+		felt = std::pair {OneOffSpellSeed::k_MeshId.value(), model};
+	}
+	if (!felt.has_value() || !meshes.Contains(felt->first))
 	{
 		return std::nullopt;
 	}
-	const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
-	const auto found = std::ranges::find(drawn, object, &RenderContext::DrawnObject::entity);
-	if (found == drawn.end())
-	{
-		return std::nullopt;
-	}
-	const auto mesh = meshes.Handle(meshComponent->id);
+	const auto mesh = meshes.Handle(felt->first);
 	std::optional<screen_pick::MeshHit> nearest;
 	for (size_t s = 0; s < mesh->GetSubMeshes().size(); ++s)
 	{
@@ -767,7 +783,7 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 			continue;
 		}
 		std::vector<glm::vec3> placed;
-		ecs::posed_model::Place(registry, object, *mesh, s, found->model, placed);
+		ecs::posed_model::Place(registry, object, *mesh, s, felt->second, placed);
 		const auto hit = screen_pick::NearestIntersection(placed, mesh->GetSubMeshes()[s]->GetBodyGeometry().indices, origin,
 		                                                  direction, false);
 		if (hit.has_value() && (!nearest.has_value() || hit->distance < nearest->distance))
