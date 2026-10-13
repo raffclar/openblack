@@ -43,6 +43,7 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -63,6 +64,7 @@
 #include "Magic/AreaEffect.h"
 #include "Magic/Impressiveness.h"
 #include "Magic/ReactionRules.h"
+#include "Magic/ReactionTimingRules.h"
 #include "Magic/TownBelief.h"
 #include "Magic/VillagerReactionRules.h"
 #include "ObjectMeasures.h"
@@ -80,6 +82,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace villager_reaction = openblack::magic::villager_reaction;
+namespace reaction_timing = openblack::magic::reaction_timing;
 
 namespace
 {
@@ -180,6 +183,81 @@ villager_reaction::Distance DistanceOf(const ReactionInfo& info)
 float SpreadDistance(const glm::vec3& at, const glm::vec3& source)
 {
 	return villager_reaction::SpreadDistance({at.x, at.z}, {source.x, source.z});
+}
+
+/// Who is reacting, as the reaction's timing tells them apart
+reaction_timing::Reacting WhoOf(const ecs::Registry& registry, entt::entity living)
+{
+	if (registry.AllOf<Villager>(living))
+	{
+		return reaction_timing::Reacting::Villager;
+	}
+	return registry.AllOf<Creature>(living) ? reaction_timing::Reacting::Creature : reaction_timing::Reacting::Other;
+}
+
+/// Where the thing a reaction is about is now: the thing itself while it is there, else where the reaction is
+glm::vec3 ThingAt(const ecs::Registry& registry, const ReactionSystem::Active& reaction)
+{
+	const auto thing = reaction.source.initiator;
+	if (thing != entt::null && registry.Valid(thing))
+	{
+		if (const auto* transform = registry.TryGet<const Transform>(thing))
+		{
+			return transform->position;
+		}
+	}
+	return reaction.source.position;
+}
+
+/// Whether what a living reacts to has gone: deleted, or a villager dying
+bool ThingGone(const ecs::Registry& registry, entt::entity thing)
+{
+	if (thing == entt::null)
+	{
+		return false;
+	}
+	if (!registry.Valid(thing))
+	{
+		return true;
+	}
+	const auto* action = registry.TryGet<const LivingAction>(thing);
+	return registry.AllOf<Villager>(thing) && action != nullptr && Locator::livingActionSystem::has_value() &&
+	       Locator::livingActionSystem::value().VillagerGetState(*action, LivingAction::Index::Final) == VillagerStates::Dying;
+}
+
+/// What a living weighs about a predator it reacts to
+reaction_timing::PredatorWatch PredatorWatchOf(const ecs::Registry& registry, entt::entity living, entt::entity predator,
+                                               const ReactionInfo& info)
+{
+	reaction_timing::PredatorWatch watch {.leastRunDistance = info.minDistanceToRunAwayFromObject};
+	if (predator == entt::null || !registry.Valid(predator) || !registry.AllOf<Transform>(predator) ||
+	    !registry.AllOf<Transform>(living))
+	{
+		return watch;
+	}
+	const auto& predatorAt = registry.Get<const Transform>(predator).position;
+	const auto& livingAt = registry.Get<const Transform>(living).position;
+	watch.animal = registry.AllOf<Animal>(predator);
+	watch.distance = gutils::GetDistanceInMetres(livingAt, predatorAt);
+	if (const auto* walker = registry.TryGet<const WallHug>(predator))
+	{
+		watch.speed = walker->speed;
+		watch.comingAt = reaction_timing::ComingAt(predatorAt, glm::vec2(walker->step), livingAt);
+	}
+	if (const auto* action = registry.TryGet<const LivingAction>(living);
+	    action != nullptr && registry.AllOf<Villager>(living) && Locator::livingActionSystem::has_value())
+	{
+		const auto& states = Locator::livingActionSystem::value();
+		const auto top = states.VillagerGetState(*action, LivingAction::Index::Top);
+		const auto final = states.VillagerGetState(*action, LivingAction::Index::Final);
+		watch.lookingAtThing = top == VillagerStates::LookingAtObjectReaction;
+		watch.hidingOrLooking =
+		    final == VillagerStates::GoAndHideInNearbyBuilding || final == VillagerStates::LookToSeeIfItIsSafe;
+		watch.lookingIfSafe = final == VillagerStates::LookToSeeIfItIsSafe;
+	}
+	// TODO(raffclar): an animal's own state numbering differs from the game's, which ends an animal's reaction to a
+	// predator charging at it while it looks at something; no predator makes reactions yet
+	return watch;
 }
 
 /// The kinds of reaction a living thing took up lately: a villager's shared with the shields
@@ -670,35 +748,76 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 uint32_t ReactionSystem::AgainTurns(const Active& reaction, entt::entity living, const glm::vec3& at) const
 {
 	const auto* info = InfoOf(reaction.source.type);
+	if (info == nullptr)
+	{
+		return 0;
+	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (registry.AllOf<Creature>(living))
+	const auto who = WhoOf(registry, living);
+	const auto thing = reaction.source.initiator;
+	// Weighed by how far it is from the reaction's thing as the reaction spreads
+	const float distance = SpreadDistance(at, ThingAt(registry, reaction));
+	const auto standard = reaction_timing::StandardTurnsBeforeReactingAgain(reaction_timing::RowOf(*info), who, distance);
+	int32_t turns = standard;
+	switch (reaction_timing::AgainRule(reaction.source.type))
 	{
-		return info->numGameTurnsForCreatureBeforeReactingAgain;
-	}
-	if (registry.AllOf<Villager>(living))
-	{
-		switch (reaction.source.type)
+	case reaction_timing::Rule::Creature:
+		// Waiting for a creature goes by how impressive it is and how the town feels about it, for all alike
+		turns = static_cast<int32_t>(ecs::villager_creature::TurnsBeforeReactingAgain(living, thing, distance));
+		break;
+	case reaction_timing::Rule::Predator:
+		turns =
+		    reaction_timing::PredatorTurnsBeforeReactingAgain(PredatorWatchOf(registry, living, thing, *info), who, standard);
+		break;
+	case reaction_timing::Rule::BurningObject:
+		if (who == reaction_timing::Reacting::Villager)
 		{
-		case Reaction::ReactToCreature:
-			// A villager waits for a creature by its own rule
-			return ecs::villager_creature::TurnsBeforeReactingAgain(
-			    living, reaction.source.initiator,
-			    villager_reaction::SpreadDistance({at.x, at.z}, {reaction.source.position.x, reaction.source.position.z}));
-		case Reaction::ReactToBurningObjectInHand:
-			return villager_reactions::BurningInHandAgainTurns(living, reaction.source.initiator,
-			                                                   info->numGameTurnsForNormalThingsBeforeReactingAgain);
-		case Reaction::ReactToWood:
-			// A forester at work goes for wood again straight away
-			if (ecs::villager_forester::ReactsToWoodAgainAtOnce(living))
-			{
-				return 0;
-			}
-			break;
-		default:
-			break;
+			turns = static_cast<int32_t>(
+			    villager_reactions::BurningInHandAgainTurns(living, thing, static_cast<uint32_t>(standard)));
 		}
+		break;
+	case reaction_timing::Rule::Wood:
+		// A forester at work goes for wood again straight away
+		if (who == reaction_timing::Reacting::Villager && ecs::villager_forester::ReactsToWoodAgainAtOnce(living))
+		{
+			turns = 0;
+		}
+		break;
+	default:
+		break;
 	}
-	return info->numGameTurnsForNormalThingsBeforeReactingAgain;
+	// The wait is counted as a whole number of turns, so a negative one is a very long wait
+	return static_cast<uint32_t>(turns);
+}
+
+int32_t ReactionSystem::TurnsToReact(const Active& reaction, entt::entity living, Reaction type) const
+{
+	const auto* info = InfoOf(type);
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (info == nullptr || !registry.AllOf<Transform>(living))
+	{
+		return 0;
+	}
+	const auto who = WhoOf(registry, living);
+	const auto thing = reaction.source.initiator;
+	// Weighed by how far it is from what it reacts to: the thing, or itself
+	const auto& at = registry.Get<const Transform>(living).position;
+	const float distance =
+	    reaction_timing::ReactsToItself(type) ? 0.0f : gutils::GetDistanceInMetres(at, ThingAt(registry, reaction));
+	const auto standard = reaction_timing::StandardTurnsToReact(reaction_timing::RowOf(*info), who, distance);
+	switch (reaction_timing::ReactRule(type))
+	{
+	case reaction_timing::Rule::Creature:
+		return static_cast<int32_t>(ecs::villager_creature::TurnsToReact(living, thing, distance));
+	case reaction_timing::Rule::Predator:
+		return reaction_timing::PredatorTurnsToReact(PredatorWatchOf(registry, living, thing, *info), who, standard);
+	case reaction_timing::Rule::None:
+		return 0;
+	default:
+		// A burning thing in the hand and a shield go by the standard turns for whoever holds them here (the shields'
+		// villagers are timed by the shields)
+		return standard;
+	}
 }
 
 void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction& state, bool takingOver)
@@ -860,30 +979,20 @@ void ReactionSystem::ProcessLiving()
 			Stop(entity, state, false);
 			continue;
 		}
+		// What it reacts to gone (deleted, or a villager dying), it stops at once; fainting or confused, it reacts to
+		// itself
 		const auto* info = InfoOf(state.type);
-		// What it reacts to gone, it stops at once
-		if (info == nullptr || !registry.AllOf<Transform>(entity) ||
-		    (reaction->source.initiator != entt::null && !registry.Valid(reaction->source.initiator)))
+		const auto target = reaction_timing::ReactsToItself(state.type) ? entity : reaction->source.initiator;
+		if (info == nullptr || !registry.AllOf<Transform>(entity) || ThingGone(registry, target))
 		{
 			Stop(entity, state, true);
 			continue;
 		}
-		// Its time counts from when it last took up a reaction of the kind, the same wherever it stands
-		const bool creature = registry.AllOf<Creature>(entity);
-		auto turns =
-		    static_cast<int32_t>(creature ? info->numGameTurnsForCreatureToReact : info->numGameTurnsForNormalThingsToReact);
-		// A villager reacts to a creature for as long as its own rule says, by how near the creature is
-		if (state.type == Reaction::ReactToCreature && registry.AllOf<Villager>(entity) &&
-		    registry.Valid(reaction->source.initiator) && registry.AllOf<Transform>(reaction->source.initiator))
-		{
-			turns = static_cast<int32_t>(ecs::villager_creature::TurnsToReact(
-			    entity, reaction->source.initiator,
-			    gutils::GetDistanceInMetres(registry.Get<const Transform>(entity).position,
-			                                registry.Get<const Transform>(reaction->source.initiator).position)));
-		}
+		// Its time counts from when it last took up a reaction of the kind, and lasts by how far it is from what it reacts
+		// to now
 		const auto since =
 		    static_cast<int32_t>(_turn - MemoryOf(registry, entity, state).LastReacted(static_cast<uint32_t>(state.type)));
-		if (since > turns)
+		if (since > TurnsToReact(*reaction, entity, state.type))
 		{
 			Stop(entity, state, true);
 		}

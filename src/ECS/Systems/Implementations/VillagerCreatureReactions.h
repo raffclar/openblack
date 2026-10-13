@@ -43,7 +43,8 @@ void TownTurn(entt::entity town, uint32_t turn);
 
 /// How urgently a villager heeds a creature's reaction, before nearness counts
 [[nodiscard]] uint8_t Priority(entt::entity villager, entt::entity creature);
-/// How many turns a villager reacts to a creature, and waits before reacting to it again, at a distance from it
+/// How many turns a living (a villager, a creature or an animal) reacts to a creature, and waits before reacting to it
+/// again, at a distance from it; one without a town has no feeling about the creature to weigh
 [[nodiscard]] uint32_t TurnsToReact(entt::entity villager, entt::entity creature, float distance);
 [[nodiscard]] uint32_t TurnsBeforeReactingAgain(entt::entity villager, entt::entity creature, float distance);
 /// The state a villager takes a creature's reaction up in: inspecting it, or running from a creature its town fears;
