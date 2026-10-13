@@ -29,6 +29,8 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Audio/Sound.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
@@ -80,6 +82,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -599,6 +602,17 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	{
 		Fail(action, "navigation failed");
 	}
+}
+
+/// One of the three creaks of a tree a creature pulls from the ground, drawn from the local random numbers
+entt::id_type TreeCreak()
+{
+	constexpr std::array k_Creaks {audio::SoundId::G_TreeBreak_01_2, audio::SoundId::G_TreeBreak_02_2,
+	                               audio::SoundId::G_TreeBreak_03_2};
+	const auto pick = Locator::gameRandom::has_value()
+	                      ? Locator::gameRandom::value().LocalRand(static_cast<int32_t>(k_Creaks.size())) % k_Creaks.size()
+	                      : 0;
+	return static_cast<entt::id_type>(k_Creaks.at(pick));
 }
 } // namespace
 
@@ -1748,8 +1762,16 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			                                  .rotation = glm::transpose(transform.rotation) * at.rotation,
 			                                  .middle = MiddleOf(registry, object)});
 			registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
+			const bool flying = Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().IsFlying(object);
+			// Whatever it is, it leaves the map's cells while the creature holds it
+			registry.Remove<MapCellResident, MapCellMover>(object);
+			// A standing tree pulled from the ground creaks, at the creature
+			if (registry.AllOf<Tree>(object) && !flying && Locator::soundTagSystem::has_value())
+			{
+				Locator::soundTagSystem::value().CreatePointSound(TreeCreak(), transform.position, false);
+			}
 			// Taken out of the air, it leaves the physics without going back on the map
-			if (Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().IsFlying(object))
+			if (flying)
 			{
 				Locator::dynamicsSystem::value().RemoveObject(object, false, true);
 				// What its landing set, the creature's hand overrides: a person or animal is held
