@@ -940,3 +940,5 @@ openblack_setup_and_add_test(
   test_instance_light_point graphics/test_instance_light_point.cpp
 )
 openblack_setup_and_add_test(test_warm_up_views graphics/test_warm_up_views.cpp)
+openblack_setup_and_add_test(test_land_altitude test_land_altitude.cpp)
+target_link_libraries(test_land_altitude PRIVATE lnd)
