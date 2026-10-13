@@ -44,6 +44,7 @@ public:
 	[[nodiscard]] const std::optional<object_draw_list::View>& GetView() const override { return _view; }
 	[[nodiscard]] bool Listed(entt::entity entity) const override;
 	[[nodiscard]] bool Drawn(const Registry& registry, entt::entity entity) const override;
+	void NoteFullFrame(entt::entity entity, bool staysDrawn) override;
 	[[nodiscard]] std::span<const entt::entity> GetList() const override { return _list; }
 	[[nodiscard]] Summary GetSummary() const override;
 	void Reset() override;
@@ -85,6 +86,9 @@ private:
 	std::vector<entt::entity> _list;
 	/// Each listed thing by its entity's index, for telling at once whether a thing is listed
 	std::vector<entt::entity> _listedByIndex;
+	/// For each listed thing by its entity's index, whether the last full frame kept it for the frames that do not
+	/// draw all of the list
+	std::vector<bool> _keptByIndex;
 };
 
 } // namespace openblack::ecs::systems

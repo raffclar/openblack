@@ -73,6 +73,21 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	                   {.kind = AnimalInfo::Crow, .offset = {10.0f, 40.0f}, .reach = 25.0f}},
 	});
 
+	// Birds that fly out of the view and back while the camera stands still
+	all.push_back({
+	    .id = "birds.still_camera",
+	    .name = "Birds: the still camera draws what was on the screen",
+	    .facet = Facet::Animals,
+	    .description = "A flock of ten doves that wanders up to 15 m about a point at the left edge of the view of a "
+	                   "camera on the ground. Do not move the camera. Then move it a little.",
+	    .expected = "While the camera stands still, a dove that flies in from the left does not show at once. It shows "
+	                "when the game makes its list of things to draw again, about once a second, or when the camera "
+	                "moves more than 1 m.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -5.0f}, .look = {0.0f, 25.0f, 40.0f}},
+	    .birdFlocks = {{.kind = AnimalInfo::Dove, .offset = {-45.0f, 40.0f}, .reach = 15.0f}},
+	});
+
 	all.push_back({
 	    .id = "animals.walk_pace",
 	    .name = "Birds: wingbeats keeping pace with the flight",

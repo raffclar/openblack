@@ -27,8 +27,15 @@
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
 #endif
 
+namespace openblack::ecs
+{
+class Registry;
+}
+
 namespace openblack::ecs::systems
 {
+
+class ObjectDrawListSystemInterface;
 
 class RenderingSystem final: public RenderingSystemCommon
 {
@@ -104,6 +111,11 @@ private:
 	std::unordered_map<entt::id_type, std::optional<AxisAlignedBoundingBox>> _meshBoxes;
 	/// The bounding box of a mesh, none when it isn't loaded
 	[[nodiscard]] const std::optional<AxisAlignedBoundingBox>& MeshBox(entt::id_type mesh);
+	/// Tell the land's draw list whether a listed thing stays drawn while the camera stands still. The thing's sphere
+	/// is the box of `boxMesh` with the model's place, turn and scale. `fadedOut` is true when the thing is too far
+	/// off to show.
+	void NoteKept(ObjectDrawListSystemInterface& drawList, const Registry& registry, entt::entity entity,
+	              const glm::mat4& model, float scale, entt::id_type boxMesh, bool fadedOut);
 	/// The things drawn by the distance bands that are fading out this frame, by how opaque, and those too far off to be
 	/// drawn at all: their other draws (a building's part built, a graveyard's graves) follow them
 	std::unordered_map<entt::entity, uint8_t> _fadingThings;

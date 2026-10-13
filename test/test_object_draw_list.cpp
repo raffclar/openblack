@@ -294,3 +294,45 @@ TEST(ObjectDrawList, TheLatestRequestSetsHowManyFramesMakeTheListAgain)
 	requests.Rebuilt();
 	EXPECT_EQ(requests.Left(), 0u);
 }
+
+// A full frame keeps a thing for the still frames when its sphere was on the screen and it did not fade out. A villager
+// or a creature stays drawn in all cases.
+TEST(ObjectDrawList, AFullFrameKeepsWhatWasOnTheScreen)
+{
+	EXPECT_TRUE(StaysDrawn(false, true, false));
+	EXPECT_FALSE(StaysDrawn(false, false, false));
+	EXPECT_FALSE(StaysDrawn(false, true, true));
+	EXPECT_TRUE(StaysDrawn(true, false, false));
+	EXPECT_TRUE(StaysDrawn(true, false, true));
+}
+
+// While the camera stands still, only the things that the last full frame kept are drawn. A move of more than one unit
+// draws all of the list again and notes it again.
+TEST(ObjectDrawList, AStillCameraDrawsOnlyWhatTheLastFullFrameKept)
+{
+	Clock clock;
+	const glm::vec3 eye {100.0f, 50.0f, 100.0f};
+	const glm::vec3 focus {200.0f, 0.0f, 200.0f};
+	// The first frame makes the list and draws all of it
+	auto frame = clock.Next(0, eye, focus, false);
+	ASSERT_TRUE(frame.rebuilt);
+	ASSERT_TRUE(frame.drawAll);
+	// The next frame moves the camera from where it last moved, so it draws all of the list and notes it
+	frame = clock.Next(0, eye, focus, false);
+	ASSERT_TRUE(frame.drawAll);
+	const bool onScreenKept = StaysDrawn(false, true, false);
+	const bool offScreenKept = StaysDrawn(false, false, false);
+	const bool villagerKept = StaysDrawn(true, false, false);
+	// The camera moves one unit: that is not more than one unit, so the frame is still
+	frame = clock.Next(0, eye + glm::vec3(1.0f, 0.0f, 0.0f), focus, false);
+	ASSERT_FALSE(frame.drawAll);
+	EXPECT_TRUE(Drawn(frame, true, onScreenKept));
+	EXPECT_FALSE(Drawn(frame, true, offScreenKept));
+	EXPECT_TRUE(Drawn(frame, true, villagerKept));
+	EXPECT_FALSE(Drawn(frame, false, onScreenKept));
+	// What it looks at moves more than one unit: all of the list is drawn again
+	frame = clock.Next(0, eye, focus + glm::vec3(0.0f, 1.5f, 0.0f), false);
+	EXPECT_TRUE(frame.drawAll);
+	EXPECT_FALSE(frame.rebuilt);
+	EXPECT_TRUE(Drawn(frame, true, offScreenKept));
+}
