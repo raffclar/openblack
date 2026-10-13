@@ -39,6 +39,7 @@
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
 #include "Creature/CreatureDecisionTree.h"
@@ -1587,6 +1588,16 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
 		return;
 	}
+	if (command.kind == Kind::EnterTemple)
+	{
+		const bool entered = Locator::temple::has_value();
+		if (entered)
+		{
+			Locator::temple::value().Activate();
+		}
+		Log(fmt::format("{:.1f}s: the player {}", _seconds, entered ? "goes into the temple" : "has no temple to go into"));
+		return;
+	}
 	if (command.kind == Kind::RunText)
 	{
 		// Not alone on its line and not waiting for a click, as the lessons' texts are shown
@@ -1788,6 +1799,7 @@ void Runner::Give(const Command& command)
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:
+	case Kind::EnterTemple:
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:

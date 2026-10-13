@@ -859,7 +859,8 @@ bool Game::IsPaused() const
 bool Game::IsHandDrawn() const
 {
 	return hand_visibility::IsShown(_interface && _interface->IsDialogOpen(),
-	                                Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+	                                Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+	                                Locator::temple::has_value() && Locator::temple::value().Active());
 }
 
 void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
@@ -5132,7 +5133,8 @@ std::chrono::milliseconds Game::CameraStepTime() const
 	const bool scripted = Locator::cinematicDirectorSystem::has_value() &&
 	                      Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
 	                      Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
-	return ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted);
+	const bool insideTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	return ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted, insideTemple);
 }
 
 float Game::HandStepSeconds() const

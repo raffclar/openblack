@@ -585,6 +585,8 @@ struct Command
 		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
 		/// loses the last of its life. Needs no creature
 		DestroyTemple,
+		/// The player goes into their temple's main room, as tapping its entrance takes them in. Needs no creature
+		EnterTemple,
 		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
 		/// does: a static action's start, loop and end, or an individual action
 		ScriptPlay,

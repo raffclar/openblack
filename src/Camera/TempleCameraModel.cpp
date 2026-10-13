@@ -29,6 +29,7 @@
 #include "Camera.h"
 #include "CameraLens.h"
 #include "Common/MachineClock.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
@@ -534,8 +535,13 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 		input.button = 1;
 	}
 	input.mouse = glm::vec2(actions.GetMousePosition());
-	// A press held since before the player came in isn't one inside
-	input.button = static_cast<uint8_t>(_heldFromOutside.Filter(static_cast<temple_press::Button>(input.button)));
+	// A press held since before the player came in isn't one inside, and while a script has the cinema bars in, as when
+	// the advisors introduce a room, the temple takes no presses at all
+	const bool cinemaBars =
+	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
+	const auto pressed = static_cast<temple_press::Button>(input.button);
+	input.button =
+	    static_cast<uint8_t>(cinemaBars ? _heldFromOutside.FilterUnderCinemaBars(pressed) : _heldFromOutside.Filter(pressed));
 	// A press on one of the room's controls goes to the control, which the room's camera then doesn't see
 	if (Locator::temple::value().HoldControl(input.button != 0, input.mouse.y))
 	{

@@ -171,8 +171,16 @@ TEST(GameClock, TheFrameRealTimeIsWholeMillisecondsOfTheWallClockAndNeverNone)
 TEST(GameClock, TheHandAndCameraStepByRealTimeExceptInAScriptsCutScene)
 {
 	using namespace std::chrono_literals;
-	EXPECT_EQ(openblack::ecs::systems::CameraStep(17ms, 0ms, false), 17ms);
-	EXPECT_EQ(openblack::ecs::systems::CameraStep(17ms, 20ms, true), 20ms);
+	EXPECT_EQ(openblack::ecs::systems::CameraStep(17ms, 0ms, false, false), 17ms);
+	EXPECT_EQ(openblack::ecs::systems::CameraStep(17ms, 20ms, true, false), 20ms);
+}
+
+TEST(GameClock, InsideTheTempleTheCameraStepsByRealTimeUnderTheCinemaBars)
+{
+	using namespace std::chrono_literals;
+	// The world is paused in the temple, so the advisors' scenes there would otherwise freeze its camera
+	EXPECT_EQ(openblack::ecs::systems::CameraStep(17ms, 0ms, true, true), 17ms);
+	EXPECT_EQ(openblack::ecs::systems::CameraStep(17ms, 0ms, false, true), 17ms);
 }
 
 // Stepped deterministically, each frame takes the fixed time whatever the wall clock does, and the clock carries on from

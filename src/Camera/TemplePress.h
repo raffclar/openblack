@@ -43,6 +43,14 @@ public:
 		return _held && button == Button::Held ? Button::None : button;
 	}
 
+	/// While a script holds the cinema bars, the temple hears no press: its camera and its controls see the button up.
+	/// A press held through them isn't a press until it is let go either, as the temple only hears the button go down.
+	[[nodiscard]] constexpr Button FilterUnderCinemaBars(Button button) noexcept
+	{
+		_held = button != Button::None;
+		return Button::None;
+	}
+
 private:
 	bool _held {true};
 };
