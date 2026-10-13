@@ -1708,6 +1708,101 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
 	return found;
 }
 
+std::optional<entt::entity> CreatureMindSystem::WholeOfShownThing(CreatureMindState& mind, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	ComeAcross(mind, thing);
+	// A creature is part of no whole thing
+	if (registry.AllOf<Creature>(thing))
+	{
+		return std::nullopt;
+	}
+	const auto whole = BelongsTo(thing);
+	if (!whole.has_value() || *whole == thing || !registry.Valid(*whole))
+	{
+		return std::nullopt;
+	}
+	ComeAcross(mind, *whole);
+	return whole;
+}
+
+std::optional<entt::entity> CreatureMindSystem::WholeOfForcedPlan(entt::entity creature, CreatureMindState& mind, Desire desire,
+                                                                  entt::entity thing)
+{
+	if (auto whole = WholeOfShownThing(mind, thing))
+	{
+		return whole;
+	}
+	// A desire about something, with no whole thing, is about the nearest town
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (tables == nullptr || at == nullptr || !tables->rules.at(static_cast<size_t>(desire)).aboutSomething)
+	{
+		return std::nullopt;
+	}
+	const auto town = mind_detail::NearestTown(registry, at->position);
+	if (town == entt::null)
+	{
+		return std::nullopt;
+	}
+	ComeAcross(mind, town);
+	return town;
+}
+
+std::optional<CreatureMindSystem::ChosenActivity>
+CreatureMindSystem::ShownActivity(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto whole = WholeOfShownThing(mind, thing);
+	const auto* belief = whole.has_value() ? mind.beliefs.Find(*whole) : nullptr;
+	const auto kind = belief != nullptr ? creature_activity::WholeOf(belief->kind) : std::nullopt;
+	if (tables == nullptr || at == nullptr || !kind.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto facts = WholeFactsOf(registry, creature, *whole, *kind, *tables);
+	if (!creature_activity::CanBeAbout(desire, facts, mind.mayAttackOwnPlayer))
+	{
+		return std::nullopt;
+	}
+	const auto usefulness = ActivityUsefulness(creature, mind, desire, *whole) *
+	                        mind_detail::Nearness(registry, creature, at->position, *whole, belief->place,
+	                                              tables->rules.at(static_cast<size_t>(desire)).distanceWeight);
+	return ChosenActivity {.whole = *whole, .kind = *kind, .usefulness = usefulness};
+}
+
+std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::ShownParts(entt::entity creature, CreatureMindState& mind,
+                                                                              Desire desire, entt::entity thing,
+                                                                              const ChosenActivity& activity)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto suits = [&](entt::entity part) {
+		const auto facts = PartFactsOf(registry, part);
+		return facts.has_value() && creature_activity::PartSuits(desire, *facts) &&
+		       ObjectToActOnUsefulness(creature, mind, desire, part) > 0.0f;
+	};
+	if (suits(thing))
+	{
+		return {GoalWorth(creature, mind, desire, thing, activity)};
+	}
+	std::vector<creature_planner::ObjectCandidate> parts;
+	for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
+	{
+		if (belief.thing != creature && registry.Valid(belief.thing) && suits(belief.thing))
+		{
+			parts.push_back(GoalWorth(creature, mind, desire, belief.thing, activity));
+		}
+	}
+	return parts;
+}
+
 creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity creature, const CreatureMindState& mind,
                                                                 Desire desire, entt::entity thing,
                                                                 const std::optional<ChosenActivity>& activity)
@@ -1730,31 +1825,9 @@ creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity cre
 		candidate.actedOnUsefulness = creature_activity::ActedOnUsefulness(desire, partUsefulness);
 		return candidate;
 	}
-	// Most desires weigh a thing by what the creature has learnt of acting on such things, for the distance
-	const auto& rules = tables->rules.at(static_cast<size_t>(desire));
-	if (!rules.aboutSomething)
-	{
-		candidate.usefulness = ObjectToActOnUsefulness(creature, mind, desire, thing);
-		candidate.actedOnUsefulness = candidate.usefulness;
-		return candidate;
-	}
-	// A desire about something, with a thing that the leash shows, weighs that thing by what the creature learnt of
-	// such things as the point of the desire, for the distance. The creature must have a belief about the thing. Only
-	// anger counts the usefulness of the thing to act on too.
-	// TODO(creature-activity-object): find what the game keeps as the whole thing of a plan for a thing that the leash
-	// shows.
-	const auto place = BelievedPlace(mind, thing);
-	if (!place.has_value())
-	{
-		return candidate;
-	}
-	candidate.usefulness = ActivityUsefulness(creature, mind, desire, thing) *
-	                       Nearness(registry, creature, at->position, thing, *place, rules.distanceWeight);
-	candidate.activityUsefulness = candidate.usefulness;
-	if (creature_planner::CountsActedOn(desire, rules.aboutSomething))
-	{
-		candidate.actedOnUsefulness = ObjectToActOnUsefulness(creature, mind, desire, thing);
-	}
+	// Without a whole thing, a thing has the worth that the creature learnt for things to act on, for the distance
+	candidate.usefulness = ObjectToActOnUsefulness(creature, mind, desire, thing);
+	candidate.actedOnUsefulness = candidate.usefulness;
 	return candidate;
 }
 
@@ -1910,6 +1983,19 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				    chosen.has_value() ? std::vector {parts.at(*chosen)} : std::vector<creature_planner::ObjectCandidate> {};
 			}
 		}
+		else if (aboutSomething)
+		{
+			// The thing shown on the leash makes the desire about the whole thing that the shown thing is part of. The
+			// plan acts on the shown thing when it suits the desire and is of use, else on the first part of the whole
+			// thing that is.
+			activity = ShownActivity(creature, mind, desire, *leashTarget);
+			if (!activity.has_value())
+			{
+				mind.planner.best.at(d).reset();
+				continue;
+			}
+			parts = ShownParts(creature, mind, desire, *leashTarget, *activity);
+		}
 		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
 		// The actions of the desire, in the order of its list
 		std::vector<creature_planner::ActionCandidate> candidates;
@@ -1965,6 +2051,14 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				       !(executor->notWhatItHolds && heldByItself(thing));
 			};
 			std::vector<creature_planner::ObjectCandidate> found;
+			if (leashTarget.has_value() && desire != Desire::Compassion && activity.has_value())
+			{
+				// The first of the shown parts that the action can act on
+				const auto first = std::ranges::find_if(parts, [&](const creature_planner::ObjectCandidate& part) {
+					return suits(static_cast<entt::entity>(part.id));
+				});
+				return first != parts.end() ? std::optional(*first) : std::nullopt;
+			}
 			if (leashTarget.has_value())
 			{
 				if (suits(*leashTarget) && (!activity.has_value() || BelongsTo(*leashTarget) == activity->whole))
@@ -1990,7 +2084,11 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		};
 		// A desire about a whole thing finds the action before the part, but anger finds the part first
 		auto order = creature_planner::PlanOrder::ActionFirst;
-		if (activity.has_value() && !leashTarget.has_value())
+		if (activity.has_value() && leashTarget.has_value() && desire != Desire::Compassion)
+		{
+			order = creature_planner::PlanOrder::PartThenAction;
+		}
+		else if (activity.has_value() && !leashTarget.has_value())
 		{
 			order = desire == Desire::Anger ? creature_planner::PlanOrder::PartThenAction
 			                                : creature_planner::PlanOrder::ActionThenPart;
@@ -2518,10 +2616,12 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	{
 		return;
 	}
+	const auto whole = WholeOfForcedPlan(creature, mind, desire, static_cast<entt::entity>(best->id));
 	const creature_planner::Plan again {
 	    .desire = desire,
 	    .action = context->action,
 	    .object = best->id,
+	    .about = whole.has_value() ? std::optional(entt::to_integral(*whole)) : std::nullopt,
 	    // As pressing as the planner would find it, so that something more pressing can still take over
 	    .priority =
 	        creature_planner::Priority(desires[desire].value, best->activityUsefulness,
@@ -2637,10 +2737,14 @@ void CreatureMindSystem::LearnTurn()
 				const auto desire = static_cast<Desire>(
 				    std::min<uint32_t>(tables->actions.at(action).desire, creature_desires::k_DesireCount - 1));
 				creature_plan_actions::Situation situation;
+				const auto whole = object.has_value()
+				                       ? WholeOfForcedPlan(creature, *mind, desire, static_cast<entt::entity>(*object))
+				                       : std::nullopt;
 				if (Adopt(creature, *mind,
 				          {.desire = desire,
 				           .action = action,
 				           .object = object,
+				           .about = whole.has_value() ? std::optional(entt::to_integral(*whole)) : std::nullopt,
 				           // Copying counts as pressing as a desire at its strongest, with nothing learnt
 				           .priority = creature_planner::Priority(1.0f, std::nullopt,
 				                                                  creature_planner::ActionPriority(learnt.opinions.at(action)),

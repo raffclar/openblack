@@ -196,6 +196,23 @@ private:
 	[[nodiscard]] std::vector<creature_planner::ObjectCandidate>
 	BelievedThingsToActOn(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
 	                      const std::function<bool(entt::entity)>& suitsAction);
+	/// The whole thing that a thing shown to the creature is part of. The creature comes across the thing and the whole
+	/// thing. A creature is part of no whole thing.
+	[[nodiscard]] std::optional<entt::entity> WholeOfShownThing(components::CreatureMindState& mind, entt::entity thing);
+	/// The whole thing that a plan that the creature must do is about: the whole thing that the plan's thing is part
+	/// of. With no such whole thing, a desire about something is about the nearest town.
+	[[nodiscard]] std::optional<entt::entity> WholeOfForcedPlan(entt::entity creature, components::CreatureMindState& mind,
+	                                                            creature_desires::Desire desire, entt::entity thing);
+	/// The whole thing that a desire is about when the leash shows the creature a thing: the whole thing that the shown
+	/// thing is part of, when the desire can be about it
+	[[nodiscard]] std::optional<ChosenActivity> ShownActivity(entt::entity creature, components::CreatureMindState& mind,
+	                                                          creature_desires::Desire desire, entt::entity thing);
+	/// The parts that a plan can act on when the leash shows a thing: the shown thing when it suits the desire and is of
+	/// use, else the parts of the whole thing that do, the newest belief first
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate> ShownParts(entt::entity creature,
+	                                                                        components::CreatureMindState& mind,
+	                                                                        creature_desires::Desire desire, entt::entity thing,
+	                                                                        const ChosenActivity& activity);
 	/// What a thing is worth to a creature as the goal of a plan for a desire, and what that worth counts for in the
 	/// plan's priority. With a whole thing that the desire is about, the thing is a part of that whole thing.
 	[[nodiscard]] creature_planner::ObjectCandidate GoalWorth(entt::entity creature, const components::CreatureMindState& mind,

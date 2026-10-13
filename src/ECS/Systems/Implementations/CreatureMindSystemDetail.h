@@ -61,6 +61,8 @@ namespace openblack::ecs::systems::mind_detail
 /// that the creature holds has the highest value.
 [[nodiscard]] float Nearness(const ecs::Registry& registry, entt::entity creature, const glm::vec3& at, entt::entity object,
                              const glm::vec3& place, float distanceWeight);
+/// The town nearest a point along the ground, of any player or none; none when there is no town
+[[nodiscard]] entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point);
 /// Whether a creature can be angry with a different creature. The other creature must not be dead. Its species must
 /// let creatures attack it.
 [[nodiscard]] bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
