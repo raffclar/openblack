@@ -10,6 +10,7 @@
 #include "LandShadowBake.h"
 
 #include <algorithm>
+#include <chrono>
 #include <iterator>
 #include <ranges>
 #include <span>
@@ -200,10 +201,22 @@ void CastShape(tree_shadows::Coverage& coverage, std::span<const glm::vec2> cast
 } // namespace
 
 LandShadowBake::LandShadowBake() = default;
-LandShadowBake::~LandShadowBake() = default;
+LandShadowBake::~LandShadowBake()
+{
+	if (_bake.valid())
+	{
+		_bake.wait();
+	}
+}
 
 void LandShadowBake::Reset()
 {
+	// A bake that still runs reads the kept triangles of the models: it ends before they go
+	if (_bake.valid())
+	{
+		_bake.wait();
+		_bake = {};
+	}
 	_texture.reset();
 	_texels = {0, 0};
 	_baked.clear();
@@ -377,6 +390,8 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		_texture->Update(unshaded.data(), static_cast<uint32_t>(unshaded.size()));
 	}
 
+	ApplyFinishedBake();
+
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<Caster> found;
 	if (casters.leaves)
@@ -430,7 +445,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 			MarkBlocksOf(cells);
 			previous->second.signature = signature;
 			previous->second.cells.assign(cells.begin(), cells.end());
-			previous->second.cast.clear();
+			previous->second.cast.reset();
 		}
 	}
 	for (auto it = _baked.begin(); it != _baked.end();)
@@ -446,7 +461,13 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		}
 	}
 
+	// A bake on the other threads that is still running holds back the next one: the blocks changed since then wait
+	if (_bake.valid())
+	{
+		return;
+	}
 	std::vector<size_t> toBake;
+	const bool wholeIsland = _bakeAll;
 	if (_bakeAll)
 	{
 		toBake.resize(blocks.size());
@@ -474,16 +495,17 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	}
 
 	// The triangles of every caster's model, read on this thread where the models and textures are found. A solid thing's
-	// are flattened once, where they fall in the world, for every block it casts into.
-	struct Prepared
-	{
-		std::span<const LeafTriangle> leaves;
-		std::span<const ShapeTriangle> shape;
-		const Baked* baked {nullptr};
-	};
+	// are flattened once, where they fall in the world, for every block it casts into. The bake gets its own copy of all
+	// that it reads, so that the game can change its things while the bake runs.
+	BakeJob job;
+	job.rowsFromFarEnd = rowsFromFarEnd;
+	job.blocks.reserve(toBake.size());
+	std::ranges::transform(toBake, std::back_inserter(job.blocks), [&blocks](size_t i) {
+		return BakeBlock {.position = blocks[i].GetBlockPosition(), .corner = blocks[i].GetMapPosition()};
+	});
 	std::vector<glm::ivec2> baking;
-	baking.reserve(toBake.size());
-	std::ranges::transform(toBake, std::back_inserter(baking), [&blocks](size_t i) { return blocks[i].GetBlockPosition(); });
+	baking.reserve(job.blocks.size());
+	std::ranges::transform(job.blocks, std::back_inserter(baking), &BakeBlock::position);
 	std::ranges::sort(baking, [](glm::ivec2 a, glm::ivec2 b) { return a.x != b.x ? a.x < b.x : a.y < b.y; });
 	const auto castsIntoBaking = [&baking](const Caster& caster) {
 		return std::ranges::any_of(caster.Cells(), [&baking](uint32_t index) {
@@ -505,63 +527,98 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 			return false;
 		});
 	};
-	std::vector<Prepared> prepared(found.size());
-	for (size_t c = 0; c < found.size(); ++c)
+	for (const auto& caster : found)
 	{
-		const auto& caster = found[c];
 		if (!castsIntoBaking(caster))
 		{
 			continue;
 		}
+		const auto cells = caster.Cells();
+		auto& baked = job.casters.emplace_back(BakeCaster {
+		    .shadow = caster.shadow,
+		    .cells = std::vector<uint32_t>(cells.begin(), cells.end()),
+		    .transform = *caster.transform,
+		});
 		if (caster.shadow == LandShadow::Leaves)
 		{
-			prepared[c].leaves = LeavesOf(caster.mesh->id);
+			baked.leaves = LeavesOf(caster.mesh->id);
 			continue;
 		}
-		prepared[c].shape = ShapeOf(caster.mesh->id);
-		auto& baked = _baked.at(caster.entity);
-		prepared[c].baked = &baked;
-		if (!baked.cast.empty() || prepared[c].shape.empty())
+		baked.shape = ShapeOf(caster.mesh->id);
+		auto& kept = _baked.at(caster.entity);
+		if (!kept.cast && !baked.shape.empty())
 		{
-			continue;
-		}
-		const auto& transform = *caster.transform;
-		const auto placing = PlacingOf(transform);
-		const glm::vec2 origin {transform.position.x, transform.position.z};
-		baked.cast.reserve(prepared[c].shape.size() * 3);
-		for (const auto& triangle : prepared[c].shape)
-		{
-			for (const auto& position : triangle.positions)
+			const auto& transform = *caster.transform;
+			const auto placing = PlacingOf(transform);
+			const glm::vec2 origin {transform.position.x, transform.position.z};
+			auto cast = std::make_shared<std::vector<glm::vec2>>();
+			cast->reserve(baked.shape.size() * 3);
+			for (const auto& triangle : baked.shape)
 			{
-				baked.cast.push_back(shape_shadows::Cast(placing * position, origin));
+				for (const auto& position : triangle.positions)
+				{
+					cast->push_back(shape_shadows::Cast(placing * position, origin));
+				}
 			}
+			const auto [lowX, highX] = std::ranges::minmax(*cast | std::views::transform(&glm::vec2::x));
+			const auto [lowZ, highZ] = std::ranges::minmax(*cast | std::views::transform(&glm::vec2::y));
+			kept.castLow = {lowX, lowZ};
+			kept.castHigh = {highX, highZ};
+			kept.cast = std::move(cast);
 		}
-		const auto [lowX, highX] = std::ranges::minmax(baked.cast | std::views::transform(&glm::vec2::x));
-		const auto [lowZ, highZ] = std::ranges::minmax(baked.cast | std::views::transform(&glm::vec2::y));
-		baked.castLow = {lowX, lowZ};
-		baked.castHigh = {highX, highZ};
+		baked.cast = kept.cast;
+		baked.castLow = kept.castLow;
+		baked.castHigh = kept.castHigh;
 	}
 
-	// The blocks are baked side by side, each on its own
-	struct Result
+	// This thread bakes the whole island before the first frame that shows it. Other threads bake the later changes
+	// while the game continues. Their shadows show from the first frame after the bake ends.
+	if (wholeIsland)
 	{
-		size_t block {0};
-		std::vector<uint8_t> shades;
-	};
-	std::vector<Result> results(toBake.size());
-	const auto bake = [&](size_t first, size_t step) {
-		auto coverage = std::make_unique<tree_shadows::Coverage>();
-		for (size_t i = first; i < toBake.size(); i += step)
+		Apply(Bake(job));
+		return;
+	}
+	_bake = std::async(std::launch::async, [job = std::move(job)] { return Bake(job); });
+}
+
+void LandShadowBake::ApplyFinishedBake()
+{
+	if (!_bake.valid() || _bake.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+	{
+		return;
+	}
+	Apply(_bake.get());
+}
+
+void LandShadowBake::Apply(const std::vector<BlockShades>& results)
+{
+	for (const auto& result : results)
+	{
+		const auto origin = glm::ivec2(glm::round((result.corner - _extentMin) / tree_shadows::k_BlockSize)) * k_BlockTexels;
+		if (origin.x < 0 || origin.y < 0 || origin.x + k_BlockTexels > _texels.x || origin.y + k_BlockTexels > _texels.y)
 		{
-			const auto& block = blocks[toBake[i]];
-			const auto blockPosition = block.GetBlockPosition();
-			const auto blockCorner = block.GetMapPosition();
+			continue;
+		}
+		const auto originRow = _rowsFromFarEnd ? _texels.y - k_BlockTexels - origin.y : origin.y;
+		_texture->UpdateLayerRegion(0, glm::u16vec2(origin.x, originRow), glm::u16vec2(k_BlockTexels), result.shades.data(),
+		                            static_cast<uint32_t>(result.shades.size()));
+	}
+}
+
+std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job)
+{
+	// The blocks are baked side by side, each on its own
+	std::vector<BlockShades> results(job.blocks.size());
+	const auto bake = [&job, &results](size_t first, size_t step) {
+		auto coverage = std::make_unique<tree_shadows::Coverage>();
+		for (size_t i = first; i < job.blocks.size(); i += step)
+		{
+			const auto& block = job.blocks[i];
 			coverage->fill(0);
-			for (size_t c = 0; c < found.size(); ++c)
+			for (const auto& caster : job.casters)
 			{
-				const auto& caster = found[c];
-				const bool takes = std::ranges::any_of(caster.Cells(), [blockPosition](uint32_t index) {
-					return tree_shadows::TakesShadowFrom(blockPosition, CellOf(index));
+				const bool takes = std::ranges::any_of(caster.cells, [&block](uint32_t index) {
+					return tree_shadows::TakesShadowFrom(block.position, CellOf(index));
 				});
 				if (!takes)
 				{
@@ -569,15 +626,13 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 				}
 				if (caster.shadow == LandShadow::Leaves)
 				{
-					CastLeaves(*coverage, *caster.transform, prepared[c].leaves, blockCorner);
+					CastLeaves(*coverage, caster.transform, caster.leaves, block.corner);
 				}
-				else if (const auto* baked = prepared[c].baked;
-				         baked != nullptr && !baked->cast.empty() && baked->castHigh.x >= blockCorner.x &&
-				         baked->castLow.x <= blockCorner.x + tree_shadows::k_BlockSize && baked->castHigh.y >= blockCorner.y &&
-				         baked->castLow.y <= blockCorner.y + tree_shadows::k_BlockSize)
+				else if (caster.cast && !caster.cast->empty() && caster.castHigh.x >= block.corner.x &&
+				         caster.castLow.x <= block.corner.x + tree_shadows::k_BlockSize &&
+				         caster.castHigh.y >= block.corner.y && caster.castLow.y <= block.corner.y + tree_shadows::k_BlockSize)
 				{
-					CastShape(*coverage, baked->cast, prepared[c].shape, caster.shadow == LandShadow::ShapeBothSides,
-					          blockCorner);
+					CastShape(*coverage, *caster.cast, caster.shape, caster.shadow == LandShadow::ShapeBothSides, block.corner);
 				}
 			}
 			// The block's texels into the island's texture: x across it and z along its rows
@@ -588,14 +643,14 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 				for (int z = 0; z < k_BlockTexels; ++z)
 				{
 					const auto covered = (*coverage)[static_cast<size_t>(x * k_BlockTexels + z)];
-					const int row = rowsFromFarEnd ? k_BlockTexels - 1 - z : z;
+					const int row = job.rowsFromFarEnd ? k_BlockTexels - 1 - z : z;
 					shades[static_cast<size_t>(row * k_BlockTexels + x)] = covered != 0 ? tree_shadows::Shade(covered) : 255;
 				}
 			}
-			results[i].block = toBake[i];
+			results[i].corner = block.corner;
 		}
 	};
-	const auto workers = std::min<size_t>(toBake.size(), std::max(1u, std::thread::hardware_concurrency()));
+	const auto workers = std::min<size_t>(job.blocks.size(), std::max(1u, std::thread::hardware_concurrency()));
 	{
 		std::vector<std::jthread> threads;
 		for (size_t w = 1; w < workers; ++w)
@@ -604,19 +659,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		}
 		bake(0, workers);
 	}
-
-	for (const auto& result : results)
-	{
-		const auto blockCorner = blocks[result.block].GetMapPosition();
-		const auto origin = glm::ivec2(glm::round((blockCorner - _extentMin) / tree_shadows::k_BlockSize)) * k_BlockTexels;
-		if (origin.x < 0 || origin.y < 0 || origin.x + k_BlockTexels > _texels.x || origin.y + k_BlockTexels > _texels.y)
-		{
-			continue;
-		}
-		const auto originRow = rowsFromFarEnd ? _texels.y - k_BlockTexels - origin.y : origin.y;
-		_texture->UpdateLayerRegion(0, glm::u16vec2(origin.x, originRow), glm::u16vec2(k_BlockTexels), result.shades.data(),
-		                            static_cast<uint32_t>(result.shades.size()));
-	}
+	return results;
 }
 
 } // namespace openblack::graphics
