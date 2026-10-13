@@ -851,6 +851,38 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	      "The Leopard and the Horse appear side by side, each with a scroll, and the breeder says \"Look. I have these "
 	      "wondrous Creatures you can choose from.\"",
 	      leopardAndHorse);
+
+	// The swap a quest offers at its end, as The Lost Flock offers its sheep: the game's own SwapCreatures script over a
+	// sheep of nobody's, the player's Cow nearby. The pointer looks at the sheep and clicks it twice with the Action
+	// button: once to choose it, and once more, after the Cow has come over, to swap
+	auto sheep = Content(CreatureType::Sheep, {15.0f, 0.0f}, 270.0f, "the flock's sheep");
+	sheep.owner = PlayerNames::NEUTRAL;
+	all.push_back({
+	    .id = "creature.field_swap",
+	    .name = "A quest's offer of its creature, as The Lost Flock's sheep",
+	    .facet = Facet::Story,
+	    .description = "The game's SwapCreatures script runs over a sheep of nobody's, the player's Cow 25 away. Three "
+	                   "seconds in the sheep is clicked; twelve seconds later it is clicked again.",
+	    .expected = "A scroll stands over the sheep, which looks at the camera. At the first click the scroll goes, the "
+	                "Cow walks over and the two look each other over, the good advisor saying the reminder. At the second "
+	                "click a cinema shows both: sparkles, both point at each other, the swap with its beams and the swap "
+	                "sound, then the evil advisor says the sheep is now the player's. The offer starts again over the "
+	                "Cow, so they can swap back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {5.0f, 22.0f, -50.0f}, .look = {15.0f, 8.0f, 0.0f}},
+	    .creatures = {Content(CreatureType::Cow, {-10.0f, 0.0f}, 90.0f, "player's cow"), sheep},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SwapCreatures",
+	                  .scriptArguments = {{.kind = Argument::Kind::Creature, .index = 1}},
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                                    {"GlobalReset", {.number = 0.0f}}}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 12.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
 }
 
 void AddStory(std::vector<Scenario>& all)
