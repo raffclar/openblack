@@ -27,6 +27,9 @@ constexpr glm::vec2 k_Hut {25.0f, 30.0f};
 /// Where the town plans three more huts, and a crèche
 constexpr std::array<glm::vec2, 3> k_PlannedHuts {{{-15.0f, 5.0f}, {5.0f, 5.0f}, {25.0f, 5.0f}}};
 constexpr glm::vec2 k_PlannedCreche {-40.0f, 60.0f};
+/// A crèche standing nearly built, for its town's builders to finish
+constexpr glm::vec2 k_NearlyBuiltCreche {-5.0f, -20.0f};
+constexpr float k_CrecheBuilt = 0.95f;
 /// Plenty of wood and food in the pit, so that building is never held up for either
 constexpr uint32_t k_PitStock = 5000;
 /// The town's grown villagers, too many for its one hut
@@ -104,6 +107,36 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_PlannedHuts[0]}, .distance = 0.6f},
 	    .objects = std::move(mending),
+	});
+
+	// A town finishing a crèche its people then dance round
+	std::vector<ObjectSetup> finishing {
+	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = k_PitStock, .storedWood = k_PitStock},
+	    {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[0], .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[2], .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::CelticCreche, .offset = k_NearlyBuiltCreche, .built = k_CrecheBuilt},
+	};
+	for (size_t i = 0; i < k_MendingCouples; ++i)
+	{
+		const float x = (static_cast<float>(i) - (static_cast<float>(k_MendingCouples) * 0.5f)) * k_VillagerSpacing;
+		finishing.push_back({.type = VillagerInfo::CelticForesterMale, .offset = {x, 20.0f}, .joinTown = true});
+		finishing.push_back({.type = VillagerInfo::CelticHousewifeFemale, .offset = {x, 17.0f}, .joinTown = true});
+	}
+	all.push_back({
+	    .id = "villagers.new_building_dance",
+	    .name = "Villagers dancing round a new building",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town with a village centre, a full storage pit, three huts for its four couples and a "
+	                   "crèche just south of the middle nearly built, its site open. Best watched at game speed 4.",
+	    .expected = "Builders fetch wood and finish the crèche. As it is finished the town's people within the reaction's "
+	                "reach come to dance round it in the small or large building dance by how wide it is, "
+	                "not impressed by it; one the dance has no room for stands looking at it, impressed. Once the "
+	                "reaction's time is over the dancers go back to what they were doing and the dance goes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_NearlyBuiltCreche}, .distance = 0.6f},
+	    .objects = std::move(finishing),
 	});
 
 	// A town whose store has run out of food, with fields to farm

@@ -44,6 +44,26 @@ struct Distance
 /// reacts to these).
 [[nodiscard]] bool TakesUp(openblack::Reaction type);
 
+/// Whether a town's building just finished makes its people react to it: a building of the town's own (a totem, storage
+/// pit, crèche, workshop, wonder, graveyard, town centre or spell dispenser), not a home, nor a temple or a football
+/// pitch
+[[nodiscard]] bool ReactedToWhenBuilt(openblack::AbodeType type);
+
+/// What a villager weighs when its town celebrates being won: whether it is a disciple, under a script, of a town at all,
+/// and whether the celebration is made by its own town itself (a town with no town centre; one with a centre celebrates
+/// from the centre)
+struct CelebrationWatch
+{
+	bool disciple {false};
+	bool scripted {false};
+	bool hasTown {false};
+	bool madeByOwnTown {false};
+};
+
+/// How urgently a villager heeds a town's celebration: by the celebration row's priority, only an ordinary villager of
+/// the town and only when the town itself made it. So a town celebrating from its centre draws none of its people.
+[[nodiscard]] uint8_t TownCelebrationPriority(const CelebrationWatch& watch, uint32_t tablePriority);
+
 /// The distance a villager is from a reaction as it is spread: half the sum of how far apart they are along each axis
 [[nodiscard]] float SpreadDistance(glm::vec2 villager, glm::vec2 reaction);
 

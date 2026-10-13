@@ -30,8 +30,10 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Dances.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -85,6 +87,33 @@ public:
 
 	PhysicsEntry entry;
 };
+/// Dances of one shared group that takes anyone, made without files; remembers the dances it was asked to end
+class OneGroupDances final: public ecs::systems::DanceSystemInterface
+{
+public:
+	entt::entity Create(DanceInfo type, const glm::vec3&, entt::entity owner, uint32_t, bool) override
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto dance = registry.Create();
+		auto& data = registry.Assign<Dance>(dance);
+		data.type = type;
+		data.owner = owner;
+		data.groups.all.emplace_back();
+		data.groups.shared.push_back(0);
+		data.groups.roundLength = 100;
+		made.push_back(type);
+		return dance;
+	}
+	void Destroy(entt::entity dance) override
+	{
+		ended.push_back(dance);
+		Locator::entitiesRegistry::value().Destroy(dance);
+	}
+	void ProcessTurn() override {}
+
+	std::vector<DanceInfo> made;
+	std::vector<entt::entity> ended;
+};
 /// Every draw of the game's random numbers is as low as it can be
 class AlwaysLowGameRandom final: public GameRandomInterface
 {
@@ -119,8 +148,9 @@ protected:
 		Locator::entitiesMap::emplace<MapProduction>();
 		Locator::livingActionSystem::emplace<ecs::systems::LivingActionSystem>();
 		_info = std::make_unique<InfoConstants>();
-		for (const auto type : {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield,
-		                        Reaction::FleeFromObject, Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed})
+		for (const auto type :
+		     {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield, Reaction::FleeFromObject,
+		      Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed, Reaction::ReactToNewBuilding})
 		{
 			auto& reaction = _info->reaction.at(static_cast<size_t>(type));
 			reaction.priority = type == Reaction::FleeFromSpell ? 150 : 120;
@@ -1013,13 +1043,13 @@ TEST_F(Reactions, AVillagerWhoseStateWontLetItGoIsPutStraightIntoDecidingWhatToD
 TEST_F(Reactions, AReactionVillagersDontActOutYetEndsWithoutMovingThem)
 {
 	MakeJob(*_info, k_JobAgain);
-	auto& celebration = _info->reaction.at(static_cast<size_t>(Reaction::ReactToTownCelebration));
-	celebration = _info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell));
+	auto& unacted = _info->reaction.at(static_cast<size_t>(Reaction::Fainting));
+	unacted = _info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell));
 	Locator::infoConstants::emplace(*_info);
 	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
 	const auto villager = _villagers[0];
 	WalkToJob(villager);
-	const auto id = Locator::reactionSystem::value().Create(Miracle(Reaction::ReactToTownCelebration));
+	const auto id = Locator::reactionSystem::value().Create(Miracle(Reaction::Fainting));
 	ASSERT_NE(Locator::entitiesRegistry::value().Get<const LivingReaction>(villager).reaction, 0u);
 	Locator::reactionSystem::value().Remove(id);
 	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
@@ -1050,4 +1080,76 @@ TEST_F(Reactions, VillagersHeedTheHandPickingUpOrSomethingCrushedWithoutTakingIt
 		EXPECT_TRUE(impression == nullptr ||
 		            impression->belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)) == 0.0f);
 	}
+}
+
+TEST(ReactionRules, OnlyATownsOwnBuildingsAreReactedToWhenBuilt)
+{
+	using magic::villager_reaction::ReactedToWhenBuilt;
+	for (const auto type : {AbodeType::Totem, AbodeType::StoragePit, AbodeType::Creche, AbodeType::Workshop, AbodeType::Wonder,
+	                        AbodeType::Graveyard, AbodeType::TownCentre, AbodeType::SpellDispenser})
+	{
+		EXPECT_TRUE(ReactedToWhenBuilt(type));
+	}
+	for (const auto type :
+	     {AbodeType::Citadel, AbodeType::FootballPitch, AbodeType::LivingQuarters, AbodeType::Windmill, AbodeType::Field})
+	{
+		EXPECT_FALSE(ReactedToWhenBuilt(type));
+	}
+}
+
+TEST_F(Reactions, VillagersDanceRoundANewBuildingUnimpressedAndGoBackWhenItsReactionEnds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::danceSystem::emplace<OneGroupDances>();
+	auto& dances = static_cast<OneGroupDances&>(Locator::danceSystem::value());
+	auto& table = _info->villagerStateTable.at(static_cast<size_t>(VillagerStates::DanceWhileReacting));
+	table.availableForReaction = 1;
+	table.isReactionState = 1;
+	Locator::infoConstants::emplace(*_info);
+	const auto building = registry.Create();
+	registry.Assign<Transform>(building, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	auto source = Miracle(Reaction::ReactToNewBuilding);
+	source.initiator = building;
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	const auto id = reactions.Create(source);
+	// One dance is made for the reaction, the small building's, and those in reach join it
+	ASSERT_EQ(dances.made.size(), 1u);
+	EXPECT_EQ(dances.made.front(), DanceInfo::BuildingSmall);
+	const auto dance = reactions.Find(id)->dance;
+	ASSERT_TRUE(dance != entt::null);
+	for (const auto villager : {_villagers[0], _villagers[1]})
+	{
+		EXPECT_EQ(StateOf(villager), VillagerStates::DanceWhileReacting);
+		EXPECT_EQ(ecs::dances::DanceOf(registry, villager), dance);
+	}
+	EXPECT_EQ(StateOf(_villagers[2]), VillagerStates::DecideWhatToDo);
+	// Dancing, they aren't impressed
+	const auto* impression = registry.TryGet<const TownImpression>(_town);
+	EXPECT_TRUE(impression == nullptr || impression->belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)) == 0.0f);
+	// The reaction over, they leave the dance and go back to what they did, and the dance goes
+	reactions.Remove(id);
+	for (const auto villager : {_villagers[0], _villagers[1]})
+	{
+		EXPECT_EQ(StateOf(villager), VillagerStates::DecideWhatToDo);
+		EXPECT_FALSE(registry.AllOf<Dancer>(villager));
+		EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	}
+	ASSERT_EQ(dances.ended.size(), 1u);
+	EXPECT_EQ(dances.ended.front(), dance);
+	Locator::reactionSystem::reset();
+	Locator::danceSystem::reset();
+}
+
+TEST(ReactionRules, OnlyAnOrdinaryVillagerHeedsItsOwnTownCelebratingWithoutACentre)
+{
+	using magic::villager_reaction::CelebrationWatch;
+	using magic::villager_reaction::TownCelebrationPriority;
+	const CelebrationWatch heeds {.hasTown = true, .madeByOwnTown = true};
+	EXPECT_EQ(TownCelebrationPriority(heeds, 90), 90u);
+	// A town celebrating from its centre draws none of its people
+	EXPECT_EQ(TownCelebrationPriority({.hasTown = true, .madeByOwnTown = false}, 90), 0u);
+	EXPECT_EQ(TownCelebrationPriority({.disciple = true, .hasTown = true, .madeByOwnTown = true}, 90), 0u);
+	EXPECT_EQ(TownCelebrationPriority({.scripted = true, .hasTown = true, .madeByOwnTown = true}, 90), 0u);
+	EXPECT_EQ(TownCelebrationPriority({}, 90), 0u);
 }

@@ -286,6 +286,8 @@ struct ObjectSetup
 	/// A planned building is the plan of one that had been finished and went from the land, which its town wants
 	/// rebuilt as a repair
 	bool wasBuilt {false};
+	/// A building stands only this much built, a site open for its town's builders to finish it
+	std::optional<float> built;
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 };

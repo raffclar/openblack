@@ -874,9 +874,14 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 					    }
 					    return plan;
 				    }
-				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
-				                                                   object.storedFood.value_or(k_ScenarioTownFood),
-				                                                   object.storedWood.value_or(k_ScenarioTownWood));
+				    const auto abode = ecs::archetypes::AbodeArchetype::Create(
+				        ScenarioTown(middle), position, type, yaw, object.scale, object.storedFood.value_or(k_ScenarioTownFood),
+				        object.storedWood.value_or(k_ScenarioTownWood));
+				    if (object.built.has_value())
+				    {
+					    ecs::construction::SetBuilt(abode, *object.built);
+				    }
+				    return abode;
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {
