@@ -138,9 +138,8 @@ constexpr int32_t k_WaterSearchCells = 30;
 constexpr float k_ShoreSearchDistance = 60.0f;
 /// Food further than this from its mouth, for its size, has got away by the time it eats
 constexpr float k_EatReach = 15.0f;
-/// Having drunk it doesn't want water for a while, and having had a poo it doesn't want another for longer
+/// Having drunk, it does not want water for a while
 constexpr float k_WaterSuppressSeconds = 20.0f;
-constexpr float k_PooSuppressSeconds = 60.0f;
 /// The rows of the game's creature action table that seeing to each need counts as
 constexpr std::string_view k_EatAction = "EatAfterExamining";
 constexpr std::string_view k_DrinkAction = "DrinkFromTheSea";
@@ -909,14 +908,13 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 		creature_desires::Suppress(desires, Desire::Water, k_WaterSuppressSeconds, k_TurnsPerSecond);
 		break;
 	case Effect::Poo:
-		physiology.Poo(creature);
+		// At the end of the squat, the bowels are empty. The lumps dropped during the squat stopped the desire to poo
+		physiology.EmptyBowels(creature);
 		Satisfied(creature, desires, k_PooAction);
-		desires[Desire::Poo].value = 0.0f;
-		creature_desires::Suppress(desires, Desire::Poo, k_PooSuppressSeconds, k_TurnsPerSecond);
 		break;
 	case Effect::Fart:
 		// At the end of the squat, the bowels are empty. The action table sets how much the desire to poo decreases
-		physiology.Fart(creature);
+		physiology.EmptyBowels(creature);
 		Satisfied(creature, desires, k_FartAction);
 		break;
 	case Effect::Puke:

@@ -53,6 +53,12 @@ TEST(CreatureFart, TheWindComesOutEveryFifthFrame)
 	EXPECT_EQ(frames, 2u);
 }
 
+TEST(CreatureFart, AFartMakesACloudAndAPooALumpOnEachBurst)
+{
+	EXPECT_EQ(BurstOf(true), Burst::Cloud);
+	EXPECT_EQ(BurstOf(false), Burst::Lump);
+}
+
 TEST(CreatureFart, TheCloudBlowsOutBehindByItsSize)
 {
 	// Each random number is half the limit. Thus there is no spread, and each puff moves straight back

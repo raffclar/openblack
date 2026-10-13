@@ -354,13 +354,14 @@ void CreaturePhysiologySystem::StepSquats()
 	const auto fart = tables != nullptr ? creature_mind_tables::FindAction(*tables, "Fart") : std::nullopt;
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> winds;
+	std::vector<entt::entity> lumps;
 	registry.Each<const CreatureAnimation, const CreatureMindState>(
 	    [&](entt::entity creature, const CreatureAnimation& animation, const CreatureMindState& mind) {
 		    if (!creature_fart::PlaysSquatLoop(animation.body))
 		    {
 			    return;
 		    }
-		    // Each squat counts its frames. A poo drops its lump at the end of the squat, not here
+		    // Each squat counts its frames
 		    auto* squat = registry.TryGet<CreatureSquat>(creature);
 		    if (squat == nullptr)
 		    {
@@ -370,15 +371,18 @@ void CreaturePhysiologySystem::StepSquats()
 		    {
 			    return;
 		    }
-		    if (fart.has_value() && mind.planActive && mind.planner.current.has_value() &&
-		        mind.planner.current->action == *fart)
-		    {
-			    winds.push_back(creature);
-		    }
+		    // A fart makes a cloud. Any other squat drops a lump of poo
+		    const bool farting = fart.has_value() && mind.planActive && mind.planner.current.has_value() &&
+		                         mind.planner.current->action == *fart;
+		    (creature_fart::BurstOf(farting) == creature_fart::Burst::Cloud ? winds : lumps).push_back(creature);
 	    });
 	for (const auto creature : winds)
 	{
 		LetOutWind(creature);
+	}
+	for (const auto creature : lumps)
+	{
+		DropPooLump(creature);
 	}
 }
 
@@ -461,7 +465,7 @@ void CreaturePhysiologySystem::SitTurn(entt::entity creature)
 	physiology::SitTurn(needs->needs, species);
 }
 
-void CreaturePhysiologySystem::Poo(entt::entity creature)
+void CreaturePhysiologySystem::DropPooLump(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* needs = registry.TryGet<CreatureNeeds>(creature);
@@ -472,6 +476,15 @@ void CreaturePhysiologySystem::Poo(entt::entity creature)
 		return;
 	}
 	physiology::Poo(needs->needs);
+	// The desire to poo becomes zero and stops for a time
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ChangeDesires(creature, [](creature_desires::Desires& desires) {
+			desires[creature_desires::Desire::Poo].value = 0.0f;
+			creature_desires::Suppress(desires, creature_desires::Desire::Poo, physiology::k_PooHoldsDesireBackSeconds,
+			                           k_TurnsPerSecond);
+		});
+	}
 	// The lump comes out at the groin as the body squats, turned any way, and is thrown back along the ground
 	if (!Locator::infoConstants::has_value() || !Locator::gameRandom::has_value())
 	{
@@ -489,9 +502,8 @@ void CreaturePhysiologySystem::Poo(entt::entity creature)
 	}
 }
 
-void CreaturePhysiologySystem::Fart(entt::entity creature)
+void CreaturePhysiologySystem::EmptyBowels(entt::entity creature)
 {
-	// A fart empties the bowels as a poo does, but the creature drops nothing
 	if (auto* needs = Locator::entitiesRegistry::value().TryGet<CreatureNeeds>(creature); needs != nullptr)
 	{
 		physiology::Poo(needs->needs);

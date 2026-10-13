@@ -30,8 +30,7 @@ public:
 
 	void Eat(entt::entity creature, float foodValue) override;
 	void Drink(entt::entity creature) override;
-	void Poo(entt::entity creature) override;
-	void Fart(entt::entity creature) override;
+	void EmptyBowels(entt::entity creature) override;
 	void SitTurn(entt::entity creature) override;
 	void Puke(entt::entity creature) override;
 	void WakeFromFaint(entt::entity creature) override;
@@ -44,8 +43,11 @@ public:
 	[[nodiscard]] bool IsFaintingEnabled() const override;
 
 private:
-	/// Count the frames of each squat loop at the refresh rate of the screen. A creature fart makes a cloud on each fifth frame
+	/// Count the frames of each squat loop at the refresh rate of the screen. On each fifth frame, a fart makes a cloud and a
+	/// poo drops a lump
 	void StepSquats();
+	/// Drop a lump of poo behind the creature. The bowels become empty and the desire to poo stops for a time
+	static void DropPooLump(entt::entity creature);
 	/// Make the cloud, the smoke and the fainting reaction of a creature fart
 	static void LetOutWind(entt::entity creature);
 

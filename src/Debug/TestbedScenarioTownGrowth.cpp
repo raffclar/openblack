@@ -235,8 +235,9 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .description = "A tiger full of poo, its desire to go as strong as it gets, 30 m east of a hut of the player's "
 	                   "town with four of its people, two trees and a rock about it.",
 	    .expected = "The tiger squats for a poo or for a fart. A third of the time it shows it needs a poo first. For a "
-	                "fart it does the steps of a poo by itself, so it does not walk and does not turn. After the squat "
-	                "its desire to poo is held back for a minute.",
+	                "fart it does the steps of a poo by itself, so it does not walk and does not turn. In a poo, all "
+	                "through the squat's loop, every fifth frame drawn, a lump of poo comes out at its rear and is thrown "
+	                "back along the ground, and its desire to poo is held back for a minute.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 25.0f}, {35.0f, 55.0f}}, .distance = 0.7f},
 	    .creatures = {{.species = CreatureType::Tiger,
@@ -253,6 +254,27 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = TreeInfo::Oak, .offset = {10.0f, 60.0f}},
 	                {.type = TreeInfo::Beech, .offset = {14.0f, 22.0f}},
 	                {.type = MobileStaticInfo::Rock, .offset = {20.0f, 48.0f}}},
+	});
+
+	// A creature told to poo. The lumps come out during the squat
+	all.push_back({
+	    .id = "needs.poo_lumps",
+	    .name = "Lumps of poo",
+	    .facet = Facet::Needs,
+	    .description = "A tiger full of poo, facing east, told to poo every so often.",
+	    .expected = "A third of the time the tiger shows it needs a poo first. Then it squats. All through the squat's "
+	                "loop, every fifth frame drawn, a lump of poo comes out at its rear and is thrown back along the "
+	                "ground behind it, so a row of lumps lies behind it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = {0.0f, 40.0f},
+	                   .facingDegrees = 90.0f,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.95f, .life = 1.0f},
+	                   .hold = true}},
+	    .commands = {{.kind = Command::Kind::Poo, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Command::Kind::Poo, .creature = 0, .delaySeconds = 20.0f, .waitUntilFree = true}},
+	    .repeatFrom = 1,
 	});
 
 	// The same village, set to respect or to fear a creature standing near it

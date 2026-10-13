@@ -40,8 +40,18 @@ using FloatRandom = std::function<float(float)>;
 
 /// Tells if the body plays the squat loop, for a poo or for a fart
 [[nodiscard]] bool PlaysSquatLoop(const creature_layers::BodyAction& body);
-/// Counts a frame of the squat loop. Returns true on the frame that makes a cloud. Then the count starts again
+/// Counts a frame of the squat loop. Returns true on the frame that makes a cloud or a lump. Then the count starts again
 [[nodiscard]] bool CountFrame(uint32_t& frames);
+/// What the squat makes on that frame: a cloud for a fart, else a lump of poo
+enum class Burst : uint8_t
+{
+	Cloud,
+	Lump,
+};
+[[nodiscard]] constexpr Burst BurstOf(bool farting)
+{
+	return farting ? Burst::Cloud : Burst::Lump;
+}
 /// Gives the velocity of each puff. Each puff moves straight back from the direction that the creature faces. A random
 /// offset of up to half the spread changes each velocity: first on z, then up, then on x
 [[nodiscard]] std::array<glm::vec3, k_Puffs> PuffVelocities(glm::vec2 ahead, float shownSize, const FloatRandom& random);
