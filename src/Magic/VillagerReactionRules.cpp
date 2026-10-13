@@ -21,6 +21,49 @@ namespace
 constexpr float k_MaxPriority = 255.0f;
 } // namespace
 
+bool villager_reaction::TakesUp(openblack::Reaction type)
+{
+	using openblack::Reaction;
+	switch (type)
+	{
+	case Reaction::ReactToHandPickUp:
+	case Reaction::ReactToHandUsingTotem:
+	case Reaction::ReactToHandPuttingStuffInStoragePit:
+	case Reaction::ReactToObjectCrushed:
+		return false;
+	default:
+		return true;
+	}
+}
+
+bool villager_reaction::ReactedToWhenBuilt(openblack::AbodeType type)
+{
+	using openblack::AbodeType;
+	switch (type)
+	{
+	case AbodeType::Totem:
+	case AbodeType::StoragePit:
+	case AbodeType::Creche:
+	case AbodeType::Workshop:
+	case AbodeType::Wonder:
+	case AbodeType::Graveyard:
+	case AbodeType::TownCentre:
+	case AbodeType::SpellDispenser:
+		return true;
+	default:
+		return false;
+	}
+}
+
+uint8_t villager_reaction::TownCelebrationPriority(const CelebrationWatch& watch, uint32_t tablePriority)
+{
+	if (watch.disciple || watch.scripted || !watch.hasTown || !watch.madeByOwnTown)
+	{
+		return 0;
+	}
+	return static_cast<uint8_t>(tablePriority & 0xFFu);
+}
+
 float villager_reaction::SpreadDistance(glm::vec2 villager, glm::vec2 reaction)
 {
 	return 0.5f * (std::abs(villager.x - reaction.x) + std::abs(villager.y - reaction.y));

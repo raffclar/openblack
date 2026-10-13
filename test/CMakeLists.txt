@@ -893,5 +893,8 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_guidance_rules test_guidance_rules.cpp)
 openblack_setup_and_add_test(test_help_query test_help_query.cpp)
 openblack_setup_and_add_test(test_land_change test_land_change.cpp)
+openblack_setup_and_add_test(
+  test_villager_walk_rules test_villager_walk_rules.cpp
+)
 openblack_setup_and_add_test(test_villager_hiding test_villager_hiding.cpp)
 openblack_setup_and_add_test(test_undrawn_picks test_undrawn_picks.cpp)

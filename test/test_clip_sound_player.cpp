@@ -105,9 +105,10 @@ struct Fixture
 		villager = world.MakeVillager();
 	}
 
-	void Play(AnimId clip, uint32_t place, uint32_t played, clip_sound_player::ClipTiming timing = {.duration = 1000})
+	void Play(AnimId clip, uint32_t place, uint32_t played, clip_sound_player::ClipTiming timing = {.duration = 1000},
+	          bool refresh = false)
 	{
-		clip_sound_player::Play(world, villager, clip, timing, place, played, glm::vec3(0.0f));
+		clip_sound_player::Play(world, villager, clip, timing, place, played, glm::vec3(0.0f), refresh);
 	}
 
 	FakeWorld world;
@@ -193,6 +194,46 @@ TEST(ClipSoundPlayer, AClipPlayedOnceIsQuietOnceFinishedAndALoopingOneComesRound
 	f.Play(k_Walk, 950, 200, {.duration = 1000, .looping = true});
 	ASSERT_EQ(f.world.played.size(), 1U);
 	EXPECT_EQ(f.world.played[0].keys, Keys(audio::SoundSize::Medium, k_Step));
+}
+
+TEST(ClipSoundPlayer, AClipHeldAtItsEndPlaysAllItsSoundsAgainAtEachRefresh)
+{
+	Fixture f;
+	// Between refreshes it is quiet
+	f.Play(k_Walk, 1000, 16);
+	EXPECT_TRUE(f.world.played.empty());
+	// At a refresh every sound plays again, whether the clock moved or not
+	f.Play(k_Walk, 1000, 16, {.duration = 1000}, true);
+	EXPECT_EQ(f.world.played.size(), 3U);
+	f.world.played.clear();
+	f.Play(k_Walk, 1000, 0, {.duration = 1000}, true);
+	EXPECT_EQ(f.world.played.size(), 3U);
+	f.world.played.clear();
+	// A clip still playing plays only what it passes, refresh or not
+	f.Play(k_Walk, 150, 0, {.duration = 1000}, true);
+	EXPECT_TRUE(f.world.played.empty());
+	f.Play(k_Walk, 150, 100, {.duration = 1000}, true);
+	EXPECT_EQ(f.world.played.size(), 1U);
+}
+
+TEST(ClipSoundPlayer, TheScreenRefreshesAtMostSixtyTimesASecond)
+{
+	clip_sound_player::RefreshPace pace;
+	// A hundred frames a second: 60 refreshes a second, one a frame at most
+	int refreshes = 0;
+	for (int frame = 0; frame < 100; ++frame)
+	{
+		refreshes += pace.Step(10.0f) ? 1 : 0;
+	}
+	EXPECT_EQ(refreshes, 60);
+	// Thirty frames a second: one each frame, a long frame owing no more
+	clip_sound_player::RefreshPace slow;
+	refreshes = 0;
+	for (int frame = 0; frame < 30; ++frame)
+	{
+		refreshes += slow.Step(33.3f) ? 1 : 0;
+	}
+	EXPECT_EQ(refreshes, 30);
 }
 
 TEST(ClipSoundPlayer, AThrownPersonScreamsOnlyEarlyInItsFlight)

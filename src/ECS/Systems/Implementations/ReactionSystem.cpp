@@ -31,10 +31,12 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Town.h"
@@ -49,6 +51,7 @@
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -295,6 +298,15 @@ void ReactionSystem::SetInitiator(uint32_t id, entt::entity initiator)
 	}
 }
 
+void ReactionSystem::SetDance(uint32_t id, entt::entity dance)
+{
+	const auto found = std::ranges::find(_reactions, id, &Active::id);
+	if (found != _reactions.end())
+	{
+		found->dance = dance;
+	}
+}
+
 std::optional<ReactionSystemInterface::Active> ReactionSystem::Find(uint32_t id) const
 {
 	const auto found = std::ranges::find(_reactions, id, &Active::id);
@@ -341,6 +353,8 @@ void ReactionSystem::RemoveFrom(entt::entity initiator)
 void ReactionSystem::ShutDown(uint32_t id)
 {
 	// It ends before those reacting to it are let go, so a state they go back to already finds it over
+	const auto found = std::ranges::find(_reactions, id, &Active::id);
+	const auto dance = found != _reactions.end() ? found->dance : entt::null;
 	std::erase_if(_reactions, [id](const Active& reaction) { return reaction.id == id; });
 	if (Locator::entitiesRegistry::has_value())
 	{
@@ -356,6 +370,12 @@ void ReactionSystem::ShutDown(uint32_t id)
 		{
 			Stop(entity, registry.Get<LivingReaction>(entity), true);
 		}
+	}
+	// Its dance goes with it, once its dancers have gone back
+	if (dance != entt::null && Locator::danceSystem::has_value() && Locator::entitiesRegistry::has_value() &&
+	    Locator::entitiesRegistry::value().Valid(dance))
+	{
+		Locator::danceSystem::value().Destroy(dance);
 	}
 }
 
@@ -439,6 +459,19 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		return registry.AllOf<Villager>(living)
 		           ? ecs::villager_breeding::ReactToBreederPriority(living, reaction.source.initiator)
 		           : 0;
+	}
+	// A villager heeds its town's celebration only when the town itself makes it
+	if (reaction.source.type == Reaction::ReactToTownCelebration && registry.AllOf<Villager>(living))
+	{
+		const auto& villager = registry.Get<const Villager>(living);
+		const auto* disciple = registry.TryGet<const Disciple>(living);
+		const auto kind = villager_reaction::TownCelebrationPriority(
+		    {.disciple = disciple != nullptr && disciple->type != VillagerDisciple::None,
+		     .scripted = registry.AllOf<ScriptControlled>(living),
+		     .hasTown = villager.town != entt::null,
+		     .madeByOwnTown = villager.town != entt::null && villager.town == reaction.source.initiator},
+		    info->priority);
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
 	// A villager heeds food lying about only when it catches its eye
 	if (reaction.source.type == Reaction::ReactToFood && registry.AllOf<Villager>(living))
@@ -581,6 +614,11 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 				{
 					reaction.firstTaken = reaction.age;
 				}
+				// A villager heeds some kinds without ever taking them up
+				if (registry.AllOf<Villager>(entity) && !villager_reaction::TakesUp(reaction.source.type))
+				{
+					continue;
+				}
 				Start(reaction, entity, *state);
 			}
 			continue;
@@ -604,6 +642,13 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		if (differs && magic::ChangesReaction(state->type, currentPriority, priority, seconds))
 		{
 			memory.Record(type, _turn);
+			// A villager keeps what it reacts to rather than change to a kind it never takes up
+			// TODO(raffclar): the game also drops the villager from the list of the reaction it keeps, so that reaction
+			// ending doesn't send it back; it still goes back once its own time with it is over
+			if (registry.AllOf<Villager>(entity) && !villager_reaction::TakesUp(reaction.source.type))
+			{
+				continue;
+			}
 			Stop(entity, *state, false);
 			Start(reaction, entity, *state, true);
 		}
@@ -653,12 +698,22 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	state.reaction = reaction.id;
 	state.type = reaction.source.type;
 	state.startTurn = _turn;
-	Impress(reaction, living, registry.Get<const Transform>(living).position);
 	if (registry.AllOf<Villager>(living))
 	{
-		villager_reactions::Start(living, reaction.source.type, state, wasReacting);
+		// A villager is impressed only by what it takes up the usual way: not joining a dance round the thing
+		const auto taken = villager_reactions::Start(living, reaction.source.type, state, wasReacting);
+		if (taken == villager_reactions::Taken::No)
+		{
+			state.reaction = 0;
+			state.type = Reaction::None;
+		}
+		else if (taken == villager_reactions::Taken::Impressed)
+		{
+			Impress(reaction, living, registry.Get<const Transform>(living).position);
+		}
 		return;
 	}
+	Impress(reaction, living, registry.Get<const Transform>(living).position);
 	// A creature goes to put out a fire or runs from it
 	if (source.type == Reaction::ReactToFire && registry.AllOf<Creature>(living) && Locator::creatureMindSystem::has_value())
 	{
