@@ -353,11 +353,10 @@ bool CreatureMindSystem::WeighWatchedCreature(entt::entity creature, CreatureMin
 		const auto dominant = [&]() {
 			const auto* ownNeeds = registry.TryGet<const CreatureNeeds>(creature);
 			const auto* otherNeeds = registry.TryGet<const CreatureNeeds>(other);
-			// TODO(usefulness-use-tree): When the ages have a difference of ten years or less, the game uses the order
-			// of the creatures in its object store. openblack does not have this order. It uses the entity index.
-			return creature_reaction::IsDominant(ownNeeds != nullptr ? ownNeeds->needs.age : 0,
-			                                     otherNeeds != nullptr ? otherNeeds->needs.age : 0,
-			                                     entt::to_entity(other) < entt::to_entity(creature));
+			// When the ages are near, the creature that the game made first is dominant
+			return creature_reaction::IsDominant(
+			    ownNeeds != nullptr ? ownNeeds->needs.age : 0, otherNeeds != nullptr ? otherNeeds->needs.age : 0,
+			    registry.Get<const Creature>(creature).made < registry.Get<const Creature>(other).made);
 		};
 		const auto verdict = creature_reaction::WeighWatch(mine, theirs, worths, dominant);
 		if (verdict.weighAgainWithoutFear)

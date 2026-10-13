@@ -131,8 +131,8 @@ struct WatchVerdict
 /// usefulness and the nearness. The value is between zero and one.
 [[nodiscard]] float WorthAbout(float strength, float usefulness, float nearness);
 /// Whether a creature is dominant over a different creature. If the ages have a difference of more than ten years,
-/// the older creature is dominant. If not, the creature that is later in the order of the game is dominant.
-[[nodiscard]] bool IsDominant(uint32_t age, uint32_t otherAge, bool laterInOrder);
+/// the older creature is dominant. If not, the creature that the game made first is dominant.
+[[nodiscard]] bool IsDominant(uint32_t age, uint32_t otherAge, bool madeFirst);
 
 /// How urgent a kind is to a creature before its distance counts, for the kinds a creature weighs its own way; none for
 /// the kinds it weighs as everything alive does. A draw below a range is asked for only where the rule draws one.
