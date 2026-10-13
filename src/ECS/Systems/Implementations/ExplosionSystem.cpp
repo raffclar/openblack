@@ -15,7 +15,6 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "3D/MapCoords.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/DeadTree.h"
@@ -40,9 +39,6 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The rubble fades out over its last second
-constexpr float k_FadeMilliseconds = 1000.0f;
-constexpr float k_AlphaPerMillisecond = 0.255f;
 /// The dust puff's size
 constexpr float k_DustSize = 1.0f;
 constexpr entt::hashed_string k_SmokeSheet = entt::hashed_string("raw/smoke");
@@ -179,18 +175,12 @@ void ExplosionSystem::Update(float milliseconds)
 		AdvanceRoots(registry, milliseconds / 1000.0f);
 		registry.Each<GroundMark>(
 		    [&](entt::entity entity, GroundMark& mark) {
-			    // In its last second its alpha is its time left as a share of the second, set before the time passes
-			    if (mark.millisecondsLeft <= k_FadeMilliseconds)
-			    {
-				    // Blending it changes how its model is drawn
-				    if (!mark.alpha.has_value())
-				    {
-					    fading = true;
-				    }
-				    mark.alpha = static_cast<uint8_t>(map_coords::FtoL(mark.millisecondsLeft * k_AlphaPerMillisecond));
-			    }
-			    mark.millisecondsLeft -= milliseconds;
-			    if (mark.millisecondsLeft < 1.0f)
+			    const auto aged = particles::blast::AgeHeap(mark.millisecondsLeft, mark.alpha, milliseconds);
+			    // Blending it changes how its model is drawn
+			    fading = fading || (aged.alpha.has_value() && !mark.alpha.has_value());
+			    mark.millisecondsLeft = aged.millisecondsLeft;
+			    mark.alpha = aged.alpha;
+			    if (aged.gone)
 			    {
 				    gone.push_back(entity);
 			    }
