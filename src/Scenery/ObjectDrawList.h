@@ -221,6 +221,31 @@ struct Frame
 	return listed && (frame.drawAll || lastOnScreen);
 }
 
+/// The frames that make the list again because an event asks. The game keeps one count of frames. Each request sets
+/// the count, so a later request replaces an earlier one, also a larger one. Each frame that makes the list again
+/// decreases the count by one, for all causes.
+class RebuildRequests
+{
+public:
+	/// Make the list again on the next `frames` frames
+	constexpr void Ask(uint32_t frames) { _frames = frames; }
+	/// Whether a request makes the list again on this frame
+	[[nodiscard]] constexpr bool Pending() const { return _frames > 0; }
+	/// Record that this frame made the list again
+	constexpr void Rebuilt()
+	{
+		if (_frames > 0)
+		{
+			--_frames;
+		}
+	}
+	[[nodiscard]] constexpr uint32_t Left() const { return _frames; }
+	constexpr void Reset() { _frames = 0; }
+
+private:
+	uint32_t _frames {0};
+};
+
 /// When the list is made again and whether the camera has moved, frame by frame
 class Clock
 {

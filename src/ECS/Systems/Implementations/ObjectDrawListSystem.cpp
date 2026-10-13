@@ -19,9 +19,9 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/MapCellResident.h"
-#include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
@@ -51,8 +51,8 @@ ObjectDrawListSystem::ObjectDrawListSystem()
 		return;
 	}
 	_registry = &Locator::entitiesRegistry::value();
-	// A thing settling out of the physics makes the list again, so that it is drawn where it came to rest
-	_physicsEnded = _registry->OnDestroy<InPhysics>().connect<&ObjectDrawListSystem::OnPhysicsEnded>(*this);
+	// When the hand releases the thing that it holds, make the list again on the next two frames
+	_letGo = _registry->OnDestroy<InHand>().connect<&ObjectDrawListSystem::OnLetGo>(*this);
 }
 
 ObjectDrawListSystem::~ObjectDrawListSystem()
@@ -60,18 +60,18 @@ ObjectDrawListSystem::~ObjectDrawListSystem()
 	// The registry may have gone first, taking its signals with it
 	if (Locator::entitiesRegistry::has_value() && &Locator::entitiesRegistry::value() == _registry)
 	{
-		_physicsEnded.release();
+		_letGo.release();
 	}
 }
 
-void ObjectDrawListSystem::OnPhysicsEnded(entt::registry& /*registry*/, entt::entity /*entity*/)
+void ObjectDrawListSystem::OnLetGo(entt::registry& /*registry*/, entt::entity /*entity*/)
 {
-	RequestRebuild(1);
+	RequestRebuild(2);
 }
 
 void ObjectDrawListSystem::RequestRebuild(uint32_t frames)
 {
-	_rebuildsAsked = std::max(_rebuildsAsked, frames);
+	_requests.Ask(frames);
 }
 
 void ObjectDrawListSystem::LoadBlocks()
@@ -140,13 +140,10 @@ void ObjectDrawListSystem::Update(uint32_t turn)
 	}
 	// Things made since the last frame go onto their blocks now, as the game puts them there when they are made
 	static_cast<void>(Locator::entitiesMap::value().GetOffBlocks());
-	_frame = _clock.Next(turn, _view->eye, camera.GetFocus(), changed || _rebuildsAsked > 0);
+	_frame = _clock.Next(turn, _view->eye, camera.GetFocus(), changed || _requests.Pending());
 	if (_frame.rebuilt)
 	{
-		if (_rebuildsAsked > 0)
-		{
-			--_rebuildsAsked;
-		}
+		_requests.Rebuilt();
 		_madeAt = turn;
 		MakeList();
 	}
@@ -244,7 +241,7 @@ ObjectDrawListSystemInterface::Summary ObjectDrawListSystem::GetSummary() const
 	        .farthestWalked = _farthestWalked,
 	        .things = static_cast<uint32_t>(_list.size()),
 	        .full = _list.size() >= object_draw_list::k_MostObjects,
-	        .rebuildsAsked = _rebuildsAsked};
+	        .rebuildsAsked = _requests.Left()};
 }
 
 void ObjectDrawListSystem::Reset()
@@ -259,5 +256,5 @@ void ObjectDrawListSystem::Reset()
 	}
 	_list.clear();
 	_madeAt.reset();
-	_rebuildsAsked = 0;
+	_requests.Reset();
 }

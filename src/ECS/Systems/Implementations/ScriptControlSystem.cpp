@@ -22,6 +22,7 @@
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "EngineConfig.h"
 #include "Locator.h"
 
@@ -99,6 +100,11 @@ void ScriptControlSystem::ReleaseCamera(Camera& camera)
 		camera.SetLens(glm::radians(Locator::config::value().cameraXFov), k_LensBackSeconds);
 	}
 	_cameraOwner = 0;
+	// Make the land's draw list again on the next frame
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().RequestRebuild(1);
+	}
 }
 
 void ScriptControlSystem::StartGameSpeed(uint32_t task)

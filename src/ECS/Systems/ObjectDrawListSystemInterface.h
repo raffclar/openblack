@@ -58,7 +58,11 @@ public:
 
 	/// Once a frame, after the camera has moved and before anything is drawn: the list is made again when it is due
 	virtual void Update(uint32_t turn) = 0;
-	/// The list is made again on the next `frames` frames, as a thing settling out of the physics asks
+	/// Make the list again on the next `frames` frames. This request replaces a request that is not used up. When the
+	/// hand releases the thing that it holds, it asks for two frames. These events ask for one frame: a thing in the
+	/// physics stops, or a hit moves it again; the hand pulls a living thing free; a player gets a reward; a flock
+	/// miracle makes an animal; a script moves its camera or releases it; a script starts or stops the high detail of a
+	/// thing.
 	virtual void RequestRebuild(uint32_t frames) = 0;
 
 	/// The frame of the list: whether it was made again and whether all of it is drawn

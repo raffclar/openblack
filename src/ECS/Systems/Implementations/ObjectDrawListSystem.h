@@ -68,16 +68,16 @@ private:
 	/// Whether one or more triangles of a block in view show, with its cells at the heights they have now
 	[[nodiscard]] static bool Shows(const LandBlock& block, const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye);
 	void MakeList();
-	void OnPhysicsEnded(entt::registry& registry, entt::entity entity);
+	void OnLetGo(entt::registry& registry, entt::entity entity);
 
 	Registry* _registry {nullptr};
-	entt::connection _physicsEnded;
+	entt::connection _letGo;
 
 	object_draw_list::Clock _clock;
 	object_draw_list::Frame _frame {.rebuilt = true, .drawAll = true};
 	std::optional<object_draw_list::View> _view;
 	std::vector<LandBlock> _blocks;
-	uint32_t _rebuildsAsked {0};
+	object_draw_list::RebuildRequests _requests;
 	std::optional<uint32_t> _madeAt;
 	uint32_t _blocksWalked {0};
 	float _farthestWalked {0.0f};
