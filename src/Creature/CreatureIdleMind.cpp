@@ -648,6 +648,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	if (!mind.stepStarted)
 	{
 		commands.lookAbout = step.kind == Step::Kind::Wait && !step.gaze.has_value();
+		// A swap of minds waits until no spell is on either creature, bringing those on itself to their end meanwhile
+		if (step.kind == Step::Kind::SwapMind && !senses.swap.spellsGone)
+		{
+			commands.finishSpells = true;
+			return commands;
+		}
 		// Nothing starts while the body still plays an action
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && senses.bodyBusy)
 		{
@@ -719,6 +725,11 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::WatchCamera:
 			WatchCamera(mind, step, senses, commands);
+			break;
+		case Step::Kind::SwapMind:
+			commands.playOnce = step.animation;
+			commands.mirrored = random(2) == 1;
+			commands.startSwapBeam = true;
 			break;
 		case Step::Kind::Wait:
 		case Step::Kind::WaitInMap:
@@ -836,6 +847,18 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::WatchCamera:
 		WatchCamera(mind, step, senses, commands);
+		break;
+	case Step::Kind::SwapMind:
+		// From the turn after the beam starts it takes on the shape, done once it has, whether or not the action has
+		// played out
+		if (senses.swap.settled)
+		{
+			FinishStep(mind);
+		}
+		else
+		{
+			commands.easeSwap = true;
+		}
 		break;
 	case Step::Kind::WaitInMap:
 		if (!senses.objectInMap.has_value())

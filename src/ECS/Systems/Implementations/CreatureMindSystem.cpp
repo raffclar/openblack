@@ -1312,6 +1312,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .feelings = FeelingsOf(mind),
 		        .choosesNext = !scripted,
 		        .camera = CameraViewOf(registry, entity, mind.idle),
+		        .swap = SwapViewOf(entity),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    Apply(commands, animation, eyes);
@@ -1337,6 +1338,7 @@ void CreatureMindSystem::ProcessTurn()
 			    mind.idle.gaveUp = true;
 		    }
 		    Order(registry, entity, commands);
+		    StepSwap(entity, commands);
 		    if (commands.douse.has_value())
 		    {
 			    if (Douse(entity, static_cast<entt::entity>(*commands.douse)))

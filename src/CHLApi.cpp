@@ -61,6 +61,7 @@
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
+#include "Creature/CreatureSwap.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -6008,10 +6009,29 @@ void SetFixedCamRotation() // 209 SET_FIXED_CAM_ROTATION
 
 void SwapCreature() // 210 SWAP_CREATURE
 {
-	[[maybe_unused]] const auto toCreature = PopObject();
-	[[maybe_unused]] const auto fromCreature = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The first creature's mind moves into the second and the second's into the first; the second becomes the player's
+	// creature if the first was
+	const auto toCreature = PopObject();
+	const auto fromCreature = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto valid = [&registry](entt::entity object) { return object != entt::null && registry.Valid(object); };
+	const auto isCreature = [&registry, &valid](entt::entity object) {
+		return valid(object) && registry.AllOf<ecs::components::Creature>(object);
+	};
+	if (!valid(toCreature) || !valid(fromCreature))
+	{
+		ScriptMessage("creature for swap not found!");
+		return;
+	}
+	if (!isCreature(fromCreature) || !isCreature(toCreature))
+	{
+		ScriptMessage("Thing not creature!");
+		return;
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().SwapMinds(fromCreature, toCreature);
+	}
 }
 
 void GetArena() // 211 GET_ARENA
@@ -6879,10 +6899,11 @@ void GetInteractionMagnitude() // 270 GET_INTERACTION_MAGNITUDE
 
 void IsCreatureAvailable() // 271 IS_CREATURE_AVAILABLE
 {
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The five bonus creatures are only there once unlocked; any other species always is
+	// TODO(creature-swap): the bonus creatures were unlocked by a program outside the game, which openblack has no
+	// equivalent of yet, so none is unlocked: as on a machine that never ran it (see the handover's decision)
+	const auto species = Pop().intVal;
+	Pushb(creature_swap::IsAvailable(species, creature_swap::Unlocked {}));
 }
 
 void CreateHighlight() // 272 CREATE_HIGHLIGHT
