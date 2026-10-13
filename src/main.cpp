@@ -66,7 +66,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		    cxxopts::value<std::vector<std::string>>()->default_value("all=debug"))
 		("screenshot-frame", "Request a screenshot of the backbuffer at a certain frame number.", cxxopts::value<uint32_t>())
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
-		("frame-stats", "Log the average and 95th percentile frame time and the profiler stages every so many frames (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
+		("frame-stats", "Log the average and 95th percentile frame time and the profiler stages every so many frames (0 for never), and each frame of 10 ms or more with its stages.", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
 		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
 		("dynamic-tree-shadows", "Trees cast their shadows as they are drawn each frame, swaying with them, rather than baked into the land as the game does.")
