@@ -1414,6 +1414,10 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 		{
 			return Thing::DeadTree;
 		}
+		if (registry.AllOf<Tree>(object))
+		{
+			return Thing::Tree;
+		}
 		if (const auto* still = registry.TryGet<const MobileStatic>(object))
 		{
 			switch (still->type)

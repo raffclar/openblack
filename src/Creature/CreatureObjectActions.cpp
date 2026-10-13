@@ -188,6 +188,7 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 	case Thing::Rock:
 	case Thing::Bonfire:
 	case Thing::DeadTree:
+	case Thing::Tree:
 		return KindRule::Whole;
 	}
 	return KindRule::Never;

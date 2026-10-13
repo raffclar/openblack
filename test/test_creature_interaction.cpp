@@ -374,11 +374,11 @@ TEST(CreatureObjectActions, EachKindOfThingTakesItsRule)
 	}
 }
 
-TEST(CreatureObjectActions, RocksBonfiresAndDeadTreesTakeTheWholeRule)
+TEST(CreatureObjectActions, RocksBonfiresAndTreesTakeTheWholeRule)
 {
 	using creature_object_actions::KindRule;
 	using creature_object_actions::Thing;
-	for (const auto thing : {Thing::Rock, Thing::Bonfire, Thing::DeadTree})
+	for (const auto thing : {Thing::Rock, Thing::Bonfire, Thing::DeadTree, Thing::Tree})
 	{
 		EXPECT_EQ(creature_object_actions::RuleOf(thing), KindRule::Whole);
 		EXPECT_TRUE(creature_object_actions::Holdable(thing));
