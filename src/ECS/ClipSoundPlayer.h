@@ -67,14 +67,29 @@ public:
 	                       bool bySampleRules) = 0;
 };
 
+/// The screen refreshes the game drew its frames at: at most 60 a second, as it waited for the display's refresh.
+/// A clip played once and held at its end plays all its sounds again at each.
+struct RefreshPace
+{
+	static constexpr float k_StepMilliseconds = 1000.0f / 60.0f;
+	/// The real time since the last refresh that counts towards the next
+	float sinceStep {0.0f};
+
+	/// Whether a frame of so many real milliseconds brings a refresh: one a frame at most, a long frame leaving no more
+	/// owed, only its share of the next
+	[[nodiscard]] bool Step(float frameMilliseconds);
+};
+
 /// Plays the sounds a living thing's clip passes as it plays on from a place by so many milliseconds, from where the
 /// thing is: a person's sounds by its size and only while it is alive, the banter from the villagers' bank (the first
 /// from its home), a thrown person's scream only early in its flight, anything else from the editor's bank, the ones
-/// played the ordinary way only as their samples allow. Nothing for a clip played once that has already finished.
+/// played the ordinary way only as their samples allow. A clip played once and held at its end plays all its sounds
+/// again at each screen refresh, as the game's did each frame until the thing went on to another clip.
 void Play(World& world, entt::entity entity, AnimId clipId, ClipTiming clip, uint32_t place, uint32_t played,
-          const glm::vec3& position);
+          const glm::vec3& position, bool refresh = false);
 
 /// The same in the game's own world
-void Play(entt::entity entity, AnimId clipId, const L3DAnim& clip, uint32_t place, uint32_t played, const glm::vec3& position);
+void Play(entt::entity entity, AnimId clipId, const L3DAnim& clip, uint32_t place, uint32_t played, const glm::vec3& position,
+          bool refresh = false);
 
 } // namespace openblack::ecs::clip_sound_player

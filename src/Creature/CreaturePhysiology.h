@@ -209,6 +209,10 @@ struct PooLump
 /// The lump of a creature whose groin is at a point, facing a way on the land (x, z, of length 1), at a shown size
 [[nodiscard]] PooLump PooLumpOf(glm::vec3 groin, glm::vec2 ahead, float shownSize);
 
+/// One game turn sitting down: it sheds a fifth of the exhaustion it would asleep
+void SitTurn(Needs& needs, const Species& species);
+constexpr float k_SitRestShare = 0.2f;
+
 /// One game turn asleep: it heals and rests. Returns whether it wakes now, having slept some turns with this one.
 [[nodiscard]] bool SleepTurn(Needs& needs, const Species& species, float size, uint32_t turnsAsleep, bool night);
 

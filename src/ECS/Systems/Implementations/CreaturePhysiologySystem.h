@@ -32,6 +32,7 @@ public:
 	void Drink(entt::entity creature) override;
 	void Poo(entt::entity creature) override;
 	void Fart(entt::entity creature) override;
+	void SitTurn(entt::entity creature) override;
 	void Puke(entt::entity creature) override;
 	void WakeFromFaint(entt::entity creature) override;
 	void FinishAction(entt::entity creature, std::string_view action) override;

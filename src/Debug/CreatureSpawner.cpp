@@ -571,8 +571,23 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		case creature_mind::Step::Kind::Douse:
 			ImGui::Text("Dousing a fire");
 			break;
+		case creature_mind::Step::Kind::Shatter:
+			ImGui::Text("Breaking a rock in two");
+			break;
+		case creature_mind::Step::Kind::Repair:
+			ImGui::Text("Mending a building");
+			break;
+		case creature_mind::Step::Kind::UseUp:
+			ImGui::Text("Using a thing up");
+			break;
+		case creature_mind::Step::Kind::WatchFlying:
+			ImGui::Text("Watching a thing fly for %.1f s", static_cast<double>(idle.stepSeconds));
+			break;
 		case creature_mind::Step::Kind::SwapMind:
 			ImGui::Text("Swapping minds for %.1f s", static_cast<double>(idle.stepSeconds));
+			break;
+		case creature_mind::Step::Kind::Overlay:
+			ImGui::Text("%s on top of its body", AnimationLabel(step.animation).c_str());
 			break;
 		default:
 			break;
