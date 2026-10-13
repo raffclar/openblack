@@ -162,6 +162,7 @@
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/VertexBuffer.h"
+#include "Graphics/WarmUpViews.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -377,7 +378,12 @@ struct BgfxCallback: public bgfx::CallbackI
 	}
 	void profilerEnd() override {}
 	// The driver's compiled pipelines, kept between runs
-	uint32_t cacheReadSize(uint64_t id) override { return pipelines.has_value() ? pipelines->ReadSize(id) : 0; }
+	uint32_t cacheReadSize(uint64_t id) override
+	{
+		// The renderer asks for the cache once for each pipeline that it makes
+		++pipelinesMade;
+		return pipelines.has_value() ? pipelines->ReadSize(id) : 0;
+	}
 	bool cacheRead(uint64_t id, void* data, uint32_t size) override
 	{
 		return pipelines.has_value() && pipelines->Read(id, std::span(static_cast<std::byte*>(data), size));
@@ -441,6 +447,8 @@ struct BgfxCallback: public bgfx::CallbackI
 	graphics::ScreenPictures pictures;
 	/// The descriptor sets the last frame counted took under Vulkan, for the report if the renderer runs out of them
 	std::atomic<uint32_t> recentDescriptorSets {0};
+	/// The pipelines that the renderer made since it started, counted on its render thread
+	std::atomic<uint32_t> pipelinesMade {0};
 	/// The driver's compiled pipelines on disk. Only the Vulkan and Direct3D 12 renderers keep them, and only when the
 	/// system gives a user folder.
 	std::optional<graphics::PipelineCache> pipelines;
@@ -594,6 +602,10 @@ Renderer::~Renderer() noexcept
 	{
 		bgfx::destroy(toBgfx(*_lightningGlowTexture));
 	}
+	if (_warmUpInstances.has_value())
+	{
+		bgfx::destroy(toBgfx(*_warmUpInstances));
+	}
 	for (auto& query : _glareQueries)
 	{
 		if (bgfx::isValid(query))
@@ -642,6 +654,10 @@ void SetSceneViewRects(RenderPass viewId, glm::u16vec2 resolution) noexcept
 
 void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept
 {
+	if (viewId == RenderPass::Main)
+	{
+		_mainClearColour = clearColor;
+	}
 	// A scene with a sky of its own is cleared by its sky's pass, which comes first, and drawn over it
 	bgfx::setViewClear(static_cast<bgfx::ViewId>(SkyPassOf(viewId)), BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, clearColor, 0.0f, 0);
 	if (HasSkyPass(viewId))
@@ -1887,13 +1903,12 @@ void Renderer::DrawCaveTrophies(const DrawSceneDesc& desc) const
 	}
 }
 
-void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, const L3DMeshSubmitDesc& bodyDesc, float fizz,
-                                float freeze, uint32_t fizzSortDepth) const
+void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components::CreatureEyes& eyes,
+                                const L3DMeshSubmitDesc& bodyDesc, float fizz, float freeze, uint32_t fizzSortDepth) const
 {
 	using ecs::components::CreatureEyes;
-	const auto* eyes = desc.entities.TryGet<const CreatureEyes>(entity);
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (eyes == nullptr || !meshes.Contains(CreatureEyes::k_EyeballMeshId) || !meshes.Contains(CreatureEyes::k_EyelidMeshId) ||
+	if (!meshes.Contains(CreatureEyes::k_EyeballMeshId) || !meshes.Contains(CreatureEyes::k_EyelidMeshId) ||
 	    !creature_fizz_look::Drawn(fizz))
 	{
 		return;
@@ -1948,7 +1963,7 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, 
 			DrawMesh(piece, submitDesc, std::numeric_limits<uint8_t>::max());
 		}
 	};
-	for (const auto& eye : eyes->drawn)
+	for (const auto& eye : eyes.drawn)
 	{
 		if (eye.eyeball.has_value())
 		{
@@ -1960,21 +1975,16 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, 
 		{
 			submitDesc.modelMatrices = &*eye.eyelid;
 			// Wholly frozen, the eyelids are white rather than the colour of the skin under them
-			submitDesc.tint = creature_fizz_look::EyelidsWhite(freeze) ? tint : tint * glm::vec4(eyes->lidColour, 1.0f);
+			submitDesc.tint = creature_fizz_look::EyelidsWhite(freeze) ? tint : tint * glm::vec4(eyes.lidColour, 1.0f);
 			draw(*eyelid);
 		}
 	}
 }
 
-void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, entt::entity entity) const
+void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin) const
 {
 	using ecs::components::CreatureHair;
-	const auto* hair = desc.entities.TryGet<const CreatureHair>(entity);
 	const auto& textures = Locator::resources::value().GetTextures();
-	if (hair == nullptr || !Locator::creatureHairSystem::value().IsShown())
-	{
-		return;
-	}
 	struct Vertex
 	{
 		glm::vec3 position;
@@ -1991,11 +2001,6 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, entt::entity entity) 
 		return layout;
 	}();
 	const bool hasTexture = textures.Contains(CreatureHair::k_TextureId) && textures.Contains(CreatureHair::k_AlphaTextureId);
-	const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
-	if (transform == nullptr)
-	{
-		return;
-	}
 	const auto eye = desc.camera->GetOrigin();
 	const auto viewId = static_cast<bgfx::ViewId>(TranslucentPassOf(desc.viewId));
 	const auto* program = _shaderManager->GetShader("CreatureHair");
@@ -2005,10 +2010,10 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, entt::entity entity) 
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const bool landLit = !inTemple && _landLightTexture.has_value();
 	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, CreatureLandLightScale(desc.viewId), 0.0f, 0.0f};
-	const glm::vec4 u_hairOrigin {transform->position, 0.0f};
+	const glm::vec4 u_hairOrigin {origin, 0.0f};
 	const auto u_haze = inTemple ? glm::vec4(0.0f) : _haze[0];
 	std::vector<creature_hair::RibbonVertex> ribbon;
-	for (const auto& group : hair->groups)
+	for (const auto& group : hair.groups)
 	{
 		// Every strand of a group in one draw, each a strip of quads between its points
 		uint32_t vertexCount = 0;
@@ -2103,7 +2108,7 @@ void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 	using namespace ecs::components;
 	const auto& temple = Locator::temple::value();
 	const auto* shader = _shaderManager->GetShader("Beam");
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& textures = Locator::resources::value().GetTextures();
 	const auto smoke = entt::hashed_string("raw/smoke");
 	const auto smokeAlpha = entt::hashed_string("raw/smokea");
@@ -2176,7 +2181,7 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 	const auto& temple = Locator::temple::value();
 	const auto inDrawnRoom = [&temple](TempleRoom room) { return temple.IsRoomDrawn(room); };
 	const auto* beamShader = _shaderManager->GetShader("Beam");
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 	auto& resources = Locator::resources::value();
 
 	bgfx::VertexLayout layout;
@@ -2470,8 +2475,12 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 		if (const auto range = sea_rows::ComputeScreenRange(camera.GetViewProjectionMatrix(), viewport, config.cameraNearClip))
 		{
 			// The ripple steps on with the frames the game's time moves on in, at the screen refresh's pace
+			// A warm-up does not step it
 			const auto& time = Locator::time::value();
-			_seaRipple = sea_rows::AdvanceRipple(_seaRipple, time.GetFrameRealTime(), time.GetFrameGameTime().count() != 0);
+			if (!_warmingUp)
+			{
+				_seaRipple = sea_rows::AdvanceRipple(_seaRipple, time.GetFrameRealTime(), time.GetFrameGameTime().count() != 0);
+			}
 			const auto rows = sea_rows::MakeRows(*range);
 			u_seaRows = {static_cast<float>(rows.first), static_cast<float>(rows.count), rows.inverseDepth, rows.inverseStep};
 			u_seaMode.y = rows.softTop ? 1.0f : 0.0f;
@@ -3300,7 +3309,8 @@ void Renderer::DrawWaterRings(const DrawSceneDesc& desc) const
 
 void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::snowfallSystem::has_value() ||
+	// Taking the tiles counts them as drawn, which a warm-up must not do
+	if (_warmingUp || desc.viewId != RenderPass::Main || !Locator::snowfallSystem::has_value() ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
@@ -3481,7 +3491,8 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 
 void Renderer::DrawRain(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::rainSystem::has_value() ||
+	// Taking the tiles counts them as drawn, which a warm-up must not do
+	if (_warmingUp || desc.viewId != RenderPass::Main || !Locator::rainSystem::has_value() ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
@@ -3558,7 +3569,9 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	const auto moonEntity = Locator::skySystem::value().GetMoon();
 	const auto [moon, body, glowLook] =
 	    registry.TryGet<ecs::components::Moon, ecs::components::CelestialBody, ecs::components::CelestialGlow>(moonEntity);
-	if (moon == nullptr || body == nullptr || !moon->placement.has_value())
+	// A warm-up draws the moon and its glow even before the moon is placed or when it does not show, then at no size
+	const bool placed = moon != nullptr && moon->placement.has_value();
+	if (moon == nullptr || body == nullptr || (!placed && !_warmingUp))
 	{
 		return;
 	}
@@ -3566,14 +3579,14 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	// copy of it with its height mirrored through sea level.
 	const bool inTheSea = viewId == RenderPass::ReflectionSky;
 	const auto& camera = Locator::camera::value();
-	const auto centre = camera.GetOrigin() + moon->placement->offset;
+	const auto centre = camera.GetOrigin() + (placed ? moon->placement->offset : glm::vec3(0.0f));
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
 	const auto inverseView = glm::inverse(view);
 	const auto basis = moon::Basis(view, inverseView, centre);
 	const auto& colour = moon->colour;
 	// It shows less through an overcast
 	const float alpha = moon->strength / 255.0f;
-	if (alpha <= 0.0f)
+	if (alpha <= 0.0f && !_warmingUp)
 	{
 		return;
 	}
@@ -3603,7 +3616,7 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		for (size_t i = 0; i < vertices.size(); ++i)
 		{
 			const auto corner = moon::k_GlowIndices.at(i);
-			vertices[i] = {glow.corners.at(corner), glow.uvs.at(corner)};
+			vertices[i] = {placed ? glow.corners.at(corner) : glm::vec3(0.0f), glow.uvs.at(corner)};
 		}
 		const auto* program = _shaderManager->GetShader("Celestial");
 		const glm::mat4 identity(1.0f);
@@ -3629,7 +3642,7 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		                              .meshId = body->meshId,
 		                              .textureId = body->textureId,
 		                              .alphaTextureId = body->alphaTextureId,
-		                              .model = moon::Model(basis, centre, phase),
+		                              .model = placed ? moon::Model(basis, centre, phase) : glm::mat4(0.0f),
 		                              .colour = glm::vec4(colour, alpha),
 		                              .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
 		                              .state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
@@ -3658,7 +3671,8 @@ void Renderer::DrawSun(RenderPass viewId) const
 	}
 	const auto [sun, body] = Locator::entitiesRegistry::value().TryGet<ecs::components::Sun, ecs::components::CelestialBody>(
 	    Locator::skySystem::value().GetSun());
-	if (sun == nullptr || body == nullptr || !sun->placement.has_value())
+	// A warm-up draws the sun even before it is placed, then at no size
+	if (sun == nullptr || body == nullptr || (!sun->placement.has_value() && !_warmingUp))
 	{
 		return;
 	}
@@ -3668,7 +3682,7 @@ void Renderer::DrawSun(RenderPass viewId) const
 	                              .meshId = body->meshId,
 	                              .textureId = body->textureId,
 	                              .alphaTextureId = body->alphaTextureId,
-	                              .model = SunModel(sun->placement->position),
+	                              .model = sun->placement.has_value() ? SunModel(sun->placement->position) : glm::mat4(0.0f),
 	                              .colour = glm::vec4(sun->colour, sun->strength / 255.0f),
 	                              .celestial = glm::vec4(0.0f),
 	                              .state = k_AdditiveState | BGFX_STATE_DEPTH_TEST_GREATER,
@@ -3683,12 +3697,13 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	}
 	const auto [sun, body] = Locator::entitiesRegistry::value().TryGet<ecs::components::Sun, ecs::components::CelestialBody>(
 	    Locator::skySystem::value().GetSun());
-	if (sun == nullptr || body == nullptr || !sun->placement.has_value())
+	// A warm-up draws the glare even before the sun is placed, then at no size
+	if (sun == nullptr || body == nullptr || (!sun->placement.has_value() && !_warmingUp))
 	{
 		return;
 	}
 	const auto& placement = sun->placement;
-	const auto model = SunModel(placement->position);
+	const auto model = placement.has_value() ? SunModel(placement->position) : glm::mat4(0.0f);
 
 	// Each sample of the sun hidden from the camera dims the glare by a fifth. The land hides it where the line from the
 	// camera to it meets the land; otherwise what is drawn at its pixel does, when it is nearer than the depth the game's
@@ -3696,12 +3711,13 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	int hidden = 0;
 	const auto origin = camera.GetOrigin();
 	const float near = camera.GetNearClip();
-	const auto samples = sun::GlareSamples(placement->position, origin, near);
+	const auto samples = sun::GlareSamples(placement.has_value() ? placement->position : origin, origin, near);
 	const bool asksDrawing = (bgfx::getCaps()->supported & BGFX_CAPS_OCCLUSION_QUERY) != 0;
 	const auto resolution =
 	    Locator::windowing::has_value() ? static_cast<glm::vec2>(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
 	const auto toClip = camera.GetViewProjectionMatrix();
-	for (size_t i = 0; i < samples.size(); ++i)
+	// A warm-up does not look at the samples: it asks nothing of the drawing, as the next frames read the answers
+	for (size_t i = 0; i < samples.size() && !_warmingUp; ++i)
 	{
 		bool isHidden = Locator::pickingSystem::has_value() &&
 		                Locator::pickingSystem::value().LandOrSeaAlong(origin, samples[i], origin).has_value();
@@ -3737,25 +3753,30 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 		}
 		hidden += isHidden ? 1 : 0;
 	}
-	const auto frameMilliseconds = static_cast<uint32_t>(Locator::time::value().GetFrameGameTime().count());
-	_sunGlare = sun::EaseGlare(_sunGlare, hidden, frameMilliseconds);
-	if (_sunGlare <= 0.0f)
+	// A warm-up leaves the glare as it is, and draws it even when it does not show
+	if (!_warmingUp)
 	{
-		return;
+		const auto frameMilliseconds = static_cast<uint32_t>(Locator::time::value().GetFrameGameTime().count());
+		_sunGlare = sun::EaseGlare(_sunGlare, hidden, frameMilliseconds);
+		if (_sunGlare <= 0.0f)
+		{
+			return;
+		}
 	}
 	// Larger, in an orange colour, over everything in the view. The temple isn't among what the samples can hit, so inside
 	// it the glare is tested against the depth of what is drawn: its solid parts hide it, and it shows through its glass
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	DrawCelestialMesh(RenderPass::Main, {
-	                                        .meshId = body->meshId,
-	                                        .textureId = body->textureId,
-	                                        .alphaTextureId = body->alphaTextureId,
-	                                        .model = model * glm::scale(glm::vec3(sun::k_GlareScale)),
-	                                        .colour = {0xA0 / 255.0f, 0x6A / 255.0f, 0x35 / 255.0f,
-	                                                   _sunGlare * placement->alpha / (255.0f * 255.0f)},
-	                                        .celestial = glm::vec4(0.0f),
-	                                        .state = k_AdditiveState | (inTemple ? BGFX_STATE_DEPTH_TEST_GREATER : 0),
-	                                    });
+	DrawCelestialMesh(RenderPass::Main,
+	                  {
+	                      .meshId = body->meshId,
+	                      .textureId = body->textureId,
+	                      .alphaTextureId = body->alphaTextureId,
+	                      .model = model * glm::scale(glm::vec3(sun::k_GlareScale)),
+	                      .colour = {0xA0 / 255.0f, 0x6A / 255.0f, 0x35 / 255.0f,
+	                                 placement.has_value() ? _sunGlare * placement->alpha / (255.0f * 255.0f) : 0.0f},
+	                      .celestial = glm::vec4(0.0f),
+	                      .state = k_AdditiveState | (inTemple ? BGFX_STATE_DEPTH_TEST_GREATER : 0),
+	                  });
 }
 
 void Renderer::AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHandle query, glm::vec2 topLeft,
@@ -4342,7 +4363,8 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	}
 	const auto* dome =
 	    Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
-	if (dome == nullptr || dome->frameRows.Get().empty())
+	// A warm-up makes the target and draws a band of no rows when the dome has none this frame: it changes no texel
+	if (dome == nullptr || (dome->frameRows.Get().empty() && !_warmingUp))
 	{
 		return;
 	}
@@ -4361,6 +4383,11 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	const auto viewId = SetUpLandView(RenderPass::SkyDome, *_skyDomeFrameBuffer, k_Size);
 	const auto& program = *_shaderManager->GetShader("SkyDome");
 	constexpr auto k_Rows = static_cast<float>(sky_dome::k_Rows);
+	if (dome->frameRows.Get().empty())
+	{
+		program.SetTextureSampler("s_diffuse", 0, *pictures);
+		SubmitLandQuad(viewId, program, {0.0f, 0.0f}, {k_Rows, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}, BGFX_STATE_WRITE_RGB);
+	}
 	for (const auto& rows : dome->frameRows.Get())
 	{
 		const auto times = sky_dome::TimePair(rows.skyType);
@@ -5318,10 +5345,40 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	}
 }
 
+void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
+{
+	// The draws into the window keep to one pixel. The renderer makes a pipeline for each draw that has pixels.
+	for (const auto view : warm_up::k_WindowSceneViews)
+	{
+		bgfx::setViewScissor(static_cast<bgfx::ViewId>(view), 0, 0, 1, 1);
+	}
+	if (!_warmUpInstances.has_value())
+	{
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::TexCoord7, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord6, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord5, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord4, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
+		    .end();
+		const RenderContext::ObjectInstance hidden {.model = glm::mat4(0.0f), .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+		_warmUpInstances = fromBgfx(bgfx::createDynamicVertexBuffer(bgfx::copy(&hidden, sizeof(hidden)), layout));
+	}
+	_warmingUp = true;
+	DrawScene(drawDesc);
+	_warmingUp = false;
+	_warmUpInFrame = true;
+}
+
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
 	SelectDrawnCreatures(drawDesc);
-	UploadCreatureSkins(drawDesc);
+	// A warm-up gives no creature a skin texture: each creature gets them in its first frame
+	if (!_warmingUp)
+	{
+		UploadCreatureSkins(drawDesc);
+	}
 	UploadHandSkins();
 	UploadAnimalBones(drawDesc);
 	{
@@ -6036,6 +6093,32 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			// The creatures, each posed and shaped as it is, then its eyes
 			drawingCreatures = true;
+			// A creature fizzing in or out of sight blends with what is behind it, but in its place among the solid
+			// models: after them in this view, before all that blends, the nearest fizzing creature first. First its depth
+			// alone, where the static scrolling over its skin is strong enough, then its body blended over just that
+			// depth. Returns the sort depth of the body.
+			const auto drawFizzing = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
+			                             uint32_t instance, std::optional<graphics::DynamicVertexBufferHandle> instances,
+			                             const EntityPose& pose, uint8_t level, glm::vec2 scroll, uint32_t depth) {
+				const auto mainState = submitDesc.state;
+				submitDesc.viewId = translucentViewId;
+				submitDesc.fizz =
+				    L3DMeshSubmitDesc::Fizz {.pass = L3DMeshSubmitDesc::Fizz::Pass::Depth, .level = level, .scroll = scroll};
+				submitDesc.state = BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
+				submitDesc.sortDepth = depth;
+				drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
+				submitDesc.fizz->pass = L3DMeshSubmitDesc::Fizz::Pass::Body;
+				submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_EQUAL |
+				                   BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
+				submitDesc.sortDepth = depth > 0 ? depth - 1 : 0;
+				drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
+				const auto bodyDepth = submitDesc.sortDepth;
+				submitDesc.fizz.reset();
+				submitDesc.state = mainState;
+				submitDesc.sortDepth = 0;
+				submitDesc.viewId = desc.viewId;
+				return bodyDepth;
+			};
 			for (const auto& drawn : _drawnCreatures)
 			{
 				const auto entity = drawn.entity;
@@ -6103,42 +6186,80 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				uint32_t eyesSortDepth = 0;
 				if (creature_fizz_look::Fizzing(fizz) && instance < renderCtx.instanceUniforms.size())
 				{
-					// Fizzing, it blends with what is behind it, but in its place among the solid models: after them in
-					// this view, before all that blends, the nearest fizzing creature first. First its depth alone, where
-					// the static scrolling over its skin is strong enough, then its body blended over just that depth.
 					const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
 					const auto depth = zsort::BeforeSorted(position, cameraOrigin);
-					const auto level = creature_fizz_look::Level(fizz);
-					const auto mainState = submitDesc.state;
-					submitDesc.viewId = translucentViewId;
-					submitDesc.fizz = L3DMeshSubmitDesc::Fizz {
-					    .pass = L3DMeshSubmitDesc::Fizz::Pass::Depth, .level = level, .scroll = spells->staticScroll};
-					submitDesc.state = BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
-					submitDesc.sortDepth = depth;
-					drawInstances(mesh->id, placers->second, false, instance, 1, &pose);
-					submitDesc.fizz->pass = L3DMeshSubmitDesc::Fizz::Pass::Body;
-					submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_EQUAL |
-					                   BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
-					submitDesc.sortDepth = depth > 0 ? depth - 1 : 0;
-					drawInstances(mesh->id, placers->second, false, instance, 1, &pose);
-					eyesSortDepth = submitDesc.sortDepth;
-					submitDesc.fizz.reset();
-					submitDesc.state = mainState;
-					submitDesc.sortDepth = 0;
-					submitDesc.viewId = desc.viewId;
+					eyesSortDepth = drawFizzing(mesh->id, placers->second, instance, std::nullopt, pose,
+					                            creature_fizz_look::Level(fizz), spells->staticScroll, depth);
 				}
 				else if (creature_fizz_look::Drawn(fizz))
 				{
 					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
 				}
 				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
-				DrawCreatureEyes(desc, poser, submitDesc, fizz, freeze, eyesSortDepth);
+				if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
+				{
+					DrawCreatureEyes(desc, *eyes, submitDesc, fizz, freeze, eyesSortDepth);
+				}
 				submitDesc.modelLight.reset();
 				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
 				// TODO(raffclar): a copy's hair isn't drawn: the creature's hangs from the creature where it is in the world
-				if (!copy && creature_fizz_look::HairShown(fizz, freeze))
+				const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(entity);
+				const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
+				if (!copy && creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
+				    Locator::creatureHairSystem::value().IsShown())
 				{
-					DrawCreatureHair(desc, entity);
+					DrawCreatureHair(desc, *hair, transform->position);
+				}
+			}
+			// A warm-up draws a body of each species that is loaded, with its eyes and hair, as the first frame of a creature
+			// draws them. They are drawn at no size, and cover no pixel.
+			if (_warmingUp && _warmUpInstances.has_value())
+			{
+				const RenderContext::InstancedDrawDesc placers {0, 1, false};
+				const auto loaded = [&meshManager](entt::id_type id) { return meshManager.Contains(id); };
+				for (int32_t type = static_cast<int32_t>(CreatureType::Cow); type < static_cast<int32_t>(CreatureType::_COUNT);
+				     ++type)
+				{
+					const auto ids =
+					    creature_morph::MeshesOf(static_cast<CreatureType>(type), creature_morph::Morph {}, loaded);
+					if (!meshManager.Contains(ids.base))
+					{
+						continue;
+					}
+					const auto body = meshManager.Handle(ids.base);
+					const L3DMeshSubmitDesc::MorphTargets targets {
+					    .meshes = {&*meshManager.Handle(ids.evilGood), &*meshManager.Handle(ids.thinFat),
+					               &*meshManager.Handle(ids.weakStrong)},
+					    .weights = glm::vec3(0.0f),
+					    .skins = {},
+					    .blendSeams = Locator::config::value().blendCreatureSeams,
+					};
+					const EntityPose pose {.bones = body->GetBoneMatrices(), .morphTargets = &targets};
+					if (pose.bones.empty())
+					{
+						continue;
+					}
+					drawInstances(ids.base, placers, false, 0, 1, &pose, nullptr, *_warmUpInstances);
+					// And fizzing, as it comes into sight
+					if (desc.viewId != RenderPass::Reflection)
+					{
+						drawFizzing(ids.base, placers, 0, *_warmUpInstances, pose,
+						            creature_fizz_look::Level(warm_up::k_CreatureFizz), glm::vec2(0.0f), 0);
+					}
+				}
+				if (desc.viewId != RenderPass::Reflection)
+				{
+					ecs::components::CreatureEyes eyes;
+					eyes.drawn.at(0) = {.eyeball = glm::mat4(0.0f), .eyelid = glm::mat4(0.0f)};
+					DrawCreatureEyes(desc, eyes, submitDesc, 0.0f, 0.0f, 0);
+					DrawCreatureEyes(desc, eyes, submitDesc, warm_up::k_CreatureFizz, 0.0f, 0);
+					ecs::components::CreatureHair hair;
+					hair.groups.push_back(
+					    {.strands = {{.positions = {glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f)}, .velocities = {}}},
+					     .colour = glm::ivec3(0),
+					     .halfWidth = 0.0f,
+					     .textured = true});
+					DrawCreatureHair(desc, hair, glm::vec3(0.0f));
 				}
 			}
 			drawingCreatures = false;
@@ -6674,7 +6795,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				using namespace ecs::components;
 
-				auto& registry = Locator::entitiesRegistry::value();
+				const auto& registry = Locator::entitiesRegistry::value();
 				// The camera's bookmarks are drawn unless a script put them away or holds the cinema bars
 				const bool bookmarksShown =
 				    (!Locator::cameraBookmarkSystem::has_value() || Locator::cameraBookmarkSystem::value().IsEnabled()) &&
@@ -6788,11 +6909,35 @@ void Renderer::BakeLandShadows(bool drawVegetation) const noexcept
 	                        LandShadowBake::Casters {.shapes = true, .leaves = drawVegetation && !movingTrees});
 }
 
+uint32_t Renderer::GetPipelinesMade() const noexcept
+{
+	return _bgfxCallback->pipelinesMade.load();
+}
+
 void Renderer::Frame() noexcept
 {
+	// In a warm-up's frame the loading screen's view first clears all of the window as the main view clears it. This is
+	// set after every draw of the frame, as the loading screen sets its view too.
+	const bool warmUp = std::exchange(_warmUpInFrame, false);
+	if (warmUp)
+	{
+		const auto cover = static_cast<bgfx::ViewId>(warm_up::k_CoverView);
+		bgfx::setViewClear(cover, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH | BGFX_CLEAR_STENCIL, _mainClearColour, 0.0f, 0);
+		bgfx::setViewRect(cover, 0, 0, bgfx::BackbufferRatio::Equal);
+		bgfx::touch(cover);
+	}
 	// Advance to next frame. Process submitted rendering primitives.
 	const auto frame = bgfx::frame();
-	if (const auto sets = _shaderManager->FrameEnded())
+	// After it, the views are set back, and the frame is not counted for the descriptor sets of the game's frames
+	if (warmUp)
+	{
+		for (const auto view : warm_up::k_WindowSceneViews)
+		{
+			bgfx::setViewScissor(static_cast<bgfx::ViewId>(view));
+		}
+		bgfx::setViewClear(static_cast<bgfx::ViewId>(warm_up::k_CoverView), BGFX_CLEAR_NONE);
+	}
+	if (const auto sets = _shaderManager->FrameEnded(); sets.has_value() && !warmUp)
 	{
 		WatchDescriptorSets(*sets);
 	}

@@ -273,6 +273,10 @@ public:
 	/// Makes textures for the painted skins of count skins. Call it behind the loading screen, so that the first frame
 	/// of a creature does not make them.
 	virtual void PrepareCreatureSkins(size_t count) const noexcept = 0;
+	/// Draws a scene as DrawScene does, but only so that the renderer makes its pipelines and render targets: the next
+	/// frame shows none of it, and nothing that later frames draw changes. Call it behind the loading screen, before
+	/// the draws of the loading frame, so that the first frames of the game do not make them.
+	virtual void WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
 	/// Asks for the frame being made to be written to a PNG once drawn; the file appears whole once written
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
 	/// Why a picture asked for was given up, once; none while it may still come
@@ -282,6 +286,9 @@ public:
 	virtual void RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept = 0;
 	/// The picture made for a name, one time; none while it is not made
 	[[nodiscard]] virtual std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& name) noexcept = 0;
+	/// How many pipelines the renderer made since it started. The renderer makes a pipeline the first time that a draw
+	/// uses a new set of program, state, vertex layouts and target formats, and that frame is slower.
+	[[nodiscard]] virtual uint32_t GetPipelinesMade() const noexcept = 0;
 	[[nodiscard]] virtual bool GetDebug() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
 	[[nodiscard]] virtual bool GetProfile() const noexcept = 0;

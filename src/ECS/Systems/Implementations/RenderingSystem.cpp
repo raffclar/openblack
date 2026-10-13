@@ -190,7 +190,7 @@ RenderingSystem::~RenderingSystem() = default;
 void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesDescs);
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 
 	// Count number of instances. The draw lists are made from the components listed in k_ChangesDrawLayout, and made
 	// again only when an entity gains or loses one of them: a component they come to depend on belongs in that list.
@@ -381,7 +381,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 
 void RenderingSystem::PrepareTreeDrawDescs(bool drawBoundingBox)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 
 	// Count number of tree instances
 	uint32_t treeInstanceCount = 0;
@@ -457,7 +457,7 @@ bool RenderingSystem::UploadUniformsKeepingDescs(bool drawBoundingBox)
 bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesUniforms);
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 
 	for (auto& [meshId, slots] : _instanceSlots)
 	{
@@ -1034,7 +1034,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 void RenderingSystem::UploadSouls()
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 	_renderContext.soulDraws.clear();
 	_renderContext.soulInstances.clear();
 	registry.Each<const RisingSoul, const Transform>([this](const RisingSoul& soul, const Transform& transform) {
@@ -1132,7 +1132,7 @@ void RenderingSystem::UploadHeldObjects()
 
 void RenderingSystem::UploadPartialBuilds()
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 	_renderContext.partialBuilds.clear();
 	_renderContext.partialBuildInstances.clear();
 	if (!Locator::buildingDamageSystem::has_value())
@@ -1255,7 +1255,7 @@ void RenderingSystem::UploadPartialBuilds()
 bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesTrees);
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& vegetation = Locator::vegetation::value();
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	const float modelDetail = graphics::detail_level::ModelDetail(Locator::config::value().detailLevel);

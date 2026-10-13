@@ -64,29 +64,29 @@ void Renderer::DrawTempleLeashes(const DrawSceneDesc& desc) const
 	// Each collar is drawn among the things that blend, by its distance from the camera, straight after its glow, which
 	// stands at the same place: the collar shows whole over the glow. Lit in white by the sun alone: no light or colour
 	// of the land reaches it, and no shadow falls on it.
-	Locator::entitiesRegistry::value().Each<const LeashPost, const Transform>(
-	    [&](const LeashPost& post, const Transform& transform) {
-		    if (transform.scale == glm::vec3(0.0f))
-		    {
-			    return;
-		    }
-		    const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		    L3DMeshSubmitDesc submitDesc = {};
-		    submitDesc.viewId = translucent;
-		    submitDesc.program = program;
-		    submitDesc.state = k_CollarState;
-		    submitDesc.modelMatrices = &model;
-		    submitDesc.matrixCount = 1;
-		    submitDesc.mirrored = reflection;
-		    submitDesc.useMaterialBlending = true;
-		    submitDesc.useMaterialCulling = true;
-		    // Its band of the leash texture, slid round it
-		    submitDesc.skinTexture = &skin;
-		    submitDesc.uvOffset = glm::vec2(post.look.scroll, temple_leashes::Band(post.type));
-		    submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(k_White), .alpha = 1.0f};
-		    submitDesc.landColourAdded = false;
-		    submitDesc.groundShadows = false;
-		    submitDesc.sortDepth = std::max(zsort::Depth(transform.position, eye), 1u) - 1;
-		    DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
-	    });
+	const auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const LeashPost, const Transform>([&](const LeashPost& post, const Transform& transform) {
+		if (transform.scale == glm::vec3(0.0f))
+		{
+			return;
+		}
+		const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+		L3DMeshSubmitDesc submitDesc = {};
+		submitDesc.viewId = translucent;
+		submitDesc.program = program;
+		submitDesc.state = k_CollarState;
+		submitDesc.modelMatrices = &model;
+		submitDesc.matrixCount = 1;
+		submitDesc.mirrored = reflection;
+		submitDesc.useMaterialBlending = true;
+		submitDesc.useMaterialCulling = true;
+		// Its band of the leash texture, slid round it
+		submitDesc.skinTexture = &skin;
+		submitDesc.uvOffset = glm::vec2(post.look.scroll, temple_leashes::Band(post.type));
+		submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(k_White), .alpha = 1.0f};
+		submitDesc.landColourAdded = false;
+		submitDesc.groundShadows = false;
+		submitDesc.sortDepth = std::max(zsort::Depth(transform.position, eye), 1u) - 1;
+		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+	});
 }

@@ -453,6 +453,30 @@ bool IsOwnTempleEntrance(std::optional<entt::entity> picked)
 	return temple != nullptr && temple->owner == PlayerNames::PLAYER_ONE;
 }
 
+/// How the game draws its scene into the window, from its camera
+graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& config, uint32_t time, bool drawHand)
+{
+	return {
+	    .camera = &Locator::camera::value(),
+	    .frameBuffer = nullptr,
+	    .entities = Locator::entitiesRegistry::value(),
+	    .time = time,
+	    .timeOfDay = config.timeOfDay,
+	    .smallBumpMapStrength = config.smallBumpMapStrength,
+	    .viewId = graphics::RenderPass::Main,
+	    .drawSky = config.drawSky,
+	    .drawWater = config.drawWater,
+	    .drawIsland = config.drawIsland,
+	    .drawEntities = config.drawEntities,
+	    .drawSprites = config.drawSprites,
+	    .drawVegetation = config.drawVegetation,
+	    .drawBoundingBoxes = config.drawBoundingBoxes,
+	    .cullBack = false,
+	    .wireframe = config.wireframe,
+	    .drawHand = drawHand,
+	};
+}
+
 } // namespace
 
 const std::string k_WindowTitle = "openblack";
@@ -525,6 +549,7 @@ Game::Game(Arguments&& args) noexcept
 	config.numFramesToSimulate = args.numFramesToSimulate;
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
+	config.warmUpFirstFrame = args.warmUpFirstFrame;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.resolution = {args.windowWidth, args.windowHeight};
@@ -909,6 +934,36 @@ uint32_t Game::GetTurn() const
 bool Game::IsPaused() const
 {
 	return Locator::time::value().IsPaused();
+}
+
+void Game::WarmUpFirstFrame()
+{
+	const auto& config = Locator::config::value();
+	if (!config.warmUpFirstFrame || !Locator::rendererInterface::has_value() || !Locator::rendereringSystem::has_value() ||
+	    !Locator::camera::has_value())
+	{
+		return;
+	}
+	auto& renderer = Locator::rendererInterface::value();
+	auto& rendering = Locator::rendereringSystem::value();
+	// The draw lists of the land's things, as the first frame makes them
+	if (config.drawEntities)
+	{
+		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams);
+	}
+	const auto start = std::chrono::steady_clock::now();
+	const bool shown = RenderLoadingFrame(
+	    true, [&renderer, &config, this]() { renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn())); });
+	// The first frame makes the draw lists again from what the game's first update changed
+	if (config.drawEntities)
+	{
+		rendering.SetLayoutDirty();
+	}
+	if (shown)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Load: the first frame drawn behind the loading screen in {:.1f} ms",
+		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+	}
 }
 
 bool Game::IsHandDrawn() const
@@ -3943,7 +3998,8 @@ bool Game::Run() noexcept
 	std::optional<debug::FrameStatsLog> frameStats;
 	if (config.frameStatsInterval > 0)
 	{
-		frameStats.emplace(config.frameStatsInterval, config.frameStatsViews);
+		frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
+		                   Locator::rendererInterface::value().GetPipelinesMade());
 		if (config.frameStatsViews)
 		{
 			Locator::rendererInterface::value().SetProfile(true);
@@ -3967,25 +4023,8 @@ bool Game::Run() noexcept
 		ShowInspectorCamera(true);
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
-			const graphics::RendererInterface::DrawSceneDesc drawDesc {
-			    .camera = &Locator::camera::value(),
-			    .frameBuffer = nullptr,
-			    .entities = Locator::entitiesRegistry::value(),
-			    .time = milliseconds.count(), // TODO(#481): get actual time
-			    .timeOfDay = config.timeOfDay,
-			    .smallBumpMapStrength = config.smallBumpMapStrength,
-			    .viewId = graphics::RenderPass::Main,
-			    .drawSky = config.drawSky,
-			    .drawWater = config.drawWater,
-			    .drawIsland = config.drawIsland,
-			    .drawEntities = config.drawEntities,
-			    .drawSprites = config.drawSprites,
-			    .drawVegetation = config.drawVegetation,
-			    .drawBoundingBoxes = config.drawBoundingBoxes,
-			    .cullBack = false,
-			    .wireframe = config.wireframe,
-			    .drawHand = IsHandDrawn(),
-			};
+			// TODO(#481): get actual time
+			const auto drawDesc = SceneDrawDesc(config, milliseconds.count(), IsHandDrawn());
 			// The sun, the moon and the dome's blend of this frame, for drawing it
 			Locator::skySystem::value().UpdateFrame(config.drawSky);
 			// Nothing of the world shows under a video that covers the screen, nor behind the falling spell's film
@@ -4059,7 +4098,8 @@ bool Game::Run() noexcept
 		const auto frameEnd = std::chrono::steady_clock::now();
 		if (frameStats.has_value())
 		{
-			frameStats->Frame(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(), profiler);
+			frameStats->Frame(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(), profiler,
+			                  Locator::rendererInterface::value().GetPipelinesMade());
 		}
 		frameStart = frameEnd;
 	}

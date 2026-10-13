@@ -135,6 +135,8 @@ struct Arguments
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
+	bool warmUpFirstFrame {true};
 	bool dynamicTreeShadows {false};
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
 	creature_swap::Unlocked unlockedBonusCreatures;
@@ -297,8 +299,9 @@ private:
 	void StartTipOfTheDay();
 	/// The tips screen, or the banner, shows while a land loads, drawn again at the loading's redraw points
 	void BeginLoadingScreen(loading::LoadingClock::Mode look);
-	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due, or at once when drawNow is true
-	void RenderLoadingFrame(bool drawNow = false);
+	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due, or at once when drawNow is true.
+	/// drawUnder, when given, draws first in a frame that is shown. Returns whether a frame was shown.
+	bool RenderLoadingFrame(bool drawNow = false, const std::function<void()>& drawUnder = nullptr);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen();
 	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources. Then it does
@@ -307,6 +310,9 @@ private:
 	/// Does behind the loading screen the work that the first frames of a land do once: the land's shadows, the land
 	/// where creatures can walk, and the particle files
 	void PrepareFirstFrames();
+	/// Draws the first frame of the land under a loading frame, which hides it, so that the renderer makes the
+	/// pipelines and render targets of the scene behind the loading screen. Nothing that the game's frames use changes.
+	void WarmUpFirstFrame();
 	/// Draws one frame outside the game's loop over a black screen and shows it
 	void PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw);
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,

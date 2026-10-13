@@ -64,14 +64,15 @@ double ThreadCpuMilliseconds()
 namespace openblack::debug
 {
 
-FrameStatsLog::FrameStatsLog(uint32_t interval, bool views)
+FrameStatsLog::FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade)
     : _interval(std::max<uint32_t>(interval, 1))
     , _views(views)
+    , _lastPipelinesMade(pipelinesMade)
     , _lastCpuMilliseconds(ThreadCpuMilliseconds())
 {
 }
 
-void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profiler)
+void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profiler, uint32_t pipelinesMade)
 {
 	_frames.Add(milliseconds);
 	++_frameNumber;
@@ -107,15 +108,17 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 	                  stats->numDynamicVertexBuffers + stats->numDynamicIndexBuffers + stats->numPrograms;
 	const auto newResources = made - _lastResourceCount;
 	_lastResourceCount = made;
+	const auto newPipelines = pipelinesMade - std::exchange(_lastPipelinesMade, pipelinesMade);
+	_pipelinesSinceReport += newPipelines;
 	if (milliseconds >= k_SpikeMilliseconds)
 	{
 		// A slow frame: which stages took its time, and what the renderer waited for
 		SPDLOG_LOGGER_INFO(
 		    spdlog::get("game"),
 		    "Frame spike: frame {} took {:.2f} ms, {:.2f} ms of it on the processor; render submit {:.2f} wait {:.2f}; "
-		    "{} draws; {} new resources; stages (ms):{}",
+		    "{} draws; {} new resources; {} new pipelines; stages (ms):{}",
 		    _frameNumber, milliseconds, onCpu, static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
-		    static_cast<double>(stats->waitRender) * toMsCpu, stats->numDraw, newResources, spikeStages);
+		    static_cast<double>(stats->waitRender) * toMsCpu, stats->numDraw, newResources, newPipelines, spikeStages);
 	}
 	if (_views)
 	{
@@ -141,9 +144,10 @@ void FrameStatsLog::Report()
 	++_reports;
 	SPDLOG_LOGGER_INFO(logger,
 	                   "Frame stats #{}: {} frames, frame avg {:.2f} ms p95 {:.2f} max {:.2f} ({:.1f} FPS); GPU avg {:.2f} "
-	                   "p95 {:.2f}; render submit {:.2f} wait {:.2f}; {:.0f} draws",
+	                   "p95 {:.2f}; render submit {:.2f} wait {:.2f}; {:.0f} draws; {} new pipelines",
 	                   _reports, frames.count, frames.average, frames.p95, frames.max, 1000.0f / frames.average, gpu.average,
-	                   gpu.p95, _submitTotal / count, _waitRenderTotal / count, static_cast<double>(_drawCallTotal) / count);
+	                   gpu.p95, _submitTotal / count, _waitRenderTotal / count, static_cast<double>(_drawCallTotal) / count,
+	                   std::exchange(_pipelinesSinceReport, 0u));
 
 	// The stages that took the longest, nested ones among them
 	std::vector<std::pair<double, size_t>> stages;

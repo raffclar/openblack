@@ -76,7 +76,7 @@ struct Caster
 /// Gathers the casters of one kind of thing. A thing has to be in the map's cells to cast (one carried by the hand
 /// casts none), except a worship site and its altar, which stand at the temple without being filed in them.
 template <typename Kind>
-void GatherCasters(ecs::Registry& registry, LandShadowBake::Casters wanted, std::vector<Caster>& casters)
+void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted, std::vector<Caster>& casters)
 {
 	registry.Each<const Kind, const MeshComponent, const Transform>(
 	    // Kinds without data aren't passed in
@@ -392,7 +392,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 
 	ApplyFinishedBake();
 
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 	std::vector<Caster> found;
 	if (casters.leaves)
 	{
