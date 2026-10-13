@@ -883,3 +883,5 @@ openblack_setup_and_add_test(test_creature_giving test_creature_giving.cpp)
 openblack_setup_and_add_test(
   test_temple_villagers_survey temple/test_temple_villagers_survey.cpp
 )
+openblack_setup_and_add_test(test_hand_pointer input/test_hand_pointer.cpp)
+openblack_setup_and_add_test(test_shared_index_lists test_shared_index_lists.cpp)

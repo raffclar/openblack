@@ -277,6 +277,10 @@ struct ObjectSetup
 	bool indestructible {false};
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes
 	bool inScript {false};
+	/// A script has said it can't be picked up, and can't be moved, as Land 1's script says of the fisherman's wife
+	/// while she waits for the player
+	bool cannotBePickedUp {false};
+	bool immovable {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
 	/// A building of the town holds this much wood, rather than the scenario town's usual stock

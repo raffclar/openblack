@@ -76,6 +76,53 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.creature_puts_down_actor",
+	    .name = "A creature puts a villager down on land a vortex levelled",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the lake's south bank after a second, as Land 1's opens beside the "
+	                   "fisherman's wife on the cliff. On the slope above, within the square it levels but beyond its "
+	                   "pull, two villagers stand still held by a script: on the right one the script has said can't be "
+	                   "picked up or moved, as the wife is while she waits for the player; on the left one it has let "
+	                   "be picked up, as the wife is after the rescue's first cinema. When the land is level the tiger "
+	                   "tries to pick up the right one, then picks up the left one and puts her down; a while later it "
+	                   "picks her up again and throws her a little way along the slope.",
+	    .expected = "Both go down with the land as it is levelled. The tiger can't pick up the right one: it gives up at "
+	                "once and she stays where she stands. Each time the left one is put down or thrown she falls to the "
+	                "levelled land and stands on it, her feet and shadow on the ground, never floating at the height the "
+	                "land had before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnTheBank.x - 30.0f, 14.0f, k_OnTheBank.y - 52.0f},
+	                .look = {k_OnTheBank.x - 8.0f, 6.0f, k_OnTheBank.y - 44.0f}},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_OnTheBank + glm::vec2(-8.0f, -60.0f),
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .hold = true,
+	                   .pauseMind = true}},
+	    .objects = {{.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_OnTheBank + glm::vec2(-8.0f, -44.0f),
+	                 .indestructible = true,
+	                 .inScript = true},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_OnTheBank + glm::vec2(-8.0f, -38.0f),
+	                 .indestructible = true,
+	                 .inScript = true,
+	                 .cannotBePickedUp = true,
+	                 .immovable = true}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnTheBank, .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Command::Kind::PickUp, .creature = 0, .delaySeconds = 9.0f, .waitUntilFree = true, .object = 1},
+	                 {.kind = Command::Kind::PutDown, .creature = 0, .delaySeconds = 1.0f, .waitUntilFree = true},
+	                 {.kind = Command::Kind::PickUp, .creature = 0, .delaySeconds = 2.0f, .waitUntilFree = true, .object = 0},
+	                 {.kind = Command::Kind::PutDown, .creature = 0, .delaySeconds = 1.0f, .waitUntilFree = true},
+	                 {.kind = Command::Kind::PickUp, .creature = 0, .delaySeconds = 4.0f, .waitUntilFree = true, .object = 0},
+	                 {.kind = Command::Kind::ThrowAt,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f,
+	                  .waitUntilFree = true,
+	                  .point = k_OnTheBank + glm::vec2(-14.0f, -58.0f)}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_pulls_things_in",
 	    .name = "A vortex out of the land pulls things in",
 	    .facet = Facet::Miracles,

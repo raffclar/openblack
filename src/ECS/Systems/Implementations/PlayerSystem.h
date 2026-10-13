@@ -37,6 +37,7 @@ public:
 	void AddCreature(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;
 	void KeepForNextLand() override;
+	void ForgetKept() override;
 	void TakeUpKept(entt::entity playerEntity) override;
 
 private:

@@ -34,6 +34,7 @@
 #include "EngineConfig.h"
 #include "Graphics/UploadPacer.h"
 #include "Gui/LoadingScreenRules.h"
+#include "Input/HandPointer.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
 #include "Magic/HandHoldPoser.h"
@@ -239,7 +240,11 @@ public:
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const { return _turnDeltaTime; }
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
 	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
-	void SetMousePosition(glm::ivec2 position) { _mousePosition = position; }
+	void SetMousePosition(glm::ivec2 position)
+	{
+		_mousePosition = position;
+		_handPointer.Moved();
+	}
 	[[nodiscard]] const audio::AtmosAudio* GetAtmosAudio() const { return _atmosAudio.get(); }
 	[[nodiscard]] audio::GameMusic* GetGameMusic() { return _gameMusic.get(); }
 	[[nodiscard]] const audio::GameMusic* GetGameMusic() const { return _gameMusic.get(); }
@@ -293,7 +298,9 @@ private:
 	bool AskForNewPlayer();
 
 	/// Clears the last land's entities, weather and effects before a new one loads
-	void PrepareNewLand();
+	/// Clears the last land for the next. The testbed is a workbench outside the game: nothing is carried onto it or off
+	/// it, so each testbed load starts as the first one after launch does.
+	void PrepareNewLand(bool toTestbed);
 	/// What every land starts with once its landscape is loaded: the sky's clock, a player and the land's physics
 	void SetUpLandscape();
 	/// Starts the game clock, the atmosphere's sounds and the music on the new land
@@ -344,9 +351,12 @@ private:
 	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
 	glm::ivec2 _mousePosition {0, 0};
+	/// Whether the hand follows the pointer the window reports yet, or until the mouse first moves the game's own
+	input::HandPointer _handPointer;
 	/// The left button went down since the last frame, which may click the dialogue on
 	bool _dialogueClick {false};
-	bool _handGripping;
+	/// Gripping the land with the mouse, which the hand only does once a button is pressed: it starts out not gripping
+	bool _handGripping {false};
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash
 	bool _actionPressTaken {false};

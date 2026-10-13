@@ -1825,6 +1825,22 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
 	});
 
+	// The camera looks along the land ahead and nothing moves the pointer, so the hand shows where it starts
+	all.push_back({
+	    .id = "hand.spawn_point",
+	    .name = "The hand before the mouse moves",
+	    .facet = Facet::Hand,
+	    .description = "A food store in the middle of the view is looked at from a little way up and the pointer is left "
+	                   "alone. Run it as the game starts (ob-build run --scenario hand.spawn_point) without touching the "
+	                   "mouse.",
+	    .expected = "From the first frame the hand is under the cursor, or in the middle of the window over the food "
+	                "store when the cursor isn't over the window; never far off towards the top left corner, gliding "
+	                "back only once the mouse moves.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, -40.0f}, .look = {0.0f, 0.0f, 10.0f}},
+	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, 10.0f}}},
+	});
+
 	// The camera looks down at the land just ahead, so the hand is seen up close
 	all.push_back({
 	    .id = "hand.miracle_glow",

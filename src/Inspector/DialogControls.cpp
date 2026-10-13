@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <optional>
 
 #include "Gui/SkipBox.h"
 #include "Story/NewGameChoice.h"
@@ -81,16 +82,46 @@ std::vector<DialogControl> openblack::inspector::DialogControls(std::span<const 
 std::vector<DialogControl> openblack::inspector::SkipBoxControls(const gui::SkipBox& box)
 {
 	auto controls = DialogControls(box.GetNamedControls());
+	// The radio buttons come in the answers' order, those not on offer (keeping an old creature, for a profile without
+	// one) left out, so each is matched to the next answer the box offers
 	size_t answer = 0;
 	for (auto& control : controls)
 	{
-		if (control.kind == "radio" && answer < new_game_choice::k_ChoiceCount)
+		if (control.kind != "radio")
 		{
-			const auto choice = static_cast<new_game_choice::Choice>(answer++);
-			control.aliases.emplace_back(new_game_choice::StartName(choice));
+			continue;
+		}
+		while (answer < new_game_choice::k_ChoiceCount && !box.IsOffered(static_cast<new_game_choice::Choice>(answer)))
+		{
+			++answer;
+		}
+		if (answer < new_game_choice::k_ChoiceCount)
+		{
+			control.aliases.emplace_back(new_game_choice::StartName(static_cast<new_game_choice::Choice>(answer++)));
 		}
 	}
 	return controls;
+}
+
+std::string openblack::inspector::SkipBoxPicked(const gui::SkipBox& box)
+{
+	const auto controls = SkipBoxControls(box);
+	const auto start = std::string(new_game_choice::StartName(box.GetSelection()));
+	const auto picked = std::ranges::find_if(controls, [&start](const DialogControl& control) {
+		return control.kind == "radio" && std::ranges::find(control.aliases, start) != control.aliases.end();
+	});
+	return picked != controls.end() ? picked->name : std::string();
+}
+
+std::optional<glm::ivec2> openblack::inspector::SkipBoxOk(const gui::SkipBox& box)
+{
+	const auto controls = SkipBoxControls(box);
+	const auto ok = std::ranges::find(controls, std::string("button"), &DialogControl::kind);
+	if (ok == controls.end())
+	{
+		return std::nullopt;
+	}
+	return ok->middle;
 }
 
 std::variant<glm::ivec2, std::string> openblack::inspector::FindDialogControl(std::span<const DialogControl> controls,

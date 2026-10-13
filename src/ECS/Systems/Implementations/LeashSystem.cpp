@@ -1944,8 +1944,8 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	const bool isCreature = registry.AllOf<Creature>(object);
 	const auto attempts = orders::OnThing({
 	    .carrying = HeldBy(creature).has_value(),
-	    .liftable =
-	        Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().CanPickUp(object),
+	    .liftable = Locator::creatureObjectActionSystem::has_value() &&
+	                Locator::creatureObjectActionSystem::value().CanPickUp(creature, object),
 	    .creature = isCreature,
 	    .distance = glm::distance(transform.position, objectAt),
 	    .leash = type,

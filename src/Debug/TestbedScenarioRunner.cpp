@@ -76,6 +76,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -405,6 +406,14 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	if (object.indestructible)
 	{
 		registry.AssignOrReplace<ecs::components::Indestructible>(entity);
+	}
+	if (object.cannotBePickedUp)
+	{
+		registry.AssignOrReplace<ecs::components::CannotBePickedUp>(entity);
+	}
+	if (object.immovable)
+	{
+		registry.AssignOrReplace<ecs::components::Immovable>(entity);
 	}
 	if (object.inScript && registry.AllOf<ecs::components::Villager>(entity) && Locator::livingActionSystem::has_value())
 	{

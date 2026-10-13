@@ -921,7 +921,8 @@ void CreatureSpawner::Command(glm::vec2 screenCoord) noexcept
 		float best = k_PickRadius;
 		registry.Each<const Transform>([&](entt::entity entity, const Transform& at) {
 			const auto distance = glm::distance(glm::xz(at.position), point);
-			if (distance < best && entity != *_selected && (pickUp ? hands.CanPickUp(entity) : hands.CanDestroy(entity)))
+			if (distance < best && entity != *_selected &&
+			    (pickUp ? hands.CanPickUp(*_selected, entity) : hands.CanDestroy(entity)))
 			{
 				best = distance;
 				nearest = entity;

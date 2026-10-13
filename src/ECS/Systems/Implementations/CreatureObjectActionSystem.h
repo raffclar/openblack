@@ -54,7 +54,7 @@ public:
 	[[nodiscard]] std::optional<float> GetProgress(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity creature) const override;
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;
-	[[nodiscard]] bool CanPickUp(entt::entity object) const override;
+	[[nodiscard]] bool CanPickUp(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
 	[[nodiscard]] std::optional<float> PickUpStraightReach(entt::entity creature) const override;
 
