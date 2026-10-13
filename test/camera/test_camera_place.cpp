@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <tuple>
+#include <utility>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -38,11 +39,26 @@ constexpr glm::vec3 k_PlacedOrigin {2430.6f, 68.6f, 2574.4f};
 constexpr glm::vec3 k_PlacedFocus {2420.4f, 66.0f, 2546.3f};
 constexpr auto k_Frame = 16ms;
 
-/// No land under any pixel
+// A place outside the world's ball round the middle of the map, looking north
+constexpr glm::vec3 k_OutsideOrigin {2560.0f, 5000.0f, 2560.0f};
+constexpr glm::vec3 k_OutsideFocus {2560.0f, 4900.0f, 2660.0f};
+
+/// The same land under every pixel, or no land
 class NoLandPicking final: public MockPickingSystem
 {
 public:
-	[[nodiscard]] std::optional<glm::vec2> LandAtPixel(glm::u16vec2 /*screenCoord*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<glm::vec2> LandAtPixel(glm::u16vec2 /*screenCoord*/) const override { return land; }
+
+	std::optional<glm::vec2> land;
+};
+
+/// No control of the camera. A double tap waits until the camera takes it.
+class DoubleTapAction final: public MockAction
+{
+public:
+	[[nodiscard]] bool TakeDoubleClick() override { return std::exchange(doubleTapWaits, false); }
+
+	bool doubleTapWaits {false};
 };
 
 /// The world camera with nobody touching the controls
@@ -58,7 +74,8 @@ protected:
 		_picking = new NoLandPicking();
 		_picking->camera = &_camera;
 		Locator::pickingSystem::reset<MockPickingSystem>(_picking);
-		Locator::gameActionSystem::reset<MockAction>(new MockAction());
+		_action = new DoubleTapAction();
+		Locator::gameActionSystem::reset<MockAction>(_action);
 
 		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f);
 		std::ignore = _camera.SetModel(std::make_unique<DefaultWorldCameraModel>(k_StartOrigin, k_StartFocus));
@@ -101,10 +118,11 @@ protected:
 
 	Camera _camera;
 	NoLandPicking* _picking = nullptr;
+	DoubleTapAction* _action = nullptr;
 };
 } // namespace
 
-// A flight under way when the camera is put somewhere is forgotten: it used to carry the camera off after a few frames
+// The camera stays where a script puts it during the first part of a flight: the flight clock stops there
 TEST_F(CameraPlace, AFlightUnderWayDoesntCarryThePlacedCameraOff)
 {
 	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus);
@@ -112,6 +130,47 @@ TEST_F(CameraPlace, AFlightUnderWayDoesntCarryThePlacedCameraOff)
 	_camera.Place(k_PlacedOrigin, k_PlacedFocus);
 	EXPECT_LT(glm::distance(_camera.GetOrigin(), k_PlacedOrigin), 1e-3f);
 	ExpectItStaysPlaced(100);
+}
+
+// A flight that did not start yet starts from where a script puts the camera, and ends where it was to end
+TEST_F(CameraPlace, AFlightNotStartedFliesFromThePlace)
+{
+	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus);
+	_camera.Place(k_PlacedOrigin, k_PlacedFocus);
+	RunFrames(1);
+	EXPECT_GT(glm::distance(_camera.GetOrigin(Camera::Interpolation::Target), k_PlacedOrigin), 1.0f);
+	RunFrames(250);
+	EXPECT_LT(glm::distance(_camera.GetOrigin(), k_FarOrigin), 1e-2f);
+}
+
+// Put outside the world's ball during a flight, the camera moves back to the ball. Half a flight time later, the last
+// part of the flight starts.
+TEST_F(CameraPlace, AMoveBackIntoTheWorldStartsTheRestOfAFlight)
+{
+	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus);
+	RunFrames(3);
+	_camera.Place(k_OutsideOrigin, k_OutsideFocus);
+	RunFrames(300);
+	EXPECT_LT(glm::distance(_camera.GetOrigin(), k_FarOrigin), 1e-2f);
+}
+
+// Put outside the world's ball with no flight, the camera stays at the edge of the ball
+TEST_F(CameraPlace, WithNoFlightTheCameraStaysAtTheEdgeOfTheWorld)
+{
+	_camera.Place(k_OutsideOrigin, k_OutsideFocus);
+	RunFrames(300);
+	EXPECT_GT(glm::distance(_camera.GetOrigin(), k_FarOrigin), 1000.0f);
+}
+
+// A double tap that the camera took before a script put it there flies the camera from the place
+TEST_F(CameraPlace, ADoubleTapThatWaitsFliesFromThePlace)
+{
+	_picking->land = glm::vec2(2300.0f, 2300.0f);
+	_action->doubleTapWaits = true;
+	_camera.HandleActions(k_Frame);
+	_camera.Place(k_PlacedOrigin, k_PlacedFocus);
+	_camera.Update(k_Frame);
+	EXPECT_GT(glm::distance(_camera.GetOrigin(Camera::Interpolation::Target), k_PlacedOrigin), 1.0f);
 }
 
 // The camera easing towards somewhere else stops there, with nothing of its speed left
