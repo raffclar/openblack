@@ -167,7 +167,11 @@ void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
 		        wallHug != nullptr && states.at(state).movesWithGround != 0 && std::abs(timing.stride) >= k_StationaryStride)
 		    {
 			    const auto speed = static_cast<uint16_t>(std::lround(wallHug->speed * k_SpeedUnitsPerMetrePerSecond + 0.5f));
-			    played = animals::MovingPlay(timing, speed, elapsed, transform.scale.x);
+			    // The part of a millisecond each frame leaves is carried on to the next, so that the legs keep pace with
+			    // the ground at any frame rate (the game dropped it every frame; deviations list)
+			    const auto carried = animals::MovingPlayCarried(timing, speed, elapsed, transform.scale.x, pose.groundCarry);
+			    played = carried.played;
+			    pose.groundCarry = carried.carry;
 		    }
 		    // The sounds on the clip's frames it passes play from the villager
 		    ecs::clip_sound_player::Play(entity, pose.clip, *clip, pose.place, static_cast<uint32_t>(played),
