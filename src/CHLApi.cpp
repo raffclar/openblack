@@ -99,6 +99,7 @@
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
@@ -7006,10 +7007,22 @@ void MoveCameraLens() // 280 MOVE_CAMERA_LENS
 
 void CreatureReaction() // 281 CREATURE_REACTION
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A script tells a creature to take notice of reactions or not; every creature starts taking notice
+	const auto creature = CreatureForNative(PopObject());
+	const auto enable = Pop().intVal != 0;
+	if (!creature.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (enable)
+	{
+		registry.Remove<ecs::components::CreatureReactionsOff>(*creature);
+	}
+	else if (!registry.AllOf<ecs::components::CreatureReactionsOff>(*creature))
+	{
+		registry.Assign<ecs::components::CreatureReactionsOff>(*creature);
+	}
 }
 
 void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT

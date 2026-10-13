@@ -37,4 +37,9 @@ struct LivingReaction
 	std::optional<uint32_t> sawCrushed;
 };
 
+/// A creature a script has told to take no notice of reactions, until a script tells it to again
+struct CreatureReactionsOff
+{
+};
+
 } // namespace openblack::ecs::components

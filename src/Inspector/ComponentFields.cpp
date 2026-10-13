@@ -1223,6 +1223,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::LivingReaction::creatureMemory>("creatureMemory")
 	    .Field<&components::LivingReaction::sawFlying>("sawFlying")
 	    .Field<&components::LivingReaction::sawCrushed>("sawCrushed");
+	Reflect<components::CreatureReactionsOff> {context};
 	Reflect<components::MagicFireBall>(context)
 	    .Field<&components::MagicFireBall::strength>("strength")
 	    .Field<&components::MagicFireBall::radius>("radius")

@@ -456,8 +456,35 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 			return false;
 		}
 	}
-	// TODO(raffclar): the game also keeps a creature reactions are turned off for by script, one in the dance editor, one
-	// forced into an action by fainting or a teleport, and a few more states, from reacting; none of them is modelled
+	// Nor does one a script has told to take no notice, or controls, one carrying out its player's order, one in a fight
+	// or whose opponent is, or one out cold in a faint
+	// TODO(creature-reactions-2): the game also keeps out a creature in the dance editor, one standing on a building,
+	// one being teleported, one dying, and one in two more states not mapped yet
+	if (registry.AnyOf<CreatureReactionsOff, ScriptControlled>(entity))
+	{
+		return false;
+	}
+	if (const auto* leash = registry.TryGet<const CreatureLeash>(entity); leash != nullptr && leash->order.has_value())
+	{
+		return false;
+	}
+	if (PlanIs(registry, entity, "Fight"))
+	{
+		return false;
+	}
+	if (Locator::creatureFightSystem::has_value())
+	{
+		if (const auto opponent = Locator::creatureFightSystem::value().OpponentOf(entity);
+		    opponent.has_value() && registry.Valid(*opponent) && PlanIs(registry, *opponent, "Fight"))
+		{
+			return false;
+		}
+	}
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity);
+	    mind != nullptr && mind->idle.activity == creature_mind::Activity::Faint)
+	{
+		return false;
+	}
 	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity);
 	    mind != nullptr && mind->learnt.has_value() && mind->learnt->mimicry.has_value())
 	{
