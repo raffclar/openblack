@@ -495,3 +495,12 @@ TEST(CreatureKindActions, PlayingAThrowingGameThrowsTheToyToThePlayersHand)
 	ASSERT_NE(game, nullptr);
 	EXPECT_EQ(game->use, plan_actions::Target::Toy);
 }
+
+TEST(CreatureKindActions, GivingWoodToABuildingSiteIsGivingWoodToAStore)
+{
+	const auto* site = plan_actions::For("GiveWoodFromTreeToBuildingSite");
+	ASSERT_NE(site, nullptr);
+	EXPECT_EQ(site->target, plan_actions::Target::BuildingBeingBuilt);
+	EXPECT_EQ(site->use, plan_actions::Target::PickableTree);
+	EXPECT_EQ(site->build, plan_actions::Build::GiveWoodToStore);
+}

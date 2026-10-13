@@ -79,9 +79,11 @@ enum class Target : uint8_t
 	CuddlyToy,
 	Die,
 	ToyAwayFromHome,
+	/// A building still going up, or one damaged and wanting repair that has lost some of its life
+	BuildingBeingBuilt,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::ToyAwayFromHome) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::BuildingBeingBuilt) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t

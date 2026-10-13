@@ -70,6 +70,7 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
@@ -97,6 +98,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "MagicLiving.h"
@@ -344,6 +346,18 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		const bool rock = thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
 		return rock && (target == Target::Rock || hands->CanPickUp(self, entity));
 	}
+	case Target::BuildingBeingBuilt:
+	{
+		// Of the towns' buildings and worship sites (the temple isn't one): still going up, or damaged and below its
+		// full life
+		if (!registry.AnyOf<Abode, WorshipSite>(entity) || registry.AllOf<Temple>(entity))
+		{
+			return false;
+		}
+		const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		return (progress != nullptr && progress->built < 1.0f) ||
+		       (registry.AllOf<RepairSite>(entity) && ecs::world_objects::LifeOf(entity) < 1.0f);
+	}
 	case Target::CuddlyToy:
 		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity) == creature_object_actions::Toy::Cuddly;
 	case Target::Die:
@@ -453,6 +467,13 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	{
 		registry.Each<const Feature, const Transform>(
 		    [&](entt::entity entity, const Feature&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::BuildingBeingBuilt)
+	{
+		registry.Each<const Abode, const Transform>(
+		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
+		registry.Each<const WorshipSite, const Transform>(
+		    [&](entt::entity entity, const WorshipSite&, const Transform& at) { consider(entity, at); });
 	}
 	const bool fire = target == Target::Burning || target == Target::Unburnt;
 	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything || fire || pickable || sea ||

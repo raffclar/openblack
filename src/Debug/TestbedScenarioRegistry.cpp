@@ -1685,6 +1685,28 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.give_wood_site",
+	    .name = "Giving a tree to a damaged building as wood",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, a birch to its left and its town's hut off to the east, hurt to six tenths of its "
+	                   "life so that its town wants it mended. A script tells it to give wood from the birch to the "
+	                   "building's site.",
+	    .expected = "It walks to the birch and pulls it up, carries it towards the hut until it is near enough to throw, "
+	                "turns to face it with a look of compassion and throws the tree in: the tree is gone and the hut's "
+	                "site has the wood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {90.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-20.0f, -15.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {90.0f, 0.0f}, .life = 0.6f}},
+	    .commands = {{.kind = Kind::DoAction,
+	                  .delaySeconds = 1.0f,
+	                  .object = 1,
+	                  .action = "GiveWoodFromTreeToBuildingSite",
+	                  .with = 0}},
+	});
+
+	all.push_back({
 	    .id = "objects.plant_tree",
 	    .name = "Planting a tree by something",
 	    .facet = Facet::Objects,

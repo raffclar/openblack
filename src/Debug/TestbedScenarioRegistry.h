@@ -270,7 +270,7 @@ struct ObjectSetup
 	/// A villager sets off to worship at this point once the walk delay is up, going through its player's teleport
 	/// stones when the point is further than villagers walk to worship
 	std::optional<glm::vec2> worshipAt;
-	/// A villager's or animal's life, 0 (dead) to 1, full when not given
+	/// A villager's, animal's or building's life, 0 (dead) to 1, full when not given; a building is hurt down to it
 	std::optional<float> life;
 	/// A tree belongs to the land's forest of this number, none for 0; and grows to this size, its scale when not given
 	uint32_t forest {0};
