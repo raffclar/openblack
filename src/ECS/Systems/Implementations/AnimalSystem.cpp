@@ -1243,7 +1243,7 @@ void AnimalSystem::IntoHand(entt::entity animal)
 	data->clipPlace = 0;
 }
 
-void AnimalSystem::BringDown(entt::entity wolf, entt::entity prey)
+void AnimalSystem::BringDown([[maybe_unused]] entt::entity wolf, entt::entity prey)
 {
 	auto& registry = EntityRegistry();
 	// The wolf brings the prey down again each turn that it is on the prey. The mark stays for all of the life of the prey
