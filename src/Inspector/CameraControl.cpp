@@ -394,8 +394,10 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	};
 	provider->Add({.name = "set",
 	               .description = "Puts the camera somewhere at once, still, as the scripts place it; what isn't given is "
-	                              "kept. It stays there until the player or a script moves it: a flight, a drag or easing "
-	                              "under way is forgotten (the world camera's own rules still apply: what it looks at "
+	                              "kept. It stays there until the player or a script moves it: a drag or easing under way is "
+	                              "forgotten. As in the game, a world camera flight that has started stops there until a "
+	                              "camera control or a move back inside the world, and one not started yet starts from "
+	                              "there. The world camera's own rules still apply (what it looks at "
 	                              "slides onto the land ahead, it keeps its height over the land, the fence and the "
 	                              "self-tilting camera). Refused while a script or a camera path holds the camera, "
 	                              "unless override, which shows it there every frame over any camera until camera.release. "
