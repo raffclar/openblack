@@ -89,6 +89,9 @@ uint32_t DanceWhileReacting(components::LivingAction& action);
 /// The states of fleeing, and of watching (after fleeing, or a nice miracle)
 uint32_t Fleeing(components::LivingAction& action);
 uint32_t Watching(components::LivingAction& action);
+/// The villager faints because of a creature fart. It does nothing each turn. At the end of the reaction it does its last task
+/// again
+uint32_t Fainting(components::LivingAction& action);
 
 /// How urgently a villager heeds one of its people the hand holds, the one held being the reaction's initiator: only one
 /// that might become its mate heeds it

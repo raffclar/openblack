@@ -40,7 +40,8 @@ float RandomFraction(const Random& random)
 bool IsSubMove(Movement::Kind kind)
 {
 	return kind == Movement::Kind::GoNearObject || kind == Movement::Kind::GetAwayFromObject ||
-	       kind == Movement::Kind::TurnToFaceObject || kind == Movement::Kind::ToThrowPosition;
+	       kind == Movement::Kind::TurnToFaceObject || kind == Movement::Kind::TurnToFaceAwayFromObject ||
+	       kind == Movement::Kind::ToThrowPosition;
 }
 
 void FinishStep(IdleMind& mind)
@@ -350,17 +351,44 @@ std::vector<Step> creature_mind::Drink(glm::vec2 shore, glm::vec2 water)
 	        drink};
 }
 
-std::vector<Step> creature_mind::Poo(const Random& random)
+std::vector<Step> creature_mind::Poo(const Random& random, std::optional<PooBy> by)
 {
 	std::vector<Step> agenda;
 	if (random(k_ShowPooLots) == 0)
 	{
 		agenda.push_back(Action(animations::k_NeedAPoo, false));
 	}
+	if (by.has_value())
+	{
+		Step goNear {.kind = Step::Kind::Move};
+		goNear.movement = {.kind = Movement::Kind::GoNearObject, .object = by->object, .maxDistance = 0.0f};
+		if (!by->itself)
+		{
+			goNear.gaze = Gaze {.object = by->object};
+		}
+		agenda.push_back(goNear);
+		Step turnAway {.kind = Step::Kind::Move};
+		turnAway.movement = {.kind = Movement::Kind::TurnToFaceAwayFromObject, .object = by->object};
+		agenda.push_back(turnAway);
+	}
 	auto poo = Static({animations::k_StartPoo, animations::k_Poo, animations::k_EndPoo}, k_PooSeconds);
 	poo.effect = Effect::Poo;
 	agenda.push_back(poo);
 	return WithFace(std::move(agenda), creature_face::Cue::Smile);
+}
+
+std::vector<Step> creature_mind::Fart(const Random& random, std::optional<PooBy> by)
+{
+	// The steps are the same as the steps for a poo. Only the result of the squat is different
+	auto agenda = Poo(random, by);
+	for (auto& step : agenda)
+	{
+		if (step.effect == Effect::Poo)
+		{
+			step.effect = Effect::Fart;
+		}
+	}
+	return agenda;
 }
 
 std::vector<Step> creature_mind::Puke()
@@ -501,7 +529,7 @@ std::optional<NeedPlan> creature_mind::ChooseNeed(const Wants& wants, const Rand
 	case Activity::Drink:
 		return NeedPlan {.activity = Activity::Drink, .agenda = Drink(wants.waterSpot->shore, wants.waterSpot->water)};
 	case Activity::Poo:
-		return NeedPlan {.activity = Activity::Poo, .agenda = Poo(random)};
+		return NeedPlan {.activity = Activity::Poo, .agenda = Poo(random, std::nullopt)};
 	case Activity::Sleep:
 	default:
 		return NeedPlan {.activity = Activity::Sleep, .agenda = Sleep(random)};

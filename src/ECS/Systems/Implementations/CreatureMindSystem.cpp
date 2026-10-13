@@ -140,13 +140,13 @@ constexpr int32_t k_WaterSearchCells = 30;
 constexpr float k_ShoreSearchDistance = 60.0f;
 /// Food further than this from its mouth, for its size, has got away by the time it eats
 constexpr float k_EatReach = 15.0f;
-/// Having drunk it doesn't want water for a while, and having had a poo it doesn't want another for longer
+/// Having drunk, it does not want water for a while
 constexpr float k_WaterSuppressSeconds = 20.0f;
-constexpr float k_PooSuppressSeconds = 60.0f;
 /// The rows of the game's creature action table that seeing to each need counts as
 constexpr std::string_view k_EatAction = "EatAfterExamining";
 constexpr std::string_view k_DrinkAction = "DrinkFromTheSea";
 constexpr std::string_view k_PooAction = "Poo";
+constexpr std::string_view k_FartAction = "Fart";
 constexpr std::string_view k_PukeAction = "Puke";
 constexpr std::string_view k_SleepAction = "SleepOnTheSpot";
 constexpr std::string_view k_ExamineAction = "ExamineByPickingUp";
@@ -482,6 +482,7 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 	case Kind::GoNearObject:
 	case Kind::GetAwayFromObject:
 	case Kind::TurnToFaceObject:
+	case Kind::TurnToFaceAwayFromObject:
 	case Kind::ToThrowPosition:
 		// Overseen turn by turn by the mind as it casts (StartSubMove)
 		break;
@@ -493,7 +494,7 @@ bool IsSubMove(creature_mind::Movement::Kind kind)
 {
 	using Kind = creature_mind::Movement::Kind;
 	return kind == Kind::GoNearObject || kind == Kind::GetAwayFromObject || kind == Kind::TurnToFaceObject ||
-	       kind == Kind::ToThrowPosition;
+	       kind == Kind::TurnToFaceAwayFromObject || kind == Kind::ToThrowPosition;
 }
 
 /// Where the creature's head looks for a step that gives it something to look at: the top of a thing, or its foot, a
@@ -1011,10 +1012,14 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 		creature_desires::Suppress(desires, Desire::Water, k_WaterSuppressSeconds, k_TurnsPerSecond);
 		break;
 	case Effect::Poo:
-		physiology.Poo(creature);
+		// At the end of the squat, the bowels are empty. The lumps dropped during the squat stopped the desire to poo
+		physiology.EmptyBowels(creature);
 		Satisfied(creature, desires, k_PooAction);
-		desires[Desire::Poo].value = 0.0f;
-		creature_desires::Suppress(desires, Desire::Poo, k_PooSuppressSeconds, k_TurnsPerSecond);
+		break;
+	case Effect::Fart:
+		// At the end of the squat, the bowels are empty. The action table sets how much the desire to poo decreases
+		physiology.EmptyBowels(creature);
+		Satisfied(creature, desires, k_FartAction);
 		break;
 	case Effect::Puke:
 		physiology.Puke(creature);
@@ -2010,9 +2015,11 @@ bool CreatureMindSystem::Drink(entt::entity creature)
 
 bool CreatureMindSystem::Poo(entt::entity creature)
 {
-	return Replan(creature, creature_mind::Activity::Poo, creature_mind::Poo([this](uint32_t range) {
-		              return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	              }));
+	return Replan(
+	    creature, creature_mind::Activity::Poo,
+	    creature_mind::Poo(
+	        [this](uint32_t range) { return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); },
+	        std::nullopt));
 }
 
 bool CreatureMindSystem::Puke(entt::entity creature)

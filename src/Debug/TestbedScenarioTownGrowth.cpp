@@ -18,6 +18,7 @@
 
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
+using creature_desires::Desire;
 
 namespace
 {
@@ -191,6 +192,106 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 30.0f}, .joinTown = true},
 	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-14.0f, 50.0f}, .joinTown = true},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-18.0f, 34.0f}, .joinTown = true}},
+	});
+
+	// An evil creature does a fart in a village. The villagers that are very near to it faint
+	all.push_back({
+	    .id = "villagers.creature_fart",
+	    .name = "Villagers fainting from a creature's stink",
+	    .facet = Facet::Objects,
+	    .description = "A hut of the player's town with six of its people about it, three of them standing right at an "
+	                   "evil tiger's feet, and the tiger, facing west, told to break wind every so often.",
+	    .expected = "The tiger squats as for a poo. All through the squat's loop, every fifth game turn, a cloud of "
+	                "grey dust blows out behind it and a white smoke starts afresh at its groin, at the base of its tail. "
+	                "When the fart stops, the smoke stops at once. No lump is dropped. The tiger looking evil, each burst "
+	                "makes a fainting "
+	                "reaction, which starts a metre wide and grows only slowly, so only the villagers right at its feet "
+	                "faint: they stop where they are (no clip of their own shows it) until the reaction's time is up, "
+	                "then go back to what they were doing. Those further off don't faint.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 25.0f}, {15.0f, 55.0f}}, .distance = 0.7f},
+	    .creatures = {{.label = "evil",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {0.0f, 40.0f},
+	                   .facingDegrees = 270.0f,
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .alignment = -1.0f,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.9f, .life = 1.0f},
+	                   .hold = true}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, 40.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {0.4f, 40.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-0.4f, 40.3f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 39.6f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 30.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-14.0f, 50.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-18.0f, 34.0f}, .joinTown = true}},
+	    .commands = {{.kind = Command::Kind::Fart, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Command::Kind::Fart, .creature = 0, .delaySeconds = 20.0f, .waitUntilFree = true}},
+	    .repeatFrom = 1,
+	});
+
+	// A creature that needs to poo, near a village. It chooses a thing to poo by
+	all.push_back({
+	    .id = "needs.poo_by_village",
+	    .name = "Pooing by a village",
+	    .facet = Facet::Needs,
+	    .description = "A tiger full of poo, its desire to go as strong as it gets, 30 m east of a hut of the player's "
+	                   "town with four of its people, two trees and a rock about it.",
+	    .expected = "The tiger squats for a poo or for a fart. A third of the time it shows it needs a poo first. For a "
+	                "fart it does the steps of a poo by itself, so it does not walk and does not turn. In a poo, all "
+	                "through the squat's loop, every fifth game turn, a lump of poo comes out at its rear and is thrown "
+	                "back along the ground, and its desire to poo is held back for a minute.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 25.0f}, {35.0f, 55.0f}}, .distance = 0.7f},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = {30.0f, 40.0f},
+	                   .facingDegrees = 90.0f,
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.95f, .life = 1.0f},
+	                   .desires = {{.desire = Desire::Poo, .fraction = 1.0f}}}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, 40.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-2.0f, 34.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, 46.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 40.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 30.0f}, .joinTown = true},
+	                {.type = TreeInfo::Oak, .offset = {10.0f, 60.0f}},
+	                {.type = TreeInfo::Beech, .offset = {14.0f, 22.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {20.0f, 48.0f}}},
+	});
+
+	// A small and a large creature told to poo. The lumps come out during the squat
+	all.push_back({
+	    .id = "needs.poo_lumps",
+	    .name = "Lumps of poo",
+	    .facet = Facet::Needs,
+	    .description = "Two tigers facing east, 30 m apart: a small one (size 0.5) and a large one (size 2). Their bowels "
+	                   "stay empty, so they do not choose to poo or fart. Each is told to poo every so often.",
+	    .expected = "A third of the time a tiger shows it needs a poo first. Then it squats for 4 seconds of game time. "
+	                "All through the squat's loop, every fifth game turn (each half second at normal speed), a lump of "
+	                "poo comes out at its rear and is thrown back along the ground, so a short row of lumps lies behind "
+	                "it. The frame rate has no effect on the count. The large tiger plays its clips more slowly, so its "
+	                "loop starts later and it drops fewer lumps. Each lump is 1.5 times the tiger's size.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 20.0f}, {25.0f, 80.0f}}, .distance = 0.7f},
+	    .creatures = {{.label = "small",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {0.0f, 30.0f},
+	                   .facingDegrees = 90.0f,
+	                   .size = 0.5f,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .hold = true},
+	                  {.label = "large",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {0.0f, 60.0f},
+	                   .facingDegrees = 90.0f,
+	                   .size = 2.0f,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .hold = true}},
+	    .commands = {{.kind = Command::Kind::Poo, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Command::Kind::Poo, .creature = 1, .delaySeconds = 0.0f},
+	                 {.kind = Command::Kind::Poo, .creature = 0, .delaySeconds = 20.0f, .waitUntilFree = true},
+	                 {.kind = Command::Kind::Poo, .creature = 1, .delaySeconds = 0.0f, .waitUntilFree = true}},
+	    .repeatFrom = 2,
 	});
 
 	// The same village, set to respect or to fear a creature standing near it

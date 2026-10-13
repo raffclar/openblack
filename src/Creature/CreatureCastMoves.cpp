@@ -161,6 +161,11 @@ bool creature_cast_moves::Facing(glm::vec2 creature, float heading, glm::vec2 po
 	return !(std::abs(off) > k_FacingRadians);
 }
 
+glm::vec2 creature_cast_moves::PointToFaceAwayFrom(glm::vec2 creature, glm::vec2 thing)
+{
+	return creature + (creature - thing);
+}
+
 std::vector<CollideCircle> creature_cast_moves::CollideCircles(glm::vec2 halfSize, glm::vec2 centre, const glm::mat2& turn)
 {
 	const auto half = glm::max(halfSize, glm::vec2(1.0f));

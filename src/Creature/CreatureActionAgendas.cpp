@@ -10,6 +10,7 @@
 #include "CreatureActionAgendas.h"
 
 #include <algorithm>
+#include <iterator>
 
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureThrow.h"
@@ -68,6 +69,16 @@ std::vector<Step> creature_mind::HurlAt(uint32_t thrown, uint32_t target, glm::v
 	                  .order = {.kind = ObjectOrder::Kind::Throw, .object = target, .point = targetPoint},
 	                  .face = creature_face::Cue::Anger,
 	                  .gaze = watch});
+	return agenda;
+}
+
+std::vector<Step> creature_mind::PooAtHome(glm::vec2 home, float height, uint32_t self, const Random& random)
+{
+	// TODO(creature-poo-steps): the game looks at the point as it walks. The gaze here needs the height of the point
+	std::vector<Step> agenda {
+	    {.kind = Step::Kind::Move,
+	     .movement = {.kind = Movement::Kind::ToPoint, .point = home, .maxDistance = k_PooAtHomeHeights * height}}};
+	std::ranges::move(Poo(random, PooBy {.object = self, .itself = true}), std::back_inserter(agenda));
 	return agenda;
 }
 

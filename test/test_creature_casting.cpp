@@ -161,6 +161,13 @@ TEST(CreatureCastMoves, GettingAway)
 	EXPECT_FLOAT_EQ(onTop.x, 15.0f);
 }
 
+TEST(CreatureCastMoves, ToTurnItsBackToAThingItFacesThePointOnTheOtherSide)
+{
+	const auto point = cast_moves::PointToFaceAwayFrom({10.0f, 20.0f}, {13.0f, 16.0f});
+	EXPECT_FLOAT_EQ(point.x, 7.0f);
+	EXPECT_FLOAT_EQ(point.y, 24.0f);
+}
+
 TEST(CreatureCastMoves, TheNearestClearAreaIsTheMiddleOfAClearSquare)
 {
 	// All clear: a square of two cells about the point, its middle at a cell corner

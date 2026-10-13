@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
+#include <chrono>
+
 #include <gtest/gtest.h>
 
 #include "3D/ChimneySmoke.h"
@@ -57,7 +60,7 @@ TEST(ChimneySmoke, PuffsRiseAndStartAgainAtTheChimney)
 	smoke.puffs[0].age = 100;
 	smoke.puffs[9].age = 890;
 	// A second with no drift: 255 steps of age, 2.55 up
-	chimney_smoke::Advance(smoke, 1000.0f, glm::vec3(0.0f));
+	chimney_smoke::Advance(smoke, std::chrono::milliseconds {1000}, glm::vec3(0.0f));
 	EXPECT_EQ(smoke.puffs[0].age, 355);
 	EXPECT_NEAR(smoke.puffs[0].position.y, 112.55f, 1e-4f);
 	// The last passed the end of its life: back at the chimney with what was left, risen for that long, seen
@@ -70,17 +73,45 @@ TEST(ChimneySmoke, DriftPushesThePuffs)
 {
 	auto smoke = chimney_smoke::Create({0.0f, 0.0f, 0.0f}, chimney_smoke::k_HomeSmoke, Fixed(0.0f));
 	smoke.puffs[0].age = 0;
-	chimney_smoke::Advance(smoke, 1000.0f, {2.0f, 0.0f, 0.0f});
+	chimney_smoke::Advance(smoke, std::chrono::milliseconds {1000}, {2.0f, 0.0f, 0.0f});
 	// v = 1.5 x 1 x 2 = 3, moved by the mean of 0 and 3
 	EXPECT_NEAR(smoke.puffs[0].velocity.x, 3.0f, 1e-5f);
 	EXPECT_NEAR(smoke.puffs[0].position.x, 1.5f, 1e-5f);
+}
+
+TEST(ChimneySmoke, EachStepRemovesTheFractionOfTheAges)
+{
+	auto smoke = chimney_smoke::Create({0.0f, 0.0f, 0.0f}, chimney_smoke::k_HomeSmoke, Fixed(0.0f));
+	smoke.puffs[0].age = 0;
+	// 16 ms gives 4.08 and 17 ms gives 4.335: each adds 4. 33 ms gives 8.415: it adds 8
+	chimney_smoke::Advance(smoke, std::chrono::milliseconds {16}, glm::vec3(0.0f));
+	EXPECT_EQ(smoke.puffs[0].age, 4);
+	chimney_smoke::Advance(smoke, std::chrono::milliseconds {17}, glm::vec3(0.0f));
+	EXPECT_EQ(smoke.puffs[0].age, 8);
+	chimney_smoke::Advance(smoke, std::chrono::milliseconds {33}, glm::vec3(0.0f));
+	EXPECT_EQ(smoke.puffs[0].age, 16);
+}
+
+TEST(ChimneySmoke, ANewSmokeShowsItsFirstPuffAfterTwentyThreeSteps)
+{
+	// At 60 steps a second, the last puff starts at age 810 and passes 900 on the 23rd step
+	auto smoke = chimney_smoke::Create({0.0f, 0.0f, 0.0f}, chimney_smoke::k_HomeSmoke, Fixed(0.0f));
+	for (int step = 1; step <= 22; ++step)
+	{
+		chimney_smoke::Advance(smoke, std::chrono::milliseconds {16}, glm::vec3(0.0f));
+	}
+	EXPECT_TRUE(std::ranges::all_of(smoke.puffs, [](const Smoke::Puff& puff) { return puff.hidden; }));
+	chimney_smoke::Advance(smoke, std::chrono::milliseconds {17}, glm::vec3(0.0f));
+	EXPECT_FALSE(smoke.puffs[9].hidden);
+	EXPECT_EQ(smoke.puffs[9].age, 2);
+	EXPECT_EQ(std::ranges::count_if(smoke.puffs, [](const Smoke::Puff& puff) { return !puff.hidden; }), 1);
 }
 
 TEST(ChimneySmoke, DyingSmokeGoesOut)
 {
 	auto smoke = chimney_smoke::Create({0.0f, 0.0f, 0.0f}, chimney_smoke::k_HomeSmoke, Fixed(0.0f));
 	smoke.state = Smoke::State::Dying;
-	chimney_smoke::Advance(smoke, 10.0f, glm::vec3(0.0f));
+	chimney_smoke::Advance(smoke, std::chrono::milliseconds {10}, glm::vec3(0.0f));
 	EXPECT_EQ(smoke.state, Smoke::State::Out);
 }
 

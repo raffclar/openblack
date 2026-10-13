@@ -25,6 +25,7 @@ namespace
 {
 /// A puff's life, in steps of 255 a second
 constexpr int32_t k_Life = 900;
+constexpr float k_AgesPerSecond = 255.0f;
 /// The puffs start a ninth of a life apart
 constexpr int32_t k_StartSpacing = 90;
 constexpr float k_SpinPerSecond = 0.765f;
@@ -106,16 +107,14 @@ bool UpdateState(ChimneySmoke& smoke, bool lit)
 	return smoke.state != ChimneySmoke::State::Out;
 }
 
-void Advance(ChimneySmoke& smoke, float milliseconds, const glm::vec3& drift)
+void Advance(ChimneySmoke& smoke, std::chrono::milliseconds step, const glm::vec3& drift)
 {
-	const float seconds = std::min(milliseconds * 0.001f, k_LongestFrame);
+	const float seconds = std::min(static_cast<float>(step.count()) * 0.001f, k_LongestFrame);
 	const float spin = seconds * k_SpinPerSecond;
 	const bool dying = smoke.state == ChimneySmoke::State::Dying;
-	// The ages move on at 255 a second, the part of a step left over kept for the next frame so that the smoke keeps
-	// its pace however fast the frames come
-	smoke.ageRemainder += seconds * 255.0f;
-	const auto ageStep = static_cast<int32_t>(smoke.ageRemainder);
-	smoke.ageRemainder -= static_cast<float>(ageStep);
+	// The ages increase by 255 for each second of the step. Each step removes the fraction: a step of 16 ms or 17 ms
+	// adds 4
+	const auto ageStep = static_cast<int32_t>(seconds * k_AgesPerSecond);
 
 	size_t shown = 0;
 	for (auto& puff : smoke.puffs)
@@ -130,7 +129,7 @@ void Advance(ChimneySmoke& smoke, float milliseconds, const glm::vec3& drift)
 			puff.age %= k_Life;
 			puff.hidden = dying;
 			puff.velocity = glm::vec3(0.0f);
-			time = static_cast<float>(puff.age) * (1.0f / 255.0f);
+			time = static_cast<float>(puff.age) * (1.0f / k_AgesPerSecond);
 		}
 		// Pushed by the drift, its speed and place moved on together, then risen
 		const auto next = puff.velocity + (k_DriftGain * time * drift);

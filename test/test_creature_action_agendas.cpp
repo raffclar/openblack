@@ -101,6 +101,25 @@ TEST(CreatureActionAgendas, SleepingAtHomeWalksHomeFacesDownTheSlopeAndSleepsUnt
 	EXPECT_FALSE(plan_actions::Possible(*sleep, {}));
 }
 
+TEST(CreatureActionAgendas, APooAtHomeWalksHomeThenDoesThePooByItself)
+{
+	const auto agenda = PooAtHome({100.0f, 200.0f}, 30.0f, 8, NeverFirst);
+	ASSERT_EQ(agenda.size(), 4);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::ToPoint);
+	EXPECT_EQ(agenda[0].movement.point, glm::vec2(100.0f, 200.0f));
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 60.0f);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_EQ(agenda[1].movement.object, 8u);
+	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::TurnToFaceAwayFromObject);
+	EXPECT_EQ(agenda[3].effect, Effect::Poo);
+	// Only with a home within 20 of it
+	const auto* poo = plan_actions::For("PooAtHome");
+	ASSERT_NE(poo, nullptr);
+	EXPECT_FALSE(plan_actions::Possible(*poo, {}));
+	EXPECT_TRUE(plan_actions::Possible(*poo, {.home = glm::vec2(20.0f, 0.0f)}));
+	EXPECT_FALSE(plan_actions::Possible(*poo, {.home = glm::vec2(20.1f, 0.0f)}));
+}
+
 // "force MyCreature CREATURE_EXAMINE_BY_LOOKING Guide"
 TEST(CreatureActionAgendas, LookingSomethingOverGoesNearItFacesItAndWatchesItsFoot)
 {
