@@ -752,8 +752,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
 		    // what of it stands can still be pointed at
+		    // (a feature is drawn going up only if it is the ark's dry dock)
 		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
-		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id;
+		    const auto* feature = registry.TryGet<const Feature>(entity);
+		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id &&
+		                         (feature == nullptr || building_construction::FeatureDrawnGoingUp(feature->type));
 		    if (goingUp)
 		    {
 			    look.z = 1.0f;

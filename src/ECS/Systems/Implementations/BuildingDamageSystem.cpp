@@ -24,8 +24,10 @@
 #include <glm/mat3x3.hpp>
 
 #include "Common/GameRandom.h"
+#include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Physics.h"
@@ -99,6 +101,13 @@ bool IsBuilt(const building_world::World& world, entt::entity building)
 {
 	const auto* progress = world.Entities().TryGet<const BuildProgress>(building);
 	return progress == nullptr || progress->built >= 1.0f;
+}
+
+/// Whether something not yet wholly built is drawn going up: any building, but of the features only those drawn as one
+bool DrawnGoingUp(const building_world::World& world, entt::entity building)
+{
+	const auto* feature = world.Entities().TryGet<const Feature>(building);
+	return !IsBuilt(world, building) && (feature == nullptr || building_construction::FeatureDrawnGoingUp(feature->type));
 }
 
 /// How much of a building is drawn standing
@@ -698,7 +707,7 @@ std::optional<float> BuildingDamageSystem::PartialShare(entt::entity building) c
 	const auto& registry = world.Entities();
 	// A broken building, one being repaired, or one still being built
 	if (!registry.Valid(building) ||
-	    (!registry.AllOf<BuildingDamage>(building) && !registry.AllOf<RepairSite>(building) && IsBuilt(world, building)))
+	    (!registry.AllOf<BuildingDamage>(building) && !registry.AllOf<RepairSite>(building) && !DrawnGoingUp(world, building)))
 	{
 		return std::nullopt;
 	}
@@ -718,7 +727,7 @@ bool BuildingDamageSystem::DrawsWhole(entt::entity object) const
 	// A building with a site for its building or repair is drawn only as far up as it stands, nothing at none, the
 	// whole of it once all of it stands; a broken one keeps its broken model drawn under that
 	if (!registry.Valid(object) || registry.AllOf<BuildingDamage>(object) ||
-	    (!registry.AllOf<RepairSite>(object) && IsBuilt(world, object)))
+	    (!registry.AllOf<RepairSite>(object) && !DrawnGoingUp(world, object)))
 	{
 		return true;
 	}

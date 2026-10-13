@@ -2149,7 +2149,7 @@ void SetProperty() // 022 SET_PROPERTY
 		}
 		return;
 	case script::ObjectPropertyType::BuiltPercentage:
-		// A building is built that far, finished at all of it
+		// A building or a feature is built that far, finished at all of it
 		ecs::construction::SetBuilt(object, value);
 		return;
 	default:

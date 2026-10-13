@@ -153,3 +153,11 @@ TEST(BuildingConstruction, FinishedMusicWaitsOnNoScript)
 	music.scriptMusic = true;
 	EXPECT_FALSE(PlaysFinishedMusic(music));
 }
+
+TEST(BuildingConstruction, OnlyTheArksDryDockOfTheFeaturesIsDrawnGoingUp)
+{
+	EXPECT_TRUE(FeatureDrawnGoingUp(openblack::FeatureInfo::ArkDryDock));
+	EXPECT_FALSE(FeatureDrawnGoingUp(openblack::FeatureInfo::Ark));
+	EXPECT_FALSE(FeatureDrawnGoingUp(openblack::FeatureInfo::ArkWreck));
+	EXPECT_FALSE(FeatureDrawnGoingUp(openblack::FeatureInfo::Toadstool));
+}
