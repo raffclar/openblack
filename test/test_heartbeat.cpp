@@ -9,6 +9,7 @@
 
 #include <array>
 #include <numbers>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -155,4 +156,14 @@ TEST(Heartbeat, ForgettingTheKeptHeartsStartsEveryoneCalm)
 	kept.Forget();
 	EXPECT_FALSE(kept.Take(PlayerNames::PLAYER_ONE).has_value());
 	EXPECT_FLOAT_EQ(State {}.rate, k_CalmRate);
+}
+
+TEST(Heartbeat, ATemplesDestructionHoldsTheHeartUntilItEnds)
+{
+	// Held at the destruction's beats while the temple is destroyed
+	EXPECT_FLOAT_EQ(HeldBeats(0.0f, 1.5f), 1.5f);
+	EXPECT_FLOAT_EQ(HeldBeats(1.5f, 2.0f), 2.0f);
+	// No temple being destroyed, as on the next land when it went with the last: the heart stays held
+	EXPECT_FLOAT_EQ(HeldBeats(2.0f, std::nullopt), 2.0f);
+	EXPECT_FLOAT_EQ(HeldBeats(0.0f, std::nullopt), 0.0f);
 }

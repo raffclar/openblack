@@ -19,6 +19,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -164,5 +165,13 @@ void GameTempleDestructionWorld::RemoveWorshipSites(entt::entity temple)
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		Locator::worshipSiteSystem::value().RemoveSites(temple);
+	}
+}
+
+void GameTempleDestructionWorld::EndHeartbeatHold(PlayerNames player)
+{
+	if (Locator::heartbeatSystem::has_value())
+	{
+		Locator::heartbeatSystem::value().EndDestruction(player);
 	}
 }

@@ -109,6 +109,7 @@ public:
 		registry.Destroy(object);
 	}
 	void RemoveWorshipSites(entt::entity temple) override { sitesRemoved.emplace_back(turn, temple); }
+	void EndHeartbeatHold(PlayerNames player) override { heartbeatHoldsEnded.push_back(player); }
 
 	Registry registry;
 	int turn {0};
@@ -125,6 +126,7 @@ public:
 	std::vector<int> removed;
 	/// The turns a temple's worship sites were taken away, and the temple
 	std::vector<std::pair<int, entt::entity>> sitesRemoved;
+	std::vector<PlayerNames> heartbeatHoldsEnded;
 	struct Beam
 	{
 		int turn;
@@ -365,4 +367,21 @@ TEST_F(TempleDestructionSystemTest, TheWorshipSitesGoWhenTheDestructionStartsAnd
 		Turn();
 	}
 	EXPECT_EQ(_world->sitesRemoved, (std::vector<std::pair<int, entt::entity>> {{0, temple}, {220, temple}}));
+}
+
+TEST_F(TempleDestructionSystemTest, OnlyTheEndOfTheLocalPlayersDestructionLetsTheirHeartGo)
+{
+	const auto local = MakeTemple(PlayerNames::PLAYER_ONE);
+	const auto other = MakeTemple(PlayerNames::PLAYER_TWO);
+	_system->Start(local);
+	_system->Start(other);
+	for (int i = 0; i < 219; ++i)
+	{
+		Turn();
+	}
+	EXPECT_TRUE(_world->heartbeatHoldsEnded.empty());
+	Turn();
+	EXPECT_FALSE(_world->registry.Valid(local));
+	EXPECT_FALSE(_world->registry.Valid(other));
+	EXPECT_EQ(_world->heartbeatHoldsEnded, std::vector<PlayerNames> {PlayerNames::PLAYER_ONE});
 }
