@@ -22,6 +22,7 @@
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Transform.h"
@@ -55,6 +56,15 @@ public:
 		registry.Assign<MobileStatic>(rock, MobileStaticInfo::Rock);
 		sizes[rock] = {.radius = radius, .height = 2.0f};
 		return rock;
+	}
+
+	entt::entity AddGlobe(glm::vec3 position)
+	{
+		const auto globe = registry.Create();
+		registry.Assign<Transform>(globe, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<OneOffSpellSeed>(globe, OneOffSpellSeed {.seedType = SpellSeedType::Food, .position = position});
+		sizes[globe] = {.radius = 1.0f, .height = 2.0f};
+		return globe;
 	}
 
 	entt::entity AddTree(glm::vec3 position, float weight)
@@ -116,6 +126,7 @@ public:
 	void CatchFirefly(entt::entity) override {}
 	void HeatHeld(entt::entity object) override { heated.push_back(object); }
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
+	void GlobeIntoHand(entt::entity globe, PlayerNames player) override { globesTaken.emplace_back(globe, player); }
 	void PlaySample(uint32_t sample, glm::vec3) override { samples.push_back(sample); }
 	bool TapThing(entt::entity object, glm::vec3, PlayerNames) override
 	{
@@ -355,6 +366,7 @@ public:
 	std::vector<ReactionRequest> reactions;
 	std::vector<entt::entity> heated;
 	std::vector<entt::entity> artefactsTaken;
+	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
 	std::vector<uint32_t> samples;
 	std::vector<entt::entity> tapped;
 	std::vector<entt::entity> villagersInHand;
@@ -523,6 +535,42 @@ TEST_F(HandGrabSystemWithWorld, AShortPressIsATap)
 	// The tap reaches the thing
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), rock);
+}
+
+// A one-shot miracle's globe is a loose thing: a quick press taps it (for its miracle), a held one carries it from the
+// side, hung seven tenths of its height below the hand
+TEST_F(HandGrabSystemWithWorld, AShortPressTapsAGlobe)
+{
+	const auto globe = world->AddGlobe({0.0f, 0.0f, 0.0f});
+	world->underCursor = globe;
+	EXPECT_TRUE(Press());
+	Frame(50);
+	const auto tapped = Release();
+	ASSERT_TRUE(tapped.has_value());
+	EXPECT_EQ(world->tapped, std::vector<entt::entity> {globe});
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->globesTaken.empty());
+}
+
+TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAGlobeFromTheSide)
+{
+	const auto globe = world->AddGlobe({0.0f, 0.0f, 0.0f});
+	world->underCursor = globe;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(*system->GetHeld(), globe);
+	EXPECT_TRUE(world->tapped.empty());
+	// The player has had its miracle within reach
+	ASSERT_EQ(world->globesTaken.size(), 1u);
+	EXPECT_EQ(world->globesTaken.front().first, globe);
+	const auto pose = system->GetHeldPose();
+	ASSERT_TRUE(pose.has_value());
+	EXPECT_EQ(pose->hold, HoldType::Side);
+	EXPECT_FLOAT_EQ(world->registry.Get<HandGrab>(world->hand).lowering, 0.7f * 2.0f);
 }
 
 TEST_F(HandGrabSystemWithWorld, WithTheLeashHeldAShortPressIsAnOrderInsteadOfATap)

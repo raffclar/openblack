@@ -643,8 +643,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			Locator::leashSystem::value().LetGoOfRope(PlayerNames::PLAYER_ONE, Locator::pickingSystem::value().GetPick().point);
 		}
 		magic.ReleaseAction();
-		// Let go quickly on a one-shot bubble, its miracle goes into the hand
-		magic.ReleaseOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		// Let go quickly on a fireball, it is tapped
+		magic.ReleaseFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
 	}
 	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
@@ -681,10 +681,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		{
 			_actionPressTaken = true;
 		}
-		// With an empty hand, a one-shot bubble under it takes the press before anything behind it
+		// With an empty hand, a fireball under it takes the press. A one-shot globe is taken hold of as any thing is.
 		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
 		{
-			_actionPressTaken = magic.PressOrb(machine_clock::Ticks(), Locator::time::value().GetTurn());
+			_actionPressTaken = magic.PressFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 		if (!_actionPressTaken)
 		{
@@ -2563,8 +2563,10 @@ bool Game::Update() noexcept
 				UpdateMagicHand(handTransform.position,
 				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 			}
+			// A fireball pressed long enough is taken, which catches it
+			Locator::magicSystem::value().HoldFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
 			{
-				// The globes and the hand show their miracles
+				// The hand and the piles show their miracles
 				auto miracleFx = profiler.BeginScoped(Profiler::Stage::MiracleFxUpdate);
 				Locator::miracleFxSystem::value().Update(
 				    std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
@@ -2619,6 +2621,12 @@ bool Game::Update() noexcept
 				};
 				holdingSeed = _handHold.Pose(heldThing, holdFrame, _handAnimation.get(), *handTransform);
 			}
+		}
+		{
+			// The globes show their miracles where they are now, a globe in the hand where the hand holds it, each turned
+			// to face the camera as it is drawn
+			auto miracleGlobes = profiler.BeginScoped(Profiler::Stage::MiracleGlobesUpdate);
+			Locator::miracleFxSystem::value().UpdateGlobes(std::chrono::duration<float>(gameTime).count());
 		}
 
 		// Animate the hand: gripping while it drags the land, otherwise its normal pose. Turning the camera with the

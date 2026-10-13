@@ -21,6 +21,10 @@ namespace openblack::player_miracles
 /// below none. Types beyond the game's are left alone.
 void SetMagicTypeEnabled(ecs::components::Player::Miracles& miracles, MagicType type, bool enable);
 
+/// The player has had the magic type within reach, as a one-shot globe taken into the hand: it is marked as ever
+/// enabled without enabling it. Types beyond the game's are left alone.
+void MarkMagicTypeEverEnabled(ecs::components::Player::Miracles& miracles, MagicType type);
+
 /// Whether the player may cast the magic type: while anything enables it, or every type is enabled
 [[nodiscard]] bool IsMagicTypeEnabled(const ecs::components::Player::Miracles& miracles, MagicType type);
 

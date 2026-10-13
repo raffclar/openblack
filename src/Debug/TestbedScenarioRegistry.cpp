@@ -945,11 +945,11 @@ void AddStory(std::vector<Scenario>& all)
 	                .look = {k_Temple.x, 10.0f, k_Temple.y}},
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.2f, 0.8f}},
-	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.45f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.36f}},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.447f, 0.604f}},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 4.0f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
-});
+	});
 	all.push_back({
 	    .id = "temple.damage_beam",
 	    .name = "A hurt temple's heart beaming across itself",
@@ -2153,6 +2153,43 @@ void AddHand(std::vector<Scenario>& all)
 	                   {.type = MagicType::LightningBolt, .offset = {19.0f, 6.0f}, .bubbleHeight = 3.0f}},
 	    .highlights = {{.kind = 1, .offset = {-1.0f, 6.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}},
 	                   {.kind = 2, .offset = {4.0f, 6.0f}}},
+	});
+	// A healing dispenser floats its globe in the middle of the screen, and a second healing globe floats on its own to
+	// its left, both in the player's influence on flat land
+	all.push_back({
+	    .id = "hand.globe_carry",
+	    .name = "Carrying and throwing one-shot globes",
+	    .facet = Facet::Hand,
+	    .description = "The hand holds the Action button on the dispenser's globe until it takes it, carries it to the "
+	                   "right and lets it go gently. Then it takes the globe floating on its own and throws it with a "
+	                   "quick upward sweep of the pointer.",
+	    .expected = "Held past a tap, each globe is lifted from where it floats and carried hanging from the side of the "
+	                "hand, still turned to the camera with its miracle spinning inside; the dispenser floats a new globe "
+	                "once its time has passed. Let go gently, the globe falls to the land and settles there, whole. Thrown, it "
+	                "flies off "
+	                "like any loose thing and lands, whole: a globe never bursts or casts by landing. A quick press on a "
+	                "globe still puts its miracle in the hand instead.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-16.0f, 14.0f, 0.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 0.0f}},
+	                   {.type = MagicType::Heal, .offset = {0.0f, 6.0f}, .bubbleHeight = 3.0f}},
+	    .commands =
+	        {// Takes the dispenser's globe, holding the button past a tap
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.31f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.6f, .value = 3},
+	         // Carries it to the right and lets it go there gently
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.2f, 0.1f}, .amount = 1.5f},
+	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	         // Takes the lone globe and throws it with a quick upward sweep
+	         {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.26f, 0.37f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.6f, .value = 3},
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.45f, 0.85f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
 }
 
