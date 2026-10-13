@@ -11,6 +11,7 @@
 #include <numbers>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "Particles/KeyPointSpline.h"
@@ -301,4 +302,43 @@ TEST(ParticleSprites, CornersFaceTheScreenOrLieFlat)
 	corners = sprites::Corners(sprite, right, up);
 	ExpectNear(corners[0], {9.0f, 0.0f, -2.0f});
 	ExpectNear(corners[2], {11.0f, 0.0f, 2.0f});
+}
+
+TEST(ParticleMaths, ATurningDrawnBetweenStepsStaysATurning)
+{
+	// A thing turned a quarter turn about the east-west axis over a step, drawn a third of the way
+	const glm::mat3 from(1.0f);
+	const glm::mat3 to(glm::rotate(glm::mat4(1.0f), std::numbers::pi_v<float> * 0.5f, glm::vec3(1.0f, 0.0f, 0.0f)));
+	const auto between = maths::LerpRotation(from, to, 1.0f / 3.0f);
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		EXPECT_NEAR(glm::length(between[axis]), 1.0f, 1e-5f);
+	}
+	EXPECT_NEAR(glm::dot(between[1], between[2]), 0.0f, 1e-5f);
+	// Turned a sixth of a turn, as far as a third of the way
+	EXPECT_NEAR(between[1].y, std::cos(std::numbers::pi_v<float> / 6.0f), 1e-5f);
+	// The ends are the steps themselves
+	EXPECT_NEAR(maths::LerpRotation(from, to, 1.0f)[1].z, to[1].z, 1e-5f);
+	EXPECT_NEAR(maths::LerpRotation(from, to, 0.0f)[1].y, 1.0f, 1e-5f);
+}
+
+TEST(ParticleMaths, AThingDrawnBetweenStepsIsDrawnAtItsPlace)
+{
+	// A model is placed by its turning and its place turned back by it, as the land's things are drawn: far from the
+	// world's middle, a turning squashed by blending would put it metres away. Between two steps it moves on smoothly.
+	const glm::vec3 from {1700.0f, 12.0f, 2520.0f};
+	const glm::vec3 to {1699.5f, 12.5f, 2520.4f};
+	const glm::mat3 turnFrom(glm::rotate(glm::mat4(1.0f), 0.3f, glm::vec3(0.0f, 0.0f, 1.0f)));
+	const glm::mat3 turnTo(glm::rotate(glm::mat4(1.0f), 0.9f, glm::vec3(1.0f, 0.0f, 0.0f)));
+	glm::vec3 last = from;
+	for (int step = 0; step <= 10; ++step)
+	{
+		const float t = static_cast<float>(step) / 10.0f;
+		const glm::vec3 position = from + (to - from) * t;
+		const auto rotation = maths::LerpRotation(turnFrom, turnTo, t);
+		const glm::vec3 drawn = glm::vec3(glm::translate(glm::mat4(rotation), position * rotation)[3]);
+		EXPECT_LT(glm::distance(drawn, position), 0.01f);
+		EXPECT_LT(glm::distance(drawn, last), 0.1f);
+		last = drawn;
+	}
 }
