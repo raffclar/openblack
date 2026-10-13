@@ -1012,6 +1012,7 @@ void Game::PickUnderCursor(float seconds)
 	            .xScale = camera.GetProjectionMatrix()[0][0],
 	            .camera = eye,
 	            .cursor = cursor,
+	            .up = camera.GetUp(),
 	        },
 	    .nearPoint = nearPoint,
 	    .seconds = seconds,

@@ -11,6 +11,7 @@
 
 #include <vector>
 
+#include "ECS/PickShapes.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -37,12 +38,17 @@ public:
 	                                                            glm::vec3 direction) const override;
 
 private:
+	/// Adds a thing's invisible ball to the frame's pick, after its model
+	void AddBall(entt::entity entity, const glm::mat4& model, entt::id_type mesh, glm::vec3 halfExtents,
+	             const ecs::pick_shapes::Ball& ball);
+
 	Pick _pick;
 	std::optional<glm::vec3> _behindHand;
 	/// Room the pick reuses from frame to frame
 	std::vector<screen_pick::Candidate> _candidates;
 	std::vector<entt::entity> _candidateEntities;
 	std::vector<glm::mat4> _candidateModels;
+	std::vector<entt::id_type> _candidateMeshes;
 	std::vector<screen_pick::ClipCorner> _corners;
 	std::vector<glm::vec3> _placed;
 	std::vector<glm::vec2> _uvs;

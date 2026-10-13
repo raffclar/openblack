@@ -242,6 +242,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	_candidates.clear();
 	_candidateEntities.clear();
 	_candidateModels.clear();
+	_candidateMeshes.clear();
 	// The miracle held in the hand is one of the things the hand holds
 	const auto heldSeed =
 	    Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeed() : std::optional<entt::entity> {};
@@ -281,47 +282,35 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		const float scale = transform != nullptr ? transform->scale.x : 1.0f;
 		const auto box = mesh->GetBoundingBox();
 		const auto halfExtents = box.Size() * 0.5f;
-		// A script's scroll is picked by a ball a little larger than its model, about the model's middle
+		_candidates.push_back({
+		    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
+		    .radius = glm::length(halfExtents) * scale,
+		    .origin = glm::vec3(model[3]),
+		    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+		});
+		_candidateEntities.push_back(entity);
+		_candidateModels.push_back(model);
+		_candidateMeshes.push_back(meshComponent->id);
+		// A script's scroll is also picked by a ball a little larger than its model, about the model's middle
 		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
 		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
 		{
-			_candidates.push_back({
-			    .centre = highlight->centre,
-			    .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin,
-			    .origin = highlight->centre,
-			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
-			});
+			AddBall(entity, model, meshComponent->id, halfExtents,
+			        {.centre = highlight->centre, .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin});
 		}
-		else
-		{
-			_candidates.push_back({
-			    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
-			    .radius = glm::length(halfExtents) * scale,
-			    .origin = glm::vec3(model[3]),
-			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
-			});
-		}
-		_candidateEntities.push_back(entity);
-		_candidateModels.push_back(model);
 	}
 
 	// How far along the view an object's first triangle under the cursor is
 	const auto distanceOf = [&](size_t i) -> std::optional<float> {
 		const auto entity = _candidateEntities[i];
 		const auto& model = _candidateModels[i];
-		// A scroll's ball is hit at its middle
-		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
-		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
-		{
-			return screen_pick::Depth(view, highlight->centre);
-		}
 		// People are picked by their bounding sphere alone: anywhere in its circle on the screen, at the sphere's
 		// distance rather than their body's
 		if (registry.AllOf<Villager>(entity))
 		{
 			const auto* transform = registry.TryGet<const Transform>(entity);
 			const float scale = transform != nullptr ? transform->scale.x : 1.0f;
-			const float halfHeight = meshes.Handle(registry.Get<const Mesh>(entity).id)->GetBoundingBox().Size().y * 0.5f;
+			const float halfHeight = meshes.Handle(_candidateMeshes[i])->GetBoundingBox().Size().y * 0.5f;
 			return screen_pick::SphereDistance(view, _candidates[i].origin, halfHeight * scale, _candidates[i].radius);
 		}
 		// A broken building is picked by its broken model's triangles, along the cursor's line
@@ -330,7 +319,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 			const auto along = BrokenAlong(broken->mesh, view.camera, frame.nearPoint - view.camera);
 			return along.has_value() ? std::optional<float>(*along * view.near) : std::nullopt;
 		}
-		const auto mesh = meshes.Handle(registry.Get<const Mesh>(entity).id);
+		const auto mesh = meshes.Handle(_candidateMeshes[i]);
 		// A tree of a forest is picked through its leaves' holes
 		const auto* info = world_objects::InfoOf(entity);
 		const bool throughHoles = info != nullptr && info->type == ObjectType::ForestTree;
@@ -428,6 +417,22 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 void PickingSystem::FindBehindHand(glm::vec3 camera, std::optional<glm::vec3> handMiddle)
 {
 	_behindHand = handMiddle.has_value() ? LandOrSeaAlong(camera, *handMiddle, camera) : std::nullopt;
+}
+
+void PickingSystem::AddBall(entt::entity entity, const glm::mat4& model, entt::id_type mesh, glm::vec3 halfExtents,
+                            const ecs::pick_shapes::Ball& ball)
+{
+	// Weighed against the land as the thing's own model is: by the model's footprint about its place
+	_candidates.push_back({
+	    .centre = ball.centre,
+	    .radius = ball.radius,
+	    .origin = glm::vec3(model[3]),
+	    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+	    .ball = true,
+	});
+	_candidateEntities.push_back(entity);
+	_candidateModels.push_back(model);
+	_candidateMeshes.push_back(mesh);
 }
 
 void PickingSystem::RetargetObject(std::optional<entt::entity> object, float distance)
