@@ -75,6 +75,11 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 	const auto draw = [&](const glm::vec3& position, PlayerNames owner, uint8_t alpha) {
 		DrawLightShaft(desc, column, position, light_column::Tint(ColourOf(owner), alpha));
 	};
+	// A warm-up draws a column that adds nothing, as the first column of a land draws it
+	if (_warmingUp)
+	{
+		DrawLightShaft(desc, column, desc.camera->GetOrigin(), glm::vec4(0.0f));
+	}
 
 	// Over each village centre, at the middle of its model, in its town's player's colour
 	std::unordered_map<uint32_t, PlayerNames> owners;

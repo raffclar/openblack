@@ -371,24 +371,29 @@ void Game::BeginLoadingScreen(loading::LoadingClock::Mode look)
 	_loadingLook = look;
 }
 
-void Game::RenderLoadingFrame(bool drawNow)
+bool Game::RenderLoadingFrame(bool drawNow, const std::function<void()>& drawUnder)
 {
 	if (!_loadingScreen || !_loadingLook || !_loadingScreen->TipShowing())
 	{
-		return;
+		return false;
 	}
 	auto& clock = _loadingScreen->GetClock();
 	const auto look = *_loadingLook;
 	if (!clock.Tick(Milliseconds(), look) && !drawNow)
 	{
-		return;
+		return false;
 	}
 	// Nothing is drawn while the window is minimised, but the time still counts
-	if (!Locator::windowing::value().IsMinimised())
+	const bool shown = !Locator::windowing::value().IsMinimised();
+	if (shown)
 	{
 		const float progress = clock.Progress();
 		const auto time = clock.Time();
-		PresentStartupFrame([this, look, progress, time](glm::u16vec2 resolution) {
+		PresentStartupFrame([this, look, progress, time, &drawUnder](glm::u16vec2 resolution) {
+			if (drawUnder)
+			{
+				drawUnder();
+			}
 			if (look == loading::LoadingClock::Mode::Tips)
 			{
 				_loadingScreen->DrawTips(resolution, 1.0f, progress);
@@ -402,6 +407,7 @@ void Game::RenderLoadingFrame(bool drawNow)
 	}
 	// The window stays responsive; its events are left for the game
 	SDL_PumpEvents();
+	return shown;
 }
 
 void Game::FinishLoadingBehindScreen()
@@ -419,6 +425,7 @@ void Game::FinishLoadingBehindScreen()
 	}
 	const auto loaded = std::chrono::steady_clock::now();
 	PrepareFirstFrames();
+	WarmUpFirstFrame();
 	// The renderer makes the last resources in one more loading frame, so that the first frame of the game does not
 	// make them. The renderer releases the memory that it used to send the resources to the GPU only when it uses the
 	// frame's command buffers again. Thus it draws more loading frames, one for each frame that the GPU can have in
@@ -430,9 +437,10 @@ void Game::FinishLoadingBehindScreen()
 	const auto prepared = std::chrono::steady_clock::now();
 	SPDLOG_LOGGER_INFO(spdlog::get("game"),
 	                   "Load: {} prefetched resources finished behind the loading screen in {:.1f} ms, then the first "
-	                   "frames prepared in {:.1f} ms",
+	                   "frames prepared in {:.1f} ms; {} pipelines made",
 	                   count, std::chrono::duration<double, std::milli>(loaded - start).count(),
-	                   std::chrono::duration<double, std::milli>(prepared - loaded).count());
+	                   std::chrono::duration<double, std::milli>(prepared - loaded).count(),
+	                   Locator::rendererInterface::has_value() ? Locator::rendererInterface::value().GetPipelinesMade() : 0);
 }
 
 void Game::PrepareFirstFrames()

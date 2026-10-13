@@ -69,7 +69,7 @@ void RenderingSystemCommon::SetLayoutDirty()
 
 void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 
 	_renderContext.animatedBoneMatrices.clear();
 	_renderContext.handMirrored = false;

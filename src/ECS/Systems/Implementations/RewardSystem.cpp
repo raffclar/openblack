@@ -339,7 +339,8 @@ void RewardSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	    .random = {},
 	};
 	particles::Effect::DrawWalk walk;
-	Locator::entitiesRegistry::value().Each<const Reward>([&](const Reward& chest) {
+	const auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const Reward>([&](const Reward& chest) {
 		// Only a chest that fell shows its dust, while its time lasts
 		if (chest.state != Reward::State::Landed || chest.dustMilliseconds <= 0.0f)
 		{

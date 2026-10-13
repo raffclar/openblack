@@ -63,7 +63,12 @@ class Game;
 namespace ecs
 {
 class Registry;
-}
+namespace components
+{
+struct CreatureEyes;
+struct CreatureHair;
+} // namespace components
+} // namespace ecs
 
 namespace graphics
 {
@@ -87,6 +92,7 @@ public:
 
 	void DrawScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void BakeLandShadows(bool drawVegetation) const noexcept final;
+	void WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void PrepareCreatureSkins(size_t count) const noexcept final;
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void Frame() noexcept final;
@@ -96,6 +102,7 @@ public:
 	[[nodiscard]] std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& name) noexcept final;
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }
+	[[nodiscard]] uint32_t GetPipelinesMade() const noexcept final;
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
 	void SetProfile(bool value) noexcept final { _bgfxProfile = value; }
 
@@ -159,6 +166,8 @@ private:
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// For a warm-up, a sprite of no size for each way that sprites blend, into the pass's blended view
+	void WarmUpParticleSprites(const DrawSceneDesc& desc) const;
 	/// The opening's light falling from the sky, and its flash where it lands
 	void DrawIntroLight(const DrawSceneDesc& desc) const;
 	/// The ghosts of the buildings effects destroyed, each laying its depth through a scrolling pattern and then added
@@ -397,10 +406,10 @@ private:
 	void DrawCaveTrophies(const DrawSceneDesc& desc) const;
 	/// A creature's eyes and eyelids, after its body: frozen with it, or else fizzing with it, drawn through the static
 	/// after its body's passes, from that sort depth on
-	void DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, const L3DMeshSubmitDesc& bodyDesc, float fizz,
-	                      float freeze, uint32_t fizzSortDepth) const;
-	/// A creature's strands of hair, as ribbons facing the camera blended over the scene
-	void DrawCreatureHair(const DrawSceneDesc& desc, entt::entity entity) const;
+	void DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components::CreatureEyes& eyes,
+	                      const L3DMeshSubmitDesc& bodyDesc, float fizz, float freeze, uint32_t fizzSortDepth) const;
+	/// A creature's strands of hair, as ribbons facing the camera blended over the scene, lit from where the creature is
+	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin) const;
 	/// The columns of light over the village centres and temples of the players whose borders show
 	void DrawLightColumns(const DrawSceneDesc& desc) const;
 	/// The beams of light the started scrolls stand in
@@ -447,6 +456,14 @@ private:
 	std::array<uint32_t, static_cast<size_t>(RenderPass::_count)> _inOrderViews {};
 	/// Frames left before the next warning about the descriptor sets
 	uint32_t _descriptorSetWarningPause {0};
+	/// While the scene is drawn only to make the renderer's pipelines and targets: nothing that later frames use changes
+	mutable bool _warmingUp {false};
+	/// The next frame holds a warm-up's draws, after which its views are set back
+	mutable bool _warmUpInFrame {false};
+	/// The colour that the main view clears the window to
+	mutable uint32_t _mainClearColour {0x000000ff};
+	/// One instance that a warm-up draws its creatures with: at no size, so that it covers no pixel
+	mutable std::optional<DynamicVertexBufferHandle> _warmUpInstances;
 
 	/// How a creature's variant meshes are read to blend its body
 	std::unique_ptr<MorphStreamLayouts> _morphStreamLayouts;

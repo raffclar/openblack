@@ -59,29 +59,29 @@ void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 	}
 
 	std::vector<Vertex> vertices;
-	Locator::entitiesRegistry::value().Each<const ecs::components::FishFarm>(
-	    [&vertices](const ecs::components::FishFarm& farm) {
-		    if (!farm.shoal.has_value() || !farm.shownAlpha.has_value())
-		    {
-			    return;
-		    }
-		    // White, as opaque as the shoal is at its distance
-		    const auto colour = (static_cast<uint32_t>(*farm.shownAlpha) << 24u) | 0x00FFFFFFu;
-		    const auto shown = fish_shoal::ShownCount(farm.shoal->fullness);
-		    for (uint32_t i = 0; i < shown; ++i)
-		    {
-			    const auto& fish = farm.shoal->fish.at(i);
-			    const auto corners = fish_shoal::Corners(fish);
-			    const auto uvs = fish_shoal::AtlasCorners(fish.frame);
-			    for (const auto corner : k_Triangles)
-			    {
-				    // Drawn into what lies under the sea, which is seen through a mirror in the sea's level: mirrored
-				    // back, each corner falls where it is seen from above
-				    const auto& at = corners.at(corner);
-				    vertices.push_back({{at.x, -at.y, at.z}, uvs.at(corner), colour});
-			    }
-		    }
-	    });
+	const auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const ecs::components::FishFarm>([&vertices](const ecs::components::FishFarm& farm) {
+		if (!farm.shoal.has_value() || !farm.shownAlpha.has_value())
+		{
+			return;
+		}
+		// White, as opaque as the shoal is at its distance
+		const auto colour = (static_cast<uint32_t>(*farm.shownAlpha) << 24u) | 0x00FFFFFFu;
+		const auto shown = fish_shoal::ShownCount(farm.shoal->fullness);
+		for (uint32_t i = 0; i < shown; ++i)
+		{
+			const auto& fish = farm.shoal->fish.at(i);
+			const auto corners = fish_shoal::Corners(fish);
+			const auto uvs = fish_shoal::AtlasCorners(fish.frame);
+			for (const auto corner : k_Triangles)
+			{
+				// Drawn into what lies under the sea, which is seen through a mirror in the sea's level: mirrored
+				// back, each corner falls where it is seen from above
+				const auto& at = corners.at(corner);
+				vertices.push_back({{at.x, -at.y, at.z}, uvs.at(corner), colour});
+			}
+		}
+	});
 	if (vertices.empty())
 	{
 		return;

@@ -28,10 +28,12 @@ namespace openblack::debug
 class FrameStatsLog
 {
 public:
-	FrameStatsLog(uint32_t interval, bool views);
+	/// pipelinesMade: how many pipelines the renderer made before the first frame
+	FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade);
 
-	/// After each frame, with how long the frame took and the profiler that timed its stages
-	void Frame(float milliseconds, const openblack::Profiler& profiler);
+	/// After each frame, with how long the frame took, the profiler that timed its stages and how many pipelines the
+	/// renderer made since it started
+	void Frame(float milliseconds, const openblack::Profiler& profiler, uint32_t pipelinesMade);
 
 	/// The log shows each frame that takes this time or more, with its stages
 	static constexpr float k_SpikeMilliseconds = 10.0f;
@@ -52,6 +54,8 @@ private:
 	uint32_t _reports {0};
 	uint64_t _frameNumber {0};
 	int64_t _lastResourceCount {0};
+	uint32_t _lastPipelinesMade {0};
+	uint32_t _pipelinesSinceReport {0};
 	/// The time that the game's thread was on a processor, at the end of the last frame
 	double _lastCpuMilliseconds {0.0};
 };
