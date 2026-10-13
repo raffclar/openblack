@@ -35,6 +35,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -351,6 +352,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		}
 	}
 	AddBubbles(view.camera);
+	AddFireBalls();
 
 	// How far along the view an object's first triangle under the cursor is
 	const auto distanceOf = [&](size_t i) -> std::optional<float> {
@@ -523,6 +525,28 @@ void PickingSystem::AddBubbles(glm::vec3 camera)
 		    _candidateMeshes.push_back(bubbleMesh);
 		    AddBall(entity, model, bubbleMesh, halfExtents, ecs::pick_shapes::BubbleBall(middle, scale));
 	    });
+}
+
+void PickingSystem::AddFireBalls()
+{
+	// A fireball is picked by a ball of its size where its particle was last placed, while it shows bright enough to take
+	// hold of. It has no model, so the land as near as it wins.
+	const auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const MagicFireBall>([this](entt::entity entity, const MagicFireBall& fireBall) {
+		if (!fireBall.handTarget.has_value())
+		{
+			return;
+		}
+		_candidates.push_back({
+		    .centre = *fireBall.handTarget,
+		    .radius = fireBall.radius,
+		    .origin = *fireBall.handTarget,
+		    .ball = true,
+		});
+		_candidateEntities.push_back(entity);
+		_candidateModels.push_back(glm::mat4(1.0f));
+		_candidateMeshes.push_back(0);
+	});
 }
 
 void PickingSystem::RetargetObject(std::optional<entt::entity> object, float distance)

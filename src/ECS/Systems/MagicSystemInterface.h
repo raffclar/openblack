@@ -234,13 +234,14 @@ public:
 
 	/// Once a frame, before any press or release
 	virtual void UpdateHand(const HandFrame& frame, float seconds) = 0;
-	/// The left button tapped: another player's fireball under the cursor is caught into the hand. Whether one was, so the
-	/// hand doesn't grip the land with the press.
-	virtual bool TapAction() = 0;
-	/// The action button went down with an empty hand: a one-shot bubble under the hand, within the player's influence,
-	/// takes the press. Whether one did, so nothing behind it is taken.
+	/// A fireball tapped by the empty hand within the player's influence: another player's is caught into the hand, the
+	/// player's own slips through. Whether it was caught.
+	virtual bool TapFireBall(entt::entity ball) = 0;
+	/// The action button went down with an empty hand: a one-shot bubble or a fireball under the hand, within the
+	/// player's influence, takes the press. Whether one did, so nothing behind it is taken.
 	virtual bool PressOrb(uint32_t nowMs, uint32_t turn) = 0;
-	/// The action button came up: let go quickly, the bubble pressed is tapped and its miracle goes into the hand
+	/// The action button came up: let go quickly, the bubble pressed is tapped and its miracle goes into the hand, or the
+	/// fireball pressed is tapped
 	virtual void ReleaseOrb(uint32_t nowMs, uint32_t turn) = 0;
 	/// The one-shot bubble under the hand now, if any
 	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;

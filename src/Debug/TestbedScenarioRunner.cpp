@@ -1452,10 +1452,11 @@ std::string Runner::HandTakeFireBall()
 	// The first fireball the hand may hold now, the hand straight over it looking down
 	std::optional<glm::vec3> target;
 	Locator::entitiesRegistry::value().Each<const ecs::components::MagicFireBall>(
-	    [&target](const ecs::components::MagicFireBall& ball) {
+	    [this, &target](entt::entity entity, const ecs::components::MagicFireBall& ball) {
 		    if (!target.has_value() && ball.handTarget.has_value())
 		    {
 			    target = ball.handTarget;
+			    _fireBallTaken = entity;
 		    }
 	    });
 	if (!target.has_value())
@@ -1493,7 +1494,7 @@ void Runner::FinishTakingFireBall()
 	}
 	else
 	{
-		result = magic.TapAction() ? "caught it" : "it slipped through the hand";
+		result = magic.TapFireBall(_fireBallTaken) ? "caught it" : "it slipped through the hand";
 	}
 	magic.DriveHand(std::nullopt);
 	Log(fmt::format("{:.1f}s: hand on the fireball: {}", _seconds, result));

@@ -61,7 +61,7 @@ public:
 		Locator::entitiesRegistry::value().Destroy(seed);
 	}
 	void UpdateHand(const HandFrame&, float) override {}
-	bool TapAction() override { return false; }
+	bool TapFireBall(entt::entity) override { return false; }
 	bool PressOrb(uint32_t, uint32_t) override { return false; }
 	void ReleaseOrb(uint32_t, uint32_t) override {}
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override { return std::nullopt; }

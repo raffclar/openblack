@@ -2272,32 +2272,35 @@ void MagicSystem::Do(const magic::CastActions& actions)
 	}
 }
 
-bool MagicSystem::TapAction()
+bool MagicSystem::TapFireBall(entt::entity ball)
 {
-	if (!_hand.overWorld || !Locator::infoConstants::has_value() || _held.has_value())
+	if (!Locator::infoConstants::has_value() || _held.has_value() || !EntityRegistry().Valid(ball) ||
+	    !EntityRegistry().AllOf<MagicFireBall>(ball) || !EmptyHandInInfluence())
 	{
 		return false;
 	}
-	if (const auto ball = FireBallAlong(_hand.rayOrigin, _hand.rayDirection))
-	{
-		return CatchFireBall(*ball);
-	}
-	return false;
+	return CatchFireBall(ball);
 }
 
-std::optional<entt::entity> MagicSystem::OrbUnderHand() const
+std::optional<entt::entity> MagicSystem::PickedUnderHand() const
 {
-	// The bubble the cursor picked, as anything else under the hand is found
+	// What the cursor picked, as anything else under the hand is found
 	if (!_hand.overWorld || !Locator::pickingSystem::has_value())
 	{
 		return std::nullopt;
 	}
 	const auto picked = Locator::pickingSystem::value().GetPick().object;
-	if (!picked.has_value() || !EntityRegistry().Valid(*picked) || !EntityRegistry().AllOf<OneOffSpellSeed>(*picked))
+	if (!picked.has_value() || !EntityRegistry().Valid(*picked))
 	{
 		return std::nullopt;
 	}
 	return picked;
+}
+
+std::optional<entt::entity> MagicSystem::OrbUnderHand() const
+{
+	const auto picked = PickedUnderHand();
+	return picked.has_value() && EntityRegistry().AllOf<OneOffSpellSeed>(*picked) ? picked : std::nullopt;
 }
 
 bool MagicSystem::EmptyHandInInfluence() const
@@ -2313,13 +2316,16 @@ bool MagicSystem::PressOrb(uint32_t nowMs, uint32_t turn)
 	{
 		return false;
 	}
-	const auto orb = OrbUnderHand();
-	// Out of the player's influence the hand neither taps nor takes a bubble
+	// A bubble or a fireball under the hand
+	const auto picked = PickedUnderHand();
+	const auto orb =
+	    picked.has_value() && EntityRegistry().AnyOf<OneOffSpellSeed, MagicFireBall>(*picked) ? picked : std::nullopt;
+	// Out of the player's influence the hand neither taps nor takes them
 	if (!orb.has_value() || !EmptyHandInInfluence())
 	{
 		return false;
 	}
-	// A bubble is something the hand can take: the press starts taking it, and only a quick release taps it
+	// The press starts taking it, and only a quick release taps it
 	// TODO(hand): held past the tap's time, the hand takes the bubble itself, to carry and throw like any other thing
 	_orbPress = OrbPress {.orb = *orb, .pressMs = nowMs, .pressTurn = turn};
 	return true;
@@ -2334,37 +2340,19 @@ void MagicSystem::ReleaseOrb(uint32_t nowMs, uint32_t turn)
 	const auto press = *_orbPress;
 	_orbPress.reset();
 	const bool quick = hand_grab::ElapsedMs(nowMs, press.pressMs, turn, press.pressTurn) <= hand_grab::k_GrabWaitMs;
-	if (!quick || _held.has_value() || !EntityRegistry().Valid(press.orb) ||
-	    !EntityRegistry().AllOf<OneOffSpellSeed>(press.orb) || !EmptyHandInInfluence())
+	if (!quick || _held.has_value() || !EntityRegistry().Valid(press.orb) || !EmptyHandInInfluence())
 	{
 		return;
 	}
-	TapOrb(press.orb);
-}
-
-std::optional<entt::entity> MagicSystem::FireBallAlong(glm::vec3 origin, glm::vec3 direction) const
-{
-	std::optional<entt::entity> nearest;
-	float best = std::numeric_limits<float>::max();
-	// Each ball the hand may hold now, a sphere of its size where its particle was last placed
-	EntityRegistry().Each<const MagicFireBall>([&](entt::entity entity, const MagicFireBall& ball) {
-		if (!ball.handTarget.has_value())
-		{
-			return;
-		}
-		const float along = glm::dot(*ball.handTarget - origin, direction);
-		if (along <= 0.0f)
-		{
-			return;
-		}
-		const auto closest = origin + direction * along;
-		if (glm::distance(closest, *ball.handTarget) < ball.radius && along < best)
-		{
-			best = along;
-			nearest = entity;
-		}
-	});
-	return nearest;
+	// A bubble's miracle goes into the hand; another player's fireball is caught, the player's own slips through
+	if (EntityRegistry().AllOf<OneOffSpellSeed>(press.orb))
+	{
+		TapOrb(press.orb);
+	}
+	else if (EntityRegistry().AllOf<MagicFireBall>(press.orb))
+	{
+		TapFireBall(press.orb);
+	}
 }
 
 bool MagicSystem::CatchFireBall(entt::entity ball)
@@ -2423,7 +2411,8 @@ bool MagicSystem::PressAction()
 	}
 	_actionDown = true;
 	// A ready fire seed put to a fireball, anyone's, takes it in: the seed grows stronger and stays in the hand
-	if (const auto ball = FireBallAlong(_hand.rayOrigin, _hand.rayDirection); ball.has_value() && AbsorbFireBall(*ball))
+	if (const auto ball = PickedUnderHand();
+	    ball.has_value() && EntityRegistry().AllOf<MagicFireBall>(*ball) && AbsorbFireBall(*ball))
 	{
 		return true;
 	}

@@ -44,6 +44,8 @@ private:
 	             const ecs::pick_shapes::Ball& ball);
 	/// Adds the one-shot bubbles, which the miracles draw themselves, to the frame's pick
 	void AddBubbles(glm::vec3 camera);
+	/// Adds the fireballs, which have no model, to the frame's pick
+	void AddFireBalls();
 
 	Pick _pick;
 	std::optional<glm::vec3> _behindHand;

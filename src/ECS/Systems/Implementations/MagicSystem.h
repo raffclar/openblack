@@ -170,7 +170,7 @@ public:
 	void DeleteSeed(entt::entity seed) override;
 
 	void UpdateHand(const HandFrame& frame, float seconds) override;
-	bool TapAction() override;
+	bool TapFireBall(entt::entity ball) override;
 	bool PressOrb(uint32_t nowMs, uint32_t turn) override;
 	void ReleaseOrb(uint32_t nowMs, uint32_t turn) override;
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override;
@@ -181,7 +181,8 @@ public:
 	[[nodiscard]] HandCastState GetHandCastState() const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return _held; }
 	/// The nearest fireball the ray passes through that the hand may hold now, if any
-	[[nodiscard]] std::optional<entt::entity> FireBallAlong(glm::vec3 origin, glm::vec3 direction) const;
+	/// What the cursor picked under the hand, while the hand is over the world
+	[[nodiscard]] std::optional<entt::entity> PickedUnderHand() const;
 	/// A fireball of another player the hand takes hold of, as a tap or a grab starts, is caught into a fireball seed in
 	/// the hand; whether it was
 	bool CatchFireBall(entt::entity ball);

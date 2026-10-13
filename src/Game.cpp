@@ -599,16 +599,9 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	auto& creatureHand = Locator::creatureHandSystem::value();
 	auto& fights = Locator::creatureFightSystem::value();
 	auto& magic = Locator::magicSystem::value();
-	// The left button catches another player's fireball under the hand, before the creatures and the land
-	bool magicTookPress = false;
 	// The hand holds one thing at a time: a thing it picked up, or a miracle
 	auto* handGrab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
 	const bool handHoldsThing = handGrab != nullptr && handGrab->IsBusy();
-	if (handTakesPresses && !inTemple && !handHoldsThing && event.type == SDL_MOUSEBUTTONDOWN &&
-	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton && !Locator::debugGui::value().IsMouseOverWindow())
-	{
-		magicTookPress = magic.TapAction();
-	}
 	// Letting go of the Action button lets go of the tip bubble
 	if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped() &&
 	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
@@ -745,7 +738,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 	}
-	if (handTakesPresses && !magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
+	if (handTakesPresses && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
 	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton)
 	{
 		const auto screenSize = Locator::windowing::value().GetSize();
