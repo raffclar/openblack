@@ -71,6 +71,8 @@ public:
 	virtual void SetTextChoices(const TextChoices& choices) = 0;
 	/// No texts and no voices, as a new land opens
 	virtual void Reset() = 0;
+	/// The advisors stop talking; the texts stay
+	virtual void StopVoices() = 0;
 
 	/// Once a frame: the voices start and stop, the player's click is taken and the newest text slides in
 	virtual void Update(const Frame& frame) = 0;

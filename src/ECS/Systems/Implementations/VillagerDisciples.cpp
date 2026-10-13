@@ -106,7 +106,6 @@ constexpr auto k_SymbolSheetAlpha = entt::hashed_string("raw/leasha");
 constexpr float k_SheetCells = 8.0f;
 /// The symbol stands two and a half of the villager's sizes over its glow, as wide on the screen wherever it is
 constexpr float k_SymbolRise = 2.5f;
-constexpr float k_SymbolPixels = 16.0f;
 /// No sprite is drawn smaller than this
 constexpr float k_LeastSpriteSize = 0.0001f;
 
@@ -1050,9 +1049,9 @@ void villager_disciple::UpdateMarks()
 	float size = k_LeastSpriteSize;
 	if (Locator::camera::has_value() && Locator::windowing::has_value())
 	{
-		const float halfWidth = static_cast<float>(Locator::windowing::value().GetSize().x) * 0.5f;
+		const auto screen = Locator::windowing::value().GetSize();
 		const float distance = glm::distance(Locator::camera::value().GetOrigin(), transform.position);
-		size = std::max(distance * (k_SymbolPixels / std::max(halfWidth, 1.0f)) * 0.5f, k_LeastSpriteSize);
+		size = disciple::SymbolSize(distance, screen.x, screen.y);
 	}
 	transform.scale = glm::vec3(size, size, 1.0f);
 	registry.Get<Sprite>(mark).uvMin = CellUv(*cell);

@@ -52,6 +52,11 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// The land is cleared: the creatures still sparkling into sight go with it; what was kept stays
 	virtual void Reset() = 0;
+	/// A new game starts, after the last game's creature was kept: from now until the next new game the creature is
+	/// kept in the file of the profile picked now. Picking another profile during a game changes nothing until then, so
+	/// the last game's creature is always kept for the profile it was played as. A creature kept for another profile is
+	/// forgotten, for the new profile's own file to be read when a script loads its creature.
+	virtual void StartGame() = 0;
 };
 
 } // namespace openblack::ecs::systems

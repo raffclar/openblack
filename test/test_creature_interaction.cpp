@@ -260,6 +260,196 @@ TEST(CreatureObjectActions, ACreatureBringsBackUpWhatCantBeEaten)
 	EXPECT_TRUE(creature_object_actions::BringsBackUp(true, true));
 }
 
+TEST(CreatureObjectActions, ACreatureLeavesAloneWhatAScriptKeepsFromIt)
+{
+	using creature_object_actions::MayPickUp;
+	EXPECT_TRUE(MayPickUp({}));
+	// The Saviour's fisherman's wife, while her challenge's script has said she can't be picked up
+	EXPECT_FALSE(MayPickUp({.cannotBePickedUp = true, .inScript = true}));
+	// Once the script lets her be picked up, the player's creature may, though the script still holds her
+	EXPECT_TRUE(MayPickUp({.inScript = true}));
+	// A computer player's creature leaves her alone, unless a script controls it
+	EXPECT_FALSE(MayPickUp({.inScript = true, .computerCreatureNotScripted = true}));
+	EXPECT_TRUE(MayPickUp({.computerCreatureNotScripted = true}));
+	EXPECT_FALSE(MayPickUp({.villagerAtHome = true}));
+	EXPECT_FALSE(MayPickUp({.worshippingForCreaturesPlayer = true}));
+}
+
+TEST(CreatureObjectActions, ACreatureLiftsOnlyWhatFitsItsReachAndWeight)
+{
+	using creature_object_actions::CanLift;
+	const creature_object_actions::LiftFacts fits {
+	    .creatureRadius = 6.0f, .thingRadius = 2.0f, .reach = 8.0f, .creatureWeight = 100.0f, .thingWeight = 80.0f};
+	// Both radii exactly within the reach, and exactly 0.8 of the creature's weight, still lift
+	EXPECT_TRUE(CanLift(fits));
+	auto tooBig = fits;
+	tooBig.thingRadius = 2.01f;
+	EXPECT_FALSE(CanLift(tooBig));
+	auto tooHeavy = fits;
+	tooHeavy.thingWeight = 80.01f;
+	EXPECT_FALSE(CanLift(tooHeavy));
+	// The rule applies to picking up wherever the thing is too
+	EXPECT_FALSE(creature_object_actions::MayPickUp({.lift = tooHeavy}));
+	EXPECT_FALSE(creature_object_actions::MayPickUpWhereverItIs({.lift = tooBig}));
+	EXPECT_TRUE(creature_object_actions::MayPickUp({.lift = fits}));
+}
+
+TEST(CreatureObjectActions, ACreatureLeavesArtefactsAndWhatItsLeashIsTiedTo)
+{
+	using creature_object_actions::MayPickUp;
+	EXPECT_FALSE(MayPickUp({.townArtefact = true}));
+	EXPECT_FALSE(MayPickUp({.leashTiedToIt = true}));
+	// Nor may it be given what its leash is tied to
+	EXPECT_FALSE(creature_object_actions::MayPickUpWhereverItIs({.leashTiedToIt = true}));
+}
+
+TEST(CreatureObjectActions, ACreaturePicksUpOnlyWhatIsInTheMap)
+{
+	using creature_object_actions::MayPickUp;
+	// Not out of the map: in a hand, flying or carried by a tornado...
+	EXPECT_FALSE(MayPickUp({.inMapOrHeldByCreature = false}));
+	// ...but a hand may give it such a thing
+	EXPECT_TRUE(creature_object_actions::MayPickUpWhereverItIs({.inMapOrHeldByCreature = false}));
+}
+
+TEST(CreatureObjectActions, TakingFromAHandSkipsTheRulesForTheLand)
+{
+	using creature_object_actions::MayPickUpWhereverItIs;
+	// A hand may give a creature a town's artefact, a worshipper, or what a script holds
+	EXPECT_TRUE(MayPickUpWhereverItIs({.townArtefact = true}));
+	EXPECT_TRUE(MayPickUpWhereverItIs({.worshippingForCreaturesPlayer = true}));
+	EXPECT_TRUE(MayPickUpWhereverItIs({.inScript = true, .computerCreatureNotScripted = true}));
+	// but never what a script said can't be picked up, nor a villager at home
+	EXPECT_FALSE(MayPickUpWhereverItIs({.cannotBePickedUp = true}));
+	EXPECT_FALSE(MayPickUpWhereverItIs({.villagerAtHome = true}));
+}
+
+TEST(CreatureObjectActions, OnlyAThingsOwnStateKeepsItFromBeingCaught)
+{
+	using creature_object_actions::MayBeCaught;
+	EXPECT_TRUE(MayBeCaught({.inScript = true, .computerCreatureNotScripted = true}));
+	EXPECT_TRUE(MayBeCaught({.townArtefact = true, .inMapOrHeldByCreature = false, .leashTiedToIt = true}));
+	EXPECT_FALSE(MayBeCaught({.cannotBePickedUp = true}));
+	EXPECT_FALSE(MayBeCaught({.villagerAtHome = true}));
+}
+
+TEST(CreatureObjectActions, EachKindOfThingHasItsOwnRuleForBeingPickedUp)
+{
+	using creature_object_actions::KindRule;
+	using creature_object_actions::MayPickUpKind;
+	const creature_object_actions::PickUpFacts outOfReach {.townArtefact = true, .inMapOrHeldByCreature = false};
+	// Never, whatever holds
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Never, .holdable = true}, {}));
+	// The football and a creed always, even out of the map or too big
+	EXPECT_TRUE(MayPickUpKind({.rule = KindRule::Always, .holdable = true}, outOfReach));
+	// A bird only when low over the land, whatever else holds
+	EXPECT_TRUE(MayPickUpKind({.rule = KindRule::Bird, .holdable = true, .low = true}, outOfReach));
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Bird, .holdable = true, .low = false}, {}));
+	// A pile unless a script said no, and only a kind that may fly about
+	EXPECT_TRUE(MayPickUpKind({.rule = KindRule::Pile, .holdable = true, .mayFly = true}, outOfReach));
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Pile, .holdable = true, .mayFly = false}, {}));
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Pile, .holdable = true, .mayFly = true}, {.cannotBePickedUp = true}));
+	// Anything else by the whole rule
+	EXPECT_TRUE(MayPickUpKind({.rule = KindRule::Whole, .holdable = true}, {}));
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Whole, .holdable = true}, outOfReach));
+}
+
+TEST(CreatureObjectActions, EachKindOfThingTakesItsRule)
+{
+	using creature_object_actions::Holdable;
+	using creature_object_actions::KindRule;
+	using creature_object_actions::RuleOf;
+	using creature_object_actions::Thing;
+	EXPECT_EQ(RuleOf(Thing::Creature), KindRule::Never);
+	EXPECT_FALSE(Holdable(Thing::Creature));
+	EXPECT_EQ(RuleOf(Thing::Other), KindRule::Never);
+	EXPECT_EQ(RuleOf(Thing::Ball), KindRule::Always);
+	EXPECT_EQ(RuleOf(Thing::Creed), KindRule::Always);
+	EXPECT_EQ(RuleOf(Thing::Bird), KindRule::Bird);
+	EXPECT_EQ(RuleOf(Thing::Pile), KindRule::Pile);
+	for (const auto thing : {Thing::Villager, Thing::Animal, Thing::MobileObject, Thing::Pot})
+	{
+		EXPECT_EQ(RuleOf(thing), KindRule::Whole);
+		EXPECT_TRUE(Holdable(thing));
+	}
+}
+
+TEST(CreatureObjectActions, RocksBonfiresAndTreesTakeTheWholeRule)
+{
+	using creature_object_actions::KindRule;
+	using creature_object_actions::Thing;
+	for (const auto thing : {Thing::Rock, Thing::Bonfire, Thing::DeadTree, Thing::Tree})
+	{
+		EXPECT_EQ(creature_object_actions::RuleOf(thing), KindRule::Whole);
+		EXPECT_TRUE(creature_object_actions::Holdable(thing));
+		const creature_object_actions::KindFacts kind {.rule = KindRule::Whole, .holdable = true};
+		// A town's artefact stays where it is, but a hand may give it
+		EXPECT_FALSE(creature_object_actions::MayPickUpKind(kind, {.townArtefact = true}));
+		EXPECT_TRUE(creature_object_actions::MayTakeKindFromHand(kind, {.townArtefact = true}));
+	}
+}
+
+TEST(CreatureObjectActions, OfOtherStaticsOnlyTheToysArePickedUp)
+{
+	using creature_object_actions::KindRule;
+	using creature_object_actions::Thing;
+	EXPECT_EQ(creature_object_actions::RuleOf(Thing::Static), KindRule::Toy);
+	const creature_object_actions::KindFacts toy {.rule = KindRule::Toy, .holdable = true, .toy = true};
+	const creature_object_actions::KindFacts statue {.rule = KindRule::Toy, .holdable = true, .toy = false};
+	// A toy whatever else holds, even an artefact out of the map
+	EXPECT_TRUE(creature_object_actions::MayPickUpKind(toy, {.townArtefact = true, .inMapOrHeldByCreature = false}));
+	EXPECT_FALSE(creature_object_actions::MayPickUpKind(statue, {}));
+	// but a hand may give a creature any static that fits
+	EXPECT_TRUE(creature_object_actions::MayTakeKindFromHand(statue, {}));
+	// Lanterns and shields no hand holds; vortices and teleport stones a creature never picks up
+	for (const auto thing : {Thing::Lantern, Thing::Shield, Thing::Vortex, Thing::TeleportStone})
+	{
+		EXPECT_EQ(creature_object_actions::RuleOf(thing), KindRule::Never);
+	}
+	EXPECT_FALSE(creature_object_actions::Holdable(Thing::Lantern));
+	EXPECT_FALSE(creature_object_actions::Holdable(Thing::Shield));
+	EXPECT_TRUE(creature_object_actions::Holdable(Thing::Vortex));
+}
+
+TEST(CreatureObjectActions, AMagicMushroomIsPickedUpUnlessAScriptSaidNo)
+{
+	using creature_object_actions::KindRule;
+	using creature_object_actions::Thing;
+	EXPECT_EQ(creature_object_actions::RuleOf(Thing::MagicMushroom), KindRule::Mushroom);
+	const creature_object_actions::KindFacts mushroom {.rule = KindRule::Mushroom, .holdable = false};
+	EXPECT_TRUE(creature_object_actions::MayPickUpKind(mushroom, {.townArtefact = true, .inMapOrHeldByCreature = false}));
+	EXPECT_FALSE(creature_object_actions::MayPickUpKind(mushroom, {.cannotBePickedUp = true}));
+	// No hand holds one, so none is given or caught
+	EXPECT_FALSE(creature_object_actions::Holdable(Thing::MagicMushroom));
+	EXPECT_FALSE(creature_object_actions::MayTakeKindFromHand(mushroom, {}));
+}
+
+TEST(CreatureObjectActions, TheToysAreKnownByTheirModels)
+{
+	using creature_object_actions::Toy;
+	using creature_object_actions::ToyOf;
+	EXPECT_EQ(ToyOf(MeshId::ObjectToyBall), Toy::Ball);
+	EXPECT_EQ(ToyOf(MeshId::ObjectToyBowlingBall), Toy::BowlingBall);
+	EXPECT_EQ(ToyOf(MeshId::ObjectToyCuddly), Toy::Cuddly);
+	EXPECT_EQ(ToyOf(MeshId::ObjectToyDice), Toy::Die);
+	EXPECT_EQ(ToyOf(MeshId::ObjectToySkittle), Toy::Skittle);
+	EXPECT_FALSE(ToyOf(MeshId::Dummy).has_value());
+}
+
+TEST(CreatureObjectActions, OnlyWhatAHandCanHoldIsGivenOrCaught)
+{
+	using creature_object_actions::KindRule;
+	// A bird high in the air may still be given or caught: those go by what a hand may hold
+	const creature_object_actions::KindFacts highBird {.rule = KindRule::Bird, .holdable = true, .low = false};
+	EXPECT_TRUE(creature_object_actions::MayTakeKindFromHand(highBird, {}));
+	EXPECT_TRUE(creature_object_actions::MayCatchKind(highBird, {}));
+	const creature_object_actions::KindFacts never {.rule = KindRule::Never, .holdable = false};
+	EXPECT_FALSE(creature_object_actions::MayTakeKindFromHand(never, {}));
+	EXPECT_FALSE(creature_object_actions::MayCatchKind(never, {}));
+	// Giving still minds the size and the leash
+	EXPECT_FALSE(creature_object_actions::MayTakeKindFromHand(highBird, {.leashTiedToIt = true}));
+}
+
 TEST(CreatureFeedback, AStrokeLandsOnTheNearestPart)
 {
 	std::array<glm::vec3, creature_feedback::k_BodyPartCount> parts {};

@@ -24,6 +24,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/BonusCreatures.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreaturePhysiology.h"
@@ -146,6 +147,9 @@ struct Environment
 	/// Where the player's temple stands, from the middle of the map, x east and y north in units of the land; with it
 	/// standing their influence border shows, as on a land. The testbed has none when not given.
 	std::optional<glm::vec2> temple;
+	/// The Creature Breeder's bonus creatures taken as unlocked while the scenario runs, as the debug option takes them;
+	/// the option is put back when it stops
+	std::optional<creature_swap::Unlocked> unlockedBonusCreatures;
 };
 
 /// Where the camera looks as the scenario starts
@@ -281,6 +285,12 @@ struct ObjectSetup
 	bool indestructible {false};
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes
 	bool inScript {false};
+	/// A villager is made a disciple of this work, as a land's script makes one
+	VillagerDisciple disciple {VillagerDisciple::None};
+	/// A script has said it can't be picked up, and can't be moved, as Land 1's script says of the fisherman's wife
+	/// while she waits for the player
+	bool cannotBePickedUp {false};
+	bool immovable {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
 	/// A building of the town holds this much wood, rather than the scenario town's usual stock
@@ -432,6 +442,24 @@ struct MiracleCast
 };
 
 /// Something a creature is told to do, in turn with the scenario's other commands
+/// A value a scenario hands a land's script, as another script's call hands it: a number, a marker made at a point from
+/// the middle of the map so high above the land, or one of the scenario's objects or creatures, by its place
+struct ScriptArgument
+{
+	enum class Kind : uint8_t
+	{
+		Number,
+		Marker,
+		Object,
+		Creature,
+	};
+	Kind kind {Kind::Number};
+	float number {0.0f};
+	glm::vec2 point {0.0f};
+	float height {0.0f};
+	size_t index {0};
+};
+
 struct Command
 {
 	enum class Kind : uint8_t
@@ -518,6 +546,8 @@ struct Command
 		FightStep,
 		FightSpecial,
 		FightAuto,
+		/// In the fight, a miracle (value, by its magic type) added to the end of the moves, as drawing its gesture does
+		FightSpell,
 		/// Being knocked out, as a fight's loser is, and brought round again
 		KnockOut,
 		BringRound,
@@ -600,6 +630,9 @@ struct Command
 		WalkHome,
 		/// One of the help's message sets (value) runs, as the help system runs it. Needs no creature
 		RunHelpMessage,
+		/// Every kind of the advisors' guidance counts as heard as long ago as can be, so the next remark due is said
+		/// at once rather than after its usual wait. Needs no creature
+		EndGuidanceWaits,
 		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
 		/// loses the last of its life. Needs no creature
 		DestroyTemple,
@@ -630,6 +663,9 @@ struct Command
 		/// The player is put in a room of the temple (value, by the temple's rooms: 0 the challenge room). Needs no
 		/// creature
 		EnterTemple,
+		/// A land's script (script, by its name) starts as a script's "run script" starts it, given its arguments in
+		/// order (scriptArguments); the scripts' globals named are set first (scriptGlobals). Needs no creature
+		RunScript,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -695,6 +731,10 @@ struct Command
 	std::string_view handDemo;
 	/// The title of a challenge recorded, by its help text's name
 	std::string_view title;
+	/// A script run, its arguments, and the globals set before it runs
+	std::string_view script;
+	std::vector<ScriptArgument> scriptArguments;
+	std::vector<std::pair<std::string_view, ScriptArgument>> scriptGlobals;
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 /// Whether a command is the player's mouse, which needs no creature
@@ -885,6 +925,7 @@ void AddHandLookScenarios(std::vector<Scenario>& all);
 /// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
 void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+void AddDiscipleScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);
 /// The moon at night, seen to the east, for trying its phases and its path with the moon debug window

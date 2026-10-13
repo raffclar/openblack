@@ -261,6 +261,11 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 	}
 	if (events.end)
 	{
+		// The local player's heart beats as the danger has it again
+		if (const auto local = _world->LocalPlayer(); local.has_value() && *local == temple.owner)
+		{
+			_world->EndHeartbeatHold(temple.owner);
+		}
 		temple.destroying = false;
 		temple.destructionClock = 0.0f;
 		RemoveTemple(entity);

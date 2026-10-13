@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -42,12 +43,9 @@ public:
 	/// The circles a creature plans its route round for a Norse gate, which stand in for its one bounding circle; none
 	/// for anything else
 	[[nodiscard]] virtual std::optional<std::vector<animated_static::RouteCircle>> RouteCircles(entt::entity gate) const = 0;
-	/// Once a frame: each animated static's clip plays on by the milliseconds of the game's clock since the last frame
-	/// and its model is posed, and the plinths' stones are placed
-	virtual void Update(uint32_t turn, float turnFraction) = 0;
-
-	/// The stone models drawn on the plinths go with the level
-	virtual void Reset() = 0;
+	/// Once a frame: each animated static's clip plays on by the frame's game time and its model is posed, and the
+	/// plinths' stones are placed
+	virtual void Update(std::chrono::milliseconds frameGameTime) = 0;
 };
 
 } // namespace openblack::ecs::systems

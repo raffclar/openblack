@@ -39,13 +39,9 @@ public:
 	[[nodiscard]] std::optional<uint32_t> GateStoneValue(entt::entity object) const override;
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
 	[[nodiscard]] std::optional<std::vector<animated_static::RouteCircle>> RouteCircles(entt::entity gate) const override;
-	void Update(uint32_t turn, float turnFraction) override;
-	void Reset() override;
+	void Update(std::chrono::milliseconds frameGameTime) override;
 
 private:
-	/// The game's clock when the scenery was last drawn; none before the first frame of a level
-	std::optional<uint32_t> _drawTime;
-
 	/// Whether something's model shows on the screen this frame
 	[[nodiscard]] static bool OnScreen(const object_draw_list::View& view, const components::Transform& transform,
 	                                   const components::Mesh& mesh);

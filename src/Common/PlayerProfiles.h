@@ -57,6 +57,9 @@ struct Profile
 	int symbol {0};
 	/// The options the player set
 	Settings settings;
+	/// How good or evil the player was when it was last kept as they played, from -1 to 1: a new game starts them there.
+	/// Neither good nor evil until one is kept
+	double alignment {0.0};
 
 	bool operator==(const Profile&) const = default;
 };
@@ -126,7 +129,8 @@ void Edit(Profile& profile, std::u16string_view creatureName, int symbol);
 
 /// The profiles as they are kept on disk, UTF-8: one line naming the current profile, then a line for each profile with
 /// its name, its creature file, its symbol and its creature's name, then a line for each of its settings: the profile's
-/// name, the setting's and its value; all separated by tabs (no name can hold a tab)
+/// name, the setting's and its value, then a line with the profile's name and the alignment kept; all separated by tabs
+/// (no name can hold a tab)
 [[nodiscard]] std::string Write(const Profiles& profiles);
 /// The profiles read back, in the list's order; lines that aren't understood are passed over, and settings not kept
 /// are the game's own

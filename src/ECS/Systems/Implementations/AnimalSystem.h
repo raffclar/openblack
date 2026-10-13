@@ -25,7 +25,7 @@ class AnimalSystem final: public AnimalSystemInterface
 {
 public:
 	void ProcessTurn() override;
-	void Update(uint32_t turn, float turnFraction) override;
+	void Update(std::chrono::milliseconds frameGameTime, float turnFraction) override;
 	void Reset() override;
 
 	entt::entity CreateFlock(glm::vec2 centre, float domainRadius, float flockDistance) override;
@@ -69,7 +69,7 @@ public:
 
 	[[nodiscard]] bool IsFrighteningToCreature(entt::entity animal) const override;
 	[[nodiscard]] bool CanPlayerPickUp(entt::entity animal) const override;
-	[[nodiscard]] bool CanBePickedUpByCreature(entt::entity animal) const override;
+	[[nodiscard]] std::optional<bool> BirdCanBePickedUpByCreature(entt::entity animal) const override;
 	[[nodiscard]] bool CanBeStompedOnByCreature(entt::entity animal, float creatureHeight) const override;
 
 private:
@@ -175,7 +175,6 @@ private:
 	uint32_t _turn {0};
 	/// How many flocks have been made, which orders them
 	uint32_t _flocksMade {0};
-	uint32_t _drawTime {0};
 };
 
 } // namespace openblack::ecs::systems

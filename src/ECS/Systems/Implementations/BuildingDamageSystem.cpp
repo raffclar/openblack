@@ -424,8 +424,8 @@ void ApplyBreakage(building_world::World& world, entt::entity building, entt::en
 	const auto& registry = world.Entities();
 	if (const auto* broken = registry.TryGet<const BuildingDamage>(building))
 	{
-		// The help's sprites about destroying buildings would show here for the local player's blow leaving less than
-		// 0.4 of it; openblack has no help system yet
+		// The advisors of the player at this machine may remark on the player's blow wrecking it
+		world.BuildingWrecked(building, player, broken->mesh.remaining);
 		values->Scale(damage::BreakageShare(world.LifeOf(building), broken->mesh.remaining));
 		// Divided by its defences, which taking the effect multiplies back, so its life comes down to what is left
 		if (const auto* info = world.InfoOf(building))

@@ -24,6 +24,9 @@ struct CreatureSwap
 	entt::entity other {entt::null};
 	/// The shape its mind brought from the other body
 	creature_swap::Shape target {};
+	/// The swap's beam of light about the body, which the beams between the two bodies are fired in; none until the
+	/// swap's action starts
+	uint32_t beam {0};
 };
 
 } // namespace openblack::ecs::components

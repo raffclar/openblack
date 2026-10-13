@@ -361,6 +361,23 @@ TEST(ScriptCamera, ACreaturesFacingIsItsBodysTurnPlusATurnLessTwoAndAHalf)
 	EXPECT_TRUE(script_camera::IsWrongFacing(4.0f * script_camera::k_FullTurn));
 }
 
+TEST(ScriptCamera, TheTwoThingCameraStandsOnTheGamesSideOfTheLine)
+{
+	// The game turns its eighth of a turn from the line's direction measured as atan2(x, -z): along +z that is half a
+	// turn and along -z none, so the camera stands back on the -x, -z side of a line along +z and on the +x, +z side of
+	// one along -z
+	const script_camera::DualThing first {.position = {0.0f, 0.0f, 0.0f}, .height = 0.0f, .radius = 0.0f};
+	const script_camera::DualThing north {.position = {0.0f, 0.0f, 100.0f}, .height = 0.0f, .radius = 0.0f};
+	const script_camera::DualThing south {.position = {0.0f, 0.0f, -100.0f}, .height = 0.0f, .radius = 0.0f};
+	script_camera::DualSettings settings;
+	const auto alongZ = script_camera::DualView(first, north, settings);
+	EXPECT_LT(alongZ.origin.x - alongZ.focus.x, 0.0f);
+	EXPECT_LT(alongZ.origin.z - alongZ.focus.z, 0.0f);
+	const auto backAlongZ = script_camera::DualView(first, south, settings);
+	EXPECT_GT(backAlongZ.origin.x - backAlongZ.focus.x, 0.0f);
+	EXPECT_GT(backAlongZ.origin.z - backAlongZ.focus.z, 0.0f);
+}
+
 TEST(ScriptCamera, TheTwoThingCamerasGlidesShortenOverItsFirstSecondAndAHalf)
 {
 	EXPECT_FLOAT_EQ(script_camera::DualSeconds(0.0f), 2.0f);

@@ -13,32 +13,37 @@
 
 #include <algorithm>
 
+#include "Common/ModelInverseSquareRoot.h"
+
 using namespace openblack;
 using namespace openblack::creature_swap;
 
-std::optional<Bonus> creature_swap::BonusOf(int32_t species)
+bool creature_swap::IsBeamTurn(uint32_t turn)
 {
-	switch (species)
-	{
-	case 3:
-		return Bonus::Leopard;
-	case 6:
-		return Bonus::Horse;
-	case 14:
-		return Bonus::Mandrill;
-	case 15:
-		return Bonus::Rhino;
-	case 16:
-		return Bonus::Gorilla;
-	default:
-		return std::nullopt;
-	}
+	return turn % k_BeamEveryTurns == 0;
 }
 
-bool creature_swap::IsAvailable(int32_t species, const Unlocked& unlocked)
+particles::PlasmaCommand creature_swap::Beam(glm::vec3 from, glm::vec3 to, uint32_t alphaDraw)
 {
-	const auto bonus = BonusOf(species);
-	return !bonus.has_value() || unlocked.test(static_cast<size_t>(*bonus));
+	// Points nearer each other than a hundredth have the beam leave straight up
+	constexpr float k_SamePointSquared = 0.0001f;
+	auto direction = to - from;
+	if (direction.z * direction.z + direction.y * direction.y + direction.x * direction.x < k_SamePointSquared)
+	{
+		direction = {0.0f, 1.0f, 0.0f};
+	}
+	// Normalised with the 3D engine's own inverse square root
+	direction *=
+	    gutils::ModelInverseSquareRoot(direction.z * direction.z + direction.y * direction.y + direction.x * direction.x);
+	return {
+	    .start = from,
+	    .end = to,
+	    .startTangent = direction,
+	    .endTangent = direction,
+	    .life = k_BeamLife,
+	    .speed = k_BeamSpeed,
+	    .alpha = static_cast<uint8_t>(k_BeamLowestAlpha + alphaDraw),
+	};
 }
 
 bool creature_swap::IsSettled(const Shape& now, const Shape& target)

@@ -147,6 +147,7 @@ class VideoSystemInterface;
 class HelpTextSystemInterface;
 class HelpProfileSystemInterface;
 class CreatureHelpSystemInterface;
+class GuidanceSystemInterface;
 class HelpMessageSystemInterface;
 class TipBubbleSystemInterface;
 class HandDemoSystemInterface;
@@ -303,6 +304,7 @@ struct Locator
 	using helpProfileSystem = entt::locator<ecs::systems::HelpProfileSystemInterface>;
 	using creatureHelpSystem = entt::locator<ecs::systems::CreatureHelpSystemInterface>;
 	using helpMessageSystem = entt::locator<ecs::systems::HelpMessageSystemInterface>;
+	using guidanceSystem = entt::locator<ecs::systems::GuidanceSystemInterface>;
 	using tipBubbleSystem = entt::locator<ecs::systems::TipBubbleSystemInterface>;
 	using handDemoSystem = entt::locator<ecs::systems::HandDemoSystemInterface>;
 	using advisorSystem = entt::locator<ecs::systems::AdvisorSystemInterface>;

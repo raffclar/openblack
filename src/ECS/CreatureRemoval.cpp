@@ -24,6 +24,7 @@
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerCreatures.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -202,6 +203,11 @@ size_t creature_removal::ForgetReferences(Registry& registry, entt::entity creat
 	for (const auto entity : held)
 	{
 		registry.Remove<HeldByCreature>(entity);
+		// Out of the creature's hand it goes back into the map's cells where it is
+		if (Locator::entitiesMap::has_value())
+		{
+			Locator::entitiesMap::value().Refile(entity);
+		}
 	}
 	cleared += held.size();
 

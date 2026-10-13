@@ -893,6 +893,13 @@ openblack_setup_and_add_test(
   test_reaction_timing_rules test_reaction_timing_rules.cpp
 )
 openblack_setup_and_add_test(test_shared_index_lists test_shared_index_lists.cpp)
+openblack_setup_and_add_test(test_cinema_hides gui/test_cinema_hides.cpp)
+openblack_setup_and_add_test(
+  test_creature_cut_scene_look test_creature_cut_scene_look.cpp
+)
+openblack_setup_and_add_test(test_guidance_rules test_guidance_rules.cpp)
+openblack_setup_and_add_test(test_help_query test_help_query.cpp)
+openblack_setup_and_add_test(test_land_change test_land_change.cpp)
 openblack_setup_and_add_test(
   test_creature_reaction_rules test_creature_reaction_rules.cpp
 )

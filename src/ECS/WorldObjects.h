@@ -102,8 +102,9 @@ void DestroyedByEffect(entt::entity object, const EffectDeath& death);
 /// A villager's life went from one value to another: its town counts one more of its people injured when it falls under
 /// seven tenths, one fewer when it rises back over
 void CountInjury(entt::entity villager, float before, float after);
-/// Harm done to a town's villager or building is an attack on its town by whoever did it
-void AttackTown(entt::entity object, float damage, PlayerNames aggressor);
+/// Harm done to a town's villager or building is an attack on its town by whoever did it; the player at this machine's
+/// advisors may remark on it. A creature doing the harm is told apart.
+void AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature = false);
 
 /// Life given back to an object other than a living thing, as a miracle's heal gives it: never above 1. Its life after.
 float IncreaseLife(entt::entity object, float amount);
