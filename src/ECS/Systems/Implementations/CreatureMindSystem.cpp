@@ -322,7 +322,10 @@ void ApplyEyes(CreatureEyes* eyes, creature_mind::Eyes look)
 		return;
 	}
 	const bool sleepy = look == creature_mind::Eyes::Sleepy;
-	eyes->mode = look == creature_mind::Eyes::Closed ? creature_eyes::Mode::Closed : creature_eyes::Mode::Calm;
+	eyes->mode = look == creature_mind::Eyes::Closed   ? creature_eyes::Mode::Closed
+	             : look == creature_mind::Eyes::Stoned ? creature_eyes::Mode::Stoned
+	             : look == creature_mind::Eyes::Wide   ? creature_eyes::Mode::Wide
+	                                                   : creature_eyes::Mode::Calm;
 	eyes->openness = sleepy ? k_SleepyOpenness : 0.0f;
 	eyes->blink.intervalMs = sleepy ? k_SleepyBlinkIntervalMs : creature_eyes::k_BlinkIntervalMs;
 }

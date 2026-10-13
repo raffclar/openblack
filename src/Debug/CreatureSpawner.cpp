@@ -574,6 +574,9 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		case creature_mind::Step::Kind::SwapMind:
 			ImGui::Text("Swapping minds for %.1f s", static_cast<double>(idle.stepSeconds));
 			break;
+		case creature_mind::Step::Kind::Overlay:
+			ImGui::Text("%s on top of its body", AnimationLabel(step.animation).c_str());
+			break;
 		default:
 			break;
 		}

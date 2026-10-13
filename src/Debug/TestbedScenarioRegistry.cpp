@@ -1726,6 +1726,89 @@ void AddObjects(std::vector<Scenario>& all)
 	                 OnObject(Kind::PickUp, 0, 4, 1.0f), Act(Kind::PutDown, 0, 1.0f, true)},
 	});
 
+	all.push_back({
+	    .id = "objects.give_wood",
+	    .name = "Giving a tree to a store as wood",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, a birch to its left and its town's empty storage pit off to the east. A script tells "
+	                   "it to give wood from the birch to the pit, as the creature does by itself out of compassion "
+	                   "for a town short of wood.",
+	    .expected = "It walks to the birch and pulls it up (the tree creaks), carries it towards the pit until it is "
+	                "near enough to throw, turns to face the pit with a look of compassion and throws the tree in. The "
+	                "pit's wood goes up.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {90.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-20.0f, -15.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {90.0f, 0.0f}, .storedFood = 0, .storedWood = 0},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {100.0f, -12.0f}, .joinTown = true}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "GiveWoodFromTreeToStoragePit", .with = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.plant_tree",
+	    .name = "Planting a tree by something",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, a birch in front of it and a rock off to the north-east. A script tells it to plant "
+	                   "the birch by the rock, as the creature does by itself out of compassion for a town.",
+	    .expected = "It pulls up the birch (the tree creaks), walks right up to the rock, turns to face it and puts the "
+	                "birch down beside it, where it stands and takes root.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -15.0f}, {50.0f, 50.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {0.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {50.0f, 50.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "PlantTree", .with = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.kind_throws",
+	    .name = "Throwing the kinds of thing about",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a villager, a rock and a toy ball in front of it, a hut off to the north and a "
+	                   "birch to the north-east. A script tells it in turn to throw the villager about, to hurl the rock "
+	                   "at the hut, and to throw the toy ball at the birch.",
+	    .expected = "It picks up the villager and throws her off to one side. It picks up the rock, goes to where it can "
+	                "throw at the hut and hurls the rock at it, angry. Half the time it jumps for joy, then picks up the "
+	                "toy ball and throws it at the birch, angry, sometimes jumping for joy again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -15.0f}, {0.0f, -90.0f}, {50.0f, -70.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-12.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::ToyBall, .offset = {12.0f, -k_Reach}},
+	                {.type = AbodeInfo::CelticHut, .offset = {0.0f, -90.0f}},
+	                {.type = TreeInfo::Birch, .offset = {50.0f, -70.0f}}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "ThrowAround"},
+	         {.kind = Kind::DoAction, .delaySeconds = 6.0f, .waitUntilFree = true, .object = 3, .action = "Hurl", .with = 1},
+	         {.kind = Kind::DoAction,
+	          .delaySeconds = 6.0f,
+	          .waitUntilFree = true,
+	          .object = 4,
+	          .action = "ThrowBallAtObject",
+	          .with = 2}},
+	});
+
+	auto stoner = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	stoner.desires = {{.desire = creature_desires::Desire::GetHigh, .fraction = 1.0f}};
+	all.push_back({
+	    .id = "objects.magic_mushroom",
+	    .name = "Eating a magic mushroom",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a magic mushroom in front of it, wanting to get high as much as it can. It "
+	                   "picks the mushroom up and eats it by itself.",
+	    .expected = "Once it has eaten it, it becomes high: amazed, it turns to the camera and talks; its eyes go wide and "
+	                "dart about, and smiling it stares at the camera, plays dazed and confused actions, half the time "
+	                "jumps for joy, and half the time walks to a clear place, sits there sadly ten to fifteen seconds and "
+	                "starts up frightened. At last it turns to the camera amazed, talks and plays a dazed action again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {stoner},
+	    .objects = {{.type = FeatureInfo::MagicMushroom, .offset = {0.0f, -k_Reach}}},
+	});
+
 	auto hungry = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	hungry.needs = {.energy = 0.3f};
 	hungry.hold = false;
@@ -3593,6 +3676,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "enter temple",
 	    "play boat film",
 	    "run script",
+	    "do action",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

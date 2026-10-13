@@ -34,6 +34,7 @@
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMind.h"
@@ -55,6 +56,7 @@
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -65,6 +67,7 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flowers.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
@@ -76,7 +79,10 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
@@ -212,7 +218,9 @@ uint32_t PlayerNumberOf(PlayerNames owner)
 	return static_cast<uint32_t>(owner);
 }
 
-/// Whether a thing is the kind an action is done to
+/// A creature takes no tree to plant from within this many metres of where the player did what it last set about copying
+constexpr float k_PlantFarFromCopied = 20.0f;
+
 /// Which toy the thing is: the football is a ball, and of the statics those with a toy's model
 std::optional<creature_object_actions::Toy> ToyOf(const ecs::Registry& registry, entt::entity entity)
 {
@@ -302,6 +310,40 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		const bool burning = Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity);
 		return burning == (target == Target::Burning);
 	}
+	case Target::AnyLiving:
+		return hands != nullptr && creature_object_actions::IsLiving(hands->KindOf(entity).thing);
+	case Target::Stonable:
+		return hands != nullptr &&
+		       creature_object_actions::CanBeStoned(hands->KindOf(entity).thing,
+		                                            registry.AllOf<VillagerDeath>(entity) || magic_living::IsDead(entity));
+	case Target::ThrowingDamage:
+	{
+		if (heldByOther || hands == nullptr)
+		{
+			return false;
+		}
+		const auto kind = hands->KindOf(entity);
+		return creature_object_actions::DoesThrowingDamage(kind.thing, kind.toy) && hands->CanPickUp(self, entity);
+	}
+	case Target::SeaThrowable:
+		return hands != nullptr && creature_object_actions::CanBeThrownInTheSea(hands->KindOf(entity).thing);
+	case Target::ThrowableToImpress:
+		return !heldByOther && hands != nullptr && hands->CanThrowToImpress(self, entity) && hands->CanPickUp(self, entity);
+	case Target::PickableTree:
+		return !heldByOther && registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanPickUp(self, entity);
+	case Target::PlantableTree:
+	{
+		// Not one it planted another by lately, nor one near where the player did what it last set about copying
+		const auto* mind = registry.TryGet<const CreatureMindState>(self);
+		const auto at = PointOf(registry, entity);
+		if (heldByOther || !registry.AllOf<Tree>(entity) || hands == nullptr || mind == nullptr || !at.has_value() ||
+		    std::ranges::find(mind->plantedBy, entt::to_integral(entity)) != mind->plantedBy.end() ||
+		    !(gutils::GetDistanceInMetres(*at, mind->copiedAt) > k_PlantFarFromCopied))
+		{
+			return false;
+		}
+		return hands->CanPickUp(self, entity);
+	}
 	}
 	return false;
 }
@@ -335,49 +377,80 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	    [&](entt::entity entity, const Creature&, const Transform& at) { consider(entity, at); });
 	registry.Each<const MobileObject, const Transform>(
 	    [&](entt::entity entity, const MobileObject&, const Transform& at) { consider(entity, at); });
+	// Anything at all is whatever it may come to know of: the living, what lies about, statics, features, trees and
+	// buildings
+	const bool anything = target == Target::Anything;
+	const bool living = target == Target::AnyLiving || target == Target::Stonable || anything;
 	// The animals and miracles that frighten it are only ever run from
-	if (target == Target::Frightening)
+	if (target == Target::Frightening || living)
 	{
 		registry.Each<const Animal, const Transform>(
 		    [&](entt::entity entity, const Animal&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::Frightening)
+	{
 		registry.Each<const ecs::components::Spell>([&](entt::entity entity, const ecs::components::Spell& spell) {
 			consider(entity, Transform {.position = spell.position, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
 		});
 	}
-	// Of pots and piles, food is eaten, and any may be picked up
-	if (target == Target::Food || target == Target::MagicFoodPile || target == Target::Pickable)
+	const bool sea = target == Target::SeaThrowable;
+	// Of pots and piles, food is eaten, and any may be picked up or thrown into the sea
+	const bool pickable = target == Target::Pickable || target == Target::ThrowableToImpress;
+	if (target == Target::Food || target == Target::MagicFoodPile || pickable || sea || anything)
 	{
 		registry.Each<const Pot, const Transform>(
 		    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
 	}
 	// Whatever else it may pick up: animals, the football, statics and rocks, dead trees, trees and mushrooms
-	const bool pickable = target == Target::Pickable;
-	if (pickable || target == Target::Toy || target == Target::ToyBall)
+	if (pickable || target == Target::Toy || target == Target::ToyBall || sea || anything)
 	{
 		registry.Each<const Ball, const Transform>(
 		    [&](entt::entity entity, const Ball&, const Transform& at) { consider(entity, at); });
+	}
+	const bool statics = pickable || target == Target::Toy || target == Target::ToyBall || sea || target == Target::Stonable ||
+	                     target == Target::ThrowingDamage || anything;
+	if (statics)
+	{
 		registry.Each<const MobileStatic, const Transform>(
 		    [&](entt::entity entity, const MobileStatic&, const Transform& at) { consider(entity, at); });
+		registry.Each<const DeadTree, const Transform>(
+		    [&](entt::entity entity, const DeadTree&, const Transform& at) { consider(entity, at); });
 	}
 	if (pickable)
 	{
 		registry.Each<const Animal, const Transform>(
 		    [&](entt::entity entity, const Animal&, const Transform& at) { consider(entity, at); });
-		registry.Each<const DeadTree, const Transform>(
-		    [&](entt::entity entity, const DeadTree&, const Transform& at) { consider(entity, at); });
+	}
+	if (pickable || target == Target::Stonable || anything)
+	{
 		registry.Each<const Feature, const Transform>(
 		    [&](entt::entity entity, const Feature&, const Transform& at) { consider(entity, at); });
 	}
 	const bool fire = target == Target::Burning || target == Target::Unburnt;
-	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything || fire || pickable)
+	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything || fire || pickable || sea ||
+	    target == Target::PickableTree || target == Target::PlantableTree)
 	{
 		registry.Each<const Tree, const Transform>(
 		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::Destroyable || target == Target::Anything || fire)
+	if (target == Target::Destroyable || target == Target::Anything || fire || target == Target::Stonable)
 	{
 		registry.Each<const Abode, const Transform>(
 		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
+	}
+	// What else is built or set into the land, which thrown things can knock about
+	if (target == Target::Stonable || anything)
+	{
+		registry.Each<const Temple, const Transform>(
+		    [&](entt::entity entity, const Temple&, const Transform& at) { consider(entity, at); });
+		registry.Each<const WorshipSite, const Transform>(
+		    [&](entt::entity entity, const WorshipSite&, const Transform& at) { consider(entity, at); });
+		registry.Each<const VillageTotem, const Transform>(
+		    [&](entt::entity entity, const VillageTotem&, const Transform& at) { consider(entity, at); });
+		registry.Each<const AnimatedStatic, const Transform>(
+		    [&](entt::entity entity, const AnimatedStatic&, const Transform& at) { consider(entity, at); });
+		registry.Each<const Flowers, const Transform>(
+		    [&](entt::entity entity, const Flowers&, const Transform& at) { consider(entity, at); });
 	}
 	if (target == Target::StoragePit)
 	{
@@ -969,6 +1042,47 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	mind.underway = CreatureMindState::ActionUnderway {.serial = idle.serial, .action = *action};
 }
 
+namespace
+{
+/// Whether a creature kept within an area by its leash has the thing farther from it than the area's radius
+bool OutsideConfinement(const ecs::Registry& registry, entt::entity creature, entt::entity object)
+{
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	if (leashes == nullptr)
+	{
+		return false;
+	}
+	const bool leashed = leashes->worn.has_value();
+	const bool works = !leashed || leashes->worn->works;
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto* objectAt = registry.TryGet<const Transform>(object);
+	return creature_leash::IsConfined(leashes->confinementRadius, leashed, works) && at != nullptr && objectAt != nullptr &&
+	       gutils::GetDistanceInMetres(at->position, objectAt->position) > leashes->confinementRadius;
+}
+
+/// The thing a creature at a point uses for an action, of a kind, other than the goal
+std::optional<uint32_t> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
+                                std::optional<uint32_t> goal)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<creature_planner::ObjectCandidate> candidates;
+	for (const auto& found : Gather(registry, use, creature, position))
+	{
+		// Nothing farther than the area its leash keeps it within, nor another creature
+		if (registry.AllOf<Creature>(found.entity) || OutsideConfinement(registry, creature, found.entity))
+		{
+			continue;
+		}
+		const auto* held = registry.TryGet<const HeldByCreature>(found.entity);
+		candidates.push_back({.id = entt::to_integral(found.entity),
+		                      .distance = found.distance,
+		                      .held = held != nullptr && held->creature == creature});
+	}
+	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
+}
+
+} // namespace
+
 bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, const creature_planner::Plan& plan,
                                const creature_plan_actions::Situation& situation)
 {
@@ -984,7 +1098,19 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		return false;
 	}
 	const auto& info = tables->actions[plan.action];
-	auto built = PlanAgenda(creature, plan.action, plan.object, situation);
+	auto situated = situation;
+	Situate(creature, situated);
+	// An action done with something takes up the thing to use too, as the plan found it or, for a plan made otherwise
+	// (copying the player, doing it again), as the planner would
+	auto chosen = plan;
+	if (const auto* executor = creature_plan_actions::For(info.name);
+	    executor != nullptr && executor->use != Target::None && !chosen.instrument.has_value())
+	{
+		chosen.instrument = UsedFor(creature, executor->use, situated.position,
+		                            tables->rules.at(static_cast<size_t>(plan.desire)).distanceWeight, plan.object);
+	}
+	situated.instrument = chosen.instrument;
+	auto built = PlanAgenda(creature, plan.action, plan.object, situated);
 	if (!built.has_value())
 	{
 		return false;
@@ -1005,7 +1131,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} sets about {} on {} ({} steps)", entt::to_integral(creature),
 	                    info.name, plan.object.value_or(0), mind.idle.agenda.size());
 	auto& learnt = *mind.learnt;
-	mind.planner.current = plan;
+	mind.planner.current = chosen;
 	mind.planActive = true;
 	mind.planSerial = mind.idle.serial;
 	mind.agendaSeen = mind.idle.serial;
@@ -1064,6 +1190,13 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	const auto cast = creature_plan_actions::IsCast(*executor) ? CastInfoFor(creature, action) : std::nullopt;
 	// Only what varies by chance draws one
 	auto situated = situation;
+	if (situation.instrument.has_value())
+	{
+		const auto used = static_cast<entt::entity>(*situation.instrument);
+		const auto& registry = Locator::entitiesRegistry::value();
+		situated.instrumentPoint = PointOf(registry, used).value_or(glm::vec2(0.0f));
+		situated.instrumentRadius = object_measures::TwoDRadius(registry, used);
+	}
 	if (object.has_value())
 	{
 		situated.thingHeight = object_measures::Height(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
@@ -1088,6 +1221,20 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	if (!agenda.has_value())
 	{
 		return std::nullopt;
+	}
+	// Planting by a tree, it remembers that tree, and won't take it to plant elsewhere for a while
+	auto& registry = Locator::entitiesRegistry::value();
+	if (executor->build == creature_plan_actions::Build::PlantTree && object.has_value() &&
+	    registry.AllOf<Tree>(static_cast<entt::entity>(*object)))
+	{
+		if (auto* mind = registry.TryGet<CreatureMindState>(creature))
+		{
+			mind->plantedBy.push_back(*object);
+			if (mind->plantedBy.size() > creature_mind::k_PlantedRemembered)
+			{
+				mind->plantedBy.erase(mind->plantedBy.begin());
+			}
+		}
 	}
 	return std::pair {executor, std::move(*agenda)};
 }
@@ -1140,12 +1287,7 @@ float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const Creatu
 			}
 		}
 		// Kept within an area, it doesn't act on what lies farther from it than the area's radius
-		const bool leashed = leashes->worn.has_value();
-		const bool works = !leashed || leashes->worn->works;
-		const auto* at = registry.TryGet<const Transform>(creature);
-		const auto* objectAt = registry.TryGet<const Transform>(object);
-		if (creature_leash::IsConfined(leashes->confinementRadius, leashed, works) && at != nullptr && objectAt != nullptr &&
-		    gutils::GetDistanceInMetres(at->position, objectAt->position) > leashes->confinementRadius)
+		if (OutsideConfinement(registry, creature, object))
 		{
 			return 0.0f;
 		}
@@ -1168,6 +1310,14 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		return;
 	}
 	mind.plannedTurn = mind.turn;
+	// Having eaten a magic mushroom, once it is done with what it was doing it becomes high before it chooses anything
+	// else
+	if (mind.highPending && mind.idle.step >= mind.idle.agenda.size() && !registry.AllOf<ScriptControlled>(creature))
+	{
+		mind.highPending = false;
+		BecomeHigh(creature);
+		return;
+	}
 	const glm::vec2 position {transform->position.x, transform->position.z};
 	const auto& desires = *mind.desires;
 	const auto& learnt = *mind.learnt;
@@ -1188,7 +1338,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	}
 	const auto random = [this](uint32_t range) { return Random(range); };
 	bool waterLooked = false;
-	bool hurlLooked = false;
 	bool fishingLooked = false;
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
 		const bool fishing = executor.build == creature_plan_actions::Build::FishAndEat ||
@@ -1207,11 +1356,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		{
 			waterLooked = true;
 			situation.water = NearestWater(position);
-		}
-		if (executor.build == creature_plan_actions::Build::Hurl && !hurlLooked)
-		{
-			hurlLooked = true;
-			situation.hurlTarget = NearestHurlTarget(registry, position);
 		}
 	};
 
@@ -1257,8 +1401,9 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	{
 		const auto d = static_cast<size_t>(desire);
 		std::optional<creature_planner::Plan> best;
-		// Actions are weighed in groups by the kind of thing they are done to, so each has a goal it can be done to
-		std::array<std::vector<creature_planner::ActionCandidate>, creature_plan_actions::k_TargetCount> groups {};
+		// Actions are weighed in groups by the kind of thing they are done to, and whether that may be what it holds, so
+		// each has a goal it can be done to
+		std::array<std::vector<creature_planner::ActionCandidate>, creature_plan_actions::k_TargetCount * 2> groups {};
 		// Compassion is about a town, and what it may do is what the town desire it helps with asks for, done to the
 		// town's own buildings and people
 		std::span<const uint32_t> actions = tables->desireActions.at(d);
@@ -1281,7 +1426,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				continue;
 			}
 			prepare(*executor);
-			groups.at(static_cast<size_t>(executor->target))
+			groups.at(static_cast<size_t>(executor->target) * 2 + (executor->notWhatItHolds ? 1 : 0))
 			    .push_back({
 			        .action = action,
 			        .needsObject = executor->target != Target::None,
@@ -1300,7 +1445,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			{
 				continue;
 			}
-			const auto target = static_cast<Target>(g);
+			const auto target = static_cast<Target>(g / 2);
+			const bool notHeld = g % 2 != 0;
 			std::vector<creature_planner::ObjectCandidate> objects;
 			if (target != Target::None)
 			{
@@ -1325,6 +1471,10 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 							continue;
 						}
 						const auto* held = registry.TryGet<const HeldByCreature>(found.entity);
+						if (notHeld && held != nullptr && held->creature == creature)
+						{
+							continue;
+						}
 						objects.push_back({
 						    .id = entt::to_integral(found.entity),
 						    .distance = found.distance,
@@ -1334,8 +1484,25 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 					}
 				}
 			}
-			const auto plan = creature_planner::PlanDesire(desire, strengths.at(d), objects, tables->rules.at(d).distanceWeight,
-			                                               groups.at(g));
+			const auto distanceWeight = tables->rules.at(d).distanceWeight;
+			auto plan = creature_planner::PlanDesire(desire, strengths.at(d), objects, distanceWeight, groups.at(g));
+			// An action done with something takes up the thing to use too; with nothing to use, the next action is tried
+			while (plan.has_value())
+			{
+				const auto* executor = creature_plan_actions::For(tables->actions.at(plan->action).name);
+				if (executor == nullptr || executor->use == Target::None)
+				{
+					break;
+				}
+				plan->instrument = UsedFor(creature, executor->use, position, distanceWeight, plan->object);
+				if (plan->instrument.has_value())
+				{
+					break;
+				}
+				auto& tried = *std::ranges::find(groups.at(g), plan->action, &creature_planner::ActionCandidate::action);
+				tried.disabled = true;
+				plan = creature_planner::PlanDesire(desire, strengths.at(d), objects, distanceWeight, groups.at(g));
+			}
 			if (plan.has_value() && (!best.has_value() || plan->priority > best->priority))
 			{
 				best = plan;
@@ -1358,6 +1525,35 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	{
 		mind.planner.best.at(static_cast<size_t>(choice->desire)).reset();
 	}
+}
+
+void CreatureMindSystem::AteMagicMushroom(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr)
+	{
+		mind->highPending = true;
+	}
+}
+
+void CreatureMindSystem::BecomeHigh(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (transform == nullptr)
+	{
+		return;
+	}
+	const glm::vec2 position {transform->position.x, transform->position.z};
+	const auto radius = object_measures::TwoDRadius(registry, creature);
+	const auto findSeat = [&]() -> std::optional<creature_mind::HighSeat> {
+		const auto place = ClearAreaFor(registry, creature, position, creature_mind::k_HighSeatRadii * radius, false);
+		return place.has_value() ? std::optional(creature_mind::HighSeat {.place = *place, .radius = radius}) : std::nullopt;
+	};
+	auto agenda = creature_mind::BecomeHigh(
+	    findSeat, [this](uint32_t range) { return Random(range); }, [this](float most) { return Chance() * most; });
+	static_cast<void>(
+	    ForcePlan(creature, {.desire = Desire::GetHigh, .action = "GetHigh", .object = creature, .agenda = std::move(agenda)}));
 }
 
 bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan)
@@ -1425,6 +1621,8 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			if (plan.instrument.has_value())
 			{
 				situation.instrument = entt::to_integral(*plan.instrument);
+				situation.instrumentPoint = PointOf(registry, *plan.instrument).value_or(position);
+				situation.instrumentRadius = object_measures::TwoDRadius(registry, *plan.instrument);
 			}
 			situation.handFull = registry.AllOf<CreatureHeldObject>(creature);
 			if (plan.object.has_value() && registry.Valid(*plan.object))
@@ -1547,6 +1745,23 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	situation.controlledByScript = registry.AllOf<ScriptControlled>(creature);
 	situation.radius = object_measures::TwoDRadius(registry, creature);
 	situation.height = body != nullptr ? k_HeightOfSizeOne * ShownSize(*body) : 0.0f;
+	const auto held = Locator::creatureObjectActionSystem::has_value()
+	                      ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
+	                      : std::nullopt;
+	situation.handFull = held.has_value();
+	if (held.has_value())
+	{
+		const auto thing = Locator::creatureObjectActionSystem::value().KindOf(*held).thing;
+		const auto* mobile = registry.TryGet<const MobileObject>(*held);
+		situation.holdingTree = thing == creature_object_actions::Thing::Tree;
+		situation.holdingMushroom = thing == creature_object_actions::Thing::MagicMushroom ||
+		                            (mobile != nullptr && (mobile->type == MobileObjectInfo::MagicMushroom ||
+		                                                   mobile->type == MobileObjectInfo::Toadstool));
+	}
+	if (const auto* at = registry.TryGet<const Transform>(creature))
+	{
+		situation.position = {at->position.x, at->position.z};
+	}
 	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
 	{
 		situation.eyeDistance = glm::distance(*situation.eye, transform->position);
@@ -1775,7 +1990,6 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 				const auto eye = Locator::camera::value().GetOrigin();
 				situation.camera = glm::vec2(eye.x, eye.z);
 			}
-			situation.hurlTarget = NearestHurlTarget(registry, position);
 			Adopt(creature, mind, again, situation);
 			return;
 		}
@@ -1882,7 +2096,6 @@ void CreatureMindSystem::LearnTurn()
 				const auto desire = static_cast<Desire>(
 				    std::min<uint32_t>(tables->actions.at(action).desire, creature_desires::k_DesireCount - 1));
 				creature_plan_actions::Situation situation;
-				situation.hurlTarget = NearestHurlTarget(registry, glm::vec2(transform->position.x, transform->position.z));
 				if (Adopt(creature, *mind,
 				          {.desire = desire,
 				           .action = action,
@@ -2090,6 +2303,10 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 		    const auto target = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt;
 		    if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target))
 		    {
+			    if (const auto copied = object.has_value() ? PointOf(registry, *object) : std::nullopt)
+			    {
+				    mind.copiedAt = *copied;
+			    }
 			    noticed.push_back(entity);
 		    }
 	    });

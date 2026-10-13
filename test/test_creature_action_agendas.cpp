@@ -49,7 +49,8 @@ TEST(CreatureActionAgendas, HurlingPicksUpWhatToThrowThenThrowsItAtTheThing)
 	EXPECT_EQ(agenda[2].face, creature_face::Cue::Anger);
 	EXPECT_EQ(agenda[3].order.kind, ObjectOrder::Kind::Throw);
 	EXPECT_EQ(agenda[3].order.point, glm::vec2(10.0f, 20.0f));
-	EXPECT_EQ(agenda[3].effect, Effect::Hurled);
+	// The throw finishes the action, which sees to whichever desire it served
+	EXPECT_EQ(agenda[3].effect, Effect::None);
 	ASSERT_TRUE(agenda[3].gaze.has_value());
 	EXPECT_EQ(agenda[3].gaze->object, 9u);
 	// Most of the time it doesn't show its anger first; with something in its hand already it throws that
@@ -59,13 +60,13 @@ TEST(CreatureActionAgendas, HurlingPicksUpWhatToThrowThenThrowsItAtTheThing)
 	EXPECT_EQ(holding[0].movement.kind, Movement::Kind::ToThrowPosition);
 }
 
-// A script's hurl is made from the thing to throw it gives; the creature's own still needs somewhere to throw at
+// A hurl, a script's or the creature's own, is made from the thing to throw it is given
 TEST(CreatureActionAgendas, AScriptsHurlNeedsNoPlaceOfItsOwn)
 {
 	const auto* hurl = plan_actions::For("Hurl");
 	ASSERT_NE(hurl, nullptr);
 	plan_actions::Situation situation;
-	EXPECT_FALSE(plan_actions::Possible(*hurl, situation));
+	EXPECT_FALSE(plan_actions::Agenda(*hurl, 9, {1.0f, 2.0f}, situation, NeverFirst).has_value());
 	situation.instrument = 4;
 	situation.height = 15.0f;
 	const auto agenda = plan_actions::Agenda(*hurl, 9, {1.0f, 2.0f}, situation, NeverFirst);
@@ -286,7 +287,8 @@ TEST(CreatureActionAgendas, BallGamesArePlayedWithToys)
 {
 	const auto* throwBall = plan_actions::For("ThrowBallAtObject");
 	ASSERT_NE(throwBall, nullptr);
-	EXPECT_EQ(throwBall->target, plan_actions::Target::Toy);
+	EXPECT_EQ(throwBall->target, plan_actions::Target::Anything);
+	EXPECT_EQ(throwBall->use, plan_actions::Target::Toy);
 	const auto* kick = plan_actions::For("KickBallAround");
 	ASSERT_NE(kick, nullptr);
 	EXPECT_EQ(kick->target, plan_actions::Target::ToyBall);
