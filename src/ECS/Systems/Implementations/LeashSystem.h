@@ -87,6 +87,8 @@ private:
 	/// What the worn leash does to the creature's desires this turn, and to those of a creature it is tied to
 	void UpdateMoods(entt::entity creature, const components::CreatureLeash::Worn& worn);
 	/// The creature takes an order on the land or on a thing, unless it refuses
+	/// Before an order: a creature on its way to a fight takes none (false), and a duelling one's fight is called off
+	bool TakeOutOfFight(entt::entity creature);
 	bool TakeGroundOrder(entt::entity creature, const glm::vec3& place);
 	bool TakeThingOrder(entt::entity creature, entt::entity object);
 	/// The creature answers an order: its player hears it acknowledged, and it nods and makes its acknowledging sound

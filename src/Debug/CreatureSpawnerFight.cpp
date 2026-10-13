@@ -195,7 +195,8 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 			if (ImGui::Button("Start fight"))
 			{
 				using Result = ecs::systems::CreatureFightSystemInterface::StartResult;
-				constexpr std::array<std::string_view, 4> k_Results {"started", "no opponent", "busy", "too weak"};
+				constexpr std::array<std::string_view, 6> k_Results {"started",  "no opponent", "busy",
+				                                                     "too weak", "no arena",    "refused"};
 				const auto result = fights.StartFight(entity, others.at(static_cast<size_t>(_fightOpponent)).second);
 				_lastFight = k_Results.at(static_cast<size_t>(result));
 				if (result == Result::Started && _fightAuto)

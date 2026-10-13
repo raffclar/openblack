@@ -81,6 +81,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -643,6 +644,14 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	{
 		return StartResult::TooWeak;
 	}
+	// Every fight starts by asking the other creature, which may refuse
+	const bool dead = Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsLyingDead(opponent);
+	if (!fight::AgreesToFight(HeightOf(ShownSize(registry.Get<const Creature>(opponent))),
+	                          HeightOf(ShownSize(registry.Get<const Creature>(creature))), dead,
+	                          registry.AllOf<ScriptControlled>(opponent), registry.AllOf<ScriptControlled>(creature)))
+	{
+		return StartResult::Refused;
+	}
 	const auto arenaEntity = TakeArena(registry, creature, opponent);
 	if (!arenaEntity.has_value())
 	{
@@ -906,6 +915,49 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 			Leave(self);
 		}
 	}
+}
+
+void CreatureFightSystem::CallOff(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* fighting = registry.TryGet<CreatureFighting>(creature);
+	if (fighting == nullptr)
+	{
+		return;
+	}
+	const auto opponent = fighting->opponent;
+	for (const auto self : {creature, opponent})
+	{
+		auto* side = registry.Valid(self) ? registry.TryGet<CreatureFighting>(self) : nullptr;
+		if (side == nullptr)
+		{
+			continue;
+		}
+		if (side->stage == CreatureFighting::Stage::Duel)
+		{
+			// Neither wins: each finishes what it is doing and stands, and its fight is over with nothing more to it
+			EndFightFor(self, std::nullopt);
+			side->stage = CreatureFighting::Stage::Respond;
+			side->played = true;
+			side->fighter.stopping = true;
+			side->fighter.queue.Clear();
+			side->fighter.marks.Clear();
+		}
+		else if (side->stage == CreatureFighting::Stage::Approach || side->stage == CreatureFighting::Stage::Taunt ||
+		         side->stage == CreatureFighting::Stage::Ready)
+		{
+			Leave(self);
+		}
+	}
+}
+
+bool CreatureFightSystem::IsSettingUpFight(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
+	return fighting != nullptr &&
+	       (fighting->stage == CreatureFighting::Stage::Approach || fighting->stage == CreatureFighting::Stage::Taunt ||
+	        fighting->stage == CreatureFighting::Stage::Ready);
 }
 
 void CreatureFightSystem::Withdraw(entt::entity creature)
@@ -2001,6 +2053,7 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		const auto duration = DurationOf(entity, fighter.animation);
 		const auto before = fighter.timeMs;
 		fighter.timeMs += milliseconds * fight::PlaybackSpeed(fighter.animation, fighter.speed);
+		fighter.stateMs += milliseconds;
 
 		// An action carries the creature as far as its animation's root moves, back or sideways only within the range
 		if ((fighter.state == fight::State::Action || fighter.state == fight::State::BlockRecoil) && duration > 0.0f)
@@ -2026,8 +2079,8 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 				moved = true;
 			}
 		}
-		// A blow lands as it reaches furthest
-		if (fighter.state == fight::State::Action && fight::IsAttack(fighter.animation) && !fighter.landed)
+		// A blow lands as it reaches furthest, while the duel is on: a fight called off lands no more blows
+		if (hasOpponent && fighter.state == fight::State::Action && fight::IsAttack(fighter.animation) && !fighter.landed)
 		{
 			const auto hitTime = fighting->hitTimesMs.at(fighter.animation - fight::animations::k_FirstAttack);
 			if (before <= hitTime && fighter.timeMs > hitTime)
@@ -2053,12 +2106,35 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 				moved = true;
 			}
 		}
-		if (duration <= 0.0f || current.timeMs >= duration)
+		const bool done = fight::StateDone(current.state, current.timeMs, duration, current.stateMs);
+		// Called off, it winds down: the move under way plays out, then it finishes and stands
+		if (current.stopping)
 		{
-			// As the start of a cast ends, the spell is cast: an attacking one at the opponent, a defending one on itself
-			if (current.state == fight::State::CastStart && current.spell.has_value())
+			if (const auto next = fight::StopTransition(current.state, done))
 			{
-				CastFightSpell(entity, static_cast<MagicType>(*current.spell), hasOpponent ? fighting->opponent : entt::null);
+				if (current.state == fight::State::Cast && Locator::magicSystem::has_value())
+				{
+					Locator::magicSystem::value().ReleaseCreatureCast(entity);
+				}
+				current.spell.reset();
+				fight::Enter(current, *next);
+				fighting->movedShare = 0.0f;
+				Show(*animation, current, false, DurationOf(entity, current.animation));
+				continue;
+			}
+		}
+		if (done)
+		{
+			// The casting pose over, the creature lets go of the miracle: one that lasts only while held stops
+			if (current.state == fight::State::Cast && Locator::magicSystem::has_value())
+			{
+				Locator::magicSystem::value().ReleaseCreatureCast(entity);
+			}
+			// As the start of a cast ends, still facing its opponent, the spell is cast: an attacking one at the opponent, a
+			// defending one on itself
+			if (current.state == fight::State::CastStart && current.spell.has_value() && hasOpponent)
+			{
+				CastFightSpell(entity, static_cast<MagicType>(*current.spell), fighting->opponent);
 				current.spell.reset();
 				fighting = registry.TryGet<CreatureFighting>(entity);
 				if (fighting == nullptr)
@@ -2273,7 +2349,7 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser)
 	}
 }
 
-void CreatureFightSystem::EndFightFor(entt::entity creature, bool won)
+void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool> won)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* fighting = registry.TryGet<CreatureFighting>(creature);
@@ -2293,9 +2369,9 @@ void CreatureFightSystem::EndFightFor(entt::entity creature, bool won)
 	record.control = fighting->fighter.control;
 	record.foughtBefore = true;
 	record.secondsSinceFight = 0.0f;
-	if (Locator::creatureMindSystem::has_value())
+	if (won.has_value() && Locator::creatureMindSystem::has_value())
 	{
-		Locator::creatureMindSystem::value().FoughtFight(creature, won);
+		Locator::creatureMindSystem::value().FoughtFight(creature, *won);
 	}
 	if (_pressed.has_value() && _pressed->creature == creature)
 	{

@@ -419,6 +419,15 @@ enum class State : uint8_t
 [[nodiscard]] bool Loops(State state);
 /// What comes after a state's animation has played through
 [[nodiscard]] State AfterAnimation(State state, bool hasOpponent);
+/// The next state of a fighter whose fight was called off, if it moves on now: in its stance it finishes, blocking it
+/// ends the block, casting it ends the cast; starting, starting a block, reeling in one or starting a cast (which is then
+/// never cast) end the same way once their animation is done, and a blow or step finishes once done. None: it carries on.
+[[nodiscard]] std::optional<State> StopTransition(State state, bool animationDone);
+/// The casting pose is held only until a moment of game time has passed in it (one update), then the cast ends
+constexpr float k_CastHoldMs = 2.0f;
+/// Whether a state is done: its animation has played through (by the animation's own time), or, for the casting pose,
+/// more than a moment of game time has passed in it
+[[nodiscard]] bool StateDone(State state, float animationMs, float durationMs, float stateMs);
 /// Whether the creature is blocking: while blocking, once half way into starting to block, and until half way out of
 /// it again
 [[nodiscard]] bool IsBlocking(State state, float timeMs, float startBlockDurationMs);
@@ -447,6 +456,8 @@ struct Fighter
 	/// The animation playing, how far through it is and the speed of the action
 	size_t animation {0};
 	float timeMs {0.0f};
+	/// The game time since the state began, whatever the animation's speed
+	float stateMs {0.0f};
 	float speed {1.0f};
 	bool mirrored {false};
 	/// A blow that is the special move, and whether it has landed yet
@@ -454,6 +465,8 @@ struct Fighter
 	bool landed {false};
 	/// The spell being cast
 	std::optional<uint32_t> spell;
+	/// Its fight was called off: it finishes the move under way, then finishes and stands
+	bool stopping {false};
 	MoveQueue queue;
 	/// The sparkles marking the moves the player queued, in step with the queue
 	marks::MarkList marks;

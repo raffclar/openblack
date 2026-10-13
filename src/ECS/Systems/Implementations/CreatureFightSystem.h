@@ -32,6 +32,8 @@ public:
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
 	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
+	void CallOff(entt::entity creature) override;
+	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity creature) const override;
 
@@ -92,7 +94,8 @@ private:
 	/// One creature beat the other: the loser faints and the winner shows off
 	void Win(entt::entity winner, entt::entity loser);
 	/// The fight ends for a creature: its life pays for it and it learns from it
-	void EndFightFor(entt::entity creature, bool won);
+	/// The creature's fight is over: won or lost, or called off with neither (when its mind isn't told it fought)
+	void EndFightFor(entt::entity creature, std::optional<bool> won);
 	void BeginDuel(entt::entity creature);
 	void MeasureBlows(entt::entity creature);
 	/// Faints and lies out cold, to be taken home later
