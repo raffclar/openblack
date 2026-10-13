@@ -369,7 +369,7 @@ bool CreatureMindSystem::WeighWatchedCreature(entt::entity creature, CreatureMin
 		{
 			return false;
 		}
-		const bool planned = ForceDesireAbout(creature, mind, *verdict.act, other);
+		[[maybe_unused]] const bool planned = ForceDesireAbout(creature, mind, *verdict.act, other);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} stops its watch of {} for desire {} ({})",
 		                    entt::to_integral(creature), entt::to_integral(other), static_cast<int>(*verdict.act),
 		                    planned ? "planned" : "no plan");
