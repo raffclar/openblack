@@ -147,6 +147,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -783,6 +784,10 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		                    .fadeSeconds = 0.5f,
 		                    .thunderWait = thunder ? glm::vec2(3.0f, 15.0f) : glm::vec2(0.0f),
 		                    .boltWait = thunder ? environment.boltSeconds.value_or(glm::vec2(2.0f, 8.0f)) : glm::vec2(0.0f)});
+	}
+	if (environment.snowDepth.has_value() && Locator::snowSystem::has_value())
+	{
+		Locator::snowSystem::value().Cover(*environment.snowDepth);
 	}
 	if (Locator::creaturePhysiologySystem::has_value())
 	{

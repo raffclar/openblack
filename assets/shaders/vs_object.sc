@@ -243,11 +243,10 @@ void main()
 		added = min(added + LandColourAt(lightOrigin.xz), vec3_splat(255.0f));
 	}
 #endif // USE_LIGHTMAP
-	// w: how much snow shows on it, of 255. An instance can have its own rate and cap of 256 for it, as a field's crop has.
 	v_haze = vec4(added / 255.0f, 0.0f);
 #ifdef USE_INSTANCING
-	// w: how frozen a creature is. An instance gives the freeze as a negative w; a field's crop gives its snow cap as a
-	// positive one.
+	// w: how frozen a creature is. An instance gives the freeze as a negative w, and the snow that it shows as a positive
+	// w.
 	if (i_data4.w < 0.0f)
 	{
 		v_haze.w = -i_data4.w;
@@ -259,8 +258,7 @@ void main()
 #ifdef USE_INSTANCING
 	if (u_snow.x > 0.5f)
 	{
-		float snowCap = i_data4.w > 0.0f ? i_data4.w : 255.0f;
-		float snowLevel = SnowObjectLevel(origin.xz, snowCap, snowCap);
+		float snowLevel = SnowShownLevel(i_data4.w);
 		if (snowLevel > 0.0f)
 		{
 			vec3 worldNormal = normalize(TO_WORLD(vec4(normal, 0.0f)).xyz);

@@ -71,6 +71,7 @@
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectDetail.h"
 #include "ECS/Registry.h"
+#include "ECS/SnowLevels.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -78,7 +79,6 @@
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
-#include "ECS/TownDesireFlags.h"
 #include "ECS/TreeRoots.h"
 #include "ECS/VillagerHeldObject.h"
 #include "Game.h"
@@ -654,7 +654,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    // A home with someone in lights its windows at night
 		    const auto* abode = registry.TryGet<const Abode>(entity);
-		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+		    // The w is the snow that the thing shows
+		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f,
+		                    static_cast<float>(openblack::ecs::snow_levels::LevelOf(registry, entity))};
 		    // A field's crop shows once it has grown a little, in its colour for how ripe it is, sunk into the ground by
 		    // how empty it is, and sways once ripe
 		    if (const auto* field = registry.TryGet<const Field>(entity); field != nullptr)
@@ -667,7 +669,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    else
 			    {
 				    look.y = static_cast<float>(crop->tint);
-				    look.w = field_crop::k_SnowCap;
 				    const auto cropMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
 				    const float cropHeight = cropMesh->GetBoundingBox().Size().y * transform.scale.y;
 				    modelMatrix[3].y += field_crop::Sink(field->height.position) * cropHeight;
@@ -767,10 +768,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A flag over a town's store carries little snow, and isn't there at all while it doesn't show
+		    // A flag over a town's store is not there at all while it does not show
 		    if (const auto* flag = registry.TryGet<const TownDesireFlag>(entity); flag != nullptr)
 		    {
-			    look.w = openblack::ecs::town_desire_flags::k_SnowCap;
 			    if (!flag->shown)
 			    {
 				    look.z = 1.0f;
@@ -1098,9 +1098,11 @@ void RenderingSystem::UploadPartialBuilds()
 			return;
 		}
 		const auto fading = _fadingThings.find(entity);
+		// The building shows its own snow, and fades out in the distance as the whole building does
+		const auto snow = static_cast<float>(openblack::ecs::snow_levels::LevelOf(registry, entity));
 		const auto look = fading != _fadingThings.end()
-		                      ? glm::vec4(0.0f, 0.0f, -(1.0f - (static_cast<float>(fading->second) / 255.0f)), 0.0f)
-		                      : glm::vec4(0.0f);
+		                      ? glm::vec4(0.0f, 0.0f, -(1.0f - (static_cast<float>(fading->second) / 255.0f)), snow)
+		                      : glm::vec4(0.0f, 0.0f, 0.0f, snow);
 		const auto model = meshes.Handle(mesh.id);
 		const float halfHeight = 0.5f * model->GetBoundingBox().Size().y;
 		const auto build = physics::damage::PartialBuildOf(*share, transform.position.y, halfHeight, transform.scale.y);
@@ -1158,9 +1160,9 @@ void RenderingSystem::UploadPartialBuilds()
 		_renderContext.partialBuildInstances.push_back(
 		    {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
 		              glm::scale(glm::mat4(1.0f), transform.scale),
-		     .look = fading != _fadingThings.end()
-		                 ? glm::vec4(0.0f, 0.0f, -(1.0f - (static_cast<float>(fading->second) / 255.0f)), 0.0f)
-		                 : glm::vec4(0.0f)});
+		     .look = glm::vec4(0.0f, 0.0f,
+		                       fading != _fadingThings.end() ? -(1.0f - (static_cast<float>(fading->second) / 255.0f)) : 0.0f,
+		                       static_cast<float>(openblack::ecs::snow_levels::LevelOf(registry, entity)))});
 	};
 	// A graveyard shows the graves of its burials
 	registry.Each<const Graveyard, const Mesh, const Transform>(
@@ -1293,6 +1295,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			    burning.z = 1.0f - (static_cast<float>(*fade) / 255.0f);
 			    group = Group::Fading;
 		    }
+		    burning.w = static_cast<float>(openblack::ecs::snow_levels::LevelOf(registry, entity));
 		    // In its least detail a tree is a paper cut-out standing turned to the camera, which neither sways nor bends,
 		    // unless it moves in the physics. Otherwise out of the land it neither sways nor bends: it is drawn as it is held
 		    // or as the physics places it.

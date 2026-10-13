@@ -62,6 +62,12 @@ inline constexpr int32_t k_ObjectRate = 255;
 [[nodiscard]] int32_t ObjectLevel(float depth, int32_t rate, int32_t cap);
 /// Objects show snow from this much of it
 inline constexpr int32_t k_ObjectLevelShown = 5;
+/// A thing's level of snow moves towards the level of the snow where it stands. In each step it moves by this much at
+/// most: the game time of the step in milliseconds, divided by 16. A step at 60 steps a second moves it by 1, so a thing
+/// takes about 4 seconds to change from no snow to all of it.
+[[nodiscard]] int32_t LevelStep(int32_t gameMilliseconds);
+/// The new level of a thing: `target`, but no more than `step` from its `level`
+[[nodiscard]] int32_t EaseLevel(int32_t level, int32_t target, int32_t step);
 /// The snow texture's alpha, 0 to 255, at which an object shows snow at a level: the more snow, the more of it
 [[nodiscard]] int32_t ObjectThreshold(int32_t level);
 
