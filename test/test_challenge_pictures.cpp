@@ -158,6 +158,7 @@ TEST(ChallengePictures, ARecordsPictureComesBackOnceTheScreenIsRead)
 
 	pictures::Collect(registry, {.take = [](const std::string&) { return std::optional<CapturedFrame> {}; }, .failed = {}});
 	EXPECT_TRUE(registry.Get<ChallengePicture>(record).waiting.has_value());
+	EXPECT_TRUE(pictures::AnyWaiting(registry));
 
 	pictures::Collect(registry,
 	                  {.take =
@@ -170,6 +171,7 @@ TEST(ChallengePictures, ARecordsPictureComesBackOnceTheScreenIsRead)
 	                   .failed = {}});
 	const auto& taken = registry.Get<ChallengePicture>(record);
 	EXPECT_FALSE(taken.waiting.has_value());
+	EXPECT_FALSE(pictures::AnyWaiting(registry));
 	EXPECT_EQ(taken.taken, 1u);
 	EXPECT_EQ(taken.full.size(), static_cast<size_t>(pictures::k_Width) * pictures::k_Height * 3);
 	EXPECT_EQ(taken.small.size(), static_cast<size_t>(pictures::k_SmallWidth) * pictures::k_SmallHeight * 3);

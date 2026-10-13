@@ -149,6 +149,14 @@ std::string challenge_pictures::Ask(ChallengePicture& picture, entt::entity reco
 	return name;
 }
 
+bool challenge_pictures::AnyWaiting(const Registry& registry)
+{
+	bool waiting = false;
+	registry.Each<const ChallengePicture>(
+	    [&waiting](entt::entity, const ChallengePicture& picture) { waiting = waiting || picture.waiting.has_value(); });
+	return waiting;
+}
+
 void challenge_pictures::Collect(Registry& registry, const Screens& screens)
 {
 	registry.Each<ChallengePicture>([&screens](entt::entity, ChallengePicture& picture) {

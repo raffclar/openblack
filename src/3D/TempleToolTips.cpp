@@ -30,6 +30,7 @@ constexpr uint32_t k_Scroll = 0xEE2 - 0xE73;
 constexpr uint32_t k_WorldStats = 0xEE3 - 0xE73;
 constexpr uint32_t k_SaveGameStats = 0xEE4 - 0xE73;
 constexpr uint32_t k_ChallengeStats = 0xEE5 - 0xE73;
+constexpr uint32_t k_ReplayChallenge = 0xE9F - 0xE73;
 constexpr uint32_t k_TiltRotate = 0xEED - 0xE73;
 /// The main room's doors, in the game's order: the creature, options, exit, future, library, save game and challenge
 /// rooms. The scroll's wall, door 6, leaves the tooltip be.
@@ -51,7 +52,11 @@ void UpdateRoomScroll(TempleToolTip& toolTip, const TempleToolTipInput& input, c
 	{
 		if (IsZoomed(input))
 		{
-			toolTip = {.index = k_Scroll, .action = ToolTipAction::Select, .arrows = Arrows::k_UpDown};
+			// Close up to one of the challenge room's pictures, its scroll says nothing
+			if (!input.pictureLookedAt)
+			{
+				toolTip = {.index = k_Scroll, .action = ToolTipAction::Select, .arrows = Arrows::k_UpDown};
+			}
 		}
 		// The world's scroll tells of the world whenever it isn't close, the others only once the camera is back
 		else if (input.room == TempleRoom::Main || input.zoom == 0.0f)
@@ -59,7 +64,40 @@ void UpdateRoomScroll(TempleToolTip& toolTip, const TempleToolTipInput& input, c
 			toolTip = {.index = stats, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
 		}
 	}
-	else if (input.lookingAtScroll && IsZoomed(input))
+	else if (input.lookingAtScroll && IsZoomed(input) && !input.pictureLookedAt)
+	{
+		toolTip = {.index = k_ZoomOut, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+	}
+}
+
+/// The challenge room's picture or replay button. A button hovered says it replays its challenge, and keeps the
+/// pictures after it in the mesh's order from choosing. A picture hovered from afar zooms in; the one looked at close up
+/// replays its challenge if it isn't done (and says nothing if it is), and while it isn't hovered, zooms back out.
+void UpdateChallengeControl(TempleToolTip& toolTip, const TempleToolTipInput& input, const TempleChallengeControl& control,
+                            bool& buttonHovered)
+{
+	const bool hovered = input.hoveredSubMesh == control.subMesh;
+	if (control.button)
+	{
+		if (!control.done && hovered)
+		{
+			toolTip = {.index = k_ReplayChallenge, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+			buttonHovered = true;
+		}
+		return;
+	}
+	const bool closeUp = IsZoomed(input) && input.challengeHighDetail == control.place && !buttonHovered;
+	if (hovered && input.zoom == 0.0f)
+	{
+		toolTip = {.index = k_ZoomIn, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+	}
+	else if (hovered && closeUp)
+	{
+		toolTip = control.done
+		              ? TempleToolTip {.index = std::nullopt, .action = ToolTipAction::None, .arrows = Arrows::k_None}
+		              : TempleToolTip {.index = k_ReplayChallenge, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+	}
+	else if (!hovered && closeUp)
 	{
 		toolTip = {.index = k_ZoomOut, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
 	}
@@ -126,22 +164,54 @@ void openblack::UpdateTempleToolTip(TempleToolTip& toolTip, const TempleToolTipI
 		}
 		break;
 	case TempleRoom::Challenge:
-	case TempleRoom::SaveGame:
-	case TempleRoom::Credits:
-		// The challenge, save game and credits rooms: moving about, and the way back
+	{
+		// The challenge room: moving about and the way back, then its controls' draw callbacks in the order of their
+		// submeshes: the pictures, the replay buttons and the scroll
 		toolTip = {.index = k_Move, .action = ToolTipAction::Select, .arrows = Arrows::k_All};
 		if (overWayBack)
 		{
 			toolTip = {.index = k_WorldRoom, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
 		}
-		// TODO(raffclar): the challenge room's pictures and replay button, and the save game room's pictures and
-		// buttons, have tooltips of their own
+		std::vector<uint32_t> controls;
+		for (const auto& control : input.challenges)
+		{
+			controls.push_back(control.subMesh);
+		}
+		for (const auto& scroll : input.scrolls)
+		{
+			controls.push_back(scroll.subMesh);
+		}
+		std::ranges::sort(controls);
+		bool buttonHovered = false;
+		for (const auto subMesh : controls)
+		{
+			if (const auto control = std::ranges::find(input.challenges, subMesh, &TempleChallengeControl::subMesh);
+			    control != input.challenges.end())
+			{
+				UpdateChallengeControl(toolTip, input, *control, buttonHovered);
+			}
+			else
+			{
+				UpdateRoomScroll(toolTip, input, *std::ranges::find(input.scrolls, subMesh, &TempleScrolls::Control::subMesh),
+				                 k_ChallengeStats);
+			}
+		}
+		break;
+	}
+	case TempleRoom::SaveGame:
+	case TempleRoom::Credits:
+		// The save game and credits rooms: moving about, and the way back
+		toolTip = {.index = k_Move, .action = ToolTipAction::Select, .arrows = Arrows::k_All};
+		if (overWayBack)
+		{
+			toolTip = {.index = k_WorldRoom, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+		}
+		// TODO(raffclar): the save game room's pictures and buttons have tooltips of their own
 		if (input.room != TempleRoom::Credits)
 		{
 			for (const auto& scroll : input.scrolls)
 			{
-				UpdateRoomScroll(toolTip, input, scroll,
-				                 input.room == TempleRoom::Challenge ? k_ChallengeStats : k_SaveGameStats);
+				UpdateRoomScroll(toolTip, input, scroll, k_SaveGameStats);
 			}
 		}
 		break;
