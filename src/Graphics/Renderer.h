@@ -186,6 +186,8 @@ private:
 	/// The miracles' seeds spinning above the village centres' stone hands and the worship sites' icons, with a ring round
 	/// each for every power-up level shown
 	void DrawIconSeeds(const DrawSceneDesc& desc) const;
+	/// The miracle a chest's town has learnt, spinning above the opened chest
+	void DrawRewardSeeds(const DrawSceneDesc& desc) const;
 	/// A miracle's seed shown as a model, as a globe holds it or the creature's room shows it
 	struct SeedModelDraw
 	{

@@ -11,10 +11,13 @@
 
 #include "RewardSystem.h"
 
+#include <cmath>
+
 #include <limits>
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
 #include "3D/L3DAnim.h"
@@ -38,6 +41,9 @@
 #include "GameRewardOpeningWorld.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/DispenserRules.h"
+#include "Magic/MagicTables.h"
+#include "Magic/MiracleVisuals.h"
 #include "Particles/ParticleBlast.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Resources/ResourcesInterface.h"
@@ -102,6 +108,22 @@ ecs::reward::Contents ContentsOf(RewardObjectInfo type)
 	        .nextMiracle = type == RewardObjectInfo::Increment,
 	        .seed = row.seed,
 	        .powerUp = row.powerUp};
+}
+
+/// A town's new miracle above its chest spins as a globe's seed does, and a creature spell's phial pulses
+void StepSeed(RewardSeed& shown, float seconds)
+{
+	shown.spin = std::fmod(shown.spin + (magic::k_OrbSeedSpin * seconds), glm::two_pi<float>());
+	if (!magic::visuals::IsPhialSeed(shown.seed) || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto* spell =
+	    magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, magic::GetSpellSeedInfo(info, shown.seed).magicTypes[0]);
+	const int receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
+	shown.phialFrame = magic::visuals::StepPhialFrame(shown.phialFrame, seconds);
+	shown.phialPhase = std::fmod(shown.phialPhase + (magic::visuals::PhialPulseSpeed(receiveType) * seconds), 1.0f);
 }
 
 /// The opened chest's model posed at a place in its clip; its resting pose when the clip doesn't fit it
@@ -243,6 +265,10 @@ void RewardSystem::Update(float milliseconds)
 	registry.Each<Reward, Transform>([&](entt::entity entity, Reward& chest, Transform& transform) {
 		if (chest.state == Reward::State::Opened)
 		{
+			if (auto* seed = registry.TryGet<RewardSeed>(entity))
+			{
+				StepSeed(*seed, milliseconds * 0.001f);
+			}
 			// The lid lifts by the frame's game time, holding once the clip has played
 			if (!Locator::resources::has_value() || !Locator::resources::value().GetAnimations().Contains(k_OpenedClip.value()))
 			{

@@ -365,6 +365,8 @@ struct RewardSetup
 	RewardObjectInfo type {RewardObjectInfo::RewardObjectToyBall};
 	glm::vec2 offset {0.0f};
 	bool fromSky {true};
+	/// It is given in the scenario's town, which gets what is inside, rather than in no town
+	bool inTown {false};
 	/// Seconds into the scenario it is given
 	float delaySeconds {0.0f};
 };

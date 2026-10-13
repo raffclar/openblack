@@ -199,3 +199,12 @@ uint32_t reward::StepOpenedClip(uint32_t place, uint32_t milliseconds, uint32_t 
 	const auto next = place + milliseconds;
 	return looping ? next % playTime : std::min(next, playTime - 1);
 }
+
+uint8_t reward::TownSeedAlpha(int32_t turnsLeft)
+{
+	constexpr int32_t k_FadeStart = 10;
+	constexpr int32_t k_FadeTurns = 20;
+	constexpr int32_t k_Opaque = 255;
+	const int32_t fade = std::clamp((turnsLeft - k_FadeStart) * k_Opaque / k_FadeTurns, 0, k_Opaque);
+	return static_cast<uint8_t>((k_Opaque * fade) & 0xFF);
+}

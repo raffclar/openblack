@@ -43,6 +43,7 @@
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Spell.h"
@@ -58,6 +59,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
+#include "ECS/RewardOpening.h"
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -447,6 +449,16 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 			const auto owner = ecs::world_objects::IconPlayer(registry, entity);
 			AddBall(entity, model, meshComponent->id, halfExtents,
 			        ecs::pick_shapes::PictureBall(shown->middle, ecs::pick_shapes::k_IconPictureSize,
+			                                      SeedModelMiddle(shown->seed, AlignmentOf(owner))));
+		}
+		// An opened chest is also picked by a ball round its town's new miracle that spins above it
+		if (const auto* shown = registry.TryGet<const RewardSeed>(entity);
+		    shown != nullptr && shown->seed != SpellSeedType::None)
+		{
+			const auto* chest = registry.TryGet<const Reward>(entity);
+			const auto owner = chest != nullptr ? chest->player.value_or(PlayerNames::NEUTRAL) : PlayerNames::NEUTRAL;
+			AddBall(entity, model, meshComponent->id, halfExtents,
+			        ecs::pick_shapes::PictureBall(shown->middle, ecs::reward::k_TownSeedSize,
 			                                      SeedModelMiddle(shown->seed, AlignmentOf(owner))));
 		}
 	}

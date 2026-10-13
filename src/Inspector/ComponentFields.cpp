@@ -1427,6 +1427,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Reward::turnsLeft>("turnsLeft")
 	    .Field<&components::Reward::clipPlace>("clipPlace");
 	Reflect<components::RewardOnLand> {context};
+	Reflect<components::RewardSeed>(context)
+	    .Field<&components::RewardSeed::seed>("seed")
+	    .Field<&components::RewardSeed::middle>("middle")
+	    .Field<&components::RewardSeed::spin>("spin")
+	    .Field<&components::RewardSeed::phialFrame>("phialFrame")
+	    .Field<&components::RewardSeed::phialPhase>("phialPhase");
 	Reflect<components::RisingSoul>(context)
 	    .Field<&components::RisingSoul::mesh>("mesh")
 	    .Field<&components::RisingSoul::clip>("clip")

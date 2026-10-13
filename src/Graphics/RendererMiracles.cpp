@@ -34,11 +34,13 @@
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "ECS/RewardOpening.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
@@ -306,6 +308,34 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 				DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
 			}
 		}
+	});
+}
+
+void Renderer::DrawRewardSeeds(const DrawSceneDesc& desc) const
+{
+	const bool reflection = desc.viewId == RenderPass::Reflection;
+	if ((desc.viewId != RenderPass::Main && !reflection) ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()) || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	using ecs::components::Reward;
+	using ecs::components::RewardSeed;
+	// A town's new miracle spins above its opened chest, smaller than on an icon, lit by the land, in the colours of
+	// the chest's player
+	desc.entities.Each<const RewardSeed, const Reward>([&](const RewardSeed& shown, const Reward& chest) {
+		const auto player = chest.player.value_or(PlayerNames::NEUTRAL);
+		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL
+		                            ? Locator::alignmentSystem::value().GetPlayerAlignment(player)
+		                            : 0.0f;
+		DrawSeedModel(desc, {.seed = shown.seed,
+		                     .middle = shown.middle,
+		                     .scale = ecs::reward::k_TownSeedSize,
+		                     .spin = shown.spin,
+		                     .phialPhase = shown.phialPhase,
+		                     .phialFrame = shown.phialFrame,
+		                     .phialAlpha = ecs::reward::TownSeedAlpha(chest.turnsLeft),
+		                     .ownerAlignment = alignment});
 	});
 }
 

@@ -6600,6 +6600,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawVillagerEyes(desc);
 			DrawGlobes(desc);
 			DrawIconSeeds(desc);
+			DrawRewardSeeds(desc);
 			DrawHandMiracleBands(desc);
 			DrawTribalPower(desc);
 			DrawLightColumns(desc);
