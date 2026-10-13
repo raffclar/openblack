@@ -3185,6 +3185,7 @@ std::vector<Scenario> Build()
 	AddTempleVillagerScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
+	AddVillagerSpeedScenarios(all);
 	AddDiscipleScenarios(all);
 	AddHighlightScenarios(all);
 	AddSkyScenarios(all);

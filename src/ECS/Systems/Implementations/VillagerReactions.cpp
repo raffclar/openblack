@@ -31,6 +31,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -432,15 +433,10 @@ bool villager_reactions::ActsOut(Reaction type)
 
 void villager_reactions::Stop(entt::entity villager, LivingReaction& state, bool resetState)
 {
-	auto& registry = EntityRegistry();
-	auto* action = registry.TryGet<LivingAction>(villager);
+	// Ending a reaction leaves the villager's speed alone: only its next change of state sets it
+	auto* action = EntityRegistry().TryGet<LivingAction>(villager);
 	if (!resetState || action == nullptr)
 	{
-		auto* wallHug = registry.TryGet<WallHug>(villager);
-		if (const auto* component = registry.TryGet<const Villager>(villager); component != nullptr && wallHug != nullptr)
-		{
-			wallHug->speed = GetSpeedStateSpeed(InfoOf(*component).speedGroup.speedDefault);
-		}
 		return;
 	}
 	// TODO(raffclar): a reaction villagers don't act out yet left them doing what they were doing, so there is nothing
@@ -568,7 +564,6 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 	}
 	// It runs there at its speed for fleeing and watching, then watches
 	villager_home::SetupMoveTo(action, glm::xz(to), VillagerStates::FleeingAndLookingAtObjectReaction);
-	SetStateSpeed(villager, FinalStateOf(action));
 	return 0;
 }
 
@@ -702,6 +697,9 @@ void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates sta
 	const auto& info = InfoOf(*component);
 	const auto& townInfo = Locator::infoConstants::value().town;
 	const auto& globals = registry.Context().mapScriptGlobals;
+	// A trader's load is weighed against the most a trader carries
+	const auto* disciple = registry.TryGet<const Disciple>(villager);
+	const bool trader = disciple != nullptr && disciple->type == VillagerDisciple::Trader;
 	villager_speed::Inputs inputs {
 	    .speeds = {static_cast<int32_t>(info.speedGroup.speedDefault), static_cast<int32_t>(info.speedGroup.speedFleeing),
 	               static_cast<int32_t>(info.speedGroup.speed2), static_cast<int32_t>(info.speedGroup.speed3),
@@ -717,8 +715,10 @@ void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates sta
 	    .landNumber = static_cast<uint32_t>(globals.landNumber),
 	    .baseForTownNeedsSpeedMod = info.baseForTownNeedsSpeedMod,
 	    .divisorForTownNeedsSpeedMod = info.divisorForTownNeedsSpeedMod,
-	    .maxWood = static_cast<float>(info.maxWoodCarried),
-	    .maxFood = static_cast<float>(info.maxFoodCarried),
+	    .woodHeld = static_cast<float>(component->woodHeld),
+	    .foodHeld = static_cast<float>(component->foodHeld),
+	    .maxWood = static_cast<float>(trader ? info.maxTraderWoodCarried : info.maxWoodCarried),
+	    .maxFood = static_cast<float>(trader ? info.maxTraderFoodCarried : info.maxFoodCarried),
 	    .speedModWhenFullLoadOfWood = info.speedModWhenFullLoadOfWood,
 	    .speedModWhenFullLoadOfFood = info.speedModWhenFullLoadOfFood,
 	    .foodSpeedUp = component->foodSpeedUp != 0,

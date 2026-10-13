@@ -1311,7 +1311,8 @@ LivingActionSystem::SetResult LivingActionSystem::ChangeTopState(LivingAction& a
 		SetStateDirectly(action, LivingAction::Index::Final, *destination);
 	}
 	const auto villager = Locator::entitiesRegistry::value().ToEntity(action);
-	villager_reactions::SetStateSpeed(villager, current);
+	// It goes at the speed of the state it is to end up in: a walk into a state goes at that state's speed
+	villager_reactions::SetStateSpeed(villager, FinalStateOf(action));
 	if (outOf.has_value())
 	{
 		villager_animate::SetAnim(villager, static_cast<int32_t>(*outOf), true);
