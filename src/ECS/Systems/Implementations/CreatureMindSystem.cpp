@@ -324,6 +324,83 @@ std::vector<creature_look::Candidate> GatherCandidates(ecs::Registry& registry)
 	return candidates;
 }
 
+/// One turn of looking about: the head turns to the most interesting thing in sight, or ahead
+glm::vec3 LookAbout(entt::entity entity, const Creature& creature, const Transform& transform, CreatureMindState& mind,
+                    std::optional<std::vector<creature_look::Candidate>>& candidates)
+{
+	if (!candidates.has_value())
+	{
+		candidates = GatherCandidates(Locator::entitiesRegistry::value());
+	}
+	const auto self = entt::to_integral(entity);
+	std::vector<creature_look::Candidate> others;
+	others.reserve(candidates->size());
+	std::ranges::copy_if(*candidates, std::back_inserter(others),
+	                     [self](const creature_look::Candidate& candidate) { return candidate.id != self; });
+	const creature_look::Viewer viewer {
+	    .position = transform.position,
+	    .ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f)),
+	    .size = ShownSize(creature),
+	};
+	mind.look = creature_look::LookAbout(mind.look, others, viewer, k_TurnsPerSecond);
+	return mind.look.id.has_value() ? mind.look.point : creature_look::PointAhead(viewer);
+}
+
+/// The creature info values for the look of a creature that walks to a place
+creature_look::WhileGoingInfo WhileGoingInfoOf(CreatureType species)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return {};
+	}
+	const auto& creatures = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(species);
+	if (row >= creatures.size())
+	{
+		return {};
+	}
+	const auto& info = creatures.at(row);
+	return {
+	    .sweepHalfAngle = info.lookSweepHalfAngle,
+	    .sweepAngleStep = info.lookSweepAngleStep,
+	    .sweepNearest = info.lookSweepNearest,
+	    .sweepFurthest = info.lookSweepFurthest,
+	    .sweepDistanceStep = info.lookSweepDistanceStep,
+	    .placeRange = info.lookAtPlaceRange,
+	};
+}
+
+/// The look of a creature that walks to a place in this turn, or none near the place
+std::optional<glm::vec3> LookWhileGoing(entt::entity entity, const Creature& creature, const Transform& transform,
+                                        CreatureMindState& mind, const glm::vec3& place)
+{
+	const auto info = WhileGoingInfoOf(creature.species);
+	if (!mind.goingLook.has_value())
+	{
+		mind.goingLook = creature_look::StartWhileGoing(info);
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
+	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+	// The direction the body faces, as the game keeps it: a quarter turn on from the map's
+	const auto heading = walk != nullptr && walk->started ? walk->heading : std::atan2(ahead.x, -ahead.z);
+	const auto point =
+	    creature_look::LookWhileGoing(*mind.goingLook, info,
+	                                  {
+	                                      .position = glm::vec2(transform.position.x, transform.position.z),
+	                                      .heading = heading,
+	                                      .place = glm::vec2(place.x, place.z),
+	                                      .watched = mind.look.id.has_value() ? std::optional(mind.look.point) : std::nullopt,
+	                                      .turnsPerSecond = k_TurnsPerSecond,
+	                                  });
+	if (!point.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point->at) : 0.0f;
+	return glm::vec3(point->at.x, point->height.value_or(ground), point->at.y);
+}
+
 void ApplyEyes(CreatureEyes* eyes, creature_mind::Eyes look)
 {
 	if (eyes == nullptr || look == creature_mind::Eyes::Unchanged)
@@ -403,13 +480,16 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 	{
 	case Kind::ToPoint:
 	case Kind::Nearby:
-		if (locomotion.MoveTo(creature, move.point, pace, move.minDistance, move.maxDistance) ==
-		        CreatureLocomotionSystemInterface::MoveResult::InvalidDestination &&
-		    move.giveUpIfUnreachable)
+	{
+		const auto result = move.extraSpeed.has_value()
+		                        ? locomotion.LeadTo(creature, move.point, *move.extraSpeed, move.maxDistance)
+		                        : locomotion.MoveTo(creature, move.point, pace, move.minDistance, move.maxDistance);
+		if (result == CreatureLocomotionSystemInterface::MoveResult::InvalidDestination && move.giveUpIfUnreachable)
 		{
 			return true;
 		}
 		break;
+	}
 	case Kind::ToObject:
 		if (object.has_value())
 		{
@@ -1385,11 +1465,6 @@ void CreatureMindSystem::ProcessTurn()
 			    }
 			    return;
 		    }
-		    // Following the leash to the hand, it is the leash's; passing out (above) lets go of it
-		    if (mind.leash.obeying)
-		    {
-			    return;
-		    }
 		    // Without the fights' knock-outs, it drops where it stands and comes round there
 		    if (fainting && !creature_mind::IsUnconscious(mind.idle))
 		    {
@@ -1593,28 +1668,19 @@ void CreatureMindSystem::ProcessTurn()
 			    // A script's focus holds the head whatever the creature is doing
 			    animation.lookAt = focus;
 		    }
+		    else if (commands.gaze.has_value() && commands.gaze->whileGoing && commands.gaze->point.has_value())
+		    {
+			    // On the way to a place: the head looks at the place, at what it watches, or from side to side
+			    const auto about = LookAbout(entity, creature, transform, mind, candidates);
+			    animation.lookAt = LookWhileGoing(entity, creature, transform, mind, *commands.gaze->point).value_or(about);
+		    }
 		    else if (commands.gaze.has_value())
 		    {
 			    animation.lookAt = GazePoint(registry, entity, *commands.gaze, moving);
 		    }
 		    else if (commands.lookAbout)
 		    {
-			    if (!candidates.has_value())
-			    {
-				    candidates = GatherCandidates(registry);
-			    }
-			    const auto self = entt::to_integral(entity);
-			    std::vector<creature_look::Candidate> others;
-			    others.reserve(candidates->size());
-			    std::ranges::copy_if(*candidates, std::back_inserter(others),
-			                         [self](const creature_look::Candidate& candidate) { return candidate.id != self; });
-			    const creature_look::Viewer viewer {
-			        .position = transform.position,
-			        .ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f)),
-			        .size = ShownSize(creature),
-			    };
-			    mind.look = creature_look::LookAbout(mind.look, others, viewer, k_TurnsPerSecond);
-			    animation.lookAt = mind.look.id.has_value() ? mind.look.point : creature_look::PointAhead(viewer);
+			    animation.lookAt = LookAbout(entity, creature, transform, mind, candidates);
 		    }
 		    else
 		    {

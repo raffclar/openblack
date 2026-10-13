@@ -74,8 +74,6 @@ struct Speeds
 [[nodiscard]] float TargetSpeed(float fraction, float runSpeed);
 /// The fraction of its top speed it goes at: what is wanted, or only its slow fraction once exhausted
 [[nodiscard]] float RequiredFraction(float wanted, float slowFraction, float exhaustion);
-/// Led on the leash, the creature goes from walking towards twice its running fraction the harder it is pulled
-[[nodiscard]] float LeashFraction(float walkFraction, float runFraction, float pull);
 
 /// The fastest it may go so as to stop in the distance left
 [[nodiscard]] float StopCap(float remaining);

@@ -14,7 +14,6 @@
 using namespace openblack;
 using namespace openblack::creature_leash;
 using creature_desires::Desire;
-using creature_mind::Activity;
 
 namespace
 {
@@ -61,56 +60,6 @@ TEST(LeashRules, LeashesForceTheirFeelings)
 	EXPECT_EQ(MiracleSightingWeight(false), 1u);
 }
 
-TEST(LeashRules, PullsOnlyWhenTaut)
-{
-	EXPECT_FALSE(ShouldPull(0.8f));
-	EXPECT_TRUE(ShouldPull(0.81f));
-	EXPECT_FALSE(ShouldPull(0.0f));
-}
-
-TEST(LeashRules, SecondPullHoldsTheDesireBack)
-{
-	PullMemory memory;
-	EXPECT_FALSE(RecordPull(memory, Desire::Hunger).has_value());
-	// Another desire's pull doesn't count towards hunger
-	EXPECT_FALSE(RecordPull(memory, Desire::Rest).has_value());
-	const auto suppressed = RecordPull(memory, Desire::Hunger);
-	ASSERT_TRUE(suppressed.has_value());
-	EXPECT_FLOAT_EQ(*suppressed, 60.0f);
-	// The count starts again
-	EXPECT_FALSE(RecordPull(memory, Desire::Hunger).has_value());
-}
-
-TEST(LeashRules, DesireBehindActivities)
-{
-	EXPECT_EQ(DesireBehind(Activity::Eat, std::nullopt), Desire::Hunger);
-	EXPECT_EQ(DesireBehind(Activity::Sleep, std::nullopt), Desire::Tiredness);
-	EXPECT_EQ(DesireBehind(Activity::ShowDesire, Desire::Play), Desire::Play);
-	EXPECT_FALSE(DesireBehind(Activity::None, std::nullopt).has_value());
-}
-
-TEST(LeashRules, LeadsToTheHand)
-{
-	const glm::vec3 hand {100.0f, 20.0f, 100.0f};
-	// Close by, it stays
-	EXPECT_EQ(DecideLead({95.0f, 15.0f, 100.0f}, hand, std::nullopt, false), Lead::Stay);
-	// Far off and standing, it goes
-	EXPECT_EQ(DecideLead({50.0f, 0.0f, 100.0f}, hand, std::nullopt, false), Lead::GoToHand);
-	// Already walking to near the hand, it carries on
-	EXPECT_EQ(DecideLead({50.0f, 0.0f, 100.0f}, hand, glm::vec2(100.5f, 100.0f), true), Lead::KeepGoing);
-	// Walking somewhere far from the hand, it is sent to the hand
-	EXPECT_EQ(DecideLead({50.0f, 0.0f, 100.0f}, hand, glm::vec2(0.0f, 100.0f), true), Lead::GoToHand);
-	// Walking to somewhere much nearer the hand than it is, but more than a unit off, it carries on
-	EXPECT_EQ(DecideLead({0.0f, 0.0f, 100.0f}, hand, glm::vec2(80.0f, 100.0f), true), Lead::KeepGoing);
-}
-
-TEST(LeashRules, PullFades)
-{
-	EXPECT_NEAR(FadePull(1.0f), 0.95f, k_Tolerance);
-	EXPECT_FLOAT_EQ(FadePull(0.31f), 0.0f);
-	EXPECT_FLOAT_EQ(FadePull(0.0f), 0.0f);
-}
-
 TEST(LeashRules, Confinement)
 {
 	EXPECT_TRUE(FreeOfHome(139.0f, true));
@@ -121,9 +70,65 @@ TEST(LeashRules, Confinement)
 	// On a leash that doesn't work, it isn't kept anywhere
 	EXPECT_FALSE(IsConfined(12.0f, true, false));
 	EXPECT_TRUE(IsConfined(12.0f, true, true));
-	EXPECT_TRUE(OutsideArea({20.0f, 0.0f}, {0.0f, 0.0f}, 12.0f));
-	EXPECT_FALSE(OutsideArea({10.0f, 0.0f}, {0.0f, 0.0f}, 12.0f));
-	EXPECT_FALSE(OutsideArea({100.0f, 0.0f}, {0.0f, 0.0f}, 0.0f));
+}
+
+TEST(LeashRules, WalksBackWhenFurtherThanTheRadius)
+{
+	constexpr Confinement k_Out {.radius = 77.0f, .leashed = true, .distance = 80.0f};
+	EXPECT_TRUE(WalksBack(k_Out));
+	// At the radius or nearer, it stays
+	EXPECT_FALSE(WalksBack({.radius = 77.0f, .leashed = true, .distance = 77.0f}));
+	// No area holds it
+	EXPECT_FALSE(WalksBack({.radius = 0.0f, .distance = 80.0f}));
+}
+
+TEST(LeashRules, OrdersCopiesScriptsAndBadLandStopTheWalkBack)
+{
+	constexpr Confinement k_Out {.radius = 77.0f, .leashed = true, .distance = 80.0f};
+	auto check = k_Out;
+	check.leashWorks = false;
+	EXPECT_FALSE(WalksBack(check));
+	check = k_Out;
+	check.orderInForce = true;
+	EXPECT_FALSE(WalksBack(check));
+	check = k_Out;
+	check.mimicking = true;
+	EXPECT_FALSE(WalksBack(check));
+	check = k_Out;
+	check.scriptControlled = true;
+	EXPECT_FALSE(WalksBack(check));
+	check = k_Out;
+	check.teleporting = true;
+	EXPECT_FALSE(WalksBack(check));
+	check = k_Out;
+	check.centreOpen = false;
+	EXPECT_FALSE(WalksBack(check));
+}
+
+TEST(LeashRules, WalksBackAgainOnlyWhenTheCentreMoved)
+{
+	Confinement check {.radius = 77.0f, .leashed = true, .distance = 80.0f};
+	// Half the radius is 38.5: the place it walks to must be further than that from the centre
+	check.returnToCentre = 38.5f;
+	EXPECT_FALSE(WalksBack(check));
+	check.returnToCentre = 39.0f;
+	EXPECT_TRUE(WalksBack(check));
+	// A small area needs a move of more than 5
+	check = {.radius = 6.0f, .distance = 7.0f, .returnToCentre = 5.0f};
+	EXPECT_FALSE(WalksBack(check));
+	check.returnToCentre = 5.5f;
+	EXPECT_TRUE(WalksBack(check));
+}
+
+TEST(LeashRules, WalksBackFasterFurtherAway)
+{
+	EXPECT_NEAR(ReturnExtraSpeed(0.0f, 50.0f), 0.0f, k_Tolerance);
+	EXPECT_NEAR(ReturnExtraSpeed(50.0f, 50.0f), 0.4f, k_Tolerance);
+	EXPECT_NEAR(ReturnExtraSpeed(100.0f, 50.0f), 0.8f, k_Tolerance);
+	EXPECT_NEAR(ReturnExtraSpeed(500.0f, 50.0f), 0.8f, k_Tolerance);
+	EXPECT_NEAR(ReturnExtraSpeed(10.0f, 0.0f), 0.0f, k_Tolerance);
+	EXPECT_NEAR(ReturnArrival(77.0f, 30.0f), 77.0f, k_Tolerance);
+	EXPECT_NEAR(ReturnArrival(10.0f, 30.0f), 30.0f, k_Tolerance);
 }
 
 TEST(LeashRules, LeashedCreaturesWarmOrCoolToEachOther)
@@ -184,16 +189,4 @@ TEST(LeashRules, LessonsOfWhatThePlayerShows)
 	EXPECT_EQ(good[1].desire, Desire::BeFriends);
 	EXPECT_FLOAT_EQ(good[1].change, 1.0f);
 	EXPECT_TRUE(LessonsFor(LeashType::Rope, false).empty());
-}
-
-TEST(LeashRules, ATautHeldRopePullsUnlessAnOrderOrAScriptHasTheCreature)
-{
-	constexpr Pull k_Taut {.tension = 0.9f};
-	EXPECT_TRUE(Pulls(k_Taut));
-	EXPECT_FALSE(Pulls({.tension = 0.8f}));
-	EXPECT_FALSE(Pulls({.tension = 0.9f, .works = false}));
-	EXPECT_FALSE(Pulls({.tension = 0.9f, .tied = true}));
-	EXPECT_FALSE(Pulls({.tension = 0.9f, .orderInForce = true}));
-	EXPECT_FALSE(Pulls({.tension = 0.9f, .scriptControlled = true}));
-	EXPECT_FALSE(Pulls({.tension = 0.9f, .takingFromHand = true}));
 }

@@ -15,19 +15,15 @@
 #include <optional>
 #include <vector>
 
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
-
 #include "Creature/CreatureDesires.h"
-#include "Creature/CreatureIdleMind.h"
 #include "Creature/LeashRope.h"
 #include "Enums.h"
 
 /// How the player leads a creature on a leash. There are three leashes: the learning leash (a plain rope), which makes
 /// the creature watch and copy the player more keenly, and the aggression and compassion leashes, which make it angry or
 /// kind for as long as it wears them. Held in the hand, the leash is as long as the creature is big; tied to something,
-/// it is as long as the creature is far from it. Pulled taut, the creature stops what it was doing and walks to the
-/// hand; pulled away from the same thing twice, it goes off wanting it for a while.
+/// it is as long as the creature is far from it. When the creature is further than the full length of the leash from the
+/// hand, or from the thing that holds the leash, it stops what it does and walks back.
 namespace openblack::creature_leash
 {
 
@@ -88,66 +84,45 @@ struct TiedTown
 /// Each sighting of a miracle counts once, three times while the creature wears the learning leash
 [[nodiscard]] uint32_t MiracleSightingWeight(bool learningLeash);
 
-/// A rope pulled harder than this pulls the creature to the hand
-constexpr float k_PullTension = 0.8f;
-[[nodiscard]] bool ShouldPull(float tension);
-/// What decides whether a held rope pulls the creature this turn
-struct Pull
+/// The data that tells if the creature walks back into the area that holds it in this turn
+struct Confinement
 {
-	float tension {0.0f};
-	/// The leash works, as scripts set
-	bool works {true};
-	/// The leash is tied to something rather than held in the hand
-	bool tied {false};
-	/// The creature is carrying out an order given with the leash
+	/// The radius of the area. The area does not hold the creature when the radius is 0.
+	float radius {0.0f};
+	bool leashed {false};
+	/// The leash works, as the scripts set it
+	bool leashWorks {true};
+	/// The creature does an order that the player gave with the leash
 	bool orderInForce {false};
+	/// The creature copies an action of the player
+	bool mimicking {false};
 	/// A script controls the creature
 	bool scriptControlled {false};
-	/// The creature is taking something the hand gives it
-	bool takingFromHand {false};
+	/// The creature uses a teleport stone
+	bool teleporting {false};
+	/// The distance from the creature to the centre of the area
+	float distance {0.0f};
+	/// A creature can walk on the land at the centre of the area
+	bool centreOpen {true};
+	/// The distance from the place that the creature walks back to, to the centre of the area. It is empty when the
+	/// creature does not walk back.
+	std::optional<float> returnToCentre;
 };
-/// A rope held in the hand and pulled taut pulls the creature to the hand, taking it out of whatever it is doing, a
-/// fight included; not while it carries out a leash order, takes something from the hand, or a script controls it
-[[nodiscard]] bool Pulls(const Pull& pull);
-
-/// Pulled away from the same desire's action a second time, the desire is held back for this many seconds a pull
-constexpr float k_SuppressSecondsPerPull = 30.0f;
-/// How many times the creature has been pulled away from acting on each desire
-struct PullMemory
-{
-	std::array<uint8_t, creature_desires::k_DesireCount> counts {};
-};
-/// The creature is pulled away from acting on a desire: on the second pull the desire is held back, for the returned
-/// seconds, and the count starts again
-[[nodiscard]] std::optional<float> RecordPull(PullMemory& memory, creature_desires::Desire desire);
-/// The desire behind what the creature is doing, if any
-[[nodiscard]] std::optional<creature_desires::Desire> DesireBehind(creature_mind::Activity activity,
-                                                                   std::optional<creature_desires::Desire> shown);
-
-/// Within this distance of the hand, a pull doesn't move the creature
-constexpr float k_CloseToHand = 10.0f;
-/// The hand has to move this far from where the creature is going for it to set off again
-constexpr float k_HandMoved = 1.0f;
-/// Still walking, it carries on while where it is going is this much closer to the hand than it is
-constexpr float k_CloserShare = 0.5f;
-enum class Lead : uint8_t
-{
-	/// Close enough to the hand already
-	Stay,
-	/// On its way to near enough where the hand is
-	KeepGoing,
-	/// Off to the hand
-	GoToHand,
-};
-/// What a pull on the leash makes the creature do
-[[nodiscard]] Lead DecideLead(const glm::vec3& creature, const glm::vec3& hand, std::optional<glm::vec2> destination,
-                              bool walking);
-
-/// How hard the creature is being pulled, for its speed: none at first, all once it is on its way, then fading by 0.95
-/// a turn and gone below 0.3
-constexpr float k_PullFade = 0.95f;
-constexpr float k_PullGone = 0.3f;
-[[nodiscard]] float FadePull(float pull);
+/// When the creature walks back already, it walks back again only if the centre is this far from the place that it
+/// walks to: half the radius, but not less than 5
+constexpr float k_ReturnShare = 0.5f;
+constexpr float k_ReturnLeast = 5.0f;
+/// The creature walks back when it is further than the radius from the centre, unless one of these is true:
+/// - the area does not hold it, or it wears a leash that does not work
+/// - it does an order of the leash, it copies the player, a script controls it, or it uses a teleport stone
+/// - a creature cannot walk on the land at the centre
+/// - it walks back already, to a place near the centre
+[[nodiscard]] bool WalksBack(const Confinement& confinement);
+/// The creature walks back faster when it is further away. At twice the radius or more, it adds 0.8 to its walk speed.
+constexpr float k_ReturnMostExtraSpeed = 0.8f;
+[[nodiscard]] float ReturnExtraSpeed(float distance, float radius);
+/// The creature stops within the radius of the centre, or within its height if that is more
+[[nodiscard]] float ReturnArrival(float radius, float height);
 
 /// Free of its home only within 140 of it, and only if its player has a temple
 constexpr float k_HomeRange = 140.0f;
@@ -156,8 +131,6 @@ constexpr float k_HomeRange = 140.0f;
 constexpr float k_HomeConfinement = 12.0f;
 /// Kept within an area: a radius is set, unless it is on a leash that doesn't work
 [[nodiscard]] bool IsConfined(float radius, bool leashed, bool leashWorks);
-/// Strayed out of the area it is kept within
-[[nodiscard]] bool OutsideArea(const glm::vec2& position, const glm::vec2& centre, float radius);
 
 /// Leashed to another creature on the aggression leash, the other gets angry too within eight times the leashed
 /// creature's height
@@ -187,8 +160,6 @@ struct MindHooks
 {
 	/// The turn a creature leashed to this one last touched how nice the two find each other
 	std::optional<uint32_t> attitudeTurn;
-	/// Following the leash to the hand: the mind leaves its body to the leash
-	bool obeying {false};
 	/// Wearing the learning leash in its player's hand, it copies the player's actions that need it
 	bool learningInHand {false};
 	/// How much each miracle seen counts towards learning it

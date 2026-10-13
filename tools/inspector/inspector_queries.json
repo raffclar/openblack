@@ -1326,7 +1326,7 @@
   "query": "creatures.status"
  },
  {
-  "description": "A creature's leash (the local player's creature by default): the leashes it knows, the one worn and picked, whether it works, is tied and to what, its rope (ends, lengths, tension) and whether the rope pulls the creature now, the order it carries out, the desire the leash makes rule it, and the local player's hand on the rope (away, over or holding)",
+  "description": "A creature's leash (the local player's creature by default): the leashes it knows, the one worn and picked, whether it works, is tied and to what, its rope (ends, lengths, tension), the area that holds the creature and the place it walks back to, the order it carries out, the desire the leash makes rule it, and the local player's hand on the rope (away, over or holding)",
   "kind": "object",
   "parameters": [
    {

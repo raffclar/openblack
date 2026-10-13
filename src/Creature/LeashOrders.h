@@ -57,6 +57,8 @@ struct Leash
 	uint32_t creature {0};
 	/// The creature is in the middle of a game with another creature, which no order breaks into
 	bool playingGame {false};
+	/// A teleport stone carries the creature now. A tap on a thing gives no order then.
+	bool carriedByTeleport {false};
 };
 
 /// What was tapped
@@ -244,8 +246,7 @@ enum class Attempt : uint8_t
 	/// A forest tapped is an order to go to it, as a tap of the land there
 	GoToForest,
 	FishAndEat,
-	/// Its desires choose what to do to the thing, with what it carries or without
-	DesiresUsingCarried,
+	/// Its desires choose what to do to the thing. The thing that the creature carries plays no part in the choice.
 	Desires,
 	/// On the aggression leash, another creature near enough is fought
 	Fight,
