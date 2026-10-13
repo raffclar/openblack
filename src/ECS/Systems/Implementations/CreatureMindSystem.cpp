@@ -699,7 +699,7 @@ std::optional<creature_mind::Wants::WaterSpot> NearestWater(glm::vec2 from)
 }
 
 /// The nearest thing a creature could pick up, and where it is
-std::optional<std::pair<entt::entity, glm::vec2>> NearestObject(ecs::Registry& registry, glm::vec2 from)
+std::optional<std::pair<entt::entity, glm::vec2>> NearestObject(ecs::Registry& registry, entt::entity creature, glm::vec2 from)
 {
 	if (!Locator::creatureObjectActionSystem::has_value())
 	{
@@ -711,7 +711,7 @@ std::optional<std::pair<entt::entity, glm::vec2>> NearestObject(ecs::Registry& r
 	registry.Each<const MobileObject, const Transform>([&](entt::entity entity, const MobileObject&, const Transform& at) {
 		const glm::vec2 point {at.position.x, at.position.z};
 		const auto distance = glm::distance(point, from);
-		if (distance <= best && !registry.AllOf<HeldByCreature>(entity) && hands.CanPickUp(entity))
+		if (distance <= best && !registry.AllOf<HeldByCreature>(entity) && hands.CanPickUp(creature, entity))
 		{
 			best = distance;
 			nearest = {entity, point};
@@ -755,7 +755,7 @@ creature_mind::Wants WantsOf(ecs::Registry& registry, entt::entity creature, con
 	};
 	if (!wants.holding && std::max({wants.curiosity, wants.play, wants.anger}) >= creature_mind::k_ActOnDesire)
 	{
-		if (const auto object = NearestObject(registry, position))
+		if (const auto object = NearestObject(registry, creature, position))
 		{
 			wants.object = entt::to_integral(object->first);
 			wants.objectPoint = object->second;

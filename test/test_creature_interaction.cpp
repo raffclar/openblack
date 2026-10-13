@@ -260,6 +260,21 @@ TEST(CreatureObjectActions, ACreatureBringsBackUpWhatCantBeEaten)
 	EXPECT_TRUE(creature_object_actions::BringsBackUp(true, true));
 }
 
+TEST(CreatureObjectActions, ACreatureLeavesAloneWhatAScriptKeepsFromIt)
+{
+	using creature_object_actions::MayPickUp;
+	EXPECT_TRUE(MayPickUp({}));
+	// The Saviour's fisherman's wife, while her challenge's script has said she can't be picked up
+	EXPECT_FALSE(MayPickUp({.cannotBePickedUp = true, .inScript = true}));
+	// Once the script lets her be picked up, the player's creature may, though the script still holds her
+	EXPECT_TRUE(MayPickUp({.inScript = true}));
+	// A computer player's creature leaves her alone, unless a script controls it
+	EXPECT_FALSE(MayPickUp({.inScript = true, .computerCreatureNotScripted = true}));
+	EXPECT_TRUE(MayPickUp({.computerCreatureNotScripted = true}));
+	EXPECT_FALSE(MayPickUp({.villagerAtHome = true}));
+	EXPECT_FALSE(MayPickUp({.worshippingForCreaturesPlayer = true}));
+}
+
 TEST(CreatureFeedback, AStrokeLandsOnTheNearestPart)
 {
 	std::array<glm::vec3, creature_feedback::k_BodyPartCount> parts {};
