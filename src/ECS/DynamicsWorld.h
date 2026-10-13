@@ -134,6 +134,8 @@ public:
 	[[nodiscard]] virtual bool IsComputerPlayer(PlayerNames player) const = 0;
 	/// A dead tree that came to rest covers the ground as it lies
 	virtual void FitDeadTreeObstacle(entt::entity deadTree) = 0;
+	/// Make the land's draw list again on the next frame
+	virtual void RemakeDrawList() = 0;
 };
 
 } // namespace openblack::ecs::dynamics

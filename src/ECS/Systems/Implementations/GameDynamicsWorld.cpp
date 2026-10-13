@@ -27,6 +27,7 @@
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -264,4 +265,12 @@ bool GameDynamicsWorld::IsComputerPlayer(PlayerNames player) const
 void GameDynamicsWorld::FitDeadTreeObstacle(entt::entity deadTree)
 {
 	archetypes::DeadTreeArchetype::FitObstacle(deadTree);
+}
+
+void GameDynamicsWorld::RemakeDrawList()
+{
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().RequestRebuild(1);
+	}
 }

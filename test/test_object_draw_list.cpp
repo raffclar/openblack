@@ -275,3 +275,22 @@ TEST(ObjectDrawList, ABlockChangesTheListWhenItStartsOrStopsToShow)
 	EXPECT_FALSE(ShowingChanged(true, lastShown));
 	EXPECT_TRUE(ShowingChanged(false, lastShown));
 }
+
+// The latest request sets the count, also when it is smaller. Each frame that makes the list again decreases it.
+TEST(ObjectDrawList, TheLatestRequestSetsHowManyFramesMakeTheListAgain)
+{
+	RebuildRequests requests;
+	EXPECT_FALSE(requests.Pending());
+	requests.Ask(2);
+	requests.Ask(1);
+	EXPECT_EQ(requests.Left(), 1u);
+	requests.Ask(2);
+	ASSERT_TRUE(requests.Pending());
+	requests.Rebuilt();
+	EXPECT_TRUE(requests.Pending());
+	requests.Rebuilt();
+	EXPECT_FALSE(requests.Pending());
+	// A frame that makes the list again for a different cause does not change an empty count
+	requests.Rebuilt();
+	EXPECT_EQ(requests.Left(), 0u);
+}

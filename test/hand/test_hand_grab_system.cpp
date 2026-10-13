@@ -180,6 +180,7 @@ public:
 		return tree;
 	}
 	void LeaveRootsHole(entt::entity tree) override { holes.push_back(tree); }
+	void RemakeDrawList() override { ++drawListsRemade; }
 	void RemovePotReaction(entt::entity) override {}
 	void SetUpPotReaction(entt::entity pot, PlayerNames) override { potReactionsSetUp.push_back(pot); }
 	[[nodiscard]] Pose PoseOf(entt::entity object) const override
@@ -380,6 +381,7 @@ public:
 	std::vector<entt::entity> uprooted;
 	std::vector<std::pair<entt::entity, entt::entity>> treesGiven;
 	std::vector<entt::entity> holes;
+	int drawListsRemade {0};
 	std::vector<entt::entity> poured;
 	std::vector<entt::entity> potReactionsSetUp;
 	std::map<entt::entity, FieldFacts> fields;
@@ -850,9 +852,27 @@ TEST_F(HandGrabSystemWithWorld, ALightTreeIsUprootedAndCreaks)
 	ASSERT_TRUE(system->GetHeld().has_value());
 	EXPECT_EQ(world->holes, std::vector<entt::entity> {tree});
 	EXPECT_EQ(world->uprooted, std::vector<entt::entity> {tree});
+	// The hand makes the land's draw list again only for a living thing that it pulls free
+	EXPECT_EQ(world->drawListsRemade, 0);
 	// A tree pulled out of the ground creaks rather than making the pick-up sound
 	ASSERT_EQ(world->samples.size(), 1u);
 	EXPECT_EQ(world->samples.front(), 32u);
+}
+
+TEST_F(HandGrabSystemWithWorld, AVillagerPulledFreeMakesTheDrawListAgain)
+{
+	const auto villager = world->registry.Create();
+	world->registry.Assign<Transform>(villager, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Villager>(villager);
+	world->sizes[villager] = {.radius = 0.5f, .height = 2.0f};
+	world->underCursor = villager;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 30 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10, {0.0f, 50.0f, 0.0f});
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(world->drawListsRemade, 1);
 }
 
 TEST_F(HandGrabSystemWithWorld, ABigForestGivesATreeOnceTheButtonHasBeenHeldAWhile)

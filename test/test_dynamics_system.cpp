@@ -191,10 +191,13 @@ public:
 	void RemoveReactions(entt::entity, Reaction) override {}
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames) const override { return false; }
 	void FitDeadTreeObstacle(entt::entity) override {}
+	void RemakeDrawList() override { ++drawListsRemade; }
 
 	/// Where each object was last put into the map's cells
 	std::map<entt::entity, glm::ivec2> filed;
 	int refiled {0};
+	/// The number of requests to make the land's draw list again
+	int drawListsRemade {0};
 
 private:
 	Registry _registry;
@@ -293,6 +296,8 @@ TEST_F(DynamicsSystemTest, AThrownRockComesToRestGoesBackIntoTheMapAndLeavesTheP
 	EXPECT_FALSE(_world->Entities().AllOf<InPhysics>(rock));
 	EXPECT_FALSE(_world->Entities().AllOf<PhysicsDrawPose>(rock));
 	EXPECT_EQ(_world->refiled, 1);
+	// The rock stopped and made the land's draw list again, one time
+	EXPECT_EQ(_world->drawListsRemade, 1);
 	EXPECT_EQ(_world->filed.at(rock), FakeWorld::CellOf(_world->Entities().Get<const Transform>(rock).position));
 	EXPECT_NEAR(_world->Entities().Get<const Transform>(rock).position.y, FakeWorld::k_LandHeight, 0.3f);
 	EXPECT_GT(_world->Entities().Get<const Transform>(rock).position.x, 1000.0f);
@@ -326,6 +331,8 @@ TEST_F(DynamicsSystemTest, ARestingRockWakesOnlyWhileSomethingMovingIsNear)
 	EXPECT_EQ(_dynamics->Find(lying), nullptr);
 	EXPECT_EQ(_dynamics->Find(thrown), nullptr);
 	EXPECT_FALSE(_world->Entities().AllOf<InPhysics>(thrown));
+	// Only the thrown rock made the land's draw list again, when it stopped. No hit moved the other rock.
+	EXPECT_EQ(_world->drawListsRemade, 1);
 }
 
 TEST_F(DynamicsSystemTest, ARockFarFromAnythingMovingIsNeverWoken)

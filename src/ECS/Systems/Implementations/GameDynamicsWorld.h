@@ -55,6 +55,7 @@ public:
 	void RemoveReactions(entt::entity initiator, Reaction type) override;
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames player) const override;
 	void FitDeadTreeObstacle(entt::entity deadTree) override;
+	void RemakeDrawList() override;
 };
 
 } // namespace openblack::ecs::systems

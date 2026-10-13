@@ -82,6 +82,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -678,6 +679,14 @@ bool GameHandGrabWorld::HoldsLooseLeash() const
 bool GameHandGrabWorld::LeashTap(entt::entity object)
 {
 	return Locator::leashSystem::has_value() && Locator::leashSystem::value().TapThing(HandPlayer(), object);
+}
+
+void GameHandGrabWorld::RemakeDrawList()
+{
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().RequestRebuild(1);
+	}
 }
 
 void GameHandGrabWorld::LeaveRootsHole(entt::entity tree)
