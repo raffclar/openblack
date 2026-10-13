@@ -500,6 +500,9 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 	case Kind::TurnToFaceObject:
 		casting.move = CreatureCasting::Move::TurnToFace;
 		break;
+	case Kind::TurnToFaceAwayFromObject:
+		casting.move = CreatureCasting::Move::TurnAway;
+		break;
 	case Kind::ToThrowPosition:
 		casting.move = CreatureCasting::Move::ToThrowPosition;
 		break;
@@ -786,6 +789,31 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		if (!facing)
 		{
 			locomotion.TurnToFace(creature, target);
+		}
+		break;
+	}
+	case CreatureCasting::Move::TurnAway:
+	{
+		if (casting->phase == 0)
+		{
+			// Right on top of the thing, or with the thing gone, it does not turn
+			if (!at.has_value() || glm::distance(here, Flat(*at)) < cast_moves::k_OnTopDistance)
+			{
+				casting->phase = 1;
+				break;
+			}
+			// It stops and starts to turn. If it cannot turn yet, it tries again on the next turn
+			locomotion.Stop(creature);
+			if (locomotion.TurnToFace(creature, cast_moves::PointToFaceAwayFrom(here, Flat(*at))))
+			{
+				casting->phase = 1;
+			}
+			break;
+		}
+		// It is done when its body does nothing more
+		if (!bodyBusy)
+		{
+			done();
 		}
 		break;
 	}

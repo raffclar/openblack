@@ -83,9 +83,11 @@ enum class Target : uint8_t
 	/// town's buildings) below its full life
 	BuildingBeingBuilt,
 	NeedsRepair,
+	/// What a creature can poo by: any thing on the land but a field, a fish farm or a dove
+	PooedOn,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::NeedsRepair) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::PooedOn) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -225,7 +227,8 @@ struct Situation
 	/// Whether what its hand holds is a tree, or a magic mushroom
 	bool holdingTree {false};
 	bool holdingMushroom {false};
-	/// Where it stands
+	/// The creature itself, by its entity's number, and where it stands
+	uint32_t self {0};
 	glm::vec2 position {0.0f};
 	/// Where the thing it uses is, and its radius on the ground
 	glm::vec2 instrumentPoint {0.0f};

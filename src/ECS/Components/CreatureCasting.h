@@ -31,6 +31,8 @@ struct CreatureCasting
 		GoNear,
 		GetAway,
 		TurnToFace,
+		/// Turning so that its back is to the target
+		TurnAway,
 		/// Going to where it can throw into the target from
 		ToThrowPosition,
 	};

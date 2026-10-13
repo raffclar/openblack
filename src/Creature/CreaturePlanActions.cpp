@@ -47,6 +47,9 @@ constexpr std::array k_Executors {
     Executor {
         .action = "EatFromFoodPile", .target = Target::MagicFoodPile, .build = Build::EatFromPile, .activity = Activity::Eat},
     Executor {.action = "SleepOnTheSpot", .build = Build::Sleep, .activity = Activity::Sleep},
+    // TODO(creature-poo-steps): the game does a poo by a thing (Target::PooedOn). The planner here weighs the actions in
+    // groups by their target, but the game chooses the action first and then the thing. Until the planner does that, a
+    // poo by a thing almost never wins against a fart, so the poo is done on the spot
     Executor {.action = "Poo", .build = Build::Poo, .activity = Activity::Poo},
     Executor {.action = "Fart", .build = Build::Fart, .activity = Activity::Poo},
     Executor {.action = "Puke", .build = Build::Puke, .activity = Activity::Puke},
@@ -348,9 +351,11 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::Sleep:
 		return creature_mind::Sleep(random);
 	case Build::Poo:
-		return creature_mind::Poo(random);
+		return creature_mind::Poo(random,
+		                          object.has_value() ? std::optional(creature_mind::PooBy {.object = *object}) : std::nullopt);
 	case Build::Fart:
-		return creature_mind::Fart(random);
+		// A fart is not done to a thing, so the creature does it by itself
+		return creature_mind::Fart(random, creature_mind::PooBy {.object = situation.self, .itself = true});
 	case Build::Puke:
 		return creature_mind::Puke();
 	case Build::Drink:

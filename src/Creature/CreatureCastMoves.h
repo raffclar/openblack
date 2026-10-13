@@ -101,5 +101,8 @@ using ClearCell = std::function<bool(int32_t x, int32_t z)>;
 
 /// Whether a creature at a heading (radians, as the creatures' movement measures it) faces a point from where it stands
 [[nodiscard]] bool Facing(glm::vec2 creature, float heading, glm::vec2 point);
+/// The point a creature turns to so that its back is to a thing: as far from the creature as the thing, on the other
+/// side
+[[nodiscard]] glm::vec2 PointToFaceAwayFrom(glm::vec2 creature, glm::vec2 thing);
 
 } // namespace openblack::creature_cast_moves

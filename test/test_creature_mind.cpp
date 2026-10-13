@@ -359,7 +359,7 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::RunFrom({}).back().face, Cue::Fear);
 	EXPECT_EQ(creature_mind::ExamineByPickingUp(1, Always(0)).back().face, Cue::Curiosity);
 	EXPECT_EQ(creature_mind::ThrowAbout(1, Always(0)).back().face, Cue::Playfulness);
-	EXPECT_EQ(creature_mind::Poo(Always(1)).back().face, Cue::Smile);
+	EXPECT_EQ(creature_mind::Poo(Always(1), std::nullopt).back().face, Cue::Smile);
 	EXPECT_EQ(creature_mind::Puke().back().face, Cue::Grimace);
 	EXPECT_EQ(creature_mind::Emote(animations::k_Happy).back().face, Cue::AttitudeToPlayer);
 	EXPECT_EQ(creature_mind::HangAround(Always(0)).front().face, Cue::Idle);
@@ -697,7 +697,7 @@ TEST(CreatureNeedsMind, ItSleepsWithItsEyesClosedUntilRested)
 TEST(CreatureNeedsMind, APooTakesFourSecondsAndDropsAsItEnds)
 {
 	creature_mind::IdleMind mind;
-	creature_mind::Plan(mind, creature_mind::Activity::Poo, creature_mind::Poo(Always(1)));
+	creature_mind::Plan(mind, creature_mind::Activity::Poo, creature_mind::Poo(Always(1), std::nullopt));
 	ASSERT_EQ(mind.agenda.size(), 1u);
 	FakeBody body;
 	std::optional<int> dropped;
@@ -722,7 +722,40 @@ TEST(CreatureNeedsMind, APooTakesFourSecondsAndDropsAsItEnds)
 	EXPECT_GE(*dropped, 40);
 	EXPECT_LE(*dropped, 41);
 	// A third of the time it shows it needs one first
-	EXPECT_EQ(creature_mind::Poo(Always(0)).front().animation, animations::k_NeedAPoo);
+	EXPECT_EQ(creature_mind::Poo(Always(0), std::nullopt).front().animation, animations::k_NeedAPoo);
+}
+
+TEST(CreatureNeedsMind, ItGoesUpToTheThingItPoosByAndTurnsItsBackToIt)
+{
+	using Kind = creature_mind::Movement::Kind;
+	const auto agenda = creature_mind::Poo(Always(1), creature_mind::PooBy {.object = 42});
+	ASSERT_EQ(agenda.size(), 3);
+	EXPECT_EQ(agenda[0].movement.kind, Kind::GoNearObject);
+	EXPECT_EQ(agenda[0].movement.object, 42u);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 0.0f);
+	ASSERT_TRUE(agenda[0].gaze.has_value());
+	EXPECT_EQ(agenda[0].gaze->object, 42u);
+	EXPECT_EQ(agenda[1].movement.kind, Kind::TurnToFaceAwayFromObject);
+	EXPECT_EQ(agenda[1].movement.object, 42u);
+	EXPECT_FALSE(agenda[1].gaze.has_value());
+	EXPECT_EQ(agenda[2].effect, creature_mind::Effect::Poo);
+	// The need shows first, then the same steps
+	const auto shown = creature_mind::Poo(Always(0), creature_mind::PooBy {.object = 42});
+	ASSERT_EQ(shown.size(), 4);
+	EXPECT_EQ(shown[0].animation, animations::k_NeedAPoo);
+	EXPECT_EQ(shown[1].movement.kind, Kind::GoNearObject);
+}
+
+TEST(CreatureNeedsMind, AFartIsDoneByItselfWithoutLookingAtItself)
+{
+	using Kind = creature_mind::Movement::Kind;
+	const auto agenda = creature_mind::Fart(Always(1), creature_mind::PooBy {.object = 7, .itself = true});
+	ASSERT_EQ(agenda.size(), 3);
+	EXPECT_EQ(agenda[0].movement.kind, Kind::GoNearObject);
+	EXPECT_EQ(agenda[0].movement.object, 7u);
+	EXPECT_FALSE(agenda[0].gaze.has_value());
+	EXPECT_EQ(agenda[1].movement.kind, Kind::TurnToFaceAwayFromObject);
+	EXPECT_EQ(agenda[2].effect, creature_mind::Effect::Fart);
 }
 
 TEST(CreatureNeedsMind, ItPicksFoodUpAndEatsIt)

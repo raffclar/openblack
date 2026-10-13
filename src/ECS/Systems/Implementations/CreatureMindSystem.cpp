@@ -434,6 +434,7 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 	case Kind::GoNearObject:
 	case Kind::GetAwayFromObject:
 	case Kind::TurnToFaceObject:
+	case Kind::TurnToFaceAwayFromObject:
 	case Kind::ToThrowPosition:
 		// Overseen turn by turn by the mind as it casts (StartSubMove)
 		break;
@@ -445,7 +446,7 @@ bool IsSubMove(creature_mind::Movement::Kind kind)
 {
 	using Kind = creature_mind::Movement::Kind;
 	return kind == Kind::GoNearObject || kind == Kind::GetAwayFromObject || kind == Kind::TurnToFaceObject ||
-	       kind == Kind::ToThrowPosition;
+	       kind == Kind::TurnToFaceAwayFromObject || kind == Kind::ToThrowPosition;
 }
 
 /// Where the creature's head looks for a step that gives it something to look at: the top of a thing, or its foot, a
@@ -1897,9 +1898,11 @@ bool CreatureMindSystem::Drink(entt::entity creature)
 
 bool CreatureMindSystem::Poo(entt::entity creature)
 {
-	return Replan(creature, creature_mind::Activity::Poo, creature_mind::Poo([this](uint32_t range) {
-		              return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	              }));
+	return Replan(
+	    creature, creature_mind::Activity::Poo,
+	    creature_mind::Poo(
+	        [this](uint32_t range) { return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); },
+	        std::nullopt));
 }
 
 bool CreatureMindSystem::Puke(entt::entity creature)

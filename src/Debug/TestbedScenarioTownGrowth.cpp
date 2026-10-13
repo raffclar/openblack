@@ -18,6 +18,7 @@
 
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
+using creature_desires::Desire;
 
 namespace
 {
@@ -224,6 +225,34 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .commands = {{.kind = Command::Kind::Fart, .creature = 0, .delaySeconds = 1.0f},
 	                 {.kind = Command::Kind::Fart, .creature = 0, .delaySeconds = 20.0f, .waitUntilFree = true}},
 	    .repeatFrom = 1,
+	});
+
+	// A creature that needs to poo, near a village. It chooses a thing to poo by
+	all.push_back({
+	    .id = "needs.poo_by_village",
+	    .name = "Pooing by a village",
+	    .facet = Facet::Needs,
+	    .description = "A tiger full of poo, its desire to go as strong as it gets, 30 m east of a hut of the player's "
+	                   "town with four of its people, two trees and a rock about it.",
+	    .expected = "The tiger squats for a poo or for a fart. A third of the time it shows it needs a poo first. For a "
+	                "fart it does the steps of a poo by itself, so it does not walk and does not turn. After the squat "
+	                "its desire to poo is held back for a minute.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 25.0f}, {35.0f, 55.0f}}, .distance = 0.7f},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = {30.0f, 40.0f},
+	                   .facingDegrees = 90.0f,
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.95f, .life = 1.0f},
+	                   .desires = {{.desire = Desire::Poo, .fraction = 1.0f}}}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, 40.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-2.0f, 34.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, 46.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 40.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 30.0f}, .joinTown = true},
+	                {.type = TreeInfo::Oak, .offset = {10.0f, 60.0f}},
+	                {.type = TreeInfo::Beech, .offset = {14.0f, 22.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {20.0f, 48.0f}}},
 	});
 
 	// The same village, set to respect or to fear a creature standing near it
