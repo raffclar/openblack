@@ -84,6 +84,7 @@ constexpr size_t k_GetUp = 107;
 constexpr size_t k_FirstGesture = 200;
 constexpr size_t k_GestureCount = 7;
 constexpr size_t k_Yawn = 202;
+constexpr size_t k_Talk = 205;
 
 /// The spec file's name of an animation the minds play, without its type letter, or empty for others
 [[nodiscard]] std::string_view Name(size_t animation);

@@ -78,6 +78,7 @@
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
+#include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
@@ -492,6 +493,7 @@ Game::Game(Arguments&& args) noexcept
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
+	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.resolution = {args.windowWidth, args.windowHeight};
 	config.displayMode = args.displayMode;
 	config.graphicsBackend = args.graphicsBackend;
@@ -1023,14 +1025,7 @@ void Game::UpdateHandInterface()
 	_interface->SetCreaturePanel(std::nullopt);
 	// The temple places the hand's tooltip itself
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	// The fighters' health and stamina, while a fight is on
-	_interface->SetFightPanel(inTemple ? std::nullopt : Locator::creatureFightSystem::value().GetPanel());
 	if (inTemple)
-	{
-		return;
-	}
-	// Nor is the panel shown while a script has the cinema bars in, whether or not the player's interface is put away
-	if (Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0)
 	{
 		return;
 	}
@@ -1933,6 +1928,13 @@ bool Game::Update() noexcept
 	Locator::highDetailSystem::value().Update();
 	if (_interface)
 	{
+		// The fighters' health and stamina while a fight is on, wanted afresh every frame whether or not the hand is out
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const bool scriptHasCamera =
+		    Locator::scriptControlSystem::has_value() && Locator::scriptControlSystem::value().GetCameraOwner() != 0;
+		_interface->SetFightPanel(creature_fight_hud::PanelAllowed(inTemple, scriptHasCamera)
+		                              ? Locator::creatureFightSystem::value().GetPanel()
+		                              : std::nullopt);
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		if (std::exchange(_restartRequested, false))
@@ -2373,7 +2375,12 @@ bool Game::Update() noexcept
 
 		// Update Hand
 		{
-			// Put away, it stays where it was and does nothing until it comes back
+			// Put away, it stays where it was and does nothing until it comes back. The creature's panel is wanted afresh
+			// every frame, so with the hand away (a cut scene, a menu) it isn't left up from before
+			if (!IsHandDrawn() && _interface)
+			{
+				_interface->SetCreaturePanel(std::nullopt);
+			}
 			if (IsHandDrawn())
 			{
 				const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));

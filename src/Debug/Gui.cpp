@@ -49,6 +49,7 @@
 #include "Camera.h"
 #include "Camera/Camera.h"
 #include "Console.h"
+#include "Creature/BonusCreatures.h"
 #include "CreatureSpawner.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
@@ -726,6 +727,22 @@ bool Gui::ShowMenu() noexcept
 			{
 				ImGui::Checkbox("Creature Shadows", &config.drawCreatureShadows);
 				ImGui::Checkbox("Dynamic Tree Shadows", &config.dynamicTreeShadows);
+
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu("Bonus Creatures"))
+			{
+				// The breeder's bonus creatures, which vanilla only had once unlocked from outside the game
+				for (size_t i = 0; i < creature_swap::k_BonusCount; ++i)
+				{
+					const auto name = creature_swap::NameOf(static_cast<creature_swap::Bonus>(i));
+					bool unlocked = config.unlockedBonusCreatures.test(i);
+					if (ImGui::Checkbox(std::string(name).c_str(), &unlocked))
+					{
+						config.unlockedBonusCreatures.set(i, unlocked);
+					}
+				}
 
 				ImGui::EndMenu();
 			}

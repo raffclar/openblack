@@ -107,6 +107,8 @@ enum class Build : uint8_t
 	LookButDontApproach,
 	LookAtCamera,
 	PointAtThing,
+	/// Looking at the camera while a script's cut scene is on, as every creature free to think for itself is made to
+	LookAtCameraInCutScene,
 	PointAtCamera,
 	/// Hurling, sleeping at home, smiling or waving at someone, being frightened on the spot, putting down what it
 	/// holds and lying dead for good, as the game builds them whoever chose them
