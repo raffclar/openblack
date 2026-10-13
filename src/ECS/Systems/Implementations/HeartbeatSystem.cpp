@@ -164,11 +164,13 @@ void HeartbeatSystem::ProcessTurn(uint32_t turn)
 			players.push_back(entity);
 		}
 	});
+	// A player's heart beats on from the land before, when they kept one, else it starts calm
 	for (const auto entity : players)
 	{
 		if (!registry.AllOf<Heartbeat>(entity))
 		{
-			registry.Assign<Heartbeat>(entity);
+			const auto kept = _kept.Take(registry.Get<const Player>(entity).name);
+			registry.Assign<Heartbeat>(entity, kept.value_or(ecs::heartbeat::State {}));
 		}
 	}
 
@@ -225,4 +227,16 @@ std::optional<ecs::heartbeat::State> HeartbeatSystem::StateOf(PlayerNames player
 		    }
 	    });
 	return found;
+}
+
+void HeartbeatSystem::KeepForNextLand()
+{
+	_kept.Forget();
+	Locator::entitiesRegistry::value().Each<const Player, const Heartbeat>(
+	    [this](const Player& player, const Heartbeat& heartbeat) { _kept.Keep(player.name, heartbeat.state); });
+}
+
+void HeartbeatSystem::ForgetKept()
+{
+	_kept.Forget();
 }

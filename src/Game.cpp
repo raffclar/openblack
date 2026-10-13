@@ -4142,6 +4142,18 @@ void Game::PrepareNewLand(land_change::Kind change)
 			Locator::playerSystem::value().ForgetKept();
 		}
 	}
+	// The players' hearts beat on from land to land; a new game starts them calm
+	if (Locator::heartbeatSystem::has_value())
+	{
+		if (carryOver && rules.heartbeatsCarried)
+		{
+			Locator::heartbeatSystem::value().KeepForNextLand();
+		}
+		else
+		{
+			Locator::heartbeatSystem::value().ForgetKept();
+		}
+	}
 	// The last land's scripts forget what they held: the land's objects go with it before anything could be let go back
 	// into the game
 	if (Locator::scriptObjects::has_value())
