@@ -419,11 +419,14 @@ void LandAnimal(World& world, PhysicsEntry* entry, entt::entity entity)
 	animal->height = 0.0f;
 	animal->move.position = {map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)};
 	animal->move.goal = animal->move.position;
+	// It keeps how it lies for its clips
+	animal->landingPose = pose;
 	if (animal->Dead())
 	{
 		// Killed in the air it starts dying where it lands; one already dying lies dead
 		const bool wasDying = animal->state == AnimalState::Dying || animal->state == AnimalState::Dead;
 		world.SetDying(entity);
+		animal->landingPose = pose;
 		if (wasDying)
 		{
 			animal->state = AnimalState::Dead;
@@ -431,53 +434,14 @@ void LandAnimal(World& world, PhysicsEntry* entry, entt::entity entity)
 		}
 		return;
 	}
-	// Its flock's home moves by its kind's rule
-	if (registry.Valid(animal->flock) && world.HasAnimals())
-	{
-		const bool leader = world.LeaderOf(animal->flock) == entity;
-		switch (living::LairOnLanding(animal->type, leader))
-		{
-		case living::LandedLair::WhereItLanded:
-			world.SetFlockCentre(animal->flock, glm::vec2(position.x, position.z));
-			break;
-		case living::LandedLair::ForestOfItsKind:
-		{
-			// Tigers and wolves choose a forest; a wolf only when it leads its flock, keeping to where it is while a
-			// script holds it. (A flag of the wolf's flock that stops the choice altogether isn't known in openblack.)
-			if (animal->type == AnimalInfo::Wolf && !leader)
-			{
-				break;
-			}
-			std::optional<glm::vec3> lair;
-			if (animal->type == AnimalInfo::Wolf && registry.AllOf<InScript>(entity))
-			{
-				lair = position;
-			}
-			else
-			{
-				lair = world.ForestLair(animal->type, position);
-			}
-			if (lair.has_value())
-			{
-				world.SetFlockCentre(animal->flock, glm::vec2(lair->x, lair->z));
-			}
-			break;
-		}
-		case living::LandedLair::Unchanged:
-			break;
-		}
-	}
-	// It plays its landing clip through, kept still, then decides what to do; a kind with none waits on its current clip
+	// It plays its landing clip as it lies. Its next turn gives its flock a new home, then it gets up
+	animal->state = AnimalState::Landed;
+	animal->turnsInState = 0;
 	if (const auto clip = living::AnimalLandedClip(animal->type, pose))
 	{
 		animal->animation = *clip;
 		animal->clipPlace = 0;
 	}
-	// A grazer, once up, joins a herd nearby if it can and wanders off
-	animal->afterClip =
-	    animals::grazers::IsGrazer(animal->type) ? AnimalState::InteractDecideWhatToDo : AnimalState::DecideWhatToDo;
-	animal->state = AnimalState::WaitForClip;
-	animal->turnsInState = 0;
 }
 
 void StartFlying(World& world, entt::entity object)
@@ -490,6 +454,12 @@ void StartFlying(World& world, entt::entity object)
 	}
 	if (auto* animal = registry.TryGet<Animal>(object))
 	{
+		// It flies, and stops what it did. A dying or dead animal keeps its state, so that it lies dead when it comes down
+		if (animal->state != AnimalState::Dying && animal->state != AnimalState::Dead)
+		{
+			animal->state = AnimalState::Flying;
+			animal->turnsInState = 0;
+		}
 		if (const auto clip = living::ClipsOf(animal->type).thrown)
 		{
 			animal->animation = *clip;

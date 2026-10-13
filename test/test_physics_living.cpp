@@ -82,6 +82,7 @@ TEST(PhysicsLiving, AnimalsHaveTheirKindsClips)
 {
 	EXPECT_EQ(AnimalLandedClip(AnimalInfo::Cow, LandingPose::Front), AnimId::ACowLandedRightSide);
 	EXPECT_EQ(AnimalLandedClip(AnimalInfo::Cow, LandingPose::Back), AnimId::ACowLandedLeftSide);
+	EXPECT_EQ(AnimalLandedClip(AnimalInfo::Cow, LandingPose::None), AnimId::ACowLandedLeftSide);
 	EXPECT_EQ(AnimalLandedClip(AnimalInfo::Pig, LandingPose::Feet), AnimId::APigStand);
 	EXPECT_EQ(ClipsOf(AnimalInfo::Lion).inHand, AnimId::ALionInHand);
 	EXPECT_EQ(ClipsOf(AnimalInfo::Crow).thrown, AnimId::CrowTakeoff);

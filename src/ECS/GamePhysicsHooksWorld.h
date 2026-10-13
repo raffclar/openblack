@@ -52,11 +52,7 @@ public:
 	[[nodiscard]] bool IsStore(entt::entity store, ResourceType type) const override;
 	bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) override;
 	void AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) override;
-	[[nodiscard]] bool HasAnimals() const override;
 	void SetDying(entt::entity animal) override;
-	[[nodiscard]] entt::entity LeaderOf(entt::entity flock) const override;
-	void SetFlockCentre(entt::entity flock, glm::vec2 centre) override;
-	[[nodiscard]] std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const override;
 	[[nodiscard]] bool HasMinds() const override;
 	[[nodiscard]] const creature_mind_tables::Tables* MindTables() const override;
 	void PlayerDid(size_t deed, glm::vec3 point, entt::entity object, PlayerNames player) override;

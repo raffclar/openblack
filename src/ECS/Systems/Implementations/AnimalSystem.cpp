@@ -35,6 +35,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
+#include "ECS/BeingEatenRules.h"
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
@@ -43,6 +44,7 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
@@ -57,11 +59,11 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
-#include "ECS/VillagerEatenRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -116,8 +118,6 @@ constexpr float k_ScriptAnimalFlockReach = 2.0f;
 constexpr float k_ScriptAnimalFlockDistance = 1.0f;
 /// It belongs to the nearest town within this many metres
 constexpr float k_ScriptAnimalTownReach = 500.0f;
-/// The prey brought down plays its fall the turn after, and waits for it from the turn after that
-constexpr int k_FallStartsAfter = 2;
 
 } // namespace
 
@@ -541,7 +541,8 @@ void AnimalSystem::ProcessTurn()
 		animal.previousPosition = animal.position;
 		animal.previousHeading = animal.heading;
 		++animal.turnsInState;
-		if (animal.state == AnimalState::Downed)
+		// Every kind is brought down, eaten and lands in the same way
+		if (CommonStateTurn(entity, animal))
 		{
 			continue;
 		}
@@ -581,8 +582,13 @@ void AnimalSystem::ProcessTurn()
 		{
 			Wolf(entity, animal);
 		}
+		else if (animal.state == AnimalState::WaitForClip &&
+		         animal.turnsInState * k_TurnMilliseconds >= PlayTimeOf(animal.animation))
+		{
+			// Any other kind goes into its next state when its clip ends
+			SetTopState(animal, animal.afterClip);
+		}
 	}
-	ProcessEaten();
 	ProcessFading();
 	ProcessTempleBirds();
 	registry.SetDirty();
@@ -1081,23 +1087,10 @@ bool AnimalSystem::OutOfTheHunt(entt::entity prey) const
 	{
 		finalState = static_cast<LivingStates>(Locator::livingActionSystem::value().VillagerGetFinalState(*action));
 	}
-	else if (const auto* other = registry.TryGet<const Animal>(prey); other != nullptr)
+	else if (const auto state = FinalGameStateOf(prey))
 	{
-		// An animal that a hunter brought down stays in one state while the hunter eats it
-		switch (other->state)
-		{
-		case AnimalState::Downed:
-			finalState = LivingStates::LivingDowned;
-			break;
-		case AnimalState::Dying:
-			finalState = LivingStates::LivingDying;
-			break;
-		case AnimalState::Dead:
-			finalState = LivingStates::LivingDead;
-			break;
-		default:
-			break;
-		}
+		// An animal is judged by the state that it goes to
+		finalState = static_cast<LivingStates>(*state);
 	}
 	return flock_rules::OutOfTheHunt(finalState, registry.AllOf<BroughtDown>(prey));
 }
@@ -1235,19 +1228,27 @@ void AnimalSystem::IntoHand(entt::entity animal)
 	{
 		return;
 	}
-	if (const auto clip = physics::living::ClipsOf(data->type).inHand)
+	// A dying or dead animal keeps its state, so that it lies dead when it comes down
+	if (data->state == AnimalState::Dying || data->state == AnimalState::Dead)
 	{
-		data->animation = *clip;
-		data->clipPlace = 0;
+		if (const auto clip = physics::living::ClipsOf(data->type).inHand)
+		{
+			data->animation = *clip;
+			data->clipPlace = 0;
+		}
+		return;
 	}
+	// It stops what it did, also the count of a hunter that eats it. It plays its kind's clip for the hand
+	SetTopState(*data, AnimalState::InHand);
+	data->clipPlace = 0;
 }
 
-void AnimalSystem::BringDown(entt::entity wolf, entt::entity prey)
+void AnimalSystem::BringDown([[maybe_unused]] entt::entity wolf, entt::entity prey)
 {
 	auto& registry = EntityRegistry();
 	// The wolf brings the prey down again each turn that it is on the prey. The mark stays for all of the life of the prey
 	registry.AssignOrReplace<BroughtDown>(prey);
-	ecs::world_objects::SetLife(prey, ecs::villager_eaten_rules::k_BroughtDownLife);
+	ecs::world_objects::SetLife(prey, ecs::being_eaten_rules::k_BroughtDownLife);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} brought down by wolf #{}", static_cast<uint32_t>(prey),
 	                    static_cast<uint32_t>(wolf));
 	if (registry.AllOf<Villager>(prey))
@@ -1267,13 +1268,108 @@ void AnimalSystem::BringDown(entt::entity wolf, entt::entity prey)
 	}
 	if (auto* other = registry.TryGet<Animal>(prey))
 	{
+		// The animal falls, then the wolf eats it. Its states count the turns, but only while it stays in these states
 		SetTopState(*other, AnimalState::Downed);
-		const int fallTurns = flock_rules::TurnsToPlay(PlayTimeOf(other->animation), k_TurnMilliseconds);
-		registry.AssignOrReplace<BeingEaten>(prey, BeingEaten {.hunter = wolf,
-		                                                       .turns = 0,
-		                                                       .eatenFrom = k_FallStartsAfter + fallTurns,
-		                                                       .left = flock_rules::k_BeingEatenTurns});
 	}
+}
+
+bool AnimalSystem::CommonStateTurn(entt::entity entity, Animal& animal)
+{
+	switch (animal.state)
+	{
+	case AnimalState::Downed:
+		Downed(animal);
+		return true;
+	case AnimalState::BeingEaten:
+		BeingEatenTurn(entity, animal);
+		return true;
+	case AnimalState::Landed:
+		Landed(entity, animal);
+		return true;
+	default:
+		return false;
+	}
+}
+
+void AnimalSystem::WaitForClipOfState(Animal& animal, AnimalState next)
+{
+	animal.afterClip = next;
+	animal.state = AnimalState::WaitForClip;
+}
+
+void AnimalSystem::Downed(Animal& animal)
+{
+	// The fall started when the hunter brought it down. After the fall, the hunter eats it for a number of turns
+	WaitForClipOfState(animal, AnimalState::BeingEaten);
+	animal.eatenTurnsLeft = being_eaten_rules::k_BeingEatenTurns;
+}
+
+void AnimalSystem::BeingEatenTurn(entt::entity entity, Animal& animal)
+{
+	const auto step = being_eaten_rules::BeingEatenTurn(animal.eatenTurnsLeft, EntityRegistry().AllOf<Indestructible>(entity));
+	animal.eatenTurnsLeft = step.turnsLeft;
+	switch (step.result)
+	{
+	case being_eaten_rules::EatenTurn::Eaten:
+		break;
+	case being_eaten_rules::EatenTurn::GetsUp:
+		// Nothing can kill it: it gets up as after a landing
+		WaitForClip(animal, AnimalState::Landed);
+		break;
+	case being_eaten_rules::EatenTurn::Dies:
+		// It dies, and its body lies dead for the turns that are left
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} eaten", static_cast<uint32_t>(entity));
+		ecs::world_objects::SetLife(entity, 0.0f);
+		animal.deadTurns = step.turnsLeft;
+		WaitForClip(animal, AnimalState::Dead);
+		break;
+	}
+}
+
+void AnimalSystem::Landed(entt::entity entity, Animal& animal)
+{
+	auto& registry = EntityRegistry();
+	// Its flock's home moves by its kind's rule
+	if (registry.AllOf<Flock>(animal.flock))
+	{
+		const bool leader = LeaderOf(animal.flock) == entity;
+		const auto position = registry.Get<const Transform>(entity).position;
+		switch (physics::living::LairOnLanding(animal.type, leader))
+		{
+		case physics::living::LandedLair::WhereItLanded:
+			SetFlockCentre(animal.flock, Xz(position));
+			break;
+		case physics::living::LandedLair::ForestOfItsKind:
+		{
+			// Tigers and wolves choose a forest. A wolf chooses only when it leads its flock, and it keeps to where it is
+			// while a script holds it. (A flag of the wolf's flock that stops the choice is not known in openblack.)
+			if (animal.type == AnimalInfo::Wolf && !leader)
+			{
+				break;
+			}
+			std::optional<glm::vec3> lair;
+			if (animal.type == AnimalInfo::Wolf && registry.AllOf<InScript>(entity))
+			{
+				lair = position;
+			}
+			else if (Locator::forestSystem::has_value())
+			{
+				lair = Locator::forestSystem::value().ForestLair(animal.type, position);
+			}
+			if (lair.has_value())
+			{
+				SetFlockCentre(animal.flock, Xz(*lair));
+			}
+			break;
+		}
+		case physics::living::LandedLair::Unchanged:
+			break;
+		}
+	}
+	// It plays its landing clip to the end, then it decides what to do. A grazer joins a herd near it if it can, then
+	// it wanders off
+	WaitForClipOfState(animal, animals::grazers::IsGrazer(animal.type) ? AnimalState::InteractDecideWhatToDo
+	                                                                   : AnimalState::DecideWhatToDo);
 }
 
 void AnimalSystem::FinishPouncing(entt::entity wolf, Animal& animal, entt::entity prey)
@@ -1320,18 +1416,36 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		facts.heightAboveLand = transform.position.y - Ground(Xz(transform.position));
 		cells[{cell.x, cell.y}].emplace_back(entity, facts);
 	};
+	// What the hunter itself is
+	const bool hunterInScript = registry.AllOf<InScript>(wolf);
+	const bool hunterInFlock = registry.AllOf<Flock>(animal.flock);
+	const bool hunterYoung = AgeOf(animal) < InfoOf(animal.type).grownUpAge;
+	// The facts that every prey has: whether a script protects or controls it, whether the hunter can get to it, and
+	// whether a hunter brought it down before
+	const auto withCommonFacts = [&](entt::entity entity, flock_rules::PreyFacts prey) {
+		prey.indestructible = registry.AllOf<Indestructible>(entity);
+		prey.reachable = PreyReachable(entity) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(entity);
+		prey.scriptControlled = registry.AllOf<ScriptControlled>(entity);
+		prey.hunterInScript = hunterInScript;
+		prey.hunterInFlock = hunterInFlock;
+		prey.hunterYoung = hunterYoung;
+		prey.broughtDown = registry.AllOf<BroughtDown>(entity);
+		return prey;
+	};
 	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& /*villager*/, const Transform& t) {
 		// A walking skeleton has no meat for it
 		add(entity, t,
-		    {.isVillager = true, .skeleton = registry.AllOf<WalkingSkeleton>(entity), .helpless = OutOfTheHunt(entity)});
+		    withCommonFacts(
+		        entity,
+		        {.isVillager = true, .skeleton = registry.AllOf<WalkingSkeleton>(entity), .helpless = OutOfTheHunt(entity)}));
 	});
 	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& other, const Transform& t) {
 		if (entity != wolf)
 		{
 			add(entity, t,
-			    {.isOtherAnimal = other.type != animal.type,
-			     .hasMeat = InfoOf(other.type).foodValue > 0.0f,
-			     .helpless = OutOfTheHunt(entity)});
+			    withCommonFacts(entity, {.isOtherAnimal = other.type != animal.type,
+			                             .hasMeat = InfoOf(other.type).foodValue > 0.0f,
+			                             .helpless = OutOfTheHunt(entity)}));
 		}
 	});
 	// So many cells spiralling out from its own, and the first prey met there is its prey
@@ -1364,25 +1478,6 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		cell += glm::ivec2(step.x, step.z);
 	}
 	return entt::null;
-}
-
-void AnimalSystem::ProcessEaten()
-{
-	auto& registry = EntityRegistry();
-	std::vector<entt::entity> eaten;
-	registry.Each<BeingEaten>([&](entt::entity entity, BeingEaten& being) {
-		++being.turns;
-		// After its fall, the hunter eats it one turn at a time
-		if (being.turns > being.eatenFrom && --being.left == 0)
-		{
-			eaten.push_back(entity);
-		}
-	});
-	for (const auto entity : eaten)
-	{
-		registry.Remove<BeingEaten>(entity);
-		Remove(entity);
-	}
 }
 
 // Fading and going
@@ -1474,6 +1569,8 @@ void AnimalSystem::SetDying(entt::entity entity)
 		return;
 	}
 	animal->life = 0.0f;
+	// It lies dead on its left side, unless a landing after this shows how it lies
+	animal->landingPose = physics::living::LandingPose::None;
 	animal->state = AnimalState::Dying;
 	animal->turnsInState = 0;
 	if (const auto clip = animals::DyingClip(animal->type))
@@ -1515,7 +1612,7 @@ void AnimalSystem::ProcessDeath(entt::entity entity, Animal& animal)
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} lies dead", static_cast<uint32_t>(entity));
 		animal.state = AnimalState::Dead;
 		animal.turnsInState = 0;
-		if (const auto clip = animals::DeadClip(animal.type))
+		if (const auto clip = animals::DeadClip(animal.type, animal.landingPose == physics::living::LandingPose::Front))
 		{
 			animal.animation = *clip;
 			animal.clipPlace = 0;
@@ -1523,6 +1620,8 @@ void AnimalSystem::ProcessDeath(entt::entity entity, Animal& animal)
 		LeaveFlock(entity, animal);
 		return;
 	}
+	// A dead animal is in no flock
+	LeaveFlock(entity, animal);
 	// A land bird lies dead in its kind's clip
 	if (const auto clip = animals::birds::DeadClip(animal.type); clip.has_value() && animal.animation != *clip)
 	{
@@ -1643,6 +1742,7 @@ bool AnimalSystem::IsAvailableForReaction(entt::entity entity) const
 	case AnimalState::Dying:
 	case AnimalState::Dead:
 	case AnimalState::Downed:
+	case AnimalState::BeingEaten:
 	case AnimalState::WaitForClip:
 		return false;
 	default:

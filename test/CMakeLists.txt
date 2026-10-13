@@ -910,5 +910,5 @@ openblack_setup_and_add_test(test_predator_rules test_predator_rules.cpp)
 openblack_setup_and_add_test(test_hand_blend hand/test_hand_blend.cpp)
 openblack_setup_and_add_test(test_pipeline_cache test_pipeline_cache.cpp)
 openblack_setup_and_add_test(
-  test_villager_eaten_rules test_villager_eaten_rules.cpp
+  test_being_eaten_rules test_being_eaten_rules.cpp
 )

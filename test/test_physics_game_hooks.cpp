@@ -201,14 +201,7 @@ public:
 		return true;
 	}
 	void AddToPile(entt::entity /*pile*/, ResourceType /*type*/, uint32_t /*amount*/, bool /*poisoned*/) override {}
-	[[nodiscard]] bool HasAnimals() const override { return false; }
 	void SetDying(entt::entity /*animal*/) override {}
-	[[nodiscard]] entt::entity LeaderOf(entt::entity /*flock*/) const override { return entt::null; }
-	void SetFlockCentre(entt::entity /*flock*/, glm::vec2 /*centre*/) override {}
-	[[nodiscard]] std::optional<glm::vec3> ForestLair(AnimalInfo /*kind*/, glm::vec3 /*from*/) const override
-	{
-		return std::nullopt;
-	}
 	[[nodiscard]] bool HasMinds() const override { return true; }
 	[[nodiscard]] const creature_mind_tables::Tables* MindTables() const override { return nullptr; }
 	void PlayerDid(size_t deed, glm::vec3 /*point*/, entt::entity object, PlayerNames player) override

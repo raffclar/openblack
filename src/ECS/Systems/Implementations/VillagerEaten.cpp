@@ -9,11 +9,11 @@
 
 #include "VillagerEaten.h"
 
+#include "ECS/BeingEatenRules.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
-#include "ECS/VillagerEatenRules.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
 #include "VillagerFire.h"
@@ -22,7 +22,7 @@ using namespace openblack::ecs;
 using openblack::ecs::components::Indestructible;
 using openblack::ecs::components::LivingAction;
 
-namespace rules = openblack::ecs::villager_eaten_rules;
+namespace rules = openblack::ecs::being_eaten_rules;
 
 uint32_t villager_eaten::Downed(LivingAction& action)
 {

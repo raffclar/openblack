@@ -10,6 +10,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 
 #include <LNDFile.h>
 #include <glm/vec2.hpp>
@@ -19,6 +20,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
 #include "Common/GUtilsAngle.h"
@@ -31,6 +33,7 @@
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Physics/LivingRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -116,6 +119,10 @@ inline size_t GameStateOf(AnimalState state)
 		return 4;
 	case AnimalState::FleeingFromObject:
 		return 6;
+	case AnimalState::Flying:
+		return 10;
+	case AnimalState::Landed:
+		return 11;
 	case AnimalState::SetDying:
 		return 13;
 	case AnimalState::Dying:
@@ -124,8 +131,12 @@ inline size_t GameStateOf(AnimalState state)
 		return 15;
 	case AnimalState::Downed:
 		return 17;
+	case AnimalState::BeingEaten:
+		return 18;
 	case AnimalState::WaitForClip:
 		return 23;
+	case AnimalState::InHand:
+		return 24;
 	case AnimalState::MoveInFlock:
 		return 27;
 	case AnimalState::FleeingAndLookingAtObject:
@@ -205,12 +216,40 @@ inline AnimId GrazerClipFor(const Animal& animal, AnimalState state)
 	    {.walk = static_cast<uint16_t>(row.speedMaxWalk), .run = static_cast<uint16_t>(row.speedMaxRun)}, RandomWhole);
 }
 
+/// The clip of a state that every kind of animal has: falling when brought down, lying dead, in a hand, flying and
+/// landed. Each kind has its own clips. A kind with no clip for the state keeps the clip that it plays. None for the
+/// other states
+inline std::optional<AnimId> CommonStateClip(const Animal& animal, AnimalState state)
+{
+	const auto type = animal.type;
+	switch (state)
+	{
+	case AnimalState::Downed:
+		return animals::DyingClip(type).value_or(animal.animation);
+	case AnimalState::BeingEaten:
+	case AnimalState::Dead:
+		return animals::DeadClip(type, animal.landingPose == physics::living::LandingPose::Front).value_or(animal.animation);
+	case AnimalState::InHand:
+		return physics::living::ClipsOf(type).inHand.value_or(animal.animation);
+	case AnimalState::Flying:
+		return physics::living::ClipsOf(type).thrown.value_or(animal.animation);
+	case AnimalState::Landed:
+		return physics::living::AnimalLandedClip(type, animal.landingPose).value_or(animal.animation);
+	default:
+		return std::nullopt;
+	}
+}
+
 /// The clip of a state: the miracle's doves always flap their clip and its bats theirs; its wolves stand to decide,
 /// leap, settle down to eat and eat, and run otherwise; the land's birds choose a flying clip afresh; the grazers take
 /// their own
 inline AnimId ClipFor(const Animal& animal, AnimalState state)
 {
 	const auto type = animal.type;
+	if (const auto clip = CommonStateClip(animal, state))
+	{
+		return *clip;
+	}
 	if (animals::grazers::IsGrazer(type))
 	{
 		return GrazerClipFor(animal, state);

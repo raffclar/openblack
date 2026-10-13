@@ -127,13 +127,7 @@ public:
 	virtual bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) = 0;
 	virtual void AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) = 0;
 
-	/// Whether there are animals
-	[[nodiscard]] virtual bool HasAnimals() const = 0;
 	virtual void SetDying(entt::entity animal) = 0;
-	[[nodiscard]] virtual entt::entity LeaderOf(entt::entity flock) const = 0;
-	virtual void SetFlockCentre(entt::entity flock, glm::vec2 centre) = 0;
-	/// A forest an animal of a kind would make its lair in, none when it finds none or there are no forests
-	[[nodiscard]] virtual std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const = 0;
 
 	/// Whether creatures have minds
 	[[nodiscard]] virtual bool HasMinds() const = 0;
