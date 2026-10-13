@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
@@ -87,6 +88,8 @@ struct ActionCandidate
 	uint32_t action {0};
 	/// Whether it acts on a thing, so needs a goal
 	bool needsObject {false};
+	/// Whether it uses a thing (a rock to throw, a tree to give), so needs one
+	bool usesThing {false};
 	float opinion {0.0f};
 	uint32_t turnsSinceDone {k_NoveltyTurns};
 	/// Whether the table says it serves the first desire, which the game counts for less novelty
@@ -111,10 +114,50 @@ struct Plan
 	std::optional<uint32_t> instrument;
 };
 
-/// The best plan for a desire of a strength: the goal worth the most, the first of equals, then the action most wanted
-[[nodiscard]] std::optional<Plan> PlanDesire(creature_desires::Desire desire, float strength,
-                                             std::span<const ObjectCandidate> objects,
-                                             std::span<const ActionCandidate> actions);
+/// The thing that a planned action uses, and its usefulness
+struct UsedChoice
+{
+	uint32_t id {0};
+	float usefulness {0.0f};
+};
+
+/// The order in which the plan for a desire finds its action and the thing that it acts on
+enum class PlanOrder : uint8_t
+{
+	/// The action first, by its priority and novelty, the last of equals. Then the thing that the action acts on, and the
+	/// thing that it uses. When the action has no thing to act on or to use, the next action is tried.
+	ActionFirst,
+	/// For a desire about a whole thing: the action first, by its priority and novelty multiplied by the usefulness of
+	/// the thing that it uses, the last of equals. Then the part of the whole thing that it acts on. When the whole thing
+	/// has no part for the action, the next action is tried. The part counts the default usefulness.
+	ActionThenPart,
+	/// For anger: the part of the whole thing is chosen before the plan. The action is the one that can act on the part,
+	/// by its priority and novelty multiplied by the usefulness of the part and of the thing that it uses, the last of
+	/// equals.
+	PartThenAction,
+};
+
+/// What the plan for a desire needs
+struct DesirePlanning
+{
+	creature_desires::Desire desire {creature_desires::Desire::Impress};
+	float strength {0.0f};
+	PlanOrder order {PlanOrder::ActionFirst};
+	/// The actions of the desire, in the order of the desire's list
+	std::span<const ActionCandidate> actions;
+	/// The usefulness of the whole thing that the desire is about, none for a desire about nothing
+	std::optional<float> activityUsefulness;
+	/// The thing that an action acts on, none when there is none
+	std::function<std::optional<ObjectCandidate>(const ActionCandidate&)> findObject;
+	/// The thing that an action uses, other than the thing that it acts on; none when there is none
+	std::function<std::optional<UsedChoice>(const ActionCandidate&, std::optional<uint32_t> object)> findUsed;
+};
+
+/// The plan for a desire: the action, the thing that it acts on, and the thing that it uses. None when no action can be
+/// planned. At most thirty actions are tried.
+[[nodiscard]] std::optional<Plan> PlanDesire(const DesirePlanning& planning);
+/// How many actions a plan tries at most
+constexpr size_t k_MostActionsTried = 30;
 
 /// One desire that a creature examines for one thing
 struct DesireOnThing
@@ -142,8 +185,8 @@ struct UsedCandidate
 /// The thing to use for a planned action, among those it may use, never the goal itself: the one the distance weighs
 /// least against (something held most of all), the first of equals; none when there is none, or every one is too far to
 /// count
-[[nodiscard]] std::optional<uint32_t> ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,
-                                                 std::optional<uint32_t> goal);
+[[nodiscard]] std::optional<UsedChoice> ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,
+                                                   std::optional<uint32_t> goal);
 
 /// A plan forced on the creature, by a reaction or a catch, scores the most a score can be, so that no plan of its own is
 /// ever pressing enough to replace it

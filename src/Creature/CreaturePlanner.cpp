@@ -10,6 +10,7 @@
 #include "CreaturePlanner.h"
 
 #include <algorithm>
+#include <vector>
 
 using namespace openblack;
 using namespace openblack::creature_planner;
@@ -66,55 +67,196 @@ bool creature_planner::CountsActedOn(Desire desire, bool aboutSomething)
 	return !aboutSomething || desire == Desire::Anger;
 }
 
-std::optional<Plan> creature_planner::PlanDesire(Desire desire, float strength, std::span<const ObjectCandidate> objects,
-                                                 std::span<const ActionCandidate> actions)
+namespace
 {
-	// The goal: the thing worth the most, if any is worth anything
-	const ObjectCandidate* goal = nullptr;
-	float goalScore = 0.0f;
-	for (const auto& object : objects)
+/// How much the creature wants to take an action: its priority and its novelty
+float Wanted(const ActionCandidate& action)
+{
+	return ActionPriority(action.opinion) + Novelty(action.turnsSinceDone, action.servesFirstDesire);
+}
+
+/// An action that the plan tried and could not use is not tried again, in any place of the list
+void MarkTried(std::span<const ActionCandidate> actions, uint32_t action, std::vector<bool>& tried)
+{
+	for (size_t i = 0; i < actions.size(); ++i)
 	{
-		if (object.usefulness > goalScore)
+		if (actions[i].action == action)
 		{
-			goal = &object;
-			goalScore = object.usefulness;
+			tried.at(i) = true;
 		}
 	}
-	// The action: the one most wanted, which nothing else is used for here
-	const ActionCandidate* chosen = nullptr;
-	float chosenPriority = 0.0f;
-	float chosenScore = -1.0f;
-	for (const auto& action : actions)
+}
+
+/// The plan for an action with the thing that it acts on and the thing that it uses
+Plan MakePlan(const DesirePlanning& planning, const ActionCandidate& action, const std::optional<ObjectCandidate>& object,
+              float objectUsefulness, const std::optional<UsedChoice>& used)
+{
+	const auto wanted = Wanted(action);
+	Plan plan {.desire = planning.desire, .action = action.action, .actionPriority = wanted};
+	if (object.has_value() && action.needsObject)
 	{
-		if (action.disabled || (action.needsObject && goal == nullptr))
+		plan.object = object->id;
+		plan.goalUsefulness = object->usefulness;
+	}
+	if (used.has_value())
+	{
+		plan.instrument = used->id;
+	}
+	plan.priority = Priority(planning.strength, planning.activityUsefulness, wanted, objectUsefulness,
+	                         used.has_value() ? std::optional(used->usefulness) : std::nullopt);
+	return plan;
+}
+
+/// The plan when the action comes first, and the thing that it acts on after it
+std::optional<Plan> PlanActionFirst(const DesirePlanning& planning)
+{
+	std::vector<bool> tried(planning.actions.size(), false);
+	for (size_t attempt = 0; attempt < k_MostActionsTried; ++attempt)
+	{
+		std::optional<size_t> chosen;
+		float most = 0.0f;
+		for (size_t i = 0; i < planning.actions.size(); ++i)
+		{
+			const auto& action = planning.actions[i];
+			if (action.disabled || tried.at(i))
+			{
+				continue;
+			}
+			const auto wanted = Wanted(action);
+			if (wanted >= most)
+			{
+				chosen = i;
+				most = wanted;
+			}
+		}
+		if (!chosen.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& action = planning.actions[*chosen];
+		const auto object = action.needsObject ? planning.findObject(action) : std::nullopt;
+		if (action.needsObject && !object.has_value())
+		{
+			MarkTried(planning.actions, action.action, tried);
+			continue;
+		}
+		const auto used = action.usesThing
+		                      ? planning.findUsed(action, object.has_value() ? std::optional(object->id) : std::nullopt)
+		                      : std::nullopt;
+		if (action.usesThing && !used.has_value())
+		{
+			MarkTried(planning.actions, action.action, tried);
+			continue;
+		}
+		const auto objectUsefulness =
+		    object.has_value() ? object->actedOnUsefulness.value_or(k_DefaultUsefulness) : k_DefaultUsefulness;
+		return MakePlan(planning, action, object, objectUsefulness, used);
+	}
+	return std::nullopt;
+}
+
+/// The plan when the action comes first, weighed with the thing that it uses, and the part that it acts on after it
+std::optional<Plan> PlanActionThenPart(const DesirePlanning& planning)
+{
+	std::vector<bool> tried(planning.actions.size(), false);
+	for (size_t attempt = 0; attempt < k_MostActionsTried; ++attempt)
+	{
+		std::optional<size_t> chosen;
+		std::optional<UsedChoice> chosenUsed;
+		float most = 0.0f;
+		for (size_t i = 0; i < planning.actions.size(); ++i)
+		{
+			const auto& action = planning.actions[i];
+			if (action.disabled || tried.at(i))
+			{
+				continue;
+			}
+			// An action that has no thing to use is not chosen
+			const auto used = action.usesThing ? planning.findUsed(action, std::nullopt) : std::nullopt;
+			if (action.usesThing && !used.has_value())
+			{
+				continue;
+			}
+			const auto score =
+			    Wanted(action) * k_DefaultUsefulness * (used.has_value() ? used->usefulness : k_DefaultUsefulness);
+			if (score >= most)
+			{
+				chosen = i;
+				chosenUsed = used;
+				most = score;
+			}
+		}
+		if (!chosen.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& action = planning.actions[*chosen];
+		const auto part = planning.findObject(action);
+		if (!part.has_value())
+		{
+			MarkTried(planning.actions, action.action, tried);
+			continue;
+		}
+		return MakePlan(planning, action, part, k_DefaultUsefulness, chosenUsed);
+	}
+	return std::nullopt;
+}
+
+/// The plan for the part chosen before it: the action that can act on the part and is wanted the most
+std::optional<Plan> PlanPartThenAction(const DesirePlanning& planning)
+{
+	std::optional<size_t> chosen;
+	std::optional<ObjectCandidate> chosenPart;
+	std::optional<UsedChoice> chosenUsed;
+	float most = 0.0f;
+	for (size_t i = 0; i < planning.actions.size(); ++i)
+	{
+		const auto& action = planning.actions[i];
+		if (action.disabled)
 		{
 			continue;
 		}
-		const auto priority = ActionPriority(action.opinion) + Novelty(action.turnsSinceDone, action.servesFirstDesire);
-		const auto score = k_DefaultUsefulness * k_DefaultUsefulness * priority;
-		if (score >= chosenScore)
+		const auto part = planning.findObject(action);
+		if (!part.has_value())
 		{
-			chosen = &action;
-			chosenPriority = priority;
-			chosenScore = score;
+			continue;
+		}
+		const auto used = action.usesThing ? planning.findUsed(action, part->id) : std::nullopt;
+		if (action.usesThing && !used.has_value())
+		{
+			continue;
+		}
+		const auto score = Wanted(action) * part->actedOnUsefulness.value_or(k_DefaultUsefulness) *
+		                   (used.has_value() ? used->usefulness : k_DefaultUsefulness);
+		if (score >= most)
+		{
+			chosen = i;
+			chosenPart = part;
+			chosenUsed = used;
+			most = score;
 		}
 	}
-	if (chosen == nullptr)
+	if (!chosen.has_value())
 	{
 		return std::nullopt;
 	}
-	Plan plan {.desire = desire, .action = chosen->action, .actionPriority = chosenPriority};
-	std::optional<float> activityUsefulness;
-	float actedOnUsefulness = k_DefaultUsefulness;
-	if (chosen->needsObject && goal != nullptr)
+	return MakePlan(planning, planning.actions[*chosen], chosenPart,
+	                chosenPart->actedOnUsefulness.value_or(k_DefaultUsefulness), chosenUsed);
+}
+} // namespace
+
+std::optional<Plan> creature_planner::PlanDesire(const DesirePlanning& planning)
+{
+	switch (planning.order)
 	{
-		plan.object = goal->id;
-		plan.goalUsefulness = goal->usefulness;
-		activityUsefulness = goal->activityUsefulness;
-		actedOnUsefulness = goal->actedOnUsefulness.value_or(k_DefaultUsefulness);
+	case PlanOrder::ActionFirst:
+		return PlanActionFirst(planning);
+	case PlanOrder::ActionThenPart:
+		return PlanActionThenPart(planning);
+	case PlanOrder::PartThenAction:
+		return PlanPartThenAction(planning);
 	}
-	plan.priority = Priority(strength, activityUsefulness, chosenPriority, actedOnUsefulness, std::nullopt);
-	return plan;
+	return std::nullopt;
 }
 
 std::optional<Desire> creature_planner::BestDesireOnThing(std::span<const DesireOnThing> desires)
@@ -132,10 +274,10 @@ std::optional<Desire> creature_planner::BestDesireOnThing(std::span<const Desire
 	return best;
 }
 
-std::optional<uint32_t> creature_planner::ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,
-                                                     std::optional<uint32_t> goal)
+std::optional<UsedChoice> creature_planner::ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,
+                                                       std::optional<uint32_t> goal)
 {
-	std::optional<uint32_t> chosen;
+	std::optional<UsedChoice> chosen;
 	float best = 0.0f;
 	for (const auto& object : objects)
 	{
@@ -148,7 +290,7 @@ std::optional<uint32_t> creature_planner::ChooseUsed(std::span<const UsedCandida
 		if (score > best)
 		{
 			best = score;
-			chosen = object.id;
+			chosen = UsedChoice {.id = object.id, .usefulness = score};
 		}
 	}
 	return chosen;

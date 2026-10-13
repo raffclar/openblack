@@ -22,6 +22,8 @@ namespace
 {
 /// The tables mark unused slots of the action lists with 0 (no action) or with a number past the last action
 constexpr uint32_t k_NoAction = 0;
+/// The planner reads at most this many entries of the list of actions of a desire
+constexpr size_t k_MostActionsInList = 30;
 /// The action table's marks for an action that needs no skill (one past the last) or no miracle
 constexpr uint32_t k_NoSkill = 6;
 constexpr uint32_t k_NoMiracle = 0;
@@ -71,10 +73,15 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 	const auto actionCount = static_cast<uint32_t>(tables.actions.size());
 	for (size_t d = 0; d < k_DesireCount; ++d)
 	{
+		// The list ends at the first empty entry, and keeps an action that is in it more than once, as the planner reads
+		// the entries in their order
 		for (const auto action : Words<uint32_t>(info.creatureDesireAction1.at(d)))
 		{
-			if (action != k_NoAction && action < actionCount &&
-			    std::ranges::find(tables.desireActions.at(d), action) == tables.desireActions.at(d).end())
+			if (action == k_NoAction || tables.desireActions.at(d).size() == k_MostActionsInList)
+			{
+				break;
+			}
+			if (action < actionCount)
 			{
 				tables.desireActions.at(d).push_back(action);
 			}

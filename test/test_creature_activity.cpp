@@ -112,12 +112,10 @@ TEST(CreatureActivity, TheFirstOfTheMostUsefulWins)
 	EXPECT_EQ(MostUseful(std::array<float, 0> {}), std::nullopt);
 }
 
-// Anger counts what it acts on, but for a part of a town; every other desire counts the default
+// Anger counts what it acts on; every other desire counts the default
 TEST(CreatureActivity, OnlyAngerCountsThePartItActsOn)
 {
-	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::Anger, Whole::Forest, 0.4f), 0.4f);
-	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::Anger, Whole::Creature, 0.3f), 0.3f);
-	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::Anger, Whole::Town, 0.4f), creature_planner::k_DefaultUsefulness);
-	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::Impress, Whole::Town, 0.4f), creature_planner::k_DefaultUsefulness);
-	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::BeFriends, Whole::Creature, 0.4f), creature_planner::k_DefaultUsefulness);
+	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::Anger, 0.4f), 0.4f);
+	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::Impress, 0.4f), creature_planner::k_DefaultUsefulness);
+	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::BeFriends, 0.4f), creature_planner::k_DefaultUsefulness);
 }

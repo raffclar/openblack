@@ -116,7 +116,7 @@ std::optional<size_t> creature_activity::MostUseful(std::span<const float> usefu
 	return best;
 }
 
-float creature_activity::ActedOnUsefulness(Desire desire, Whole whole, float partUsefulness)
+float creature_activity::ActedOnUsefulness(Desire desire, float partUsefulness)
 {
-	return desire == Desire::Anger && whole != Whole::Town ? partUsefulness : creature_planner::k_DefaultUsefulness;
+	return desire == Desire::Anger ? partUsefulness : creature_planner::k_DefaultUsefulness;
 }

@@ -216,44 +216,183 @@ TEST(CreaturePlanner, PriorityAndSwitching)
 	EXPECT_TRUE(creature_planner::ShouldSwitch(1.0f, 0.0f));
 }
 
-TEST(CreaturePlanner, PlansTheMostUsefulGoal)
+TEST(CreaturePlanner, PlansTheActionFirstAndThenTheThing)
 {
-	// The worth already counts the distance: the most worth wins, the first of equals
-	const std::vector<creature_planner::ObjectCandidate> objects {
-	    {.id = 1, .usefulness = 0.05f, .actedOnUsefulness = 0.05f},
-	    {.id = 2, .usefulness = 0.08f, .actedOnUsefulness = 0.08f},
-	    {.id = 3, .usefulness = 0.08f, .actedOnUsefulness = 0.08f},
+	// The action is the most wanted, the last of equals; the thing is then found for that action only
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 12, .needsObject = true, .turnsSinceDone = 0},
+	    {.action = 13, .needsObject = true, .turnsSinceDone = 0},
 	};
-	const std::vector<creature_planner::ActionCandidate> actions {{.action = 12, .needsObject = true}};
-	const auto plan = creature_planner::PlanDesire(Desire::Hunger, 1.0f, objects, actions);
+	std::vector<uint32_t> asked;
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Hunger,
+	    .strength = 1.0f,
+	    .actions = actions,
+	    .findObject = [&](const creature_planner::ActionCandidate& action) -> std::optional<creature_planner::ObjectCandidate> {
+		    asked.push_back(action.action);
+		    return creature_planner::ObjectCandidate {.id = 2, .usefulness = 0.08f, .actedOnUsefulness = 0.08f};
+	    },
+	    .findUsed = [](const creature_planner::ActionCandidate&,
+	                   std::optional<uint32_t>) { return std::optional<creature_planner::UsedChoice> {}; },
+	});
 	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->action, 13u);
 	EXPECT_EQ(plan->object, 2u);
+	EXPECT_EQ(asked, std::vector<uint32_t> {13});
 	EXPECT_FLOAT_EQ(plan->goalUsefulness, 0.08f);
-	// The thing acted on counts once, the default standing for what the desire is about
 	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(1.0f, std::nullopt, plan->actionPriority, 0.08f, std::nullopt));
-	// Nothing worth anything is never a goal, and an action that needs one can't be planned without it
-	const std::vector<creature_planner::ObjectCandidate> worthless {{.id = 1}, {.id = 2}};
-	EXPECT_FALSE(creature_planner::PlanDesire(Desire::Hunger, 1.0f, worthless, actions).has_value());
-	EXPECT_FALSE(creature_planner::PlanDesire(Desire::Hunger, 1.0f, {}, actions).has_value());
 }
 
-TEST(CreaturePlanner, WeighsWhatADesireIsAbout)
+TEST(CreaturePlanner, TriesTheNextActionWhenNoThingIsFound)
 {
-	const std::vector<creature_planner::ActionCandidate> actions {{.action = 7, .needsObject = true}};
-	// Compassion counts the town it is about, and the default for what it acts on
-	const std::vector<creature_planner::ObjectCandidate> townThings {
-	    {.id = 4, .usefulness = 0.06f, .activityUsefulness = 0.09f},
+	// The second action is the most wanted, but has nothing to use. The last ties with the first and wins the tie,
+	// but has nothing to act on. The first is the plan.
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 1},
+	    {.action = 2, .usesThing = true, .opinion = 1.0f},
+	    {.action = 3, .needsObject = true},
 	};
-	const auto plan = creature_planner::PlanDesire(Desire::Compassion, 0.5f, townThings, actions);
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Poo,
+	    .strength = 1.0f,
+	    .actions = actions,
+	    .findObject =
+	        [](const creature_planner::ActionCandidate&) { return std::optional<creature_planner::ObjectCandidate> {}; },
+	    .findUsed = [](const creature_planner::ActionCandidate&,
+	                   std::optional<uint32_t>) { return std::optional<creature_planner::UsedChoice> {}; },
+	});
 	ASSERT_TRUE(plan.has_value());
-	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(0.5f, 0.09f, plan->actionPriority,
+	EXPECT_EQ(plan->action, 1u);
+	EXPECT_FALSE(plan->object.has_value());
+	// An action that acts on nothing counts the default usefulness
+	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(1.0f, std::nullopt, plan->actionPriority,
 	                                                           creature_planner::k_DefaultUsefulness, std::nullopt));
+	// No action that can be done: no plan
+	const std::vector<creature_planner::ActionCandidate> none {{.action = 3, .needsObject = true},
+	                                                           {.action = 4, .disabled = true}};
+	EXPECT_FALSE(creature_planner::PlanDesire({.desire = Desire::Poo,
+	                                           .strength = 1.0f,
+	                                           .actions = none,
+	                                           .findObject =
+	                                               [](const creature_planner::ActionCandidate&) {
+		                                               return std::optional<creature_planner::ObjectCandidate> {};
+	                                               },
+	                                           .findUsed = {}})
+	                 .has_value());
+}
+
+TEST(CreaturePlanner, AnActionThatFailsIsNotTriedAgainInAnotherPlace)
+{
+	// An action can be in the list of a desire twice. The later entry wins the tie, and when it fails, the earlier entry
+	// is not tried.
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 5, .needsObject = true},
+	    {.action = 6},
+	    {.action = 5, .needsObject = true},
+	};
+	int asked = 0;
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Impress,
+	    .strength = 1.0f,
+	    .actions = actions,
+	    .findObject =
+	        [&](const creature_planner::ActionCandidate&) {
+		        ++asked;
+		        return std::optional<creature_planner::ObjectCandidate> {};
+	        },
+	    .findUsed = {},
+	});
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->action, 6u);
+	EXPECT_EQ(asked, 1);
+}
+
+TEST(CreaturePlanner, AnActionThatUsesAThingCountsItsUsefulness)
+{
+	const std::vector<creature_planner::ActionCandidate> actions {{.action = 15, .needsObject = true, .usesThing = true}};
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Hunger,
+	    .strength = 1.0f,
+	    .actions = actions,
+	    .findObject =
+	        [](const creature_planner::ActionCandidate&) {
+		        return std::optional(
+		            creature_planner::ObjectCandidate {.id = 4, .usefulness = 0.05f, .actedOnUsefulness = 0.05f});
+	        },
+	    .findUsed =
+	        [](const creature_planner::ActionCandidate&, std::optional<uint32_t> object) {
+		        // The thing used is never the thing acted on
+		        EXPECT_EQ(object, 4u);
+		        return std::optional(creature_planner::UsedChoice {.id = 9, .usefulness = 0.07f});
+	        },
+	});
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->instrument, 9u);
+	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(1.0f, std::nullopt, plan->actionPriority, 0.05f, 0.07f));
+}
+
+TEST(CreaturePlanner, ADesireAboutAWholeThingFindsThePartAfterTheAction)
+{
+	// The action that uses the more useful thing wins; the part then counts the default usefulness
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 7, .needsObject = true, .usesThing = true},
+	    {.action = 8, .needsObject = true, .usesThing = true},
+	};
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Impress,
+	    .strength = 0.5f,
+	    .order = creature_planner::PlanOrder::ActionThenPart,
+	    .actions = actions,
+	    .activityUsefulness = 0.09f,
+	    .findObject =
+	        [](const creature_planner::ActionCandidate& action) {
+		        return action.action == 7 ? std::optional(creature_planner::ObjectCandidate {.id = 4, .usefulness = 0.06f})
+		                                  : std::nullopt;
+	        },
+	    .findUsed =
+	        [](const creature_planner::ActionCandidate& action, std::optional<uint32_t>) {
+		        return std::optional(creature_planner::UsedChoice {.id = 9, .usefulness = action.action == 8 ? 0.08f : 0.05f});
+	        },
+	});
+	// Action 8 wins first, but the whole thing has no part for it: action 7 is tried next
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->action, 7u);
+	EXPECT_EQ(plan->object, 4u);
+	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(0.5f, 0.09f, plan->actionPriority,
+	                                                           creature_planner::k_DefaultUsefulness, 0.05f));
 	// Only anger, of the desires about something, counts what it acts on as well
 	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Anger, true));
 	EXPECT_FALSE(creature_planner::CountsActedOn(Desire::Impress, true));
 	EXPECT_FALSE(creature_planner::CountsActedOn(Desire::BeFriends, true));
 	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Hunger, false));
-	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Curiosity, false));
+}
+
+TEST(CreaturePlanner, AngerFindsThePartFirst)
+{
+	// Only the actions that can act on the part count, and the part's usefulness counts in the priority
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 20, .needsObject = true},
+	    {.action = 21, .needsObject = true, .opinion = 1.0f},
+	    {.action = 22, .needsObject = true, .opinion = 1.0f},
+	};
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Anger,
+	    .strength = 1.0f,
+	    .order = creature_planner::PlanOrder::PartThenAction,
+	    .actions = actions,
+	    .activityUsefulness = 0.09f,
+	    .findObject =
+	        [](const creature_planner::ActionCandidate& action) {
+		        return action.action == 22 ? std::nullopt
+		                                   : std::optional(creature_planner::ObjectCandidate {
+		                                         .id = 4, .usefulness = 0.06f, .actedOnUsefulness = 0.06f});
+	        },
+	    .findUsed = {},
+	});
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->action, 21u);
+	EXPECT_EQ(plan->object, 4u);
+	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(1.0f, 0.09f, plan->actionPriority, 0.06f, std::nullopt));
 }
 
 TEST(CreaturePlanner, BestDesireOnOneThing)
@@ -274,7 +413,7 @@ TEST(CreaturePlanner, OpinionBreaksTies)
 {
 	const std::vector<creature_planner::ActionCandidate> actions {{.action = 1, .opinion = 1.0f, .turnsSinceDone = 0},
 	                                                              {.action = 2, .opinion = -1.0f, .turnsSinceDone = 0}};
-	EXPECT_EQ(creature_planner::PlanDesire(Desire::Rest, 0.5f, {}, actions)->action, 1u);
+	EXPECT_EQ(creature_planner::PlanDesire({.desire = Desire::Rest, .strength = 0.5f, .actions = actions})->action, 1u);
 }
 
 TEST(CreaturePlanner, GoesRoundTheEligibleDesires)

@@ -1089,8 +1089,8 @@ bool OutsideConfinement(const ecs::Registry& registry, entt::entity creature, en
 }
 
 /// The thing a creature at a point uses for an action, of a kind, other than the goal
-std::optional<uint32_t> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
-                                std::optional<uint32_t> goal)
+std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
+                                                    std::optional<uint32_t> goal)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<creature_planner::UsedCandidate> candidates;
@@ -1135,7 +1135,8 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	    executor != nullptr && executor->use != Target::None && !chosen.instrument.has_value())
 	{
 		chosen.instrument = UsedFor(creature, executor->use, situated.position,
-		                            tables->rules.at(static_cast<size_t>(plan.desire)).distanceWeight, plan.object);
+		                            tables->rules.at(static_cast<size_t>(plan.desire)).distanceWeight, plan.object)
+		                        .transform([](const creature_planner::UsedChoice& used) { return used.id; });
 	}
 	situated.instrument = chosen.instrument;
 	auto built = PlanAgenda(creature, plan.action, plan.object, situated);
@@ -1614,7 +1615,7 @@ creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity cre
 		const auto partUsefulness = ObjectToActOnUsefulness(creature, mind, desire, thing);
 		candidate.usefulness = activity->kind == creature_activity::Whole::Creature ? activity->usefulness : partUsefulness;
 		candidate.activityUsefulness = activity->usefulness;
-		candidate.actedOnUsefulness = creature_activity::ActedOnUsefulness(desire, activity->kind, partUsefulness);
+		candidate.actedOnUsefulness = creature_activity::ActedOnUsefulness(desire, partUsefulness);
 		return candidate;
 	}
 	// Most desires weigh a thing by what the creature has learnt of acting on such things, for the distance
@@ -1760,10 +1761,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
-		std::optional<creature_planner::Plan> best;
-		// Actions are weighed in groups by the kind of thing they are done to, and whether that may be what it holds, so
-		// each has a goal it can be done to
-		std::array<std::vector<creature_planner::ActionCandidate>, creature_plan_actions::k_TargetCount * 2> groups {};
 		// A desire about something is about a whole thing: a town, a forest, a temple, a flock or a creature. The plan
 		// acts on a part of the whole thing. Without a whole thing, the desire has no plan.
 		std::span<const uint32_t> actions = tables->desireActions.at(d);
@@ -1802,6 +1799,9 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			}
 		}
 		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
+		// The actions of the desire, in the order of its list
+		std::vector<creature_planner::ActionCandidate> candidates;
+		std::vector<const creature_plan_actions::Executor*> executors;
 		for (const auto action : actions)
 		{
 			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
@@ -1810,92 +1810,97 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				continue;
 			}
 			prepare(*executor);
-			groups.at(static_cast<size_t>(executor->target) * 2 + (executor->notWhatItHolds ? 1 : 0))
-			    .push_back({
-			        .action = action,
-			        .needsObject = executor->target != Target::None,
-			        .opinion = learnt.opinions.at(action),
-			        .turnsSinceDone = learnt.turnsSinceDone.at(action),
-			        .servesFirstDesire = tables->actions.at(action).desire == 0,
-			        .disabled = !creature_plan_actions::Possible(*executor, situation) ||
-			                    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
-			                    (creature_plan_actions::IsCast(*executor) &&
-			                     !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))),
-			    });
+			candidates.push_back({
+			    .action = action,
+			    .needsObject = executor->target != Target::None,
+			    .usesThing = executor->use != Target::None,
+			    .opinion = learnt.opinions.at(action),
+			    .turnsSinceDone = learnt.turnsSinceDone.at(action),
+			    .servesFirstDesire = tables->actions.at(action).desire == 0,
+			    .disabled = !creature_plan_actions::Possible(*executor, situation) ||
+			                !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
+			                (creature_plan_actions::IsCast(*executor) &&
+			                 !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))),
+			});
+			executors.push_back(executor);
 		}
-		for (size_t g = 0; g < groups.size(); ++g)
+		const auto executorOf = [&](const creature_planner::ActionCandidate& candidate) {
+			const auto at = std::ranges::find(candidates, candidate.action, &creature_planner::ActionCandidate::action);
+			return executors.at(static_cast<size_t>(std::distance(candidates.begin(), at)));
+		};
+		const auto heldByItself = [&](entt::entity thing) {
+			const auto* held = registry.TryGet<const HeldByCreature>(thing);
+			return held != nullptr && held->creature == creature;
+		};
+		// The thing that an action can act on: the most useful, the first of equals, and only one that is worth more than
+		// nothing. An action that must not act on what the creature holds does not take a thing that it holds.
+		const auto mostUseful = [](const std::vector<creature_planner::ObjectCandidate>& found) {
+			std::optional<creature_planner::ObjectCandidate> best;
+			for (const auto& object : found)
+			{
+				if (object.usefulness > (best.has_value() ? best->usefulness : 0.0f))
+				{
+					best = object;
+				}
+			}
+			return best;
+		};
+		const auto findObject =
+		    [&](const creature_planner::ActionCandidate& candidate) -> std::optional<creature_planner::ObjectCandidate> {
+			const auto* executor = executorOf(candidate);
+			const auto suits = [&](entt::entity thing) {
+				return (executor->target == Target::None || Accepts(registry, executor->target, thing, creature)) &&
+				       !(executor->notWhatItHolds && heldByItself(thing));
+			};
+			std::vector<creature_planner::ObjectCandidate> found;
+			if (leashTarget.has_value())
+			{
+				if (suits(*leashTarget) && (!activity.has_value() || BelongsTo(*leashTarget) == activity->whole))
+				{
+					found.push_back(worth(*leashTarget));
+				}
+			}
+			else if (activity.has_value())
+			{
+				std::ranges::copy_if(parts, std::back_inserter(found), [&](const creature_planner::ObjectCandidate& part) {
+					return suits(static_cast<entt::entity>(part.id));
+				});
+			}
+			else
+			{
+				for (const auto& thing : Gather(registry, executor->target, creature, position))
+				{
+					if (suits(thing.entity))
+					{
+						found.push_back(worth(thing.entity));
+					}
+				}
+			}
+			return mostUseful(found);
+		};
+		const auto distanceWeight = tables->rules.at(d).distanceWeight;
+		const auto findUsed = [&](const creature_planner::ActionCandidate& candidate, std::optional<uint32_t> object) {
+			return UsedFor(creature, executorOf(candidate)->use, position, distanceWeight, object);
+		};
+		// A desire about a whole thing finds the action before the part, but anger finds the part first
+		auto order = creature_planner::PlanOrder::ActionFirst;
+		if (activity.has_value() && !leashTarget.has_value())
 		{
-			if (groups.at(g).empty())
-			{
-				continue;
-			}
-			const auto target = static_cast<Target>(g / 2);
-			const bool notHeld = g % 2 != 0;
-			std::vector<creature_planner::ObjectCandidate> objects;
-			if (target != Target::None)
-			{
-				const auto heldByItself = [&](entt::entity thing) {
-					const auto* held = registry.TryGet<const HeldByCreature>(thing);
-					return held != nullptr && held->creature == creature;
-				};
-				if (leashTarget.has_value())
-				{
-					if (Accepts(registry, target, *leashTarget, creature) &&
-					    (!activity.has_value() || BelongsTo(*leashTarget) == activity->whole))
-					{
-						objects.push_back(worth(*leashTarget));
-					}
-				}
-				else if (activity.has_value())
-				{
-					for (const auto& part : parts)
-					{
-						const auto thing = static_cast<entt::entity>(part.id);
-						if (Accepts(registry, target, thing, creature) && !(notHeld && heldByItself(thing)))
-						{
-							objects.push_back(part);
-						}
-					}
-				}
-				else
-				{
-					for (const auto& found : Gather(registry, target, creature, position))
-					{
-						if (notHeld && heldByItself(found.entity))
-						{
-							continue;
-						}
-						objects.push_back(worth(found.entity));
-					}
-				}
-			}
-			const auto distanceWeight = tables->rules.at(d).distanceWeight;
-			auto plan = creature_planner::PlanDesire(desire, strengths.at(d), objects, groups.at(g));
-			// An action done with something takes up the thing to use too; with nothing to use, the next action is tried
-			while (plan.has_value())
-			{
-				const auto* executor = creature_plan_actions::For(tables->actions.at(plan->action).name);
-				if (executor == nullptr || executor->use == Target::None)
-				{
-					break;
-				}
-				plan->instrument = UsedFor(creature, executor->use, position, distanceWeight, plan->object);
-				if (plan->instrument.has_value())
-				{
-					break;
-				}
-				auto& tried = *std::ranges::find(groups.at(g), plan->action, &creature_planner::ActionCandidate::action);
-				tried.disabled = true;
-				plan = creature_planner::PlanDesire(desire, strengths.at(d), objects, groups.at(g));
-			}
-			if (plan.has_value() && (!best.has_value() || plan->priority > best->priority))
-			{
-				best = plan;
-				if (activity.has_value())
-				{
-					best->about = entt::to_integral(activity->whole);
-				}
-			}
+			order = desire == Desire::Anger ? creature_planner::PlanOrder::PartThenAction
+			                                : creature_planner::PlanOrder::ActionThenPart;
+		}
+		auto best = creature_planner::PlanDesire({
+		    .desire = desire,
+		    .strength = strengths.at(d),
+		    .order = order,
+		    .actions = candidates,
+		    .activityUsefulness = activity.has_value() ? std::optional(activity->usefulness) : std::nullopt,
+		    .findObject = findObject,
+		    .findUsed = findUsed,
+		});
+		if (best.has_value() && activity.has_value())
+		{
+			best->about = entt::to_integral(activity->whole);
 		}
 		mind.planner.best.at(d) = best;
 	}

@@ -96,8 +96,8 @@ struct PartFacts
 /// The first of the values that is the most and more than nothing, none when no value is more than nothing
 [[nodiscard]] std::optional<size_t> MostUseful(std::span<const float> usefulness);
 
-/// What the part that a plan acts on counts for in the priority of the plan. Anger counts the usefulness of the part,
-/// but for a part of a town, which counts the default usefulness. Every other desire counts the default usefulness.
-[[nodiscard]] float ActedOnUsefulness(creature_desires::Desire desire, Whole whole, float partUsefulness);
+/// What the part that a plan acts on counts for in the priority of the plan. Anger counts the usefulness of the part.
+/// Every other desire counts the default usefulness.
+[[nodiscard]] float ActedOnUsefulness(creature_desires::Desire desire, float partUsefulness);
 
 } // namespace openblack::creature_activity

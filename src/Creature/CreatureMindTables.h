@@ -68,7 +68,8 @@ struct DesireTexts
 struct Tables
 {
 	std::vector<ActionInfo> actions;
-	/// The actions that satisfy each desire
+	/// The actions that satisfy each desire, in the order of the list of the desire. An action can be in a list more than
+	/// once.
 	std::array<std::vector<uint32_t>, k_DesireCount> desireActions {};
 	/// The actions a creature's compassion for a town may take for each of the town's desires
 	creature_town_compassion::DesireActions townActions {};
