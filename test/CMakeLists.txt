@@ -912,3 +912,4 @@ openblack_setup_and_add_test(test_pipeline_cache test_pipeline_cache.cpp)
 openblack_setup_and_add_test(
   test_being_eaten_rules test_being_eaten_rules.cpp
 )
+openblack_setup_and_add_test(test_menu_pause gui/test_menu_pause.cpp)
