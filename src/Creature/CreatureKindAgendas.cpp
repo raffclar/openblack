@@ -9,7 +9,10 @@
 
 #include "CreatureKindAgendas.h"
 
+#include <algorithm>
+
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureThrow.h"
 
 using namespace openblack;
@@ -86,6 +89,136 @@ std::vector<Step> creature_mind::ThrowToyAt(uint32_t toy, uint32_t target, glm::
 	return agenda;
 }
 
+std::vector<Step> creature_mind::BreakRock(std::optional<uint32_t> pickUp, uint32_t rock, glm::vec2 from, float height)
+{
+	auto agenda = PracticeThrow(pickUp, from, height);
+	agenda.push_back({.kind = Step::Kind::Shatter, .object = rock});
+	return agenda;
+}
+
+std::vector<Step> creature_mind::StrokeToy(uint32_t toy)
+{
+	using creature_face::Cue;
+	auto pickUp = PickUp(toy);
+	pickUp.face = Cue::Compassion;
+	return {pickUp,
+	        {.kind = Step::Kind::Object,
+	         .order = {.kind = ObjectOrder::Kind::Keep, .animation = creature_object_actions::k_StrokeObject},
+	         .face = Cue::Compassion,
+	         .gaze = Gaze {.object = toy}}};
+}
+
+std::vector<Step> creature_mind::TakeToyHome(uint32_t toy, glm::vec2 home, float height, const Random& random,
+                                             const std::function<float()>& randomFraction)
+{
+	using creature_face::Cue;
+	auto pickUp = PickUp(toy);
+	pickUp.face = Cue::Compassion;
+	// Somewhere about home, five either way along each axis
+	const float alongX = (randomFraction() * k_ToyHomeSpread) - (k_ToyHomeSpread * 0.5f);
+	const float alongZ = (randomFraction() * k_ToyHomeSpread) - (k_ToyHomeSpread * 0.5f);
+	const auto drop = random(k_ToyPutDownLots) >= k_ToyTossedBelow ? creature_throw::k_PutDown : creature_throw::k_Discard;
+	return {pickUp,
+	        {.kind = Step::Kind::Move,
+	         .movement = {.kind = Movement::Kind::ToPoint,
+	                      .point = home + glm::vec2(alongX, alongZ),
+	                      .maxDistance = std::min(height, k_ToyHomeNearest)},
+	         .face = Cue::Compassion},
+	        {.kind = Step::Kind::Object,
+	         .order = {.kind = ObjectOrder::Kind::Discard, .animation = drop},
+	         .face = Cue::Compassion}};
+}
+
+std::vector<Step> creature_mind::ThrowDie(std::optional<uint32_t> pickUp, uint32_t die, glm::vec2 from, float height,
+                                          const Random& random)
+{
+	std::vector<Step> agenda;
+	if (pickUp.has_value())
+	{
+		agenda.push_back(PickUp(*pickUp));
+	}
+	agenda.push_back({.kind = Step::Kind::Object,
+	                  .order = {.kind = ObjectOrder::Kind::Throw, .point = from + glm::vec2(k_DieThrowHeights * height)}});
+	agenda.push_back(
+	    {.kind = Step::Kind::WatchFlying, .object = die, .face = creature_face::Cue::Amazed, .gaze = Gaze {.object = die}});
+	const bool happy = random(k_DieOutcomeLots) > 0;
+	agenda.push_back({.kind = Step::Kind::Action,
+	                  .animation = happy ? creature_layers::animations::k_Happy : creature_layers::animations::k_Sad});
+	return agenda;
+}
+
+std::vector<Step> creature_mind::ThrowToPlayer(uint32_t toy, glm::vec3 hand, bool handFull)
+{
+	std::vector<Step> agenda {PickUp(toy)};
+	if (!handFull)
+	{
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::Throw, .point = {hand.x, hand.z}, .pointHeight = hand.y},
+		                  .gaze = Gaze {.point = hand}});
+	}
+	agenda.push_back({.kind = Step::Kind::Action, .animation = creature_layers::animations::k_Happy});
+	return agenda;
+}
+
+std::vector<Step> creature_mind::HelpRepairHouse(std::optional<uint32_t> pickUp, uint32_t house, uint32_t tree)
+{
+	std::vector<Step> agenda;
+	if (pickUp.has_value())
+	{
+		agenda.push_back(PickUp(*pickUp));
+	}
+	agenda.push_back(
+	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::GoNearObject, .object = house, .maxDistance = 0.0f}});
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .seconds = k_FaceHouseSeconds,
+	                  .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = house},
+	                  .gaze = Gaze {.object = house}});
+	agenda.push_back(
+	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Discard, .animation = creature_throw::k_PutDown}});
+	agenda.push_back({.kind = Step::Kind::Repair, .object = house, .gaze = Gaze {.object = house}});
+	agenda.push_back({.kind = Step::Kind::UseUp, .object = tree});
+	return agenda;
+}
+
+std::vector<Step> creature_mind::KickBallAround(uint32_t ball, const Random& random)
+{
+	const Gaze watch {.object = ball};
+	const Step goNear {.kind = Step::Kind::Move,
+	                   .movement = {.kind = Movement::Kind::GoNearObject, .object = ball, .maxDistance = 0.0f},
+	                   .gaze = watch};
+	std::vector<Step> agenda;
+	uint32_t kicks = 0;
+	// The count to reach is drawn afresh after every kick
+	do
+	{
+		agenda.push_back(goNear);
+		agenda.push_back({.kind = Step::Kind::Move,
+		                  .seconds = k_FaceBallSeconds,
+		                  .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = ball},
+		                  .gaze = watch});
+		agenda.push_back(goNear);
+		agenda.push_back(
+		    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Kick, .object = ball}, .gaze = watch});
+		if (random(k_PointAfterKickLots) == 0)
+		{
+			agenda.push_back({.kind = Step::Kind::Object,
+			                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = ball, .seconds = k_PointAtBallSeconds},
+			                  .gaze = watch});
+		}
+		else
+		{
+			const auto turns = k_WaitAfterKickTurns + random(k_WaitAfterKickMoreTurns);
+			agenda.push_back({.kind = Step::Kind::Wait, .seconds = static_cast<float>(turns) * k_KickTurnSeconds});
+		}
+		++kicks;
+	} while (kicks < k_LeastKicks + random(k_MoreKicksLots));
+	if (random(k_HappyAfterKicksLots) == 0)
+	{
+		agenda.push_back({.kind = Step::Kind::Action, .animation = creature_layers::animations::k_Happy});
+	}
+	return agenda;
+}
+
 std::vector<Step> creature_mind::GetHigh(std::optional<uint32_t> pickUp, uint32_t eaten)
 {
 	std::vector<Step> agenda;
@@ -108,9 +241,7 @@ std::vector<Step> creature_mind::BecomeHigh(const std::function<std::optional<Hi
 	};
 	std::vector<Step> agenda;
 	agenda.push_back({.kind = Step::Kind::WatchCamera, .seconds = k_HighWatchSeconds, .face = Cue::Amazed, .gaze = camera});
-	// TODO(creature-kind-actions): while talking the game also flutters its eyelids looking at itself, which no
-	// creature here does yet
-	agenda.push_back({.kind = Step::Kind::Overlay, .animation = k_Talk});
+	agenda.push_back({.kind = Step::Kind::Overlay, .animation = k_Talk, .flutterEyelids = true});
 	agenda.push_back(
 	    {.kind = Step::Kind::WatchCamera, .seconds = k_HighStaredSeconds, .face = Cue::Smile, .heldEyes = Eyes::Stoned});
 	agenda.push_back({.kind = Step::Kind::Wait, .seconds = k_HighWaitSeconds, .face = Cue::Smile, .gaze = camera});

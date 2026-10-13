@@ -68,6 +68,9 @@ public:
 	/// has stopped flying
 	virtual bool ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds) = 0;
 	virtual bool Destroy(entt::entity creature, entt::entity target) = 0;
+	/// Kicks a thing at its feet, which flies off ahead of it as the foot meets it; fails when the thing is in its own or
+	/// the player's hand, or the species has no kick
+	virtual bool Kick(entt::entity creature, entt::entity target) = 0;
 	virtual bool PointAt(entt::entity creature, const glm::vec3& point) = 0;
 	/// Points for some seconds at a point, or at a thing wherever it goes
 	virtual bool PointAtFor(entt::entity creature, const glm::vec3& point, float /*seconds*/,
@@ -122,7 +125,7 @@ public:
 	[[nodiscard]] virtual creature_object_actions::KindFacts KindOf(entt::entity /*object*/) const { return {}; }
 	/// Whether a creature may throw a thing to impress, by its kind, its height and the creature's weight
 	[[nodiscard]] virtual bool CanThrowToImpress(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
-	/// Whether a creature can knock something down: trees, homes and things
+	/// Whether a creature can knock something down: trees, homes and things, statics and rocks among them
 	[[nodiscard]] virtual bool CanDestroy(entt::entity target) const = 0;
 	/// How far a creature's hand gets at its furthest stretch when picking up, measured straight, from where the hand
 	/// takes hold in its reaching animations; none when its species has nothing to reach with or isn't posed yet
