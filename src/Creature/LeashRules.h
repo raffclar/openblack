@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -121,8 +122,12 @@ constexpr float k_ReturnLeast = 5.0f;
 /// The creature walks back faster when it is further away. At twice the radius or more, it adds 0.8 to its walk speed.
 constexpr float k_ReturnMostExtraSpeed = 0.8f;
 [[nodiscard]] float ReturnExtraSpeed(float distance, float radius);
-/// The creature stops within the radius of the centre, or within its height if that is more
+/// The ring of arrival around the centre: the radius, or the height of the creature if that is more. The creature walks
+/// onto the centre. The ring only lets it stop before the centre when an obstacle near the centre is in the way.
 [[nodiscard]] float ReturnArrival(float radius, float height);
+/// Whether the action of the walk back continues: the mind still does the agenda that the walk back gave it, and the
+/// agenda has steps that it did not do. Any end of that action ends the walk back.
+[[nodiscard]] bool ReturnInForce(uint32_t walkSerial, uint32_t agendaSerial, size_t step, size_t steps);
 
 /// Free of its home only within 140 of it, and only if its player has a temple
 constexpr float k_HomeRange = 140.0f;
