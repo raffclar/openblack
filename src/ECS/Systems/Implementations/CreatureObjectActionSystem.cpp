@@ -1446,8 +1446,8 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 			const auto kind = static_cast<size_t>(still->type);
 			if (Locator::infoConstants::has_value() && kind < Locator::infoConstants::value().mobileStatic.size())
 			{
-				const auto mesh = Locator::infoConstants::value().mobileStatic.at(kind).meshId;
-				facts.toy = mesh >= MeshId::ObjectToyBall && mesh <= MeshId::ObjectToySkittle;
+				facts.toy =
+				    creature_object_actions::ToyOf(Locator::infoConstants::value().mobileStatic.at(kind).meshId).has_value();
 			}
 			return Thing::Static;
 		}

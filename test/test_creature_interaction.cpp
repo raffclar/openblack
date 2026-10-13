@@ -424,6 +424,18 @@ TEST(CreatureObjectActions, AMagicMushroomIsPickedUpUnlessAScriptSaidNo)
 	EXPECT_FALSE(creature_object_actions::MayTakeKindFromHand(mushroom, {}));
 }
 
+TEST(CreatureObjectActions, TheToysAreKnownByTheirModels)
+{
+	using creature_object_actions::Toy;
+	using creature_object_actions::ToyOf;
+	EXPECT_EQ(ToyOf(MeshId::ObjectToyBall), Toy::Ball);
+	EXPECT_EQ(ToyOf(MeshId::ObjectToyBowlingBall), Toy::BowlingBall);
+	EXPECT_EQ(ToyOf(MeshId::ObjectToyCuddly), Toy::Cuddly);
+	EXPECT_EQ(ToyOf(MeshId::ObjectToyDice), Toy::Die);
+	EXPECT_EQ(ToyOf(MeshId::ObjectToySkittle), Toy::Skittle);
+	EXPECT_FALSE(ToyOf(MeshId::Dummy).has_value());
+}
+
 TEST(CreatureObjectActions, OnlyWhatAHandCanHoldIsGivenOrCaught)
 {
 	using creature_object_actions::KindRule;

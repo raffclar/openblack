@@ -196,6 +196,25 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 	return KindRule::Never;
 }
 
+std::optional<creature_object_actions::Toy> creature_object_actions::ToyOf(MeshId mesh)
+{
+	switch (mesh)
+	{
+	case MeshId::ObjectToyBall:
+		return Toy::Ball;
+	case MeshId::ObjectToyBowlingBall:
+		return Toy::BowlingBall;
+	case MeshId::ObjectToyCuddly:
+		return Toy::Cuddly;
+	case MeshId::ObjectToyDice:
+		return Toy::Die;
+	case MeshId::ObjectToySkittle:
+		return Toy::Skittle;
+	default:
+		return std::nullopt;
+	}
+}
+
 bool creature_object_actions::Holdable(Thing thing)
 {
 	return thing != Thing::Other && thing != Thing::Creature && thing != Thing::Lantern && thing != Thing::Shield &&

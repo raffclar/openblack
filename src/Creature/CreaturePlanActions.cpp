@@ -51,16 +51,14 @@ constexpr std::array k_Executors {
               .activity = Activity::Examine},
     Executor {.action = "ExamineByLooking", .target = Target::Anything, .build = Build::ExamineByLooking},
     Executor {.action = "ExamineByFollowing", .target = Target::Living, .build = Build::ExamineByFollowing},
-    Executor {.action = "ThrowBallAtObject",
-              .target = Target::Pickable,
-              .build = Build::ThrowAbout,
-              .activity = Activity::PlayWithObject},
+    Executor {
+        .action = "ThrowBallAtObject", .target = Target::Toy, .build = Build::ThrowAbout, .activity = Activity::PlayWithObject},
     // Throwing things about and into the sea, kicking a ball about and throwing to impress are all throwing what it
     // picks up somewhere nearby, as the throws aimed at the sea or at an audience need systems that aren't here yet
     Executor {
         .action = "ThrowAround", .target = Target::Pickable, .build = Build::ThrowAbout, .activity = Activity::PlayWithObject},
     Executor {.action = "KickBallAround",
-              .target = Target::Pickable,
+              .target = Target::ToyBall,
               .build = Build::ThrowAbout,
               .activity = Activity::PlayWithObject},
     Executor {.action = "ThrowInTheSea",

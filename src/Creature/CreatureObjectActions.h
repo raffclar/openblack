@@ -16,6 +16,8 @@
 #include <optional>
 #include <string_view>
 
+#include "3D/AllMeshes.h"
+
 /// What a creature does with the things about it: picking them up, holding, examining, eating, putting down, tossing
 /// away and throwing them, knocking them down, and pointing at them. Each is played on the body by animations, and
 /// whatever it is done to is taken hold of or let go of at a moment of the animation particular to the species.
@@ -213,6 +215,18 @@ enum class Thing : uint8_t
 [[nodiscard]] KindRule RuleOf(Thing thing);
 /// Whether a hand may hold a kind of thing at all
 [[nodiscard]] bool Holdable(Thing thing);
+
+/// The toys among the statics, known by their models
+enum class Toy : uint8_t
+{
+	Ball,
+	BowlingBall,
+	Cuddly,
+	Die,
+	Skittle,
+};
+/// Which toy a static's model makes it, if any
+[[nodiscard]] std::optional<Toy> ToyOf(MeshId mesh);
 
 /// What the kind of a thing says about its being picked up by a creature
 struct KindFacts
