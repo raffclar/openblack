@@ -48,10 +48,7 @@ constexpr std::array k_Executors {
     Executor {
         .action = "EatFromFoodPile", .target = Target::MagicFoodPile, .build = Build::EatFromPile, .activity = Activity::Eat},
     Executor {.action = "SleepOnTheSpot", .build = Build::Sleep, .activity = Activity::Sleep},
-    // TODO(creature-poo-steps): the game does a poo by a thing (Target::PooedOn). The planner here weighs the actions in
-    // groups by their target, but the game chooses the action first and then the thing. Until the planner does that, a
-    // poo by a thing almost never wins against a fart, so the poo is done on the spot
-    Executor {.action = "Poo", .build = Build::Poo, .activity = Activity::Poo},
+    Executor {.action = "Poo", .target = Target::PooedOn, .build = Build::Poo, .activity = Activity::Poo},
     Executor {.action = "Fart", .build = Build::Fart, .activity = Activity::Poo},
     Executor {.action = "PooAtHome", .build = Build::PooAtHome, .activity = Activity::Poo},
     Executor {.action = "Puke", .build = Build::Puke, .activity = Activity::Puke},

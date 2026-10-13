@@ -61,6 +61,10 @@ namespace openblack::ecs::systems::mind_detail
 /// that the creature holds has the highest value.
 [[nodiscard]] float Nearness(const ecs::Registry& registry, entt::entity creature, const glm::vec3& at, entt::entity object,
                              const glm::vec3& place, float distanceWeight);
+/// Whether a creature can be angry with a different creature. The other creature must not be dead. Its species must
+/// let creatures attack it.
+[[nodiscard]] bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
+                                  const creature_mind_tables::Tables& tables);
 /// How useful the creature has learnt a food is to eat, 0.1 when nothing is known
 [[nodiscard]] float FoodUsefulness(const ecs::Registry& registry, const components::CreatureMindState& mind, entt::entity self,
                                    entt::entity food);

@@ -97,19 +97,19 @@ TEST(CreatureKindActions, TheThingUsedIsTheNearestOtherThanTheGoal)
 	    creature_planner::UsedCandidate {.id = 2, .distance = 5.0f},
 	    creature_planner::UsedCandidate {.id = 3, .distance = 5.0f},
 	};
-	EXPECT_EQ(creature_planner::ChooseUsed(objects, 0.4f, std::nullopt), 2u);
+	EXPECT_EQ(creature_planner::ChooseUsed(objects, 0.4f, std::nullopt)->id, 2u);
 	// Never the goal; of equals the first
-	EXPECT_EQ(creature_planner::ChooseUsed(objects, 0.4f, 2u), 3u);
+	EXPECT_EQ(creature_planner::ChooseUsed(objects, 0.4f, 2u)->id, 3u);
 	// Something held comes first however far
 	const std::array held {
 	    creature_planner::UsedCandidate {.id = 1, .distance = 1.0f},
 	    creature_planner::UsedCandidate {.id = 2, .distance = 150.0f, .held = true},
 	};
-	EXPECT_EQ(creature_planner::ChooseUsed(held, 0.4f, std::nullopt), 2u);
+	EXPECT_EQ(creature_planner::ChooseUsed(held, 0.4f, std::nullopt)->id, 2u);
 	// What the distance weighs fully against counts for nothing
 	const std::array far {creature_planner::UsedCandidate {.id = 1, .distance = 250.0f}};
-	EXPECT_EQ(creature_planner::ChooseUsed(far, 1.0f, std::nullopt), std::nullopt);
-	EXPECT_EQ(creature_planner::ChooseUsed({}, 0.4f, std::nullopt), std::nullopt);
+	EXPECT_FALSE(creature_planner::ChooseUsed(far, 1.0f, std::nullopt).has_value());
+	EXPECT_FALSE(creature_planner::ChooseUsed({}, 0.4f, std::nullopt).has_value());
 }
 
 TEST(CreatureKindActions, GivingWoodPullsUpTheTreeAndThrowsItIntoTheStore)

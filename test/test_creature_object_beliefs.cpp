@@ -154,6 +154,32 @@ TEST(CreatureObjectBeliefs, ItForgetsBeliefsAboutThingsThatAreGone)
 	EXPECT_EQ(store.All().size(), 2u);
 }
 
+// The parts of a whole thing come newest first, and a part replaced in a full kind is no longer a part
+TEST(CreatureObjectBeliefs, ItKnowsThePartsOfAWholeThingNewestFirst)
+{
+	constexpr uint32_t k_Tree = 5;
+	Store store;
+	store.Add(Thing(1), k_Forest, {});
+	store.Add(Thing(2), k_Tree, {});
+	store.Add(Thing(3), k_Tree, {});
+	store.Add(Thing(4), k_Tree, {});
+	store.JoinTo(Thing(2), Thing(1));
+	store.JoinTo(Thing(3), Thing(1));
+	store.JoinTo(Thing(9), Thing(1));
+	const auto parts = store.PartsOf(Thing(1));
+	ASSERT_EQ(parts.size(), 2u);
+	EXPECT_EQ(parts[0].thing, Thing(3));
+	EXPECT_EQ(parts[1].thing, Thing(2));
+	EXPECT_TRUE(store.PartsOf(Thing(4)).empty());
+	const auto newest = store.NewestFirst();
+	ASSERT_EQ(newest.size(), 4u);
+	EXPECT_EQ(newest.front().thing, Thing(4));
+	EXPECT_EQ(newest.back().thing, Thing(1));
+	store.Forget(Thing(3));
+	ASSERT_EQ(store.PartsOf(Thing(1)).size(), 1u);
+	EXPECT_EQ(store.PartsOf(Thing(1))[0].thing, Thing(2));
+}
+
 TEST(CreatureObjectBeliefs, ItsEyesSweepASquareThatGrowsWithItsSize)
 {
 	// The odd number below the root of sixty times its size and a hundred and sixty, squared

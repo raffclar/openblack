@@ -3556,6 +3556,46 @@ void AddMind(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -34.0f}}},
 	    .commands = {setDesire(Desire::Hunger, 1.0f, 2.0f)},
 	});
+	// A tiger of another player looks north at a village of the player: a hut and three of its villagers
+	auto stranger = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "another player's");
+	stranger.owner = PlayerNames::PLAYER_TWO;
+	stranger.hold = false;
+	stranger.pauseMind = false;
+	const std::vector<ObjectSetup> village {
+	    {.type = AbodeInfo::CelticHut, .offset = {0.0f, 40.0f}},
+	    {.type = VillagerInfo::CelticFarmerMale, .offset = {-8.0f, 25.0f}, .joinTown = true},
+	    {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 22.0f}, .joinTown = true},
+	    {.type = VillagerInfo::CelticFarmerMale, .offset = {8.0f, 25.0f}, .joinTown = true},
+	};
+	// A rock by the tiger, which it can hurl
+	auto angryVillage = village;
+	angryVillage.push_back({.type = MobileStaticInfo::RockChalk, .offset = {6.0f, -14.0f}});
+	all.push_back({
+	    .id = "mind.angry_at_village",
+	    .name = "Anger at a village acts on one of its people",
+	    .facet = Facet::Mind,
+	    .description = "A tiger of another player looks north at a village of the player: a hut and three villagers. A rock "
+	                   "lies by it. Its mind runs; after two seconds it is made as angry as can be.",
+	    .expected = "Its anger is about the village (the Mind panel's plan shows the town as what the plan is about), and it "
+	                "acts on one of the villagers that it has seen, not on the town itself.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {stranger},
+	    .objects = angryVillage,
+	    .commands = {setDesire(Desire::Anger, 1.0f, 2.0f)},
+	});
+	all.push_back({
+	    .id = "mind.impress_village",
+	    .name = "To impress a village it acts on one of its people",
+	    .facet = Facet::Mind,
+	    .description = "A tiger of another player looks north at a village of the player: a hut and three villagers. Its "
+	                   "mind runs; after two seconds its desire to impress is made as strong as can be.",
+	    .expected = "Its desire to impress is about the village, and it acts on one of the villagers that it has seen and "
+	                "that does not dance, never on the hut.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {stranger},
+	    .objects = village,
+	    .commands = {setDesire(Desire::Impress, 1.0f, 2.0f)},
+	});
 	// The player's evil, big tiger swaps minds with a small, neutral sheep that belongs to nobody, as The Lost Flock's
 	// sheep offers; then back again
 	auto swapper = Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "player's tiger");
