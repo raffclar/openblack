@@ -59,6 +59,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -73,6 +74,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
@@ -1487,6 +1489,71 @@ creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::
 	return facts;
 }
 
+/// The town that a building belongs to, none when it has none
+std::optional<entt::entity> TownOfBuilding(const ecs::Registry& registry, uint32_t townId)
+{
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(townId);
+	return found != towns.end() && registry.Valid(found->second) ? std::optional(found->second) : std::nullopt;
+}
+
+/// The tribe of a town; none for no town or a town of no tribe
+std::optional<Tribe> TribeOfTown(const ecs::Registry& registry, std::optional<entt::entity> town)
+{
+	const auto* tribe = town.has_value() ? registry.TryGet<const Tribe>(*town) : nullptr;
+	return tribe != nullptr ? std::optional(*tribe) : std::nullopt;
+}
+
+/// A field has the data of the field building of its town's tribe, or of the first building for a field of no town
+const GAbodeInfo* FieldBuildingInfo(const ecs::Registry& registry, entt::entity field)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto& self = registry.Get<const Field>(field);
+	const auto tribe =
+	    TribeOfTown(registry, self.town >= 0 ? TownOfBuilding(registry, static_cast<uint32_t>(self.town)) : std::nullopt);
+	if (!tribe.has_value())
+	{
+		return &info.abode.at(0);
+	}
+	const auto row = static_cast<size_t>(GAbodeInfo::Find(*tribe, AbodeNumber::Field));
+	return row < info.abode.size() ? &info.abode.at(row) : nullptr;
+}
+
+/// The town of a village totem: the town of the village centre that it stands on
+std::optional<entt::entity> TownOfTotem(const ecs::Registry& registry, entt::entity totem)
+{
+	const auto& self = registry.Get<const VillageTotem>(totem);
+	const auto* centre = registry.Valid(self.townCentre) ? registry.TryGet<const Abode>(self.townCentre) : nullptr;
+	return centre != nullptr ? TownOfBuilding(registry, centre->townId) : std::nullopt;
+}
+
+/// The data of a village totem's statue, by the tribe of its town
+const GTotemStatueInfo* TotemStatueInfo(const ecs::Registry& registry, entt::entity totem)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& statues = Locator::infoConstants::value().totemStatue;
+	const auto tribe = TribeOfTown(registry, TownOfTotem(registry, totem));
+	const auto row = tribe.has_value() ? static_cast<size_t>(*tribe) : statues.size();
+	return row < statues.size() ? &statues.at(row) : nullptr;
+}
+
+/// Whether the creature found no way to a thing lately. A thing fixed in the land is left alone for longer.
+bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
+{
+	const auto* belief = mind.beliefs.Find(thing);
+	const bool fixed =
+	    registry.AnyOf<Abode, Tree, Feature, Field, FishFarm, AnimatedStatic, Flowers, Temple, WorshipSite, VillageTotem>(
+	        thing);
+	return belief != nullptr && creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
+}
+
 /// What a creature knows about a part of a whole thing; none for a thing that is not a part it can act on
 std::optional<creature_activity::PartFacts> PartFactsOf(const ecs::Registry& registry, entt::entity part)
 {
@@ -1499,13 +1566,13 @@ std::optional<creature_activity::PartFacts> PartFactsOf(const ecs::Registry& reg
 	if (const auto* villager = registry.TryGet<const Villager>(part))
 	{
 		const auto row = static_cast<size_t>(GVillagerInfo::Find(villager->tribe, villager->number));
-		// TODO(creature-activity-object): the game also refuses compassion for a villager that the game marks as not to
-		// be picked up. openblack does not keep these marks yet.
+		// A villager in its home, or one that may not be picked up, cannot have help
 		return creature_activity::PartFacts {
 		    .kind = Part::Villager,
 		    .attackable = row < info.villager.size() && info.villager.at(row).canCreatureAttackMe != 0,
 		    .dead = registry.AllOf<VillagerDeath>(part) || !(villager->life > 0.0f),
 		    .dancing = registry.AllOf<Dancer>(part),
+		    .pickable = !registry.AnyOf<AtHome, CannotBePickedUp>(part),
 		};
 	}
 	if (const auto* animal = registry.TryGet<const Animal>(part))
@@ -1537,8 +1604,25 @@ std::optional<creature_activity::PartFacts> PartFactsOf(const ecs::Registry& reg
 		    .attackable = known && info.abode.at(row).canCreatureAttackMe != 0,
 		};
 	}
-	// TODO(creature-activity-object): a field is part of its town too. The game reads the data of the building of the
-	// field, which openblack does not keep on a field yet.
+	// A field has the data of its town's field building
+	if (registry.AllOf<Field>(part))
+	{
+		const auto* data = FieldBuildingInfo(registry, part);
+		return creature_activity::PartFacts {
+		    .kind = Part::Building,
+		    .canActOn = data != nullptr && data->canCreatureInteractWithMe != 0,
+		    .attackable = data != nullptr && data->canCreatureAttackMe != 0,
+		};
+	}
+	if (registry.AllOf<VillageTotem>(part))
+	{
+		const auto* data = TotemStatueInfo(registry, part);
+		return creature_activity::PartFacts {
+		    .kind = Part::TotemStatue,
+		    .canActOn = data != nullptr && data->canCreatureInteractWithMe != 0,
+		    .attackable = data != nullptr && data->canCreatureAttackMe != 0,
+		};
+	}
 	return std::nullopt;
 }
 
@@ -1559,7 +1643,20 @@ bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 	{
 		return false;
 	}
-	const auto* info = ecs::world_objects::InfoOf(thing);
+	// A field has the data of its town's field building, and a village totem the data of its statue
+	const GObjectInfo* info = nullptr;
+	if (registry.AllOf<Field>(thing))
+	{
+		info = FieldBuildingInfo(registry, thing);
+	}
+	else if (registry.AllOf<VillageTotem>(thing))
+	{
+		info = TotemStatueInfo(registry, thing);
+	}
+	else
+	{
+		info = ecs::world_objects::InfoOf(thing);
+	}
 	return info != nullptr && info->canCreatureInteractWithMe != 0;
 }
 
@@ -1579,16 +1676,9 @@ std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::ent
 	{
 		return town(farm->town);
 	}
-	if (const auto* totem = registry.TryGet<const VillageTotem>(thing))
+	if (registry.AllOf<VillageTotem>(thing))
 	{
-		const auto* centre = registry.Valid(totem->townCentre) ? registry.TryGet<const Abode>(totem->townCentre) : nullptr;
-		if (centre != nullptr)
-		{
-			const auto& towns = registry.Context().towns;
-			const auto found = towns.find(centre->townId);
-			return found != towns.end() ? town(found->second) : std::nullopt;
-		}
-		return std::nullopt;
+		return TownOfTotem(registry, thing);
 	}
 	if (registry.AllOf<Pot>(thing))
 	{
@@ -1658,7 +1748,7 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 	std::vector<creature_planner::ObjectCandidate> parts;
 	for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
 	{
-		if (belief.thing == creature || !registry.Valid(belief.thing))
+		if (belief.thing == creature || !registry.Valid(belief.thing) || NoWayLately(registry, mind, belief.thing))
 		{
 			continue;
 		}
@@ -1674,7 +1764,7 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(thing))
+	if (!registry.Valid(thing) || NoWayLately(registry, mind, thing))
 	{
 		return false;
 	}
@@ -1785,7 +1875,7 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::ShownParts(en
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto suits = [&](entt::entity part) {
 		const auto facts = PartFactsOf(registry, part);
-		return facts.has_value() && creature_activity::PartSuits(desire, *facts) &&
+		return !NoWayLately(registry, mind, part) && facts.has_value() && creature_activity::PartSuits(desire, *facts) &&
 		       ObjectToActOnUsefulness(creature, mind, desire, part) > 0.0f;
 	};
 	if (suits(thing))

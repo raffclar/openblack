@@ -31,6 +31,7 @@
 #include "ECS/Components/ForestMember.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -101,8 +102,7 @@ std::optional<entt::entity> CreatureMindSystem::BelongsTo(entt::entity thing)
 	{
 		return thing;
 	}
-	// TODO(physics): the game also has a temple's parts belong to the temple and a totem statue to its town; neither is
-	// a thing of its own here yet
+	// TODO(physics): the game also has a temple's parts belong to the temple; they are not things of their own here
 	if (const auto* villager = registry.TryGet<const Villager>(thing))
 	{
 		return registry.Valid(villager->town) ? std::optional(villager->town) : std::nullopt;
@@ -114,6 +114,12 @@ std::optional<entt::entity> CreatureMindSystem::BelongsTo(entt::entity thing)
 	if (const auto* field = registry.TryGet<const Field>(thing))
 	{
 		return field->town >= 0 ? TownOf(registry, static_cast<uint32_t>(field->town)) : std::nullopt;
+	}
+	// A village totem belongs to the town of the village centre that it stands on
+	if (const auto* totem = registry.TryGet<const VillageTotem>(thing))
+	{
+		const auto* centre = registry.Valid(totem->townCentre) ? registry.TryGet<const Abode>(totem->townCentre) : nullptr;
+		return centre != nullptr ? TownOf(registry, centre->townId) : std::nullopt;
 	}
 	if (registry.AllOf<Tree>(thing))
 	{

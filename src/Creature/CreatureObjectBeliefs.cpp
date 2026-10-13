@@ -26,6 +26,19 @@ bool openblack::creature_object_beliefs::InListOfWholeThings(uint32_t kind)
 	       kind == kinds::k_Flock;
 }
 
+bool openblack::creature_object_beliefs::BlockedRecently(const Belief& belief, uint32_t turn, bool fixed)
+{
+	return belief.blockedTurn.has_value() && turn - *belief.blockedTurn <= (fixed ? k_BlockedTurnsFixed : k_BlockedTurns);
+}
+
+void Store::MarkBlocked(entt::entity thing, uint32_t turn)
+{
+	if (auto* belief = Find(thing))
+	{
+		belief->blockedTurn = turn;
+	}
+}
+
 Store::Added Store::Add(entt::entity thing, uint32_t kind, glm::vec3 place)
 {
 	if (const auto known = _index.find(thing); known != _index.end())

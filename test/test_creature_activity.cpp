@@ -81,6 +81,12 @@ TEST(CreatureActivity, ToImpressItActsOnAVillagerThatDoesNotDance)
 	EXPECT_FALSE(PartSuits(Desire::Impress, {.kind = Part::Villager, .dancing = true}));
 	EXPECT_FALSE(PartSuits(Desire::Impress, {.kind = Part::Building}));
 	EXPECT_FALSE(PartSuits(Desire::Impress, {.kind = Part::Villager, .canActOn = false}));
+	// A totem statue can be impressed, while its data lets a creature act on it
+	EXPECT_TRUE(PartSuits(Desire::Impress, {.kind = Part::TotemStatue}));
+	EXPECT_FALSE(PartSuits(Desire::Impress, {.kind = Part::TotemStatue, .canActOn = false}));
+	EXPECT_TRUE(PartSuits(Desire::Compassion, {.kind = Part::TotemStatue}));
+	EXPECT_TRUE(PartSuits(Desire::Anger, {.kind = Part::TotemStatue, .attackable = true}));
+	EXPECT_FALSE(PartSuits(Desire::Anger, {.kind = Part::TotemStatue}));
 }
 
 // For anger, it acts on what its data lets a creature attack, and on every tree

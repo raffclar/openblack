@@ -87,7 +87,7 @@ bool creature_activity::PartSuits(Desire desire, const PartFacts& part)
 	switch (desire)
 	{
 	case Desire::Impress:
-		return part.kind == Part::Villager && !part.dancing;
+		return (part.kind == Part::Villager && !part.dancing) || part.kind == Part::TotemStatue;
 	case Desire::Compassion:
 		return part.kind != Part::Villager || part.pickable;
 	case Desire::Anger:

@@ -205,6 +205,20 @@ TEST(CreatureObjectBeliefs, ItLooksThroughTheWholeThingsFirstThenTheOtherThingsE
 	EXPECT_FALSE(InListOfWholeThings(4));
 }
 
+TEST(CreatureObjectBeliefs, AThingWithNoWayToItIsLeftAloneForTenOrSixtySeconds)
+{
+	constexpr uint32_t k_Villager = 6;
+	Store store;
+	store.Add(Thing(1), k_Villager, {});
+	store.MarkBlocked(Thing(2), 5);
+	EXPECT_FALSE(BlockedRecently(*store.Find(Thing(1)), 50, false));
+	store.MarkBlocked(Thing(1), 50);
+	EXPECT_TRUE(BlockedRecently(*store.Find(Thing(1)), 150, false));
+	EXPECT_FALSE(BlockedRecently(*store.Find(Thing(1)), 151, false));
+	EXPECT_TRUE(BlockedRecently(*store.Find(Thing(1)), 650, true));
+	EXPECT_FALSE(BlockedRecently(*store.Find(Thing(1)), 651, true));
+}
+
 TEST(CreatureObjectBeliefs, ItsEyesSweepASquareThatGrowsWithItsSize)
 {
 	// The odd number below the root of sixty times its size and a hundred and sixty, squared

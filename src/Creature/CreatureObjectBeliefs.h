@@ -54,7 +54,16 @@ struct Belief
 	std::optional<entt::entity> partOf;
 	/// The order in which the beliefs were made: a newer belief has a larger number
 	uint64_t order {0};
+	/// The game turn on which the creature last found no way to the thing, none if it never did
+	std::optional<uint32_t> blockedTurn;
 };
+
+/// After the creature finds no way to a thing, it does not choose the thing for a time: 10 seconds for a thing that
+/// moves, 60 seconds for a thing that is fixed in the land (a building, a tree), at 10 game turns each second
+inline constexpr uint32_t k_BlockedTurns = 100;
+inline constexpr uint32_t k_BlockedTurnsFixed = 600;
+/// Whether the creature found no way to the thing in the time before this turn
+[[nodiscard]] bool BlockedRecently(const Belief& belief, uint32_t turn, bool fixed);
 
 /// A creature's beliefs about things, a fixed number of places for each kind
 class Store
@@ -92,6 +101,8 @@ public:
 			Forget(thing);
 		}
 	}
+	/// Records that the creature found no way to the thing on a turn, if the store has a belief about the thing
+	void MarkBlocked(entt::entity thing, uint32_t turn);
 	/// Records that the thing is part of a whole thing, if the store has a belief about the thing
 	void JoinTo(entt::entity part, entt::entity whole);
 	/// The beliefs about the parts of a whole thing, the newest first

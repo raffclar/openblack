@@ -70,6 +70,8 @@ enum class Part : uint8_t
 	Tree,
 	/// A building, a field or another object that does not live
 	Building,
+	/// The totem statue of a town, which a creature can impress
+	TotemStatue,
 };
 
 /// What the creature knows about a part when it examines a desire about the whole thing
@@ -87,7 +89,7 @@ struct PartFacts
 };
 
 /// Whether a creature can act on a part for a desire.
-/// - To impress, it acts on a villager that does not dance.
+/// - To impress, it acts on a villager that does not dance, or on a totem statue.
 /// - For compassion, it acts on a villager that a hand can pick up, or on any other part.
 /// - For anger, it acts on a tree, on a thing that lives and is not dead, or on a building, if the data of the part lets
 ///   a creature attack it. All trees let a creature attack them.
