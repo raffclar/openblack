@@ -2412,6 +2412,31 @@ void AddHand(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Horse, .offset = {-12.0f, 8.0f}},
 	                {.type = AnimalInfo::Pig, .offset = {-6.0f, 5.0f}}},
 	});
+
+	// One of each kind of thing the cursor picks by its own shape, in a row on bare land
+	all.push_back({
+	    .id = "hand.pick_kinds",
+	    .name = "What the cursor picks, kind by kind",
+	    .facet = Facet::Hand,
+	    .description = "In a row on bare land, left to right: a person, a pig, an oak, a \"did you know\" sign, a silver "
+	                   "scroll, a fire dispenser floating its globe, and a lightning globe on its own. Move the pointer "
+	                   "round each and press the Action button on it.",
+	    .expected = "A person is picked anywhere in the circle their bounding ball makes, at that ball's near side; the "
+	                "pig, the oak and the sign only on their bodies. The scroll is picked on its model or a little "
+	                "round it, whichever is nearer. The dispenser is picked on its building and in a wide ball round "
+	                "its globe, and a press there knocks on it; on the globe itself the globe is picked, being pushed "
+	                "towards the camera, and a quick press puts its miracle in the hand. The loose globe is picked on "
+	                "its model or within a ball about its middle 1.2 times its size.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -28.0f}, .look = {0.0f, 3.0f, 8.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-18.0f, 6.0f}, .inScript = true},
+	                {.type = AnimalInfo::Pig, .offset = {-13.0f, 6.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-7.0f, 10.0f}}},
+	    .dispensers = {{.type = MagicType::Fireball, .offset = {11.0f, 10.0f}},
+	                   {.type = MagicType::LightningBolt, .offset = {19.0f, 6.0f}, .bubbleHeight = 3.0f}},
+	    .highlights = {{.kind = 1, .offset = {-1.0f, 6.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}},
+	                   {.kind = 2, .offset = {4.0f, 6.0f}}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
@@ -3704,7 +3729,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
-	       IsPointerCommand(kind);
+	       kind == Kind::HandPour || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -3731,7 +3756,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 109> k_Names {
+	constexpr std::array<std::string_view, 110> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3840,6 +3865,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "enter temple",
 	    "play boat film",
 	    "run script",
+	    "hand pour",
 	    "do action",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
@@ -3889,11 +3915,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
 	    scenario.vortices.empty() && scenario.rewards.empty() && scenario.fireflyRewards.empty() &&
-	    scenario.landStorms.empty() &&
+	    scenario.landStorms.empty() && scenario.highlights.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
-		                      "chests, crowd, fireflies' rewards, land storms, player's commands or alignment for the hand");
+		problems.emplace_back(
+		    "no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
+		    "chests, crowd, fireflies' rewards, land storms, scrolls or signs, player's commands or alignment for the "
+		    "hand");
 	}
 	for (const auto& storm : scenario.landStorms)
 	{

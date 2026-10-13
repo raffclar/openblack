@@ -101,7 +101,8 @@ using SparkLook = particles::rising_sparks::SparkLook;
 using Sparks = particles::rising_sparks::Sparks;
 using particles::rising_sparks::StepSparks;
 
-/// A scroll is picked under the cursor by a ball a little larger than its model; a sign by its model
+/// A scroll is picked under the cursor by its model and by a ball a little larger than its model, whichever is nearer;
+/// a sign by its model alone
 [[nodiscard]] constexpr bool PickedByBall(HighlightInfo kind)
 {
 	return !IsTipSign(kind);

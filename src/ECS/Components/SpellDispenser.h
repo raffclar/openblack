@@ -33,6 +33,8 @@ struct SpellDispenser
 	uint32_t effect {0};
 	/// Its row in the buildings' table
 	AbodeInfo building {AbodeInfo::None};
+	/// The town it belongs to, none for none: a knock on it brings up that town's read-out
+	entt::entity town {entt::null};
 };
 
 /// One of the dispensers the testbed lays out in a grid, cleared away when a scenario asks for none

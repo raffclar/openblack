@@ -41,6 +41,8 @@ struct View
 	glm::vec3 camera {0.0f};
 	/// The cursor's pixel, from the top left
 	glm::vec2 cursor {0.0f};
+	/// The camera's up, in the world
+	glm::vec3 up {0.0f, 1.0f, 0.0f};
 };
 
 /// How far along the view a point is: its clip w
@@ -51,6 +53,13 @@ struct View
 /// camera is inside is, wherever the cursor is; otherwise its circle on the screen must reach the screen and hold the
 /// cursor strictly inside it.
 [[nodiscard]] bool CursorOverSphere(const View& view, glm::vec3 centre, float radius, glm::vec3 origin);
+
+/// How far away an invisible ball is when the cursor is on it, as the game picks the things it gives a ball of their
+/// own (a scroll, a bubble, a dispenser, a fireball): its middle must be at or beyond the near plane, its circle's
+/// radius on the screen is how many whole pixels up or down its middle moves when lifted by its radius along the
+/// camera's up, and the cursor's pixel must lie strictly within that many pixels of its middle's pixel (whole pixels
+/// each, cut towards nothing). It is counted at its middle's depth.
+[[nodiscard]] std::optional<float> BallHit(const View& view, glm::vec3 centre, float radius);
 
 /// Whether any of an object's bounding sphere shows on the screen, as the scripts ask whether a thing is in view: one
 /// whose sphere is behind the near plane does not; one the camera is inside does; otherwise its circle on the screen
@@ -129,10 +138,14 @@ struct Candidate
 	glm::vec3 origin {0.0f};
 	/// Half its model's extents across x and z, unscaled: its footprint
 	glm::vec2 halfExtents {0.0f};
+	/// An invisible ball of the object's, its middle `centre` and its radius `radius`: it is tested by its own circle
+	/// (`BallHit`) and counted at its middle's depth, never by `distanceOf`, and nothing nearer stops it being tested
+	bool ball {false};
 };
 /// The object the interface picks among the frame's objects in the order they are drawn: one whose sphere the cursor is
 /// over and which lies no further than the nearest so far by more than its radius is tested, its distance found by
-/// `distanceOf` (none for a miss), and it replaces the nearest only when strictly nearer, so a tie keeps the first drawn
+/// `distanceOf` (none for a miss), and it replaces the nearest only when strictly nearer, so a tie keeps the first drawn.
+/// An invisible ball is tested by its own circle alone.
 struct Picked
 {
 	size_t index;
