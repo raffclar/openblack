@@ -89,14 +89,7 @@ bool HandAnimation::Load(const morph::MorphFile& file, const std::vector<uint32_
 	}
 
 	_skeleton = skeletal_animation::Skeleton::FromRestMatrices(boneParents, restMatrices);
-	float lowest = restMatrices.front()[3].y;
-	float highest = lowest;
-	for (const auto& matrix : restMatrices)
-	{
-		lowest = std::min(lowest, matrix[3].y);
-		highest = std::max(highest, matrix[3].y);
-	}
-	_restHeight = std::max(highest - lowest, 0.001f);
+	_restHeight = std::max(RestHeight(restMatrices), 0.001f);
 	_cycleTimes = {};
 	_springStarted = false;
 	_fadeTime.reset();
@@ -118,6 +111,19 @@ float HandAnimation::SizeAtDistance(float distanceFromCamera)
 		size *= (distance / k_GrowDistance) * (1.0f - ((distance - k_GrowDistance) / (k_MaxDistance - k_GrowDistance)) * 0.3f);
 	}
 	return size;
+}
+
+float HandAnimation::RestHeight(std::span<const glm::mat4> restMatrices)
+{
+	// The span always includes the origin. If all the bones are below the origin, the span starts at the origin.
+	float lowest = 0.0f;
+	float highest = 0.0f;
+	for (const auto& matrix : restMatrices)
+	{
+		lowest = std::min(lowest, matrix[3].y);
+		highest = std::max(highest, matrix[3].y);
+	}
+	return highest - lowest;
 }
 
 float HandAnimation::ScaleAtDistance(float distanceFromCamera) const
