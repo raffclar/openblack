@@ -882,3 +882,4 @@ openblack_setup_and_add_test(test_creature_giving test_creature_giving.cpp)
 openblack_setup_and_add_test(
   test_temple_villagers_survey temple/test_temple_villagers_survey.cpp
 )
+openblack_setup_and_add_test(test_cinema_hides gui/test_cinema_hides.cpp)
