@@ -128,6 +128,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -945,6 +946,14 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		if (object.alight && Locator::fireSystem::has_value())
 		{
 			Locator::fireSystem::value().SetOnFire(_objects.back(), 0.0f);
+		}
+		if (object.reaction.has_value() && Locator::reactionSystem::has_value())
+		{
+			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
+			Locator::reactionSystem::value().Create({.initiator = _objects.back(),
+			                                         .type = *object.reaction,
+			                                         .player = PlayerNames::PLAYER_ONE,
+			                                         .position = placed.position});
 		}
 	}
 }

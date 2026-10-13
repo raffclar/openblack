@@ -266,6 +266,29 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .hand = HandHold {.offset = {-4.0f, 38.0f}, .height = 6.0f},
 	});
 
+	// Villagers near and far from a thing that came to rest, each watching it for its own time
+	all.push_back({
+	    .id = "villagers.reaction_by_distance",
+	    .name = "Villagers watching a thing near and far",
+	    .facet = Facet::Objects,
+	    .description = "A cart in the middle of open land makes a reaction to look at it, of the kind a miracle makes to "
+	                   "be looked at (one that never runs out by itself). Six villagers stand in a line east of it, 2, "
+	                   "12, 22, 32, 42 and 52 metres away.",
+	    .expected = "Each villager takes the reaction up and turns to watch the cart. How long each keeps watching goes by "
+	                "its distance, as the reaction table's row says: the furthest gives up first, about nine seconds in, "
+	                "and each nearer one a little later, the nearest last, about twelve seconds in; each soon takes it "
+	                "up again and watches for as long again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-4.0f, -6.0f}, {56.0f, 6.0f}}, .distance = 0.6f},
+	    .objects = {{.type = MobileObjectInfo::Cart, .offset = {0.0f, 0.0f}, .reaction = Reaction::LookAtSpell},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {2.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {12.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {22.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {32.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {42.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {52.0f, 0.0f}, .yawDegrees = 0.0f}},
+	});
+
 	// A town whose store has run out of food, with fields to farm
 	std::vector<ObjectSetup> hungry {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},

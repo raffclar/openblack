@@ -296,6 +296,9 @@ struct ObjectSetup
 	bool firefly {false};
 	/// The thing is set alight as it is made, burning as at the start of a fire
 	bool alight {false};
+	/// The thing makes a reaction of this kind as it is made, as the game makes one about a thing (a thing coming to rest
+	/// makes one to look at it), by the scenario's player
+	std::optional<Reaction> reaction;
 };
 
 /// A particle effect played on the land

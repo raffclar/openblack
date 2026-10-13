@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <glm/geometric.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
 #include "3D/MapCoords.h"
@@ -992,8 +993,13 @@ void ReactionSystem::ProcessLiving()
 		// to now
 		const auto since =
 		    static_cast<int32_t>(_turn - MemoryOf(registry, entity, state).LastReacted(static_cast<uint32_t>(state.type)));
-		if (since > TurnsToReact(*reaction, entity, state.type))
+		if (const auto turns = TurnsToReact(*reaction, entity, state.type); since > turns)
 		{
+			if (const auto logger = spdlog::get("game"); logger != nullptr)
+			{
+				SPDLOG_LOGGER_DEBUG(logger, "Reaction: {} stops reacting to kind {} after {} turns (its time {})",
+				                    static_cast<uint32_t>(entity), static_cast<int>(state.type), since, turns);
+			}
 			Stop(entity, state, true);
 		}
 	}
