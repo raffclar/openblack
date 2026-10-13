@@ -64,6 +64,11 @@ glm::mat4 Camera::GetRotationMatrix() const
 
 glm::mat4 Camera::GetViewMatrix(Interpolation interpolation) const
 {
+	if (interpolation == Interpolation::Drawn)
+	{
+		const auto drawn = GetDrawnView();
+		return glm::lookAt(drawn.eye, drawn.focus, glm::vec3(0.0f, 1.0f, 0.0f));
+	}
 	// Invert the camera's rotation (transposed) and position (negated) to get the view matrix.
 	return glm::lookAt(GetOrigin(interpolation) + _shakeEye, GetFocus(interpolation) + _shakeFocus,
 	                   glm::vec3(0.0f, 1.0f, 0.0f));
@@ -78,12 +83,44 @@ Camera& Camera::SetShake(const glm::vec3& eye, const glm::vec3& focus)
 
 glm::mat4 Camera::GetViewProjectionMatrix(Interpolation interpolation) const
 {
-	return GetProjectionMatrix() * GetViewMatrix(interpolation);
+	return GetProjectionMatrix(_cameraProjection, interpolation) * GetViewMatrix(interpolation);
 }
 
 glm::mat4 Camera::GetViewProjectionMatrix(Projection projection, Interpolation interpolation) const
 {
-	return GetProjectionMatrix(projection) * GetViewMatrix(interpolation);
+	return GetProjectionMatrix(projection, interpolation) * GetViewMatrix(interpolation);
+}
+
+glm::mat4 Camera::GetProjectionMatrix(Projection projection, Interpolation interpolation) const
+{
+	if (interpolation != Interpolation::Drawn)
+	{
+		return GetProjectionMatrix(projection);
+	}
+	const auto drawn = GetDrawnView().projection;
+	return projection == Projection::ReversedZ ? k_ReverseZMatrix * drawn : drawn;
+}
+
+void Camera::KeepDrawnView()
+{
+	_drawnView = View {
+	    .eye = GetOrigin() + _shakeEye,
+	    .focus = GetFocus() + _shakeFocus,
+	    .projection = _projectionMatrix,
+	    .nearClip = _nearClip,
+	};
+}
+
+Camera::View Camera::GetDrawnView() const
+{
+	if (_drawnView.has_value())
+	{
+		return *_drawnView;
+	}
+	return {.eye = GetOrigin() + _shakeEye,
+	        .focus = GetFocus() + _shakeFocus,
+	        .projection = _projectionMatrix,
+	        .nearClip = _nearClip};
 }
 
 std::optional<ecs::components::Transform> Camera::RaycastMouseToLand(bool includeWater, Interpolation interpolation) const
@@ -127,7 +164,8 @@ Camera::NearPlanePoint Camera::OnNearPlane(glm::vec2 screenCoord, Interpolation 
 	{
 		return {.eye = eye, .point = rayOrigin};
 	}
-	return {.eye = eye, .point = eye + (rayOrigin - eye) * (_nearClip / depth)};
+	const float nearClip = interpolation == Interpolation::Drawn ? GetDrawnView().nearClip : _nearClip;
+	return {.eye = eye, .point = eye + (rayOrigin - eye) * (nearClip / depth)};
 }
 
 Camera& Camera::SetProjectionMatrixPerspective(float xFov, float aspect, float nearClip)
@@ -273,8 +311,8 @@ bool Camera::ProjectWorldToScreen(glm::vec3 worldPosition, glm::vec4 viewport, g
 		outScreenPosition = glm::vec3(glm::lerp(glm::xy(viewport), glm::zw(viewport), {0.5f, 0.5f}), 0.0f);
 		return true; // Right at the camera position
 	}
-	outScreenPosition =
-	    glm::project(worldPosition, GetViewMatrix(interpolation), GetProjectionMatrix(Projection::Normal), viewport);
+	outScreenPosition = glm::project(worldPosition, GetViewMatrix(interpolation),
+	                                 GetProjectionMatrix(Projection::Normal, interpolation), viewport);
 	if (outScreenPosition.x < viewport.x || outScreenPosition.y < viewport.y || glm::round(outScreenPosition.x) > viewport.z ||
 	    glm::round(outScreenPosition.y) > viewport.w)
 	{
@@ -381,6 +419,8 @@ glm::vec3 Camera::GetOrigin(Interpolation interpolation) const
 		return _originInterpolators.p0;
 	case Interpolation::Target:
 		return _originInterpolators.p1;
+	case Interpolation::Drawn:
+		return GetDrawnView().eye;
 	default:
 		assert(false);
 		std::unreachable();
@@ -397,6 +437,8 @@ glm::vec3 Camera::GetFocus(Interpolation interpolation) const
 		return _focusInterpolators.p0;
 	case Interpolation::Target:
 		return _focusInterpolators.p1;
+	case Interpolation::Drawn:
+		return GetDrawnView().focus;
 	default:
 		assert(false);
 		std::unreachable();
@@ -417,6 +459,9 @@ glm::vec3 Camera::GetOriginVelocity(Interpolation interpolation) const
 	case Interpolation::Target:
 		result = _originInterpolators.v1;
 		break;
+	case Interpolation::Drawn:
+		// A kept view does not move
+		return glm::vec3(0.0f);
 	default:
 		assert(false);
 		std::unreachable();
@@ -443,6 +488,9 @@ glm::vec3 Camera::GetFocusVelocity(Interpolation interpolation) const
 	case Interpolation::Target:
 		result = _focusInterpolators.v1;
 		break;
+	case Interpolation::Drawn:
+		// A kept view does not move
+		return glm::vec3(0.0f);
 	default:
 		assert(false);
 		std::unreachable();
@@ -489,6 +537,11 @@ Camera& Camera::SetFocus(const glm::vec3& position)
 
 Camera& Camera::Place(const glm::vec3& origin, const glm::vec3& focus)
 {
+	// When the kept view has this eye and focus, nothing changes. A movement continues.
+	if (const auto drawn = GetDrawnView(); drawn.eye == origin && drawn.focus == focus)
+	{
+		return *this;
+	}
 	SetOrigin(origin).SetFocus(focus);
 	SetInterpolatorDuration(std::chrono::microseconds::zero());
 	SetInterpolatorTime(std::chrono::microseconds::zero());

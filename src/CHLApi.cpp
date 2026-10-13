@@ -1055,15 +1055,11 @@ void RemakeDrawList()
 	}
 }
 
-/// Puts the camera at a position and focus at once, still, whatever has the camera. When the camera is already there,
-/// nothing changes. The land's draw list is made again on the next frame.
+/// Puts the camera at a position and focus at once, still, whatever has the camera. When the kept view of the camera
+/// has this position and focus, nothing changes. The land's draw list is made again on the next frame.
 void PlaceCamera(const glm::vec3& origin, const glm::vec3& focus)
 {
-	auto& camera = Locator::camera::value();
-	if (camera.GetOrigin() != origin || camera.GetFocus() != focus)
-	{
-		camera.Place(origin, focus);
-	}
+	Locator::camera::value().Place(origin, focus);
 	RemakeDrawList();
 }
 

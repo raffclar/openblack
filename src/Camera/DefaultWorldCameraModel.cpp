@@ -182,7 +182,7 @@ float DefaultWorldCameraModel::GetVerticalLineInverseDistanceWeighingRayCast(con
 	{
 		const glm::vec2 coord = glm::vec2(0.5f, i / 16.0f);
 
-		if (const auto hit = camera.RaycastScreenCoordToLand(coord, true, Camera::Interpolation::Target))
+		if (const auto hit = camera.RaycastScreenCoordToLand(coord, true, Camera::Interpolation::Drawn))
 		{
 			inverseHitDistances.push_back(1.0f / glm::length(hit->position - _targetOrigin));
 		}
@@ -336,7 +336,7 @@ void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 or
 {
 	_focusAtClick = _targetFocus;
 	_screenSpaceMouseRaycastHitAtClick =
-	    camera.RaycastMouseToLand(true, Camera::Interpolation::Target).and_then(ecs::components::GetTransformPosition);
+	    camera.RaycastMouseToLand(true, Camera::Interpolation::Drawn).and_then(ecs::components::GetTransformPosition);
 	if (_screenSpaceMouseRaycastHitAtClick.has_value())
 	{
 		_arcBallRadius = PointDistanceAlongLineSegment(origin, focus, *_screenSpaceMouseRaycastHitAtClick);
@@ -505,7 +505,8 @@ void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16v
 	{
 		// The line from where the camera was through where it goes, carried on to the map's edge, meets the land, or else
 		// the sea near the camera
-		const auto hit = Locator::pickingSystem::value().LandOrSeaAlong(_originAtClick, place->origin, camera.GetOrigin());
+		const auto hit = Locator::pickingSystem::value().LandOrSeaAlong(_originAtClick, place->origin,
+		                                                                camera.GetOrigin(Camera::Interpolation::Drawn));
 		if (hit.has_value())
 		{
 			stopped = camera_pan::StopShortOfLand(*place, _originAtClick, *hit);
@@ -591,13 +592,14 @@ void DefaultWorldCameraModel::UpdateCameraInterpolationValues(const Camera& came
 
 void DefaultWorldCameraModel::UpdateRaycastHitPoints(const Camera& camera)
 {
-	// Raycast mouse and screen center
+	// The rays through the cursor and the middle of the screen start from the kept view of the last frame. This view can
+	// be different from the destination while the camera moves, and on the frame after a command puts the camera.
 	{
-		const auto hit = camera.RaycastMouseToLand(true, Camera::Interpolation::Target);
+		const auto hit = camera.RaycastMouseToLand(true, Camera::Interpolation::Drawn);
 		_screenSpaceMouseRaycastHit = hit.and_then(ecs::components::GetTransformPosition);
 	}
 	{
-		const auto hit = camera.RaycastScreenCoordToLand({0.5f, 0.5f}, true, Camera::Interpolation::Target);
+		const auto hit = camera.RaycastScreenCoordToLand({0.5f, 0.5f}, true, Camera::Interpolation::Drawn);
 		_screenSpaceCenterRaycastHit = hit.and_then(ecs::components::GetTransformPosition);
 		_lastScreenCentreHit = _screenSpaceCenterRaycastHit.value_or(_lastScreenCentreHit);
 	}
@@ -1247,12 +1249,9 @@ void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
 	// A double tap that waits for this frame flies the camera from here.
 	_mode = _mode == Mode::FlyingToPoint ? Mode::FlyingToPoint : Mode::Cartesian;
 	_modePrev = Mode::Cartesian;
-	// A drag of the land that the player holds takes the land again as the camera now looks at it
-	_dragging = false;
-	_dragGivenUp = false;
-	_landGrip.reset();
-	_heldBack = false;
-	_twoButtonTurn = {};
+	// A drag that the player holds continues with the grip, the cursor and the view of its start. Thus the next frame of
+	// a land drag moves the camera from where the drag started, not from this place. A hold of the controls after a push
+	// from the fence also continues.
 }
 
 glm::vec3 DefaultWorldCameraModel::GetTargetOrigin() const
