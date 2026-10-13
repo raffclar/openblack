@@ -128,6 +128,18 @@ TEST(HandGrab, EachKindHangsItsOwnWay)
 	EXPECT_FLOAT_EQ(cuddly.loweringMultiplier, 0.0f);
 }
 
+TEST(HandGrab, TheHandHoldsOnlyTheCuddlyToyAndTheSkittleFromTheSide)
+{
+	const auto holdOf = [](MobileStaticInfo type, MeshId mesh) {
+		return HoldOf(GrabKind::MobileStatic, type, mesh, 1.0f, 1.0f).type;
+	};
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToyCuddly, MeshId::ObjectToyCuddly), HoldType::Side);
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToySkittle, MeshId::ObjectToySkittle), HoldType::Side);
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToyBall, MeshId::ObjectToyBall), HoldType::Above);
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToyBowlingBall, MeshId::ObjectToyBowlingBall), HoldType::Above);
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToyDie, MeshId::ObjectToyDice), HoldType::Above);
+}
+
 TEST(HandGrab, TheHandRisesForWhatItHolds)
 {
 	// Taken to be pulled free, a thing is gripped no closer than a share of the hand's height

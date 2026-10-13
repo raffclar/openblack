@@ -162,6 +162,7 @@ HoldFacts hand_grab::HoldOf(GrabKind kind, MobileStaticInfo staticType, MeshId m
 			facts.type = HoldType::Side;
 			facts.loweringMultiplier = k_SingingStoneLowering;
 		}
+		// Of the toys, the hand holds the cuddly toy and the skittle from the side. It holds the other toys from above.
 		else if (mesh == MeshId::ObjectToyCuddly || mesh == MeshId::ObjectToySkittle)
 		{
 			facts.type = HoldType::Side;
