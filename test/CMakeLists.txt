@@ -913,3 +913,6 @@ openblack_setup_and_add_test(
   test_being_eaten_rules test_being_eaten_rules.cpp
 )
 openblack_setup_and_add_test(test_menu_pause gui/test_menu_pause.cpp)
+
+openblack_setup_and_add_test(test_land_altitude test_land_altitude.cpp)
+target_link_libraries(test_land_altitude PRIVATE lnd)
