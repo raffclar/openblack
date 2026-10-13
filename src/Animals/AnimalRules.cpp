@@ -62,10 +62,10 @@ std::optional<AnimId> animals::DyingClip(AnimalInfo type)
 	}
 }
 
-std::optional<AnimId> animals::DeadClip(AnimalInfo type)
+std::optional<AnimId> animals::DeadClip(AnimalInfo type, bool onRightSide)
 {
-	// The big cats and wolves lie in their sleeping clip; the farm animals killed lie on their left, the one of their two
-	// dead clips the killed take
+	// The big cats and wolves lie in their sleeping clip. The farm animals lie on their right side only when they last came
+	// down on their right side. Else they lie on their left side
 	switch (type)
 	{
 	case AnimalInfo::Lion:
@@ -77,13 +77,13 @@ std::optional<AnimId> animals::DeadClip(AnimalInfo type)
 	case AnimalInfo::Wolf:
 		return AnimId::AWolfSleep;
 	case AnimalInfo::Cow:
-		return AnimId::ACowDeadOnLhs;
+		return onRightSide ? AnimId::ACowDeadOnRhs : AnimId::ACowDeadOnLhs;
 	case AnimalInfo::Sheep:
-		return AnimId::ASheepDeadLhs;
+		return onRightSide ? AnimId::ASheepDeadRhs : AnimId::ASheepDeadLhs;
 	case AnimalInfo::Horse:
-		return AnimId::AHorseDeadlhs;
+		return onRightSide ? AnimId::AHorseDeadrhs : AnimId::AHorseDeadlhs;
 	case AnimalInfo::Pig:
-		return AnimId::APigDeadlhs;
+		return onRightSide ? AnimId::APigDeadrhs : AnimId::APigDeadlhs;
 	case AnimalInfo::Tortoise:
 		return AnimId::ATortoiseStand;
 	default:

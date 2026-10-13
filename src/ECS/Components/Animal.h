@@ -25,6 +25,7 @@
 #include "Animals/Zoomer.h"
 #include "Enums.h"
 #include "Magic/FlockMiracleRules.h"
+#include "Physics/LivingRules.h"
 
 namespace openblack::ecs::components
 {
@@ -56,7 +57,7 @@ enum class AnimalState : uint8_t
 	WaitForClip,
 	/// A wolf eating what it brought down
 	Eat,
-	/// Brought down by a hunter, being eaten
+	/// Brought down by a hunter: it falls, then it waits for its fall to end
 	Downed,
 	/// Killed: falling dead, its kind's dying clip playing out once
 	Dying,
@@ -82,6 +83,14 @@ enum class AnimalState : uint8_t
 	GivesBirth,
 	/// Up again after landing from the hand or the physics: it joins a herd nearby if it can, then wanders off
 	InteractDecideWhatToDo,
+	/// Lies on the land while a hunter eats it. It dies when its count of turns ends
+	BeingEaten,
+	/// Held in the player's hand or in the hand of a creature
+	InHand,
+	/// Flies through the air, as after a throw
+	Flying,
+	/// Came down on the land: its flock gets a new home, then it gets up
+	Landed,
 };
 
 /// A living animal: a kind of the tables, flying or on the land
@@ -129,6 +138,10 @@ struct Animal
 	uint32_t birthTurn {0};
 	/// Once killed, the turns its body lies dead before it goes
 	int32_t deadTurns {0};
+	/// The turns that a hunter eats it before it dies. The count changes only in the state "being eaten"
+	uint16_t eatenTurnsLeft {0};
+	/// How it lay when it last came down on the land. Its dead clip and its clip to get up use it
+	physics::living::LandingPose landingPose {physics::living::LandingPose::Feet};
 
 	[[nodiscard]] bool Dead() const { return !(life > 0.0f); }
 };
@@ -209,16 +222,6 @@ struct AnimalPose
 	/// For a swimmer, its colour (0 to 255, shaded by the game's light) under the sea: what of it is below the sea's
 	/// level is drawn beneath the sea's surface, as seen from above, and the sea is blended over it
 	std::optional<glm::vec3> underSea;
-};
-
-/// An animal that a hunter brought down: it falls, then the hunter eats it for a number of turns, then it goes
-struct BeingEaten
-{
-	entt::entity hunter {entt::null};
-	int turns {0};
-	/// The turn it starts being eaten, once its fall has played out, and the turns of eating left after that
-	int eatenFrom {0};
-	int left {0};
 };
 
 /// A villager or an animal that a hunter brought down. The mark stays for all of its life:

@@ -66,7 +66,6 @@ bool IsSharedComponent(std::string_view name)
 	static constexpr std::array k_Shared = std::to_array<std::string_view>({
 	    "AtHome",
 	    "AudioEmitter",
-	    "BeingEaten",
 	    "BroughtDown",
 	    "CannotBePickedUp",
 	    "CarriedByTornado",

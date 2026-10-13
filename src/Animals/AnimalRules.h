@@ -58,9 +58,9 @@ inline constexpr float k_FormationSpacing = 10.0f;
 /// A killed animal lies dead this many turns, and one more, before it goes
 inline constexpr int32_t k_TurnsToDieOver = 600;
 /// The clip a kind of animal falls dead with, and the one it then lies dead in, once killed; none where its kind keeps
-/// the clip it had
+/// the clip it had. A farm animal lies dead on its right side only when it last came down on its right side
 [[nodiscard]] std::optional<AnimId> DyingClip(AnimalInfo type);
-[[nodiscard]] std::optional<AnimId> DeadClip(AnimalInfo type);
+[[nodiscard]] std::optional<AnimId> DeadClip(AnimalInfo type, bool onRightSide);
 /// A turn of a body lying dead: whether it goes now. Its turns left count down to none, then it goes; a body a script
 /// controls never counts down and lies there until the script lets it go
 [[nodiscard]] bool DeadBodyGoes(int32_t& turnsLeft, bool scriptControlled);

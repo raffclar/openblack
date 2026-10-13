@@ -424,7 +424,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::heading>("heading")
 	    .Field<&components::Animal::life>("life")
 	    .Field<&components::Animal::birthTurn>("birthTurn")
-	    .Field<&components::Animal::deadTurns>("deadTurns");
+	    .Field<&components::Animal::deadTurns>("deadTurns")
+	    .Field<&components::Animal::eatenTurnsLeft>("eatenTurnsLeft")
+	    .Field<&components::Animal::landingPose>("landingPose");
 	Reflect<components::Grazer>(context)
 	    .Field<&components::Grazer::needs>("needs")
 	    .Field<&components::Grazer::sleepingCell>("sleepingCell")
@@ -452,11 +454,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AnimalPose::cutBelow>("cutBelow")
 	    .Field<&components::AnimalPose::aboveCutShown>("aboveCutShown")
 	    .Field<&components::AnimalPose::underSea>("underSea");
-	Reflect<components::BeingEaten>(context)
-	    .Field<&components::BeingEaten::hunter>("hunter")
-	    .Field<&components::BeingEaten::turns>("turns")
-	    .Field<&components::BeingEaten::eatenFrom>("eatenFrom")
-	    .Field<&components::BeingEaten::left>("left");
 	Reflect<components::BroughtDown> {context};
 	Reflect<components::AnimatedStatic>(context)
 	    .Field<&components::AnimatedStatic::type>("type")

@@ -195,6 +195,24 @@ TEST(FlockMiracleRules, WhatAWolfHunts)
 	EXPECT_FALSE(flock::IsPrey({.isOtherAnimal = true, .hasMeat = false}));
 }
 
+TEST(FlockMiracleRules, AWolfLeavesAloneWhatItCannotGetToOrKill)
+{
+	EXPECT_FALSE(flock::IsPrey({.isOtherAnimal = true, .indestructible = true}));
+	// In a hand, in the air or hidden in a building
+	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .reachable = false}));
+	// A thing that a script controls is prey only to a hunter that a script holds
+	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .scriptControlled = true}));
+	EXPECT_TRUE(flock::IsPrey({.isVillager = true, .scriptControlled = true, .hunterInScript = true}));
+	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .hunterInFlock = false}));
+}
+
+TEST(FlockMiracleRules, AYoungWolfHuntsOnlyWhatAHunterBroughtDownBefore)
+{
+	EXPECT_FALSE(flock::IsPrey({.isOtherAnimal = true, .hunterYoung = true}));
+	EXPECT_TRUE(flock::IsPrey({.isOtherAnimal = true, .hunterYoung = true, .broughtDown = true}));
+	EXPECT_TRUE(flock::IsPrey({.isOtherAnimal = true, .broughtDown = true}));
+}
+
 TEST(FlockMiracleRules, HuntersLeaveAloneWhatIsDownOrWasBroughtDown)
 {
 	EXPECT_FALSE(flock::OutOfTheHunt(LivingStates::LivingMoveToPos, false));
@@ -232,11 +250,14 @@ TEST(AnimalRules, FormationSlots)
 TEST(AnimalRules, AKilledAnimalFallsAndLiesInItsKindsClips)
 {
 	EXPECT_EQ(animals::DyingClip(AnimalInfo::Lion), AnimId::ALionDie);
-	EXPECT_EQ(animals::DeadClip(AnimalInfo::Lion), AnimId::ALionSleep);
-	// The farm animals killed lie on their left
+	EXPECT_EQ(animals::DeadClip(AnimalInfo::Lion, true), AnimId::ALionSleep);
+	// The farm animals lie on their left, but on their right after they last came down on their right side
 	EXPECT_EQ(animals::DyingClip(AnimalInfo::Cow), AnimId::ACowDie);
-	EXPECT_EQ(animals::DeadClip(AnimalInfo::Cow), AnimId::ACowDeadOnLhs);
-	EXPECT_EQ(animals::DeadClip(AnimalInfo::Horse), AnimId::AHorseDeadlhs);
+	EXPECT_EQ(animals::DeadClip(AnimalInfo::Cow, false), AnimId::ACowDeadOnLhs);
+	EXPECT_EQ(animals::DeadClip(AnimalInfo::Cow, true), AnimId::ACowDeadOnRhs);
+	EXPECT_EQ(animals::DeadClip(AnimalInfo::Horse, false), AnimId::AHorseDeadlhs);
+	EXPECT_EQ(animals::DeadClip(AnimalInfo::Sheep, true), AnimId::ASheepDeadRhs);
+	EXPECT_EQ(animals::DeadClip(AnimalInfo::Pig, true), AnimId::APigDeadrhs);
 	// A kind with clips of its own for neither keeps the clip it had
 	EXPECT_FALSE(animals::DyingClip(AnimalInfo::Goat).has_value());
 	EXPECT_EQ(animals::k_TurnsToDieOver, 600);

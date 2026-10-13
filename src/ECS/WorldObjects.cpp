@@ -405,6 +405,10 @@ float world_objects::LifeOf(entt::entity object)
 	{
 		return magic::piles::Life(pile->amount, FullAmountOf(*pile));
 	}
+	if (const auto* animal = registry.TryGet<const Animal>(object))
+	{
+		return animal->life;
+	}
 	if (const auto* life = registry.TryGet<const ObjectLife>(object))
 	{
 		return life->life;
@@ -438,6 +442,14 @@ void world_objects::SetLife(entt::entity object, float life, bool allowed)
 		if (allowed)
 		{
 			villager->life = life;
+		}
+		return;
+	}
+	if (auto* animal = registry.TryGet<Animal>(object))
+	{
+		if (allowed)
+		{
+			animal->life = life;
 		}
 		return;
 	}
