@@ -56,4 +56,9 @@ float CreatureTakenDistance(float modelReachX, float modelReachZ, float scale)
 	return std::max(modelReachX, modelReachZ) * scale * k_CreatureTakenShare;
 }
 
+bool TakesWhatStrikesIt(VortexType type, VortexStateType state, bool hitterFlying, bool hitterMayBeTaken)
+{
+	return type == VortexType::In && state == VortexStateType::Active && hitterFlying && hitterMayBeTaken;
+}
+
 } // namespace openblack::vortex

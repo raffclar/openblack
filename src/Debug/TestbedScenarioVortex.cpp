@@ -28,6 +28,13 @@ constexpr glm::vec2 k_OnTheBank = k_Lake - glm::vec2(0.0f, flat_land::k_LakeHalf
 constexpr glm::vec2 k_AboveTheBank = k_OnTheBank + glm::vec2(80.0f, -80.0f);
 /// Out on the plane, where the land is already flat
 constexpr glm::vec2 k_OnThePlane {-120.0f, 60.0f};
+
+/// A thing thrown east from where it lies, 6 m up, at 25 m a second and 6 m a second upwards: from 60 m west of a
+/// vortex it reaches the vortex's cylinder in about 1.6 seconds, about 3 m above the land
+ThrowSetup ThrownIn(size_t object, glm::vec2 from, float delaySeconds)
+{
+	return {.object = object, .from = from, .height = 6.0f, .velocity = {25.0f, 6.0f, 0.0f}, .delaySeconds = delaySeconds};
+}
 } // namespace
 
 void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
@@ -174,6 +181,37 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_AboveTheBank, k_Lake}, .distance = 0.8f},
 	    .vortices = {{.type = VortexType::Volcano, .offset = k_AboveTheBank, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "story.vortex_takes_what_is_thrown_in",
+	    .name = "A vortex out of the land takes what is thrown into it",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the flat plane at once, as Land 1's opens for the player to leave by, "
+	                   "with two rocks, a villager and a cow lying 60 m to its west, out of its reach. The player's hand "
+	                   "throws the first rock at it from where it lies 3 seconds in, while it still fades in; then, once "
+	                   "it is fully open, the second rock at 9 seconds and the villager at 10, and the cow at 11 from "
+	                   "40 m off.",
+	    .expected = "The vortex's unseen cylinder (20 m round its middle, 60 m high) is in the way of what flies from the "
+	                "moment it is made: the first rock strikes it and is slowed in it, but nothing is taken while the vortex "
+	                "fades in; the rock is still rolling inside the cylinder when the vortex opens fully, about 7 seconds "
+	                "in, and is taken at once. The second rock, the villager and the cow are each taken as they strike "
+	                "the cylinder, still flying: they leave the physics there and are drawn round the middle from that "
+	                "place at the speed they flew with, curving into the swirl rather than falling, and are gone into "
+	                "the middle some seconds later. Each gets its line in the crossing file.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 30.0f, 40.0f, k_OnThePlane.y - 75.0f},
+	                .look = {k_OnThePlane.x - 20.0f, 0.0f, k_OnThePlane.y}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = k_OnThePlane + glm::vec2(-60.0f, 6.0f)},
+	                {.type = MobileStaticInfo::Rock, .offset = k_OnThePlane + glm::vec2(-60.0f, 2.0f)},
+	                {.type = VillagerInfo::NorseHousewifeFemale, .offset = k_OnThePlane + glm::vec2(-60.0f, -2.0f)},
+	                {.type = AnimalInfo::Cow, .offset = k_OnThePlane + glm::vec2(-60.0f, -6.0f)}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane}},
+	    .throws = {ThrownIn(0, k_OnThePlane + glm::vec2(-60.0f, 6.0f), 3.0f),
+	               ThrownIn(1, k_OnThePlane + glm::vec2(-60.0f, 2.0f), 9.0f),
+	               ThrownIn(2, k_OnThePlane + glm::vec2(-60.0f, -2.0f), 10.0f),
+	               ThrownIn(3, k_OnThePlane + glm::vec2(-40.0f, -6.0f), 11.0f)},
 	});
 
 	all.push_back({

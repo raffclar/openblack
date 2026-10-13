@@ -57,6 +57,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
@@ -766,6 +767,17 @@ void PhysicsGameHooks::ReactToImpact(DynamicsSystemInterface& dynamics, PhysicsE
 	    shield != nullptr && shield->kind == MagicShield::Kind::Physical)
 	{
 		StrikeShield(world, dynamics, object, impact);
+		return;
+	}
+	// A vortex is handed what struck it with the velocity it flew at and its body's place and turn
+	if (registry.AllOf<Vortex>(object))
+	{
+		if (auto* struck = hitter != entt::null ? dynamics.Find(hitter) : nullptr; struck != nullptr && struck->body != nullptr)
+		{
+			const auto& body = *struck->body;
+			world.StrikeVortex(object, hitter,
+			                   {.velocity = body.velocity, .position = body.ObjectPose().origin, .rotation = body.Axes()});
+		}
 		return;
 	}
 	if (registry.AllOf<Temple>(object))

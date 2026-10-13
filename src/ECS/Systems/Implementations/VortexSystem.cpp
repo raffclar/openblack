@@ -40,6 +40,7 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
@@ -80,6 +81,7 @@ using namespace openblack::ecs::systems;
 using openblack::ecs::components::CarriedByTornado;
 using openblack::ecs::components::Creature;
 using openblack::ecs::components::DrawnIntoVortex;
+using openblack::ecs::components::InPhysics;
 using openblack::ecs::components::Transform;
 using openblack::ecs::components::Vortex;
 
@@ -422,13 +424,15 @@ void VortexSystem::Pull(entt::entity entity, const Vortex& vortex)
 	}
 }
 
-void VortexSystem::HandOver(entt::entity vortexEntity, const Vortex& vortex, entt::entity thing)
+void VortexSystem::HandOver(entt::entity vortexEntity, const Vortex& vortex, entt::entity thing,
+                            const std::optional<DrawnIntoVortex::Flight>& flight)
 {
 	if (vortex.objectMoverEffect == ParticleSystemInterface::k_NoEffect || !Locator::particleSystem::has_value())
 	{
 		return;
 	}
-	Locator::entitiesRegistry::value().AssignOrReplace<DrawnIntoVortex>(thing, vortexEntity);
+	Locator::entitiesRegistry::value().AssignOrReplace<DrawnIntoVortex>(
+	    thing, DrawnIntoVortex {.vortex = vortexEntity, .flight = flight});
 	Locator::particleSystem::value().AddTarget(vortex.objectMoverEffect, thing);
 }
 
@@ -467,11 +471,23 @@ std::optional<VortexSystemInterface::Taken> VortexSystem::EnterVortex(const std:
 	// The vortex it was handed by stays named on it while it is carried, as the thrower of a throw back out
 	const auto* drawn = registry.TryGet<const DrawnIntoVortex>(thing);
 	const entt::entity vortexEntity = drawn != nullptr ? drawn->vortex : entt::null;
+	const auto flight = drawn != nullptr ? drawn->flight : std::nullopt;
 	const auto* transform = registry.TryGet<const Transform>(thing);
 	if (transform == nullptr || registry.AnyOf<CarriedByTornado>(thing))
 	{
 		registry.Remove<DrawnIntoVortex>(thing);
 		return std::nullopt;
+	}
+	// A thing taken as it flew leaves the physics first, without going back onto the land; one that has stopped flying
+	// since is not taken
+	if (flight.has_value())
+	{
+		if (!registry.AllOf<InPhysics>(thing) || !Locator::dynamicsSystem::has_value())
+		{
+			registry.Remove<DrawnIntoVortex>(thing);
+			return std::nullopt;
+		}
+		Locator::dynamicsSystem::value().RemoveObject(thing, false, false);
 	}
 	// It leaves the land as a thing starting to move does, without a body of its own: refused when it is moving already
 	// or a script holds it where it is
@@ -481,9 +497,10 @@ std::optional<VortexSystemInterface::Taken> VortexSystem::EnterVortex(const std:
 		registry.Remove<DrawnIntoVortex>(thing);
 		return std::nullopt;
 	}
-	const Taken taken {.position = transform->position,
-	                   .rotation = transform->rotation,
-	                   .velocity = glm::vec3(0.0f),
+	// It starts where it stood, still, or where its body was as it flew, at the velocity it flew with
+	const Taken taken {.position = flight.has_value() ? flight->position : transform->position,
+	                   .rotation = flight.has_value() ? flight->rotation : transform->rotation,
+	                   .velocity = flight.has_value() ? flight->velocity : glm::vec3(0.0f),
 	                   .indestructible = registry.AllOf<components::Indestructible>(thing)};
 	registry.Assign<CarriedByTornado>(thing, carried);
 	const auto* vortex = registry.Valid(vortexEntity) ? registry.TryGet<const Vortex>(vortexEntity) : nullptr;
@@ -505,6 +522,34 @@ std::optional<VortexSystemInterface::Taken> VortexSystem::EnterVortex(const std:
 		WriteCrossing(*vortex, thing);
 	}
 	return taken;
+}
+
+void VortexSystem::StruckBy(entt::entity vortexEntity, entt::entity hitter, const DrawnIntoVortex::Flight& flight)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* vortex = registry.Valid(vortexEntity) ? registry.TryGet<const Vortex>(vortexEntity) : nullptr;
+	if (vortex == nullptr || hitter == entt::null || !registry.Valid(hitter))
+	{
+		return;
+	}
+	// It takes what it would draw in from the land: a creature only as it would take one, anything else that can fly
+	const auto* creature = registry.TryGet<const Creature>(hitter);
+	const bool mayBeTaken = creature != nullptr ? CreatureMayBeTaken(hitter, *creature)
+	                                            : Locator::dynamicsSystem::has_value() &&
+	                                                  Locator::dynamicsSystem::value().CanBecomePhysicsObject(hitter);
+	if (!vortex::TakesWhatStrikesIt(vortex->type, vortex->state, registry.AllOf<InPhysics>(hitter), mayBeTaken))
+	{
+		return;
+	}
+	if (creature != nullptr)
+	{
+		if (const auto* transform = registry.TryGet<const Transform>(hitter))
+		{
+			PullCreature(hitter, *creature, transform->position, map_coords::FromMetres({vortex->centre.x, vortex->centre.z}));
+		}
+		return;
+	}
+	HandOver(vortexEntity, *vortex, hitter, flight);
 }
 
 void VortexSystem::ThrowOutOfVortex(entt::entity object, float angle, float scale)
@@ -887,14 +932,18 @@ void VortexSystem::RemoveTheTaken()
 	}
 }
 
-void VortexSystem::PullCreature(entt::entity entity, const Creature& creature, const glm::vec3& position,
-                                const map_coords::MapCoords& centre)
+bool VortexSystem::CreatureMayBeTaken(entt::entity entity, const Creature& creature)
 {
 	// Taken when a script let it through and it is on the leash, or whenever a script controls it
 	const bool leashed = Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(entity);
 	const bool scripted = Locator::entitiesRegistry::value().AllOf<components::ScriptControlled>(entity);
-	if (!vortex::CreatureMayBeTaken(creature.mayGoThroughVortex, leashed, scripted) ||
-	    !Locator::creatureFizzSystem::has_value())
+	return vortex::CreatureMayBeTaken(creature.mayGoThroughVortex, leashed, scripted);
+}
+
+void VortexSystem::PullCreature(entt::entity entity, const Creature& creature, const glm::vec3& position,
+                                const map_coords::MapCoords& centre)
+{
+	if (!CreatureMayBeTaken(entity, creature) || !Locator::creatureFizzSystem::has_value())
 	{
 		return;
 	}

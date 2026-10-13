@@ -34,6 +34,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/VillagerDroppedLog.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -224,6 +225,15 @@ void GamePhysicsHooksWorld::StrikeBuilding(DynamicsSystemInterface& dynamics, Ph
 	if (Locator::buildingDamageSystem::has_value())
 	{
 		Locator::buildingDamageSystem::value().ReactToImpact(dynamics, entry, impact);
+	}
+}
+
+void GamePhysicsHooksWorld::StrikeVortex(entt::entity vortex, entt::entity hitter,
+                                         const components::DrawnIntoVortex::Flight& flight)
+{
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().StruckBy(vortex, hitter, flight);
 	}
 }
 

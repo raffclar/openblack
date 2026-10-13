@@ -1827,7 +1827,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect")
 	    .Field<&components::Vortex::arrival>("arrival")
 	    .Field<&components::Vortex::throwingOut>("throwingOut");
-	Reflect<components::DrawnIntoVortex>(context).Field<&components::DrawnIntoVortex::vortex>("vortex");
+	Reflect<components::DrawnIntoVortex>(context)
+	    .Field<&components::DrawnIntoVortex::vortex>("vortex")
+	    .Field<&components::DrawnIntoVortex::flight>("flight");
 	Reflect<components::WalkPath>(context)
 	    .Field<&components::WalkPath::number>("number")
 	    .Field<&components::WalkPath::track>("track")
@@ -2494,6 +2496,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::CreatureSkin::Skin>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureSkin::Skin::id>("id")
 	    .Field<&openblack::ecs::components::CreatureSkin::Skin::texels>("texels");
+	Reflect<openblack::ecs::components::DrawnIntoVortex::Flight>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::velocity>("velocity")
+	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::position>("position")
+	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::rotation>("rotation");
 	Reflect<openblack::ecs::components::Footpath::Node>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Footpath::Node::position>("position")
 	    .Field<&openblack::ecs::components::Footpath::Node::place>("place");

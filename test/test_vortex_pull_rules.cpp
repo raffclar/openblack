@@ -75,3 +75,17 @@ TEST(VortexPull, ACreatureIsTakenWithinSevenTenthsOfTheModel)
 	EXPECT_FLOAT_EQ(vortex::CreatureTakenDistance(20.0f, 20.0f, 1.0f), 14.0f);
 	EXPECT_FLOAT_EQ(vortex::CreatureTakenDistance(10.0f, 30.0f, 2.0f), 42.0f);
 }
+
+TEST(VortexPull, OnlyAnOpenVortexOutOfTheLandTakesWhatStrikesIt)
+{
+	EXPECT_TRUE(vortex::TakesWhatStrikesIt(VortexType::In, VortexStateType::Active, true, true));
+	// Not while it fades in or out
+	EXPECT_FALSE(vortex::TakesWhatStrikesIt(VortexType::In, VortexStateType::FadeIn, true, true));
+	EXPECT_FALSE(vortex::TakesWhatStrikesIt(VortexType::In, VortexStateType::FadeOut, true, true));
+	// The way into a land and the volcano's mouth never do
+	EXPECT_FALSE(vortex::TakesWhatStrikesIt(VortexType::Out, VortexStateType::Active, true, true));
+	EXPECT_FALSE(vortex::TakesWhatStrikesIt(VortexType::Volcano, VortexStateType::Active, true, true));
+	// Only a thing still flying, that it would draw in from the land
+	EXPECT_FALSE(vortex::TakesWhatStrikesIt(VortexType::In, VortexStateType::Active, false, true));
+	EXPECT_FALSE(vortex::TakesWhatStrikesIt(VortexType::In, VortexStateType::Active, true, false));
+}

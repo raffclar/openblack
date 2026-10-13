@@ -44,6 +44,7 @@ public:
 	void PassOnBlowToBuilding(systems::DynamicsSystemInterface& dynamics, entt::entity building, PhysicsEntry& struck,
 	                          const ImpactInfo& impact) override;
 	void StrikeBuilding(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const ImpactInfo& impact) override;
+	void StrikeVortex(entt::entity vortex, entt::entity hitter, const components::DrawnIntoVortex::Flight& flight) override;
 	[[nodiscard]] std::optional<entt::entity> PieceAtRest(systems::DynamicsSystemInterface& dynamics, PhysicsEntry* entry,
 	                                                      entt::entity piece, bool insert) override;
 	[[nodiscard]] systems::ResourceStoreSystemInterface::ObjectResource ResourceOf(entt::entity object) const override;

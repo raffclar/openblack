@@ -36,6 +36,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/PhysicsHooksWorld.h"
@@ -175,6 +176,10 @@ public:
 	{
 		struckBuildings.push_back(entry.entity);
 	}
+	void StrikeVortex(entt::entity vortex, entt::entity hitter, const components::DrawnIntoVortex::Flight& flight) override
+	{
+		struckVortices.push_back({vortex, hitter, flight});
+	}
 	[[nodiscard]] std::optional<entt::entity> PieceAtRest(DynamicsSystemInterface& /*dynamics*/, PhysicsEntry* /*entry*/,
 	                                                      entt::entity /*piece*/, bool /*insert*/) override
 	{
@@ -256,6 +261,13 @@ public:
 	std::vector<entt::id_type> sounds;
 	std::vector<entt::entity> passedOn;
 	std::vector<entt::entity> struckBuildings;
+	struct StruckVortex
+	{
+		entt::entity vortex;
+		entt::entity hitter;
+		components::DrawnIntoVortex::Flight flight;
+	};
+	std::vector<StruckVortex> struckVortices;
 	std::vector<std::pair<entt::entity, entt::entity>> taken;
 	std::vector<Deed> deeds;
 	std::vector<float> feedbacks;
@@ -498,6 +510,35 @@ TEST(PhysicsGameHooks, RocksBreakBuildings)
 	f.world->registry.Assign<Abode>(building);
 	f.StrikeWithRock(building, 2500.0f, std::nullopt);
 	EXPECT_EQ(f.world->struckBuildings, std::vector<entt::entity> {building});
+}
+
+TEST(PhysicsGameHooks, AVortexIsHandedWhatStruckItAsItFlew)
+{
+	Fixture f;
+	const auto vortex = f.world->registry.Create();
+	f.world->registry.Assign<components::Vortex>(vortex);
+	const auto impact = f.StrikeWithRock(vortex, 2500.0f, std::nullopt);
+	ASSERT_EQ(f.world->struckVortices.size(), 1U);
+	const auto& struck = f.world->struckVortices[0];
+	const auto& body = *f.dynamics.Find(impact.hitBy)->body;
+	EXPECT_EQ(struck.vortex, vortex);
+	EXPECT_EQ(struck.hitter, impact.hitBy);
+	EXPECT_EQ(struck.flight.velocity, body.velocity);
+	EXPECT_EQ(struck.flight.position, body.ObjectPose().origin);
+	EXPECT_EQ(struck.flight.rotation, body.Axes());
+	// Nothing else reacts to the blow
+	EXPECT_TRUE(f.world->effects.empty());
+	EXPECT_TRUE(f.world->struckBuildings.empty());
+}
+
+TEST(PhysicsGameHooks, AVortexStruckByNothingIsHandedNothing)
+{
+	Fixture f;
+	const auto vortex = f.world->registry.Create();
+	f.world->registry.Assign<components::Vortex>(vortex);
+	f.struck.entity = vortex;
+	f.hooks->ReactToImpact(f.dynamics, f.struck, {});
+	EXPECT_TRUE(f.world->struckVortices.empty());
 }
 
 TEST(PhysicsGameHooks, AnAnimalTheHandDroppedInTheSeaTeachesTheLocalPlayersCreature)

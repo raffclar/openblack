@@ -51,7 +51,8 @@ enum class BodyKind : uint8_t
 	Creature,
 	/// The physical shield's dome, as it stands
 	ShieldDome,
-	/// A gate, the piper's cave or the phone box: a collision model of its own, picked by its state
+	/// A gate, the piper's cave or the phone box: a collision model of its own, picked by its state; a vortex: its unseen
+	/// cylinder
 	CollisionModel,
 	/// A piece broken off a building: a slab of its triangles
 	BuildingPiece,
@@ -88,7 +89,7 @@ struct ClassFacts
 	bool dynamic {false};
 	/// The weight of its body is never raised to the least a body weighs (a tree's isn't)
 	bool unclampedMass {false};
-	/// The model a gate, the piper's cave or the phone box collides with
+	/// The model a gate, the piper's cave, the phone box or a vortex collides with
 	std::optional<uint32_t> collisionMesh;
 };
 
