@@ -19,6 +19,8 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureObjectActions.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -116,6 +118,10 @@ public:
 	[[nodiscard]] virtual bool CanTakeFromHand(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
 	/// Whether a flying thing is of a kind creatures catch and its own state lets them, before its weight is compared
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity /*object*/) const { return false; }
+	/// What kind of thing something is to a creature's hands, and what its kind says of its being picked up
+	[[nodiscard]] virtual creature_object_actions::KindFacts KindOf(entt::entity /*object*/) const { return {}; }
+	/// Whether a creature may throw a thing to impress, by its kind, its height and the creature's weight
+	[[nodiscard]] virtual bool CanThrowToImpress(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
 	/// Whether a creature can knock something down: trees, homes and things
 	[[nodiscard]] virtual bool CanDestroy(entt::entity target) const = 0;
 	/// How far a creature's hand gets at its furthest stretch when picking up, measured straight, from where the hand

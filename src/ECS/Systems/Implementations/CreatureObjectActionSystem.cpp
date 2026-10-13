@@ -43,6 +43,7 @@
 #include "Creature/CreatureThrow.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -54,6 +55,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/Flowers.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -64,13 +66,16 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
@@ -1156,10 +1161,24 @@ bool CreatureObjectActionSystem::Lob(entt::entity creature)
 	return Start(creature, {.kind = Kind::Lob});
 }
 
+namespace
+{
+/// A magic mushroom growing on the land, or one of the mushrooms lying about
+bool IsMagicMushroom(const ecs::Registry& registry, entt::entity object)
+{
+	const auto* feature = registry.TryGet<const Feature>(object);
+	const auto* mobile = registry.TryGet<const MobileObject>(object);
+	return (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
+	       (mobile != nullptr &&
+	        (mobile->type == MobileObjectInfo::MagicMushroom || mobile->type == MobileObjectInfo::Toadstool));
+}
+} // namespace
+
 bool CreatureObjectActionSystem::EatHeld(entt::entity creature)
 {
 	const auto held = GetHeld(creature);
-	if (held.has_value() && !FoodValueOf(*held).has_value())
+	// A magic mushroom is eaten whatever it is worth as food
+	if (held.has_value() && !FoodValueOf(*held).has_value() && !IsMagicMushroom(Locator::entitiesRegistry::value(), *held))
 	{
 		auto action = CreatureObjectAction {.kind = Kind::Eat};
 		Fail(action, "what it holds can't be eaten");
@@ -1451,8 +1470,15 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 			}
 			return Thing::Static;
 		}
+		// What is built or set into the land: buildings, the temple, totems, worship sites, features, animated statics and
+		// flowers
+		if (registry.AnyOf<Abode, Temple, WorshipSite, VillageTotem, Feature, AnimatedStatic, Flowers>(object))
+		{
+			return Thing::Fixture;
+		}
 		return Thing::Other;
 	}();
+	facts.thing = thing;
 	facts.rule = creature_object_actions::RuleOf(thing);
 	facts.holdable = creature_object_actions::Holdable(thing);
 	return facts;
@@ -1528,6 +1554,21 @@ bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
 	return creature_object_actions::MayCatchKind(KindFactsOf(object),
 	                                             {.cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
 	                                              .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
+}
+
+bool CreatureObjectActionSystem::CanThrowToImpress(entt::entity creature, entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr || !registry.Valid(object))
+	{
+		return false;
+	}
+	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
+	const auto weight = physics::living::CreatureMass(ShownSize(*body), morph != nullptr ? morph->drawn.thinFat : 0.0f,
+	                                                  morph != nullptr ? morph->drawn.weakStrong : 0.0f);
+	return creature_object_actions::CanBeThrownToImpress(KindFactsOf(object).thing, object_measures::Height(registry, object),
+	                                                     weight);
 }
 
 bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
@@ -1905,6 +1946,11 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 				break;
 			}
 			const auto value = FoodValueOf(*held);
+			// A magic mushroom makes it high once it is done with what it is doing
+			if (IsMagicMushroom(registry, *held) && Locator::creatureMindSystem::has_value())
+			{
+				Locator::creatureMindSystem::value().AteMagicMushroom(creature);
+			}
 			registry.Remove<CreatureHeldObject>(creature);
 			Consume(registry, *held);
 			if (value.has_value() && Locator::creaturePhysiologySystem::has_value())

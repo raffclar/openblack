@@ -191,6 +191,9 @@ public:
 		/// The thing used, if any
 		std::optional<entt::entity> instrument;
 	};
+	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
+	/// about to already
+	virtual void AteMagicMushroom(entt::entity /*creature*/) {}
 	/// The creature gives up what it was doing for the plan, which nothing it wants replaces until it is done. Returns
 	/// whether it could be carried out.
 	virtual bool ForcePlan(entt::entity /*creature*/, const ForcedPlan& /*plan*/) { return false; }

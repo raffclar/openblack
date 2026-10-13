@@ -111,6 +111,28 @@ std::optional<Plan> creature_planner::PlanDesire(Desire desire, float strength, 
 	return plan;
 }
 
+std::optional<uint32_t> creature_planner::ChooseUsed(std::span<const ObjectCandidate> objects, float distanceWeight,
+                                                     std::optional<uint32_t> goal)
+{
+	std::optional<uint32_t> chosen;
+	float best = 0.0f;
+	for (const auto& object : objects)
+	{
+		if (object.id == goal)
+		{
+			continue;
+		}
+		const auto score =
+		    std::clamp(DistancePriority(object.held, object.distance, distanceWeight) * k_DefaultUsefulness, 0.0f, 1.0f);
+		if (score > best)
+		{
+			best = score;
+			chosen = object.id;
+		}
+	}
+	return chosen;
+}
+
 std::vector<Desire> creature_planner::NextGoals(PlannerState& state,
                                                 const std::array<bool, creature_desires::k_DesireCount>& eligible, size_t count)
 {

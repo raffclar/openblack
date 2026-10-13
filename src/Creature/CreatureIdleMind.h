@@ -249,6 +249,20 @@ enum class Effect : uint8_t
 	TookFromHand,
 };
 
+/// How the eyes should look
+enum class Eyes : uint8_t
+{
+	Unchanged,
+	/// Drooping and slowly blinking, as if just woken up
+	Sleepy,
+	Normal,
+	Closed,
+	/// Wide open and darting about
+	Stoned,
+	/// Wide open, as when frightened
+	Wide,
+};
+
 /// What a creature's head is made to look at: a thing (its top, or its foot), a point, or the player's camera
 struct Gaze
 {
@@ -329,6 +343,9 @@ struct Step
 	creature_face::Cue face {creature_face::Cue::None};
 	/// What its head looks at while the step lasts, in place of looking about
 	std::optional<Gaze> gaze;
+	/// How its eyes look from the step's start until it next takes up something else to do: stoned (wide and darting
+	/// about) or wide open, as when frightened
+	std::optional<Eyes> heldEyes;
 };
 
 struct IdleMind
@@ -341,6 +358,9 @@ struct IdleMind
 	bool sitEnding {false};
 	/// Seconds until the step's face is pulled again, and the count that varies the faces it pulls
 	float faceSeconds {0.0f};
+	/// Its eyes look as a step held them, and look as usual again once it takes up something else to do
+	bool eyesHeld {false};
+	bool eyesToClear {false};
 	uint32_t faceVariety {0};
 	/// Seconds until it may show a desire again
 	float showDesireSeconds {0.0f};
@@ -462,16 +482,6 @@ struct Senses
 constexpr float k_WatchCameraFurthest = 100.0f;
 constexpr float k_WatchCameraOverhead = 0.1f;
 constexpr float k_WatchCameraTurn = 1.5707963f;
-
-/// How the eyes should look
-enum class Eyes : uint8_t
-{
-	Unchanged,
-	/// Drooping and slowly blinking, as if just woken up
-	Sleepy,
-	Normal,
-	Closed,
-};
 
 /// What the mind tells the body
 struct Commands
