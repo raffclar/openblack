@@ -511,6 +511,8 @@ struct Command
 		FightStep,
 		FightSpecial,
 		FightAuto,
+		/// In the fight, a miracle (value, by its magic type) added to the end of the moves, as drawing its gesture does
+		FightSpell,
 		/// Being knocked out, as a fight's loser is, and brought round again
 		KnockOut,
 		BringRound,
