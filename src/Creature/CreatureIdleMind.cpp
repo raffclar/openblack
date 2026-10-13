@@ -757,6 +757,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			mind.eyesHeld = false;
 			mind.eyesToClear = false;
 		}
+		if (step.flutterEyelids)
+		{
+			// Its eyes go back to their usual blinking once it takes up something else
+			commands.blinkIntervalMs = k_FlutterBlinkIntervalMs;
+			mind.eyesHeld = true;
+		}
 		switch (step.kind)
 		{
 		case Step::Kind::Action:

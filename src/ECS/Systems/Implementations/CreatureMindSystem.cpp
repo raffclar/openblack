@@ -333,6 +333,11 @@ void ApplyEyes(CreatureEyes* eyes, creature_mind::Eyes look)
 	             : look == creature_mind::Eyes::Stoned ? creature_eyes::Mode::Stoned
 	             : look == creature_mind::Eyes::Wide   ? creature_eyes::Mode::Wide
 	                                                   : creature_eyes::Mode::Calm;
+	// Stoned or wide eyes only change how the eyes look: the lids and the blinking stay as they were
+	if (look == creature_mind::Eyes::Stoned || look == creature_mind::Eyes::Wide)
+	{
+		return;
+	}
 	eyes->openness = sleepy ? k_SleepyOpenness : 0.0f;
 	eyes->blink.intervalMs = sleepy ? k_SleepyBlinkIntervalMs : creature_eyes::k_BlinkIntervalMs;
 }
@@ -626,6 +631,10 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 		                                           commands.face->milliseconds, commands.face->cue);
 	}
 	ApplyEyes(eyes, commands.eyes);
+	if (eyes != nullptr && commands.blinkIntervalMs.has_value())
+	{
+		eyes->blink.intervalMs = *commands.blinkIntervalMs;
+	}
 }
 
 /// What, besides why, picks the faces the creature pulls

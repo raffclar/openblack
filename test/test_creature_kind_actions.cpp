@@ -570,3 +570,18 @@ TEST(CreatureKindActions, ASittingStepRestsUntilItIsToldToGetUp)
 	EXPECT_TRUE(Think(mind, senses, KindActionsFirst).restSitting);
 	EXPECT_FALSE(Think(mind, senses, KindActionsFirst).restSitting);
 }
+
+TEST(CreatureKindActions, TalkingWhenHighFluttersTheEyelidsUntilItTakesUpSomethingElse)
+{
+	const auto agenda = BecomeHigh([] { return std::nullopt; }, KindActionsFirst, [](float) { return 0.0f; });
+	ASSERT_GE(agenda.size(), 2u);
+	EXPECT_TRUE(agenda[1].flutterEyelids);
+	IdleMind mind;
+	mind.agenda = {{.kind = Step::Kind::Overlay, .animation = k_Talk, .flutterEyelids = true}};
+	const auto started = Think(mind, Senses {.seconds = 0.1f}, KindActionsFirst);
+	EXPECT_EQ(started.blinkIntervalMs, k_FlutterBlinkIntervalMs);
+	EXPECT_TRUE(mind.eyesHeld);
+	Plan(mind, Activity::BeIdle, {{.kind = Step::Kind::Wait, .seconds = 1.0f}});
+	const auto next = Think(mind, Senses {.seconds = 0.1f}, KindActionsFirst);
+	EXPECT_EQ(next.eyes, Eyes::Normal);
+}

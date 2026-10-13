@@ -358,6 +358,8 @@ struct Step
 	/// How its eyes look from the step's start until it next takes up something else to do: stoned (wide and darting
 	/// about) or wide open, as when frightened
 	std::optional<Eyes> heldEyes;
+	/// It flutters its eyelids, blinking far more often, from the step's start until it next takes up something else
+	bool flutterEyelids {false};
 };
 
 struct IdleMind
@@ -534,6 +536,8 @@ struct Commands
 	std::optional<uint32_t> shatter;
 	/// Sitting down this turn, it rests a little
 	bool restSitting {false};
+	/// How often its eyes now blink, when that changes
+	std::optional<int32_t> blinkIntervalMs;
 	/// A building to mend, and a thing to do away with, by their entities' numbers
 	std::optional<uint32_t> repair;
 	std::optional<uint32_t> useUp;
@@ -548,6 +552,9 @@ struct Commands
 
 /// random(n) is a whole number from 0 to n - 1
 using Random = std::function<uint32_t(uint32_t)>;
+
+/// Fluttering its eyelids, the creature blinks every 0.625 to 1.875 seconds
+constexpr int32_t k_FlutterBlinkIntervalMs = 1250;
 
 /// Watching a thing fly goes on, after so many whole seconds of watching, while they are fewer than two seconds and a
 /// chance of up to two more drawn each turn: always within the first three seconds, half the time in the fourth, never

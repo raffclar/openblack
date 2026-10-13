@@ -241,9 +241,7 @@ std::vector<Step> creature_mind::BecomeHigh(const std::function<std::optional<Hi
 	};
 	std::vector<Step> agenda;
 	agenda.push_back({.kind = Step::Kind::WatchCamera, .seconds = k_HighWatchSeconds, .face = Cue::Amazed, .gaze = camera});
-	// TODO(creature-kind-actions): while talking the game also flutters its eyelids looking at itself, which no
-	// creature here does yet
-	agenda.push_back({.kind = Step::Kind::Overlay, .animation = k_Talk});
+	agenda.push_back({.kind = Step::Kind::Overlay, .animation = k_Talk, .flutterEyelids = true});
 	agenda.push_back(
 	    {.kind = Step::Kind::WatchCamera, .seconds = k_HighStaredSeconds, .face = Cue::Smile, .heldEyes = Eyes::Stoned});
 	agenda.push_back({.kind = Step::Kind::Wait, .seconds = k_HighWaitSeconds, .face = Cue::Smile, .gaze = camera});
