@@ -731,21 +731,23 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		    const auto deepest = depths.empty() ? 0.0f : *std::ranges::max_element(depths);
 		    return Json {{"cells", depths.size()}, {"deepest", deepest}, {"revision", snow.GetRevision()}};
 	    }));
-	provider->Add(
-	    Query("precipitation", "The rain's streaks and fall, and the falling snow's flakes"), [](const QueryContext& /*c*/) {
-		    Json result = Json::object();
-		    if (Locator::rainSystem::has_value())
-		    {
-			    const auto& rain = Locator::rainSystem::value();
-			    result["rain"] = {
-			        {"streaks", rain.GetStreaks().size()}, {"height", rain.GetHeight()}, {"speed", rain.GetFall().speed}};
-		    }
-		    if (Locator::snowfallSystem::has_value())
-		    {
-			    result["snowflakes"] = Locator::snowfallSystem::value().GetFlakes().size();
-		    }
-		    return QueryResult::Value(std::move(result));
-	    });
+	provider->Add(Query("precipitation", "The rain's streaks, fall and splashes, and the falling snow's flakes"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              if (Locator::rainSystem::has_value())
+		              {
+			              const auto& rain = Locator::rainSystem::value();
+			              result["rain"] = {{"streaks", rain.GetStreaks().size()},
+			                                {"height", rain.GetHeight()},
+			                                {"speed", rain.GetFall().speed},
+			                                {"splashes", rain.GetSplashCount()}};
+		              }
+		              if (Locator::snowfallSystem::has_value())
+		              {
+			              result["snowflakes"] = Locator::snowfallSystem::value().GetFlakes().size();
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("vegetation", "How many trees and fields sway with the wind"),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		              return Json {{"swaying", Locator::vegetation::has_value()},

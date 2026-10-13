@@ -1118,6 +1118,36 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.rain_splashes",
+	    .name = "Rain splashes on the land and the lake",
+	    .facet = Facet::Light,
+	    .description = "A heavy rain falls over the whole island at noon. The camera looks low over the grass, a birch, "
+	                   "the shallows and the open water of the testbed's lake.",
+	    .expected = "Small rings come and go on the grass and on the water where the rain falls. Each ring grows and "
+	                "fades in less than a second. The rings are white by day.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .weather = Weather::Rain, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x, 6.0f, k_NearShallows - 30.0f},
+	                .look = {k_Lake.x, 0.0f, k_NearShallows + 10.0f}},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {k_Lake.x + 8.0f, k_NearShallows - 14.0f}}},
+	});
+
+	all.push_back({
+	    .id = "light.rain_splashes_night",
+	    .name = "Rain splashes at night",
+	    .facet = Facet::Light,
+	    .description = "A heavy rain falls over the whole island at eleven at night. The camera looks low over the "
+	                   "grass, a birch, the shallows and the open water of the testbed's lake.",
+	    .expected = "Small rings come and go on the grass and on the water where the rain falls. The rings take the "
+	                "dark colour of the land's light at night, so they show less than by day.",
+	    .environment = {.hour = 23.0f, .clockRuns = false, .weather = Weather::Rain, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x, 6.0f, k_NearShallows - 30.0f},
+	                .look = {k_Lake.x, 0.0f, k_NearShallows + 10.0f}},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {k_Lake.x + 8.0f, k_NearShallows - 14.0f}}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_on_things",
 	    .name = "Snow settles on new things",
 	    .facet = Facet::Light,

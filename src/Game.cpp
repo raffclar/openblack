@@ -2094,7 +2094,8 @@ bool Game::Update() noexcept
 	// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
 	Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
 	// The rain falls as the storm nearest the camera has it
-	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), camera.GetOrigin());
+	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), clock.GetFrameRealTime(),
+	                                    camera.GetOrigin());
 	// The static the fizzing creatures are drawn through slides across them
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade

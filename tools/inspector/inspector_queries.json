@@ -851,7 +851,7 @@
   "query": "land.snow"
  },
  {
-  "description": "The rain's streaks and fall, and the falling snow's flakes",
+  "description": "The rain's streaks, fall and splashes, and the falling snow's flakes",
   "kind": "object",
   "parameters": [],
   "query": "land.precipitation"
