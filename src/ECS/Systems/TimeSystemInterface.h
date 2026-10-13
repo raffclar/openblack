@@ -83,11 +83,12 @@ public:
 };
 
 /// What the hand and the camera step by in a frame: the frame's real time, except while a script holds the widescreen
-/// for a cut scene, when they keep to the game's time
-[[nodiscard]] constexpr std::chrono::milliseconds CameraStep(std::chrono::milliseconds realTime,
-                                                             std::chrono::milliseconds gameTime, bool scriptWidescreen)
+/// for a cut scene, when they keep to the game's time. Inside the temple, where the world is paused, the rooms' camera
+/// and the hand always go by the frame's real time, the advisors' scenes there included.
+[[nodiscard]] constexpr std::chrono::milliseconds
+CameraStep(std::chrono::milliseconds realTime, std::chrono::milliseconds gameTime, bool scriptWidescreen, bool insideTemple)
 {
-	return scriptWidescreen ? gameTime : realTime;
+	return scriptWidescreen && !insideTemple ? gameTime : realTime;
 }
 
 } // namespace openblack::ecs::systems

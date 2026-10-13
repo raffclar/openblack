@@ -106,6 +106,46 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_throws_things_out",
+	    .name = "A vortex into the land throws out what crossed",
+	    .facet = Facet::Miracles,
+	    .description = "A vortex into a land opens on the flat plane after a second, as Land 2's opens when the player "
+	                   "arrives, with a crossing file written as Land 1's vortex would have left it: a villager, two cows "
+	                   "and a sheep, an oak, a rock, a pot of food and a dead tree. A hut stands 40 m off; the animals "
+	                   "gather 30 m to the south, kept within 27 m and 48 m as Land 2's script says. It is told to fade "
+	                   "out 3 seconds after it opens, long before all are out.",
+	    .expected = "Every fifth of a second, in a random direction, something is thrown out of the vortex about 16 m from "
+	                "its middle, flying 8 to 13 m a second outwards and 10 to 15 upwards, tumbling: first the file's "
+	                "things, each where it lay about the old vortex (the dead tree is whole, at its model's size), then "
+	                "new villagers until 30 have come out, every fifth a child. The villagers join the hut's town; the "
+	                "two cows gather as one flock, the sheep in a new one. Nothing thrown out can be destroyed while the "
+	                "vortex lasts. Though told to fade out, the vortex stays open until the last villager is out, "
+	                "then fades over 5 seconds and goes 7 seconds after the last.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 40.0f, 50.0f, k_OnThePlane.y - 70.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(40.0f, 0.0f), .yawDegrees = 90.0f}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = k_OnThePlane,
+	                  .delaySeconds = 1.0f,
+	                  .fadeOutAfterSeconds = 3.0f,
+	                  .crossingLines = {"CREATE_TOWN_VILLAGER(-1, \"-10.00,8.00\", NORSE_FARMER, 30)",
+	                                    "CREATE_NEW_ANIMAL(\"12.00,-6.00\", 8, -1, -1, 6)",
+	                                    "CREATE_NEW_ANIMAL(\"10.00,-9.00\", 8, -1, -1, 3)",
+	                                    "CREATE_NEW_ANIMAL(\"-4.00,12.00\", 4, -1, -1, 2)",
+	                                    "CREATE_NEW_TREE(-1, \"6.00,14.00\", 5, 1, 0.000000, 0.800000, 1.000000)",
+	                                    "CREATE_MOBILE_STATIC(\"-14.00,-10.00\", 2, 0.000000, 0.000000, 0.500000, 0.000000, "
+	                                    "1.000000)",
+	                                    "CREATE_POT(\"0.00,-18.00\", 12, 0, 1000)",
+	                                    "CREATE_DEAD_TREE(\"8.00,-12.00\", \"NEUTRAL\", 5, 1.000000, 0.000000, 1.000000, "
+	                                    "0.000000)"},
+	                  .gatheringOffset = k_OnThePlane + glm::vec2(0.0f, -30.0f),
+	                  .flockDistance = 27.0f,
+	                  .flockRadius = 48.0f}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_opens_a_hole",
 	    .name = "A vortex out of the land opens a hole in it",
 	    .facet = Facet::Miracles,

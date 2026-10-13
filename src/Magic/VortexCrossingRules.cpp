@@ -195,4 +195,48 @@ std::string Text(const Line& line)
 	    line);
 }
 
+map_coords::MapCoords ThrowOutPlace(const map_coords::MapCoords& vortex, float angle)
+{
+	// The whole cell (the top half of each coordinate) is moved; the place within it stays
+	constexpr double k_Out = 16.0;
+	constexpr double k_CellSize = 10.0;
+	const auto moved = [](int32_t fixed, double by) {
+		const auto cell = static_cast<double>(static_cast<uint32_t>(fixed) >> 16u);
+		const auto newCell = static_cast<uint16_t>(static_cast<int32_t>((cell * k_CellSize + by) / k_CellSize));
+		return static_cast<int32_t>((static_cast<uint32_t>(newCell) << 16u) | (static_cast<uint32_t>(fixed) & 0xffffu));
+	};
+	map_coords::MapCoords place = vortex;
+	place.x = moved(vortex.x, std::sin(static_cast<double>(angle)) * k_Out);
+	place.z = moved(vortex.z, -std::cos(static_cast<double>(angle)) * k_Out);
+	return place;
+}
+
+bool HoldsFade(bool reading, uint32_t villagersOut)
+{
+	return reading || villagersOut < k_ArrivalVillagers;
+}
+
+bool KeepsThrown(VortexType type, std::span<const entt::entity> thrown, entt::entity thing)
+{
+	return type == VortexType::Out && std::ranges::find(thrown, thing) != thrown.end();
+}
+
+uint32_t NewVillagerAgeLimit(uint32_t count)
+{
+	return count % 5 == 0 ? k_ChildAgeRandom : k_AdultAgeRandom;
+}
+
+uint32_t NewVillagerAge(uint32_t count, uint32_t random)
+{
+	constexpr uint32_t k_AdultAge = 16;
+	return count % 5 == 0 ? random + 1 : random + k_AdultAge;
+}
+
+int32_t NewVillagerRow(int32_t tribe, float housewifeRandom, uint32_t jobRandom)
+{
+	constexpr int32_t k_RowsPerTribe = 7;
+	const auto housewife = tribe * k_RowsPerTribe;
+	return housewifeRandom < k_HousewifeShare ? housewife : housewife + static_cast<int32_t>(jobRandom) + 1;
+}
+
 } // namespace openblack::vortex::crossing

@@ -9,19 +9,21 @@
 
 #pragma once
 
-#include <glm/vec2.hpp>
+#include <entt/entity/entity.hpp>
 
-#include "Graphics/GraphicsHandle.h"
+#include "Creature/CreatureSwap.h"
 
 namespace openblack::ecs::components
 {
 
-/// The entity's mesh is drawn with this texture in place of its own skins, slid across it by an offset, as the temple's
-/// leashes are drawn with their bands of the leash texture. Every entity of the mesh is drawn alike.
-struct SkinOverride
+/// A creature whose mind has just been swapped with another's: the size and alignment the other body had, which its
+/// body takes on little by little while it carries out the swap. It stays until the next swap.
+struct CreatureSwap
 {
-	graphics::TextureHandle texture;
-	glm::vec2 uvOffset {0.0f};
+	/// The creature it swapped minds with
+	entt::entity other {entt::null};
+	/// The shape its mind brought from the other body
+	creature_swap::Shape target {};
 };
 
 } // namespace openblack::ecs::components

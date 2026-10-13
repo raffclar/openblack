@@ -155,6 +155,8 @@ struct ObjectOrder
 		/// Taking food from a pile: a handful sized to the creature, no more than the pile holds, appears at its feet and
 		/// it picks it up
 		TakeFromPile,
+		/// Reaching out to take what the player's hand gives it, with its left hand when mirrored
+		TakeFromHand,
 	};
 	Kind kind {Kind::PickUp};
 	/// What it acts on, by its entity's number. Pointing at an object, it points at wherever the object is, turn by
@@ -165,6 +167,8 @@ struct ObjectOrder
 	/// Pointing: how high the point is, when it isn't on the ground, and how long it points, when not for its usual while
 	std::optional<float> pointHeight;
 	std::optional<float> seconds;
+	/// Taking from the player's hand with its left hand
+	bool mirrored {false};
 };
 
 /// Going somewhere, or turning to face something
@@ -241,6 +245,8 @@ enum class Effect : uint8_t
 	Observed,
 	/// Has picked up the food it took from a pile, which the pile now gives up
 	TookFromPile,
+	/// Has taken what the player's hand gave it (the step's object), and decides what to do with it
+	TookFromHand,
 };
 
 /// What a creature's head is made to look at: a thing (its top, or its foot), a point, or the player's camera
@@ -284,6 +290,10 @@ struct Step
 		WatchCamera,
 		/// Taking in what the step's object is, done at once
 		Observe,
+		/// Swapping minds with another creature: every spell on it is brought to its end until none is on it or on the
+		/// other creature; then it plays the step's animation (not while its body plays another), starting the beam
+		/// between them, and turn by turn it takes on the shape the swap gives it until it has
+		SwapMind,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -429,6 +439,14 @@ struct Senses
 		float turn {0.0f};
 	};
 	std::optional<CameraView> camera;
+	/// A swap of minds: whether no spell is on it or on the other creature any more, and whether its body has taken on
+	/// the shape the swap gives it
+	struct SwapView
+	{
+		bool spellsGone {false};
+		bool settled {false};
+	};
+	SwapView swap {};
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -480,6 +498,11 @@ struct Commands
 	std::optional<uint32_t> douse;
 	/// What the head looks at this turn, for a step that gives it something to look at
 	std::optional<Gaze> gaze;
+	/// A swap of minds: bring every spell on it to its end, start the beam to the other creature, take on a turn more of
+	/// the shape the swap gives it
+	bool finishSpells {false};
+	bool startSwapBeam {false};
+	bool easeSwap {false};
 };
 
 /// random(n) is a whole number from 0 to n - 1
@@ -532,6 +555,14 @@ struct FishingTrip
 [[nodiscard]] std::vector<Step> Faint();
 /// Eating what it holds
 [[nodiscard]] std::vector<Step> EatHeld();
+/// Taking a thing the player's hand gives it: turning to the player's camera, then reaching out to take it from the
+/// hand, looking at it and curious all along
+[[nodiscard]] std::vector<Step> TakeFromHand(uint32_t object, glm::vec2 camera, bool leftHand);
+/// What it does with a thing it was given and holds: looks it over, curious; eats it; or throws it at the player's
+/// camera, looking at the camera
+[[nodiscard]] std::vector<Step> ExamineGiven(uint32_t object);
+[[nodiscard]] std::vector<Step> EatGiven();
+[[nodiscard]] std::vector<Step> ThrowGiven(glm::vec3 camera);
 /// Playing an action once on the spot
 [[nodiscard]] std::vector<Step> Emote(size_t animation);
 /// Turning to face a point, then playing an action

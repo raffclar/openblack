@@ -17,6 +17,7 @@
 #include <glm/vec3.hpp>
 
 #include "Common/Zoomer.h"
+#include "Creature/CreatureGiving.h"
 #include "Enums.h"
 #include "Hand/HandGrabRules.h"
 
@@ -121,6 +122,16 @@ struct HandGrab
 	float handSize {1.0f};
 	std::optional<glm::vec3> handPoint;
 
+	/// Giving what it holds to a creature: the creature it offers it to while the offer lasts, the creature it gave it
+	/// to while that creature reaches for it, and how far round the offered thing is turned
+	entt::entity offeredTo {entt::null};
+	creature_giving::Offer offer;
+	entt::entity givenTo {entt::null};
+	Zoomer offerTurn {0.0f};
+	/// Where the hand was drawn last frame
+	std::optional<glm::vec3> lastHand;
+	/// The button is held down while it holds something, since the press: held long enough it gives the thing
+	bool givePress {false};
 	/// What it last picked up and last dropped, while they still exist
 	entt::entity lastPickedUp {entt::null};
 	entt::entity lastDropped {entt::null};

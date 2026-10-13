@@ -181,6 +181,14 @@ TEST(LeashRope, AHandHoldingATiedRopeDrawsNoneOfItsUsualRope)
 	EXPECT_FALSE(Shown({.handHoldsTiedRope = true}));
 }
 
+TEST(LeashRope, AHandHoldingATiedRopeDrawsItsTwoRopesWhileTheScriptsShowLeashes)
+{
+	EXPECT_TRUE(HeldRopesShown({.handHoldsTiedRope = true}));
+	EXPECT_FALSE(HeldRopesShown({.scriptShows = false, .handHoldsTiedRope = true}));
+	EXPECT_FALSE(HeldRopesShown({.local = false, .handHoldsTiedRope = true}));
+	EXPECT_FALSE(HeldRopesShown({}));
+}
+
 TEST(LeashRope, AnotherPlayersRopeGoesAsTheirCreatureFizzesAway)
 {
 	EXPECT_TRUE(Shown({.local = false, .creatureFizz = 0.39f}));

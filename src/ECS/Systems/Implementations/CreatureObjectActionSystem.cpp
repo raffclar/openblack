@@ -32,6 +32,7 @@
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureGiving.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureReach.h"
@@ -69,6 +70,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -1000,6 +1002,14 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		case Kind::Catch:
 			now = StartCatch(creature, action, *points);
 			break;
+		case Kind::TakeFromHand:
+		{
+			// It reaches with the hand it was asked to, whatever it holds
+			const bool mirrored = action.mirrored;
+			single(creature_giving::k_TakeAnimation, points->takeFromHandMs);
+			action.mirrored = mirrored;
+			break;
+		}
 		}
 		if (now)
 		{
@@ -1046,6 +1056,48 @@ void CreatureObjectActionSystem::StartPendingCatches()
 			Start(creature, {.kind = Kind::Catch, .target = object});
 		}
 	}
+}
+
+bool CreatureObjectActionSystem::TakeFromHand(entt::entity creature, entt::entity object, bool mirrored)
+{
+	return Start(creature, {.kind = Kind::TakeFromHand, .target = object, .mirrored = mirrored});
+}
+
+std::optional<CreatureObjectActionSystemInterface::TakingFromHand>
+CreatureObjectActionSystem::GetTakingFromHand(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
+	if (action == nullptr || action->kind != Kind::TakeFromHand || action->phase != Phase::Playing ||
+	    (action->status != Status::Running && action->status != Status::Contact) || !action->target.has_value())
+	{
+		return std::nullopt;
+	}
+	return TakingFromHand {.object = *action->target, .msFromTake = action->timeMs - action->eventMs};
+}
+
+std::optional<glm::vec3> CreatureObjectActionSystem::TakePoint(entt::entity creature, glm::vec3 facing) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.AllOf<Creature, Transform>(creature))
+	{
+		return std::nullopt;
+	}
+	const auto* points = PointsOf(registry.Get<const Creature>(creature));
+	const auto& transform = registry.Get<const Transform>(creature);
+	if (points == nullptr)
+	{
+		return std::nullopt;
+	}
+	// The right hand at the moment of taking, with the creature turned to face the point
+	const auto hand = HandAt(creature, transform, *points, creature_giving::k_TakeAnimation, points->takeFromHandMs);
+	if (!hand.has_value())
+	{
+		return std::nullopt;
+	}
+	const glm::vec2 towards {facing.x - transform.position.x, facing.z - transform.position.z};
+	const auto heading = glm::length(towards) > 0.0f ? std::atan2(-towards.x, -towards.y) : 0.0f;
+	return transform.position + glm::vec3(glm::eulerAngleY(heading) * glm::vec4(*hand, 0.0f));
 }
 
 bool CreatureObjectActionSystem::PickUp(entt::entity creature, entt::entity object)
@@ -1648,6 +1700,20 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			{
 				Locator::creaturePhysiologySystem::value().Eat(creature, *value);
 			}
+			break;
+		}
+		case Kind::TakeFromHand:
+		{
+			// It takes the thing only if the player's hand still gives it; otherwise its hand closes on nothing
+			const auto object = *action.target;
+			if (!registry.Valid(object) || !Locator::handGrabSystem::has_value() ||
+			    !Locator::handGrabSystem::value().HandOver(object))
+			{
+				Fail(action, "the hand no longer gives it");
+				break;
+			}
+			TakeInHand(registry, creature, object, action, *points, animation, transform);
+			action.status = Status::Contact;
 			break;
 		}
 		case Kind::Keep:

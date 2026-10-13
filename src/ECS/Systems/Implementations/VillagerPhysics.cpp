@@ -34,6 +34,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/VillagerClips.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -180,11 +181,12 @@ bool villager_physics::StartFlying(entt::entity villager)
 			return false;
 		}
 	}
-	// It flies dead or thrown. Only a vortex bringing people from another land flings them out with the vortex clip;
-	// openblack has no such vortex yet, and a tornado's passengers are simply thrown.
+	// It flies dead or thrown. Someone a vortex into the land threw out, and still keeps, flails as the vortex flings
+	// them, however they come to fly while it keeps them; a tornado's passengers are simply thrown.
+	const bool fromVortex = Locator::vortexSystem::has_value() && Locator::vortexSystem::value().IsThrownOutByAVortex(villager);
 	const auto& thrown = registry.AssignOrReplace<VillagerClip>(
 	    villager, VillagerClip {.state = VillagerStates::Flying,
-	                            .clip = living::VillagerThrownClip(world_objects::LifeOf(villager) > 0.0f, false)});
+	                            .clip = living::VillagerThrownClip(world_objects::LifeOf(villager) > 0.0f, fromVortex)});
 	villager_animate::SetAnim(villager, static_cast<int32_t>(thrown.clip), true);
 	return true;
 }

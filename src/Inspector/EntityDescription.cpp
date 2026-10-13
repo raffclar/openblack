@@ -102,7 +102,6 @@ bool IsSharedComponent(std::string_view name)
 	    "ResourceLastTaken",
 	    "ScriptControlled",
 	    "SeeThrough",
-	    "SkinOverride",
 	    "SoundTag",
 	    "Sprite",
 	    "Swayable",

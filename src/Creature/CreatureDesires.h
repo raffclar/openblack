@@ -226,6 +226,9 @@ void MakeSourcesFull(Desires& desires, Desire desire);
 void SetValueFromScript(Desires& desires, Desire desire, float value);
 
 /// The action a creature plays to show a desire, for the desires it can show
+/// The desire the creature wants most: the first of the activated desires with the highest value, held down or not;
+/// the first desire when none is wanted at all
+[[nodiscard]] Desire Dominant(const Desires& desires);
 [[nodiscard]] std::optional<size_t> EmoteFor(Desire desire);
 /// The strongest activated desire the creature can show, if any is above a minimum
 [[nodiscard]] std::optional<Desire> StrongestShowable(const Desires& desires, float minimum);

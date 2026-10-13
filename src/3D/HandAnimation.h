@@ -77,8 +77,9 @@ public:
 	          const std::vector<glm::mat4>& restMatrices);
 	[[nodiscard]] bool IsLoaded() const { return !_skeleton.Empty(); }
 
-	/// Advances the animation by a frame. cursor is the mouse position in window pixels.
-	void Update(std::chrono::microseconds dt, State state, Cycle cycle, glm::ivec2 cursor);
+	/// Advances the animation by a frame. cursor is the mouse position in window pixels. The fingers' pinch of a leash's
+	/// rope (HoldFingers) doesn't play: it is held still at pinchShare of its length.
+	void Update(std::chrono::microseconds dt, State state, Cycle cycle, glm::ivec2 cursor, float pinchShare = 0.0f);
 	/// Whether changing from one cycle to another cross-fades from the last pose or changes at once. Held to a creature,
 	/// a caress dropping back to the wiggle as the hand leaves the body changes at once; every other change fades.
 	[[nodiscard]] static bool FadesBetween(State state, Cycle from, Cycle to);

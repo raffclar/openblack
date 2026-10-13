@@ -46,6 +46,7 @@
 #include "Creature/LeashRules.h"
 #include "Creature/TempleLeashes.h"
 #include "ECS/Archetypes/LeashMarkerArchetype.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
@@ -55,14 +56,16 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
-#include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
@@ -72,6 +75,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -350,6 +354,26 @@ bool Force(entt::entity creature, const ForcedPlan& plan)
 {
 	return Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().ForcePlan(creature, plan);
 }
+
+/// The village a leash is tied to: by its centre, or by the totem standing on its centre
+std::optional<entt::entity> TownTiedTo(const Registry& registry, entt::entity object)
+{
+	auto centre = object;
+	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
+	{
+		centre = totem->townCentre;
+	}
+	const auto* abode = registry.TryGet<const Abode>(centre);
+	if (abode == nullptr || abode->type != AbodeNumber::TownCentre)
+	{
+		return std::nullopt;
+	}
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(abode->townId);
+	return found != towns.end() && registry.Valid(found->second) && registry.TryGet<const Town>(found->second) != nullptr
+	           ? std::optional(found->second)
+	           : std::nullopt;
+}
 } // namespace
 
 bool LeashSystem::Knows(entt::entity creature, LeashType type) const
@@ -557,12 +581,9 @@ void LeashSystem::TakeOff(entt::entity creature)
 	leashes->control = CreatureLeash::Control::Idle;
 	leashes->pull = 0.0f;
 	leashes->confinementRadius = 0.0f;
-	leashes->turnsWithOther = 0;
 	if (auto* mind = MindOf(registry, creature))
 	{
 		mind->leash.obeying = false;
-		mind->leash.forcedDesire.reset();
-		mind->leash.forcedValue = 0.0f;
 		mind->leash.learningInHand = false;
 		mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
 	}
@@ -665,9 +686,29 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 	{
 		leashes->worn->type = type;
 		leashes->worn->rope.look = leash::LookFor(type);
+		// Picked while it is worn, the learning leash lets go of the desire a leash made dominant, and the others make
+		// theirs dominant at once
+		if (Locator::creatureMindSystem::has_value())
+		{
+			auto& minds = Locator::creatureMindSystem::value();
+			if (const auto desire = leash::ForcedDesireFor(type); desire.has_value())
+			{
+				minds.MakeDesireDominant(creature, *desire, leash::k_ForcedDesireSeconds, false);
+			}
+			else
+			{
+				minds.EndDominantDesire(creature);
+			}
+		}
 	}
-	// The posts show the leash picked
-	registry.Each<LeashPost>([leashes](LeashPost& post) { post.selected = post.type == leashes->selected; });
+	// Its player's posts show the leash picked
+	const auto* body = registry.TryGet<const Creature>(creature);
+	registry.Each<LeashPost>([leashes, body](LeashPost& post) {
+		if (body != nullptr && post.owner == body->owner)
+		{
+			post.selected = post.type == leashes->selected;
+		}
+	});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s picked leash is now the {} leash", entt::to_integral(creature),
 	                   leash::Name(type));
 	return true;
@@ -698,7 +739,6 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	worn.rope.maxLength = lengths.max;
 	worn.ropeStarted = false;
 	leashes->control = CreatureLeash::Control::Idle;
-	leashes->turnsWithOther = 0;
 
 	// The two tying sounds in turn
 	PlaySound(_secondAttachSound ? audio::SoundId::G_LeashAttach_01_2 : audio::SoundId::G_LeashAttach_01_1, std::nullopt);
@@ -729,7 +769,6 @@ void LeashSystem::UntieToHand(entt::entity creature)
 	}
 	leashes->worn->tiedTo.reset();
 	leashes->worn->ropeStarted = false;
-	leashes->turnsWithOther = 0;
 }
 
 void LeashSystem::SetWorks(entt::entity creature, bool works)
@@ -874,9 +913,7 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 			registry.Destroy(entity);
 		}
 	}
-	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& textures = Locator::resources::value().GetTextures();
-	const bool hasSkin = textures.Contains(LeashPost::k_TextureId);
 	const bool hasSmoke = textures.Contains(k_SmokeId.value()) && textures.Contains(k_SmokeAlphaId.value());
 	auto* random = Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
 	const auto draw = [random] { return random != nullptr ? random->CrtRand() : 0; };
@@ -904,19 +941,8 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 			                                           .facesCamera = true,
 			                                           .alpha = textures.Handle(k_SmokeAlphaId)->GetNativeHandle()});
 		}
+		// The renderer draws its collar
 		registry.Assign<LeashPost>(entity, post);
-		const auto collar = entt::hashed_string::value(temple_leashes::CollarMeshName(owner, post.type).c_str());
-		const auto meshId = meshes.Contains(collar) ? collar : LeashPost::k_MeshId;
-		if (meshes.Contains(meshId))
-		{
-			registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));
-			if (hasSkin && meshId != LeashPost::k_MeshId)
-			{
-				registry.Assign<SkinOverride>(
-				    entity, SkinOverride {.texture = textures.Handle(LeashPost::k_TextureId)->GetNativeHandle(),
-				                          .uvOffset = glm::vec2(post.look.scroll, temple_leashes::Band(post.type))});
-			}
-		}
 	}
 	registry.SetDirty();
 	_postsPlaced = true;
@@ -924,50 +950,56 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 
 void LeashSystem::UpdatePosts(float seconds)
 {
+	Locator::entitiesRegistry::value().Each<LeashPost>([this, seconds](LeashPost& post) {
+		const auto creature = PlayersCreature(post.owner);
+		post.hung = temple_leashes::Hung(creature.has_value(), creature.has_value() && Knows(*creature, post.type));
+		if (!post.hung)
+		{
+			return;
+		}
+		post.look = temple_leashes::Advance(post.look, seconds);
+	});
+}
+
+void LeashSystem::ShowPosts(bool handShown)
+{
+	_handShown = handShown;
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto light = temple_leashes::GlowAlpha(FrameLandLight(LandLightTable::k_Size - 1));
-	// The hand carrying the picked leash
-	std::optional<Transform> hand;
+	// The wrist of the hand carrying the picked leash: its first bone, where it is posed this frame
+	std::optional<std::pair<glm::mat4, float>> wrist;
 	if (Locator::handSystem::has_value())
 	{
 		const auto entity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-		if (const auto* at = registry.Valid(entity) ? registry.TryGet<const Transform>(entity) : nullptr)
+		const auto* at = registry.Valid(entity) ? registry.TryGet<const Transform>(entity) : nullptr;
+		const auto* hand = registry.Valid(entity) ? registry.TryGet<const Hand>(entity) : nullptr;
+		if (at != nullptr)
 		{
-			hand = *at;
+			const auto model = glm::translate(at->position) * glm::mat4(at->rotation) * glm::scale(at->scale);
+			const auto bone = hand != nullptr && !hand->boneMatrices.empty() ? hand->boneMatrices.front() : glm::mat4(1.0f);
+			// The hand may be mirrored to make a right hand; its size is the same either way
+			wrist = std::pair {model * bone, std::abs(at->scale.y)};
 		}
 	}
-	std::vector<entt::entity> posts;
-	registry.Each<const LeashPost>([&posts](entt::entity entity, const LeashPost& /*post*/) { posts.push_back(entity); });
-	for (const auto entity : posts)
-	{
-		auto& post = registry.Get<LeashPost>(entity);
-		const auto creature = PlayersCreature(post.owner);
-		post.hung = temple_leashes::Hung(creature.has_value(), creature.has_value() && Knows(*creature, post.type));
-		auto& transform = registry.Get<Transform>(entity);
+	registry.Each<LeashPost, Transform>([&](const LeashPost& post, Transform& transform) {
 		auto* glow = post.glow != entt::null && registry.Valid(post.glow) ? registry.TryGet<Transform>(post.glow) : nullptr;
-		if (!post.hung)
+		// The picked leash of this machine's player is carried in the hand; the others tumble where they hang
+		const bool carried = post.selected && post.owner == k_LocalPlayer;
+		if (!post.hung || !temple_leashes::Shows(carried, handShown))
 		{
 			transform.scale = glm::vec3(0.0f);
 			if (glow != nullptr)
 			{
 				glow->scale = glm::vec3(0.0f);
 			}
-			continue;
+			return;
 		}
-		post.look = temple_leashes::Advance(post.look, seconds);
-		if (auto* skin = registry.TryGet<SkinOverride>(entity))
+		if (carried && wrist.has_value())
 		{
-			skin->uvOffset = glm::vec2(post.look.scroll, temple_leashes::Band(post.type));
-		}
-		// The picked leash of this machine's player is carried in the hand; the others tumble where they hang
-		const bool picked = post.selected && post.owner == k_LocalPlayer;
-		if (picked && hand.has_value())
-		{
-			const auto scale = hand->scale.x * temple_leashes::k_HandScale;
-			transform.position = hand->position + (hand->rotation * (temple_leashes::k_InHandOffset * scale));
-			// Carried, it is turned as the hand is, without its tumble
-			transform.rotation = hand->rotation;
-			transform.scale = glm::vec3(scale * temple_leashes::k_InHandShare);
+			const auto at = temple_leashes::CarriedAt(wrist->first, wrist->second);
+			transform.position = at.position;
+			transform.rotation = at.rotation;
+			transform.scale = glm::vec3(at.scale);
 		}
 		else
 		{
@@ -977,9 +1009,10 @@ void LeashSystem::UpdatePosts(float seconds)
 		}
 		if (glow != nullptr)
 		{
+			// The glow stays where the leash hangs, even while it is carried
 			glow->scale = glm::vec3(temple_leashes::k_GlowSize);
 			auto& sprite = registry.Get<Sprite>(post.glow);
-			const auto look = temple_leashes::GlowOf(picked, light);
+			const auto look = temple_leashes::GlowOf(carried, light);
 			sprite.tint = look.tint;
 			sprite.additive = look.additive;
 			const auto picture = temple_leashes::GlowPicture(post.look);
@@ -987,7 +1020,7 @@ void LeashSystem::UpdatePosts(float seconds)
 			    glm::vec2(static_cast<float>(picture % k_SmokeCellsPerRow), static_cast<float>(picture / k_SmokeCellsPerRow)) /
 			    k_SmokeCellsPerSide;
 		}
-	}
+	});
 }
 
 bool LeashSystem::TapPost(entt::entity post)
@@ -1056,6 +1089,90 @@ void LeashSystem::PlacePostsAtTemples()
 		PlacePosts(owner, points);
 	}
 	_postsPlaced = true;
+}
+
+void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& worn)
+{
+	if (!Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	auto& minds = Locator::creatureMindSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr)
+	{
+		return;
+	}
+	// Tied to a village, it is made to want to impress it. On the compassion leash its own desire takes over at once.
+	if (worn.tiedTo.has_value())
+	{
+		if (const auto town = TownTiedTo(registry, *worn.tiedTo); town.has_value())
+		{
+			const auto& data = registry.Get<const Town>(*town);
+			const auto* impression = registry.TryGet<const TownImpression>(*town);
+			leash::TiedTown tied {
+			    .leash = worn.type,
+			    .impressing = minds.DominantDesire(creature) == creature_desires::Desire::Impress,
+			    .creatureHasPlayer = body->owner != PlayerNames::NEUTRAL,
+			    .ownersTown = data.owner == body->owner,
+			};
+			if (impression != nullptr && tied.creatureHasPlayer)
+			{
+				const auto& beliefs = impression->belief.belief;
+				const auto mine = static_cast<size_t>(body->owner);
+				tied.beliefInOwner = beliefs.at(mine);
+				for (size_t player = 0; player < beliefs.size(); ++player)
+				{
+					if (player != mine)
+					{
+						tied.mostOtherBelief = std::max(tied.mostOtherBelief, beliefs.at(player));
+					}
+				}
+			}
+			if (leash::ImpressesTown(tied))
+			{
+				minds.MakeDesireDominant(creature, creature_desires::Desire::Impress, leash::k_ImpressTownSeconds, false);
+			}
+		}
+	}
+	// The aggression and compassion leashes make their desire dominant every turn they are worn
+	if (const auto desire = leash::ForcedDesireFor(worn.type); desire.has_value())
+	{
+		minds.MakeDesireDominant(creature, *desire, leash::k_ForcedDesireSeconds, false);
+	}
+	if (!worn.tiedTo.has_value() || registry.TryGet<const Creature>(*worn.tiedTo) == nullptr)
+	{
+		return;
+	}
+	// Tied to another creature: on the aggression leash it gets angry too when near enough, unless anger already rules
+	// it
+	const auto other = *worn.tiedTo;
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto* otherAt = registry.TryGet<const Transform>(other);
+	if (worn.type == LeashType::Evil && at != nullptr && otherAt != nullptr &&
+	    minds.DominantDesire(other) != creature_desires::Desire::Anger &&
+	    glm::distance(at->position, otherAt->position) < leash::k_AngerOtherReach * CreatureHeight(*body))
+	{
+		minds.MakeDesireDominant(other, creature_desires::Desire::Anger, leash::k_ForcedDesireSeconds, false);
+	}
+	// And the two warm or cool to each other, now and then
+	auto* mind = MindOf(registry, creature);
+	auto* otherMind = MindOf(registry, other);
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	if (otherMind == nullptr || !leash::AttitudeDue(otherMind->leash.attitudeTurn, turn))
+	{
+		return;
+	}
+	otherMind->leash.attitudeTurn = turn;
+	if (const auto change = leash::AttitudeChange(worn.type); change != 0.0f)
+	{
+		if (mind != nullptr)
+		{
+			mind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(other), .change = change});
+		}
+		otherMind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(creature), .change = change});
+	}
 }
 
 void LeashSystem::Pull(entt::entity creature)
@@ -1187,7 +1304,6 @@ void LeashSystem::ProcessTurn()
 			if (mind != nullptr)
 			{
 				mind->leash.obeying = false;
-				mind->leash.forcedDesire.reset();
 				mind->leash.learningInHand = false;
 				mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
 			}
@@ -1241,45 +1357,13 @@ void LeashSystem::ProcessTurn()
 		// The leash's feelings, every turn
 		if (mind != nullptr)
 		{
-			mind->leash.forcedDesire = leash::ForcedDesireFor(worn.type);
-			mind->leash.forcedValue = mind->leash.forcedDesire.has_value() ? leash::k_ForcedDesireValue : 0.0f;
 			mind->leash.learningInHand = worn.type == LeashType::Rope && !worn.tiedTo.has_value();
 			mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(worn.type == LeashType::Rope);
 		}
+		UpdateMoods(entity, worn);
 
 		if (worn.tiedTo.has_value())
 		{
-			const auto object = *worn.tiedTo;
-			// Tied to someone else's village, or its own, on any leash but aggression, it wants to impress it
-			if (registry.TryGet<const Town>(object) != nullptr && worn.type != LeashType::Evil && mind != nullptr)
-			{
-				mind->leash.forcedDesire = creature_desires::Desire::Impress;
-				mind->leash.forcedValue = leash::k_ImpressTownValue;
-			}
-			// Tied to another creature: anger spreads on the aggression leash, and they warm or cool to each other
-			if (registry.TryGet<const Creature>(object) != nullptr)
-			{
-				++leashes.turnsWithOther;
-				auto* otherMind = MindOf(registry, object);
-				const auto otherAt = registry.Get<const Transform>(object).position;
-				if (worn.type == LeashType::Evil && otherMind != nullptr &&
-				    glm::distance(transform->position, otherAt) < leash::k_AngerOtherReach * CreatureHeight(*body))
-				{
-					otherMind->leash.forcedDesire = creature_desires::Desire::Anger;
-					otherMind->leash.forcedValue = leash::k_ForcedDesireValue;
-				}
-				if (const auto change = leash::AttitudeChange(worn.type, leashes.turnsWithOther); change != 0.0f)
-				{
-					if (mind != nullptr)
-					{
-						mind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(object), .change = change});
-					}
-					if (otherMind != nullptr)
-					{
-						otherMind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(entity), .change = change});
-					}
-				}
-			}
 			// Strayed beyond the leash's length, it walks back to what it is tied to
 			if (worn.works && !moving &&
 			    leash::OutsideArea(position, glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z),
@@ -1307,50 +1391,184 @@ void LeashSystem::Update(float seconds)
 	UpdatePosts(seconds);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto hand = HandPoint();
-	registry.Each<CreatureLeash, const Creature, const Transform>(
-	    [&](entt::entity entity, CreatureLeash& leashes, const Creature& /*creature*/, const Transform& /*transform*/) {
-		    if (!leashes.worn.has_value())
-		    {
-			    return;
-		    }
-		    auto& worn = *leashes.worn;
-		    std::optional<glm::vec3> start;
-		    if (worn.tiedTo.has_value() && registry.Valid(*worn.tiedTo) &&
-		        registry.TryGet<const Transform>(*worn.tiedTo) != nullptr)
-		    {
-			    start = TiedPoint(registry, *worn.tiedTo);
-		    }
-		    else
-		    {
-			    start = hand;
-		    }
-		    if (!start.has_value())
-		    {
-			    // The hand is off the land: the rope keeps its last place
-			    return;
-		    }
-		    const auto end = CollarPoint(registry, entity);
-		    // Held in the hand, its length follows the creature's size
-		    if (!worn.tiedTo.has_value() || !worn.ropeStarted)
-		    {
-			    const auto lengths = LengthsOf(registry, entity, worn);
-			    worn.rope.slackLength = lengths.slack;
-			    worn.rope.maxLength = lengths.max;
-		    }
-		    if (!worn.ropeStarted)
-		    {
-			    worn.rope =
-			        leash_rope::Create(*start, end, worn.rope.slackLength, worn.rope.maxLength, leash::LookFor(worn.type));
-			    worn.ropeStarted = true;
-			    return;
-		    }
-		    worn.rope.look = leash::LookFor(worn.type);
-		    leash_rope::Step(worn.rope, *start, end, seconds, GroundAt);
-	    });
+	registry.Each<CreatureLeash, const Creature, const Transform>([&](entt::entity entity, CreatureLeash& leashes,
+	                                                                  const Creature& /*creature*/,
+	                                                                  const Transform& /*transform*/) {
+		if (!leashes.worn.has_value())
+		{
+			return;
+		}
+		auto& worn = *leashes.worn;
+		std::optional<glm::vec3> start;
+		if (worn.tiedTo.has_value() && registry.Valid(*worn.tiedTo) &&
+		    registry.TryGet<const Transform>(*worn.tiedTo) != nullptr)
+		{
+			start = TiedPoint(registry, *worn.tiedTo);
+		}
+		else
+		{
+			start = hand;
+		}
+		if (!start.has_value())
+		{
+			// The hand is off the land: the rope keeps its last place
+			return;
+		}
+		const auto end = CollarPoint(registry, entity);
+		// Held in the hand, its length follows the creature's size
+		if (!worn.tiedTo.has_value() || !worn.ropeStarted)
+		{
+			const auto lengths = LengthsOf(registry, entity, worn);
+			worn.rope.slackLength = lengths.slack;
+			worn.rope.maxLength = lengths.max;
+		}
+		if (!worn.ropeStarted)
+		{
+			worn.rope = leash_rope::Create(*start, end, worn.rope.slackLength, worn.rope.maxLength, leash::LookFor(worn.type));
+			worn.ropeStarted = true;
+			return;
+		}
+		worn.rope.look = leash::LookFor(worn.type);
+		leash_rope::Step(worn.rope, *start, end, seconds, GroundAt);
+		// The hand holding the rope of the tied leash: its two ropes run from the collar and from what it is tied to
+		// to the hand
+		if (worn.held.has_value() && hand.has_value() && worn.tiedTo.has_value())
+		{
+			leash_rope::Step(worn.held->toCollar, end, *hand, seconds, GroundAt);
+			leash_rope::Step(worn.held->toTied, registry.Get<const Transform>(*worn.tiedTo).position, *hand, seconds, GroundAt);
+		}
+	});
+	// Untied while the hand held its rope, the hand lets go of it
+	if (_ropeHand == leash_snap::Hand::Holding && HeldLeash(k_LocalPlayer) == nullptr)
+	{
+		_ropeHand = leash_snap::Hand::Away;
+	}
 }
 
-void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-                              uint32_t milliseconds, bool actionTaken)
+CreatureLeash::Worn* LeashSystem::TiedLeash(PlayerNames player)
+{
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value())
+	{
+		return nullptr;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* leashes = registry.TryGet<CreatureLeash>(*creature);
+	if (leashes == nullptr || !leashes->worn.has_value() || leashes->worn->holder != player ||
+	    !leashes->worn->tiedTo.has_value() || !registry.Valid(*leashes->worn->tiedTo) ||
+	    registry.TryGet<const Transform>(*leashes->worn->tiedTo) == nullptr || !leashes->worn->ropeStarted)
+	{
+		if (leashes != nullptr && leashes->worn.has_value())
+		{
+			leashes->worn->held.reset();
+		}
+		return nullptr;
+	}
+	return &*leashes->worn;
+}
+
+CreatureLeash::Worn* LeashSystem::HeldLeash(PlayerNames player)
+{
+	auto* worn = TiedLeash(player);
+	return worn != nullptr && worn->held.has_value() ? worn : nullptr;
+}
+
+void LeashSystem::UpdateRopeHover(PlayerNames player, const RopeFrame& frame)
+{
+	if (player != k_LocalPlayer || _ropeHand == leash_snap::Hand::Holding)
+	{
+		return;
+	}
+	_ropeHand = leash_snap::Hand::Away;
+	const auto* worn = TiedLeash(player);
+	if (worn == nullptr || frame.screenSize.x <= 0.0f || frame.screenSize.y <= 0.0f)
+	{
+		return;
+	}
+	// The rope as seen on the screen
+	std::array<leash_snap::ScreenPoint, leash_rope::k_PointCount> points {};
+	for (size_t i = 0; i < points.size(); ++i)
+	{
+		const auto clip = frame.viewProjection * glm::vec4(leash_rope::Point(worn->rope, i), 1.0f);
+		if (clip.w <= 0.0f)
+		{
+			continue;
+		}
+		const auto ndc = glm::vec2(clip) / clip.w;
+		points.at(i) = {
+		    .pixel = {(ndc.x + 1.0f) * 0.5f * frame.screenSize.x, (1.0f - ndc.y) * 0.5f * frame.screenSize.y},
+		    .depth = clip.w,
+		    .inFront = true,
+		};
+	}
+	const auto depth = leash_snap::TouchDepth(points, frame.cursor, frame.screenSize.x, worn->rope.look.halfWidth);
+	if (depth.has_value() && leash_snap::RopeIsUnder(*depth, frame.under))
+	{
+		_ropeHand = leash_snap::Hand::Over;
+	}
+}
+
+leash_snap::Hand LeashSystem::RopeHand(PlayerNames player) const
+{
+	return player == k_LocalPlayer ? _ropeHand : leash_snap::Hand::Away;
+}
+
+bool LeashSystem::PressRope(PlayerNames player)
+{
+	const auto hand = HandPoint();
+	auto* worn = player == k_LocalPlayer && _ropeHand == leash_snap::Hand::Over ? TiedLeash(player) : nullptr;
+	if (worn == nullptr || !hand.has_value())
+	{
+		return false;
+	}
+	// Both ropes start straight from their ends to the hand, looking as the leash does; the collar's half as long again
+	// as the leash, the tied thing's short
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = *PlayersCreature(player);
+	const auto collar = leash_snap::CollarRopeLengths({.slack = worn->rope.slackLength, .max = worn->rope.maxLength});
+	const auto tied = leash_snap::k_TiedRopeLengths;
+	worn->held = CreatureLeash::Worn::HeldRopes {
+	    .toCollar = leash_rope::Create(CollarPoint(registry, creature), *hand, collar.slack, collar.max, worn->rope.look),
+	    .toTied = leash_rope::Create(registry.Get<const Transform>(*worn->tiedTo).position, *hand, tied.slack, tied.max,
+	                                 worn->rope.look),
+	};
+	_ropeHand = leash_snap::Hand::Holding;
+	return true;
+}
+
+void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place)
+{
+	if (player != k_LocalPlayer || _ropeHand != leash_snap::Hand::Holding)
+	{
+		return;
+	}
+	_ropeHand = leash_snap::Hand::Away;
+	auto* worn = HeldLeash(player);
+	const auto hand = HandPoint();
+	if (worn == nullptr)
+	{
+		return;
+	}
+	worn->held.reset();
+	if (!hand.has_value())
+	{
+		return;
+	}
+	// The leash is as long as the hand is from what it is tied to
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto tied = *worn->tiedTo;
+	const auto lengths = leash_snap::LengthsOnLettingGo(*hand, registry.Get<const Transform>(tied).position,
+	                                                    object_measures::TwoDRadius(registry, tied));
+	worn->rope.slackLength = lengths.slack;
+	worn->rope.maxLength = lengths.max;
+	// And the creature goes to the place under the hand
+	if (place.has_value())
+	{
+		OrderAt(player, *place);
+	}
+}
+
+void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken)
 {
 	if (!Locator::gameActionSystem::has_value())
 	{
@@ -1377,9 +1595,10 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	{
 		return;
 	}
-	const bool doubleTap = _doubleTaps.OnPress(milliseconds, cursor);
+	// A press the leash took as a double tap was acted on as it came
+	const bool doubleTap = std::exchange(_lastPressDouble, false);
+	// The temple's leash posts along the ray come first
 	const auto direction = glm::normalize(rayDirection);
-	// The player's leash posts along the ray come first
 	std::optional<entt::entity> post;
 	float nearest = k_TapReach;
 	registry.Each<const LeashPost, const Transform>([&](entt::entity entity, const LeashPost& at, const Transform&) {
@@ -1400,24 +1619,28 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 		TapPost(*post);
 		return;
 	}
-	if (!creature.has_value())
+	if (!creature.has_value() || doubleTap)
 	{
 		return;
 	}
+	ActOnTap(player, *creature, TappedUnder(rayOrigin, rayDirection), false);
+}
 
-	// What the interface picked under the cursor: a thing, or else the land or the sea
-	std::optional<entt::entity> object;
-	std::optional<glm::vec3> land;
+LeashSystem::Under LeashSystem::TappedUnder(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	Under under;
 	if (Locator::pickingSystem::has_value())
 	{
 		const auto& pick = Locator::pickingSystem::value().GetPick();
-		object = pick.object;
-		land = pick.land;
+		under.object = pick.object;
+		under.land = pick.land;
 	}
-	if (!object.has_value())
+	if (!under.object.has_value() && glm::length(rayDirection) > 0.0f)
 	{
 		// A creature along the ray, when the interface picked none
-		nearest = k_TapReach;
+		const auto direction = glm::normalize(rayDirection);
+		float nearest = k_TapReach;
 		registry.Each<const Creature, const Transform>([&](entt::entity entity, const Creature& body, const Transform& at) {
 			const auto height = CreatureHeight(body);
 			const auto centre = at.position + glm::vec3(0.0f, height * 0.5f, 0.0f);
@@ -1425,22 +1648,28 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 			    along.has_value() && *along < nearest)
 			{
 				nearest = *along;
-				object = entity;
+				under.object = entity;
 			}
 		});
 	}
-	if (object.has_value() && !registry.Valid(*object))
+	if (under.object.has_value() && !registry.Valid(*under.object))
 	{
-		object.reset();
+		under.object.reset();
 	}
+	return under;
+}
 
-	const auto* leashes = registry.TryGet<const CreatureLeash>(*creature);
+void LeashSystem::ActOnTap(PlayerNames player, entt::entity creature, const Under& under, bool doubleTap)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& object = under.object;
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
 	const bool worn = leashes != nullptr && leashes->worn.has_value() && leashes->worn->holder == player;
 	const orders::Leash state {
 	    .worn = worn,
 	    .tiedTo =
 	        worn && leashes->worn->tiedTo.has_value() ? std::optional(entt::to_integral(*leashes->worn->tiedTo)) : std::nullopt,
-	    .creature = entt::to_integral(*creature),
+	    .creature = entt::to_integral(creature),
 	};
 	// The temple's taps are its own: on its entrance they take the player inside
 	const orders::Tapped tapped {
@@ -1454,34 +1683,78 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 		OrderOn(player, *object);
 		break;
 	case orders::Tap::OrderOnLand:
-		if (land.has_value())
+		if (under.land.has_value())
 		{
-			OrderAt(player, *land);
+			OrderAt(player, *under.land);
 		}
 		break;
 	case orders::Tap::Tie:
 	{
 		// Grown up enough, it can be tied to things, and it leaves what it was doing for the thing
-		const auto* mind = registry.TryGet<const CreatureMindState>(*creature);
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
 		if (mind != nullptr && mind->developmentPhase <= orders::k_TyingPhase)
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is too young to have its leash tied to things",
-			                   entt::to_integral(*creature));
+			                   entt::to_integral(creature));
 			break;
 		}
-		if (TieTo(*creature, *object))
+		if (TieTo(creature, *object))
 		{
-			TakeThingOrder(*creature, *object);
+			TakeThingOrder(creature, *object);
 		}
 		break;
 	}
 	case orders::Tap::Untie:
-		UntieToHand(*creature);
+		UntieToHand(creature);
 		break;
 	case orders::Tap::Normal:
 	case orders::Tap::Nothing:
 		break;
 	}
+}
+
+bool LeashSystem::PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
+                              uint32_t milliseconds)
+{
+	_lastPressDouble = _doubleTaps.OnPress(milliseconds, cursor);
+	if (!_lastPressDouble)
+	{
+		return false;
+	}
+	// A double tap with the leash held ties it to the thing under the cursor, or unties it; any other is left to the hand
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value() || !IsLeashed(*creature))
+	{
+		_lastPressDouble = false;
+		return false;
+	}
+	ActOnTap(player, *creature, TappedUnder(rayOrigin, rayDirection), true);
+	return true;
+}
+
+bool LeashSystem::TapThing(PlayerNames player, entt::entity object)
+{
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value() || !IsLeashed(*creature) || TiedTo(*creature).has_value())
+	{
+		return false;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* leashes = registry.TryGet<const CreatureLeash>(*creature);
+	if (leashes == nullptr || leashes->worn->holder != player)
+	{
+		return false;
+	}
+	const orders::Tapped tapped {
+	    .object = entt::to_integral(object),
+	    .leashTarget = !registry.AnyOf<LeashPost, Temple, LeashMarker>(object),
+	    .miracleBubble = registry.AllOf<OneOffSpellSeed>(object),
+	};
+	if (orders::OnTap({.worn = true, .creature = entt::to_integral(*creature)}, tapped) != orders::Tap::OrderOnThing)
+	{
+		return false;
+	}
+	return OrderOn(player, object);
 }
 
 bool LeashSystem::OrderAt(PlayerNames player, const glm::vec3& place)
@@ -1914,6 +2187,11 @@ void LeashSystem::UpdateMarkers(float seconds)
 
 std::optional<uint32_t> LeashSystem::ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const
 {
+	// Over the rope of the tied leash, or holding it, the hand shows no tip
+	if (RopeHand(player) != leash_snap::Hand::Away)
+	{
+		return std::nullopt;
+	}
 	const auto creature = PlayersCreature(player);
 	if (!creature.has_value())
 	{

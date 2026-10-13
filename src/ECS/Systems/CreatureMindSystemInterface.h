@@ -58,6 +58,11 @@ public:
 	virtual void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) = 0;
 	/// The creature's mind as a mind file of the current version, over the file it was loaded from, if it has a mind
 	[[nodiscard]] virtual std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const = 0;
+	/// Swaps the minds of two creatures at once, as a script does: everything the mind file keeps (what each has learnt
+	/// and how it feels, its physique and tattoos) moves to the other body, while each keeps its name, size and alignment
+	/// for now; the creature the first belonged to now owns the second and the other way round, and both carry out the
+	/// swap, during which each body takes on the size and alignment the other had. Returns whether it could.
+	virtual bool SwapMinds(entt::entity /*from*/, entt::entity /*to*/) { return false; }
 	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
 	virtual void ClearLearning(entt::entity creature) = 0;
 	/// Creatures that can see the point watch an ordinary skill practised (by its row in the game's table), or a miracle
@@ -135,6 +140,15 @@ public:
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
 	/// plan's desire opposes are held back.
 	virtual bool ForceActivity(entt::entity /*creature*/, const ForcedActivity& /*plan*/) { return false; }
+	/// The player's hand gives the creature a thing: it drops what it was doing, turns to the camera at a point on the
+	/// ground looking curious, and reaches to take the thing from the hand, with its left hand when asked; then its
+	/// desires choose what to do with it. Whether it took the giving.
+	virtual bool TakeFromHand(entt::entity /*creature*/, entt::entity /*object*/, bool /*leftHand*/, glm::vec2 /*camera*/)
+	{
+		return false;
+	}
+	/// Whether the creature is still about taking a thing from the hand: turning to the player or reaching for it
+	[[nodiscard]] virtual bool IsTakingFromHand(entt::entity /*creature*/) const { return false; }
 	/// A fire reaches the creature: it goes to put out a fire on something it cares for enough, once it has seen the
 	/// water miracle often enough to cast it, and runs from the burning thing otherwise
 	virtual void ReactToFire(entt::entity /*creature*/, entt::entity /*burning*/) {}
@@ -206,6 +220,19 @@ public:
 	/// A script makes a desire the creature's only one for some seconds, or takes it away again
 	virtual void SetOnlyDesire(entt::entity /*creature*/, creature_desires::Desire /*desire*/, float /*seconds*/) {}
 	virtual void ClearOnlyDesire(entt::entity /*creature*/) {}
+	/// A desire is made the creature's dominant one for some seconds (as a leash does every turn it is worn): wanted as
+	/// much as it can be, the others as little as any can be and held down, its bodily needs too only when asked
+	virtual void MakeDesireDominant(entt::entity /*creature*/, creature_desires::Desire /*desire*/, float /*seconds*/,
+	                                bool /*needsToo*/)
+	{
+	}
+	/// The desire made dominant ends at once and every desire held down is let go (as picking the learning leash does)
+	virtual void EndDominantDesire(entt::entity /*creature*/) {}
+	/// The desire the creature wants most now, if its mind has desires yet
+	[[nodiscard]] virtual std::optional<creature_desires::Desire> DominantDesire(entt::entity /*creature*/) const
+	{
+		return std::nullopt;
+	}
 	/// A script changes the creature's desires: how much it wants them, whether they are active and how much it can
 	/// want them at most. A creature whose mind hasn't thought yet has them set up first, the ones its stage of growing
 	/// up brings already active, so that what the script sets stands.
