@@ -77,9 +77,11 @@ struct CreatureLeash
 	float confinementRadius {0.0f};
 	/// Where its home is, which it is kept at while it starts to grow up
 	std::optional<glm::vec3> home;
-	/// The place that the creature walks back to, when it walks back into the area that holds it. The place stays
-	/// after the creature arrives, until the player gives an order with the leash.
+	/// The place that the creature walks back to, when it walks back into the area that holds it. The place goes when
+	/// the action of the walk ends: the creature arrives, it cannot get there, or a different action starts.
 	std::optional<glm::vec3> returnTo;
+	/// The mind's count of agendas when the walk back started, which identifies the action of the walk
+	uint32_t returnSerial {0};
 
 	/// The order given with the leash that the creature carries out, and where it is marked
 	struct Order
