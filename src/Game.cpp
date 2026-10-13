@@ -4271,6 +4271,13 @@ void Game::PrepareNewLand(land_change::Kind change)
 		Locator::handGrabSystem::value().Reset();
 	}
 
+	// Every sound stops as the land goes, however it changes: the music at once, without fading, the atmosphere, and
+	// every sound and voice still playing. They go before their entities do, which would leave them playing on
+	if (Locator::audio::has_value())
+	{
+		Locator::audio::value().Stop();
+	}
+
 	// The sky goes on as it was: it is kept while every entity goes, and made again after
 	Locator::skySystem::value().KeepForNextLand();
 	// Reset everything. Deletes all entities and their components
