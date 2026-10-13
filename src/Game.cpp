@@ -854,6 +854,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		if (!Locator::gameActionSystem::value().IsCursorFrozen())
 		{
 			_mousePosition = {event.motion.x, event.motion.y};
+			_handPointer.Moved();
 		}
 		break;
 	}
@@ -956,6 +957,7 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	if (const auto drawing = Locator::gestureSystem::value().GetDrawingPoint())
 	{
 		_mousePosition = glm::ivec2(*drawing * (size.y / gesture::k_ReferenceHeight));
+		_handPointer.Moved();
 	}
 }
 
@@ -1825,7 +1827,11 @@ bool Game::Update() noexcept
 		if (const auto warp = actions.GetCursorWarp(); warp.has_value())
 		{
 			_mousePosition = *warp;
+			_handPointer.Moved();
 		}
+		// The hand is put under the pointer every frame, moving or not: until the mouse first moves, under the pointer
+		// the game keeps, so from a land's first frame it is where the cursor is
+		_mousePosition = _handPointer.Frame(_mousePosition, actions.GetPointerPosition());
 		ProcessTempleRoomKeys();
 		_shortcutKeys.Update();
 	}
@@ -2512,6 +2518,7 @@ bool Game::Update() noexcept
 								{
 									Locator::gameActionSystem::value().WarpCursor(at);
 									_mousePosition = at;
+									_handPointer.Moved();
 								}
 								_totemPointer = at;
 							}
