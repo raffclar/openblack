@@ -2277,19 +2277,16 @@ void AddAdvisorPlacement(Json& item, const ecs::systems::AdvisorSystemInterface&
 {
 	const auto& controller = advisors.GetController();
 	const auto& dude = controller.Dude(draw.advisor);
-	const auto& layout = controller.GetScreen();
-	const auto& stage = advisors.GetStage();
-	const auto& screen = stage.screen;
-	const auto halfWidth = static_cast<float>(layout.HalfWidth());
+	const auto& screen = controller.GetScreen();
+	const auto unit = static_cast<float>(screen.HoverUnit());
 	const auto hover = dude.Hover();
 	item["state"] = dude.State();
 	item["hover"] = {hover.x, hover.y};
-	// Both of the hover's axes are measured in half the advisors' area's width from its middle; the pixel is the screen's
-	const auto hoverPixel =
-	    stage.ToScreen({(hover.x + 1.0f) * halfWidth, hover.y * halfWidth + static_cast<float>(layout.HalfHeight())});
-	item["hover_pixel"] = {hoverPixel.x, hoverPixel.y};
-	item["stage"] = {{"left", stage.left}, {"width", layout.width}, {"share", stage.share}};
-	item["draw_share"] = dude.DrawShare();
+	// Both of the hover's axes are measured in hover units from the screen's middle
+	item["hover_pixel"] = {hover.x * unit + static_cast<float>(screen.HalfWidth()),
+	                       hover.y * unit + static_cast<float>(screen.HalfHeight())};
+	item["screen"] = {
+	    {"width", screen.width}, {"height", screen.height}, {"hover_unit", screen.HoverUnit()}, {"reach", screen.Reach()}};
 	item["cling_edge"] = static_cast<int>(dude.ClingEdge());
 	item["cling_target"] = {dude.ClingTarget().x, dude.ClingTarget().y};
 	if (camera == nullptr || draw.bones.empty())
@@ -2331,47 +2328,47 @@ void AddAdvisorPlacement(Json& item, const ecs::systems::AdvisorSystemInterface&
 std::unique_ptr<ProviderInterface> AdvisorsProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("advisors");
-	provider->Add(Query("draws",
-	                    "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in "
-	                    "the world, where they hover and cling on the screen (and the 4:3 area they are laid out in and the "
-	                    "share of their size they are drawn at) and where their bones are drawn, and how "
-	                    "close their posed meshes come to the camera beside its near plane",
-	                    {}, ResultKind::List),
-	              Serve<Locator::advisorSystem>(
-	                  "the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors, const QueryContext& /*c*/) {
-		                  const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
-		                  Json items = Json::array();
-		                  for (const auto& draw : advisors.GetDraws())
-		                  {
-			                  Json item = {{"advisor", draw.advisor},    {"near_screen", draw.nearScreen},
-			                               {"alpha", draw.alpha},        {"in_world", draw.inWorld},
-			                               {"bones", draw.bones.size()}, {"sprites", draw.sprites.size()}};
-			                  if (!draw.bones.empty())
-			                  {
-				                  item["root"] = Point(glm::vec3(draw.bones.front()[3]));
-			                  }
-			                  AddAdvisorPlacement(item, advisors, draw, camera);
-			                  const auto* model = advisors.GetModel(draw.advisor);
-			                  if (camera != nullptr && model != nullptr)
-			                  {
-				                  item["near_clip"] = camera->GetNearClip();
-				                  if (const auto depths = MeasureAdvisorDepths(*model, draw.bones, *camera))
-				                  {
-					                  item["nearest_vertex_depth"] = depths->nearestVertex;
-					                  item["furthest_vertex_depth"] = depths->furthestVertex;
-					                  item["vertices"] = depths->vertices;
-					                  item["vertices_closer_than_near"] = depths->closerThanNear;
-					                  item["vertices_clipped_near"] = depths->clippedNear;
-					                  item["vertices_clipped_far"] = depths->clippedFar;
-					                  item["triangles_clockwise"] = depths->clockwise;
-					                  item["triangles_counter_clockwise"] = depths->counterClockwise;
-					                  item["mirrored_bones"] = depths->mirroredBones;
-				                  }
-			                  }
-			                  items.push_back(std::move(item));
-		                  }
-		                  return items;
-	                  }));
+	provider->Add(
+	    Query("draws",
+	          "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in "
+	          "the world, where they hover and cling on the screen (and the screen they move on: its size, the pixels in "
+	          "a hover unit and how many hover units out its sides lie) and where their bones are drawn, and how "
+	          "close their posed meshes come to the camera beside its near plane",
+	          {}, ResultKind::List),
+	    Serve<Locator::advisorSystem>("the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors,
+	                                                     const QueryContext& /*c*/) {
+		    const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+		    Json items = Json::array();
+		    for (const auto& draw : advisors.GetDraws())
+		    {
+			    Json item = {{"advisor", draw.advisor},  {"near_screen", draw.nearScreen}, {"alpha", draw.alpha},
+			                 {"in_world", draw.inWorld}, {"bones", draw.bones.size()},     {"sprites", draw.sprites.size()}};
+			    if (!draw.bones.empty())
+			    {
+				    item["root"] = Point(glm::vec3(draw.bones.front()[3]));
+			    }
+			    AddAdvisorPlacement(item, advisors, draw, camera);
+			    const auto* model = advisors.GetModel(draw.advisor);
+			    if (camera != nullptr && model != nullptr)
+			    {
+				    item["near_clip"] = camera->GetNearClip();
+				    if (const auto depths = MeasureAdvisorDepths(*model, draw.bones, *camera))
+				    {
+					    item["nearest_vertex_depth"] = depths->nearestVertex;
+					    item["furthest_vertex_depth"] = depths->furthestVertex;
+					    item["vertices"] = depths->vertices;
+					    item["vertices_closer_than_near"] = depths->closerThanNear;
+					    item["vertices_clipped_near"] = depths->clippedNear;
+					    item["vertices_clipped_far"] = depths->clippedFar;
+					    item["triangles_clockwise"] = depths->clockwise;
+					    item["triangles_counter_clockwise"] = depths->counterClockwise;
+					    item["mirrored_bones"] = depths->mirroredBones;
+				    }
+			    }
+			    items.push_back(std::move(item));
+		    }
+		    return items;
+	    }));
 	return provider;
 }
 
