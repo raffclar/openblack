@@ -175,4 +175,28 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {k_AboveTheBank, k_Lake}, .distance = 0.8f},
 	    .vortices = {{.type = VortexType::Volcano, .offset = k_AboveTheBank, .delaySeconds = 1.0f}},
 	});
+
+	all.push_back({
+	    .id = "story.vortex_creature_keeps_clear",
+	    .name = "The creature walks round a vortex out of the land",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the flat plane, as Land 1's opens for the player to leave by. The "
+	                   "player's creature, off the leash and not let through by a script, stands 70 m south of it and "
+	                   "after 2 seconds walks to a point 70 m north of it, straight through the vortex's middle, and "
+	                   "then back.",
+	    .expected = "Both ways the creature walks round the vortex, keeping about 20 m (the vortex's unseen cylinder) "
+	                "plus part of its own reach from the middle, and is never taken in. A creature on the leash that a "
+	                "script has let through, or one a script controls, would walk straight in instead.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 90.0f, 80.0f, k_OnThePlane.y - 40.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .creatures = {{.offset = k_OnThePlane + glm::vec2(0.0f, -70.0f), .facingDegrees = 180.0f, .pauseMind = true}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane}},
+	    .commands = {{.kind = Command::Kind::WalkTo, .delaySeconds = 2.0f, .point = k_OnThePlane + glm::vec2(0.0f, 70.0f)},
+	                 {.kind = Command::Kind::WalkTo,
+	                  .delaySeconds = 1.0f,
+	                  .waitUntilFree = true,
+	                  .point = k_OnThePlane + glm::vec2(0.0f, -70.0f)}},
+	});
 }
