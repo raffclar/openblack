@@ -1252,6 +1252,32 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 1.0f}},
 	});
 
+	// Four challenges recorded with their pictures, each looking at a different place of the land
+	const std::vector<Command> challengeRecords {{.kind = Kind::RecordChallenge,
+	                                              .delaySeconds = 1.0f,
+	                                              .point = {0.0f, 0.0f},
+	                                              .value = 1,
+	                                              .amount = 0.25f,
+	                                              .title = "HELP_TEXT_TITLE_01"},
+	                                             {.kind = Kind::RecordChallenge,
+	                                              .delaySeconds = 0.5f,
+	                                              .point = {200.0f, -150.0f},
+	                                              .value = 3,
+	                                              .amount = 0.0f,
+	                                              .title = "HELP_TEXT_TITLE_03"},
+	                                             {.kind = Kind::RecordChallenge,
+	                                              .delaySeconds = 0.5f,
+	                                              .point = {-250.0f, 200.0f},
+	                                              .value = 15,
+	                                              .amount = 1.0f,
+	                                              .title = "HELP_TEXT_TITLE_15"},
+	                                             {.kind = Kind::RecordChallenge,
+	                                              .delaySeconds = 0.5f,
+	                                              .point = {150.0f, 250.0f},
+	                                              .value = 16,
+	                                              .amount = 0.5f,
+	                                              .ctrl = true,
+	                                              .title = "HELP_TEXT_TITLE_16"}};
 	all.push_back({
 	    .id = "temple.challenge_room",
 	    .name = "The temple's challenge room with four challenges",
@@ -1265,32 +1291,31 @@ void AddAudio(std::vector<Scenario>& all)
 	                "with its title and its time and percentage at the top of the screen; clicking it again (or a button) "
 	                "fades to white with a woosh and leaves the temple to the challenge's view.",
 	    .framing = {.shot = Shot::Overview},
-	    .commands = {{.kind = Kind::RecordChallenge,
-	                  .delaySeconds = 1.0f,
-	                  .point = {0.0f, 0.0f},
-	                  .value = 1,
-	                  .amount = 0.25f,
-	                  .title = "HELP_TEXT_TITLE_01"},
-	                 {.kind = Kind::RecordChallenge,
-	                  .delaySeconds = 0.5f,
-	                  .point = {200.0f, -150.0f},
-	                  .value = 3,
-	                  .amount = 0.0f,
-	                  .title = "HELP_TEXT_TITLE_03"},
-	                 {.kind = Kind::RecordChallenge,
-	                  .delaySeconds = 0.5f,
-	                  .point = {-250.0f, 200.0f},
-	                  .value = 15,
-	                  .amount = 1.0f,
-	                  .title = "HELP_TEXT_TITLE_15"},
-	                 {.kind = Kind::RecordChallenge,
-	                  .delaySeconds = 0.5f,
-	                  .point = {150.0f, 250.0f},
-	                  .value = 16,
-	                  .amount = 0.5f,
-	                  .ctrl = true,
-	                  .title = "HELP_TEXT_TITLE_16"},
-	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 0}},
+	    .commands =
+	        [&challengeRecords] {
+		        auto commands = challengeRecords;
+		        commands.push_back({.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 0});
+		        return commands;
+	        }(),
+	});
+
+	all.push_back({
+	    .id = "temple.challenge_markers",
+	    .name = "The temple's map marking the challenges not done",
+	    .facet = Facet::Story,
+	    .description = "The same four challenges as the challenge room scenario are recorded, then the player is put in "
+	                   "the temple's main room.",
+	    .expected = "The map in the pool marks the three challenges not done (not The Lost Brother) with the white "
+	                "challenge marker, turning, at the places their pictures looked at; with no glow under them, as the "
+	                "game draws their glow at the challenge's place in the world instead. The challenges' button by "
+	                "the pool hides them.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands =
+	        [&challengeRecords] {
+		        auto commands = challengeRecords;
+		        commands.push_back({.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3});
+		        return commands;
+	        }(),
 	});
 
 	// The camera looks out across the north edge of the player's influence: the bottom of the screen is inside it,

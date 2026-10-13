@@ -844,8 +844,22 @@ void TempleInterior::UpdateMapMarkers(float seconds)
 			                       .colour = TempleMap::MarkerColour(creature.owner)});
 		});
 	}
-	// TODO(raffclar): the map also marks the challenges not yet done, the miracles being cast, and the players'
-	// influence, as their buttons show them
+	if (_toggles.IsShown(TempleToggles::Display::Challenges))
+	{
+		// Every challenge not yet done, in white, where the camera was when its picture was taken
+		registry.Each<const ChallengeRecord>([this](const ChallengeRecord& record) {
+			if (record.success >= 1.0f || !record.position.has_value())
+			{
+				return;
+			}
+			const auto& at = *record.position;
+			_mapMarkers.push_back({.kind = TempleMapMarkerKind::Challenge,
+			                       .position = _map.ToMap(glm::vec2(at.x, at.z)),
+			                       .colour = glm::u8vec3(0xFF),
+			                       .glow = at + glm::vec3(0.0f, 0.1f, 0.0f)});
+		});
+	}
+	// TODO(raffclar): the map also marks the miracles being cast and the players' influence, as their buttons show them
 	// The markers turn a radian a second while the map is drawn
 	_mapMarkerTurn += seconds;
 }
