@@ -50,6 +50,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -484,9 +485,9 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
 		return true;
 	}
-	// A town's building is knocked on, whoever's town it is, unless the hand holds its creature's leash, which takes the
-	// tap to send the creature there
-	if (Entities().AllOf<Abode>(object) && Locator::abodeKnockSystem::has_value() && !HoldsLeash(player))
+	// A town's building, a miracle dispenser among them, is knocked on, whoever's town it is, unless the hand holds its
+	// creature's leash, which takes the tap to send the creature there
+	if (Entities().AnyOf<Abode, SpellDispenser>(object) && Locator::abodeKnockSystem::has_value() && !HoldsLeash(player))
 	{
 		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
 		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
