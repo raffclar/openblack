@@ -208,7 +208,8 @@ void AddShields(std::vector<Scenario>& all)
 	    "for a blow its caster can't pay for).",
 	    "When the shield breaks its people take up its fall: each walks along the paths to the hut of its town nearest "
 	    "to it by the hut's door (within 100), vanishes inside, stays 15 to 30 seconds, then steps out a metre and a half "
-	    "to three from the door, looks about for 2.5 to 5 seconds and goes back to what it was doing.",
+	    "to three from the door and looks about for 2.5 to 5 seconds. Then, as in the original game, it stands "
+	    "idle (the empty state) until a need moves it on: hiding remembered nothing to go back to.",
 	    {{-50.0f, 45.0f}, {55.0f, 40.0f}}));
 
 	all.push_back(ShieldFall(
