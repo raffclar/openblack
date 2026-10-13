@@ -74,6 +74,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/ObjectPhysics.h"
+#include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -83,6 +84,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -90,6 +92,8 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
+#include "Physics/Body.h"
+#include "Physics/LivingRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -518,6 +522,30 @@ std::optional<bool> WaitedForInMap(const ecs::Registry& registry, const creature
 	}
 	return registry.AllOf<MapCellResident>(object) &&
 	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
+}
+
+/// Whether the thing a step watches fly is still really in the air: in the physics, and moving fast or clear of the land
+bool WatchedIsInTheAir(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WatchFlying ||
+	    !idle.agenda[idle.step].object.has_value() || !Locator::dynamicsSystem::has_value())
+	{
+		return false;
+	}
+	const auto object = static_cast<entt::entity>(*idle.agenda[idle.step].object);
+	if (!registry.Valid(object) || !registry.AllOf<InPhysics>(object))
+	{
+		return false;
+	}
+	const auto* entry = Locator::dynamicsSystem::value().Find(object);
+	if (entry == nullptr || entry->body == nullptr)
+	{
+		return false;
+	}
+	const auto centre = entry->body->Centre();
+	const float land =
+	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::vec2(centre.x, centre.z)) : 0.0f;
+	return physics::living::IsActuallyInTheAir(entry->body->Speed(), centre.y, land, entry->body->Radius());
 }
 
 /// Its player's camera as a creature watching it sees it, only while its step watches the camera; none for a creature
@@ -1364,6 +1392,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .rested = needs != nullptr && needs->rested,
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
+		        .objectInTheAir = WatchedIsInTheAir(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
 		        .choosesNext = !scripted,
 		        .camera = CameraViewOf(registry, entity, mind.idle),

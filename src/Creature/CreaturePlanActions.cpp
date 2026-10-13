@@ -34,6 +34,13 @@ constexpr size_t k_PickMe = 74;
 constexpr float k_FollowSeconds = 8.0f;
 constexpr float k_GazeSeconds = 6.0f;
 
+/// A chance from 0 to 1 in fine steps, from the whole-number random
+float RandomFraction(const creature_mind::Random& random)
+{
+	constexpr uint32_t k_Steps = 1U << 24U;
+	return static_cast<float>(random(k_Steps)) / static_cast<float>(k_Steps);
+}
+
 constexpr std::array k_Executors {
     Executor {.action = "EatAfterExamining", .target = Target::Food, .build = Build::Eat, .activity = Activity::Eat},
     Executor {.action = "EatAlive", .target = Target::LiveFood, .build = Build::Eat, .activity = Activity::Eat},
@@ -77,6 +84,11 @@ constexpr std::array k_Executors {
         .action = "BreakRock", .target = Target::PickableRock, .build = Build::BreakRock, .activity = Activity::PlayWithObject},
     // Stamping on a rock, which breaks in two
     Executor {.action = "SmashStoneInHalf", .target = Target::Rock, .build = Build::Destroy},
+    // Toys: stroking a cuddly one, taking one home, throwing a die
+    // The game's data names stroking a toy "StrokToy"
+    Executor {.action = "StrokToy", .target = Target::CuddlyToy, .build = Build::StrokeToy},
+    Executor {.action = "TakeToyHome", .target = Target::ToyAwayFromHome, .build = Build::TakeToyHome},
+    Executor {.action = "ThrowDie", .target = Target::Die, .build = Build::ThrowDie, .activity = Activity::PlayWithObject},
     Executor {.action = "ThrowAround",
               .target = Target::AnyLiving,
               .build = Build::PracticeThrow,
@@ -276,6 +288,18 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 			return std::nullopt;
 		}
 		return creature_mind::ThrowToyAt(*situation.instrument, *object, objectPoint, situation.height, random);
+	case Build::StrokeToy:
+		return creature_mind::StrokeToy(*object);
+	case Build::TakeToyHome:
+		if (!situation.home.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::TakeToyHome(*object, *situation.home, situation.height, random,
+		                                  [&random] { return RandomFraction(random); });
+	case Build::ThrowDie:
+		return creature_mind::ThrowDie(situation.handFull ? std::nullopt : object, *object, situation.position,
+		                               situation.height, random);
 	case Build::BreakRock:
 		return creature_mind::BreakRock(situation.handFull ? std::nullopt : object, *object, situation.position,
 		                                situation.height);

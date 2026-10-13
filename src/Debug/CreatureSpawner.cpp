@@ -574,6 +574,9 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		case creature_mind::Step::Kind::Shatter:
 			ImGui::Text("Breaking a rock in two");
 			break;
+		case creature_mind::Step::Kind::WatchFlying:
+			ImGui::Text("Watching a thing fly for %.1f s", static_cast<double>(idle.stepSeconds));
+			break;
 		case creature_mind::Step::Kind::SwapMind:
 			ImGui::Text("Swapping minds for %.1f s", static_cast<double>(idle.stepSeconds));
 			break;

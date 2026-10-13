@@ -302,6 +302,10 @@ struct Step
 		Douse,
 		/// Breaking the step's object, a rock, in two at once; when it isn't a rock, the rest of the agenda is given up
 		Shatter,
+		/// Watching the step's object fly, the turn it starts on counting as the first: done once it is no longer
+		/// really in the air, or by the whole seconds watched: not in the first three, half the time each turn in the
+		/// fourth, at four at the latest (see WatchingFlyingGoesOn)
+		WatchFlying,
 		/// Watching its player's camera: turning to it whenever it is more than a quarter turn away, until whole seconds
 		/// of turns more than the step's seconds have gone by, or the camera is right overhead or more than 100 away. A
 		/// creature without a player is done at once. With the step's turns set it watches for that many turns whatever
@@ -453,6 +457,8 @@ struct Senses
 	HandsState hands {HandsState::Idle};
 	/// Whether the object a step waits for is on the map, none when the object is gone
 	std::optional<bool> objectInMap;
+	/// Whether the object a step watches fly is still really in the air
+	bool objectInTheAir {false};
 	/// What picks the faces it pulls
 	creature_face::Feelings feelings {};
 	/// Whether it chooses what to do next by itself when its agenda runs out; under a script's control it only does
@@ -533,6 +539,13 @@ struct Commands
 
 /// random(n) is a whole number from 0 to n - 1
 using Random = std::function<uint32_t(uint32_t)>;
+
+/// Watching a thing fly goes on, after so many whole seconds of watching, while they are fewer than two seconds and a
+/// chance of up to two more drawn each turn: always within the first three seconds, half the time in the fourth, never
+/// after
+[[nodiscard]] bool WatchingFlyingGoesOn(uint32_t wholeSeconds, const Random& random);
+constexpr uint32_t k_WatchFlyingSeconds = 2;
+constexpr uint32_t k_WatchFlyingMoreSeconds = 2;
 
 /// Being idle: wait a second or two looking about, then a tired yawn with sleepy eyes, twice
 [[nodiscard]] std::vector<Step> BeIdle(const Random& random);

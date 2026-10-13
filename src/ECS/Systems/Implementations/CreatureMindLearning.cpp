@@ -150,6 +150,8 @@ constexpr float k_HeightOfSizeOne = 15.0f;
 constexpr float k_HurtEnoughToHeal = 0.7f;
 /// A pile of food this many times a storage pit's radius from it is the storage pit's
 constexpr float k_StoragePitReach = 1.1f;
+/// A toy further than this from its creature's home is one it may take home
+constexpr float k_ToyAwayFromHome = 50.0f;
 
 /// The actions that cast a power-up of a miracle, which only a creature grown up enough tries
 bool IsPowerUpCast(std::string_view action)
@@ -340,6 +342,18 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		const bool rock = thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
 		return rock && (target == Target::Rock || hands->CanPickUp(self, entity));
 	}
+	case Target::CuddlyToy:
+		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity) == creature_object_actions::Toy::Cuddly;
+	case Target::Die:
+		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity) == creature_object_actions::Toy::Die;
+	case Target::ToyAwayFromHome:
+	{
+		// Only a static toy: the football is never taken home
+		const auto home = ecs::creature_home::HomeOf(registry, self);
+		const auto at = PointOf(registry, entity);
+		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity).has_value() && home.has_value() &&
+		       at.has_value() && gutils::GetDistanceInMetres(*home, glm::vec3(at->x, home->y, at->y)) > k_ToyAwayFromHome;
+	}
 	case Target::PickableTree:
 		return !heldByOther && registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanPickUp(self, entity);
 	case Target::PlantableTree:
@@ -420,7 +434,7 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	}
 	const bool statics = pickable || target == Target::Toy || target == Target::ToyBall || sea || target == Target::Stonable ||
 	                     target == Target::ThrowingDamage || target == Target::PickableRock || target == Target::Rock ||
-	                     anything;
+	                     target == Target::CuddlyToy || target == Target::Die || target == Target::ToyAwayFromHome || anything;
 	if (statics)
 	{
 		registry.Each<const MobileStatic, const Transform>(

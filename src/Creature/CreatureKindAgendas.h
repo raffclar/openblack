@@ -58,6 +58,27 @@ constexpr uint32_t k_HappyAroundToyThrowLots = 2;
 /// holds three times its height further along both of the land's axes), then breaking the rock in two as it flies
 [[nodiscard]] std::vector<Step> BreakRock(std::optional<uint32_t> pickUp, uint32_t rock, glm::vec2 from, float height);
 
+/// Stroking a cuddly toy: picking it up and stroking it in its hand, looking at it, with a look of compassion
+[[nodiscard]] std::vector<Step> StrokeToy(uint32_t toy);
+
+/// Taking a toy home: picking it up and walking it to a place within five of home along each of the land's axes
+/// (offset by chance), until within the creature's height of it or five at most, then putting it down, eight times in
+/// ten, or else tossing it away; all with a look of compassion. randomFraction is a chance from 0 to 1.
+[[nodiscard]] std::vector<Step> TakeToyHome(uint32_t toy, glm::vec2 home, float height, const Random& random,
+                                            const std::function<float()>& randomFraction);
+constexpr float k_ToyHomeSpread = 10.0f;
+constexpr float k_ToyHomeNearest = 5.0f;
+constexpr uint32_t k_ToyPutDownLots = 10;
+constexpr uint32_t k_ToyTossedBelow = 2;
+
+/// Throwing a die: unless its hand holds something, picking the die up; throwing what it holds at the point 1.2 times
+/// its height further along both of the land's axes than where it stood; watching the die fly, amazed; then two times
+/// in three a happy jump, else a sad shake
+[[nodiscard]] std::vector<Step> ThrowDie(std::optional<uint32_t> pickUp, uint32_t die, glm::vec2 from, float height,
+                                         const Random& random);
+constexpr float k_DieThrowHeights = 1.2f;
+constexpr uint32_t k_DieOutcomeLots = 3;
+
 /// Kicking a ball about: going up to it, turning to face it a tenth of a second, going right up to it again and kicking
 /// it, watching it; then a quarter of the time pointing at it a second, else waiting 0.4 to 1 second (in whole turns).
 /// It kicks it again after each, two times at the least, each time going on while the count is under two plus a chance

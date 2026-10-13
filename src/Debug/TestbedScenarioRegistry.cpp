@@ -1773,6 +1773,54 @@ void AddObjects(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "SmashStoneInHalf"}},
 	});
 
+	all.push_back({
+	    .id = "objects.stroke_toy",
+	    .name = "Stroking a cuddly toy",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a cuddly toy in front of it. A script tells it to stroke the toy.",
+	    .expected = "With a look of compassion it picks the toy up and strokes it in its hand, looking at it, then keeps "
+	                "holding it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyCuddly, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StrokToy"}},
+	});
+
+	all.push_back({
+	    .id = "objects.throw_die",
+	    .name = "Throwing a die",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a die in front of it. A script tells it to throw the die.",
+	    .expected = "It picks the die up and throws it a little way off to one side, watches it fly, amazed, until it "
+	                "lands (three to four seconds at most), then jumps for joy two times in three, else looks sad.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyDie, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "ThrowDie"}},
+	});
+
+	{
+		constexpr glm::vec2 k_ToyTemple {-300.0f, 100.0f};
+		constexpr float k_ToyTempleTurn = 36.0f;
+		all.push_back({
+		    .id = "objects.take_toy_home",
+		    .name = "Taking a toy home",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger of the player's, whose temple stands far to the west, with a toy ball in front "
+		                   "of it. A script tells it to take the toy home.",
+		    .expected = "With a look of compassion it picks the ball up, walks to its home, the pen before the temple, "
+		                "and sets the ball down within five of it; now and then it tosses it away instead.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -k_Reach}}},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "TakeToyHome"}},
+		});
+	}
+
 	auto stoner = Content(CreatureType::Tiger, {0.0f, 0.0f});
 	stoner.desires = {{.desire = creature_desires::Desire::GetHigh, .fraction = 1.0f}};
 	all.push_back({

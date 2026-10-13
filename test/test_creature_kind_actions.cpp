@@ -402,3 +402,80 @@ TEST(CreatureKindActions, SmashingAStoneInHalfStampsOnItAngrily)
 	EXPECT_EQ(agenda[0].order.object, 4u);
 	EXPECT_EQ(agenda[0].face, creature_face::Cue::Anger);
 }
+
+TEST(CreatureKindActions, StrokingAToyPicksItUpAndStrokesIt)
+{
+	const auto agenda = StrokeToy(5);
+	ASSERT_EQ(agenda.size(), 2);
+	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Compassion);
+	EXPECT_EQ(agenda[1].order.kind, ObjectOrder::Kind::Keep);
+	EXPECT_EQ(agenda[1].order.animation, creature_object_actions::k_StrokeObject);
+	EXPECT_EQ(agenda[1].face, creature_face::Cue::Compassion);
+	EXPECT_EQ(plan_actions::For("StrokToy")->target, plan_actions::Target::CuddlyToy);
+}
+
+TEST(CreatureKindActions, TakingAToyHomePutsItDownNearHomeMostly)
+{
+	// Fractions 0 and 1 put it 5 short along x and 5 past along z; a draw of 2 or more out of 10 puts it down
+	std::array<float, 2> fractions {0.0f, 1.0f};
+	size_t next = 0;
+	const auto agenda =
+	    TakeToyHome(5, {100.0f, 200.0f}, 8.0f, [](uint32_t) { return 2u; }, [&] { return fractions.at(next++); });
+	ASSERT_EQ(agenda.size(), 3);
+	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::ToPoint);
+	EXPECT_EQ(agenda[1].movement.point, glm::vec2(95.0f, 205.0f));
+	EXPECT_FLOAT_EQ(agenda[1].movement.maxDistance, 5.0f);
+	EXPECT_EQ(agenda[2].order.kind, ObjectOrder::Kind::Discard);
+	EXPECT_EQ(agenda[2].order.animation, creature_throw::k_PutDown);
+	// A draw of 0 or 1 tosses it away; a creature shorter than 5 arrives within its height
+	next = 0;
+	const auto tossed = TakeToyHome(5, {0.0f, 0.0f}, 3.0f, [](uint32_t) { return 1u; }, [&] { return fractions.at(next++); });
+	EXPECT_EQ(tossed[2].order.animation, creature_throw::k_Discard);
+	EXPECT_FLOAT_EQ(tossed[1].movement.maxDistance, 3.0f);
+}
+
+TEST(CreatureKindActions, ThrowingADieWatchesItFlyThenJumpsOrSulks)
+{
+	const auto agenda = ThrowDie(6u, 6u, {10.0f, 20.0f}, 10.0f, [](uint32_t) { return 1u; });
+	ASSERT_EQ(agenda.size(), 4);
+	EXPECT_EQ(agenda[1].order.kind, ObjectOrder::Kind::Throw);
+	EXPECT_EQ(agenda[1].order.point, glm::vec2(22.0f, 32.0f));
+	EXPECT_EQ(agenda[2].kind, Step::Kind::WatchFlying);
+	EXPECT_EQ(agenda[2].object, 6u);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::Amazed);
+	EXPECT_EQ(agenda[3].animation, creature_layers::animations::k_Happy);
+	const auto sulk = ThrowDie(std::nullopt, 6u, {0.0f, 0.0f}, 10.0f, KindActionsFirst);
+	ASSERT_EQ(sulk.size(), 3);
+	EXPECT_EQ(sulk[2].animation, creature_layers::animations::k_Sad);
+}
+
+TEST(CreatureKindActions, WatchingAThingFlyLastsThreeToFourSeconds)
+{
+	const Random never = [](uint32_t) { return 0u; };
+	const Random always = [](uint32_t range) { return range - 1; };
+	for (uint32_t seconds = 0; seconds < 3; ++seconds)
+	{
+		EXPECT_TRUE(WatchingFlyingGoesOn(seconds, never));
+	}
+	EXPECT_FALSE(WatchingFlyingGoesOn(3, never));
+	EXPECT_TRUE(WatchingFlyingGoesOn(3, always));
+	EXPECT_FALSE(WatchingFlyingGoesOn(4, always));
+}
+
+TEST(CreatureKindActions, WatchingAThingFlyEndsWhenItLands)
+{
+	IdleMind mind;
+	mind.agenda = {{.kind = Step::Kind::WatchFlying, .object = 3}};
+	Senses senses {.seconds = 0.1f};
+	senses.objectInTheAir = true;
+	const auto random = [](uint32_t) { return 0u; };
+	static_cast<void>(Think(mind, senses, random));
+	EXPECT_EQ(mind.step, 0u);
+	static_cast<void>(Think(mind, senses, random));
+	EXPECT_EQ(mind.step, 0u);
+	senses.objectInTheAir = false;
+	static_cast<void>(Think(mind, senses, random));
+	EXPECT_EQ(mind.step, 1u);
+}

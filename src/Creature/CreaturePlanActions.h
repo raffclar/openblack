@@ -75,9 +75,13 @@ enum class Target : uint8_t
 	/// A rock (bonfires too) it can pick up, or any rock
 	PickableRock,
 	Rock,
+	/// A cuddly toy, a die, or a toy (but not the football) more than 50 from the creature's home
+	CuddlyToy,
+	Die,
+	ToyAwayFromHome,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::Rock) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::ToyAwayFromHome) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -154,6 +158,10 @@ enum class Build : uint8_t
 	KickBallAround,
 	/// Practising a throw with the rock, and breaking it in two as it flies
 	BreakRock,
+	/// Stroking a cuddly toy, taking a toy home, throwing a die
+	StrokeToy,
+	TakeToyHome,
+	ThrowDie,
 	/// An action whose agenda can never be made
 	Never,
 };
