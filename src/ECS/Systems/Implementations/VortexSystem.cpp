@@ -15,6 +15,7 @@
 #include <chrono>
 #include <filesystem>
 #include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -40,6 +41,7 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
@@ -593,12 +595,21 @@ void VortexSystem::Throw(entt::entity object, float angle, float scale, entt::en
 	{
 		return;
 	}
+	// Its model: its own mesh, or a globe's dome
+	std::optional<entt::id_type> model;
+	if (const auto* mesh = registry.TryGet<const components::Mesh>(object))
+	{
+		model = mesh->id;
+	}
+	else if (registry.AllOf<components::OneOffSpellSeed>(object))
+	{
+		model = components::OneOffSpellSeed::k_MeshId.value();
+	}
 	float height = 0.0f;
-	if (const auto* mesh = registry.TryGet<const components::Mesh>(object);
-	    mesh != nullptr && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(mesh->id))
+	if (model.has_value() && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(*model))
 	{
 		// Twice its model's reach above its origin, scaled
-		height = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox().maxima.y * 2.0f *
+		height = Locator::resources::value().GetMeshes().Handle(*model)->GetBoundingBox().maxima.y * 2.0f *
 		         registry.Get<const Transform>(object).scale.x;
 	}
 	auto& random = Locator::gameRandom::value();
