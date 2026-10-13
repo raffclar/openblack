@@ -1217,6 +1217,8 @@ void LeashSystem::WalkBack(entt::entity creature)
 	    .extraSpeed = leash::ReturnExtraSpeed(distance, leashes.confinementRadius),
 	    .maxDistance = leash::ReturnArrival(leashes.confinementRadius, CreatureHeight(body)),
 	};
+	// On the way, the head looks at the centre, at what the creature watches, or from side to side
+	walk.gaze = creature_mind::Gaze {.point = glm::vec3(centre.x, 0.0f, centre.y), .whileGoing = true};
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} walks back to ({:.1f}, {:.1f}), {:.1f} away",
 	                   entt::to_integral(creature), centre.x, centre.y, distance);
 	Force(creature, {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}});

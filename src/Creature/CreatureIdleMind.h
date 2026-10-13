@@ -275,6 +275,9 @@ struct Gaze
 	bool bottom {false};
 	std::optional<glm::vec3> point;
 	bool camera {false};
+	/// The look of a creature that walks to the point: at the point, at what it watches, and a sweep from side to side
+	/// (see creature_look::LookWhileGoing)
+	bool whileGoing {false};
 };
 
 struct Step

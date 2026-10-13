@@ -27,10 +27,12 @@ using creature_mind::Step;
 
 namespace
 {
+/// A walk to a point. On the way, the head looks at the point, at what the creature watches, or from side to side.
 Step Walk(glm::vec2 point, float arrival, bool run)
 {
 	Step step {.kind = Step::Kind::Move};
 	step.movement = {.kind = Movement::Kind::ToPoint, .point = point, .run = run, .maxDistance = arrival};
+	step.gaze = creature_mind::Gaze {.point = glm::vec3(point.x, 0.0f, point.y), .whileGoing = true};
 	return step;
 }
 

@@ -740,6 +740,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::idle>("idle")
 	    .Field<&components::CreatureMindState::scriptPlay>("scriptPlay")
 	    .Field<&components::CreatureMindState::look>("look")
+	    .Field<&components::CreatureMindState::goingLook>("goingLook")
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
@@ -2231,6 +2232,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_look::Target::kind>("kind")
 	    .Field<&openblack::creature_look::Target::point>("point")
 	    .Field<&openblack::creature_look::Target::watchedTurns>("watchedTurns");
+	Reflect<openblack::creature_look::WhileGoing>(context, ValueOnly {})
+	    .Field<&openblack::creature_look::WhileGoing::look>("look")
+	    .Field<&openblack::creature_look::WhileGoing::turns>("turns")
+	    .Field<&openblack::creature_look::WhileGoing::sweepAngle>("sweepAngle")
+	    .Field<&openblack::creature_look::WhileGoing::sweepAngleStep>("sweepAngleStep")
+	    .Field<&openblack::creature_look::WhileGoing::sweepDistance>("sweepDistance")
+	    .Field<&openblack::creature_look::WhileGoing::sweepDistanceStep>("sweepDistanceStep");
 	Reflect<openblack::creature_marks::Mark>(context, ValueOnly {})
 	    .Field<&openblack::creature_marks::Mark::u>("u")
 	    .Field<&openblack::creature_marks::Mark::v>("v")
@@ -2249,7 +2257,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Gaze::object>("object")
 	    .Field<&openblack::creature_mind::Gaze::bottom>("bottom")
 	    .Field<&openblack::creature_mind::Gaze::point>("point")
-	    .Field<&openblack::creature_mind::Gaze::camera>("camera");
+	    .Field<&openblack::creature_mind::Gaze::camera>("camera")
+	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::activity>("activity")
 	    .Field<&openblack::creature_mind::IdleMind::agenda>("agenda")
