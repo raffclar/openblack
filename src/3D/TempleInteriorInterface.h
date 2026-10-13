@@ -37,6 +37,7 @@ class GameInterface;
 } // namespace gui
 struct OrientedTextVertex;
 class TempleDoors;
+class TemplePeople;
 struct TemplePerson;
 
 enum class TempleRoom
@@ -161,6 +162,11 @@ public:
 	[[nodiscard]] virtual const std::vector<TemplePerson>& GetPeople() const = 0;
 	/// How many of the player's worshippers came in with the player, seen or not
 	[[nodiscard]] virtual size_t GetPeopleInside() const = 0;
+	/// The player's worshippers walking about the temple and the floors they walk, while the player is inside; null
+	/// when nobody came in
+	[[nodiscard]] virtual const TemplePeople* GetWalkingPeople() const = 0;
+	/// Where the temple's rooms stand in the world: their place and turn, which carry a point in the temple out to it
+	[[nodiscard]] virtual glm::mat4 GetPlacement() const = 0;
 	/// How far the markers have turned, in radians
 	[[nodiscard]] virtual float GetMapMarkerTurn() const = 0;
 	/// How long the main room's pool has shimmered, in seconds, which its two layers' alpha and texture follow
