@@ -485,6 +485,10 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 			ecs::villager_mourning::Setup(*action, *dead);
 		}
 		break;
+	case Reaction::Fainting:
+		// The fart of a creature makes the villager faint. It stays where it is and does nothing until the reaction ends
+		SetTop(*action, VillagerStates::FaintingReaction);
+		break;
 	case Reaction::ReactToFire:
 		// The fire's own states take over, from the object burning
 		if (Locator::reactionSystem::has_value())
@@ -524,6 +528,7 @@ bool villager_reactions::ActsOut(Reaction type)
 	case Reaction::ReactToNewBuilding:
 	case Reaction::ReactToTownCelebration:
 	case Reaction::ReactToCreature:
+	case Reaction::Fainting:
 		return true;
 	default:
 		return false;
@@ -694,6 +699,11 @@ std::optional<entt::entity> villager_reactions::ReactingTo(entt::entity villager
 bool villager_reactions::LookAt(entt::entity villager, const glm::vec3& point, LookSpeed speed)
 {
 	return TurnTowards(villager, point, speed == LookSpeed::Quick ? 2.0f * k_WatchTurn : k_WatchTurn);
+}
+
+uint32_t villager_reactions::Fainting(LivingAction& /*action*/)
+{
+	return 1;
 }
 
 uint32_t villager_reactions::Watching(LivingAction& action)

@@ -125,9 +125,9 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
-#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerBreeding.h"
 #include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -1965,6 +1965,10 @@ void Runner::Give(const Command& command)
 		break;
 	case Kind::Poo:
 		result = minds.Poo(*entity) ? "started" : "can't";
+		break;
+	case Kind::Fart:
+		// A fart is always a plan for the desire to poo
+		result = minds.ForcePlan(*entity, {.desire = creature_desires::Desire::Poo, .action = "Fart"}) ? "started" : "can't";
 		break;
 	case Kind::Puke:
 		result = minds.Puke(*entity) ? "started" : "can't";

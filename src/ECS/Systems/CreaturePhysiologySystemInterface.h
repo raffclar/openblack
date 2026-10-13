@@ -36,6 +36,8 @@ public:
 	virtual void Drink(entt::entity creature) = 0;
 	/// Had a poo, which drops behind it
 	virtual void Poo(entt::entity creature) = 0;
+	/// Did a fart: the bowels are empty, and the creature drops nothing
+	virtual void Fart(entt::entity creature) = 0;
 	/// Was sick, spraying drops of it in front
 	virtual void Puke(entt::entity creature) = 0;
 	/// Came round from a faint

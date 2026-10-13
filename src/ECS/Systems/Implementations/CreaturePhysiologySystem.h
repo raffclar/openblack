@@ -11,6 +11,7 @@
 
 #include <random>
 
+#include "Common/FramePace.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 
@@ -30,6 +31,7 @@ public:
 	void Eat(entt::entity creature, float foodValue) override;
 	void Drink(entt::entity creature) override;
 	void Poo(entt::entity creature) override;
+	void Fart(entt::entity creature) override;
 	void Puke(entt::entity creature) override;
 	void WakeFromFaint(entt::entity creature) override;
 	void FinishAction(entt::entity creature, std::string_view action) override;
@@ -41,7 +43,13 @@ public:
 	[[nodiscard]] bool IsFaintingEnabled() const override;
 
 private:
+	/// Count the frames of each squat loop at the refresh rate of the screen. A creature fart makes a cloud on each fifth frame
+	void StepSquats();
+	/// Make the cloud, the smoke and the fainting reaction of a creature fart
+	static void LetOutWind(entt::entity creature);
+
 	float _timeScale {1.0f};
+	frame_pace::Pace _squatPace;
 	/// Turns of the body owed from a fractional time scale
 	float _owedTurns {0.0f};
 	bool _fainting {true};

@@ -907,3 +907,4 @@ openblack_setup_and_add_test(test_undrawn_picks test_undrawn_picks.cpp)
 openblack_setup_and_add_test(
   test_creature_reaction_rules test_creature_reaction_rules.cpp
 )
+openblack_setup_and_add_test(test_creature_fart test_creature_fart.cpp)

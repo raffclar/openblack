@@ -40,6 +40,7 @@ constexpr std::array k_Executors {
         .action = "EatFromFoodPile", .target = Target::MagicFoodPile, .build = Build::EatFromPile, .activity = Activity::Eat},
     Executor {.action = "SleepOnTheSpot", .build = Build::Sleep, .activity = Activity::Sleep},
     Executor {.action = "Poo", .build = Build::Poo, .activity = Activity::Poo},
+    Executor {.action = "Fart", .build = Build::Fart, .activity = Activity::Poo},
     Executor {.action = "Puke", .build = Build::Puke, .activity = Activity::Puke},
     Executor {.action = "DrinkFromTheSea", .build = Build::Drink, .activity = Activity::Drink},
     Executor {.action = "FishAndEat", .build = Build::FishAndEat, .activity = Activity::Eat},
@@ -232,6 +233,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::Sleep(random);
 	case Build::Poo:
 		return creature_mind::Poo(random);
+	case Build::Fart:
+		return creature_mind::Fart(random);
 	case Build::Puke:
 		return creature_mind::Puke();
 	case Build::Drink:

@@ -138,6 +138,7 @@ constexpr float k_PooSuppressSeconds = 60.0f;
 constexpr std::string_view k_EatAction = "EatAfterExamining";
 constexpr std::string_view k_DrinkAction = "DrinkFromTheSea";
 constexpr std::string_view k_PooAction = "Poo";
+constexpr std::string_view k_FartAction = "Fart";
 constexpr std::string_view k_PukeAction = "Puke";
 constexpr std::string_view k_SleepAction = "SleepOnTheSpot";
 constexpr std::string_view k_ExamineAction = "ExamineByPickingUp";
@@ -868,6 +869,11 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 		Satisfied(creature, desires, k_PooAction);
 		desires[Desire::Poo].value = 0.0f;
 		creature_desires::Suppress(desires, Desire::Poo, k_PooSuppressSeconds, k_TurnsPerSecond);
+		break;
+	case Effect::Fart:
+		// At the end of the squat, the bowels are empty. The action table sets how much the desire to poo decreases
+		physiology.Fart(creature);
+		Satisfied(creature, desires, k_FartAction);
 		break;
 	case Effect::Puke:
 		physiology.Puke(creature);

@@ -867,7 +867,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .exitState = &villager_shepherd::ExitShepherding,
     },
     /* DANCE_BUT_NOT_WORSHIP */ k_TodoEntry,
-    /* FAINTING_REACTION */ k_TodoEntry,
+    /* FAINTING_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_reactions::Fainting,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* START_CONFUSED_REACTION */ k_TodoEntry,
     /* CONFUSED_REACTION */ k_TodoEntry,
     /* AFTER_TAP_ON_ABODE */

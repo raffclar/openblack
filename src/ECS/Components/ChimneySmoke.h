@@ -18,8 +18,8 @@
 namespace openblack::ecs::components
 {
 
-/// The smoke from a home's chimney: ten puffs that rise from it, spinning, growing and fading, and drift with the air or
-/// with the hand passing by
+/// The smoke from the chimney of a home, or from the point of a creature fart. Ten puffs rise from the point. Each puff
+/// turns, grows and fades, and moves with the air or with the hand when the hand moves near
 struct ChimneySmoke
 {
 	static constexpr size_t k_Puffs = 10;

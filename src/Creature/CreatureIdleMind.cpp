@@ -357,6 +357,20 @@ std::vector<Step> creature_mind::Poo(const Random& random)
 	return WithFace(std::move(agenda), creature_face::Cue::Smile);
 }
 
+std::vector<Step> creature_mind::Fart(const Random& random)
+{
+	// The steps are the same as the steps for a poo. Only the result of the squat is different
+	auto agenda = Poo(random);
+	for (auto& step : agenda)
+	{
+		if (step.effect == Effect::Poo)
+		{
+			step.effect = Effect::Fart;
+		}
+	}
+	return agenda;
+}
+
 std::vector<Step> creature_mind::Puke()
 {
 	auto puke = Static({animations::k_StartPuke, animations::k_Puke, animations::k_EndPuke}, k_PukeSeconds);

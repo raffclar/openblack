@@ -68,6 +68,7 @@ enum class Build : uint8_t
 	Eat,
 	Sleep,
 	Poo,
+	Fart,
 	Puke,
 	Drink,
 	ExamineByPickingUp,

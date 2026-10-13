@@ -230,6 +230,8 @@ enum class Effect : uint8_t
 	Eat,
 	Drink,
 	Poo,
+	/// Did a fart
+	Fart,
 	Puke,
 	/// Wakes up rested
 	Slept,
@@ -559,6 +561,8 @@ struct FishingTrip
 [[nodiscard]] std::vector<Step> TakeFishTo(const std::optional<FishingTrip>& trip, glm::vec2 place, float height);
 /// A poo on the spot, a third of the time showing it needs one first
 [[nodiscard]] std::vector<Step> Poo(const Random& random);
+/// A fart on the spot: the creature does the same squat as for a poo, but it makes a cloud, not a lump
+[[nodiscard]] std::vector<Step> Fart(const Random& random);
 /// Being sick on the spot
 [[nodiscard]] std::vector<Step> Puke();
 /// Fainting where it stands, lying out cold a while, then getting up
