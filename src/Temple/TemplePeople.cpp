@@ -136,6 +136,7 @@ std::unique_ptr<TemplePeople> TemplePeople::Gather()
 	{
 		// Each comes in as the villager looks: its model, its size and its sex
 		people->_visitors.push_back({
+		    .villager = villager,
 		    .mesh = registry.Get<const Mesh>(villager).id,
 		    .scale = registry.Get<const Transform>(villager).scale.x,
 		    .man = registry.Get<const Villager>(villager).sex == Villager::Sex::MALE,
