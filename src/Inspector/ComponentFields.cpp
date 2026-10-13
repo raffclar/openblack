@@ -822,6 +822,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureHeldObject::middle>("middle");
 	Reflect<components::PendingCatch>(context).Field<&components::PendingCatch::object>("object");
 	Reflect<components::CatchHands>(context).Field<&components::CatchHands::hands>("hands");
+	Reflect<components::PickUpReach>(context).Field<&components::PickUpReach::straightReach>("straightReach");
 	Reflect<components::HeldByCreature>(context).Field<&components::HeldByCreature::creature>("creature");
 	Reflect<components::CreatureTownAttitude>(context)
 	    .Field<&components::CreatureTownAttitude::attitude>("attitude")

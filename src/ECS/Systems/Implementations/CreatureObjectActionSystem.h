@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "Creature/CreatureObjectActions.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -55,10 +56,16 @@ public:
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity creature) const override;
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;
 	[[nodiscard]] bool CanPickUp(entt::entity creature, entt::entity object) const override;
+	[[nodiscard]] bool CanTakeFromHand(entt::entity creature, entt::entity object) const override;
+	[[nodiscard]] bool CanBeCaught(entt::entity object) const override;
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
 	[[nodiscard]] std::optional<float> PickUpStraightReach(entt::entity creature) const override;
 
 private:
+	/// Whether the thing is of a kind a creature picks up at all: things, villagers, food and low birds
+	[[nodiscard]] bool KindCanBePickedUp(entt::entity object) const;
+	/// What the rules for a creature picking the thing up depend on
+	[[nodiscard]] creature_object_actions::PickUpFacts PickUpFactsOf(entt::entity creature, entt::entity object) const;
 	/// Catches made to wait while a creature's body acted out something else start once it is free
 	void StartPendingCatches();
 	/// Starts an action on the creature in place of any it was doing, or records why it can't

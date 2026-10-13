@@ -229,7 +229,7 @@ public:
 	[[nodiscard]] std::optional<float> CatchMs(entt::entity /*creature*/) const override { return std::nullopt; }
 	[[nodiscard]] std::optional<entt::entity> HandHeldCreature() const override { return std::nullopt; }
 	[[nodiscard]] bool HasCreatureActions() const override { return true; }
-	[[nodiscard]] bool CanPickUp(entt::entity /*creature*/, entt::entity /*object*/) const override { return true; }
+	[[nodiscard]] bool CanBeCaught(entt::entity /*object*/) const override { return true; }
 	void Catch(entt::entity /*creature*/, entt::entity /*object*/) override {}
 	void StopCreature(entt::entity /*creature*/) override {}
 	void DropCarriedLog(systems::DynamicsSystemInterface& /*dynamics*/, entt::entity villager,

@@ -275,6 +275,64 @@ TEST(CreatureObjectActions, ACreatureLeavesAloneWhatAScriptKeepsFromIt)
 	EXPECT_FALSE(MayPickUp({.worshippingForCreaturesPlayer = true}));
 }
 
+TEST(CreatureObjectActions, ACreatureLiftsOnlyWhatFitsItsReachAndWeight)
+{
+	using creature_object_actions::CanLift;
+	const creature_object_actions::LiftFacts fits {
+	    .creatureRadius = 6.0f, .thingRadius = 2.0f, .reach = 8.0f, .creatureWeight = 100.0f, .thingWeight = 80.0f};
+	// Both radii exactly within the reach, and exactly 0.8 of the creature's weight, still lift
+	EXPECT_TRUE(CanLift(fits));
+	auto tooBig = fits;
+	tooBig.thingRadius = 2.01f;
+	EXPECT_FALSE(CanLift(tooBig));
+	auto tooHeavy = fits;
+	tooHeavy.thingWeight = 80.01f;
+	EXPECT_FALSE(CanLift(tooHeavy));
+	// The rule applies to picking up wherever the thing is too
+	EXPECT_FALSE(creature_object_actions::MayPickUp({.lift = tooHeavy}));
+	EXPECT_FALSE(creature_object_actions::MayPickUpWhereverItIs({.lift = tooBig}));
+	EXPECT_TRUE(creature_object_actions::MayPickUp({.lift = fits}));
+}
+
+TEST(CreatureObjectActions, ACreatureLeavesArtefactsAndWhatItsLeashIsTiedTo)
+{
+	using creature_object_actions::MayPickUp;
+	EXPECT_FALSE(MayPickUp({.townArtefact = true}));
+	EXPECT_FALSE(MayPickUp({.leashTiedToIt = true}));
+	// Nor may it be given what its leash is tied to
+	EXPECT_FALSE(creature_object_actions::MayPickUpWhereverItIs({.leashTiedToIt = true}));
+}
+
+TEST(CreatureObjectActions, ACreaturePicksUpOnlyWhatIsInTheMap)
+{
+	using creature_object_actions::MayPickUp;
+	// Not out of the map: in a hand, flying or carried by a tornado...
+	EXPECT_FALSE(MayPickUp({.inMapOrHeldByCreature = false}));
+	// ...but a hand may give it such a thing
+	EXPECT_TRUE(creature_object_actions::MayPickUpWhereverItIs({.inMapOrHeldByCreature = false}));
+}
+
+TEST(CreatureObjectActions, TakingFromAHandSkipsTheRulesForTheLand)
+{
+	using creature_object_actions::MayPickUpWhereverItIs;
+	// A hand may give a creature a town's artefact, a worshipper, or what a script holds
+	EXPECT_TRUE(MayPickUpWhereverItIs({.townArtefact = true}));
+	EXPECT_TRUE(MayPickUpWhereverItIs({.worshippingForCreaturesPlayer = true}));
+	EXPECT_TRUE(MayPickUpWhereverItIs({.inScript = true, .computerCreatureNotScripted = true}));
+	// but never what a script said can't be picked up, nor a villager at home
+	EXPECT_FALSE(MayPickUpWhereverItIs({.cannotBePickedUp = true}));
+	EXPECT_FALSE(MayPickUpWhereverItIs({.villagerAtHome = true}));
+}
+
+TEST(CreatureObjectActions, OnlyAThingsOwnStateKeepsItFromBeingCaught)
+{
+	using creature_object_actions::MayBeCaught;
+	EXPECT_TRUE(MayBeCaught({.inScript = true, .computerCreatureNotScripted = true}));
+	EXPECT_TRUE(MayBeCaught({.townArtefact = true, .inMapOrHeldByCreature = false, .leashTiedToIt = true}));
+	EXPECT_FALSE(MayBeCaught({.cannotBePickedUp = true}));
+	EXPECT_FALSE(MayBeCaught({.villagerAtHome = true}));
+}
+
 TEST(CreatureFeedback, AStrokeLandsOnTheNearestPart)
 {
 	std::array<glm::vec3, creature_feedback::k_BodyPartCount> parts {};

@@ -102,6 +102,23 @@ enum class Status : uint8_t
 /// or one the scripts hold while they own the widescreen bars, can't be eaten. The creature then lets it fall and is
 /// sick, and isn't hungry for a while.
 [[nodiscard]] bool BringsBackUp(bool indestructible, bool heldDuringCutscene);
+/// A creature only lifts what weighs at most this share of its own weight
+constexpr float k_MostLiftedWeightShare = 0.8f;
+/// How big and heavy the thing is against the creature
+struct LiftFacts
+{
+	/// The creature's and the thing's radii across the land
+	float creatureRadius {0.0f};
+	float thingRadius {0.0f};
+	/// How far the creature's hand gets at its furthest stretch when picking up, measured straight
+	float reach {0.0f};
+	float creatureWeight {0.0f};
+	float thingWeight {0.0f};
+};
+/// Whether a creature can lift the thing: the two radii together within its reach, and the thing no heavier than its
+/// share of the creature's weight
+[[nodiscard]] bool CanLift(const LiftFacts& facts);
+
 /// What decides whether a creature may pick up a thing whose kind can be picked up
 struct PickUpFacts
 {
@@ -115,11 +132,27 @@ struct PickUpFacts
 	bool inScript {false};
 	/// The creature belongs to a computer player, and isn't under a script's control
 	bool computerCreatureNotScripted {false};
+	/// A rock, static or dead tree that has been made a town's artefact
+	bool townArtefact {false};
+	/// It stands in the map, out of any hand, flight or tornado; or it is what the creature already holds
+	bool inMapOrHeldByCreature {true};
+	/// The creature's leash is on and tied to the thing
+	bool leashTiedToIt {false};
+	/// How big and heavy it is against the creature; none when the creature's reach can't be measured, as for a
+	/// creature not posed yet
+	std::optional<LiftFacts> lift;
 };
-/// Whether a creature may pick the thing up: never one a script said can't be picked up, a villager at home or one off
-/// to worship for the creature's own player; and a computer player's creature, when no script controls it, leaves alone
-/// whatever a script holds. A player's creature may pick up what a script holds once the script allows it.
+/// Whether a creature may take the thing wherever it is, as from a hand that gives it: never what its leash is tied to,
+/// nor what it can't lift, nor one a script said can't be picked up or a villager at home
+[[nodiscard]] bool MayPickUpWhereverItIs(const PickUpFacts& facts);
+/// Whether a creature may pick the thing up from where it is: as wherever it is, and never a town's artefact, a thing
+/// out of the map that it isn't holding already, or a villager off to worship for the creature's own player; and a
+/// computer player's creature, when no script controls it, leaves alone whatever a script holds. A player's creature
+/// may pick up what a script holds once the script allows it.
 [[nodiscard]] bool MayPickUp(const PickUpFacts& facts);
+/// Whether a flying thing may be caught at all, before the weights are compared: only the thing's own say counts, not
+/// one a script said can't be picked up nor a villager at home
+[[nodiscard]] bool MayBeCaught(const PickUpFacts& facts);
 
 /// How long a creature that brought its food back up isn't hungry for
 constexpr float k_NotHungryAfterBringingUpSeconds = 20.0f;
