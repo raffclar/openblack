@@ -925,7 +925,17 @@ struct GCreatureInfo: GLivingInfo
 	std::array<uint8_t, 0x8> field0x2d0;
 	/// Running away, the creature goes at least this far from what it flees, and up to 40 further
 	float runAwayDistance;
-	std::array<uint8_t, 0x20> field0x2dc;
+	/// The look of a creature that walks to a place (see creature_look::WhileGoingInfo): the sweep's angle from ahead
+	/// and its step, in radians, its nearest and furthest distance and the distance step, and the range in which it
+	/// looks only at the place
+	float lookSweepHalfAngle;
+	float lookSweepAngleStep;
+	float lookSweepNearest;
+	float lookSweepFurthest;
+	float lookSweepDistanceStep;
+	float field0x2f0;
+	float field0x2f4;
+	float lookAtPlaceRange;
 	/// The help tells of a problem with its body at most once in this many seconds
 	float helpBodyProblemSeconds;
 	float field0x300;
@@ -968,6 +978,8 @@ static_assert(offsetof(GCreatureInfo, spellSizeFactor) == 0x380);
 static_assert(offsetof(GCreatureInfo, totemIcon) == 0x334);
 static_assert(offsetof(GCreatureInfo, helpBodyProblemSeconds) == 0x2fc);
 static_assert(offsetof(GCreatureInfo, inspectCreatureSeconds) == 0x2cc);
+static_assert(offsetof(GCreatureInfo, lookSweepHalfAngle) == 0x2dc);
+static_assert(offsetof(GCreatureInfo, lookAtPlaceRange) == 0x2f8);
 static_assert(offsetof(GCreatureInfo, helpVeryThirsty) == 0x324);
 static_assert(offsetof(GCreatureInfo, startEnergy) == 0x1f4);
 static_assert(offsetof(GCreatureInfo, comfortTemperature) == 0x1fc);

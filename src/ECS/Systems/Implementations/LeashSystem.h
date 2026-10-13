@@ -84,7 +84,9 @@ private:
 	/// The posts of each temple whose heart mesh has the three points to hang them at, once the temples are there
 	void PlacePostsAtTemples();
 	/// A taut rope in the hand pulls the creature to the hand
-	void Pull(entt::entity creature);
+	/// Whether the creature must walk back into the area that holds it in this turn
+	[[nodiscard]] bool ShouldWalkBack(entt::entity creature) const;
+	void WalkBack(entt::entity creature);
 	/// What the worn leash does to the creature's desires this turn, and to those of a creature it is tied to
 	void UpdateMoods(entt::entity creature, const components::CreatureLeash::Worn& worn);
 	/// The creature takes an order on the land or on a thing, unless it refuses

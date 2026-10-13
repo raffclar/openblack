@@ -301,7 +301,6 @@ bool CreatureMindSystem::ForceDesireAbout(entt::entity creature, CreatureMindSta
 	}
 	creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
 	creature_learning::MakeFullyDominant(*mind.desires, desire);
-	mind.leash.obeying = false;
 	mind.leash.actOn = {entt::to_integral(thing)};
 	mind.plannedTurn = mind.turn + 1;
 	PlanCreature(creature, mind, false, desire);

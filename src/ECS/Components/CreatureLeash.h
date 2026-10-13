@@ -72,25 +72,14 @@ struct CreatureLeash
 	/// rope show through a script's cinema bars and while the hand is put away (see leash_rope::Shown)
 	bool drawn {true};
 
-	/// How the creature is being led: not at all, or walking to the hand
-	enum class Control : uint8_t
-	{
-		Idle,
-		WalkingToHand,
-	};
-	Control control {Control::Idle};
-	/// How hard it is pulled, which speeds it up from walking to running
-	float pull {0.0f};
-	/// How often it has been pulled away from acting on each desire
-	creature_leash::PullMemory pulls {};
-
 	/// The area the creature is kept within, none when the radius is 0
 	glm::vec3 confinementCentre {0.0f};
 	float confinementRadius {0.0f};
 	/// Where its home is, which it is kept at while it starts to grow up
 	std::optional<glm::vec3> home;
-	/// Walking back into the area it is kept within
-	bool returning {false};
+	/// The place that the creature walks back to, when it walks back into the area that holds it. The place stays
+	/// after the creature arrives, until the player gives an order with the leash.
+	std::optional<glm::vec3> returnTo;
 
 	/// The order given with the leash that the creature carries out, and where it is marked
 	struct Order
@@ -118,8 +107,6 @@ struct CreatureLeash
 		CurrentDesire,
 		/// It couldn't get where it was sent
 		Inaccessible,
-		/// The leash pulled it away from what it was doing
-		PulledAway,
 	};
 	Help help {Help::None};
 	std::optional<creature_desires::Desire> helpDesire;

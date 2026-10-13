@@ -27,10 +27,12 @@ using creature_mind::Step;
 
 namespace
 {
+/// A walk to a point. On the way, the head looks at the point, at what the creature watches, or from side to side.
 Step Walk(glm::vec2 point, float arrival, bool run)
 {
 	Step step {.kind = Step::Kind::Move};
 	step.movement = {.kind = Movement::Kind::ToPoint, .point = point, .run = run, .maxDistance = arrival};
+	step.gaze = creature_mind::Gaze {.point = glm::vec3(point.x, 0.0f, point.y), .whileGoing = true};
 	return step;
 }
 
@@ -69,7 +71,7 @@ Tap creature_leash_orders::OnTap(const Leash& leash, const Tapped& tapped)
 	{
 		return Tap::OrderOnLand;
 	}
-	if (*tapped.object == leash.creature || !tapped.leashTarget)
+	if (*tapped.object == leash.creature || !tapped.leashTarget || leash.carriedByTeleport)
 	{
 		return Tap::Normal;
 	}
@@ -199,9 +201,10 @@ std::vector<Attempt> creature_leash_orders::OnThing(const Thing& thing)
 	const bool fight = thing.leash == LeashType::Evil && thing.creature && thing.distance < thing.height * k_FightReachHeights;
 	const auto fightOrDesires = fight ? Attempt::Fight : Attempt::Desires;
 	const auto fallback = thing.liftable ? Attempt::Hold : Attempt::Look;
+	// When the creature carries something, its desires choose first, also before a fight on the aggression leash
 	if (thing.carrying)
 	{
-		return {Attempt::DesiresUsingCarried, fightOrDesires, fallback};
+		return {Attempt::Desires, fightOrDesires, fallback};
 	}
 	if (!thing.liftable)
 	{

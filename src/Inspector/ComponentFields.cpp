@@ -685,13 +685,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLeash::worn>("worn")
 	    .Field<&components::CreatureLeash::selected>("selected")
 	    .Field<&components::CreatureLeash::drawn>("drawn")
-	    .Field<&components::CreatureLeash::control>("control")
-	    .Field<&components::CreatureLeash::pull>("pull")
-	    .Field<&components::CreatureLeash::pulls>("pulls")
 	    .Field<&components::CreatureLeash::confinementCentre>("confinementCentre")
 	    .Field<&components::CreatureLeash::confinementRadius>("confinementRadius")
 	    .Field<&components::CreatureLeash::home>("home")
-	    .Field<&components::CreatureLeash::returning>("returning")
+	    .Field<&components::CreatureLeash::returnTo>("returnTo")
 	    .Field<&components::CreatureLeash::order>("order")
 	    .Field<&components::CreatureLeash::help>("help")
 	    .Field<&components::CreatureLeash::helpDesire>("helpDesire");
@@ -741,6 +738,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::idle>("idle")
 	    .Field<&components::CreatureMindState::scriptPlay>("scriptPlay")
 	    .Field<&components::CreatureMindState::look>("look")
+	    .Field<&components::CreatureMindState::goingLook>("goingLook")
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
@@ -2208,7 +2206,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_leash::Lesson::change>("change");
 	Reflect<openblack::creature_leash::MindHooks>(context, ValueOnly {})
 	    .Field<&openblack::creature_leash::MindHooks::attitudeTurn>("attitudeTurn")
-	    .Field<&openblack::creature_leash::MindHooks::obeying>("obeying")
 	    .Field<&openblack::creature_leash::MindHooks::learningInHand>("learningInHand")
 	    .Field<&openblack::creature_leash::MindHooks::miracleSightingWeight>("miracleSightingWeight")
 	    .Field<&openblack::creature_leash::MindHooks::shown>("shown")
@@ -2221,8 +2218,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_leash::MindHooks::Shown::object>("object")
 	    .Field<&openblack::creature_leash::MindHooks::Shown::type>("type")
 	    .Field<&openblack::creature_leash::MindHooks::Shown::lessons>("lessons");
-	Reflect<openblack::creature_leash::PullMemory>(context, ValueOnly {})
-	    .Field<&openblack::creature_leash::PullMemory::counts>("counts", {k_CreatureDesiresDesireNames});
 	Reflect<openblack::creature_locomotion::Pair>(context, ValueOnly {})
 	    .Field<&openblack::creature_locomotion::Pair::from>("from")
 	    .Field<&openblack::creature_locomotion::Pair::to>("to")
@@ -2238,6 +2233,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_look::Target::kind>("kind")
 	    .Field<&openblack::creature_look::Target::point>("point")
 	    .Field<&openblack::creature_look::Target::watchedTurns>("watchedTurns");
+	Reflect<openblack::creature_look::WhileGoing>(context, ValueOnly {})
+	    .Field<&openblack::creature_look::WhileGoing::look>("look")
+	    .Field<&openblack::creature_look::WhileGoing::turns>("turns")
+	    .Field<&openblack::creature_look::WhileGoing::sweepAngle>("sweepAngle")
+	    .Field<&openblack::creature_look::WhileGoing::sweepAngleStep>("sweepAngleStep")
+	    .Field<&openblack::creature_look::WhileGoing::sweepDistance>("sweepDistance")
+	    .Field<&openblack::creature_look::WhileGoing::sweepDistanceStep>("sweepDistanceStep");
 	Reflect<openblack::creature_marks::Mark>(context, ValueOnly {})
 	    .Field<&openblack::creature_marks::Mark::u>("u")
 	    .Field<&openblack::creature_marks::Mark::v>("v")
@@ -2258,7 +2260,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Gaze::itself>("itself")
 	    .Field<&openblack::creature_mind::Gaze::hand>("hand")
 	    .Field<&openblack::creature_mind::Gaze::point>("point")
-	    .Field<&openblack::creature_mind::Gaze::camera>("camera");
+	    .Field<&openblack::creature_mind::Gaze::camera>("camera")
+	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::activity>("activity")
 	    .Field<&openblack::creature_mind::IdleMind::agenda>("agenda")
@@ -2284,6 +2287,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Movement::point>("point")
 	    .Field<&openblack::creature_mind::Movement::object>("object")
 	    .Field<&openblack::creature_mind::Movement::run>("run")
+	    .Field<&openblack::creature_mind::Movement::extraSpeed>("extraSpeed")
 	    .Field<&openblack::creature_mind::Movement::minDistance>("minDistance")
 	    .Field<&openblack::creature_mind::Movement::maxDistance>("maxDistance")
 	    .Field<&openblack::creature_mind::Movement::giveUpIfUnreachable>("giveUpIfUnreachable");

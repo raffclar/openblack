@@ -2695,8 +2695,8 @@ void AddLeash(std::vector<Scenario>& all)
 	    .facet = Facet::Leash,
 	    .description = "A tiger far off to the north is put on the learning leash. Put the hand on the land near the "
 	                   "camera, well away from it.",
-	    .expected = "Once the rope is pulled taut it stops what it is doing and walks to the hand, then its mind takes "
-	                "over again near the hand.",
+	    .expected = "When the tiger is further from the hand than the full length of the leash, it stops what it does "
+	                "and walks back. It is faster when it is further away. It stops within the full length of the hand.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 150.0f})},
 	    .commands = {Leash(0, LeashType::Rope, 1.0f)},

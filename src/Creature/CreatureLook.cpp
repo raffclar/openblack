@@ -18,6 +18,8 @@
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/GUtilsAngle.h"
+
 using namespace openblack;
 using namespace openblack::creature_look;
 
@@ -125,4 +127,68 @@ glm::vec3 creature_look::PointAhead(const Viewer& viewer)
 	const glm::vec3 flat {viewer.ahead.x, 0.0f, viewer.ahead.z};
 	const auto ahead = glm::length(flat) > 0.0f ? glm::normalize(flat) : glm::vec3(0.0f, 0.0f, -1.0f);
 	return viewer.position + glm::vec3(0.0f, k_HeadHeight * viewer.size, 0.0f) + (ahead * k_AheadMetres);
+}
+
+WhileGoing creature_look::StartWhileGoing(const WhileGoingInfo& info)
+{
+	return {
+	    .sweepAngleStep = info.sweepAngleStep,
+	    .sweepDistance = info.sweepNearest,
+	    .sweepDistanceStep = info.sweepDistanceStep,
+	};
+}
+
+std::optional<WhileGoingPoint> creature_look::LookWhileGoing(WhileGoing& state, const WhileGoingInfo& info,
+                                                             const WhileGoingView& view)
+{
+	const auto distance = glm::distance(view.position, view.place);
+	if (distance <= k_WhileGoingLeast)
+	{
+		return std::nullopt;
+	}
+	const WhileGoingPoint place {.at = view.place};
+	if (distance <= info.placeRange)
+	{
+		return place;
+	}
+	auto point = place;
+	switch (state.look)
+	{
+	case WhileGoing::Look::Place:
+		break;
+	case WhileGoing::Look::Watched:
+		if (view.watched.has_value())
+		{
+			point = {.at = glm::vec2(view.watched->x, view.watched->z), .height = view.watched->y};
+		}
+		break;
+	case WhileGoing::Look::Sweep:
+	{
+		// The head turns a step further each turn; at each side it turns back, and looks a step further ahead
+		state.sweepAngle += state.sweepAngleStep;
+		if (state.sweepAngle <= -info.sweepHalfAngle || info.sweepHalfAngle <= state.sweepAngle)
+		{
+			state.sweepAngleStep = -state.sweepAngleStep;
+			state.sweepDistance += state.sweepDistanceStep;
+			if (info.sweepFurthest <= state.sweepDistance)
+			{
+				state.sweepDistance = info.sweepNearest;
+			}
+		}
+		const auto angle = static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(view.heading + state.sweepAngle));
+		point = {.at = view.position + glm::vec2(gutils::GetXByAngle(angle, state.sweepDistance),
+		                                         gutils::GetZByAngle(angle, state.sweepDistance))};
+		break;
+	}
+	}
+	// After two seconds of turns the next look starts
+	++state.turns;
+	if (static_cast<float>(state.turns) > std::trunc(k_WhileGoingLookSeconds * view.turnsPerSecond))
+	{
+		state.turns = 0;
+		state.look = state.look == WhileGoing::Look::Sweep
+		                 ? WhileGoing::Look::Place
+		                 : static_cast<WhileGoing::Look>(static_cast<uint8_t>(state.look) + 1);
+	}
+	return point;
 }

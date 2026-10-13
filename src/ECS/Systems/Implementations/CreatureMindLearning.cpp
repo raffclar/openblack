@@ -1479,7 +1479,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	if (tables == nullptr || transform == nullptr || !mind.desires.has_value() || !mind.learnt.has_value() || mind.paused ||
-	    mind.leash.obeying || creature_mind::IsUnconscious(mind.idle))
+	    creature_mind::IsUnconscious(mind.idle))
 	{
 		return;
 	}
@@ -1848,7 +1848,6 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	{
 		return false;
 	}
-	mind->leash.obeying = false;
 	// Forced, nothing it wants is ever more pressing than the plan until it is done
 	const auto action = creature_mind_tables::FindAction(*tables, plan.action);
 	if (!action.has_value())
@@ -1903,7 +1902,6 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	registry.AssignOrReplace<ScriptControlled>(creature);
 	// It obeys its player by following them, as far as its plan goes, which nothing it wants replaces until the agenda
 	// is over; unlike an order, it learns nothing from it
-	mind->leash.obeying = false;
 	if (const auto* tables = GetTables(); tables != nullptr)
 	{
 		if (const auto action = creature_mind_tables::FindAction(*tables, "FollowPlayer"); action.has_value())
@@ -1999,7 +1997,6 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 	// What it was doing is given up, so that the thing is planned for at once, whatever it was doing
 	Abandon(*mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
-	mind->leash.obeying = false;
 	mind->leash.actOn = {entt::to_integral(object)};
 	mind->plannedTurn = mind->turn + 1;
 	PlanCreature(creature, *mind);

@@ -240,8 +240,6 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 		ImGui::Text("Tension");
 		ImGui::SameLine();
 		ImGui::ProgressBar(worn.rope.tension, ImVec2(k_BarWidth, 0.0f), fmt::format("{:.2f}", worn.rope.tension).c_str());
-		ImGui::SameLine();
-		ImGui::TextUnformatted(leash::ShouldPull(worn.rope.tension) ? "pulling" : "");
 		ImGui::Text("Length %.1f (rest %.1f, full %.1f)", glm::distance(worn.rope.start, worn.rope.end), worn.rope.slackLength,
 		            worn.rope.maxLength);
 	}
@@ -251,13 +249,10 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	}
 	if (state != nullptr)
 	{
-		ImGui::Text("Led: %s, pull %.2f",
-		            state->control == CreatureLeash::Control::WalkingToHand ? "walking to the hand" : "not controlling",
-		            state->pull);
 		if (state->confinementRadius > 0.0f)
 		{
 			ImGui::Text("Kept within %.1f of (%.0f, %.0f)%s", state->confinementRadius, state->confinementCentre.x,
-			            state->confinementCentre.z, state->returning ? ", returning" : "");
+			            state->confinementCentre.z, state->returnTo.has_value() ? ", walks back" : "");
 		}
 	}
 	ImGui::Text("Free of home: %s", leashes.FreeOfHome(entity) ? "yes" : "no");
