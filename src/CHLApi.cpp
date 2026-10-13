@@ -416,7 +416,8 @@ void StopHelpScripts()
 	                                     lhvm::ScriptType::MultiplayerHelp);
 }
 
-/// The task with the dialogue gives it back: the cinema bars go, and the advisors are sent home
+/// The task with the dialogue gives it back: the cinema bars go, and the advisors are sent home. The bars go whoever
+/// brought them in, another task included, as they do in the game
 void ReleaseDialogue(uint32_t task)
 {
 	if (Locator::dialogueControlSystem::value().Release(task, TaskType(task) == lhvm::ScriptType::Help))
