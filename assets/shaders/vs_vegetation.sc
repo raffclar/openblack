@@ -66,7 +66,7 @@ void main()
     v_snowLight = vec3_splat(0.0);
     if (u_snow.x > 0.5)
     {
-        float snowLevel = SnowObjectLevel(origin.xz, 255.0, 255.0);
+        float snowLevel = SnowShownLevel(i_data4.w);
         if (snowLevel > 0.0)
         {
             vec3 worldNormal = normalize(instMul(model, vec4(a_normal, 0.0)).xyz);

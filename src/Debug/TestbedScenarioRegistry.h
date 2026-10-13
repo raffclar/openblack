@@ -150,6 +150,8 @@ struct Environment
 	/// The Creature Breeder's bonus creatures taken as unlocked while the scenario runs, as the debug option takes them;
 	/// the option is put back when it stops
 	std::optional<creature_swap::Unlocked> unlockedBonusCreatures;
+	/// The snow lies this deep in every cell of the island as the scenario starts, 0 to 255. A testbed set-up step.
+	std::optional<float> snowDepth;
 };
 
 /// Where the camera looks as the scenario starts

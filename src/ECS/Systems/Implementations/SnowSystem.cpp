@@ -12,6 +12,11 @@
 #include "SnowSystem.h"
 
 #include <algorithm>
+#include <iterator>
+
+#include "ECS/Registry.h"
+#include "ECS/SnowLevels.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 
 using namespace openblack::ecs::systems;
 using openblack::ecs::components::Storm;
@@ -31,6 +36,7 @@ void SnowSystem::Reset()
 {
 	std::ranges::fill(_depths, 0.0f);
 	_melting = {};
+	_objectPace = {};
 	++_revision;
 }
 
@@ -47,4 +53,25 @@ void SnowSystem::ProcessTurn(std::span<const Storm> storms)
 	}
 	snow_cover::Melt(_depths, _melting, k_TurnSeconds);
 	++_revision;
+}
+
+void SnowSystem::Cover(float depth)
+{
+	std::ranges::fill(_depths, std::clamp(depth, 0.0f, snow_cover::k_MaxDepth));
+	++_revision;
+}
+
+void SnowSystem::StepObjects(Registry& registry, const ObjectDrawListSystemInterface& drawList,
+                             std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
+{
+	const auto gameTime = water_rings::Step(_objectPace, frameRealTime, frameGameTime);
+	const auto step = snow_cover::LevelStep(static_cast<int32_t>(gameTime.count()));
+	if (step <= 0 || !drawList.GetView().has_value())
+	{
+		return;
+	}
+	_drawn.clear();
+	std::ranges::copy_if(drawList.GetList(), std::back_inserter(_drawn),
+	                     [&registry, &drawList](entt::entity entity) { return drawList.Drawn(registry, entity); });
+	snow_levels::Step(registry, _drawn, [this](glm::vec2 xz) { return GetDepth(xz); }, step);
 }

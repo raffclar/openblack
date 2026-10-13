@@ -2886,6 +2886,13 @@ bool Game::Update() noexcept
 				if (Locator::objectDrawListSystem::has_value())
 				{
 					Locator::objectDrawListSystem::value().Update(clock.GetTurn());
+					// The things that the list draws show a little more or less of the snow where they stand
+					if (Locator::snowSystem::has_value())
+					{
+						Locator::snowSystem::value().StepObjects(Locator::entitiesRegistry::value(),
+						                                         Locator::objectDrawListSystem::value(),
+						                                         clock.GetFrameRealTime(), clock.GetFrameGameTime());
+					}
 				}
 				updateDrawnScenery();
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,

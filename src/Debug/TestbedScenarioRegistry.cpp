@@ -1115,6 +1115,28 @@ void AddLight(std::vector<Scenario>& all)
 	                  Posed(CreatureType::Horse, {k_Lake.x, k_FarShallows}),
 	                  Posed(CreatureType::GiantApe, {k_Lake.x - 30.0f, k_FarShallows})},
 	});
+
+	all.push_back({
+	    .id = "light.snow_on_things",
+	    .name = "Snow settles on new things",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island and more snow falls. A hut, a field, trees, a rock, a cow, "
+	                   "two villagers and a tiger are new on the land in front of the camera.",
+	    .expected = "The things start with no snow. In about two seconds the snow shows on the hut, the trees, the rock, "
+	                "the cow and the villagers, and it increases for about two seconds more. The field shows only a "
+	                "little snow. The tiger shows no snow. Turn the camera away and back: the things keep their snow.",
+	    .environment = {.weather = Weather::Snow, .dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -20.0f}, .look = {0.0f, 2.0f, 12.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {28.0f, 18.0f})},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-12.0f, 18.0f}},
+	                {.type = FieldTypeInfo::Wheat, .offset = {-26.0f, 0.0f}},
+	                {.type = TreeInfo::Conifer, .offset = {8.0f, 22.0f}, .scale = 1.5f},
+	                {.type = TreeInfo::Birch, .offset = {14.0f, 10.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {4.0f, 0.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {14.0f, -2.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-4.0f, 4.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-8.0f, 6.0f}, .joinTown = true}},
+	});
 }
 
 void AddMovement(std::vector<Scenario>& all)

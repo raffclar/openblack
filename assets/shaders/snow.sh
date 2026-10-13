@@ -28,12 +28,9 @@ float SnowDepthAt(vec2 xz)
 	return mix(near, far, w.y);
 }
 
-// How much snow shows on an object standing at a point, 0 to its cap: none below 20, then as deep as it lies beyond
-// that, scaled by its rate of 256; none at all below 5
-float SnowObjectLevel(vec2 origin, float rate, float cap)
+// The snow that an object shows at its level of snow, 0 to 255: an object shows no snow below the level 5
+float SnowShownLevel(float level)
 {
-	float beyond = floor(max(SnowDepthAt(origin) - 20.0f, 0.0f));
-	float level = min(floor(beyond * rate / 256.0f), cap);
 	return level < 5.0f ? 0.0f : level;
 }
 
