@@ -25,16 +25,18 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerWorship.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "Editor/EditorEntities.h"
 #include "InfoConstants.h"
-#include "Inspector/GameWorldEdit.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -462,7 +464,6 @@ void TempleVillagers::Spawn(const temple_villagers::Town& town) noexcept
 
 void TempleVillagers::ClearSpawned() noexcept
 {
-	inspector::GameWorldEdit edit;
 	auto& registry = Locator::entitiesRegistry::value();
 	for (const auto villager : std::exchange(_spawned, {}))
 	{
@@ -471,7 +472,16 @@ void TempleVillagers::ClearSpawned() noexcept
 			// It leaves its site and the dance as a worshipper leaving its town does, then the towns forget it
 			ecs::villager_worship::LeaveTown(villager);
 			ecs::villager_worship::Forget(villager);
-			[[maybe_unused]] const auto refusal = edit.Remove(villager, inspector::RemoveHow::Remove);
+			// Out of the physics and silent first, then out of the world as the game takes things out
+			if (Locator::dynamicsSystem::has_value())
+			{
+				Locator::dynamicsSystem::value().RemoveObject(villager, false, false);
+			}
+			if (Locator::audio::has_value())
+			{
+				Locator::audio::value().StopOwnedSounds(villager);
+			}
+			editor::Remove(villager);
 		}
 	}
 	_toSend.clear();
