@@ -9,6 +9,9 @@
 
 // The testbed's scenario of a town centre's totem
 
+#include <array>
+#include <optional>
+#include <string_view>
 #include <vector>
 
 #include "TestbedScenarioRegistry.h"
@@ -22,6 +25,33 @@ namespace
 constexpr glm::vec2 k_Centre {0.0f, 40.0f};
 /// Where the player's temple stands, well clear of the town centre
 constexpr glm::vec2 k_Temple {0.0f, -60.0f};
+
+/// A species whose carving the player's totem wears, or none for the hand the totem wears without a creature
+struct Carving
+{
+	std::string_view id;
+	std::string_view name;
+	std::optional<CreatureType> species;
+};
+constexpr std::array k_Carvings {
+    Carving {"town.totem_symbols_ape", "The player's symbol over the ape's totem", CreatureType::GiantApe},
+    Carving {"town.totem_symbols_bear", "The player's symbol over the bear's totem", CreatureType::BrownBear},
+    Carving {"town.totem_symbols_cow", "The player's symbol over the cow's totem", CreatureType::Cow},
+    Carving {"town.totem_symbols_horse", "The player's symbol over the horse's totem", CreatureType::Horse},
+    Carving {"town.totem_symbols_leopard", "The player's symbol over the leopard's totem", CreatureType::Leopard},
+    Carving {"town.totem_symbols_lion", "The player's symbol over the lion's totem", CreatureType::Lion},
+    Carving {"town.totem_symbols_polar_bear", "The player's symbol over the polar bear's totem", CreatureType::PolarBear},
+    Carving {"town.totem_symbols_sheep", "The player's symbol over the sheep's totem", CreatureType::Sheep},
+    Carving {"town.totem_symbols_tiger", "The player's symbol over the tiger's totem", CreatureType::Tiger},
+    Carving {"town.totem_symbols_tortoise", "The player's symbol over the tortoise's totem", CreatureType::Tortoise},
+    Carving {"town.totem_symbols_wolf", "The player's symbol over the wolf's totem", CreatureType::Wolf},
+    Carving {"town.totem_symbols_zebra", "The player's symbol over the zebra's totem", CreatureType::Zebra},
+    Carving {"town.totem_symbols_hand", "The player's symbol over the hand's totem", std::nullopt},
+};
+/// The player's creature stands well away to the east, out of the shot
+constexpr glm::vec2 k_CreatureAway {60.0f, 40.0f};
+/// The town believes in the player, so that it stays theirs
+constexpr float k_TownBelief = 1000.0f;
 } // namespace
 
 void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario>& all)
@@ -61,4 +91,31 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	                 .joinTown = true}},
 	    .temples = {{.offset = k_Temple}},
 	});
+
+	for (const auto& carving : k_Carvings)
+	{
+		std::vector<CreatureSetup> creatures;
+		if (carving.species.has_value())
+		{
+			creatures.push_back({.species = *carving.species, .offset = k_CreatureAway, .pauseMind = true});
+		}
+		all.push_back({
+		    .id = carving.id,
+		    .name = carving.name,
+		    .facet = Facet::Objects,
+		    .description = "A Norse town centre of the player's town, which believes only in the player, and the "
+		                   "player's creature of one species standing away to the east (none for the hand's totem). "
+		                   "Seen from the south south west, a little above the top of the totem.",
+		    .expected = "The totem wears the carving of the player's creature (the hand without one). The player's "
+		                "symbol sits still over the totem, the town believing in no one else: as high over the top of "
+		                "the carving as the symbols are set to sit, whatever the carving's height, never sunk into it.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed,
+		                .eye = {k_Centre.x - 12.7f, 18.0f, k_Centre.y - 27.2f},
+		                .look = {k_Centre.x, 14.0f, k_Centre.y}},
+		    .creatures = std::move(creatures),
+		    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre}},
+		    .townBeliefInPlayer = k_TownBelief,
+		});
+	}
 }

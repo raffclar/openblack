@@ -153,14 +153,20 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	{
 		return std::nullopt;
 	}
-	// Its totem, where it stands as it rises with the worship, and its top
+	// Its totem's top, over the icon on the plinth, where it stands as it rises with the worship
 	std::optional<glm::vec3> totemTop;
 	registry.Each<const VillageTotem, const Transform>(
-	    [&totemTop, centre](entt::entity totem, const VillageTotem& standing, const Transform& transform) {
-		    if (!totemTop.has_value() && standing.townCentre == centre)
+	    [&registry, &totemTop, centre](const VillageTotem& standing, const Transform& plinth) {
+		    if (totemTop.has_value() || standing.townCentre != centre)
 		    {
-			    totemTop = transform.position + glm::vec3(0.0f, ecs::world_objects::SizeOf(totem).height, 0.0f);
+			    return;
 		    }
+		    const auto* icon = registry.Valid(standing.icon) ? registry.TryGet<const Transform>(standing.icon) : nullptr;
+		    auto top = icon != nullptr ? icon->position
+		                               : plinth.position + glm::vec3(0.0f, ecs::village_totem::k_IconAbovePlinth, 0.0f);
+		    const float iconHeight = icon != nullptr ? ecs::world_objects::SizeOf(standing.icon).height : 0.0f;
+		    top.y = ecs::village_totem::TopY(top.y, iconHeight);
+		    totemTop = top;
 	    });
 	if (!totemTop.has_value())
 	{
