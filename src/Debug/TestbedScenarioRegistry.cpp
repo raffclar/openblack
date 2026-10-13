@@ -910,6 +910,25 @@ void AddStory(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
 	});
 	AddBreederOffers(all);
+	all.push_back({
+	    .id = "temple.intro_movement",
+	    .name = "Looking about the temple while the advisors introduce it",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle; after a second the player goes into it for the "
+	                   "first time, and the advisors' introduction of its main room plays. Turn and tilt the room with the "
+	                   "camera's keys, move the hand about, and click and drag while they talk.",
+	    .expected = "The camera flies in from the entrance to the main room by itself while the good and evil advisors "
+	                "come out and talk through their nine lines. Throughout, the hand follows the cursor over the room "
+	                "and the camera's keys turn and tilt the room as they do after the scene. Clicks and drags do nothing "
+	                "until the scene is over: the flight isn't cut short and the room isn't dragged round.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {40.0f}, k_Temple + glm::vec2 {40.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    // Room 3 is the main room, the one the entrance leads to
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
+	});
 }
 
 void AddAppearance(std::vector<Scenario>& all)
@@ -1622,6 +1641,47 @@ void AddObjects(std::vector<Scenario>& all)
 	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::EatHeld, 0, 0.5f, true)},
 	});
 
+	// Giving from the player's hand: the hand takes the thing, held in front of the creature, and gives it
+	const std::vector<Command> giving {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                                   {.kind = Kind::HandGive, .creature = 0, .delaySeconds = 1.5f}};
+	const HandHold offering {.offset = {0.0f, -k_Reach}, .height = 12.0f};
+	// Its mind runs, to take the thing and choose what to do with it
+	auto hungryThinking = hungry;
+	hungryThinking.pauseMind = false;
+	all.push_back({
+	    .id = "creature.give_food",
+	    .name = "Giving food from the hand",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a pile of food and, held in front of a hungry tiger, gives it to it.",
+	    .expected = "The hand turns its palm over to offer the food; the tiger turns to the camera looking curious, reaches "
+	                "out, and the hand meets its hand as it takes the food; hungry, it then eats it.",
+	    .environment = {.cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungryThinking},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
+	auto curious = Posed(CreatureType::Tiger, {0.0f, 0.0f});
+	curious.hold = false;
+	curious.pauseMind = false;
+	all.push_back({
+	    .id = "creature.give_villager",
+	    .name = "Giving a villager from the hand",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a villager and, held in front of a tiger that isn't hungry, gives her to it.",
+	    .expected = "The hand turns the villager a quarter round to offer her; the tiger turns to the camera, reaches out and "
+	                "takes her from the hand, then does with her what its desires say: looks her over the first time if it "
+	                "wants nothing much, eats her if hungry, or throws her at the camera if it wants to play.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {curious},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
 	all.push_back({
 	    .id = "objects.knock_down_trees",
 	    .name = "Knocking down trees",
@@ -1906,8 +1966,10 @@ void AddLeash(std::vector<Scenario>& all)
 	    .facet = Facet::Leash,
 	    .description = "A tiger is put on the learning leash, then the aggression leash, then the compassion leash, a "
 	                   "while each, and the leash is taken off. Move the hand about to lead it.",
-	    .expected = "A rope runs from the hand to its collar, coloured for each leash; on the aggression leash it wants "
-	                "to be angry, on the compassion leash to be kind, and on the learning leash it watches the player.",
+	    .expected = "A rope runs from the hand to its collar, coloured for each leash; on the aggression leash anger is "
+	                "what it wants most, on the compassion leash kindness and making friends, and on the learning leash "
+	                "it watches the player. Taken off, the last of these moods stays until the learning leash is picked "
+	                "while it is worn.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 40.0f})},
 	    .commands = {Leash(0, LeashType::Rope, 1.0f), Leash(0, LeashType::Evil, 10.0f), Leash(0, LeashType::Good, 10.0f),
@@ -1961,6 +2023,33 @@ void AddLeash(std::vector<Scenario>& all)
 	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 4.0f, .value = 0}},
 	});
 
+	const auto templeGlows = [](std::string_view id, std::string_view name, float hour) {
+		return Scenario {
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Leash,
+		    .description = "Your tiger knows all three leashes and your temple stands in front of the camera, its leash posts "
+		                   "in view. The learning leash is picked at its post, so the hand carries it.",
+		    .expected = "The aggression leash (the spiked blade) and the compassion leash (the rainbow fur) tumble slowly on "
+		                "their posts, each in a pale smoky glow about four metres across, half seen by day and fading at "
+		                "night. By the empty learning post the glow is orange and added to what is behind it. The learning "
+		                "leash, a twisted rope collar, hangs round the hand's wrist, turned with the hand, its texture "
+		                "running round it. Tapping the orange glow puts the leash back on its post, silently; with the hand "
+		                "put away the carried leash and its orange glow are gone.",
+		    .environment = {.hour = hour, .clockRuns = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed, .eye = {-262.0f, 30.0f, 120.0f}, .look = {-300.0f, 5.0f, 100.0f}},
+		    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+		    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+		    .commands = {Leash(0, LeashType::Rope, 0.5f),
+		                 Leash(0, LeashType::Evil, 0.5f),
+		                 Leash(0, LeashType::Good, 0.5f),
+		                 Act(Kind::TakeOffLeash, 0, 0.5f),
+		                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 1.0f, .value = 1}},
+		};
+	};
+	all.push_back(templeGlows("leash.temple_glows", "The glows round the temple's leashes by day", 12.0f));
+	all.push_back(templeGlows("leash.temple_glows_night", "The glows round the temple's leashes at night", 23.0f));
+
 	all.push_back({
 	    .id = "leash.pull_to_hand",
 	    .name = "Pulled to the hand",
@@ -1991,6 +2080,40 @@ void AddLeash(std::vector<Scenario>& all)
 	                 OnObject(Kind::TieLeash, 0, 1, 2.0f, false), Go(Kind::WalkTo, 0, {120.0f, 60.0f}, 1.0f, false),
 	                 Act(Kind::TakeOffLeash, 0, 8.0f)},
 	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "leash.tie_by_hand",
+	    .name = "Ordering and tying with the hand",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger is clicked to put the leash on, a tree and a pillar of rock stand ahead. With the hand: "
+	                   "right click the tree once, then double click it, then double click it again; right click the "
+	                   "rock, and double click the rock.",
+	    .expected = "Over the tree with the leash in the hand the tip says Attach Leash. A single click sends the tiger to "
+	                "act on the tree (marked); the double click ties the leash to it, the rope running from the tree, and "
+	                "over the tree the tip now says Detach Leash; double clicked again it comes back to the hand. The "
+	                "same for the rock. The hand never pulls the tree up on a quick click.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 60.0f}, {40.0f, 60.0f}, {0.0f, 20.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 60.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {40.0f, 60.0f}}},
+	    .commands = {{.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "leash.snap_rope",
+	    .name = "Snap the tied leash",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger's leash is tied to a tree. Put the hand on the rope (the hand opens its fingers), hold "
+	                   "the right button to take hold of it, drag it out over the land and let go.",
+	    .expected = "Over the rope the hand opens its fingers to pinch it and no tip shows. Holding it, the fingers pinch "
+	                "it and the rope runs as two, one from the collar and one from the tree, both to the hand. Let go, the "
+	                "tiger is sent to the place under the hand (marked) and is kept within the distance from the tree to "
+	                "where the hand let go.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 60.0f}, {60.0f, 20.0f}, {0.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 60.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false)},
 	});
 
 	all.push_back({
@@ -2832,6 +2955,7 @@ std::vector<Scenario> Build()
 	AddHandLookScenarios(all);
 	AddGateScenarios(all);
 	AddVillageTotemScenarios(all);
+	AddTempleVillagerScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
 	AddHighlightScenarios(all);
@@ -2966,7 +3090,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::RecordChallenge || kind == Kind::EnterTemple ||
-	       kind == Kind::RunScript || IsPointerCommand(kind);
+	       kind == Kind::HandTake || kind == Kind::RunScript || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2993,7 +3117,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 103> k_Names {
+	constexpr std::array<std::string_view, 105> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3093,6 +3217,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "run text",
 	    "play hand demo",
 	    "reframe",
+	    "hand take",
+	    "hand give",
 	    "swap minds",
 	    "record challenge",
 	    "enter temple",

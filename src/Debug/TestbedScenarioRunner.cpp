@@ -50,6 +50,7 @@
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureScriptPlay.h"
+#include "DebugGuiInterface.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -124,6 +125,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
@@ -134,6 +136,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -504,6 +507,14 @@ void Runner::Start(const Scenario& scenario)
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
+	if (scenario.worshipShare.has_value())
+	{
+		SetUpWorship(*scenario.worshipShare);
+	}
+	if (!scenario.debugWindow.empty() && Locator::debugGui::has_value())
+	{
+		Locator::debugGui::value().OpenWindow(scenario.debugWindow);
 	}
 	if (Locator::fireflySystem::has_value())
 	{
@@ -931,6 +942,29 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 	}
 }
 
+void Runner::SetUpWorship(float share)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(k_ScenarioTownId);
+	if (found == towns.end() || !registry.Valid(found->second) || !Locator::worshipSiteSystem::has_value())
+	{
+		return;
+	}
+	const auto town = found->second;
+	const auto site = registry.Get<const ecs::components::Town>(town).worshipSite;
+	if (!registry.Valid(site))
+	{
+		return;
+	}
+	// Put up at once, as a land's script puts down a site already built, then the totem raised to the share
+	Locator::worshipSiteSystem::value().BuildBy(site, 1.0f);
+	if (Locator::villageTotemSystem::has_value())
+	{
+		Locator::villageTotemSystem::value().SetTownShare(town, share);
+	}
+}
+
 void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 {
 	const auto& land = Locator::terrainSystem::value();
@@ -1293,6 +1327,17 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return HandTakeFireBall();
 	case Kind::HandTapObject:
 		return HandTapObject(command.object);
+	case Kind::HandTake:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::handGrabSystem::has_value())
+		{
+			return "nothing to take";
+		}
+		auto& hand = Locator::handGrabSystem::value();
+		const auto why = hand.WhyNotTake(*object);
+		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
+	}
 	default:
 		return {};
 	}
@@ -1612,7 +1657,8 @@ bool Runner::IsFree(size_t creature) const
 void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
-	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject)
+	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
+	    command.kind == Kind::HandTake)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -1906,6 +1952,11 @@ void Runner::Give(const Command& command)
 	case Kind::OpenTattooEditor:
 		result = GiveCreatureModeCommand(*entity, command);
 		break;
+	case Kind::HandGive:
+		result = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity)
+		             ? "given"
+		             : "the hand gives nothing";
+		break;
 	case Kind::SetHour:
 	case Kind::HoldSeed:
 	case Kind::DrawGesture:
@@ -1913,6 +1964,7 @@ void Runner::Give(const Command& command)
 	case Kind::PressKey:
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
+	case Kind::HandTake:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:
@@ -2716,6 +2768,28 @@ uint32_t Runner::StartParticle(size_t index) const
 	return effect;
 }
 
+void Runner::WriteCrossingFile(std::span<const std::string_view> lines)
+{
+	// Where the profile keeps it, as a vortex out of the last land writes it
+	if (!Locator::playerProfileSystem::has_value())
+	{
+		return;
+	}
+	const auto folder = Locator::playerProfileSystem::value().SavedGamesFolder();
+	if (!folder.has_value())
+	{
+		return;
+	}
+	std::error_code error;
+	std::filesystem::create_directories(*folder, error);
+	std::ofstream file(*folder / "vortex.txt", std::ios::out | std::ios::trunc | std::ios::binary);
+	for (const auto line : lines)
+	{
+		file << line << '\n';
+	}
+	Log(fmt::format("Wrote {} lines to the crossing file in {}", lines.size(), folder->string()));
+}
+
 void Runner::UpdateVortices()
 {
 	if (!Locator::vortexSystem::has_value() || !Locator::terrainSystem::has_value())
@@ -2730,7 +2804,20 @@ void Runner::UpdateVortices()
 		if (running.vortex == entt::null && _seconds >= setup.delaySeconds)
 		{
 			const auto point = MapPoint(_middle, setup.offset);
+			if (!setup.crossingLines.empty())
+			{
+				WriteCrossingFile(setup.crossingLines);
+			}
 			running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
+			if (setup.gatheringOffset.has_value())
+			{
+				const auto gathering = MapPoint(_middle, *setup.gatheringOffset);
+				vortices.SetArrival(running.vortex, {.town = entt::null,
+				                                     .gatheringPlace = {gathering.x, 0.0f, gathering.y},
+				                                     .flockDistance = setup.flockDistance,
+				                                     .flockRadius = setup.flockRadius,
+				                                     .flock = entt::null});
+			}
 			Log(fmt::format("Vortex {} opened at {:.0f}, {:.0f}", i, point.x, point.y));
 		}
 		if (running.vortex != entt::null && !running.fading && setup.fadeOutAfterSeconds.has_value() &&

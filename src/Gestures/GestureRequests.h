@@ -74,7 +74,7 @@ struct Request
 	Purpose purpose {Purpose::DropSeed};
 	/// PowerUp: the level, 0 to 2
 	int powerUpLevel {-1};
-	/// PickLeash: the leash
+	/// PickLeash: the leash; LeashGesture: the leash worn, else the one picked to put on next
 	LeashType leash {LeashType::None};
 	/// FightMiracle: the miracle
 	MagicType magic {MagicType::None};
@@ -121,6 +121,8 @@ struct HandContext
 		/// The leashes it knows: aggression, learning, compassion
 		std::array<bool, 3> knows {false, false, false};
 		LeashType worn {LeashType::None};
+		/// The leash the leash gesture is about: the one worn, else the one picked to put on next
+		LeashType current {LeashType::Rope};
 		/// It duels and takes more moves: then the hand waits only for the fight's gestures
 		bool takesFightMoves {false};
 		/// The miracles it knows that can be cast in a fight, each with its gesture, in the order of the miracles

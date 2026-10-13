@@ -46,7 +46,8 @@ std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requ
 	std::map<GestureType, const gesture::Request*> byGesture;
 	for (const auto& request : requests)
 	{
-		if (request.purpose == gesture::Purpose::PickLeash && request.gesture != GestureType::None)
+		if ((request.purpose == gesture::Purpose::PickLeash || request.purpose == gesture::Purpose::LeashGesture) &&
+		    request.gesture != GestureType::None)
 		{
 			byGesture[request.gesture] = &request;
 		}
@@ -57,7 +58,8 @@ std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requ
 	{
 		Hint hint {
 		    .gesture = gesture,
-		    .order = static_cast<int>(request->leash) + k_LeashOrderBase,
+		    .order = request->purpose == gesture::Purpose::LeashGesture ? k_LeashGestureOrder
+		                                                                : static_cast<int>(request->leash) + k_LeashOrderBase,
 		    .leash = request->leash,
 		};
 		auto shape = shapeOf ? shapeOf(gesture) : std::nullopt;

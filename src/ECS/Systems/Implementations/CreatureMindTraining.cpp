@@ -68,6 +68,11 @@ uint32_t CreatureMindSystem::GetActionCount(entt::entity creature, uint32_t acti
 
 void CreatureMindSystem::SetOnlyDesire(entt::entity creature, Desire desire, float seconds)
 {
+	MakeDesireDominant(creature, desire, seconds, true);
+}
+
+void CreatureMindSystem::MakeDesireDominant(entt::entity creature, Desire desire, float seconds, bool needsToo)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
 	const auto* body = mind != nullptr ? registry.TryGet<const Creature>(creature) : nullptr;
@@ -88,8 +93,32 @@ void CreatureMindSystem::SetOnlyDesire(entt::entity creature, Desire desire, flo
 		spells = &registry.Assign<CreatureSpells>(creature);
 	}
 	spells->cheat = creature_spell_mind::SetCheatDominant(
-	    *mind->desires, desire, {.all = true, .seconds = seconds, .floor = mind_detail::DesireFloorOf(creature)},
+	    *mind->desires, desire, {.all = needsToo, .seconds = seconds, .floor = mind_detail::DesireFloorOf(creature)},
 	    k_TurnsPerSecond);
+}
+
+void CreatureMindSystem::EndDominantDesire(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	auto* spells = mind != nullptr ? registry.TryGet<CreatureSpells>(creature) : nullptr;
+	if (spells == nullptr || !mind->desires.has_value() || !spells->cheat.has_value())
+	{
+		return;
+	}
+	creature_spell_mind::ClearCheatDominance(*mind->desires);
+	spells->cheat.reset();
+}
+
+std::optional<Desire> CreatureMindSystem::DominantDesire(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr || !mind->desires.has_value())
+	{
+		return std::nullopt;
+	}
+	return creature_desires::Dominant(*mind->desires);
 }
 
 void CreatureMindSystem::ClearOnlyDesire(entt::entity creature)

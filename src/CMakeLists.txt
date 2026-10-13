@@ -25,19 +25,21 @@ file(GLOB OPENBLACK_IMGUI_VS_SHADERS
 file(GLOB OPENBLACK_IMGUI_FS_SHADERS
      "${CMAKE_SOURCE_DIR}/assets/shaders/imgui/fs_*.sc"
 )
-bgfx_compile_shaders(
-  AS_HEADERS
+include(ShaderCompile)
+
+openblack_compile_shaders(
   TYPE VERTEX
   SHADERS ${OPENBLACK_IMGUI_VS_SHADERS}
   VARYING_DEF ${CMAKE_SOURCE_DIR}/assets/shaders/imgui/varying.def.sc
   OUTPUT_DIR ${CMAKE_BINARY_DIR}/include/generated/shaders/imgui
+  OUT_FILES_VAR OPENBLACK_IMGUI_VS_SHADER_HEADERS
 )
-bgfx_compile_shaders(
-  AS_HEADERS
+openblack_compile_shaders(
   TYPE FRAGMENT
   SHADERS ${OPENBLACK_IMGUI_FS_SHADERS}
   VARYING_DEF ${CMAKE_SOURCE_DIR}/assets/shaders/imgui/varying.def.sc
   OUTPUT_DIR ${CMAKE_BINARY_DIR}/include/generated/shaders/imgui
+  OUT_FILES_VAR OPENBLACK_IMGUI_FS_SHADER_HEADERS
 )
 
 file(GLOB OPENBLACK_VERTEX_SHADERS "${CMAKE_SOURCE_DIR}/assets/shaders/vs_*.sc")
@@ -48,19 +50,19 @@ file(GLOB OPENBLACK_VARYING_DEF_FILE
      "${CMAKE_SOURCE_DIR}/assets/shaders/varying.def.sc"
 )
 
-bgfx_compile_shaders(
-  AS_HEADERS
+openblack_compile_shaders(
   TYPE VERTEX
   SHADERS ${OPENBLACK_VERTEX_SHADERS}
   VARYING_DEF ${OPENBLACK_VARYING_DEF_FILE}
   OUTPUT_DIR ${CMAKE_BINARY_DIR}/include/generated/shaders
+  OUT_FILES_VAR OPENBLACK_VERTEX_SHADER_HEADERS
 )
-bgfx_compile_shaders(
-  AS_HEADERS
+openblack_compile_shaders(
   TYPE FRAGMENT
   SHADERS ${OPENBLACK_FRAGMENT_SHADERS}
   VARYING_DEF ${OPENBLACK_VARYING_DEF_FILE}
   OUTPUT_DIR ${CMAKE_BINARY_DIR}/include/generated/shaders
+  OUT_FILES_VAR OPENBLACK_FRAGMENT_SHADER_HEADERS
 )
 
 list(APPEND OPENBLACK_SHADERS ${OPENBLACK_IMGUI_VS_SHADERS})
@@ -90,6 +92,11 @@ target_sources(
           ${OPENBLACK_VERTEX_SHADERS}
           ${OPENBLACK_FRAGMENT_SHADERS}
           ${OPENBLACK_VARYING_DEF_FILE}
+          # Compiled shaders, built before the sources that embed them
+          ${OPENBLACK_IMGUI_VS_SHADER_HEADERS}
+          ${OPENBLACK_IMGUI_FS_SHADER_HEADERS}
+          ${OPENBLACK_VERTEX_SHADER_HEADERS}
+          ${OPENBLACK_FRAGMENT_SHADER_HEADERS}
 )
 set_target_properties(openblack_lib PROPERTIES LINKER_LANGUAGE CXX)
 

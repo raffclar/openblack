@@ -44,6 +44,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
 #include "Debug/DebugGuiInterface.h"
+#include "Debug/TempleVillagersSurvey.h"
 #include "ECS/ArtefactRules.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -1833,6 +1834,115 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 		                  {"transition_room", transition.has_value() ? Json(static_cast<int>(*transition)) : Json(nullptr)},
 		                  {"visits", temple.GetVisits()}};
 	              }));
+	provider->Add(
+	    Query("villagers",
+	          "The villagers around the player's temple, as the Temple Villagers debug window shows them: its worship "
+	          "sites and the places at them, the towns worshipping there, every villager worshipping, on its way or "
+	          "within the radius with its state and walk, and those walking about inside the temple",
+	          {{.name = "radius",
+	            .type = "number",
+	            .description = "Villagers this near the temple's middle, in metres, are listed too (60 if not given)",
+	            .required = false},
+	           {.name = "player", .type = "integer", .description = "The player, 0 if not given", .required = false}}),
+	    [](const QueryContext& context) {
+		    const auto player = static_cast<PlayerNames>(context.params.value("player", 0));
+		    const auto survey = temple_villagers::Take(player, context.params.value("radius", 60.0f), false);
+		    if (survey.temple == entt::null)
+		    {
+			    return QueryResult::Error("the player has no temple");
+		    }
+		    Json sites = Json::array();
+		    for (const auto& site : survey.sites)
+		    {
+			    Json places = Json::object();
+			    for (size_t i = 0; i < site.places.size(); ++i)
+			    {
+				    if (const auto& place = site.places.at(i); place.has_value())
+				    {
+					    places[std::string(temple_villagers::Name(static_cast<temple_villagers::SitePlace>(i)))] = {place->x,
+					                                                                                                place->y};
+				    }
+			    }
+			    Json worshippers = Json::array();
+			    for (const auto villager : site.worshippers)
+			    {
+				    worshippers.push_back(Id(villager));
+			    }
+			    sites.push_back({{"id", Id(site.site)},
+			                     {"tribe", static_cast<int>(site.tribe)},
+			                     {"place", site.place},
+			                     {"built", site.built},
+			                     {"dancers", site.dancers},
+			                     {"food_in_pot", site.foodInPot},
+			                     {"worshippers", std::move(worshippers)},
+			                     {"places", std::move(places)}});
+		    }
+		    Json towns = Json::array();
+		    for (const auto& town : survey.towns)
+		    {
+			    towns.push_back({{"id", Id(town.town)},
+			                     {"town_id", town.id},
+			                     {"site", Id(town.site)},
+			                     {"share", town.share},
+			                     {"population", town.population},
+			                     {"worshipping", town.worshipping},
+			                     {"on_the_way", town.onTheWay},
+			                     {"needed", town.needed}});
+		    }
+		    Json villagers = Json::array();
+		    for (const auto& villager : survey.villagers)
+		    {
+			    Json item {{"id", Id(villager.villager)},
+			               {"standing", std::string(temple_villagers::Name(villager.standing))},
+			               {"tribe", static_cast<int>(villager.tribe)},
+			               {"job", static_cast<int>(villager.number)},
+			               {"child", villager.child},
+			               {"age", villager.age},
+			               {"life", villager.life},
+			               {"town", Id(villager.town)},
+			               {"site", Id(villager.site)},
+			               {"state", static_cast<int>(villager.final)},
+			               {"top_state", static_cast<int>(villager.top)},
+			               {"turns_in_state", villager.turnsInState},
+			               {"position", Point(villager.position)},
+			               {"distance", villager.distance}};
+			    if (villager.walk.has_value())
+			    {
+				    const auto& walk = *villager.walk;
+				    Json walking {{"goal", {walk.goal.x, walk.goal.y}},
+				                  {"move_state", std::string(walk.moveState)},
+				                  {"speed", walk.speed}};
+				    if (walk.stepGoal.has_value())
+				    {
+					    walking["step_goal"] = {walk.stepGoal->x, walk.stepGoal->y};
+				    }
+				    if (walk.circleCentre.has_value())
+				    {
+					    walking["circle"] = {{"centre", {walk.circleCentre->x, walk.circleCentre->y}},
+					                         {"radius", walk.circleRadius}};
+				    }
+				    item["walk"] = std::move(walking);
+			    }
+			    villagers.push_back(std::move(item));
+		    }
+		    Json inside = Json::array();
+		    for (const auto& walker : survey.inside.walkers)
+		    {
+			    inside.push_back({{"villager", Id(walker.villager)},
+			                      {"position", Point(walker.position)},
+			                      {"target", Point(walker.target)},
+			                      {"walking", walker.walking},
+			                      {"timer", walker.timer},
+			                      {"pause", walker.pause}});
+		    }
+		    return QueryResult::Value({{"temple", Id(survey.temple)},
+		                               {"temple_position", Point(survey.templePosition)},
+		                               {"sites", std::move(sites)},
+		                               {"towns", std::move(towns)},
+		                               {"villagers", std::move(villagers)},
+		                               {"in_temple", survey.inside.active},
+		                               {"inside", std::move(inside)}});
+	    });
 	return provider;
 }
 

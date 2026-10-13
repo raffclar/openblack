@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <map>
+#include <numbers>
 #include <set>
 #include <vector>
 
@@ -120,7 +121,38 @@ public:
 		tapped.push_back(object);
 		return true;
 	}
+	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity) const override
+	{
+		const auto found = creatures.find(target);
+		return found != creatures.end() ? std::optional(found->second) : std::nullopt;
+	}
+	void SayCantPickUp(entt::entity creature) override { cantPickUp.push_back(creature); }
+	bool GiveTo(entt::entity creature, entt::entity held, bool leftHand) override
+	{
+		given.push_back({creature, held, leftHand});
+		stillTaking = true;
+		return true;
+	}
+	[[nodiscard]] std::optional<Taking> TakingOf(entt::entity) const override { return taking; }
+	[[nodiscard]] std::optional<glm::vec3> TakePointOf(entt::entity, glm::vec3) const override { return takePoint; }
+	[[nodiscard]] bool StillTaking(entt::entity) const override { return stillTaking; }
+	[[nodiscard]] float CreatureSizeOf(entt::entity) const override { return 2.0f; }
+	void CallOffGiving(entt::entity creature) override
+	{
+		calledOff.push_back(creature);
+		stillTaking = false;
+	}
+	[[nodiscard]] bool RightHanded() const override { return rightHanded; }
 	[[nodiscard]] bool HoldsLooseLeash() const override { return looseLeash; }
+	bool LeashTap(entt::entity object) override
+	{
+		if (!leashTakesTaps)
+		{
+			return false;
+		}
+		leashTapped.push_back(object);
+		return true;
+	}
 	[[nodiscard]] uint32_t LocalRandom(uint32_t) override { return 0; }
 	void VillagerIntoHand(entt::entity villager) override { villagersInHand.push_back(villager); }
 	void AnimalIntoOwnFlock(entt::entity) override {}
@@ -309,6 +341,9 @@ public:
 	std::optional<entt::entity> underCursor;
 	bool influence {true};
 	bool looseLeash {false};
+	/// The leash held loose in the hand takes taps as orders
+	bool leashTakesTaps {false};
+	std::vector<entt::entity> leashTapped;
 	std::vector<PlayerNames> usedOnLand;
 	std::map<entt::entity, Size> sizes;
 	std::map<entt::entity, float> weights;
@@ -351,6 +386,21 @@ public:
 	std::map<entt::entity, uint32_t> stored;
 	std::vector<uint32_t> pouredAmounts;
 	std::vector<entt::entity> usedUp;
+	/// Creatures, and whether they would take what the hand holds
+	std::map<entt::entity, creature_giving::Verdict> creatures;
+	std::vector<entt::entity> cantPickUp;
+	struct Given
+	{
+		entt::entity creature;
+		entt::entity held;
+		bool leftHand;
+	};
+	std::vector<Given> given;
+	std::optional<Taking> taking;
+	std::optional<glm::vec3> takePoint;
+	bool stillTaking {false};
+	std::vector<entt::entity> calledOff;
+	bool rightHanded {false};
 };
 
 } // namespace
@@ -453,6 +503,20 @@ TEST_F(HandGrabSystemWithWorld, AShortPressIsATap)
 	// The tap reaches the thing
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), rock);
+}
+
+TEST_F(HandGrabSystemWithWorld, WithTheLeashHeldAShortPressIsAnOrderInsteadOfATap)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	world->leashTakesTaps = true;
+	EXPECT_TRUE(Press());
+	Frame(50);
+	const auto tapped = Release();
+	ASSERT_TRUE(tapped.has_value());
+	ASSERT_EQ(world->leashTapped.size(), 1u);
+	EXPECT_EQ(world->leashTapped.front(), rock);
+	EXPECT_TRUE(world->tapped.empty());
 }
 
 TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)
@@ -1160,4 +1224,134 @@ TEST_F(HandGrabSystemWithWorld, AScoopsStreamFollowsTheHandAndAPourEndsAfterThre
 	EXPECT_EQ(world->stopped.size(), stoppedBefore);
 	Frame(100);
 	EXPECT_EQ(world->stopped.size(), stoppedBefore + 1);
+}
+
+class HandGrabSystemGiving: public HandGrabSystemWithWorld
+{
+protected:
+	entt::entity HoldRock()
+	{
+		const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+		world->underCursor = rock;
+		Press();
+		for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+		{
+			Frame(10);
+		}
+		Release();
+		return rock;
+	}
+
+	entt::entity AddCreature(creature_giving::Verdict verdict)
+	{
+		const auto creature = world->registry.Create();
+		world->registry.Assign<Transform>(creature, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		world->creatures[creature] = verdict;
+		return creature;
+	}
+};
+
+TEST_F(HandGrabSystemGiving, OverACreatureThatWouldTakeItTheHandOffersAndTurnsItOver)
+{
+	const auto rock = HoldRock();
+	ASSERT_EQ(system->GetHeld(), rock);
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	EXPECT_EQ(system->GetOfferedCreature(), creature);
+	// The palm turns over, eased towards the turn afresh every frame over 0.4 s, so it settles rather than arriving
+	for (int i = 0; i < 120; ++i)
+	{
+		Frame(16);
+	}
+	EXPECT_NEAR(system->GetOfferTurn(), std::numbers::pi_v<float>, 1e-3f);
+	// Off the creature the offer lasts 1.1 s, turning back once less than 0.3 s is left
+	world->underCursor.reset();
+	Frame(700);
+	EXPECT_EQ(system->GetOfferedCreature(), creature);
+	Frame(200);
+	Frame(200);
+	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+}
+
+TEST_F(HandGrabSystemGiving, HoldingTheButtonWhileOfferingGivesItToTheCreatureWithTheMatchingHand)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	// The cursor has moved off it, but the offer stands
+	world->underCursor.reset();
+	Frame(16);
+	EXPECT_TRUE(Press());
+	// Given once the button has been held more than 225 ms
+	Frame(200);
+	EXPECT_TRUE(world->given.empty());
+	Frame(30);
+	ASSERT_EQ(world->given.size(), 1u);
+	EXPECT_EQ(world->given.front().creature, creature);
+	EXPECT_EQ(world->given.front().held, rock);
+	EXPECT_TRUE(world->given.front().leftHand);
+	// Still held until the creature takes it, and not made ready to throw
+	EXPECT_EQ(system->GetHeld(), rock);
+	Release();
+	EXPECT_TRUE(world->released.empty());
+	// Taken, the hand holds nothing and offers nothing
+	EXPECT_TRUE(system->HandOver(rock));
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_FALSE(world->registry.AllOf<InHand>(rock));
+	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+	EXPECT_FALSE(system->HandOver(rock));
+}
+
+TEST_F(HandGrabSystemGiving, WhileTheCreatureReachesTheHandMeetsItsHandAtTheMomentOfTaking)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	Press();
+	Frame(230);
+	world->takePoint = glm::vec3(5.0f, 3.0f, 0.0f);
+	world->taking = hand_grab::HandGrabWorldInterface::Taking {.object = rock, .msFromTake = 0.0f};
+	const auto atTake = Frame(16, {0.0f, 0.0f, 0.0f});
+	// At the creature's hand, the held thing's hang below and the hand's rise above cancelling for a palm hold
+	EXPECT_NEAR(atTake.x, 5.0f, 1e-4f);
+	// Half a second from the take it is where it should be
+	world->taking->msFromTake = -500.0f;
+	const auto before = Frame(16, {0.0f, 0.0f, 0.0f});
+	EXPECT_NEAR(before.x, 0.0f, 1e-4f);
+}
+
+TEST_F(HandGrabSystemGiving, MovingTheHandFifteenSizesFromTheReachingCreatureCallsItOff)
+{
+	HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	Press();
+	Frame(230);
+	world->underCursor.reset();
+	world->takePoint = glm::vec3(0.0f, 0.0f, 0.0f);
+	// It is measured from where the hand was drawn the frame before
+	Frame(16, {29.0f, 0.0f, 0.0f});
+	Frame(16, {29.0f, 0.0f, 0.0f});
+	EXPECT_TRUE(world->calledOff.empty());
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	EXPECT_EQ(world->calledOff, std::vector<entt::entity> {creature});
+	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+}
+
+TEST_F(HandGrabSystemGiving, ACreatureThatCantPickItUpSaysSoAndIsNotOffered)
+{
+	HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::CantPickUp);
+	world->underCursor = creature;
+	Frame(16);
+	EXPECT_EQ(world->cantPickUp, std::vector<entt::entity> {creature});
+	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+	Press();
+	Frame(230);
+	EXPECT_TRUE(world->given.empty());
 }
