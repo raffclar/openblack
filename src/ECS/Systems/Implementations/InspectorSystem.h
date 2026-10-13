@@ -65,6 +65,11 @@ public:
 private:
 	/// The helper answering while the game loads: until told to stop
 	void AnswerWhileLoading();
+	/// A scenario asked for while the game loads is kept and loaded once the load is done, rather than refused: a tool
+	/// asking for one straight after launching the game would otherwise get the empty testbed it was starting with
+	[[nodiscard]] std::optional<inspector::QueryResult> QueueWhileLoading(const inspector::Request& request);
+	/// Asks for the scenario kept while loading, if any, as though it was asked for now
+	void RequestQueuedScenario();
 
 	std::unique_ptr<inspector::Server> _server;
 	/// The components' reflection, the inspector's own rather than the library's shared one
@@ -88,6 +93,8 @@ private:
 	/// How many loads are under way, what the outermost is loading, and the helper answering meanwhile
 	int _loadingDepth {0};
 	std::string _loading;
+	/// The scenario asked for while loading, to load next
+	std::optional<std::string> _queuedScenario;
 	std::mutex _loadingMutex;
 	std::atomic<bool> _stopLoadingHelper {false};
 	std::thread _loadingHelper;

@@ -298,7 +298,9 @@ private:
 	bool AskForNewPlayer();
 
 	/// Clears the last land's entities, weather and effects before a new one loads
-	void PrepareNewLand();
+	/// Clears the last land for the next. The testbed is a workbench outside the game: nothing is carried onto it or off
+	/// it, so each testbed load starts as the first one after launch does.
+	void PrepareNewLand(bool toTestbed);
 	/// What every land starts with once its landscape is loaded: the sky's clock, a player and the land's physics
 	void SetUpLandscape();
 	/// Starts the game clock, the atmosphere's sounds and the music on the new land

@@ -12,6 +12,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -66,11 +67,15 @@ public:
 	/// "describe" are answered as ever, "game.state" says it isn't ready and what is loading, and everything else is
 	/// refused with "loading": true beside the error, so that tools wait and ask again. Reads nothing of the game, so
 	/// it may run on another thread than the game's while the game is busy loading.
-	[[nodiscard]] std::string HandleWhileLoading(std::string_view line, std::string_view loading) const;
+	/// A request that can wait for the load, such as one to load something next, is given to queued: an answer from it is
+	/// sent instead of the refusal. It runs on the thread answering.
+	using QueuedWhileLoading = std::function<std::optional<QueryResult>(const Request& request)>;
+	[[nodiscard]] std::string HandleWhileLoading(std::string_view line, std::string_view loading,
+	                                             const QueuedWhileLoading& queued = nullptr) const;
 
 private:
 	[[nodiscard]] QueryResult Describe(const Json& params) const;
-	[[nodiscard]] QueryResult Writes(const Request& request) const;
+	[[nodiscard]] QueryResult Writes(const QueryOptions& options) const;
 	void Remember(const Request& request, const QueryResult& answer) const;
 
 	std::vector<std::unique_ptr<ProviderInterface>> _providers;
