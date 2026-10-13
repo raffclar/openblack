@@ -1170,9 +1170,10 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	grab->spring.Count(frame.gameMs, frame.seconds * 1000.0f);
 	if (grab->scoopSource != entt::null && Exists(grab->scoopSource))
 	{
-		// Scooping, the hand stays where it began, over the land by the height of what it scoops from and three more
+		// While the hand scoops, it stays where it started. Its height is the land, plus the height of the source, plus
+		// the rise of the hold.
 		target = grab->scoopAnchor;
-		target.y = _world->LandHeightAt(target) + _world->SizeOf(grab->scoopSource).height + hand_grab::k_ScoopHoverAbove;
+		target.y = _world->LandHeightAt(target) + _world->SizeOf(grab->scoopSource).height + grab->rise;
 		grab->lastTarget = target;
 		return target;
 	}
@@ -1495,15 +1496,4 @@ float HandGrabSystem::GetCursorRaise() const
 {
 	const auto* grab = Grab();
 	return grab != nullptr ? hand_grab::CursorRaise(grab->rise) : 0.0f;
-}
-
-std::optional<float> HandGrabSystem::GetScoopTip() const
-{
-	const auto* grab = Grab();
-	if (grab == nullptr || grab->scoopSource == entt::null || !Exists(grab->scoopSource))
-	{
-		return std::nullopt;
-	}
-	// Tipped by how high it hovers, against the hand's own length
-	return hand_grab::ScoopTip(grab->lastTarget.y, hand_grab::k_HandLength);
 }
