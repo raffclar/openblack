@@ -4111,6 +4111,7 @@ void Game::LoadTestbed() noexcept
 void Game::PrepareNewLand(land_change::Kind change)
 {
 	const bool toTestbed = change == land_change::Kind::Testbed;
+	const auto rules = land_change::RulesFor(change);
 	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
 	// creature's room's flames and smoke, keeps entities of the land after they have gone
 	if (Locator::temple::has_value())
@@ -4172,6 +4173,22 @@ void Game::PrepareNewLand(land_change::Kind change)
 	if (Locator::cameraBookmarkSystem::has_value())
 	{
 		Locator::cameraBookmarkSystem::value().SetEnabled(true);
+	}
+	// The advisors carry on through the story's change of land, out or on their way home as they were. The land menu
+	// starting the scripts again sends them home, and a new game starts them at home, out of sight
+	if (Locator::advisorSystem::has_value())
+	{
+		switch (rules.advisors)
+		{
+		case land_change::Advisors::CarryOn:
+			break;
+		case land_change::Advisors::SentHome:
+			SendAdvisorsHome(false);
+			break;
+		case land_change::Advisors::Afresh:
+			Locator::advisorSystem::value().Reset();
+			break;
+		}
 	}
 	// The scripts start again, and the help's texts and voices with them
 	Locator::helpTextSystem::value().Reset();
