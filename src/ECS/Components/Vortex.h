@@ -100,7 +100,8 @@ struct Vortex
 	ThrowingOut throwingOut;
 };
 
-/// A thing a vortex that leads away has handed to its effect this turn, to be drawn in once the effect next steps
+/// A thing a vortex that leads away has handed to its effect, and that vortex: kept while the effect carries it, so the
+/// vortex throws it back out if it can't be destroyed
 struct DrawnIntoVortex
 {
 	entt::entity vortex {entt::null};

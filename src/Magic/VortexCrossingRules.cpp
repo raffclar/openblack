@@ -216,6 +216,11 @@ bool HoldsFade(bool reading, uint32_t villagersOut)
 	return reading || villagersOut < k_ArrivalVillagers;
 }
 
+bool KeepsThrown(VortexType type, std::span<const entt::entity> thrown, entt::entity thing)
+{
+	return type == VortexType::Out && std::ranges::find(thrown, thing) != thrown.end();
+}
+
 uint32_t NewVillagerAgeLimit(uint32_t count)
 {
 	return count % 5 == 0 ? k_ChildAgeRandom : k_AdultAgeRandom;

@@ -464,15 +464,13 @@ std::optional<VortexSystemInterface::Taken> VortexSystem::EnterVortex(const std:
 		return std::nullopt;
 	}
 	const auto thing = carried->object;
-	entt::entity vortexEntity = entt::null;
-	if (const auto* drawn = registry.TryGet<const DrawnIntoVortex>(thing))
-	{
-		vortexEntity = drawn->vortex;
-		registry.Remove<DrawnIntoVortex>(thing);
-	}
+	// The vortex it was handed by stays named on it while it is carried, as the thrower of a throw back out
+	const auto* drawn = registry.TryGet<const DrawnIntoVortex>(thing);
+	const entt::entity vortexEntity = drawn != nullptr ? drawn->vortex : entt::null;
 	const auto* transform = registry.TryGet<const Transform>(thing);
 	if (transform == nullptr || registry.AnyOf<CarriedByTornado>(thing))
 	{
+		registry.Remove<DrawnIntoVortex>(thing);
 		return std::nullopt;
 	}
 	// It leaves the land as a thing starting to move does, without a body of its own: refused when it is moving already
@@ -480,6 +478,7 @@ std::optional<VortexSystemInterface::Taken> VortexSystem::EnterVortex(const std:
 	if (Locator::dynamicsSystem::has_value() &&
 	    !Locator::dynamicsSystem::value().InitialisePhysics(thing, {.add = false}).started)
 	{
+		registry.Remove<DrawnIntoVortex>(thing);
 		return std::nullopt;
 	}
 	const Taken taken {.position = transform->position,
@@ -528,8 +527,14 @@ void VortexSystem::ThrowOutOfVortex(entt::entity object, float angle, float scal
 	{
 		Locator::dynamicsSystem::value().EndPhysicsAsObject(object, true, false);
 	}
-	// TODO(vortex-crossing): the game names the vortex as the thrower here too; the particle doesn't know its vortex
-	Throw(object, angle, scale, entt::null);
+	// The vortex that took it in throws it
+	entt::entity thrower = entt::null;
+	if (const auto* drawn = registry.TryGet<const DrawnIntoVortex>(object))
+	{
+		thrower = registry.Valid(drawn->vortex) ? drawn->vortex : entt::null;
+		registry.Remove<DrawnIntoVortex>(object);
+	}
+	Throw(object, angle, scale, thrower);
 }
 
 void VortexSystem::Throw(entt::entity object, float angle, float scale, entt::entity thrower)
@@ -814,6 +819,16 @@ void VortexSystem::JoinAndThrow(entt::entity entity, Vortex& vortex, entt::entit
 	progress.thrown.push_back(thing);
 	Throw(thing, angle, 1.0f, entity);
 	registry.AssignOrReplace<components::Indestructible>(thing);
+}
+
+bool VortexSystem::IsThrownOutByAVortex(entt::entity thing) const
+{
+	// Only the vortices into the land keep what they threw; the others never throw anything out
+	bool kept = false;
+	Locator::entitiesRegistry::value().Each<const Vortex>([thing, &kept](const Vortex& vortex) {
+		kept = kept || vortex::crossing::KeepsThrown(vortex.type, vortex.throwingOut.thrown, thing);
+	});
+	return kept;
 }
 
 void VortexSystem::LetGoOfThrown(const Vortex& vortex)

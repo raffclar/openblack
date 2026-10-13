@@ -42,6 +42,7 @@ public:
 	[[nodiscard]] std::span<const GroundMark> GetGroundMarks() const override { return _groundMarks; }
 	std::optional<Taken> EnterVortex(const std::shared_ptr<particles::CarriedObject>& carried) override;
 	void ThrowOutOfVortex(entt::entity object, float angle, float scale) override;
+	[[nodiscard]] bool IsThrownOutByAVortex(entt::entity thing) const override;
 
 private:
 	/// A vortex's effects start where it is made

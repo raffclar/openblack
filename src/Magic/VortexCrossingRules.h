@@ -13,14 +13,17 @@
 
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <variant>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "Enums.h"
 
 // What a vortex that leads away from the land does with the things it takes, and how it remembers them for the next
 // land. Each thing it takes is carried round and down into its middle by the effect that draws things in: drawn in faster and
@@ -213,6 +216,8 @@ inline constexpr int32_t k_ArrivalTribeWithoutTown = 7;
 /// The vortex keeps fading out from the start while its file is still being read or fewer than its villagers have
 /// come out
 [[nodiscard]] bool HoldsFade(bool reading, uint32_t villagersOut);
+/// Whether a vortex still keeps a thing it threw out: only a vortex into the land throws things out and keeps them
+[[nodiscard]] bool KeepsThrown(VortexType type, std::span<const entt::entity> thrown, entt::entity thing);
 /// The random limit for the age of the new villager that brings the count to `count`, and its age from the number drawn
 [[nodiscard]] uint32_t NewVillagerAgeLimit(uint32_t count);
 [[nodiscard]] uint32_t NewVillagerAge(uint32_t count, uint32_t random);

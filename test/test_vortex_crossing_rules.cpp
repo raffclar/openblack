@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <array>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -167,6 +168,15 @@ TEST(VortexCrossing, TheFadeWaitsForTheFileAndThirtyVillagers)
 	EXPECT_TRUE(HoldsFade(true, 40));
 	EXPECT_TRUE(HoldsFade(false, 29));
 	EXPECT_FALSE(HoldsFade(false, 30));
+}
+
+TEST(VortexCrossing, OnlyAVortexIntoTheLandKeepsWhatItThrew)
+{
+	const std::array thrown {entt::entity {3}, entt::entity {7}};
+	EXPECT_TRUE(KeepsThrown(VortexType::Out, thrown, entt::entity {7}));
+	EXPECT_FALSE(KeepsThrown(VortexType::Out, thrown, entt::entity {5}));
+	EXPECT_FALSE(KeepsThrown(VortexType::In, thrown, entt::entity {7}));
+	EXPECT_FALSE(KeepsThrown(VortexType::Volcano, thrown, entt::entity {7}));
 }
 
 TEST(VortexCrossing, EveryFifthNewVillagerIsAChild)
