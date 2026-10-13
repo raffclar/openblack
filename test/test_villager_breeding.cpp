@@ -181,6 +181,16 @@ TEST(VillagerBreeding, TouchingIsEdgeToEdgeWithinAGap)
 	EXPECT_FALSE(Touching(1.2f, 0.3f, 0.3f, k_KissingGap));
 }
 
+TEST(VillagerBreeding, TheFirstToArriveWaitsForItsPartnerWalkingUpToKiss)
+{
+	EXPECT_TRUE(WaitsForPartner(true, true));
+	// Arrived, or gone off to something else: the kiss starts at once
+	EXPECT_FALSE(WaitsForPartner(true, false));
+	// Too far off: they set out to meet again, as in the game
+	EXPECT_FALSE(WaitsForPartner(false, true));
+	EXPECT_FALSE(WaitsForPartner(false, false));
+}
+
 TEST(VillagerBreeding, LoveEndsOnlyOnGoingOnToAnEndInItselfOutsideLove)
 {
 	EXPECT_TRUE(LeavesLove(false, true));
