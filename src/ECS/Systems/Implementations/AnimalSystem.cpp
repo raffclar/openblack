@@ -1727,11 +1727,14 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 	return true;
 }
 
-bool AnimalSystem::CanBePickedUpByCreature(entt::entity animal) const
+std::optional<bool> AnimalSystem::BirdCanBePickedUpByCreature(entt::entity animal) const
 {
 	const auto* data = EntityRegistry().TryGet<const Animal>(animal);
-	// TODO(animals): the other kinds take the rules of things in general, which aren't ported; a creature picks none up
-	return data != nullptr && IsBird(data->type) && animals::birds::CreatureCanPickUp(data->height);
+	if (data == nullptr || !IsBird(data->type))
+	{
+		return std::nullopt;
+	}
+	return animals::birds::CreatureCanPickUp(data->height);
 }
 
 bool AnimalSystem::CanBeStompedOnByCreature(entt::entity animal, float creatureHeight) const

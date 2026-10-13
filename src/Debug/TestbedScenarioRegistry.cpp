@@ -1522,6 +1522,30 @@ void AddObjects(std::vector<Scenario>& all)
 	                 Go(Kind::TurnToFace, 0, {0.0f, -60.0f}, 0.0f)},
 	});
 
+	all.push_back({
+	    .id = "objects.pickup_kinds",
+	    .name = "The kinds of thing a creature picks up",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with, in front of it from left to right, a toy ball, a rock, an idol, a birch and a "
+	                   "magic mushroom. It picks up and throws the toy ball and then the rock to the west, tries to pick up "
+	                   "the idol, pulls up the birch and puts it down, then picks up the mushroom and puts it down.",
+	    .expected = "The toy ball and the rock are lifted and thrown. The idol is refused at once: of the statics only "
+	                "toys are picked up. The birch creaks as it comes out of the ground and is planted again where it is "
+	                "put down. The mushroom is lifted and put down.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {25.0f, -15.0f}, {-60.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {-12.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {-6.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::Idol, .offset = {0.0f, -k_Reach}},
+	                {.type = TreeInfo::Birch, .offset = {6.0f, -k_Reach}},
+	                {.type = FeatureInfo::MagicMushroom, .offset = {12.0f, -k_Reach}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Go(Kind::ThrowAt, 0, {-60.0f, -10.0f}, 0.5f),
+	                 OnObject(Kind::PickUp, 0, 1, 1.0f), Go(Kind::ThrowAt, 0, {-60.0f, 10.0f}, 4.0f),
+	                 OnObject(Kind::PickUp, 0, 2, 1.0f), OnObject(Kind::PickUp, 0, 3, 1.0f), Act(Kind::PutDown, 0, 1.0f, true),
+	                 OnObject(Kind::PickUp, 0, 4, 1.0f), Act(Kind::PutDown, 0, 1.0f, true)},
+	});
+
 	auto hungry = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	hungry.needs = {.energy = 0.3f};
 	hungry.hold = false;
@@ -3027,9 +3051,9 @@ bool ValidOffset(glm::vec2 offset)
 	return std::abs(offset.x) <= k_MaxOffset && std::abs(offset.y) <= k_MaxOffset;
 }
 
-/// What is wrong with what a command acts on, if anything: the object it picks up must be a thing, an animal or a
-/// villager, what it knocks down a thing or a tree, the part it strokes, the way it looks something over and the leash
-/// put on real ones
+/// What is wrong with what a command acts on, if anything: the object it picks up must be of a kind a creature may pick
+/// up (a thing, pot, animal, villager, static, tree or magic mushroom), what it knocks down a thing or a tree, the
+/// part it strokes, the way it looks something over and the leash put on real ones
 std::string_view CommandProblem(const Command& command, std::span<const ObjectSetup> objects)
 {
 	const auto* object = command.object < objects.size() ? &objects[command.object] : nullptr;
@@ -3038,7 +3062,12 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 	case Kind::PickUp:
 		return object != nullptr &&
 		               (std::holds_alternative<MobileObjectInfo>(object->type) ||
-		                std::holds_alternative<AnimalInfo>(object->type) || std::holds_alternative<VillagerInfo>(object->type))
+		                std::holds_alternative<AnimalInfo>(object->type) ||
+		                std::holds_alternative<VillagerInfo>(object->type) || std::holds_alternative<PotInfo>(object->type) ||
+		                std::holds_alternative<MobileStaticInfo>(object->type) ||
+		                std::holds_alternative<TreeInfo>(object->type) ||
+		                (std::holds_alternative<FeatureInfo>(object->type) &&
+		                 std::get<FeatureInfo>(object->type) == FeatureInfo::MagicMushroom))
 		           ? ""
 		           : "picks up no thing";
 	case Kind::KnockDown:

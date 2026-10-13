@@ -16,6 +16,8 @@
 #include <optional>
 #include <string_view>
 
+#include "3D/AllMeshes.h"
+
 /// What a creature does with the things about it: picking them up, holding, examining, eating, putting down, tossing
 /// away and throwing them, knocking them down, and pointing at them. Each is played on the body by animations, and
 /// whatever it is done to is taken hold of or let go of at a moment of the animation particular to the species.
@@ -153,6 +155,99 @@ struct PickUpFacts
 /// Whether a flying thing may be caught at all, before the weights are compared: only the thing's own say counts, not
 /// one a script said can't be picked up nor a villager at home
 [[nodiscard]] bool MayBeCaught(const PickUpFacts& facts);
+
+/// How a creature decides whether it may pick up a kind of thing
+enum class KindRule : uint8_t
+{
+	/// Never: creatures, buildings, fields, features other than magic mushrooms, lanterns, shields, vortices and teleport
+	/// stones
+	Never,
+	/// Always, whatever else holds: the football and a creed
+	Always,
+	/// A static other than a rock: only when it is one of the toys, whatever else holds
+	Toy,
+	/// A bird: only when it is low enough over the land, whatever else holds
+	Bird,
+	/// A magic mushroom: unless a script said it can't be picked up
+	Mushroom,
+	/// A pile of food or wood: unless a script said it can't be picked up, and only a kind of pile that may fly about
+	Pile,
+	/// Anything else that can be picked up (villagers, animals, things lying about, pots, rocks, dead trees, trees):
+	/// the whole rule
+	Whole,
+};
+
+/// The kinds of thing that differ in how a creature picks them up
+enum class Thing : uint8_t
+{
+	/// Anything not named below: buildings, fields, features and the like
+	Other,
+	Creature,
+	Villager,
+	/// An animal other than a bird
+	Animal,
+	Bird,
+	/// The football
+	Ball,
+	Creed,
+	/// Anything else lying about
+	MobileObject,
+	Pot,
+	/// A pile of food or wood
+	Pile,
+	Rock,
+	Bonfire,
+	DeadTree,
+	/// A standing tree
+	Tree,
+	/// A magic mushroom growing on the land
+	MagicMushroom,
+	/// Any other static: only the toys among them are picked up
+	Static,
+	/// Statics with kinds of their own that no hand holds
+	Lantern,
+	Shield,
+	/// Statics with kinds of their own that a hand could hold but a creature never picks up
+	Vortex,
+	TeleportStone,
+};
+/// How a creature decides on picking up a kind of thing
+[[nodiscard]] KindRule RuleOf(Thing thing);
+/// Whether a hand may hold a kind of thing at all
+[[nodiscard]] bool Holdable(Thing thing);
+
+/// The toys among the statics, known by their models
+enum class Toy : uint8_t
+{
+	Ball,
+	BowlingBall,
+	Cuddly,
+	Die,
+	Skittle,
+};
+/// Which toy a static's model makes it, if any
+[[nodiscard]] std::optional<Toy> ToyOf(MeshId mesh);
+
+/// What the kind of a thing says about its being picked up by a creature
+struct KindFacts
+{
+	KindRule rule {KindRule::Never};
+	/// A hand may hold it at all, so a hand may give it to a creature and a creature may catch it: villagers, animals,
+	/// things lying about, pots and piles, statics and rocks, dead trees and trees
+	bool holdable {false};
+	/// One of the toys
+	bool toy {false};
+	/// A bird low enough over the land
+	bool low {false};
+	/// A kind of pile that may fly about
+	bool mayFly {false};
+};
+/// Whether a creature may pick the thing up from where it is, by its kind's own rule
+[[nodiscard]] bool MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts);
+/// Whether a creature may take the thing from a hand that gives it
+[[nodiscard]] bool MayTakeKindFromHand(const KindFacts& kind, const PickUpFacts& facts);
+/// Whether a creature may catch the thing flying past
+[[nodiscard]] bool MayCatchKind(const KindFacts& kind, const PickUpFacts& facts);
 
 /// How long a creature that brought its food back up isn't hungry for
 constexpr float k_NotHungryAfterBringingUpSeconds = 20.0f;
