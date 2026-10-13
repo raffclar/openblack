@@ -203,6 +203,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/UndrawnPickModel.h"
 #include "ECS/Components/Unlit.h"
 #include "ECS/Components/Velocity.h"
 #include "ECS/Components/VillageLight.h"
@@ -1747,6 +1748,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Tree::growthCountdown>("growthCountdown")
 	    .Field<&components::Tree::madeToGrow>("madeToGrow")
 	    .Field<&components::Tree::nonScenic>("nonScenic");
+	Reflect<components::UndrawnPickModel>(context)
+	    .Field<&components::UndrawnPickModel::mesh>("mesh")
+	    .Field<&components::UndrawnPickModel::drawnWith>("drawnWith")
+	    .Field<&components::UndrawnPickModel::takesCursor>("takesCursor");
 	Reflect<components::Unlit> {context};
 	Reflect<components::Velocity>(context)
 	    .Field<&components::Velocity::dX>("dX")

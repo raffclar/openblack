@@ -9,10 +9,6 @@
 
 #pragma once
 
-#include <optional>
-
-#include <glm/vec3.hpp>
-
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -25,9 +21,9 @@ class TempleExteriorSystemInterface
 public:
 	virtual ~TempleExteriorSystemInterface() = default;
 
+	/// Each turn also lets a player's temple entrances take the cursor from the first turn a temple of theirs stands fully
+	/// built
 	virtual void UpdateTurn() = 0;
-	/// The player whose temple's entrance a ray first meets, if it meets one (the entrance picked under the cursor)
-	[[nodiscard]] virtual std::optional<PlayerNames> EntranceAt(glm::vec3 origin, glm::vec3 direction) const = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -108,6 +108,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -424,6 +425,25 @@ std::optional<entt::entity> ScriptCameraCreature()
 	const auto entity = static_cast<entt::entity>(*thing);
 	const auto& registry = Locator::entitiesRegistry::value();
 	return registry.Valid(entity) && registry.AllOf<ecs::components::Creature>(entity) ? std::optional(entity) : std::nullopt;
+}
+
+/// Whether the hand, at the cursor's point in the world, is within the local player's influence (anywhere, with no point)
+bool HandInInfluence(const std::optional<glm::vec3>& cursor)
+{
+	return !cursor.has_value() || Locator::influenceSystem::value().PlayerInfluence(PlayerNames::PLAYER_ONE, *cursor) > 0.0f;
+}
+
+/// Whether the thing picked under the cursor is an entrance of the local player's own temple
+bool IsOwnTempleEntrance(std::optional<entt::entity> picked)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* entrance = picked.has_value() && registry.Valid(*picked)
+	                           ? registry.TryGet<const ecs::components::TempleEntrance>(*picked)
+	                           : nullptr;
+	const auto* temple = entrance != nullptr && registry.Valid(entrance->temple)
+	                         ? registry.TryGet<const ecs::components::Temple>(entrance->temple)
+	                         : nullptr;
+	return temple != nullptr && temple->owner == PlayerNames::PLAYER_ONE;
 }
 
 } // namespace
@@ -1258,9 +1278,10 @@ void Game::ProcessHandToolTipTurn()
 		// Over a flag of a town's store, the hand shows how much the town wants its thing, in the flag's own words
 		toolTips.SubmitInWords(ecs::town_desire_flags::k_NeedToolTip, flagTip->words, flagTip->percent);
 	}
-	else if (const auto submissions = shown && overToolTips && !over.has_value()
-	                                      ? gui::world_tooltip::Over(pointed.value_or(entt::null))
-	                                      : std::vector<gui::world_tooltip::Submission> {};
+	else if (const auto submissions =
+	             shown && overToolTips && !over.has_value()
+	                 ? gui::world_tooltip::Over(pointed.value_or(entt::null), HandInInfluence(_cursorWorldPosition))
+	                 : std::vector<gui::world_tooltip::Submission> {};
 	         !submissions.empty())
 	{
 		// Over a temple, a village centre, a store or a pile, the hand says what it holds or can do
@@ -2224,15 +2245,15 @@ bool Game::Update() noexcept
 				}
 				else if (!glm::any(glm::isnan(rayOrigin) || glm::isnan(rayDirection)))
 				{
-					// The Action button on the player's own temple's entrance takes them inside, when the scripts let it
+					// The Action button on the player's own temple's entrance, picked under the cursor, takes them inside,
+					// when the scripts let it
 					const auto& actions = Locator::gameActionSystem::value();
 					if (Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered &&
 					    Locator::cinematicDirectorSystem::value().IsInterfaceActive() &&
 					    !Locator::magicSystem::value().IsHandBusy() && actions.GetChanged(input::BindableActionMap::ACTION) &&
 					    actions.Get(input::BindableActionMap::ACTION))
 					{
-						enterTemple = Locator::templeExteriorSystem::value().EntranceAt(rayOrigin, rayDirection) ==
-						              PlayerNames::PLAYER_ONE;
+						enterTemple = IsOwnTempleEntrance(Locator::pickingSystem::value().GetPick().object);
 					}
 					// The leash keys, and the Action button tapping leash posts, and with the leash held giving orders and
 					// tying the leash to things.
@@ -3054,9 +3075,9 @@ bool Game::Initialize() noexcept
 				                   SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading temple mesh: {}", f.stem().string());
 				                   RegisterFile(meshManager, name, f, resources::L3DLoader::FromDiskTag {}, f);
 				                   // The temple's outside is blended from the temple meshes, into the first temple's,
-				                   // its entrance is picked under the cursor, and its worship sites wear its skin
+				                   // and its worship sites wear its skin
 				                   if (name.starts_with("temple/b_temple") || name.starts_with("temple/b_first_temple") ||
-				                       name == "temple/entrance_l3d" || name == "temple/b_worship_l3d")
+				                       name == "temple/b_worship_l3d")
 				                   {
 					                   RegisterFile(resources.GetL3DFiles(), name, f, resources::L3DFileLoader::FromDiskTag {},
 					                                f);
@@ -5219,8 +5240,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds)
 	else
 	{
 		auto frame = *cues.icons;
-		frame.handInInfluence = !_cursorWorldPosition.has_value() || Locator::influenceSystem::value().PlayerInfluence(
-		                                                                 PlayerNames::PLAYER_ONE, *_cursorWorldPosition) > 0.0f;
+		frame.handInInfluence = HandInInfluence(_cursorWorldPosition);
 		frame.tickMs = machine_clock::Ticks();
 		const auto icons = hand_tricons::WorldCamera(frame, _triconAngle);
 		_triconAngle = icons.rotateAngle;
