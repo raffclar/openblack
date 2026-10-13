@@ -39,6 +39,7 @@ public:
 	entt::entity CreateGrazer(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock,
 	                          entt::entity town) override;
 	void JoinFlock(entt::entity animal, entt::entity flock) override;
+	void LeaveFlock(entt::entity animal) override;
 	bool SetScriptState(entt::entity animal, LivingStates state) override;
 	void ScriptMoveTo(entt::entity animal, glm::vec2 point) override;
 	[[nodiscard]] std::optional<uint8_t> FinalGameStateOf(entt::entity animal) const override;

@@ -314,6 +314,11 @@ void TornadoSystem::ProcessTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<std::pair<entt::entity, particles::CarriedObject>> released;
 	registry.Each<CarriedByTornado>([&](entt::entity entity, const CarriedByTornado& carried) {
+		// What a vortex draws in is the vortex's to deal with
+		if (carried.carried != nullptr && carried.carried->carrier != particles::CarriedObject::Carrier::Tornado)
+		{
+			return;
+		}
 		if (carried.carried == nullptr || carried.carried->atom == nullptr)
 		{
 			released.emplace_back(entity, carried.carried != nullptr ? *carried.carried : particles::CarriedObject {});

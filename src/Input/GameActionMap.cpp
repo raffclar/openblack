@@ -374,8 +374,9 @@ bool GameActionMap::CanScalePointer() const
 void GameActionMap::StartScaledPointer(glm::ivec2 at)
 {
 	_scaledPointer.Place(at);
-	// The movements come with the system's own speed and acceleration, as its cursor moves, before the screen's scale
-	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "1");
+	// The movements are the mouse's own, without the system's pointer speed and acceleration (the user's choice), before
+	// the screen's scale
+	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");
 	if (SDL_SetRelativeMouseMode(SDL_TRUE) != 0)
 	{
 		return;
@@ -651,7 +652,6 @@ void GameActionMap::Frame()
 		else if (cursor.warpTo.has_value())
 		{
 			// The window keeps the mouse if it had it before the turn
-			SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "1");
 			if (!_pointerScaled)
 			{
 				SDL_SetRelativeMouseMode(SDL_FALSE);

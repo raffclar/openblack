@@ -7,8 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// What a tornado's particles ask of the world: the game turn, the colour of the land at its foot, and what it reaches,
-// picks up and catches, which the tornado system does
+// What a tornado's and a vortex's particles ask of the world: the game turn, the colour of the land at a tornado's foot,
+// what it reaches, picks up and catches, which the tornado system does, and the things a vortex draws in, which the vortex
+// system takes and throws back out
 
 #define LOCATOR_IMPLEMENTATIONS
 
@@ -18,6 +19,7 @@
 #include "3D/LandIslandInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -125,4 +127,30 @@ entt::entity GameParticleWorld::TakeFromPile(entt::entity pile, uint32_t amount,
 std::optional<glm::mat3> GameParticleWorld::Carry(const std::shared_ptr<particles::CarriedObject>& carried)
 {
 	return Locator::tornadoSystem::has_value() ? Locator::tornadoSystem::value().Carry(carried) : std::nullopt;
+}
+
+std::optional<particles::ParticleWorldInterface::VortexEntry>
+GameParticleWorld::EnterVortex(const std::shared_ptr<particles::CarriedObject>& carried)
+{
+	if (!Locator::vortexSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto taken = Locator::vortexSystem::value().EnterVortex(carried);
+	if (!taken.has_value())
+	{
+		return std::nullopt;
+	}
+	return VortexEntry {.position = taken->position,
+	                    .rotation = taken->rotation,
+	                    .velocity = taken->velocity,
+	                    .indestructible = taken->indestructible};
+}
+
+void GameParticleWorld::ThrowOutOfVortex(entt::entity object, float angle, float scale)
+{
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().ThrowOutOfVortex(object, angle, scale);
+	}
 }

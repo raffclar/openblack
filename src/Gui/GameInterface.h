@@ -146,6 +146,16 @@ public:
 	};
 	void SetMessage(std::optional<Message> message) { _message = std::move(message); }
 
+	/// Lines of words centred at the top of the screen, in black and again in yellow just right of and below, as the
+	/// temple's challenge room titles the picture it looks at closely
+	struct Caption
+	{
+		std::vector<std::u16string> lines;
+		/// From 0 to 255
+		uint8_t alpha;
+	};
+	void SetCaption(std::optional<Caption> caption) { _caption = std::move(caption); }
+
 	/// What the hand shows for what it is over
 	[[nodiscard]] ToolTips& GetToolTips() noexcept { return _toolTips; }
 	/// The colour over the whole screen, over the interface too, which the temple fades in and out by
@@ -310,6 +320,8 @@ private:
 	/// Whether the left mouse button is down, as the tattoo editor's dialog has seen it
 	bool _leftButtonDown {false};
 	std::optional<Message> _message;
+	std::optional<Caption> _caption;
+	void DrawCaption(glm::u16vec2 resolution);
 	std::vector<villager_labels::Request> _villagerLabels;
 	ToolTips _toolTips;
 	ScreenFade _screenFade;

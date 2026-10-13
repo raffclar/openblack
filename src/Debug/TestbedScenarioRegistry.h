@@ -585,8 +585,6 @@ struct Command
 		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
 		/// loses the last of its life. Needs no creature
 		DestroyTemple,
-		/// The player goes into their temple's main room, as tapping its entrance takes them in. Needs no creature
-		EnterTemple,
 		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
 		/// does: a static action's start, loop and end, or an individual action
 		ScriptPlay,
@@ -599,6 +597,14 @@ struct Command
 		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
 		/// flight, say). Needs no creature
 		Reframe,
+		/// A challenge's script records it as SNAPSHOT does: the challenge (value), its title (title, by its help text's
+		/// name), how far it has got (amount, 1 done), a quest (ctrl) or not; the camera is first put 50 above and 70
+		/// along z from a point (point, from the middle of the map), looking at it, and the picture is of that view.
+		/// Needs no creature
+		RecordChallenge,
+		/// The player is put in a room of the temple (value, by the temple's rooms: 0 the challenge room). Needs no
+		/// creature
+		EnterTemple,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -662,6 +668,8 @@ struct Command
 	uint32_t anim {0};
 	/// The hand demonstration played, by its file's name in the game's hand demonstrations
 	std::string_view handDemo;
+	/// The title of a challenge recorded, by its help text's name
+	std::string_view title;
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 /// Whether a command is the player's mouse, which needs no creature

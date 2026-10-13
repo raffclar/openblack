@@ -11,6 +11,7 @@
 
 #include <cstddef>
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -34,6 +35,9 @@ public:
 	[[nodiscard]] virtual std::optional<player_profiles::Profile> GetCurrentProfile() const = 0;
 	/// The file the current profile's creature is kept in between lands, none without a profile
 	[[nodiscard]] virtual std::optional<std::string> CreatureFile() const = 0;
+	/// The folder the current profile's saved games are kept in, as the file of what crosses between lands; none without
+	/// a profile or a place to keep it
+	[[nodiscard]] virtual std::optional<std::filesystem::path> SavedGamesFolder() const { return std::nullopt; }
 	/// Whether a new profile may take the name
 	[[nodiscard]] virtual player_profiles::NameCheck CheckNewName(std::u16string_view name) const = 0;
 	/// Makes a profile of the name with the player's symbol, plays as it and keeps it. The name must have been accepted

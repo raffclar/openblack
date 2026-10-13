@@ -67,6 +67,8 @@ public:
 	virtual entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) = 0;
 	/// An animal leaves its flock, which goes when it is left empty, and joins another as its newest member
 	virtual void JoinFlock(entt::entity animal, entt::entity flock) = 0;
+	/// An animal leaves its flock, which goes once it has no one left
+	virtual void LeaveFlock([[maybe_unused]] entt::entity animal) {}
 	/// A script sets what an animal does: held still, or going about with its flock. False for anything else, which
 	/// openblack's animals can't do yet.
 	virtual bool SetScriptState(entt::entity animal, LivingStates state) = 0;

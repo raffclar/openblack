@@ -393,13 +393,9 @@ void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices,
 
 TempleScrolls::Facts TempleScrolls::Facts::Mock()
 {
-	// TODO(raffclar): Made up until openblack keeps the player's challenges, saved games and the help it has shown; the
-	// world's statistics and the creature are filled in by the temple from the game
+	// TODO(raffclar): Made up until openblack keeps the player's saved games and the help it has shown; the world's
+	// statistics, the challenges and the creature are filled in by the temple from the game
 	Facts facts;
-	facts.challengesDiscovered = 2;
-	facts.challengesCompleted = 1;
-	// The titles come from the lands' scripts, which openblack doesn't give them yet
-	facts.challenges = {"HELP_TEXT_GENERAL_CHALLENGE_START_02", "HELP_TEXT_GENERAL_CHALLENGE_START_04"};
 	facts.saveCount = 4;
 	facts.loadCount = 2;
 	facts.savedGames = {{u"04/10/2026 21:14", u"Land 1"}, {u"03/10/2026 18:02", u""}};
@@ -633,7 +629,7 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 		text.AddNewLine();
 		for (const auto challenge : facts.challenges)
 		{
-			text.Add(get(challenge));
+			text.Add(helpText(challenge));
 		}
 		text.End();
 		break;

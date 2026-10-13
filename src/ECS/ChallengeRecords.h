@@ -59,6 +59,22 @@ Outcome Record(Registry& registry, const script::challenge_snapshots::Snapshot& 
 /// The record of a challenge, none before it has started
 [[nodiscard]] std::optional<entt::entity> Find(const Registry& registry, uint32_t challenge);
 
+/// The records in the order their challenges started, which is also the order of their pictures in the challenge room
+[[nodiscard]] std::vector<entt::entity> InOrder(const Registry& registry);
+
+/// A challenge is done once its success is exactly 1
+[[nodiscard]] bool IsDone(const components::ChallengeRecord& record);
+
+/// What the challenge room's scroll lists: how many challenges have started, how many are done, and their titles (help
+/// text numbers) in the order they started
+struct Listing
+{
+	int32_t discovered {0};
+	int32_t completed {0};
+	std::vector<uint32_t> titles;
+};
+[[nodiscard]] Listing List(const Registry& registry);
+
 /// The record's reminder script arguments in the order the script is to be given them, the first given first
 [[nodiscard]] std::vector<script::challenge_snapshots::Value> ReminderArguments(const components::ChallengeRecord& record);
 

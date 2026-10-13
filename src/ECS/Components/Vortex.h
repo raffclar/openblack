@@ -66,6 +66,8 @@ struct Vortex
 	uint32_t stateStartTurn {0};
 	/// Its middle: where it was made, on the land
 	glm::vec3 centre {0.0f};
+	/// How high above the land it was made
+	float altitude {0.0f};
 	/// How far it has levelled the ground so far; below 0 before it first does
 	float levelApplied {-1.0f};
 	/// The levelled square's heights as they were when it first levelled them, x major, and their average
@@ -79,6 +81,12 @@ struct Vortex
 	uint32_t lightMapEffect {0};
 	/// Only a vortex that leads into the land keeps one
 	Arrival arrival;
+};
+
+/// A thing a vortex that leads away has handed to its effect this turn, to be drawn in once the effect next steps
+struct DrawnIntoVortex
+{
+	entt::entity vortex {entt::null};
 };
 
 } // namespace openblack::ecs::components

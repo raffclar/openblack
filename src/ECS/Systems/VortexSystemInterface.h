@@ -11,14 +11,22 @@
 
 #include <cstdint>
 
+#include <memory>
+#include <optional>
 #include <span>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "ECS/Components/Vortex.h"
 #include "Enums.h"
+
+namespace openblack::particles
+{
+struct CarriedObject;
+}
 
 namespace openblack::ecs::systems
 {
@@ -44,6 +52,16 @@ public:
 
 	virtual ~VortexSystemInterface() = default;
 
+	/// How a thing a vortex starts to draw in starts: where it stands, turned, the velocity it is taken with and whether
+	/// it can't be destroyed
+	struct Taken
+	{
+		glm::vec3 position {0.0f};
+		glm::mat3 rotation {1.0f};
+		glm::vec3 velocity {0.0f};
+		bool indestructible {false};
+	};
+
 	/// A vortex of a kind made at a point on the land, raised by an altitude above the ground there
 	virtual entt::entity Create(glm::vec3 position, VortexType type, float altitude) = 0;
 	/// A vortex starts to fade out, whatever it was doing, and goes when it has. Whether the thing was a vortex.
@@ -61,6 +79,14 @@ public:
 	/// and its effect over the land step with its openness, its glow takes its brightness, and its marks on the ground
 	/// follow its openness
 	virtual void UpdateFrame(float gameSeconds) = 0;
+	/// A vortex's particle starts drawing in a thing the vortex handed it: it leaves the land and its own doings and,
+	/// unless it can't be destroyed, its town or its young, and is written to the crossing file for the next land. None
+	/// when it can't be carried.
+	virtual std::optional<Taken> EnterVortex(const std::shared_ptr<particles::CarriedObject>& carried) = 0;
+	/// A thing that can't be destroyed comes back out of a vortex's middle, thrown out at an angle across the land at a
+	/// scale of the usual speeds
+	virtual void ThrowOutOfVortex(entt::entity object, float angle, float scale) = 0;
+
 	/// The open vortices' marks on the ground as the last frame left them
 	[[nodiscard]] virtual std::span<const GroundMark> GetGroundMarks() const = 0;
 };

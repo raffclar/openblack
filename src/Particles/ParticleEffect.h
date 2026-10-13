@@ -205,7 +205,16 @@ struct BoltShare
 /// go where the particle was once the particle has gone
 struct CarriedObject
 {
+	/// What carries it, which decides what becomes of it once its particle has gone
+	enum class Carrier : uint8_t
+	{
+		/// Flung out by a tornado, to fall
+		Tornado,
+		/// Drawn into a vortex that leads away from the land, to go with it
+		Vortex,
+	};
 	entt::entity object {entt::null};
+	Carrier carrier {Carrier::Tornado};
 	/// The particle, while it carries the object
 	const Atom* atom {nullptr};
 	/// Where the particle was last drawn, kept once it has gone
@@ -374,6 +383,21 @@ public:
 	/// A particle starts carrying an object, which leaves the ground and follows it; the object's rotation for the
 	/// particle to start with, none when it can't be carried
 	virtual std::optional<glm::mat3> Carry(const std::shared_ptr<CarriedObject>& /*carried*/) { return std::nullopt; }
+	/// How a thing a vortex starts to draw in starts: where it stands, turned, the velocity it is taken with and whether
+	/// it can't be destroyed
+	struct VortexEntry
+	{
+		glm::vec3 position {0.0f};
+		glm::mat3 rotation {1.0f};
+		glm::vec3 velocity {0.0f};
+		bool indestructible {false};
+	};
+	/// A vortex's particle starts drawing in a thing it was handed, which leaves the land and its own doings and, unless
+	/// it can't be destroyed, leaves the land for good; none when it can't be carried
+	virtual std::optional<VortexEntry> EnterVortex(const std::shared_ptr<CarriedObject>& /*carried*/) { return std::nullopt; }
+	/// A thing that can't be destroyed comes back out of a vortex's middle, from where its particle was, thrown out at an
+	/// angle across the land at a scale of the usual speeds
+	virtual void ThrowOutOfVortex(entt::entity /*object*/, float /*angle*/, float /*scale*/) {}
 	/// The extra points of an object's model, placed in the world as the object stands; none for a model without any
 	[[nodiscard]] virtual std::vector<glm::vec3> TargetExtraPoints(entt::entity /*target*/) const { return {}; }
 	/// Where an object a rule follows stands, none once it is no longer there

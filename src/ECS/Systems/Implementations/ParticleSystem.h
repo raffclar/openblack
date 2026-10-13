@@ -99,6 +99,8 @@ public:
 	void CatchCreature(entt::entity creature) override;
 	entt::entity TakeFromPile(entt::entity pile, uint32_t amount, float sizeShare) override;
 	std::optional<glm::mat3> Carry(const std::shared_ptr<particles::CarriedObject>& carried) override;
+	std::optional<VortexEntry> EnterVortex(const std::shared_ptr<particles::CarriedObject>& carried) override;
+	void ThrowOutOfVortex(entt::entity object, float angle, float scale) override;
 	[[nodiscard]] std::vector<glm::vec3> TargetExtraPoints(entt::entity target) const override;
 	[[nodiscard]] std::optional<glm::vec3> ObjectPosition(entt::entity object) const override;
 	[[nodiscard]] uint64_t GameMilliseconds() const override;

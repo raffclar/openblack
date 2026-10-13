@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <fstream>
+#include <memory>
+#include <optional>
 #include <vector>
 
 #include "3D/MapCoords.h"
@@ -37,6 +40,8 @@ public:
 	void ProcessTurn() override;
 	void UpdateFrame(float gameSeconds) override;
 	[[nodiscard]] std::span<const GroundMark> GetGroundMarks() const override { return _groundMarks; }
+	std::optional<Taken> EnterVortex(const std::shared_ptr<particles::CarriedObject>& carried) override;
+	void ThrowOutOfVortex(entt::entity object, float angle, float scale) override;
 
 private:
 	/// A vortex's effects start where it is made
@@ -44,7 +49,17 @@ private:
 	/// They go at once with it
 	static void DeleteEffects(const components::Vortex& vortex);
 	/// A fully open vortex that leads away takes what it reaches this turn
-	static void Pull(const components::Vortex& vortex);
+	static void Pull(entt::entity entity, const components::Vortex& vortex);
+	/// A thing it takes is handed to its effect, which starts drawing it in when it next steps
+	static void HandOver(entt::entity vortexEntity, const components::Vortex& vortex, entt::entity thing);
+	/// A pile it reaches gives up a pot of what it holds, which it takes
+	static void TakeFromPile(entt::entity vortexEntity, const components::Vortex& vortex, entt::entity pile);
+	/// A new vortex that leads away empties the crossing file and writes to it until it goes
+	void StartCrossingFile(entt::entity vortex);
+	/// The line of a thing taken, relative to the vortex
+	void WriteCrossing(const components::Vortex& vortex, entt::entity thing);
+	/// Whatever a vortex was drawing in whose particle has gone, with the vortex or at its middle, goes too
+	static void RemoveTheTaken();
 	/// A creature it reaches sparkles away once near the middle, if it may be taken
 	static void PullCreature(entt::entity entity, const components::Creature& creature, const glm::vec3& position,
 	                         const map_coords::MapCoords& centre);
@@ -54,6 +69,9 @@ private:
 	static void LevelGround(components::Vortex& vortex, float amount);
 
 	std::vector<GroundMark> _groundMarks;
+	/// The crossing file, written by the vortex that last started leading away while it lasts
+	std::ofstream _crossing;
+	entt::entity _crossingVortex {entt::null};
 };
 
 } // namespace openblack::ecs::systems

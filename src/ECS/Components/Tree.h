@@ -29,6 +29,8 @@ struct Tree
 	uint16_t growthCountdown {0};
 	/// Made smaller than its largest size: only such a tree grows, and only while in a forest
 	bool madeToGrow {false};
+	/// Made by its land as not part of the scenery
+	bool nonScenic {false};
 };
 
 } // namespace openblack::ecs::components

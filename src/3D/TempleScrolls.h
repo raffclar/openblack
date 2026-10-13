@@ -133,8 +133,8 @@ public:
 		std::array<int32_t, 8> discipleKinds {};
 		int32_t challengesDiscovered {0};
 		int32_t challengesCompleted {0};
-		/// The titles of the challenges discovered
-		std::vector<std::string_view> challenges;
+		/// The titles of the challenges discovered, as help text numbers, in the order they started
+		std::vector<uint32_t> challenges;
 		std::chrono::seconds timePlayed {0};
 		int32_t saveCount {0};
 		int32_t loadCount {0};

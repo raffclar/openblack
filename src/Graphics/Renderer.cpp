@@ -1733,8 +1733,8 @@ void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 		const glm::vec4 u_spriteParams {1.0f, 1.0f, 1.0f, 0.0f};
 		for (const auto& marker : markers)
 		{
-			const auto model = glm::scale(
-			    glm::translate(glm::mat4(1.0f), origin + marker.position + glm::vec3(0.0f, 0.1f, 0.0f)), glm::vec3(k_GlowSize));
+			const auto glow = marker.glow.value_or(marker.position + glm::vec3(0.0f, 0.1f, 0.0f));
+			const auto model = glm::scale(glm::translate(glm::mat4(1.0f), origin + glow), glm::vec3(k_GlowSize));
 			bgfx::setTransform(glm::value_ptr(model));
 			spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
 			spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));

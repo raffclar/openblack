@@ -36,6 +36,7 @@ namespace openblack
 class CameraModel;
 class CreatureCaveEffects;
 class TempleCameraModel;
+class TempleChallengeRoom;
 class TempleScrolls;
 class TempleSigns;
 
@@ -170,8 +171,18 @@ private:
 	/// The rooms' scrolls, written as the temple opens, and the labels of their signs
 	std::unique_ptr<TempleScrolls> _scrolls;
 	std::unique_ptr<TempleSigns> _signs;
-	/// As each room is set up: makes and writes the scrolls, and finds the signs
+	/// As each room is set up: makes and writes the scrolls, and finds the signs and the challenge room's pictures
 	void CreateScrolls();
+	/// The challenge room's pictures, frames and buttons
+	std::unique_ptr<TempleChallengeRoom> _challengeRoom;
+	/// The challenge whose reminder the player is leaving the temple to replay, once the screen is white
+	std::optional<entt::entity> _replay;
+	/// Fades to white with a woosh to leave and replay a challenge
+	void ReplayChallenge(entt::entity record);
+	/// Leaves the temple, the camera put back where the challenge's picture was taken, and starts its reminder
+	void LeaveToReplayChallenge();
+	/// Moves on the challenge room's pictures and its close look's words
+	void UpdateChallengeRoom();
 	/// This frame's text in the rooms
 	std::vector<OrientedTextVertex> _text;
 	/// Whether the options room has opened the game's options

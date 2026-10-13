@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "ScriptHeaders/NativeStubCalls.h"
+#include "ScriptHeaders/ScriptChallengeSnapshots.h"
 
 namespace openblack::chlapi
 {
@@ -41,6 +42,12 @@ public:
 	/// the dialogue (a help script holding it is stopped first). True when it started; false too before the challenge
 	/// has a record.
 	static bool StartChallengeReminder(uint32_t challenge);
+	/// A challenge's reminder script starts with its record's arguments, as the temple's challenge room replays it.
+	/// False before the challenge has a record.
+	static bool StartChallengeScript(uint32_t challenge);
+	/// A challenge recorded as a script's snapshot records it: the record kept, its picture asked for and the player's
+	/// alignment moved
+	static void RecordChallenge(const script::challenge_snapshots::Snapshot& snapshot, script::challenge_snapshots::Call call);
 	/// A help script holds the dialogue
 	[[nodiscard]] static bool HelpScriptHoldsDialogue();
 	/// As the player's Escape does outside a cut scene: the help scripts stop and both advisors are cut short
