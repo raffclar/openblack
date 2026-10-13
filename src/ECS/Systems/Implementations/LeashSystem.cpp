@@ -1265,7 +1265,11 @@ void LeashSystem::ProcessTurn()
 		auto* mind = MindOf(registry, entity);
 		const auto* body = registry.TryGet<const Creature>(entity);
 		const auto* transform = registry.TryGet<const Transform>(entity);
-		// Fighting or knocked out, the leash doesn't pull it about
+		// Fighting or knocked out, the leash doesn't pull it about.
+		// TODO(creature-fights-4): in the game a held rope pulled taut (its applied force over 0.8) also takes a
+		// fighting creature out of its fight (bw1-decomp creature/creature_fights_4.md). That waits for the rope's
+		// tension to follow the game's leash force: it reads fully taut even with the hand right by the creature, so every
+		// fight with the leash held would end at once.
 		if (body == nullptr || transform == nullptr || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
 		{
 			continue;
@@ -1777,6 +1781,27 @@ bool LeashSystem::OrderOn(PlayerNames player, entt::entity object)
 	return TakeThingOrder(*creature, object);
 }
 
+bool LeashSystem::TakeOutOfFight(entt::entity creature)
+{
+	if (!Locator::creatureFightSystem::has_value())
+	{
+		return true;
+	}
+	auto& fights = Locator::creatureFightSystem::value();
+	// On its way to a fight it takes no orders; once duelling, an order calls the fight off
+	if (fights.IsSettingUpFight(creature))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders on its way to a fight",
+		                   entt::to_integral(creature));
+		return false;
+	}
+	if (fights.IsFighting(creature))
+	{
+		fights.CallOff(creature);
+	}
+	return true;
+}
+
 bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1834,6 +1859,10 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		leashes.help = CreatureLeash::Help::Inaccessible;
 		leashes.helpDesire.reset();
 		TellHelp(creature, {.kind = creature_help::Kind::FailureExplanation, .parameter = creature_help::k_Inaccessible});
+		return false;
+	}
+	if (!TakeOutOfFight(creature))
+	{
 		return false;
 	}
 	if (order.acknowledged)
@@ -1937,6 +1966,10 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	{
 		return TakeGroundOrder(creature, objectAt);
 	}
+	if (!TakeOutOfFight(creature))
+	{
+		return false;
+	}
 	const auto& body = registry.Get<const Creature>(creature);
 	const auto& transform = registry.Get<const Transform>(creature);
 	const auto height = CreatureHeight(body);
@@ -1944,8 +1977,8 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	const bool isCreature = registry.AllOf<Creature>(object);
 	const auto attempts = orders::OnThing({
 	    .carrying = HeldBy(creature).has_value(),
-	    .liftable =
-	        Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().CanPickUp(object),
+	    .liftable = Locator::creatureObjectActionSystem::has_value() &&
+	                Locator::creatureObjectActionSystem::value().CanPickUp(creature, object),
 	    .creature = isCreature,
 	    .distance = glm::distance(transform.position, objectAt),
 	    .leash = type,

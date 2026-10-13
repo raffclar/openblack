@@ -35,6 +35,7 @@
 #include "3D/MapCoords.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/FrameBuffer.h"
+#include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
@@ -162,9 +163,11 @@ void LandIsland::Build(const LandData& data)
 	const auto& lndBlocks = data.blocks;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "[LandIsland] loading {} blocks", lndBlocks.size());
 	_landBlocks.resize(lndBlocks.size());
+	_blockTriangles = std::make_unique<SharedIndexLists<graphics::IndexBuffer>>();
 	for (size_t i = 0; i < _landBlocks.size(); i++)
 	{
 		_landBlocks[i].SetLndBlock(lndBlocks[i]);
+		_landBlocks[i].SetTriangleSets(*_blockTriangles);
 	}
 
 	_extentIndexMin.x = std::numeric_limits<uint16_t>::max();

@@ -256,6 +256,8 @@ void InspectorSystem::EndLoading()
 	{
 		_loadingHelper.join();
 	}
+	// A scenario asked for meanwhile is loaded next: the game goes on answering as loading until it is laid out
+	RequestQueuedScenario();
 	// The land has started, and none of its frames has run yet
 	_game->Loaded();
 }
@@ -271,8 +273,46 @@ void InspectorSystem::AnswerWhileLoading()
 			loading = _loading;
 		}
 		// Only what reads nothing of the game is answered here; the game's own frames answer the rest once loaded
-		_server->Poll([this, &loading](std::string_view line) { return _inspector.HandleWhileLoading(line, loading); });
+		_server->Poll([this, &loading](std::string_view line) {
+			return _inspector.HandleWhileLoading(
+			    line, loading, [this](const inspector::Request& request) { return QueueWhileLoading(request); });
+		});
 		std::this_thread::sleep_for(k_Interval);
+	}
+}
+
+std::optional<inspector::QueryResult> InspectorSystem::QueueWhileLoading(const inspector::Request& request)
+{
+	if (request.query != "game.scenario")
+	{
+		return std::nullopt;
+	}
+	const auto id = request.params.is_object() && request.params.contains("id") && request.params["id"].is_string()
+	                    ? request.params["id"].get<std::string>()
+	                    : std::string();
+	if (testbed_scenarios::Find(id) == nullptr)
+	{
+		return inspector::QueryResult::Error("no scenario " + id + "; ask game.scenarios for them");
+	}
+	{
+		const std::scoped_lock lock(_loadingMutex);
+		_queuedScenario = id;
+	}
+	return inspector::QueryResult::Value({{"loading", id}, {"queued", true}});
+}
+
+void InspectorSystem::RequestQueuedScenario()
+{
+	std::optional<std::string> id;
+	{
+		const std::scoped_lock lock(_loadingMutex);
+		id = std::exchange(_queuedScenario, std::nullopt);
+	}
+	if (id.has_value())
+	{
+		// As the query would have been answered had the game been ready
+		const auto line = inspector::Json {{"query", "game.scenario"}, {"params", {{"id", *id}}}}.dump();
+		static_cast<void>(_inspector.Handle(line));
 	}
 }
 
@@ -292,7 +332,12 @@ void InspectorSystem::Service()
 	                         : std::nullopt;
 	if (const auto loading = inspector::ScenarioLoading(pending); loading.has_value())
 	{
-		_server->Poll([this, &loading](std::string_view line) { return _inspector.HandleWhileLoading(line, *loading); });
+		_server->Poll([this, &loading](std::string_view line) {
+			return _inspector.HandleWhileLoading(
+			    line, *loading, [this](const inspector::Request& request) { return QueueWhileLoading(request); });
+		});
+		// A scenario asked for over the one loading replaces it
+		RequestQueuedScenario();
 	}
 	else
 	{

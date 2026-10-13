@@ -226,3 +226,61 @@ TEST_F(CreatureFightSystemTest, AScriptReadsAndSetsTheFightHealthInAndOutOfAFigh
 	fights.SetFightHealth(other, 1.5f);
 	EXPECT_FLOAT_EQ(fights.GetFightHealth(other), 1.5f);
 }
+
+TEST_F(CreatureFightSystemTest, AFightCalledOffEndsWithNoWinnerAndNoResponse)
+{
+	Locator::reactionSystem::emplace<RecordedReactions>();
+	auto& reactions = static_cast<RecordedReactions&>(Locator::reactionSystem::value());
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+	}
+	EXPECT_TRUE(fights.QueueMove(first, fight::AttackMove(fight::Band::High), false));
+	fights.CallOff(first);
+	for (const auto self : {first, second})
+	{
+		const auto& side = registry.Get<const CreatureFighting>(self);
+		// Both wind down to stand, with nothing left to do and nothing to celebrate or sulk about
+		EXPECT_TRUE(side.ended);
+		EXPECT_TRUE(side.fighter.stopping);
+		EXPECT_TRUE(side.played);
+		EXPECT_EQ(side.stage, CreatureFighting::Stage::Respond);
+		EXPECT_TRUE(side.fighter.queue.Empty());
+	}
+	// Nobody won it
+	EXPECT_TRUE(reactions.made.empty());
+	EXPECT_EQ(registry.Get<const CreatureFightRecord>(first).wins, 0u);
+	EXPECT_EQ(registry.Get<const CreatureFightRecord>(second).wins, 0u);
+	Locator::reactionSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, OnTheWayToAFightACreatureIsSettingItUp)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_FALSE(fights.IsSettingUpFight(first));
+	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Approach;
+	EXPECT_TRUE(fights.IsSettingUpFight(first));
+	// Called off then, it simply leaves the fight
+	fights.CallOff(first);
+	EXPECT_FALSE(registry.AllOf<CreatureFighting>(first));
+}
+
+TEST_F(CreatureFightSystemTest, ACreatureRefusesAFightWithOneTooBigOrTooSmall)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto big = MakeCreature(registry, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 0.0f});
+	const auto small = MakeCreature(registry, PlayerNames::PLAYER_TWO, {130.0f, 0.0f, 0.0f});
+	registry.Get<Creature>(big).size = 1.5f;
+	registry.Get<Creature>(small).size = 0.6f;
+	using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
+	// Less than half the asker's height, it says no, either way round
+	EXPECT_EQ(fights.StartFight(big, small), Start::Refused);
+	EXPECT_EQ(fights.StartFight(small, big), Start::Refused);
+	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(big));
+	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(small));
+	// Only one of the two under a script's control: refused too
+	registry.Get<Creature>(small).size = 1.0f;
+	registry.Assign<ScriptControlled>(small);
+	EXPECT_EQ(fights.StartFight(big, small), Start::Refused);
+}

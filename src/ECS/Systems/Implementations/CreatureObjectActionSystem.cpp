@@ -41,13 +41,16 @@
 #include "Creature/CreatureThrow.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
@@ -71,7 +74,9 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -938,7 +943,8 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		{
 			Fail(action, "there is nothing there");
 		}
-		else if (action.kind == Kind::PickUp && (!CanPickUp(*action.target) || registry.AllOf<HeldByCreature>(*action.target)))
+		else if (action.kind == Kind::PickUp &&
+		         (!CanPickUp(creature, *action.target) || registry.AllOf<HeldByCreature>(*action.target)))
 		{
 			Fail(action, "it can't be picked up");
 		}
@@ -1329,7 +1335,7 @@ std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object
 	return value > 0.0f ? std::optional(value) : std::nullopt;
 }
 
-bool CreatureObjectActionSystem::CanPickUp(entt::entity object) const
+bool CreatureObjectActionSystem::CanPickUp(entt::entity creature, entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
@@ -1338,10 +1344,30 @@ bool CreatureObjectActionSystem::CanPickUp(entt::entity object) const
 	}
 	// Of pots and piles, only food can be picked up, to eat; of animals, those the animals' own rules allow, as a bird
 	// low over the land
-	return registry.AnyOf<MobileObject, Ball, Villager>(object) ||
-	       (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value()) ||
-	       (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value() &&
-	        Locator::animalSystem::value().CanBePickedUpByCreature(object));
+	const bool kindCanBePickedUp = registry.AnyOf<MobileObject, Ball, Villager>(object) ||
+	                               (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value()) ||
+	                               (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value() &&
+	                                Locator::animalSystem::value().CanBePickedUpByCreature(object));
+	if (!kindCanBePickedUp)
+	{
+		return false;
+	}
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	const auto owner = body != nullptr ? std::optional(body->owner) : std::nullopt;
+	const auto* action = registry.AllOf<Villager>(object) ? registry.TryGet<const LivingAction>(object) : nullptr;
+	const bool worshipping = action != nullptr && owner.has_value() &&
+	                         action->states[static_cast<size_t>(LivingAction::Index::Final)] ==
+	                             static_cast<uint8_t>(VillagerStates::WorshippingAtWorshipSite) &&
+	                         ecs::world_objects::PlayerOf(object) == owner;
+	const bool computerCreature =
+	    owner.has_value() && Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(*owner);
+	return creature_object_actions::MayPickUp({
+	    .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
+	    .villagerAtHome = registry.AllOf<Villager, AtHome>(object),
+	    .worshippingForCreaturesPlayer = worshipping,
+	    .inScript = registry.AllOf<InScript>(object),
+	    .computerCreatureNotScripted = computerCreature && !registry.AllOf<ScriptControlled>(creature),
+	});
 }
 
 bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const

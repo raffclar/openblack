@@ -10,6 +10,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -54,6 +55,12 @@ struct DialogControl
 /// The start-of-game question's controls: its OK button, then each answer's radio button by its answer, which also
 /// answers to the name the developers' start gives that answer ("normal", "creature", "story", "old", "cow")
 [[nodiscard]] std::vector<DialogControl> SkipBoxControls(const gui::SkipBox& box);
+
+/// The name of the start-of-game question's answer picked now, as gui.windows shows it; empty if none is
+[[nodiscard]] std::string SkipBoxPicked(const gui::SkipBox& box);
+
+/// The middle of the start-of-game question's OK button, which the player presses to answer it and close it
+[[nodiscard]] std::optional<glm::ivec2> SkipBoxOk(const gui::SkipBox& box);
 
 /// The middle of the control a path names: its name or another of its names, in any case, with [n] before it for the
 /// n-th of that name from 0. Why not, if no control answers

@@ -280,6 +280,10 @@ struct ObjectSetup
 	bool indestructible {false};
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes
 	bool inScript {false};
+	/// A script has said it can't be picked up, and can't be moved, as Land 1's script says of the fisherman's wife
+	/// while she waits for the player
+	bool cannotBePickedUp {false};
+	bool immovable {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
 	/// A building of the town holds this much wood, rather than the scenario town's usual stock
@@ -512,6 +516,8 @@ struct Command
 		FightStep,
 		FightSpecial,
 		FightAuto,
+		/// In the fight, a miracle (value, by its magic type) added to the end of the moves, as drawing its gesture does
+		FightSpell,
 		/// Being knocked out, as a fight's loser is, and brought round again
 		KnockOut,
 		BringRound,
@@ -815,10 +821,17 @@ struct Scenario
 	/// The weights a caught firefly's miracle is drawn by, by the miracles' names, as a land's script sets them; the
 	/// testbed's land sets none
 	std::vector<std::pair<std::string_view, float>> fireflyRewards;
+	/// A testbed set-up step: the scenario's town has its worship site put up built, as a land's script can, and its
+	/// totem asks for this share of its people at worship, which sends them there as the game does
+	std::optional<float> worshipShare;
+	/// The debug window opened as the scenario starts, by its name; none when empty
+	std::string_view debugWindow;
 };
 
 /// A town centre's totem
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
+/// The villagers around the player's temple, with their debug window open
+void AddTempleVillagerScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry
 void AddMiracleScenarios(std::vector<Scenario>& all);
 /// The miracles' globes and dispensers close up, and the hand's miracle effects
