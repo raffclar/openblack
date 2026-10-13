@@ -37,7 +37,8 @@ struct OneOffSpellSeed
 	SpellSeedType seedType {SpellSeedType::None};
 	/// The miracle it was made to give, none for one made from a seed alone
 	MagicType magicType {MagicType::None};
-	/// Where it floats; its transform turns about its middle from here to face the camera
+	/// Where it is, unturned: its transform turns about its middle to face the camera, and anything that moves the globe
+	/// (its flight when thrown) moves this with it
 	glm::vec3 position {0.0f};
 	int powerUp {magic::k_BasePowerUpLevel};
 	/// Scales the prayer power and the time of what it casts
