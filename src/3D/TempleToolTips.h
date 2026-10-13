@@ -15,6 +15,7 @@
 #include <span>
 
 #include "3D/CreatureCaveTargets.h"
+#include "3D/TempleChallengeRoom.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleScrolls.h"
 #include "3D/TempleToggles.h"
@@ -56,6 +57,11 @@ struct TempleToolTipInput
 	std::span<const TempleScrolls::Control> scrolls;
 	/// The main room's buttons drawn
 	std::span<const TempleToggles::Control> toggles;
+	/// The challenge room's pictures and buttons, the place of the picture last looked at in high detail, and whether
+	/// the camera was last sent to a picture rather than the scroll
+	std::span<const TempleChallengeControl> challenges;
+	std::optional<uint32_t> challengeHighDetail;
+	bool pictureLookedAt {false};
 };
 
 /// The tooltip before the temple has set one: Rotate, with the left button

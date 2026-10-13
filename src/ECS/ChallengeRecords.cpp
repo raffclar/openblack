@@ -10,6 +10,8 @@
 #include "ChallengeRecords.h"
 
 #include <algorithm>
+#include <iterator>
+#include <utility>
 
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/DiscipleRules.h"
@@ -104,6 +106,36 @@ challenge_records::Outcome challenge_records::Record(Registry& registry, const s
 	record.quest = call == snapshots::Call::Start && snapshot.quest;
 	Write(record, snapshot, call != snapshots::Call::Update, turn, references);
 	return {.record = entity, .alignment = std::nullopt, .takesPicture = true};
+}
+
+std::vector<entt::entity> challenge_records::InOrder(const Registry& registry)
+{
+	std::vector<std::pair<uint32_t, entt::entity>> ordered;
+	registry.Each<const ChallengeRecord>(
+	    [&ordered](entt::entity entity, const ChallengeRecord& record) { ordered.emplace_back(record.order, entity); });
+	std::ranges::sort(ordered, {}, &std::pair<uint32_t, entt::entity>::first);
+	std::vector<entt::entity> entities;
+	entities.reserve(ordered.size());
+	std::ranges::transform(ordered, std::back_inserter(entities), &std::pair<uint32_t, entt::entity>::second);
+	return entities;
+}
+
+bool challenge_records::IsDone(const ChallengeRecord& record)
+{
+	return record.success == 1.0f;
+}
+
+challenge_records::Listing challenge_records::List(const Registry& registry)
+{
+	Listing listing;
+	for (const auto entity : InOrder(registry))
+	{
+		const auto& record = registry.Get<ChallengeRecord>(entity);
+		++listing.discovered;
+		listing.completed += IsDone(record) ? 1 : 0;
+		listing.titles.push_back(record.title);
+	}
+	return listing;
 }
 
 std::vector<snapshots::Value> challenge_records::ReminderArguments(const ChallengeRecord& record)
