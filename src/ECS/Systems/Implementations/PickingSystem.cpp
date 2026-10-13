@@ -392,9 +392,9 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			continue;
 		}
-		// So are the lanterns at a temple's entrance, by its creature's pen, and the explorers' boat film: the cursor
-		// meets what is behind them
-		if (registry.AnyOf<TempleLantern, BoatFilmPart>(entity))
+		// So are the lanterns at a temple's entrance, by its creature's pen, the lanterns on the Norse gate and the
+		// explorers' boat film: the cursor meets what is behind them
+		if (registry.AnyOf<TempleLantern, GateLantern, BoatFilmPart>(entity))
 		{
 			continue;
 		}

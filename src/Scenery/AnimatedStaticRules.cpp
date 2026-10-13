@@ -174,3 +174,8 @@ std::vector<RouteCircle> animated_static::GateRouteCircles(glm::vec2 middle, glm
 	}
 	return circles;
 }
+
+LanternLook animated_static::GateLanternLook(bool gateInDrawList, bool gateOnScreen, glm::vec2 gate, glm::vec2 lantern)
+{
+	return {.shown = gateInDrawList && gateOnScreen, .lightOffset = gate - lantern, .snowCap = k_NoSnowCap};
+}

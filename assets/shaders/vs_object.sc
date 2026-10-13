@@ -141,11 +141,12 @@ void main()
 #endif // USE_BONE_PALETTE
 #ifdef USE_INSTANCING
 	// An instance's first column says in w where its bones are, where an affine matrix has 0: an animal's place among
-	// its model's instances, or a villager's first bone in the palette
+	// its model's instances, or a villager's first bone in the palette. The w of the second and third columns is an
+	// offset on the land from the instance's place to the point that gives its land light (graphics::instance_light).
 	mat4 model;
 	model[0] = vec4(i_data0.xyz, 0.0f);
-	model[1] = i_data1;
-	model[2] = i_data2;
+	model[1] = vec4(i_data1.xyz, 0.0f);
+	model[2] = vec4(i_data2.xyz, 0.0f);
 	model[3] = i_data3;
 #ifdef USE_BONE_TEXTURE
 	mat4 bone = BoneMatrix(u_bones.x + (i_data0.w * u_bones.y) + float(modelIndex));
@@ -200,6 +201,16 @@ void main()
 	vec3 colour = vec3_splat(255.0f);
 	bool shadedElsewhere = u_shadeAt.w > 0.0f;
 	vec3 lightOrigin = shadedElsewhere ? u_shadeAt.xyz : origin;
+	// The haze is at the object, or at the point that shades it
+	vec3 fogOrigin = lightOrigin;
+#ifdef USE_INSTANCING
+	// A lantern on the Norse gate takes the land's light and colour of the point where the gate stands
+	vec2 lightOffset = vec2(i_data1.w, i_data2.w);
+	if (any(notEqual(lightOffset, vec2_splat(0.0f))))
+	{
+		lightOrigin.xz = i_data3.xz + lightOffset;
+	}
+#endif // USE_INSTANCING
 #ifndef USE_LIGHTMAP
 	if (u_landLight.x > 0.0f)
 	{
@@ -221,7 +232,6 @@ void main()
 #endif // USE_INSTANCING
 	// The distance haze, once for the object at its origin: its colour fades and the haze's is added after the texture.
 	// The temple fogs a model where it stands, or where the draw says.
-	vec3 fogOrigin = lightOrigin;
 	if (InTempleFog())
 	{
 #ifdef USE_INSTANCING
