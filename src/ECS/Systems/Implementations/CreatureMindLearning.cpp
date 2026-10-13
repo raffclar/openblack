@@ -861,6 +861,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		{
 			creature_training::CountCarriedOut(mind.actionCounts, plan.action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+			mind.lastActionDone = plan.action;
 		}
 		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
 		{
@@ -896,6 +897,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		{
 			creature_training::CountCarriedOut(mind.actionCounts, mind.underway->action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+			mind.lastActionDone = mind.underway->action;
 		}
 		mind.underway.reset();
 	}
@@ -1983,37 +1985,48 @@ void CreatureMindSystem::ClearLearning(entt::entity creature)
 void CreatureMindSystem::SeeSkill(const glm::vec3& point, size_t skill)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> watching;
+	registry.Each<const Creature, const CreatureMindState, const Transform>(
+	    [&](entt::entity entity, const Creature&, const CreatureMindState& mind, const Transform& at) {
+		    if (mind.learnt.has_value() && glm::distance(at.position, point) <= k_ViewDistance)
+		    {
+			    watching.push_back(entity);
+		    }
+	    });
+	for (const auto entity : watching)
+	{
+		WatchSkill(entity, skill);
+	}
+}
+
+void CreatureMindSystem::WatchSkill(entt::entity creature, size_t skill)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	const auto* tables = GetTables();
-	if (tables == nullptr)
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (tables == nullptr || mind == nullptr || !mind->learnt.has_value())
 	{
 		return;
 	}
-	registry.Each<const Creature, CreatureMindState, const Transform>(
-	    [&](entt::entity entity, const Creature&, CreatureMindState& mind, const Transform& at) {
-		    if (!mind.learnt.has_value() || glm::distance(at.position, point) > k_ViewDistance)
-		    {
-			    return;
-		    }
-		    const auto progress = creature_watching::SeeSkill(mind.learnt->knowledge, skill, tables->skills,
-		                                                      mind.developmentPhase, mind.turn, k_TurnsPerSecond);
-		    if (progress.learnt && !progress.ignored)
-		    {
-			    creature_mind_model::Think(*mind.learnt, fmt::format("I've learnt to {}", tables->skills.at(skill).name));
-		    }
-		    // The advisor tells of it: too young to learn it, learnt it now, or still learning it (a skill it knows already
-		    // says nothing)
-		    using creature_help::Kind;
-		    const auto parameter = static_cast<uint32_t>(skill);
-		    if (progress.ignored && !progress.learnt)
-		    {
-			    TellHelp(entity, {.kind = Kind::CantLearnNormalActionYet, .parameter = parameter});
-		    }
-		    else if (!progress.ignored)
-		    {
-			    TellHelp(entity, {.kind = progress.learnt ? Kind::LessonNormalAction : Kind::NearlyLearntNormalAction,
-			                      .parameter = parameter});
-		    }
-	    });
+	const auto progress = creature_watching::SeeSkill(mind->learnt->knowledge, skill, tables->skills, mind->developmentPhase,
+	                                                  mind->turn, k_TurnsPerSecond);
+	if (progress.learnt && !progress.ignored)
+	{
+		creature_mind_model::Think(*mind->learnt, fmt::format("I've learnt to {}", tables->skills.at(skill).name));
+	}
+	// The advisor tells of it: too young to learn it, learnt it now, or still learning it (a skill it knows already says
+	// nothing)
+	using creature_help::Kind;
+	const auto parameter = static_cast<uint32_t>(skill);
+	if (progress.ignored && !progress.learnt)
+	{
+		TellHelp(creature, {.kind = Kind::CantLearnNormalActionYet, .parameter = parameter});
+	}
+	else if (!progress.ignored)
+	{
+		TellHelp(creature,
+		         {.kind = progress.learnt ? Kind::LessonNormalAction : Kind::NearlyLearntNormalAction, .parameter = parameter});
+	}
 }
 
 void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)
