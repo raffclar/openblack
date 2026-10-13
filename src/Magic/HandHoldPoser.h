@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Hand/HandBlend.h"
 #include "Magic/HandHoldPose.h"
 
 namespace openblack
@@ -77,19 +78,18 @@ public:
 	/// hand isn't animated otherwise.
 	bool Pose(const std::optional<HeldSeed>& seed, const Frame& frame, HandAnimation* animation,
 	          ecs::components::Transform& hand);
-	/// The drawn hand, faded from how it was drawn when it changed stage: the hand stays placed and its bones are made to
-	/// draw it blended from how it was last drawn (see hand_hold::WorldPoseFade). A thing it holds is drawn hanging from
-	/// where the hand was placed, faded (see hand_hold::StageFade).
-	void Fade(hand_hold::HandStage stage, entt::entity held, std::chrono::microseconds dt,
+	/// Blends the drawn hand after its changes in this frame. The hand stays at its place, and its bones draw the blend
+	/// (see hand_hold::WorldPoseFade). When hangsHeld is true, the held thing moves with the blend (see hand_hold::HeldFade).
+	/// When the game does not draw the hand, the blend stays the same. The changes of the hand still start the blend.
+	void Fade(const hand_blend::Changes& changes, bool drawn, bool hangsHeld, entt::entity held, float seconds,
 	          const ecs::components::Transform& hand, std::vector<glm::mat4>& bones);
 	/// Once the hand is drawn at its size: the held seed's in-hand effect is placed in its fingers
 	void PlaceHandEffect(const std::optional<HeldSeed>& seed, const HandAnimation* animation,
 	                     const ecs::components::Transform& hand, float handSize) const;
 
 private:
-	hand_hold::StageFade _fade;
+	hand_hold::HeldFade _heldFade;
 	hand_hold::WorldPoseFade _poseFade;
-	std::optional<hand_hold::HandStage> _stage;
 };
 
 } // namespace openblack::magic

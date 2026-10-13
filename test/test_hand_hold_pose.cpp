@@ -143,23 +143,6 @@ TEST(HandHoldPose, TheSeedTurnsHalfRoundForARightHandAndByItsOwnTurn)
 	ExpectNear(quarter[2], {-1.0f, 0.0f, 0.0f});
 }
 
-TEST(HandHoldPose, TakingASeedFadesTheDrawnHandOverThirteenHundredths)
-{
-	HandFade fade;
-	fade.Start({0.0f, 0.0f, 0.0f}, glm::mat3(1.0f));
-	glm::vec3 position {13.0f, 0.0f, 0.0f};
-	glm::mat3 rotation {2.0f};
-	fade.Step(0.065f, position, rotation);
-	EXPECT_NEAR(position.x, 6.5f, 1e-3f);
-	EXPECT_NEAR(rotation[0][0], 1.5f, 1e-3f);
-	EXPECT_TRUE(fade.Fading());
-	glm::vec3 later {13.0f, 0.0f, 0.0f};
-	glm::mat3 laterRotation {2.0f};
-	fade.Step(0.07f, later, laterRotation);
-	EXPECT_FLOAT_EQ(later.x, 13.0f);
-	EXPECT_FALSE(fade.Fading());
-}
-
 TEST(HandHoldPose, PullingAThingHeldAboveOpensTheHandByTheHandsHeightAlone)
 {
 	using openblack::magic::hand_hold::TugTimeMs;
@@ -170,45 +153,7 @@ TEST(HandHoldPose, PullingAThingHeldAboveOpensTheHandByTheHandsHeightAlone)
 	EXPECT_EQ(TugTimeMs(HoldType::Side, k_HoldSideMs, 0.8f, 1.0f), HoldTimeMs(HoldType::Side, k_HoldSideMs, 0.8f, 1.0f));
 }
 
-TEST(HandHoldPose, TheHandsStageIsWhatItHoldsPullsOrScoops)
-{
-	EXPECT_EQ(StageOf(false, false, false, false), HandStage::Free);
-	EXPECT_EQ(StageOf(true, false, false, false), HandStage::Holding);
-	EXPECT_EQ(StageOf(false, true, false, false), HandStage::Pulling);
-	// A handful still being scooped is scooping, not holding
-	EXPECT_EQ(StageOf(false, false, true, true), HandStage::Scooping);
-	EXPECT_EQ(StageOf(false, false, false, true), HandStage::Holding);
-}
-
-TEST(HandHoldPose, ChangingStageMovesTheDrawnHandOverInAStraightLine)
-{
-	StageFade fade;
-	glm::mat3 rotation {1.0f};
-	// Hovering over a rock, the hand is placed and drawn where it is
-	glm::vec3 position {0.0f, 2.0f, 0.0f};
-	EXPECT_EQ(fade.Step(HandStage::Free, 0.016f, position, rotation), glm::vec3(0.0f));
-	ExpectNear(position, {0.0f, 2.0f, 0.0f});
-	// Pulling it free puts the hand on its grip, 2 lower: halfway through the fade it is drawn halfway down
-	position = {0.0f, 0.0f, 0.0f};
-	fade.Step(HandStage::Pulling, 0.0f, position, rotation);
-	ExpectNear(position, {0.0f, 2.0f, 0.0f});
-	position = {0.0f, 0.0f, 0.0f};
-	fade.Step(HandStage::Pulling, 0.065f, position, rotation);
-	ExpectNear(position, {0.0f, 1.0f, 0.0f});
-	// Taken into the hand halfway down, the hand fades back up from where it was drawn, so it never jumps; what it holds
-	// fades from the grip where the hand was placed
-	position = {0.0f, 3.0f, 0.0f};
-	const auto offset = fade.Step(HandStage::Holding, 0.0325f, position, rotation);
-	ExpectNear(position, {0.0f, 1.5f, 0.0f});
-	ExpectNear(offset, {0.0f, -2.25f, 0.0f});
-	EXPECT_TRUE(fade.Fading());
-	position = {0.0f, 3.0f, 0.0f};
-	fade.Step(HandStage::Holding, 0.1f, position, rotation);
-	ExpectNear(position, {0.0f, 3.0f, 0.0f});
-	EXPECT_FALSE(fade.Fading());
-}
-
-TEST(HandHoldPose, ChangingStageBlendsEachDrawnBoneInAStraightLine)
+TEST(HandHoldPose, AChangeBlendsEachDrawnBoneInAStraightLine)
 {
 	WorldPoseFade fade;
 	// A two-bone hand: its wrist at its origin, its fingers 10 along its own y, drawn at a hundredth of its size
@@ -225,7 +170,7 @@ TEST(HandHoldPose, ChangingStageBlendsEachDrawnBoneInAStraightLine)
 	// bone is drawn halfway along its own straight line, rather than the hand folding up or swinging away
 	const glm::mat3 upsideDown {glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
 	const auto held = place({0.0f, 1.0f, 0.0f}, upsideDown);
-	fade.Start();
+	fade.Change();
 	auto holding = bones;
 	fade.Apply(k_FadeSeconds * 0.5f, held, holding);
 	EXPECT_TRUE(fade.Fading());
@@ -239,4 +184,65 @@ TEST(HandHoldPose, ChangingStageBlendsEachDrawnBoneInAStraightLine)
 	fade.Apply(k_FadeSeconds, held, holding);
 	EXPECT_FALSE(fade.Fading());
 	ExpectNear(glm::vec3((held * holding[1])[3]), {0.0f, 0.9f, 0.0f});
+}
+
+namespace
+{
+/// The place of a hand of one bone at a distance along x, after a frame of some seconds
+float DrawnAt(WorldPoseFade& fade, float x, float seconds, bool poseIntoKept = false)
+{
+	std::vector<glm::mat4> bones {glm::mat4(1.0f)};
+	const auto model = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f));
+	fade.Apply(seconds, model, bones, poseIntoKept);
+	return (model * bones[0])[3].x;
+}
+} // namespace
+
+TEST(HandHoldPose, TwoChangesBeforeAFrameBlendFromThePoseThatTheBlendKeptBefore)
+{
+	WorldPoseFade fade;
+	EXPECT_NEAR(DrawnAt(fade, 0.0f, 0.016f), 0.0f, k_Epsilon);
+	fade.Change();
+	// The first blend goes from 0 to 1 and stops
+	EXPECT_NEAR(DrawnAt(fade, 1.0f, k_FadeSeconds), 1.0f, k_Epsilon);
+	EXPECT_NEAR(DrawnAt(fade, 2.0f, 0.016f), 2.0f, k_Epsilon);
+	// One change blends from the last drawn pose, at 2
+	WorldPoseFade once = fade;
+	once.Change();
+	EXPECT_NEAR(DrawnAt(once, 3.0f, k_FadeSeconds * 0.5f), 2.5f, k_Epsilon);
+	// Two changes blend from the pose that the first blend kept, at 0
+	fade.Change();
+	fade.Change();
+	EXPECT_NEAR(DrawnAt(fade, 3.0f, k_FadeSeconds * 0.5f), 1.5f, k_Epsilon);
+}
+
+TEST(HandHoldPose, APoseIntoTheKeptPoseBlendsTowardsTheOldDrawnPoseForOneFrame)
+{
+	WorldPoseFade fade;
+	DrawnAt(fade, 0.0f, 0.016f);
+	fade.Change();
+	DrawnAt(fade, 1.0f, k_FadeSeconds);
+	DrawnAt(fade, 2.0f, 0.016f);
+	// The kept pose at 0 becomes the drawn pose, and the pose of the frame at 3 replaces the kept pose: the frame blends
+	// from 3 towards 0
+	fade.Change();
+	EXPECT_NEAR(DrawnAt(fade, 3.0f, k_FadeSeconds * 0.25f, true), 2.25f, k_Epsilon);
+	EXPECT_TRUE(fade.Fading());
+	// The next frame blends from the pose at 3 to the pose of the frame at 4
+	EXPECT_NEAR(DrawnAt(fade, 4.0f, k_FadeSeconds * 0.25f), 3.5f, k_Epsilon);
+	// At the end of the blend the hand is drawn as it is posed
+	EXPECT_NEAR(DrawnAt(fade, 5.0f, k_FadeSeconds), 5.0f, k_Epsilon);
+	EXPECT_FALSE(fade.Fading());
+}
+
+TEST(HandHoldPose, AHeldThingMovesFromTheLastPlaceOfTheHandInAStraightLine)
+{
+	HeldFade fade;
+	ExpectNear(fade.Step(0.016f, {0.0f, 2.0f, 0.0f}), glm::vec3(0.0f));
+	fade.Change();
+	// The hand goes 2 lower: halfway through the blend the thing is 1 above the hand
+	ExpectNear(fade.Step(k_FadeSeconds * 0.5f, {0.0f, 0.0f, 0.0f}), {0.0f, 1.0f, 0.0f});
+	EXPECT_TRUE(fade.Fading());
+	ExpectNear(fade.Step(k_FadeSeconds * 0.5f, {0.0f, 0.0f, 0.0f}), glm::vec3(0.0f));
+	EXPECT_FALSE(fade.Fading());
 }

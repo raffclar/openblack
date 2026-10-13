@@ -43,7 +43,7 @@ inline constexpr float k_AboveReachShare = 1.2f;
 inline constexpr float k_MaxSway = 0.3f;
 /// ...when the cursor runs this many pixels ahead of where the hand has caught up to
 inline constexpr float k_SwayLag = 80.0f;
-/// Taking or losing a seed cross-fades the hand from its last pose over this many seconds
+/// A change of the hand blends the drawn hand for this number of seconds
 inline constexpr float k_FadeSeconds = 0.13f;
 
 /// How a seed is held: as a miracle not yet ready until it is ready, then as its record says
@@ -85,77 +85,43 @@ struct HoldFrame
 /// about its up
 [[nodiscard]] glm::mat3 SeedTurn(const glm::mat3& basis, float yRotate, bool rightHanded);
 
-/// What the hand is doing, as far as where it is drawn goes: every change from one to another cross-fades the drawn hand
-enum class HandStage : uint8_t
-{
-	Free,
-	/// Pulling a thing free of the land
-	Pulling,
-	/// Holding a thing or a seed
-	Holding,
-	/// Scooping food, wood or fish into a handful
-	Scooping,
-};
-/// The hand's stage: a seed or a thing held is holding, unless the thing is still being scooped into the hand
-[[nodiscard]] HandStage StageOf(bool holdsSeed, bool pulling, bool scooping, bool holdsThing);
-
-/// A cross-fade of the drawn hand from where it was to where it now is, over k_FadeSeconds
-class HandFade
-{
-public:
-	/// The hand starts fading from where it was last drawn
-	void Start(glm::vec3 position, const glm::mat3& rotation);
-	/// Some seconds on, the drawn hand between where the fade began and where the hand now is
-	void Step(float seconds, glm::vec3& position, glm::mat3& rotation);
-	[[nodiscard]] bool Fading() const { return _time.has_value(); }
-
-private:
-	glm::vec3 _fromPosition {0.0f};
-	glm::mat3 _fromRotation {1.0f};
-	std::optional<float> _time;
-};
-
-/// The drawn hand's pose through its changes of stage, as the game blends it: for k_FadeSeconds after a change, every
-/// bone of the drawn hand moves in a straight line, in the world, from where it was last drawn to where the newly placed
-/// and posed hand has it. Blending the drawn bones themselves, rather than the hand's place and turn and its pose apart,
-/// keeps the hand together: turning between two very different holds can't fold it up or swing it away from what it
-/// holds.
+/// The blend of the drawn hand. The blend keeps two poses of the hand: the drawn pose and a kept pose. Each pose has
+/// the world matrices of all the bones. For k_FadeSeconds after a change, each bone moves in a straight line in the
+/// world, from the kept pose to the pose of the frame. This keeps the hand together. A turn between two very different
+/// holds cannot fold the hand or move it away from what it holds.
 class WorldPoseFade
 {
 public:
-	/// A change of stage: the drawn hand fades from how it was last drawn
-	void Start();
-	/// The hand placed by a model matrix and posed by its bones this frame: some seconds on, the bones are made to draw
-	/// it between how it was last drawn and how it is now placed and posed
-	void Apply(float seconds, const glm::mat4& model, std::vector<glm::mat4>& bones);
+	/// A change starts the blend again. The last drawn pose becomes the kept pose. The kept pose of the last change becomes
+	/// the drawn pose until the frame gives its pose.
+	void Change();
+	/// The model matrix and the bones place and pose the hand in this frame. The bones change to draw the blend. Usually
+	/// the pose of the frame replaces the drawn pose. When poseIntoKept is true, the pose of the frame replaces the kept
+	/// pose, and the blend goes from the pose of the frame to the old drawn pose.
+	void Apply(float seconds, const glm::mat4& model, std::vector<glm::mat4>& bones, bool poseIntoKept = false);
 	[[nodiscard]] bool Fading() const { return _time.has_value(); }
 
 private:
-	std::vector<glm::mat4> _lastDrawn;
-	std::vector<glm::mat4> _from;
+	std::vector<glm::mat4> _drawn;
+	std::vector<glm::mat4> _kept;
 	std::optional<float> _time;
 };
 
-/// The drawn hand through the hand's changes of stage. When the stage changes, the hand is drawn moving in a straight
-/// line over k_FadeSeconds from where it was last drawn to where it is now placed, turning from how it was last drawn,
-/// so it never jumps as it starts or stops pulling, holding or scooping, even when a change comes part way through an
-/// earlier fade. A thing held in it follows its own straight line from where the hand was last placed (before any
-/// fade), so that during a fade begun part way through another it can be drawn a little apart from the hand.
-class StageFade
+/// The position of a thing in the hand during the blend. Each change keeps the position where the hand was last placed.
+/// For k_FadeSeconds, the thing moves in a straight line from that position to the place of the hand.
+class HeldFade
 {
 public:
-	/// The hand placed at a position and turn this frame, in a stage: they become where it is drawn. How far a thing held
-	/// in it is drawn from where the hand was placed.
-	glm::vec3 Step(HandStage stage, float seconds, glm::vec3& position, glm::mat3& rotation);
-	[[nodiscard]] bool Fading() const { return _fade.Fading(); }
+	/// A change starts the blend again from the last place of the hand
+	void Change();
+	/// The hand is at a place in this frame. The result is the distance from that place to the position of the thing.
+	glm::vec3 Step(float seconds, glm::vec3 placed);
+	[[nodiscard]] bool Fading() const { return _time.has_value(); }
 
 private:
-	HandFade _fade;
-	HandFade _heldFade;
-	std::optional<HandStage> _stage;
 	std::optional<glm::vec3> _placed;
-	glm::vec3 _drawn {0.0f};
-	glm::mat3 _drawnRotation {1.0f};
+	glm::vec3 _from {0.0f};
+	std::optional<float> _time;
 };
 
 } // namespace openblack::magic::hand_hold

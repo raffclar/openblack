@@ -2276,6 +2276,37 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
 
+	// The camera looks at a rock on flat land from 35 m. The hand does one thing after another, with a pause between them.
+	all.push_back({
+	    .id = "hand.state_blend",
+	    .name = "The hand blends when it changes what it does",
+	    .facet = Facet::Hand,
+	    .description = "The hand moves over the bare land, then over the rock. It takes the rock and puts it down. It "
+	                   "grips the land and pulls the camera, then turns the camera with the middle button. Last, it "
+	                   "gets a food seed. Two seconds between the steps.",
+	    .expected = "At each change, every bone of the drawn hand moves in a straight line for 0.13 s from how it looked "
+	                "before. A grip of the bare land blends from the pose that the hand kept at the change before. A "
+	                "change of the camera animation shows almost no blend.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.35f, 0.8f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.65f, 0.75f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.35f, 0.8f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 1},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.1f, -0.1f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 1},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 2},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.15f, 0.0f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 2},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Food)}},
+	});
+
 	// The camera looks north over the land, a rock and a tiger to its east, all in the player's influence; the pointer stays
 	// east of the middle, clear of the testbed's window
 	all.push_back({

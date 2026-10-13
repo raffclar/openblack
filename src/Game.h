@@ -452,7 +452,7 @@ private:
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The hand's debugging trace keeps the frame: where the hand was placed and drawn, where it shows, on the screen
 	/// too, and what it was doing
-	void EndHandTrace(const glm::vec3& placed, const ecs::components::Transform& hand, magic::hand_hold::HandStage stage,
+	void EndHandTrace(const glm::vec3& placed, const ecs::components::Transform& hand, hand_blend::HandMode mode,
 	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
@@ -535,6 +535,8 @@ private:
 	std::unique_ptr<HandAnimation> _handAnimation;
 	/// Poses the hand around the miracle seed it holds
 	magic::HandHoldPoser _handHold;
+	/// The changes of the hand that start a blend of the drawn hand
+	hand_blend::ChangeTracker _handBlend;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
 	std::filesystem::path _landPath;
