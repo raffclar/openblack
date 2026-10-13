@@ -105,6 +105,9 @@ inline constexpr float k_StoreReachMultiplier = 1.2f;
 /// A model's radius on the ground: the larger of its half width and half depth, scaled. A pile of food's shrinks with
 /// how much of it is raised.
 [[nodiscard]] float RadiusOnGround(glm::vec2 halfExtent, float scale);
+/// Whether a point poured at is within a store's or pile's reach: its radius on the ground times its multiplier, from
+/// the point it is measured from, across the land only
+[[nodiscard]] bool WithinReach(glm::vec2 at, glm::vec2 from, float radius, float multiplier);
 
 /// A pile that leads on to another of the same store holds no more than it is drawn full at; the last of a store's and
 /// the miracles' piles hold all they are given

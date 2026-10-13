@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -56,6 +57,10 @@ inline constexpr int32_t k_LandWithoutSites = 1;
 /// A point of a model on the land, its model set down at a spot and turned to face some way (in radians): across the
 /// land only, as the game measures the places
 [[nodiscard]] glm::vec2 TurnedPoint(glm::vec2 spot, float facing, glm::vec3 point);
+
+/// The site's middle on the land, for a site standing at a spot, turned and scaled as its model is drawn: what food and
+/// wood poured onto the site are judged near or far from
+[[nodiscard]] glm::vec2 CentreOnLand(glm::vec3 position, const glm::mat3& rotation, float scale);
 
 /// Of the free places around a temple, the one whose site would stand nearest a spot on the land, judged by where the
 /// model's place point would be. The game turns the point only by the place's own share of a turn, not by the way the
