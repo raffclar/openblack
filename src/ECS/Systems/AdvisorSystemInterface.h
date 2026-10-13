@@ -20,7 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-#include "Help/SpiritStage.h"
+#include "Help/SpiritScreen.h"
 
 namespace openblack
 {
@@ -135,8 +135,6 @@ public:
 
 	/// This frame's draws, the good advisor's first
 	[[nodiscard]] virtual std::span<const Draw> GetDraws() const = 0;
-	/// Where the advisors' area lies on the screen this frame
-	[[nodiscard]] virtual const help::spirits::Stage& GetStage() const = 0;
 	/// This frame's trails, as triangles
 	[[nodiscard]] virtual std::span<const TrailVertex> GetTrails() const = 0;
 };

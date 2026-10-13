@@ -142,6 +142,40 @@ TEST_F(PlayerSystemLands, ANewPlayerHasNothingToTakeUp)
 	EXPECT_EQ(Locator::entitiesRegistry::value().TryGet<components::Alignment>(one), nullptr);
 }
 
+TEST_F(PlayerSystemLands, ANewGamesPlayersStartWithNothingOfTheLastGame)
+{
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<components::Alignment>(one, components::Alignment {.value = -0.5f, .pending = 0.0f});
+	registry.Get<components::Player>(one).miracles.everEnabled.at(3) = true;
+	_players.RegisterPlayers();
+	_players.KeepForNextLand();
+	// A new game forgets what the last game's players kept
+	_players.ForgetKept();
+	ClearLand();
+	const auto again = MakePlayer(PlayerNames::PLAYER_ONE);
+	_players.TakeUpKept(again);
+	EXPECT_EQ(registry.TryGet<components::Alignment>(again), nullptr);
+	EXPECT_FALSE(registry.Get<components::Player>(again).miracles.everEnabled.at(3));
+}
+
+TEST_F(PlayerSystemLands, TheAlignmentIsKeptWithTheProfileEverySixHundredTurnsFromLandToLand)
+{
+	EXPECT_FALSE(_players.KeepAlignmentAt(0));
+	EXPECT_FALSE(_players.KeepAlignmentAt(599));
+	EXPECT_TRUE(_players.KeepAlignmentAt(600));
+	EXPECT_FALSE(_players.KeepAlignmentAt(601));
+	EXPECT_TRUE(_players.KeepAlignmentAt(1200));
+	// The next land's turns start again from nothing: kept at once, then every six hundred turns from there
+	EXPECT_TRUE(_players.KeepAlignmentAt(0));
+	EXPECT_FALSE(_players.KeepAlignmentAt(599));
+	EXPECT_TRUE(_players.KeepAlignmentAt(600));
+	// A new game starts the count again
+	_players.ForgetKept();
+	EXPECT_FALSE(_players.KeepAlignmentAt(0));
+	EXPECT_FALSE(_players.KeepAlignmentAt(599));
+}
+
 TEST_F(PlayerSystemLands, APlayersEnabledMiraclesAndTribalPowerGoWithTheLand)
 {
 	auto& registry = Locator::entitiesRegistry::value();

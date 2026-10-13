@@ -467,6 +467,12 @@ std::optional<Picked> PickAmong(const View& view, std::span<const Candidate> can
 	return picked;
 }
 
+float SphereDistance(const View& view, glm::vec3 origin, float halfHeight, float radius)
+{
+	const auto middle = origin + glm::vec3(0.0f, halfHeight, 0.0f);
+	return glm::length(middle - view.camera) - (radius + view.near);
+}
+
 bool LandHidesObject(float landDistance, float objectDistance, glm::vec2 landPoint, glm::vec2 objectOrigin,
                      glm::vec2 halfExtents)
 {

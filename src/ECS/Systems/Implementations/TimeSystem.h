@@ -53,6 +53,7 @@ public:
 	[[nodiscard]] std::chrono::milliseconds GetElapsedTime() const override;
 
 	void StartGameClock(bool paused) override;
+	void RestartTurns() override;
 	[[nodiscard]] bool IsTurnDue() override;
 	void StartTurn() override;
 	void UpdateFrame() override;

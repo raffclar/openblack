@@ -168,6 +168,11 @@ void TimeSystem::StartGameClock(bool paused)
 	ResetTimerToTurn();
 }
 
+void TimeSystem::RestartTurns()
+{
+	_turn = 0;
+}
+
 bool TimeSystem::IsTurnDue()
 {
 	if (_paused || _turnsThisFrame >= k_MaxTurnsPerFrame)

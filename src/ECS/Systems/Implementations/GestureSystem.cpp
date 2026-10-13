@@ -94,8 +94,9 @@ void GestureSystem::Inject(const GestureEvent& event)
 
 void GestureSystem::Reset()
 {
+	// The path being drawn is the hand's, not the land's: it is kept, and goes as usual once the camera has moved to
+	// the new land
 	_events.clear();
-	ForgetPath();
 	_drawing.clear();
 	_picker.Close();
 	_circleSeconds = 0.0f;

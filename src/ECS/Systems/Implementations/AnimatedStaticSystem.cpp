@@ -160,17 +160,14 @@ std::optional<std::vector<animated_static::RouteCircle>> AnimatedStaticSystem::R
 	                                         glm::vec2(across.x, across.z), halfWidth, transform->scale.x, openAndStill);
 }
 
-void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
+void AnimatedStaticSystem::Update(std::chrono::milliseconds frameGameTime)
 {
 	if (!Locator::resources::has_value() || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto now = animals::DrawTime(turn, std::clamp(turnFraction, 0.0f, 1.0f));
-	// The milliseconds of the game's clock since the last frame, none when the clock went back
-	const uint32_t elapsed = _drawTime.has_value() && now >= *_drawTime ? now - *_drawTime : 0;
-	_drawTime = now;
+	const auto elapsed = static_cast<uint32_t>(frameGameTime.count());
 
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
@@ -309,11 +306,6 @@ void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
 	{
 		registry.SetDirty();
 	}
-}
-
-void AnimatedStaticSystem::Reset()
-{
-	_drawTime.reset();
 }
 
 bool AnimatedStaticSystem::OnScreen(const object_draw_list::View& view, const Transform& transform, const Mesh& mesh)

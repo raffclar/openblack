@@ -93,6 +93,9 @@ void Step(Ease& ease, float milliseconds);
 [[nodiscard]] float SlideShare(float held, float slide);
 /// Where the hand holds the statue: above the icon's place by part of its height
 [[nodiscard]] float GripY(float iconY, float iconHeight);
+/// The top of the totem, over which the players' symbols of the town's belief sit: the icon's place raised by the icon's
+/// whole height, so it is as high as the town player's creature's carving is tall, not the plinth's height
+[[nodiscard]] float TopY(float iconY, float iconHeight);
 /// How far the holding hand is tipped, in radians: more as it comes near the land
 [[nodiscard]] float HandTiltAt(float handY);
 /// How far the hand closes on the icon: by how wide the icon is against the hand, at most fully

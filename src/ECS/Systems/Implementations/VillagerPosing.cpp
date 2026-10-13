@@ -125,17 +125,14 @@ void LivingActionSystem::StartTurnPlaces()
 	    });
 }
 
-void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
+void LivingActionSystem::UpdatePoses(std::chrono::milliseconds frameGameTime, float turnFraction)
 {
 	if (!Locator::resources::has_value() || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto now = animals::DrawTime(turn, std::clamp(turnFraction, 0.0f, 1.0f));
-	// The milliseconds of the game's clock since the last frame, none when the clock went back
-	const uint32_t elapsed = now >= _poseDrawTime ? now - _poseDrawTime : 0;
-	_poseDrawTime = now;
+	const auto elapsed = static_cast<uint32_t>(frameGameTime.count());
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& states = Locator::infoConstants::value().villagerStateTable;

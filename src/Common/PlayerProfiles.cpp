@@ -32,6 +32,7 @@ constexpr uint32_t k_ScrambleSeed = 0x913;
 constexpr std::string_view k_CurrentKey = "current";
 constexpr std::string_view k_ProfileKey = "profile";
 constexpr std::string_view k_SettingKey = "setting";
+constexpr std::string_view k_AlignmentKey = "alignment";
 constexpr char k_Separator = '\t';
 
 char16_t FoldCase(char16_t c)
@@ -74,11 +75,12 @@ bool ParseNumber(std::string_view text, T& value)
 }
 
 /// A fraction written in the classic locale, whatever the computer's
-bool ParseFraction(std::string_view text, float& value)
+template <typename T>
+bool ParseFraction(std::string_view text, T& value)
 {
 	std::istringstream stream {std::string(text)};
 	stream.imbue(std::locale::classic());
-	float parsed = 0.0f;
+	T parsed {};
 	stream >> parsed;
 	if (!stream || stream.peek() != std::char_traits<char>::eof())
 	{
@@ -142,6 +144,39 @@ std::string CreatureFileName(uint32_t ticks)
 	return std::format("C{:x}.erc", ScrambleTicks(ticks));
 }
 
+std::string ProfileKey(std::u16string_view name)
+{
+	constexpr std::string_view k_HexDigits = "0123456789abcdef";
+	constexpr char16_t k_FirstOther = 0x80;
+	constexpr unsigned k_Nibble = 4;
+	constexpr unsigned k_NibbleMask = 0xf;
+	std::string key;
+	for (const char16_t character : name)
+	{
+		const bool plain =
+		    character < k_FirstOther && ((character >= u'a' && character <= u'z') || (character >= u'A' && character <= u'Z') ||
+		                                 (character >= u'0' && character <= u'9'));
+		if (plain)
+		{
+			key += '_';
+			key += static_cast<char>(character);
+		}
+		else
+		{
+			for (int shift = 3; shift >= 0; --shift)
+			{
+				key += k_HexDigits.at((static_cast<unsigned>(character) >> (static_cast<unsigned>(shift) * k_Nibble)) &
+				                      k_NibbleMask);
+			}
+		}
+		if (key.size() >= k_LongestKey)
+		{
+			break;
+		}
+	}
+	return key;
+}
+
 bool SameName(std::u16string_view a, std::u16string_view b)
 {
 	return std::ranges::equal(a, b, [](char16_t x, char16_t y) { return FoldCase(x) == FoldCase(y); });
@@ -187,8 +222,12 @@ const Profile& Add(Profiles& profiles, std::u16string_view name, std::u16string_
 	if (found == nullptr)
 	{
 		const auto text = gui::ToUtf8(given);
-		profiles.profiles.push_back(
-		    {.name = text, .creatureFile = std::string(creatureFile), .creatureName = text, .symbol = symbol, .settings = {}});
+		profiles.profiles.push_back({.name = text,
+		                             .creatureFile = std::string(creatureFile),
+		                             .creatureName = text,
+		                             .symbol = symbol,
+		                             .settings = {},
+		                             .alignment = 0.0});
 		SortForTheList(profiles);
 		found = Find(profiles, given);
 	}
@@ -254,6 +293,7 @@ std::string Write(const Profiles& profiles)
 			text += std::format("{1}{0}{2}{0}{3}{0}{4}\n", k_Separator, k_SettingKey, profile.name, field.name,
 			                    field.write(profile.settings));
 		}
+		text += std::format("{1}{0}{2}{0}{3}\n", k_Separator, k_AlignmentKey, profile.name, profile.alignment);
 	}
 	return text;
 }
@@ -293,6 +333,17 @@ Profiles Read(std::string_view text)
 			}
 			continue;
 		}
+		if (key == k_AlignmentKey)
+		{
+			const auto owner = NextField(line);
+			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
+			// A value that can't be read leaves the profile neither good nor evil
+			if (profile != profiles.profiles.end())
+			{
+				ParseFraction(line, profile->alignment);
+			}
+			continue;
+		}
 		if (key != k_ProfileKey)
 		{
 			continue;
@@ -310,7 +361,8 @@ Profiles Read(std::string_view text)
 		                             .creatureFile = std::string(file),
 		                             .creatureName = std::string(line),
 		                             .symbol = symbol,
-		                             .settings = {}});
+		                             .settings = {},
+		                             .alignment = 0.0});
 	}
 	SortForTheList(profiles);
 	return profiles;

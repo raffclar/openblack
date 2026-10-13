@@ -54,6 +54,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Hand.h"
@@ -61,6 +62,7 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -336,10 +338,13 @@ orders::Body BodyOf(const Registry& registry, entt::entity creature)
 {
 	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
 	const auto* needs = registry.TryGet<const CreatureNeeds>(creature);
+	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
 	return {
 	    .leashWorks = leashes != nullptr && leashes->worn.has_value() && leashes->worn->works,
 	    .life = needs != nullptr ? needs->needs.life : 1.0f,
 	    .exhaustion = needs != nullptr ? needs->needs.exhaustion : 0.0f,
+	    .frozen = spells != nullptr && spells->pausedMind,
+	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	};
 }
 
@@ -1265,13 +1270,32 @@ void LeashSystem::ProcessTurn()
 		auto* mind = MindOf(registry, entity);
 		const auto* body = registry.TryGet<const Creature>(entity);
 		const auto* transform = registry.TryGet<const Transform>(entity);
-		// Fighting or knocked out, the leash doesn't pull it about.
-		// TODO(creature-fights-4): in the game a held rope pulled taut (its applied force over 0.8) also takes a
-		// fighting creature out of its fight (bw1-decomp creature/creature_fights_4.md). That waits for the rope's
-		// tension to follow the game's leash force: it reads fully taut even with the hand right by the creature, so every
-		// fight with the leash held would end at once.
-		if (body == nullptr || transform == nullptr || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
+		// Knocked out, the leash doesn't pull it about
+		if (body == nullptr || transform == nullptr || registry.AllOf<CreatureKnockedOut>(entity))
 		{
+			continue;
+		}
+		const bool scriptControlled = registry.AllOf<ScriptControlled>(entity);
+		const bool takingFromHand =
+		    Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsTakingFromHand(entity);
+		// Fighting, only the held rope pulled taut reaches it: that takes it out of the fight with no winner and off to
+		// the hand
+		if (registry.AllOf<CreatureFighting>(entity))
+		{
+			if (leashes.worn.has_value() &&
+			    leash::Pulls({.tension = leashes.worn->rope.tension,
+			                  .works = leashes.worn->works,
+			                  .tied = leashes.worn->tiedTo.has_value(),
+			                  .orderInForce = leashes.order.has_value(),
+			                  .scriptControlled = scriptControlled,
+			                  .takingFromHand = takingFromHand}) &&
+			    Locator::creatureFightSystem::has_value())
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is pulled out of its fight by the leash",
+				                   entt::to_integral(entity));
+				Locator::creatureFightSystem::value().CallOff(entity);
+				Pull(entity);
+			}
 			continue;
 		}
 		const auto position = glm::vec2(transform->position.x, transform->position.z);
@@ -1368,8 +1392,8 @@ void LeashSystem::ProcessTurn()
 
 		if (worn.tiedTo.has_value())
 		{
-			// Strayed beyond the leash's length, it walks back to what it is tied to
-			if (worn.works && !moving &&
+			// Strayed beyond the leash's length, it walks back to what it is tied to, unless a script controls it
+			if (worn.works && !moving && !scriptControlled &&
 			    leash::OutsideArea(position, glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z),
 			                       worn.rope.slackLength) &&
 			    Locator::creatureLocomotionSystem::has_value())
@@ -1381,8 +1405,13 @@ void LeashSystem::ProcessTurn()
 			continue;
 		}
 
-		// Held in the hand: a taut rope pulls it to the hand, unless it is carrying out an order
-		if (worn.works && leash::ShouldPull(worn.rope.tension) && !leashes.order.has_value())
+		// Held in the hand: a taut rope pulls it to the hand, unless it is carrying out an order or a script controls it
+		if (leash::Pulls({.tension = worn.rope.tension,
+		                  .works = worn.works,
+		                  .tied = false,
+		                  .orderInForce = leashes.order.has_value(),
+		                  .scriptControlled = scriptControlled,
+		                  .takingFromHand = takingFromHand}))
 		{
 			Pull(entity);
 		}
@@ -1426,14 +1455,15 @@ void LeashSystem::Update(float seconds)
 			worn.rope.slackLength = lengths.slack;
 			worn.rope.maxLength = lengths.max;
 		}
+		// The rope runs from the collar to the hand or the tied thing, so its tension is the stretch at the collar
 		if (!worn.ropeStarted)
 		{
-			worn.rope = leash_rope::Create(*start, end, worn.rope.slackLength, worn.rope.maxLength, leash::LookFor(worn.type));
+			worn.rope = leash_rope::Create(end, *start, worn.rope.slackLength, worn.rope.maxLength, leash::LookFor(worn.type));
 			worn.ropeStarted = true;
 			return;
 		}
 		worn.rope.look = leash::LookFor(worn.type);
-		leash_rope::Step(worn.rope, *start, end, seconds, GroundAt);
+		leash_rope::Step(worn.rope, end, *start, seconds, GroundAt);
 		// The hand holding the rope of the tied leash: its two ropes run from the collar and from what it is tied to
 		// to the hand
 		if (worn.held.has_value() && hand.has_value() && worn.tiedTo.has_value())
@@ -1805,7 +1835,7 @@ bool LeashSystem::TakeOutOfFight(entt::entity creature)
 bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!orders::TakesOrders(BodyOf(registry, creature)))
+	if (!orders::TakesGroundOrders(BodyOf(registry, creature)))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders now", entt::to_integral(creature));
 		return false;

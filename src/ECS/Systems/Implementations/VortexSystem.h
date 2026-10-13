@@ -12,6 +12,7 @@
 #include <fstream>
 #include <memory>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 
 #include "3D/MapCoords.h"
@@ -42,6 +43,7 @@ public:
 	[[nodiscard]] std::span<const GroundMark> GetGroundMarks() const override { return _groundMarks; }
 	std::optional<Taken> EnterVortex(const std::shared_ptr<particles::CarriedObject>& carried) override;
 	void ThrowOutOfVortex(entt::entity object, float angle, float scale) override;
+	void StruckBy(entt::entity vortex, entt::entity hitter, const components::DrawnIntoVortex::Flight& flight) override;
 	[[nodiscard]] bool IsThrownOutByAVortex(entt::entity thing) const override;
 
 private:
@@ -51,8 +53,10 @@ private:
 	static void DeleteEffects(const components::Vortex& vortex);
 	/// A fully open vortex that leads away takes what it reaches this turn
 	static void Pull(entt::entity entity, const components::Vortex& vortex);
-	/// A thing it takes is handed to its effect, which starts drawing it in when it next steps
-	static void HandOver(entt::entity vortexEntity, const components::Vortex& vortex, entt::entity thing);
+	/// A thing it takes is handed to its effect, which starts drawing it in when it next steps; a thing taken as it flew
+	/// starts as it flew
+	static void HandOver(entt::entity vortexEntity, const components::Vortex& vortex, entt::entity thing,
+	                     const std::optional<components::DrawnIntoVortex::Flight>& flight = std::nullopt);
 	/// A pile it reaches gives up a pot of what it holds, which it takes
 	static void TakeFromPile(entt::entity vortexEntity, const components::Vortex& vortex, entt::entity pile);
 	/// A thing thrown out at an angle, at a scale of the usual speeds, passing through what threw it
@@ -76,6 +80,8 @@ private:
 	/// A creature it reaches sparkles away once near the middle, if it may be taken
 	static void PullCreature(entt::entity entity, const components::Creature& creature, const glm::vec3& position,
 	                         const map_coords::MapCoords& centre);
+	/// Whether a creature may be taken by a vortex now
+	[[nodiscard]] static bool CreatureMayBeTaken(entt::entity entity, const components::Creature& creature);
 	/// How near the middle a creature must come to be taken
 	[[nodiscard]] static float CreatureTakenDistance();
 	/// The land under a vortex is levelled as far as an amount: its heights are read the first time
@@ -85,6 +91,9 @@ private:
 	/// The crossing file, written by the vortex that last started leading away while it lasts
 	std::ofstream _crossing;
 	entt::entity _crossingVortex {entt::null};
+	/// What the file has been written for already: each thing is written once, and a static thing's fellows standing
+	/// just where it stood count as written with it
+	std::unordered_set<entt::entity> _written;
 };
 
 } // namespace openblack::ecs::systems

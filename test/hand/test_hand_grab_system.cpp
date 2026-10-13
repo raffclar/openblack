@@ -80,6 +80,7 @@ public:
 	[[nodiscard]] entt::entity Hand() const override { return hand; }
 	[[nodiscard]] PlayerNames HandPlayer() const override { return PlayerNames::PLAYER_ONE; }
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override { return underCursor; }
+	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override { return nearHand; }
 	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3) const override { return influence; }
 	void HeldThingUsedOnLand(PlayerNames player) override { usedOnLand.push_back(player); }
 	[[nodiscard]] bool InBounds(glm::vec3) const override { return true; }
@@ -339,6 +340,7 @@ public:
 	Registry registry;
 	entt::entity hand {entt::null};
 	std::optional<entt::entity> underCursor;
+	std::optional<entt::entity> nearHand;
 	bool influence {true};
 	bool looseLeash {false};
 	/// The leash held loose in the hand takes taps as orders
@@ -460,6 +462,24 @@ TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
 	ASSERT_FALSE(world->reactions.empty());
 	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
 	EXPECT_EQ(world->reactions.front().initiator, world->hand);
+}
+
+// Pressed with nothing under the cursor, the hand reaches for what stands nearest the land behind it; something under
+// the cursor goes first
+TEST_F(HandGrabSystemWithWorld, WithNothingUnderTheCursorThePressReachesForWhatIsNearTheHand)
+{
+	const auto near = world->AddRock({1.0f, 0.0f, 0.0f});
+	world->nearHand = near;
+	EXPECT_TRUE(Press());
+	ASSERT_TRUE(world->registry.TryGet<HandGrab>(world->hand) != nullptr);
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).object, near);
+	Release();
+
+	const auto under = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = under;
+	now += 1000;
+	EXPECT_TRUE(Press());
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).object, under);
 }
 
 TEST_F(HandGrabSystemWithWorld, TheHandKeepsToItsPullUntilItHoldsAndRisesTheFrameItTakes)

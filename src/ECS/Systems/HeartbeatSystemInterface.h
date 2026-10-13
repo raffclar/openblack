@@ -33,6 +33,12 @@ public:
 	[[nodiscard]] virtual float Pulse(PlayerNames player, float turnFraction) const = 0;
 	/// A player's heartbeat as it stands, none before their first turn
 	[[nodiscard]] virtual std::optional<heartbeat::State> StateOf(PlayerNames player) const = 0;
+	/// The players' heartbeats are kept as the land goes, each to beat on as it was when the player is on the next
+	virtual void KeepForNextLand() = 0;
+	/// Nothing is kept: the next land's players' hearts start calm
+	virtual void ForgetKept() = 0;
+	/// The destruction of the player's temple has ended: their heart beats as the danger has it again
+	virtual void EndDestruction(PlayerNames player) = 0;
 };
 
 } // namespace openblack::ecs::systems
