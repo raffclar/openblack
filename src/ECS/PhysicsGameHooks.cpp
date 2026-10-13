@@ -65,6 +65,7 @@
 #include "ECS/Systems/Implementations/VillagerPhysics.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/TempleHeartTowns.h"
 #include "Magic/MagicWorldInterface.h"
 #include "Magic/SpellRules.h"
 #include "Physics/Body.h"
@@ -198,41 +199,17 @@ void HurtCreature(World& world, DynamicsSystemInterface& dynamics, const Physics
 // belong to no town yet
 std::vector<physics::temple_heart::Town> HeartTowns(World& world, PlayerNames owner)
 {
-	auto& registry = world.Entities();
-	std::vector<const Town*> towns;
-	registry.Each<const Town>([&towns, owner](entt::entity, const Town& town) {
-		if (town.owner == owner)
-		{
-			towns.push_back(&town);
-		}
-	});
-	std::ranges::sort(towns, {}, &Town::gained);
-	const auto dying = [&world](entt::entity villager) {
-		return world.VillagerStateOf(villager, true) == VillagerStates::Dying;
-	};
-	std::vector<physics::temple_heart::Town> lists;
-	lists.reserve(towns.size());
-	for (const auto* town : towns)
-	{
-		auto& list = lists.emplace_back();
-		for (const auto abode : town->abodes)
-		{
-			const bool available = registry.Valid(abode);
-			const auto* progress = available ? registry.TryGet<const BuildProgress>(abode) : nullptr;
-			const auto* info = available ? world.AbodeInfoOf(abode) : nullptr;
-			list.buildings.push_back({.entity = abode,
-			                          .available = available,
-			                          .life = available ? world.LifeOf(abode) : 0.0f,
-			                          .built = progress != nullptr ? progress->built : 1.0f,
-			                          .field = available && registry.AllOf<Field>(abode),
-			                          .footballPitch = info != nullptr && info->abodeType == AbodeType::FootballPitch});
-		}
-		for (const auto villager : town->homelessVillagers)
-		{
-			list.homeless.push_back({.entity = villager, .available = registry.Valid(villager) && !dying(villager)});
-		}
-	}
-	return lists;
+	return temple_heart_towns::Gather(
+	    world.Entities(), owner,
+	    {
+	        .lifeOf = [&world](entt::entity abode) { return world.LifeOf(abode); },
+	        .footballPitch =
+	            [&world](entt::entity abode) {
+		            const auto* info = world.AbodeInfoOf(abode);
+		            return info != nullptr && info->abodeType == AbodeType::FootballPitch;
+	            },
+	        .dying = [&world](entt::entity villager) { return world.VillagerStateOf(villager, true) == VillagerStates::Dying; },
+	    });
 }
 
 /// The spot visual a temple's heart fires its beams from, made the first time it beams; tried again on a later beam when
