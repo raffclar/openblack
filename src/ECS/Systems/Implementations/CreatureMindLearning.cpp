@@ -68,6 +68,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/MiracleImpression.h"
@@ -294,6 +295,10 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		        Locator::animalSystem::value().IsFrighteningToCreature(entity));
 	case Target::Anything:
 		return true;
+	case Target::PooedOn:
+		// A thing that is not alive and is taller than 1.5 m, but not a field or a fish farm
+		return !registry.AnyOf<Villager, Animal, Creature, Field, FishFarm>(entity) &&
+		       object_measures::Height(registry, entity) > creature_plan_actions::k_PooedOnTallerThan;
 	case Target::StoragePit:
 		return registry.AllOf<StoragePit>(entity);
 	case Target::MagicFoodPile:
@@ -425,7 +430,8 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	    [&](entt::entity entity, const MobileObject&, const Transform& at) { consider(entity, at); });
 	// Anything at all is whatever it may come to know of: the living, what lies about, statics, features, trees and
 	// buildings
-	const bool anything = target == Target::Anything;
+	// What a creature can poo by is looked for among the same things
+	const bool anything = target == Target::Anything || target == Target::PooedOn;
 	const bool living = target == Target::AnyLiving || target == Target::Stonable || anything;
 	// The animals and miracles that frighten it are only ever run from
 	if (target == Target::Frightening || living)
@@ -486,13 +492,13 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		    [&](entt::entity entity, const WorshipSite&, const Transform& at) { consider(entity, at); });
 	}
 	const bool fire = target == Target::Burning || target == Target::Unburnt;
-	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything || fire || pickable || sea ||
+	if (target == Target::Destroyable || target == Target::Tree || anything || fire || pickable || sea ||
 	    target == Target::PickableTree || target == Target::PlantableTree)
 	{
 		registry.Each<const Tree, const Transform>(
 		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::Destroyable || target == Target::Anything || fire || target == Target::Stonable)
+	if (target == Target::Destroyable || anything || fire || target == Target::Stonable)
 	{
 		registry.Each<const Abode, const Transform>(
 		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
@@ -1948,6 +1954,7 @@ void CreatureMindSystem::SetScriptFocus(entt::entity creature, std::optional<cre
 void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::Situation& situation)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	situation.self = entt::to_integral(creature);
 	if (Locator::camera::has_value())
 	{
 		situation.eye = Locator::camera::value().GetOrigin();

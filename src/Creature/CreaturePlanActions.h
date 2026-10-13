@@ -83,9 +83,14 @@ enum class Target : uint8_t
 	/// town's buildings) below its full life
 	BuildingBeingBuilt,
 	NeedsRepair,
+	/// What a creature can poo by: a thing that is not alive and is taller than k_PooedOnTallerThan, but not a field or a
+	/// fish farm
+	PooedOn,
 };
+/// A creature poos only by a thing taller than this, in metres
+constexpr float k_PooedOnTallerThan = 1.5f;
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::NeedsRepair) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::PooedOn) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -93,6 +98,7 @@ enum class Build : uint8_t
 	Eat,
 	Sleep,
 	Poo,
+	Fart,
 	Puke,
 	Drink,
 	ExamineByPickingUp,
@@ -138,6 +144,8 @@ enum class Build : uint8_t
 	/// Hurling, sleeping at home, smiling or waving at someone, being frightened on the spot, putting down what it
 	/// holds and lying dead for good, as the game builds them whoever chose them
 	SleepAtHome,
+	/// Walking home and doing a poo there by itself
+	PooAtHome,
 	SmileAt,
 	WaveAt,
 	BeFrightened,
@@ -230,7 +238,8 @@ struct Situation
 	/// Whether what its hand holds is a tree, or a magic mushroom
 	bool holdingTree {false};
 	bool holdingMushroom {false};
-	/// Where it stands
+	/// The creature itself, by its entity's number, and where it stands
+	uint32_t self {0};
 	glm::vec2 position {0.0f};
 	/// Where the thing it uses is, and its radius on the ground
 	glm::vec2 instrumentPoint {0.0f};

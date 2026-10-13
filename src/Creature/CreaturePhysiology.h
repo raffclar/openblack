@@ -195,6 +195,8 @@ void ApplyActionCost(Needs& needs, Shape& shape, const ActionCost& cost, uint32_
 float Eat(Needs& needs, Shape& shape, const Species& species, float foodValue);
 /// Drinks its fill
 void Drink(Needs& needs);
+/// Each lump of poo stops the desire to poo for this many seconds
+constexpr float k_PooHoldsDesireBackSeconds = 60.0f;
 /// Has a poo
 void Poo(Needs& needs);
 

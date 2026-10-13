@@ -81,8 +81,13 @@ void ChimneySmokeSystem::ProcessTurn()
 	_lastHandPosition = position;
 }
 
-void ChimneySmokeSystem::Update(std::chrono::duration<float, std::milli> gameTime)
+void ChimneySmokeSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
 {
+	const auto step = frame_pace::Step(_pace, frameRealTime, frameGameTime);
+	if (step <= std::chrono::milliseconds {0})
+	{
+		return;
+	}
 	if (const auto position = HandPosition())
 	{
 		_handWind = chimney_smoke::WindOf(*position, _handVelocity);
@@ -94,6 +99,15 @@ void ChimneySmokeSystem::Update(std::chrono::duration<float, std::milli> gameTim
 		{
 			return;
 		}
-		chimney_smoke::Advance(smoke, gameTime.count(), chimney_smoke::Drift(smoke.chimney, _handWind, random));
+		chimney_smoke::Advance(smoke, step, chimney_smoke::Drift(smoke.chimney, _handWind, random));
 	});
+	// A smoke that is not on a home (for example, the smoke of a creature fart) continues until something removes it
+	Locator::entitiesRegistry::value().Each<ChimneySmoke>(
+	    [&](ChimneySmoke& smoke) {
+		    if (chimney_smoke::UpdateState(smoke, true))
+		    {
+			    chimney_smoke::Advance(smoke, step, chimney_smoke::Drift(smoke.chimney, _handWind, random));
+		    }
+	    },
+	    entt::exclude<Abode>);
 }

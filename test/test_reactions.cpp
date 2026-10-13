@@ -1083,13 +1083,13 @@ TEST_F(Reactions, AVillagerWhoseStateWontLetItGoIsPutStraightIntoDecidingWhatToD
 TEST_F(Reactions, AReactionVillagersDontActOutYetEndsWithoutMovingThem)
 {
 	MakeJob(*_info, k_JobAgain);
-	auto& unacted = _info->reaction.at(static_cast<size_t>(Reaction::Fainting));
+	auto& unacted = _info->reaction.at(static_cast<size_t>(Reaction::Confused));
 	unacted = _info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell));
 	Locator::infoConstants::emplace(*_info);
 	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
 	const auto villager = _villagers[0];
 	WalkToJob(villager);
-	const auto id = Locator::reactionSystem::value().Create(Miracle(Reaction::Fainting));
+	const auto id = Locator::reactionSystem::value().Create(Miracle(Reaction::Confused));
 	ASSERT_NE(Locator::entitiesRegistry::value().Get<const LivingReaction>(villager).reaction, 0u);
 	Locator::reactionSystem::value().Remove(id);
 	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
@@ -1311,4 +1311,31 @@ TEST_F(Reactions, VillagersLookAtAThingThatCameToRestOrAScaffold)
 		EXPECT_EQ(Locator::entitiesRegistry::value().Get<const LivingReaction>(_villagers[0]).type, type);
 		_reactions.Remove(id);
 	}
+}
+
+TEST_F(Reactions, VillagersFaintWhereTheyStandUntilTheStinkIsOver)
+{
+	_info->reaction.at(static_cast<size_t>(Reaction::Fainting)) =
+	    _info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell));
+	auto& fainting = _info->villagerStateTable.at(static_cast<size_t>(VillagerStates::FaintingReaction));
+	fainting.availableForReaction = 1;
+	fainting.isReactionState = 1;
+	Locator::infoConstants::emplace(*_info);
+	// The creature that did the fart
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = registry.Create();
+	registry.Assign<Transform>(creature, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	auto source = Miracle(Reaction::Fainting);
+	source.initiator = creature;
+	const auto id = _reactions.Create(source);
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::FaintingReaction);
+	EXPECT_EQ(registry.Get<const LivingReaction>(_villagers[0]).type, Reaction::Fainting);
+	// The villager stays in the faint state while the reaction continues
+	_reactions.ProcessTurn();
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::FaintingReaction);
+	// At the end of the reaction, the villager does its last task again
+	_reactions.Remove(id);
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
+	registry.Destroy(creature);
 }
