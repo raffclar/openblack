@@ -1729,6 +1729,22 @@ void AddObjects(std::vector<Scenario>& all)
 	          .with = 2}},
 	});
 
+	all.push_back({
+	    .id = "objects.kick_ball",
+	    .name = "Kicking a ball about",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a toy ball in front of it. A script tells it to kick the ball about.",
+	    .expected = "It walks up to the ball, turns to it and kicks it: the ball flies off ahead of it, half upwards, and "
+	                "bounces away. A quarter of the time it then points at the ball a second, else it waits up to a "
+	                "second. It goes after the ball and kicks it again, two to four times in all, sometimes jumping for "
+	                "joy at the end. The kicks make no sound.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 10.0f}, {20.0f, -150.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "KickBallAround"}},
+	});
+
 	auto stoner = Content(CreatureType::Tiger, {0.0f, 0.0f});
 	stoner.desires = {{.desire = creature_desires::Desire::GetHigh, .fraction = 1.0f}};
 	all.push_back({

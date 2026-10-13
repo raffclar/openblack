@@ -16,6 +16,9 @@
 #include <optional>
 #include <string_view>
 
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+
 #include "3D/AllMeshes.h"
 
 /// What a creature does with the things about it: picking them up, holding, examining, eating, putting down, tossing
@@ -45,6 +48,8 @@ enum class Kind : uint8_t
 	Catch,
 	/// Reaching out to take what the player's hand gives it, which it takes from the hand at a moment of the animation
 	TakeFromHand,
+	/// Kicking a thing in front of it, which flies off as the foot meets it
+	Kick,
 };
 [[nodiscard]] std::string_view Name(Kind kind);
 
@@ -96,6 +101,20 @@ enum class Status : uint8_t
 	Done,
 	Failed,
 };
+
+/// The kicking animation
+constexpr size_t k_KickAnimation = 117;
+/// A thing kicked flies off at this many times the creature's size
+constexpr float k_KickSpeedPerSize = 45.0f;
+/// How the creature leans with the land under it: the rise across its width, by the heights a radius to either side of
+/// it, times this share, at most this much either way
+constexpr float k_LeanShare = 0.6f;
+constexpr float k_MostLean = 0.3f;
+/// How the creature leans along the land's two axes, from the land's heights a radius to either side of it along each
+[[nodiscard]] glm::vec2 LeanOf(float plusX, float minusX, float plusZ, float minusZ, float radius);
+/// How a thing it kicks starts to fly: half up and half ahead of the creature, the ahead part tipped up or down with the
+/// creature's lean, at the kick's speed for its size
+[[nodiscard]] glm::vec3 KickVelocity(glm::vec2 forward, glm::vec2 lean, float size);
 
 /// Whether a throw is over: its animation has played out, and, thrown into a store, what it threw has stopped flying
 [[nodiscard]] bool ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying);

@@ -77,11 +77,9 @@ constexpr std::array k_Executors {
               .target = Target::AnyLiving,
               .build = Build::PracticeThrow,
               .activity = Activity::PlayWithObject},
-    // TODO(creature-kind-actions): the game kicks the ball about two to four times, going up to it each time; kicking a
-    // thing isn't here yet, so it throws the ball somewhere nearby
     Executor {.action = "KickBallAround",
               .target = Target::ToyBall,
-              .build = Build::ThrowAbout,
+              .build = Build::KickBallAround,
               .activity = Activity::PlayWithObject},
     // TODO(creature-kind-actions): the game walks to the nearest coast it hasn't visited and throws the thing into the
     // nearest sea it hasn't visited, by the creature's map of where it has been, which isn't here yet; until then it
@@ -274,6 +272,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 			return std::nullopt;
 		}
 		return creature_mind::ThrowToyAt(*situation.instrument, *object, objectPoint, situation.height, random);
+	case Build::KickBallAround:
+		return creature_mind::KickBallAround(*object, random);
 	case Build::GetHigh:
 		return creature_mind::GetHigh(situation.holdingMushroom ? std::nullopt : object, *object);
 	case Build::PracticeThrow:

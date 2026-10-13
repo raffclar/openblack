@@ -147,6 +147,8 @@ enum class Build : uint8_t
 	ThrowToy,
 	/// Picking up the thing, unless it holds a magic mushroom, and eating it
 	GetHigh,
+	/// Kicking the ball about a few times
+	KickBallAround,
 	/// An action whose agenda can never be made
 	Never,
 };

@@ -1055,6 +1055,12 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 			hands.Cancel(creature);
 		}
 		break;
+	case Kind::Kick:
+		if (!object.has_value() || !registry.Valid(*object) || !hands.Kick(creature, *object))
+		{
+			hands.Cancel(creature);
+		}
+		break;
 	case Kind::PointAt:
 		if (object.has_value() || order.seconds.has_value() || order.pointHeight.has_value())
 		{

@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <array>
 
 #include <gtest/gtest.h>
@@ -303,4 +305,67 @@ TEST(CreatureKindActions, BeingHighSittingDownWhereItIsClear)
 	EXPECT_EQ(agenda[13].heldEyes, Eyes::Wide);
 	EXPECT_EQ(agenda[14].animation, k_HighSitDazed);
 	EXPECT_EQ(agenda.back().animation, k_HighDazed);
+}
+
+TEST(CreatureKindActions, KickingABallAboutKicksItTwiceAtTheLeast)
+{
+	// Every chance comes up nought: it points after each kick, kicks twice and jumps for joy
+	const auto agenda = KickBallAround(7, KindActionsFirst);
+	ASSERT_EQ(agenda.size(), 11u);
+	for (size_t kick = 0; kick < 2; ++kick)
+	{
+		const auto* steps = &agenda[kick * 5];
+		EXPECT_EQ(steps[0].movement.kind, Movement::Kind::GoNearObject);
+		EXPECT_EQ(steps[0].movement.object, 7u);
+		EXPECT_FLOAT_EQ(steps[0].movement.maxDistance, 0.0f);
+		EXPECT_EQ(steps[1].movement.kind, Movement::Kind::TurnToFaceObject);
+		EXPECT_FLOAT_EQ(steps[1].seconds, 0.1f);
+		EXPECT_EQ(steps[2].movement.kind, Movement::Kind::GoNearObject);
+		EXPECT_EQ(steps[3].order.kind, ObjectOrder::Kind::Kick);
+		EXPECT_EQ(steps[3].order.object, 7u);
+		EXPECT_EQ(steps[4].order.kind, ObjectOrder::Kind::PointAt);
+		EXPECT_EQ(steps[4].order.seconds, 1.0f);
+	}
+	EXPECT_EQ(agenda[10].animation, creature_layers::animations::k_Happy);
+}
+
+TEST(CreatureKindActions, KickingABallAboutWaitsAndDrawsTheCountAfreshEachKick)
+{
+	// Answers in turn: no point (1), wait 4 + 5 turns, count 2 + 2 (go on); no point, wait 4, count 2 + 0 (stop at 2);
+	// no jump
+	const std::array<uint32_t, 7> answers {1, 5, 2, 1, 0, 0, 1};
+	size_t next = 0;
+	const auto agenda = KickBallAround(3, [&](uint32_t) { return answers.at(next++); });
+	ASSERT_EQ(agenda.size(), 10u);
+	EXPECT_EQ(agenda[4].kind, Step::Kind::Wait);
+	EXPECT_FLOAT_EQ(agenda[4].seconds, 0.9f);
+	EXPECT_EQ(agenda[9].kind, Step::Kind::Wait);
+	EXPECT_FLOAT_EQ(agenda[9].seconds, 0.4f);
+	EXPECT_EQ(next, answers.size());
+}
+
+TEST(CreatureKindActions, AKickFliesHalfUpHalfAheadOnFlatLand)
+{
+	const auto lean = creature_object_actions::LeanOf(5.0f, 5.0f, 5.0f, 5.0f, 2.0f);
+	EXPECT_EQ(lean, glm::vec2(0.0f));
+	const auto velocity = creature_object_actions::KickVelocity({0.0f, -1.0f}, lean, 2.0f);
+	const float component = 90.0f / std::sqrt(2.0f);
+	EXPECT_NEAR(velocity.x, 0.0f, 1e-4f);
+	EXPECT_NEAR(velocity.y, component, 1e-3f);
+	EXPECT_NEAR(velocity.z, -component, 1e-3f);
+}
+
+TEST(CreatureKindActions, AKickTipsUpWithTheLandAheadRisingAndTheLeanIsCapped)
+{
+	// The land rises 1 over 4 along x: 1 x 0.6 / 4 = 0.15; along z it rises 10, capped at 0.3
+	const auto lean = creature_object_actions::LeanOf(6.0f, 5.0f, 15.0f, 5.0f, 2.0f);
+	EXPECT_NEAR(lean.x, 0.15f, 1e-6f);
+	EXPECT_NEAR(lean.y, 0.3f, 1e-6f);
+	EXPECT_NEAR(creature_object_actions::LeanOf(0.0f, 10.0f, 0.0f, 0.0f, 1.0f).x, -0.3f, 1e-6f);
+	// Facing +x, the up part is 1 + 0.15
+	const auto velocity = creature_object_actions::KickVelocity({1.0f, 0.0f}, lean, 1.0f);
+	const auto length = std::sqrt(1.0f + (1.15f * 1.15f));
+	EXPECT_NEAR(velocity.x, 45.0f / length, 1e-3f);
+	EXPECT_NEAR(velocity.y, 45.0f * 1.15f / length, 1e-3f);
+	EXPECT_NEAR(velocity.z, 0.0f, 1e-4f);
 }

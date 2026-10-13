@@ -68,6 +68,9 @@ public:
 	/// has stopped flying
 	virtual bool ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds) = 0;
 	virtual bool Destroy(entt::entity creature, entt::entity target) = 0;
+	/// Kicks a thing at its feet, which flies off ahead of it as the foot meets it; fails when the thing is in its own or
+	/// the player's hand, or the species has no kick
+	virtual bool Kick(entt::entity creature, entt::entity target) = 0;
 	virtual bool PointAt(entt::entity creature, const glm::vec3& point) = 0;
 	/// Points for some seconds at a point, or at a thing wherever it goes
 	virtual bool PointAtFor(entt::entity creature, const glm::vec3& point, float /*seconds*/,

@@ -157,6 +157,8 @@ struct ObjectOrder
 		TakeFromPile,
 		/// Reaching out to take what the player's hand gives it, with its left hand when mirrored
 		TakeFromHand,
+		/// Kicking the object, which flies off ahead of it
+		Kick,
 	};
 	Kind kind {Kind::PickUp};
 	/// What it acts on, by its entity's number. Pointing at an object, it points at wherever the object is, turn by

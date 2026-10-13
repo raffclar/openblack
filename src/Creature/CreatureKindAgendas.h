@@ -54,6 +54,22 @@ constexpr float k_PracticeThrowHeights = 3.0f;
                                            const Random& random);
 constexpr uint32_t k_HappyAroundToyThrowLots = 2;
 
+/// Kicking a ball about: going up to it, turning to face it a tenth of a second, going right up to it again and kicking
+/// it, watching it; then a quarter of the time pointing at it a second, else waiting 0.4 to 1 second (in whole turns).
+/// It kicks it again after each, two times at the least, each time going on while the count is under two plus a chance
+/// of nought to two. At the end, half the time, a happy jump.
+[[nodiscard]] std::vector<Step> KickBallAround(uint32_t ball, const Random& random);
+constexpr uint32_t k_LeastKicks = 2;
+constexpr uint32_t k_MoreKicksLots = 3;
+constexpr uint32_t k_PointAfterKickLots = 4;
+constexpr float k_FaceBallSeconds = 0.1f;
+constexpr float k_PointAtBallSeconds = 1.0f;
+/// The wait after a kick: 4 to 9 turns of a tenth of a second, all as likely
+constexpr uint32_t k_WaitAfterKickTurns = 4;
+constexpr uint32_t k_WaitAfterKickMoreTurns = 6;
+constexpr float k_KickTurnSeconds = 0.1f;
+constexpr uint32_t k_HappyAfterKicksLots = 2;
+
 /// Getting high on a magic mushroom: unless it holds a mushroom, picking up the thing; then eating it. A magic
 /// mushroom eaten makes it high once it is done (see BecomeHigh).
 [[nodiscard]] std::vector<Step> GetHigh(std::optional<uint32_t> pickUp, uint32_t eaten);

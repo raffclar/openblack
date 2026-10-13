@@ -86,6 +86,45 @@ std::vector<Step> creature_mind::ThrowToyAt(uint32_t toy, uint32_t target, glm::
 	return agenda;
 }
 
+std::vector<Step> creature_mind::KickBallAround(uint32_t ball, const Random& random)
+{
+	const Gaze watch {.object = ball};
+	const Step goNear {.kind = Step::Kind::Move,
+	                   .movement = {.kind = Movement::Kind::GoNearObject, .object = ball, .maxDistance = 0.0f},
+	                   .gaze = watch};
+	std::vector<Step> agenda;
+	uint32_t kicks = 0;
+	// The count to reach is drawn afresh after every kick
+	do
+	{
+		agenda.push_back(goNear);
+		agenda.push_back({.kind = Step::Kind::Move,
+		                  .seconds = k_FaceBallSeconds,
+		                  .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = ball},
+		                  .gaze = watch});
+		agenda.push_back(goNear);
+		agenda.push_back(
+		    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Kick, .object = ball}, .gaze = watch});
+		if (random(k_PointAfterKickLots) == 0)
+		{
+			agenda.push_back({.kind = Step::Kind::Object,
+			                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = ball, .seconds = k_PointAtBallSeconds},
+			                  .gaze = watch});
+		}
+		else
+		{
+			const auto turns = k_WaitAfterKickTurns + random(k_WaitAfterKickMoreTurns);
+			agenda.push_back({.kind = Step::Kind::Wait, .seconds = static_cast<float>(turns) * k_KickTurnSeconds});
+		}
+		++kicks;
+	} while (kicks < k_LeastKicks + random(k_MoreKicksLots));
+	if (random(k_HappyAfterKicksLots) == 0)
+	{
+		agenda.push_back({.kind = Step::Kind::Action, .animation = creature_layers::animations::k_Happy});
+	}
+	return agenda;
+}
+
 std::vector<Step> creature_mind::GetHigh(std::optional<uint32_t> pickUp, uint32_t eaten)
 {
 	std::vector<Step> agenda;
