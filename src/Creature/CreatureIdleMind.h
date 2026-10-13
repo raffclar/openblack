@@ -532,6 +532,8 @@ struct Commands
 	std::optional<uint32_t> douse;
 	/// A rock to break in two, by its entity's number
 	std::optional<uint32_t> shatter;
+	/// Sitting down this turn, it rests a little
+	bool restSitting {false};
 	/// A building to mend, and a thing to do away with, by their entities' numbers
 	std::optional<uint32_t> repair;
 	std::optional<uint32_t> useUp;

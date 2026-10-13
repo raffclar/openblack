@@ -1449,6 +1449,10 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    ecs::world_objects::Remove(static_cast<entt::entity>(*commands.useUp));
 		    }
+		    if (commands.restSitting && Locator::creaturePhysiologySystem::has_value())
+		    {
+			    Locator::creaturePhysiologySystem::value().SitTurn(entity);
+		    }
 		    if (commands.douse.has_value())
 		    {
 			    if (Douse(entity, static_cast<entt::entity>(*commands.douse)))

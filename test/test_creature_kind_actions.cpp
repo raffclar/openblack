@@ -16,6 +16,7 @@
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureThrow.h"
@@ -538,4 +539,34 @@ TEST(CreatureKindActions, ShatteringRepairingAndUsingUpAreDoneAtOnce)
 		                                                 : commands.useUp;
 		EXPECT_EQ(given, 5u);
 	}
+}
+
+TEST(CreatureKindActions, SittingRestsAFifthAsMuchAsSleeping)
+{
+	creature_physiology::Needs needs {.exhaustion = 0.5f};
+	const creature_physiology::Species species {.sleepRecover = 0.01f};
+	creature_physiology::SitTurn(needs, species);
+	EXPECT_NEAR(needs.exhaustion, 0.498f, 1e-6f);
+	needs.exhaustion = 0.0f;
+	creature_physiology::SitTurn(needs, species);
+	EXPECT_EQ(needs.exhaustion, 0.0f);
+}
+
+TEST(CreatureKindActions, ASittingStepRestsUntilItIsToldToGetUp)
+{
+	IdleMind mind;
+	mind.agenda = {{.kind = Step::Kind::Static,
+	                .seconds = 1.0f,
+	                .sequence = {creature_layers::animations::k_StartSit, creature_layers::animations::k_Sit,
+	                             creature_layers::animations::k_EndSit}}};
+	// It sits down, and from the next turn on sits in the loop
+	Senses senses {.seconds = 0.1f};
+	static_cast<void>(Think(mind, senses, KindActionsFirst));
+	senses.bodyBusy = true;
+	senses.bodyLooping = true;
+	EXPECT_TRUE(Think(mind, senses, KindActionsFirst).restSitting);
+	mind.stepSeconds = 2.0f;
+	// The turn it is told to get up it still rests; after that it doesn't
+	EXPECT_TRUE(Think(mind, senses, KindActionsFirst).restSitting);
+	EXPECT_FALSE(Think(mind, senses, KindActionsFirst).restSitting);
 }

@@ -878,6 +878,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Static:
 	{
 		commands.lookAbout = senses.bodyLooping && !step.closedEyes;
+		// Sitting rests it a little every turn until it is told to get up
+		commands.restSitting = !mind.sitEnding && step.sequence[1] == animations::k_Sit;
 		const bool done = mind.wakeWanted || (step.untilRested ? senses.rested : mind.stepSeconds >= step.seconds);
 		if (!senses.bodyBusy)
 		{
