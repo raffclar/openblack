@@ -1238,8 +1238,10 @@ void LeashSystem::WalkBack(entt::entity creature)
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} walks back to ({:.1f}, {:.1f}), {:.1f} away",
 	                   entt::to_integral(creature), centre.x, centre.y, distance);
 	Force(creature, {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}});
-	// The creature keeps the place, also if it cannot walk there
+	// The creature keeps the place until the action of the walk ends
 	leashes.returnTo = leashes.confinementCentre;
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	leashes.returnSerial = mind != nullptr ? mind->idle.serial : 0;
 }
 
 void LeashSystem::ProcessTurn()
@@ -1328,12 +1330,20 @@ void LeashSystem::ProcessTurn()
 			UpdateMoods(entity, worn);
 		}
 
+		// The walk back ends with its action: the creature arrives, it cannot get there, or a different action starts
+		if (leashes.returnTo.has_value() &&
+		    (mind == nullptr ||
+		     !leash::ReturnInForce(leashes.returnSerial, mind->idle.serial, mind->idle.step, mind->idle.agenda.size())))
+		{
+			leashes.returnTo.reset();
+		}
+
 		if (!ShouldWalkBack(entity))
 		{
 			continue;
 		}
-		// TODO(raffclar): the game does not stop a fight here. It gives the creature a new action. This call lets the
-		// fight system stop the fight so that the creature can walk back.
+		// The walk back ends the current action of the creature, also a fight. The fight ends with no winner, as when
+		// the player gives an order with the leash.
 		if (registry.AllOf<CreatureFighting>(entity) && Locator::creatureFightSystem::has_value())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} leaves its fight to walk back", entt::to_integral(entity));

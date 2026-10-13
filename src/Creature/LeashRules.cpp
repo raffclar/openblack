@@ -162,6 +162,11 @@ float creature_leash::ReturnArrival(float radius, float height)
 	return std::max(radius, height);
 }
 
+bool creature_leash::ReturnInForce(uint32_t walkSerial, uint32_t agendaSerial, size_t step, size_t steps)
+{
+	return walkSerial == agendaSerial && step < steps;
+}
+
 bool creature_leash::AttitudeDue(std::optional<uint32_t> lastTurn, uint32_t turn)
 {
 	return !lastTurn.has_value() || turn - *lastTurn > k_AttitudeTurns;

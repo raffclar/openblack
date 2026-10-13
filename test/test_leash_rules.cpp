@@ -131,6 +131,16 @@ TEST(LeashRules, WalksBackFasterFurtherAway)
 	EXPECT_NEAR(ReturnArrival(10.0f, 30.0f), 30.0f, k_Tolerance);
 }
 
+TEST(LeashRules, WalkBackEndsWithItsAction)
+{
+	// The walk back continues while the mind does its agenda
+	EXPECT_TRUE(ReturnInForce(7, 7, 0, 1));
+	// The creature arrived or could not get there: the agenda has no more steps
+	EXPECT_FALSE(ReturnInForce(7, 7, 1, 1));
+	// A different action started: an order, a new plan or a script
+	EXPECT_FALSE(ReturnInForce(7, 8, 0, 1));
+}
+
 TEST(LeashRules, LeashedCreaturesWarmOrCoolToEachOther)
 {
 	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Evil), -0.1f);

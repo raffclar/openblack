@@ -691,6 +691,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLeash::confinementRadius>("confinementRadius")
 	    .Field<&components::CreatureLeash::home>("home")
 	    .Field<&components::CreatureLeash::returnTo>("returnTo")
+	    .Field<&components::CreatureLeash::returnSerial>("returnSerial")
 	    .Field<&components::CreatureLeash::order>("order")
 	    .Field<&components::CreatureLeash::help>("help")
 	    .Field<&components::CreatureLeash::helpDesire>("helpDesire");
