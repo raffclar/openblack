@@ -37,6 +37,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -297,6 +298,12 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			AddBall(entity, model, meshComponent->id, halfExtents,
 			        {.centre = highlight->centre, .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin});
+		}
+		// A miracle dispenser is also picked by a wide ball round the bubble it floats, which takes the dispenser itself
+		if (registry.AllOf<SpellDispenser>(entity) && transform != nullptr)
+		{
+			AddBall(entity, model, meshComponent->id, halfExtents,
+			        ecs::pick_shapes::DispenserBall(transform->position, halfExtents, scale));
 		}
 	}
 
