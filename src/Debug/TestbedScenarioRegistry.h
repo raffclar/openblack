@@ -597,6 +597,9 @@ struct Command
 		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
 		/// flight, say). Needs no creature
 		Reframe,
+		/// A script swaps the minds of the creature and another (value, by its place in the scenario's creatures), as
+		/// "swap creature from A to B" does
+		SwapMinds,
 		/// A challenge's script records it as SNAPSHOT does: the challenge (value), its title (title, by its help text's
 		/// name), how far it has got (amount, 1 done), a quest (ctrl) or not; the camera is first put 50 above and 70
 		/// along z from a point (point, from the middle of the map), looking at it, and the picture is of that view.

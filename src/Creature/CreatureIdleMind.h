@@ -284,6 +284,10 @@ struct Step
 		WatchCamera,
 		/// Taking in what the step's object is, done at once
 		Observe,
+		/// Swapping minds with another creature: every spell on it is brought to its end until none is on it or on the
+		/// other creature; then it plays the step's animation (not while its body plays another), starting the beam
+		/// between them, and turn by turn it takes on the shape the swap gives it until it has
+		SwapMind,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -429,6 +433,14 @@ struct Senses
 		float turn {0.0f};
 	};
 	std::optional<CameraView> camera;
+	/// A swap of minds: whether no spell is on it or on the other creature any more, and whether its body has taken on
+	/// the shape the swap gives it
+	struct SwapView
+	{
+		bool spellsGone {false};
+		bool settled {false};
+	};
+	SwapView swap {};
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -480,6 +492,11 @@ struct Commands
 	std::optional<uint32_t> douse;
 	/// What the head looks at this turn, for a step that gives it something to look at
 	std::optional<Gaze> gaze;
+	/// A swap of minds: bring every spell on it to its end, start the beam to the other creature, take on a turn more of
+	/// the shape the swap gives it
+	bool finishSpells {false};
+	bool startSwapBeam {false};
+	bool easeSwap {false};
 };
 
 /// random(n) is a whole number from 0 to n - 1
