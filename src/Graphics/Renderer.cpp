@@ -944,7 +944,7 @@ bool Renderer::BindCap(const std::vector<partial_build_cap::CapVertex>& cap)
 }
 
 void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc,
-                           bool preserveState, const TextureHandle* subMeshTexture, glm::vec3 glow) const
+                           bool preserveState, const TextureHandle* subMeshTexture, glm::vec3 glow, glm::vec3 offset) const
 {
 	assert(&subMesh.GetMesh());
 	// Physics meshes aren't drawn, nor the parts of other statuses (building stages, graves) or of another detail than
@@ -995,6 +995,13 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		jointModel = *modelMatrices * glm::translate(glm::mat4(1.0f), joint->pivot) * desc.joints[joint->index] *
 		             glm::translate(glm::mat4(1.0f), -joint->pivot);
 		modelMatrices = &jointModel;
+	}
+	// A held button of the temple moves into the wall. The movement is in the mesh, after the joint turns the submesh.
+	glm::mat4 offsetModel;
+	if (offset != glm::vec3(0.0f) && modelMatrices != nullptr && desc.matrixCount == 1)
+	{
+		offsetModel = *modelMatrices * glm::translate(glm::mat4(1.0f), offset);
+		modelMatrices = &offsetModel;
 	}
 	// A creature's body takes its blended skins in place of its base mesh's. A draw given a skin of its own (the
 	// temple's icons) binds that for every skinned primitive, and a submesh drawn with a texture of its own (the
@@ -1061,10 +1068,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		// of its own
 		// nor inner walls, whose inset each primitive's material decides
 		// nor primitives that may each take the environment map or a sliding texture in their own way
+		// nor the submeshes of a mesh that moves some of its submeshes
 		const bool primitivePreserveState = !materialBlending && subMeshTexture == nullptr && desc.subMeshGlows.empty() &&
-		                                    !desc.innerWalls && !desc.cap && desc.environment == nullptr &&
-		                                    !desc.uvOffsetByMaterial && texture != nullptr && texture == nextTexture &&
-		                                    (preserveState || hasNext);
+		                                    desc.subMeshOffsets.empty() && !desc.innerWalls && !desc.cap &&
+		                                    desc.environment == nullptr && !desc.uvOffsetByMaterial && texture != nullptr &&
+		                                    texture == nextTexture && (preserveState || hasNext);
 
 		// A cut building's inner walls and cap belong only to a primitive with a whole triangle below the cut, and a cap
 		// is drawn from geometry of its own, which a primitive not cut has none of
@@ -2306,8 +2314,10 @@ void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& 
 		}
 		const auto found = std::ranges::find(desc.subMeshTextures, index, &std::pair<uint32_t, TextureHandle>::first);
 		const auto glow = std::ranges::find(desc.subMeshGlows, index, &std::pair<uint32_t, glm::vec3>::first);
+		const auto offset = std::ranges::find(desc.subMeshOffsets, index, &std::pair<uint32_t, glm::vec3>::first);
 		DrawSubMesh(mesh, subMesh, desc, index != lastDrawn, found != desc.subMeshTextures.end() ? &found->second : nullptr,
-		            glow != desc.subMeshGlows.end() ? glow->second : glm::vec3(0.0f));
+		            glow != desc.subMeshGlows.end() ? glow->second : glm::vec3(0.0f),
+		            offset != desc.subMeshOffsets.end() ? offset->second : glm::vec3(0.0f));
 	}
 }
 
@@ -5932,6 +5942,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.uvOffset = placers.uvOffset;
 				submitDesc.subMeshTextures = placers.subMeshTextures;
 				submitDesc.subMeshGlows = placers.subMeshGlows;
+				submitDesc.subMeshOffsets = placers.subMeshOffsets;
 				submitDesc.hiddenSubMeshes = placers.hiddenSubMeshes;
 				// The rooms meet at their doorways, whose arches each room has a copy of: the player's room's is seen
 				submitDesc.depthBias = placers.behindCurrentRoom ? k_OtherTempleRoomDepthBias : 0.0f;

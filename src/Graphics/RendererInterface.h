@@ -142,6 +142,8 @@ public:
 		std::span<const std::pair<uint32_t, TextureHandle>> subMeshTextures;
 		/// Colours added to some of the submeshes, by submesh, after everything else
 		std::span<const std::pair<uint32_t, glm::vec3>> subMeshGlows;
+		/// Movements of some of the submeshes in the mesh, by submesh, before the mesh's own matrix
+		std::span<const std::pair<uint32_t, glm::vec3>> subMeshOffsets;
 		/// Submeshes left undrawn
 		std::span<const uint32_t> hiddenSubMeshes;
 		/// The primitives of the alpha textured materials (4 and 5) are drawn added over what is behind without writing

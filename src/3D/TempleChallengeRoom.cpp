@@ -182,6 +182,25 @@ const TempleChallengeRoom::Part* TempleChallengeRoom::FindPart(uint32_t subMesh)
 	return found != _parts.end() ? &*found : nullptr;
 }
 
+std::vector<TempleSubMeshOffset> TempleChallengeRoom::GetOffsets() const
+{
+	if (!_held.has_value())
+	{
+		return {};
+	}
+	const auto* part = FindPart(*_held);
+	if (part == nullptr)
+	{
+		return {};
+	}
+	const auto offset = rules::HeldOffset(part->control.part, glm::vec3(part->frame[2]));
+	if (offset == glm::vec3(0.0f))
+	{
+		return {};
+	}
+	return {{.subMesh = part->subMesh, .offset = offset}};
+}
+
 std::vector<TempleSubMeshTexture> TempleChallengeRoom::GetTextures() const
 {
 	std::vector<TempleSubMeshTexture> textures;

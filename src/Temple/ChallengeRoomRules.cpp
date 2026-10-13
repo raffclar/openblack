@@ -146,3 +146,8 @@ uint8_t challenge_room::TextAlpha(float closeness)
 {
 	return static_cast<uint8_t>(std::clamp(static_cast<int32_t>(closeness * 255.0f), 0, 255));
 }
+
+glm::vec3 challenge_room::HeldOffset(challenge_room::Part part, glm::vec3 frameZ)
+{
+	return part == challenge_room::Part::ReplayButton ? -challenge_room::k_ButtonPushIn * frameZ : glm::vec3(0.0f);
+}

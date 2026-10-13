@@ -67,6 +67,9 @@ public:
 	/// The parts not drawn: those of places without a challenge, the frames of the other kind and done challenges'
 	/// buttons
 	[[nodiscard]] std::vector<uint32_t> GetHidden() const;
+	/// The parts that move while the player holds the mouse button on them, by submesh, with the movement in the mesh.
+	/// A held replay button moves into the wall.
+	[[nodiscard]] std::vector<TempleSubMeshOffset> GetOffsets() const;
 	/// Whether a submesh is a part drawn, a control the cursor makes glow
 	[[nodiscard]] bool IsControl(uint32_t subMesh) const;
 	/// The pictures and buttons drawn, in the mesh's order, as the tooltips see them
