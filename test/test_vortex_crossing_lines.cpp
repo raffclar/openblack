@@ -20,6 +20,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -158,6 +159,34 @@ TEST(VortexCrossingLines, ARockKeepsItsHeightAboveTheLandAndItsTurns)
 	EXPECT_EQ(LineText(registry, rock), fmt::format("CREATE_MOBILE_STATIC(\"0.00,0.00\", {}, 2.000000, 0.100000, 0.200000, "
 	                                                "0.300000, 1.500000)\n",
 	                                                static_cast<int>(MobileStaticInfo::Rock)));
+}
+
+TEST(VortexCrossingLines, AnArtefactOfAPlayerIsMadeOneAgainOfNoTown)
+{
+	Registry registry;
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, Town {.id = 3});
+	const auto rock = Thing(registry, {1000.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<MobileStatic>(rock, MobileStaticInfo::Rock);
+	auto& artefact = registry.Assign<TownArtefact>(rock);
+	artefact.town = town;
+	artefact.inTown = true;
+	artefact.value = 2.5f;
+	// Nobody's artefact is written as a plain static
+	const auto plain = fmt::format("CREATE_MOBILE_STATIC(\"0.00,0.00\", {}, 0.000000, 0.000000, 0.000000, 0.000000, "
+	                               "1.000000)\n",
+	                               static_cast<int>(MobileStaticInfo::Rock));
+	EXPECT_EQ(LineText(registry, rock), plain);
+	registry.Get<TownArtefact>(rock).player = PlayerNames::PLAYER_TWO;
+	const auto text = LineText(registry, rock);
+	EXPECT_EQ(text, plain + "MAKE_LAST_OBJECT_ARTIFACT(-1, \"PLAYER_TWO\", 2.500000)\n");
+	// Each is a line of its own, read on a turn of its own
+	const auto second = text.substr(plain.size());
+	const auto read = Read(second);
+	EXPECT_TRUE(ReaderTakes(read));
+	EXPECT_EQ(*read.values.at(0).IntegerValue(), -1);
+	EXPECT_EQ(read.values.at(1).StringValue(), "PLAYER_TWO");
+	EXPECT_FLOAT_EQ(*read.values.at(2).FloatValue(), 2.5f);
 }
 
 TEST(VortexCrossingLines, APotIsWrittenUnlessItIsAStoragePitsPile)

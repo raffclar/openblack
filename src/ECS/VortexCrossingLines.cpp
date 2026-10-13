@@ -25,6 +25,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -143,12 +144,21 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 	if (const auto* still = registry.TryGet<const MobileStatic>(thing))
 	{
 		const auto angles = AnglesOf(transform->rotation);
+		// An artefact of a player stays one, of no town: it joins its player's nearest as it is made again
+		const auto* artefact = registry.TryGet<const TownArtefact>(thing);
+		std::optional<ArtefactLine> artefactLine;
+		if (artefact != nullptr && artefact->player.has_value())
+		{
+			artefactLine = ArtefactLine {.player = std::string(k_PlayerNamesStrs.at(static_cast<size_t>(*artefact->player))),
+			                             .value = artefact->value};
+		}
 		return MobileStaticLine {.offset = offset,
 		                         .row = static_cast<int32_t>(still->type),
 		                         .xAngle = angles.x,
 		                         .yAngle = angles.y,
 		                         .zAngle = angles.z,
-		                         .scale = scale};
+		                         .scale = scale,
+		                         .artefact = artefactLine};
 	}
 	if (const auto* mobile = registry.TryGet<const MobileObject>(thing))
 	{

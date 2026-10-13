@@ -154,7 +154,16 @@ struct TreeLine
 	float scale {1.0f};
 	float maxScale {1.0f};
 };
-/// A rock or any other static thing lying about
+/// What makes the thing made last an artefact of a player, worth so much. Written after the static thing's own line; the
+/// town is never kept through a vortex, so the artefact joins the nearest town of its player as it is made again.
+struct ArtefactLine
+{
+	int32_t town {-1};
+	/// Its player as the land scripts name them ("PLAYER_ONE")
+	std::string player;
+	float value {0.0f};
+};
+/// A rock or any other static thing lying about, with the line making it an artefact when it is one of a player's
 struct MobileStaticLine
 {
 	map_coords::MapCoords offset;
@@ -163,6 +172,7 @@ struct MobileStaticLine
 	float yAngle {0.0f};
 	float zAngle {0.0f};
 	float scale {1.0f};
+	std::optional<ArtefactLine> artefact;
 };
 struct MobileObjectLine
 {
