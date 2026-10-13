@@ -34,6 +34,9 @@ public:
 		Current,
 		Start,
 		Target,
+		/// The view that the camera kept after its last step, with the shake. The game drew this view, unless a command
+		/// put the camera after the step. Before the first kept view, the view now.
+		Drawn,
 	};
 	enum class Projection : uint8_t
 	{
@@ -73,7 +76,7 @@ public:
 	Camera& SetOrigin(const glm::vec3& position);
 	Camera& SetFocus(const glm::vec3& position);
 	/// Puts the camera here, still, and has what moves it forget where it was going, so that it stays here until the
-	/// player or a script moves it
+	/// player or a script moves it. When the kept view has this eye and focus, nothing changes.
 	Camera& Place(const glm::vec3& origin, const glm::vec3& focus);
 	/// The eye and what it looks at jump up by these as the camera shakes, as it is drawn
 	Camera& SetShake(const glm::vec3& eye, const glm::vec3& focus);
@@ -134,6 +137,9 @@ public:
 
 	void Update(std::chrono::microseconds dt);
 	void HandleActions(std::chrono::microseconds dt);
+	/// Keeps the view after the step of the camera in this frame. The rays of the camera to the land on the next frame
+	/// start from this view. A command that puts the camera after the step does not change this view.
+	void KeepDrawnView();
 
 	[[nodiscard]] glm::mat4 GetRotationMatrix() const;
 	[[nodiscard]] Projection GetCameraProjection() const;
@@ -205,6 +211,18 @@ protected:
 	Projection _cameraProjection = Projection::ReversedZ;
 	glm::vec3 _shakeEye {0.0f};
 	glm::vec3 _shakeFocus {0.0f};
+	/// A kept view: the eye and the focus with the shake, and the perspective
+	struct View
+	{
+		glm::vec3 eye;
+		glm::vec3 focus;
+		glm::mat4 projection;
+		float nearClip;
+	};
+	std::optional<View> _drawnView;
+	/// The kept view, or the view now when there is no kept view
+	[[nodiscard]] View GetDrawnView() const;
+	[[nodiscard]] glm::mat4 GetProjectionMatrix(Projection projection, Interpolation interpolation) const;
 	float _keyboardMoveSpeed = k_KeyboardMoveSpeedDefault;
 };
 

@@ -1972,6 +1972,9 @@ bool Game::Update() noexcept
 		camera.SetOrigin(chase->origin).SetFocus(chase->focus);
 	}
 	FitNearClip();
+	// The camera keeps this view for its rays to the land on the next frame. A command of this frame that puts the camera
+	// does not change the view of these rays.
+	camera.KeepDrawnView();
 	// The temple's camera may have taken the player out of the temple
 	if (Locator::temple::has_value())
 	{

@@ -168,7 +168,7 @@ public:
 	{
 		const auto size = glm::vec2(openblack::Locator::windowing::value().GetSize());
 		const auto clip =
-		    camera->GetViewProjectionMatrix(openblack::Camera::Projection::Normal, openblack::Camera::Interpolation::Target) *
+		    camera->GetViewProjectionMatrix(openblack::Camera::Projection::Normal, openblack::Camera::Interpolation::Drawn) *
 		    glm::vec4(position, 1.0f);
 		if (clip.w <= 0.0f)
 		{
@@ -182,8 +182,9 @@ public:
 			return std::nullopt;
 		}
 		screenPosition.y = size.y - screenPosition.y;
-		// Move point because of precision loss in project/deproject
-		return static_cast<glm::u16vec2>(glm::round(glm::round(screenPosition * 10.0f) / 10.0f));
+		// The trip through the view and back loses some precision, up to a tenth of a pixel. The recorded pixels are whole
+		// or halves (the middle line). Thus the position goes to the nearest quarter of a pixel, and a half goes up.
+		return static_cast<glm::u16vec2>(glm::round(glm::round(screenPosition * 4.0f) / 4.0f));
 	}
 
 	uint16_t frameNumber = 0;
