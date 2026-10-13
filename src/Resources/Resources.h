@@ -73,6 +73,17 @@ public:
 		return pending;
 	}
 
+	[[nodiscard]] size_t LoadingCount() const override
+	{
+		if (_loadQueue.GetThreadCount() == 0)
+		{
+			return 0;
+		}
+		size_t loading = 0;
+		ForEachManager([&loading](const auto& manager) { loading += manager.LoadingCount(); });
+		return loading;
+	}
+
 	void StopLoading() override { _loadQueue.Cancel(); }
 	AdvisorModelManager& GetAdvisorModels() override { return _advisorModels; }
 

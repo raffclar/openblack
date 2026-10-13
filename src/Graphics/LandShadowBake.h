@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <future>
 #include <memory>
 #include <span>
 #include <unordered_map>
@@ -21,6 +22,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Components/Transform.h"
+#include "ECS/LandShadowCasters.h"
 #include "Graphics/TreeShadows.h"
 
 namespace openblack::graphics
@@ -83,10 +86,49 @@ private:
 		bool seen;
 		/// A solid thing's triangles flattened where they fall in the world, kept until it changes, and the corners of
 		/// the land they fall within, along x and z
-		std::vector<glm::vec2> cast;
+		std::shared_ptr<const std::vector<glm::vec2>> cast;
 		glm::vec2 castLow {0.0f};
 		glm::vec2 castHigh {0.0f};
 	};
+
+	/// A copy of a caster, as it was when its bake started
+	struct BakeCaster
+	{
+		ecs::LandShadow shadow;
+		std::vector<uint32_t> cells;
+		ecs::components::Transform transform;
+		std::span<const LeafTriangle> leaves;
+		std::span<const ShapeTriangle> shape;
+		std::shared_ptr<const std::vector<glm::vec2>> cast;
+		glm::vec2 castLow {0.0f};
+		glm::vec2 castHigh {0.0f};
+	};
+	/// A land block to bake: its index along x and z, and its corner on the land
+	struct BakeBlock
+	{
+		glm::ivec2 position;
+		glm::vec2 corner;
+	};
+	/// All that a bake reads
+	struct BakeJob
+	{
+		std::vector<BakeBlock> blocks;
+		std::vector<BakeCaster> casters;
+		bool rowsFromFarEnd {false};
+	};
+	/// The texels of a baked block
+	struct BlockShades
+	{
+		glm::vec2 corner {0.0f};
+		std::vector<uint8_t> shades;
+	};
+
+	/// Bakes the blocks, on as many threads as there are blocks, up to one for each processor
+	[[nodiscard]] static std::vector<BlockShades> Bake(const BakeJob& job);
+	/// Puts the baked blocks into the texture
+	void Apply(const std::vector<BlockShades>& results);
+	/// Puts the blocks of the bake on the other threads into the texture, if the bake is done
+	void ApplyFinishedBake();
 
 	void MarkBlocksOf(std::span<const uint32_t> cells);
 	/// The triangles of a model that cast its shadow, found once
@@ -104,6 +146,8 @@ private:
 	/// The land blocks to bake again, by their index along x and z
 	std::vector<glm::ivec2> _dirty;
 	bool _bakeAll {true};
+	/// The bake that runs on other threads
+	std::future<std::vector<BlockShades>> _bake;
 };
 
 } // namespace openblack::graphics

@@ -68,6 +68,7 @@
 #include "3D/WaterRings.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
+#include "Common/UserData.h"
 #include "Creature/CreatureFizzLook.h"
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureMorph.h"
@@ -152,6 +153,7 @@
 #include "Graphics/ModelLight.h"
 #include "Graphics/Moon.h"
 #include "Graphics/ObjectShadows.h"
+#include "Graphics/PipelineCache.h"
 #include "Graphics/Primitive.h"
 #include "Graphics/ScreenshotCapture.h"
 #include "Graphics/SeaReflection.h"
@@ -374,13 +376,19 @@ struct BgfxCallback: public bgfx::CallbackI
 	{
 	}
 	void profilerEnd() override {}
-	// Reading and writing to shader cache
-	uint32_t cacheReadSize([[maybe_unused]] uint64_t id) override { return 0; }
-	bool cacheRead([[maybe_unused]] uint64_t id, [[maybe_unused]] void* data, [[maybe_unused]] uint32_t size) override
+	// The driver's compiled pipelines, kept between runs
+	uint32_t cacheReadSize(uint64_t /*id*/) override { return pipelines.has_value() ? pipelines->ReadSize() : 0; }
+	bool cacheRead(uint64_t /*id*/, void* data, uint32_t size) override
 	{
-		return false;
+		return pipelines.has_value() && pipelines->Read(std::span(static_cast<std::byte*>(data), size));
 	}
-	void cacheWrite([[maybe_unused]] uint64_t id, [[maybe_unused]] const void* data, [[maybe_unused]] uint32_t size) override {}
+	void cacheWrite(uint64_t /*id*/, const void* data, uint32_t size) override
+	{
+		if (pipelines.has_value())
+		{
+			pipelines->Write(std::span(static_cast<const std::byte*>(data), size));
+		}
+	}
 	// Saving a screenshot
 	void screenShot(const char* filePath, uint32_t width, uint32_t height, uint32_t pitch, const void* data, uint32_t size,
 	                bool yflip) override
@@ -433,6 +441,9 @@ struct BgfxCallback: public bgfx::CallbackI
 	graphics::CapturedFrames captured;
 	/// The descriptor sets the last frame counted took under Vulkan, for the report if the renderer runs out of them
 	std::atomic<uint32_t> recentDescriptorSets {0};
+	/// The driver's compiled pipelines on disk. Only the Vulkan renderer keeps them, and only when the system gives a user
+	/// folder.
+	std::optional<graphics::PipelineCache> pipelines;
 };
 
 } // namespace openblack
@@ -477,6 +488,11 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 
 	uint32_t bgfxReset = BGFX_RESET_NONE;
 	auto bgfxCallback = std::make_unique<BgfxCallback>();
+	// Only the Vulkan renderer gives back one cache for all its pipelines
+	if (const auto folder = user_data::Folder(); folder.has_value() && backend == GraphicsBackend::Vulkan)
+	{
+		bgfxCallback->pipelines.emplace(*folder / "cache" / "vulkan_pipelines.bin");
+	}
 	if (vsync)
 	{
 		bgfxReset |= BGFX_RESET_VSYNC;

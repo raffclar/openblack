@@ -88,6 +88,9 @@ public:
 	virtual void PrefetchAll() = 0;
 	/// How many registered resources are not loaded yet
 	[[nodiscard]] virtual size_t PendingCount() const = 0;
+	/// How many prefetched resources the loading threads must still load. Zero when there are no loading threads,
+	/// because then each resource loads when it is first used.
+	[[nodiscard]] virtual size_t LoadingCount() const = 0;
 	/// Stops loading on the loading threads: drops what hasn't started and waits for what has
 	virtual void StopLoading() = 0;
 	/// The videos playing, by their paths; each is let go when it ends

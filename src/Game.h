@@ -173,6 +173,9 @@ public:
 	/// loading frame to about 6 ms on Vulkan, where some models' hundreds of small parts made it 17 ms
 	static constexpr size_t k_FrameLoadBudget = 256 << 10;
 	static constexpr graphics::UploadPacer::Allowance k_FrameUploads {.bytes = 128 << 10, .uploads = 16};
+	/// How many bytes of files the loading threads read at a time while the loading screen shows. No game frame waits
+	/// then, so the threads read as much as they can.
+	static constexpr size_t k_LoadingScreenLoadBudget = 64 << 20;
 	static constexpr float k_TurnDurationMultiplierSlow = 2.0f;
 	static constexpr float k_TurnDurationMultiplierNormal = 1.0f;
 	static constexpr float k_TurnDurationMultiplierFast = 0.5f;
@@ -289,10 +292,12 @@ private:
 	void StartTipOfTheDay();
 	/// The tips screen, or the banner, shows while a land loads, drawn again at the loading's redraw points
 	void BeginLoadingScreen(loading::LoadingClock::Mode look);
-	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due
-	void RenderLoadingFrame();
+	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due, or at once when drawNow is true
+	void RenderLoadingFrame(bool drawNow = false);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen();
+	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources
+	void FinishLoadingBehindScreen();
 	/// Draws one frame outside the game's loop over a black screen and shows it
 	void PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw);
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,
