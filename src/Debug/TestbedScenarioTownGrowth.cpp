@@ -10,6 +10,7 @@
 // The testbed's scenario of a town growing from the buildings it planned
 
 #include <array>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -157,6 +158,87 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 2.0f}, .yawDegrees = 0.0f, .mateWith = 3},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 14.0f}, .yawDegrees = 180.0f}},
 	});
+
+	// A town's people come across a creature standing still on the edge of their village
+	all.push_back({
+	    .id = "villagers.creature_curious",
+	    .name = "Villagers inspecting a creature",
+	    .facet = Facet::Objects,
+	    .description = "A hut of the player's town north of the middle with six of its people about it, and the player's "
+	                   "tiger standing still, its mind paused, thirty metres to the east.",
+	    .expected = "The town has never seen the creature, so it is curious: the villagers within reach take up its "
+	                "reaction and stand looking at it from where they are for a second and a half to four and a half, "
+	                "then walk to twenty metres from it and look again for one and a half to eight and a half seconds, "
+	                "and if there is time step to twelve metres, then four. Fifteen seconds after the town first noticed it, "
+	                "with the creature doing "
+	                "nothing, the town grows indifferent and they all go back to what they were doing.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 25.0f}, {35.0f, 55.0f}}, .distance = 0.7f},
+	    .creatures = {{.label = "watched",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {30.0f, 40.0f},
+	                   .facingDegrees = 270.0f,
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .hold = true,
+	                   .pauseMind = true}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, 40.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-2.0f, 34.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, 46.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 40.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 30.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-14.0f, 50.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-18.0f, 34.0f}, .joinTown = true}},
+	});
+
+	// The same village, set to respect or to fear a creature standing near it
+	const auto creatureFeeling = [&all](std::string_view id, std::string_view name, PlayerNames owner,
+	                                    ecs::creature_attitude::Attitude feeling, bool thinks, std::string_view description,
+	                                    std::string_view expected) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Objects,
+		    .description = description,
+		    .expected = expected,
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 25.0f}, {35.0f, 55.0f}}, .distance = 0.7f},
+		    .creatures = {{.label = "watched",
+		                   .species = CreatureType::Tiger,
+		                   .offset = {30.0f, 40.0f},
+		                   .facingDegrees = 270.0f,
+		                   .owner = owner,
+		                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+		                   .hold = true,
+		                   .pauseMind = !thinks}},
+		    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, 40.0f}},
+		                {.type = VillagerInfo::CelticFarmerMale, .offset = {-2.0f, 34.0f}, .joinTown = true},
+		                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, 46.0f}, .joinTown = true},
+		                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 40.0f}, .joinTown = true},
+		                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 30.0f}, .joinTown = true},
+		                {.type = VillagerInfo::CelticFishermanMale, .offset = {-14.0f, 50.0f}, .joinTown = true},
+		                {.type = VillagerInfo::CelticFarmerMale, .offset = {-18.0f, 34.0f}, .joinTown = true}},
+		    .townFeelingAboutCreatures = feeling,
+		});
+	};
+	creatureFeeling(
+	    "villagers.creature_respect", "Villagers bowing to a creature", PlayerNames::PLAYER_TWO,
+	    ecs::creature_attitude::Attitude::Respect, false,
+	    "The village of six by its hut, with another player's tiger standing still thirty metres to the east. The town "
+	    "respects the tiger from the start, as if it had just done something kind.",
+	    "The villagers within reach take up the tiger's reaction and, respecting it, walk towards it, turn quickly to face "
+	    "it and bow for four seconds, turning to face it again if it moves round them, then go back to what they were "
+	    "doing. Ten seconds after the start the town's respect lapses into indifference and no one takes the reaction "
+	    "up again.");
+	creatureFeeling("villagers.creature_fear", "Villagers running from a creature", PlayerNames::PLAYER_ONE,
+	                ecs::creature_attitude::Attitude::Fear, true,
+	                "The village of six by its hut, with the player's tiger thirty metres to the east, left to its own "
+	                "mind. The town fears the tiger from the start, as if it had just thrown something.",
+	                "The villagers within reach take up the tiger's reaction and, frightened, run from it: while the tiger "
+	                "means to act on something each sets off now and then (one turn in ten) at half its fleeing speed "
+	                "to a point straight away from it, 1.2 times the reaction's reach off; with the tiger meaning nothing "
+	                "they stand. Thirty seconds after the tiger last frightened the town its fear lapses into "
+	                "indifference and they go back to what they were doing.");
 
 	// A town whose store has run out of food, with fields to farm
 	std::vector<ObjectSetup> hungry {

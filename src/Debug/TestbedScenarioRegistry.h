@@ -28,6 +28,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureTattoo.h"
+#include "ECS/CreatureAttitudeRules.h"
 #include "Enums.h"
 #include "Particles/ParticleDrawPath.h"
 #include "TestbedCrowd.h"
@@ -805,6 +806,9 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town believes this much in the player from the start, so that it stays the
 	/// player's rather than going back to the neutral player at its first turn
 	std::optional<float> townBeliefInPlayer;
+	/// A testbed set-up step: the scenario's town feels so about each of the scenario's creatures from the start, as if
+	/// the creature had just shown it, rather than first seeing them as it plays
+	std::optional<ecs::creature_attitude::Attitude> townFeelingAboutCreatures;
 	/// A crowd spawned a batch a frame, after the creatures and objects above; the runner measures the frames once it
 	/// is all there
 	std::optional<Crowd> crowd;

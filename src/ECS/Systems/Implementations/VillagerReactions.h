@@ -76,8 +76,14 @@ bool ExitReaction(components::LivingAction& action, VillagerStates next);
 /// What the villager reacts to: the reaction's thing, while it is there
 [[nodiscard]] std::optional<entt::entity> ReactingTo(entt::entity villager);
 
+/// How fast a villager turns to look at something: an eighth of a half turn a turn, or twice that
+enum class LookSpeed : uint8_t
+{
+	Steady,
+	Quick,
+};
 /// A villager turns towards a point, a step a turn, as one watching something does: whether it now faces it
-bool LookAt(entt::entity villager, const glm::vec3& point);
+bool LookAt(entt::entity villager, const glm::vec3& point, LookSpeed speed = LookSpeed::Steady);
 /// Dancing round what it reacts to, in the reaction's dance: out of the dance it decides what to do
 uint32_t DanceWhileReacting(components::LivingAction& action);
 /// The states of fleeing, and of watching (after fleeing, or a nice miracle)
@@ -108,6 +114,9 @@ struct BeliefVoice
 /// A town's belief gained in a player rises as a symbol from its town centre's foot, in the player's colour
 /// The villager goes at its speed for the state it is to end up in, as the game works it out at each change of state
 void SetStateSpeed(entt::entity villager, VillagerStates state);
+/// The villager goes at a speed from its tables, made its own by when it was made, its age, and as an adult its belly,
+/// its life and its sex
+void SetSpeed(entt::entity villager, int32_t speed);
 /// The town's impression, made as the town first takes one: believing in the neutral player as its tables say
 components::TownImpression& ImpressionOf(entt::entity town);
 void ShowTownBelief(const glm::vec3& centre, PlayerNames player, float belief);

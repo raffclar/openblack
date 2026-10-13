@@ -118,6 +118,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBreeding.h"
+#include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -530,6 +531,19 @@ void Runner::Start(const Scenario& scenario)
 			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
 			{
 				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_ONE, *scenario.townBeliefInPlayer);
+			}
+		}
+	}
+	if (scenario.townFeelingAboutCreatures.has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+			for (const auto creature : _creatures)
+			{
+				ecs::villager_creature::SetFeeling(town->second, creature, *scenario.townFeelingAboutCreatures, turn);
 			}
 		}
 	}

@@ -817,6 +817,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		{
 			creature_training::CountCarriedOut(mind.actionCounts, plan.action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+			mind.lastActionDone = plan.action;
 		}
 		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
 		{
@@ -852,6 +853,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		{
 			creature_training::CountCarriedOut(mind.actionCounts, mind.underway->action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+			mind.lastActionDone = mind.underway->action;
 		}
 		mind.underway.reset();
 	}

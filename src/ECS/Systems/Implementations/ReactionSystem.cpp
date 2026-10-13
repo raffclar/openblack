@@ -68,6 +68,7 @@
 #include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
 #include "VillagerBreeding.h"
+#include "VillagerCreatureReactions.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
 #include "VillagerForester.h"
@@ -460,6 +461,18 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		           ? ecs::villager_breeding::ReactToBreederPriority(living, reaction.source.initiator)
 		           : 0;
 	}
+	// A villager weighs a creature by how its town feels about it
+	// TODO(villager-social): creatures and animals weigh a creature by rules of their own that aren't ported yet; until
+	// then they take no notice of it
+	if (reaction.source.type == Reaction::ReactToCreature)
+	{
+		if (!registry.AllOf<Villager>(living))
+		{
+			return 0;
+		}
+		const auto kind = ecs::villager_creature::Priority(living, reaction.source.initiator);
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
 	// A villager heeds its town's celebration only when the town itself makes it
 	if (reaction.source.type == Reaction::ReactToTownCelebration && registry.AllOf<Villager>(living))
 	{
@@ -591,12 +604,18 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		}
 		auto& memory = MemoryOf(registry, entity, *state);
 		const bool creature = registry.AllOf<Creature>(entity);
-		// A forester at work goes for wood again straight away
-		const auto again = creature ? info->numGameTurnsForCreatureBeforeReactingAgain
-		                   : reaction.source.type == Reaction::ReactToWood && registry.AllOf<Villager>(entity) &&
-		                           ecs::villager_forester::ReactsToWoodAgainAtOnce(entity)
-		                       ? 0u
-		                       : info->numGameTurnsForNormalThingsBeforeReactingAgain;
+		// A forester at work goes for wood again straight away; a villager waits for a creature by its own rule
+		const bool villagerAndCreature = reaction.source.type == Reaction::ReactToCreature && registry.AllOf<Villager>(entity);
+		const auto again =
+		    creature ? info->numGameTurnsForCreatureBeforeReactingAgain
+		    : villagerAndCreature
+		        ? ecs::villager_creature::TurnsBeforeReactingAgain(
+		              entity, reaction.source.initiator,
+		              villager_reaction::SpreadDistance({at.x, at.z}, {reaction.source.position.x, reaction.source.position.z}))
+		    : reaction.source.type == Reaction::ReactToWood && registry.AllOf<Villager>(entity) &&
+		            ecs::villager_forester::ReactsToWoodAgainAtOnce(entity)
+		        ? 0u
+		        : info->numGameTurnsForNormalThingsBeforeReactingAgain;
 		// Impressed without reacting, it is the last in the cell the reaction reaches
 		if (BelievesWithoutReacting(registry, entity, reaction.source.type))
 		{
@@ -824,8 +843,17 @@ void ReactionSystem::ProcessLiving()
 		}
 		// Its time counts from when it last took up a reaction of the kind, the same wherever it stands
 		const bool creature = registry.AllOf<Creature>(entity);
-		const auto turns =
+		auto turns =
 		    static_cast<int32_t>(creature ? info->numGameTurnsForCreatureToReact : info->numGameTurnsForNormalThingsToReact);
+		// A villager reacts to a creature for as long as its own rule says, by how near the creature is
+		if (state.type == Reaction::ReactToCreature && registry.AllOf<Villager>(entity) &&
+		    registry.Valid(reaction->source.initiator) && registry.AllOf<Transform>(reaction->source.initiator))
+		{
+			turns = static_cast<int32_t>(ecs::villager_creature::TurnsToReact(
+			    entity, reaction->source.initiator,
+			    gutils::GetDistanceInMetres(registry.Get<const Transform>(entity).position,
+			                                registry.Get<const Transform>(reaction->source.initiator).position)));
+		}
 		const auto since =
 		    static_cast<int32_t>(_turn - MemoryOf(registry, entity, state).LastReacted(static_cast<uint32_t>(state.type)));
 		if (since > turns)
@@ -859,6 +887,25 @@ void ReactionSystem::ProcessTurn()
 	for (const auto id : gone)
 	{
 		ShutDown(id);
+	}
+	// Every creature has a reaction of its own, which follows it for as long as it lives
+	std::vector<Source> creatures;
+	registry.Each<const Creature, const Transform>(
+	    [this, &creatures](entt::entity creature, const Creature& component, const Transform& transform) {
+		    const bool has = std::ranges::any_of(_reactions, [creature](const Active& reaction) {
+			    return reaction.source.initiator == creature && reaction.source.type == Reaction::ReactToCreature;
+		    });
+		    if (!has)
+		    {
+			    creatures.push_back({.initiator = creature,
+			                         .type = Reaction::ReactToCreature,
+			                         .player = component.owner,
+			                         .position = transform.position});
+		    }
+	    });
+	for (const auto& source : creatures)
+	{
+		Create(source);
 	}
 	// A reaction to a flying thing, to a villager held in the hand, or to a creature, is where the thing is now; a
 	// creature moves the way it faces, as far as matters to those fleeing it

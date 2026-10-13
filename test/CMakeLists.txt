@@ -885,3 +885,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_temple_villagers_survey temple/test_temple_villagers_survey.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_attitude_rules test_creature_attitude_rules.cpp
+)
