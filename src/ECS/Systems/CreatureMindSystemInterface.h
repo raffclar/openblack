@@ -58,6 +58,11 @@ public:
 	virtual void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) = 0;
 	/// The creature's mind as a mind file of the current version, over the file it was loaded from, if it has a mind
 	[[nodiscard]] virtual std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const = 0;
+	/// Swaps the minds of two creatures at once, as a script does: everything the mind file keeps (what each has learnt
+	/// and how it feels, its physique and tattoos) moves to the other body, while each keeps its name, size and alignment
+	/// for now; the creature the first belonged to now owns the second and the other way round, and both carry out the
+	/// swap, during which each body takes on the size and alignment the other had. Returns whether it could.
+	virtual bool SwapMinds(entt::entity /*from*/, entt::entity /*to*/) { return false; }
 	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
 	virtual void ClearLearning(entt::entity creature) = 0;
 	/// Creatures that can see the point watch an ordinary skill practised (by its row in the game's table), or a miracle

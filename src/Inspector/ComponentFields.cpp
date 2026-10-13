@@ -55,6 +55,7 @@
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureSpells.h"
+#include "Creature/CreatureSwap.h"
 #include "Creature/CreatureSway.h"
 #include "Creature/CreatureTattoo.h"
 #include "Creature/CreatureTownCompassion.h"
@@ -98,6 +99,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/CreatureSwap.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
@@ -837,6 +839,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::smallestSize>("smallestSize")
 	    .Field<&components::CreatureSpells::largestSize>("largestSize")
 	    .Field<&components::CreatureSpells::cheat>("cheat");
+	Reflect<components::CreatureSwap>(context)
+	    .Field<&components::CreatureSwap::other>("other")
+	    .Field<&components::CreatureSwap::target>("target");
 	Reflect<components::DanceMove>(context)
 	    .Field<&components::DanceMove::action>("action")
 	    .Field<&components::DanceMove::first>("first")
@@ -2330,6 +2335,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_spells::Waiting::spell>("spell")
 	    .Field<&openblack::creature_spells::Waiting::holdTurns>("holdTurns")
 	    .Field<&openblack::creature_spells::Waiting::miracle>("miracle");
+	Reflect<openblack::creature_swap::Shape>(context, ValueOnly {})
+	    .Field<&openblack::creature_swap::Shape::size>("size")
+	    .Field<&openblack::creature_swap::Shape::alignment>("alignment");
 	Reflect<openblack::creature_sway::Sway>(context, ValueOnly {})
 	    .Field<&openblack::creature_sway::Sway::lowerVelocity>("lowerVelocity")
 	    .Field<&openblack::creature_sway::Sway::upperVelocity>("upperVelocity")

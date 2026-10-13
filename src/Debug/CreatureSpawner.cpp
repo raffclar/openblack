@@ -571,6 +571,11 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		case creature_mind::Step::Kind::Douse:
 			ImGui::Text("Dousing a fire");
 			break;
+		case creature_mind::Step::Kind::SwapMind:
+			ImGui::Text("Swapping minds for %.1f s", static_cast<double>(idle.stepSeconds));
+			break;
+		default:
+			break;
 		}
 	}
 	ImGui::Text("Shows a desire again in %.0f s%s%s", static_cast<double>(idle.showDesireSeconds),

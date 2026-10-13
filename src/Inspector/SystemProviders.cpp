@@ -156,6 +156,8 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "watch_camera";
 	case Kind::Observe:
 		return "observe";
+	case Kind::SwapMind:
+		return "swap_mind";
 	}
 	return "unknown";
 }

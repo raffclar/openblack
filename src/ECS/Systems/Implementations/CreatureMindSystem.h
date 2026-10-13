@@ -80,6 +80,7 @@ public:
 	void SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows) override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
+	bool SwapMinds(entt::entity from, entt::entity to) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
 	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
@@ -103,6 +104,11 @@ private:
 	void SetUpLearning(entt::entity creature, components::CreatureMindState& mind);
 	/// Takes up a mind file waiting to be loaded
 	void TakeUpFile(entt::entity creature, components::CreatureMindState& mind);
+	/// How a creature's swap of minds stands this turn: whether the spells on both creatures have gone and whether its
+	/// body has taken on its new shape
+	[[nodiscard]] static creature_mind::Senses::SwapView SwapViewOf(entt::entity creature);
+	/// What the idle mind told a creature carrying out a swap to do this turn
+	void StepSwap(entt::entity creature, const creature_mind::Commands& commands);
 	/// Remembers what the idle mind has started, for feedback to be credited to, and finishes plans that are done
 	void FollowAgenda(entt::entity creature, components::CreatureMindState& mind);
 	/// Carries out a plan in place of what the creature was doing; returns whether it could
