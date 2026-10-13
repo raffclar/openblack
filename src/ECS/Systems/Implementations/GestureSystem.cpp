@@ -23,6 +23,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Registry.h"
@@ -223,6 +224,8 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 				state.knows.at(i) = leashes.Knows(*creature, creature_leash::k_Types.at(i));
 			}
 			state.worn = state.leashed ? leashes.TypeOf(*creature) : LeashType::None;
+			const auto* picked = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*creature);
+			state.current = state.leashed ? state.worn : (picked != nullptr ? picked->selected : LeashType::Rope);
 			context.creature = state;
 		}
 	}

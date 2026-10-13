@@ -56,6 +56,14 @@ struct CreatureLeash
 		leash_rope::Rope rope;
 		/// Whether the rope has been placed from its ends yet
 		bool ropeStarted {false};
+		/// While the hand holds the rope of the tied leash, the rope is drawn as two of its own: from the collar to the
+		/// hand, and from what it is tied to to the hand
+		struct HeldRopes
+		{
+			leash_rope::Rope toCollar;
+			leash_rope::Rope toTied;
+		};
+		std::optional<HeldRopes> held;
 	};
 	std::optional<Worn> worn;
 	/// The leash picked to put on next, at the citadel or by the hotkeys
@@ -75,8 +83,6 @@ struct CreatureLeash
 	float pull {0.0f};
 	/// How often it has been pulled away from acting on each desire
 	creature_leash::PullMemory pulls {};
-	/// Turns leashed to another creature
-	uint32_t turnsWithOther {0};
 
 	/// The area the creature is kept within, none when the radius is 0
 	glm::vec3 confinementCentre {0.0f};
@@ -128,9 +134,8 @@ struct LeashMarker
 /// One of the three leashes hanging at a citadel, which its player taps to pick that leash
 struct LeashPost
 {
-	/// The collar mesh the posts are drawn with, Data/Misc/leash.l3d. Each player's leash of each kind has a copy of its
-	/// own (see temple_leashes::CollarMeshName), so that each is drawn with its own band of the leash texture and its own
-	/// slide of it.
+	/// The collar mesh the posts are drawn with, Data/Misc/leash.l3d, each with its own band of the leash texture and its
+	/// own slide of it
 	static constexpr entt::id_type k_MeshId = entt::hashed_string("misc/leash");
 	/// The leash texture with its alpha, which the collars are drawn with in place of their own skin
 	static constexpr entt::id_type k_TextureId = entt::hashed_string("raw/leash+alpha");

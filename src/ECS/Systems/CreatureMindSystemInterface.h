@@ -211,6 +211,19 @@ public:
 	/// A script makes a desire the creature's only one for some seconds, or takes it away again
 	virtual void SetOnlyDesire(entt::entity /*creature*/, creature_desires::Desire /*desire*/, float /*seconds*/) {}
 	virtual void ClearOnlyDesire(entt::entity /*creature*/) {}
+	/// A desire is made the creature's dominant one for some seconds (as a leash does every turn it is worn): wanted as
+	/// much as it can be, the others as little as any can be and held down, its bodily needs too only when asked
+	virtual void MakeDesireDominant(entt::entity /*creature*/, creature_desires::Desire /*desire*/, float /*seconds*/,
+	                                bool /*needsToo*/)
+	{
+	}
+	/// The desire made dominant ends at once and every desire held down is let go (as picking the learning leash does)
+	virtual void EndDominantDesire(entt::entity /*creature*/) {}
+	/// The desire the creature wants most now, if its mind has desires yet
+	[[nodiscard]] virtual std::optional<creature_desires::Desire> DominantDesire(entt::entity /*creature*/) const
+	{
+		return std::nullopt;
+	}
 	/// A script changes the creature's desires: how much it wants them, whether they are active and how much it can
 	/// want them at most. A creature whose mind hasn't thought yet has them set up first, the ones its stage of growing
 	/// up brings already active, so that what the script sets stands.

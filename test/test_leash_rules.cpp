@@ -128,11 +128,40 @@ TEST(LeashRules, Confinement)
 
 TEST(LeashRules, LeashedCreaturesWarmOrCoolToEachOther)
 {
-	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Evil, 600), -0.1f);
-	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Good, 1200), 0.1f);
-	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Good, 599), 0.0f);
-	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Rope, 600), 0.0f);
-	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Good, 0), 0.0f);
+	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Evil), -0.1f);
+	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Good), 0.1f);
+	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Rope), 0.0f);
+}
+
+TEST(LeashRules, FeelingsAreTouchedAtOnceThenAfterMoreThanSixHundredTurns)
+{
+	EXPECT_TRUE(AttitudeDue(std::nullopt, 5));
+	EXPECT_FALSE(AttitudeDue(100u, 700));
+	EXPECT_TRUE(AttitudeDue(100u, 701));
+}
+
+TEST(LeashRules, TiedToAVillageTheCreatureWantsToImpressItUnlessItIsFirmlyItsOwn)
+{
+	// Someone else's village, on the learning leash
+	EXPECT_TRUE(ImpressesTown({.leash = LeashType::Rope, .creatureHasPlayer = true, .ownersTown = false}));
+	// Never on the aggression leash, nor when impressing is already what it wants most
+	EXPECT_FALSE(ImpressesTown({.leash = LeashType::Evil, .creatureHasPlayer = true}));
+	EXPECT_FALSE(ImpressesTown({.leash = LeashType::Rope, .impressing = true, .creatureHasPlayer = true}));
+	// Its own village believing in its player more than half as much as in anyone else is firmly its own
+	EXPECT_FALSE(ImpressesTown({.leash = LeashType::Good,
+	                            .creatureHasPlayer = true,
+	                            .ownersTown = true,
+	                            .beliefInOwner = 5.1f,
+	                            .mostOtherBelief = 10.0f}));
+	// Its own village believing in another player more than twice as much isn't
+	EXPECT_TRUE(ImpressesTown({.leash = LeashType::Good,
+	                           .creatureHasPlayer = true,
+	                           .ownersTown = true,
+	                           .beliefInOwner = 5.0f,
+	                           .mostOtherBelief = 10.0f}));
+	// A creature of no player leaves the villages of no player alone
+	EXPECT_FALSE(ImpressesTown({.leash = LeashType::Rope, .ownersTown = true}));
+	EXPECT_TRUE(ImpressesTown({.leash = LeashType::Rope, .ownersTown = false}));
 }
 
 TEST(LeashRules, TypeIndices)

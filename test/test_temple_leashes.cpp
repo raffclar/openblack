@@ -102,15 +102,75 @@ TEST(TempleLeashes, TheirToolTips)
 
 TEST(TempleLeashes, EachPlayersLeashSlidesItsTextureByItself)
 {
-	// Each player's leash of each kind is drawn with a collar of its own, so two temples' leashes of a kind slide their
-	// textures each from its own random start
-	EXPECT_NE(CollarMeshName(PlayerNames::PLAYER_ONE, LeashType::Evil),
-	          CollarMeshName(PlayerNames::PLAYER_TWO, LeashType::Evil));
-	EXPECT_NE(CollarMeshName(PlayerNames::PLAYER_ONE, LeashType::Evil),
-	          CollarMeshName(PlayerNames::PLAYER_ONE, LeashType::Good));
+	// Each leash slides its texture from its own random start
 	const auto first = Advance(Start({1000, 0, 0, 0}), 1.0f);
 	const auto second = Advance(Start({20000, 0, 0, 0}), 1.0f);
 	EXPECT_NE(first.scroll, second.scroll);
 	// Each draw is scaled to its range as the game scales the C library's numbers
 	EXPECT_NEAR(Start({16384, 0, 0, 0}).scroll, 16384.0f / 32767.0f, k_Tolerance);
+}
+
+TEST(TempleLeashes, AnglesGiveBackTheirTurn)
+{
+	// A turn made of three angles gives back those angles, and so the same turn
+	const glm::vec3 angles {0.4f, -0.3f, 1.2f};
+	const auto turn = TurnByAngles(angles);
+	const auto back = AnglesOf(turn);
+	EXPECT_NEAR(back.x, angles.x, k_Tolerance);
+	EXPECT_NEAR(back.y, angles.y, k_Tolerance);
+	EXPECT_NEAR(back.z, angles.z, k_Tolerance);
+	// Growing the thing evenly changes none of them
+	const auto grown = AnglesOf(turn * 3.0f);
+	EXPECT_NEAR(grown.x, angles.x, k_Tolerance);
+	EXPECT_NEAR(grown.z, angles.z, k_Tolerance);
+	// The hanging leash's tumble is the same turn with no first angle
+	const auto tumble = Turn({.pitch = 0.7f, .roll = 2.1f});
+	const auto same = TurnByAngles({0.0f, 0.7f, 2.1f});
+	for (int column = 0; column < 3; ++column)
+	{
+		for (int row = 0; row < 3; ++row)
+		{
+			EXPECT_NEAR(tumble[column][row], same[column][row], k_Tolerance);
+		}
+	}
+}
+
+TEST(TempleLeashes, TheCarriedLeashSitsRoundTheWrist)
+{
+	// The wrist turned a quarter turn about the upward axis, a little grown, somewhere in the world
+	const auto turn = TurnByAngles({0.0f, 0.0f, 0.0f});
+	const auto quarter = TurnByAngles({k_FullTurn * 0.25f, 0.0f, 0.0f});
+	glm::mat4 wrist(quarter * 2.0f);
+	wrist[3] = glm::vec4(10.0f, 20.0f, 30.0f, 1.0f);
+	const float handScale = 0.01f;
+	const auto carried = CarriedAt(wrist, handScale);
+	const auto size = handScale * k_HandScale;
+	// Half the hand's size across, turned as the wrist without its growth
+	EXPECT_NEAR(carried.scale, size * 0.5f, k_Tolerance);
+	for (int column = 0; column < 3; ++column)
+	{
+		EXPECT_NEAR(glm::length(carried.rotation[column]), 1.0f, k_Tolerance);
+		for (int row = 0; row < 3; ++row)
+		{
+			EXPECT_NEAR(carried.rotation[column][row], quarter[column][row], k_Tolerance);
+		}
+	}
+	// Shifted along its own axes from the wrist
+	const auto shift = quarter * (glm::vec3(0.05f, 0.25f, 0.0f) * size);
+	EXPECT_NEAR(carried.position.x, 10.0f + shift.x, k_Tolerance);
+	EXPECT_NEAR(carried.position.y, 20.0f + shift.y, k_Tolerance);
+	EXPECT_NEAR(carried.position.z, 30.0f + shift.z, k_Tolerance);
+	// Unturned, it is shifted up the hand a quarter of its size and a twentieth across
+	glm::mat4 still(turn);
+	const auto plain = CarriedAt(still, handScale);
+	EXPECT_NEAR(plain.position.x, 0.05f * size, k_Tolerance);
+	EXPECT_NEAR(plain.position.y, 0.25f * size, k_Tolerance);
+}
+
+TEST(TempleLeashes, TheCarriedLeashGoesWithThePutAwayHand)
+{
+	EXPECT_TRUE(Shows(false, true));
+	EXPECT_TRUE(Shows(false, false));
+	EXPECT_TRUE(Shows(true, true));
+	EXPECT_FALSE(Shows(true, false));
 }

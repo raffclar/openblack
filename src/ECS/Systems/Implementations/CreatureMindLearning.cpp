@@ -1174,11 +1174,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
 	{
 		const auto& state = desires.desires.at(d);
-		auto strength = state.activated && state.suppressedTurns == 0 ? state.value : 0.0f;
-		if (mind.leash.forcedDesire == static_cast<Desire>(d))
-		{
-			strength = std::max(strength, mind.leash.forcedValue);
-		}
+		const auto strength = state.activated && state.suppressedTurns == 0 ? state.value : 0.0f;
 		strengths.at(d) = strength;
 		eligible.at(d) = strength > 0.0f && std::ranges::any_of(tables->desireActions.at(d), [tables](uint32_t action) {
 			                 return creature_plan_actions::For(tables->actions.at(action).name) != nullptr;
