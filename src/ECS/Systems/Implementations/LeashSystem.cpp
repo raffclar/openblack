@@ -1422,14 +1422,15 @@ void LeashSystem::Update(float seconds)
 			worn.rope.slackLength = lengths.slack;
 			worn.rope.maxLength = lengths.max;
 		}
+		// The rope runs from the collar to the hand or the tied thing, so its tension is the stretch at the collar
 		if (!worn.ropeStarted)
 		{
-			worn.rope = leash_rope::Create(*start, end, worn.rope.slackLength, worn.rope.maxLength, leash::LookFor(worn.type));
+			worn.rope = leash_rope::Create(end, *start, worn.rope.slackLength, worn.rope.maxLength, leash::LookFor(worn.type));
 			worn.ropeStarted = true;
 			return;
 		}
 		worn.rope.look = leash::LookFor(worn.type);
-		leash_rope::Step(worn.rope, *start, end, seconds, GroundAt);
+		leash_rope::Step(worn.rope, end, *start, seconds, GroundAt);
 		// The hand holding the rope of the tied leash: its two ropes run from the collar and from what it is tied to
 		// to the hand
 		if (worn.held.has_value() && hand.has_value() && worn.tiedTo.has_value())
