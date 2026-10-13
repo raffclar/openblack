@@ -38,6 +38,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/DayNightClock.h"
+#include "3D/FlatLand.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/TempleInteriorInterface.h"
@@ -75,6 +76,7 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/HandGrab.h"
@@ -99,6 +101,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -126,6 +129,7 @@
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
@@ -992,6 +996,10 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 		{
 			ecs::construction::SetBuilt(temple, *setup.built);
 		}
+		if (setup.life.has_value())
+		{
+			Locator::entitiesRegistry::value().AssignOrReplace<ecs::components::ObjectLife>(temple, *setup.life);
+		}
 		_temples.push_back(temple);
 	}
 	if (!Locator::animalSystem::has_value())
@@ -1703,6 +1711,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (command.kind == Kind::PlayBoatFilm)
+	{
+		Log(fmt::format("{:.1f}s: {}", _seconds, PlayBoatFilm(command)));
+		return;
+	}
 	if (command.kind == Kind::EnterTemple)
 	{
 		const auto room = static_cast<TempleRoom>(command.value);
@@ -2010,6 +2023,7 @@ void Runner::Give(const Command& command)
 	case Kind::Reframe:
 	case Kind::RecordChallenge:
 	case Kind::EnterTemple:
+	case Kind::PlayBoatFilm:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
@@ -2540,6 +2554,16 @@ void Runner::UpdateMiracles(float seconds)
 			Locator::magicSystem::value().CloseDown(miracle.spell);
 			miracle.letGoAt.reset();
 		}
+		if (miracle.breakAt.has_value() && _seconds >= *miracle.breakAt)
+		{
+			miracle.breakAt.reset();
+			if (Locator::magicShieldSystem::has_value() && Locator::magicShieldSystem::value().HasObject(miracle.spell))
+			{
+				Locator::magicShieldSystem::value().ShieldStruck(miracle.spell, true);
+				Locator::magicSystem::value().CloseDown(miracle.spell);
+				Log("Shield broken");
+			}
+		}
 		if (!miracle.nextAt.has_value() || _seconds < *miracle.nextAt)
 		{
 			continue;
@@ -2549,6 +2573,10 @@ void Runner::UpdateMiracles(float seconds)
 		if (setup.holdSeconds.has_value() && miracle.spell != entt::null)
 		{
 			miracle.letGoAt = _seconds + *setup.holdSeconds;
+		}
+		if (setup.breakSeconds.has_value() && miracle.spell != entt::null)
+		{
+			miracle.breakAt = _seconds + *setup.breakSeconds;
 		}
 		miracle.nextAt = setup.repeatSeconds.has_value() ? std::optional(*miracle.nextAt + *setup.repeatSeconds) : std::nullopt;
 	}
@@ -3319,6 +3347,26 @@ std::optional<std::filesystem::path> Runner::SaveResults(std::optional<std::file
 	csv << benchmark::ToCsv(run, results, _recorder->Stages());
 	Log(fmt::format("Saved {}", jsonPath.generic_string()));
 	return jsonPath;
+}
+
+std::string Runner::PlayBoatFilm(const Command& command) const
+{
+	if (!Locator::boatLaunchSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return "no boat film";
+	}
+	const auto dock = MapPoint(_middle, command.point);
+	// The sailing clip starts the boat about 67 metres west and 59 south of where it is played from: played from there,
+	// the boat sets off from the lake's north-east corner and crosses it to the south west
+	constexpr glm::vec2 k_SailingClipStart {-67.3f, -59.4f};
+	const auto corner = flat_land::k_LakeCentre + flat_land::k_LakeHalfExtent;
+	const auto sailing = corner - k_SailingClipStart;
+	const ecs::systems::BoatLaunchSystemInterface::Places places {
+	    .dock = {dock.x, Locator::terrainSystem::value().GetHeightAt(dock), dock.y},
+	    .sailingStart = {sailing.x, 0.0f, sailing.y},
+	};
+	Locator::boatLaunchSystem::value().Play(places);
+	return fmt::format("the explorers' boat film plays from ({:.0f}, {:.0f})", dock.x, dock.y);
 }
 
 std::string Runner::RecordChallenge(const Command& command) const

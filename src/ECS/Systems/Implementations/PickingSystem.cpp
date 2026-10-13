@@ -30,6 +30,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AppleBarrel.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -43,6 +44,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/UndrawnPickModel.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
@@ -299,8 +301,9 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			continue;
 		}
-		// So are the lanterns at a temple's entrance, by its creature's pen: the cursor meets what is behind them
-		if (registry.AllOf<TempleLantern>(entity))
+		// So are the lanterns at a temple's entrance, by its creature's pen, and the explorers' boat film: the cursor
+		// meets what is behind them
+		if (registry.AnyOf<TempleLantern, BoatFilmPart>(entity))
 		{
 			continue;
 		}
@@ -358,6 +361,15 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
 		{
 			return screen_pick::Depth(view, highlight->centre);
+		}
+		// People are picked by their bounding sphere alone: anywhere in its circle on the screen, at the sphere's
+		// distance rather than their body's
+		if (registry.AllOf<Villager>(entity))
+		{
+			const auto* transform = registry.TryGet<const Transform>(entity);
+			const float scale = transform != nullptr ? transform->scale.x : 1.0f;
+			const float halfHeight = meshes.Handle(registry.Get<const Mesh>(entity).id)->GetBoundingBox().Size().y * 0.5f;
+			return screen_pick::SphereDistance(view, _candidates[i].origin, halfHeight * scale, _candidates[i].radius);
 		}
 		// A broken building is picked by its broken model's triangles, along the cursor's line
 		if (const auto* broken = registry.TryGet<const BuildingDamage>(entity); broken != nullptr && broken->drawMesh != 0)
@@ -458,6 +470,11 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		_pick.object = FishFarmUnder(_pick.land);
 	}
 	picking::CarryHover(previous, _pick, frame.seconds);
+}
+
+void PickingSystem::FindBehindHand(glm::vec3 camera, std::optional<glm::vec3> handMiddle)
+{
+	_behindHand = handMiddle.has_value() ? LandOrSeaAlong(camera, *handMiddle, camera) : std::nullopt;
 }
 
 void PickingSystem::RetargetObject(std::optional<entt::entity> object, float distance)

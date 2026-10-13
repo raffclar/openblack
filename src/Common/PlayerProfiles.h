@@ -106,6 +106,12 @@ enum class NameCheck : uint8_t
 /// Whether a new profile may take the name: the check for a name already kept comes first, then its length
 [[nodiscard]] NameCheck CheckNewName(const Profiles& profiles, std::u16string_view name);
 
+/// The name a profile's own folder goes by: each plain (ASCII) letter or digit as an underscore and itself, any other
+/// character as its four lower-case hexadecimal digits, ending once the name made reaches k_LongestKey characters
+[[nodiscard]] std::string ProfileKey(std::u16string_view name);
+/// A profile's folder name stops growing once it is this long, finishing the character it is on
+constexpr size_t k_LongestKey = 252;
+
 /// The profile being played, if there is one by its name
 [[nodiscard]] const Profile* Current(const Profiles& profiles);
 /// The profile of a name, if one is kept

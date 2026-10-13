@@ -31,12 +31,15 @@ public:
 	void PickUnderCursor(const Frame& frame) override;
 	[[nodiscard]] const Pick& GetPick() const override { return _pick; }
 	void RetargetObject(std::optional<entt::entity> object, float distance) override;
+	void FindBehindHand(glm::vec3 camera, std::optional<glm::vec3> handMiddle) override;
+	[[nodiscard]] std::optional<glm::vec3> GetBehindHand() const override { return _behindHand; }
 
 	[[nodiscard]] std::optional<screen_pick::MeshHit> FeelModel(entt::entity object, glm::vec3 origin,
 	                                                            glm::vec3 direction) const override;
 
 private:
 	Pick _pick;
+	std::optional<glm::vec3> _behindHand;
 	/// Room the pick reuses from frame to frame
 	std::vector<screen_pick::Candidate> _candidates;
 	std::vector<entt::entity> _candidateEntities;

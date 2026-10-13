@@ -98,6 +98,11 @@ float GripY(float iconY, float iconHeight)
 	return iconY + iconHeight * k_GripHeight;
 }
 
+float TopY(float iconY, float iconHeight)
+{
+	return iconY + iconHeight;
+}
+
 float HandTiltAt(float handY)
 {
 	if (handY >= k_LowHand)

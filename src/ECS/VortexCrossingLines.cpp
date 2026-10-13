@@ -18,15 +18,21 @@
 #include <glm/mat4x4.hpp>
 
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/LandFollowers.h"
 #include "ECS/Registry.h"
 #include "ECS/VillagerAge.h"
 
@@ -56,6 +62,16 @@ glm::vec3 AnglesOf(const glm::mat3& rotation)
 	glm::vec3 negated {0.0f};
 	glm::extractEulerAngleXYZ(glm::mat4(rotation), negated.x, negated.y, negated.z);
 	return glm::vec3(0.0f) - negated;
+}
+
+/// Where a static thing lies, at the height above the land it was put down at
+map_coords::MapCoords StaticPlace(const ecs::Registry& registry, entt::entity thing, const ecs::vortex_crossing::World& world)
+{
+	const auto& position = registry.Get<const Transform>(thing).position;
+	auto place = ecs::vortex_crossing::MapPlace(position, world.ground({position.x, position.z}));
+	place.altitude = ecs::land_followers::PlacedHeightOf(position, world.ground({position.x, position.z}),
+	                                                     registry.TryGet<const PlacedHeight>(thing));
+	return place;
 }
 
 bool PartOfStoragePit(const ecs::Registry& registry, entt::entity pot)
@@ -104,14 +120,11 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 	if (const auto* animal = registry.TryGet<const Animal>(thing))
 	{
 		const auto* flock = registry.Valid(animal->flock) ? registry.TryGet<const Flock>(animal->flock) : nullptr;
-		const auto* grazer = registry.TryGet<const Grazer>(thing);
-		// TODO(vortex-crossing): the ages of the animals that aren't grazers aren't kept
-		const uint32_t age = grazer != nullptr ? villager_age::AgeOf(world.turn, grazer->birthTurn) : 0;
 		return AnimalLine {.offset = offset,
 		                   .type = static_cast<int32_t>(animal->type),
 		                   .flock = flock != nullptr ? flock->scriptId.value_or(-1) : -1,
 		                   .town = flock != nullptr ? TownNumber(registry, flock->town) : -1,
-		                   .age = age};
+		                   .age = villager_age::AgeOf(world.turn, animal->birthTurn)};
 	}
 	if (const auto* pot = registry.TryGet<const Pot>(thing))
 	{
@@ -134,15 +147,32 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 		                 .scale = scale,
 		                 .maxScale = tree->maxSize};
 	}
+	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(thing))
+	{
+		// Written by the miracle its seed casts at its power-up, not by the seed
+		return OneOffSpellLine {.offset = offset, .magic = world.magicName(globe->seedType, globe->powerUp)};
+	}
 	if (const auto* still = registry.TryGet<const MobileStatic>(thing))
 	{
+		// Its height is the one it was put down at, whatever has been done to the land under it since
+		auto staticOffset = offset;
+		staticOffset.altitude = StaticPlace(registry, thing, world).altitude - vortex.altitude;
 		const auto angles = AnglesOf(transform->rotation);
-		return MobileStaticLine {.offset = offset,
+		// An artefact of a player stays one, of no town: it joins its player's nearest as it is made again
+		const auto* artefact = registry.TryGet<const TownArtefact>(thing);
+		std::optional<ArtefactLine> artefactLine;
+		if (artefact != nullptr && artefact->player.has_value())
+		{
+			artefactLine = ArtefactLine {.player = std::string(k_PlayerNamesStrs.at(static_cast<size_t>(*artefact->player))),
+			                             .value = artefact->value};
+		}
+		return MobileStaticLine {.offset = staticOffset,
 		                         .row = static_cast<int32_t>(still->type),
 		                         .xAngle = angles.x,
 		                         .yAngle = angles.y,
 		                         .zAngle = angles.z,
-		                         .scale = scale};
+		                         .scale = scale,
+		                         .artefact = artefactLine};
 	}
 	if (const auto* mobile = registry.TryGet<const MobileObject>(thing))
 	{
@@ -165,4 +195,33 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 		                     .zAngle = angles.z};
 	}
 	return std::nullopt;
+}
+
+std::vector<entt::entity> ecs::vortex_crossing::IdenticalStatics(const Registry& registry, entt::entity thing,
+                                                                 const World& world)
+{
+	std::vector<entt::entity> identical;
+	const auto* still = registry.Valid(thing) ? registry.TryGet<const MobileStatic>(thing) : nullptr;
+	const auto* transform = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
+	if (still == nullptr || transform == nullptr)
+	{
+		return identical;
+	}
+	const auto place = StaticPlace(registry, thing, world);
+	registry.Each<const MobileStatic, const Transform>(
+	    [&](entt::entity other, const MobileStatic& otherStill, const Transform& /*unused*/) {
+		    // Only those lying on the land are found there: not one flying, held or being taken
+		    if (other == thing || otherStill.type != still->type ||
+		        registry.AnyOf<InPhysics, InHand, CarriedByTornado>(other) || !world.filedAsStatic(other))
+		    {
+			    return;
+		    }
+		    const auto otherPlace = StaticPlace(registry, other, world);
+		    // The very same place across the land and the very same height above it
+		    if (otherPlace.x == place.x && otherPlace.z == place.z && otherPlace.altitude == place.altitude)
+		    {
+			    identical.push_back(other);
+		    }
+	    });
+	return identical;
 }

@@ -32,6 +32,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "Physics/BodyShapes.h"
@@ -388,6 +389,15 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 	if (const auto* animated = registry.TryGet<const AnimatedStatic>(entity))
 	{
 		return AnimatedStaticFacts(*animated);
+	}
+	if (const auto* vortex = registry.TryGet<const Vortex>(entity))
+	{
+		// A vortex never moves; only the open way out of a land is in the way of what flies, as its unseen cylinder, and
+		// takes what strikes it
+		return {.body = BodyKind::CollisionModel,
+		        .row = MaterialRow::Vortex,
+		        .interacts = vortex->type == VortexType::In,
+		        .collisionMesh = static_cast<uint32_t>(MeshId::SpellVortexCylinder)};
 	}
 	if (registry.AnyOf<Feature, Flowers>(entity))
 	{

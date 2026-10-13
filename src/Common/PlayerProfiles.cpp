@@ -144,6 +144,39 @@ std::string CreatureFileName(uint32_t ticks)
 	return std::format("C{:x}.erc", ScrambleTicks(ticks));
 }
 
+std::string ProfileKey(std::u16string_view name)
+{
+	constexpr std::string_view k_HexDigits = "0123456789abcdef";
+	constexpr char16_t k_FirstOther = 0x80;
+	constexpr unsigned k_Nibble = 4;
+	constexpr unsigned k_NibbleMask = 0xf;
+	std::string key;
+	for (const char16_t character : name)
+	{
+		const bool plain =
+		    character < k_FirstOther && ((character >= u'a' && character <= u'z') || (character >= u'A' && character <= u'Z') ||
+		                                 (character >= u'0' && character <= u'9'));
+		if (plain)
+		{
+			key += '_';
+			key += static_cast<char>(character);
+		}
+		else
+		{
+			for (int shift = 3; shift >= 0; --shift)
+			{
+				key += k_HexDigits.at((static_cast<unsigned>(character) >> (static_cast<unsigned>(shift) * k_Nibble)) &
+				                      k_NibbleMask);
+			}
+		}
+		if (key.size() >= k_LongestKey)
+		{
+			break;
+		}
+	}
+	return key;
+}
+
 bool SameName(std::u16string_view a, std::u16string_view b)
 {
 	return std::ranges::equal(a, b, [](char16_t x, char16_t y) { return FoldCase(x) == FoldCase(y); });

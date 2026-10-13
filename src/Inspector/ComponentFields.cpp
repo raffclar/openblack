@@ -75,6 +75,7 @@
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/BlendedByMaterial.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -209,6 +210,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/VillagerHiding.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/VillagerWork.h"
@@ -417,12 +419,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::previousHeading>("previousHeading")
 	    .Field<&components::Animal::heading>("heading")
 	    .Field<&components::Animal::life>("life")
+	    .Field<&components::Animal::birthTurn>("birthTurn")
 	    .Field<&components::Animal::deadTurns>("deadTurns");
 	Reflect<components::Grazer>(context)
 	    .Field<&components::Grazer::needs>("needs")
 	    .Field<&components::Grazer::sleepingCell>("sleepingCell")
-	    .Field<&components::Grazer::meals>("meals")
-	    .Field<&components::Grazer::birthTurn>("birthTurn");
+	    .Field<&components::Grazer::meals>("meals");
 	Reflect<components::TempleBirds>(context)
 	    .Field<&components::TempleBirds::flock>("flock")
 	    .Field<&components::TempleBirds::look>("look");
@@ -490,6 +492,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::group>("group");
 	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
 	Reflect<components::BlendedByMaterial> {context};
+	Reflect<components::BoatFilmPart>(context)
+	    .Field<&components::BoatFilmPart::role>("role")
+	    .Field<&components::BoatFilmPart::index>("index")
+	    .Field<&components::BoatFilmPart::clipTime>("clipTime")
+	    .Field<&components::BoatFilmPart::castsShadow>("castsShadow");
+	Reflect<components::DrawnMatrix>(context).Field<&components::DrawnMatrix::model>("model");
 	Reflect<components::Lover>(context).Field<&components::Lover::partner>("partner");
 	Reflect<components::BreederSpot>(context).Field<&components::BreederSpot::spot>("spot");
 	Reflect<components::BuildingDamage>(context)
@@ -1302,6 +1310,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Mobile>(context).Field<&components::Mobile::dummy>("dummy");
 	Reflect<components::MobileStatic>(context).Field<&components::MobileStatic::type>("type");
 	Reflect<components::MobileObject>(context).Field<&components::MobileObject::type>("type");
+	Reflect<components::PlacedHeight>(context)
+	    .Field<&components::PlacedHeight::height>("height")
+	    .Field<&components::PlacedHeight::position>("position");
 	Reflect<components::Rock> {context};
 	Reflect<components::MorphWithTerrain>(context).Field<&components::MorphWithTerrain::dummy>("dummy");
 	Reflect<components::NeverFades> {context};
@@ -1799,6 +1810,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerDeath::killer>("killer")
 	    .Field<&components::VillagerDeath::onBack>("onBack")
 	    .Field<&components::VillagerDeath::noticed>("noticed");
+	Reflect<components::VillagerHiding>(context)
+	    .Field<&components::VillagerHiding::building>("building")
+	    .Field<&components::VillagerHiding::turns>("turns")
+	    .Field<&components::VillagerHiding::threat>("threat")
+	    .Field<&components::VillagerHiding::threatKind>("threatKind");
+	Reflect<components::VillagerPanic>(context).Field<&components::VillagerPanic::point>("point");
 	Reflect<components::NamedVillager>(context).Field<&components::NamedVillager::row>("row");
 	Reflect<components::DetailsShown>(context).Field<&components::DetailsShown::dummy>("dummy");
 	Reflect<components::NameHidden>(context).Field<&components::NameHidden::dummy>("dummy");
@@ -1837,7 +1854,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect")
 	    .Field<&components::Vortex::arrival>("arrival")
 	    .Field<&components::Vortex::throwingOut>("throwingOut");
-	Reflect<components::DrawnIntoVortex>(context).Field<&components::DrawnIntoVortex::vortex>("vortex");
+	Reflect<components::DrawnIntoVortex>(context)
+	    .Field<&components::DrawnIntoVortex::vortex>("vortex")
+	    .Field<&components::DrawnIntoVortex::flight>("flight");
 	Reflect<components::WalkPath>(context)
 	    .Field<&components::WalkPath::number>("number")
 	    .Field<&components::WalkPath::track>("track")
@@ -2507,6 +2526,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::CreatureSkin::Skin>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureSkin::Skin::id>("id")
 	    .Field<&openblack::ecs::components::CreatureSkin::Skin::texels>("texels");
+	Reflect<openblack::ecs::components::DrawnIntoVortex::Flight>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::velocity>("velocity")
+	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::position>("position")
+	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::rotation>("rotation");
 	Reflect<openblack::ecs::components::Footpath::Node>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Footpath::Node::position>("position")
 	    .Field<&openblack::ecs::components::Footpath::Node::place>("place");
