@@ -30,6 +30,7 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 camera, glm::vec3 nearPoint, Sea sea) const override;
 
 	void PickUnderCursor(const Frame& frame) override;
+	void ResolveScreenShapes(const ScreenShapes& shapes) override;
 	[[nodiscard]] const Pick& GetPick() const override { return _pick; }
 	void RetargetObject(std::optional<entt::entity> object, float distance) override;
 	void FindBehindHand(glm::vec3 camera, std::optional<glm::vec3> handMiddle) override;
@@ -46,8 +47,18 @@ private:
 	void AddBubbles(glm::vec3 camera);
 	/// Adds the fireballs, which have no model, to the frame's pick
 	void AddFireBalls();
+	/// Adds the vortices between the lands and the teleport stones, picked by their balls alone, to the frame's pick
+	void AddVortices();
+	void AddTeleportStones();
+	/// Adds the leashes hanging at the temples, picked by their balls alone, to the frame's pick
+	void AddLeashPosts();
 
 	Pick _pick;
+	/// The last frame's pick and this frame's seconds, for the hover time once the screen's shapes are weighed, and
+	/// whether this frame's land is gripped
+	Pick _previous;
+	float _seconds {0.0f};
+	bool _locked {false};
 	std::optional<glm::vec3> _behindHand;
 	/// Room the pick reuses from frame to frame
 	std::vector<screen_pick::Candidate> _candidates;

@@ -561,19 +561,6 @@ bool Inside(const Placement& placement, glm::vec2 pointer)
 	       pointer.y < placement.max.y;
 }
 
-bool HandOnBubble(const Placement& placement, glm::vec2 pointer, const UnderHand& under)
-{
-	if (!Inside(placement, pointer))
-	{
-		return false;
-	}
-	if (under.objectDepth.has_value() && *under.objectDepth <= placement.depth)
-	{
-		return false;
-	}
-	return !under.landDepth.has_value() || *under.landDepth >= placement.depth;
-}
-
 bool OnScreen(const Ball& ball, const View& view)
 {
 	const auto projected = view.project(ball.centre);

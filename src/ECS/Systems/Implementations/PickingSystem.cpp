@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <iterator>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <LNDFile.h>
@@ -34,6 +35,7 @@
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -43,22 +45,28 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/UndrawnPickModel.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptHighlightRules.h"
-#include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/UndrawnPicks.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -67,26 +75,6 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The fish farm whose fish show under the cursor's point on the sea: only over a cell of water, off the map counting as
-/// water, and only through the fish, as a farm has no model
-std::optional<entt::entity> FishFarmUnder(const std::optional<glm::vec3>& point)
-{
-	if (!point.has_value() || !Locator::fishFarmSystem::has_value() || !Locator::terrainSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto cell = map_coords::CellOf(*point);
-	if (map_coords::InBounds(cell))
-	{
-		const auto* landCell = Locator::terrainSystem::value().FindCell(glm::u16vec2(cell));
-		if (landCell != nullptr && landCell->properties.hasWater == 0)
-		{
-			return std::nullopt;
-		}
-	}
-	return Locator::fishFarmSystem::value().FarmWithFishAt({point->x, point->z});
-}
-
 /// The land's corner heights as the game reads them for its line test: the cell's own block holds its far corners
 std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
 {
@@ -107,6 +95,39 @@ std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
 float HeightAt(glm::vec2 point)
 {
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+}
+
+/// The middle of the model a seed shows in its picture, as the model is made (neither turned nor scaled), nothing for a
+/// seed that shows no model
+glm::vec3 SeedModelMiddle(SpellSeedType seed, float ownerAlignment)
+{
+	if (seed == SpellSeedType::None || !Locator::infoConstants::has_value() || !Locator::resources::has_value())
+	{
+		return glm::vec3(0.0f);
+	}
+	const auto model = magic::GetSeedModel(Locator::infoConstants::value(), seed, ownerAlignment);
+	auto& meshes = Locator::resources::value().GetMeshes();
+	const auto id = model.has_value() ? resources::HashIdentifier(*model) : entt::id_type {0};
+	if (!model.has_value() || !meshes.Contains(id))
+	{
+		return glm::vec3(0.0f);
+	}
+	return meshes.Handle(id)->GetBoundingBox().Center();
+}
+
+/// A player's alignment, nobody's being 0
+float AlignmentOf(PlayerNames player)
+{
+	return Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL
+	           ? Locator::alignmentSystem::value().GetPlayerAlignment(player)
+	           : 0.0f;
+}
+
+/// The half extents of a mesh's box, none for a mesh that isn't there
+glm::vec3 HalfExtentsOf(entt::id_type mesh)
+{
+	auto& meshes = Locator::resources::value().GetMeshes();
+	return meshes.Contains(mesh) ? meshes.Handle(mesh)->GetBoundingBox().Size() * 0.5f : glm::vec3(0.0f);
 }
 
 } // namespace
@@ -171,6 +192,69 @@ void picking::CarryHover(const PickingSystemInterface::Pick& previous, PickingSy
 	}
 }
 
+void picking::WeighScreenShapes(PickingSystemInterface::Pick& pick, const PickingSystemInterface::ScreenShapes& shapes,
+                                bool objectIsCreature)
+{
+	pick.textBubble = false;
+	pick.rope = false;
+	std::optional<float> bubble = shapes.textBubble;
+	// The text bubble nearer than the object drops the object; no nearer, the object keeps the cursor
+	if (pick.object.has_value())
+	{
+		if (bubble.has_value() && *bubble < pick.distance)
+		{
+			pick.object.reset();
+		}
+		else
+		{
+			bubble.reset();
+		}
+	}
+	// With no object, the land nearer than the bubble drops it
+	if (!pick.object.has_value() && bubble.has_value() && pick.landDistance < *bubble)
+	{
+		bubble.reset();
+	}
+	// The rope touched strictly nearer than what is left takes the cursor, but never from a creature
+	if (shapes.rope.has_value())
+	{
+		const float rope = *shapes.rope;
+		if (pick.object.has_value())
+		{
+			if (!objectIsCreature && rope < pick.distance)
+			{
+				pick.object.reset();
+				pick.rope = true;
+			}
+		}
+		else if (bubble.has_value())
+		{
+			if (rope < *bubble)
+			{
+				bubble.reset();
+				pick.rope = true;
+			}
+		}
+		else if (rope < pick.landDistance)
+		{
+			pick.rope = true;
+		}
+	}
+	if (pick.object.has_value())
+	{
+		return;
+	}
+	if (bubble.has_value())
+	{
+		pick.textBubble = true;
+		pick.point = shapes.textBubblePoint;
+		pick.distance = *bubble;
+		return;
+	}
+	pick.point = pick.land;
+	pick.distance = pick.landDistance;
+}
+
 namespace
 {
 /// Along a line, how far (in its direction's lengths) it first meets a broken building's triangles, from either side; a
@@ -227,6 +311,8 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	}
 
 	// Gripping the land, the interface keeps what it picked and follows only the land
+	_locked = frame.locked;
+	_seconds = frame.seconds;
 	if (frame.locked)
 	{
 		_pick = picking::Locked(_pick, land, landDistance);
@@ -234,8 +320,10 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	}
 
 	const auto previous = _pick;
+	_previous = previous;
 	_pick = {};
 	_pick.land = land;
+	_pick.landDistance = landDistance;
 	if (!Locator::rendereringSystem::has_value() || !Locator::resources::has_value())
 	{
 		_pick.point = _pick.land;
@@ -330,6 +418,13 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		const float scale = transform != nullptr ? transform->scale.x : 1.0f;
 		const auto box = mesh->GetBoundingBox();
 		const auto halfExtents = box.Size() * 0.5f;
+		// A miracle dispenser is also picked by a wide ball round the bubble it floats, which takes the dispenser itself.
+		// It is tested before the building, so it wins a tie
+		if (registry.AllOf<SpellDispenser>(entity) && transform != nullptr)
+		{
+			AddBall(entity, model, meshComponent->id, halfExtents,
+			        ecs::pick_shapes::DispenserBall(transform->position, halfExtents, scale));
+		}
 		_candidates.push_back({
 		    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
 		    .radius = glm::length(halfExtents) * scale,
@@ -346,15 +441,20 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 			AddBall(entity, model, meshComponent->id, halfExtents,
 			        {.centre = highlight->centre, .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin});
 		}
-		// A miracle dispenser is also picked by a wide ball round the bubble it floats, which takes the dispenser itself
-		if (registry.AllOf<SpellDispenser>(entity) && transform != nullptr)
+		// A miracle icon is also picked by a ball round the miracle's picture it holds up
+		if (const auto* shown = registry.TryGet<const IconSeed>(entity); shown != nullptr && shown->seed != SpellSeedType::None)
 		{
+			const auto owner = ecs::world_objects::IconPlayer(registry, entity);
 			AddBall(entity, model, meshComponent->id, halfExtents,
-			        ecs::pick_shapes::DispenserBall(transform->position, halfExtents, scale));
+			        ecs::pick_shapes::PictureBall(shown->middle, ecs::pick_shapes::k_IconPictureSize,
+			                                      SeedModelMiddle(shown->seed, AlignmentOf(owner))));
 		}
 	}
 	AddBubbles(view.camera);
 	AddFireBalls();
+	AddVortices();
+	AddTeleportStones();
+	AddLeashPosts();
 
 	// How far along the view an object's first triangle under the cursor is
 	const auto distanceOf = [&](size_t i) -> std::optional<float> {
@@ -464,10 +564,24 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	{
 		_pick.point = _pick.land;
 		_pick.distance = landDistance;
-		// With nothing else under the cursor, a fish farm is picked through its fish, the hand resting on the sea
-		_pick.object = FishFarmUnder(_pick.land);
 	}
 	picking::CarryHover(previous, _pick, frame.seconds);
+}
+
+void PickingSystem::ResolveScreenShapes(const ScreenShapes& shapes)
+{
+	if (_locked)
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const bool creature = _pick.object.has_value() && registry.Valid(*_pick.object) && registry.AllOf<Creature>(*_pick.object);
+	const auto object = _pick.object;
+	picking::WeighScreenShapes(_pick, shapes, creature);
+	if (_pick.object != object)
+	{
+		picking::CarryHover(_previous, _pick, _seconds);
+	}
 }
 
 void PickingSystem::FindBehindHand(glm::vec3 camera, std::optional<glm::vec3> handMiddle)
@@ -505,7 +619,7 @@ void PickingSystem::AddBubbles(glm::vec3 camera)
 	const auto box = meshes.Handle(bubbleMesh)->GetBoundingBox();
 	const auto halfExtents = box.Size() * 0.5f;
 	registry.Each<const OneOffSpellSeed, const Transform>(
-	    [&](entt::entity entity, const OneOffSpellSeed&, const Transform& transform) {
+	    [&](entt::entity entity, const OneOffSpellSeed& globe, const Transform& transform) {
 		    if (registry.AnyOf<InHand, SeeThrough>(entity))
 		    {
 			    return;
@@ -525,7 +639,9 @@ void PickingSystem::AddBubbles(glm::vec3 camera)
 		    _candidateEntities.push_back(entity);
 		    _candidateModels.push_back(pushed);
 		    _candidateMeshes.push_back(bubbleMesh);
-		    AddBall(entity, model, bubbleMesh, halfExtents, ecs::pick_shapes::BubbleBall(middle, scale));
+		    // Nobody owns a globe: no alignment chooses its flock's picture
+		    AddBall(entity, model, bubbleMesh, halfExtents,
+		            ecs::pick_shapes::BubbleBall(middle, scale, SeedModelMiddle(globe.seedType, 0.0f)));
 	    });
 }
 
@@ -551,6 +667,63 @@ void PickingSystem::AddFireBalls()
 	});
 }
 
+void PickingSystem::AddVortices()
+{
+	// A vortex between the lands is picked by a ball at its middle, most of its cylinder's width; it is weighed against
+	// the land by the cylinder's footprint
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto cylinder = resources::HashIdentifier(MeshId::SpellVortexCylinder);
+	const auto halfExtents = HalfExtentsOf(cylinder);
+	registry.Each<const Vortex>([&](entt::entity entity, const Vortex& vortex) {
+		AddBall(entity, glm::translate(glm::mat4(1.0f), vortex.centre), cylinder, halfExtents,
+		        ecs::pick_shapes::VortexBall(vortex.centre, halfExtents));
+	});
+}
+
+void PickingSystem::AddTeleportStones()
+{
+	// A teleport stone is picked by a wide ball about it while its miracle is still held in the hand; it is weighed
+	// against the land by the footprint of the model its kind is made with
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto model = resources::HashIdentifier(
+	    Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(MobileStaticInfo::Teleport)).meshId);
+	const auto halfExtents = HalfExtentsOf(model);
+	registry.Each<const TeleportStone, const Transform>(
+	    [&](entt::entity entity, const TeleportStone& stone, const Transform& transform) {
+		    const auto* spell = registry.Valid(stone.spell) ? registry.TryGet<const Spell>(stone.spell) : nullptr;
+		    const auto* seed =
+		        spell != nullptr && registry.Valid(spell->seed) ? registry.TryGet<const SpellSeed>(spell->seed) : nullptr;
+		    if (seed == nullptr || seed->spell != stone.spell)
+		    {
+			    return;
+		    }
+		    AddBall(entity, glm::translate(glm::mat4(1.0f), transform.position), model, halfExtents,
+		            ecs::pick_shapes::TeleportBall(transform.position));
+	    });
+}
+
+void PickingSystem::AddLeashPosts()
+{
+	// A leash hanging at a temple is picked by a ball where it hangs, while it is shown, even when the picked one is
+	// carried in the hand; it is weighed against the land by its collar's footprint where it is drawn
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto collar = LeashPost::k_MeshId;
+	const auto halfExtents = HalfExtentsOf(collar);
+	registry.Each<const LeashPost, const Transform>(
+	    [&](entt::entity entity, const LeashPost& post, const Transform& transform) {
+		    if (!post.hung || transform.scale.x == 0.0f)
+		    {
+			    return;
+		    }
+		    AddBall(entity, glm::translate(glm::mat4(1.0f), transform.position), collar, halfExtents,
+		            ecs::pick_shapes::LeashPostBall(post.point));
+	    });
+}
+
 void PickingSystem::RetargetObject(std::optional<entt::entity> object, float distance)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -574,19 +747,34 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 		return std::nullopt;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* meshComponent = registry.Valid(object) ? registry.TryGet<const Mesh>(object) : nullptr;
+	if (!registry.Valid(object))
+	{
+		return std::nullopt;
+	}
 	auto& meshes = Locator::resources::value().GetMeshes();
-	if (meshComponent == nullptr || !meshes.Contains(meshComponent->id))
+	// The model as it was drawn this frame; a one-shot bubble, drawn by the miracles' own pass, where it is drawn (not
+	// moved towards the camera as for the pick)
+	std::optional<std::pair<entt::id_type, glm::mat4>> felt;
+	if (const auto* meshComponent = registry.TryGet<const Mesh>(object); meshComponent != nullptr)
+	{
+		const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
+		if (const auto found = std::ranges::find(drawn, object, &RenderContext::DrawnObject::entity); found != drawn.end())
+		{
+			felt = std::pair {meshComponent->id, found->model};
+		}
+	}
+	else if (const auto* transform = registry.TryGet<const Transform>(object);
+	         transform != nullptr && registry.AllOf<OneOffSpellSeed>(object))
+	{
+		auto model = glm::mat4(transform->rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform->scale)));
+		model[3] = glm::vec4(transform->position, 1.0f);
+		felt = std::pair {OneOffSpellSeed::k_MeshId.value(), model};
+	}
+	if (!felt.has_value() || !meshes.Contains(felt->first))
 	{
 		return std::nullopt;
 	}
-	const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
-	const auto found = std::ranges::find(drawn, object, &RenderContext::DrawnObject::entity);
-	if (found == drawn.end())
-	{
-		return std::nullopt;
-	}
-	const auto mesh = meshes.Handle(meshComponent->id);
+	const auto mesh = meshes.Handle(felt->first);
 	std::optional<screen_pick::MeshHit> nearest;
 	for (size_t s = 0; s < mesh->GetSubMeshes().size(); ++s)
 	{
@@ -596,7 +784,7 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 			continue;
 		}
 		std::vector<glm::vec3> placed;
-		ecs::posed_model::Place(registry, object, *mesh, s, found->model, placed);
+		ecs::posed_model::Place(registry, object, *mesh, s, felt->second, placed);
 		const auto hit = screen_pick::NearestIntersection(placed, mesh->GetSubMeshes()[s]->GetBodyGeometry().indices, origin,
 		                                                  direction, false);
 		if (hit.has_value() && (!nearest.has_value() || hit->distance < nearest->distance))

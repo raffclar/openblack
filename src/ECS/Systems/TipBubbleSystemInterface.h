@@ -42,7 +42,11 @@ public:
 	virtual void UpdateFrame(float gameMilliseconds) = 0;
 	/// The pointer is over the bubble: it keeps showing
 	virtual void Hover() = 0;
-	/// Whether the hand was on the bubble, before anything under it, at the last frame drawn
+	/// Drawn this frame with the pointer inside it: how far along the view it stands, for the interface's pick to weigh
+	virtual void SetUnderPointer(std::optional<float> depth) = 0;
+	[[nodiscard]] virtual std::optional<float> GetUnderPointer() const = 0;
+	/// Whether the hand was on the bubble, the pick giving it the cursor before anything under it, at the last frame
+	/// drawn
 	virtual void SetUnderHand(bool underHand) = 0;
 	[[nodiscard]] virtual bool IsUnderHand() const = 0;
 	/// The Action button pressed with an empty hand on the bubble grips it, and its words follow the hand until the

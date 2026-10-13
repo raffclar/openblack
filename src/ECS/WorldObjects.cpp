@@ -45,6 +45,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -53,6 +54,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
@@ -829,6 +831,21 @@ bool world_objects::CanBeCrushed(entt::entity object)
 	}
 	return registry.AnyOf<Villager, Creature, Animal, Abode, Tree, DeadTree, Feature, Field, AnimatedStatic, BigForest,
 	                      MobileStatic, Flowers>(object);
+}
+
+PlayerNames world_objects::IconPlayer(const Registry& registry, entt::entity icon)
+{
+	if (const auto* hand = registry.TryGet<const TownCentreIcon>(icon))
+	{
+		const auto* town = registry.Valid(hand->town) ? registry.TryGet<const Town>(hand->town) : nullptr;
+		return town != nullptr ? town->owner : PlayerNames::NEUTRAL;
+	}
+	if (const auto* site = registry.TryGet<const WorshipIcon>(icon))
+	{
+		const auto* component = registry.Valid(site->site) ? registry.TryGet<const WorshipSite>(site->site) : nullptr;
+		return component != nullptr ? component->player : PlayerNames::NEUTRAL;
+	}
+	return PlayerNames::NEUTRAL;
 }
 
 std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)

@@ -115,15 +115,6 @@ std::optional<float> leash_snap::TouchDepth(std::span<const ScreenPoint> points,
 	return std::nullopt;
 }
 
-bool leash_snap::RopeIsUnder(float ropeDepth, const Under& under)
-{
-	if (under.object)
-	{
-		return !under.creature && under.objectDepth > ropeDepth;
-	}
-	return !under.landDepth.has_value() || *under.landDepth > ropeDepth;
-}
-
 creature_leash::Lengths leash_snap::LengthsOnLettingGo(const glm::vec3& hand, const glm::vec3& tied, float tiedRadius)
 {
 	const auto length = std::max(glm::distance(hand, tied), k_RadiusReach * tiedRadius);
