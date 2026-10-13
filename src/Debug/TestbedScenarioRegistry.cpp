@@ -3281,6 +3281,24 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.mimic_same_kind",
+	    .name = "Mimic the player on a thing of the same kind",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger. The player plays with a loose ball that is not a toy. A toy die lies near the "
+	                   "tiger and a cuddly toy lies far from it. Every 20 seconds the player plays again.",
+	    .expected = "The tiger cannot play with the player's ball, so it plays with the nearest thing of the same kind: "
+	                "the toy die. The log shows the pass and the thing for each copy.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {30.0f, -30.0f}},
+	                {.type = MobileStaticInfo::ToyDie, .offset = {12.0f, 8.0f}},
+	                {.type = MobileStaticInfo::ToyCuddly, .offset = {-35.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::PlayerDidOn, .creature = 0, .delaySeconds = 3.0f, .value = k_PlayWithToy, .object = 0},
+	                 Act(Kind::Stop, 0, 20.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "mind.watch_skill",
 	    .name = "Learn a skill by watching",
 	    .facet = Facet::Mind,
@@ -3882,7 +3900,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 112> k_Names {
+	constexpr std::array<std::string_view, 113> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3948,6 +3966,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "see skill",
 	    "see miracle",
 	    "player did",
+	    "player did it to the object",
 	    "press C",
 	    "double click",
 	    "camera keys",
@@ -4260,7 +4279,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		    (command.kind == Kind::CastMiracle &&
 		     (command.atCreature.has_value() ? *command.atCreature >= scenario.creatures.size()
 		                                     : command.object >= scenario.objects.size())) ||
-		    (command.kind == Kind::PlayerDid && command.value >= k_Deeds) ||
+		    ((command.kind == Kind::PlayerDid || command.kind == Kind::PlayerDidOn) && command.value >= k_Deeds) ||
 		    (command.kind == Kind::CameraKeys && (command.value >= 4 || command.amount <= 0.0f)) ||
 		    (command.kind == Kind::PointerTo &&
 		     (!InRange(command.point.x, 0.0f, 1.0f) || !InRange(command.point.y, 0.0f, 1.0f))) ||

@@ -568,6 +568,8 @@ struct Command
 		SeeSkill,
 		SeeMiracle,
 		PlayerDid,
+		/// The player does one of the deeds creatures copy (value) to the scenario's object
+		PlayerDidOn,
 		/// C pressed: Creature Mode locks onto the player's creature, or lets go of it; a double click on the creature;
 		/// the cursor keys (value: left, right, up or down) held with Shift, or with Ctrl, for some seconds (amount);
 		/// Ctrl and Shift pressed together for a clear view; the camera given back

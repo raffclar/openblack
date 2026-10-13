@@ -713,7 +713,7 @@ std::optional<uint32_t> PlayerOfTown(const ecs::Registry& registry, std::optiona
 
 /// The number of the player a thing is of, none for a thing of no player. The things of a town are of its player; a
 /// miracle is of the player of its caster; the land's other things are of the neutral player or of none.
-std::optional<uint32_t> PlayerOfThing(const ecs::Registry& registry, entt::entity thing)
+std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::entity thing)
 {
 	if (const auto* creature = registry.TryGet<const Creature>(thing))
 	{
@@ -740,7 +740,7 @@ std::optional<uint32_t> PlayerOfThing(const ecs::Registry& registry, entt::entit
 		case SpellCaster::Kind::Creature:
 		case SpellCaster::Kind::Object:
 			return registry.Valid(spell->caster.entity) && spell->caster.entity != thing
-			           ? PlayerOfThing(registry, spell->caster.entity)
+			           ? BeliefPlayerOf(registry, spell->caster.entity)
 			           : std::nullopt;
 		default:
 			return std::nullopt;
@@ -928,7 +928,7 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 	    .type = *type,
 	    .origin = OriginOf(registry, entity),
 	    .animate = registry.AnyOf<Villager, Animal, Creature>(entity),
-	    .player = PlayerOfThing(registry, entity),
+	    .player = BeliefPlayerOf(registry, entity),
 	    .creaturesPlayer = me != nullptr ? std::optional(PlayerNumberOf(me->owner)) : std::nullopt,
 	    .harderThanMe = creature != nullptr && me != nullptr && ShownSize(*creature) > SizeOfPlayersCreature(registry, *me),
 	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
@@ -2916,58 +2916,11 @@ void CreatureMindSystem::LearnTurn()
 			continue;
 		}
 		const auto& rule = tables->mimics.at(learnt.mimicry->rule);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player's {}: stage {}", entt::to_integral(creature),
+		                    rule.name, creature_watching::Name(learnt.mimicry->stage));
 		if (learnt.mimicry->stage == creature_watching::MimicStage::CopyAction)
 		{
-			// It does what the player did, to the same thing or one like it
-			const auto* transform = registry.TryGet<const Transform>(creature);
-			for (const auto action : rule.copyActions)
-			{
-				const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
-				if (executor == nullptr || transform == nullptr ||
-				    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs))
-				{
-					continue;
-				}
-				std::optional<uint32_t> object;
-				if (executor->target != Target::None)
-				{
-					if (learnt.mimicry->object.has_value() &&
-					    Accepts(registry, executor->target, static_cast<entt::entity>(*learnt.mimicry->object), creature))
-					{
-						object = learnt.mimicry->object;
-					}
-					else if (const auto found = Gather(registry, executor->target, creature,
-					                                   glm::vec2(transform->position.x, transform->position.z));
-					         !found.empty())
-					{
-						object = entt::to_integral(found.front().entity);
-					}
-					if (!object.has_value())
-					{
-						continue;
-					}
-				}
-				const auto desire = static_cast<Desire>(
-				    std::min<uint32_t>(tables->actions.at(action).desire, creature_desires::k_DesireCount - 1));
-				creature_plan_actions::Situation situation;
-				const auto whole = object.has_value()
-				                       ? WholeOfForcedPlan(creature, *mind, desire, static_cast<entt::entity>(*object))
-				                       : std::nullopt;
-				if (Adopt(creature, *mind,
-				          {.desire = desire,
-				           .action = action,
-				           .object = object,
-				           .about = whole.has_value() ? std::optional(entt::to_integral(*whole)) : std::nullopt,
-				           // Copying counts as pressing as a desire at its strongest, with nothing learnt
-				           .priority = creature_planner::Priority(1.0f, std::nullopt,
-				                                                  creature_planner::ActionPriority(learnt.opinions.at(action)),
-				                                                  creature_planner::k_DefaultUsefulness, std::nullopt)},
-				          situation))
-				{
-					creature_mind_model::Think(learnt, fmt::format("I'm copying you: {}", tables->actions.at(action).name));
-					break;
-				}
-			}
+			CopyPlayersDeed(creature, *mind);
 		}
 		else if (learnt.mimicry->stage == creature_watching::MimicStage::CopyDesire &&
 		         rule.desire < creature_desires::k_DesireCount)
@@ -2975,6 +2928,191 @@ void CreatureMindSystem::LearnTurn()
 			// It comes to want what the player seemed to want
 			creature_learning::MakeFullyDominant(*mind->desires, static_cast<Desire>(rule.desire));
 			creature_mind_model::Think(learnt, fmt::format("I want what you wanted: {}", tables->texts.at(rule.desire).desire));
+		}
+	}
+}
+
+namespace
+{
+/// The kind of a thing for copying the player
+creature_watching::MimicKind MimicKindOf(const ecs::Registry& registry, entt::entity thing)
+{
+	using Class = creature_watching::MimicFacts::Class;
+	creature_watching::MimicFacts facts;
+	if (const auto* villager = registry.TryGet<const Villager>(thing))
+	{
+		facts.kind = Class::Villager;
+		facts.child = villager->lifeStage == Villager::LifeStage::Child;
+		facts.female = villager->sex == Villager::Sex::FEMALE;
+	}
+	else if (registry.AllOf<Animal>(thing))
+	{
+		const auto* info = ecs::world_objects::InfoOf(thing);
+		facts.kind = Class::Animal;
+		facts.nasty = info != nullptr && info->alignmentType == AlignmentType::AnimalNasty;
+	}
+	else if (registry.AllOf<Creature>(thing))
+	{
+		facts.kind = Class::Creature;
+	}
+	else if (registry.AnyOf<WorshipSite, VillageTotem, FishFarm, Temple, Town>(thing))
+	{
+		facts.kind = Class::Other;
+	}
+	else if (registry.AnyOf<Abode, Field>(thing))
+	{
+		facts.kind = Class::Building;
+	}
+	else if (registry.AllOf<Tree>(thing))
+	{
+		facts.kind = Class::Tree;
+	}
+	else if (registry.AnyOf<Rock, DeadTree>(thing))
+	{
+		facts.kind = Class::Rock;
+	}
+	else if (registry.AnyOf<MobileStatic, MobileObject, Ball, Pot>(thing))
+	{
+		facts.kind = Class::LooseObject;
+	}
+	return creature_watching::KindToCopy(facts);
+}
+} // namespace
+
+void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindState& mind)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	if (tables == nullptr || !mind.learnt.has_value() || !mind.learnt->mimicry.has_value() ||
+	    !registry.AllOf<Transform>(creature))
+	{
+		return;
+	}
+	auto& learnt = *mind.learnt;
+	const auto& rule = tables->mimics.at(learnt.mimicry->rule);
+	// Every copy is for the desire the player seemed to have
+	if (rule.desire >= creature_desires::k_DesireCount)
+	{
+		return;
+	}
+	const auto desire = static_cast<Desire>(rule.desire);
+	std::optional<entt::entity> players;
+	if (learnt.mimicry->object.has_value())
+	{
+		const auto thing = static_cast<entt::entity>(*learnt.mimicry->object);
+		if (registry.Valid(thing))
+		{
+			ComeAcross(mind, thing);
+			if (mind.beliefs.Find(thing) != nullptr)
+			{
+				// The player still holds the thing in the hand: it stops copying
+				if (registry.AllOf<InHand>(thing))
+				{
+					learnt.mimicry.reset();
+					return;
+				}
+				players = thing;
+			}
+		}
+	}
+
+	// It does what the player did, in three passes: to the player's thing, to the nearest thing of the same kind, and to
+	// the thing it finds most useful to act on. It may do it each time it can; after each time, it stops by random(2).
+	enum class Pass : uint8_t
+	{
+		PlayersThing,
+		SameKind,
+		MostUseful,
+	};
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto distanceWeight = tables->rules.at(static_cast<size_t>(desire)).distanceWeight;
+	const auto choose = [&](Pass pass, Target target) -> std::optional<entt::entity> {
+		const auto suits = [&](entt::entity thing) { return Accepts(registry, target, thing, creature); };
+		switch (pass)
+		{
+		case Pass::PlayersThing:
+			return players.has_value() && suits(*players) ? players : std::nullopt;
+		case Pass::SameKind:
+		{
+			if (!mind.copiedKind.has_value())
+			{
+				return std::nullopt;
+			}
+			std::vector<entt::entity> things;
+			std::vector<creature_watching::MimicCandidate> candidates;
+			for (const auto& belief : mind.beliefs.InListOrder())
+			{
+				if (belief.thing == creature || !SuitsDesire(creature, mind, desire, belief.thing) || !suits(belief.thing))
+				{
+					continue;
+				}
+				things.push_back(belief.thing);
+				candidates.push_back({
+				    .kind = MimicKindOf(registry, belief.thing),
+				    .nearness =
+				        mind_detail::Nearness(registry, creature, at->position, belief.thing, belief.place, distanceWeight),
+				});
+			}
+			const auto nearest = creature_watching::NearestOfKind(candidates, *mind.copiedKind);
+			return nearest.has_value() ? std::optional(things.at(*nearest)) : std::nullopt;
+		}
+		case Pass::MostUseful:
+		{
+			std::optional<creature_planner::ObjectCandidate> best;
+			for (const auto& thing : BelievedThingsToActOn(creature, mind, desire, suits))
+			{
+				if (thing.usefulness > (best.has_value() ? best->usefulness : 0.0f))
+				{
+					best = thing;
+				}
+			}
+			return best.has_value() ? std::optional(static_cast<entt::entity>(best->id)) : std::nullopt;
+		}
+		}
+		return std::nullopt;
+	};
+	for (const auto pass : {Pass::PlayersThing, Pass::SameKind, Pass::MostUseful})
+	{
+		for (const auto action : rule.copyActions)
+		{
+			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
+			if (executor == nullptr || !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs))
+			{
+				continue;
+			}
+			// An action that needs no thing acts on the creature itself
+			std::optional<entt::entity> object;
+			if (executor->target != Target::None)
+			{
+				object = choose(pass, executor->target);
+				if (!object.has_value())
+				{
+					continue;
+				}
+			}
+			const auto whole = WholeOfForcedPlan(creature, mind, desire, object.value_or(creature));
+			creature_plan_actions::Situation situation;
+			if (!Adopt(creature, mind,
+			           {.desire = desire,
+			            .action = action,
+			            .object = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt,
+			            .about = whole.has_value() ? std::optional(entt::to_integral(*whole)) : std::nullopt,
+			            // Copying counts as pressing as a desire at its strongest, with nothing learnt
+			            .priority = creature_planner::Priority(1.0f, std::nullopt,
+			                                                   creature_planner::ActionPriority(learnt.opinions.at(action)),
+			                                                   creature_planner::k_DefaultUsefulness, std::nullopt)},
+			           situation))
+			{
+				continue;
+			}
+			creature_mind_model::Think(learnt, fmt::format("I'm copying you: {}", tables->actions.at(action).name));
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player in pass {}: {} on {}",
+			                    entt::to_integral(creature), static_cast<int>(pass), tables->actions.at(action).name,
+			                    object.has_value() ? static_cast<int64_t>(entt::to_integral(*object)) : -1);
+			if (Random(2) == 0)
+			{
+				return;
+			}
 		}
 	}
 }
@@ -3171,6 +3309,10 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 			    if (const auto copied = object.has_value() ? PointOf(registry, *object) : std::nullopt)
 			    {
 				    mind.copiedAt = *copied;
+			    }
+			    if (object.has_value() && registry.Valid(*object))
+			    {
+				    mind.copiedKind = MimicKindOf(registry, *object);
 			    }
 			    noticed.push_back(entity);
 		    }

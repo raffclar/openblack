@@ -2154,6 +2154,18 @@ void Runner::Give(const Command& command)
 		minds.PlayerDid(command.value, glm::vec3(point.x, land.GetHeightAt(point), point.y), std::nullopt, std::nullopt);
 		break;
 	}
+	case Kind::PlayerDidOn:
+	{
+		const auto object = ObjectAt(command.object);
+		const auto* at = object.has_value() ? Locator::entitiesRegistry::value().TryGet<const Transform>(*object) : nullptr;
+		if (at == nullptr)
+		{
+			result = "no such object";
+			break;
+		}
+		minds.PlayerDid(command.value, at->position, object, std::nullopt);
+		break;
+	}
 	}
 	Log(fmt::format("{:.1f}s: {} {}{}{}", _seconds, who, Name(command.kind), result.empty() ? "" : ": ", result));
 }

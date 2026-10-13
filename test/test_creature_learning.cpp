@@ -885,6 +885,37 @@ TEST(CreatureWatching, MimicChanceIsARankNotARoll)
 	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::Notice);
 }
 
+TEST(CreatureWatching, ThingsAreCopiedOnByTheirKind)
+{
+	using creature_watching::MimicKind;
+	using Class = creature_watching::MimicFacts::Class;
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Villager}), MimicKind::Man);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Villager, .female = true}), MimicKind::Woman);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Villager, .child = true, .female = true}), MimicKind::Child);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Animal, .nasty = true}), MimicKind::NastyAnimal);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Animal}), MimicKind::NiceAnimal);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Rock}), MimicKind::Rock);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::LooseObject}), MimicKind::LooseObject);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Other}), MimicKind::Other);
+	EXPECT_EQ(static_cast<int>(MimicKind::Creature), 9);
+}
+
+TEST(CreatureWatching, TheNearestThingOfTheSameKindIsCopiedOn)
+{
+	using creature_watching::MimicKind;
+	const std::vector<creature_watching::MimicCandidate> candidates {
+	    {.kind = MimicKind::Tree, .nearness = 0.9f},  {.kind = MimicKind::Rock, .nearness = 0.2f},
+	    {.kind = MimicKind::Rock, .nearness = 0.6f},  {.kind = MimicKind::Rock, .nearness = 0.6f},
+	    {.kind = MimicKind::Woman, .nearness = 0.0f},
+	};
+	// The first of the nearest equals of the kind
+	EXPECT_EQ(creature_watching::NearestOfKind(candidates, MimicKind::Rock), 2u);
+	EXPECT_EQ(creature_watching::NearestOfKind(candidates, MimicKind::Tree), 0u);
+	// None of the kind, or none nearer than nothing
+	EXPECT_FALSE(creature_watching::NearestOfKind(candidates, MimicKind::Man).has_value());
+	EXPECT_FALSE(creature_watching::NearestOfKind(candidates, MimicKind::Woman).has_value());
+}
+
 // Carrying out plans
 
 TEST(CreaturePlanActions, BuildsAgendas)

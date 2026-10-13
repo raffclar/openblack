@@ -133,6 +133,9 @@ private:
 	           const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
+	/// Copying the player, the creature does what the player did: to the player's thing, else to the nearest thing of the
+	/// same kind, else to the most useful thing (CreatureMindLearning.cpp)
+	void CopyPlayersDeed(entt::entity creature, components::CreatureMindState& mind);
 	/// A script makes a creature pick a fight with another: it asks, and they fight if the other agrees; either way the
 	/// script's order is carried out
 	bool FightForScript(entt::entity creature, entt::entity opponent);

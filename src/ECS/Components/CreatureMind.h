@@ -166,6 +166,8 @@ struct CreatureMindState
 	/// Where the thing stood that the player did something to which the creature last set about copying (the land's
 	/// corner until then): it takes no tree from near there to plant
 	glm::vec2 copiedAt {0.0f};
+	/// The kind for copying of that thing. A deed on no thing keeps the kind from before. None before the first deed.
+	std::optional<creature_watching::MimicKind> copiedKind;
 	/// It ate a magic mushroom, and becomes high once it is done with what it is doing
 	bool highPending {false};
 	/// The trees it planted others by most recently, by entity number, oldest first: it never takes one of them to plant

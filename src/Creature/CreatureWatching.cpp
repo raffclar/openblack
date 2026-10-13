@@ -275,3 +275,46 @@ void creature_watching::StrokedWhileMimicking(std::optional<Mimicry>& mimicry, s
 	mimicry->stage = MimicStage::CopyAction;
 	mimicry->stepsLeft = rules[mimicry->rule].stageSteps;
 }
+
+creature_watching::MimicKind creature_watching::KindToCopy(const MimicFacts& facts)
+{
+	using Class = MimicFacts::Class;
+	switch (facts.kind)
+	{
+	case Class::Villager:
+		if (facts.child)
+		{
+			return MimicKind::Child;
+		}
+		return facts.female ? MimicKind::Woman : MimicKind::Man;
+	case Class::Animal:
+		return facts.nasty ? MimicKind::NastyAnimal : MimicKind::NiceAnimal;
+	case Class::Building:
+		return MimicKind::Building;
+	case Class::Tree:
+		return MimicKind::Tree;
+	case Class::Rock:
+		return MimicKind::Rock;
+	case Class::LooseObject:
+		return MimicKind::LooseObject;
+	case Class::Creature:
+		return MimicKind::Creature;
+	default:
+		return MimicKind::Other;
+	}
+}
+
+std::optional<size_t> creature_watching::NearestOfKind(std::span<const MimicCandidate> candidates, MimicKind kind)
+{
+	std::optional<size_t> nearest;
+	float best = 0.0f;
+	for (size_t i = 0; i < candidates.size(); ++i)
+	{
+		if (candidates[i].kind == kind && candidates[i].nearness > best)
+		{
+			best = candidates[i].nearness;
+			nearest = i;
+		}
+	}
+	return nearest;
+}
