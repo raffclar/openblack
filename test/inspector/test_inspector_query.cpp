@@ -97,6 +97,31 @@ public:
 	[[nodiscard]] QueryResult Run(std::string_view, const QueryContext&) override { return QueryResult::Value(Json()); }
 };
 
+/// A provider whose query takes parameters named as shaping options, which stay its own
+class OwnNamesProvider final: public ProviderInterface
+{
+public:
+	[[nodiscard]] std::string_view Name() const override { return "own"; }
+	[[nodiscard]] std::vector<QueryDescription> Describe() const override
+	{
+		return {
+		    {.name = "list",
+		     .description = "Things, with fields and a radius of its own",
+		     .parameters = {{.name = "fields", .type = "object", .description = "Its own", .required = false},
+		                    {.name = "radius", .type = "number", .description = "Its own", .required = false}},
+		     .kind = ResultKind::List,
+		     .needsNear = false},
+		};
+	}
+	[[nodiscard]] QueryResult Run(std::string_view, const QueryContext& context) override
+	{
+		seen = context.params;
+		return QueryResult::Value(Things(30));
+	}
+
+	Json seen;
+};
+
 Json Ask(const Inspector& inspector, const std::string& line)
 {
 	const auto answer = Parse(inspector.Handle(line));
@@ -357,6 +382,61 @@ TEST(Inspector, NearAndRadiusInsideParamsAreTakenAsBesideThem)
 	EXPECT_NE(twice["error"].get<std::string>().find("twice"), std::string::npos) << twice;
 	// Without near anywhere, the query says to give it beside params
 	EXPECT_NE(Ask(inspector, R"({"query": "fake.near"})")["error"].get<std::string>().find("beside params"), std::string::npos);
+}
+
+// Every shaping option may go inside params too, as tools put every argument, and is taken as if given beside them
+TEST(Inspector, ShapingOptionsInsideParamsAreTakenAsBesideThem)
+{
+	Inspector inspector;
+	inspector.Add(std::make_unique<FakeProvider>());
+
+	const auto shaped = [&inspector](const std::string& options) {
+		const auto beside = Ask(inspector, R"({"query": "fake.all", )" + options + "}");
+		const auto inside = Ask(inspector, R"({"query": "fake.all", "params": {)" + options + "}}");
+		EXPECT_EQ(beside["ok"], true) << beside;
+		EXPECT_EQ(inside, beside) << options;
+		return inside;
+	};
+	EXPECT_EQ(shaped(R"("limit": 3)")["result"]["items"].size(), 3u);
+	EXPECT_EQ(shaped(R"("limit": 2, "cursor": 4)")["result"]["items"][0]["id"], 4);
+	EXPECT_EQ(shaped(R"("count": true)")["result"], Json({{"count", 30}}));
+	EXPECT_EQ(shaped(R"("where": [{"field": "id", "op": "<", "value": 2}])")["result"]["total"], 2);
+	EXPECT_EQ(shaped(R"("fields": ["id"], "limit": 1)")["result"]["items"][0], Json({{"id", 0}}));
+	EXPECT_EQ(shaped(R"("summary": "id")")["result"]["max"], 29);
+	shaped(R"("max_bytes": 300)");
+
+	// Split between both places, each is taken from where it is
+	const auto split = Ask(inspector, R"({"query": "fake.all", "limit": 2, "params": {"cursor": 4}})");
+	EXPECT_EQ(split["result"]["items"].size(), 2u);
+	EXPECT_EQ(split["result"]["items"][0]["id"], 4);
+
+	// A value that doesn't read, or the same option in both places, is refused rather than ignored
+	const auto bad = Ask(inspector, R"({"query": "fake.all", "params": {"limit": "lots"}})");
+	EXPECT_EQ(bad["ok"], false);
+	EXPECT_NE(bad["error"].get<std::string>().find("limit must be a whole number"), std::string::npos) << bad;
+	const auto twice = Ask(inspector, R"({"query": "fake.all", "limit": 2, "params": {"limit": 3}})");
+	EXPECT_EQ(twice["ok"], false);
+	EXPECT_NE(twice["error"].get<std::string>().find("limit given twice"), std::string::npos) << twice;
+
+	// The inspector's own list of writes takes them the same; ping, which shapes nothing, refuses them
+	EXPECT_EQ(Ask(inspector, R"({"query": "writes", "params": {"limit": 1}})")["ok"], true);
+	EXPECT_EQ(Ask(inspector, R"({"query": "ping", "params": {"limit": 1}})")["ok"], false);
+}
+
+// A query with parameters named like shaping options keeps them as its own
+TEST(Inspector, AQuerysOwnParametersAreNotTakenAsShaping)
+{
+	Inspector inspector;
+	auto provider = std::make_unique<OwnNamesProvider>();
+	auto* own = provider.get();
+	inspector.Add(std::move(provider));
+
+	const auto answer = Ask(inspector, R"({"query": "own.list", "params": {"fields": {"a": 1}, "radius": 5, "limit": 1}})");
+	ASSERT_EQ(answer["ok"], true) << answer;
+	EXPECT_EQ(own->seen, Json({{"fields", {{"a", 1}}}, {"radius", 5}}));
+	EXPECT_EQ(answer["result"]["items"].size(), 1u);
+	// near goes with radius, which this query owns, so it is no parameter of the query's
+	EXPECT_EQ(Ask(inspector, R"({"query": "own.list", "params": {"near": [0, 0]}})")["ok"], false);
 }
 
 TEST(Inspector, Ping)

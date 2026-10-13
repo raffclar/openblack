@@ -394,17 +394,11 @@ std::vector<WindowInfo> GameGui::Windows() const
 		// The start-of-game question: OK and its answers' radio buttons, and the answer picked
 		const auto& skipBox = game->GetInterface()->GetSkipBox();
 		WindowInfo skip {.name = std::string(k_SkipBox), .kind = "game", .open = skipBox.IsActive()};
-		const auto skipControls = SkipBoxControls(skipBox);
-		for (const auto& control : skipControls)
+		for (const auto& control : SkipBoxControls(skipBox))
 		{
 			skip.buttons.push_back(control.name);
 		}
-		const auto picked = static_cast<size_t>(skipBox.GetSelection());
-		const auto radio = std::ranges::find(skipControls, std::string("radio"), &DialogControl::kind);
-		if (radio != skipControls.end() && static_cast<size_t>(std::distance(radio, skipControls.end())) > picked)
-		{
-			skip.selected = std::next(radio, static_cast<std::ptrdiff_t>(picked))->name;
-		}
+		skip.selected = SkipBoxPicked(skipBox);
 		windows.push_back(std::move(skip));
 
 		const auto& tattoo = game->GetInterface()->GetTattooEditor();
@@ -495,9 +489,25 @@ std::string GameGui::Close(std::string_view window)
 		}
 		return {};
 	}
-	if (Lower(window) == k_SkipBox || Lower(window) == k_TattooEditor)
+	if (Lower(window) == k_SkipBox)
 	{
-		return "that dialog closes as it is answered: gui.press its OK (or the tattoo editor's Cancel)";
+		// The player closes the question only by answering it: OK is pressed, as a click on it, keeping the answer picked
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetSkipBox().IsActive())
+		{
+			return {};
+		}
+		const auto& interface = *game->GetInterface();
+		const auto ok = SkipBoxOk(interface.GetSkipBox());
+		if (!ok.has_value())
+		{
+			return "the start-of-game question has no OK button";
+		}
+		return Send(ClickAt(interface.DialogToScreen(*ok)));
+	}
+	if (Lower(window) == k_TattooEditor)
+	{
+		return "that dialog closes as it is answered: gui.press its OK or Cancel";
 	}
 	const auto name = DebugWindowNamed(window);
 	if (!name.has_value())
