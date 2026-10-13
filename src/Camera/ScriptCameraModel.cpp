@@ -212,6 +212,12 @@ void ScriptCameraModel::SetFocus(const glm::vec3& focus)
 	Place(_focus, focus);
 }
 
+void ScriptCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
+{
+	Place(_origin, origin);
+	Place(_focus, focus);
+}
+
 void ScriptCameraModel::MoveOrigin(const glm::vec3& origin, float seconds)
 {
 	StopTrack();

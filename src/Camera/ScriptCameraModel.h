@@ -272,6 +272,9 @@ public:
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	void HandleActions(std::chrono::microseconds dt) override;
 	void SetFlight(glm::vec3 origin, glm::vec3 focus) override;
+	/// The camera stops at this position and focus. A thing that it follows or looks at, its track and a two-thing
+	/// camera continue, and move it again on the next frame.
+	void PlaceAt(glm::vec3 origin, glm::vec3 focus) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override;
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const override;

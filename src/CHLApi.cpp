@@ -1055,6 +1055,18 @@ void RemakeDrawList()
 	}
 }
 
+/// Puts the camera at a position and focus at once, still, whatever has the camera. When the camera is already there,
+/// nothing changes. The land's draw list is made again on the next frame.
+void PlaceCamera(const glm::vec3& origin, const glm::vec3& focus)
+{
+	auto& camera = Locator::camera::value();
+	if (camera.GetOrigin() != origin || camera.GetFocus() != focus)
+	{
+		camera.Place(origin, focus);
+	}
+	RemakeDrawList();
+}
+
 void None() {} // 000 NONE
 
 void SetCameraPosition() // 001 SET_CAMERA_POSITION
@@ -7058,14 +7070,16 @@ void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT
 
 void StoreCameraDetails() // 283 STORE_CAMERA_DETAILS
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The script keeps where the camera is and where it looks, whatever has the camera
+	const auto& camera = Locator::camera::value();
+	Locator::scriptControlSystem::value().StoreCameraDetails({.origin = camera.GetOrigin(), .focus = camera.GetFocus()});
 }
 
 void RestoreCameraDetails() // 284 RESTORE_CAMERA_DETAILS
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The camera goes back at once to the position and focus that the script kept last
+	const auto details = Locator::scriptControlSystem::value().GetCameraDetails();
+	PlaceCamera(details.origin, details.focus);
 }
 
 /// The advisors start cheering the player's turning of the camera, the measure of its speed starting again from
@@ -7095,15 +7109,13 @@ void StartAngleSound285() // 285 START_ANGLE_SOUND
 
 void SetCameraPosFocLens() // 286 SET_CAMERA_POS_FOC_LENS
 {
-	// const auto unk6 = Pop().intVal;
-	// const auto unk5 = Pop().intVal;
-	// const auto unk4 = Pop().intVal;
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto lens = Popf();
+	const auto focus = PopVec();
+	const auto position = PopVec();
+	// The camera goes at once to the position and focus, whatever has the camera
+	PlaceCamera(position, focus);
+	// The lens changes at once. The script gives it in radians: this command does not change degrees to radians.
+	Locator::camera::value().SetLens(lens, 0.0f);
 }
 
 void MoveCameraPosFocLens() // 287 MOVE_CAMERA_POS_FOC_LENS

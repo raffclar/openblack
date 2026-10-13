@@ -31,6 +31,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ViewFrustum.h"
@@ -178,6 +179,14 @@ void HighDetailSystem::Update()
 	{
 		return;
 	}
+	if (ReleaseAll() && Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().RequestRebuild(1);
+	}
+}
+
+bool HighDetailSystem::ReleaseAll()
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> drawn;
 	registry.Each<const HighDetail>([&drawn](entt::entity entity, const HighDetail&) { drawn.push_back(entity); });
@@ -185,6 +194,7 @@ void HighDetailSystem::Update()
 	{
 		Release(entity);
 	}
+	return !drawn.empty();
 }
 
 void HighDetailSystem::PlaceEyes(uint32_t drawTime, const glm::mat4& viewProjection)

@@ -13,6 +13,8 @@
 
 #include <functional>
 
+#include <glm/vec3.hpp>
+
 namespace openblack
 {
 class Camera;
@@ -70,7 +72,18 @@ public:
 	/// A task has stopped: the camera goes back to the player and the game's speed to normal, for whichever it had
 	virtual Released TaskStopped(Camera& camera, uint32_t task) = 0;
 
-	/// As a new land opens: nobody has the camera or the speed
+	/// The camera position and focus that a script keeps, to put the camera back there later
+	struct CameraDetails
+	{
+		glm::vec3 origin {0.0f};
+		glm::vec3 focus {0.0f};
+	};
+	/// A script keeps where the camera is and where it looks. A new store replaces the last one.
+	virtual void StoreCameraDetails(const CameraDetails& details) = 0;
+	/// The camera details that a script kept last. Before the first store, the two points are at zero.
+	[[nodiscard]] virtual const CameraDetails& GetCameraDetails() const = 0;
+
+	/// As a new land opens: nobody has the camera or the speed. The kept camera details do not change.
 	virtual void Reset() = 0;
 };
 
