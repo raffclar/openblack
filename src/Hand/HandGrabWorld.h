@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 
 #include "Animals/FishFarmRules.h"
+#include "Creature/CreatureGiving.h"
 #include "Enums.h"
 #include "HandGrabRules.h"
 
@@ -111,8 +112,43 @@ public:
 	virtual void PlaySample(uint32_t sample, glm::vec3 position) = 0;
 	/// The hand taps a thing at a point, for a player, as a rock breaks when tapped; whether the thing took the tap
 	virtual bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) = 0;
+	/// Whether what the hand holds can be given to a thing: none when the thing isn't a creature
+	[[nodiscard]] virtual std::optional<creature_giving::Verdict> GiveVerdict(entt::entity /*target*/,
+	                                                                          entt::entity /*held*/) const
+	{
+		return std::nullopt;
+	}
+	/// The creature's help says it couldn't pick up what it is offered
+	virtual void SayCantPickUp(entt::entity /*creature*/) {}
+	/// The creature is given what the hand holds: it turns to the player and reaches for it, with its left hand for the
+	/// player's left hand. Whether it took the giving.
+	virtual bool GiveTo(entt::entity /*creature*/, entt::entity /*held*/, bool /*leftHand*/) { return false; }
+	/// While the creature reaches for what the hand gave it: the thing it reaches for and how many milliseconds it is from
+	/// taking it, none before it reaches out
+	struct Taking
+	{
+		entt::entity object {entt::null};
+		float msFromTake {0.0f};
+	};
+	[[nodiscard]] virtual std::optional<Taking> TakingOf(entt::entity /*creature*/) const { return std::nullopt; }
+	/// Where the creature's hand takes it from the hand, facing the hand
+	[[nodiscard]] virtual std::optional<glm::vec3> TakePointOf(entt::entity /*creature*/, glm::vec3 /*hand*/) const
+	{
+		return std::nullopt;
+	}
+	/// Whether the creature is still about taking what it was given, turning to the player or reaching
+	[[nodiscard]] virtual bool StillTaking(entt::entity /*creature*/) const { return false; }
+	/// The creature's size, which bounds how far the hand may go while it reaches
+	[[nodiscard]] virtual float CreatureSizeOf(entt::entity /*creature*/) const { return 1.0f; }
+	/// The hand went too far while the creature reached: the creature gives up taking it
+	virtual void CallOffGiving(entt::entity /*creature*/) {}
+	/// Whether the player's hand is the right hand
+	[[nodiscard]] virtual bool RightHanded() const { return false; }
 	/// Whether the hand's player holds their creature's leash loose in the hand, tied to nothing
 	[[nodiscard]] virtual bool HoldsLooseLeash() const = 0;
+	/// A tap on a thing, let go before the hand took it, given to the leash held loose in the hand: whether the leash took
+	/// it as an order to the creature, in place of the thing's own tap
+	virtual bool LeashTap(entt::entity object) = 0;
 	/// A local random number below a count
 	[[nodiscard]] virtual uint32_t LocalRandom(uint32_t count) = 0;
 	/// A villager goes into the hand: it remembers what it was doing and is held

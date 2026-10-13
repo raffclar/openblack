@@ -18,6 +18,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -131,6 +132,8 @@ private:
 	void UpdateParticles(float seconds);
 	/// The scenario's vortices open when it is time and are told to fade out when it is time
 	void UpdateVortices();
+	/// The crossing file a vortex out of the last land would have left, written for a vortex into this one to read
+	void WriteCrossingFile(std::span<const std::string_view> lines);
 	void UpdateRewards();
 	/// The needs and desires go on once the body and mind have started, and every frame for those that hold them
 	void ApplyStates();

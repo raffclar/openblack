@@ -86,6 +86,9 @@ public:
 	/// A thing that can't be destroyed comes back out of a vortex's middle, thrown out at an angle across the land at a
 	/// scale of the usual speeds
 	virtual void ThrowOutOfVortex(entt::entity object, float angle, float scale) = 0;
+	/// Whether a vortex into the land threw the thing out and still keeps it (a villager it threw flies with the
+	/// vortex's own flailing)
+	[[nodiscard]] virtual bool IsThrownOutByAVortex(entt::entity thing) const = 0;
 
 	/// The open vortices' marks on the ground as the last frame left them
 	[[nodiscard]] virtual std::span<const GroundMark> GetGroundMarks() const = 0;

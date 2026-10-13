@@ -56,13 +56,34 @@ struct Lengths
 /// thicker.
 [[nodiscard]] leash_rope::Look LookFor(LeashType type);
 
-/// What a leash makes the creature feel while it wears one: anger on the aggression leash and compassion on the
-/// compassion leash, overriding its other desires; nothing on the learning leash
+/// The desire a leash makes dominant every turn the creature wears it, and whenever the player picks it while it is on:
+/// anger on the aggression leash and compassion on the compassion leash; nothing on the learning leash, which instead
+/// lets go of a desire made dominant before. Taking the leash off doesn't end it: the other desires stay held down
+/// until their time is up.
 [[nodiscard]] std::optional<creature_desires::Desire> ForcedDesireFor(LeashType type);
-/// How strongly a leash forces its desire, far beyond any desire's own
-constexpr float k_ForcedDesireValue = 36000.0f;
-/// Tied to a village's centre on any leash but aggression, the creature wants to impress the village this much
-constexpr float k_ImpressTownValue = 120.0f;
+/// How long the leash's desire holds the creature's other desires (but its bodily needs) down, in seconds
+constexpr float k_ForcedDesireSeconds = 36000.0f;
+/// How long a creature tied to a village it wants to impress holds its other desires down, in seconds
+constexpr float k_ImpressTownSeconds = 120.0f;
+
+/// What a creature tied to a village's centre (or its totem) knows of the village
+struct TiedTown
+{
+	/// The leash isn't the aggression leash
+	LeashType leash {LeashType::Rope};
+	/// The creature's strongest desire is already to impress
+	bool impressing {false};
+	/// The creature belongs to a player, and the village to the creature's player
+	bool creatureHasPlayer {false};
+	bool ownersTown {false};
+	/// The village's belief in the creature's player, and the most it believes in any other player
+	float beliefInOwner {0.0f};
+	float mostOtherBelief {0.0f};
+};
+/// Tied to a village on any leash but aggression, the creature is made to want to impress it, unless that is already
+/// its strongest desire or the village is firmly its player's: theirs, and believing in them more than half as much as
+/// in any other player (any village of its own when it has no player)
+[[nodiscard]] bool ImpressesTown(const TiedTown& town);
 
 /// Each sighting of a miracle counts once, three times while the creature wears the learning leash
 [[nodiscard]] uint32_t MiracleSightingWeight(bool learningLeash);
@@ -123,12 +144,14 @@ constexpr float k_HomeConfinement = 12.0f;
 /// Leashed to another creature on the aggression leash, the other gets angry too within eight times the leashed
 /// creature's height
 constexpr float k_AngerOtherReach = 8.0f;
-/// Every 600 turns leashed to another creature, how nice each finds the other goes down (aggression) or up
-/// (compassion) by 0.1
+/// Leashed to another creature, how nice each finds the other goes down (aggression) or up (compassion) by 0.1 at the
+/// first turn, then whenever more than 600 turns have passed since the other creature's feelings were last touched so
 constexpr uint32_t k_AttitudeTurns = 600;
 constexpr float k_AttitudeStep = 0.1f;
-/// How much nicer each finds the other after a number of turns leashed together, none on the learning leash
-[[nodiscard]] float AttitudeChange(LeashType type, uint32_t turnsTogether);
+/// How much nicer each finds the other each time, none on the learning leash
+[[nodiscard]] float AttitudeChange(LeashType type);
+/// Whether the feelings are touched this turn, given the turn the other creature's were last touched by a leash
+[[nodiscard]] bool AttitudeDue(std::optional<uint32_t> lastTurn, uint32_t turn);
 
 /// A lesson the creature learns about something the player showed it on a leash: how much more the desire is what to
 /// act on it with
@@ -144,9 +167,8 @@ struct Lesson
 /// What the leash tells the creature's mind, for its planner and its learning to act on
 struct MindHooks
 {
-	/// A desire forced over all the others while the leash is worn, and how strongly
-	std::optional<creature_desires::Desire> forcedDesire;
-	float forcedValue {0.0f};
+	/// The turn a creature leashed to this one last touched how nice the two find each other
+	std::optional<uint32_t> attitudeTurn;
 	/// Following the leash to the hand: the mind leaves its body to the leash
 	bool obeying {false};
 	/// Wearing the learning leash in its player's hand, it copies the player's actions that need it

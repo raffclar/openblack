@@ -53,7 +53,17 @@ public:
 	void HeatHeld(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
+	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity held) const override;
+	void SayCantPickUp(entt::entity creature) override;
+	bool GiveTo(entt::entity creature, entt::entity held, bool leftHand) override;
+	[[nodiscard]] std::optional<Taking> TakingOf(entt::entity creature) const override;
+	[[nodiscard]] std::optional<glm::vec3> TakePointOf(entt::entity creature, glm::vec3 hand) const override;
+	[[nodiscard]] bool StillTaking(entt::entity creature) const override;
+	[[nodiscard]] float CreatureSizeOf(entt::entity creature) const override;
+	void CallOffGiving(entt::entity creature) override;
+	[[nodiscard]] bool RightHanded() const override;
 	[[nodiscard]] bool HoldsLooseLeash() const override;
+	bool LeashTap(entt::entity object) override;
 	/// Whether the player's hand holds their creature's leash, rather than a post or a thing holding it
 	[[nodiscard]] static bool HoldsLeash(PlayerNames player);
 	[[nodiscard]] uint32_t LocalRandom(uint32_t count) override;

@@ -71,6 +71,8 @@ public:
 	void FoughtFight(entt::entity creature, bool won) override;
 	void AbandonAction(entt::entity creature) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;
+	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
+	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
@@ -80,6 +82,7 @@ public:
 	void SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows) override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
+	bool SwapMinds(entt::entity from, entt::entity to) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
 	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
@@ -90,6 +93,9 @@ public:
 	[[nodiscard]] uint32_t GetActionCount(entt::entity creature, uint32_t action) const override;
 	void SetOnlyDesire(entt::entity creature, creature_desires::Desire desire, float seconds) override;
 	void ClearOnlyDesire(entt::entity creature) override;
+	void MakeDesireDominant(entt::entity creature, creature_desires::Desire desire, float seconds, bool needsToo) override;
+	void EndDominantDesire(entt::entity creature) override;
+	[[nodiscard]] std::optional<creature_desires::Desire> DominantDesire(entt::entity creature) const override;
 	void ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change) override;
 	void SetAgendaPriority(entt::entity creature, float priority) override;
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
@@ -103,6 +109,11 @@ private:
 	void SetUpLearning(entt::entity creature, components::CreatureMindState& mind);
 	/// Takes up a mind file waiting to be loaded
 	void TakeUpFile(entt::entity creature, components::CreatureMindState& mind);
+	/// How a creature's swap of minds stands this turn: whether the spells on both creatures have gone and whether its
+	/// body has taken on its new shape
+	[[nodiscard]] static creature_mind::Senses::SwapView SwapViewOf(entt::entity creature);
+	/// What the idle mind told a creature carrying out a swap to do this turn
+	void StepSwap(entt::entity creature, const creature_mind::Commands& commands);
 	/// Remembers what the idle mind has started, for feedback to be credited to, and finishes plans that are done
 	void FollowAgenda(entt::entity creature, components::CreatureMindState& mind);
 	/// Carries out a plan in place of what the creature was doing; returns whether it could
@@ -115,6 +126,8 @@ private:
 	bool FightForScript(entt::entity creature, entt::entity opponent);
 	/// Learns what feedback teaches, from what the creature did lately
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
+	/// The creature has taken a thing the hand gave it: its desires choose what it does with it
+	void UseGift(entt::entity creature, entt::entity object);
 	/// Held by the player's hand, it shows what it wants once its body is free
 	void ShowDesireOnHold(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& animation);
 	/// Plans the desires due this turn for one creature

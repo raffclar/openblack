@@ -319,6 +319,13 @@ struct VortexSetup
 	/// Seconds into the scenario it is made, and after that it is told to fade out; none to stay
 	float delaySeconds {0.0f};
 	std::optional<float> fadeOutAfterSeconds;
+	/// For a vortex into the land: the crossing file's lines, written just before it is made, as a vortex out of the last
+	/// land would have written them (none leaves the file as it is); and where the animals that come out gather, as one
+	/// flock keeping within the distance and the radius, as a land's script tells it
+	std::vector<std::string_view> crossingLines;
+	std::optional<glm::vec2> gatheringOffset;
+	float flockDistance {0.0f};
+	float flockRadius {0.0f};
 };
 
 /// A reward chest given to the player as a challenge's script gives one: dropped from the sky or put on the land
@@ -599,6 +606,13 @@ struct Command
 		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
 		/// flight, say). Needs no creature
 		Reframe,
+		/// The player's hand takes the scenario's object at once, as if picked up from where it stands (needs no
+		/// creature); the hand gives what it holds to the creature, as the Action button pressed over it does
+		HandTake,
+		HandGive,
+		/// A script swaps the minds of the creature and another (value, by its place in the scenario's creatures), as
+		/// "swap creature from A to B" does
+		SwapMinds,
 		/// A challenge's script records it as SNAPSHOT does: the challenge (value), its title (title, by its help text's
 		/// name), how far it has got (amount, 1 done), a quest (ctrl) or not; the camera is first put 50 above and 70
 		/// along z from a point (point, from the middle of the map), looking at it, and the picture is of that view.

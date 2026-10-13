@@ -188,7 +188,8 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 		const auto known = KnownLeashes(*context.creature);
 		if ((context.creature->leashed && known > 1) || (!context.creature->leashed && known > 0))
 		{
-			requests.push_back({.gesture = context.leashGesture, .purpose = Purpose::LeashGesture});
+			requests.push_back(
+			    {.gesture = context.leashGesture, .purpose = Purpose::LeashGesture, .leash = context.creature->current});
 		}
 	}
 	return requests;

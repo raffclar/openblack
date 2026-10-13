@@ -245,6 +245,23 @@ TEST(TemplePress, APressHeldFromOutsideIsNoPressUntilLetGo)
 	EXPECT_EQ(fresh.Filter(Button::DoubleClick), Button::DoubleClick);
 }
 
+TEST(TemplePress, TheCinemaBarsKeepPressesFromTheTemple)
+{
+	using temple_press::Button;
+	temple_press::HeldFromOutside held;
+	EXPECT_EQ(held.Filter(Button::None), Button::None);
+	// While the advisors introduce a room, neither a press nor a double click reaches the temple
+	EXPECT_EQ(held.FilterUnderCinemaBars(Button::Held), Button::None);
+	EXPECT_EQ(held.FilterUnderCinemaBars(Button::DoubleClick), Button::None);
+	// A press held through the scene isn't one once the bars go, until it is let go and pressed again
+	EXPECT_EQ(held.Filter(Button::Held), Button::None);
+	EXPECT_EQ(held.Filter(Button::None), Button::None);
+	EXPECT_EQ(held.Filter(Button::Held), Button::Held);
+	// Let go under the bars, the next press after them is one
+	EXPECT_EQ(held.FilterUnderCinemaBars(Button::None), Button::None);
+	EXPECT_EQ(held.Filter(Button::Held), Button::Held);
+}
+
 TEST(TemplePress, TheFadeHoldsPressesBackForTheFirstSecond)
 {
 	using temple_press::Button;
