@@ -13,6 +13,7 @@
 
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -50,6 +51,13 @@ double BeliefMargin(const TownImpression& impression)
 	return static_cast<double>(belief[static_cast<size_t>(k_LocalPlayer)]) - static_cast<double>(others);
 }
 
+/// Whether a building is fully built
+bool StandsBuilt(const ecs::Registry& registry, entt::entity building)
+{
+	const auto* progress = registry.TryGet<const BuildProgress>(building);
+	return progress == nullptr || progress->built >= 1.0f;
+}
+
 /// The places for people in a town's homes, adults and children
 uint32_t PlacesOf(const Town& town)
 {
@@ -65,7 +73,7 @@ uint32_t PlacesOf(const Town& town)
 }
 } // namespace
 
-std::vector<Submission> Over(entt::entity object)
+std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 {
 	std::vector<Submission> submissions;
 	auto& registry = Locator::entitiesRegistry::value();
@@ -86,7 +94,8 @@ std::vector<Submission> Over(entt::entity object)
 	if (const auto* entrance = registry.TryGet<const TempleEntrance>(object))
 	{
 		const auto* temple = registry.Valid(entrance->temple) ? registry.TryGet<const Temple>(entrance->temple) : nullptr;
-		if (temple != nullptr && temple->owner == k_LocalPlayer)
+		if (temple != nullptr &&
+		    OffersEnterTemple(temple->owner == k_LocalPlayer, StandsBuilt(registry, entrance->temple), handInInfluence))
 		{
 			submissions.push_back({.numbers = {.index = k_EnterTemple, .first = 0.0, .second = std::nullopt},
 			                       .action = ToolTipAction::Apply,

@@ -32,8 +32,8 @@ struct Submission
 };
 
 /// What the hand shows over a thing of the world, in the order the game submits them: a temple's health, a village
-/// centre's belief and population (over the centre or its totem), the way into the player's own temple, a village store's food
-/// and wood, a pile's amount. Nothing for anything else.
-[[nodiscard]] std::vector<Submission> Over(entt::entity object);
+/// centre's belief and population (over the centre or its totem), the way into the player's own temple (with the hand in
+/// the player's influence), a village store's food and wood, a pile's amount. Nothing for anything else.
+[[nodiscard]] std::vector<Submission> Over(entt::entity object, bool handInInfluence);
 
 } // namespace openblack::gui::world_tooltip
