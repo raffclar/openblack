@@ -269,3 +269,14 @@ TEST_F(ScriptedMouse, TheInspectorTakesThePointerWhereItRests)
 	// Handed back, it stays where the inspector left it
 	EXPECT_EQ(Frame().readAtFrameStart, k_Window / 2);
 }
+
+// The pointer resting in the middle isn't known: the hand stays under the top left corner until the cursor comes over
+// the window. An agent holding the input, or the inspector's pointer, makes it known
+TEST_F(ScriptedMouse, ThePointerIsKnownOnlyOnceSomeoneHoldsIt)
+{
+	Frame();
+	EXPECT_FALSE(_actions->IsPointerKnown());
+	_actions->SetInputLockMode(input::LockMode::Locked);
+	Frame();
+	EXPECT_TRUE(_actions->IsPointerKnown());
+}

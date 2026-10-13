@@ -2288,10 +2288,11 @@ void Runner::UpdateCamera()
 	switch (*_shot)
 	{
 	case Shot::Testbed:
-		// As the testbed leaves it: 120 units south of the middle and 60 up, looking at the middle
+		// As the testbed leaves it: south of the middle and up, looking north just east of the middle
 		placement = CameraPlacement {
-		    .origin = {_middle.x, land.GetHeightAt(_middle) + 60.0f, _middle.y - 120.0f},
-		    .focus = {_middle.x, land.GetHeightAt(_middle), _middle.y},
+		    .origin = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle) + flat_land::k_CameraHeight,
+		               _middle.y - flat_land::k_CameraBack},
+		    .focus = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle), _middle.y},
 		};
 		break;
 	case Shot::Overview:

@@ -88,7 +88,7 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 	{
 		Hooks().LetGoByHand(object, release.player, release.dontReplant);
 	}
-	LetGoOfLeashesTiedTo(object);
+	// A leash tied to the thing stays tied while it flies: the rope follows it
 	registry.AssignOrReplace<InPhysics>(object);
 	// Out of the map's cells while it moves
 	registry.Remove<MapCellResident, MapCellMover>(object);

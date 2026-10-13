@@ -280,11 +280,9 @@ constexpr float k_HandSplashHeight = 0.2f;
 // Where the camera starts on the testbed: above and behind the middle of the map
 /// What the land's path reads while the testbed is loaded
 constexpr std::string_view k_TestbedLandPath = "testbed";
-constexpr float k_TestbedCameraHeight = 60.0f;
 /// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
 constexpr float k_TestbedInfluenceRadius = 400.0f;
 constexpr float k_TestbedPrayer = 1.0e6f;
-constexpr float k_TestbedCameraBack = 120.0f;
 
 /// The meshes the hand is pulled towards as its player turns evil or good, the first two of its morph file's variants,
 /// and the files of the base and those two for their skins. Black & White would also blend the hand's bones and
@@ -1857,8 +1855,10 @@ bool Game::Update() noexcept
 			_handPointer.Moved();
 		}
 		// The hand is put under the pointer every frame, moving or not: until the mouse first moves, under the pointer
-		// the game keeps, so from a land's first frame it is where the cursor is
-		_mousePosition = _handPointer.Frame(_mousePosition, actions.GetPointerPosition());
+		// the game keeps, so from a land's first frame it is where the cursor is, or the top left corner while the
+		// cursor has never been over the window
+		_mousePosition = _handPointer.Frame(
+		    _mousePosition, actions.IsPointerKnown() ? std::optional(actions.GetPointerPosition()) : std::nullopt);
 		ProcessTempleRoomKeys();
 		_shortcutKeys.Update();
 	}
@@ -4152,13 +4152,14 @@ void Game::LoadTestbed() noexcept
 	RenderLoadingFrame();
 	EndLoadingScreen();
 
-	// Looking down over the middle of the map, from the south
+	// Looking down over the middle of the map, from the south, a little to its east
 	const auto& land = Locator::terrainSystem::value();
 	const auto middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
 	const auto ground = land.GetHeightAt(middle);
+	const float x = middle.x + flat_land::k_CameraAside;
 	Locator::camera::value()
-	    .SetOrigin({middle.x, ground + k_TestbedCameraHeight, middle.y - k_TestbedCameraBack})
-	    .SetFocus({middle.x, ground, middle.y});
+	    .SetOrigin({x, ground + flat_land::k_CameraHeight, middle.y - flat_land::k_CameraBack})
+	    .SetFocus({x, ground, middle.y});
 
 	StartNewLand(land_change::Kind::Testbed);
 
