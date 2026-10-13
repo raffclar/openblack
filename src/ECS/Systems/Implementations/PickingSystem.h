@@ -41,6 +41,8 @@ private:
 	/// Adds a thing's invisible ball to the frame's pick, after its model
 	void AddBall(entt::entity entity, const glm::mat4& model, entt::id_type mesh, glm::vec3 halfExtents,
 	             const ecs::pick_shapes::Ball& ball);
+	/// Adds the one-shot bubbles, which the miracles draw themselves, to the frame's pick
+	void AddBubbles(glm::vec3 camera);
 
 	Pick _pick;
 	std::optional<glm::vec3> _behindHand;

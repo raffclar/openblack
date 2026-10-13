@@ -255,8 +255,6 @@ public:
 	[[nodiscard]] virtual magic::PourPose GetHandPour(float fraction) const = 0;
 	[[nodiscard]] virtual HandCastState GetHandCastState() const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeed() const = 0;
-	/// The one-shot bubble nearest along a line of sight, if any
-	[[nodiscard]] virtual std::optional<entt::entity> OrbAlong(glm::vec3 origin, glm::vec3 direction) const = 0;
 	[[nodiscard]] virtual HandResult GetLastHandResult() const = 0;
 	/// Once a frame, once the hand is posed: where the held miracle's in-hand effect sits, and how large the hand is
 	/// drawn, which is how large the effect is

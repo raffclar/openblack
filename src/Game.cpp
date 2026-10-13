@@ -105,6 +105,7 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/SpellSeed.h"
@@ -974,18 +975,15 @@ bool Game::HandOverThing() const
 	{
 		return false;
 	}
-	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().OrbUnderHand().has_value())
-	{
-		return true;
-	}
 	if (!Locator::pickingSystem::has_value())
 	{
 		return false;
 	}
-	// Only a thing with a model of its own: a fish farm, found through its fish, has none
+	// Only a thing with a model of its own (a bubble's is drawn by the miracles): a fish farm, found through its fish,
+	// has none
 	const auto picked = Locator::pickingSystem::value().GetPick().object;
 	return picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
-	       Locator::entitiesRegistry::value().AllOf<ecs::components::Mesh>(*picked);
+	       Locator::entitiesRegistry::value().AnyOf<ecs::components::Mesh, ecs::components::OneOffSpellSeed>(*picked);
 }
 
 void Game::PickUnderCursor(float seconds)

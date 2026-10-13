@@ -91,6 +91,7 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -131,13 +132,8 @@ constexpr auto k_DispenserBuilding = AbodeInfo::NorseSpellDispenser;
 /// The size a miracle cast from the hand takes without a gesture: a sizing miracle its tables' usual size, any other
 /// the plain size
 constexpr float k_PlainHandMagnitude = 1.0f;
-/// The id of the bubble's model in the resource cache
-constexpr auto k_BubbleMeshId = OneOffSpellSeed::k_MeshId;
 /// How far round a point a struck shield is looked for, to show its spark
 constexpr float k_ShieldStrikeMargin = 2.0f;
-/// A bubble is easier to tap than its model is big
-constexpr float k_OrbTapLeeway = 1.3f;
-constexpr float k_DefaultOrbRadius = 2.5f;
 
 // The game's world
 /// The colours of the rings the water's drops leave on the land, picked at random
@@ -1893,40 +1889,6 @@ bool MagicSystem::TapOrb(entt::entity orb)
 	return true;
 }
 
-std::optional<entt::entity> MagicSystem::OrbAlong(glm::vec3 origin, glm::vec3 direction) const
-{
-	const auto& registry = EntityRegistry();
-	auto& meshes = Locator::resources::value().GetMeshes();
-	const auto bubble = k_BubbleMeshId.value();
-	glm::vec3 centre(0.0f);
-	float radius = k_DefaultOrbRadius;
-	if (meshes.Contains(bubble))
-	{
-		const auto box = meshes.Handle(bubble)->GetBoundingBox();
-		centre = box.Center();
-		radius = std::max({box.Size().x, box.Size().y, box.Size().z}) * 0.5f;
-	}
-	std::optional<entt::entity> nearest;
-	float best = std::numeric_limits<float>::max();
-	registry.Each<const OneOffSpellSeed, const Transform>(
-	    [&](entt::entity entity, const OneOffSpellSeed& orb, const Transform& transform) {
-		    const auto middle = orb.position + centre * transform.scale;
-		    const float reach = radius * transform.scale.x * k_OrbTapLeeway;
-		    const float along = glm::dot(middle - origin, direction);
-		    if (along <= 0.0f)
-		    {
-			    return;
-		    }
-		    const auto closest = origin + direction * along;
-		    if (glm::distance(closest, middle) < reach && along < best)
-		    {
-			    best = along;
-			    nearest = entity;
-		    }
-	    });
-	return nearest;
-}
-
 // The hand
 
 void MagicSystem::UpdateHand(const HandFrame& mouseFrame, float seconds)
@@ -2325,11 +2287,17 @@ bool MagicSystem::TapAction()
 
 std::optional<entt::entity> MagicSystem::OrbUnderHand() const
 {
-	if (!_hand.overWorld)
+	// The bubble the cursor picked, as anything else under the hand is found
+	if (!_hand.overWorld || !Locator::pickingSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return OrbAlong(_hand.rayOrigin, _hand.rayDirection);
+	const auto picked = Locator::pickingSystem::value().GetPick().object;
+	if (!picked.has_value() || !EntityRegistry().Valid(*picked) || !EntityRegistry().AllOf<OneOffSpellSeed>(*picked))
+	{
+		return std::nullopt;
+	}
+	return picked;
 }
 
 bool MagicSystem::EmptyHandInInfluence() const

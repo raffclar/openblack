@@ -180,7 +180,6 @@ public:
 	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override { return magic::PourPoseAt(_pour, fraction); }
 	[[nodiscard]] HandCastState GetHandCastState() const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return _held; }
-	[[nodiscard]] std::optional<entt::entity> OrbAlong(glm::vec3 origin, glm::vec3 direction) const override;
 	/// The nearest fireball the ray passes through that the hand may hold now, if any
 	[[nodiscard]] std::optional<entt::entity> FireBallAlong(glm::vec3 origin, glm::vec3 direction) const;
 	/// A fireball of another player the hand takes hold of, as a tap or a grab starts, is caught into a fireball seed in

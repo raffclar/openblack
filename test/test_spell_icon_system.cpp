@@ -71,7 +71,6 @@ public:
 	[[nodiscard]] magic::PourPose GetHandPour(float) const override { return {}; }
 	[[nodiscard]] HandCastState GetHandCastState() const override { return {}; }
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return std::nullopt; }
-	[[nodiscard]] std::optional<entt::entity> OrbAlong(glm::vec3, glm::vec3) const override { return std::nullopt; }
 	[[nodiscard]] HandResult GetLastHandResult() const override { return {}; }
 	bool SendSpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
 	float ForcePayForSpell(entt::entity, float) override { return 0.0f; }

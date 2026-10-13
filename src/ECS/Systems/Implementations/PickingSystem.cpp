@@ -16,6 +16,7 @@
 
 #include <LNDFile.h>
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
@@ -34,6 +35,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
@@ -306,6 +308,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 			        ecs::pick_shapes::DispenserBall(transform->position, halfExtents, scale));
 		}
 	}
+	AddBubbles(view.camera);
 
 	// How far along the view an object's first triangle under the cursor is
 	const auto distanceOf = [&](size_t i) -> std::optional<float> {
@@ -440,6 +443,44 @@ void PickingSystem::AddBall(entt::entity entity, const glm::mat4& model, entt::i
 	_candidateEntities.push_back(entity);
 	_candidateModels.push_back(model);
 	_candidateMeshes.push_back(mesh);
+}
+
+void PickingSystem::AddBubbles(glm::vec3 camera)
+{
+	// One-shot bubbles are drawn by the miracles' own pass, so they aren't among the drawn models: each is picked by its
+	// model moved towards the camera by its width, and by a ball about its middle
+	const auto& registry = Locator::entitiesRegistry::value();
+	auto& meshes = Locator::resources::value().GetMeshes();
+	const auto bubbleMesh = OneOffSpellSeed::k_MeshId.value();
+	if (!meshes.Contains(bubbleMesh))
+	{
+		return;
+	}
+	const auto box = meshes.Handle(bubbleMesh)->GetBoundingBox();
+	const auto halfExtents = box.Size() * 0.5f;
+	registry.Each<const OneOffSpellSeed, const Transform>(
+	    [&](entt::entity entity, const OneOffSpellSeed&, const Transform& transform) {
+		    if (registry.AnyOf<InHand, SeeThrough>(entity))
+		    {
+			    return;
+		    }
+		    const float scale = transform.scale.x;
+		    auto model = glm::mat4(transform.rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
+		    model[3] = glm::vec4(transform.position, 1.0f);
+		    const auto middle = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+		    auto pushed = model;
+		    pushed[3] += glm::vec4(ecs::pick_shapes::BubblePickOffset(middle, camera, halfExtents, scale), 0.0f);
+		    _candidates.push_back({
+		        .centre = glm::vec3(pushed * glm::vec4(box.Center(), 1.0f)),
+		        .radius = glm::length(halfExtents) * scale,
+		        .origin = transform.position,
+		        .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+		    });
+		    _candidateEntities.push_back(entity);
+		    _candidateModels.push_back(pushed);
+		    _candidateMeshes.push_back(bubbleMesh);
+		    AddBall(entity, model, bubbleMesh, halfExtents, ecs::pick_shapes::BubbleBall(middle, scale));
+	    });
 }
 
 void PickingSystem::RetargetObject(std::optional<entt::entity> object, float distance)
