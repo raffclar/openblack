@@ -24,21 +24,36 @@ namespace
 {
 namespace pictures = openblack::ecs::challenge_pictures;
 using openblack::ecs::components::ChallengePicture;
-using openblack::graphics::CapturedFrame;
+using openblack::graphics::ScreenView;
+
+/// The pixels of a test screen, and the view of them that the renderer gives
+struct TestScreen
+{
+	uint32_t width {0};
+	uint32_t height {0};
+	bool yflip {false};
+	std::vector<uint8_t> bgra;
+
+	[[nodiscard]] ScreenView View() const
+	{
+		return {.width = width, .height = height, .pitch = width * 4, .yflip = yflip, .bgra = bgra};
+	}
+};
 
 /// A screen whose pixels (red, green, blue) come from where they are, top row first
-CapturedFrame Screen(uint32_t width, uint32_t height, const std::function<std::array<uint8_t, 3>(uint32_t, uint32_t)>& colour,
-                     bool yflip = false)
+TestScreen Screen(uint32_t width, uint32_t height, const std::function<std::array<uint8_t, 3>(uint32_t, uint32_t)>& colour,
+                  bool yflip = false)
 {
-	CapturedFrame frame {.width = width, .height = height, .pitch = width * 4, .yflip = yflip, .bgra = {}};
-	frame.bgra.resize(static_cast<size_t>(frame.pitch) * height);
+	TestScreen frame {.width = width, .height = height, .yflip = yflip, .bgra = {}};
+	const auto pitch = static_cast<size_t>(width) * 4;
+	frame.bgra.resize(pitch * height);
 	for (uint32_t y = 0; y < height; ++y)
 	{
 		const auto row = yflip ? height - 1 - y : y;
 		for (uint32_t x = 0; x < width; ++x)
 		{
 			const auto [r, g, b] = colour(x, y);
-			const auto offset = static_cast<size_t>(row) * frame.pitch + static_cast<size_t>(x) * 4;
+			const auto offset = static_cast<size_t>(row) * pitch + static_cast<size_t>(x) * 4;
 			frame.bgra[offset] = b;
 			frame.bgra[offset + 1] = g;
 			frame.bgra[offset + 2] = r;
@@ -46,6 +61,12 @@ CapturedFrame Screen(uint32_t width, uint32_t height, const std::function<std::a
 		}
 	}
 	return frame;
+}
+
+/// The picture in high detail of a test screen
+std::vector<uint8_t> TakeOf(const TestScreen& screen)
+{
+	return pictures::Take(screen.View());
 }
 
 uint8_t Red(const std::vector<uint8_t>& picture, uint32_t width, uint32_t x, uint32_t y)
@@ -80,8 +101,7 @@ TEST(ChallengePictures, APictureIsOfTheLargestMiddle4By3PartOfTheScreen)
 
 TEST(ChallengePictures, AnEvenScreenGivesAnEvenPicture)
 {
-	const auto picture =
-	    pictures::Take(Screen(640, 480, [](uint32_t, uint32_t) { return std::array<uint8_t, 3> {10, 20, 30}; }));
+	const auto picture = TakeOf(Screen(640, 480, [](uint32_t, uint32_t) { return std::array<uint8_t, 3> {10, 20, 30}; }));
 	ASSERT_EQ(picture.size(), static_cast<size_t>(pictures::k_Width) * pictures::k_Height * 3);
 	for (size_t i = 0; i < picture.size(); i += 3)
 	{
@@ -94,7 +114,7 @@ TEST(ChallengePictures, AnEvenScreenGivesAnEvenPicture)
 TEST(ChallengePictures, EachPixelIsMeanedWithTheOneBeforeItThenSoftened)
 {
 	// Red on the right half of the screen only; one screen pixel per picture column
-	const auto picture = pictures::Take(Screen(256, 192, [](uint32_t x, uint32_t) {
+	const auto picture = TakeOf(Screen(256, 192, [](uint32_t x, uint32_t) {
 		return std::array<uint8_t, 3> {static_cast<uint8_t>(x >= 128 ? 255 : 0), 0, 0};
 	}));
 	ASSERT_FALSE(picture.empty());
@@ -114,8 +134,8 @@ TEST(ChallengePictures, APictureReadBottomUpIsTheRightWayUp)
 	const auto top = [](uint32_t, uint32_t y) {
 		return std::array<uint8_t, 3> {0, static_cast<uint8_t>(y < 240 ? 255 : 0), 0};
 	};
-	const auto upright = pictures::Take(Screen(640, 480, top));
-	const auto flipped = pictures::Take(Screen(640, 480, top, true));
+	const auto upright = TakeOf(Screen(640, 480, top));
+	const auto flipped = TakeOf(Screen(640, 480, top, true));
 	EXPECT_EQ(upright, flipped);
 	EXPECT_EQ(Green(flipped, pictures::k_Width, 10, 0), 255);
 	EXPECT_EQ(Green(flipped, pictures::k_Width, 10, 127), 0);
@@ -123,7 +143,7 @@ TEST(ChallengePictures, APictureReadBottomUpIsTheRightWayUp)
 
 TEST(ChallengePictures, AWideScreenLeavesItsSidesOut)
 {
-	const auto picture = pictures::Take(Screen(1920, 1080, [](uint32_t x, uint32_t) {
+	const auto picture = TakeOf(Screen(1920, 1080, [](uint32_t x, uint32_t) {
 		return std::array<uint8_t, 3> {static_cast<uint8_t>(x < 240 || x >= 1680 ? 255 : 0), 0, 0};
 	}));
 	ASSERT_FALSE(picture.empty());
@@ -152,11 +172,12 @@ TEST(ChallengePictures, ARecordsPictureComesBackOnceTheScreenIsRead)
 	const auto record = registry.Create();
 	auto& picture = registry.Assign<ChallengePicture>(record);
 	const auto name = pictures::Ask(picture, record);
-	EXPECT_TRUE(name.starts_with(openblack::graphics::CapturedFrames::k_Prefix));
+	EXPECT_TRUE(name.starts_with(openblack::graphics::ScreenPictures::k_Prefix));
 	EXPECT_NE(pictures::Ask(picture, record), name);
 	const auto asked = *picture.waiting;
 
-	pictures::Collect(registry, {.take = [](const std::string&) { return std::optional<CapturedFrame> {}; }, .failed = {}});
+	pictures::Collect(registry,
+	                  {.take = [](const std::string&) { return std::optional<std::vector<uint8_t>> {}; }, .failed = {}});
 	EXPECT_TRUE(registry.Get<ChallengePicture>(record).waiting.has_value());
 	EXPECT_TRUE(pictures::AnyWaiting(registry));
 
@@ -164,8 +185,8 @@ TEST(ChallengePictures, ARecordsPictureComesBackOnceTheScreenIsRead)
 	                  {.take =
 	                       [&asked](const std::string& wanted) {
 		                       return wanted == asked
-		                                  ? std::optional(Screen(
-		                                        640, 480, [](uint32_t, uint32_t) { return std::array<uint8_t, 3> {1, 2, 3}; }))
+		                                  ? std::optional(TakeOf(Screen(
+		                                        640, 480, [](uint32_t, uint32_t) { return std::array<uint8_t, 3> {1, 2, 3}; })))
 		                                  : std::nullopt;
 	                       },
 	                   .failed = {}});

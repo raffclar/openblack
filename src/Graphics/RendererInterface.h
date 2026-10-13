@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -269,14 +270,18 @@ public:
 	/// Bakes the shadows of the things on the land into the land, as the next scene draw does. Call it behind the
 	/// loading screen, so that the first frame of a land does not do the bake of the whole island.
 	virtual void BakeLandShadows(bool drawVegetation) const noexcept = 0;
+	/// Makes textures for the painted skins of count skins. Call it behind the loading screen, so that the first frame
+	/// of a creature does not make them.
+	virtual void PrepareCreatureSkins(size_t count) const noexcept = 0;
 	/// Asks for the frame being made to be written to a PNG once drawn; the file appears whole once written
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
 	/// Why a picture asked for was given up, once; none while it may still come
 	[[nodiscard]] virtual std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept = 0;
-	/// The picture asked for at a path starting with graphics::CapturedFrames::k_Prefix, kept in memory, once it is
-	/// back; none while it may still come
-	[[nodiscard]] virtual std::optional<graphics::CapturedFrame>
-	TakeCapturedFrame(const std::filesystem::path& filepath) noexcept = 0;
+	/// Asks for a picture of the frame that the game makes now, kept in memory under a name. The name must start with
+	/// graphics::ScreenPictures::k_Prefix. The renderer calls picturer on its own thread when it reads the frame.
+	virtual void RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept = 0;
+	/// The picture made for a name, one time; none while it is not made
+	[[nodiscard]] virtual std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& name) noexcept = 0;
 	[[nodiscard]] virtual bool GetDebug() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
 	[[nodiscard]] virtual bool GetProfile() const noexcept = 0;

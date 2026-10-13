@@ -13,6 +13,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <string>
 
 using namespace openblack;
 using namespace openblack::creature_skin;
@@ -22,6 +23,12 @@ namespace
 /// The axis is scaled to 256 steps before it is capped at the most a weight can be
 constexpr float k_WeightSteps = 256.0f;
 } // namespace
+
+entt::id_type creature_skin::MeshFileId(std::string_view meshName)
+{
+	const auto name = "creature/skins/" + std::string(meshName);
+	return entt::hashed_string(name.c_str()).value();
+}
 
 uint8_t creature_skin::BlendWeight(float evilGood)
 {

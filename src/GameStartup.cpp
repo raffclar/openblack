@@ -9,10 +9,12 @@
 
 // The screens the game shows as it starts and while a land loads: the logos, the pre-intro and the tips screen
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <thread>
 
+#include <L3DFile.h>
 #include <SDL.h>
 #include <bgfx/bgfx.h>
 #include <spdlog/spdlog.h>
@@ -21,6 +23,8 @@
 #include "Audio/MusicPlayer.h"
 #include "Common/MachineClock.h"
 #include "Common/UserData.h"
+#include "Creature/CreatureRig.h"
+#include "Creature/CreatureSkin.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
@@ -438,6 +442,21 @@ void Game::PrepareFirstFrames()
 	if (config.drawEntities && Locator::rendererInterface::has_value())
 	{
 		Locator::rendererInterface::value().BakeLandShadows(config.drawVegetation);
+	}
+	// The first frame of a creature makes a texture for each of its painted skins. Make enough for the species with the
+	// most skins.
+	if (Locator::rendererInterface::has_value())
+	{
+		auto& resources = Locator::resources::value();
+		const auto& files = resources.GetL3DFiles();
+		size_t skins = 0;
+		resources.GetCreatureRigs().Each([&files, &skins](entt::id_type, const auto& rig) {
+			if (const auto* file = files.Find(creature_skin::MeshFileId(rig->baseMeshName)); file != nullptr)
+			{
+				skins = std::max(skins, file->GetSkins().size());
+			}
+		});
+		Locator::rendererInterface::value().PrepareCreatureSkins(skins);
 	}
 	// A creature's first move finds where creatures can walk on the whole land
 	if (Locator::creatureLocomotionSystem::has_value())

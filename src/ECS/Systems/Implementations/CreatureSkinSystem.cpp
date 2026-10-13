@@ -37,7 +37,8 @@ using openblack::creature::CreatureRig;
 
 namespace
 {
-/// A creature mesh's file, read the first time a skin of it is painted, for its skins' texels
+/// The file of a creature mesh, for the texels of its skins. The game loads the files behind the loading screen. If a
+/// file is not loaded, this function reads it the first time that a skin of it is painted.
 const l3d::L3DFile* MeshFile(const std::string& name)
 {
 	if (name.empty())
@@ -45,7 +46,7 @@ const l3d::L3DFile* MeshFile(const std::string& name)
 		return nullptr;
 	}
 	auto& files = Locator::resources::value().GetL3DFiles();
-	const auto id = entt::hashed_string(("creature/skins/" + name).c_str()).value();
+	const auto id = creature_skin::MeshFileId(name);
 	if (!files.Contains(id))
 	{
 		auto& fileSystem = Locator::filesystem::value();

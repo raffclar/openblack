@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
@@ -58,6 +59,9 @@ struct Art
 
 /// The id the art is loaded under
 constexpr entt::id_type k_ArtId = entt::hashed_string("creature/skin_art");
+
+/// The id that the file of a creature mesh loads under, for the texels of its skins
+[[nodiscard]] entt::id_type MeshFileId(std::string_view meshName);
 
 /// What is painted over one of a creature's skins
 struct Layers
