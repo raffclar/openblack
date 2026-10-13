@@ -147,6 +147,9 @@ private:
 	/// What an agenda needs to know of the creature itself: the camera's position, whether it has a player, whether a
 	/// script controls it, its radius, and a chance for what varies
 	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
+	/// The places that the creature uses when it hangs around at home: its home and its player's temple, both on the
+	/// ground, the radius of the area that holds it, and its height
+	[[nodiscard]] static creature_mind::HangAroundPlaces HangAroundPlacesOf(entt::entity creature);
 
 	/// Plans an activity in place of what the creature was doing: it stops walking and gets up out of a pose first, while
 	/// an action it is playing plays on and the new agenda waits for it

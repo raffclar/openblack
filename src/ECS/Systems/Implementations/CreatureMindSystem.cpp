@@ -175,12 +175,6 @@ constexpr float k_ManifestSum = 3.0f;
 constexpr float k_SleepyOpenness = -0.7f;
 constexpr int32_t k_SleepyBlinkIntervalMs = 2500;
 
-/// How high above their feet creatures look at other things
-constexpr float k_VillagerHeadHeight = 1.8f;
-constexpr float k_AbodeLookHeight = 4.0f;
-constexpr float k_TreeLookHeight = 6.0f;
-constexpr float k_CitadelLookHeight = 30.0f;
-
 float Clamp01(float value)
 {
 	return std::clamp(value, 0.0f, 1.0f);
@@ -293,57 +287,18 @@ std::optional<float> ReadSource(uint32_t type, const creature_desires::Desires& 
 	}
 }
 
-/// Everything on the land a creature might look at
-std::vector<creature_look::Candidate> GatherCandidates(ecs::Registry& registry)
+/// One turn of looking about: the head turns to what the creature watches, or ahead
+glm::vec3 LookAbout(const Creature& creature, const Transform& transform, const CreatureMindState& mind)
 {
-	std::vector<creature_look::Candidate> candidates;
-	const auto add = [&candidates](entt::entity entity, creature_look::Interest kind, const glm::vec3& point) {
-		candidates.push_back({.id = entt::to_integral(entity), .kind = kind, .point = point});
-	};
-	registry.Each<const Creature, const Transform>([&](entt::entity entity, const Creature& creature, const Transform& at) {
-		add(entity, creature_look::Interest::Creature,
-		    at.position + glm::vec3(0.0f, creature_look::k_HeadHeight * ShownSize(creature), 0.0f));
-	});
-	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager&, const Transform& at) {
-		add(entity, creature_look::Interest::Villager, at.position + glm::vec3(0.0f, k_VillagerHeadHeight, 0.0f));
-	});
-	registry.Each<const Abode, const Transform>([&](entt::entity entity, const Abode&, const Transform& at) {
-		add(entity, creature_look::Interest::Abode, at.position + glm::vec3(0.0f, k_AbodeLookHeight, 0.0f));
-	});
-	registry.Each<const Tree, const Transform>([&](entt::entity entity, const Tree&, const Transform& at) {
-		add(entity, creature_look::Interest::Tree, at.position + glm::vec3(0.0f, k_TreeLookHeight, 0.0f));
-	});
-	registry.Each<const Temple, const Transform>([&](entt::entity entity, const Temple&, const Transform& at) {
-		add(entity, creature_look::Interest::Citadel, at.position + glm::vec3(0.0f, k_CitadelLookHeight, 0.0f));
-	});
-	// A miracle's doves catch a creature's eye as much as anything; other animals less so
-	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& animal, const Transform& at) {
-		add(entity, animal.type == AnimalInfo::SpellDove ? creature_look::Interest::Dove : creature_look::Interest::Animal,
-		    at.position);
-	});
-	return candidates;
-}
-
-/// One turn of looking about: the head turns to the most interesting thing in sight, or ahead
-glm::vec3 LookAbout(entt::entity entity, const Creature& creature, const Transform& transform, CreatureMindState& mind,
-                    std::optional<std::vector<creature_look::Candidate>>& candidates)
-{
-	if (!candidates.has_value())
+	if (mind.look.id.has_value())
 	{
-		candidates = GatherCandidates(Locator::entitiesRegistry::value());
+		return mind.look.point;
 	}
-	const auto self = entt::to_integral(entity);
-	std::vector<creature_look::Candidate> others;
-	others.reserve(candidates->size());
-	std::ranges::copy_if(*candidates, std::back_inserter(others),
-	                     [self](const creature_look::Candidate& candidate) { return candidate.id != self; });
-	const creature_look::Viewer viewer {
+	return creature_look::PointAhead({
 	    .position = transform.position,
 	    .ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f)),
 	    .size = ShownSize(creature),
-	};
-	mind.look = creature_look::LookAbout(mind.look, others, viewer, k_TurnsPerSecond);
-	return mind.look.id.has_value() ? mind.look.point : creature_look::PointAhead(viewer);
+	});
 }
 
 /// The creature info values for the look of a creature that walks to a place
@@ -1362,7 +1317,6 @@ void CreatureMindSystem::ProcessTurn()
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
 	};
-	std::optional<std::vector<creature_look::Candidate>> candidates;
 	const bool night = IsNight();
 	// The creatures passing out this turn, which are knocked out once every mind has thought
 	std::vector<entt::entity> passingOut;
@@ -1563,6 +1517,9 @@ void CreatureMindSystem::ProcessTurn()
 		        .hand = HandViewOf(registry, entity, mind.idle),
 		        .swap = SwapViewOf(entity),
 		        .overlayPlaying = animation.gesture.animation.has_value(),
+		        // The places to hang around at are only looked for when it is free to choose what to do next
+		        .hangAround =
+		            mind.idle.step >= mind.idle.agenda.size() ? HangAroundPlacesOf(entity) : creature_mind::HangAroundPlaces {},
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    Apply(commands, animation, eyes);
@@ -1684,7 +1641,7 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    // On the way to a place: the head looks at the place, at what it watches, or from side to side. Without
 			    // a point of its own, the look uses the place that the creature walks to.
-			    const auto about = LookAbout(entity, creature, transform, mind, candidates);
+			    const auto about = LookAbout(creature, transform, mind);
 			    auto place = commands.gaze->point;
 			    if (const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
 			        !place.has_value() && walk != nullptr && walk->destination.has_value())
@@ -1700,7 +1657,7 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    else if (commands.lookAbout)
 		    {
-			    animation.lookAt = LookAbout(entity, creature, transform, mind, candidates);
+			    animation.lookAt = LookAbout(creature, transform, mind);
 		    }
 		    else
 		    {
@@ -2103,7 +2060,8 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	{
 		return;
 	}
-	// What it was doing stops as a failure
+	// It comes across the thing that it catches, and what it was doing stops as a failure
+	ComeAcross(creature, *mind, object);
 	Abandon(*mind);
 	ReleaseCast(creature);
 	creature_mind::Step step {.kind = creature_mind::Step::Kind::Object};
