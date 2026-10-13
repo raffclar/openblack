@@ -240,6 +240,30 @@ entt::entity AnimalSystem::CreateScriptAnimal(AnimalInfo type, glm::vec2 positio
 	return entity;
 }
 
+entt::entity AnimalSystem::CreateStillAnimal(AnimalInfo type, glm::vec3 position, float heading, float scale)
+{
+	auto& registry = EntityRegistry();
+	const auto entity = ecs::archetypes::AnimalArchetype::Create(type, position, heading, scale, PlayerNames::NEUTRAL);
+	auto& animal = registry.Get<Animal>(entity);
+	animal.move.position = Fixed(glm::vec2(position.x, position.z));
+	animal.move.goal = animal.move.position;
+	// It stands in the clip of an animal that a script holds still
+	SetTopState(animal, AnimalState::InScript);
+	// The miracle's wolf has a white light and every bird has the brightest light of the land.
+	// The other kinds have the light of the land where they stand.
+	auto light = AnimalLight::Land;
+	if (type == AnimalInfo::SpellWolf)
+	{
+		light = AnimalLight::White;
+	}
+	else if (IsBird(type))
+	{
+		light = AnimalLight::BrightestLand;
+	}
+	registry.Assign<AnimalPose>(entity, AnimalPose {.light = light});
+	return entity;
+}
+
 void AnimalSystem::JoinFlock(entt::entity entity, entt::entity flockEntity)
 {
 	auto& registry = EntityRegistry();

@@ -42,6 +42,8 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Animals/BirdRules.h"
+#include "Animals/GrazerRules.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
@@ -385,6 +387,36 @@ std::string_view HandResultName(ecs::systems::MagicSystemInterface::HandResult r
 		return "powered up";
 	}
 	return "";
+}
+
+/// An animal as the scenario gives it: a living one as a land's script makes it, or one that stays at its position
+entt::entity PlaceAnimal(AnimalInfo type, const ObjectSetup& object, glm::vec3 position, float yaw)
+{
+	if (!Locator::animalSystem::has_value())
+	{
+		return ecs::archetypes::AnimalArchetype::Create(type, position, yaw, object.scale, PlayerNames::NEUTRAL);
+	}
+	auto& animalSystem = Locator::animalSystem::value();
+	const glm::vec2 point {position.x, position.z};
+	entt::entity animal = entt::null;
+	if (object.living && animals::grazers::IsGrazer(type))
+	{
+		animal = animalSystem.CreateGrazer(type, point, 0, entt::null, entt::null);
+	}
+	else if (object.living && animals::birds::IsLandBird(type))
+	{
+		animal = animalSystem.CreateBird(type, point, 0, entt::null);
+	}
+	if (animal != entt::null)
+	{
+		return animal;
+	}
+	if (object.living)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: animal kind {} cannot live yet, it stays where it is put",
+		                   static_cast<int>(type));
+	}
+	return animalSystem.CreateStillAnimal(type, position, yaw, object.scale);
 }
 
 /// A villager's or animal's life and poison as the scenario gives them
@@ -960,7 +992,7 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, AnimalInfo>)
 			    {
-				    return ecs::archetypes::AnimalArchetype::Create(type, position, yaw, 1.0f, PlayerNames::NEUTRAL);
+				    return PlaceAnimal(type, object, position, yaw);
 			    }
 			    else if constexpr (std::is_same_v<T, MobileStaticInfo>)
 			    {

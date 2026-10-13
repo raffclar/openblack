@@ -2407,10 +2407,10 @@ void AddHand(std::vector<Scenario>& all)
 	                {.type = TreeInfo::Oak, .offset = {10.0f, 3.0f}},
 	                {.type = VillagerInfo::CelticForesterMale, .offset = {8.5f, 2.0f}, .inScript = true},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {11.5f, 2.0f}, .inScript = true},
-	                {.type = AnimalInfo::Cow, .offset = {-14.0f, 2.0f}},
-	                {.type = AnimalInfo::Sheep, .offset = {-9.0f, -3.0f}},
-	                {.type = AnimalInfo::Horse, .offset = {-12.0f, 8.0f}},
-	                {.type = AnimalInfo::Pig, .offset = {-6.0f, 5.0f}}},
+	                {.type = AnimalInfo::Cow, .offset = {-14.0f, 2.0f}, .living = true},
+	                {.type = AnimalInfo::Sheep, .offset = {-9.0f, -3.0f}, .living = true},
+	                {.type = AnimalInfo::Horse, .offset = {-12.0f, 8.0f}, .living = true},
+	                {.type = AnimalInfo::Pig, .offset = {-6.0f, 5.0f}, .living = true}},
 	});
 }
 
