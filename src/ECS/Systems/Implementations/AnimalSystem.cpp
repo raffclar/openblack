@@ -1822,6 +1822,9 @@ void AnimalSystem::Update(uint32_t turn, float turnFraction)
 	const auto now = animals::DrawTime(turn, t);
 	const uint32_t elapsed = now >= _drawTime ? now - _drawTime : 0;
 	_drawTime = now;
+	// A screen refresh of the game's, when a clip held at its end plays its sounds again; none while the game is paused
+	const bool refresh = Locator::time::has_value() && !Locator::time::value().IsPaused() &&
+	                     _soundPace.Step(static_cast<float>(Locator::time::value().GetFrameRealTime().count()));
 	const float elapsedSeconds = static_cast<float>(elapsed) * 0.001f;
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
@@ -1859,11 +1862,8 @@ void AnimalSystem::Update(uint32_t turn, float turnFraction)
 		                        ? animals::MovingPlay(timing, animal.move.speed, elapsed, transform.scale.x)
 		                        : static_cast<int32_t>(elapsed);
 		// The sounds on the clip's frames it passes play from the animal
-		if (played > 0)
-		{
-			ecs::clip_sound_player::Play(entity, animal.animation, *clip, animal.clipPlace, static_cast<uint32_t>(played),
-			                             transform.position);
-		}
+		ecs::clip_sound_player::Play(entity, animal.animation, *clip, animal.clipPlace,
+		                             static_cast<uint32_t>(std::max(played, 0)), transform.position, refresh);
 		animal.clipPlace = animals::AdvanceClip(timing, animal.clipPlace, played);
 
 		// A wolf fades out of sight as it goes; the doves and bats stay whole until they go

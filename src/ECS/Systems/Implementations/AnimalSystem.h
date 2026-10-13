@@ -16,6 +16,7 @@
 #endif
 
 #include "Animals/AnimalMove.h"
+#include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/Animal.h"
 
 namespace openblack::ecs::systems
@@ -176,6 +177,8 @@ private:
 	/// How many flocks have been made, which orders them
 	uint32_t _flocksMade {0};
 	uint32_t _drawTime {0};
+	/// The game's screen refreshes, at which animals' clips held at their end play their sounds again
+	ecs::clip_sound_player::RefreshPace _soundPace;
 };
 
 } // namespace openblack::ecs::systems

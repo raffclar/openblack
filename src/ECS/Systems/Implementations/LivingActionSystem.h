@@ -14,6 +14,7 @@
 
 #include <glm/mat4x4.hpp>
 
+#include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 
@@ -91,6 +92,8 @@ private:
 
 	/// The game's clock in milliseconds at the last frame the villagers were posed
 	uint32_t _poseDrawTime {0};
+	/// The game's screen refreshes, at which villagers' clips held at their end play their sounds again
+	ecs::clip_sound_player::RefreshPace _soundPace;
 	/// The old clip's pose of a high-detail villager changing clip, reused from frame to frame
 	std::vector<glm::mat4> _blendBones;
 };

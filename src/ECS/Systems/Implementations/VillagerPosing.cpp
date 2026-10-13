@@ -33,6 +33,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerDrawRules.h"
 #include "Graphics/ViewFrustum.h"
@@ -136,6 +137,9 @@ void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
 	// The milliseconds of the game's clock since the last frame, none when the clock went back
 	const uint32_t elapsed = now >= _poseDrawTime ? now - _poseDrawTime : 0;
 	_poseDrawTime = now;
+	// A screen refresh of the game's, when a clip held at its end plays its sounds again; none while the game is paused
+	const bool refresh = Locator::time::has_value() && !Locator::time::value().IsPaused() &&
+	                     _soundPace.Step(static_cast<float>(Locator::time::value().GetFrameRealTime().count()));
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& states = Locator::infoConstants::value().villagerStateTable;
@@ -175,7 +179,7 @@ void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
 		    }
 		    // The sounds on the clip's frames it passes play from the villager
 		    ecs::clip_sound_player::Play(entity, pose.clip, *clip, pose.place, static_cast<uint32_t>(played),
-		                                 transform.position);
+		                                 transform.position, refresh);
 		    pose.place = animals::AdvanceClip(timing, pose.place, played);
 		    // While it walks with a clip that carries it along, it is drawn gliding from where it stood as the turn began
 		    const bool glides = ecs::villager_draw::Glides(states.at(state).movesWithGround != 0, clip->IsPlayedByTime());

@@ -9,6 +9,8 @@
 
 #include "ClipSoundPlayer.h"
 
+#include <cmath>
+
 #include <optional>
 #include <string>
 #include <string_view>
@@ -82,10 +84,23 @@ public:
 
 } // namespace
 
-void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, ClipTiming clip, uint32_t place, uint32_t played,
-                             const glm::vec3& position)
+bool clip_sound_player::RefreshPace::Step(float frameMilliseconds)
 {
-	if (played == 0)
+	sinceStep += frameMilliseconds;
+	if (sinceStep < k_StepMilliseconds)
+	{
+		return false;
+	}
+	sinceStep = std::fmod(sinceStep - k_StepMilliseconds, k_StepMilliseconds);
+	return true;
+}
+
+void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, ClipTiming clip, uint32_t place, uint32_t played,
+                             const glm::vec3& position, bool refresh)
+{
+	// Held at its end, a clip played once plays all its sounds again at each refresh, the clock moving or not
+	const bool held = !clip.looping && place >= clip.duration;
+	if (held ? !refresh : played == 0)
 	{
 		return;
 	}
@@ -94,11 +109,8 @@ void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, C
 	{
 		return;
 	}
-	if (!clip.looping && place >= clip.duration)
-	{
-		return;
-	}
-	const auto passed = clip_sounds::Passed(sounds->sounds, place, played, clip.duration, clip.looping);
+	const auto passed = held ? clip_sounds::AllOf(sounds->sounds, clip.duration)
+	                         : clip_sounds::Passed(sounds->sounds, place, played, clip.duration, clip.looping);
 	if (passed.empty())
 	{
 		return;
@@ -147,8 +159,9 @@ void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, C
 }
 
 void clip_sound_player::Play(entt::entity entity, AnimId clipId, const L3DAnim& clip, uint32_t place, uint32_t played,
-                             const glm::vec3& position)
+                             const glm::vec3& position, bool refresh)
 {
 	GameWorld world;
-	Play(world, entity, clipId, {.duration = clip.GetPlayTime(), .looping = clip.IsLooping()}, place, played, position);
+	Play(world, entity, clipId, {.duration = clip.GetPlayTime(), .looping = clip.IsLooping()}, place, played, position,
+	     refresh);
 }
