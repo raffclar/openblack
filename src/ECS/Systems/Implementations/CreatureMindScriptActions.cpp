@@ -67,6 +67,13 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	}
 	// The script takes control of it first, so the action's agenda is made for a creature under a script's control
 	registry.AssignOrReplace<ScriptControlled>(creature);
+	// It comes across the thing to act on, and the thing to use
+	auto& mind = registry.Get<CreatureMindState>(creature);
+	ComeAcross(creature, mind, target);
+	if (with.has_value())
+	{
+		ComeAcross(creature, mind, *with);
+	}
 	const auto& name = tables->actions[action].name;
 	if (name == k_FightAction)
 	{

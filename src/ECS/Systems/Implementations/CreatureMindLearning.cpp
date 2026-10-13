@@ -1910,6 +1910,7 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 	// What it was doing is given up, so that the thing is planned for at once, whatever it was doing
 	Abandon(*mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
+	ComeAcross(creature, *mind, object);
 	mind->leash.actOn = {entt::to_integral(object)};
 	mind->leash.actOnForced = true;
 	// The other things of its group that the creature believes in, newest belief first

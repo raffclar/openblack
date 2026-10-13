@@ -485,6 +485,9 @@ TEST(CreatureLook, InterestByKind)
 	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Villager), 0.5f);
 	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Tree), 0.3f);
 	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Fixed), 0.25f);
+	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Toy), 0.9f);
+	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Static), 0.4f);
+	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::None), 0.0f);
 }
 
 TEST(CreatureLook, BiggerCreaturesLookFurther)
@@ -499,61 +502,83 @@ TEST(CreatureLook, NearerIsMoreInteresting)
 	EXPECT_FLOAT_EQ(creature_look::DistanceFactor(10.0f, 100.0f), 1.0f);
 	EXPECT_FLOAT_EQ(creature_look::DistanceFactor(49.0f, 100.0f), 1.0f);
 	EXPECT_FLOAT_EQ(creature_look::DistanceFactor(75.0f, 100.0f), 0.25f);
+	// Past the range, less than nothing
+	EXPECT_FLOAT_EQ(creature_look::DistanceFactor(150.0f, 100.0f), -0.5f);
 }
 
-TEST(CreatureLook, ItSeesWhatIsInFront)
+TEST(CreatureLook, ItKeepsInViewWhatItSeesAndFaces)
 {
-	const creature_look::Viewer viewer {.position = {0.0f, 0.0f, 0.0f}, .ahead = {0.0f, 0.0f, -1.0f}, .size = 1.0f};
-	EXPECT_TRUE(creature_look::CanSee(viewer, {20.0f, 0.0f, -50.0f}));
-	EXPECT_FALSE(creature_look::CanSee(viewer, {50.0f, 0.0f, -20.0f}));
-	EXPECT_FALSE(creature_look::CanSee(viewer, {0.0f, 0.0f, 50.0f}));
-	EXPECT_FALSE(creature_look::CanSee(viewer, {0.0f, 0.0f, -200.0f}));
-	// Anything right by it
-	EXPECT_TRUE(creature_look::CanSee(viewer, {0.0f, 0.0f, 5.0f}));
+	// Looking and facing along game angle 0
+	EXPECT_TRUE(creature_look::InView(0, 0, 0x100, false));
+	// Seen, but a sixth of a turn or more from the way the body faces
+	EXPECT_FALSE(creature_look::InView(0x200, 0, 0x155, false));
+	EXPECT_TRUE(creature_look::InView(0x200, 0, 0x154, false));
+	// Faced, but past a third of a turn from the way the head looks
+	EXPECT_FALSE(creature_look::InView(0x400, 0x100, 0x100, false));
+	// The body's difference does not wrap round a full turn
+	EXPECT_FALSE(creature_look::InView(0x7F0, 0x7F0, 0x10, false));
+	// Anything in its own cell
+	EXPECT_TRUE(creature_look::InView(0x400, 0, 0x400, true));
 }
 
-TEST(CreatureLook, ItWatchesTheMostInterestingThing)
+TEST(CreatureLook, ItWatchesTheFirstThingThatItSees)
 {
-	const creature_look::Viewer viewer {.position = {0.0f, 0.0f, 0.0f}, .ahead = {0.0f, 0.0f, -1.0f}, .size = 1.0f};
-	const std::array<creature_look::Candidate, 3> candidates {{
-	    {.id = 1, .kind = creature_look::Interest::Tree, .point = {0.0f, 0.0f, -30.0f}},
-	    {.id = 2, .kind = creature_look::Interest::Creature, .point = {10.0f, 0.0f, -40.0f}},
-	    {.id = 3, .kind = creature_look::Interest::Villager, .point = {0.0f, 0.0f, 40.0f}},
-	}};
-	const auto target = creature_look::LookAbout({}, candidates, viewer, k_TurnsPerSecond);
-	EXPECT_EQ(target.id, 2u);
+	creature_look::Target target;
+	// With nothing watched, even a thing of no interest far past the range takes over
+	EXPECT_TRUE(creature_look::Consider(target, {.id = 4, .kind = creature_look::Interest::None, .distance = 500.0f}, 0.0f,
+	                                    150.0f, 0.999f, 10));
+	EXPECT_EQ(target.id, 4u);
 	EXPECT_EQ(target.watchedTurns, 0u);
-	const auto later = creature_look::LookAbout(target, candidates, viewer, k_TurnsPerSecond);
-	EXPECT_EQ(later.id, 2u);
-	EXPECT_EQ(later.watchedTurns, 1u);
+	creature_look::Watch(target, true);
+	EXPECT_EQ(target.watchedTurns, 1u);
+}
+
+TEST(CreatureLook, AMoreInterestingThingTakesOver)
+{
+	creature_look::Target tree {.id = 1, .interest = 0.3f, .watchedTurns = 0};
+	// The creature catches its eye more than the tree holds it
+	EXPECT_TRUE(creature_look::Consider(tree, {.id = 2, .kind = creature_look::Interest::Creature, .distance = 40.0f}, 30.0f,
+	                                    150.0f, 0.999f, 10));
+	EXPECT_EQ(tree.id, 2u);
+	EXPECT_FLOAT_EQ(tree.interest, 0.85f);
+	// A villager does not catch its eye more than the creature holds it
+	EXPECT_FALSE(creature_look::Consider(tree, {.id = 3, .kind = creature_look::Interest::Villager, .distance = 10.0f}, 40.0f,
+	                                     150.0f, 0.999f, 10));
+	EXPECT_EQ(tree.id, 2u);
 }
 
 TEST(CreatureLook, TheLongerItWatchesTheLessElseCatchesItsEye)
 {
-	const creature_look::Viewer viewer {.position = {0.0f, 0.0f, 0.0f}, .ahead = {0.0f, 0.0f, -1.0f}, .size = 1.0f};
-	const std::array<creature_look::Candidate, 2> candidates {{
-	    {.id = 1, .kind = creature_look::Interest::Tree, .point = {0.0f, 0.0f, -30.0f}},
-	    {.id = 2, .kind = creature_look::Interest::Creature, .point = {10.0f, 0.0f, -40.0f}},
-	}};
-	// Watching the tree for a while: the creature, more than twice as interesting, still takes over at first
-	creature_look::Target tree {
-	    .id = 1, .kind = creature_look::Interest::Tree, .point = {0.0f, 0.0f, -30.0f}, .watchedTurns = 50};
-	EXPECT_EQ(creature_look::LookAbout(tree, candidates, viewer, k_TurnsPerSecond).id, 2u);
+	// Watching a tree for 18 whole seconds: a creature catches its eye a tenth as much, 0.085 against 0.3
+	creature_look::Target tree {.id = 1, .interest = 0.3f, .watchedTurns = 189};
+	EXPECT_FALSE(creature_look::Consider(tree, {.id = 2, .kind = creature_look::Interest::Creature, .distance = 40.0f}, 30.0f,
+	                                     150.0f, 0.999f, 10));
+	// At 5 whole seconds (59 turns), three quarters as much: 0.6375 against 0.3
+	tree.watchedTurns = 59;
+	EXPECT_TRUE(creature_look::Consider(tree, {.id = 2, .kind = creature_look::Interest::Creature, .distance = 40.0f}, 30.0f,
+	                                    150.0f, 0.999f, 10));
 	// After twenty seconds, nothing else does
-	tree.watchedTurns = 200;
-	EXPECT_EQ(creature_look::LookAbout(tree, candidates, viewer, k_TurnsPerSecond).id, 1u);
+	creature_look::Target bored {.id = 1, .interest = 0.25f, .watchedTurns = 200};
+	EXPECT_FALSE(creature_look::Consider(bored, {.id = 2, .kind = creature_look::Interest::Dove, .distance = 0.0f}, 140.0f,
+	                                     150.0f, 0.999f, 10));
 }
 
-TEST(CreatureLook, WhatGoesOutOfSightIsDropped)
+TEST(CreatureLook, WhatItWatchesHoldsItLessFarAway)
 {
-	const creature_look::Viewer viewer {.position = {0.0f, 0.0f, 0.0f}, .ahead = {0.0f, 0.0f, -1.0f}, .size = 1.0f};
-	const std::array<creature_look::Candidate, 1> behind {{
-	    {.id = 7, .kind = creature_look::Interest::Creature, .point = {0.0f, 0.0f, 60.0f}},
-	}};
-	const creature_look::Target watching {
-	    .id = 7, .kind = creature_look::Interest::Creature, .point = {0.0f, 0.0f, -60.0f}, .watchedTurns = 3};
-	EXPECT_FALSE(creature_look::LookAbout(watching, behind, viewer, k_TurnsPerSecond).id.has_value());
-	EXPECT_FALSE(creature_look::LookAbout(watching, {}, viewer, k_TurnsPerSecond).id.has_value());
+	const creature_look::Target tree {.id = 1, .interest = 0.4f};
+	EXPECT_FLOAT_EQ(creature_look::Hold(tree, 30.0f, 100.0f, 1.0f), 0.4f);
+	EXPECT_FLOAT_EQ(creature_look::Hold(tree, 75.0f, 100.0f, 1.0f), 0.1f);
+	// Held to the range: never less than nothing
+	EXPECT_FLOAT_EQ(creature_look::Hold(tree, 300.0f, 100.0f, 1.0f), 0.0f);
+	EXPECT_FLOAT_EQ(creature_look::Hold({}, 30.0f, 100.0f, 1.0f), 0.0f);
+}
+
+TEST(CreatureLook, WhatGoesOutOfViewIsDropped)
+{
+	creature_look::Target watching {.id = 7, .interest = 0.85f, .watchedTurns = 3};
+	creature_look::Watch(watching, false);
+	EXPECT_FALSE(watching.id.has_value());
+	EXPECT_EQ(watching.watchedTurns, 0u);
 }
 
 TEST(CreatureLook, WithNothingToSeeItLooksAhead)

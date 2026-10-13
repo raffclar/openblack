@@ -952,7 +952,11 @@ struct GCreatureInfo: GLivingInfo
 	MeshId totemIcon;
 	/// Each turn the change waiting for its alignment, held between -1 and 1, moves it by that share of this
 	float alignmentChangePerTurn;
-	std::array<uint8_t, 0x28> field0x33c;
+	std::array<uint8_t, 0x1c> field0x33c;
+	/// How much things on the land, mountains and water catch its eye as it looks about
+	float lookAtObjectsWeight;
+	float lookAtMountainsWeight;
+	float lookAtWaterWeight;
 	/// How long it sleeps for its size, once rested
 	float sleepLength;
 	/// A meal's food value over this, and over its size, is the energy it gains
@@ -976,6 +980,7 @@ static_assert(offsetof(GCreatureInfo, totemIcon) == 0x334);
 static_assert(offsetof(GCreatureInfo, helpBodyProblemSeconds) == 0x2fc);
 static_assert(offsetof(GCreatureInfo, lookSweepHalfAngle) == 0x2dc);
 static_assert(offsetof(GCreatureInfo, lookAtPlaceRange) == 0x2f8);
+static_assert(offsetof(GCreatureInfo, lookAtObjectsWeight) == 0x358);
 static_assert(offsetof(GCreatureInfo, helpVeryThirsty) == 0x324);
 static_assert(offsetof(GCreatureInfo, startEnergy) == 0x1f4);
 static_assert(offsetof(GCreatureInfo, comfortTemperature) == 0x1fc);
