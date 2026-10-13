@@ -59,6 +59,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerBreeding.h"
+#include "VillagerCreatureReactions.h"
 #include "VillagerDiscipleWork.h"
 #include "VillagerDisciples.h"
 #include "VillagerWorship.h"
@@ -558,6 +559,8 @@ void TownSystem::ProcessTurn()
 		{
 			changed.emergencyTurn = 0;
 		}
+		// Then it judges the creatures it watches
+		ecs::villager_creature::TownTurn(townEntity, turn);
 	}
 	// Every tenth turn each town short of worshippers sends more
 	if (Locator::worshipSiteSystem::has_value())

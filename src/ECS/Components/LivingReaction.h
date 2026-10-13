@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 
 #include "Enums.h"
@@ -30,6 +32,9 @@ struct LivingReaction
 	/// A creature's memory of the kinds it reacted to lately; a villager's is its VillagerReactionMemory, which the
 	/// shields' reactions share
 	magic::villager_reaction::Memory creatureMemory;
+	/// The turn a creature last took up a flying thing's and a crushed thing's reaction, which it waits a while after
+	std::optional<uint32_t> sawFlying;
+	std::optional<uint32_t> sawCrushed;
 };
 
 } // namespace openblack::ecs::components

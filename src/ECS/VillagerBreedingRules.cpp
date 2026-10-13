@@ -110,6 +110,16 @@ bool villager_breeding::Touching(float centreDistance, float radiusA, float radi
 	return centreDistance - (radiusA + radiusB) <= gap;
 }
 
+bool villager_breeding::WaitsForPartner(bool partnerTouching, bool partnerWalkingToMeet)
+{
+	return partnerTouching && partnerWalkingToMeet;
+}
+
+bool villager_breeding::LeavesLove(bool nextIsLoveState, bool nextIsFinal)
+{
+	return !nextIsLoveState && nextIsFinal;
+}
+
 bool villager_breeding::BreederMayBreed(const TownHeadcount& town, float overAllowance)
 {
 	const auto over = [](uint32_t count, uint32_t places) {

@@ -1969,6 +1969,60 @@ void AddHand(std::vector<Scenario>& all)
 	         // And comes back in
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.97f}}},
 	});
+	// The camera looks down on the north edge of the player's influence, 400 m from the middle: a wood pile and another
+	// player's tiger just inside, a wood pile, another player's tiger and the player's own tiger just outside, all clear
+	// of the testbed's window. The hand rests on the land between visits, so that each tooltip is submitted afresh.
+	all.push_back({
+	    .id = "hand.tooltips_influence",
+	    .name = "The hand's tooltips either side of the influence border",
+	    .facet = Facet::Hand,
+	    .description = "The hand starts over the wood pile outside the player's influence, then goes over the other "
+	                   "player's tiger outside and the player's own tiger outside. It comes in over the wood pile and the "
+	                   "other player's tiger inside, then goes back out over the outside wood pile, rests out on the land "
+	                   "for twenty seconds and tries the pile again.",
+	    .expected = "Outside, the wood pile shows no amount and the other player's tiger no \"Interact\"; the player's "
+	                "own tiger shows \"Interact\" anywhere. Inside, the wood pile shows its amount and the other player's "
+	                "tiger \"Interact\". Back out at once, the outside pile shows its amount, as the hand keeps some of "
+	                "the player's influence past the border; once that has run out it shows nothing again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 45.0f, 355.0f}, .look = {0.0f, 0.0f, 410.0f}},
+	    .creatures = {{.label = "own outside",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {48.0f, 430.0f},
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .size = 0.5f,
+	                   .pauseMind = true},
+	                  {.label = "other inside",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {18.0f, 386.0f},
+	                   .owner = PlayerNames::PLAYER_TWO,
+	                   .size = 0.5f,
+	                   .pauseMind = true},
+	                  {.label = "other outside",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {35.0f, 430.0f},
+	                   .owner = PlayerNames::PLAYER_TWO,
+	                   .size = 0.5f,
+	                   .pauseMind = true}},
+	    .objects = {{.type = PotInfo::WoodPile_1, .offset = {0.0f, 390.0f}, .amount = 300},
+	                {.type = PotInfo::WoodPile_1, .offset = {15.0f, 428.0f}, .amount = 300}},
+	    .commands =
+	        {// Outside: the wood pile, the other player's tiger, the land, the player's own tiger, the land
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.626f, 0.379f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.798f, 0.327f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.7f, 0.45f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.909f, 0.327f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.7f, 0.45f}},
+	         // Inside: the wood pile, the land, the other player's tiger, the land
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.702f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.62f, 0.9f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.759f, 0.71f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.62f, 0.9f}},
+	         // Straight back out over the outside pile, out on the land until nothing is kept, and the pile again
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.626f, 0.379f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.7f, 0.45f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 20.0f, .point = {0.626f, 0.379f}}},
+	});
 	// The camera stands as in the tutorial's throwing demonstration, 9 m over the land and 35 m behind the rock, which
 	// sits in the middle of the screen; the flat land beyond leaves the throw room to land
 	all.push_back({
@@ -2045,9 +2099,10 @@ void AddHand(std::vector<Scenario>& all)
 	    .description = "A food store in the middle of the view is looked at from a little way up and the pointer is left "
 	                   "alone. Run it as the game starts (ob-build run --scenario hand.spawn_point) without touching the "
 	                   "mouse.",
-	    .expected = "From the first frame the hand is under the cursor, or in the middle of the window over the food "
-	                "store when the cursor isn't over the window; never far off towards the top left corner, gliding "
-	                "back only once the mouse moves.",
+	    .expected = "From the first frame the hand is under the cursor when the cursor is over the window. When the "
+	                "cursor has never been over the window the pointer is the window's top left corner, as in the "
+	                "original, so the hand is off along the line through that corner until the cursor comes over the "
+	                "window. An agent holding the input puts it under the middle of the window, over the food store.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, -40.0f}, .look = {0.0f, 0.0f, 10.0f}},
 	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, 10.0f}}},
@@ -2315,6 +2370,21 @@ void AddLeash(std::vector<Scenario>& all)
 	                 OnObject(Kind::TieLeash, 0, 1, 2.0f, false), Go(Kind::WalkTo, 0, {120.0f, 60.0f}, 1.0f, false),
 	                 Act(Kind::TakeOffLeash, 0, 8.0f)},
 	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "leash.tied_thrown",
+	    .name = "Tied to a thrown rock",
+	    .facet = Facet::Leash,
+	    .description = "A tiger on the learning leash is tied to a rock of nobody's, which is then thrown off to the "
+	                   "east, every eight seconds.",
+	    .expected = "The leash stays tied to the rock as it flies and after it lands: the rope runs from the rock "
+	                "throughout and never goes back to the hand.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 10.0f}, {60.0f, 10.0f}, {0.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {-30.0f, 10.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false)},
+	    .throws = {{.object = 0, .height = 4.0f, .velocity = {12.0f, 8.0f, 0.0f}, .delaySeconds = 3.0f, .repeatSeconds = 8.0f}},
 	});
 
 	all.push_back({

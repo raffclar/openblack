@@ -36,6 +36,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
@@ -52,6 +53,7 @@
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerSpeed.h"
+#include "ECS/VillagerWalkRules.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -547,7 +549,16 @@ template <MoveState S>
 void CollectWalkers(ecs::Registry& registry, std::vector<Walker>& walkers)
 {
 	registry.Each<const MoveStateTagComponent<S>, WallHug, Transform>(
-	    [&walkers](entt::entity entity, const MoveStateTagComponent<S>& tag, WallHug& wallHug, Transform& transform) {
+	    [&walkers, &registry](entt::entity entity, const MoveStateTagComponent<S>& tag, WallHug& wallHug,
+	                          Transform& transform) {
+		    // A villager's walk waits while it is in a state that doesn't walk it
+		    if (const auto* action = registry.TryGet<const LivingAction>(entity);
+		        action != nullptr && registry.AllOf<Villager>(entity) &&
+		        !villager_walk::Walks(
+		            static_cast<VillagerStates>(action->states.at(static_cast<size_t>(LivingAction::Index::Top)))))
+		    {
+			    return;
+		    }
 		    walkers.push_back({
 		        .entity = entity,
 		        .transform = transform,

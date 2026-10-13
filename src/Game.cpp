@@ -281,11 +281,9 @@ constexpr float k_HandSplashHeight = 0.2f;
 // Where the camera starts on the testbed: above and behind the middle of the map
 /// What the land's path reads while the testbed is loaded
 constexpr std::string_view k_TestbedLandPath = "testbed";
-constexpr float k_TestbedCameraHeight = 60.0f;
 /// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
 constexpr float k_TestbedInfluenceRadius = 400.0f;
 constexpr float k_TestbedPrayer = 1.0e6f;
-constexpr float k_TestbedCameraBack = 120.0f;
 
 /// The meshes the hand is pulled towards as its player turns evil or good, the first two of its morph file's variants,
 /// and the files of the base and those two for their skins. Black & White would also blend the hand's bones and
@@ -428,10 +426,13 @@ std::optional<entt::entity> ScriptCameraCreature()
 	return registry.Valid(entity) && registry.AllOf<ecs::components::Creature>(entity) ? std::optional(entity) : std::nullopt;
 }
 
-/// Whether the hand, at the cursor's point in the world, is within the local player's influence (anywhere, with no point)
-bool HandInInfluence(const std::optional<glm::vec3>& cursor)
+/// Whether the hand is within the local player's influence, as what it offers and does asks it: at the point picked,
+/// which is the position of the thing under the cursor, or the land under it with nothing there (anywhere, with neither).
+/// While the hand keeps some of the player's influence past the border it counts as inside however far out it is.
+bool HandInInfluence()
 {
-	return !cursor.has_value() || Locator::influenceSystem::value().PlayerInfluence(PlayerNames::PLAYER_ONE, *cursor) > 0.0f;
+	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
+	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, *point);
 }
 
 /// Whether the thing picked under the cursor is an entrance of the local player's own temple
@@ -1265,15 +1266,15 @@ void Game::ProcessHandToolTipTurn()
 	else if (const auto flagTip = shown && overToolTips
 	                                  ? Locator::townDesireSystem::value().GetFlagToolTip(pointed.value_or(entt::null))
 	                                  : std::nullopt;
-	         flagTip.has_value() && !over.has_value())
+	         flagTip.has_value() && !over.has_value() &&
+	         gui::world_tooltip::Shows(gui::world_tooltip::Subject::DesireFlag, HandInInfluence()))
 	{
 		// Over a flag of a town's store, the hand shows how much the town wants its thing, in the flag's own words
 		toolTips.SubmitInWords(ecs::town_desire_flags::k_NeedToolTip, flagTip->words, flagTip->percent);
 	}
-	else if (const auto submissions =
-	             shown && overToolTips && !over.has_value()
-	                 ? gui::world_tooltip::Over(pointed.value_or(entt::null), HandInInfluence(_cursorWorldPosition))
-	                 : std::vector<gui::world_tooltip::Submission> {};
+	else if (const auto submissions = shown && overToolTips && !over.has_value()
+	                                      ? gui::world_tooltip::Over(pointed.value_or(entt::null), HandInInfluence())
+	                                      : std::vector<gui::world_tooltip::Submission> {};
 	         !submissions.empty())
 	{
 		// Over a temple, a village centre, a store or a pile, the hand says what it holds or can do
@@ -1295,7 +1296,8 @@ void Game::ProcessHandToolTipTurn()
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
 		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);
 		const bool asleep = mind != nullptr && creature_mind::IsAsleep(mind->idle);
-		if (creature != nullptr && creature_hand::ShowsInteractTip(PlayerNames::PLAYER_ONE, creature->owner, asleep))
+		if (creature != nullptr &&
+		    creature_hand::ShowsInteractTip(PlayerNames::PLAYER_ONE, creature->owner, asleep, HandInInfluence()))
 		{
 			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
 		}
@@ -1849,8 +1851,10 @@ bool Game::Update() noexcept
 			_handPointer.Moved();
 		}
 		// The hand is put under the pointer every frame, moving or not: until the mouse first moves, under the pointer
-		// the game keeps, so from a land's first frame it is where the cursor is
-		_mousePosition = _handPointer.Frame(_mousePosition, actions.GetPointerPosition());
+		// the game keeps, so from a land's first frame it is where the cursor is, or the top left corner while the
+		// cursor has never been over the window
+		_mousePosition = _handPointer.Frame(
+		    _mousePosition, actions.IsPointerKnown() ? std::optional(actions.GetPointerPosition()) : std::nullopt);
 		ProcessTempleRoomKeys();
 		_shortcutKeys.Update();
 	}
@@ -2238,14 +2242,15 @@ bool Game::Update() noexcept
 				else if (!glm::any(glm::isnan(rayOrigin) || glm::isnan(rayDirection)))
 				{
 					// The Action button on the player's own temple's entrance, picked under the cursor, takes them inside,
-					// when the scripts let it
+					// when the scripts let it and the hand is within the player's influence
 					const auto& actions = Locator::gameActionSystem::value();
 					if (Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered &&
 					    Locator::cinematicDirectorSystem::value().IsInterfaceActive() &&
 					    !Locator::magicSystem::value().IsHandBusy() && actions.GetChanged(input::BindableActionMap::ACTION) &&
 					    actions.Get(input::BindableActionMap::ACTION))
 					{
-						enterTemple = IsOwnTempleEntrance(Locator::pickingSystem::value().GetPick().object);
+						enterTemple =
+						    IsOwnTempleEntrance(Locator::pickingSystem::value().GetPick().object) && HandInInfluence();
 					}
 					// The leash keys, and the Action button tapping leash posts, and with the leash held giving orders and
 					// tying the leash to things.
@@ -4152,13 +4157,14 @@ void Game::LoadTestbed() noexcept
 	RenderLoadingFrame();
 	EndLoadingScreen();
 
-	// Looking down over the middle of the map, from the south
+	// Looking down over the middle of the map, from the south, a little to its east
 	const auto& land = Locator::terrainSystem::value();
 	const auto middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
 	const auto ground = land.GetHeightAt(middle);
+	const float x = middle.x + flat_land::k_CameraAside;
 	Locator::camera::value()
-	    .SetOrigin({middle.x, ground + k_TestbedCameraHeight, middle.y - k_TestbedCameraBack})
-	    .SetFocus({middle.x, ground, middle.y});
+	    .SetOrigin({x, ground + flat_land::k_CameraHeight, middle.y - flat_land::k_CameraBack})
+	    .SetFocus({x, ground, middle.y});
 
 	StartNewLand(land_change::Kind::Testbed);
 
@@ -5240,7 +5246,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds)
 	else
 	{
 		auto frame = *cues.icons;
-		frame.handInInfluence = HandInInfluence(_cursorWorldPosition);
+		frame.handInInfluence = HandInInfluence();
 		frame.tickMs = machine_clock::Ticks();
 		const auto icons = hand_tricons::WorldCamera(frame, _triconAngle);
 		_triconAngle = icons.rotateAngle;

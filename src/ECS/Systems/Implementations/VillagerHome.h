@@ -89,6 +89,9 @@ uint32_t HomeDecideWhatToDo(components::LivingAction& action);
 
 uint32_t DecideWhatToDo(components::LivingAction& action);
 uint32_t MoveToPos(components::LivingAction& action);
+/// Leaving a plain walk lets go of what it was walking round: the walk, should it go on later, looks afresh. Never
+/// refuses.
+bool ExitMoveToPos(components::LivingAction& action, VillagerStates next);
 uint32_t GoHome(components::LivingAction& action);
 /// Going home, arriving in one state, or lying down in the open in another when it has no home: a dancer leaves its
 /// dance first

@@ -106,6 +106,9 @@ struct SoundSource
 /// that has finished). The sounds are given by their place in the list, once for each time they play.
 [[nodiscard]] std::vector<size_t> Passed(std::span<const sas::FrameSound> sounds, uint32_t place, uint32_t played,
                                          uint32_t duration, bool looping);
+/// All the sounds a clip of so many milliseconds plays from its start to its end, as one played once and held at its
+/// end plays them again
+[[nodiscard]] std::vector<size_t> AllOf(std::span<const sas::FrameSound> sounds, uint32_t duration);
 
 /// The size a clip's sound is played for: the people's clips by the person (a man large, a woman medium, a child or
 /// anything else small); any other kind of thing's clips medium
