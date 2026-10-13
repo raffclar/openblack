@@ -127,4 +127,6 @@ void PhysicsClassHooks::PutDownByHand([[maybe_unused]] entt::entity object, [[ma
 {
 }
 
+void PhysicsClassHooks::NotPutDownByHand([[maybe_unused]] entt::entity object) {}
+
 void PhysicsClassHooks::ConsiderMimickingToyPlay([[maybe_unused]] entt::entity toy, [[maybe_unused]] PlayerNames player) {}

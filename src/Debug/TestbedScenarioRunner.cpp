@@ -1420,6 +1420,12 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return fmt::format("{} wood poured at ({:.1f}, {:.1f}): {}", amount, at.x, at.y,
 		                   loose() > before ? "left on the land as a new pile" : "taken in");
 	}
+	case Kind::HandRelease:
+		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
+		{
+			return "the hand holds nothing";
+		}
+		return command.velocity == glm::vec3(0.0f) ? "put down" : "thrown";
 	default:
 		return {};
 	}
@@ -1747,7 +1753,7 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake || command.kind == Kind::HandPour)
+	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2083,6 +2089,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTapObject:
 	case Kind::HandTake:
 	case Kind::HandPour:
+	case Kind::HandRelease:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:

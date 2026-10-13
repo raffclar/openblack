@@ -3735,7 +3735,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
-	       kind == Kind::HandPour || IsPointerCommand(kind);
+	       kind == Kind::HandPour || kind == Kind::HandRelease || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -3762,7 +3762,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 110> k_Names {
+	constexpr std::array<std::string_view, 111> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3871,6 +3871,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "enter temple",
 	    "play boat film",
 	    "run script",
+	    "hand release",
 	    "hand pour",
 	    "do action",
 	};
