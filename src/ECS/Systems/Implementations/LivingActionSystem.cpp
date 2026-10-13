@@ -50,6 +50,7 @@
 #include "VillagerDisciples.h"
 #include "VillagerEaten.h"
 #include "VillagerFarmer.h"
+#include "VillagerFightWatch.h"
 #include "VillagerFire.h"
 #include "VillagerFisherman.h"
 #include "VillagerFlock.h"
@@ -77,6 +78,7 @@ namespace villager_eaten = openblack::ecs::villager_eaten;
 namespace villager_teleport = openblack::ecs::villager_teleport;
 namespace villager_shield = openblack::ecs::villager_shield;
 namespace villager_fire = openblack::ecs::villager_fire;
+namespace villager_fight_watch = openblack::ecs::villager_fight_watch;
 namespace villager_flock = openblack::ecs::villager_flock;
 namespace villager_dance = openblack::ecs::villager_dance;
 namespace villager_artefact_dance = openblack::ecs::villager_artefact_dance;
@@ -743,8 +745,16 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* MOVE_TOWARDS_OBJECT_TO_LOOK_AT */ k_TodoEntry,
     /* INITIALISE_IMPRESSED_REACTION */ k_TodoEntry,
     /* PERFORM_IMPRESSED_REACTION */ k_TodoEntry,
-    /* INITIALISE_FIGHT_REACTION */ k_TodoEntry,
-    /* PERFORM_FIGHT_REACTION */ k_TodoEntry,
+    /* INITIALISE_FIGHT_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_fight_watch::InitialiseFightReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
+    /* PERFORM_FIGHT_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_fight_watch::PerformFightReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* HOMELESS_EAT_DINNER */
     VillagerStateTableEntry {
         .state = &villager_food::DoesNothing,

@@ -28,6 +28,12 @@ glm::vec2 TurnedPoint(glm::vec2 spot, float facing, glm::vec3 point)
 	return spot + glm::vec2(cosine * point.x - sine * point.z, sine * point.x + cosine * point.z);
 }
 
+glm::vec2 CentreOnLand(glm::vec3 position, const glm::mat3& rotation, float scale)
+{
+	const auto centre = position + rotation * (k_CentrePoint * scale);
+	return {centre.x, centre.z};
+}
+
 std::optional<uint32_t> NearestFreePlace(const std::array<bool, k_Places>& taken, glm::vec2 temple, glm::vec3 placePoint,
                                          glm::vec2 spot)
 {

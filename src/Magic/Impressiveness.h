@@ -56,6 +56,36 @@ struct ImpressionInputs
 /// How much a miracle impresses one watcher
 [[nodiscard]] float ImpressiveValue(const ImpressionInputs& inputs);
 
+/// What goes into how much a creature impresses a villager that takes up its reaction
+struct CreatureImpressionInputs
+{
+	/// The land's balance of how impressive things in the world are
+	float landBalance {1.0f};
+	/// How impressive the action the creature last finished is, from its action table
+	float actionImpressiveness {0.0f};
+	/// The reaction's multiplier
+	float reactionMultiplier {1.0f};
+	/// When the villager's town is still only curious about the creature, the belief its table gives for seeing a
+	/// creature at all, in place of the two above
+	std::optional<float> curiousTownBelief;
+	float distance {0.0f};
+	float maxDistance {1.0f};
+	/// The villager's town's weariness of this kind of reaction
+	float boredom {1.0f};
+	/// The creature's size as shown, and its species' two numbers that turn it into impressiveness
+	float size {1.0f};
+	float sizeAddition {0.0f};
+	float sizeMultiplier {1.0f};
+};
+
+/// How much a creature's size impresses: its size plus its species' addition, held between 1 and 4, times its
+/// species' multiplier
+[[nodiscard]] float CreatureImpressiveSize(float size, float addition, float multiplier);
+/// How much a creature impresses a villager: by its size, the town's weariness, the distance, what it last did (or,
+/// to a town only curious about it, the belief for seeing a creature) and the land's balance. A creature's power counts
+/// as 1.
+[[nodiscard]] float CreatureImpressiveValue(const CreatureImpressionInputs& inputs);
+
 /// The multiplier a reaction impresses one watcher by. A reaction to food or wood impresses by how much the watcher's
 /// town wants what its table names (its want, plus the boosts the game and the scripts give it), or by exactly 1 when
 /// the watcher has no town or the table names nothing. Every other reaction impresses by its table's multiplier.

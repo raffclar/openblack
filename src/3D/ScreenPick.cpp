@@ -15,6 +15,7 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_access.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
 namespace openblack::screen_pick
@@ -204,6 +205,37 @@ struct AtCursor
 float Depth(const View& view, glm::vec3 point)
 {
 	return (view.worldToClip * glm::vec4(point, 1.0f)).w;
+}
+
+std::optional<float> BallHit(const View& view, glm::vec3 centre, float radius)
+{
+	const glm::vec2 half = view.resolution * 0.5f;
+	// A point's whole pixel, none when it is nearer than the near plane
+	const auto pixelOf = [&view, &half](glm::vec3 point) -> std::optional<glm::ivec2> {
+		const auto clip = view.worldToClip * glm::vec4(point, 1.0f);
+		if (clip.w < view.near)
+		{
+			return std::nullopt;
+		}
+		const float overDepth = 1.0f / clip.w;
+		return glm::ivec2(static_cast<int>((clip.x * overDepth + 1.0f) * half.x),
+		                  static_cast<int>((1.0f - clip.y * overDepth) * half.y));
+	};
+	const auto middle = pixelOf(centre);
+	if (!middle.has_value())
+	{
+		return std::nullopt;
+	}
+	// Lifted out of the view, the ball has no size on the screen
+	const auto lifted = pixelOf(centre + view.up * radius);
+	const int size = lifted.has_value() ? std::abs(middle->y - lifted->y) : 0;
+	const auto cursor = glm::ivec2(static_cast<int>(view.cursor.x), static_cast<int>(view.cursor.y));
+	const auto apart = cursor - *middle;
+	if (!(apart.x * apart.x + apart.y * apart.y < size * size))
+	{
+		return std::nullopt;
+	}
+	return Depth(view, centre);
 }
 
 namespace
@@ -449,6 +481,15 @@ std::optional<Picked> PickAmong(const View& view, std::span<const Candidate> can
 	for (size_t i = 0; i < candidates.size(); ++i)
 	{
 		const auto& candidate = candidates[i];
+		if (candidate.ball)
+		{
+			const auto distance = BallHit(view, candidate.centre, candidate.radius);
+			if (distance.has_value() && (!picked.has_value() || *distance < picked->distance))
+			{
+				picked = Picked {.index = i, .distance = *distance};
+			}
+			continue;
+		}
 		if (!CursorOverSphere(view, candidate.centre, candidate.radius, candidate.origin))
 		{
 			continue;

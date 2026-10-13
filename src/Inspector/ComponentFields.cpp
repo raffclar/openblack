@@ -668,6 +668,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFightRecord::wins>("wins")
 	    .Field<&components::CreatureFightRecord::secondsSinceFight>("secondsSinceFight")
 	    .Field<&components::CreatureFightRecord::control>("control")
+	    .Field<&components::CreatureFightRecord::struckTurn>("struckTurn")
 	    .Field<&components::CreatureFightRecord::health>("health");
 	Reflect<components::CreatureKnockedOut>(context)
 	    .Field<&components::CreatureKnockedOut::stage>("stage")
@@ -1233,6 +1234,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::LivingReaction::reaction>("reaction")
 	    .Field<&components::LivingReaction::type>("type")
 	    .Field<&components::LivingReaction::startTurn>("startTurn")
+	    .Field<&components::LivingReaction::joined>("joined")
 	    .Field<&components::LivingReaction::creatureMemory>("creatureMemory")
 	    .Field<&components::LivingReaction::sawFlying>("sawFlying")
 	    .Field<&components::LivingReaction::sawCrushed>("sawCrushed");
@@ -1536,7 +1538,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellDispenser::orb>("orb")
 	    .Field<&components::SpellDispenser::orbPosition>("orbPosition")
 	    .Field<&components::SpellDispenser::effect>("effect")
-	    .Field<&components::SpellDispenser::building>("building");
+	    .Field<&components::SpellDispenser::building>("building")
+	    .Field<&components::SpellDispenser::town>("town");
 	Reflect<components::TestbedDispenser> {context};
 	Reflect<components::TownMagic>(context).Field<&components::TownMagic::held>("held");
 	Reflect<components::TownCentreIcon>(context)
