@@ -28,6 +28,7 @@ public:
 
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override;
 	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override;
+	[[nodiscard]] std::optional<glm::vec3> PickedPoint() const override;
 	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override;
 	[[nodiscard]] bool HandInInfluence(PlayerNames player, glm::vec3 hand) const override;
 	void HeldThingUsedOnLand(PlayerNames player) override;

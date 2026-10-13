@@ -79,7 +79,6 @@
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureFightHud.h"
-#include "Creature/CreatureHandRules.h"
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FrameStatsLog.h"
@@ -95,7 +94,6 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureLeash.h"
-#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/FloatingNumber.h"
@@ -431,6 +429,11 @@ std::optional<entt::entity> ScriptCameraCreature()
 /// While the hand keeps some of the player's influence past the border it counts as inside however far out it is.
 bool HandInInfluence()
 {
+	// One answer for what the hand offers and what it does
+	if (Locator::handGrabSystem::has_value())
+	{
+		return Locator::handGrabSystem::value().IsInInfluence();
+	}
 	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
 	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, *point);
 }
@@ -1293,11 +1296,8 @@ void Game::ProcessHandToolTipTurn()
 	}
 	else if (over.has_value() && shown && overToolTips)
 	{
-		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
-		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);
-		const bool asleep = mind != nullptr && creature_mind::IsAsleep(mind->idle);
-		if (creature != nullptr &&
-		    creature_hand::ShowsInteractTip(PlayerNames::PLAYER_ONE, creature->owner, asleep, HandInInfluence()))
+		if (Locator::creatureHandSystem::has_value() &&
+		    Locator::creatureHandSystem::value().ShowsInteractTip(*over, HandInInfluence()))
 		{
 			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
 		}

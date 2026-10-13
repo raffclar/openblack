@@ -223,6 +223,11 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
 	return nearest.has_value() ? std::optional<entt::entity>(things[*nearest]) : std::nullopt;
 }
 
+std::optional<glm::vec3> GameHandGrabWorld::PickedPoint() const
+{
+	return Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
+}
+
 bool GameHandGrabWorld::InInfluence(PlayerNames player, glm::vec3 point) const
 {
 	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().PlayerInfluence(player, point) > 0.0f;

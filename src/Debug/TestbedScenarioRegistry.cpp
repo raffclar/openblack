@@ -2199,19 +2199,25 @@ void AddHand(std::vector<Scenario>& all)
 	});
 	// The camera looks down on the north edge of the player's influence, 400 m from the middle: a wood pile and another
 	// player's tiger just inside, a wood pile, another player's tiger and the player's own tiger just outside, all clear
-	// of the testbed's window. The hand rests on the land between visits, so that each tooltip is submitted afresh.
+	// of the testbed's window. The hand rests on the land between visits, so that each tooltip is submitted afresh. A
+	// birch stands just inside, so tall that the land under the cursor on its crown lies outside.
 	all.push_back({
 	    .id = "hand.tooltips_influence",
-	    .name = "The hand's tooltips either side of the influence border",
+	    .name = "The hand's tooltips and grabs either side of the influence border",
 	    .facet = Facet::Hand,
 	    .description = "The hand starts over the wood pile outside the player's influence, then goes over the other "
 	                   "player's tiger outside and the player's own tiger outside. It comes in over the wood pile and the "
 	                   "other player's tiger inside, then goes back out over the outside wood pile, rests out on the land "
-	                   "for twenty seconds and tries the pile again.",
+	                   "for twenty seconds and tries the pile again. Then it presses on the crown of the birch standing "
+	                   "just inside, against the land outside, drops what it took on the land inside, and holds the "
+	                   "button down on the other player's tiger inside and then on the player's own tiger outside.",
 	    .expected = "Outside, the wood pile shows no amount and the other player's tiger no \"Interact\"; the player's "
 	                "own tiger shows \"Interact\" anywhere. Inside, the wood pile shows its amount and the other player's "
 	                "tiger \"Interact\". Back out at once, the outside pile shows its amount, as the hand keeps some of "
-	                "the player's influence past the border; once that has run out it shows nothing again.",
+	                "the player's influence past the border; once that has run out it shows nothing again. The birch is "
+	                "pulled up and held, as it stands inside though the land under the cursor is outside. The other "
+	                "player's tiger is never taken hold of, even inside (the log says so); the player's own tiger is, "
+	                "outside, and the camera turns to it.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 45.0f, 355.0f}, .look = {0.0f, 0.0f, 410.0f}},
 	    .creatures = {{.label = "own outside",
@@ -2233,7 +2239,8 @@ void AddHand(std::vector<Scenario>& all)
 	                   .size = 0.5f,
 	                   .pauseMind = true}},
 	    .objects = {{.type = PotInfo::WoodPile_1, .offset = {0.0f, 390.0f}, .amount = 300},
-	                {.type = PotInfo::WoodPile_1, .offset = {15.0f, 428.0f}, .amount = 300}},
+	                {.type = PotInfo::WoodPile_1, .offset = {15.0f, 428.0f}, .amount = 300},
+	                {.type = TreeInfo::Birch, .offset = {30.0f, 396.0f}}},
 	    .commands =
 	        {// Outside: the wood pile, the other player's tiger, the land, the player's own tiger, the land
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.626f, 0.379f}},
@@ -2249,7 +2256,23 @@ void AddHand(std::vector<Scenario>& all)
 	         // Straight back out over the outside pile, out on the land until nothing is kept, and the pile again
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.626f, 0.379f}},
 	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.7f, 0.45f}},
-	         {.kind = Kind::PointerTo, .delaySeconds = 20.0f, .point = {0.626f, 0.379f}}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 20.0f, .point = {0.626f, 0.379f}},
+	         // With nothing kept, the birch standing just inside, its top against the land outside: pulled up and held
+	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.887f, 0.547f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3},
+	         // Dropped on the land inside
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.62f, 0.9f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	         // The other player's tiger inside, held down on: never taken hold of
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.759f, 0.71f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3},
+	         // The player's own tiger outside, held down on: taken hold of
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.909f, 0.327f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3}},
 	});
 	// The camera stands as in the tutorial's throwing demonstration, 9 m over the land and 35 m behind the rock, which
 	// sits in the middle of the screen; the flat land beyond leaves the throw room to land
@@ -2777,13 +2800,13 @@ void AddLeash(std::vector<Scenario>& all)
 
 	all.push_back({
 	    .id = "leash.other_gods_creatures",
-	    .name = "Slapping other gods' creatures",
+	    .name = "Other gods' creatures can't be slapped",
 	    .facet = Facet::Leash,
 	    .description = "Your tiger on the left, a tortoise of player three (as Khazar's is) in the middle and a wolf of "
-	                   "player four (as Lethys's is) on the right. The hand slaps the tortoise and the wolf, as it may "
-	                   "any god's creature, then tries to leash the tortoise.",
-	    .expected = "The tortoise and the wolf are slapped and reel. Leashing the tortoise is refused, as it isn't "
-	                "yours, and the log says so.",
+	                   "player four (as Lethys's is) on the right. The hand tries to slap the tortoise and the wolf, "
+	                   "then to leash the tortoise.",
+	    .expected = "Neither is slapped: the hand never takes hold of another god's creature, inside the player's "
+	                "influence or out, and the log says so. Leashing the tortoise is refused too, as it isn't yours.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {-40.0f, 60.0f}),
 	                  [] {
