@@ -75,6 +75,8 @@ constexpr std::array k_Executors {
               .activity = Activity::PlayWithObject},
     Executor {
         .action = "BreakRock", .target = Target::PickableRock, .build = Build::BreakRock, .activity = Activity::PlayWithObject},
+    // Stamping on a rock, which breaks in two
+    Executor {.action = "SmashStoneInHalf", .target = Target::Rock, .build = Build::Destroy},
     Executor {.action = "ThrowAround",
               .target = Target::AnyLiving,
               .build = Build::PracticeThrow,

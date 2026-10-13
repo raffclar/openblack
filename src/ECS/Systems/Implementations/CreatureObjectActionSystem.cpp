@@ -202,25 +202,31 @@ glm::vec3 MiddleOf(const ecs::Registry& registry, entt::entity entity)
 	return meshes.Handle(mesh->id)->GetBoundingBox().Center() * transform->scale;
 }
 
+/// Where a bone is in an animation at a time, in the creature's own space at the world's scale
+std::optional<glm::vec3> BoneAt(entt::entity creature, const Transform& transform, uint32_t bone, size_t animation,
+                                float timeMs)
+{
+	const auto at = Locator::creatureAnimationSystem::value().BoneInAnimation(creature, animation, timeMs, bone, false);
+	return at.has_value() ? std::optional(*at * transform.scale) : std::nullopt;
+}
+
 /// Where the right hand is in an animation at a time, in the creature's own space at the world's scale
 std::optional<glm::vec3> HandAt(entt::entity creature, const Transform& transform, const CreatureRig::ActionPoints& points,
                                 size_t animation, float timeMs)
 {
-	const auto bone =
-	    Locator::creatureAnimationSystem::value().BoneInAnimation(creature, animation, timeMs, points.rightHand, false);
-	return bone.has_value() ? std::optional(*bone * transform.scale) : std::nullopt;
+	return BoneAt(creature, transform, points.rightHand, animation, timeMs);
 }
 
-/// Where the hand takes hold in each of four reaching animations
-std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const Transform& transform,
-                                                   const CreatureRig::ActionPoints& points,
+/// Where the bone it acts with gets to in each of four reaching animations: the right hand reaching to pick something
+/// up, the right foot striking a blow
+std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const Transform& transform, uint32_t bone,
                                                    const std::array<size_t, creature_reach::k_CornerCount>& animations,
                                                    float timeMs)
 {
 	creature_reach::Points reach {};
 	for (size_t i = 0; i < animations.size(); ++i)
 	{
-		const auto hand = HandAt(creature, transform, points, animations.at(i), timeMs);
+		const auto hand = BoneAt(creature, transform, bone, animations.at(i), timeMs);
 		if (!hand.has_value())
 		{
 			return std::nullopt;
@@ -611,7 +617,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		const bool pickingUp = action.kind == Kind::PickUp;
 		action.eventMs = pickingUp ? points->pickUpMs : points->destroyMs;
 		action.reach =
-		    MeasureReach(creature, transform, *points,
+		    MeasureReach(creature, transform, pickingUp ? points->rightHand : points->rightFoot,
 		                 pickingUp ? creature_reach::k_PickUpAnimations : creature_reach::k_DestroyAnimations, action.eventMs);
 		if (!action.reach.has_value())
 		{
@@ -1637,7 +1643,7 @@ bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	return registry.Valid(target) && registry.AllOf<Transform>(target) &&
-	       registry.AnyOf<Tree, Abode, MobileObject, Ball>(target);
+	       registry.AnyOf<Tree, Abode, MobileObject, MobileStatic, Ball>(target);
 }
 
 std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entity creature) const
@@ -1665,7 +1671,8 @@ std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entit
 	}
 	auto unscaled = *transform;
 	unscaled.scale = glm::vec3(1.0f);
-	const auto reach = MeasureReach(creature, unscaled, *points, creature_reach::k_PickUpAnimations, points->pickUpMs);
+	const auto reach =
+	    MeasureReach(creature, unscaled, points->rightHand, creature_reach::k_PickUpAnimations, points->pickUpMs);
 	if (!reach.has_value())
 	{
 		return std::nullopt;

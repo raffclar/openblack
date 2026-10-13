@@ -72,11 +72,12 @@ enum class Target : uint8_t
 	PlantableTree,
 	/// What it can pick up and throw to impress
 	ThrowableToImpress,
-	/// A rock (bonfires too) it can pick up
+	/// A rock (bonfires too) it can pick up, or any rock
 	PickableRock,
+	Rock,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::PickableRock) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::Rock) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t

@@ -389,3 +389,16 @@ TEST(CreatureKindActions, BreakingARockThrowsItOffToOneSideAndBreaksItAsItFlies)
 	EXPECT_EQ(breakRock->target, plan_actions::Target::PickableRock);
 	EXPECT_EQ(breakRock->build, plan_actions::Build::BreakRock);
 }
+
+TEST(CreatureKindActions, SmashingAStoneInHalfStampsOnItAngrily)
+{
+	const auto* smash = plan_actions::For("SmashStoneInHalf");
+	ASSERT_NE(smash, nullptr);
+	EXPECT_EQ(smash->target, plan_actions::Target::Rock);
+	EXPECT_EQ(smash->build, plan_actions::Build::Destroy);
+	const auto agenda = DestroyThing(4);
+	ASSERT_EQ(agenda.size(), 1);
+	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::Destroy);
+	EXPECT_EQ(agenda[0].order.object, 4u);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Anger);
+}

@@ -330,14 +330,15 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	case Target::ThrowableToImpress:
 		return !heldByOther && hands != nullptr && hands->CanThrowToImpress(self, entity) && hands->CanPickUp(self, entity);
 	case Target::PickableRock:
+	case Target::Rock:
 	{
-		if (heldByOther || hands == nullptr)
+		if (hands == nullptr || (target == Target::PickableRock && heldByOther))
 		{
 			return false;
 		}
 		const auto thing = hands->KindOf(entity).thing;
-		return (thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire) &&
-		       hands->CanPickUp(self, entity);
+		const bool rock = thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
+		return rock && (target == Target::Rock || hands->CanPickUp(self, entity));
 	}
 	case Target::PickableTree:
 		return !heldByOther && registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanPickUp(self, entity);
@@ -418,7 +419,8 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		    [&](entt::entity entity, const Ball&, const Transform& at) { consider(entity, at); });
 	}
 	const bool statics = pickable || target == Target::Toy || target == Target::ToyBall || sea || target == Target::Stonable ||
-	                     target == Target::ThrowingDamage || target == Target::PickableRock || anything;
+	                     target == Target::ThrowingDamage || target == Target::PickableRock || target == Target::Rock ||
+	                     anything;
 	if (statics)
 	{
 		registry.Each<const MobileStatic, const Transform>(

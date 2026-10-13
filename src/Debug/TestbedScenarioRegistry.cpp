@@ -1759,6 +1759,20 @@ void AddObjects(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BreakRock"}},
 	});
 
+	all.push_back({
+	    .id = "objects.smash_stone",
+	    .name = "Smashing a stone in half",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a rock in front of it. A script tells it to smash the stone in half.",
+	    .expected = "Angry, it reaches for the rock with a blow and stamps on it: the rock breaks into two halves with a "
+	                "smashing sound.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "SmashStoneInHalf"}},
+	});
+
 	auto stoner = Content(CreatureType::Tiger, {0.0f, 0.0f});
 	stoner.desires = {{.desire = creature_desires::Desire::GetHigh, .fraction = 1.0f}};
 	all.push_back({
