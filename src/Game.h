@@ -292,8 +292,8 @@ private:
 	void StartTipOfTheDay();
 	/// The tips screen, or the banner, shows while a land loads, drawn again at the loading's redraw points
 	void BeginLoadingScreen(loading::LoadingClock::Mode look);
-	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due
-	void RenderLoadingFrame();
+	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due, or at once when drawNow is true
+	void RenderLoadingFrame(bool drawNow = false);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen();
 	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources

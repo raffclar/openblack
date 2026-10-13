@@ -361,7 +361,7 @@ void Game::BeginLoadingScreen(loading::LoadingClock::Mode look)
 	_loadingLook = look;
 }
 
-void Game::RenderLoadingFrame()
+void Game::RenderLoadingFrame(bool drawNow)
 {
 	if (!_loadingScreen || !_loadingLook || !_loadingScreen->TipShowing())
 	{
@@ -369,7 +369,7 @@ void Game::RenderLoadingFrame()
 	}
 	auto& clock = _loadingScreen->GetClock();
 	const auto look = *_loadingLook;
-	if (!clock.Tick(Milliseconds(), look))
+	if (!clock.Tick(Milliseconds(), look) && !drawNow)
 	{
 		return;
 	}
@@ -411,6 +411,9 @@ void Game::FinishLoadingBehindScreen()
 		RenderLoadingFrame();
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
+	// The renderer makes the last resources in one more loading frame, so that the first frame of the game does not
+	// make them
+	RenderLoadingFrame(true);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Load: {} prefetched resources finished behind the loading screen in {:.1f} ms",
 	                   count, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 }
