@@ -87,7 +87,7 @@ void testbed_scenarios::AddGateScenarios(std::vector<Scenario>& all)
 	    .expected = "Each lantern has the same land light and land colour as the middle of the gate, not the light of "
 	                "the land below the lantern. The lanterns show only while the gate shows. The cursor does not find "
 	                "them: it finds the gate or the land behind them.",
-	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -70.0f}, .look = {0.0f, 25.0f, 0.0f}},
+	    .framing = {.shot = Shot::Placed, .eye = {-50.0f, 30.0f, 50.0f}, .look = {0.0f, 25.0f, 0.0f}},
 	    .objects = {{.type = AnimatedStaticInfo::NorseGate, .yawDegrees = k_Turn}},
 	});
 
