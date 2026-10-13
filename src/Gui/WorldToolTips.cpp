@@ -120,7 +120,8 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 				submissions.push_back({.numbers = Population(people, PlacesOf(*townComponent))});
 			}
 		}
-		else if (abode->type == AbodeNumber::StoragePit && Locator::resourceStoreSystem::has_value())
+		else if (abode->type == AbodeNumber::StoragePit && Shows(Subject::Store, handInInfluence) &&
+		         Locator::resourceStoreSystem::has_value())
 		{
 			const auto& stores = Locator::resourceStoreSystem::value();
 			submissions.push_back({.numbers = Stored(stores.GetResource(object, ResourceType::Food),
@@ -128,7 +129,7 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 		}
 		return submissions;
 	}
-	if (registry.AllOf<Pot>(object) && Locator::resourceStoreSystem::has_value())
+	if (registry.AllOf<Pot>(object) && Shows(Subject::Pile, handInInfluence) && Locator::resourceStoreSystem::has_value())
 	{
 		// A pile, of a store or alone, says what its store holds or else what it holds itself
 		const auto& stores = Locator::resourceStoreSystem::value();
