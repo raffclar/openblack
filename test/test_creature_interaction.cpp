@@ -354,6 +354,41 @@ TEST(CreatureObjectActions, EachKindOfThingHasItsOwnRuleForBeingPickedUp)
 	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Whole, .holdable = true}, outOfReach));
 }
 
+TEST(CreatureObjectActions, EachKindOfThingTakesItsRule)
+{
+	using creature_object_actions::Holdable;
+	using creature_object_actions::KindRule;
+	using creature_object_actions::RuleOf;
+	using creature_object_actions::Thing;
+	EXPECT_EQ(RuleOf(Thing::Creature), KindRule::Never);
+	EXPECT_FALSE(Holdable(Thing::Creature));
+	EXPECT_EQ(RuleOf(Thing::Other), KindRule::Never);
+	EXPECT_EQ(RuleOf(Thing::Ball), KindRule::Always);
+	EXPECT_EQ(RuleOf(Thing::Creed), KindRule::Always);
+	EXPECT_EQ(RuleOf(Thing::Bird), KindRule::Bird);
+	EXPECT_EQ(RuleOf(Thing::Pile), KindRule::Pile);
+	for (const auto thing : {Thing::Villager, Thing::Animal, Thing::MobileObject, Thing::Pot})
+	{
+		EXPECT_EQ(RuleOf(thing), KindRule::Whole);
+		EXPECT_TRUE(Holdable(thing));
+	}
+}
+
+TEST(CreatureObjectActions, RocksBonfiresAndDeadTreesTakeTheWholeRule)
+{
+	using creature_object_actions::KindRule;
+	using creature_object_actions::Thing;
+	for (const auto thing : {Thing::Rock, Thing::Bonfire, Thing::DeadTree})
+	{
+		EXPECT_EQ(creature_object_actions::RuleOf(thing), KindRule::Whole);
+		EXPECT_TRUE(creature_object_actions::Holdable(thing));
+		const creature_object_actions::KindFacts kind {.rule = KindRule::Whole, .holdable = true};
+		// A town's artefact stays where it is, but a hand may give it
+		EXPECT_FALSE(creature_object_actions::MayPickUpKind(kind, {.townArtefact = true}));
+		EXPECT_TRUE(creature_object_actions::MayTakeKindFromHand(kind, {.townArtefact = true}));
+	}
+}
+
 TEST(CreatureObjectActions, OnlyWhatAHandCanHoldIsGivenOrCaught)
 {
 	using creature_object_actions::KindRule;

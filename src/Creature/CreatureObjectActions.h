@@ -175,6 +175,33 @@ enum class KindRule : uint8_t
 	Whole,
 };
 
+/// The kinds of thing that differ in how a creature picks them up
+enum class Thing : uint8_t
+{
+	/// Anything not named below: buildings, fields, features and the like
+	Other,
+	Creature,
+	Villager,
+	/// An animal other than a bird
+	Animal,
+	Bird,
+	/// The football
+	Ball,
+	Creed,
+	/// Anything else lying about
+	MobileObject,
+	Pot,
+	/// A pile of food or wood
+	Pile,
+	Rock,
+	Bonfire,
+	DeadTree,
+};
+/// How a creature decides on picking up a kind of thing
+[[nodiscard]] KindRule RuleOf(Thing thing);
+/// Whether a hand may hold a kind of thing at all
+[[nodiscard]] bool Holdable(Thing thing);
+
 /// What the kind of a thing says about its being picked up by a creature
 struct KindFacts
 {

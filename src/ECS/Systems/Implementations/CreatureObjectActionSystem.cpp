@@ -52,6 +52,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/DeadTree.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -1358,49 +1359,71 @@ std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object
 
 creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt::entity object) const
 {
-	using creature_object_actions::KindRule;
+	using creature_object_actions::Thing;
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(object) || !registry.AllOf<Transform>(object) || registry.AllOf<Creature>(object))
+	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
 	{
 		return {};
 	}
-	if (registry.AllOf<Villager>(object))
-	{
-		return {.rule = KindRule::Whole, .holdable = true};
-	}
-	if (registry.AllOf<Animal>(object))
-	{
-		// A bird goes by its height over the land alone; the other animals by the whole rule
-		const auto bird = Locator::animalSystem::has_value()
-		                      ? Locator::animalSystem::value().BirdCanBePickedUpByCreature(object)
-		                      : std::nullopt;
-		return bird.has_value() ? creature_object_actions::KindFacts {.rule = KindRule::Bird, .holdable = true, .low = *bird}
-		                        : creature_object_actions::KindFacts {.rule = KindRule::Whole, .holdable = true};
-	}
-	// The football is always picked up
-	if (registry.AllOf<Ball>(object))
-	{
-		return {.rule = KindRule::Always, .holdable = true};
-	}
-	if (const auto* pot = registry.TryGet<const Pot>(object))
-	{
-		// A pile of food or wood goes by its own say and whether its kind may fly about; a pot by the whole rule
-		const auto kind = static_cast<size_t>(pot->type);
-		const auto* info = Locator::infoConstants::has_value() && kind < Locator::infoConstants::value().pot.size()
-		                       ? &Locator::infoConstants::value().pot.at(kind)
-		                       : nullptr;
-		if (info != nullptr && info->potType != PotType::Pot)
+	creature_object_actions::KindFacts facts;
+	const auto thing = [&] {
+		if (registry.AllOf<Creature>(object))
 		{
-			return {.rule = KindRule::Pile, .holdable = true, .mayFly = info->canBecomeAPhysicsObject != 0};
+			return Thing::Creature;
 		}
-		return {.rule = KindRule::Whole, .holdable = true};
-	}
-	if (const auto* mobile = registry.TryGet<const MobileObject>(object))
-	{
-		// A creed is always picked up
-		return {.rule = mobile->type == MobileObjectInfo::Creed ? KindRule::Always : KindRule::Whole, .holdable = true};
-	}
-	return {};
+		if (registry.AllOf<Villager>(object))
+		{
+			return Thing::Villager;
+		}
+		if (registry.AllOf<Animal>(object))
+		{
+			// A bird goes by its height over the land
+			const auto bird = Locator::animalSystem::has_value()
+			                      ? Locator::animalSystem::value().BirdCanBePickedUpByCreature(object)
+			                      : std::nullopt;
+			facts.low = bird.value_or(false);
+			return bird.has_value() ? Thing::Bird : Thing::Animal;
+		}
+		if (registry.AllOf<Ball>(object))
+		{
+			return Thing::Ball;
+		}
+		if (const auto* pot = registry.TryGet<const Pot>(object))
+		{
+			// A pile of food or wood goes by whether its kind may fly about
+			const auto kind = static_cast<size_t>(pot->type);
+			const auto* info = Locator::infoConstants::has_value() && kind < Locator::infoConstants::value().pot.size()
+			                       ? &Locator::infoConstants::value().pot.at(kind)
+			                       : nullptr;
+			if (info != nullptr && info->potType != PotType::Pot)
+			{
+				facts.mayFly = info->canBecomeAPhysicsObject != 0;
+				return Thing::Pile;
+			}
+			return Thing::Pot;
+		}
+		if (const auto* mobile = registry.TryGet<const MobileObject>(object))
+		{
+			return mobile->type == MobileObjectInfo::Creed ? Thing::Creed : Thing::MobileObject;
+		}
+		if (registry.AllOf<Rock>(object))
+		{
+			return Thing::Rock;
+		}
+		if (registry.AllOf<DeadTree>(object))
+		{
+			return Thing::DeadTree;
+		}
+		const auto* still = registry.TryGet<const MobileStatic>(object);
+		if (still != nullptr && still->type == MobileStaticInfo::Bonfire)
+		{
+			return Thing::Bonfire;
+		}
+		return Thing::Other;
+	}();
+	facts.rule = creature_object_actions::RuleOf(thing);
+	facts.holdable = creature_object_actions::Holdable(thing);
+	return facts;
 }
 
 creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(entt::entity creature, entt::entity object) const

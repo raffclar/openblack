@@ -161,6 +161,37 @@ bool creature_object_actions::MayPickUp(const PickUpFacts& facts)
 	return MayPickUpWhereverItIs(facts);
 }
 
+creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
+{
+	switch (thing)
+	{
+	case Thing::Other:
+	case Thing::Creature:
+		return KindRule::Never;
+	case Thing::Ball:
+	case Thing::Creed:
+		return KindRule::Always;
+	case Thing::Bird:
+		return KindRule::Bird;
+	case Thing::Pile:
+		return KindRule::Pile;
+	case Thing::Villager:
+	case Thing::Animal:
+	case Thing::MobileObject:
+	case Thing::Pot:
+	case Thing::Rock:
+	case Thing::Bonfire:
+	case Thing::DeadTree:
+		return KindRule::Whole;
+	}
+	return KindRule::Never;
+}
+
+bool creature_object_actions::Holdable(Thing thing)
+{
+	return thing != Thing::Other && thing != Thing::Creature;
+}
+
 bool creature_object_actions::MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts)
 {
 	switch (kind.rule)
