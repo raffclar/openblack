@@ -15,6 +15,7 @@
 #include <chrono>
 #include <optional>
 
+#include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
@@ -74,6 +75,25 @@ public:
 	}
 	/// Catches something flying at it, when it can still reach where it passes
 	virtual bool Catch(entt::entity creature, entt::entity object) = 0;
+	/// Reaches out to take a thing the player's hand gives it, with its left hand when mirrored: the thing leaves the
+	/// hand for the creature's at the moment of taking, if the hand still gives it then
+	virtual bool TakeFromHand(entt::entity /*creature*/, entt::entity /*object*/, bool /*mirrored*/) { return false; }
+	/// While it reaches for a thing in the player's hand: the thing, and how many milliseconds its animation is from the
+	/// moment it takes it (less than nothing before)
+	struct TakingFromHand
+	{
+		entt::entity object {entt::null};
+		float msFromTake {0.0f};
+	};
+	[[nodiscard]] virtual std::optional<TakingFromHand> GetTakingFromHand(entt::entity /*creature*/) const
+	{
+		return std::nullopt;
+	}
+	/// Where its right hand takes a thing from the player's hand, turned to face a point
+	[[nodiscard]] virtual std::optional<glm::vec3> TakePoint(entt::entity /*creature*/, glm::vec3 /*facing*/) const
+	{
+		return std::nullopt;
+	}
 	/// Stops what it is doing, keeping hold of whatever it holds
 	virtual void Cancel(entt::entity creature) = 0;
 	/// Lets go of what it holds at once, dropping it from the hand

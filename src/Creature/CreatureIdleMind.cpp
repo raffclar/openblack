@@ -359,6 +359,40 @@ std::vector<Step> creature_mind::EatHeld()
 	return WithFace({Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat)}, creature_face::Cue::Curiosity);
 }
 
+std::vector<Step> creature_mind::TakeFromHand(uint32_t object, glm::vec2 camera, bool leftHand)
+{
+	Step turn {.kind = Step::Kind::Move};
+	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = camera};
+	auto take = Object({.kind = ObjectOrder::Kind::TakeFromHand, .object = object, .mirrored = leftHand}, Effect::TookFromHand);
+	std::vector<Step> agenda {turn, take};
+	for (auto& step : agenda)
+	{
+		step.gaze = Gaze {.object = object};
+	}
+	return WithFace(std::move(agenda), creature_face::Cue::Curiosity);
+}
+
+std::vector<Step> creature_mind::ExamineGiven(uint32_t object)
+{
+	auto examine =
+	    Object({.kind = ObjectOrder::Kind::Keep, .animation = creature_object_actions::k_ExamineObject}, Effect::Examined);
+	examine.gaze = Gaze {.object = object};
+	return WithFace({examine}, creature_face::Cue::Curiosity);
+}
+
+std::vector<Step> creature_mind::EatGiven()
+{
+	return {Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat)};
+}
+
+std::vector<Step> creature_mind::ThrowGiven(glm::vec3 camera)
+{
+	auto toss =
+	    Object({.kind = ObjectOrder::Kind::Throw, .point = {camera.x, camera.z}, .pointHeight = camera.y}, Effect::ThrewAbout);
+	toss.gaze = Gaze {.camera = true};
+	return {toss};
+}
+
 std::vector<Step> creature_mind::Emote(size_t animation)
 {
 	return WithFace({Action(animation, false)}, creature_face::Cue::AttitudeToPlayer);
@@ -792,6 +826,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		if (senses.hands == HandsState::Done)
 		{
 			commands.effect = step.effect;
+			if (step.effect == Effect::TookFromHand)
+			{
+				commands.effectObject = step.order.object;
+			}
 			FinishStep(mind);
 		}
 		else if (senses.hands != HandsState::Busy)

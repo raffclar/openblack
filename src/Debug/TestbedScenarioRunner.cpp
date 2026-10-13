@@ -1275,6 +1275,17 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return HandTakeFireBall();
 	case Kind::HandTapObject:
 		return HandTapObject(command.object);
+	case Kind::HandTake:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::handGrabSystem::has_value())
+		{
+			return "nothing to take";
+		}
+		auto& hand = Locator::handGrabSystem::value();
+		const auto why = hand.WhyNotTake(*object);
+		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
+	}
 	default:
 		return {};
 	}
@@ -1526,7 +1537,8 @@ bool Runner::IsFree(size_t creature) const
 void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
-	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject)
+	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
+	    command.kind == Kind::HandTake)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -1815,6 +1827,11 @@ void Runner::Give(const Command& command)
 	case Kind::OpenTattooEditor:
 		result = GiveCreatureModeCommand(*entity, command);
 		break;
+	case Kind::HandGive:
+		result = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity)
+		             ? "given"
+		             : "the hand gives nothing";
+		break;
 	case Kind::SetHour:
 	case Kind::HoldSeed:
 	case Kind::DrawGesture:
@@ -1822,6 +1839,7 @@ void Runner::Give(const Command& command)
 	case Kind::PressKey:
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
+	case Kind::HandTake:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:

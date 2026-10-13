@@ -41,6 +41,8 @@ enum class Kind : uint8_t
 	Point,
 	/// Catching something flying at it with the four catching animations blended
 	Catch,
+	/// Reaching out to take what the player's hand gives it, which it takes from the hand at a moment of the animation
+	TakeFromHand,
 };
 [[nodiscard]] std::string_view Name(Kind kind);
 
