@@ -52,6 +52,8 @@ private:
 	uint32_t _reports {0};
 	uint64_t _frameNumber {0};
 	int64_t _lastResourceCount {0};
+	/// The time that the game's thread was on a processor, at the end of the last frame
+	double _lastCpuMilliseconds {0.0};
 };
 
 } // namespace openblack::debug
