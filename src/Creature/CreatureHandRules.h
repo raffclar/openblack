@@ -32,9 +32,9 @@ struct Holdable
 /// Whether the hand may take hold of a creature to stroke and slap it. The game lets the hand hold any creature that
 /// belongs to a player, whichever player, unless it is asleep or frozen. Ogres never can be.
 [[nodiscard]] bool MayHold(const Holdable& creature);
-/// Whether the hand shows its tooltip for interacting with a creature it is over: only for the player's own creature,
-/// awake, though it may hold others too
-[[nodiscard]] bool ShowsInteractTip(PlayerNames player, PlayerNames owner, bool asleep);
+/// Whether the hand shows its tooltip for interacting with a creature it is over, awake: the player's own creature
+/// anywhere, another player's only while the hand is within the player's influence (asked at the creature)
+[[nodiscard]] bool ShowsInteractTip(PlayerNames player, PlayerNames owner, bool asleep, bool handInInfluence);
 
 /// A press of the right button let go sooner than this is a click rather than a hold. The hand can't stroke or slap
 /// that soon.
