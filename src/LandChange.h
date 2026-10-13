@@ -47,6 +47,11 @@ struct Rules
 	bool scriptScreenKept;
 	/// Each player's heartbeat beats on as it was, rather than starting calm
 	bool heartbeatsCarried;
+	/// The players go on as they were: their alignment, the miracles they have ever had, their histories. Otherwise they
+	/// start afresh, neither good nor evil, with no miracles and no history
+	bool playersCarried;
+	/// The player starts as good or evil as their profile last kept them
+	bool alignmentFromProfile;
 };
 
 [[nodiscard]] constexpr Rules RulesFor(Kind kind)
@@ -54,14 +59,31 @@ struct Rules
 	switch (kind)
 	{
 	case Kind::Story:
-		return {.advisors = Advisors::CarryOn, .scriptScreenKept = true, .heartbeatsCarried = true};
+		return {.advisors = Advisors::CarryOn,
+		        .scriptScreenKept = true,
+		        .heartbeatsCarried = true,
+		        .playersCarried = true,
+		        .alignmentFromProfile = false};
 	case Kind::FreshScripts:
-		return {.advisors = Advisors::SentHome, .scriptScreenKept = false, .heartbeatsCarried = true};
+		return {.advisors = Advisors::SentHome,
+		        .scriptScreenKept = false,
+		        .heartbeatsCarried = true,
+		        .playersCarried = true,
+		        .alignmentFromProfile = false};
 	case Kind::NewGame:
+		return {.advisors = Advisors::Afresh,
+		        .scriptScreenKept = false,
+		        .heartbeatsCarried = false,
+		        .playersCarried = false,
+		        .alignmentFromProfile = true};
 	case Kind::Testbed:
 		break;
 	}
-	return {.advisors = Advisors::Afresh, .scriptScreenKept = false, .heartbeatsCarried = false};
+	return {.advisors = Advisors::Afresh,
+	        .scriptScreenKept = false,
+	        .heartbeatsCarried = false,
+	        .playersCarried = false,
+	        .alignmentFromProfile = false};
 }
 
 } // namespace openblack::land_change

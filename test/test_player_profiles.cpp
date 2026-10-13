@@ -130,6 +130,21 @@ TEST(PlayerProfiles, ProfilesAreReadBackAsWritten)
 	EXPECT_EQ(read.current, "Ann");
 }
 
+TEST(PlayerProfiles, TheAlignmentKeptIsReadBackAsWrittenAndIsNeitherGoodNorEvilUntilKept)
+{
+	Profiles profiles;
+	Add(profiles, u"Ann", u"", "C2.erc", 1);
+	EXPECT_EQ(profiles.profiles.front().alignment, 0.0);
+	profiles.profiles.front().alignment = static_cast<double>(-0.123456789f);
+	const auto read = Read(Write(profiles));
+	ASSERT_EQ(read.profiles.size(), 1u);
+	EXPECT_EQ(read.profiles.front().alignment, profiles.profiles.front().alignment);
+	// A value that can't be read leaves the profile neither good nor evil
+	const auto bad = Read("profile\tAnn\tC2.erc\t7\tRex\nalignment\tAnn\tgood\n");
+	ASSERT_EQ(bad.profiles.size(), 1u);
+	EXPECT_EQ(bad.profiles.front().alignment, 0.0);
+}
+
 TEST(PlayerProfiles, TheListIsInTheOrderOfTheNamesWhateverTheirCase)
 {
 	Profiles profiles;
@@ -278,6 +293,7 @@ TEST(PlayerProfileSystem, PickingDeletingAndEditingProfilesIsKept)
 	auto settings = system.GetCurrentProfile()->settings;
 	settings.helpLevel = 0;
 	system.SetCurrentSettings(settings);
+	system.SetCurrentAlignment(0.75);
 	EXPECT_TRUE(system.DeleteProfile(u"Ann"));
 	EXPECT_FALSE(system.DeleteProfile(u"Ann"));
 
@@ -289,6 +305,7 @@ TEST(PlayerProfileSystem, PickingDeletingAndEditingProfilesIsKept)
 	EXPECT_EQ(profile->creatureName, "Rex");
 	EXPECT_EQ(profile->symbol, 9);
 	EXPECT_EQ(profile->settings.helpLevel, 0);
+	EXPECT_EQ(profile->alignment, 0.75);
 }
 
 TEST(PlayerProfileSystem, ADevelopersRunPlaysAsAProfileNeverKept)
