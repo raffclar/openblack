@@ -411,6 +411,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::hunger>("hunger")
 	    .Field<&components::Animal::animation>("animation")
 	    .Field<&components::Animal::clipPlace>("clipPlace")
+	    .Field<&components::Animal::groundCarry>("groundCarry")
 	    .Field<&components::Animal::previousPosition>("previousPosition")
 	    .Field<&components::Animal::position>("position")
 	    .Field<&components::Animal::previousHeading>("previousHeading")

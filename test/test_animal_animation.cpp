@@ -25,6 +25,32 @@ namespace
 // eleven keyframes over 1100 ms
 constexpr ClipTiming k_Flap {.playTime = 1066, .frameCount = 10, .looping = true, .playedByTime = false, .stride = 2.77f};
 constexpr ClipTiming k_Held {.playTime = 1100, .frameCount = 11, .looping = false, .playedByTime = false, .stride = 0.0f};
+// A looping walk of twelve keyframes over 1000 ms that carries its animal 1.2 of its units each play, and a clip that
+// plays by the clock
+constexpr ClipTiming k_Walk {.playTime = 1000, .frameCount = 12, .looping = true, .playedByTime = false, .stride = 1.2f};
+constexpr ClipTiming k_Graze {.playTime = 2000, .frameCount = 20, .looping = true, .playedByTime = true, .stride = 1.2f};
+
+// The milliseconds of clip an animal walking at about a metre a second (655 of 655.35), at a scale of 0.8, plays over a second
+// of frames of so many milliseconds each, its place in the clip moving on as the game's frames move it
+struct WalkedSecond
+{
+	int64_t played {0};
+	uint32_t place {0};
+};
+WalkedSecond WalkASecond(uint32_t frameMilliseconds)
+{
+	constexpr auto k_MetreASecond = static_cast<uint16_t>(655);
+	WalkedSecond walked;
+	float carry = 0.0f;
+	for (uint32_t time = 0; time < 1000; time += frameMilliseconds)
+	{
+		const auto step = FramePlay(k_Walk, true, k_MetreASecond, frameMilliseconds, 0.8f, carry);
+		walked.played += step.played;
+		walked.place = AdvanceClip(k_Walk, walked.place, step.played);
+		carry = step.carry;
+	}
+	return walked;
+}
 } // namespace
 
 TEST(AnimalAnimation, ALoopingClipComesRoundAndAHeldOneStopsAtItsEnd)
@@ -91,6 +117,56 @@ TEST(AnimalAnimation, ACarriedPlayKeepsPaceWithTheGroundAtAnyFrameRate)
 	const auto held = MovingPlayCarried(k_Held, speed, 100, 1.0f, 0.5f);
 	EXPECT_EQ(held.played, 0);
 	EXPECT_EQ(held.carry, 0.0f);
+}
+
+TEST(AnimalAnimation, AWalkingAnimalsLegsKeepPaceWithTheGroundAtAnyFrameRate)
+{
+	// A metre a second at a scale of 0.8 over a stride of 1.2: 1041.11 ms of clip a second, at 1000, 250, 125, 25 and
+	// 10 frames a second alike, to a millisecond
+	for (const uint32_t frame : {1u, 4u, 8u, 40u, 100u})
+	{
+		const auto walked = WalkASecond(frame);
+		EXPECT_NEAR(static_cast<double>(walked.played), 1041.11, 1.0) << frame;
+		EXPECT_NEAR(static_cast<double>(walked.place), 41.11, 1.0) << frame;
+	}
+}
+
+TEST(AnimalAnimation, AtThirtyFramesASecondTheCarriedPlayIsTheDroppedOnesPaceKept)
+{
+	// At the game's own 30 frames a second each 33 ms frame covers 34.36 ms of clip: dropping the fraction plays 34 a
+	// frame, carrying it plays 34 or 35 so that the clip keeps up with the ground
+	constexpr auto k_MetreASecond = static_cast<uint16_t>(655);
+	int64_t carried = 0;
+	int64_t dropped = 0;
+	float carry = 0.0f;
+	for (int frame = 0; frame < 30; ++frame)
+	{
+		const auto step = FramePlay(k_Walk, true, k_MetreASecond, 33, 0.8f, carry);
+		EXPECT_GE(step.played, 34);
+		EXPECT_LE(step.played, 35);
+		carried += step.played;
+		carry = step.carry;
+		dropped += MovingPlay(k_Walk, k_MetreASecond, 33, 0.8f);
+	}
+	EXPECT_EQ(dropped, 30 * 34);
+	EXPECT_NEAR(static_cast<double>(carried), 30.0 * 34.36, 1.0);
+}
+
+TEST(AnimalAnimation, AnAnimalStandingOrOnAClockClipPlaysTheFramesMilliseconds)
+{
+	constexpr auto k_MetreASecond = static_cast<uint16_t>(655);
+	// Standing still, its walk plays by the clock and the leftover waits for it to move again
+	auto step = FramePlay(k_Walk, false, k_MetreASecond, 16, 0.8f, 0.25f);
+	EXPECT_EQ(step.played, 16);
+	EXPECT_EQ(step.carry, 0.25f);
+	// Moving with a clip that plays by the clock, the same
+	step = FramePlay(k_Graze, true, k_MetreASecond, 16, 0.8f, 0.25f);
+	EXPECT_EQ(step.played, 16);
+	EXPECT_EQ(step.carry, 0.25f);
+	// Moving with its walk, the leftover is taken on: 16.66 ms of clip and a half make 17 with 0.16 left
+	step = FramePlay(k_Walk, true, k_MetreASecond, 16, 0.8f, 0.5f);
+	EXPECT_EQ(step.played, 17);
+	EXPECT_NEAR(step.carry, 0.16f, 0.01f);
 }
 
 TEST(AnimalAnimation, TheKeyframesAreSpreadEvenlyOverThePlay)

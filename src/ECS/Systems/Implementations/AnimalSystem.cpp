@@ -1861,9 +1861,12 @@ void AnimalSystem::Update(uint32_t turn, float turnFraction)
 		                    (animal.move.stage != animals::MoveStage::AtGoal &&
 		                     (animal.state == AnimalState::MoveToPos || animal.state == AnimalState::SpecialMoveToPos ||
 		                      animal.state == AnimalState::FollowFlock || animal.state == AnimalState::Chase));
-		const auto played = moving && !timing.playedByTime
-		                        ? animals::MovingPlay(timing, animal.move.speed, elapsed, transform.scale.x)
-		                        : static_cast<int32_t>(elapsed);
+		// The part of a millisecond each moving frame leaves is carried on to the next, so that the legs keep pace with
+		// the ground at any frame rate (the game dropped it every frame; deviations list)
+		const auto carried =
+		    animals::FramePlay(timing, moving, animal.move.speed, elapsed, transform.scale.x, animal.groundCarry);
+		const auto played = carried.played;
+		animal.groundCarry = carried.carry;
 		// The sounds on the clip's frames it passes play from the animal
 		ecs::clip_sound_player::Play(entity, animal.animation, *clip, animal.clipPlace,
 		                             static_cast<uint32_t>(std::max(played, 0)), transform.position, refresh);

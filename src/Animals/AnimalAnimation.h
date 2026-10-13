@@ -59,6 +59,12 @@ struct CarriedPlay
 [[nodiscard]] CarriedPlay MovingPlayCarried(const ClipTiming& clip, uint16_t speedState, uint32_t frameMilliseconds,
                                             float scale, float carry);
 
+/// How far an animal's clip plays in a frame: while the animal moves and its clip plays by the ground, the ground it
+/// covers with the part of a millisecond left over from the frame before (so its legs keep pace with the ground at any
+/// frame rate); else the frame's milliseconds by the clock, the leftover kept for when it next moves
+[[nodiscard]] CarriedPlay FramePlay(const ClipTiming& clip, bool moving, uint16_t speedState, uint32_t frameMilliseconds,
+                                    float scale, float carry);
+
 /// The two keyframes a place in a clip falls between and how far between them: a looping clip's keyframes are spread
 /// over its whole play time and its last blends into its first, any other's run from the first at its start to the
 /// last at its end

@@ -75,6 +75,16 @@ animals::CarriedPlay animals::MovingPlayCarried(const ClipTiming& clip, uint16_t
 	return {.played = static_cast<int32_t>(whole), .carry = static_cast<float>(share - whole)};
 }
 
+animals::CarriedPlay animals::FramePlay(const ClipTiming& clip, bool moving, uint16_t speedState, uint32_t frameMilliseconds,
+                                        float scale, float carry)
+{
+	if (moving && !clip.playedByTime)
+	{
+		return MovingPlayCarried(clip, speedState, frameMilliseconds, scale, carry);
+	}
+	return {.played = static_cast<int32_t>(frameMilliseconds), .carry = carry};
+}
+
 animals::KeyframeSpan animals::SpanAt(const ClipTiming& clip, uint32_t place)
 {
 	const auto count = static_cast<uint32_t>(clip.frameCount);
