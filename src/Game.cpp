@@ -4253,6 +4253,7 @@ void Game::PrepareNewLand(land_change::Kind change)
 	{
 		Locator::time::value().SetPaused(false);
 	}
+	CloseMenuForNewLand();
 	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
 	// creature's room's flames and smoke, keeps entities of the land after they have gone
 	if (Locator::temple::has_value())
@@ -4665,18 +4666,14 @@ void Game::HandleInterfaceAction()
 	}
 
 	// The menu pauses the game while it is open
-	const auto open = _interface->GetMenu().IsOpen();
-	if (open && !_menuWasOpen)
+	if (const auto pause = _menuPause.Follow(_interface->GetMenu().IsOpen(), IsPaused()); pause.has_value())
 	{
-		_pausedBeforeMenu = IsPaused();
-		Locator::time::value().SetPaused(true);
+		Locator::time::value().SetPaused(*pause);
+		if (!_menuPause.IsHeld())
+		{
+			_menuClosedAt = std::chrono::steady_clock::now();
+		}
 	}
-	else if (!open && _menuWasOpen)
-	{
-		Locator::time::value().SetPaused(_pausedBeforeMenu);
-		_menuClosedAt = std::chrono::steady_clock::now();
-	}
-	_menuWasOpen = open;
 
 	switch (action)
 	{
@@ -4735,6 +4732,22 @@ void Game::HandleInterfaceAction()
 	case Action::Continue:
 	case Action::None:
 		break;
+	}
+}
+
+void Game::CloseMenuForNewLand()
+{
+	// In the game, a land changes only when the menu is closed. The menu closes before the choices in it that change
+	// the land. This also closes the menu for a land that the debug tools load.
+	if (_interface && _interface->GetMenu().IsOpen())
+	{
+		_interface->GetMenu().Close();
+	}
+	// The game gets the pause that it had before the menu opened, before the next land asks for a pause of its own
+	if (const auto pause = _menuPause.Release(); pause.has_value())
+	{
+		Locator::time::value().SetPaused(*pause);
+		_menuClosedAt = std::chrono::steady_clock::now();
 	}
 }
 
