@@ -52,6 +52,7 @@
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/AudioEmitter.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
@@ -100,6 +101,7 @@
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
+#include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -303,6 +305,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"danceSystem", "living.dances"},
     LocatorCoverage {"sharkSystem", "living.sharks"},
     LocatorCoverage {"introSystem", "living.intro"},
+    LocatorCoverage {"boatLaunchSystem", "living.boat_launch"},
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
@@ -1082,6 +1085,45 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  }
 		                  return json;
 	                  }));
+	provider->Add(
+	    Query("boat_launch", "The explorers' boat film: the stage, its clocks, where it plays, where the boat is drawn and "
+	                         "the things drawn in it with their clips' places"),
+	    Serve<Locator::boatLaunchSystem>(
+	        "the explorers' boat", [](const ecs::systems::BoatLaunchSystemInterface& film, const QueryContext&) {
+		        const auto state = film.GetState();
+		        Json wakes = Json::array();
+		        for (const auto phase : state.clocks.wakes)
+		        {
+			        wakes.push_back(phase);
+		        }
+		        Json parts = Json::array();
+		        if (const auto* registry = Registry(); registry != nullptr)
+		        {
+			        registry->Each<const BoatFilmPart, const Transform>(
+			            [&parts, registry](entt::entity entity, const BoatFilmPart& part, const Transform& transform) {
+				            auto item = Listed(*registry, entity);
+				            item["role"] = static_cast<int32_t>(part.role);
+				            item["index"] = part.index;
+				            item["at"] = Point(transform.position);
+				            item["clip_time"] = part.clipTime;
+				            parts.push_back(std::move(item));
+			            });
+		        }
+		        Json json {{"playing", state.playing},
+		                   {"stage", state.clocks.stage == ecs::boat_launch::Stage::Launch ? "launch" : "sailing"},
+		                   {"elapsed", state.clocks.elapsed},
+		                   {"boat_time", state.clocks.boatTime},
+		                   {"pushing", state.clocks.pushing},
+		                   {"wakes", std::move(wakes)},
+		                   {"dock", Point(state.places.dock)},
+		                   {"sailing_start", Point(state.places.sailingStart)},
+		                   {"parts", std::move(parts)}};
+		        if (state.boat.has_value())
+		        {
+			        json["boat"] = Point(glm::vec3((*state.boat)[3]));
+		        }
+		        return json;
+	        }));
 	provider->Add(Query("walk_paths", "The things walking the camera editor's tracks: the track, how far and up to where", {},
 	                    ResultKind::List),
 	              Serve<Locator::walkPathSystem>(

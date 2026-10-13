@@ -931,6 +931,31 @@ void AddStory(std::vector<Scenario>& all)
 	AddBreederOffers(all);
 }
 
+void AddExplorersBoat(std::vector<Scenario>& all)
+{
+	// The dry dock on the testbed lake's east bank, so that the boat is pushed west into the water
+	constexpr glm::vec2 k_Dock {58.0f, 220.0f};
+	all.push_back({
+	    .id = "story.explorers_boat",
+	    .name = "The explorers' boat pushed into the sea and sailing away",
+	    .facet = Facet::Story,
+	    .description = "The film the Land 1 silver scroll of the explorers ends with, played on the testbed after a second: "
+	                   "its dry dock stands on the lake's east bank and its sailing starts in the lake's north-east corner "
+	                   "(on Land 1 the boat sails out to sea, 425 metres west of the beach).",
+	    .expected = "Five sailors push the boat for three seconds, then it slides west down the bank into the lake with a "
+	                "creak, a splash and a big splash, throwing up brown sand and then white water; the sailors stop "
+	                "pushing as it goes, three worn out and two cheering. About eighteen seconds in it is at sea: two cows "
+	                "eat beside a pile of grain, a man and a woman stand arms out at the bow, two sailors sit swinging "
+	                "their legs, one scrubs the deck, five wake sprites run back from it, and it sails south west at five "
+	                "metres a second for a minute, then is gone. Out of the lake it sails under the testbed's flat land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Dock - glm::vec2 {110.0f, 70.0f}, k_Dock + glm::vec2 {10.0f, 60.0f}},
+	                .distance = 1.0f},
+	    .commands = {{.kind = Kind::PlayBoatFilm, .delaySeconds = 1.0f, .point = k_Dock}},
+	});
+}
+
 void AddAppearance(std::vector<Scenario>& all)
 {
 	constexpr std::array<CreatureType, 3> k_Species {CreatureType::GiantApe, CreatureType::Mandrill, CreatureType::Horse};
@@ -3190,6 +3215,7 @@ std::vector<Scenario> Build()
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
 	AddStory(all);
+	AddExplorersBoat(all);
 	AddTownGrowthScenarios(all);
 	AddStatisticsScenarios(all);
 	AddTutorialScenarios(all);
@@ -3323,7 +3349,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
-	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || IsPointerCommand(kind);
+	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -3350,7 +3377,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 107> k_Names {
+	constexpr std::array<std::string_view, 108> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3457,6 +3484,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "swap minds",
 	    "record challenge",
 	    "enter temple",
+	    "play boat film",
 	    "run script",
 	};
 	return k_Names.at(static_cast<size_t>(kind));

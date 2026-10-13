@@ -986,6 +986,12 @@
   "query": "living.intro"
  },
  {
+  "description": "The explorers' boat film: the stage, its clocks, where it plays, where the boat is drawn and the things drawn in it with their clips' places",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.boat_launch"
+ },
+ {
   "description": "The things walking the camera editor's tracks: the track, how far and up to where",
   "kind": "list",
   "parameters": [],
