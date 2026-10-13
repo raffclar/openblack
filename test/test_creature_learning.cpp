@@ -485,6 +485,25 @@ TEST(CreaturePlanner, BestDesireOnOneThing)
 	EXPECT_FALSE(creature_planner::BestDesireOnThing(none).has_value());
 }
 
+TEST(CreaturePlanner, DesireForAThingShownOnTheLeash)
+{
+	const std::vector<creature_planner::DesireOnThing> aboutWhole {
+	    {.desire = Desire::Compassion, .strength = 0.5f, .usefulness = 0.08f},
+	};
+	// A desire not about a whole thing scores a tenth of its strength, against the usefulness of the best desire before
+	const std::vector<creature_planner::DesireOnThing> weak {{.desire = Desire::Curiosity, .strength = 0.7f}};
+	EXPECT_EQ(creature_planner::DesireForShownThing(aboutWhole, weak), Desire::Compassion);
+	const std::vector<creature_planner::DesireOnThing> strong {{.desire = Desire::Curiosity, .strength = 0.9f},
+	                                                           {.desire = Desire::Poo, .strength = 0.95f}};
+	EXPECT_EQ(creature_planner::DesireForShownThing(aboutWhole, strong), Desire::Poo);
+	// With no whole thing, the strongest of the others; with nothing, none
+	EXPECT_EQ(creature_planner::DesireForShownThing({}, strong), Desire::Poo);
+	EXPECT_FALSE(creature_planner::DesireForShownThing({}, {}).has_value());
+	// Only the desires that test the thing they act on
+	EXPECT_TRUE(creature_planner::TestsThingActedOn(Desire::Curiosity));
+	EXPECT_FALSE(creature_planner::TestsThingActedOn(Desire::Hunger));
+}
+
 TEST(CreaturePlanner, OpinionBreaksTies)
 {
 	const std::vector<creature_planner::ActionCandidate> actions {{.action = 1, .opinion = 1.0f, .turnsSinceDone = 0},

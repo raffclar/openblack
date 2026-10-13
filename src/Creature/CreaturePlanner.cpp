@@ -10,6 +10,7 @@
 #include "CreaturePlanner.h"
 
 #include <algorithm>
+#include <array>
 #include <vector>
 
 using namespace openblack;
@@ -273,6 +274,38 @@ std::optional<Desire> creature_planner::BestDesireOnThing(std::span<const Desire
 		}
 	}
 	return best;
+}
+
+std::optional<Desire> creature_planner::DesireForShownThing(std::span<const DesireOnThing> aboutWhole,
+                                                            std::span<const DesireOnThing> withoutWhole)
+{
+	std::optional<Desire> best;
+	float bestScore = 0.0f;
+	for (const auto& weighed : aboutWhole)
+	{
+		if (weighed.strength * weighed.usefulness > bestScore)
+		{
+			best = weighed.desire;
+			bestScore = weighed.usefulness;
+		}
+	}
+	for (const auto& weighed : withoutWhole)
+	{
+		const auto score = weighed.strength * k_ShownThingShare;
+		if (score > bestScore)
+		{
+			best = weighed.desire;
+			bestScore = score;
+		}
+	}
+	return best;
+}
+
+bool creature_planner::TestsThingActedOn(Desire desire)
+{
+	// By the desires' numbers in the game's tables
+	constexpr std::array<size_t, 15> k_Testing {0, 1, 2, 3, 5, 6, 7, 8, 13, 16, 23, 31, 32, 34, 37};
+	return std::ranges::find(k_Testing, static_cast<size_t>(desire)) != k_Testing.end();
 }
 
 std::optional<UsedChoice> creature_planner::ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,

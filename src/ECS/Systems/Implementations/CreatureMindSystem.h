@@ -220,6 +220,18 @@ private:
 	                                                                        components::CreatureMindState& mind,
 	                                                                        creature_desires::Desire desire, entt::entity thing,
 	                                                                        const ChosenActivity& activity);
+	/// The things that a plan for a desire not about a whole thing can act on when the leash shows a thing: the shown
+	/// thing when it suits the desire and is of use, else the parts of its whole thing that do, the newest belief first
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate> ShownThingsWithoutWhole(entt::entity creature,
+	                                                                                     components::CreatureMindState& mind,
+	                                                                                     creature_desires::Desire desire,
+	                                                                                     entt::entity thing);
+	/// The desire that a creature most wants for a thing shown on the leash, of the desires not yet tried; none when no
+	/// desire is left
+	[[nodiscard]] std::optional<creature_desires::Desire> DesireForShownThing(entt::entity creature,
+	                                                                          components::CreatureMindState& mind,
+	                                                                          entt::entity thing,
+	                                                                          std::span<const creature_desires::Desire> tried);
 	/// What a thing is worth to a creature as the goal of a plan for a desire, and what that worth counts for in the
 	/// plan's priority. With a whole thing that the desire is about, the thing is a part of that whole thing.
 	[[nodiscard]] creature_planner::ObjectCandidate GoalWorth(entt::entity creature, const components::CreatureMindState& mind,

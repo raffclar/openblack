@@ -3447,6 +3447,27 @@ void AddMind(std::vector<Scenario>& all)
 	    .objects = village,
 	    .commands = {setDesire(Desire::Impress, 1.0f, 2.0f)},
 	});
+	// The player's tiger looks north at a village of the player, on the learning leash
+	auto ownTiger = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "player's");
+	ownTiger.hold = false;
+	ownTiger.pauseMind = false;
+	all.push_back({
+	    .id = "leash.shown_hut",
+	    .name = "A hut shown on the leash",
+	    .facet = Facet::Leash,
+	    .description = "The player's tiger on the learning leash looks north at a village of the player: a hut and three "
+	                   "villagers. Its compassion is made as strong as can be. Then the Action button of the leash "
+	                   "orders it onto the hut.",
+	    .expected = "First it tries the desire it wants most for the village of the hut: compassion. When compassion "
+	                "has no plan, it tries the next desire, up to 40 times. The log shows the desire that it uses and "
+	                "how many desires it tried.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {ownTiger},
+	    .objects = village,
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), setDesire(Desire::Compassion, 1.0f, 1.0f),
+	                 OnObject(Kind::LeashOrderOn, 0, 0, 0.5f, false), Act(Kind::TakeOffLeash, 0, 20.0f)},
+	    .repeatFrom = 0,
+	});
 	// The player's evil, big tiger swaps minds with a small, neutral sheep that belongs to nobody, as The Lost Flock's
 	// sheep offers; then back again
 	auto swapper = Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "player's tiger");

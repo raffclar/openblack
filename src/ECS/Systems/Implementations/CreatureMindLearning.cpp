@@ -2016,6 +2016,32 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::ShownParts(en
 	return parts;
 }
 
+std::vector<creature_planner::ObjectCandidate>
+CreatureMindSystem::ShownThingsWithoutWhole(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto suits = [&](entt::entity found) {
+		return registry.Valid(found) && found != creature && SuitsDesire(creature, mind, desire, found) &&
+		       ObjectToActOnUsefulness(creature, mind, desire, found) > 0.0f;
+	};
+	if (suits(thing))
+	{
+		return {GoalWorth(creature, mind, desire, thing, std::nullopt)};
+	}
+	std::vector<creature_planner::ObjectCandidate> parts;
+	if (const auto whole = WholeOfShownThing(mind, thing))
+	{
+		for (const auto& belief : mind.beliefs.PartsOf(*whole))
+		{
+			if (suits(belief.thing))
+			{
+				parts.push_back(GoalWorth(creature, mind, desire, belief.thing, std::nullopt));
+			}
+		}
+	}
+	return parts;
+}
+
 creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity creature, const CreatureMindState& mind,
                                                                 Desire desire, entt::entity thing,
                                                                 const std::optional<ChosenActivity>& activity)
@@ -2209,6 +2235,12 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			}
 			parts = ShownParts(creature, mind, desire, *leashTarget, *activity);
 		}
+		else if (leashTarget.has_value())
+		{
+			// A desire not about a whole thing acts on the shown thing when it suits the desire and is of use. If not, it
+			// acts on the first part of the whole thing that suits the desire and is of use.
+			parts = ShownThingsWithoutWhole(creature, mind, desire, *leashTarget);
+		}
 		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
 		// The actions of the desire, in the order of its list
 		std::vector<creature_planner::ActionCandidate> candidates;
@@ -2264,7 +2296,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				       !(executor->notWhatItHolds && heldByItself(thing));
 			};
 			std::vector<creature_planner::ObjectCandidate> found;
-			if (leashTarget.has_value() && desire != Desire::Compassion && activity.has_value())
+			if (leashTarget.has_value() && desire != Desire::Compassion && (activity.has_value() || !aboutSomething))
 			{
 				// The first of the shown parts that the action can act on
 				const auto first = std::ranges::find_if(parts, [&](const creature_planner::ObjectCandidate& part) {
@@ -2297,7 +2329,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		};
 		// A desire about a whole thing finds the action before the part, but anger finds the part first
 		auto order = creature_planner::PlanOrder::ActionFirst;
-		if (activity.has_value() && leashTarget.has_value() && desire != Desire::Compassion)
+		if (leashTarget.has_value() && desire != Desire::Compassion && (activity.has_value() || !aboutSomething))
 		{
 			order = creature_planner::PlanOrder::PartThenAction;
 		}
@@ -2615,6 +2647,53 @@ bool CreatureMindSystem::HasPlayed(entt::entity creature) const
 	return mind == nullptr || creature_script_play::Played(mind->idle);
 }
 
+std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creature, CreatureMindState& mind,
+                                                              entt::entity thing, std::span<const Desire> tried)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (tables == nullptr || at == nullptr || !mind.desires.has_value() || !registry.AllOf<Creature>(creature))
+	{
+		return std::nullopt;
+	}
+	// The whole thing that the shown thing is part of, when there is one
+	const auto whole = WholeOfShownThing(mind, thing);
+	const auto* wholeBelief = whole.has_value() ? mind.beliefs.Find(*whole) : nullptr;
+	const auto kind = wholeBelief != nullptr ? creature_activity::WholeOf(wholeBelief->kind) : std::nullopt;
+	std::vector<creature_planner::DesireOnThing> aboutWhole;
+	std::vector<creature_planner::DesireOnThing> withoutWhole;
+	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+	{
+		const auto desire = static_cast<Desire>(d);
+		const auto& state = mind.desires->desires.at(d);
+		if (!state.activated || state.suppressedTurns != 0 || std::ranges::find(tried, desire) != tried.end())
+		{
+			continue;
+		}
+		const auto& rule = tables->rules.at(d);
+		if (rule.aboutSomething)
+		{
+			if (!kind.has_value() ||
+			    !creature_activity::CanBeAbout(desire, WholeFactsOf(registry, creature, *whole, *kind, *tables),
+			                                   mind.mayAttackOwnPlayer))
+			{
+				continue;
+			}
+			const auto nearness =
+			    mind_detail::Nearness(registry, creature, at->position, *whole, wholeBelief->place, rule.distanceWeight);
+			aboutWhole.push_back({.desire = desire,
+			                      .strength = state.value,
+			                      .usefulness = ActivityUsefulness(creature, mind, desire, *whole) * nearness});
+		}
+		else if (creature_planner::TestsThingActedOn(desire))
+		{
+			withoutWhole.push_back({.desire = desire, .strength = state.value});
+		}
+	}
+	return creature_planner::DesireForShownThing(aboutWhole, withoutWhole);
+}
+
 std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::entity creature, entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2627,17 +2706,31 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 	Abandon(*mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 	mind->leash.obeying = false;
-	mind->leash.actOn = {entt::to_integral(object)};
-	mind->plannedTurn = mind->turn + 1;
-	PlanCreature(creature, *mind);
-	mind->leash.actOn.clear();
-	if (!mind->planActive || !mind->planner.current.has_value() ||
-	    mind->planner.current->object != std::optional(entt::to_integral(object)))
+	ComeAcross(*mind, object);
+	// It finds the desire that it most wants for the shown thing, and plans that desire alone. With no plan, it leaves
+	// that desire out and tries the next desire.
+	std::vector<Desire> tried;
+	for (size_t attempt = 0; attempt < creature_planner::k_ShownThingTries; ++attempt)
 	{
-		return std::nullopt;
+		const auto desire = DesireForShownThing(creature, *mind, object, tried);
+		if (!desire.has_value())
+		{
+			break;
+		}
+		mind->leash.actOn = {entt::to_integral(object)};
+		mind->plannedTurn = mind->turn + 1;
+		PlanCreature(creature, *mind, false, desire);
+		mind->leash.actOn.clear();
+		if (mind->planActive && mind->planner.current.has_value() && mind->planner.current->desire == *desire)
+		{
+			mind->planner.current->priority = std::numeric_limits<float>::max();
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} acts on the shown thing {} for desire {} after {} tries",
+			                    entt::to_integral(creature), entt::to_integral(object), static_cast<int>(*desire), attempt + 1);
+			return desire;
+		}
+		tried.push_back(*desire);
 	}
-	mind->planner.current->priority = std::numeric_limits<float>::max();
-	return mind->planner.current->desire;
+	return std::nullopt;
 }
 
 void CreatureMindSystem::PlanTurn()
