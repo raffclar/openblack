@@ -166,4 +166,29 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.2f}},
 	    .throws = throws,
 	});
+	// One thing of each kind in a row in front of the camera, for the Help key
+	all.push_back({
+	    .id = "advisors.help_key",
+	    .name = "The Help key on one thing of each kind",
+	    .facet = Facet::Advisors,
+	    .description = "A row in front of the camera, from left to right: a villager of no town, a sheep, an oak, a "
+	                   "Celtic hut, an Aztec statue, a rock, a food pile, a scroll and the player's tiger. Put the hand "
+	                   "over each, and over the bare ground and the sea, and press F1.",
+	    .expected = "Each press has the advisors say the thing's help text in the dialogue box: the villager, belonging "
+	                "to no town, gets one of the remarks about vagrants; the sheep, the oak, the hut, the statue, the "
+	                "rock, the food pile (\"a food pile\") and the scroll their own descriptions; the player's tiger its "
+	                "species' text. Over bare ground the text tells what the ground is made of (grass, earth, sand...); "
+	                "over the sea or land at sea level, shallow water. A new press cuts short the one before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-45.0f, 0.0f}, {45.0f, 20.0f}}, .distance = 0.8f},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = {40.0f, 10.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-40.0f, 10.0f}},
+	                {.type = AnimalInfo::Sheep, .offset = {-30.0f, 10.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-20.0f, 10.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {-7.0f, 10.0f}},
+	                {.type = FeatureInfo::AztcStatue, .offset = {6.0f, 10.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {15.0f, 10.0f}},
+	                {.type = PotInfo::FoodPile, .offset = {22.0f, 10.0f}}},
+	    .highlights = {{.kind = 0, .offset = {30.0f, 10.0f}}},
+	});
 }
