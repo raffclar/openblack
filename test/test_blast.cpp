@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <array>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -218,4 +219,38 @@ TEST(Blast, BrokenPiecesAreShadedByTheModelLightInTheirOwnFrame)
 	const auto local = LocalDirection({10.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}, up, {1.0f, 0.0f, 0.0f}, glm::vec3(0.0f));
 	EXPECT_NEAR(local.z, 1.0f, 1e-6f);
 	EXPECT_NEAR(local.x, 0.0f, 1e-6f);
+}
+
+TEST(Blast, AHeapOfRootsLastsFifteenSecondsOfGameTimeWhateverTheFrameRate)
+{
+	// Frames of 7 ms, 16 ms (60 Hz), 33 ms (30 Hz) and 100 ms (one game turn) all run it down in the same game time
+	for (const float frame : {7.0f, 16.0f, 33.0f, 100.0f})
+	{
+		blast::HeapAge heap {.millisecondsLeft = blast::k_RubbleMilliseconds};
+		float lived = 0.0f;
+		while (!heap.gone)
+		{
+			heap = blast::AgeHeap(heap.millisecondsLeft, heap.alpha, frame);
+			lived += frame;
+		}
+		EXPECT_GE(lived, blast::k_RubbleMilliseconds - 1.0f) << frame;
+		EXPECT_LT(lived, blast::k_RubbleMilliseconds + frame) << frame;
+	}
+	// A frame that passes no game time (paused) leaves it as it was
+	const auto paused = blast::AgeHeap(5000.0f, std::nullopt, 0.0f);
+	EXPECT_EQ(paused.millisecondsLeft, 5000.0f);
+	EXPECT_FALSE(paused.gone);
+}
+
+TEST(Blast, AHeapFadesOutOverItsLastSecondByTheTimeItHadLeft)
+{
+	// Whole until its last second
+	EXPECT_FALSE(blast::AgeHeap(1016.0f, std::nullopt, 16.0f).alpha.has_value());
+	// Then its alpha is the time left before the frame passes, as a share of 255
+	EXPECT_EQ(blast::AgeHeap(1000.0f, std::nullopt, 16.0f).alpha, std::optional<uint8_t>(255));
+	EXPECT_EQ(blast::AgeHeap(500.0f, 255, 16.0f).alpha, std::optional<uint8_t>(127));
+	EXPECT_EQ(blast::AgeHeap(16.0f, 4, 16.0f).alpha, std::optional<uint8_t>(4));
+	// It goes once less than a millisecond is left
+	EXPECT_FALSE(blast::AgeHeap(17.0f, 4, 16.0f).gone);
+	EXPECT_TRUE(blast::AgeHeap(16.5f, 4, 16.0f).gone);
 }
