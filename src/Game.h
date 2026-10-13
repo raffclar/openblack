@@ -215,6 +215,11 @@ public:
 	/// Loads a land as the land menu does: the challenge's scripts start again from scratch before the land loads
 	bool LoadMapWithFreshScripts(const std::filesystem::path& path,
 	                             land_change::Kind change = land_change::Kind::FreshScripts) noexcept;
+	/// A land picked from the land menu: a playground land starts a skirmish, a new game on it; any other land is loaded
+	/// with the challenge's scripts started again
+	bool LoadFromLandMenu(const std::filesystem::path& path) noexcept;
+	/// Whether a land's script is one of the playground lands, played as a skirmish
+	[[nodiscard]] static bool IsPlaygroundLand(const std::filesystem::path& path);
 	void LoadLandscape(const std::filesystem::path& path);
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures

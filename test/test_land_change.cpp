@@ -36,7 +36,7 @@ TEST(LandChange, TheLandMenuStartsTheScriptsAgainButKeepsThePlayers)
 
 TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
 {
-	for (const auto kind : {Kind::NewGame, Kind::Testbed})
+	for (const auto kind : {Kind::NewGame, Kind::Skirmish, Kind::Testbed})
 	{
 		const auto rules = RulesFor(kind);
 		EXPECT_EQ(rules.advisors, Advisors::Afresh);
@@ -49,7 +49,23 @@ TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
 TEST(LandChange, OnlyANewGameStartsThePlayerAtTheirProfilesAlignment)
 {
 	EXPECT_TRUE(RulesFor(Kind::NewGame).alignmentFromProfile);
+	EXPECT_TRUE(RulesFor(Kind::Skirmish).alignmentFromProfile);
 	EXPECT_FALSE(RulesFor(Kind::Testbed).alignmentFromProfile);
+}
+
+TEST(LandChange, OnlyANewGameIsPlayedAsTheProfilePickedNow)
+{
+	EXPECT_TRUE(RulesFor(Kind::NewGame).gameStarts);
+	EXPECT_TRUE(RulesFor(Kind::Skirmish).gameStarts);
+	EXPECT_FALSE(RulesFor(Kind::Story).gameStarts);
+	EXPECT_FALSE(RulesFor(Kind::FreshScripts).gameStarts);
+	EXPECT_FALSE(RulesFor(Kind::Testbed).gameStarts);
+}
+
+TEST(LandChange, APlaygroundLandFromTheLandMenuStartsASkirmish)
+{
+	EXPECT_EQ(FromLandMenu(true), Kind::Skirmish);
+	EXPECT_EQ(FromLandMenu(false), Kind::FreshScripts);
 }
 
 TEST(ProfileAlignment, ANewGameStartsThePlayerAtTheKeptAlignmentNoFurtherThanGoodOrEvil)
