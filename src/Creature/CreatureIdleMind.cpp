@@ -668,6 +668,28 @@ std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, cr
 	return face;
 }
 
+bool creature_mind::KeepsWatchingFlying(uint32_t turns, uint32_t turnsPerSecond, float limit, bool flying)
+{
+	return flying && static_cast<float>(turns / turnsPerSecond) < limit;
+}
+
+namespace
+{
+/// A turn of watching a flying thing: the limit is picked afresh each turn, before anything else is looked at
+void WatchFlying(IdleMind& mind, const Step& step, const Senses& senses, const Random& random)
+{
+	const auto limit =
+	    static_cast<float>(random(game_random::k_FloatRandRange)) * step.extraSeconds * game_random::k_FloatRandScale +
+	    step.seconds;
+	++mind.watchTurns;
+	const auto turnsPerSecond = static_cast<uint32_t>(std::lround(1.0f / senses.seconds));
+	if (!KeepsWatchingFlying(mind.watchTurns, turnsPerSecond, limit, senses.objectFlying.value_or(false)))
+	{
+		FinishStep(mind);
+	}
+}
+} // namespace
+
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	Commands commands;
@@ -788,6 +810,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::Overlay:
 			// Nothing starts on top of the body while something already plays there; the step waits for it all the same
 			commands.playOverlay = step.animation;
+			break;
+		case Step::Kind::WatchFlying:
+			mind.watchTurns = 0;
+			WatchFlying(mind, step, senses, random);
 			break;
 		case Step::Kind::Inspect:
 		{
@@ -924,6 +950,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		{
 			FinishStep(mind);
 		}
+		break;
+	case Step::Kind::WatchFlying:
+		WatchFlying(mind, step, senses, random);
 		break;
 	case Step::Kind::Inspect:
 		if (mind.inspectTurns > 0)

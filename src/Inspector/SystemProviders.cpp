@@ -162,6 +162,8 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "overlay";
 	case Kind::Inspect:
 		return "inspect";
+	case Kind::WatchFlying:
+		return "watch_flying";
 	}
 	return "unknown";
 }

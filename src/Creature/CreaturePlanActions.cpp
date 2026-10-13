@@ -96,6 +96,7 @@ constexpr std::array k_Executors {
         .action = "Stroke", .target = Target::Villager, .build = Build::ApproachEmote, .animation = animations::k_FeelingNice},
     Executor {.action = "SmileAtFriend", .target = Target::Creature, .build = Build::SmileAt},
     Executor {.action = "InspectCreature", .target = Target::Creature, .build = Build::InspectCreature},
+    Executor {.action = "LookAtFlyingObject", .target = Target::Anything, .build = Build::LookAtFlyingObject},
     Executor {.action = "WaveAtFriend",
               .target = Target::Creature,
               .build = Build::ApproachEmote,
@@ -274,6 +275,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::WaveAt(*object, situation.height);
 	case Build::InspectCreature:
 		return creature_mind::InspectCreature(*object, situation.height);
+	case Build::LookAtFlyingObject:
+		return creature_mind::LookAtFlyingObject(*object, random);
 	case Build::BeFrightened:
 		return creature_mind::BeFrightenedOnTheSpot();
 	case Build::PutDown:

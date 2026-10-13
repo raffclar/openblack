@@ -90,6 +90,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
+#include "VillagerPhysics.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -457,6 +458,10 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	{
 		return std::nullopt;
 	}
+	if (gaze.itself)
+	{
+		return *at;
+	}
 	const glm::vec2 flat {at->x, at->z};
 	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(flat) : at->y;
 	if (gaze.bottom)
@@ -515,6 +520,23 @@ std::optional<bool> WaitedForInMap(const ecs::Registry& registry, const creature
 	}
 	return registry.AllOf<MapCellResident>(object) &&
 	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
+}
+
+/// Whether the thing a step watches flying is still flying: moved by the physics and really up in the air; none when it
+/// is gone or the step watches nothing flying
+std::optional<bool> WatchedFlying(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WatchFlying ||
+	    !idle.agenda[idle.step].object.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto object = static_cast<entt::entity>(*idle.agenda[idle.step].object);
+	if (!registry.Valid(object))
+	{
+		return std::nullopt;
+	}
+	return registry.AllOf<InPhysics>(object) && ecs::villager_physics::IsActuallyInTheAir(object);
 }
 
 /// Its player's camera as a creature watching it sees it, only while its step watches the camera; none for a creature
@@ -1356,6 +1378,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .rested = needs != nullptr && needs->rested,
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
+		        .objectFlying = WatchedFlying(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
 		        .choosesNext = !scripted,
 		        .camera = CameraViewOf(registry, entity, mind.idle),

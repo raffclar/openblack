@@ -326,6 +326,23 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                   .owner = PlayerNames::PLAYER_TWO}},
 	});
 
+	// A barrel thrown past a creature
+	all.push_back({
+	    .id = "creatures.look_at_flying",
+	    .name = "A creature watching a thing thrown past it",
+	    .facet = Facet::Objects,
+	    .description = "The player's tiger stands facing south, towards the camera. Three seconds in, the player's hand "
+	                   "throws a barrel from 20 metres to its left, 12 metres in front of it, across its view.",
+	    .expected = "As the barrel flies, the tiger drops what it was doing; half the time it points at it two seconds, "
+	                "amazed, its head following the barrel; then it watches it, amazed, while it is still in the air, "
+	                "for no more than four seconds. It takes no notice of another thing thrown for a minute and a half.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 18.0f, -55.0f}, .look = {0.0f, 6.0f, -6.0f}},
+	    .creatures = {{.offset = {0.0f, 0.0f}, .facingDegrees = 0.0f}},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {-20.0f, -12.0f}}},
+	    .throws = {{.object = 0, .height = 4.0f, .velocity = {10.0f, 10.0f, 0.0f}, .delaySeconds = 3.0f}},
+	});
+
 	// A town whose store has run out of food, with fields to farm
 	std::vector<ObjectSetup> hungry {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},

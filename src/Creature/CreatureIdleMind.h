@@ -256,6 +256,8 @@ struct Gaze
 {
 	std::optional<uint32_t> object;
 	bool bottom {false};
+	/// The thing itself where it is, as up in the air, rather than its top or foot
+	bool itself {false};
 	std::optional<glm::vec3> point;
 	bool camera {false};
 };
@@ -303,6 +305,10 @@ struct Step
 		/// Looking another creature (the step's object) over: as it starts it picks a time of the step's seconds and up
 		/// to the step's extra seconds more, counted in whole turns from the next, after which it has looked it over
 		Inspect,
+		/// Watching a thing flying through the air (the step's object): each turn, from the one it starts on, it goes on
+		/// while the thing is still flying and the whole seconds it has watched come under a limit picked afresh each
+		/// turn, from the step's seconds to the step's extra seconds more
+		WatchFlying,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -364,6 +370,8 @@ struct IdleMind
 	uint32_t castTurns {0};
 	/// An inspect step: the turns it watches for yet
 	uint32_t inspectTurns {0};
+	/// A step watching a flying thing: the turns it has watched it
+	uint32_t watchTurns {0};
 };
 
 /// The needs it might see to, and the means at hand
@@ -438,6 +446,8 @@ struct Senses
 	HandsState hands {HandsState::Idle};
 	/// Whether the object a step waits for is on the map, none when the object is gone
 	std::optional<bool> objectInMap;
+	/// Whether the thing a step watches is still flying through the air, none when it is gone
+	std::optional<bool> objectFlying;
 	/// What picks the faces it pulls
 	creature_face::Feelings feelings {};
 	/// Whether it chooses what to do next by itself when its agenda runs out; under a script's control it only does
@@ -621,4 +631,7 @@ void ChooseNext(IdleMind& mind, const Senses& senses, const Random& random);
                                                              const Random& random);
 /// One game turn of the mind
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random);
+/// Whether a creature goes on watching a flying thing: while the thing is still flying and the whole seconds of the
+/// turns it has watched come under the limit
+[[nodiscard]] bool KeepsWatchingFlying(uint32_t turns, uint32_t turnsPerSecond, float limit, bool flying);
 } // namespace openblack::creature_mind

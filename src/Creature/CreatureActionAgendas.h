@@ -61,6 +61,15 @@ constexpr float k_InspectFaceSeconds = 0.1f;
 constexpr float k_InspectSeconds = 5.0f;
 constexpr float k_InspectExtraSeconds = 10.0f;
 
+/// Looking at a thing flying through the air: half the time it first points at it two seconds, amazed, then it watches
+/// it, amazed, while it flies, for up to two seconds and a draw of up to two more each turn; its head follows the thing
+/// where it is, unless the creature holds it
+[[nodiscard]] std::vector<Step> LookAtFlyingObject(uint32_t thing, const Random& random);
+constexpr uint32_t k_PointAtFlyingLots = 2;
+constexpr float k_PointAtFlyingSeconds = 2.0f;
+constexpr float k_WatchFlyingSeconds = 2.0f;
+constexpr float k_WatchFlyingExtraSeconds = 2.0f;
+
 /// Smiling at a friend: going near it (three times its height away) and facing it four seconds and up to four more,
 /// smiling at it with fluttering eyelids; then half the time a happy jump
 [[nodiscard]] std::vector<Step> SmileAt(uint32_t friendly, float height, float chance, const Random& random);

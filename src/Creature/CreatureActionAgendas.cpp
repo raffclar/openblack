@@ -155,6 +155,26 @@ std::vector<Step> creature_mind::InspectCreature(uint32_t other, float height)
 	};
 }
 
+std::vector<Step> creature_mind::LookAtFlyingObject(uint32_t thing, const Random& random)
+{
+	const Gaze follow {.object = thing, .itself = true};
+	std::vector<Step> agenda;
+	if (random(k_PointAtFlyingLots) == 0)
+	{
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = thing, .seconds = k_PointAtFlyingSeconds},
+		                  .face = creature_face::Cue::Amazed,
+		                  .gaze = follow});
+	}
+	agenda.push_back({.kind = Step::Kind::WatchFlying,
+	                  .seconds = k_WatchFlyingSeconds,
+	                  .extraSeconds = k_WatchFlyingExtraSeconds,
+	                  .object = thing,
+	                  .face = creature_face::Cue::Amazed,
+	                  .gaze = follow});
+	return agenda;
+}
+
 std::vector<Step> creature_mind::SmileAt(uint32_t friendly, float height, float chance, const Random& random)
 {
 	const Gaze look {.object = friendly};

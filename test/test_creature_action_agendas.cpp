@@ -178,6 +178,58 @@ TEST(CreatureActionAgendas, LookingACreatureOverLastsFiveToFifteenSeconds)
 	}
 }
 
+// "LookAtFlyingObject": half the time pointing at it two seconds first, then watching it, amazed, its head on the thing
+// itself
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, LookingAtAFlyingThingPointsHalfTheTimeThenWatches)
+{
+	const auto pointing = LookAtFlyingObject(4, [](uint32_t range) {
+		EXPECT_EQ(range, 2u);
+		return 0u;
+	});
+	ASSERT_EQ(pointing.size(), 2);
+	EXPECT_EQ(pointing[0].kind, Step::Kind::Object);
+	EXPECT_EQ(pointing[0].order.kind, ObjectOrder::Kind::PointAt);
+	EXPECT_EQ(pointing[0].order.object, 4u);
+	EXPECT_EQ(pointing[0].order.seconds, std::optional(2.0f));
+	EXPECT_EQ(pointing[0].face, creature_face::Cue::Amazed);
+	EXPECT_EQ(pointing[1].kind, Step::Kind::WatchFlying);
+	EXPECT_EQ(pointing[1].face, creature_face::Cue::Amazed);
+	ASSERT_TRUE(pointing[1].gaze.has_value());
+	EXPECT_TRUE(pointing[1].gaze->itself);
+	const auto watching = LookAtFlyingObject(4, [](uint32_t /*range*/) { return 1u; });
+	ASSERT_EQ(watching.size(), 1);
+	EXPECT_EQ(watching[0].kind, Step::Kind::WatchFlying);
+	EXPECT_NE(plan_actions::For("LookAtFlyingObject"), nullptr);
+}
+
+// The watch goes on while the thing flies and its whole seconds come under the limit drawn each turn
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, WatchingAFlyingThingLastsWhileItFliesUpToFourSeconds)
+{
+	EXPECT_TRUE(KeepsWatchingFlying(19, 10, 2.0f, true));
+	EXPECT_FALSE(KeepsWatchingFlying(20, 10, 2.0f, true));
+	EXPECT_TRUE(KeepsWatchingFlying(39, 10, 3.5f, true));
+	EXPECT_FALSE(KeepsWatchingFlying(1, 10, 3.5f, false));
+	// The lowest draw every turn: it counts the turn it starts on, and stops on the twentieth
+	IdleMind mind;
+	Plan(mind, Activity::Planned, LookAtFlyingObject(4, [](uint32_t /*range*/) { return 1u; }));
+	creature_mind::Senses senses {.seconds = 0.1f, .objectFlying = true, .choosesNext = false};
+	const auto lowest = [](uint32_t /*range*/) { return 0u; };
+	uint32_t turns = 0;
+	while (mind.step == 0 && turns < 100)
+	{
+		(void)Think(mind, senses, lowest);
+		++turns;
+	}
+	EXPECT_EQ(turns, 20u);
+	// Down on the land, it stops at once
+	Plan(mind, Activity::Planned, LookAtFlyingObject(4, [](uint32_t /*range*/) { return 1u; }));
+	senses.objectFlying = false;
+	(void)Think(mind, senses, lowest);
+	EXPECT_EQ(mind.step, 1u);
+}
+
 // A kind of thing it has looked over is a hundredth as interesting, unless the thing is up to something interesting
 TEST(CreatureActionAgendas, LookedOverKindsAreFarLessInteresting)
 {

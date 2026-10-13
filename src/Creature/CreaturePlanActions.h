@@ -126,6 +126,8 @@ enum class Build : uint8_t
 	EatFromPile,
 	/// Looking another creature over
 	InspectCreature,
+	/// Looking at a thing flying through the air
+	LookAtFlyingObject,
 	/// An action whose agenda can never be made
 	Never,
 };

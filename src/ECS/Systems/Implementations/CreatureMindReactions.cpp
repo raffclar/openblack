@@ -127,14 +127,9 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	     ObjectToActOnUsefulness(creature, *mind, setup.plan->desire, thing) > 0.0f);
 	if (setup.plan.has_value() && (setup.plan->onSelf || there) && wanted)
 	{
-		// TODO(creature-reaction-holding): looking at a flying thing has no agenda yet (pointing at it half the time,
-		// then watching it); until it has, the creature keeps to what it was doing rather than stand idle
-		if (setup.plan->action != "LookAtFlyingObject")
-		{
-			ForceActivity(creature, {.desire = setup.plan->desire,
-			                         .action = setup.plan->action,
-			                         .actionObject = setup.plan->onSelf ? creature : thing});
-		}
+		ForceActivity(creature, {.desire = setup.plan->desire,
+		                         .action = setup.plan->action,
+		                         .actionObject = setup.plan->onSelf ? creature : thing});
 	}
 	if (setup.skill.has_value())
 	{
