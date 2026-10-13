@@ -28,12 +28,22 @@ public:
 	};
 	static uint32_t GetTypeSize(Type type);
 
+	/// Where the indices are on the GPU
+	enum class Storage : uint8_t
+	{
+		/// A buffer of their own
+		Own,
+		/// A part of a large buffer that bgfx shares between many small lists. A new list then does not make a new
+		/// buffer on the GPU, which can take a quarter of a millisecond.
+		Shared,
+	};
+
 	IndexBuffer() = delete;
 	IndexBuffer(const IndexBuffer& other) = delete;
 	IndexBuffer(IndexBuffer&&) = default;
 
 	IndexBuffer(std::string name, const void* indices, uint32_t indexCount, Type type);
-	IndexBuffer(std::string name, const void* memory, Type type);
+	IndexBuffer(std::string name, const void* memory, Type type, Storage storage = Storage::Own);
 
 	~IndexBuffer();
 
@@ -51,6 +61,8 @@ private:
 	uint32_t _count;
 	Type _type;
 	IndexBufferHandle _handle;
+	DynamicIndexBufferHandle _sharedHandle;
+	Storage _storage {Storage::Own};
 };
 
 } // namespace openblack::graphics

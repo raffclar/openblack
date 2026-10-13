@@ -86,6 +86,7 @@ public:
 	void ConfigureView(RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept final;
 
 	void DrawScene(const DrawSceneDesc& drawDesc) const noexcept final;
+	void BakeLandShadows(bool drawVegetation) const noexcept final;
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;

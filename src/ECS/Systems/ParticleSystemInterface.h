@@ -87,6 +87,9 @@ public:
 	virtual EffectId Start(std::string_view file, glm::vec3 origin, float magnitude, bool synced = false) = 0;
 	/// The effect of a particle type; k_NoEffect for a type without a file
 	virtual EffectId Start(ParticleType type, glm::vec3 origin, float magnitude, bool synced = false) = 0;
+	/// Loads the files of all the particle types, and the models and light maps that they use. Call it behind the
+	/// loading screen, so that the first start of an effect does not read files in a frame.
+	virtual void LoadAllTypes() {}
 	/// An effect a miracle owns and steps itself with ProcessForSpell; it is told the effect started. Its random numbers
 	/// are the shared ones unless it is only this computer's, such as the one shown in the hand
 	virtual EffectId StartForSpell(ParticleType type, glm::vec3 origin, glm::vec3 direction, float magnitude,

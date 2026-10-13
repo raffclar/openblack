@@ -947,21 +947,7 @@ ParticleSystemInterface::EffectId ParticleSystem::Start(std::string_view file, g
 	{
 		return k_NoEffect;
 	}
-	auto& files = Locator::resources::value().GetParticleFiles();
-	const auto id = ParticleFileId(file);
-	if (!files.Contains(id))
-	{
-		try
-		{
-			files.Load(id, resources::ParticleFileLoader::FromDiskTag {}, ParticleFileDirectory(), std::string(file));
-		}
-		catch (const std::exception& error)
-		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: cannot load {}: {}", file, error.what());
-			return k_NoEffect;
-		}
-	}
-	const std::shared_ptr<const psys::ParticleFile> data = files.Handle(id).handle();
+	const auto data = LoadFile(file);
 	if (!data)
 	{
 		return k_NoEffect;
@@ -980,6 +966,55 @@ ParticleSystemInterface::EffectId ParticleSystem::Start(std::string_view file, g
 	const auto effectId = _nextId++;
 	_effects.push_front({.id = effectId, .file = std::string(file), .effect = std::move(effect)});
 	return effectId;
+}
+
+std::shared_ptr<const psys::ParticleFile> ParticleSystem::LoadFile(std::string_view file)
+{
+	auto& files = Locator::resources::value().GetParticleFiles();
+	const auto id = ParticleFileId(file);
+	if (!files.Contains(id))
+	{
+		try
+		{
+			files.Load(id, resources::ParticleFileLoader::FromDiskTag {}, ParticleFileDirectory(), std::string(file));
+		}
+		catch (const std::exception& error)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: cannot load {}: {}", file, error.what());
+			return nullptr;
+		}
+	}
+	return files.Handle(id).handle();
+}
+
+void ParticleSystem::LoadAllTypes()
+{
+	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	FindTextureStems();
+	for (size_t index = 0; index < particles::k_ParticleTypeCount; ++index)
+	{
+		const auto file = particles::ParticleTypeFile(static_cast<ParticleType>(index));
+		if (file.empty())
+		{
+			continue;
+		}
+		const auto data = LoadFile(file);
+		if (!data)
+		{
+			continue;
+		}
+		// The creators load the models and the light maps of the effect. They do not use random numbers.
+		for (const auto& object : data->objects)
+		{
+			if (const auto* factory = _classes.FindCreator(object.className))
+			{
+				[[maybe_unused]] const auto creator = (*factory)(object);
+			}
+		}
+	}
 }
 
 ParticleSystemInterface::EffectId ParticleSystem::Start(ParticleType type, glm::vec3 origin, float magnitude, bool synced)
@@ -1303,7 +1338,7 @@ void ParticleSystem::Reset()
 	_world.Reset();
 }
 
-void ParticleSystem::ResolveTextures(const particles::Effect& effect)
+void ParticleSystem::FindTextureStems()
 {
 	if (_textureStems.empty() && Locator::filesystem::has_value())
 	{
@@ -1316,6 +1351,11 @@ void ParticleSystem::ResolveTextures(const particles::Effect& effect)
 			}
 		});
 	}
+}
+
+void ParticleSystem::ResolveTextures(const particles::Effect& effect)
+{
+	FindTextureStems();
 	const auto resolve = [this](std::string_view texture) {
 		if (texture.empty() || _textures.contains(texture))
 		{

@@ -196,6 +196,7 @@ public:
 
 	EffectId Start(std::string_view file, glm::vec3 origin, float magnitude, bool synced) override;
 	EffectId Start(ParticleType type, glm::vec3 origin, float magnitude, bool synced) override;
+	void LoadAllTypes() override;
 	EffectId StartForSpell(ParticleType type, glm::vec3 origin, glm::vec3 direction, float magnitude,
 	                       particles::SpellSink& sink, bool synced) override;
 	bool ProcessForSpell(EffectId id, const particles::ProcessInfo& info, float seconds) override;
@@ -274,6 +275,10 @@ private:
 	[[nodiscard]] std::deque<Running>::const_iterator FindRunning(EffectId id) const;
 	/// Steps an effect; true once it has ended
 	bool StepEffect(particles::Effect& effect, float seconds);
+	/// The particle file of an effect, loaded the first time; none if it cannot be loaded
+	std::shared_ptr<const psys::ParticleFile> LoadFile(std::string_view file);
+	/// The names of the sheets on disk, found the first time
+	void FindTextureStems();
 	/// The sheets its sprites are drawn from, looked up whatever case the files spell their names in
 	void ResolveTextures(const particles::Effect& effect);
 	/// The gesture trails' effect, started when it isn't running

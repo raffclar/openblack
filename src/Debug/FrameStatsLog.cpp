@@ -18,12 +18,56 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#ifdef _WIN32
+#include <intrin.h>
+#include <windows.h>
+#else
+#include <ctime>
+#endif
+
+namespace
+{
+
+#ifdef _WIN32
+/// The processor's time stamp counter ticks in a millisecond, measured over two milliseconds
+double TicksPerMillisecond()
+{
+	const auto start = std::chrono::steady_clock::now();
+	const auto first = __rdtsc();
+	while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(2))
+	{
+	}
+	const auto last = __rdtsc();
+	const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+	return static_cast<double>(last - first) / elapsed;
+}
+#endif
+
+/// The time that this thread was on a processor since it started, in milliseconds. A frame that takes much more time
+/// than this waited: for the renderer, or for the system, which gave the processor to other programs.
+double ThreadCpuMilliseconds()
+{
+#ifdef _WIN32
+	static const double k_TicksPerMillisecond = TicksPerMillisecond();
+	ULONG64 cycles = 0;
+	QueryThreadCycleTime(GetCurrentThread(), &cycles);
+	return static_cast<double>(cycles) / k_TicksPerMillisecond;
+#else
+	timespec time {};
+	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time);
+	return static_cast<double>(time.tv_sec) * 1000.0 + static_cast<double>(time.tv_nsec) / 1.0e6;
+#endif
+}
+
+} // namespace
+
 namespace openblack::debug
 {
 
 FrameStatsLog::FrameStatsLog(uint32_t interval, bool views)
     : _interval(std::max<uint32_t>(interval, 1))
     , _views(views)
+    , _lastCpuMilliseconds(ThreadCpuMilliseconds())
 {
 }
 
@@ -31,6 +75,8 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 {
 	_frames.Add(milliseconds);
 	++_frameNumber;
+	const auto cpuMilliseconds = ThreadCpuMilliseconds();
+	const auto onCpu = cpuMilliseconds - std::exchange(_lastCpuMilliseconds, cpuMilliseconds);
 	std::string spikeStages;
 
 	// The stages timed in this frame: those that started since the frame did
@@ -66,9 +112,9 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 		// A slow frame: which stages took its time, and what the renderer waited for
 		SPDLOG_LOGGER_INFO(
 		    spdlog::get("game"),
-		    "Frame spike: frame {} took {:.2f} ms; render submit {:.2f} wait {:.2f}; {} draws; {} new resources; "
-		    "stages (ms):{}",
-		    _frameNumber, milliseconds, static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
+		    "Frame spike: frame {} took {:.2f} ms, {:.2f} ms of it on the processor; render submit {:.2f} wait {:.2f}; "
+		    "{} draws; {} new resources; stages (ms):{}",
+		    _frameNumber, milliseconds, onCpu, static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
 		    static_cast<double>(stats->waitRender) * toMsCpu, stats->numDraw, newResources, spikeStages);
 	}
 	if (_views)

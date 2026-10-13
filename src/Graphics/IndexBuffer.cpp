@@ -27,6 +27,7 @@ IndexBuffer::IndexBuffer(std::string name, const void* indices, uint32_t indexCo
     , _count(indexCount)
     , _type(type)
     , _handle(BGFX_INVALID_HANDLE)
+    , _sharedHandle(BGFX_INVALID_HANDLE)
 {
 	assert(indices != nullptr);
 	assert(indexCount > 0);
@@ -43,16 +44,29 @@ IndexBuffer::IndexBuffer(std::string name, const void* indices, uint32_t indexCo
 	bgfx::setName(toBgfx(_handle), _name.c_str());
 }
 
-IndexBuffer::IndexBuffer(std::string name, const void* mem, Type type)
+IndexBuffer::IndexBuffer(std::string name, const void* mem, Type type, Storage storage)
     : _name(std::move(name))
     , _type(type)
     , _handle(BGFX_INVALID_HANDLE)
+    , _sharedHandle(BGFX_INVALID_HANDLE)
+    , _storage(storage)
 {
 	const auto* memBgfx = static_cast<const bgfx::Memory*>(mem);
 	_count = memBgfx->size / sizeof(uint16_t);
 	UploadPacer::Pace(memBgfx->size);
 
-	_handle = fromBgfx(bgfx::createIndexBuffer(memBgfx, type == Type::Uint32 ? BGFX_BUFFER_INDEX32 : 0));
+	const uint16_t flags = type == Type::Uint32 ? BGFX_BUFFER_INDEX32 : 0;
+	if (storage == Storage::Shared)
+	{
+		// bgfx gives a part of its shared buffer. A name is only for a buffer of its own.
+		_sharedHandle = fromBgfx(bgfx::createDynamicIndexBuffer(memBgfx, flags));
+		if (!bgfx::isValid(toBgfx(_sharedHandle)))
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
+		}
+		return;
+	}
+	_handle = fromBgfx(bgfx::createIndexBuffer(memBgfx, flags));
 	if (!bgfx::isValid(toBgfx(_handle)))
 	{
 		// Out of handles, setting a name would write past bgfx's own arrays; the buffer is left empty and isn't drawn
@@ -67,6 +81,10 @@ IndexBuffer::~IndexBuffer()
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
 		bgfx::destroy(toBgfx(_handle));
+	}
+	if (_storage == Storage::Shared && bgfx::isValid(toBgfx(_sharedHandle)))
+	{
+		bgfx::destroy(toBgfx(_sharedHandle));
 	}
 }
 
@@ -97,13 +115,18 @@ uint32_t IndexBuffer::GetTypeSize(Type type)
 
 bool IndexBuffer::IsValid() const noexcept
 {
-	return bgfx::isValid(toBgfx(_handle));
+	return _storage == Storage::Shared ? bgfx::isValid(toBgfx(_sharedHandle)) : bgfx::isValid(toBgfx(_handle));
 }
 
 void IndexBuffer::Bind(uint32_t count, uint32_t startIndex) const
 {
 	if (!IsValid())
 	{
+		return;
+	}
+	if (_storage == Storage::Shared)
+	{
+		bgfx::setIndexBuffer(toBgfx(_sharedHandle), startIndex, count);
 		return;
 	}
 	bgfx::setIndexBuffer(toBgfx(_handle), startIndex, count);
