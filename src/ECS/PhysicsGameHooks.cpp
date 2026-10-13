@@ -721,6 +721,12 @@ void PhysicsGameHooks::PutDownByHand(entt::entity object, std::optional<PlayerNa
 	villager_disciple::PutDown(object, player);
 }
 
+void PhysicsGameHooks::NotPutDownByHand(entt::entity object)
+{
+	// If the hand did not put a villager on the land, the villager gets back the work that it had at the pick-up
+	villager_disciple::NotPutDown(object);
+}
+
 void PhysicsGameHooks::StartFlyingFromHand([[maybe_unused]] DynamicsSystemInterface& dynamics, PhysicsEntry& entry)
 {
 	StartFlying(*_world, entry.entity);

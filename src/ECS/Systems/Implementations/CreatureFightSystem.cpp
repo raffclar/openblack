@@ -612,6 +612,10 @@ void ReleaseArena(ecs::Registry& registry, entt::entity entity)
 	}
 	if (taken->temporary)
 	{
+		if (Locator::reactionSystem::has_value())
+		{
+			Locator::reactionSystem::value().RemoveFrom(entity);
+		}
 		registry.Destroy(entity);
 		return;
 	}
@@ -2218,6 +2222,10 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	{
 		return;
 	}
+	// The victim remembers when it was struck, which the villagers watching cheer or despair at
+	auto& struck = registry.AllOf<CreatureFightRecord>(opponent) ? registry.Get<CreatureFightRecord>(opponent)
+	                                                             : registry.Assign<CreatureFightRecord>(opponent);
+	struck.struckTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u;
 
 	const bool blocked = fight::IsBlocking(victim.state, victim.timeMs, DurationOf(opponent, fight::animations::k_StartBlock));
 	const auto heightShare = std::clamp((point.y - opponentTransform.position.y) / opponentHeight, 0.0f, 1.0f);

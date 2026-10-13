@@ -97,6 +97,7 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 	    object, {.velocity = release.velocity, .thrower = release.creature, .player = release.player, .fromHand = !byCreature});
 	if (entry == nullptr)
 	{
+		Hooks().NotPutDownByHand(object);
 		// A villager or animal the physics won't move, as one a script made immovable, is put straight back down: on the
 		// land under where it was let go, back in the map, landing as if it had come down there
 		if (registry.AnyOf<Villager, Animal>(object))
@@ -197,6 +198,7 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 	                        .playerless = !release.player.has_value()});
 	Hooks().OfferToCatchingCreatures(object, *entry);
 	Hooks().StartFlyingFromHand(*this, *entry);
+	Hooks().NotPutDownByHand(object);
 	ConsiderToyPlay(object, release);
 	return {.accepted = true, .entry = entry, .landed = false};
 }

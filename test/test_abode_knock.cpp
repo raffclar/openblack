@@ -31,6 +31,13 @@ TEST(AbodeKnock, OnlyHousesAndWindmillsKnockBack)
 	EXPECT_FALSE(KnocksBack(AbodeType::Field));
 }
 
+TEST(AbodeKnock, AMiracleDispenserTakesAKnockButDoesNotKnockBack)
+{
+	// Pressed on, a dispenser is knocked on as any building of its town: its town's read-out, nobody inside to come out
+	EXPECT_TRUE(IsTappable(AbodeType::SpellDispenser, 1.0f));
+	EXPECT_FALSE(KnocksBack(AbodeType::SpellDispenser));
+}
+
 TEST(AbodeKnock, TheNineSoundsComeInTurn)
 {
 	EXPECT_EQ(NextKnockSound(0), 1u);

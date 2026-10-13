@@ -63,6 +63,7 @@ public:
 	[[nodiscard]] std::optional<float> GetScoopTip() const override;
 	bool HandOver(entt::entity object) override;
 	bool TakeIntoHand(entt::entity object) override;
+	bool LetGoAt(glm::vec3 velocity) override;
 	bool GiveHeldTo(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetOfferedCreature() const override;
 	[[nodiscard]] float GetOfferTurn() const override;

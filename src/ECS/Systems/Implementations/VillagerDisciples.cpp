@@ -667,7 +667,20 @@ void villager_disciple::SetType(entt::entity villager, VillagerDisciple type, en
 
 void villager_disciple::PickedUp(entt::entity villager)
 {
-	Entities().AssignOrReplace<DiscipleHeld>(villager, DiscipleHeld {.atPickUp = disciple::AtPickUp(TypeOf(villager))});
+	const auto* disciple = Entities().TryGet<const Disciple>(villager);
+	Entities().AssignOrReplace<DiscipleHeld>(
+	    villager, DiscipleHeld {.atPickUp = disciple::AtPickUp(TypeOf(villager)),
+	                            .tradeTown = disciple != nullptr ? disciple->tradeTown : entt::null});
+}
+
+void villager_disciple::NotPutDown(entt::entity villager)
+{
+	const auto* held = Entities().TryGet<const DiscipleHeld>(villager);
+	if (held == nullptr)
+	{
+		return;
+	}
+	SetType(villager, held->atPickUp, held->tradeTown);
 }
 
 void villager_disciple::LetGo(entt::entity villager, std::optional<PlayerNames> player, bool forced)
@@ -715,7 +728,7 @@ uint32_t villager_disciple::InHand(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
 	auto& registry = Entities();
-	const auto* held = registry.TryGet<const DiscipleHeld>(villager);
+	auto* held = registry.TryGet<DiscipleHeld>(villager);
 	if (held == nullptr)
 	{
 		return 1;
@@ -728,16 +741,12 @@ uint32_t villager_disciple::InHand(LivingAction& action)
 		facts.push_back(NearFactsOf(thing, villager));
 	}
 	const auto choice = disciple::ChooseWhileHeld(facts, HeldFactsOf(villager, LocalPlayer()), held->atPickUp);
-	entt::entity tradeTown = entt::null;
+	// When the hand shows a trader a thing of a town, the trader trades with that town. Other work keeps the trade town.
 	if (choice.type == Trader && choice.from.has_value())
 	{
-		tradeTown = TownOfThing(things.at(*choice.from)).value_or(entt::null);
+		held->tradeTown = TownOfThing(things.at(*choice.from)).value_or(entt::null);
 	}
-	else if (const auto* disciple = registry.TryGet<const Disciple>(villager); disciple != nullptr && !choice.from)
-	{
-		tradeTown = disciple->tradeTown;
-	}
-	SetType(villager, choice.type, tradeTown);
+	SetType(villager, choice.type, held->tradeTown);
 	return 1;
 }
 

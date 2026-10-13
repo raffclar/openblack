@@ -31,6 +31,26 @@ float openblack::magic::ImpressiveValue(const ImpressionInputs& inputs)
 	       DistanceChangeToBelief(inputs.distance, inputs.maxDistance) * inputs.power * inputs.boredom;
 }
 
+float openblack::magic::CreatureImpressiveSize(float size, float addition, float multiplier)
+{
+	constexpr float k_Least = 1.0f;
+	constexpr float k_Most = 4.0f;
+	const float sum = size + addition;
+	const float held = sum < k_Least ? k_Least : (sum > k_Most ? k_Most : sum);
+	return held * multiplier;
+}
+
+float openblack::magic::CreatureImpressiveValue(const CreatureImpressionInputs& inputs)
+{
+	const float shown = inputs.curiousTownBelief.value_or(inputs.reactionMultiplier * inputs.actionImpressiveness);
+	const float size = CreatureImpressiveSize(inputs.size, inputs.sizeAddition, inputs.sizeMultiplier);
+	// Multiplied in the game's order, each step rounded to a float
+	float value = size * inputs.boredom;
+	value *= DistanceChangeToBelief(inputs.distance, inputs.maxDistance);
+	value *= shown;
+	return value * inputs.landBalance;
+}
+
 float openblack::magic::ReactionMultiplier(Reaction type, float tableMultiplier, std::optional<float> townDesire)
 {
 	if (type != Reaction::ReactToFood && type != Reaction::ReactToWood)
