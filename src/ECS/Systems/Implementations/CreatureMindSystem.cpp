@@ -698,6 +698,33 @@ creature_face::Feelings FeelingsOf(const CreatureMindState& mind)
 	return {.variety = mind.idle.faceVariety, .attitudeToPlayer = mind.attitudeToPlayer, .idlePick = 0};
 }
 
+/// What the creature shows when it communicates its state now
+creature_desires::Communication Communication(const CreatureMindState& mind)
+{
+	if (!mind.desires.has_value())
+	{
+		return {};
+	}
+	const auto turnsSinceFeedback =
+	    mind.feedbackSeconds.has_value()
+	        ? std::optional(static_cast<uint32_t>(std::lround(*mind.feedbackSeconds / k_TurnSeconds)))
+	        : std::nullopt;
+	return creature_desires::Communicate(*mind.desires, turnsSinceFeedback,
+	                                     static_cast<uint32_t>(std::lround(k_TurnsPerSecond)), mind.attitudeToPlayer);
+}
+
+/// After the creature communicates its state, its desire to show its state cannot grow for a time, and the plan found
+/// for that desire is forgotten
+void Communicated(CreatureMindState& mind)
+{
+	if (mind.desires.has_value())
+	{
+		creature_desires::Suppress(*mind.desires, Desire::ManifestState, creature_desires::k_CommunicateSuppressSeconds,
+		                           k_TurnsPerSecond);
+	}
+	mind.planner.best.at(static_cast<size_t>(Desire::ManifestState)).reset();
+}
+
 bool IsNight()
 {
 	return Locator::skySystem::has_value() && Locator::skySystem::value().GetClock().IsVisualNight();
@@ -1308,8 +1335,8 @@ void CreatureMindSystem::ProcessTurn()
 			    creature_mind::Plan(mind.idle, creature_mind::Activity::Faint, creature_mind::Faint());
 			    needs->faint.reset();
 		    }
-		    // Free to choose what to do next, it weighs every desire's plans first; the idle policy only chooses when
-		    // none is pressing enough
+		    // When the creature is free to choose, it weighs the plans of every desire. When no plan is ready, it does
+		    // nothing.
 		    if (!scripted && !mind.planActive && mind.idle.step >= mind.idle.agenda.size() &&
 		        !(needs != nullptr && needs->faint.has_value()))
 		    {
@@ -1370,6 +1397,9 @@ void CreatureMindSystem::ProcessTurn()
 		    const bool catchStep = mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
 		                           mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Object &&
 		                           mind.idle.agenda[mind.idle.step].order.kind == creature_mind::ObjectOrder::Kind::Catch;
+		    // As a step that communicates its state starts, the creature finds what it feels at that time
+		    const bool communicates = !mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
+		                              mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Communicate;
 		    const creature_mind::Senses senses {
 		        .seconds = k_TurnSeconds,
 		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
@@ -1377,21 +1407,22 @@ void CreatureMindSystem::ProcessTurn()
 		        .moving = moving,
 		        .subMove = SubMoveOf(entity),
 		        .position = glm::vec2(transform.position.x, transform.position.z),
-		        .strongest = creature_desires::StrongestShowable(*mind.desires, creature_mind::k_MinDesireShown),
-		        .feedbackSeconds = mind.feedbackSeconds,
-		        .feedbackWasStroke = mind.feedbackWasStroke,
+		        .communication = communicates ? Communication(mind) : creature_desires::Communication {},
 		        .rested = needs != nullptr && needs->rested,
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .objectInTheAir = WatchedIsInTheAir(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
-		        .choosesNext = !scripted,
 		        .camera = CameraViewOf(registry, entity, mind.idle),
 		        .hand = HandViewOf(registry, entity, mind.idle),
 		        .swap = SwapViewOf(entity),
 		        .overlayPlaying = animation.gesture.animation.has_value(),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
+		    if (commands.communicated.has_value())
+		    {
+			    Communicated(mind);
+		    }
 		    Apply(commands, animation, eyes);
 		    if (Move(entity, commands))
 		    {
@@ -1749,12 +1780,6 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	mind->feedbackSeconds = 0.0f;
 	mind->feedbackWasStroke = feedback > 0.0f;
 	LearnFromFeedback(creature, *mind, feedback);
-	// It shows how it feels as soon as it is free, unless it is doing something again as it was stroked for
-	mind->idle.showDesireSeconds = 0.0f;
-	if (!mind->planActive && mind->idle.activity != creature_mind::Activity::ShowDesire)
-	{
-		mind->idle.agenda.resize(std::min(mind->idle.agenda.size(), mind->idle.step + (mind->idle.stepStarted ? 1 : 0)));
-	}
 }
 
 bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bool mirrored,

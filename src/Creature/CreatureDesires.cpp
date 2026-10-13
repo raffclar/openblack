@@ -304,10 +304,10 @@ std::optional<size_t> creature_desires::EmoteFor(Desire desire)
 	return found->animation;
 }
 
-std::optional<Desire> creature_desires::StrongestShowable(const Desires& desires, float minimum)
+std::optional<Desire> creature_desires::StrongestShowable(const Desires& desires)
 {
 	std::optional<Desire> strongest;
-	float strongestValue = minimum;
+	float strongestValue = 0.0f;
 	for (const auto& emote : k_Emotes)
 	{
 		const auto& state = desires[emote.desire];
@@ -318,6 +318,23 @@ std::optional<Desire> creature_desires::StrongestShowable(const Desires& desires
 		}
 	}
 	return strongest;
+}
+
+Communication creature_desires::Communicate(const Desires& desires, std::optional<uint32_t> turnsSinceFeedback,
+                                            uint32_t turnsPerSecond, float attitudeToPlayer)
+{
+	const bool recentFeedback =
+	    turnsSinceFeedback.has_value() && *turnsSinceFeedback < k_CommunicateFeedbackSeconds * turnsPerSecond;
+	if (recentFeedback && desires[Desire::ManifestState].carriedOut == 0)
+	{
+		return {.animation = attitudeToPlayer < 0.0f ? animations::k_Sad : animations::k_Happy, .desire = std::nullopt};
+	}
+	const auto strongest = StrongestShowable(desires);
+	if (!strongest.has_value())
+	{
+		return {};
+	}
+	return {.animation = EmoteFor(*strongest), .desire = strongest};
 }
 
 bool creature_desires::CountTowardsUrge(DesireState& desire)

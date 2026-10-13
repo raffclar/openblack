@@ -38,8 +38,7 @@ creature_mind::IdleMind Swapping()
 
 Senses SwapSenses(bool spellsGone, bool settled, bool bodyBusy = false)
 {
-	return {
-	    .seconds = 0.1f, .bodyBusy = bodyBusy, .choosesNext = false, .swap = {.spellsGone = spellsGone, .settled = settled}};
+	return {.seconds = 0.1f, .bodyBusy = bodyBusy, .swap = {.spellsGone = spellsGone, .settled = settled}};
 }
 } // namespace
 

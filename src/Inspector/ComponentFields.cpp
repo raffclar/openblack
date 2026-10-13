@@ -2274,7 +2274,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::eyesHeld>("eyesHeld")
 	    .Field<&openblack::creature_mind::IdleMind::eyesToClear>("eyesToClear")
 	    .Field<&openblack::creature_mind::IdleMind::faceVariety>("faceVariety")
-	    .Field<&openblack::creature_mind::IdleMind::showDesireSeconds>("showDesireSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::shown>("shown")
 	    .Field<&openblack::creature_mind::IdleMind::wakeWanted>("wakeWanted")
 	    .Field<&openblack::creature_mind::IdleMind::serial>("serial")

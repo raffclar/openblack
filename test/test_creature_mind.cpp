@@ -48,12 +48,7 @@ struct FakeBody
 
 	[[nodiscard]] creature_mind::Senses Senses() const
 	{
-		return {.seconds = k_Turn,
-		        .bodyBusy = turnsLeft > 0 || looping,
-		        .bodyLooping = looping,
-		        .strongest = std::nullopt,
-		        .feedbackSeconds = std::nullopt,
-		        .feedbackWasStroke = false};
+		return {.seconds = k_Turn, .bodyBusy = turnsLeft > 0 || looping, .bodyLooping = looping};
 	}
 
 	void Obey(const creature_mind::Commands& commands, int actionTurns)
@@ -218,8 +213,40 @@ TEST(CreatureDesires, TheStrongestShowableDesire)
 	desires[Desire::Play].value = 0.6f;
 	desires[Desire::Play].activated = false;
 	desires[Desire::Sadness].value = 0.3f;
-	EXPECT_EQ(creature_desires::StrongestShowable(desires, 0.2f), Desire::Hunger);
-	EXPECT_FALSE(creature_desires::StrongestShowable(desires, 0.55f).has_value());
+	EXPECT_EQ(creature_desires::StrongestShowable(desires), Desire::Hunger);
+	// A weak desire is shown too, and of two desires with the same value the first wins
+	desires[Desire::Hunger].value = 0.01f;
+	desires[Desire::Sadness].value = 0.01f;
+	EXPECT_EQ(creature_desires::StrongestShowable(desires), Desire::Hunger);
+	// With no value more than 0, it has nothing to show
+	desires[Desire::Hunger].value = 0.0f;
+	desires[Desire::Sadness].value = 0.0f;
+	EXPECT_FALSE(creature_desires::StrongestShowable(desires).has_value());
+}
+
+TEST(CreatureDesires, ACommunicationShowsTheFeelingAboutRecentFeedbackElseTheStrongestDesire)
+{
+	Desires desires;
+	desires[Desire::Hunger].value = 0.5f;
+	constexpr uint32_t k_TurnsPerSecond = 10;
+	// In the 10 seconds after a stroke or a slap, it is happy, or sad when its attitude to the player is less than 0
+	auto shown = creature_desires::Communicate(desires, 99u, k_TurnsPerSecond, 0.0f);
+	EXPECT_EQ(shown.animation, animations::k_Happy);
+	EXPECT_FALSE(shown.desire.has_value());
+	EXPECT_EQ(creature_desires::Communicate(desires, 0u, k_TurnsPerSecond, -0.01f).animation, animations::k_Sad);
+	// After 10 seconds, or with no feedback, it shows its strongest desire
+	shown = creature_desires::Communicate(desires, 100u, k_TurnsPerSecond, 0.0f);
+	EXPECT_EQ(shown.animation, animations::k_Hungry);
+	EXPECT_EQ(shown.desire, Desire::Hunger);
+	EXPECT_EQ(creature_desires::Communicate(desires, std::nullopt, k_TurnsPerSecond, 0.0f).animation, animations::k_Hungry);
+	// After it completed a plan to show its state, recent feedback does not count until the urge is satisfied
+	desires[Desire::ManifestState].carriedOut = 1;
+	EXPECT_EQ(creature_desires::Communicate(desires, 5u, k_TurnsPerSecond, 0.0f).animation, animations::k_Hungry);
+	// With nothing to show, it plays nothing
+	desires[Desire::Hunger].value = 0.0f;
+	shown = creature_desires::Communicate(desires, 5u, k_TurnsPerSecond, 0.0f);
+	EXPECT_FALSE(shown.animation.has_value());
+	EXPECT_FALSE(shown.desire.has_value());
 }
 
 TEST(CreatureDesires, TheDominantDesireIsTheFirstActiveOneWantedMost)
@@ -281,8 +308,9 @@ TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
 {
 	creature_mind::IdleMind mind;
 	FakeBody body;
-	// Draws of 1: waits of 1.001 seconds, faces from the grimace, mirrored actions, and no sitting
+	// Draws of 1: waits of 1.001 seconds, faces from the grimace and mirrored actions
 	const auto random = Always(1);
+	creature_mind::Plan(mind, creature_mind::Activity::BeIdle, creature_mind::BeIdle(random));
 	std::vector<int> actionTurns;
 	std::vector<creature_mind::Eyes> eyes;
 	for (int turn = 0; turn < 200 && body.played.size() < 2; ++turn)
@@ -325,6 +353,7 @@ TEST(CreatureIdleMind, IdleStepsPullAFaceAsTheyStartAndEveryFewSeconds)
 	creature_mind::IdleMind mind;
 	FakeBody body;
 	std::vector<int> pulled;
+	creature_mind::Plan(mind, creature_mind::Activity::BeIdle, creature_mind::BeIdle(Always(1)));
 	for (int turn = 0; turn < 60; ++turn)
 	{
 		const auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
@@ -404,7 +433,8 @@ TEST(CreatureIdleMind, SometimesItSitsForAWhile)
 {
 	creature_mind::IdleMind mind;
 	FakeBody body;
-	// Draws of 0 choose to sit, for ten seconds
+	// Draws of 0: it sits for ten seconds
+	creature_mind::Plan(mind, creature_mind::Activity::Sit, {creature_mind::SitDown(Always(0))});
 	std::optional<int> stood;
 	for (int turn = 0; turn < 300 && !stood; ++turn)
 	{
@@ -425,47 +455,44 @@ TEST(CreatureIdleMind, SometimesItSitsForAWhile)
 	EXPECT_EQ(*stood, 100);
 }
 
-TEST(CreatureIdleMind, ItShowsItsStrongestDesireOnceAMinute)
+TEST(CreatureIdleMind, CommunicatingTurnsToTheCameraThenShowsWhatItFeels)
 {
 	creature_mind::IdleMind mind;
-	FakeBody body;
-	std::vector<int> shown;
-	for (int turn = 0; turn < 1300; ++turn)
-	{
-		auto senses = body.Senses();
-		senses.strongest = Desire::Hunger;
-		const auto commands = creature_mind::Think(mind, senses, Always(1));
-		if (commands.playOnce == animations::k_Hungry)
-		{
-			shown.push_back(turn);
-		}
-		body.Obey(commands, 20);
-	}
-	ASSERT_GE(shown.size(), 2u);
-	EXPECT_EQ(shown[0], 0);
-	// Not again until a minute has passed, at the next choice after it
-	EXPECT_GE(shown[1], 600);
-	EXPECT_LT(shown[1], 700);
+	creature_mind::Plan(mind, creature_mind::Activity::ShowDesire, creature_mind::Communicate({30.0f, 40.0f}));
+	ASSERT_EQ(mind.agenda.size(), 2u);
+	auto senses = FakeBody {}.Senses();
+	senses.communication = {.animation = animations::k_Hungry, .desire = Desire::Hunger};
+	// It turns to the camera first, and its head looks at the camera all the time
+	const auto turn = creature_mind::Think(mind, senses, Always(0));
+	ASSERT_TRUE(turn.move.has_value());
+	EXPECT_EQ(turn.move->kind, creature_mind::Movement::Kind::TurnToFace);
+	EXPECT_EQ(turn.move->point, glm::vec2(30.0f, 40.0f));
+	ASSERT_TRUE(turn.gaze.has_value());
+	EXPECT_TRUE(turn.gaze->camera);
+	EXPECT_FALSE(turn.communicated.has_value());
+	// Turned, it shows what it feels as the step starts
+	EXPECT_FALSE(creature_mind::Think(mind, senses, Always(0)).communicated.has_value());
+	const auto shown = creature_mind::Think(mind, senses, Always(0));
+	ASSERT_TRUE(shown.communicated.has_value());
+	EXPECT_EQ(shown.playOnce, animations::k_Hungry);
+	ASSERT_TRUE(shown.gaze.has_value());
+	EXPECT_TRUE(shown.gaze->camera);
 	EXPECT_EQ(mind.shown, Desire::Hunger);
+	// Once the action has played, the agenda is done
+	EXPECT_FALSE(creature_mind::Think(mind, senses, Always(0)).playOnce.has_value());
+	EXPECT_GE(mind.step, mind.agenda.size());
 }
 
-TEST(CreatureIdleMind, AStrokeOrASlapIsShownFirst)
+TEST(CreatureIdleMind, WithNothingToShowACommunicationIsDoneAtOnce)
 {
 	creature_mind::IdleMind mind;
-	auto senses = FakeBody {}.Senses();
-	senses.strongest = Desire::Hunger;
-	senses.feedbackSeconds = 4.0f;
-	senses.feedbackWasStroke = true;
-	EXPECT_EQ(creature_mind::Think(mind, senses, Always(1)).playOnce, animations::k_Happy);
-
-	creature_mind::IdleMind slapped;
-	senses.feedbackWasStroke = false;
-	EXPECT_EQ(creature_mind::Think(slapped, senses, Always(1)).playOnce, animations::k_Sad);
-
-	// Long after, the desire is shown instead
-	creature_mind::IdleMind later;
-	senses.feedbackSeconds = 20.0f;
-	EXPECT_EQ(creature_mind::Think(later, senses, Always(1)).playOnce, animations::k_Hungry);
+	creature_mind::Plan(mind, creature_mind::Activity::ShowDesire,
+	                    {{.kind = creature_mind::Step::Kind::Communicate, .seconds = 0.0f}});
+	const auto commands = creature_mind::Think(mind, FakeBody {}.Senses(), Always(0));
+	// It still counts as a communication, so that it does not want to show its state again for a time
+	EXPECT_TRUE(commands.communicated.has_value());
+	EXPECT_FALSE(commands.playOnce.has_value());
+	EXPECT_GE(mind.step, mind.agenda.size());
 }
 
 TEST(CreatureIdleMind, AnAbandonedSitEnds)
@@ -568,8 +595,9 @@ TEST(CreatureLook, WithNothingToSeeItLooksAhead)
 TEST(CreatureIdleMind, HangingAroundWalksSomewhereNearbyThenSits)
 {
 	creature_mind::IdleMind mind;
-	// Draws of 5: the last lot, which is hanging around, 5 degrees round and 25 units away
+	// Draws of 5: 5 degrees round and 25 units away
 	const auto random = Always(5);
+	creature_mind::Plan(mind, creature_mind::Activity::HangAround, creature_mind::HangAround(random));
 	auto senses = FakeBody {}.Senses();
 	senses.position = {100.0f, 200.0f};
 	const auto first = creature_mind::Think(mind, senses, random);
@@ -630,24 +658,23 @@ TEST(CreatureIdleMind, AFollowStepStopsWhenItsTimeIsUp)
 	EXPECT_LE(stoppedAt, 11);
 }
 
-TEST(CreatureIdleMind, TheIdleChoiceLeavesTheNeedsAndThingsAboutItToThePlanner)
+TEST(CreatureIdleMind, WithNoAgendaItDoesNothing)
 {
-	// For each random value, the idle choice gives only Sit, HangAround, BeIdle or ShowDesire. Only the planner chooses
-	// the actions for the needs and for the things near the creature.
-	for (uint32_t draw = 0; draw < creature_mind::k_ActivityLots; ++draw)
+	// When the agenda is done and no plan gives a new agenda, the creature does nothing
+	for (uint32_t draw = 0; draw < 6; ++draw)
 	{
-		for (const bool showDue : {false, true})
+		creature_mind::IdleMind mind;
+		auto senses = FakeBody {}.Senses();
+		senses.communication = {.animation = animations::k_Hungry, .desire = Desire::Hunger};
+		for (int turn = 0; turn < 20; ++turn)
 		{
-			creature_mind::IdleMind mind;
-			mind.showDesireSeconds = showDue ? 0.0f : creature_mind::k_ShowDesireSeconds;
-			auto senses = FakeBody {}.Senses();
-			senses.strongest = Desire::Hunger;
-			creature_mind::ChooseNext(mind, senses, Always(draw));
-			using enum creature_mind::Activity;
-			EXPECT_TRUE(mind.activity == Sit || mind.activity == HangAround || mind.activity == BeIdle ||
-			            mind.activity == ShowDesire)
-			    << creature_mind::Name(mind.activity);
+			const auto commands = creature_mind::Think(mind, senses, Always(draw));
+			EXPECT_FALSE(commands.playOnce.has_value());
+			EXPECT_FALSE(commands.startSequence.has_value());
+			EXPECT_FALSE(commands.move.has_value());
 		}
+		EXPECT_EQ(mind.activity, creature_mind::Activity::None);
+		EXPECT_TRUE(mind.agenda.empty());
 	}
 }
 

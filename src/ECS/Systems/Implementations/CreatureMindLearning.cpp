@@ -178,7 +178,8 @@ bool Interruptible(creature_mind::Activity activity)
 	return activity == None || activity == BeIdle || activity == Sit || activity == HangAround;
 }
 
-/// The action of the game's table an idle activity counts as, for feedback to be credited to
+/// The action in the table of actions that gets the feedback for an agenda that no plan gave.
+/// Only the forced agendas to eat, sleep, poo, be sick or drink are such agendas.
 std::string_view ActionForActivity(creature_mind::Activity activity)
 {
 	using enum creature_mind::Activity;
@@ -186,12 +187,6 @@ std::string_view ActionForActivity(creature_mind::Activity activity)
 	{
 	case Eat:
 		return "EatAfterExamining";
-	case Examine:
-		return "ExamineByPickingUp";
-	case PlayWithObject:
-		return "PracticeThrow";
-	case Hurl:
-		return "Hurl";
 	case Sleep:
 		return "SleepOnTheSpot";
 	case Poo:
@@ -200,14 +195,6 @@ std::string_view ActionForActivity(creature_mind::Activity activity)
 		return "Puke";
 	case Drink:
 		return "DrinkFromTheSea";
-	case Sit:
-		return "SitDown";
-	case BeIdle:
-		return "BeIdle";
-	case HangAround:
-		return "HangAroundAtHome";
-	case ShowDesire:
-		return "CommunicateState";
 	default:
 		return {};
 	}
@@ -1183,10 +1170,6 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		    });
 	}
 	creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
-	if (executor->build == creature_plan_actions::Build::ShowDesire)
-	{
-		mind.idle.showDesireSeconds = creature_mind::k_ShowDesireSeconds;
-	}
 	return true;
 }
 
@@ -1940,13 +1923,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		situation.camera = glm::vec2(eye.x, eye.z);
 	}
 	Situate(creature, situation);
-	if (mind.idle.showDesireSeconds <= 0.0f)
-	{
-		if (const auto strongest = creature_desires::StrongestShowable(desires, creature_mind::k_MinDesireShown))
-		{
-			situation.showDesireAnimation = creature_desires::EmoteFor(*strongest);
-		}
-	}
 	const auto random = [this](uint32_t range) { return Random(range); };
 	bool waterLooked = false;
 	bool fishingLooked = false;

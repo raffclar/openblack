@@ -593,9 +593,7 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 			break;
 		}
 	}
-	ImGui::Text("Shows a desire again in %.0f s%s%s", static_cast<double>(idle.showDesireSeconds),
-	            idle.shown.has_value() ? ", last " : "",
-	            idle.shown.has_value() ? creature_desires::Name(*idle.shown).data() : "");
+	ImGui::Text("Last desire shown: %s", idle.shown.has_value() ? creature_desires::Name(*idle.shown).data() : "none");
 
 	ImGui::SeparatorText("Body");
 	const auto& body = animation->body;

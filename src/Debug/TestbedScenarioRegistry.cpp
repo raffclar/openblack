@@ -3389,6 +3389,22 @@ void AddMind(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -34.0f}}},
 	    .commands = {setDesire(Desire::Hunger, 1.0f, 2.0f)},
 	});
+	// A tiger with its mind on, alone, that wants to show its state and is a little hungry
+	auto communicative = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 90.0f, "yours");
+	communicative.hold = false;
+	communicative.pauseMind = false;
+	all.push_back({
+	    .id = "mind.communicate_state",
+	    .name = "Showing its state to the player",
+	    .facet = Facet::Mind,
+	    .description = "A tiger stands alone with its mind on, side on to the camera. After two seconds it wants to show "
+	                   "its state as much as possible, and it is a little hungry.",
+	    .expected = "It turns to face the camera, with its head on the camera, then plays its hungry animation once. Then "
+	                "it does not want to show its state for a minute. When no plan is ready, it stands and does nothing.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {communicative},
+	    .commands = {setDesire(Desire::ManifestState, 1.0f, 2.0f), setDesire(Desire::Hunger, 0.3f, 2.0f)},
+	});
 	// A tiger of another player looks north at a village of the player: a hut and three of its villagers
 	auto stranger = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "another player's");
 	stranger.owner = PlayerNames::PLAYER_TWO;

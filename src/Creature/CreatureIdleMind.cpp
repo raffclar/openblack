@@ -446,6 +446,14 @@ std::vector<Step> creature_mind::Emote(size_t animation)
 	return WithFace({Action(animation, false)}, creature_face::Cue::AttitudeToPlayer);
 }
 
+std::vector<Step> creature_mind::Communicate(glm::vec2 camera)
+{
+	const Gaze gaze {.camera = true};
+	Step turn {.kind = Step::Kind::Move, .gaze = gaze};
+	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = camera};
+	return WithFace({turn, {.kind = Step::Kind::Communicate, .gaze = gaze}}, creature_face::Cue::AttitudeToPlayer);
+}
+
 std::vector<Step> creature_mind::FaceAndEmote(glm::vec2 point, size_t animation)
 {
 	Step turn {.kind = Step::Kind::Move};
@@ -545,44 +553,6 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.eyesToClear = mind.eyesHeld;
 }
 
-void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Random& random)
-{
-	if (mind.showDesireSeconds <= 0.0f)
-	{
-		std::optional<size_t> emote;
-		if (senses.feedbackSeconds.has_value() && *senses.feedbackSeconds < k_FeedbackSeconds)
-		{
-			emote = senses.feedbackWasStroke ? animations::k_Happy : animations::k_Sad;
-			mind.shown.reset();
-		}
-		else if (senses.strongest.has_value())
-		{
-			emote = creature_desires::EmoteFor(*senses.strongest);
-			mind.shown = senses.strongest;
-		}
-		if (emote.has_value())
-		{
-			// Showing the player how it feels, its face shows what it thinks of them
-			Plan(mind, Activity::ShowDesire, Emote(*emote));
-			mind.showDesireSeconds = k_ShowDesireSeconds;
-			return;
-		}
-	}
-	const auto lot = random(k_ActivityLots);
-	if (lot == 0)
-	{
-		Plan(mind, Activity::Sit, {SitDown(random)});
-	}
-	else if (lot == k_ActivityLots - 1)
-	{
-		Plan(mind, Activity::HangAround, HangAround(random));
-	}
-	else
-	{
-		Plan(mind, Activity::BeIdle, BeIdle(random));
-	}
-}
-
 std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
                                                               const Random& random)
 {
@@ -656,11 +626,6 @@ void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	Commands commands;
-	mind.showDesireSeconds = std::max(mind.showDesireSeconds - senses.seconds, 0.0f);
-	if (mind.step >= mind.agenda.size() && senses.choosesNext)
-	{
-		ChooseNext(mind, senses, random);
-	}
 	if (mind.step >= mind.agenda.size())
 	{
 		return commands;
@@ -821,6 +786,20 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			mind.inspectTurns = static_cast<uint32_t>((extra + step.seconds) * turnsPerSecond);
 			break;
 		}
+		case Step::Kind::Communicate:
+			// It shows what it feels now, and it does not want to show its state again for a time
+			commands.communicated = senses.communication;
+			mind.shown = senses.communication.desire;
+			if (senses.communication.animation.has_value())
+			{
+				commands.playOnce = senses.communication.animation;
+				commands.mirrored = random(2) == 1;
+			}
+			else
+			{
+				FinishStep(mind);
+			}
+			break;
 		case Step::Kind::Wait:
 		case Step::Kind::WaitInMap:
 			break;
@@ -834,6 +813,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Wait:
 		commands.lookAbout = !step.gaze.has_value();
 		if (mind.stepSeconds >= step.seconds)
+		{
+			FinishStep(mind);
+		}
+		break;
+	case Step::Kind::Communicate:
+		if (!senses.bodyBusy)
 		{
 			FinishStep(mind);
 		}

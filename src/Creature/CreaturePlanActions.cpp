@@ -261,12 +261,11 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return situation.controlledByScript && (situation.clearArea.has_value() || situation.home.has_value());
 	case Build::FaceCameraEmote:
 	case Build::RunFromPlayer:
+	case Build::ShowDesire:
 		return situation.camera.has_value();
 	case Build::PointAtCamera:
 	case Build::PointOutHighlight:
 		return situation.eye.has_value();
-	case Build::ShowDesire:
-		return situation.showDesireAnimation.has_value();
 	default:
 		return true;
 	}
@@ -433,7 +432,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::HangAround:
 		return creature_mind::HangAround(random);
 	case Build::ShowDesire:
-		return creature_mind::Emote(*situation.showDesireAnimation);
+		return creature_mind::Communicate(*situation.camera);
 	case Build::Emote:
 		return creature_mind::Emote(executor.animation);
 	case Build::FaceCameraEmote:
