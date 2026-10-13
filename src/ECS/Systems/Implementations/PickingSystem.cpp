@@ -191,6 +191,69 @@ void picking::CarryHover(const PickingSystemInterface::Pick& previous, PickingSy
 	}
 }
 
+void picking::WeighScreenShapes(PickingSystemInterface::Pick& pick, const PickingSystemInterface::ScreenShapes& shapes,
+                                bool objectIsCreature)
+{
+	pick.textBubble = false;
+	pick.rope = false;
+	std::optional<float> bubble = shapes.textBubble;
+	// The text bubble nearer than the object drops the object; no nearer, the object keeps the cursor
+	if (pick.object.has_value())
+	{
+		if (bubble.has_value() && *bubble < pick.distance)
+		{
+			pick.object.reset();
+		}
+		else
+		{
+			bubble.reset();
+		}
+	}
+	// With no object, the land nearer than the bubble drops it
+	if (!pick.object.has_value() && bubble.has_value() && pick.landDistance < *bubble)
+	{
+		bubble.reset();
+	}
+	// The rope touched strictly nearer than what is left takes the cursor, but never from a creature
+	if (shapes.rope.has_value())
+	{
+		const float rope = *shapes.rope;
+		if (pick.object.has_value())
+		{
+			if (!objectIsCreature && rope < pick.distance)
+			{
+				pick.object.reset();
+				pick.rope = true;
+			}
+		}
+		else if (bubble.has_value())
+		{
+			if (rope < *bubble)
+			{
+				bubble.reset();
+				pick.rope = true;
+			}
+		}
+		else if (rope < pick.landDistance)
+		{
+			pick.rope = true;
+		}
+	}
+	if (pick.object.has_value())
+	{
+		return;
+	}
+	if (bubble.has_value())
+	{
+		pick.textBubble = true;
+		pick.point = shapes.textBubblePoint;
+		pick.distance = *bubble;
+		return;
+	}
+	pick.point = pick.land;
+	pick.distance = pick.landDistance;
+}
+
 namespace
 {
 /// Along a line, how far (in its direction's lengths) it first meets a broken building's triangles, from either side; a
@@ -247,6 +310,8 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	}
 
 	// Gripping the land, the interface keeps what it picked and follows only the land
+	_locked = frame.locked;
+	_seconds = frame.seconds;
 	if (frame.locked)
 	{
 		_pick = picking::Locked(_pick, land, landDistance);
@@ -254,8 +319,10 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	}
 
 	const auto previous = _pick;
+	_previous = previous;
 	_pick = {};
 	_pick.land = land;
+	_pick.landDistance = landDistance;
 	if (!Locator::rendereringSystem::has_value() || !Locator::resources::has_value())
 	{
 		_pick.point = _pick.land;
@@ -497,6 +564,22 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		_pick.distance = landDistance;
 	}
 	picking::CarryHover(previous, _pick, frame.seconds);
+}
+
+void PickingSystem::ResolveScreenShapes(const ScreenShapes& shapes)
+{
+	if (_locked)
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const bool creature = _pick.object.has_value() && registry.Valid(*_pick.object) && registry.AllOf<Creature>(*_pick.object);
+	const auto object = _pick.object;
+	picking::WeighScreenShapes(_pick, shapes, creature);
+	if (_pick.object != object)
+	{
+		picking::CarryHover(_previous, _pick, _seconds);
+	}
 }
 
 void PickingSystem::FindBehindHand(glm::vec3 camera, std::optional<glm::vec3> handMiddle)

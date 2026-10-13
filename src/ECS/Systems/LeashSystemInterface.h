@@ -138,17 +138,19 @@ public:
 	/// it, in place of the thing's own tap. Returns whether the leash took the tap.
 	virtual bool TapThing(PlayerNames player, entt::entity object) = 0;
 
-	/// The frame as seen, to find whether the hand is over the rope of the player's tied leash: the camera's view and
-	/// projection, the screen's size in pixels, the cursor's pixel, and what else the interface picked under it
+	/// The frame as seen, to find whether the cursor touches the rope of the player's tied leash: the camera's view and
+	/// projection, the screen's size in pixels and the cursor's pixel
 	struct RopeFrame
 	{
 		glm::mat4 viewProjection {1.0f};
 		glm::vec2 screenSize {0.0f};
 		glm::ivec2 cursor {0};
-		leash_snap::Under under;
 	};
-	/// Once a frame: whether the player's hand is over the rope of their tied leash
-	virtual void UpdateRopeHover(PlayerNames player, const RopeFrame& frame) = 0;
+	/// How far along the view the cursor touches the rope of the player's tied leash, none where it doesn't (or while the
+	/// hand holds the rope), for the interface's pick to weigh
+	[[nodiscard]] virtual std::optional<float> RopeUnderCursor(PlayerNames player, const RopeFrame& frame) = 0;
+	/// Once a frame, after the pick: whether the pick gave the cursor to the rope, the hand being over it
+	virtual void SetRopeHovered(PlayerNames player, bool hovered) = 0;
 	/// What the player's hand does about the rope of their tied leash: nothing, over it, or holding it
 	[[nodiscard]] virtual leash_snap::Hand RopeHand(PlayerNames player) const = 0;
 	/// The Action button is pressed with the hand over the rope of the tied leash: the hand takes hold of it. Returns

@@ -1001,6 +1001,41 @@ bool Game::HandOverThing() const
 	       Locator::entitiesRegistry::value().AnyOf<ecs::components::Mesh, ecs::components::OneOffSpellSeed>(*picked);
 }
 
+void Game::ResolveScreenShapes()
+{
+	// The pick's last step, once the interface is drawn: the help's text bubble and the tied leash's rope under the cursor
+	// are weighed against what the frame picked, and the bubble and the rope learn whether they have the cursor
+	if (!Locator::pickingSystem::has_value() || !Locator::camera::has_value() || !Locator::windowing::has_value())
+	{
+		return;
+	}
+	ecs::systems::PickingSystemInterface::ScreenShapes shapes;
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		const auto& bubble = Locator::tipBubbleSystem::value();
+		shapes.textBubble = bubble.GetUnderPointer();
+		shapes.textBubblePoint = bubble.GetAnchor().value_or(glm::vec3(0.0f));
+	}
+	if (Locator::leashSystem::has_value())
+	{
+		shapes.rope = Locator::leashSystem::value().RopeUnderCursor(
+		    PlayerNames::PLAYER_ONE, {.viewProjection = Locator::camera::value().GetViewProjectionMatrix(),
+		                              .screenSize = static_cast<glm::vec2>(Locator::windowing::value().GetSize()),
+		                              .cursor = Locator::gameActionSystem::value().GetPointerPosition()});
+	}
+	auto& picking = Locator::pickingSystem::value();
+	picking.ResolveScreenShapes(shapes);
+	const auto& pick = picking.GetPick();
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		Locator::tipBubbleSystem::value().SetUnderHand(pick.textBubble);
+	}
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().SetRopeHovered(PlayerNames::PLAYER_ONE, pick.rope);
+	}
+}
+
 void Game::PickUnderCursor(float seconds)
 {
 	if (!Locator::pickingSystem::has_value() || !Locator::windowing::has_value())
@@ -2254,29 +2289,6 @@ bool Game::Update() noexcept
 					if (!Locator::debugGui::value().StealsFocus())
 					{
 						auto& leashes = Locator::leashSystem::value();
-						// Whether the hand is over the rope of the tied leash, which comes before the land and things
-						// behind it
-						{
-							const auto& pick = Locator::pickingSystem::value().GetPick();
-							const auto viewProjection = camera.GetViewProjectionMatrix();
-							const auto& registry = Locator::entitiesRegistry::value();
-							ecs::systems::LeashSystemInterface::RopeFrame frame {
-							    .viewProjection = viewProjection,
-							    .screenSize = static_cast<glm::vec2>(screenSize),
-							    .cursor = _mousePosition,
-							};
-							if (pick.object.has_value() && registry.Valid(*pick.object))
-							{
-								frame.under.object = true;
-								frame.under.creature = registry.AllOf<ecs::components::Creature>(*pick.object);
-								frame.under.objectDepth = pick.distance;
-							}
-							if (pick.land.has_value())
-							{
-								frame.under.landDepth = (viewProjection * glm::vec4(*pick.land, 1.0f)).w;
-							}
-							leashes.UpdateRopeHover(PlayerNames::PLAYER_ONE, frame);
-						}
 						leashes.HandleInput(rayOrigin, rayDirection, _actionPressTaken);
 						_actionPressTaken = false;
 					}
@@ -3934,6 +3946,7 @@ bool Game::Run() noexcept
 			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, machine_clock::Ticks(),
 			                 Locator::debugGui::value().IsMouseOverWindow());
 		}
+		ResolveScreenShapes();
 
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::GuiDraw);

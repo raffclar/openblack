@@ -38,8 +38,16 @@ public:
 		std::optional<glm::vec3> point;
 		/// How far along the view the point is
 		float distance {std::numeric_limits<float>::max()};
-		/// The land or sea under the cursor, whatever was picked
+		/// The land or sea under the cursor, whatever was picked, and how far along the view it counts (a little further
+		/// than it is)
 		std::optional<glm::vec3> land;
+		float landDistance {std::numeric_limits<float>::max()};
+		/// The help's text bubble took the cursor, nearer than anything else: no object is picked, and the point is the
+		/// bubble's
+		bool textBubble {false};
+		/// The rope of the player's tied leash took the cursor, nearer than anything else: no object is picked, and the
+		/// point stays the land's
+		bool rope {false};
 		/// What was picked when the hover time last started again, nothing included, and how long, in seconds of the
 		/// frames drawn since, it has stayed picked
 		std::optional<entt::entity> hoverObject;
@@ -57,6 +65,16 @@ public:
 		/// The hand is gripping the land: the interface keeps what it picked before the grip and follows only the land
 		/// under the cursor
 		bool locked {false};
+	};
+
+	/// What is drawn flat on the screen under the cursor and weighed in the pick's last step, once the frame's interface is
+	/// drawn: the help's text bubble (how far along the view it stands, and the point it is over) and the rope of the
+	/// player's tied leash (how far along the view the cursor touches it)
+	struct ScreenShapes
+	{
+		std::optional<float> textBubble;
+		glm::vec3 textBubblePoint {0.0f};
+		std::optional<float> rope;
 	};
 
 	virtual ~PickingSystemInterface() = default;
@@ -82,6 +100,9 @@ public:
 
 	/// The interface's pick at a frame as it is drawn: the drawn object under the cursor, weighed against the land
 	virtual void PickUnderCursor(const Frame& frame) = 0;
+	/// The last step of the frame's pick, once its interface is drawn: the text bubble and the rope under the cursor are
+	/// weighed against what was picked (see `picking::WeighScreenShapes`). Nothing changes while the land is gripped.
+	virtual void ResolveScreenShapes(const ScreenShapes& shapes) = 0;
 	/// The pick of the last frame drawn, which the interface and the hand go by
 	[[nodiscard]] virtual const Pick& GetPick() const = 0;
 	/// A replayed click lands on another thing, or on none: the pick's object becomes it, at the distance given, its point
@@ -109,6 +130,13 @@ namespace picking
 /// How long the same thing has stayed picked: the frame's seconds are added while it does, nothing picked included, and
 /// the count starts again at nothing when it changes
 void CarryHover(const PickingSystemInterface::Pick& previous, PickingSystemInterface::Pick& next, float seconds);
+/// The pick's last step, on what the drawn things and the land left picked:
+/// - the text bubble wins over a farther object, and over the land unless the land is nearer;
+/// - then the rope wins over what is left (the object, unless it is a creature; else the bubble; else the land) when the
+///   cursor touches it strictly nearer;
+/// - what wins gives the point: the object's place, the bubble's point, or the land's (the rope keeps the land's).
+void WeighScreenShapes(PickingSystemInterface::Pick& pick, const PickingSystemInterface::ScreenShapes& shapes,
+                       bool objectIsCreature);
 } // namespace picking
 
 } // namespace openblack::ecs::systems

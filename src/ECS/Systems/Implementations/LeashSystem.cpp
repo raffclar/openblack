@@ -1507,17 +1507,16 @@ CreatureLeash::Worn* LeashSystem::HeldLeash(PlayerNames player)
 	return worn != nullptr && worn->held.has_value() ? worn : nullptr;
 }
 
-void LeashSystem::UpdateRopeHover(PlayerNames player, const RopeFrame& frame)
+std::optional<float> LeashSystem::RopeUnderCursor(PlayerNames player, const RopeFrame& frame)
 {
 	if (player != k_LocalPlayer || _ropeHand == leash_snap::Hand::Holding)
 	{
-		return;
+		return std::nullopt;
 	}
-	_ropeHand = leash_snap::Hand::Away;
 	const auto* worn = TiedLeash(player);
 	if (worn == nullptr || frame.screenSize.x <= 0.0f || frame.screenSize.y <= 0.0f)
 	{
-		return;
+		return std::nullopt;
 	}
 	// The rope as seen on the screen
 	std::array<leash_snap::ScreenPoint, leash_rope::k_PointCount> points {};
@@ -1535,11 +1534,16 @@ void LeashSystem::UpdateRopeHover(PlayerNames player, const RopeFrame& frame)
 		    .inFront = true,
 		};
 	}
-	const auto depth = leash_snap::TouchDepth(points, frame.cursor, frame.screenSize.x, worn->rope.look.halfWidth);
-	if (depth.has_value() && leash_snap::RopeIsUnder(*depth, frame.under))
+	return leash_snap::TouchDepth(points, frame.cursor, frame.screenSize.x, worn->rope.look.halfWidth);
+}
+
+void LeashSystem::SetRopeHovered(PlayerNames player, bool hovered)
+{
+	if (player != k_LocalPlayer || _ropeHand == leash_snap::Hand::Holding)
 	{
-		_ropeHand = leash_snap::Hand::Over;
+		return;
 	}
+	_ropeHand = hovered ? leash_snap::Hand::Over : leash_snap::Hand::Away;
 }
 
 leash_snap::Hand LeashSystem::RopeHand(PlayerNames player) const
