@@ -904,3 +904,4 @@ openblack_setup_and_add_test(test_creature_reaction_rules test_creature_reaction
 openblack_setup_and_add_test(
   test_creature_kind_actions test_creature_kind_actions.cpp
 )
+openblack_setup_and_add_test(test_pipeline_cache test_pipeline_cache.cpp)
