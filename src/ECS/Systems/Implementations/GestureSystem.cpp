@@ -15,6 +15,7 @@
 #include <utility>
 
 #include <GestureFile.h>
+#include <LHVM.h>
 #include <entt/core/hashed_string.hpp>
 #include <glm/common.hpp>
 #include <glm/vector_relational.hpp>
@@ -47,6 +48,9 @@ namespace
 {
 /// The game's templates in the resource caches
 constexpr auto k_TemplatesId = entt::hashed_string("gestures/templates");
+
+/// The kinds of script that a single player game starts by name
+constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 
 /// How long a recognised gesture shows in the debug window
 constexpr float k_RecognisedShownSeconds = 10.0f;
@@ -256,6 +260,11 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		}
 	}
 	context.pickerOpen = _picker.open;
+	if (Locator::entitiesRegistry::has_value())
+	{
+		const auto& globals = Locator::entitiesRegistry::value().Context();
+		context.hiddenScriptLand = globals.mapScriptGlobals.landNumber == 1 && !globals.skirmish;
+	}
 	return context;
 }
 
@@ -499,6 +508,13 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 			Locator::creatureFightSystem::value().GestureSpell(request.magic);
 		}
 		break;
+	case Purpose::HiddenScript:
+		// Each square wave starts the script again. The script itself finds the phone box that it made before.
+		if (Locator::vm::has_value())
+		{
+			Locator::vm::value().StartScript(std::string(gesture::k_HiddenScript), k_SinglePlayerScripts);
+		}
+		break;
 	}
 
 	if (_events.size() > eventsBefore)
@@ -510,9 +526,12 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		    static_cast<int>(event.kind), event.centre.x, event.centre.y, event.centre.z, event.radius, event.powerUpLevel);
 	}
 
-	// The path is forgotten and the hand rests a moment
+	// The hand forgets the path. After most gestures, the hand also stops for a short time.
 	ForgetPath();
-	_pause = gesture::k_RecognisedPauseSeconds;
+	if (gesture::RestsAfter(request.purpose))
+	{
+		_pause = gesture::k_RecognisedPauseSeconds;
+	}
 	_requests = gesture::Requests(ContextOf(frame));
 }
 

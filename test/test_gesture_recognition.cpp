@@ -10,6 +10,7 @@
 #include <cstdlib>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <numbers>
 #include <vector>
@@ -348,6 +349,58 @@ TEST(GestureRequests, TheLeash)
 	context = {};
 	context.creature = HandContext::Creature {.fighting = true, .knows = {false, true, false}};
 	EXPECT_TRUE(Requests(context).empty());
+}
+
+TEST(GestureRequests, OnLandOneTheLeashPickerAlsoWaitsForTheSquareWave)
+{
+	HandContext context;
+	context.creature = HandContext::Creature {.leashed = true, .knows = {true, false, true}, .worn = LeashType::Rope};
+	context.pickerOpen = true;
+	const auto hidden = Request {.gesture = GestureType::SquareWave, .purpose = Purpose::HiddenScript};
+
+	// Not on Land 1: the picker does not wait for the square wave
+	EXPECT_EQ(std::ranges::count(Requests(context), hidden), 0);
+
+	// On Land 1: the square wave comes after the scribble and before the leashes
+	context.hiddenScriptLand = true;
+	const auto requests = Requests(context);
+	ASSERT_GE(requests.size(), 3u);
+	EXPECT_EQ(requests[0].purpose, Purpose::ClosePicker);
+	EXPECT_EQ(requests[1], hidden);
+	EXPECT_EQ(requests[2].purpose, Purpose::PickLeash);
+
+	// Without the open picker, or with the leash off, the hand does not wait for it
+	context.pickerOpen = false;
+	EXPECT_EQ(std::ranges::count(Requests(context), hidden), 0);
+	context.pickerOpen = true;
+	context.creature->leashed = false;
+	EXPECT_EQ(std::ranges::count(Requests(context), hidden), 0);
+}
+
+TEST(GestureRequests, TheSquareWaveShowsNothingAndTheHandDoesNotStop)
+{
+	EXPECT_FALSE(ShowsRecognition(Purpose::HiddenScript));
+	EXPECT_FALSE(RestsAfter(Purpose::HiddenScript));
+	EXPECT_TRUE(RestsAfter(Purpose::ClosePicker));
+	EXPECT_TRUE(RestsAfter(Purpose::PickLeash));
+	EXPECT_TRUE(RestsAfter(Purpose::ShakeOffLeash));
+	EXPECT_EQ(Name(GestureType::SquareWave), "square wave");
+}
+
+TEST(GestureMatcher, RecognisesASquareWave)
+{
+	const std::array<glm::vec2, 9> wave {glm::vec2 {100.0f, 220.0f}, {100.0f, 100.0f}, {200.0f, 100.0f},
+	                                     {200.0f, 220.0f},           {300.0f, 220.0f}, {300.0f, 100.0f},
+	                                     {400.0f, 100.0f},           {400.0f, 220.0f}, {500.0f, 220.0f}};
+	const std::vector templates {
+	    MakeTemplate(GestureType::SquareWave, Record(Trace(wave)).KeyPoints(), true, false, false, k_ScreenAspect)};
+	// The same wave, drawn smaller in another place
+	std::array<glm::vec2, 9> drawn {};
+	std::ranges::transform(wave, drawn.begin(), [](glm::vec2 point) { return (point * 0.6f) + glm::vec2(250.0f, 300.0f); });
+	EXPECT_TRUE(Recognise(templates, GestureType::SquareWave, Record(Trace(drawn)).KeyPoints(), k_ScreenAspect).has_value());
+	// A scribble is not a square wave
+	const auto scribble = Record(TraceScribble({300.0f, 300.0f}, 300.0f, 5));
+	EXPECT_FALSE(Recognise(templates, GestureType::SquareWave, scribble.KeyPoints(), k_ScreenAspect).has_value());
 }
 
 TEST(GestureRequests, TheLeashPickerClosesByItself)
