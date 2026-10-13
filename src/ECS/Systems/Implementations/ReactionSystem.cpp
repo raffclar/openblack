@@ -581,6 +581,11 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 				{
 					reaction.firstTaken = reaction.age;
 				}
+				// A villager heeds some kinds without ever taking them up
+				if (registry.AllOf<Villager>(entity) && !villager_reaction::TakesUp(reaction.source.type))
+				{
+					continue;
+				}
 				Start(reaction, entity, *state);
 			}
 			continue;
@@ -604,6 +609,13 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		if (differs && magic::ChangesReaction(state->type, currentPriority, priority, seconds))
 		{
 			memory.Record(type, _turn);
+			// A villager keeps what it reacts to rather than change to a kind it never takes up
+			// TODO(raffclar): the game also drops the villager from the list of the reaction it keeps, so that reaction
+			// ending doesn't send it back; it still goes back once its own time with it is over
+			if (registry.AllOf<Villager>(entity) && !villager_reaction::TakesUp(reaction.source.type))
+			{
+				continue;
+			}
 			Stop(entity, *state, false);
 			Start(reaction, entity, *state, true);
 		}

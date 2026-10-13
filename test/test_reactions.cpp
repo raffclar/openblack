@@ -119,8 +119,8 @@ protected:
 		Locator::entitiesMap::emplace<MapProduction>();
 		Locator::livingActionSystem::emplace<ecs::systems::LivingActionSystem>();
 		_info = std::make_unique<InfoConstants>();
-		for (const auto type :
-		     {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield, Reaction::FleeFromObject})
+		for (const auto type : {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield,
+		                        Reaction::FleeFromObject, Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed})
 		{
 			auto& reaction = _info->reaction.at(static_cast<size_t>(type));
 			reaction.priority = type == Reaction::FleeFromSpell ? 150 : 120;
@@ -1026,4 +1026,28 @@ TEST_F(Reactions, AReactionVillagersDontActOutYetEndsWithoutMovingThem)
 	EXPECT_EQ(SlotOf(villager, LivingAction::Index::Final), k_Job);
 	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const LivingReaction>(villager).reaction, 0u);
 	Locator::reactionSystem::reset();
+}
+
+TEST_F(Reactions, VillagersHeedTheHandPickingUpOrSomethingCrushedWithoutTakingItUpOrBelieving)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// A few turns in, so that what is remembered is later than nothing
+	_reactions.ProcessTurn();
+	_reactions.ProcessTurn();
+	for (const auto type : {Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed})
+	{
+		_reactions.Create(Miracle(type));
+		const auto villager = _villagers[0];
+		// Heeded: the kind is remembered, so it isn't heeded again straight away
+		const auto* memory = registry.TryGet<const VillagerReactionMemory>(villager);
+		ASSERT_NE(memory, nullptr);
+		EXPECT_NE(memory->memory.LastReacted(static_cast<uint32_t>(type)), 0u);
+		// But never held: it goes on with what it does and its town believes nothing
+		const auto* state = registry.TryGet<const LivingReaction>(villager);
+		EXPECT_TRUE(state == nullptr || state->reaction == 0);
+		EXPECT_EQ(StateOf(villager), VillagerStates::DecideWhatToDo);
+		const auto* impression = registry.TryGet<const TownImpression>(_town);
+		EXPECT_TRUE(impression == nullptr ||
+		            impression->belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)) == 0.0f);
+	}
 }

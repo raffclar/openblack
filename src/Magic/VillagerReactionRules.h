@@ -17,6 +17,8 @@
 
 #include <glm/vec2.hpp>
 
+#include "Enums.h"
+
 // How a villager takes up a reaction going on near it, by the reaction's table row. A villager sees a reaction within
 // the row's distance by the row's priority, more urgently the nearer it is; it takes up a reaction of a kind again only
 // once a cooldown since it last did has passed, and it keeps reacting for as long as the row says, longer for nearer
@@ -35,6 +37,12 @@ struct Distance
 	float maxDistance {0.0f};
 	float importance {0.0f};
 };
+
+/// Whether a villager takes up a kind of reaction it heeds. Villagers do nothing about the hand picking something up,
+/// the hand using a totem, the hand putting things in a storage pit or something crushed: they weigh such a reaction,
+/// and remember having heeded its kind, but never hold it, so it neither moves nor impresses them (the creature
+/// reacts to these).
+[[nodiscard]] bool TakesUp(openblack::Reaction type);
 
 /// The distance a villager is from a reaction as it is spread: half the sum of how far apart they are along each axis
 [[nodiscard]] float SpreadDistance(glm::vec2 villager, glm::vec2 reaction);

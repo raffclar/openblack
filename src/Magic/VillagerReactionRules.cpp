@@ -21,6 +21,21 @@ namespace
 constexpr float k_MaxPriority = 255.0f;
 } // namespace
 
+bool villager_reaction::TakesUp(openblack::Reaction type)
+{
+	using openblack::Reaction;
+	switch (type)
+	{
+	case Reaction::ReactToHandPickUp:
+	case Reaction::ReactToHandUsingTotem:
+	case Reaction::ReactToHandPuttingStuffInStoragePit:
+	case Reaction::ReactToObjectCrushed:
+		return false;
+	default:
+		return true;
+	}
+}
+
 float villager_reaction::SpreadDistance(glm::vec2 villager, glm::vec2 reaction)
 {
 	return 0.5f * (std::abs(villager.x - reaction.x) + std::abs(villager.y - reaction.y));
