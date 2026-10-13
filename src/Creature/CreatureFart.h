@@ -20,7 +20,8 @@
 #include "Creature/CreatureLayers.h"
 
 /// The rules for a creature fart. The creature squats as for a poo. On each fifth game turn of the squat loop, a cloud
-/// of dust moves out behind it and a smoke starts at its groin. If the creature looks evil, the villagers near it faint.
+/// of dust moves out behind it and a smoke starts at its groin. The smoke stops when the fart stops. If the creature looks
+/// evil, the villagers near it faint.
 namespace openblack::creature_fart
 {
 /// The squat loop makes a cloud or a lump on each fifth game turn. The frame rate has no effect on the count
@@ -56,6 +57,12 @@ enum class Burst : uint8_t
 /// Gives the velocity of each puff. Each puff moves straight back from the direction that the creature faces. A random
 /// offset of up to half the spread changes each velocity: first on z, then up, then on x
 [[nodiscard]] std::array<glm::vec3, k_Puffs> PuffVelocities(glm::vec2 ahead, float shownSize, const FloatRandom& random);
+/// Tells if the smoke of a fart continues. The smoke continues only while the creature does the plan that made it. When
+/// that plan stops, because it is complete or for another cause, the smoke stops at once
+[[nodiscard]] constexpr bool SmokeContinues(uint32_t smokePlan, bool planActive, uint32_t planNow)
+{
+	return planActive && planNow == smokePlan;
+}
 /// Tells if the fart makes villagers faint, from the evil to good value of the drawn body (-1 evil to 1 good)
 [[nodiscard]] constexpr bool Stinks(float evilGood)
 {

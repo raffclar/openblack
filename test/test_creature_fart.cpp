@@ -107,3 +107,13 @@ TEST(CreatureFart, OnlyAnEvilLookingBodyStinks)
 	EXPECT_FALSE(Stinks(0.0f));
 	EXPECT_FALSE(Stinks(1.0f));
 }
+
+TEST(CreatureFart, TheSmokeContinuesOnlyWhileThePlanThatMadeItContinues)
+{
+	// The creature does the plan that made the smoke
+	EXPECT_TRUE(SmokeContinues(7, true, 7));
+	// The plan is complete and the creature does no plan
+	EXPECT_FALSE(SmokeContinues(7, false, 7));
+	// A different plan replaced the plan that made the smoke
+	EXPECT_FALSE(SmokeContinues(7, true, 8));
+}

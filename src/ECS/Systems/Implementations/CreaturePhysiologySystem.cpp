@@ -348,6 +348,21 @@ void CreaturePhysiologySystem::StepSquats()
 	const auto* tables = Locator::creatureMindSystem::value().GetTables();
 	const auto fart = tables != nullptr ? creature_mind_tables::FindAction(*tables, "Fart") : std::nullopt;
 	auto& registry = Locator::entitiesRegistry::value();
+	// When the plan that made a fart smoke stops, the smoke stops at once
+	std::vector<entt::entity> smokesOut;
+	registry.Each<CreatureSquat, const ChimneySmoke, const CreatureMindState>(
+	    [&smokesOut](entt::entity creature, CreatureSquat& squat, const ChimneySmoke&, const CreatureMindState& mind) {
+		    if (!squat.smokePlan.has_value() ||
+		        !creature_fart::SmokeContinues(*squat.smokePlan, mind.planActive, mind.planSerial))
+		    {
+			    squat.smokePlan.reset();
+			    smokesOut.push_back(creature);
+		    }
+	    });
+	for (const auto creature : smokesOut)
+	{
+		registry.Remove<ChimneySmoke>(creature);
+	}
 	std::vector<entt::entity> winds;
 	std::vector<entt::entity> lumps;
 	registry.Each<const CreatureAnimation, const CreatureMindState>(
@@ -408,6 +423,13 @@ void CreaturePhysiologySystem::LetOutWind(entt::entity creature)
 	registry.AssignOrReplace<ChimneySmoke>(
 	    creature, chimney_smoke::Create(GroinOf(registry, creature, *self, *transform), chimney_smoke::k_HomeSmoke,
 	                                    [&random](float a, float b) { return random.CrtRandom(a, b); }));
+	// The smoke continues only while the creature does the plan that made it
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	auto* squat = registry.TryGet<CreatureSquat>(creature);
+	if (mind != nullptr && squat != nullptr)
+	{
+		squat->smokePlan = mind->planSerial;
+	}
 	// If the body of the creature looks evil, the villagers near it faint
 	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
 	if (morph != nullptr && creature_fart::Stinks(morph->drawn.evilGood) && Locator::reactionSystem::has_value())

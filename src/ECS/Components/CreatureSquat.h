@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 namespace openblack::ecs::components
 {
 
@@ -19,6 +21,8 @@ namespace openblack::ecs::components
 struct CreatureSquat
 {
 	uint32_t turns {0};
+	/// The plan that made the smoke of the fart, by the mind's count of agendas. The smoke stops when this plan stops
+	std::optional<uint32_t> smokePlan;
 };
 
 } // namespace openblack::ecs::components

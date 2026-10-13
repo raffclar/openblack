@@ -202,8 +202,9 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .description = "A hut of the player's town with six of its people about it, three of them standing right at an "
 	                   "evil tiger's feet, and the tiger, facing west, told to break wind every so often.",
 	    .expected = "The tiger squats as for a poo. All through the squat's loop, every fifth game turn, a cloud of "
-	                "grey dust blows out behind it and a white smoke starts afresh at its groin; the last smoke is left "
-	                "rising where it squatted. No lump is dropped. The tiger looking evil, each burst makes a fainting "
+	                "grey dust blows out behind it and a white smoke starts afresh at its groin, at the base of its tail. "
+	                "When the fart stops, the smoke stops at once. No lump is dropped. The tiger looking evil, each burst "
+	                "makes a fainting "
 	                "reaction, which starts a metre wide and grows only slowly, so only the villagers right at its feet "
 	                "faint: they stop where they are (no clip of their own shows it) until the reaction's time is up, "
 	                "then go back to what they were doing. Those further off don't faint.",
