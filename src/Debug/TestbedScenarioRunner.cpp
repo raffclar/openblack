@@ -75,6 +75,7 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/HandGrab.h"
@@ -991,6 +992,10 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 		if (setup.built.has_value())
 		{
 			ecs::construction::SetBuilt(temple, *setup.built);
+		}
+		if (setup.life.has_value())
+		{
+			Locator::entitiesRegistry::value().AssignOrReplace<ecs::components::ObjectLife>(temple, *setup.life);
 		}
 		_temples.push_back(temple);
 	}

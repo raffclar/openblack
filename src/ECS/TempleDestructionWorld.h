@@ -23,6 +23,7 @@
 #include "3D/ModelSurface.h"
 #include "Enums.h"
 #include "Particles/PlasmaCommand.h"
+#include "Physics/TempleHeart.h"
 
 namespace openblack
 {
@@ -35,9 +36,8 @@ class Registry;
 }
 
 /// What a temple's destruction needs of the rest of the game: the entities, the turn's length, the local player, its
-/// sounds, spot visuals and plasma beams, its heart's model, random numbers, the game-over script and taking the temple and its
-/// worship sites away.
-/// The game's own world works through the game's systems; tests give a fake.
+/// sounds, spot visuals and plasma beams, its heart's model, its player's towns, random numbers, the game-over script and
+/// taking the temple and its worship sites away. The game's own world works through the game's systems; tests give a fake.
 namespace openblack::ecs::temple_world
 {
 
@@ -74,6 +74,8 @@ public:
 	/// The triangles of the drawn parts of a thing's model, in the model's space, and where the model is placed
 	[[nodiscard]] virtual std::vector<model_surface::Triangle> DrawnTrianglesOf(entt::entity object) const = 0;
 	[[nodiscard]] virtual glm::mat4 PlacementOf(entt::entity object) const = 0;
+	/// A player's towns as a temple's heart looks over them for something to pass a blow on to
+	[[nodiscard]] virtual std::vector<physics::temple_heart::Town> HeartTowns(PlayerNames owner) = 0;
 	/// The game's random numbers, none when there are none
 	[[nodiscard]] virtual GameRandomInterface* Random() = 0;
 

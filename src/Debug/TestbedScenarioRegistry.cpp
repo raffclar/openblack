@@ -928,6 +928,21 @@ void AddStory(std::vector<Scenario>& all)
 	    // Room 3 is the main room, the one the entrance leads to
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
 	});
+	all.push_back({
+	    .id = "temple.damage_beam",
+	    .name = "A hurt temple's heart beaming across itself",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle with its heart at 30% of its life and no town to "
+	                   "pass blows on to.",
+	    .expected = "Every 1.2 seconds (12 turns) a plasma beam leaps between two points of the heart's model, leaving "
+	                "and arriving along the model's surface, lasting 1.18 seconds and fairly faint (alpha 76 of 255). "
+	                "Each beam sounds one of the five heart beam sounds in turn, from the heart.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {40.0f}, k_Temple + glm::vec2 {40.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
+	});
 	AddBreederOffers(all);
 }
 

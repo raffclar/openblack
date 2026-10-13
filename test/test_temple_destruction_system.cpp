@@ -24,12 +24,14 @@
 
 #include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/TempleDestructionSystem.h"
 #include "ECS/TempleDestructionWorld.h"
 #include "Particles/PlasmaCommand.h"
+#include "Physics/TempleHeart.h"
 #include "Temple/TempleDestruction.h"
 
 using namespace openblack;
@@ -100,6 +102,7 @@ public:
 		return triangles;
 	}
 	[[nodiscard]] glm::mat4 PlacementOf(entt::entity /*object*/) const override { return glm::mat4(1.0f); }
+	[[nodiscard]] std::vector<physics::temple_heart::Town> HeartTowns(PlayerNames /*owner*/) override { return towns; }
 	[[nodiscard]] GameRandomInterface* Random() override { return random; }
 	float RandomShare(float /*spread*/) override { return share; }
 	void StartScript(std::string_view name) override { scripts.emplace_back(name); }
@@ -136,6 +139,7 @@ public:
 	std::vector<uint32_t> ended;
 	std::vector<Beam> beams;
 	std::vector<model_surface::Triangle> triangles;
+	std::vector<physics::temple_heart::Town> towns;
 	GameRandomInterface* random {nullptr};
 };
 
@@ -293,6 +297,105 @@ TEST_F(TempleDestructionSystemTest, ABeamSourceThatHasEndedIsMadeAgain)
 	ASSERT_EQ(_world->beamSources.size(), 2u);
 	ASSERT_GT(_world->beams.size(), before);
 	EXPECT_EQ(_world->beams.back().source, 101u);
+}
+
+/// A hurt heart, its model one roof facing up
+class TempleDamageTest: public TempleDestructionSystemTest
+{
+protected:
+	entt::entity MakeHurtTemple(float life)
+	{
+		const auto temple = MakeTemple(PlayerNames::PLAYER_TWO);
+		_world->registry.Assign<ObjectLife>(temple, life);
+		_world->triangles = {{{{{0.0f, 5.0f, 0.0f}, k_Up}, {{4.0f, 5.0f, 0.0f}, k_Up}, {{0.0f, 5.0f, 4.0f}, k_Up}}}};
+		_world->random = &_random;
+		return temple;
+	}
+	void Turns(int count)
+	{
+		for (int i = 0; i < count; ++i)
+		{
+			Turn();
+		}
+	}
+
+	static constexpr glm::vec3 k_Up {0.0f, 1.0f, 0.0f};
+	SeededRandom _random;
+};
+
+TEST_F(TempleDamageTest, AHurtHeartBeamsAcrossItselfOnItsWaitWithASound)
+{
+	MakeHurtTemple(0.5f);
+	Turns(40);
+	// 1.7 seconds' wait at half its life: 17 turns, a beam once more than that have gone by
+	ASSERT_EQ(_world->beams.size(), 2u);
+	EXPECT_EQ(_world->beams[0].turn, 18);
+	EXPECT_EQ(_world->beams[1].turn, 36);
+	const auto& command = _world->beams[0].command;
+	EXPECT_EQ(command.start.y, 5.0f);
+	EXPECT_EQ(command.end.y, 5.0f);
+	EXPECT_EQ(command.startTangent, k_Up);
+	EXPECT_EQ(command.endTangent, -k_Up);
+	// Each lasts the wait, at the speed of the heart's beams, with an alpha of 60
+	EXPECT_FLOAT_EQ(command.life, 1.7f);
+	EXPECT_FLOAT_EQ(command.speed, particles::k_HeartPlasmaSpeed);
+	EXPECT_EQ(command.alpha, 60);
+	// From the heart's lasting beam source, its player's
+	ASSERT_EQ(_world->beamSources.size(), 1u);
+	EXPECT_EQ(_world->beamSources[0].turn, 18);
+	EXPECT_EQ(_world->beamSources[0].turns, -1);
+	EXPECT_EQ(_world->beamSources[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_world->beams[1].source, 100u);
+	// With 60% of its life or less, each beam sounds, the five sounds in turn
+	EXPECT_EQ(_world->played, (std::vector<int> {18, 36}));
+	EXPECT_EQ(_world->onceSound, entt::hashed_string("InGame.sad/207").value());
+}
+
+TEST_F(TempleDamageTest, AboveSixtyPercentLifeItBeamsWithoutASound)
+{
+	MakeHurtTemple(0.8f);
+	Turns(60);
+	// 2.48 seconds: 24 turns
+	ASSERT_EQ(_world->beams.size(), 2u);
+	EXPECT_EQ(_world->beams[0].turn, 25);
+	EXPECT_EQ(_world->beams[1].turn, 50);
+	EXPECT_EQ(_world->beams[0].command.alpha, 36);
+	EXPECT_TRUE(_world->played.empty());
+}
+
+TEST_F(TempleDamageTest, AWholeHeartDoesntBeam)
+{
+	MakeHurtTemple(1.0f);
+	Turns(60);
+	EXPECT_TRUE(_world->beams.empty());
+	EXPECT_TRUE(_world->beamSources.empty());
+}
+
+TEST_F(TempleDamageTest, ItDoesntBeamWhileItsPlayerHasSomethingToPassBlowsOnTo)
+{
+	const auto temple = MakeHurtTemple(0.2f);
+	const auto building = _world->registry.Create();
+	_world->towns = {{.buildings = {{.entity = building, .available = true, .life = 1.0f, .built = 1.0f}}}};
+	Turns(60);
+	EXPECT_TRUE(_world->beams.empty());
+	EXPECT_TRUE(_world->played.empty());
+	EXPECT_EQ(_world->registry.Get<Temple>(temple).beamTurn, 0u);
+	// Once the building is gone it beams again
+	_world->towns.front().buildings.front().available = false;
+	Turns(10);
+	EXPECT_EQ(_world->beams.size(), 1u);
+}
+
+TEST_F(TempleDamageTest, ItBeamsAtItsFiercestWhileItIsDestroyed)
+{
+	const auto temple = MakeHurtTemple(0.0f);
+	_system->Start(temple);
+	Turns(10);
+	// Every five turns: 0.4 s is four turns, and a beam once more than four have gone by
+	const auto damageBeams =
+	    std::ranges::count_if(_world->beams, [](const FakeWorld::Beam& beam) { return beam.command.alpha == 100; });
+	EXPECT_EQ(damageBeams, 2);
+	EXPECT_EQ(_world->played.size(), 2u);
 }
 
 TEST_F(TempleDestructionSystemTest, StartedAgainWhileTheLoopPlaysASecondLoopSoundsAndBothStopAtTheExplosion)

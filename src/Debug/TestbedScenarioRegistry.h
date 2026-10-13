@@ -752,6 +752,8 @@ struct TempleSetup
 	float angle {0.0f};
 	/// How much of it is built, 0 to 1, for a temple still going up; built when not given
 	std::optional<float> built;
+	/// Its heart's life, 0 to 1, for a temple already hurt; whole when not given
+	std::optional<float> life;
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
