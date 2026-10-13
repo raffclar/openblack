@@ -67,6 +67,7 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
+#include "VillagerCover.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDance.h"
 #include "VillagerFire.h"
@@ -409,6 +410,22 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 		// The creature impresses it by its size, what it last did and how its town feels about it
 		return Taken::Impressed;
 	}
+	// A hunter: one on its way to hide counts its time inside afresh and is neither taken up nor impressed; any other
+	// is frightened by it
+	if (type == Reaction::FleeFromPredator)
+	{
+		if (FinalStateOf(*action) == VillagerStates::GoAndHideInNearbyBuilding)
+		{
+			ecs::villager_cover::ResetHidingTurns(villager);
+			return Taken::No;
+		}
+		if (!wasReacting)
+		{
+			villager_reactions::RememberStateToGoBackTo(*action);
+		}
+		SetTop(*action, VillagerStates::FleeingFromPredatorReaction);
+		return Taken::Impressed;
+	}
 	if (!wasReacting)
 	{
 		villager_reactions::RememberStateToGoBackTo(*action);
@@ -527,6 +544,7 @@ bool villager_reactions::ActsOut(Reaction type)
 	case Reaction::ReactToNewBuilding:
 	case Reaction::ReactToTownCelebration:
 	case Reaction::ReactToCreature:
+	case Reaction::FleeFromPredator:
 		return true;
 	default:
 		return false;

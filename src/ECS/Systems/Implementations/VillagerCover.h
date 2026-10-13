@@ -35,7 +35,12 @@ bool SetupGoAndHideInNearbyBuilding(components::LivingAction& action, entt::enti
                                     Reaction threatKind = Reaction::None);
 /// The point a panicking villager ran from, which it looks back at once it stops
 void SetPanicPoint(entt::entity villager, glm::vec2 point);
+/// A villager on its way to hide, frightened again, starts counting its time inside afresh
+void ResetHidingTurns(entt::entity villager);
 
+/// A villager frightened by a hunter: it hides in a building of its town from a fast hunter coming at it, or one time
+/// in six; otherwise, or with nowhere to hide, it runs from the hunter or turns to watch it
+uint32_t FleeingFromPredatorReaction(components::LivingAction& action);
 uint32_t GoAndHideInNearbyBuilding(components::LivingAction& action);
 uint32_t LookToSeeIfItIsSafe(components::LivingAction& action);
 uint32_t PanicReaction(components::LivingAction& action);

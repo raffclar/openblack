@@ -113,6 +113,37 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "animals.predators_village",
+	    .name = "Hunters frighten a village",
+	    .facet = Facet::Miracles,
+	    .description = "The ground flock cast at a point south of a village of two huts, its wolves running north through "
+	                   "it: four villagers of the player's town beside the huts and two cows south of them.",
+	    .expected = "Each wolf carries a frightening reaction reaching 25 m. A villager it reaches is frightened (half the "
+	                "table's urgency, 80): from a wolf running at it, or one time in six, it heads along the paths for the "
+	                "nearest hut to hide, staying inside while a wolf is within 30 m and 15 to 30 seconds after, then "
+	                "steps out and looks about, going back in if a wolf is still within 25 m; otherwise it runs 10 m away "
+	                "from a wolf coming at it or nearer than 30 m, or turns to watch one further off, giving up once the "
+	                "wolf is 75 m away. A wolf gives up a villager that has got inside. The cows take fright at a running "
+	                "wolf and run 10 m from it at their fleeing speed, then flee or watch it until it is 75 m away. The "
+	                "wolves run at 10 m a second, so most of the frightened are caught before they reach a hut.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-45.0f, 0.0f}, {45.0f, 110.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-30.0f, 75.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {32.0f, 80.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-30.0f, 69.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {32.0f, 74.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-24.0f, 75.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {26.0f, 80.0f}, .joinTown = true},
+	                {.type = AnimalInfo::Cow, .offset = {-18.0f, 48.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {20.0f, 52.0f}}},
+	    .miracles = {{.type = MagicType::FlockGround,
+	                  .point = k_Spot,
+	                  .handOffset = k_HandBehind,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.flock_wolves_fade",
 	    .name = "Ground flock: wolves fade as it ends",
 	    .facet = Facet::Miracles,

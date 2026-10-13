@@ -25,6 +25,7 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/MapCoords.h"
+#include "Animals/PredatorRules.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -34,6 +35,7 @@
 #include "Creature/CreatureReactionRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
@@ -158,9 +160,9 @@ const GLivingInfo* LivingInfoOf(const ecs::Registry& registry, entt::entity enti
 }
 
 /// Whether a reaction reaches a kind of living thing: villagers and creatures every kind; animals, so far, only things
-/// flying at them, fires, things to flee and creatures, all of which they flee
-// TODO(animals): the other reactions animals take up (predators and the others whose priority the animal doesn't zero)
-// belong to the animals' own behaviour, which openblack doesn't run yet
+/// flying at them, fires, things to flee, creatures and hunters, all of which they flee
+// TODO(animals): the other reactions animals take up (those whose priority the animal doesn't zero) belong to the
+// animals' own behaviour, which openblack doesn't run yet
 bool Reaches(const ecs::Registry& registry, entt::entity entity, Reaction type)
 {
 	if (registry.AnyOf<Villager, Creature>(entity))
@@ -168,7 +170,7 @@ bool Reaches(const ecs::Registry& registry, entt::entity entity, Reaction type)
 		return true;
 	}
 	return (type == Reaction::ReactToFlyingObject || type == Reaction::ReactToFire || type == Reaction::FleeFromObject ||
-	        type == Reaction::ReactToCreature) &&
+	        type == Reaction::ReactToCreature || type == Reaction::FleeFromPredator) &&
 	       registry.AllOf<Animal>(entity);
 }
 
@@ -253,7 +255,15 @@ reaction_timing::PredatorWatch PredatorWatchOf(const ecs::Registry& registry, en
 	const auto& livingAt = registry.Get<const Transform>(living).position;
 	watch.animal = registry.AllOf<Animal>(predator);
 	watch.distance = gutils::GetDistanceInMetres(livingAt, predatorAt);
-	if (const auto* walker = registry.TryGet<const WallHug>(predator))
+	if (watch.animal && Locator::animalSystem::has_value())
+	{
+		// An animal by its own speed and step
+		const auto& animalSystem = Locator::animalSystem::value();
+		const auto step = animalSystem.MovementOf(predator);
+		watch.speed = animals::predators::SpeedMetresPerSecond(animalSystem.SpeedOf(predator));
+		watch.comingAt = reaction_timing::ComingAt(predatorAt, glm::vec2(step.x, step.z), livingAt);
+	}
+	else if (const auto* walker = registry.TryGet<const WallHug>(predator))
 	{
 		watch.speed = walker->speed;
 		watch.comingAt = reaction_timing::ComingAt(predatorAt, glm::vec2(walker->step), livingAt);
@@ -263,7 +273,8 @@ reaction_timing::PredatorWatch PredatorWatchOf(const ecs::Registry& registry, en
 	{
 		const auto& states = Locator::livingActionSystem::value();
 		const auto top = states.VillagerGetState(*action, LivingAction::Index::Top);
-		const auto final = states.VillagerGetState(*action, LivingAction::Index::Final);
+		// The state it is to end up in: the state it is in when that is one of its own, else the one it is heading for
+		const auto final = states.VillagerGetFinalState(*action);
 		watch.lookingAtThing = top == VillagerStates::LookingAtObjectReaction;
 		watch.hidingOrLooking =
 		    final == VillagerStates::GoAndHideInNearbyBuilding || final == VillagerStates::LookToSeeIfItIsSafe;
@@ -466,6 +477,70 @@ bool BelievesWithoutReacting(const ecs::Registry& registry, entt::entity entity,
 	return action != nullptr && Locator::livingActionSystem::has_value() &&
 	       Locator::livingActionSystem::value().VillagerGetState(*action, LivingAction::Index::Top) ==
 	           VillagerStates::GoAndHideInNearbyBuilding;
+}
+
+/// How urgent a hunter's reaction is to a living thing: a villager by how it sees the hunter, another hunter by their
+/// strengths, anything else by how fast the hunter goes
+uint8_t PredatorPriority(const ecs::Registry& registry, entt::entity living, entt::entity hunter, const ReactionInfo& info)
+{
+	namespace predators = animals::predators;
+	const bool hunterAnimal = hunter != entt::null && registry.Valid(hunter) && registry.AllOf<Animal, Transform>(hunter);
+	const auto tablePriority = info.priority;
+	if (registry.AllOf<Villager>(living))
+	{
+		const auto* action = registry.TryGet<const LivingAction>(living);
+		if (!hunterAnimal || action == nullptr || !Locator::livingActionSystem::has_value() ||
+		    !Locator::animalSystem::has_value() || !registry.AllOf<Transform>(living))
+		{
+			return 0;
+		}
+		const auto& states = Locator::livingActionSystem::value();
+		const auto& animalSystem = Locator::animalSystem::value();
+		const auto hunterAt = registry.Get<const Transform>(hunter).position;
+		const auto livingAt = registry.Get<const Transform>(living).position;
+		const auto hunterState = animalSystem.TopGameStateOf(hunter).value_or(0);
+		const auto step = animalSystem.MovementOf(hunter);
+		const auto* memory = registry.TryGet<const VillagerReactionMemory>(living);
+		const auto& hunterInfo =
+		    Locator::infoConstants::value().animal.at(static_cast<size_t>(registry.Get<const Animal>(hunter).type));
+		// The game's numbers for an animal asleep and one in its lair
+		constexpr uint8_t k_Asleep = 35;
+		constexpr uint8_t k_InLair = 51;
+		return predators::VillagerPriority({
+		    .animal = true,
+		    .distance = gutils::GetDistanceInMetres(livingAt, hunterAt),
+		    .leastRunDistance = info.minDistanceToRunAwayFromObject,
+		    .atHome = registry.AllOf<AtHome>(living),
+		    .hiding = states.VillagerGetState(*action, LivingAction::Index::Top) == VillagerStates::GoAndHideInNearbyBuilding,
+		    .goingToHide =
+		        states.VillagerGetState(*action, LivingAction::Index::Final) == VillagerStates::GoAndHideInNearbyBuilding,
+		    .lookingAbout = states.VillagerGetFinalState(*action) == VillagerStates::LookToSeeIfItIsSafe,
+		    .turnsLookingAbout = action->turnsSinceStateChange,
+		    .hunterResting = hunterState == k_Asleep || hunterState == k_InLair,
+		    .frightenedBefore =
+		        memory != nullptr && memory->memory.LastReacted(static_cast<uint32_t>(Reaction::FleeFromPredator)) != 0,
+		    .comingAt = reaction_timing::ComingAt(hunterAt, glm::vec2(step.x, step.z), livingAt),
+		    .speed = predators::SpeedMetresPerSecond(animalSystem.SpeedOf(hunter)),
+		    .kindSpeed3 = static_cast<uint32_t>(hunterInfo.speedGroup.speed3),
+		    .tablePriority = tablePriority,
+		});
+	}
+	const auto* own = registry.TryGet<const Animal>(living);
+	if (own != nullptr && predators::IsPredator(own->type))
+	{
+		const auto* hunterInfo = registry.Valid(hunter) ? LivingInfoOf(registry, hunter) : nullptr;
+		const auto* ownInfo = LivingInfoOf(registry, living);
+		return predators::HunterPriority(hunterInfo != nullptr, hunterInfo != nullptr ? hunterInfo->strength : 0.0f,
+		                                 ownInfo != nullptr ? ownInfo->strength : 0.0f, tablePriority);
+	}
+	if (!hunterAnimal || !Locator::animalSystem::has_value())
+	{
+		return predators::OtherPriority(false, 0, 0, tablePriority);
+	}
+	const auto& hunterInfo =
+	    Locator::infoConstants::value().animal.at(static_cast<size_t>(registry.Get<const Animal>(hunter).type));
+	return predators::OtherPriority(true, Locator::animalSystem::value().SpeedOf(hunter),
+	                                static_cast<uint32_t>(hunterInfo.speedGroup.speed2), tablePriority);
 }
 
 /// The kinds of reaction a living thing switching to another reaction of the same kind may take up: fire, a predator, a
@@ -687,6 +762,12 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		{
 			return villager_reaction::Priority(*kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 		}
+	}
+	// A hunter frightens by rules of its own
+	if (reaction.source.type == Reaction::FleeFromPredator)
+	{
+		const auto kind = PredatorPriority(registry, living, reaction.source.initiator, *info);
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
 	// A villager weighs a creature by how its town feels about it; an animal heeds one as its table says
 	// TODO(creature-reactions-2): a creature weighs another by rules of its own that aren't ported yet; until then it takes
@@ -1035,7 +1116,9 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		    Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(source.initiator) : nullptr;
 		const bool flees =
 		    Locator::animalSystem::has_value() &&
-		    (((source.type == Reaction::ReactToFire || source.type == Reaction::FleeFromObject ||
+		    ((source.type == Reaction::FleeFromPredator &&
+		      Locator::animalSystem::value().SetupFleeFromPredator(living, source.initiator)) ||
+		     ((source.type == Reaction::ReactToFire || source.type == Reaction::FleeFromObject ||
 		       source.type == Reaction::ReactToCreature) &&
 		      Locator::animalSystem::value().SetupFleeFromObject(living, source.initiator, source.type)) ||
 		     (source.type == Reaction::ReactToFlyingObject && entry != nullptr && entry->body != nullptr &&
@@ -1262,6 +1345,24 @@ void ReactionSystem::ProcessTurn()
 			                         .position = transform.position});
 		    }
 	    });
+	// Every hunter has one too, which belongs to no player
+	registry.Each<const Animal, const Transform>(
+	    [this, &creatures](entt::entity hunter, const Animal& animal, const Transform& transform) {
+		    if (!animals::predators::IsPredator(animal.type))
+		    {
+			    return;
+		    }
+		    const bool has = std::ranges::any_of(_reactions, [hunter](const Active& reaction) {
+			    return reaction.source.initiator == hunter && reaction.source.type == Reaction::FleeFromPredator;
+		    });
+		    if (!has)
+		    {
+			    creatures.push_back({.initiator = hunter,
+			                         .type = Reaction::FleeFromPredator,
+			                         .player = PlayerNames::NEUTRAL,
+			                         .position = transform.position});
+		    }
+	    });
 	for (const auto& source : creatures)
 	{
 		Create(source);
@@ -1272,7 +1373,8 @@ void ReactionSystem::ProcessTurn()
 	for (auto& reaction : _reactions)
 	{
 		const bool creature = registry.Valid(reaction.source.initiator) && registry.AllOf<Creature>(reaction.source.initiator);
-		const bool follows = creature || reaction.source.type == Reaction::ReactToFlyingObject ||
+		const bool hunter = reaction.source.type == Reaction::FleeFromPredator;
+		const bool follows = creature || hunter || reaction.source.type == Reaction::ReactToFlyingObject ||
 		                     reaction.source.type == Reaction::ReactToVillagerInHand ||
 		                     reaction.source.type == Reaction::ReactToBurningObjectInHand;
 		if (!follows || !registry.Valid(reaction.source.initiator))
@@ -1282,6 +1384,11 @@ void ReactionSystem::ProcessTurn()
 		if (const auto* transform = registry.TryGet<const Transform>(reaction.source.initiator))
 		{
 			reaction.source.position = transform->position;
+		}
+		// A hunter moves by its step
+		if (hunter && Locator::animalSystem::has_value())
+		{
+			reaction.velocity = Locator::animalSystem::value().MovementOf(reaction.source.initiator);
 		}
 		const auto* locomotion = creature ? registry.TryGet<const CreatureLocomotion>(reaction.source.initiator) : nullptr;
 		if (locomotion != nullptr && locomotion->started)

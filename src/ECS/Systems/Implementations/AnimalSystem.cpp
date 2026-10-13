@@ -30,11 +30,14 @@
 #include "Animals/AnimalAnimation.h"
 #include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
+#include "Animals/PredatorRules.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Flock.h"
@@ -55,6 +58,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/WorldObjects.h"
@@ -1069,11 +1073,37 @@ bool AnimalSystem::IsHuntingTargetValid(entt::entity wolf, const Animal& animal,
 	                                      TurnAngleOf(animal), point);
 }
 
+namespace
+{
+/// Whether a hunter can get at its prey: a villager not indoors at home, not in a hand, not hidden in a building and not
+/// dying
+bool PreyReachable(entt::entity prey)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.AllOf<Villager>(prey))
+	{
+		return true;
+	}
+	if (registry.AnyOf<AtHome, InHand>(prey))
+	{
+		return false;
+	}
+	const auto* action = registry.TryGet<const LivingAction>(prey);
+	if (action == nullptr || !Locator::livingActionSystem::has_value())
+	{
+		return true;
+	}
+	const auto& states = Locator::livingActionSystem::value();
+	return states.VillagerGetState(*action, LivingAction::Index::Final) != VillagerStates::Dying &&
+	       states.VillagerGetState(*action, LivingAction::Index::Top) != VillagerStates::GoAndHideInNearbyBuilding;
+}
+} // namespace
+
 void AnimalSystem::Chase(entt::entity wolf, Animal& animal)
 {
 	auto& registry = EntityRegistry();
 	auto& run = registry.Get<SpellWolf>(wolf);
-	if (run.prey == entt::null || !registry.Valid(run.prey))
+	if (run.prey == entt::null || !registry.Valid(run.prey) || !PreyReachable(run.prey))
 	{
 		Abandon(wolf, animal);
 		return;
@@ -1615,6 +1645,104 @@ bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object,
 	return true;
 }
 
+bool AnimalSystem::SetupFleeFromPredator(entt::entity entity, entt::entity predator)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return false;
+	}
+	// TODO(animals): the game remembers what it was doing when it takes up a reaction not already reacting, and once
+	// over goes back to that state's resume state; every state an animal of openblack's can be in resumes deciding
+	// again except one a script holds, which the game leaves in the empty state. openblack decides again.
+	animal->fleeing = predator;
+	animal->fleeReaction = Reaction::FleeFromPredator;
+	SetTopState(*animal, AnimalState::FleeingFromPredator);
+	return true;
+}
+
+std::optional<uint8_t> AnimalSystem::TopGameStateOf(entt::entity entity) const
+{
+	const auto* animal = EntityRegistry().TryGet<const Animal>(entity);
+	return animal != nullptr ? std::optional(static_cast<uint8_t>(GameStateOf(animal->state))) : std::nullopt;
+}
+
+glm::vec3 AnimalSystem::FledThingMovement(entt::entity thing) const
+{
+	const auto& registry = EntityRegistry();
+	if (registry.AllOf<Animal>(thing) && !registry.AllOf<InPhysics>(thing))
+	{
+		return MovementOf(thing);
+	}
+	if (const auto* walker = registry.TryGet<const WallHug>(thing); walker != nullptr && !registry.AllOf<InPhysics>(thing))
+	{
+		const auto step = Metres(walker->step);
+		return {step.x, 0.0f, step.y};
+	}
+	const auto* entry = Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(thing) : nullptr;
+	return entry != nullptr && entry->body != nullptr ? entry->body->velocity : glm::vec3(0.0f);
+}
+
+void AnimalSystem::GiveUpReaction(entt::entity entity)
+{
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().StopReacting(entity);
+	}
+	StopReaction(entity);
+}
+
+void AnimalSystem::FleeFromPredator(entt::entity entity, Animal& animal)
+{
+	auto& registry = EntityRegistry();
+	const auto hunter = animal.fleeing;
+	const auto* at = hunter != entt::null && registry.Valid(hunter) ? registry.TryGet<const Transform>(hunter) : nullptr;
+	const auto& here = registry.Get<const Transform>(entity).position;
+	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(Reaction::FleeFromPredator));
+	const float distance = at != nullptr ? gutils::GetDistanceInMetres(here, at->position) : 0.0f;
+	switch (
+	    animals::predators::AnimalFleeStep(hunter != entt::null, at != nullptr, distance, info.maxDistanceToRunAwayFromObject))
+	{
+	case animals::predators::AnimalFlees::Nothing:
+		return;
+	case animals::predators::AnimalFlees::Stop:
+		GiveUpReaction(entity);
+		return;
+	case animals::predators::AnimalFlees::Run:
+		break;
+	}
+	// A step away from it, across its way when it moves
+	const auto movement = FledThingMovement(hunter);
+	auto to = magic::FleePointFromStill(here, at->position);
+	if (glm::length(movement) > 0.0f)
+	{
+		const float x = Random(magic::k_FleeJitter);
+		const float z = Random(magic::k_FleeJitter);
+		to = magic::FleePointFromMoving(here, at->position, movement, x, z);
+	}
+	if (!OnMap(Xz(to)))
+	{
+		return;
+	}
+	// At its kind's fleeing speed, which nothing changes until it stops fleeing; then it flees the hunter as it flees
+	// anything
+	const auto speed = SpeedStateOf(InfoOf(animal.type), 1);
+	if (animals::grazers::IsGrazer(animal.type))
+	{
+		SetGrazerSpeed(animal, speed);
+	}
+	else
+	{
+		animal.move.speed = speed;
+	}
+	SetupMoveTo(animal, Xz(to), 0.0f, AnimalState::FleeingFromObject);
+	if (const auto logger = spdlog::get("game"); logger != nullptr)
+	{
+		SPDLOG_LOGGER_DEBUG(logger, "Predator: animal {} runs from hunter {}, {:.1f} m away", static_cast<uint32_t>(entity),
+		                    static_cast<uint32_t>(hunter), distance);
+	}
+}
+
 bool AnimalSystem::SetupReactToFlyingObject(entt::entity entity, entt::entity object, float speed)
 {
 	auto& registry = EntityRegistry();
@@ -1645,7 +1773,9 @@ void AnimalSystem::StopReaction(entt::entity entity)
 	}
 	animal->fleeing = entt::null;
 	if (animal->state == AnimalState::FleeingFromObject || animal->state == AnimalState::FleeingAndLookingAtObject ||
-	    (animal->state == AnimalState::MoveToPos && animal->finalState == AnimalState::FleeingAndLookingAtObject))
+	    animal->state == AnimalState::FleeingFromPredator ||
+	    (animal->state == AnimalState::MoveToPos && (animal->finalState == AnimalState::FleeingAndLookingAtObject ||
+	                                                 animal->finalState == AnimalState::FleeingFromObject)))
 	{
 		SetState(*animal, AnimalState::DecideWhatToDo);
 	}
@@ -1653,6 +1783,11 @@ void AnimalSystem::StopReaction(entt::entity entity)
 
 bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 {
+	if (animal.state == AnimalState::FleeingFromPredator)
+	{
+		FleeFromPredator(entity, animal);
+		return true;
+	}
 	const bool running = animal.state == AnimalState::MoveToPos && animal.finalState == AnimalState::FleeingAndLookingAtObject;
 	if (animal.state != AnimalState::FleeingFromObject && animal.state != AnimalState::FleeingAndLookingAtObject && !running)
 	{
@@ -1664,7 +1799,7 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 	// With nothing left to flee it decides again
 	if (at == nullptr)
 	{
-		StopReaction(entity);
+		GiveUpReaction(entity);
 		return true;
 	}
 	// Running to where it flees, it gets there first
@@ -1684,17 +1819,16 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 	{
 		if (!(distance <= info.maxDistanceToRunAwayFromObject))
 		{
-			StopReaction(entity);
+			GiveUpReaction(entity);
 		}
 		return true;
 	}
-	const auto* entry = Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(animal.fleeing) : nullptr;
-	const glm::vec3 velocity = entry != nullptr && entry->body != nullptr ? entry->body->velocity : glm::vec3(0.0f);
+	const glm::vec3 velocity = FledThingMovement(animal.fleeing);
 	const bool coming = magic::ComingTowards(here, at->position, velocity);
 	switch (living::FleeFromObject(distance, info.minDistanceToRunAwayFromObject, info.maxDistanceToRunAwayFromObject, coming))
 	{
 	case living::FleeStep::GiveUp:
-		StopReaction(entity);
+		GiveUpReaction(entity);
 		break;
 	case living::FleeStep::Watch:
 		SetState(animal, AnimalState::FleeingAndLookingAtObject);
