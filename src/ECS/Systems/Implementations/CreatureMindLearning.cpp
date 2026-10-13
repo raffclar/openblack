@@ -937,6 +937,22 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 	return belief;
 }
 
+std::optional<creature_tree::Belief> mind_detail::ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,
+                                                                  entt::entity self)
+{
+	// The temple here is one thing. Acted on, it stands for its heart: a part of the temple of the temple's player.
+	if (const auto* temple = registry.Valid(entity) ? registry.TryGet<const Temple>(entity) : nullptr)
+	{
+		const auto* me = registry.TryGet<const Creature>(self);
+		return creature_tree::CommonBelief({
+		    .type = creature_tree::belief_types::k_CitadelPart,
+		    .player = PlayerNumberOf(temple->owner),
+		    .creaturesPlayer = me != nullptr ? std::optional(PlayerNumberOf(me->owner)) : std::nullopt,
+		});
+	}
+	return BeliefOf(registry, entity, self);
+}
+
 std::optional<uint32_t> mind_detail::LessonActivity(const creature_mind_tables::Tables& tables, Desire desire,
                                                     std::optional<uint32_t> object, std::optional<uint32_t> about)
 {
@@ -1188,7 +1204,8 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	        .action = *action,
 	        .desire = static_cast<Desire>(info.desire),
 	        .object = object,
-	        .belief = object.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*object), creature) : std::nullopt,
+	        .belief =
+	            object.has_value() ? ActedOnBeliefOf(registry, static_cast<entt::entity>(*object), creature) : std::nullopt,
 	        .activity = activity,
 	        .activityBelief =
 	            activity.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*activity), creature) : std::nullopt,
@@ -1311,7 +1328,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		        .action = plan.action,
 		        .desire = plan.desire,
 		        .object = plan.object,
-		        .belief = plan.object.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*plan.object), creature)
+		        .belief = plan.object.has_value() ? ActedOnBeliefOf(registry, static_cast<entt::entity>(*plan.object), creature)
 		                                          : std::nullopt,
 		        .activity = activity,
 		        .activityBelief =
@@ -1504,7 +1521,7 @@ float CreatureMindSystem::ObjectToActOnUsefulness(entt::entity creature, const C
 			return 0.0f;
 		}
 	}
-	const auto belief = BeliefOf(registry, object, creature);
+	const auto belief = ActedOnBeliefOf(registry, object, creature);
 	// Curious, a kind it has had a good look at is a hundredth as useful
 	// TODO(creature-reactions-2): the game makes a thing five times as useful to a curious creature while it does
 	// something the creature finds interesting (only a villager can), and has a rule of its own for one more desire
@@ -1686,6 +1703,15 @@ std::optional<creature_activity::PartFacts> PartFactsOf(const ecs::Registry& reg
 		return std::nullopt;
 	}
 	const auto& info = Locator::infoConstants::value();
+	// The temple stands for its heart
+	if (registry.AllOf<Temple>(part))
+	{
+		return creature_activity::PartFacts {
+		    .kind = Part::Building,
+		    .canActOn = info.citadelHeart.canCreatureInteractWithMe != 0,
+		    .attackable = info.citadelHeart.canCreatureAttackMe != 0,
+		};
+	}
 	if (const auto* villager = registry.TryGet<const Villager>(part))
 	{
 		const auto row = static_cast<size_t>(GVillagerInfo::Find(villager->tribe, villager->number));
@@ -1753,16 +1779,22 @@ std::optional<creature_activity::PartFacts> PartFactsOf(const ecs::Registry& reg
 constexpr float k_MostCompassionToEatFrom = 0.1f;
 
 /// Whether a creature can act on a thing at all. The living and miracles can always have an action. A whole thing, a
-/// worship site and a thing without data cannot. Any other thing lets a creature act on it when its data says so.
-// TODO(creature-belief-lists): the game keeps the heart and the other parts of a temple as things of their own, which a
-// creature can act on when their data lets it. Here the temple is one thing, the whole thing, and has no action.
+/// worship site and a thing without data cannot. Any other thing lets a creature act on it when its data says so. The
+/// temple here is one thing, which stands for its heart: the data of the heart says if a creature can act on it.
+// TODO(creature-belief-types-in-trees): the game also has the creature pens of a temple as parts that a creature can act
+// on. Here the pens are not things of their own.
 bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 {
 	if (registry.AnyOf<Villager, Animal, Creature, ecs::components::Spell>(thing))
 	{
 		return true;
 	}
-	if (registry.AnyOf<WorshipSite, Town, Temple, Flock, ForestTurns>(thing))
+	if (registry.AllOf<Temple>(thing))
+	{
+		return Locator::infoConstants::has_value() &&
+		       Locator::infoConstants::value().citadelHeart.canCreatureInteractWithMe != 0;
+	}
+	if (registry.AnyOf<WorshipSite, Town, Flock, ForestTurns>(thing))
 	{
 		return false;
 	}
@@ -1869,17 +1901,25 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
 	std::vector<creature_planner::ObjectCandidate> parts;
-	for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
-	{
-		if (belief.thing == creature || !registry.Valid(belief.thing) || NoWayLately(registry, mind, belief.thing))
+	const auto add = [&](entt::entity thing) {
+		if (thing == creature || !registry.Valid(thing) || NoWayLately(registry, mind, thing))
 		{
-			continue;
+			return;
 		}
-		const auto facts = PartFactsOf(registry, belief.thing);
+		const auto facts = PartFactsOf(registry, thing);
 		if (facts.has_value() && creature_activity::PartSuits(desire, *facts))
 		{
-			parts.push_back(GoalWorth(creature, mind, desire, belief.thing, activity));
+			parts.push_back(GoalWorth(creature, mind, desire, thing, activity));
 		}
+	};
+	for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
+	{
+		add(belief.thing);
+	}
+	// The temple is its own heart, the part that the creature came across first
+	if (activity.kind == creature_activity::Whole::Citadel)
+	{
+		add(activity.whole);
 	}
 	return parts;
 }
@@ -1933,6 +1973,11 @@ std::optional<entt::entity> CreatureMindSystem::WholeOfShownThing(CreatureMindSt
 	if (registry.AllOf<Creature>(thing))
 	{
 		return std::nullopt;
+	}
+	// The temple is its own heart, a part of itself
+	if (registry.AllOf<Temple>(thing))
+	{
+		return thing;
 	}
 	const auto whole = BelongsTo(thing);
 	if (!whole.has_value() || *whole == thing || !registry.Valid(*whole))
@@ -2531,21 +2576,22 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	const auto lessonActivity = plan.activityObject.has_value() ? std::optional(entt::to_integral(*plan.activityObject))
 	                                                            : LessonActivity(*tables, plan.desire, object, std::nullopt);
 	creature_learning::Remember(
-	    learnt.contexts, {
-	                         .action = *action,
-	                         .desire = plan.desire,
-	                         .object = object,
-	                         .belief = plan.object.has_value() ? BeliefOf(registry, *plan.object, creature) : std::nullopt,
-	                         .activity = lessonActivity,
-	                         .activityBelief = lessonActivity.has_value()
-	                                               ? BeliefOf(registry, static_cast<entt::entity>(*lessonActivity), creature)
-	                                               : std::nullopt,
-	                         .learnable = info.learnable,
-	                         .windowSeconds = info.learningWindowSeconds,
-	                         .source = mind->desires.has_value() ? creature_learning::PlanSource((*mind->desires)[plan.desire])
-	                                                                   .value_or(creature_learning::k_NoTellingSource)
-	                                                             : creature_learning::k_NoTellingSource,
-	                     });
+	    learnt.contexts,
+	    {
+	        .action = *action,
+	        .desire = plan.desire,
+	        .object = object,
+	        .belief = plan.object.has_value() ? ActedOnBeliefOf(registry, *plan.object, creature) : std::nullopt,
+	        .activity = lessonActivity,
+	        .activityBelief = lessonActivity.has_value()
+	                              ? BeliefOf(registry, static_cast<entt::entity>(*lessonActivity), creature)
+	                              : std::nullopt,
+	        .learnable = info.learnable,
+	        .windowSeconds = info.learningWindowSeconds,
+	        .source = mind->desires.has_value() ? creature_learning::PlanSource((*mind->desires)[plan.desire])
+	                                                  .value_or(creature_learning::k_NoTellingSource)
+	                                            : creature_learning::k_NoTellingSource,
+	    });
 	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 	return true;
 }

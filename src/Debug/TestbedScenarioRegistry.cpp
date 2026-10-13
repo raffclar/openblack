@@ -3435,6 +3435,20 @@ void AddMind(std::vector<Scenario>& all)
 	    .commands = {setDesire(Desire::Anger, 1.0f, 2.0f)},
 	});
 	all.push_back({
+	    .id = "mind.angry_at_temple",
+	    .name = "Anger at a temple acts on its heart",
+	    .facet = Facet::Mind,
+	    .description = "A tiger of another player looks north at a temple of the player. A rock lies by the tiger. Its mind "
+	                   "runs; after two seconds it is made as angry as can be.",
+	    .expected = "Its anger is about the temple, and it acts on the heart of the temple: the temple itself, as the "
+	                "temple here is one thing. It does not act on a worship site.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {stranger},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {6.0f, -14.0f}}},
+	    .temples = {{.offset = {0.0f, 70.0f}}},
+	    .commands = {setDesire(Desire::Anger, 1.0f, 2.0f)},
+	});
+	all.push_back({
 	    .id = "mind.impress_village",
 	    .name = "To impress a village it acts on one of its people",
 	    .facet = Facet::Mind,

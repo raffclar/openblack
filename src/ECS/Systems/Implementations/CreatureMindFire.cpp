@@ -33,6 +33,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -102,7 +103,12 @@ std::optional<entt::entity> CreatureMindSystem::BelongsTo(entt::entity thing)
 	{
 		return thing;
 	}
-	// TODO(physics): the game also has a temple's parts belong to the temple; they are not things of their own here
+	// A worship site is a part of its temple. The temple here is its own heart; the creature pens are not things of their
+	// own.
+	if (const auto* site = registry.TryGet<const WorshipSite>(thing))
+	{
+		return registry.Valid(site->temple) ? std::optional(site->temple) : std::nullopt;
+	}
 	if (const auto* villager = registry.TryGet<const Villager>(thing))
 	{
 		return registry.Valid(villager->town) ? std::optional(villager->town) : std::nullopt;

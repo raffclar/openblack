@@ -54,6 +54,10 @@ namespace openblack::ecs::systems::mind_detail
 /// What a creature knows of a thing, as far as the world here tells it
 [[nodiscard]] std::optional<creature_tree::Belief> BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                             entt::entity self);
+/// What a creature knows of a thing that it acts on. The temple here is one thing, which stands for its heart when a
+/// creature acts on it.
+[[nodiscard]] std::optional<creature_tree::Belief> ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,
+                                                                   entt::entity self);
 /// What a plan's desire was about, for the lessons feedback teaches: what the plan says it was about, else for a desire
 /// about something in itself the thing it acted on, else nothing
 [[nodiscard]] std::optional<uint32_t> LessonActivity(const creature_mind_tables::Tables& tables,

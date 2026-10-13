@@ -2280,8 +2280,9 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 		        .action = *action,
 		        .desire = forced.desire,
 		        .object = actionObject,
-		        .belief = actionObject.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*actionObject), creature)
-		                                           : std::nullopt,
+		        .belief = actionObject.has_value()
+		                      ? ActedOnBeliefOf(registry, static_cast<entt::entity>(*actionObject), creature)
+		                      : std::nullopt,
 		        .activity = toNumber(forced.activityObject),
 		        .activityBelief =
 		            forced.activityObject.has_value() ? BeliefOf(registry, *forced.activityObject, creature) : std::nullopt,
