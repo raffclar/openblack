@@ -10,8 +10,10 @@
 #include <cmath>
 
 #include <numbers>
+#include <vector>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <gtest/gtest.h>
 
@@ -204,4 +206,37 @@ TEST(HandHoldPose, ChangingStageMovesTheDrawnHandOverInAStraightLine)
 	fade.Step(HandStage::Holding, 0.1f, position, rotation);
 	ExpectNear(position, {0.0f, 3.0f, 0.0f});
 	EXPECT_FALSE(fade.Fading());
+}
+
+TEST(HandHoldPose, ChangingStageBlendsEachDrawnBoneInAStraightLine)
+{
+	WorldPoseFade fade;
+	// A two-bone hand: its wrist at its origin, its fingers 10 along its own y, drawn at a hundredth of its size
+	std::vector<glm::mat4> bones {glm::mat4(1.0f), glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 10.0f, 0.0f))};
+	const auto place = [](glm::vec3 at, const glm::mat3& turn) {
+		return glm::translate(glm::mat4(1.0f), at) * glm::mat4(turn) * glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
+	};
+	const glm::mat3 upright {1.0f};
+	// Pulling, the hand is drawn upright at the grip
+	auto pulling = bones;
+	fade.Apply(0.016f, place({0.0f, 0.0f, 0.0f}, upright), pulling);
+	EXPECT_EQ(pulling, bones);
+	// Taken into the hand, it is placed at once a little higher and turned upside down: halfway through the blend each
+	// bone is drawn halfway along its own straight line, rather than the hand folding up or swinging away
+	const glm::mat3 upsideDown {glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
+	const auto held = place({0.0f, 1.0f, 0.0f}, upsideDown);
+	fade.Start();
+	auto holding = bones;
+	fade.Apply(k_FadeSeconds * 0.5f, held, holding);
+	EXPECT_TRUE(fade.Fading());
+	const auto wrist = glm::vec3((held * holding[0])[3]);
+	const auto fingers = glm::vec3((held * holding[1])[3]);
+	ExpectNear(wrist, {0.0f, 0.5f, 0.0f});
+	// The fingers go from 0.1 above the old wrist to 0.1 below the new one: halfway, beside the wrist
+	ExpectNear(fingers, {0.0f, 0.5f, 0.0f});
+	// Once the blend is over, the hand is drawn as it is placed and posed
+	holding = bones;
+	fade.Apply(k_FadeSeconds, held, holding);
+	EXPECT_FALSE(fade.Fading());
+	ExpectNear(glm::vec3((held * holding[1])[3]), {0.0f, 0.9f, 0.0f});
 }

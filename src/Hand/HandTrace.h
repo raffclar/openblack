@@ -60,6 +60,8 @@ struct Frame
 	uint8_t stage {0};
 	bool busy {false};
 	std::optional<uint32_t> held;
+	/// Where what it holds is drawn
+	std::optional<glm::vec3> heldAt;
 	/// What the cursor picked, which the hand goes by: the object, the land, and the point on a thing it rests on
 	std::optional<uint32_t> picked;
 	std::optional<glm::vec3> cursorLand;
