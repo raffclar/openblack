@@ -4148,15 +4148,20 @@ void Game::PrepareNewLand(land_change::Kind change)
 	{
 		Locator::scriptObjects::value().ClearForNewLand();
 	}
-	// A new land has no weather of the last one, and none of its script's fades, cinema bars or clipping
+	// A new land has no weather of the last one
 	if (Locator::weatherSystem::has_value())
 	{
 		Locator::weatherSystem::value().Reset();
 		Locator::snowSystem::value().Reset();
 		Locator::waterRingSystem::value().Reset();
 	}
-	Locator::cinematicDirectorSystem::value().Reset();
-	// Nor the opening's light and hand
+	// The scripts' hold on the screen goes on through the story's change of land: a fade to black made on the last land
+	// stays black while the next loads, for that land's scripts to fade in. It goes when the scripts start again
+	if (!rules.scriptScreenKept)
+	{
+		Locator::cinematicDirectorSystem::value().Reset();
+	}
+	// The opening's light and hand go
 	Locator::introSystem::value().ReleaseAll();
 	// Nor does any script keep the camera, the game's speed or the dialogue
 	if (Locator::camera::has_value())
