@@ -2242,7 +2242,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_look::NoticedMover::turn>("turn");
 	Reflect<openblack::creature_look::Target>(context, ValueOnly {})
 	    .Field<&openblack::creature_look::Target::id>("id")
-	    .Field<&openblack::creature_look::Target::kind>("kind")
+	    .Field<&openblack::creature_look::Target::interest>("interest")
 	    .Field<&openblack::creature_look::Target::point>("point")
 	    .Field<&openblack::creature_look::Target::watchedTurns>("watchedTurns");
 	Reflect<openblack::creature_look::WhileGoing>(context, ValueOnly {})

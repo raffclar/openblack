@@ -12,16 +12,18 @@
 #include <cstdint>
 
 #include <optional>
-#include <span>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-/// What an idle creature looks at as it looks about: the most interesting thing it can see, the nearer the better.
-/// The longer it has watched one thing, the less anything else catches its eye, until what it watches goes out of sight.
+/// What a creature watches as it looks about. As its eyes sweep the land, each thing that it sees can take over from
+/// what it watches: when it watches nothing, or when the thing catches its eye more than what it watches holds it. The
+/// longer it watches one thing, the less a new thing catches its eye. It watches the thing until the thing goes out of
+/// view.
 namespace openblack::creature_look
 {
-/// The kinds of things a creature finds interesting, from most to least
+/// The kinds of things a creature finds interesting, from most to least. A toy and another static thing that the
+/// creature can pick up have interests of their own. A mobile object has no interest.
 enum class Interest : uint8_t
 {
 	Dove,
@@ -32,18 +34,58 @@ enum class Interest : uint8_t
 	Abode,
 	Tree,
 	Fixed,
+	Toy,
+	Static,
+	None,
 };
 [[nodiscard]] float InterestOf(Interest kind);
 
-/// After this many seconds watching one thing, nothing else catches the creature's eye
-constexpr float k_BoredSeconds = 20.0f;
+/// After this many whole seconds of watching one thing, nothing else catches the creature's eye
+constexpr uint32_t k_BoredSeconds = 20;
 /// How high a creature's eyes are above its feet at size 1
 constexpr float k_HeadHeight = 15.0f;
 
 /// How far a creature looks about, in metres: bigger creatures see further
 [[nodiscard]] float LookRange(float size);
-/// Things within half the range are as interesting as they get; further ones less so, down to nothing at the range
+/// Things within half the range are as interesting as they get. Further things are less so: nothing at the range, and
+/// less than nothing past it.
 [[nodiscard]] float DistanceFactor(float distance, float range);
+
+/// A creature keeps a thing in view when it can see the thing, and the thing is less than a sixth of a turn from the
+/// way its body faces. The game measures this difference without a wrap at a full turn. A thing in its own map cell is
+/// always in view. The angles are game angles.
+constexpr int32_t k_BodyViewParts = 6;
+[[nodiscard]] bool InView(uint16_t looking, uint16_t facing, uint16_t direction, bool sameCell);
+
+/// A thing that the creature sees as its eyes sweep the land, and how far it is along the ground
+struct Candidate
+{
+	uint32_t id;
+	Interest kind;
+	float distance;
+};
+
+/// What the creature watches: the thing, its interest when the creature started to watch it, where the creature looks
+/// to see it, and for how many turns it has watched it
+struct Target
+{
+	std::optional<uint32_t> id;
+	float interest {0.0f};
+	glm::vec3 point {0.0f};
+	uint32_t watchedTurns {0};
+};
+
+/// How much what it watches holds the creature: the creature's weight for things, times the interest, times the
+/// distance factor at the distance now (held between 0 and the range). Nothing holds it when it watches nothing.
+[[nodiscard]] float Hold(const Target& target, float distance, float range, float weight);
+/// A thing in view that the creature sees takes over what it watches, if it watches nothing or if the thing catches its
+/// eye more than what it watches holds it. A thing catches its eye by the weight, its interest and the distance factor,
+/// less as the whole seconds of watching go up to k_BoredSeconds. Returns whether the thing took over.
+bool Consider(Target& target, const Candidate& candidate, float watchedDistance, float range, float weight,
+              uint32_t turnsPerSecond);
+/// One turn of watching: while the thing that the creature watches is in view, the creature watches it a turn longer.
+/// Else the creature watches nothing.
+void Watch(Target& target, bool inView);
 
 /// The creature looking about
 struct Viewer
@@ -53,35 +95,6 @@ struct Viewer
 	glm::vec3 ahead;
 	float size;
 };
-/// Whether a creature can see a point: in front of it, within its range
-[[nodiscard]] bool CanSee(const Viewer& viewer, const glm::vec3& point);
-
-struct Candidate
-{
-	uint32_t id;
-	Interest kind;
-	/// Where the creature looks to look at it
-	glm::vec3 point;
-};
-
-/// What the creature watches and for how many turns it has
-struct Target
-{
-	std::optional<uint32_t> id;
-	Interest kind {Interest::Fixed};
-	glm::vec3 point {0.0f};
-	uint32_t watchedTurns {0};
-};
-
-/// How much a thing catches the creature's eye from where it is
-[[nodiscard]] float Priority(const Viewer& viewer, Interest kind, const glm::vec3& point);
-
-/// One game turn of looking about: what it watches, if still in sight, is watched a turn longer; then each candidate in
-/// sight, its priority less as the creature grows bored, takes over if it beats what is watched. Candidates should
-/// include the thing watched, where it is now; if it isn't among them, it is no longer there.
-[[nodiscard]] Target LookAbout(Target target, std::span<const Candidate> candidates, const Viewer& viewer,
-                               float turnsPerSecond);
-
 /// Where to look when nothing is interesting: straight ahead at head height
 [[nodiscard]] glm::vec3 PointAhead(const Viewer& viewer);
 

@@ -362,7 +362,7 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::Poo(Always(1)).back().face, Cue::Smile);
 	EXPECT_EQ(creature_mind::Puke().back().face, Cue::Grimace);
 	EXPECT_EQ(creature_mind::Emote(animations::k_Happy).back().face, Cue::AttitudeToPlayer);
-	EXPECT_EQ(creature_mind::HangAround(Always(0)).front().face, Cue::Idle);
+	EXPECT_EQ(creature_mind::HangAround({}, k_Turn, Always(0))[1].face, Cue::Idle);
 	EXPECT_EQ(creature_mind::LookAt({}, 1.0f).back().face, Cue::Amazed);
 	EXPECT_EQ(creature_mind::PutDownHeld().back().face, Cue::None);
 	EXPECT_EQ(creature_mind::Faint().back().face, Cue::None);
@@ -485,6 +485,9 @@ TEST(CreatureLook, InterestByKind)
 	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Villager), 0.5f);
 	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Tree), 0.3f);
 	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Fixed), 0.25f);
+	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Toy), 0.9f);
+	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::Static), 0.4f);
+	EXPECT_FLOAT_EQ(creature_look::InterestOf(creature_look::Interest::None), 0.0f);
 }
 
 TEST(CreatureLook, BiggerCreaturesLookFurther)
@@ -499,61 +502,83 @@ TEST(CreatureLook, NearerIsMoreInteresting)
 	EXPECT_FLOAT_EQ(creature_look::DistanceFactor(10.0f, 100.0f), 1.0f);
 	EXPECT_FLOAT_EQ(creature_look::DistanceFactor(49.0f, 100.0f), 1.0f);
 	EXPECT_FLOAT_EQ(creature_look::DistanceFactor(75.0f, 100.0f), 0.25f);
+	// Past the range, less than nothing
+	EXPECT_FLOAT_EQ(creature_look::DistanceFactor(150.0f, 100.0f), -0.5f);
 }
 
-TEST(CreatureLook, ItSeesWhatIsInFront)
+TEST(CreatureLook, ItKeepsInViewWhatItSeesAndFaces)
 {
-	const creature_look::Viewer viewer {.position = {0.0f, 0.0f, 0.0f}, .ahead = {0.0f, 0.0f, -1.0f}, .size = 1.0f};
-	EXPECT_TRUE(creature_look::CanSee(viewer, {20.0f, 0.0f, -50.0f}));
-	EXPECT_FALSE(creature_look::CanSee(viewer, {50.0f, 0.0f, -20.0f}));
-	EXPECT_FALSE(creature_look::CanSee(viewer, {0.0f, 0.0f, 50.0f}));
-	EXPECT_FALSE(creature_look::CanSee(viewer, {0.0f, 0.0f, -200.0f}));
-	// Anything right by it
-	EXPECT_TRUE(creature_look::CanSee(viewer, {0.0f, 0.0f, 5.0f}));
+	// Looking and facing along game angle 0
+	EXPECT_TRUE(creature_look::InView(0, 0, 0x100, false));
+	// Seen, but a sixth of a turn or more from the way the body faces
+	EXPECT_FALSE(creature_look::InView(0x200, 0, 0x155, false));
+	EXPECT_TRUE(creature_look::InView(0x200, 0, 0x154, false));
+	// Faced, but past a third of a turn from the way the head looks
+	EXPECT_FALSE(creature_look::InView(0x400, 0x100, 0x100, false));
+	// The body's difference does not wrap round a full turn
+	EXPECT_FALSE(creature_look::InView(0x7F0, 0x7F0, 0x10, false));
+	// Anything in its own cell
+	EXPECT_TRUE(creature_look::InView(0x400, 0, 0x400, true));
 }
 
-TEST(CreatureLook, ItWatchesTheMostInterestingThing)
+TEST(CreatureLook, ItWatchesTheFirstThingThatItSees)
 {
-	const creature_look::Viewer viewer {.position = {0.0f, 0.0f, 0.0f}, .ahead = {0.0f, 0.0f, -1.0f}, .size = 1.0f};
-	const std::array<creature_look::Candidate, 3> candidates {{
-	    {.id = 1, .kind = creature_look::Interest::Tree, .point = {0.0f, 0.0f, -30.0f}},
-	    {.id = 2, .kind = creature_look::Interest::Creature, .point = {10.0f, 0.0f, -40.0f}},
-	    {.id = 3, .kind = creature_look::Interest::Villager, .point = {0.0f, 0.0f, 40.0f}},
-	}};
-	const auto target = creature_look::LookAbout({}, candidates, viewer, k_TurnsPerSecond);
-	EXPECT_EQ(target.id, 2u);
+	creature_look::Target target;
+	// With nothing watched, even a thing of no interest far past the range takes over
+	EXPECT_TRUE(creature_look::Consider(target, {.id = 4, .kind = creature_look::Interest::None, .distance = 500.0f}, 0.0f,
+	                                    150.0f, 0.999f, 10));
+	EXPECT_EQ(target.id, 4u);
 	EXPECT_EQ(target.watchedTurns, 0u);
-	const auto later = creature_look::LookAbout(target, candidates, viewer, k_TurnsPerSecond);
-	EXPECT_EQ(later.id, 2u);
-	EXPECT_EQ(later.watchedTurns, 1u);
+	creature_look::Watch(target, true);
+	EXPECT_EQ(target.watchedTurns, 1u);
+}
+
+TEST(CreatureLook, AMoreInterestingThingTakesOver)
+{
+	creature_look::Target tree {.id = 1, .interest = 0.3f, .watchedTurns = 0};
+	// The creature catches its eye more than the tree holds it
+	EXPECT_TRUE(creature_look::Consider(tree, {.id = 2, .kind = creature_look::Interest::Creature, .distance = 40.0f}, 30.0f,
+	                                    150.0f, 0.999f, 10));
+	EXPECT_EQ(tree.id, 2u);
+	EXPECT_FLOAT_EQ(tree.interest, 0.85f);
+	// A villager does not catch its eye more than the creature holds it
+	EXPECT_FALSE(creature_look::Consider(tree, {.id = 3, .kind = creature_look::Interest::Villager, .distance = 10.0f}, 40.0f,
+	                                     150.0f, 0.999f, 10));
+	EXPECT_EQ(tree.id, 2u);
 }
 
 TEST(CreatureLook, TheLongerItWatchesTheLessElseCatchesItsEye)
 {
-	const creature_look::Viewer viewer {.position = {0.0f, 0.0f, 0.0f}, .ahead = {0.0f, 0.0f, -1.0f}, .size = 1.0f};
-	const std::array<creature_look::Candidate, 2> candidates {{
-	    {.id = 1, .kind = creature_look::Interest::Tree, .point = {0.0f, 0.0f, -30.0f}},
-	    {.id = 2, .kind = creature_look::Interest::Creature, .point = {10.0f, 0.0f, -40.0f}},
-	}};
-	// Watching the tree for a while: the creature, more than twice as interesting, still takes over at first
-	creature_look::Target tree {
-	    .id = 1, .kind = creature_look::Interest::Tree, .point = {0.0f, 0.0f, -30.0f}, .watchedTurns = 50};
-	EXPECT_EQ(creature_look::LookAbout(tree, candidates, viewer, k_TurnsPerSecond).id, 2u);
+	// Watching a tree for 18 whole seconds: a creature catches its eye a tenth as much, 0.085 against 0.3
+	creature_look::Target tree {.id = 1, .interest = 0.3f, .watchedTurns = 189};
+	EXPECT_FALSE(creature_look::Consider(tree, {.id = 2, .kind = creature_look::Interest::Creature, .distance = 40.0f}, 30.0f,
+	                                     150.0f, 0.999f, 10));
+	// At 5 whole seconds (59 turns), three quarters as much: 0.6375 against 0.3
+	tree.watchedTurns = 59;
+	EXPECT_TRUE(creature_look::Consider(tree, {.id = 2, .kind = creature_look::Interest::Creature, .distance = 40.0f}, 30.0f,
+	                                    150.0f, 0.999f, 10));
 	// After twenty seconds, nothing else does
-	tree.watchedTurns = 200;
-	EXPECT_EQ(creature_look::LookAbout(tree, candidates, viewer, k_TurnsPerSecond).id, 1u);
+	creature_look::Target bored {.id = 1, .interest = 0.25f, .watchedTurns = 200};
+	EXPECT_FALSE(creature_look::Consider(bored, {.id = 2, .kind = creature_look::Interest::Dove, .distance = 0.0f}, 140.0f,
+	                                     150.0f, 0.999f, 10));
 }
 
-TEST(CreatureLook, WhatGoesOutOfSightIsDropped)
+TEST(CreatureLook, WhatItWatchesHoldsItLessFarAway)
 {
-	const creature_look::Viewer viewer {.position = {0.0f, 0.0f, 0.0f}, .ahead = {0.0f, 0.0f, -1.0f}, .size = 1.0f};
-	const std::array<creature_look::Candidate, 1> behind {{
-	    {.id = 7, .kind = creature_look::Interest::Creature, .point = {0.0f, 0.0f, 60.0f}},
-	}};
-	const creature_look::Target watching {
-	    .id = 7, .kind = creature_look::Interest::Creature, .point = {0.0f, 0.0f, -60.0f}, .watchedTurns = 3};
-	EXPECT_FALSE(creature_look::LookAbout(watching, behind, viewer, k_TurnsPerSecond).id.has_value());
-	EXPECT_FALSE(creature_look::LookAbout(watching, {}, viewer, k_TurnsPerSecond).id.has_value());
+	const creature_look::Target tree {.id = 1, .interest = 0.4f};
+	EXPECT_FLOAT_EQ(creature_look::Hold(tree, 30.0f, 100.0f, 1.0f), 0.4f);
+	EXPECT_FLOAT_EQ(creature_look::Hold(tree, 75.0f, 100.0f, 1.0f), 0.1f);
+	// Held to the range: never less than nothing
+	EXPECT_FLOAT_EQ(creature_look::Hold(tree, 300.0f, 100.0f, 1.0f), 0.0f);
+	EXPECT_FLOAT_EQ(creature_look::Hold({}, 30.0f, 100.0f, 1.0f), 0.0f);
+}
+
+TEST(CreatureLook, WhatGoesOutOfViewIsDropped)
+{
+	creature_look::Target watching {.id = 7, .interest = 0.85f, .watchedTurns = 3};
+	creature_look::Watch(watching, false);
+	EXPECT_FALSE(watching.id.has_value());
+	EXPECT_EQ(watching.watchedTurns, 0u);
 }
 
 TEST(CreatureLook, WithNothingToSeeItLooksAhead)
@@ -565,37 +590,145 @@ TEST(CreatureLook, WithNothingToSeeItLooksAhead)
 	EXPECT_NEAR(point.z, 0.0f, k_Tolerance);
 }
 
-TEST(CreatureIdleMind, HangingAroundWalksSomewhereNearbyThenSits)
+/// A home 100 north of its temple, in an area of radius 10, for a creature 20 tall
+const creature_mind::HangAroundPlaces k_HangAroundPlaces {
+    .home = {100.0f, 0.0f, 200.0f}, .temple = glm::vec3 {100.0f, 0.0f, 100.0f}, .confinementRadius = 10.0f, .height = 20.0f};
+
+TEST(CreatureIdleMind, HangingAroundStartsWithAWalkHome)
 {
 	creature_mind::IdleMind mind;
-	// Draws of 5: the last lot, which is hanging around, 5 degrees round and 25 units away
+	// Draws of 5: the last lot, which is hanging around
 	const auto random = Always(5);
 	auto senses = FakeBody {}.Senses();
-	senses.position = {100.0f, 200.0f};
+	senses.position = {10.0f, 20.0f};
+	senses.hangAround = k_HangAroundPlaces;
 	const auto first = creature_mind::Think(mind, senses, random);
 	EXPECT_EQ(mind.activity, creature_mind::Activity::HangAround);
 	ASSERT_TRUE(first.move.has_value());
 	EXPECT_EQ(first.move->kind, creature_mind::Movement::Kind::ToPoint);
-	const auto angle = 5.0f * std::numbers::pi_v<float> / 180.0f;
-	EXPECT_NEAR(first.move->point.x, 100.0f + (25.0f * std::cos(angle)), k_Tolerance);
-	EXPECT_NEAR(first.move->point.y, 200.0f + (25.0f * std::sin(angle)), k_Tolerance);
+	EXPECT_NEAR(first.move->point.x, 100.0f, k_Tolerance);
+	EXPECT_NEAR(first.move->point.y, 200.0f, k_Tolerance);
+	// It stops at its height from home, at most 5
+	EXPECT_NEAR(first.move->maxDistance, creature_mind::k_HangAroundHomeReach, k_Tolerance);
 
 	// On its way, it keeps going
 	senses.moving = true;
 	senses.bodyBusy = true;
 	for (int i = 0; i < 10; ++i)
 	{
-		const auto commands = creature_mind::Think(mind, senses, random);
-		EXPECT_FALSE(commands.move.has_value());
-		EXPECT_FALSE(commands.startSequence);
+		EXPECT_FALSE(creature_mind::Think(mind, senses, random).move.has_value());
 		EXPECT_EQ(mind.step, 0u);
 	}
-	// Arrived, it sits down
+	// Arrived, it waits while it looks about
 	senses.moving = false;
 	senses.bodyBusy = false;
-	EXPECT_FALSE(creature_mind::Think(mind, senses, random).startSequence);
+	EXPECT_FALSE(creature_mind::Think(mind, senses, random).move.has_value());
 	EXPECT_EQ(mind.step, 1u);
-	EXPECT_TRUE(creature_mind::Think(mind, senses, random).startSequence);
+	EXPECT_TRUE(creature_mind::Think(mind, senses, random).lookAbout);
+}
+
+TEST(CreatureIdleMind, HangingAroundGoesOutFromHomeAwayFromTheTemple)
+{
+	using Kind = creature_mind::Step::Kind;
+	using Movement = creature_mind::Movement;
+	// Draws of 5: a lot that sends it out, and it points
+	const auto agenda = creature_mind::HangAround(k_HangAroundPlaces, k_Turn, Always(5));
+	ASSERT_EQ(agenda.size(), 7u);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::ToPoint);
+	ASSERT_TRUE(agenda[0].gaze.has_value());
+	EXPECT_TRUE(agenda[0].gaze->whileGoing);
+	// The wait is two seconds and up to three more, in whole turns
+	EXPECT_EQ(agenda[1].kind, Kind::Wait);
+	EXPECT_NEAR(agenda[1].seconds, 2.0f, k_Tolerance);
+	EXPECT_EQ(agenda[1].face, creature_face::Cue::Idle);
+	// It walks out for eight tenths of the radius, away from the temple, and stops within 2
+	EXPECT_EQ(agenda[2].kind, Kind::Move);
+	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::ToPoint);
+	EXPECT_NEAR(agenda[2].movement.point.x, 100.0f, k_Tolerance);
+	EXPECT_NEAR(agenda[2].movement.point.y, 208.0f, k_Tolerance);
+	EXPECT_NEAR(agenda[2].movement.maxDistance, 2.0f, k_Tolerance);
+	ASSERT_TRUE(agenda[2].gaze.has_value());
+	EXPECT_TRUE(agenda[2].gaze->whileGoing);
+	// It faces a point 50 from home away from the temple and looks at it
+	EXPECT_EQ(agenda[3].movement.kind, Movement::Kind::FacePoint);
+	EXPECT_NEAR(agenda[3].movement.point.y, 250.0f, k_Tolerance);
+	ASSERT_TRUE(agenda[3].gaze.has_value() && agenda[3].gaze->point.has_value());
+	EXPECT_NEAR(agenda[3].gaze->point->z, 250.0f, k_Tolerance);
+	// It points at the point for a second, amazed
+	EXPECT_EQ(agenda[4].kind, Kind::Object);
+	EXPECT_EQ(agenda[4].order.kind, creature_mind::ObjectOrder::Kind::PointAt);
+	EXPECT_NEAR(agenda[4].order.point.y, 250.0f, k_Tolerance);
+	ASSERT_TRUE(agenda[4].order.seconds.has_value());
+	EXPECT_NEAR(*agenda[4].order.seconds, 1.0f, k_Tolerance);
+	EXPECT_EQ(agenda[4].face, creature_face::Cue::Amazed);
+	// Then it turns to the temple and sits for ten seconds and a little more, mirrored half the time
+	EXPECT_EQ(agenda[5].movement.kind, Movement::Kind::FacePoint);
+	EXPECT_NEAR(agenda[5].movement.point.y, 100.0f, k_Tolerance);
+	EXPECT_EQ(agenda[6].kind, Kind::Static);
+	EXPECT_EQ(agenda[6].sequence[1], animations::k_Sit);
+	EXPECT_TRUE(agenda[6].mirrorAtRandom);
+	EXPECT_NEAR(agenda[6].seconds, 10.0f + (5.0f * 0.005f), k_Tolerance);
+	EXPECT_EQ(agenda[6].face, creature_face::Cue::None);
+}
+
+TEST(CreatureIdleMind, HangingAroundOutFromHomeItSitsHalfTheTime)
+{
+	// The lot 1 sends it out, and the draw of 0 of two makes it sit
+	const creature_mind::Random random = [](uint32_t range) { return range == creature_mind::k_HangAroundLots ? 1u : 0u; };
+	const auto agenda = creature_mind::HangAround(k_HangAroundPlaces, k_Turn, random);
+	ASSERT_EQ(agenda.size(), 7u);
+	EXPECT_EQ(agenda[4].kind, creature_mind::Step::Kind::Static);
+	EXPECT_EQ(agenda[4].sequence[1], animations::k_Sit);
+	EXPECT_EQ(agenda[6].kind, creature_mind::Step::Kind::Static);
+}
+
+TEST(CreatureIdleMind, HangingAroundTheLastLotsSitAndLookAtTheTemple)
+{
+	const auto agenda = creature_mind::HangAround(k_HangAroundPlaces, k_Turn, Always(9));
+	ASSERT_EQ(agenda.size(), 4u);
+	EXPECT_EQ(agenda[2].movement.kind, creature_mind::Movement::Kind::FacePoint);
+	EXPECT_NEAR(agenda[2].movement.point.y, 100.0f, k_Tolerance);
+	EXPECT_EQ(agenda[3].kind, creature_mind::Step::Kind::Static);
+}
+
+TEST(CreatureIdleMind, HangingAroundTheFirstLotOrNoTempleIsAYawn)
+{
+	auto noTemple = k_HangAroundPlaces;
+	noTemple.temple.reset();
+	for (const auto& agenda : {creature_mind::HangAround(k_HangAroundPlaces, k_Turn, Always(0)),
+	                           creature_mind::HangAround(noTemple, k_Turn, Always(5))})
+	{
+		ASSERT_EQ(agenda.size(), 3u);
+		EXPECT_EQ(agenda[2].kind, creature_mind::Step::Kind::Action);
+		EXPECT_EQ(agenda[2].animation, animations::k_Tired);
+		EXPECT_TRUE(agenda[2].sleepyEyes);
+		EXPECT_EQ(agenda[2].face, creature_face::Cue::Idle);
+	}
+}
+
+TEST(CreatureIdleMind, HangingAroundTheWayOutIncludesTheHeightOfHome)
+{
+	// Home is 30 above the temple and 40 north of it, so the way out climbs as it goes
+	const creature_mind::HangAroundPlaces places {
+	    .home = {0.0f, 30.0f, 0.0f}, .temple = glm::vec3 {0.0f, 0.0f, -40.0f}, .confinementRadius = 10.0f, .height = 3.0f};
+	const auto agenda = creature_mind::HangAround(places, k_Turn, Always(5));
+	ASSERT_EQ(agenda.size(), 7u);
+	EXPECT_NEAR(agenda[0].movement.maxDistance, 3.0f, k_Tolerance);
+	EXPECT_NEAR(agenda[2].movement.point.x, 0.0f, k_Tolerance);
+	EXPECT_NEAR(agenda[2].movement.point.y, 6.4f, k_Tolerance);
+	EXPECT_NEAR(agenda[4].order.point.y, 40.0f, k_Tolerance);
+	ASSERT_TRUE(agenda[4].order.pointHeight.has_value());
+	EXPECT_NEAR(*agenda[4].order.pointHeight, 60.0f, k_Tolerance);
+}
+
+TEST(CreatureIdleMind, HangingAroundAtTheTempleItGoesOutAlongX)
+{
+	auto places = k_HangAroundPlaces;
+	places.temple = places.home + glm::vec3 {0.0005f, 20.0f, -0.0005f};
+	const auto agenda = creature_mind::HangAround(places, k_Turn, Always(5));
+	ASSERT_EQ(agenda.size(), 7u);
+	EXPECT_NEAR(agenda[2].movement.point.x, 108.0f, k_Tolerance);
+	EXPECT_NEAR(agenda[2].movement.point.y, 200.0f, k_Tolerance);
 }
 
 TEST(CreatureIdleMind, AFollowStepStopsWhenItsTimeIsUp)

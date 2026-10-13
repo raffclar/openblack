@@ -19,22 +19,21 @@
 #include <glm/vec2.hpp>
 
 #include "Common/GUtilsAngle.h"
+#include "Creature/CreatureObjectBeliefs.h"
 
 using namespace openblack;
 using namespace openblack::creature_look;
 
 namespace
 {
-constexpr std::array<float, 8> k_Interest {0.9f, 0.9f, 0.85f, 0.7f, 0.5f, 0.4f, 0.3f, 0.25f};
-/// How much things on the land catch a creature's eye, against mountains and the sea, which it doesn't look at yet
-constexpr float k_ObjectWeight = 1.0f;
+constexpr std::array<float, 11> k_Interest {0.9f, 0.9f, 0.85f, 0.7f, 0.5f, 0.4f, 0.3f, 0.25f, 0.9f, 0.4f, 0.0f};
 /// The land the creature looks over is a square of map cells, this many metres across each
 constexpr float k_CellMetres = 10.0f;
 /// The square is the odd number of cells nearest below the square root of this much per size, and this much more
 constexpr float k_CellsSquaredPerSize = 60.0f;
 constexpr float k_CellsSquaredAtSizeZero = 160.0f;
-/// Creatures see things up to a sixth of a turn either side of ahead, and anything in their own cell
-constexpr float k_HalfFieldOfView = std::numbers::pi_v<float> / 3.0f;
+/// A full turn in game angles
+constexpr int32_t k_Circle = 0x800;
 /// How far ahead the creature looks when nothing catches its eye
 constexpr float k_AheadMetres = 50.0f;
 } // namespace
@@ -60,66 +59,55 @@ float creature_look::DistanceFactor(float distance, float range)
 	return distance < range * 0.5f ? 1.0f : 1.0f - (distance / range);
 }
 
-bool creature_look::CanSee(const Viewer& viewer, const glm::vec3& point)
+bool creature_look::InView(uint16_t looking, uint16_t facing, uint16_t direction, bool sameCell)
 {
-	const glm::vec2 offset {point.x - viewer.position.x, point.z - viewer.position.z};
-	const auto distance = glm::length(offset);
-	if (distance < k_CellMetres)
+	if (sameCell)
 	{
 		return true;
 	}
-	if (distance > LookRange(viewer.size))
+	const auto apart = std::abs(static_cast<int32_t>(facing) - static_cast<int32_t>(direction));
+	return creature_object_beliefs::CanSee(looking, direction, false) && apart < k_Circle / k_BodyViewParts;
+}
+
+float creature_look::Hold(const Target& target, float distance, float range, float weight)
+{
+	if (!target.id.has_value())
+	{
+		return 0.0f;
+	}
+	return weight * target.interest * DistanceFactor(std::clamp(distance, 0.0f, std::max(range, 0.0f)), range);
+}
+
+bool creature_look::Consider(Target& target, const Candidate& candidate, float watchedDistance, float range, float weight,
+                             uint32_t turnsPerSecond)
+{
+	const auto interest = InterestOf(candidate.kind);
+	const auto watchedSeconds = turnsPerSecond > 0 ? target.watchedTurns / turnsPerSecond : 0u;
+	const auto boredom =
+	    1.0f - (static_cast<float>(std::min(watchedSeconds, k_BoredSeconds)) / static_cast<float>(k_BoredSeconds));
+	const auto catches = boredom * weight * DistanceFactor(candidate.distance, range) * interest;
+	if (target.id.has_value() && !(Hold(target, watchedDistance, range, weight) < catches))
 	{
 		return false;
 	}
-	const glm::vec2 ahead {viewer.ahead.x, viewer.ahead.z};
-	if (glm::length(ahead) <= 0.0f)
-	{
-		return false;
-	}
-	const auto cosine = glm::dot(offset / distance, glm::normalize(ahead));
-	return cosine > std::cos(k_HalfFieldOfView);
+	target = {.id = candidate.id, .interest = interest, .point = target.point, .watchedTurns = 0};
+	return true;
 }
 
-float creature_look::Priority(const Viewer& viewer, Interest kind, const glm::vec3& point)
+void creature_look::Watch(Target& target, bool inView)
 {
-	const auto distance = glm::length(glm::vec2(point.x - viewer.position.x, point.z - viewer.position.z));
-	const auto range = LookRange(viewer.size);
-	return InterestOf(kind) * k_ObjectWeight * DistanceFactor(std::min(distance, range), range);
-}
-
-Target creature_look::LookAbout(Target target, std::span<const Candidate> candidates, const Viewer& viewer,
-                                float turnsPerSecond)
-{
-	if (target.id.has_value())
+	if (!target.id.has_value())
 	{
-		const auto current = std::ranges::find(candidates, *target.id, &Candidate::id);
-		if (current == candidates.end() || !CanSee(viewer, current->point))
-		{
-			target = {};
-		}
-		else
-		{
-			target.point = current->point;
-			++target.watchedTurns;
-		}
+		return;
 	}
-
-	for (const auto& candidate : candidates)
+	if (inView)
 	{
-		if (candidate.id == target.id || !CanSee(viewer, candidate.point))
-		{
-			continue;
-		}
-		const auto watchedSeconds = turnsPerSecond > 0.0f ? static_cast<float>(target.watchedTurns) / turnsPerSecond : 0.0f;
-		const auto boredom = 1.0f - (std::clamp(watchedSeconds, 0.0f, k_BoredSeconds) / k_BoredSeconds);
-		const auto priority = boredom * Priority(viewer, candidate.kind, candidate.point);
-		if (!target.id.has_value() || Priority(viewer, target.kind, target.point) < priority)
-		{
-			target = {.id = candidate.id, .kind = candidate.kind, .point = candidate.point, .watchedTurns = 0};
-		}
+		++target.watchedTurns;
 	}
-	return target;
+	else
+	{
+		target = {};
+	}
 }
 
 glm::vec3 creature_look::PointAhead(const Viewer& viewer)

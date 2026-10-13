@@ -98,13 +98,6 @@ std::string AnimationLabel(size_t animation)
 	return name.empty() ? fmt::format("{}", animation) : fmt::format("{} {}", animation, name);
 }
 
-std::string_view LookKindName(creature_look::Interest kind)
-{
-	constexpr std::array<std::string_view, 8> k_Names {"dove",     "citadel", "creature", "animal",
-	                                                   "villager", "abode",   "tree",     "fixed object"};
-	return k_Names.at(static_cast<size_t>(kind));
-}
-
 std::string_view MotionName(CreatureLocomotion::Motion motion)
 {
 	constexpr std::array<std::string_view, 6> k_Names {"Standing", "Planning a route", "Confused",
@@ -617,8 +610,8 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	ImGui::Text("Gesture %s", animation->gesture.animation ? AnimationLabel(*animation->gesture.animation).c_str() : "none");
 	if (mind->look.id.has_value() && animation->lookAt.has_value())
 	{
-		ImGui::Text("Looks at a %s (entity %u) for %.1f s", LookKindName(mind->look.kind).data(), *mind->look.id,
-		            static_cast<double>(mind->look.watchedTurns) / 10.0);
+		ImGui::Text("Looks at entity %u, of interest %.2f, for %.1f s", *mind->look.id,
+		            static_cast<double>(mind->look.interest), static_cast<double>(mind->look.watchedTurns) / 10.0);
 	}
 	else
 	{

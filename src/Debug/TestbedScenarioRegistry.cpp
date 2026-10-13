@@ -2687,6 +2687,26 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "senses.hang_around_at_home",
+	    .name = "Hangs around at home",
+	    .facet = Facet::Senses,
+	    .description = "A tiger kept within 40 of its home at the temple is told to hang around at home, again and again. "
+	                   "A birch stands to the west as the thing that the order names.",
+	    .expected = "It walks home and waits for two to five seconds while it looks about. Then, one time in ten, it yawns. "
+	                "Seven times in ten, it walks 32 out from home away from the temple, faces away from the temple and "
+	                "sits or points. Then it turns to the temple and sits for ten to fifteen seconds. Two times in ten, it "
+	                "only turns to the temple and sits.",
+	    .environment = {.dispenserGrid = false, .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}, {0.0f, 80.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {-30.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-60.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.5f, .radius = 40.0f},
+	                 {.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HangAroundAtHome"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 40.0f, .object = 0, .action = "HangAroundAtHome"}},
+	    .repeatFrom = 2,
+	});
+
+	all.push_back({
 	    .id = "leash.temple_leashes",
 	    .name = "The leashes hanging on the temple",
 	    .facet = Facet::Leash,
