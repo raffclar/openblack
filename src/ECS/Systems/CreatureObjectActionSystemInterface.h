@@ -107,8 +107,9 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld(entt::entity creature) const = 0;
 	/// What something is worth to eat, if anything
 	[[nodiscard]] virtual std::optional<float> FoodValueOf(entt::entity object) const = 0;
-	/// Whether a creature can pick something up: things and villagers, not the land's fixtures nor other creatures
-	[[nodiscard]] virtual bool CanPickUp(entt::entity object) const = 0;
+	/// Whether a creature can pick something up: things and villagers, not the land's fixtures nor other creatures, nor
+	/// what a script or the thing's state keeps from it
+	[[nodiscard]] virtual bool CanPickUp(entt::entity creature, entt::entity object) const = 0;
 	/// Whether a creature can knock something down: trees, homes and things
 	[[nodiscard]] virtual bool CanDestroy(entt::entity target) const = 0;
 	/// How far a creature's hand gets at its furthest stretch when picking up, measured straight, from where the hand
