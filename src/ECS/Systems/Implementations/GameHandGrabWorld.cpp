@@ -681,11 +681,11 @@ bool GameHandGrabWorld::LeashTap(entt::entity object)
 	return Locator::leashSystem::has_value() && Locator::leashSystem::value().TapThing(HandPlayer(), object);
 }
 
-void GameHandGrabWorld::RemakeDrawList()
+void GameHandGrabWorld::RemakeDrawList(uint32_t frames)
 {
 	if (Locator::objectDrawListSystem::has_value())
 	{
-		Locator::objectDrawListSystem::value().RequestRebuild(1);
+		Locator::objectDrawListSystem::value().RequestRebuild(frames);
 	}
 }
 

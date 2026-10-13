@@ -22,7 +22,9 @@
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
+#include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
+#include "Locator.h"
 
 using namespace openblack;
 using openblack::ecs::systems::ScriptControlSystem;
@@ -55,6 +57,29 @@ std::shared_ptr<const edt::EDTTrack> StraightTrack()
 	track->focus = StraightWay({2400.0f, 10.0f, 2550.0f});
 	return track;
 }
+
+/// Counts the requests to draw all the high-detail villagers as usual again
+class CountingHighDetail final: public ecs::systems::HighDetailSystemInterface
+{
+public:
+	explicit CountingHighDetail(int& releases)
+	    : _releases(releases)
+	{
+	}
+	void Make(entt::entity) override {}
+	void Release(entt::entity) override {}
+	bool ReleaseAll() override
+	{
+		++_releases;
+		return true;
+	}
+	bool Order(entt::entity, ecs::high_detail_rules::ThingSpecial, bool) override { return false; }
+	void Update() override {}
+	void PlaceEyes(uint32_t, const glm::mat4&) override {}
+
+private:
+	int& _releases;
+};
 
 ScriptControlSystem::CameraRequest Outside(uint32_t task)
 {
@@ -177,6 +202,26 @@ TEST(ScriptControl, AStoppedTaskGivesBackWhatItHad)
 	EXPECT_FALSE(withSpeed.camera);
 	EXPECT_TRUE(withSpeed.gameSpeed);
 	EXPECT_FALSE(control.MaySetGameSpeed(6));
+}
+
+TEST(ScriptControl, TheCameraGivenBackDrawsTheHighDetailVillagersAsUsual)
+{
+	int releases = 0;
+	Locator::highDetailSystem::emplace<CountingHighDetail>(releases);
+	Camera camera;
+	ScriptControlSystem control;
+	ASSERT_TRUE(control.StartCameraControl(camera, Outside(5), FlatLand));
+	EXPECT_EQ(releases, 0);
+	EXPECT_TRUE(control.EndCameraControl(camera, 5));
+	EXPECT_EQ(releases, 1);
+	// The same occurs when the task with the camera stops
+	ASSERT_TRUE(control.StartCameraControl(camera, Outside(6), FlatLand));
+	control.TaskStopped(camera, 6);
+	EXPECT_EQ(releases, 2);
+	// Another task that stops does not release them
+	control.TaskStopped(camera, 7);
+	EXPECT_EQ(releases, 2);
+	Locator::highDetailSystem::reset();
 }
 
 TEST(ScriptControl, OnlyTheTaskWithTheGameSpeedSetsIt)
@@ -327,6 +372,52 @@ TEST(ScriptCamera, ATrackPutsTheCameraWhereItsWaysHaveGotToAtTheFramesTime)
 	model.MoveFocus({2505.0f, 6.0f, 2507.0f}, 1.0f);
 	EXPECT_FALSE(model.OnTrack());
 	EXPECT_FALSE(model.Arrived());
+}
+
+TEST(ScriptCamera, PutFromOutsideItStopsThereAtOnce)
+{
+	Camera camera;
+	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
+	model.MoveOrigin({2500.0f, 50.0f, 2900.0f}, 5.0f);
+	model.MoveFocus({2600.0f, 0.0f, 2900.0f}, 5.0f);
+	model.Update(std::chrono::milliseconds(100), camera);
+	model.PlaceAt({2450.0f, 40.0f, 2460.0f}, {2470.0f, 5.0f, 2480.0f});
+	EXPECT_TRUE(model.Arrived());
+	const auto placed = model.Update(std::chrono::milliseconds(100), camera);
+	ASSERT_TRUE(placed.has_value());
+	EXPECT_FLOAT_EQ(placed->origin.z, 2460.0f);
+	EXPECT_FLOAT_EQ(placed->focus.x, 2470.0f);
+	EXPECT_TRUE(model.Arrived());
+}
+
+TEST(ScriptCamera, PutFromOutsideItsTrackContinues)
+{
+	Camera camera;
+	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
+	const auto track = StraightTrack();
+	model.RunTrack(track);
+	model.PassGameTime(std::chrono::milliseconds(500));
+	model.Update(std::chrono::milliseconds(16), camera);
+	model.PlaceAt({2000.0f, 40.0f, 2000.0f}, {2010.0f, 5.0f, 2010.0f});
+	// The track continues and puts the camera back on it on the next frame
+	EXPECT_TRUE(model.OnTrack());
+	const auto next = model.Update(std::chrono::milliseconds(16), camera);
+	ASSERT_TRUE(next.has_value());
+	camera_track::WayRunner runner(track->position);
+	const auto expected = runner.Get(track->position, 500);
+	EXPECT_FLOAT_EQ(next->origin.x, expected.x);
+}
+
+TEST(ScriptControl, TheKeptCameraDetailsStartAtZeroAndStayForANewLand)
+{
+	ScriptControlSystem control;
+	EXPECT_EQ(control.GetCameraDetails().origin, glm::vec3(0.0f));
+	EXPECT_EQ(control.GetCameraDetails().focus, glm::vec3(0.0f));
+	control.StoreCameraDetails({.origin = {1.0f, 2.0f, 3.0f}, .focus = {4.0f, 5.0f, 6.0f}});
+	control.StoreCameraDetails({.origin = {7.0f, 8.0f, 9.0f}, .focus = {10.0f, 11.0f, 12.0f}});
+	control.Reset();
+	EXPECT_EQ(control.GetCameraDetails().origin, glm::vec3(7.0f, 8.0f, 9.0f));
+	EXPECT_EQ(control.GetCameraDetails().focus, glm::vec3(10.0f, 11.0f, 12.0f));
 }
 
 TEST(ScriptCamera, NoTrackRunsNothing)

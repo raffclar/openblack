@@ -124,7 +124,7 @@ private:
 	/// and is never planted again
 	void LetGo(components::HandGrab& grab, glm::vec3 velocity, bool forced);
 	/// The hand holds nothing, having let go before taking anything or let go of what it held
-	static void Empty(components::HandGrab& grab);
+	void Empty(components::HandGrab& grab);
 
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] bool HandInInfluence() const;
