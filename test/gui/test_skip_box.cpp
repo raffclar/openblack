@@ -308,3 +308,23 @@ TEST(SkipBox, AKeptPickTheProfileCantTakeMoves)
 	ASSERT_TRUE(answered.answer.has_value());
 	EXPECT_FALSE(SkipFor(*answered.answer).keepOldCreature);
 }
+
+// A change of land closes the question with no answer. Then the box takes no input, and the hand can show again.
+TEST(SkipBox, AWithdrawnQuestionGivesNoAnswer)
+{
+	SkipFixture f;
+	ASSERT_TRUE(f.box.IsActive());
+	EXPECT_TRUE(f.box.Withdraw());
+	EXPECT_FALSE(f.box.IsActive());
+	// A click on the OK button of a closed box gives no answer
+	EXPECT_FALSE(f.Click(k_Ok).answer.has_value());
+	// The box fades out
+	f.box.Update(1.0f);
+	EXPECT_FALSE(f.box.IsVisible());
+	// A closed box stays closed
+	EXPECT_FALSE(f.box.Withdraw());
+	// The next new game asks the question again
+	f.box.Show(true);
+	EXPECT_TRUE(f.box.IsActive());
+	EXPECT_TRUE(f.Click(k_Ok).answer.has_value());
+}

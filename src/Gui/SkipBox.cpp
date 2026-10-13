@@ -138,6 +138,17 @@ void SkipBox::Show(bool currentProfileHasCreature)
 	_fade.SetDestination(1.0f, k_FadeInSeconds);
 }
 
+bool SkipBox::Withdraw()
+{
+	const bool wasActive = std::exchange(_active, false);
+	_answer.reset();
+	if (wasActive)
+	{
+		_fade.SetDestination(0.0f, k_FadeOutSeconds);
+	}
+	return wasActive;
+}
+
 void SkipBox::MouseMove(glm::ivec2 point)
 {
 	if (_active)
