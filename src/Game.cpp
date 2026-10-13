@@ -4352,10 +4352,6 @@ void Game::PrepareNewLand(land_change::Kind change)
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
-	if (Locator::objectDrawListSystem::has_value())
-	{
-		Locator::objectDrawListSystem::value().Reset();
-	}
 	if (Locator::appleBarrelSystem::has_value())
 	{
 		Locator::appleBarrelSystem::value().Reset();
@@ -4395,6 +4391,12 @@ void Game::PrepareNewLand(land_change::Kind change)
 	Locator::skySystem::value().KeepForNextLand();
 	// Reset everything. Deletes all entities and their components
 	Locator::entitiesRegistry::value().Reset();
+	// The new land makes the draw list again on its first frame only. Thus reset the draw list after the entities go:
+	// a thing that the hand held asks for two frames when it goes.
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().Reset();
+	}
 	Locator::skySystem::value().Initialize();
 	// TODO(#661): split entities that are permanent from map entities and move hand and camera to init
 	// We need a hand for the player
