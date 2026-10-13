@@ -473,6 +473,12 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		const auto kind = ecs::villager_creature::Priority(living, reaction.source.initiator);
 		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
+	// A villager heeds a burning thing in the hand when near it or the thing moves fast
+	if (reaction.source.type == Reaction::ReactToBurningObjectInHand && registry.AllOf<Villager>(living))
+	{
+		const auto kind = villager_reactions::BurningInHandPriority(living, reaction.source.initiator, info->priority);
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
 	// A villager heeds its town's celebration only when the town itself makes it
 	if (reaction.source.type == Reaction::ReactToTownCelebration && registry.AllOf<Villager>(living))
 	{
@@ -568,7 +574,6 @@ void ReactionSystem::Spread(Active& reaction)
 
 void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::entity>& mobiles)
 {
-	const auto* info = InfoOf(reaction.source.type);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto type = static_cast<uint32_t>(reaction.source.type);
 	for (const auto entity : mobiles)
@@ -603,19 +608,7 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			state = &registry.Assign<LivingReaction>(entity);
 		}
 		auto& memory = MemoryOf(registry, entity, *state);
-		const bool creature = registry.AllOf<Creature>(entity);
-		// A forester at work goes for wood again straight away; a villager waits for a creature by its own rule
-		const bool villagerAndCreature = reaction.source.type == Reaction::ReactToCreature && registry.AllOf<Villager>(entity);
-		const auto again =
-		    creature ? info->numGameTurnsForCreatureBeforeReactingAgain
-		    : villagerAndCreature
-		        ? ecs::villager_creature::TurnsBeforeReactingAgain(
-		              entity, reaction.source.initiator,
-		              villager_reaction::SpreadDistance({at.x, at.z}, {reaction.source.position.x, reaction.source.position.z}))
-		    : reaction.source.type == Reaction::ReactToWood && registry.AllOf<Villager>(entity) &&
-		            ecs::villager_forester::ReactsToWoodAgainAtOnce(entity)
-		        ? 0u
-		        : info->numGameTurnsForNormalThingsBeforeReactingAgain;
+		const auto again = AgainTurns(reaction, entity, at);
 		// Impressed without reacting, it is the last in the cell the reaction reaches
 		if (BelievesWithoutReacting(registry, entity, reaction.source.type))
 		{
@@ -672,6 +665,40 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			Start(reaction, entity, *state, true);
 		}
 	}
+}
+
+uint32_t ReactionSystem::AgainTurns(const Active& reaction, entt::entity living, const glm::vec3& at) const
+{
+	const auto* info = InfoOf(reaction.source.type);
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (registry.AllOf<Creature>(living))
+	{
+		return info->numGameTurnsForCreatureBeforeReactingAgain;
+	}
+	if (registry.AllOf<Villager>(living))
+	{
+		switch (reaction.source.type)
+		{
+		case Reaction::ReactToCreature:
+			// A villager waits for a creature by its own rule
+			return ecs::villager_creature::TurnsBeforeReactingAgain(
+			    living, reaction.source.initiator,
+			    villager_reaction::SpreadDistance({at.x, at.z}, {reaction.source.position.x, reaction.source.position.z}));
+		case Reaction::ReactToBurningObjectInHand:
+			return villager_reactions::BurningInHandAgainTurns(living, reaction.source.initiator,
+			                                                   info->numGameTurnsForNormalThingsBeforeReactingAgain);
+		case Reaction::ReactToWood:
+			// A forester at work goes for wood again straight away
+			if (ecs::villager_forester::ReactsToWoodAgainAtOnce(living))
+			{
+				return 0;
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	return info->numGameTurnsForNormalThingsBeforeReactingAgain;
 }
 
 void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction& state, bool takingOver)
@@ -907,13 +934,15 @@ void ReactionSystem::ProcessTurn()
 	{
 		Create(source);
 	}
-	// A reaction to a flying thing, to a villager held in the hand, or to a creature, is where the thing is now; a
+	// A reaction to a flying thing, to a villager or a burning thing held in the hand, or to a creature, is where the
+	// thing is now; a
 	// creature moves the way it faces, as far as matters to those fleeing it
 	for (auto& reaction : _reactions)
 	{
 		const bool creature = registry.Valid(reaction.source.initiator) && registry.AllOf<Creature>(reaction.source.initiator);
 		const bool follows = creature || reaction.source.type == Reaction::ReactToFlyingObject ||
-		                     reaction.source.type == Reaction::ReactToVillagerInHand;
+		                     reaction.source.type == Reaction::ReactToVillagerInHand ||
+		                     reaction.source.type == Reaction::ReactToBurningObjectInHand;
 		if (!follows || !registry.Valid(reaction.source.initiator))
 		{
 			continue;

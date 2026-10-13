@@ -107,6 +107,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -940,6 +941,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		{
 			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
 			Locator::fireflySystem::value().Create(map_coords::FromWorld(land, placed.position));
+		}
+		if (object.alight && Locator::fireSystem::has_value())
+		{
+			Locator::fireSystem::value().SetOnFire(_objects.back(), 0.0f);
 		}
 	}
 }

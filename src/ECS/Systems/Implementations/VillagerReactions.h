@@ -97,6 +97,11 @@ uint32_t Watching(components::LivingAction& action);
 /// reaction's reach, and stops reacting once it is further
 uint32_t WaitForMate(components::LivingAction& action);
 
+/// How urgently a villager heeds a burning thing in the hand, and how long it waits before heeding one again: by how far
+/// it is from the thing and how fast the thing moves
+[[nodiscard]] uint8_t BurningInHandPriority(entt::entity villager, entt::entity thing, uint32_t tablePriority);
+[[nodiscard]] uint32_t BurningInHandAgainTurns(entt::entity villager, entt::entity thing, uint32_t tableTurns);
+
 /// The share of an impression a villager's town takes: its population for unchanged belief over its people
 [[nodiscard]] float TownShare(entt::entity town);
 

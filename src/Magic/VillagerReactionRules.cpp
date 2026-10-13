@@ -19,6 +19,8 @@ using namespace openblack::magic;
 namespace
 {
 constexpr float k_MaxPriority = 255.0f;
+/// A burning thing in the hand moving this fast, in metres a second, alarms villagers beyond the least running distance
+constexpr float k_FastBurningThing = 3.0f;
 } // namespace
 
 bool villager_reaction::TakesUp(openblack::Reaction type)
@@ -53,6 +55,22 @@ bool villager_reaction::ReactedToWhenBuilt(openblack::AbodeType type)
 	default:
 		return false;
 	}
+}
+
+uint8_t villager_reaction::BurningInHandPriority(float distance, float leastRunDistance, float thingSpeed,
+                                                 uint32_t tablePriority)
+{
+	if (distance <= leastRunDistance || thingSpeed >= k_FastBurningThing)
+	{
+		return static_cast<uint8_t>(tablePriority & 0xFFu);
+	}
+	return 0;
+}
+
+uint32_t villager_reaction::BurningInHandAgainTurns(float distance, float leastRunDistance, float thingSpeed,
+                                                    uint32_t tableTurns)
+{
+	return distance < leastRunDistance || thingSpeed > k_FastBurningThing ? 0 : tableTurns;
 }
 
 uint8_t villager_reaction::TownCelebrationPriority(const CelebrationWatch& watch, uint32_t tablePriority)

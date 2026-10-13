@@ -294,6 +294,8 @@ struct ObjectSetup
 	std::optional<float> built;
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
+	/// The thing is set alight as it is made, burning as at the start of a fire
+	bool alight {false};
 };
 
 /// A particle effect played on the land

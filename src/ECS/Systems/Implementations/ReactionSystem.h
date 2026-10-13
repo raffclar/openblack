@@ -58,6 +58,8 @@ private:
 	/// How urgent a reaction is to a living thing where it stands now, by its distance to the reaction or one given
 	[[nodiscard]] uint32_t PriorityTo(const Active& reaction, entt::entity living, const glm::vec3& at) const;
 	[[nodiscard]] uint32_t PriorityTo(const Active& reaction, entt::entity living, const glm::vec3& at, float distance) const;
+	/// The turns a living thing waits before taking up a reaction's kind again
+	[[nodiscard]] uint32_t AgainTurns(const Active& reaction, entt::entity living, const glm::vec3& at) const;
 	/// A living thing takes up a reaction: it is impressed by it, and does what it does about it
 	/// A living takes up a reaction; one taking it over from another it reacted to counts as reacting already
 	void Start(Active& reaction, entt::entity living, components::LivingReaction& state, bool takingOver = false);

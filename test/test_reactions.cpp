@@ -1153,3 +1153,18 @@ TEST(ReactionRules, OnlyAnOrdinaryVillagerHeedsItsOwnTownCelebratingWithoutACent
 	EXPECT_EQ(TownCelebrationPriority({.scripted = true, .hasTown = true, .madeByOwnTown = true}, 90), 0u);
 	EXPECT_EQ(TownCelebrationPriority({}, 90), 0u);
 }
+
+// A burning thing in the hand alarms a villager near it, or further off when it moves fast; one near it, or alarmed by a
+// thing moving faster still, heeds it again at once
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionRules, ABurningThingInTheHandAlarmsThoseNearOrWhenItMovesFast)
+{
+	using magic::villager_reaction::BurningInHandAgainTurns;
+	using magic::villager_reaction::BurningInHandPriority;
+	EXPECT_EQ(BurningInHandPriority(10.0f, 10.0f, 0.0f, 120), 120u);
+	EXPECT_EQ(BurningInHandPriority(10.5f, 10.0f, 2.9f, 120), 0u);
+	EXPECT_EQ(BurningInHandPriority(40.0f, 10.0f, 3.0f, 120), 120u);
+	EXPECT_EQ(BurningInHandAgainTurns(9.0f, 10.0f, 0.0f, 50), 0u);
+	EXPECT_EQ(BurningInHandAgainTurns(10.0f, 10.0f, 3.0f, 50), 50u);
+	EXPECT_EQ(BurningInHandAgainTurns(20.0f, 10.0f, 3.5f, 50), 0u);
+}

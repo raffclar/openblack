@@ -240,6 +240,32 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "they stand. Thirty seconds after the tiger last frightened the town its fear lapses into "
 	                "indifference and they go back to what they were doing.");
 
+	// A burning cart near a town's people, taken up in the hand
+	all.push_back({
+	    .id = "villagers.burning_in_hand",
+	    .name = "Villagers running from a burning thing in the hand",
+	    .facet = Facet::Objects,
+	    .description = "A hut of the player's town north of the middle with six of its people about it, and a cart burning "
+	                   "a hundred metres south of them, too far off for its fire to alarm them. A second in, the hand, held "
+	                   "still over the village, takes the burning cart up.",
+	    .expected = "Taken into the hand, the cart's fire stops making its fire reaction and makes a burning thing in "
+	                "the hand's reaction instead: the villagers no further from it than the "
+	                "reaction's least running distance (or any in reach while it moves at 3 metres a second or more) run "
+	                "straight away from it, then turn to watch it from a safe distance, giving up once it is out of reach.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 25.0f}, {20.0f, 55.0f}}, .distance = 0.7f},
+	    .objects = {{.type = MobileObjectInfo::Cart, .offset = {-4.0f, -60.0f}, .alight = true},
+	                {.type = AbodeInfo::CelticHut, .offset = {-10.0f, 46.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-2.0f, 34.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-8.0f, 36.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 40.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 30.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {4.0f, 44.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-12.0f, 32.0f}, .joinTown = true}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 1.0f, .object = 0}},
+	    .hand = HandHold {.offset = {-4.0f, 38.0f}, .height = 6.0f},
+	});
+
 	// A town whose store has run out of food, with fields to farm
 	std::vector<ObjectSetup> hungry {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},

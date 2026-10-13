@@ -15,8 +15,10 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <numbers>
 #include <optional>
+#include <utility>
 
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
@@ -416,6 +418,7 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 	{
 	case Reaction::FleeFromObject:
 	case Reaction::FleeFromSpell:
+	case Reaction::ReactToBurningObjectInHand:
 		SetTop(*action, VillagerStates::FleeingFromObjectReaction);
 		break;
 	case Reaction::LookAtNiceSpell:
@@ -500,6 +503,7 @@ bool villager_reactions::ActsOut(Reaction type)
 	{
 	case Reaction::FleeFromObject:
 	case Reaction::FleeFromSpell:
+	case Reaction::ReactToBurningObjectInHand:
 	case Reaction::LookAtNiceSpell:
 	case Reaction::ReactToImpressiveSpell:
 	case Reaction::ReactToTeleport:
@@ -715,6 +719,43 @@ uint32_t villager_reactions::DanceWhileReacting(LivingAction& action)
 		return Locator::livingActionSystem::value().VillagerCallState(action, LivingAction::Index::Top);
 	}
 	return ecs::villager_dance::PerformDance(action, VillagerStates::DanceWhileReacting);
+}
+
+namespace
+{
+/// How far a villager is from a burning thing, and how fast the thing moves, in metres a second: a thing that doesn't walk
+/// about keeps still as far as this goes
+std::pair<float, float> BurningThingFrom(entt::entity villager, entt::entity thing)
+{
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(thing) || !registry.AllOf<Transform>(thing) || !registry.AllOf<Transform>(villager))
+	{
+		return {std::numeric_limits<float>::max(), 0.0f};
+	}
+	const float distance = gutils::GetDistanceInMetres(registry.Get<const Transform>(villager).position,
+	                                                   registry.Get<const Transform>(thing).position);
+	const auto* walker = registry.TryGet<const WallHug>(thing);
+	return {distance, walker != nullptr ? walker->speed : 0.0f};
+}
+
+float LeastRunDistance()
+{
+	return Locator::infoConstants::value()
+	    .reaction.at(static_cast<size_t>(Reaction::ReactToBurningObjectInHand))
+	    .minDistanceToRunAwayFromObject;
+}
+} // namespace
+
+uint8_t villager_reactions::BurningInHandPriority(entt::entity villager, entt::entity thing, uint32_t tablePriority)
+{
+	const auto [distance, speed] = BurningThingFrom(villager, thing);
+	return magic::villager_reaction::BurningInHandPriority(distance, LeastRunDistance(), speed, tablePriority);
+}
+
+uint32_t villager_reactions::BurningInHandAgainTurns(entt::entity villager, entt::entity thing, uint32_t tableTurns)
+{
+	const auto [distance, speed] = BurningThingFrom(villager, thing);
+	return magic::villager_reaction::BurningInHandAgainTurns(distance, LeastRunDistance(), speed, tableTurns);
 }
 
 uint32_t villager_reactions::ReactToVillagerInHandPriority(entt::entity villager, entt::entity held)
