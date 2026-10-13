@@ -622,7 +622,7 @@ TEST(CreatureIdleMind, HangingAroundStartsWithAWalkHome)
 	// Arrived, it waits while it looks about
 	senses.moving = false;
 	senses.bodyBusy = false;
-	creature_mind::Think(mind, senses, random);
+	EXPECT_FALSE(creature_mind::Think(mind, senses, random).move.has_value());
 	EXPECT_EQ(mind.step, 1u);
 	EXPECT_TRUE(creature_mind::Think(mind, senses, random).lookAbout);
 }
