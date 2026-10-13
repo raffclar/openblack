@@ -160,6 +160,8 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "swap_mind";
 	case Kind::Overlay:
 		return "overlay";
+	case Kind::Inspect:
+		return "inspect";
 	}
 	return "unknown";
 }

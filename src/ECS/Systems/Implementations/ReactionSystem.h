@@ -41,6 +41,7 @@ public:
 	[[nodiscard]] bool IsActive(uint32_t id) const override;
 	[[nodiscard]] bool HasReaction(entt::entity initiator) const override;
 	void ProcessTurn() override;
+	[[nodiscard]] uint32_t CurrentTurn() const override { return _turn; }
 	void Reset() override;
 	void GiveTownBelief(entt::entity town, PlayerNames player, float amount, entt::entity from,
 	                    GuidanceAlignment alignment) override;

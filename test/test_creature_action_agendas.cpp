@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <Common/GameRandom.h>
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureActionAgendas.h"
@@ -127,6 +128,54 @@ TEST(CreatureActionAgendas, TakingInAThingIsDoneAtOnce)
 	EXPECT_EQ(commands.effect, Effect::Observed);
 	EXPECT_EQ(commands.effectObject, 3u);
 	EXPECT_EQ(mind.step, 1u);
+}
+
+// "InspectCreature": near it at four of its own heights, a tenth of a second facing it, curious, then watching it
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, LookingACreatureOverGoesNearItFacesItAndWatchesIt)
+{
+	const auto agenda = InspectCreature(7, 10.0f);
+	ASSERT_EQ(agenda.size(), 3);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 40.0f);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda[1].seconds, 0.1f);
+	EXPECT_EQ(agenda[1].face, creature_face::Cue::Curiosity);
+	EXPECT_EQ(agenda[2].kind, Step::Kind::Inspect);
+	EXPECT_EQ(agenda[2].object, 7u);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::Curiosity);
+	ASSERT_TRUE(agenda[2].gaze.has_value());
+	EXPECT_EQ(agenda[2].gaze->object, 7u);
+	EXPECT_NE(plan_actions::For("InspectCreature"), nullptr);
+}
+
+// The watch lasts five seconds and a draw of up to ten more, in whole turns from the turn after it starts, and then it
+// has looked the creature over
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, LookingACreatureOverLastsFiveToFifteenSeconds)
+{
+	for (const auto& [draw, turns] : {std::pair {0u, 50u}, std::pair {0xfffeu, 149u}, std::pair {0x8000u, 100u}})
+	{
+		SCOPED_TRACE(draw);
+		IdleMind mind;
+		Plan(mind, Activity::Planned, InspectCreature(7, 10.0f));
+		mind.step = 2;
+		// The faces it pulls draw too; only the time's draw is fixed
+		const auto random = [draw](uint32_t range) { return range == game_random::k_FloatRandRange ? draw : 0u; };
+		const creature_mind::Senses senses {.seconds = 0.1f, .choosesNext = false};
+		const auto faces = [](uint32_t /*range*/) { return 0u; };
+		auto commands = Think(mind, senses, random);
+		EXPECT_EQ(mind.inspectTurns, turns);
+		uint32_t watched = 0;
+		while (commands.effect != Effect::Inspected && watched < 1000)
+		{
+			commands = Think(mind, senses, faces);
+			++watched;
+		}
+		EXPECT_EQ(watched, turns);
+		EXPECT_EQ(commands.effectObject, 7u);
+		EXPECT_EQ(mind.step, 3u);
+	}
 }
 
 // A kind of thing it has looked over is a hundredth as interesting, unless the thing is up to something interesting

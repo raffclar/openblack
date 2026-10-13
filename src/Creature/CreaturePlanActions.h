@@ -124,6 +124,8 @@ enum class Build : uint8_t
 	SleepByObject,
 	/// Taking food from a pile and eating it
 	EatFromPile,
+	/// Looking another creature over
+	InspectCreature,
 	/// An action whose agenda can never be made
 	Never,
 };

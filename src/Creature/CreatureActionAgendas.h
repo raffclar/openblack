@@ -53,6 +53,14 @@ constexpr float k_ExamineHeights = 2.5f;
 constexpr float k_ExamineFaceSeconds = 2.0f;
 constexpr float k_ExamineWatchSeconds = 1.1f;
 
+/// Looking another creature over: going near it (four times its own height away), turning to face it a tenth of a
+/// second, curious, then watching it, curious, for five seconds and up to ten more, after which it has looked it over
+[[nodiscard]] std::vector<Step> InspectCreature(uint32_t other, float height);
+constexpr float k_InspectHeights = 4.0f;
+constexpr float k_InspectFaceSeconds = 0.1f;
+constexpr float k_InspectSeconds = 5.0f;
+constexpr float k_InspectExtraSeconds = 10.0f;
+
 /// Smiling at a friend: going near it (three times its height away) and facing it four seconds and up to four more,
 /// smiling at it with fluttering eyelids; then half the time a happy jump
 [[nodiscard]] std::vector<Step> SmileAt(uint32_t friendly, float height, float chance, const Random& random);

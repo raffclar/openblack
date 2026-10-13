@@ -247,6 +247,8 @@ enum class Effect : uint8_t
 	TookFromPile,
 	/// Has taken what the player's hand gave it (the step's object), and decides what to do with it
 	TookFromHand,
+	/// Has looked another creature (the effect's object) over, and waits a while before it does again
+	Inspected,
 };
 
 /// What a creature's head is made to look at: a thing (its top, or its foot), a point, or the player's camera
@@ -298,9 +300,14 @@ struct Step
 		/// Playing the step's animation on top of the body, as talking: it starts unless something already plays there,
 		/// and the step is done once nothing plays on top of the body
 		Overlay,
+		/// Looking another creature (the step's object) over: as it starts it picks a time of the step's seconds and up
+		/// to the step's extra seconds more, counted in whole turns from the next, after which it has looked it over
+		Inspect,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
+	/// Up to how many seconds more an inspect step may last, picked as it starts
+	float extraSeconds {0.0f};
 	/// Watching the camera for a set number of turns, rather than until the camera goes or the step's seconds are up
 	std::optional<uint32_t> turns;
 	size_t animation {0};
@@ -355,6 +362,8 @@ struct IdleMind
 	/// A cast step: whether its miracle has been cast, and the turns it is held for yet
 	bool castDone {false};
 	uint32_t castTurns {0};
+	/// An inspect step: the turns it watches for yet
+	uint32_t inspectTurns {0};
 };
 
 /// The needs it might see to, and the means at hand

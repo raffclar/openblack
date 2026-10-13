@@ -307,6 +307,25 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = MobileObjectInfo::Cart, .offset = {0.0f, 20.0f}, .reaction = Reaction::ReactToObjectCrushed}},
 	});
 
+	// Two creatures meeting
+	all.push_back({
+	    .id = "creatures.inspect_creature",
+	    .name = "A creature meeting another creature",
+	    .facet = Facet::Objects,
+	    .description = "The player's tiger stands facing south, towards the camera; another player's cow stands 40 metres "
+	                   "south of it, facing north.",
+	    .expected = "Each creature, as curious about the other as it has learnt to be, drops what it was doing and goes "
+	                "up to the other to four times its own height, turns to face it with a curious look and watches it "
+	                "for 5 to 15 seconds. For a minute after it takes no further notice of the same creature.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {60.0f, 25.0f, -20.0f}, .look = {0.0f, 6.0f, -20.0f}},
+	    .creatures = {{.offset = {0.0f, 0.0f}, .facingDegrees = 0.0f},
+	                  {.species = CreatureType::Cow,
+	                   .offset = {0.0f, -40.0f},
+	                   .facingDegrees = 180.0f,
+	                   .owner = PlayerNames::PLAYER_TWO}},
+	});
+
 	// A town whose store has run out of food, with fields to farm
 	std::vector<ObjectSetup> hungry {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},

@@ -919,7 +919,10 @@ struct GCreatureInfo: GLivingInfo
 	/// above its energy's floor, below which it can't pay
 	float chantsPerEnergy;
 	float spellEnergyFloor;
-	std::array<uint8_t, 0x4c> field0x28c;
+	std::array<uint8_t, 0x40> field0x28c;
+	/// A creature looks another creature over again only once more than this many seconds have gone by since it last did
+	float inspectCreatureSeconds;
+	std::array<uint8_t, 0x8> field0x2d0;
 	/// Running away, the creature goes at least this far from what it flees, and up to 40 further
 	float runAwayDistance;
 	std::array<uint8_t, 0x20> field0x2dc;
@@ -960,6 +963,7 @@ static_assert(offsetof(GCreatureInfo, desireFloor) == 0x264);
 static_assert(offsetof(GCreatureInfo, spellSizeFactor) == 0x380);
 static_assert(offsetof(GCreatureInfo, totemIcon) == 0x334);
 static_assert(offsetof(GCreatureInfo, helpBodyProblemSeconds) == 0x2fc);
+static_assert(offsetof(GCreatureInfo, inspectCreatureSeconds) == 0x2cc);
 static_assert(offsetof(GCreatureInfo, helpVeryThirsty) == 0x324);
 static_assert(offsetof(GCreatureInfo, startEnergy) == 0x1f4);
 static_assert(offsetof(GCreatureInfo, comfortTemperature) == 0x1fc);

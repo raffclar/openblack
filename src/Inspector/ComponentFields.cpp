@@ -2238,7 +2238,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::serial>("serial")
 	    .Field<&openblack::creature_mind::IdleMind::gaveUp>("gaveUp")
 	    .Field<&openblack::creature_mind::IdleMind::castDone>("castDone")
-	    .Field<&openblack::creature_mind::IdleMind::castTurns>("castTurns");
+	    .Field<&openblack::creature_mind::IdleMind::castTurns>("castTurns")
+	    .Field<&openblack::creature_mind::IdleMind::inspectTurns>("inspectTurns");
 	Reflect<openblack::creature_mind::Movement>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Movement::kind>("kind")
 	    .Field<&openblack::creature_mind::Movement::point>("point")
@@ -2258,6 +2259,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_mind::Step>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Step::kind>("kind")
 	    .Field<&openblack::creature_mind::Step::seconds>("seconds")
+	    .Field<&openblack::creature_mind::Step::extraSeconds>("extraSeconds")
 	    .Field<&openblack::creature_mind::Step::turns>("turns")
 	    .Field<&openblack::creature_mind::Step::animation>("animation")
 	    .Field<&openblack::creature_mind::Step::sleepyEyes>("sleepyEyes")

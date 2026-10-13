@@ -270,3 +270,57 @@ TEST(CreatureReactionRules, WhatItDoes)
 		EXPECT_FALSE(rules::SetupFor(type, false).has_value());
 	}
 }
+
+// Another creature is as urgent as can be once it is due another look over, unless the creature is busy with its own
+// reaction, its player's order, a fight or that creature already
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureReactionRules, AnotherCreatureIsUrgentOnceDueALookOver)
+{
+	auto facts = Seeing();
+	facts.thingIsCreature = true;
+	facts.inspectDue = true;
+	EXPECT_EQ(rules::Priority(Reaction::ReactToCreature, facts, NoDraw), std::optional<uint8_t>(0xff));
+	facts.inspectDue = false;
+	EXPECT_EQ(rules::Priority(Reaction::ReactToCreature, facts, NoDraw), std::optional<uint8_t>(0));
+	facts.inspectDue = true;
+	for (auto busy : {&rules::Facts::thingIsSelf, &rules::Facts::orderedByPlayer, &rules::Facts::hasOpponent,
+	                  &rules::Facts::planActsOnThing, &rules::Facts::thingGone})
+	{
+		auto blocked = facts;
+		blocked.*busy = true;
+		EXPECT_TRUE(rules::BlocksInspecting(blocked));
+		EXPECT_EQ(rules::Priority(Reaction::ReactToCreature, blocked, NoDraw), std::optional<uint8_t>(0));
+	}
+	EXPECT_FALSE(rules::BlocksInspecting(facts));
+	// Neither its player nor whether it sees the creature counts
+	facts.humanPlayer = false;
+	facts.seesThing = false;
+	EXPECT_EQ(rules::Priority(Reaction::ReactToCreature, facts, NoDraw), std::optional<uint8_t>(0xff));
+}
+
+// A creature never looked over is due at once; one looked over only once more turns than the wait have gone by
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureReactionRules, ACreatureIsDueALookOverOnlyAfterTheWait)
+{
+	EXPECT_TRUE(rules::InspectDue(std::nullopt, 0, 600));
+	EXPECT_FALSE(rules::InspectDue(1000, 1600, 600));
+	EXPECT_TRUE(rules::InspectDue(1000, 1601, 600));
+	// The game's wait of a minute, at ten turns a second
+	EXPECT_EQ(rules::InspectWaitTurns(60.0f, 10), 600u);
+	EXPECT_EQ(rules::InspectWaitTurns(1.25f, 10), 12u);
+}
+
+// Taking up another creature's reaction, it looks it over, if that is of any use and isn't what it does already
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureReactionRules, TakingUpAnotherCreatureLooksItOverWhenOfUse)
+{
+	const auto setup = rules::SetupFor(Reaction::ReactToCreature, false);
+	ASSERT_TRUE(setup.has_value());
+	EXPECT_TRUE(setup->keeps);
+	EXPECT_FALSE(setup->comesAcross);
+	ASSERT_TRUE(setup->plan.has_value());
+	EXPECT_EQ(setup->plan->desire, Desire::Curiosity);
+	EXPECT_EQ(setup->plan->action, "InspectCreature");
+	EXPECT_TRUE(setup->plan->onlyIfUseful);
+	EXPECT_FALSE(setup->plan->onSelf);
+}

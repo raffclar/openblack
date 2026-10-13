@@ -83,6 +83,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -881,6 +882,7 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 		break;
 	case Effect::Completed:
 	case Effect::Observed:
+	case Effect::Inspected:
 	case Effect::TookFromPile:
 	case Effect::TookFromHand:
 	case Effect::None:
@@ -1411,10 +1413,19 @@ void CreatureMindSystem::ProcessTurn()
 				    mind.observedKinds.insert(creature_tree::belief_types::k_Animal);
 			    }
 		    }
+		    // Having looked another creature over, it notes when, and waits a while before it does again
+		    if (commands.effect == creature_mind::Effect::Inspected && commands.effectObject.has_value())
+		    {
+			    if (auto* inspected = mind.beliefs.Find(static_cast<entt::entity>(*commands.effectObject));
+			        inspected != nullptr && Locator::reactionSystem::has_value())
+			    {
+				    inspected->inspected = Locator::reactionSystem::value().CurrentTurn();
+			    }
+		    }
 		    CountCompleted(entity, mind, commands, GetTables());
 		    // Taking in what a thing is does nothing for the desire the plan serves
 		    if (commands.effect != creature_mind::Effect::None && commands.effect != creature_mind::Effect::Observed &&
-		        commands.effect != creature_mind::Effect::TookFromPile &&
+		        commands.effect != creature_mind::Effect::Inspected && commands.effect != creature_mind::Effect::TookFromPile &&
 		        commands.effect != creature_mind::Effect::TookFromHand)
 		    {
 			    mind.satisfiedByEffect = true;

@@ -19,6 +19,7 @@
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMiracleReactions.h"
+#include "Creature/CreatureReactionRules.h"
 #include "Creature/CreatureWatching.h"
 #include "CreatureMindSystem.h"
 #include "ECS/Components/Creature.h"
@@ -118,7 +119,13 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	{
 		ComeAcross(*mind, thing);
 	}
-	if (setup.plan.has_value() && (setup.plan->onSelf || there))
+	// A plan done only to a thing of some use drops nothing for one the plan already acts on or one of no use
+	const bool wanted =
+	    !setup.plan.has_value() || !setup.plan->onlyIfUseful ||
+	    (there &&
+	     !(mind->planner.current.has_value() && mind->planner.current->object == std::optional(entt::to_integral(thing))) &&
+	     ObjectToActOnUsefulness(creature, *mind, setup.plan->desire, thing) > 0.0f);
+	if (setup.plan.has_value() && (setup.plan->onSelf || there) && wanted)
 	{
 		// TODO(creature-reaction-holding): looking at a flying thing has no agenda yet (pointing at it half the time,
 		// then watching it); until it has, the creature keeps to what it was doing rather than stand idle
@@ -137,4 +144,22 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	{
 		creature_desires::ChangeSource(*mind->desires, setup.desireSource->first, setup.desireSource->second);
 	}
+}
+
+bool CreatureMindSystem::NoticeCreatureToInspect(entt::entity creature, entt::entity other, uint32_t turn, uint32_t waitTurns)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr || !registry.Valid(other))
+	{
+		return false;
+	}
+	ComeAcross(*mind, other);
+	auto* belief = mind->beliefs.Find(other);
+	if (belief == nullptr || !creature_reaction::InspectDue(belief->inspected, turn, waitTurns))
+	{
+		return false;
+	}
+	belief->inspected = turn;
+	return true;
 }

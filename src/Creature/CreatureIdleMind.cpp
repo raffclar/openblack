@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/GameRandom.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 
@@ -788,6 +789,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			// Nothing starts on top of the body while something already plays there; the step waits for it all the same
 			commands.playOverlay = step.animation;
 			break;
+		case Step::Kind::Inspect:
+		{
+			// The time is picked as the step starts, and counted in whole turns from the next
+			const auto turnsPerSecond = static_cast<float>(std::lround(1.0f / senses.seconds));
+			const auto extra =
+			    static_cast<float>(random(game_random::k_FloatRandRange)) * step.extraSeconds * game_random::k_FloatRandScale;
+			mind.inspectTurns = static_cast<uint32_t>((extra + step.seconds) * turnsPerSecond);
+			break;
+		}
 		case Step::Kind::Wait:
 		case Step::Kind::WaitInMap:
 			break;
@@ -912,6 +922,18 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Overlay:
 		if (!senses.overlayPlaying)
 		{
+			FinishStep(mind);
+		}
+		break;
+	case Step::Kind::Inspect:
+		if (mind.inspectTurns > 0)
+		{
+			--mind.inspectTurns;
+		}
+		if (mind.inspectTurns == 0)
+		{
+			commands.effect = Effect::Inspected;
+			commands.effectObject = step.object;
 			FinishStep(mind);
 		}
 		break;

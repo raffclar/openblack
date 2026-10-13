@@ -36,6 +36,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
@@ -357,6 +358,15 @@ creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::en
 		facts.thrownFromHand = entry != nullptr && entry->Has(ecs::PhysicsEntry::k_FromHand);
 		facts.inTheAir = ecs::villager_physics::IsActuallyInTheAir(thing);
 	}
+	if (source.type == Reaction::ReactToCreature)
+	{
+		const auto* leash = registry.TryGet<const CreatureLeash>(creature);
+		facts.orderedByPlayer = leash != nullptr && leash->order.has_value();
+		facts.hasOpponent =
+		    Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().OpponentOf(creature).has_value();
+		const auto* plan = CurrentPlanOf(registry, creature);
+		facts.planActsOnThing = plan != nullptr && there && plan->object == std::optional(entt::to_integral(thing));
+	}
 	if (source.type == Reaction::ReactToHandPickUp && there)
 	{
 		const auto* grab = registry.TryGet<const HandGrab>(thing);
@@ -365,6 +375,18 @@ creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::en
 		                  (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow);
 	}
 	return facts;
+}
+
+/// How many turns a creature waits before it looks the same creature over again, by its species
+uint32_t InspectWaitTurns(const ecs::Registry& registry, entt::entity creature)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return 0;
+	}
+	const auto& rows = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(registry.Get<const Creature>(creature).species);
+	return row < rows.size() ? creature_reaction::InspectWaitTurns(rows.at(row).inspectCreatureSeconds, k_TurnsPerSecond) : 0;
 }
 
 /// What a creature does on taking up a reaction, for the kinds whose rules are its own; none for fire, teleport stones and
@@ -678,16 +700,23 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		const auto random = [](uint32_t range) {
 			return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : 0u;
 		};
-		if (const auto kind = creature_reaction::Priority(reaction.source.type,
-		                                                  CreatureFactsOf(registry, living, reaction, *info, _turn), random);
-		    kind.has_value())
+		auto facts = CreatureFactsOf(registry, living, reaction, *info, _turn);
+		// Free to look another creature over, it comes across it, and is due a look once long enough has gone by since the
+		// last, which it notes as it weighs it
+		if (reaction.source.type == Reaction::ReactToCreature && !creature_reaction::BlocksInspecting(facts) &&
+		    Locator::creatureMindSystem::has_value())
+		{
+			facts.inspectDue = Locator::creatureMindSystem::value().NoticeCreatureToInspect(
+			    living, reaction.source.initiator, _turn, InspectWaitTurns(registry, living));
+		}
+		if (const auto kind = creature_reaction::Priority(reaction.source.type, facts, random); kind.has_value())
 		{
 			return villager_reaction::Priority(*kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 		}
 	}
 	// A villager weighs a creature by how its town feels about it
-	// TODO(villager-social): creatures and animals weigh a creature by rules of their own that aren't ported yet; until
-	// then they take no notice of it
+	// TODO(villager-social): animals weigh a creature by rules of their own that aren't ported yet; until then they take
+	// no notice of it
 	if (reaction.source.type == Reaction::ReactToCreature)
 	{
 		if (!registry.AllOf<Villager>(living))

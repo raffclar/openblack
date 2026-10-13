@@ -117,6 +117,8 @@ public:
 	[[nodiscard]] virtual bool HasReaction(entt::entity initiator) const = 0;
 	/// Once a game turn: the reactions age, and impress who is in their reach
 	virtual void ProcessTurn() = 0;
+	/// The turns the reactions have aged on this land, the clock everything that waits between reactions counts by
+	[[nodiscard]] virtual uint32_t CurrentTurn() const { return 0; }
 	/// A new land: none going
 	virtual void Reset() = 0;
 	/// A town is given belief in a player by a thing, as by an artefact its people dance round: the symbol of it rises
