@@ -2423,10 +2423,10 @@ void Create() // 027 CREATE
 
 void Random() // 028 RANDOM
 {
+	// A whole number from min to max, both included
 	const auto max = Popf();
 	const auto min = Popf();
-	const float random = min + (max - min) * static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-	Pushf(random);
+	Pushf(script::random::NumberFrom(min, max, Locator::gameRandom::value()));
 }
 
 void DllGettime() // 029 DLL_GETTIME
