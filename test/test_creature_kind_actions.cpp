@@ -454,15 +454,14 @@ TEST(CreatureKindActions, ThrowingADieWatchesItFlyThenJumpsOrSulks)
 
 TEST(CreatureKindActions, WatchingAThingFlyLastsThreeToFourSeconds)
 {
-	const Random never = [](uint32_t) { return 0u; };
-	const Random always = [](uint32_t range) { return range - 1; };
-	for (uint32_t seconds = 0; seconds < 3; ++seconds)
+	// Ten turns a second, a limit just above the lowest and the highest draw
+	for (uint32_t turns = 0; turns < 30; ++turns)
 	{
-		EXPECT_TRUE(WatchingFlyingGoesOn(seconds, never));
+		EXPECT_TRUE(KeepsWatchingFlying(turns, 10, 2.01f, true));
 	}
-	EXPECT_FALSE(WatchingFlyingGoesOn(3, never));
-	EXPECT_TRUE(WatchingFlyingGoesOn(3, always));
-	EXPECT_FALSE(WatchingFlyingGoesOn(4, always));
+	EXPECT_FALSE(KeepsWatchingFlying(30, 10, 2.01f, true));
+	EXPECT_TRUE(KeepsWatchingFlying(39, 10, 3.99f, true));
+	EXPECT_FALSE(KeepsWatchingFlying(40, 10, 3.99f, true));
 }
 
 TEST(CreatureKindActions, WatchingAThingFlyEndsWhenItLands)

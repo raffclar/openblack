@@ -43,6 +43,8 @@ struct Belief
 	entt::entity thing {entt::null};
 	uint32_t kind {0};
 	glm::vec3 place {0.0f};
+	/// For another creature: the game turn it last looked that creature over, none before it ever has
+	std::optional<uint32_t> inspected;
 };
 
 /// A creature's beliefs about things, a fixed number of places for each kind
@@ -61,6 +63,7 @@ public:
 	};
 	Added Add(entt::entity thing, uint32_t kind, glm::vec3 place);
 	[[nodiscard]] const Belief* Find(entt::entity thing) const;
+	[[nodiscard]] Belief* Find(entt::entity thing);
 	/// Forgets the belief about a thing; whether there was one
 	bool Forget(entt::entity thing);
 	/// Forgets every belief about a thing that is gone

@@ -85,7 +85,26 @@ struct Facts
 	/// The hand picking something up is its own player's and holds something
 	bool ownPlayersHand {false};
 	bool handHolds {false};
+	/// It carries out an order its player gave it with the leash, it has an opponent in a fight, or its plan's action is
+	/// done to the reaction's thing
+	bool orderedByPlayer {false};
+	bool hasOpponent {false};
+	bool planActsOnThing {false};
+	/// The creature the reaction is about is due another look over: it never has looked it over, or not for long enough
+	bool inspectDue {false};
 };
+
+/// Another creature is so urgent to a creature, once due another look over
+inline constexpr uint8_t k_InspectCreatureUrgency = 0xff;
+
+/// Whether a creature passes over another creature's reaction before even thinking of looking it over: the reaction is
+/// its own, or isn't a creature's, or it is busy with its player's order, a fight, or the creature already
+[[nodiscard]] bool BlocksInspecting(const Facts& facts);
+/// Whether a creature last looked over at a turn (none for never) is due another look over now: only once more than
+/// the wait has gone by
+[[nodiscard]] bool InspectDue(std::optional<uint32_t> inspected, uint32_t turn, uint32_t waitTurns);
+/// The wait in turns from the creature's wait in seconds, at whole turns a second: cut down to a whole turn
+[[nodiscard]] uint32_t InspectWaitTurns(float seconds, uint32_t turnsPerSecond);
 
 /// How urgent a kind is to a creature before its distance counts, for the kinds a creature weighs its own way; none for
 /// the kinds it weighs as everything alive does. A draw below a range is asked for only where the rule draws one.
@@ -99,6 +118,8 @@ struct Plan
 	creature_desires::Desire desire {creature_desires::Desire::Curiosity};
 	std::string_view action;
 	bool onSelf {false};
+	/// Only when its plan isn't already done to the thing, and the thing is of some use to act on for the desire
+	bool onlyIfUseful {false};
 };
 
 /// What the creature does on taking up a reaction, in order: it comes across the thing, drops what it was doing for a
@@ -117,7 +138,14 @@ struct Setup
 	std::optional<size_t> skill;
 	/// A source of its desires, by the game's numbering, moved by an amount
 	std::optional<std::pair<uint32_t, float>> desireSource;
+	/// It watches the hand for a minute and up to another (as turns), rather than its plan's own while, which the watch
+	/// caps at five seconds
+	bool longHandWatch {false};
 };
+
+/// Watching the hand pick something up, the creature's watch is set to this many seconds and a draw of up to as many
+/// more
+inline constexpr float k_HandPickUpWatchSeconds = 60.0f;
 
 /// Ordinary skills of the game's table a creature learns by watching the hand: working a totem and filling a storage pit
 inline constexpr size_t k_UseTotemSkill = 2;
