@@ -83,6 +83,9 @@ public:
 	/// unless it can't be destroyed, its town or its young, and is written to the crossing file for the next land. None
 	/// when it can't be carried.
 	virtual std::optional<Taken> EnterVortex(const std::shared_ptr<particles::CarriedObject>& carried) = 0;
+	/// A thing flying in the physics struck a vortex: an open vortex out of the land takes it as it flies, a creature
+	/// only as it would draw one in from the land
+	virtual void StruckBy(entt::entity vortex, entt::entity hitter, const components::DrawnIntoVortex::Flight& flight) = 0;
 	/// A thing that can't be destroyed comes back out of a vortex's middle, thrown out at an angle across the land at a
 	/// scale of the usual speeds
 	virtual void ThrowOutOfVortex(entt::entity object, float angle, float scale) = 0;

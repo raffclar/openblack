@@ -173,9 +173,16 @@ std::string Text(const Line& line)
 		    }
 		    else if constexpr (std::is_same_v<T, MobileStaticLine>)
 		    {
-			    return fmt::sprintf(CommandFormat("CREATE_MOBILE_STATIC", "ANFFFFF"), place, l.row,
-			                        static_cast<double>(l.offset.altitude), static_cast<double>(l.xAngle),
-			                        static_cast<double>(l.yAngle), static_cast<double>(l.zAngle), static_cast<double>(l.scale));
+			    auto text =
+			        fmt::sprintf(CommandFormat("CREATE_MOBILE_STATIC", "ANFFFFF"), place, l.row,
+			                     static_cast<double>(l.offset.altitude), static_cast<double>(l.xAngle),
+			                     static_cast<double>(l.yAngle), static_cast<double>(l.zAngle), static_cast<double>(l.scale));
+			    if (l.artefact.has_value())
+			    {
+				    text += fmt::sprintf(CommandFormat("MAKE_LAST_OBJECT_ARTIFACT", "NLF"), l.artefact->town,
+				                         l.artefact->player, static_cast<double>(l.artefact->value));
+			    }
+			    return text;
 		    }
 		    else if constexpr (std::is_same_v<T, MobileObjectLine>)
 		    {
@@ -183,6 +190,10 @@ std::string Text(const Line& line)
 			    constexpr float k_Thousand = 1000.0f;
 			    return fmt::sprintf(CommandFormat("CREATE_MOBILEOBJECT", "ANNN"), place, l.row,
 			                        map_coords::FtoL(l.yAngle * k_Thousand), map_coords::FtoL(l.scale * k_Thousand));
+		    }
+		    else if constexpr (std::is_same_v<T, OneOffSpellLine>)
+		    {
+			    return fmt::sprintf(CommandFormat("CREATE_ONE_SHOT_SPELL_PU", "AL"), place, l.magic);
 		    }
 		    else
 		    {

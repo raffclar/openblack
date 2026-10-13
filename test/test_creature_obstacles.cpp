@@ -105,6 +105,12 @@ TEST(CreatureObstacles, EachKindHasItsOwnRule)
 	EXPECT_TRUE(MustAvoid(other, walker));
 	other.walking = true;
 	EXPECT_FALSE(MustAvoid(other, walker));
+	// A vortex out of the land is kept clear of, however low, unless it may take the creature
+	const auto vortexOut = AThing(Avoidance::VortexOutOfTheLand, Shape::AtPlace, {0.1f, 0.1f, 0.1f});
+	EXPECT_TRUE(MustAvoid(vortexOut, walker));
+	auto taken = walker;
+	taken.mayBeTakenByVortex = true;
+	EXPECT_FALSE(MustAvoid(vortexOut, taken));
 	// Shields only another player's, and not for a creature a script moves
 	auto shield = AThing(Avoidance::Shield, Shape::ModelBox, {10.0f, 10.0f, 10.0f});
 	shield.owner = PlayerNames::PLAYER_TWO;

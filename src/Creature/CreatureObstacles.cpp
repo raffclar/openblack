@@ -174,6 +174,8 @@ bool creature_obstacles::MustAvoid(const Thing& thing, const Walker& walker)
 		return !thing.walking;
 	case Avoidance::Shield:
 		return !walker.scriptControlled && thing.owner != walker.owner;
+	case Avoidance::VortexOutOfTheLand:
+		return !walker.mayBeTakenByVortex;
 	}
 	return false;
 }
