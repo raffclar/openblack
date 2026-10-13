@@ -421,6 +421,21 @@ TEST(TestbedScenarios, ProblemsAreFound)
 	EXPECT_GE(Problems(broken).size(), 8u);
 }
 
+TEST(TestbedScenarios, AFoodPileWhoseModelIsFarFromItsPointIsAProblem)
+{
+	Scenario piles {
+	    .id = "objects.piles",
+	    .name = "Piles",
+	    .facet = Facet::Objects,
+	    .description = "Two food piles",
+	    .expected = "Both are seen at their points",
+	    .objects = {{.type = PotInfo::MagicFood}},
+	};
+	EXPECT_TRUE(Problems(piles).empty());
+	piles.objects.push_back({.type = PotInfo::FoodPile});
+	EXPECT_EQ(Problems(piles).size(), 1u);
+}
+
 TEST(TestbedScenarios, BoundsTakeInEveryPoint)
 {
 	const std::array<glm::vec2, 3> points {glm::vec2 {-10.0f, 0.0f}, glm::vec2 {30.0f, 20.0f}, glm::vec2 {10.0f, -40.0f}};
