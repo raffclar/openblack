@@ -1150,6 +1150,40 @@ TEST(ReactionRules, OnlyAnOrdinaryVillagerHeedsItsOwnTownCelebratingWithoutACent
 	// A town celebrating from its centre draws none of its people
 	EXPECT_EQ(TownCelebrationPriority({.hasTown = true, .madeByOwnTown = false}, 90), 0u);
 	EXPECT_EQ(TownCelebrationPriority({.disciple = true, .hasTown = true, .madeByOwnTown = true}, 90), 0u);
-	EXPECT_EQ(TownCelebrationPriority({.scripted = true, .hasTown = true, .madeByOwnTown = true}, 90), 0u);
+	EXPECT_EQ(TownCelebrationPriority({.dancing = true, .hasTown = true, .madeByOwnTown = true}, 90), 0u);
 	EXPECT_EQ(TownCelebrationPriority({}, 90), 0u);
+}
+
+// A burning thing in the hand alarms a villager near it, or further off when it moves fast; one near it, or alarmed by a
+// thing moving faster still, heeds it again at once
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionRules, ABurningThingInTheHandAlarmsThoseNearOrWhenItMovesFast)
+{
+	using magic::villager_reaction::BurningInHandAgainTurns;
+	using magic::villager_reaction::BurningInHandPriority;
+	EXPECT_EQ(BurningInHandPriority(10.0f, 10.0f, 0.0f, 120), 120u);
+	EXPECT_EQ(BurningInHandPriority(10.5f, 10.0f, 2.9f, 120), 0u);
+	EXPECT_EQ(BurningInHandPriority(40.0f, 10.0f, 3.0f, 120), 120u);
+	EXPECT_EQ(BurningInHandAgainTurns(9.0f, 10.0f, 0.0f, 50), 0u);
+	EXPECT_EQ(BurningInHandAgainTurns(10.0f, 10.0f, 3.0f, 50), 50u);
+	EXPECT_EQ(BurningInHandAgainTurns(20.0f, 10.0f, 3.5f, 50), 0u);
+}
+
+// A villager looks at a thing that came to rest, a miracle to look at or a scaffold put up for a building, as at a nice
+// miracle
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, VillagersLookAtAThingThatCameToRestOrAScaffold)
+{
+	for (const auto type : {Reaction::LookAtObject, Reaction::LookAtSpell, Reaction::ReactToScaffold})
+	{
+		_info->reaction.at(static_cast<size_t>(type)) = _info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell));
+	}
+	Locator::infoConstants::emplace(*_info);
+	for (const auto type : {Reaction::LookAtObject, Reaction::LookAtSpell, Reaction::ReactToScaffold})
+	{
+		const auto id = _reactions.Create(Miracle(type));
+		EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::LookingAtObjectReaction);
+		EXPECT_EQ(Locator::entitiesRegistry::value().Get<const LivingReaction>(_villagers[0]).type, type);
+		_reactions.Remove(id);
+	}
 }
