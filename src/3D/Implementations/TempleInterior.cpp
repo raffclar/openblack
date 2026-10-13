@@ -266,6 +266,11 @@ const std::vector<TemplePerson>& TempleInterior::GetPeople() const
 	return _people != nullptr && shown ? _people->GetDrawn() : k_Nobody;
 }
 
+glm::mat4 TempleInterior::GetPlacement() const
+{
+	return glm::translate(glm::mat4(1.0f), _templePosition) * glm::eulerAngleY(_templeRotation.y);
+}
+
 void TempleInterior::SetInterface(gui::GameInterface* interface)
 {
 	_interface = interface;
@@ -1165,8 +1170,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		if (_people != nullptr)
 		{
 			const auto& camera = Locator::camera::value();
-			const auto temple = glm::translate(glm::mat4(1.0f), _templePosition) * glm::eulerAngleY(_templeRotation.y);
-			_people->Update(milliseconds, temple, camera.GetViewProjectionMatrix(), camera.GetNearClip());
+			_people->Update(milliseconds, GetPlacement(), camera.GetViewProjectionMatrix(), camera.GetNearClip());
 			// They move every frame, so the draw lists are made again
 			if (_people->GetCount() > 0)
 			{

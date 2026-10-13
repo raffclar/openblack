@@ -81,6 +81,7 @@
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple.h"
+#include "TempleVillagers.h"
 #include "TestbedScenarios.h"
 #include "TextureViewer.h"
 #include "VideoViewer.h"
@@ -136,6 +137,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new PathFinding);
 	debugWindows.emplace_back(new Audio);
 	debugWindows.emplace_back(new TempleInterior);
+	debugWindows.emplace_back(std::make_unique<TempleVillagers>());
 	debugWindows.emplace_back(new gui::Camera);
 	debugWindows.emplace_back(new Weather);
 	debugWindows.emplace_back(new Moon);

@@ -75,6 +75,8 @@ public:
 	[[nodiscard]] const TempleFog& GetFog() const override { return _fog; }
 	[[nodiscard]] const std::vector<TemplePerson>& GetPeople() const override;
 	[[nodiscard]] size_t GetPeopleInside() const override { return _people != nullptr ? _people->GetCount() : 0; }
+	[[nodiscard]] const TemplePeople* GetWalkingPeople() const override { return _people.get(); }
+	[[nodiscard]] glm::mat4 GetPlacement() const override;
 	[[nodiscard]] float GetMapMarkerTurn() const override { return _mapMarkerTurn; }
 	[[nodiscard]] float GetPoolTime() const override { return _poolTime; }
 	void Escape() override;

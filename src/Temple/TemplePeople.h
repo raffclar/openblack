@@ -10,6 +10,7 @@
 #pragma once
 
 #include <memory>
+#include <span>
 #include <vector>
 
 #include <entt/core/fwd.hpp>
@@ -42,19 +43,24 @@ public:
 	/// matrix, and the camera sees it by its view and projection.
 	void Update(float milliseconds, const glm::mat4& temple, const glm::mat4& viewProjection, float nearClip);
 
-	/// Those drawn this frame
-	[[nodiscard]] const std::vector<TemplePerson>& GetDrawn() const { return _drawn; }
-	[[nodiscard]] size_t GetCount() const { return _visitors.size(); }
-
-private:
+	/// One who came in: the villager it came in as, its model, its size and sex, and its walk about the temple
 	struct Visitor
 	{
+		entt::entity villager;
 		entt::id_type mesh;
 		float scale;
 		bool man;
 		temple_people::Walker walker;
 	};
 
+	/// Those drawn this frame
+	[[nodiscard]] const std::vector<TemplePerson>& GetDrawn() const { return _drawn; }
+	[[nodiscard]] size_t GetCount() const { return _visitors.size(); }
+	/// Everyone who came in, seen or not, and the floors they walk, in the temple
+	[[nodiscard]] std::span<const Visitor> GetVisitors() const { return _visitors; }
+	[[nodiscard]] const temple_people::WalkMesh& GetWalkMesh() const { return _mesh; }
+
+private:
 	temple_people::WalkMesh _mesh;
 	std::vector<Visitor> _visitors;
 	std::vector<TemplePerson> _drawn;
