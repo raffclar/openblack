@@ -7120,16 +7120,18 @@ void SetCameraPosFocLens() // 286 SET_CAMERA_POS_FOC_LENS
 
 void MoveCameraPosFocLens() // 287 MOVE_CAMERA_POS_FOC_LENS
 {
-	// const auto unk7 = Pop().intVal;
-	// const auto unk6 = Pop().intVal;
-	// const auto unk5 = Pop().intVal;
-	// const auto unk4 = Pop().intVal;
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto time = Popf();
+	const auto lens = Popf();
+	const auto focus = PopVec();
+	const auto position = PopVec();
+	// Only the script camera moves. The position, the focus and the lens move for the same time. The script gives the
+	// lens in radians: this command does not change degrees to radians. The land's draw list does not change.
+	if (auto* camera = ScriptCameraToMove(); camera != nullptr)
+	{
+		camera->MoveOrigin(position, time);
+		camera->MoveFocus(focus, time);
+		Locator::camera::value().SetLens(lens, time);
+	}
 }
 
 void GameTimeOnOff() // 288 GAME_TIME_ON_OFF
