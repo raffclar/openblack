@@ -950,7 +950,47 @@ void AddStory(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 4.0f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
 	});
+	all.push_back({
+	    .id = "temple.damage_beam",
+	    .name = "A hurt temple's heart beaming across itself",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle with its heart at 30% of its life and no town to "
+	                   "pass blows on to.",
+	    .expected = "Every 1.2 seconds (12 turns) a plasma beam leaps between two points of the heart's model, leaving "
+	                "and arriving along the model's surface, lasting 1.18 seconds and fairly faint (alpha 76 of 255). "
+	                "Each beam sounds one of the five heart beam sounds in turn, from the heart.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {40.0f}, k_Temple + glm::vec2 {40.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
+	});
 	AddBreederOffers(all);
+}
+
+void AddExplorersBoat(std::vector<Scenario>& all)
+{
+	// The dry dock on the testbed lake's east bank, so that the boat is pushed west into the water
+	constexpr glm::vec2 k_Dock {58.0f, 220.0f};
+	all.push_back({
+	    .id = "story.explorers_boat",
+	    .name = "The explorers' boat pushed into the sea and sailing away",
+	    .facet = Facet::Story,
+	    .description = "The film the Land 1 silver scroll of the explorers ends with, played on the testbed after a second: "
+	                   "its dry dock stands on the lake's east bank and its sailing starts in the lake's north-east corner "
+	                   "(on Land 1 the boat sails out to sea, 425 metres west of the beach).",
+	    .expected = "Five sailors push the boat for three seconds, then it slides west down the bank into the lake with a "
+	                "creak, a splash and a big splash, throwing up brown sand and then white water; the sailors stop "
+	                "pushing as it goes, three worn out and two cheering. About eighteen seconds in it is at sea: two cows "
+	                "eat beside a pile of grain, a man and a woman stand arms out at the bow, two sailors sit swinging "
+	                "their legs, one scrubs the deck, five wake sprites run back from it, and it sails south west at five "
+	                "metres a second for a minute, then is gone. Out of the lake it sails under the testbed's flat land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Dock - glm::vec2 {110.0f, 70.0f}, k_Dock + glm::vec2 {10.0f, 60.0f}},
+	                .distance = 1.0f},
+	    .commands = {{.kind = Kind::PlayBoatFilm, .delaySeconds = 1.0f, .point = k_Dock}},
+	});
 }
 
 void AddAppearance(std::vector<Scenario>& all)
@@ -2626,6 +2666,20 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 1, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "leash.pulled_out_of_fight",
+	    .name = "The leash pulls a creature out of its fight",
+	    .facet = Facet::Leash,
+	    .description = "The player's red tiger wears the learning leash held in the hand and fights a blue tiger, both "
+	                   "by themselves. Hold the hand near the red tiger, then move it well away so the rope pulls taut.",
+	    .expected = "With the hand near, the rope hangs slack and the duel goes on. Pulled taut, the red tiger is "
+	                "taken out of the fight: the fight is called off with no winner, the help says \"You pulled your "
+	                "Creature away from what he was trying to do.\" and the red tiger walks to the hand.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
 	// Big against small: the game never resizes a creature for a fight; it only refuses one outside half to twice its
 	// height
 	auto big = Fighter(left, 90.0f, "big tiger", PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
@@ -3223,6 +3277,7 @@ std::vector<Scenario> Build()
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
 	AddStory(all);
+	AddExplorersBoat(all);
 	AddTownGrowthScenarios(all);
 	AddStatisticsScenarios(all);
 	AddTutorialScenarios(all);
@@ -3356,7 +3411,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
-	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || IsPointerCommand(kind);
+	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -3383,7 +3439,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 107> k_Names {
+	constexpr std::array<std::string_view, 108> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3490,6 +3546,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "swap minds",
 	    "record challenge",
 	    "enter temple",
+	    "play boat film",
 	    "run script",
 	};
 	return k_Names.at(static_cast<size_t>(kind));

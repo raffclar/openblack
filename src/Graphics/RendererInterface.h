@@ -181,6 +181,9 @@ public:
 		/// The land's colour where the mesh stands is added over it after its light. Off for a mesh lit in a colour of its
 		/// own that the land's colour never reaches, as the shrinking and growing phials are
 		bool landColourAdded {true};
+		/// The world's distance haze fades it and adds its colour. Off for the explorers' boat in the sea, which is mirrored
+		/// in its own colour and the land's alone, however far off
+		bool hazed {true};
 		/// Nothing of the mesh is drawn below this height, when given, where its program takes it
 		std::optional<float> cutBelow;
 		/// Nothing of the mesh is drawn above this height, when given, where its program takes it: a building drawn as far

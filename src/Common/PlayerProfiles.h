@@ -57,6 +57,9 @@ struct Profile
 	int symbol {0};
 	/// The options the player set
 	Settings settings;
+	/// How good or evil the player was when it was last kept as they played, from -1 to 1: a new game starts them there.
+	/// Neither good nor evil until one is kept
+	double alignment {0.0};
 
 	bool operator==(const Profile&) const = default;
 };
@@ -103,6 +106,12 @@ enum class NameCheck : uint8_t
 /// Whether a new profile may take the name: the check for a name already kept comes first, then its length
 [[nodiscard]] NameCheck CheckNewName(const Profiles& profiles, std::u16string_view name);
 
+/// The name a profile's own folder goes by: each plain (ASCII) letter or digit as an underscore and itself, any other
+/// character as its four lower-case hexadecimal digits, ending once the name made reaches k_LongestKey characters
+[[nodiscard]] std::string ProfileKey(std::u16string_view name);
+/// A profile's folder name stops growing once it is this long, finishing the character it is on
+constexpr size_t k_LongestKey = 252;
+
 /// The profile being played, if there is one by its name
 [[nodiscard]] const Profile* Current(const Profiles& profiles);
 /// The profile of a name, if one is kept
@@ -126,7 +135,8 @@ void Edit(Profile& profile, std::u16string_view creatureName, int symbol);
 
 /// The profiles as they are kept on disk, UTF-8: one line naming the current profile, then a line for each profile with
 /// its name, its creature file, its symbol and its creature's name, then a line for each of its settings: the profile's
-/// name, the setting's and its value; all separated by tabs (no name can hold a tab)
+/// name, the setting's and its value, then a line with the profile's name and the alignment kept; all separated by tabs
+/// (no name can hold a tab)
 [[nodiscard]] std::string Write(const Profiles& profiles);
 /// The profiles read back, in the list's order; lines that aren't understood are passed over, and settings not kept
 /// are the game's own

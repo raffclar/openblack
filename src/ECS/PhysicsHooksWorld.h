@@ -21,6 +21,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/ModelSurface.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "Enums.h"
 #include "Magic/MagicWorldInterface.h"
@@ -112,6 +113,8 @@ public:
 	                                  const ImpactInfo& impact) = 0;
 	/// A building breaks under a blow on its own body
 	virtual void StrikeBuilding(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const ImpactInfo& impact) = 0;
+	/// A thing flying struck a vortex, which may take it as it flies
+	virtual void StrikeVortex(entt::entity vortex, entt::entity hitter, const components::DrawnIntoVortex::Flight& flight) = 0;
 	/// A piece of a broken building comes to rest: the object that stays, none when nothing does; none at all when there
 	/// is nothing that breaks buildings
 	[[nodiscard]] virtual std::optional<entt::entity> PieceAtRest(systems::DynamicsSystemInterface& dynamics,

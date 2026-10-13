@@ -30,6 +30,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AppleBarrel.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -303,8 +304,9 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			continue;
 		}
-		// So are the lanterns at a temple's entrance, by its creature's pen: the cursor meets what is behind them
-		if (registry.AllOf<TempleLantern>(entity))
+		// So are the lanterns at a temple's entrance, by its creature's pen, and the explorers' boat film: the cursor
+		// meets what is behind them
+		if (registry.AnyOf<TempleLantern, BoatFilmPart>(entity))
 		{
 			continue;
 		}

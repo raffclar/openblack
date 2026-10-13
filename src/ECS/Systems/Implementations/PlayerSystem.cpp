@@ -19,6 +19,7 @@
 #include "ECS/Components/PlayerCreatures.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/PlayerMiracles.h"
+#include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Locator.h"
@@ -110,6 +111,17 @@ void PlayerSystem::KeepForNextLand()
 void PlayerSystem::ForgetKept()
 {
 	_kept.clear();
+	_alignmentKeptTurn = 0;
+}
+
+bool PlayerSystem::KeepAlignmentAt(uint32_t turn)
+{
+	if (!profile_alignment::DueToKeep(turn, _alignmentKeptTurn))
+	{
+		return false;
+	}
+	_alignmentKeptTurn = turn;
+	return true;
 }
 
 void PlayerSystem::TakeUpKept(entt::entity playerEntity)

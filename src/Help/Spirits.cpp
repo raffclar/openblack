@@ -31,7 +31,8 @@ namespace
 constexpr float k_Pi = 3.14159265f;
 constexpr float k_TwoPi = 6.28318531f;
 constexpr float k_HalfPi = 1.57079633f;
-constexpr float k_HoverClampX = 0.75f;
+/// How far in from the side edges a hover target is kept, in hover units (0.75 from the middle on 4:3)
+constexpr float k_HoverSideMargin = 0.25f;
 constexpr float k_HoverClampY = 0.6f;
 constexpr float k_Third = 0.333333343f;
 
@@ -618,17 +619,19 @@ AdvisorSpirit::AdvisorSpirit(int index, const DudeData& data, AdvisorSpiritContr
 	SetState(dude_state::k_Hover, false);
 }
 
-ClingPlace PlaceCling(glm::vec2 hover)
+ClingPlace PlaceCling(glm::vec2 hover, float reach)
 {
-	// The side holds lie 1.04 half widths out; the top and bottom ones 0.78, just beyond a 4:3 screen's edges, and the
-	// test between them weighs the height by 1 / 0.78
+	// The side holds lie 1.04 units out; the top and bottom ones 0.78, just beyond a 4:3 screen's edges, and the test
+	// between them weighs the height by 1 / 0.78
 	constexpr float k_SideHold = 1.04f;
 	constexpr float k_EndHold = 0.78f;
 	constexpr float k_EndWeight = 1.2820513f;
-	if (std::abs(hover.y * k_EndWeight) < std::abs(hover.x))
+	// (openblack) On a screen wider than 4:3 the point's place across is weighed as a share of the real half width,
+	// and the side holds lie as far beyond the real side edges as on 4:3
+	if (std::abs(hover.y * k_EndWeight) < std::abs(hover.x) / reach)
 	{
-		return {.edge = hover.x > 0.0f ? Edge::Right : Edge::Left,
-		        .hover = {hover.x > 0.0f ? k_SideHold : -k_SideHold, hover.y}};
+		const float side = (reach - 1.0f) + k_SideHold;
+		return {.edge = hover.x > 0.0f ? Edge::Right : Edge::Left, .hover = {hover.x > 0.0f ? side : -side, hover.y}};
 	}
 	if (hover.y > 0.0f)
 	{
@@ -640,9 +643,9 @@ ClingPlace PlaceCling(glm::vec2 hover)
 void AdvisorSpirit::SetPosition(glm::ivec2 pixel)
 {
 	const Screen& screen = _control.GetScreen();
-	const auto halfW = static_cast<float>(screen.HalfWidth());
-	_hoverX.Reset(static_cast<float>(pixel.x - screen.HalfWidth()) / halfW);
-	_hoverY.Reset(static_cast<float>(pixel.y - screen.HalfHeight()) / halfW);
+	const auto unit = static_cast<float>(screen.HoverUnit());
+	_hoverX.Reset(static_cast<float>(pixel.x - screen.HalfWidth()) / unit);
+	_hoverY.Reset(static_cast<float>(pixel.y - screen.HalfHeight()) / unit);
 	ResetTrail();
 	SetState(dude_state::k_Hover, false);
 }
@@ -650,9 +653,9 @@ void AdvisorSpirit::SetPosition(glm::ivec2 pixel)
 void AdvisorSpirit::FlyTo(glm::ivec2 pixel, float seconds, bool clamp)
 {
 	const Screen& screen = _control.GetScreen();
-	const auto halfW = static_cast<float>(screen.HalfWidth());
-	const float hx = static_cast<float>(pixel.x - screen.HalfWidth()) / halfW;
-	const float hy = static_cast<float>(pixel.y - screen.HalfHeight()) / halfW;
+	const auto unit = static_cast<float>(screen.HoverUnit());
+	const float hx = static_cast<float>(pixel.x - screen.HalfWidth()) / unit;
+	const float hy = static_cast<float>(pixel.y - screen.HalfHeight()) / unit;
 	SetHoverX(hx, seconds, clamp);
 	SetHoverY(hy, seconds, clamp);
 	_clingX = hx; // the unclamped target
@@ -669,13 +672,15 @@ void AdvisorSpirit::SetHoverX(float target, float seconds, bool clamp)
 	}
 	if (clamp)
 	{
-		if (target <= -k_HoverClampX)
+		// (openblack) As far in from the real screen's sides as on 4:3: 0.75 from the middle there
+		const float limit = (_control.GetScreen().Reach() - 1.0f) + (1.0f - k_HoverSideMargin);
+		if (target <= -limit)
 		{
-			target = -k_HoverClampX;
+			target = -limit;
 		}
-		else if (!(target < k_HoverClampX))
+		else if (!(target < limit))
 		{
-			target = k_HoverClampX;
+			target = limit;
 		}
 	}
 	_hoverX.SetDestination(target, seconds, 0.0f);
@@ -719,7 +724,7 @@ void AdvisorSpirit::SnapClingEdge()
 	{
 		return;
 	}
-	const auto place = PlaceCling({_clingX, _clingY});
+	const auto place = PlaceCling({_clingX, _clingY}, _control.GetScreen().Reach());
 	_edge = place.edge;
 	_clingX = place.hover.x;
 	_clingY = place.hover.y;
@@ -769,9 +774,9 @@ void AdvisorSpirit::ScreenPoint(glm::ivec2 pixel)
 {
 	_pointOffScreen = false;
 	const Screen& screen = _control.GetScreen();
-	const auto halfW = static_cast<float>(screen.HalfWidth());
-	_pointX = static_cast<float>(pixel.x - screen.HalfWidth()) / halfW;
-	_pointY = static_cast<float>(pixel.y - screen.HalfHeight()) / halfW;
+	const auto unit = static_cast<float>(screen.HoverUnit());
+	_pointX = static_cast<float>(pixel.x - screen.HalfWidth()) / unit;
+	_pointY = static_cast<float>(pixel.y - screen.HalfHeight()) / unit;
 	SetState(dude_state::k_Point, false);
 }
 
@@ -1021,9 +1026,9 @@ void AdvisorSpirit::StartPuff()
 glm::vec3 AdvisorSpirit::HoverTo3D(float hx, float hy, float k, bool nearFlag) const
 {
 	const Screen& screen = _control.GetScreen();
-	const auto halfW = static_cast<float>(screen.HalfWidth());
-	const auto px = static_cast<int32_t>((hx + 1.0f) * halfW);
-	const auto py = static_cast<int32_t>(hy * halfW + static_cast<float>(screen.HalfHeight()));
+	const auto unit = static_cast<float>(screen.HoverUnit());
+	const auto px = static_cast<int32_t>((hx + 1.0f) * unit + static_cast<float>(screen.MiddleLeft()));
+	const auto py = static_cast<int32_t>(hy * unit + static_cast<float>(screen.HalfHeight()));
 	const Queries& q = _control.GetQueries();
 	float depth;
 	if (nearFlag)
@@ -1057,18 +1062,21 @@ std::optional<glm::vec2> AdvisorSpirit::WorldToHover(const glm::vec3& p, bool fo
 	}
 	const Screen& screen = _control.GetScreen();
 	const auto halfW = static_cast<float>(screen.HalfWidth());
-	return glm::vec2((pixel->x - halfW) / halfW, (pixel->y - static_cast<float>(screen.HalfHeight())) / halfW);
+	const auto unit = static_cast<float>(screen.HoverUnit());
+	return glm::vec2((pixel->x - halfW) / unit, (pixel->y - static_cast<float>(screen.HalfHeight())) / unit);
 }
 
 float AdvisorSpirit::Feel(float x, float y) const
 {
 	const float limit = _control.Frame().wideScreen ? 0.45f : 0.6f;
+	// (openblack) The advisor is pushed back from as far in from the real screen's sides as on 4:3
+	const float side = (_control.GetScreen().Reach() - 1.0f) + 0.75f;
 	float e = 0.0f;
 	const float ax = std::abs(x);
 	const float ay = std::abs(y) * 1.33333337f;
-	if (ax > 0.75f)
+	if (ax > side)
 	{
-		e = ax - 0.75f;
+		e = ax - side;
 	}
 	if (ay > limit)
 	{
@@ -1205,18 +1213,20 @@ void AdvisorSpirit::UpdateHoverPosition(float probability)
 	}
 	if (!keepHop)
 	{
+		const float reach = _control.GetScreen().Reach();
 		for (int i = 0; i < tries; ++i)
 		{
 			const float span = radius + radius;
 			float cx = _control.LocalFloatRand(span) + x0 - radius;
 			float cy = _control.LocalFloatRand(span) + y0 - radius;
-			if (cx < -1.0f)
+			// (openblack) kept within the real screen's sides
+			if (cx < -reach)
 			{
-				cx = -1.0f;
+				cx = -reach;
 			}
-			else if (!(cx <= 1.0f))
+			else if (!(cx <= reach))
 			{
-				cx = 1.0f;
+				cx = reach;
 			}
 			if (cy < -0.75f)
 			{
@@ -1315,11 +1325,12 @@ void AdvisorSpirit::UpdateZones(float dt, bool focus)
 	const Screen& screen = frame.screen;
 	const auto halfW = static_cast<float>(screen.HalfWidth());
 	const auto halfH = static_cast<float>(screen.HalfHeight());
+	const auto unit = static_cast<float>(screen.HoverUnit());
 	Zone& mouse = _zones[4];
 	mouse.inner = 0.16f;
 	mouse.outer = 0.6f;
-	const float mdx = static_cast<float>(frame.mouse.x - _lastMouse.x) / halfW;
-	const float mdy = static_cast<float>(frame.mouse.y - _lastMouse.y) / halfW;
+	const float mdx = static_cast<float>(frame.mouse.x - _lastMouse.x) / unit;
+	const float mdy = static_cast<float>(frame.mouse.y - _lastMouse.y) / unit;
 	_lastMouse = frame.mouse;
 	// (openblack) a frame of dt 0 gives speed 0 instead of the original's division by zero
 	_mouseSpeed = dt > 0.0f ? std::sqrt(mdy * mdy + mdx * mdx) / dt : 0.0f;
@@ -1332,8 +1343,8 @@ void AdvisorSpirit::UpdateZones(float dt, bool focus)
 	{
 		mouse.strength = (candidate - mouse.strength) * 0.3f + mouse.strength;
 	}
-	mouse.x = (static_cast<float>(frame.mouse.x) - halfW) / halfW;
-	mouse.y = (static_cast<float>(frame.mouse.y) - halfH) / halfW;
+	mouse.x = (static_cast<float>(frame.mouse.x) - halfW) / unit;
+	mouse.y = (static_cast<float>(frame.mouse.y) - halfH) / unit;
 	if (frame.wideScreen)
 	{
 		mouse.strength = 0.0f;
@@ -1432,17 +1443,9 @@ void AdvisorSpirit::UpdateMatrix(float dt)
 	}
 	_rows = rows;
 	_position = HoverTo3D(_hoverX.GetValue(), _hoverY.GetValue(), -_depth.GetValue(), false);
-	// (openblack) On a screen wider than 4:3 the advisor is drawn as a 4:3 screen of the same height shows it: shrunk
-	// across the screen near it, back to its own size out in the world. Its place comes from its hover, which is laid
-	// out on that 4:3 area already
-	const auto shrink = [this, &camera](float sb) {
-		_drawShare = (1.0f - _control.Frame().share) * sb + _control.Frame().share;
-		_rows = ShrinkAcrossScreen(_rows, camera[2], _drawShare);
-	};
 
 	if (_inWorld == 0.0f)
 	{
-		shrink(0.0f);
 		return;
 	}
 	// into the world, next to the target
@@ -1469,7 +1472,6 @@ void AdvisorSpirit::UpdateMatrix(float dt)
 	{
 		_rows[i] *= grow;
 	}
-	shrink(sb);
 }
 
 void AdvisorSpirit::UpdateBasePose(bool stable, float rate, bool sfx)
@@ -2600,16 +2602,18 @@ glm::ivec2 AdvisorSpiritController::Anchor(int edge) const
 {
 	const int32_t halfW = _frame.screen.HalfWidth();
 	const int32_t halfH = _frame.screen.HalfHeight();
+	// (openblack) The side anchors lie as far beyond the real screen's sides as on 4:3: a hover unit
+	const int32_t unit = _frame.screen.HoverUnit();
 	switch (edge)
 	{
 	case 0:
 		return {halfW, halfH * 3};
 	case 1:
-		return {-halfW, halfH};
+		return {-unit, halfH};
 	case 2:
 		return {halfW, -halfH};
 	default:
-		return {halfW * 3, halfH};
+		return {halfW * 2 + unit, halfH};
 	}
 }
 
@@ -2618,10 +2622,11 @@ glm::ivec2 AdvisorSpiritController::HomePoint(int dude) const
 	const int32_t w = _frame.screen.width;
 	const int32_t h = _frame.screen.height;
 	const AdvisorSpirit& d = *_dudes[dude];
-	const auto halfW = static_cast<float>(_frame.screen.HalfWidth());
+	const auto unit = static_cast<float>(_frame.screen.HoverUnit());
 	const auto halfH = static_cast<float>(_frame.screen.HalfHeight());
-	const auto px = static_cast<int32_t>((d.HoverX().GetValue() + 1.0f) * halfW);
-	const auto py = static_cast<int32_t>(d.HoverY().GetValue() * halfW + halfH);
+	const auto px =
+	    static_cast<int32_t>((d.HoverX().GetValue() + 1.0f) * unit + static_cast<float>(_frame.screen.MiddleLeft()));
+	const auto py = static_cast<int32_t>(d.HoverY().GetValue() * unit + halfH);
 	int32_t best = 10000;
 	glm::ivec2 nearest(0);
 	for (int i = 0; i < 4; ++i)
@@ -2638,12 +2643,12 @@ glm::ivec2 AdvisorSpiritController::HomePoint(int dude) const
 	}
 	if (best < 0x40)
 	{
-		// already there: the top corner of its side
+		// already there: the top corner of its side, (openblack) a hover unit beyond the real screen's side
 		if (dude == 0)
 		{
-			return {(w * 3) / 2, -(h / 2)};
+			return {w + _frame.screen.HoverUnit(), -(h / 2)};
 		}
-		return {-(w / 2), -(h / 2)};
+		return {-_frame.screen.HoverUnit(), -(h / 2)};
 	}
 	return nearest;
 }
@@ -2746,7 +2751,8 @@ void AdvisorSpiritController::Cling(int dude, float px, float py)
 		_timer[dude] = 0.0f;
 		d.SetEmotion(0, 1.0f);
 	}
-	const auto halfW = static_cast<float>(_frame.screen.HalfWidth());
+	const auto unit = static_cast<float>(_frame.screen.HoverUnit());
+	const auto middleLeft = static_cast<float>(_frame.screen.MiddleLeft());
 	float hx;
 	float hy;
 	if (px == 0.0f && py == 0.0f)
@@ -2756,8 +2762,8 @@ void AdvisorSpiritController::Cling(int dude, float px, float py)
 	}
 	else
 	{
-		hx = px / halfW - 1.0f;
-		hy = (py - static_cast<float>(_frame.screen.HalfHeight())) / halfW;
+		hx = (px - middleLeft) / unit - 1.0f;
+		hy = (py - static_cast<float>(_frame.screen.HalfHeight())) / unit;
 	}
 	d.Cling(hx, hy, fromHome);
 }
@@ -2788,7 +2794,8 @@ void AdvisorSpiritController::PlayAnim(int dude, float px, float py, uint32_t an
 	}
 	const auto halfW = static_cast<float>(_frame.screen.HalfWidth());
 	const auto halfH = static_cast<float>(_frame.screen.HalfHeight());
-	d.PlayAnim((px - halfW) / halfW, (py - halfH) / halfW, anim, speed);
+	const auto unit = static_cast<float>(_frame.screen.HoverUnit());
+	d.PlayAnim((px - halfW) / unit, (py - halfH) / unit, anim, speed);
 }
 
 void AdvisorSpiritController::PointAtPosition(int dude, const glm::vec3& position, bool inWorld, float side, float height)
@@ -3073,8 +3080,9 @@ void AdvisorSpiritController::Process(float dt, float focusBias)
 			{
 				d.SetState(dude_state::k_Hover, false);
 			}
-			// the rest zone: good right, evil left
-			d._zones[0] = {2.0f, i == 0 ? 0.66f : -0.66f, 0.0f, 0.4f, 0.6f};
+			// the rest zone: good right, evil left, (openblack) the same share of the real screen's half width out
+			const float rest = 0.66f * _frame.screen.Reach();
+			d._zones[0] = {2.0f, i == 0 ? rest : -rest, 0.0f, 0.4f, 0.6f};
 			d.partner = _dudes[i == 0 ? 1 : 0].get();
 			d.UpdateMotion(dt, focus == i, 0.0f, true);
 		}

@@ -174,7 +174,9 @@ help::DialogueText::Queries HelpTextSystem::DialogueQueries()
 		return help::DialogueVoice {.advisorsBank = sample->bank == audio::SpeechBank::HelpSprites};
 	};
 	queries.turn = []() { return Locator::time::value().GetTurn(); };
-	queries.nowMs = [this]() { return _clockMs; };
+	// The texts are timed in milliseconds by the real time since the game started, which runs on whatever the game's
+	// speed, while it is paused, in the temple and through every change of land
+	queries.nowMs = []() { return static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()); };
 	queries.inTemple = [this]() { return _inTemple; };
 	queries.advisorsTalking = [this]() { return _voices.AnyTalking(); };
 	queries.narrationSounding = [](uint32_t number) {
@@ -226,6 +228,11 @@ void HelpTextSystem::Reset()
 	{
 		_dialogue->ClearAllText();
 	}
+	StopVoices();
+}
+
+void HelpTextSystem::StopVoices()
+{
 	_voices.Stop(k_GoodAdvisor);
 	_voices.Stop(k_EvilAdvisor);
 }
@@ -273,7 +280,6 @@ std::u16string HelpTextSystem::GetWords(uint32_t text) const
 
 void HelpTextSystem::Update(const Frame& frame)
 {
-	_clockMs += static_cast<int32_t>(frame.gameMs);
 	_inTemple = frame.inTemple;
 	_voices.Update();
 	if (!_dialogue)

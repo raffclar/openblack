@@ -124,9 +124,8 @@ std::optional<std::filesystem::path> PlayerProfileSystem::SavedGamesFolder() con
 	{
 		return std::nullopt;
 	}
-	// Each profile keeps its own, under the profiles' folder by its name
-	const std::u8string name(profile->name.begin(), profile->name.end());
-	return *_store.folder / "Profiles" / std::filesystem::path(name) / "Saved Games";
+	// Each profile keeps its own, under the profiles' folder by its name made safe for a folder's
+	return *_store.folder / "Profiles" / player_profiles::ProfileKey(gui::ToUtf16(profile->name)) / "Saved Games";
 }
 
 player_profiles::NameCheck PlayerProfileSystem::CheckNewName(std::u16string_view name) const
@@ -206,6 +205,17 @@ void PlayerProfileSystem::SetCurrentSettings(const player_profiles::Settings& se
 		return;
 	}
 	profile->settings = settings;
+	Save();
+}
+
+void PlayerProfileSystem::SetCurrentAlignment(double alignment)
+{
+	auto* profile = CurrentProfile();
+	if (profile == nullptr || profile->alignment == alignment)
+	{
+		return;
+	}
+	profile->alignment = alignment;
 	Save();
 }
 

@@ -73,6 +73,55 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	                 Tell(k_Good, Action::Out, 5.0f), Tell(k_Evil, Action::Out, 0.0f)},
 	});
 	all.push_back({
+	    .id = "advisors.cling_sides",
+	    .name = "The advisors cling to the sides of the screen",
+	    .facet = Facet::Advisors,
+	    .description = "The good advisor is told to cling to the right side of the screen halfway down and the evil one to "
+	                   "the left side a little higher, as a script does, then both come out again.",
+	    .expected = "Each flies in from beyond its side and holds on to that side of the screen, on any screen shape at the "
+	                "real screen's edge, only the half of it nearer the middle showing, turned to face in from the edge and "
+	                "swinging a little. The advisors are the same size for the screen's height as on a 4:3 screen. After "
+	                "six seconds each lets go and flies back into the screen.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = AdvisorsFraming(),
+	    .commands = {Tell(k_Good, Action::Cling, 0.5f, {1.0f, 0.5f}), Tell(k_Evil, Action::Cling, 0.0f, {0.0f, 0.4f}),
+	                 Tell(k_Good, Action::Out, 6.0f), Tell(k_Evil, Action::Out, 0.0f)},
+	});
+	all.push_back({
+	    .id = "advisors.go_home",
+	    .name = "The advisors go home off the screen",
+	    .facet = Facet::Advisors,
+	    .description = "Both advisors come out and fly out towards their sides of the screen, then are sent home; then "
+	                   "they come out again and are sent home from the middle of the screen.",
+	    .expected = "Each flies in a second to the nearest of its homes beyond the screen's edges: past its own side of "
+	                "the screen when near that side, past the bottom or top when nearer the middle (the advisors drift apart "
+	                "before they are sent, so where they leave varies). On every screen shape each leaves the screen "
+	                "completely before it is gone: neither vanishes while still in view.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = AdvisorsFraming(),
+	    .commands = {Tell(k_Good, Action::Out, 0.5f), Tell(k_Evil, Action::Out, 0.0f),
+	                 Tell(k_Good, Action::Fly, 2.0f, {0.9f, 0.5f}), Tell(k_Evil, Action::Fly, 0.0f, {0.1f, 0.45f}),
+	                 Tell(k_Good, Action::Home, 2.5f), Tell(k_Evil, Action::Home, 0.0f), Tell(k_Good, Action::Out, 2.5f),
+	                 Tell(k_Evil, Action::Out, 0.0f), Tell(k_Good, Action::Fly, 1.5f, {0.55f, 0.5f}),
+	                 Tell(k_Evil, Action::Fly, 0.0f, {0.45f, 0.5f}), Tell(k_Good, Action::Home, 2.0f),
+	                 Tell(k_Evil, Action::Home, 0.0f)},
+	});
+	all.push_back({
+	    .id = "advisors.screen_point",
+	    .name = "The advisors point at the corners of the screen",
+	    .facet = Facet::Advisors,
+	    .description = "Both come out; the evil advisor points at a point of the screen near its top right corner and the "
+	                   "good one at a point near its bottom left corner, as a script's screen point tells them.",
+	    .expected = "Each raises the arm on the side of its point and turns its head towards it, holding it there: the "
+	                "evil one towards the real screen's top right corner and the good one towards its bottom left, on any "
+	                "screen shape.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = AdvisorsFraming(),
+	    .commands = {Tell(k_Good, Action::Out, 0.5f), Tell(k_Evil, Action::Out, 0.0f),
+	                 Tell(k_Evil, Action::PointOnScreen, 2.0f, {0.95f, 0.1f}),
+	                 Tell(k_Good, Action::PointOnScreen, 0.0f, {0.05f, 0.9f})},
+	});
+	all.push_back({
 	    .id = "advisors.point_and_act",
 	    .name = "The advisors point and act",
 	    .facet = Facet::Advisors,

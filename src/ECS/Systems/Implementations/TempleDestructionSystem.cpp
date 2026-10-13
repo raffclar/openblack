@@ -123,19 +123,58 @@ void TempleDestructionSystem::DamageEffect(entt::entity entity, Temple& temple)
 	{
 		return;
 	}
+	// Only while it would take a blow itself: while its player has a building or a homeless villager to pass blows on to,
+	// it doesn't beam
+	if (temple_heart::Choose(_world->HeartTowns(temple.owner)).kind != temple_heart::TargetKind::Heart)
+	{
+		return;
+	}
 	const auto interval = temple_heart::DamageInterval(_world->MillisecondsPerTurn(), *life);
 	if (!temple_heart::DamageBeamDue(temple.beamTurn, _world->Turn(), interval))
 	{
 		return;
 	}
-	// TODO(temple-dressing): the beam itself, plasma from a point of the heart's model, isn't made yet; only its sound
+	// The beams come from the spot visual the heart fires all its beams from, made with the first
+	const auto position = registry.Get<const Transform>(entity).position;
+	if (!temple.beamSource.has_value())
+	{
+		temple.beamSource = _world->StartSpotVisual(SpotVisualType::MagicBeamOnCitadel, position, -1, temple.owner);
+	}
+	// Each beam leaps between two random points of the heart's model facing no more than a little down, leaving along the
+	// first's normal and arriving against the second's. The points are drawn even when there is nothing to fire from.
+	auto* random = _world->Random();
+	if (random == nullptr)
+	{
+		return;
+	}
+	const auto triangles = _world->DrawnTrianglesOf(entity);
+	const auto placement = _world->PlacementOf(entity);
+	const auto from = model_surface::RandomUpwardPoint(triangles, placement, *random);
+	const auto to = model_surface::RandomUpwardPoint(triangles, placement, *random);
+	if (!temple.beamSource.has_value())
+	{
+		return;
+	}
 	if (temple_heart::DamageBeamSounds(*life))
 	{
 		// The sound takes the next of the five whether or not it can be heard
 		const auto sample = temple_heart::NextDamageSample(registry.Context().nextDamageBeamSound);
-		_world->PlayOnce(k_DamageSounds.at(sample - k_FirstDamageSample).value(),
-		                 registry.Get<const Transform>(entity).position, entity);
+		_world->PlayOnce(k_DamageSounds.at(sample - k_FirstDamageSample).value(), position, entity);
 	}
+	if (!from.has_value() || !to.has_value())
+	{
+		return;
+	}
+	const auto look = temple_heart::DamageLookAt(*life);
+	_world->AddPlasma(*temple.beamSource, {
+	                                          .start = from->position,
+	                                          .end = to->position,
+	                                          .startTangent = from->normal,
+	                                          .endTangent = -to->normal,
+	                                          .life = look.life,
+	                                          .speed = particles::k_HeartPlasmaSpeed,
+	                                          .alpha = look.alpha,
+	                                      });
 }
 
 void TempleDestructionSystem::Beam(entt::entity entity, Temple& temple, glm::vec3 position)
@@ -261,6 +300,11 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 	}
 	if (events.end)
 	{
+		// The local player's heart beats as the danger has it again
+		if (const auto local = _world->LocalPlayer(); local.has_value() && *local == temple.owner)
+		{
+			_world->EndHeartbeatHold(temple.owner);
+		}
 		temple.destroying = false;
 		temple.destructionClock = 0.0f;
 		RemoveTemple(entity);

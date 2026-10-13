@@ -25,7 +25,7 @@ class AnimalSystem final: public AnimalSystemInterface
 {
 public:
 	void ProcessTurn() override;
-	void Update(uint32_t turn, float turnFraction) override;
+	void Update(std::chrono::milliseconds frameGameTime, float turnFraction) override;
 	void Reset() override;
 
 	entt::entity CreateFlock(glm::vec2 centre, float domainRadius, float flockDistance) override;
@@ -127,7 +127,7 @@ private:
 	/// Whether a point is within the reach of an animal's herd's home: never for an animal with no herd
 	[[nodiscard]] bool WithinDomain(const components::Animal& animal, glm::ivec2 point) const;
 	[[nodiscard]] std::optional<animals::grazers::HerdSize> HerdSizeOf(const components::Animal& animal) const;
-	[[nodiscard]] uint32_t AgeOf(const components::Grazer& grazer) const;
+	[[nodiscard]] uint32_t AgeOf(const components::Animal& animal) const;
 	/// Whether an animal sees to its needs before it does what its state does
 	[[nodiscard]] static bool SeesToNeedsIn(components::AnimalState state);
 
@@ -175,7 +175,6 @@ private:
 	uint32_t _turn {0};
 	/// How many flocks have been made, which orders them
 	uint32_t _flocksMade {0};
-	uint32_t _drawTime {0};
 };
 
 } // namespace openblack::ecs::systems
