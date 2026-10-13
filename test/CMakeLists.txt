@@ -901,3 +901,4 @@ openblack_setup_and_add_test(test_villager_hiding test_villager_hiding.cpp)
 openblack_setup_and_add_test(
   test_reaction_timing_rules test_reaction_timing_rules.cpp
 )
+openblack_setup_and_add_test(test_predator_rules test_predator_rules.cpp)
