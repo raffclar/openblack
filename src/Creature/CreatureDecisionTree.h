@@ -88,6 +88,10 @@ constexpr uint32_t k_MagicFood = 14;
 constexpr uint32_t k_Feature = 15;
 /// A pot or a pile of food or wood
 constexpr uint32_t k_Pot = 16;
+/// The icon of a miracle
+constexpr uint32_t k_SpellIcon = 17;
+/// A miracle's seed, or a mist
+constexpr uint32_t k_SpellSeed = 18;
 /// Any other thing that lies about and can move
 constexpr uint32_t k_MobileObject = 19;
 constexpr uint32_t k_Other = 21;
@@ -114,6 +118,47 @@ struct Belief
 [[nodiscard]] Belief FromSlots(uint32_t type, std::span<const uint32_t> slots);
 /// A belief's values in its kind's order, missing ones as 0
 [[nodiscard]] std::vector<uint32_t> ToSlots(const Belief& belief);
+
+/// The values of the allegiance attribute: the thing is of the creature's own player, or of another player or none
+namespace allegiance
+{
+constexpr uint32_t k_Friendly = 0;
+constexpr uint32_t k_Enemy = 1;
+} // namespace allegiance
+/// The values of the origin attribute
+namespace origin
+{
+constexpr uint32_t k_Natural = 0;
+constexpr uint32_t k_ManMade = 1;
+constexpr uint32_t k_Magic = 2;
+} // namespace origin
+/// The player number of a thing of no player
+constexpr uint32_t k_NoPlayerNumber = 7;
+
+/// What a creature finds out about any thing, whatever its kind
+struct CommonFacts
+{
+	/// The kind of thing (the belief type)
+	uint32_t type {belief_types::k_Other};
+	uint32_t origin {origin::k_Natural};
+	/// It is alive and moves: a villager, an animal or a creature
+	bool animate {false};
+	/// The number of the thing's player, none for a thing of no player
+	std::optional<uint32_t> player;
+	/// The number of the creature's own player
+	std::optional<uint32_t> creaturesPlayer;
+	/// It is a creature that is taller than the creature of the creature's player
+	bool harderThanMe {false};
+	/// The species of a creature, 0 for any other thing
+	uint32_t creatureType {0};
+};
+/// The seven attributes every belief has. The allegiance is friendly only when the thing has the same player as the
+/// creature. A thing of no player has the last player number.
+[[nodiscard]] Belief CommonBelief(const CommonFacts& facts);
+/// The size of a forest by its trees: under 10 small, under 20 middle-sized, else big
+[[nodiscard]] uint32_t ForestSize(size_t trees);
+/// The height of a creature by the size it shows: under 0.25, under 0.75, under 1.25, or bigger
+[[nodiscard]] uint32_t CreatureHeight(float shownSize);
 
 /// One example: a thing and the feedback for acting on it, from -1 to 1
 struct Episode

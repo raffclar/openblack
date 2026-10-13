@@ -180,6 +180,54 @@ TEST(CreatureDecisionTree, SlotsFollowTheKindOfThing)
 	EXPECT_EQ(creature_tree::ToSlots(belief), slots);
 }
 
+TEST(CreatureDecisionTree, EveryThingIsFriendlyOnlyWhenItHasTheCreaturesPlayer)
+{
+	namespace types = creature_tree::belief_types;
+	// A rock of the neutral player, seen by the first player's creature
+	const auto rock = creature_tree::CommonBelief({.type = types::k_Rock, .player = 7, .creaturesPlayer = 0});
+	EXPECT_EQ(rock.type, types::k_Rock);
+	EXPECT_EQ(rock.Value(Attribute::Type), types::k_Rock);
+	EXPECT_EQ(rock.Value(Attribute::Allegiance), creature_tree::allegiance::k_Enemy);
+	EXPECT_EQ(rock.Value(Attribute::PlayerNumber), 7u);
+	EXPECT_EQ(rock.Value(Attribute::Origin), creature_tree::origin::k_Natural);
+	EXPECT_EQ(rock.Value(Attribute::Animate), 0u);
+	// A villager of the creature's own town, and one of no town
+	const auto own =
+	    creature_tree::CommonBelief({.type = types::k_Villager, .animate = true, .player = 0, .creaturesPlayer = 0});
+	EXPECT_EQ(own.Value(Attribute::Allegiance), creature_tree::allegiance::k_Friendly);
+	EXPECT_EQ(own.Value(Attribute::PlayerNumber), 0u);
+	EXPECT_EQ(own.Value(Attribute::Animate), 1u);
+	const auto homeless = creature_tree::CommonBelief({.type = types::k_Villager, .animate = true, .creaturesPlayer = 0});
+	EXPECT_EQ(homeless.Value(Attribute::Allegiance), creature_tree::allegiance::k_Enemy);
+	EXPECT_EQ(homeless.Value(Attribute::PlayerNumber), creature_tree::k_NoPlayerNumber);
+	// Another player's creature, taller than the player's own
+	const auto other = creature_tree::CommonBelief({.type = types::k_Creature,
+	                                                .animate = true,
+	                                                .player = 1,
+	                                                .creaturesPlayer = 0,
+	                                                .harderThanMe = true,
+	                                                .creatureType = 4});
+	EXPECT_EQ(other.Value(Attribute::Allegiance), creature_tree::allegiance::k_Enemy);
+	EXPECT_EQ(other.Value(Attribute::HarderThanMe), 1u);
+	EXPECT_EQ(other.Value(Attribute::CreatureType), 4u);
+	EXPECT_EQ(creature_tree::ToSlots(other).size(), 11u);
+}
+
+TEST(CreatureDecisionTree, ForestsAndCreaturesAreSortedBySize)
+{
+	EXPECT_EQ(creature_tree::ForestSize(0), 0u);
+	EXPECT_EQ(creature_tree::ForestSize(9), 0u);
+	EXPECT_EQ(creature_tree::ForestSize(10), 1u);
+	EXPECT_EQ(creature_tree::ForestSize(19), 1u);
+	EXPECT_EQ(creature_tree::ForestSize(20), 2u);
+	EXPECT_EQ(creature_tree::CreatureHeight(0.2f), 0u);
+	EXPECT_EQ(creature_tree::CreatureHeight(0.25f), 1u);
+	EXPECT_EQ(creature_tree::CreatureHeight(0.74f), 1u);
+	EXPECT_EQ(creature_tree::CreatureHeight(0.75f), 2u);
+	EXPECT_EQ(creature_tree::CreatureHeight(1.25f), 3u);
+	EXPECT_EQ(creature_tree::CreatureHeight(2.0f), 3u);
+}
+
 // The planner
 
 TEST(CreaturePlanner, DistancePriority)
@@ -435,6 +483,25 @@ TEST(CreaturePlanner, BestDesireOnOneThing)
 	// No score more than zero: no desire
 	const std::vector<creature_planner::DesireOnThing> none {{.desire = Desire::Anger, .strength = 0.0f, .usefulness = 0.1f}};
 	EXPECT_FALSE(creature_planner::BestDesireOnThing(none).has_value());
+}
+
+TEST(CreaturePlanner, DesireForAThingShownOnTheLeash)
+{
+	const std::vector<creature_planner::DesireOnThing> aboutWhole {
+	    {.desire = Desire::Compassion, .strength = 0.5f, .usefulness = 0.08f},
+	};
+	// A desire not about a whole thing scores a tenth of its strength, against the usefulness of the best desire before
+	const std::vector<creature_planner::DesireOnThing> weak {{.desire = Desire::Curiosity, .strength = 0.7f}};
+	EXPECT_EQ(creature_planner::DesireForShownThing(aboutWhole, weak), Desire::Compassion);
+	const std::vector<creature_planner::DesireOnThing> strong {{.desire = Desire::Curiosity, .strength = 0.9f},
+	                                                           {.desire = Desire::Poo, .strength = 0.95f}};
+	EXPECT_EQ(creature_planner::DesireForShownThing(aboutWhole, strong), Desire::Poo);
+	// With no whole thing, the strongest of the others; with nothing, none
+	EXPECT_EQ(creature_planner::DesireForShownThing({}, strong), Desire::Poo);
+	EXPECT_FALSE(creature_planner::DesireForShownThing({}, {}).has_value());
+	// Only the desires that test the thing they act on
+	EXPECT_TRUE(creature_planner::TestsThingActedOn(Desire::Curiosity));
+	EXPECT_FALSE(creature_planner::TestsThingActedOn(Desire::Hunger));
 }
 
 TEST(CreaturePlanner, OpinionBreaksTies)
@@ -850,6 +917,37 @@ TEST(CreatureWatching, MimicChanceIsARankNotARoll)
 	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 2, rules, grown, std::nullopt));
 	EXPECT_EQ(mimicry->rule, 2u);
 	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::Notice);
+}
+
+TEST(CreatureWatching, ThingsAreCopiedOnByTheirKind)
+{
+	using creature_watching::MimicKind;
+	using Class = creature_watching::MimicFacts::Class;
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Villager}), MimicKind::Man);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Villager, .female = true}), MimicKind::Woman);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Villager, .child = true, .female = true}), MimicKind::Child);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Animal, .nasty = true}), MimicKind::NastyAnimal);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Animal}), MimicKind::NiceAnimal);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Rock}), MimicKind::Rock);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::LooseObject}), MimicKind::LooseObject);
+	EXPECT_EQ(creature_watching::KindToCopy({.kind = Class::Other}), MimicKind::Other);
+	EXPECT_EQ(static_cast<int>(MimicKind::Creature), 9);
+}
+
+TEST(CreatureWatching, TheNearestThingOfTheSameKindIsCopiedOn)
+{
+	using creature_watching::MimicKind;
+	const std::vector<creature_watching::MimicCandidate> candidates {
+	    {.kind = MimicKind::Tree, .nearness = 0.9f},  {.kind = MimicKind::Rock, .nearness = 0.2f},
+	    {.kind = MimicKind::Rock, .nearness = 0.6f},  {.kind = MimicKind::Rock, .nearness = 0.6f},
+	    {.kind = MimicKind::Woman, .nearness = 0.0f},
+	};
+	// The first of the nearest equals of the kind
+	EXPECT_EQ(creature_watching::NearestOfKind(candidates, MimicKind::Rock), 2u);
+	EXPECT_EQ(creature_watching::NearestOfKind(candidates, MimicKind::Tree), 0u);
+	// None of the kind, or none nearer than nothing
+	EXPECT_FALSE(creature_watching::NearestOfKind(candidates, MimicKind::Man).has_value());
+	EXPECT_FALSE(creature_watching::NearestOfKind(candidates, MimicKind::Woman).has_value());
 }
 
 // Carrying out plans

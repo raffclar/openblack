@@ -174,6 +174,20 @@ struct DesireOnThing
 /// If no desire has a score more than zero, there is no best desire.
 [[nodiscard]] std::optional<creature_desires::Desire> BestDesireOnThing(std::span<const DesireOnThing> desires);
 
+/// A desire that is not about a whole thing has this share of its strength as its score for a thing shown on the leash
+constexpr float k_ShownThingShare = 0.1f;
+/// Find the desire for a thing shown on the leash. First, find the best desire about the whole thing that the shown
+/// thing is part of, as BestDesireOnThing does. Then examine, in their order, the desires that are not about a whole
+/// thing. The score of such a desire is k_ShownThingShare of its strength. It becomes the best when its score is more
+/// than the usefulness of the best desire before it, or more than the score of the best desire not about a whole thing.
+[[nodiscard]] std::optional<creature_desires::Desire> DesireForShownThing(std::span<const DesireOnThing> aboutWhole,
+                                                                          std::span<const DesireOnThing> withoutWhole);
+/// Whether a desire tests the thing that it acts on. Only these desires, of those that are not about a whole thing, can
+/// act on a thing shown on the leash.
+[[nodiscard]] bool TestsThingActedOn(creature_desires::Desire desire);
+/// A thing shown on the leash gets at most this many tries for a desire with a plan
+constexpr size_t k_ShownThingTries = 40;
+
 /// Something a planned action could use
 struct UsedCandidate
 {

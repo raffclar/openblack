@@ -198,4 +198,56 @@ void StrokedWhileMimicking(std::optional<Mimicry>& mimicry, std::span<const Mimi
 constexpr float k_MaxReactionPriorityToMimic = 150.0f;
 constexpr uint32_t k_MinMimicPhase = 3;
 
+/// The kinds of thing a creature tells apart when it copies the player: it can copy a deed on a thing of the same kind
+enum class MimicKind : uint8_t
+{
+	Man,
+	Woman,
+	Child,
+	NastyAnimal,
+	NiceAnimal,
+	Building,
+	Tree,
+	Rock,
+	LooseObject,
+	Creature,
+	Other,
+};
+/// A thing as a creature sees it when it copies the player
+struct MimicFacts
+{
+	enum class Class : uint8_t
+	{
+		Villager,
+		Animal,
+		/// A building or a field
+		Building,
+		Tree,
+		/// A rock, or a dead or felled tree
+		Rock,
+		/// Any other thing that lies about
+		LooseObject,
+		Creature,
+		Other,
+	};
+	Class kind {Class::Other};
+	bool child {false};
+	bool female {false};
+	/// An animal whose data marks it as nasty
+	bool nasty {false};
+};
+/// The kind of a thing for copying: a villager by age and sex, an animal by whether it is nasty, else by its class
+[[nodiscard]] MimicKind KindToCopy(const MimicFacts& facts);
+
+/// A thing the creature believes in, as a candidate for copying the player on a thing like the player's
+struct MimicCandidate
+{
+	MimicKind kind {MimicKind::Other};
+	/// How much the creature prefers it for its nearness
+	float nearness {0.0f};
+};
+/// The nearest candidate of the kind that the player's thing was: the first of those with the highest nearness above 0.
+/// None when no candidate of that kind has a nearness above 0.
+[[nodiscard]] std::optional<size_t> NearestOfKind(std::span<const MimicCandidate> candidates, MimicKind kind);
+
 } // namespace openblack::creature_watching

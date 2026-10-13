@@ -203,12 +203,3 @@ TEST(LeashRules, LessonsOfWhatThePlayerShows)
 	EXPECT_FLOAT_EQ(good[1].change, 1.0f);
 	EXPECT_TRUE(LessonsFor(LeashType::Rope, false).empty());
 }
-
-TEST(LeashRules, AForcedPlanUsesTheThingOrElseTheFirstOfItsGroupThatSuits)
-{
-	const std::vector<int> group {7, 8, 9};
-	EXPECT_EQ(ForcedTarget(3, group, [](int thing) { return thing == 3 || thing == 8; }), std::optional(3));
-	EXPECT_EQ(ForcedTarget(3, group, [](int thing) { return thing >= 8; }), std::optional(8));
-	EXPECT_EQ(ForcedTarget(3, group, [](int) { return false; }), std::nullopt);
-	EXPECT_EQ(ForcedTarget(3, std::vector<int> {}, [](int thing) { return thing == 3; }), std::optional(3));
-}

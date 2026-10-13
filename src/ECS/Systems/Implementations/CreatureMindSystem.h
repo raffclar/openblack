@@ -109,6 +109,10 @@ public:
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
+	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
+	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
+	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
+
 private:
 	/// Gives a creature its desires and what it has learnt, if it has none yet: the first time its mind thinks, or
 	/// sooner when it is told to do something before then
@@ -129,6 +133,9 @@ private:
 	           const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
+	/// Copying the player, the creature does what the player did: to the player's thing, else to the nearest thing of the
+	/// same kind, else to the most useful thing (CreatureMindLearning.cpp)
+	void CopyPlayersDeed(entt::entity creature, components::CreatureMindState& mind);
 	/// A script makes a creature pick a fight with another: it asks, and they fight if the other agrees; either way the
 	/// script's order is carried out
 	bool FightForScript(entt::entity creature, entt::entity opponent);
@@ -217,6 +224,18 @@ private:
 	                                                                        components::CreatureMindState& mind,
 	                                                                        creature_desires::Desire desire, entt::entity thing,
 	                                                                        const ChosenActivity& activity);
+	/// The things that a plan for a desire not about a whole thing can act on when the leash shows a thing: the shown
+	/// thing when it suits the desire and is of use, else the parts of its whole thing that do, the newest belief first
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate> ShownThingsWithoutWhole(entt::entity creature,
+	                                                                                     components::CreatureMindState& mind,
+	                                                                                     creature_desires::Desire desire,
+	                                                                                     entt::entity thing);
+	/// The desire that a creature most wants for a thing shown on the leash, of the desires not yet tried; none when no
+	/// desire is left
+	[[nodiscard]] std::optional<creature_desires::Desire> DesireForShownThing(entt::entity creature,
+	                                                                          components::CreatureMindState& mind,
+	                                                                          entt::entity thing,
+	                                                                          std::span<const creature_desires::Desire> tried);
 	/// What a thing is worth to a creature as the goal of a plan for a desire, and what that worth counts for in the
 	/// plan's priority. With a whole thing that the desire is about, the thing is a part of that whole thing.
 	[[nodiscard]] creature_planner::ObjectCandidate GoalWorth(entt::entity creature, const components::CreatureMindState& mind,
@@ -237,9 +256,6 @@ private:
 	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
 	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
 	bool Douse(entt::entity creature, entt::entity object);
-	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
-	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
-	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
 
 	// What it believes about the things about it (CreatureMindBeliefs.cpp)
 	/// It comes across a thing: its belief about it is brought up to date, or made, and a new one leads it on to what the
