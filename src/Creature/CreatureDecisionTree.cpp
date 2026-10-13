@@ -148,8 +148,24 @@ const char* creature_tree::BeliefName(uint32_t type)
 		return "spell";
 	case belief_types::k_Field:
 		return "field";
+	case belief_types::k_Rock:
+		return "rock";
+	case belief_types::k_Poo:
+		return "poo";
+	case belief_types::k_MagicFood:
+		return "food";
 	case belief_types::k_Feature:
 		return "feature";
+	case belief_types::k_Pot:
+		return "pot";
+	case belief_types::k_SpellIcon:
+		return "spell icon";
+	case belief_types::k_SpellSeed:
+		return "spell seed";
+	case belief_types::k_MobileObject:
+		return "mobile object";
+	case belief_types::k_TotemStatue:
+		return "totem";
 	case belief_types::k_Flock:
 		return "flock";
 	default:
@@ -195,6 +211,37 @@ std::vector<uint32_t> creature_tree::ToSlots(const Belief& belief)
 		slots.push_back(belief.Value(attribute).value_or(0));
 	}
 	return slots;
+}
+
+Belief creature_tree::CommonBelief(const CommonFacts& facts)
+{
+	Belief belief {.type = facts.type};
+	belief.Set(Allegiance, facts.player == facts.creaturesPlayer ? allegiance::k_Friendly : allegiance::k_Enemy);
+	belief.Set(Origin, facts.origin);
+	belief.Set(Animate, facts.animate ? 1 : 0);
+	belief.Set(PlayerNumber, std::min(facts.player.value_or(k_NoPlayerNumber), k_NoPlayerNumber));
+	belief.Set(HarderThanMe, facts.harderThanMe ? 1 : 0);
+	belief.Set(CreatureType, facts.creatureType);
+	belief.Set(Type, facts.type);
+	return belief;
+}
+
+uint32_t creature_tree::ForestSize(size_t trees)
+{
+	constexpr size_t k_SmallBelow = 10;
+	constexpr size_t k_MiddleBelow = 20;
+	if (trees < k_SmallBelow)
+	{
+		return 0;
+	}
+	return trees < k_MiddleBelow ? 1 : 2;
+}
+
+uint32_t creature_tree::CreatureHeight(float shownSize)
+{
+	constexpr std::array k_Limits {0.25f, 0.75f, 1.25f};
+	const auto taller = std::ranges::count_if(k_Limits, [shownSize](float limit) { return shownSize >= limit; });
+	return static_cast<uint32_t>(taller);
 }
 
 void creature_tree::AddEpisode(std::vector<Episode>& episodes, Episode episode)

@@ -109,6 +109,10 @@ public:
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
+	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
+	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
+	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
+
 private:
 	/// Gives a creature its desires and what it has learnt, if it has none yet: the first time its mind thinks, or
 	/// sooner when it is told to do something before then
@@ -233,9 +237,6 @@ private:
 	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
 	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
 	bool Douse(entt::entity creature, entt::entity object);
-	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
-	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
-	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
 
 	// What it believes about the things about it (CreatureMindBeliefs.cpp)
 	/// It comes across a thing: its belief about it is brought up to date, or made, and a new one leads it on to what the

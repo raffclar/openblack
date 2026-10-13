@@ -180,6 +180,54 @@ TEST(CreatureDecisionTree, SlotsFollowTheKindOfThing)
 	EXPECT_EQ(creature_tree::ToSlots(belief), slots);
 }
 
+TEST(CreatureDecisionTree, EveryThingIsFriendlyOnlyWhenItHasTheCreaturesPlayer)
+{
+	namespace types = creature_tree::belief_types;
+	// A rock of the neutral player, seen by the first player's creature
+	const auto rock = creature_tree::CommonBelief({.type = types::k_Rock, .player = 7, .creaturesPlayer = 0});
+	EXPECT_EQ(rock.type, types::k_Rock);
+	EXPECT_EQ(rock.Value(Attribute::Type), types::k_Rock);
+	EXPECT_EQ(rock.Value(Attribute::Allegiance), creature_tree::allegiance::k_Enemy);
+	EXPECT_EQ(rock.Value(Attribute::PlayerNumber), 7u);
+	EXPECT_EQ(rock.Value(Attribute::Origin), creature_tree::origin::k_Natural);
+	EXPECT_EQ(rock.Value(Attribute::Animate), 0u);
+	// A villager of the creature's own town, and one of no town
+	const auto own =
+	    creature_tree::CommonBelief({.type = types::k_Villager, .animate = true, .player = 0, .creaturesPlayer = 0});
+	EXPECT_EQ(own.Value(Attribute::Allegiance), creature_tree::allegiance::k_Friendly);
+	EXPECT_EQ(own.Value(Attribute::PlayerNumber), 0u);
+	EXPECT_EQ(own.Value(Attribute::Animate), 1u);
+	const auto homeless = creature_tree::CommonBelief({.type = types::k_Villager, .animate = true, .creaturesPlayer = 0});
+	EXPECT_EQ(homeless.Value(Attribute::Allegiance), creature_tree::allegiance::k_Enemy);
+	EXPECT_EQ(homeless.Value(Attribute::PlayerNumber), creature_tree::k_NoPlayerNumber);
+	// Another player's creature, taller than the player's own
+	const auto other = creature_tree::CommonBelief({.type = types::k_Creature,
+	                                                .animate = true,
+	                                                .player = 1,
+	                                                .creaturesPlayer = 0,
+	                                                .harderThanMe = true,
+	                                                .creatureType = 4});
+	EXPECT_EQ(other.Value(Attribute::Allegiance), creature_tree::allegiance::k_Enemy);
+	EXPECT_EQ(other.Value(Attribute::HarderThanMe), 1u);
+	EXPECT_EQ(other.Value(Attribute::CreatureType), 4u);
+	EXPECT_EQ(creature_tree::ToSlots(other).size(), 11u);
+}
+
+TEST(CreatureDecisionTree, ForestsAndCreaturesAreSortedBySize)
+{
+	EXPECT_EQ(creature_tree::ForestSize(0), 0u);
+	EXPECT_EQ(creature_tree::ForestSize(9), 0u);
+	EXPECT_EQ(creature_tree::ForestSize(10), 1u);
+	EXPECT_EQ(creature_tree::ForestSize(19), 1u);
+	EXPECT_EQ(creature_tree::ForestSize(20), 2u);
+	EXPECT_EQ(creature_tree::CreatureHeight(0.2f), 0u);
+	EXPECT_EQ(creature_tree::CreatureHeight(0.25f), 1u);
+	EXPECT_EQ(creature_tree::CreatureHeight(0.74f), 1u);
+	EXPECT_EQ(creature_tree::CreatureHeight(0.75f), 2u);
+	EXPECT_EQ(creature_tree::CreatureHeight(1.25f), 3u);
+	EXPECT_EQ(creature_tree::CreatureHeight(2.0f), 3u);
+}
+
 // The planner
 
 TEST(CreaturePlanner, DistancePriority)

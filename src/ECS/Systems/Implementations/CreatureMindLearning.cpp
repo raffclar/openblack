@@ -76,12 +76,14 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LandForest.h"
+#include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -102,6 +104,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -151,9 +154,6 @@ constexpr float k_PooUseFeedback = 0.5f;
 constexpr float k_ViewDistance = 150.0f;
 /// Copying the player moves on a step once a second
 constexpr uint32_t k_MimicStepTurns = 10;
-/// Things nobody owns, and things of no player
-constexpr uint32_t k_Neutral = 1;
-constexpr uint32_t k_NoPlayer = 7;
 
 /// The land's script that curses the player's creature, and how tall a creature of size 1 is
 constexpr std::string_view k_CurseScript = "CreatureCurse";
@@ -699,86 +699,190 @@ void FinishedHelpingTown(const ecs::Registry& registry, CreatureMindState& mind,
 }
 } // namespace
 
-/// What a creature knows of a thing: its kind and attributes, as far as the game's world here tells them
-std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& registry, entt::entity entity,
-                                                           entt::entity self)
+namespace
 {
-	using creature_tree::Attribute;
-	namespace types = creature_tree::belief_types;
-	if (!registry.Valid(entity))
+std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::entity thing,
+                                        std::optional<entt::entity> belongsTo);
+
+/// The player number of a town, none when there is no town
+std::optional<uint32_t> PlayerOfTown(const ecs::Registry& registry, std::optional<entt::entity> town)
+{
+	const auto* data = town.has_value() && registry.Valid(*town) ? registry.TryGet<const Town>(*town) : nullptr;
+	return data != nullptr ? std::optional(PlayerNumberOf(data->owner)) : std::nullopt;
+}
+
+/// The number of the player a thing is of, none for a thing of no player. The things of a town are of its player; a
+/// miracle is of the player of its caster; the land's other things are of the neutral player or of none.
+std::optional<uint32_t> PlayerOfThing(const ecs::Registry& registry, entt::entity thing)
+{
+	if (const auto* creature = registry.TryGet<const Creature>(thing))
+	{
+		return PlayerNumberOf(creature->owner);
+	}
+	if (const auto* town = registry.TryGet<const Town>(thing))
+	{
+		return PlayerNumberOf(town->owner);
+	}
+	if (const auto* temple = registry.TryGet<const Temple>(thing))
+	{
+		return PlayerNumberOf(temple->owner);
+	}
+	if (const auto* site = registry.TryGet<const WorshipSite>(thing))
+	{
+		return PlayerNumberOf(site->player);
+	}
+	if (const auto* spell = registry.TryGet<const ecs::components::Spell>(thing))
+	{
+		switch (spell->caster.kind)
+		{
+		case SpellCaster::Kind::Player:
+			return PlayerNumberOf(spell->caster.player);
+		case SpellCaster::Kind::Creature:
+		case SpellCaster::Kind::Object:
+			return registry.Valid(spell->caster.entity) && spell->caster.entity != thing
+			           ? PlayerOfThing(registry, spell->caster.entity)
+			           : std::nullopt;
+		default:
+			return std::nullopt;
+		}
+	}
+	if (const auto* pile = registry.TryGet<const MagicPile>(thing))
+	{
+		return PlayerNumberOf(pile->player);
+	}
+	if (const auto* icon = registry.TryGet<const TownCentreIcon>(thing))
+	{
+		return PlayerOfTown(registry, icon->town);
+	}
+	// A villager, a field or a fish farm with no town is of no player; a building, a totem or a pile with no town is of
+	// the neutral player
+	if (registry.AnyOf<Villager, Abode, Field, FishFarm, VillageTotem, Pot>(thing))
+	{
+		if (const auto player = PlayerOfTown(registry, TownOfThing(registry, thing, CreatureMindSystem::BelongsTo(thing))))
+		{
+			return player;
+		}
+		if (registry.AnyOf<Villager, Field, FishFarm>(thing))
+		{
+			return std::nullopt;
+		}
+		return PlayerNumberOf(PlayerNames::NEUTRAL);
+	}
+	// Trees, forests and flocks have no player
+	if (registry.AnyOf<Tree, ForestTurns, Flock>(thing))
 	{
 		return std::nullopt;
 	}
-	const auto* me = registry.TryGet<const Creature>(self);
-	creature_tree::Belief belief;
-	const auto common = [&belief](uint32_t type, uint32_t allegiance, uint32_t origin, uint32_t animate, uint32_t player) {
-		belief.type = type;
-		belief.Set(Attribute::Allegiance, allegiance);
-		belief.Set(Attribute::Origin, origin);
-		belief.Set(Attribute::Animate, animate);
-		belief.Set(Attribute::PlayerNumber, player);
-		belief.Set(Attribute::HarderThanMe, 0);
-		belief.Set(Attribute::CreatureType, 0);
-		belief.Set(Attribute::Type, type);
-	};
-	if (const auto* villager = registry.TryGet<const Villager>(entity))
+	return PlayerNumberOf(PlayerNames::NEUTRAL);
+}
+
+/// Whether a thing is natural, made by people, or made by magic
+uint32_t OriginOf(const ecs::Registry& registry, entt::entity thing)
+{
+	namespace origin = creature_tree::origin;
+	if (registry.AnyOf<Temple, ecs::components::Spell>(thing))
 	{
-		common(types::k_Villager, k_Neutral, 0, 1, k_NoPlayer);
-		belief.Set(Attribute::Sex, static_cast<uint32_t>(villager->sex));
-		belief.Set(Attribute::VillagerJob, static_cast<uint32_t>(villager->number));
-		belief.Set(Attribute::Life, villager->life > 0.0f ? 1 : 0);
-		belief.Set(Attribute::OnFire,
-		           Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity) ? 1 : 0);
-		belief.Set(Attribute::Tribe, static_cast<uint32_t>(villager->tribe));
-		return belief;
+		return origin::k_Magic;
 	}
-	if (const auto* creature = registry.TryGet<const Creature>(entity))
+	// A worship site is a part of the temple, which is natural
+	if (registry.AllOf<WorshipSite>(thing))
 	{
-		const bool mine = me != nullptr && me->owner == creature->owner;
-		common(types::k_Creature, mine ? 0 : 2, 0, 1, PlayerNumberOf(creature->owner));
-		belief.Set(Attribute::HarderThanMe,
-		           me != nullptr && creature->strength * ShownSize(*creature) > me->strength * ShownSize(*me) ? 1 : 0);
-		belief.Set(Attribute::CreatureType, static_cast<uint32_t>(creature::InfoRow(creature->species)));
-		belief.Set(Attribute::Height, static_cast<uint32_t>(std::lround(ShownSize(*creature) * 3.0f)));
-		belief.Set(Attribute::SpellKnowledge, 0);
-		belief.Set(Attribute::Carrying, registry.AllOf<CreatureHeldObject>(entity) ? 1 : 0);
-		uint32_t dominant = 0;
-		if (const auto* mind = registry.TryGet<const CreatureMindState>(entity); mind != nullptr && mind->desires.has_value())
+		return origin::k_Natural;
+	}
+	return registry.AnyOf<Town, Abode, Field>(thing) ? origin::k_ManMade : origin::k_Natural;
+}
+
+/// The size that the creature of a creature's player shows: the first creature of the player, else the creature itself
+float SizeOfPlayersCreature(const ecs::Registry& registry, const Creature& me)
+{
+	if (Locator::playerSystem::has_value())
+	{
+		if (const auto primary = Locator::playerSystem::value().GetPrimaryCreature(me.owner))
 		{
-			float strongest = 0.0f;
-			for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+			if (const auto* body = registry.TryGet<const Creature>(*primary))
 			{
-				const auto& state = mind->desires->desires.at(d);
-				if (state.activated && state.value > strongest)
-				{
-					strongest = state.value;
-					dominant = static_cast<uint32_t>(d);
-				}
+				return ShownSize(*body);
 			}
 		}
-		belief.Set(Attribute::DominantDesire, dominant);
-		return belief;
 	}
-	if (const auto* abode = registry.TryGet<const Abode>(entity))
+	return ShownSize(me);
+}
+
+/// How many trees a forest has, grown and growing
+size_t TreesInForest(entt::entity forest)
+{
+	if (!Locator::forestSystem::has_value())
 	{
-		common(types::k_Abode, k_Neutral, 1, 0, k_NoPlayer);
-		belief.Set(Attribute::AbodeType, static_cast<uint32_t>(abode->type));
-		belief.Set(Attribute::Life, 1);
-		belief.Set(Attribute::OnFire,
-		           Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity) ? 1 : 0);
-		belief.Set(Attribute::AbodeBeingBuilt, 0);
-		return belief;
+		return 0;
 	}
-	if (registry.AllOf<Tree>(entity))
+	const auto& forests = Locator::forestSystem::value();
+	return forests.TreesOf(forest, false).size() + forests.TreesOf(forest, true).size();
+}
+
+/// The desire that another creature feels most
+uint32_t StrongestDesireOf(const ecs::Registry& registry, entt::entity creature)
+{
+	uint32_t dominant = 0;
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->desires.has_value())
 	{
-		common(types::k_Tree, k_Neutral, 0, 0, k_NoPlayer);
-		return belief;
+		return dominant;
 	}
-	if (const auto* town = registry.TryGet<const Town>(entity))
+	float strongest = 0.0f;
+	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
 	{
-		// Its own player's town, or another's; made, not living
-		const bool mine = me != nullptr && me->owner == town->owner;
-		common(types::k_Town, mine ? 0 : 1, 1, 0, std::min(PlayerNumberOf(town->owner), k_NoPlayer));
+		const auto& state = mind->desires->desires.at(d);
+		if (state.activated && state.value > strongest)
+		{
+			strongest = state.value;
+			dominant = static_cast<uint32_t>(d);
+		}
+	}
+	return dominant;
+}
+
+/// The attributes only the beliefs about villagers, creatures, buildings, towns and forests have
+void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const Creature* me, creature_tree::Belief& belief)
+{
+	using creature_tree::Attribute;
+	namespace types = creature_tree::belief_types;
+	const auto onFire = [&registry, entity]() -> uint32_t {
+		return Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity) ? 1 : 0;
+	};
+	switch (belief.type)
+	{
+	case types::k_Villager:
+		if (const auto* villager = registry.TryGet<const Villager>(entity))
+		{
+			belief.Set(Attribute::Sex, static_cast<uint32_t>(villager->sex));
+			belief.Set(Attribute::VillagerJob, static_cast<uint32_t>(villager->number));
+			belief.Set(Attribute::Life, villager->life > 0.0f ? 1 : 0);
+			belief.Set(Attribute::OnFire, onFire());
+			belief.Set(Attribute::Tribe, static_cast<uint32_t>(villager->tribe));
+		}
+		break;
+	case types::k_Creature:
+		if (const auto* creature = registry.TryGet<const Creature>(entity))
+		{
+			belief.Set(Attribute::Height, creature_tree::CreatureHeight(ShownSize(*creature)));
+			// TODO(creature-belief-types-in-trees): the game knows which miracles the other creature knows, what kind
+			// of thing it carries, and takes the desire of the action it does as its strongest desire
+			belief.Set(Attribute::SpellKnowledge, 0);
+			belief.Set(Attribute::Carrying, registry.AllOf<CreatureHeldObject>(entity) ? 1 : 0);
+			belief.Set(Attribute::DominantDesire, StrongestDesireOf(registry, entity));
+		}
+		break;
+	case types::k_Abode:
+		if (const auto* abode = registry.TryGet<const Abode>(entity))
+		{
+			belief.Set(Attribute::AbodeType, static_cast<uint32_t>(abode->type));
+			belief.Set(Attribute::Life, 1);
+			belief.Set(Attribute::OnFire, onFire());
+			belief.Set(Attribute::AbodeBeingBuilt, 0);
+		}
+		break;
+	case types::k_Town:
+	{
 		float faith = 0.0f;
 		if (const auto* impression = registry.TryGet<const TownImpression>(entity); impression != nullptr && me != nullptr)
 		{
@@ -794,24 +898,43 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 		// No tribe counts as the last
 		belief.Set(Attribute::Tribe,
 		           tribe != nullptr ? std::min(static_cast<uint32_t>(*tribe), static_cast<uint32_t>(Tribe::TIBETAN)) : 0);
-		return belief;
+		break;
 	}
-	if (registry.AllOf<Temple>(entity))
+	case types::k_Forest:
+		belief.Set(Attribute::ForestSize, creature_tree::ForestSize(TreesInForest(entity)));
+		break;
+	default:
+		break;
+	}
+}
+} // namespace
+
+/// What a creature knows of a thing: its kind and attributes, as far as the game's world here tells them
+std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& registry, entt::entity entity,
+                                                           entt::entity self)
+{
+	if (!registry.Valid(entity))
 	{
-		common(types::k_Citadel, 0, 1, 0, me != nullptr ? PlayerNumberOf(me->owner) : 0);
-		return belief;
+		return std::nullopt;
 	}
-	if (registry.AllOf<Feature>(entity))
+	const auto type = BeliefKindOf(registry, entity);
+	if (!type.has_value())
 	{
-		common(types::k_Feature, k_Neutral, 0, 0, k_NoPlayer);
-		return belief;
+		return std::nullopt;
 	}
-	if (registry.AnyOf<MobileObject, Ball, Pot>(entity))
-	{
-		common(types::k_Other, k_Neutral, 1, 0, k_NoPlayer);
-		return belief;
-	}
-	return std::nullopt;
+	const auto* me = registry.TryGet<const Creature>(self);
+	const auto* creature = registry.TryGet<const Creature>(entity);
+	auto belief = creature_tree::CommonBelief({
+	    .type = *type,
+	    .origin = OriginOf(registry, entity),
+	    .animate = registry.AnyOf<Villager, Animal, Creature>(entity),
+	    .player = PlayerOfThing(registry, entity),
+	    .creaturesPlayer = me != nullptr ? std::optional(PlayerNumberOf(me->owner)) : std::nullopt,
+	    .harderThanMe = creature != nullptr && me != nullptr && ShownSize(*creature) > SizeOfPlayersCreature(registry, *me),
+	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
+	});
+	SetKindAttributes(registry, entity, me, belief);
+	return belief;
 }
 
 std::optional<uint32_t> mind_detail::LessonActivity(const creature_mind_tables::Tables& tables, Desire desire,
