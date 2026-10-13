@@ -72,6 +72,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -121,8 +122,6 @@ constexpr float k_CollarHeightShare = 0.7f;
 /// Where the leash meets something it is tied to, as a share of its height, and that height when it has no mesh
 constexpr float k_TiedHeightShare = 0.5f;
 constexpr float k_DefaultObjectHeight = 5.0f;
-/// How near the hand the creature walks
-constexpr float k_HandArrival = leash::k_CloseToHand * 0.5f;
 /// How far round a creature is tapped, as a share of its height
 constexpr float k_CreatureTapShare = 0.4f;
 /// How far a tap reaches
@@ -561,12 +560,6 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 	}
 	leashes->worn->type = type;
 	leashes->selected = type;
-	leashes->control = CreatureLeash::Control::Idle;
-	// The leash going on ends any drag the body still leans against
-	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
-	{
-		creature_sway::SetLeashDrag(animation->sway, 0.0f);
-	}
 	// The rope is laid afresh from the hand to the collar next frame
 	leashes->worn->ropeStarted = false;
 	return true;
@@ -583,12 +576,9 @@ void LeashSystem::TakeOff(entt::entity creature)
 	EndOrder(creature);
 	leashes = registry.TryGet<CreatureLeash>(creature);
 	leashes->worn.reset();
-	leashes->control = CreatureLeash::Control::Idle;
-	leashes->pull = 0.0f;
 	leashes->confinementRadius = 0.0f;
 	if (auto* mind = MindOf(registry, creature))
 	{
-		mind->leash.obeying = false;
 		mind->leash.learningInHand = false;
 		mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
 	}
@@ -743,7 +733,6 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	worn.rope.slackLength = lengths.slack;
 	worn.rope.maxLength = lengths.max;
 	worn.ropeStarted = false;
-	leashes->control = CreatureLeash::Control::Idle;
 
 	// The two tying sounds in turn
 	PlaySound(_secondAttachSound ? audio::SoundId::G_LeashAttach_01_2 : audio::SoundId::G_LeashAttach_01_1, std::nullopt);
@@ -752,7 +741,6 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	// The creature learns that the player wants something done with what it is tied to
 	if (auto* mind = MindOf(registry, creature))
 	{
-		mind->leash.obeying = false;
 		const bool isCreature = registry.TryGet<const Creature>(object) != nullptr;
 		mind->leash.shown.push_back({
 		    .object = static_cast<uint32_t>(object),
@@ -824,7 +812,7 @@ void LeashSystem::ClearConfinement(entt::entity creature)
 	if (auto* leashes = registry.TryGet<CreatureLeash>(creature))
 	{
 		leashes->confinementRadius = 0.0f;
-		leashes->returning = false;
+		leashes->returnTo.reset();
 	}
 }
 
@@ -1180,71 +1168,60 @@ void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& 
 	}
 }
 
-void LeashSystem::Pull(entt::entity creature)
+bool LeashSystem::ShouldWalkBack(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& leashes = registry.Get<const CreatureLeash>(creature);
+	const auto& transform = registry.Get<const Transform>(creature);
+	// The creature that the hand holds does nothing until the hand lets go of it
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == creature)
+	{
+		return false;
+	}
+	const auto centre = glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z);
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	auto centreOpen = true;
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		centreOpen =
+		    Locator::creatureLocomotionSystem::value().GetWalkableLand().AtPoint(centre) == creature_route::Ground::Open;
+	}
+	return leash::WalksBack({
+	    .radius = leashes.confinementRadius,
+	    .leashed = leashes.worn.has_value(),
+	    .leashWorks = !leashes.worn.has_value() || leashes.worn->works,
+	    .orderInForce = OrderInForce(creature),
+	    .mimicking = mind != nullptr && mind->learnt.has_value() && mind->learnt->mimicry.has_value(),
+	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
+	    .distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), centre),
+	    .centreOpen = centreOpen,
+	    .returnToCentre = leashes.returnTo.has_value()
+	                          ? std::optional(glm::distance(glm::vec2(leashes.returnTo->x, leashes.returnTo->z), centre))
+	                          : std::nullopt,
+	});
+}
+
+void LeashSystem::WalkBack(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& leashes = registry.Get<CreatureLeash>(creature);
-	auto* mind = MindOf(registry, creature);
-	const auto hand = HandPoint();
-	if (!hand.has_value() || !Locator::creatureLocomotionSystem::has_value())
-	{
-		return;
-	}
-	// Asleep or out cold, a pull doesn't wake it
-	if (mind != nullptr && (creature_mind::IsAsleep(mind->idle) || creature_mind::IsUnconscious(mind->idle)))
-	{
-		return;
-	}
-	auto& locomotion = Locator::creatureLocomotionSystem::value();
-	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
-	const auto position = registry.Get<const Transform>(creature).position;
-	const bool walking = leashes.control == CreatureLeash::Control::WalkingToHand && locomotion.IsMoving(creature);
-	const auto decision = leash::DecideLead(position, *hand, walk != nullptr ? walk->destination : std::nullopt, walking);
-	if (decision != leash::Lead::GoToHand)
-	{
-		return;
-	}
-	// The first pull stops whatever it was doing; pulled away from the same desire twice, it is held back a while
-	if (leashes.control == CreatureLeash::Control::Idle && mind != nullptr)
-	{
-		// The desire behind a plan it carries out, else behind what it does with nothing better to do
-		const auto desire = mind->planActive && mind->planner.current.has_value()
-		                        ? std::optional(mind->planner.current->desire)
-		                        : leash::DesireBehind(mind->idle.activity, mind->idle.shown);
-		// Pulled away from a plan, it says so
-		if (mind->planActive)
-		{
-			leashes.help = CreatureLeash::Help::PulledAway;
-			leashes.helpDesire = desire;
-			TellHelp(creature, {.kind = creature_help::Kind::FailureExplanation, .parameter = creature_help::k_PulledAway});
-		}
-		mind->planActive = false;
-		mind->planner.current.reset();
-		if (desire.has_value() && mind->desires.has_value())
-		{
-			if (const auto seconds = leash::RecordPull(leashes.pulls, *desire))
-			{
-				creature_desires::Suppress(*mind->desires, *desire, *seconds, k_TurnsPerSecond);
-			}
-		}
-		creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
-	}
-	if (locomotion.LeadTo(creature, glm::vec2(hand->x, hand->z), leashes.pull, k_HandArrival) ==
-	    CreatureLocomotionSystemInterface::MoveResult::Started)
-	{
-		leashes.control = CreatureLeash::Control::WalkingToHand;
-		// Once on its way, it is pulled along as fast as it goes
-		leashes.pull = 1.0f;
-		// and its body leans against the drag
-		if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
-		{
-			creature_sway::SetLeashDrag(animation->sway, 1.0f);
-		}
-		if (mind != nullptr)
-		{
-			mind->leash.obeying = true;
-		}
-	}
+	const auto& body = registry.Get<const Creature>(creature);
+	const auto& transform = registry.Get<const Transform>(creature);
+	const auto centre = glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z);
+	const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), centre);
+	// The creature stops what it does and walks to the centre. It is faster when it is further away.
+	creature_mind::Step walk {.kind = creature_mind::Step::Kind::Move};
+	walk.movement = {
+	    .kind = creature_mind::Movement::Kind::ToPoint,
+	    .point = centre,
+	    .extraSpeed = leash::ReturnExtraSpeed(distance, leashes.confinementRadius),
+	    .maxDistance = leash::ReturnArrival(leashes.confinementRadius, CreatureHeight(body)),
+	};
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} walks back to ({:.1f}, {:.1f}), {:.1f} away",
+	                   entt::to_integral(creature), centre.x, centre.y, distance);
+	Force(creature, {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}});
+	// The creature keeps the place, also if it cannot walk there
+	leashes.returnTo = leashes.confinementCentre;
 }
 
 void LeashSystem::ProcessTurn()
@@ -1270,35 +1247,11 @@ void LeashSystem::ProcessTurn()
 		auto* mind = MindOf(registry, entity);
 		const auto* body = registry.TryGet<const Creature>(entity);
 		const auto* transform = registry.TryGet<const Transform>(entity);
-		// Knocked out, the leash doesn't pull it about
+		// The leash does not move a creature that is knocked out
 		if (body == nullptr || transform == nullptr || registry.AllOf<CreatureKnockedOut>(entity))
 		{
 			continue;
 		}
-		const bool scriptControlled = registry.AllOf<ScriptControlled>(entity);
-		const bool takingFromHand =
-		    Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsTakingFromHand(entity);
-		// Fighting, only the held rope pulled taut reaches it: that takes it out of the fight with no winner and off to
-		// the hand
-		if (registry.AllOf<CreatureFighting>(entity))
-		{
-			if (leashes.worn.has_value() &&
-			    leash::Pulls({.tension = leashes.worn->rope.tension,
-			                  .works = leashes.worn->works,
-			                  .tied = leashes.worn->tiedTo.has_value(),
-			                  .orderInForce = leashes.order.has_value(),
-			                  .scriptControlled = scriptControlled,
-			                  .takingFromHand = takingFromHand}) &&
-			    Locator::creatureFightSystem::has_value())
-			{
-				SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is pulled out of its fight by the leash",
-				                   entt::to_integral(entity));
-				Locator::creatureFightSystem::value().CallOff(entity);
-				Pull(entity);
-			}
-			continue;
-		}
-		const auto position = glm::vec2(transform->position.x, transform->position.z);
 		// On the first land a young creature of the local player's is kept near its home while off the leash
 		if (mind != nullptr && Locator::playerSystem::has_value() &&
 		    creature_development::KeptAtHome({
@@ -1310,111 +1263,65 @@ void LeashSystem::ProcessTurn()
 		{
 			ConfineToHome(entity, creature_development::k_YoungHomeRadius);
 		}
-		const bool moving =
-		    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity);
-
-		// Arrived at the hand, or stopped on the way, its mind takes over again
-		if (leashes.control == CreatureLeash::Control::WalkingToHand && !moving)
-		{
-			leashes.control = CreatureLeash::Control::Idle;
-			if (mind != nullptr)
-			{
-				mind->leash.obeying = false;
-			}
-		}
-		if (leashes.control == CreatureLeash::Control::Idle)
-		{
-			leashes.pull = leash::FadePull(leashes.pull);
-		}
 
 		if (!leashes.worn.has_value())
 		{
 			if (mind != nullptr)
 			{
-				mind->leash.obeying = false;
 				mind->leash.learningInHand = false;
 				mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
 			}
-			// Kept within its home, it walks back when it strays
-			if (leash::IsConfined(leashes.confinementRadius, false, true) &&
-			    leash::OutsideArea(position, glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z),
-			                       leashes.confinementRadius))
-			{
-				if (!moving && Locator::creatureLocomotionSystem::has_value())
-				{
-					Locator::creatureLocomotionSystem::value().MoveTo(
-					    entity, glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z),
-					    CreatureLocomotionSystemInterface::Pace::Walk, 0.0f, leashes.confinementRadius * 0.5f);
-					leashes.returning = true;
-				}
-			}
-			else
-			{
-				leashes.returning = false;
-			}
-			continue;
 		}
-
-		// Made someone else's or no longer the one its owner leads, the leash comes off
-		if (!body->leashable || leashes.worn->holder != body->owner)
+		else if (!body->leashable || leashes.worn->holder != body->owner)
 		{
+			// Made someone else's or no longer the one its owner leads, the leash comes off
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s leash comes off: it isn't its holder's to lead",
 			                   entt::to_integral(entity));
 			TakeOff(entity);
 			continue;
 		}
-		auto& worn = *leashes.worn;
-		if (worn.tiedTo.has_value() &&
-		    (!registry.Valid(*worn.tiedTo) || registry.TryGet<const Transform>(*worn.tiedTo) == nullptr))
+		else
 		{
-			worn.tiedTo.reset();
-			worn.ropeStarted = false;
-		}
-		const auto hand = HandPoint();
-		// It is kept as near what holds the leash as the leash is long
-		if (worn.tiedTo.has_value())
-		{
-			leashes.confinementCentre = registry.Get<const Transform>(*worn.tiedTo).position;
-		}
-		else if (hand.has_value())
-		{
-			leashes.confinementCentre = *hand;
-		}
-		leashes.confinementRadius = worn.rope.maxLength;
-
-		// The leash's feelings, every turn
-		if (mind != nullptr)
-		{
-			mind->leash.learningInHand = worn.type == LeashType::Rope && !worn.tiedTo.has_value();
-			mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(worn.type == LeashType::Rope);
-		}
-		UpdateMoods(entity, worn);
-
-		if (worn.tiedTo.has_value())
-		{
-			// Strayed beyond the leash's length, it walks back to what it is tied to, unless a script controls it
-			if (worn.works && !moving && !scriptControlled &&
-			    leash::OutsideArea(position, glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z),
-			                       worn.rope.slackLength) &&
-			    Locator::creatureLocomotionSystem::has_value())
+			auto& worn = *leashes.worn;
+			if (worn.tiedTo.has_value() &&
+			    (!registry.Valid(*worn.tiedTo) || registry.TryGet<const Transform>(*worn.tiedTo) == nullptr))
 			{
-				Locator::creatureLocomotionSystem::value().LeadTo(
-				    entity, glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z), leashes.pull,
-				    worn.rope.slackLength * 0.5f);
+				worn.tiedTo.reset();
+				worn.ropeStarted = false;
 			}
+			// The leash holds the creature within its full length of the hand, or of the thing that it is tied to
+			const auto hand = HandPoint();
+			if (worn.tiedTo.has_value())
+			{
+				leashes.confinementCentre = registry.Get<const Transform>(*worn.tiedTo).position;
+			}
+			else if (hand.has_value())
+			{
+				leashes.confinementCentre = *hand;
+			}
+			leashes.confinementRadius = worn.rope.maxLength;
+
+			// The leash's feelings, every turn
+			if (mind != nullptr)
+			{
+				mind->leash.learningInHand = worn.type == LeashType::Rope && !worn.tiedTo.has_value();
+				mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(worn.type == LeashType::Rope);
+			}
+			UpdateMoods(entity, worn);
+		}
+
+		if (!ShouldWalkBack(entity))
+		{
 			continue;
 		}
-
-		// Held in the hand: a taut rope pulls it to the hand, unless it is carrying out an order or a script controls it
-		if (leash::Pulls({.tension = worn.rope.tension,
-		                  .works = worn.works,
-		                  .tied = false,
-		                  .orderInForce = leashes.order.has_value(),
-		                  .scriptControlled = scriptControlled,
-		                  .takingFromHand = takingFromHand}))
+		// TODO(raffclar): the game does not stop a fight here. It gives the creature a new action. This call lets the
+		// fight system stop the fight so that the creature can walk back.
+		if (registry.AllOf<CreatureFighting>(entity) && Locator::creatureFightSystem::has_value())
 		{
-			Pull(entity);
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} leaves its fight to walk back", entt::to_integral(entity));
+			Locator::creatureFightSystem::value().CallOff(entity);
 		}
+		WalkBack(entity);
 	}
 }
 

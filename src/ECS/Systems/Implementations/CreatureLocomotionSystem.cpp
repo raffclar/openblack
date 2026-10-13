@@ -929,7 +929,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveTo(entt::enti
 	                 true);
 }
 
-CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::entity creature, glm::vec2 point, float pull,
+CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::entity creature, glm::vec2 point, float extraSpeed,
                                                                       float maxDistance)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -940,9 +940,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::enti
 		return MoveResult::Busy;
 	}
 	self->following.reset();
-	const auto fractions = FractionsOf(body->species);
-	return StartMove(creature, *self, point, locomotion::LeashFraction(fractions.walk, fractions.run, pull), 0.0f, maxDistance,
-	                 true);
+	return StartMove(creature, *self, point, FractionsOf(body->species).walk + extraSpeed, 0.0f, maxDistance, true);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt::entity creature, entt::entity target,

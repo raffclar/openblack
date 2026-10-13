@@ -61,12 +61,6 @@ TEST(CreatureLocomotion, ExhaustedCreaturesGoSlowly)
 	EXPECT_NEAR(RequiredFraction(0.9f, 0.5f, 0.8f), 0.5f, k_Tolerance);
 }
 
-TEST(CreatureLocomotion, PullingTheLeashSpeedsItUp)
-{
-	EXPECT_NEAR(LeashFraction(0.7f, 0.9f, 0.0f), 0.7f, k_Tolerance);
-	EXPECT_NEAR(LeashFraction(0.7f, 0.9f, 1.0f), 1.8f, k_Tolerance);
-}
-
 TEST(CreatureLocomotion, AcceleratesAtTwelveUnitsASecondEachSecond)
 {
 	EXPECT_NEAR(Accelerate(0.0f, 10.0f, 0.1f), 1.2f, k_Tolerance);

@@ -11,12 +11,9 @@
 
 #include <algorithm>
 
-#include <glm/geometric.hpp>
-
 using namespace openblack;
 using namespace openblack::creature_leash;
 using creature_desires::Desire;
-using creature_mind::Activity;
 
 namespace
 {
@@ -124,92 +121,6 @@ uint32_t creature_leash::MiracleSightingWeight(bool learningLeash)
 	return learningLeash ? 3 : 1;
 }
 
-bool creature_leash::ShouldPull(float tension)
-{
-	return tension > k_PullTension;
-}
-
-bool creature_leash::Pulls(const Pull& pull)
-{
-	return pull.works && !pull.tied && !pull.orderInForce && !pull.scriptControlled && !pull.takingFromHand &&
-	       ShouldPull(pull.tension);
-}
-
-std::optional<float> creature_leash::RecordPull(PullMemory& memory, Desire desire)
-{
-	auto& count = memory.counts.at(static_cast<size_t>(desire));
-	count = static_cast<uint8_t>(std::min<int>(count + 1, UINT8_MAX));
-	if (count < 2)
-	{
-		return std::nullopt;
-	}
-	const auto seconds = static_cast<float>(count) * k_SuppressSecondsPerPull;
-	count = 0;
-	return seconds;
-}
-
-std::optional<Desire> creature_leash::DesireBehind(Activity activity, std::optional<Desire> shown)
-{
-	switch (activity)
-	{
-	case Activity::Eat:
-		return Desire::Hunger;
-	case Activity::Drink:
-		return Desire::Water;
-	case Activity::Sleep:
-		return Desire::Tiredness;
-	case Activity::Poo:
-		return Desire::Poo;
-	case Activity::Puke:
-		return Desire::Puke;
-	case Activity::Sit:
-	case Activity::BeIdle:
-		return Desire::Rest;
-	case Activity::HangAround:
-		return Desire::Wanderlust;
-	case Activity::ShowDesire:
-		return shown;
-	case Activity::Told:
-		return Desire::ObeyPlayer;
-	case Activity::None:
-	case Activity::Faint:
-	case Activity::Examine:
-	case Activity::PlayWithObject:
-	case Activity::Hurl:
-	case Activity::PutDown:
-	case Activity::Planned:
-		break;
-	}
-	return std::nullopt;
-}
-
-Lead creature_leash::DecideLead(const glm::vec3& creature, const glm::vec3& hand, std::optional<glm::vec2> destination,
-                                bool walking)
-{
-	if (glm::distance(creature, hand) < k_CloseToHand)
-	{
-		return Lead::Stay;
-	}
-	const auto handAcross = glm::vec2(hand.x, hand.z);
-	const auto creatureToHand = glm::distance(glm::vec2(creature.x, creature.z), handAcross);
-	if (walking && destination.has_value() && creatureToHand > 0.0f &&
-	    glm::distance(*destination, handAcross) / creatureToHand < k_CloserShare)
-	{
-		return Lead::KeepGoing;
-	}
-	if (!walking || !destination.has_value() || glm::distance(*destination, handAcross) > k_HandMoved)
-	{
-		return Lead::GoToHand;
-	}
-	return Lead::KeepGoing;
-}
-
-float creature_leash::FadePull(float pull)
-{
-	const auto faded = pull * k_PullFade;
-	return faded < k_PullGone ? 0.0f : faded;
-}
-
 bool creature_leash::FreeOfHome(float distanceFromHome, bool playerHasTemple)
 {
 	return playerHasTemple && distanceFromHome < k_HomeRange;
@@ -220,9 +131,34 @@ bool creature_leash::IsConfined(float radius, bool leashed, bool leashWorks)
 	return radius > 0.0f && !(leashed && !leashWorks);
 }
 
-bool creature_leash::OutsideArea(const glm::vec2& position, const glm::vec2& centre, float radius)
+bool creature_leash::WalksBack(const Confinement& confinement)
 {
-	return radius > 0.0f && glm::distance(position, centre) > radius;
+	if (!IsConfined(confinement.radius, confinement.leashed, confinement.leashWorks) || confinement.orderInForce ||
+	    confinement.mimicking || confinement.scriptControlled || confinement.distance <= confinement.radius)
+	{
+		return false;
+	}
+	if (confinement.returnToCentre.has_value() &&
+	    *confinement.returnToCentre <= std::max(confinement.radius * k_ReturnShare, k_ReturnLeast))
+	{
+		return false;
+	}
+	return confinement.centreOpen;
+}
+
+float creature_leash::ReturnExtraSpeed(float distance, float radius)
+{
+	const auto most = radius * 2.0f;
+	if (most <= 0.0f)
+	{
+		return 0.0f;
+	}
+	return std::clamp(distance, 0.0f, most) * k_ReturnMostExtraSpeed / most;
+}
+
+float creature_leash::ReturnArrival(float radius, float height)
+{
+	return std::max(radius, height);
 }
 
 bool creature_leash::AttitudeDue(std::optional<uint32_t> lastTurn, uint32_t turn)

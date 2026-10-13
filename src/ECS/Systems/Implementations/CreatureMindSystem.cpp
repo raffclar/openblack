@@ -401,13 +401,16 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 	{
 	case Kind::ToPoint:
 	case Kind::Nearby:
-		if (locomotion.MoveTo(creature, move.point, pace, move.minDistance, move.maxDistance) ==
-		        CreatureLocomotionSystemInterface::MoveResult::InvalidDestination &&
-		    move.giveUpIfUnreachable)
+	{
+		const auto result = move.extraSpeed.has_value()
+		                        ? locomotion.LeadTo(creature, move.point, *move.extraSpeed, move.maxDistance)
+		                        : locomotion.MoveTo(creature, move.point, pace, move.minDistance, move.maxDistance);
+		if (result == CreatureLocomotionSystemInterface::MoveResult::InvalidDestination && move.giveUpIfUnreachable)
 		{
 			return true;
 		}
 		break;
+	}
 	case Kind::ToObject:
 		if (object.has_value())
 		{
@@ -1325,11 +1328,6 @@ void CreatureMindSystem::ProcessTurn()
 				    needs->faint.reset();
 				    passingOut.push_back(entity);
 			    }
-			    return;
-		    }
-		    // Following the leash to the hand, it is the leash's; passing out (above) lets go of it
-		    if (mind.leash.obeying)
-		    {
 			    return;
 		    }
 		    // Without the fights' knock-outs, it drops where it stands and comes round there

@@ -687,13 +687,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLeash::worn>("worn")
 	    .Field<&components::CreatureLeash::selected>("selected")
 	    .Field<&components::CreatureLeash::drawn>("drawn")
-	    .Field<&components::CreatureLeash::control>("control")
-	    .Field<&components::CreatureLeash::pull>("pull")
-	    .Field<&components::CreatureLeash::pulls>("pulls")
 	    .Field<&components::CreatureLeash::confinementCentre>("confinementCentre")
 	    .Field<&components::CreatureLeash::confinementRadius>("confinementRadius")
 	    .Field<&components::CreatureLeash::home>("home")
-	    .Field<&components::CreatureLeash::returning>("returning")
+	    .Field<&components::CreatureLeash::returnTo>("returnTo")
 	    .Field<&components::CreatureLeash::order>("order")
 	    .Field<&components::CreatureLeash::help>("help")
 	    .Field<&components::CreatureLeash::helpDesire>("helpDesire");
@@ -2207,7 +2204,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_leash::Lesson::change>("change");
 	Reflect<openblack::creature_leash::MindHooks>(context, ValueOnly {})
 	    .Field<&openblack::creature_leash::MindHooks::attitudeTurn>("attitudeTurn")
-	    .Field<&openblack::creature_leash::MindHooks::obeying>("obeying")
 	    .Field<&openblack::creature_leash::MindHooks::learningInHand>("learningInHand")
 	    .Field<&openblack::creature_leash::MindHooks::miracleSightingWeight>("miracleSightingWeight")
 	    .Field<&openblack::creature_leash::MindHooks::shown>("shown")
@@ -2220,8 +2216,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_leash::MindHooks::Shown::object>("object")
 	    .Field<&openblack::creature_leash::MindHooks::Shown::type>("type")
 	    .Field<&openblack::creature_leash::MindHooks::Shown::lessons>("lessons");
-	Reflect<openblack::creature_leash::PullMemory>(context, ValueOnly {})
-	    .Field<&openblack::creature_leash::PullMemory::counts>("counts", {k_CreatureDesiresDesireNames});
 	Reflect<openblack::creature_locomotion::Pair>(context, ValueOnly {})
 	    .Field<&openblack::creature_locomotion::Pair::from>("from")
 	    .Field<&openblack::creature_locomotion::Pair::to>("to")
@@ -2279,6 +2273,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Movement::point>("point")
 	    .Field<&openblack::creature_mind::Movement::object>("object")
 	    .Field<&openblack::creature_mind::Movement::run>("run")
+	    .Field<&openblack::creature_mind::Movement::extraSpeed>("extraSpeed")
 	    .Field<&openblack::creature_mind::Movement::minDistance>("minDistance")
 	    .Field<&openblack::creature_mind::Movement::maxDistance>("maxDistance")
 	    .Field<&openblack::creature_mind::Movement::giveUpIfUnreachable>("giveUpIfUnreachable");

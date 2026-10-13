@@ -209,6 +209,9 @@ struct Movement
 	/// The object walked up to or followed, by its entity's number
 	std::optional<uint32_t> object;
 	bool run {false};
+	/// An extra fraction of the top speed, added to the walk speed in place of the run. The creature walks back into the
+	/// area that holds it at such a speed.
+	std::optional<float> extraSpeed;
 	/// Arriving anywhere from min to max from the point, or keeping within max of what it follows
 	float minDistance {0.0f};
 	float maxDistance {0.0f};

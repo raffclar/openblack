@@ -64,11 +64,6 @@ float creature_locomotion::RequiredFraction(float wanted, float slowFraction, fl
 	return exhaustion >= k_ExhaustedAt ? slowFraction : wanted;
 }
 
-float creature_locomotion::LeashFraction(float walkFraction, float runFraction, float pull)
-{
-	return walkFraction + (pull * ((2.0f * runFraction) - walkFraction));
-}
-
 float creature_locomotion::StopCap(float remaining)
 {
 	return std::max(std::sqrt(2.0f * k_Acceleration * std::max(remaining, 0.0f)), k_MinSpeed);
