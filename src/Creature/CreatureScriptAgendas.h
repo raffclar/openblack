@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -50,6 +51,25 @@ constexpr float k_FacePlaceSeconds = 0.1f;
 /// Watching the camera, curious, turning to it when it is more than a quarter turn away, for six seconds or until the
 /// camera is overhead or more than 100 away, for a creature with a player; done at once for one without
 [[nodiscard]] std::vector<Step> LookAtCamera(bool hasPlayer);
+/// While a script's cut scene is on, a creature free to think for itself is made to look at the camera, over and over
+/// until the cut scene is over. Half the time it first points at the camera for a second, amazed; then it watches the
+/// camera, curious, for 21 turns; half the time it waves, amazed; half the time it talks, curious; one time in three it
+/// looks confused, amazed, and talks; then it watches the camera for 21 turns again. It looks at the camera throughout.
+/// Without a camera it doesn't point; without a player it doesn't watch.
+[[nodiscard]] std::vector<Step> LookAtCameraInCutScene(const std::optional<glm::vec3>& camera, const Random& random);
+/// Whether a cut scene makes a creature free to think for itself look at the camera this turn: the cinema bars are in,
+/// a script brought them (owner 0 is the game's own bars), and it isn't carrying out the look already. Once a look is
+/// over it is made to look again while the bars stay in.
+[[nodiscard]] bool StartsLookAtCameraInCutScene(bool barsIn, uint32_t barsOwner, bool lookingAlready);
+/// The action of the game's table the look in a cut scene is
+constexpr std::string_view k_CutSceneLookAction = "LookAtCameraInWideScreen";
+/// Watching the camera in a cut scene ends once more than this many turns have gone by
+constexpr uint32_t k_CutSceneWatchTurns = 20;
+/// The chances of each extra in the look: pointing, waving and talking are one in two, looking confused one in three
+constexpr uint32_t k_CutScenePointLots = 2;
+constexpr uint32_t k_CutSceneWaveLots = 2;
+constexpr uint32_t k_CutSceneTalkLots = 2;
+constexpr uint32_t k_CutSceneConfusedLots = 3;
 /// Pointing at a thing for five seconds wherever it goes, amazed
 [[nodiscard]] std::vector<Step> PointAtThing(uint32_t thing);
 /// Pointing at the camera for a second, amazed, having turned to face it first when it has a player

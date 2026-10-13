@@ -72,4 +72,11 @@ struct Layout
 /// The longest start of a name that fits a width, letters taken off its end one at a time
 [[nodiscard]] std::u16string_view FitName(std::u16string_view name, float width,
                                           const std::function<float(std::u16string_view)>& widthOf);
+/// Whether the fighters' panel may be drawn while the camera watches a fight: only while the player's own camera does,
+/// so not inside the temple nor while a script has taken the camera for a cut scene (it comes back when the script
+/// lets the camera go). The cinema bars by themselves don't hide it.
+[[nodiscard]] constexpr bool PanelAllowed(bool inTemple, bool scriptHasCamera)
+{
+	return !inTemple && !scriptHasCamera;
+}
 } // namespace openblack::creature_fight_hud

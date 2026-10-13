@@ -2245,6 +2245,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_mind::Step>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Step::kind>("kind")
 	    .Field<&openblack::creature_mind::Step::seconds>("seconds")
+	    .Field<&openblack::creature_mind::Step::turns>("turns")
 	    .Field<&openblack::creature_mind::Step::animation>("animation")
 	    .Field<&openblack::creature_mind::Step::sleepyEyes>("sleepyEyes")
 	    .Field<&openblack::creature_mind::Step::movement>("movement")
