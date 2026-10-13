@@ -14,6 +14,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/ChimneySmoke.h"
+#include "Common/FramePace.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -29,13 +30,15 @@ public:
 	void Attach(entt::entity abode, const graphics::L3DMesh& mesh, const components::Transform& transform,
 	            bool workshop) override;
 	void ProcessTurn() override;
-	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 
 private:
 	/// The hand's velocity, easing towards its motion each turn, and where it was at the last turn
 	glm::vec3 _handVelocity {0.0f};
 	std::optional<glm::vec3> _lastHandPosition;
 	chimney_smoke::HandWind _handWind;
+	/// The puffs move at most once for each refresh of the screen
+	frame_pace::Pace _pace;
 };
 
 } // namespace openblack::ecs::systems

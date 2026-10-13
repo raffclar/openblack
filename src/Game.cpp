@@ -2118,7 +2118,7 @@ bool Game::Update() noexcept
 	Locator::snowfallSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
 	                                        Locator::rainSystem::value().GetFall());
 	// The homes' smoke rises while someone is in
-	Locator::chimneySmokeSystem::value().Update(gameTime);
+	Locator::chimneySmokeSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	Locator::influenceSystem::value().Update(gameTime);
 	// What the hand shows past the border is shown with the hand
 	if (IsHandDrawn())

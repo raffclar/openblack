@@ -38,7 +38,7 @@ struct ChimneySmoke
 	{
 		glm::vec3 position {0.0f};
 		glm::vec3 velocity {0.0f};
-		/// From 0 to 900 over its life, at 255 a second
+		/// From 0 to 900 over its life. Each step adds 255 for each second of the step and removes the fraction
 		int32_t age {0};
 		/// Its turn in the plane of the screen, and which way it spins
 		float angle {0.0f};
@@ -51,8 +51,6 @@ struct ChimneySmoke
 	/// The smoke's colour: grey from a workshop, white from a home
 	uint32_t rgb {0xFFFFFF};
 	State state {State::Smoking};
-	/// The part of a step of the puffs' ages left over from the last frame
-	float ageRemainder {0.0f};
 	std::array<Puff, k_Puffs> puffs {};
 };
 

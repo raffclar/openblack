@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <functional>
 
 #include <glm/vec2.hpp>
@@ -49,8 +50,8 @@ struct HandWind
 
 /// Whether a smoke is lit, its home having someone in. Returns whether there is anything left of it to draw.
 bool UpdateState(ecs::components::ChimneySmoke& smoke, bool lit);
-/// Moves the puffs on by some milliseconds of game time, pushed by the frame's drift
-void Advance(ecs::components::ChimneySmoke& smoke, float milliseconds, const glm::vec3& drift);
+/// Moves the puffs by one step of game time. The drift of the step pushes them
+void Advance(ecs::components::ChimneySmoke& smoke, std::chrono::milliseconds step, const glm::vec3& drift);
 
 /// How a puff looks: the frame of the smoke texture it shows, its half width and its colour with its opacity
 struct Look

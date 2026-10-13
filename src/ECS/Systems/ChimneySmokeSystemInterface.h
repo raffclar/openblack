@@ -38,8 +38,9 @@ public:
 	                    bool workshop) = 0;
 	/// Once a game turn: how fast the hand is moving
 	virtual void ProcessTurn() = 0;
-	/// Once a frame: every smoke lights or dies down with its home, and its puffs move on by the frame's game time
-	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// Once a frame, with the real time and the game time of the frame: each smoke lights or stops with its home, and
+	/// its puffs move. They move at most 60 times a second. Each step uses all the game time since the last step
+	virtual void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) = 0;
 };
 
 } // namespace openblack::ecs::systems

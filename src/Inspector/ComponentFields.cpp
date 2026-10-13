@@ -545,7 +545,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ChimneySmoke::chimney>("chimney")
 	    .Field<&components::ChimneySmoke::rgb>("rgb")
 	    .Field<&components::ChimneySmoke::state>("state")
-	    .Field<&components::ChimneySmoke::ageRemainder>("ageRemainder")
 	    .Field<&components::ChimneySmoke::puffs>("puffs");
 	Reflect<components::Cloud>(context).Field<&components::Cloud::track>("track").Field<&components::Cloud::pinned>("pinned");
 	Reflect<components::PlannedTemple>(context)
