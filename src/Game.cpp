@@ -3828,7 +3828,9 @@ bool Game::Run() noexcept
 				Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
 			}
 			// A picture without the debug windows: the frame's windows are made as ever but not drawn
-			const bool hiddenThisFrame = _debugGuiHiddenFrame == _frameCount;
+			// nor in a challenge's picture
+			const bool hiddenThisFrame =
+			    _debugGuiHiddenFrame == _frameCount || ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value());
 			if ((!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
 				Locator::debugGui::value().Draw();

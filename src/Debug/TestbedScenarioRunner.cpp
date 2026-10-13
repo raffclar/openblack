@@ -39,6 +39,8 @@
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "3D/TempleInteriorInterface.h"
+#include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
 #include "Creature/CreatureDecisionTree.h"
@@ -138,6 +140,8 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
+#include "Gui/GameInterface.h"
+#include "Gui/TextDatabase.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -1537,6 +1541,29 @@ void Runner::Give(const Command& command)
 		Log(line);
 		return;
 	}
+	if (command.kind == Kind::RecordChallenge)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
+		return;
+	}
+	if (command.kind == Kind::EnterTemple)
+	{
+		const auto room = static_cast<TempleRoom>(command.value);
+		if (Locator::temple::has_value())
+		{
+			auto& temple = Locator::temple::value();
+			if (temple.Active())
+			{
+				temple.GoToRoom(room);
+			}
+			else
+			{
+				temple.Activate(room);
+			}
+		}
+		Log(fmt::format("{:.1f}s: the player goes into temple room {}", _seconds, command.value));
+		return;
+	}
 	if (command.kind == Kind::Reframe)
 	{
 		Frame(_scenario->framing.shot, _scenario->framing.creature, _scenario->framing.distance);
@@ -1796,6 +1823,8 @@ void Runner::Give(const Command& command)
 	case Kind::RunText:
 	case Kind::PlayHandDemo:
 	case Kind::Reframe:
+	case Kind::RecordChallenge:
+	case Kind::EnterTemple:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
@@ -3105,6 +3134,40 @@ std::optional<std::filesystem::path> Runner::SaveResults(std::optional<std::file
 	csv << benchmark::ToCsv(run, results, _recorder->Stages());
 	Log(fmt::format("Saved {}", jsonPath.generic_string()));
 	return jsonPath;
+}
+
+std::string Runner::RecordChallenge(const Command& command) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return "no land";
+	}
+	// The camera is put over the place first, and the picture is of the frame drawn from there
+	const auto at = MapPoint(_middle, command.point);
+	const auto focus = glm::vec3(at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y);
+	const auto position = focus + glm::vec3(0.0f, 50.0f, 70.0f);
+	auto& camera = Locator::camera::value();
+	camera.SetOrigin(position);
+	camera.SetFocus(focus);
+	script::challenge_snapshots::Snapshot snapshot;
+	snapshot.challenge = static_cast<uint32_t>(command.value);
+	snapshot.reminderScript = "";
+	snapshot.success = command.amount;
+	snapshot.position = position;
+	snapshot.focus = focus;
+	snapshot.quest = command.ctrl;
+	auto* game = Game::Instance();
+	if (game != nullptr && game->GetInterface() != nullptr)
+	{
+		const auto names = game->GetInterface()->GetTexts().GetHelpNames();
+		if (const auto found = std::ranges::find(names, command.title); found != names.end())
+		{
+			snapshot.title = static_cast<uint32_t>(std::distance(names.begin(), found));
+		}
+	}
+	chlapi::CHLApi::RecordChallenge(snapshot, script::challenge_snapshots::Call::Start);
+	return fmt::format("challenge {} ({}), {:.0f}% done{}", command.value, command.title, command.amount * 100.0f,
+	                   command.ctrl ? ", a quest" : "");
 }
 
 std::string Runner::GiveAdvisorCommand(const Command& command) const

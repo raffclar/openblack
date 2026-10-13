@@ -891,13 +891,22 @@ bool CHLApi::StartHelpScript(std::string_view name)
 
 bool CHLApi::StartChallengeReminder(uint32_t challenge)
 {
-	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 	auto& dialogue = Locator::dialogueControlSystem::value();
 	if (const auto owner = dialogue.GetOwner(); owner != 0 && TaskType(owner) == lhvm::ScriptType::Help)
 	{
 		StopHelpScripts();
 	}
 	if (dialogue.GetOwner() != 0)
+	{
+		return false;
+	}
+	return StartChallengeScript(challenge);
+}
+
+bool CHLApi::StartChallengeScript(uint32_t challenge)
+{
+	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
+	if (!Locator::vm::has_value())
 	{
 		return false;
 	}
@@ -3598,6 +3607,11 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 	    ecs::challenge_records::AlignmentChange(alignment.GetPlayerAlignment(player), *outcome.alignment,
 	                                            Locator::infoConstants::value().player.maxScriptAlignmentChange);
 	alignment.AddPlayerAlignment(player, change);
+}
+
+void CHLApi::RecordChallenge(const script::challenge_snapshots::Snapshot& snapshot, script::challenge_snapshots::Call call)
+{
+	KeepChallengeRecord(snapshot, call);
 }
 
 void Snapshot() // 057 SNAPSHOT

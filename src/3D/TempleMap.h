@@ -43,6 +43,9 @@ struct TempleMapMarker
 	TempleMapMarkerKind kind;
 	glm::vec3 position;
 	glm::u8vec3 colour;
+	/// Where the glow under it is drawn, in the room: a tenth above the marker, but a challenge's at the challenge's own
+	/// place in the world, as the game draws it (far outside the room, so it is never seen)
+	std::optional<glm::vec3> glow;
 };
 
 /// The island in relief over the main room's pool.
