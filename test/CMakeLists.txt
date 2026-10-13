@@ -879,3 +879,6 @@ openblack_setup_and_add_test(test_vortex_crossing_lines test_vortex_crossing_lin
 openblack_setup_and_add_test(test_creature_swap test_creature_swap.cpp)
 openblack_setup_and_add_test(test_leash_snap test_leash_snap.cpp)
 openblack_setup_and_add_test(test_creature_giving test_creature_giving.cpp)
+openblack_setup_and_add_test(
+  test_villager_walk_rules test_villager_walk_rules.cpp
+)

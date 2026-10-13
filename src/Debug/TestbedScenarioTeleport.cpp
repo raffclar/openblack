@@ -123,8 +123,8 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	    .description = "Two teleport miracles cast 600 apart, then a villager beside the first sets off to worship at a "
 	                   "point beside the second, further than villagers walk to worship.",
 	    .expected = "The villager turns aside into the near stone at once, vanishes in a burst of pale yellow sparks and "
-	                "comes out of the far one, near the worship point, and takes up its way to worship again (which is "
-	                "as far as openblack's villagers go: worshipping itself is not there yet).",
+	                "comes out of the far one, near the worship point, and stands there on its way to worship: with no "
+	                "worship site there, its way to worship walks it nowhere further.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_WorshipStoneB + glm::vec2(-20.0f, -20.0f), k_WorshipStoneB + glm::vec2(20.0f, 20.0f)}},

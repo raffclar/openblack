@@ -223,10 +223,12 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* MOVE_TO_POS */
     VillagerStateTableEntry {
         .state = &villager_home::MoveToPos,
+        .exitState = &villager_home::ExitMoveToPos,
     },
     /* MOVE_TO_OBJECT */
     VillagerStateTableEntry {
         .state = &villager_move_to_object::MoveToObject,
+        .exitState = &villager_home::ExitMoveToPos,
     },
     /* MOVE_ON_STRUCTURE */ k_TodoEntry,
     /* IN_SCRIPT */
