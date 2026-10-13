@@ -162,6 +162,8 @@ private:
 	/// The ghosts of the buildings effects destroyed, each laying its depth through a scrolling pattern and then added
 	/// over itself where it did, the farthest first
 	void DrawDestructionGhosts(const DrawSceneDesc& desc) const;
+	/// The explorers' boat mirrored in the sea, in its own flat colour
+	void DrawFilmReflections(const DrawSceneDesc& desc) const;
 	/// The physical shields' domes
 	void DrawShieldDomes(const DrawSceneDesc& desc) const;
 	/// A particle's mist, in the translucent pass at a place among what blends

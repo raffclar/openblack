@@ -38,6 +38,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/DayNightClock.h"
+#include "3D/FlatLand.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/TempleInteriorInterface.h"
@@ -99,6 +100,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -1704,6 +1706,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (command.kind == Kind::PlayBoatFilm)
+	{
+		Log(fmt::format("{:.1f}s: {}", _seconds, PlayBoatFilm(command)));
+		return;
+	}
 	if (command.kind == Kind::EnterTemple)
 	{
 		const auto room = static_cast<TempleRoom>(command.value);
@@ -2011,6 +2018,7 @@ void Runner::Give(const Command& command)
 	case Kind::Reframe:
 	case Kind::RecordChallenge:
 	case Kind::EnterTemple:
+	case Kind::PlayBoatFilm:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
@@ -3334,6 +3342,26 @@ std::optional<std::filesystem::path> Runner::SaveResults(std::optional<std::file
 	csv << benchmark::ToCsv(run, results, _recorder->Stages());
 	Log(fmt::format("Saved {}", jsonPath.generic_string()));
 	return jsonPath;
+}
+
+std::string Runner::PlayBoatFilm(const Command& command) const
+{
+	if (!Locator::boatLaunchSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return "no boat film";
+	}
+	const auto dock = MapPoint(_middle, command.point);
+	// The sailing clip starts the boat about 67 metres west and 59 south of where it is played from: played from there,
+	// the boat sets off from the lake's north-east corner and crosses it to the south west
+	constexpr glm::vec2 k_SailingClipStart {-67.3f, -59.4f};
+	const auto corner = flat_land::k_LakeCentre + flat_land::k_LakeHalfExtent;
+	const auto sailing = corner - k_SailingClipStart;
+	const ecs::systems::BoatLaunchSystemInterface::Places places {
+	    .dock = {dock.x, Locator::terrainSystem::value().GetHeightAt(dock), dock.y},
+	    .sailingStart = {sailing.x, 0.0f, sailing.y},
+	};
+	Locator::boatLaunchSystem::value().Play(places);
+	return fmt::format("the explorers' boat film plays from ({:.0f}, {:.0f})", dock.x, dock.y);
 }
 
 std::string Runner::RecordChallenge(const Command& command) const
