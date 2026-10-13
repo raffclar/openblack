@@ -77,6 +77,18 @@ public:
 	virtual void SetRecordedThrow(glm::vec3 velocity) = 0;
 	/// The world is cleared: the hand holds nothing
 	virtual void Reset() = 0;
+	/// A creature takes a thing the hand gave it: the hand lets go of it into the creature's hand, without dropping it.
+	/// Whether the hand still held it to give.
+	virtual bool HandOver(entt::entity /*object*/) { return false; }
+	/// For the debug tools: the empty hand takes a thing at once, as if picked up from where it stands; and gives what it
+	/// holds to a creature, as the Action button pressed over the creature does. Whether it could.
+	virtual bool TakeIntoHand(entt::entity /*object*/) { return false; }
+	virtual bool GiveHeldTo(entt::entity /*creature*/) { return false; }
+	/// The creature the hand offers what it holds to, while it does; the creature reaching for it once given
+	[[nodiscard]] virtual std::optional<entt::entity> GetOfferedCreature() const { return std::nullopt; }
+	/// How far round what the hand holds is turned as it is offered, rolled with the hand about the line to the camera,
+	/// in radians
+	[[nodiscard]] virtual float GetOfferTurn() const { return 0.0f; }
 
 	/// What the hand holds, none when it holds nothing of its own
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld() const = 0;

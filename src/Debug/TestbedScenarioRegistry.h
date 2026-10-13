@@ -597,6 +597,10 @@ struct Command
 		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
 		/// flight, say). Needs no creature
 		Reframe,
+		/// The player's hand takes the scenario's object at once, as if picked up from where it stands (needs no
+		/// creature); the hand gives what it holds to the creature, as the Action button pressed over it does
+		HandTake,
+		HandGive,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

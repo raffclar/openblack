@@ -2526,7 +2526,11 @@ bool Game::Update() noexcept
 				    .camera = camera.GetOrigin(),
 				    .levelTurn = glm::mat3(glm::eulerAngleY(camera.GetRotation().y)),
 				    .modelCorrection = glm::mat3(glm::eulerAngleX(glm::radians(90.0f))),
-				    .tilt = Locator::magicSystem::value().GetHandPour(Locator::time::value().GetTurnFraction()).tilt,
+				    // A pour tips the hand; offering what it holds to a creature turns it over too
+				    .tilt = Locator::magicSystem::value().GetHandPour(Locator::time::value().GetTurnFraction()).tilt +
+				            (heldSeed.has_value() || !Locator::handGrabSystem::has_value()
+				                 ? 0.0f
+				                 : Locator::handGrabSystem::value().GetOfferTurn()),
 				    // A thing the hand picked up isn't turned about for a right hand as a seed is
 				    .rightHanded = heldSeed.has_value() && config.rightHandedHand,
 				};

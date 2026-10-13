@@ -155,6 +155,8 @@ struct ObjectOrder
 		/// Taking food from a pile: a handful sized to the creature, no more than the pile holds, appears at its feet and
 		/// it picks it up
 		TakeFromPile,
+		/// Reaching out to take what the player's hand gives it, with its left hand when mirrored
+		TakeFromHand,
 	};
 	Kind kind {Kind::PickUp};
 	/// What it acts on, by its entity's number. Pointing at an object, it points at wherever the object is, turn by
@@ -165,6 +167,8 @@ struct ObjectOrder
 	/// Pointing: how high the point is, when it isn't on the ground, and how long it points, when not for its usual while
 	std::optional<float> pointHeight;
 	std::optional<float> seconds;
+	/// Taking from the player's hand with its left hand
+	bool mirrored {false};
 };
 
 /// Going somewhere, or turning to face something
@@ -241,6 +245,8 @@ enum class Effect : uint8_t
 	Observed,
 	/// Has picked up the food it took from a pile, which the pile now gives up
 	TookFromPile,
+	/// Has taken what the player's hand gave it (the step's object), and decides what to do with it
+	TookFromHand,
 };
 
 /// What a creature's head is made to look at: a thing (its top, or its foot), a point, or the player's camera
@@ -532,6 +538,14 @@ struct FishingTrip
 [[nodiscard]] std::vector<Step> Faint();
 /// Eating what it holds
 [[nodiscard]] std::vector<Step> EatHeld();
+/// Taking a thing the player's hand gives it: turning to the player's camera, then reaching out to take it from the
+/// hand, looking at it and curious all along
+[[nodiscard]] std::vector<Step> TakeFromHand(uint32_t object, glm::vec2 camera, bool leftHand);
+/// What it does with a thing it was given and holds: looks it over, curious; eats it; or throws it at the player's
+/// camera, looking at the camera
+[[nodiscard]] std::vector<Step> ExamineGiven(uint32_t object);
+[[nodiscard]] std::vector<Step> EatGiven();
+[[nodiscard]] std::vector<Step> ThrowGiven(glm::vec3 camera);
 /// Playing an action once on the spot
 [[nodiscard]] std::vector<Step> Emote(size_t animation);
 /// Turning to face a point, then playing an action

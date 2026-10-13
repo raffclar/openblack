@@ -71,6 +71,8 @@ public:
 	void FoughtFight(entt::entity creature, bool won) override;
 	void AbandonAction(entt::entity creature) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;
+	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
+	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
@@ -115,6 +117,8 @@ private:
 	bool FightForScript(entt::entity creature, entt::entity opponent);
 	/// Learns what feedback teaches, from what the creature did lately
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
+	/// The creature has taken a thing the hand gave it: its desires choose what it does with it
+	void UseGift(entt::entity creature, entt::entity object);
 	/// Held by the player's hand, it shows what it wants once its body is free
 	void ShowDesireOnHold(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& animation);
 	/// Plans the desires due this turn for one creature

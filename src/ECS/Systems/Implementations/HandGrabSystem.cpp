@@ -325,6 +325,10 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 	switch (grab->state)
 	{
 	case HandGrab::State::Holding:
+		// Held down long enough, the button gives what the hand holds to a creature (see UpdateFrame)
+		grab->givePress = true;
+		grab->pressMs = nowMs;
+		grab->pressTurn = turn;
 		// On something the held thing can be used on, it is given to it; otherwise ready to throw: the spring takes hold of
 		// the hand the next frame, where the hand then is
 		if (const auto target = _world->ObjectUnderCursor(); target.has_value() && HandInInfluence() && ApplyTo(*grab, *target))
@@ -384,6 +388,7 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 	{
 		return std::nullopt;
 	}
+	grab->givePress = false;
 	switch (grab->state)
 	{
 	case HandGrab::State::Grabbing:
@@ -972,6 +977,11 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, bool forced)
 
 void HandGrabSystem::Empty(HandGrab& grab)
 {
+	// Whatever it offered, it offers no more
+	ForgetOffer(grab);
+	grab.offerTurn.Reset(0.0f);
+	grab.lastHand.reset();
+	grab.givePress = false;
 	grab.state = HandGrab::State::Empty;
 	grab.object = entt::null;
 	grab.waits = false;
@@ -1103,6 +1113,21 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		break;
 	}
 
+	// The button held down a while gives what the hand holds to the creature it offers it to, or to one under the cursor
+	// that would take it: the hand keeps hold of it, no longer ready to throw, until the creature takes it
+	if (grab->givePress &&
+	    hand_grab::ElapsedMs(frame.nowMs, grab->pressMs, frame.turn, grab->pressTurn) > hand_grab::k_GrabWaitMs)
+	{
+		grab->givePress = false;
+		if (Give(*grab, _world->ObjectUnderCursor()))
+		{
+			grab->state = HandGrab::State::Holding;
+			grab->springOn = false;
+			grab->springPending = false;
+		}
+	}
+	// Offered to a creature, the hand may be drawn to its hand as it reaches
+	const auto offered = UpdateOffer(*grab, frame);
 	// The hand rises by how far what it holds hung last frame, which it then measures again
 	const auto* tree = _world->Entities().TryGet<const Tree>(grab->object);
 	const auto size = _world->SizeOf(grab->object);
@@ -1112,7 +1137,7 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	// While it holds something its twist is made ready again, for when it lets go
 	grab->releaseSpinMs = static_cast<int32_t>(hand_grab::k_ReleaseSpinDelayMs);
 	grab->lastTarget = frame.target;
-	auto target = frame.target + glm::vec3(0.0f, grab->rise, 0.0f);
+	auto target = offered + glm::vec3(0.0f, grab->rise, 0.0f);
 	// The game time spent holding is counted whether the spring is on or not, scooping too
 	grab->spring.Count(frame.gameMs);
 	if (grab->scoopSource != entt::null && Exists(grab->scoopSource))
@@ -1128,6 +1153,7 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		// The spring's own throw takes the place of a recorded one as soon as it moves the hand
 		grab->recordedThrow.reset();
 		grab->spring.Step(target);
+		grab->lastHand = grab->spring.Position();
 		return grab->spring.Position();
 	}
 	if (grab->springPending && grab->state == HandGrab::State::ReadyToThrow)
@@ -1137,7 +1163,157 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		grab->springOn = true;
 		grab->springPending = false;
 	}
+	grab->lastHand = target;
 	return target;
+}
+
+glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
+{
+	// Once given, the creature reaches for it until it has it or gives up
+	if (grab.givenTo != entt::null && !_world->StillTaking(grab.givenTo))
+	{
+		ForgetOffer(grab);
+	}
+	const bool reaching = grab.givenTo != entt::null;
+	// Over a creature that would take it, the offer lasts its full time again; otherwise it runs down on the frame's time
+	const auto under = _world->ObjectUnderCursor();
+	const auto verdict =
+	    under.has_value() && *under != grab.object && Exists(*under) ? _world->GiveVerdict(*under, grab.object) : std::nullopt;
+	if (verdict == creature_giving::Verdict::Give)
+	{
+		grab.offeredTo = *under;
+		grab.offer.Renew();
+	}
+	else
+	{
+		if (verdict == creature_giving::Verdict::CantPickUp)
+		{
+			_world->SayCantPickUp(*under);
+		}
+		const auto frameMs = static_cast<int32_t>(std::lround(frame.seconds * 1000.0f));
+		if (grab.offer.RunDown(frameMs, reaching))
+		{
+			grab.offeredTo = entt::null;
+		}
+	}
+	// The held thing turns over towards the creature, and back as the offer ends
+	if (const auto turn = creature_giving::OfferTurn(grab.hold.type, _world->RightHanded(), grab.offer, reaching))
+	{
+		grab.offerTurn.SetDestination(*turn, creature_giving::k_OfferTurnSeconds);
+	}
+	grab.offerTurn.UpdateInline(frame.seconds);
+	if (!reaching)
+	{
+		return frame.target;
+	}
+	// While the creature reaches, the hand meets its hand at the moment it takes the thing; moved too far from the
+	// creature's hand, the giving is called off
+	const auto hand = grab.lastHand.value_or(frame.target);
+	const auto takePoint = _world->TakePointOf(grab.givenTo, hand);
+	if (!takePoint.has_value())
+	{
+		return frame.target;
+	}
+	if (creature_giving::CallsOff(hand, *takePoint, _world->CreatureSizeOf(grab.givenTo)))
+	{
+		_world->CallOffGiving(grab.givenTo);
+		ForgetOffer(grab);
+		return frame.target;
+	}
+	const auto taking = _world->TakingOf(grab.givenTo);
+	if (!taking.has_value() || taking->object != grab.object)
+	{
+		return frame.target;
+	}
+	return creature_giving::DrawToCreature(*takePoint, frame.target, taking->msFromTake, grab.lowering).value_or(frame.target);
+}
+
+bool HandGrabSystem::Give(HandGrab& grab, std::optional<entt::entity> under)
+{
+	const auto held = grab.object;
+	if (!Exists(held) || grab.givenTo != entt::null)
+	{
+		return false;
+	}
+	// The creature it offers it to comes first, then the thing under the hand
+	auto creature = grab.offer.Active() && Exists(grab.offeredTo) ? std::optional(grab.offeredTo) : std::nullopt;
+	if (!creature.has_value() && under.has_value() && *under != held && Exists(*under))
+	{
+		creature = under;
+	}
+	if (!creature.has_value() || _world->GiveVerdict(*creature, held) != creature_giving::Verdict::Give)
+	{
+		return false;
+	}
+	if (!_world->GiveTo(*creature, held, !_world->RightHanded()))
+	{
+		return false;
+	}
+	grab.offeredTo = *creature;
+	grab.givenTo = *creature;
+	return true;
+}
+
+void HandGrabSystem::ForgetOffer(HandGrab& grab)
+{
+	grab.offeredTo = entt::null;
+	grab.givenTo = entt::null;
+	grab.offer = {};
+}
+
+bool HandGrabSystem::HandOver(entt::entity object)
+{
+	auto* grab = Grab();
+	if (grab == nullptr || grab->object != object ||
+	    (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	{
+		return false;
+	}
+	// A scoop ends with it
+	if (grab->scoopSource != entt::null)
+	{
+		EndScoop(*grab);
+	}
+	_world->Entities().Remove<InHand>(object);
+	Empty(*grab);
+	return true;
+}
+
+bool HandGrabSystem::TakeIntoHand(entt::entity object)
+{
+	auto* grab = Grab();
+	if (grab == nullptr || grab->state != HandGrab::State::Empty || !Exists(object) || !MayTake(object))
+	{
+		return false;
+	}
+	Take(*grab, object, true);
+	return grab->state == HandGrab::State::Holding;
+}
+
+bool HandGrabSystem::GiveHeldTo(entt::entity creature)
+{
+	auto* grab = Grab();
+	return grab != nullptr && grab->state == HandGrab::State::Holding && Give(*grab, creature);
+}
+
+std::optional<entt::entity> HandGrabSystem::GetOfferedCreature() const
+{
+	const auto* grab = Grab();
+	if (grab == nullptr || (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	{
+		return std::nullopt;
+	}
+	if (grab->givenTo != entt::null)
+	{
+		return grab->givenTo;
+	}
+	return grab->offer.Active() && grab->offeredTo != entt::null ? std::optional(grab->offeredTo) : std::nullopt;
+}
+
+float HandGrabSystem::GetOfferTurn() const
+{
+	const auto* grab = Grab();
+	return grab != nullptr && grab->state != HandGrab::State::Empty ? grab->offerTurn.GetValue() : 0.0f;
 }
 
 void HandGrabSystem::ProcessTurn()

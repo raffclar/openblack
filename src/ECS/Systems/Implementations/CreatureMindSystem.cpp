@@ -37,6 +37,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
@@ -144,6 +145,12 @@ constexpr std::string_view k_HurlAction = "Hurl";
 constexpr std::string_view k_FightAction = "Fight";
 /// The action a creature made to catch something carries out
 constexpr std::string_view k_CatchAction = "Catch";
+/// The action a creature given something from the hand carries out to take it
+constexpr std::string_view k_TakeFromHandAction = "TakeObjectFromHand";
+/// What a creature does with what it was given, by the game's action table
+constexpr std::string_view k_ExamineGivenAction = "ExamineObjectInHand";
+constexpr std::string_view k_EatGivenAction = "EatObjectInHand";
+constexpr std::string_view k_ThrowGivenAction = "ThrowObjectInHand";
 /// A creature looks for things to pick up this far away at most, and for homes and trees to hurl them at
 constexpr float k_ObjectSearchDistance = 80.0f;
 constexpr float k_HurlSearchDistance = 120.0f;
@@ -867,6 +874,7 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	case Effect::Completed:
 	case Effect::Observed:
 	case Effect::TookFromPile:
+	case Effect::TookFromHand:
 	case Effect::None:
 		break;
 	}
@@ -1017,7 +1025,14 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		break;
 	case Kind::Throw:
 	case Kind::ThrowNearby:
-		hands.Throw(creature, point);
+		// At a point in the air when it has a height, as the player's camera; otherwise at the ground there
+		hands.Throw(creature, {point.x, order.pointHeight.value_or(point.y), point.z});
+		break;
+	case Kind::TakeFromHand:
+		if (!object.has_value() || !registry.Valid(*object) || !hands.TakeFromHand(creature, *object, order.mirrored))
+		{
+			hands.Cancel(creature);
+		}
 		break;
 	case Kind::Destroy:
 		if (object.has_value() && registry.Valid(*object))
@@ -1366,11 +1381,17 @@ void CreatureMindSystem::ProcessTurn()
 		    CountCompleted(entity, mind, commands, GetTables());
 		    // Taking in what a thing is does nothing for the desire the plan serves
 		    if (commands.effect != creature_mind::Effect::None && commands.effect != creature_mind::Effect::Observed &&
-		        commands.effect != creature_mind::Effect::TookFromPile)
+		        commands.effect != creature_mind::Effect::TookFromPile &&
+		        commands.effect != creature_mind::Effect::TookFromHand)
 		    {
 			    mind.satisfiedByEffect = true;
 		    }
 		    FollowAgenda(entity, mind);
+		    // Once it has taken what the hand gave it, its desires choose what to do with it
+		    if (commands.effect == creature_mind::Effect::TookFromHand && commands.effectObject.has_value())
+		    {
+			    UseGift(entity, static_cast<entt::entity>(*commands.effectObject));
+		    }
 		    if (needs != nullptr)
 		    {
 			    needs->rest = creature_mind::IsUnconscious(mind.idle) ? CreatureNeeds::Rest::Unconscious
@@ -1837,6 +1858,126 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	if (mind->desires.has_value())
 	{
 		creature_learning::SuppressOpposed(*mind->desires, Desire::Play, tables->dependencies, k_TurnsPerSecond);
+	}
+}
+
+bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* tables = GetTables();
+	if (mind == nullptr || tables == nullptr || !mind->desires.has_value() || !registry.Valid(object))
+	{
+		return false;
+	}
+	const auto action = creature_mind_tables::FindAction(*tables, k_TakeFromHandAction);
+	if (!action.has_value())
+	{
+		return false;
+	}
+	// It drops what it was doing at once, its body's action ended there, as a failure
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
+	Abandon(*mind);
+	ReleaseCast(creature);
+	if (!Replan(creature, creature_mind::Activity::Planned,
+	            creature_mind::TakeFromHand(entt::to_integral(object), camera, leftHand)))
+	{
+		return false;
+	}
+	// Curious about what it is given, the plan is on the creature itself
+	const auto self = entt::to_integral(creature);
+	mind->planner.current = creature_planner::Plan {.desire = Desire::Curiosity,
+	                                                .action = *action,
+	                                                .object = self,
+	                                                .goalUsefulness = creature_planner::k_ForcedScore,
+	                                                .actionPriority = creature_planner::k_ForcedScore,
+	                                                .priority = creature_planner::k_ForcedScore};
+	mind->planActive = true;
+	mind->planSerial = mind->idle.serial;
+	mind->agendaSeen = mind->idle.serial;
+	mind->satisfiedByEffect = false;
+	mind->desireSeenTo = false;
+	creature_learning::SuppressOpposed(*mind->desires, Desire::Curiosity, tables->dependencies, k_TurnsPerSecond);
+	return true;
+}
+
+bool CreatureMindSystem::IsTakingFromHand(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr || mind->idle.step >= mind->idle.agenda.size())
+	{
+		return false;
+	}
+	// The take is still ahead of it, or under way
+	return std::ranges::any_of(mind->idle.agenda.begin() + static_cast<std::ptrdiff_t>(mind->idle.step),
+	                           mind->idle.agenda.end(), [](const creature_mind::Step& step) {
+		                           return step.kind == creature_mind::Step::Kind::Object &&
+		                                  step.order.kind == creature_mind::ObjectOrder::Kind::TakeFromHand;
+	                           });
+}
+
+void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr || !mind->desires.has_value() || !registry.Valid(object) ||
+	    !Locator::creatureObjectActionSystem::has_value() ||
+	    Locator::creatureObjectActionSystem::value().GetHeld(creature) != object)
+	{
+		return;
+	}
+	// TODO(creature-giving): the game first carries on the plan the creature had before it was given the thing, when that
+	// plan's action takes a thing of this sort (see bw1-decomp creature/creature_giving.md section 4); not done yet
+	const auto& desires = *mind->desires;
+	const auto weigh = [&](Desire desire) {
+		return creature_giving::Weighed {.desire = desires[desire].value,
+		                                 .usefulness = ActivityUsefulness(creature, *mind, desire, object)};
+	};
+	const auto belief = BeliefOf(registry, object, creature);
+	const auto kind = belief.has_value() ? belief->type : creature_tree::belief_types::k_Other;
+	// TODO(creature-giving): the game also keeps which kinds it has learnt it can't eat; openblack has no such memory yet
+	const auto choice = creature_giving::ChooseUse({
+	    .curiosity = weigh(Desire::Curiosity),
+	    .hunger = weigh(Desire::Hunger),
+	    .playWithPlayer = weigh(Desire::PlayWithPlayer),
+	    .cantEatKind = false,
+	    .givenKindBefore = mind->givenKinds.contains(kind),
+	});
+	if (choice.remembersKind)
+	{
+		mind->givenKinds.insert(kind);
+	}
+	const auto number = entt::to_integral(object);
+	switch (choice.use)
+	{
+	case creature_giving::Use::Examine:
+		ForcePlan(creature, {.desire = Desire::Curiosity,
+		                     .action = k_ExamineGivenAction,
+		                     .object = object,
+		                     .agenda = creature_mind::ExamineGiven(number)});
+		break;
+	case creature_giving::Use::Eat:
+		ForcePlan(
+		    creature,
+		    {.desire = Desire::Hunger, .action = k_EatGivenAction, .object = object, .agenda = creature_mind::EatGiven()});
+		break;
+	case creature_giving::Use::Throw:
+	{
+		const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
+		ForcePlan(creature, {.desire = Desire::PlayWithPlayer,
+		                     .action = k_ThrowGivenAction,
+		                     .object = object,
+		                     .agenda = creature_mind::ThrowGiven(eye)});
+		break;
+	}
+	case creature_giving::Use::AsLed:
+		ForcePlanOn(creature, object);
+		break;
 	}
 }
 

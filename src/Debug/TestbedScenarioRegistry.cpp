@@ -1438,6 +1438,47 @@ void AddObjects(std::vector<Scenario>& all)
 	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::EatHeld, 0, 0.5f, true)},
 	});
 
+	// Giving from the player's hand: the hand takes the thing, held in front of the creature, and gives it
+	const std::vector<Command> giving {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                                   {.kind = Kind::HandGive, .creature = 0, .delaySeconds = 1.5f}};
+	const HandHold offering {.offset = {0.0f, -k_Reach}, .height = 12.0f};
+	// Its mind runs, to take the thing and choose what to do with it
+	auto hungryThinking = hungry;
+	hungryThinking.pauseMind = false;
+	all.push_back({
+	    .id = "creature.give_food",
+	    .name = "Giving food from the hand",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a pile of food and, held in front of a hungry tiger, gives it to it.",
+	    .expected = "The hand turns its palm over to offer the food; the tiger turns to the camera looking curious, reaches "
+	                "out, and the hand meets its hand as it takes the food; hungry, it then eats it.",
+	    .environment = {.cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungryThinking},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
+	auto curious = Posed(CreatureType::Tiger, {0.0f, 0.0f});
+	curious.hold = false;
+	curious.pauseMind = false;
+	all.push_back({
+	    .id = "creature.give_villager",
+	    .name = "Giving a villager from the hand",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a villager and, held in front of a tiger that isn't hungry, gives her to it.",
+	    .expected = "The hand turns the villager a quarter round to offer her; the tiger turns to the camera, reaches out and "
+	                "takes her from the hand, then does with her what its desires say: looks her over the first time if it "
+	                "wants nothing much, eats her if hungry, or throws her at the camera if it wants to play.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {curious},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
 	all.push_back({
 	    .id = "objects.knock_down_trees",
 	    .name = "Knocking down trees",
@@ -2687,7 +2728,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
-	       kind == Kind::RunHelpMessage || IsPointerCommand(kind);
+	       kind == Kind::HandTake || kind == Kind::RunHelpMessage || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2714,7 +2755,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 99> k_Names {
+	constexpr std::array<std::string_view, 101> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2814,6 +2855,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "run text",
 	    "play hand demo",
 	    "reframe",
+	    "hand take",
+	    "hand give",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

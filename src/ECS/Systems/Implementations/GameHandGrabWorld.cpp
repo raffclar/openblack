@@ -27,7 +27,9 @@
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
+#include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureHelp.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -59,6 +61,9 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
@@ -82,6 +87,7 @@
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
+#include "EngineConfig.h"
 #include "Hand/HandGrabRules.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -458,6 +464,98 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	}
 	// Other things' taps are the clicking and activating of the interface
 	return false;
+}
+
+std::optional<creature_giving::Verdict> GameHandGrabWorld::GiveVerdict(entt::entity target, entt::entity held) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* creature = registry.Valid(target) ? registry.TryGet<const Creature>(target) : nullptr;
+	if (creature == nullptr || !registry.Valid(held))
+	{
+		return std::nullopt;
+	}
+	// openblack has no alliances between players, so only the creature's own player may give it things. The hand never
+	// holds a miracle's seed as a thing (seeds are held by the miracles), so no seed is ever offered this way.
+	const auto giver = HandPlayer();
+	return creature_giving::MayGive({
+	    .creatureHasPlayer = true,
+	    .giverHasPlayer = true,
+	    .friendly = creature->owner == giver,
+	    .spellSeed = false,
+	    .creatureCanPickUp =
+	        Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().CanPickUp(held),
+	});
+}
+
+void GameHandGrabWorld::SayCantPickUp(entt::entity creature)
+{
+	if (Locator::creatureHelpSystem::has_value())
+	{
+		Locator::creatureHelpSystem::value().Raise(
+		    creature, {.kind = creature_help::Kind::MiscellaneousStacked, .parameter = creature_giving::k_CantPickUpHelp});
+	}
+}
+
+bool GameHandGrabWorld::GiveTo(entt::entity creature, entt::entity held, bool leftHand)
+{
+	if (!Locator::creatureMindSystem::has_value())
+	{
+		return false;
+	}
+	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
+	return Locator::creatureMindSystem::value().TakeFromHand(creature, held, leftHand, glm::vec2(eye.x, eye.z));
+}
+
+std::optional<hand_grab::HandGrabWorldInterface::Taking> GameHandGrabWorld::TakingOf(entt::entity creature) const
+{
+	if (!Locator::creatureObjectActionSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto taking = Locator::creatureObjectActionSystem::value().GetTakingFromHand(creature);
+	if (!taking.has_value())
+	{
+		return std::nullopt;
+	}
+	return Taking {.object = taking->object, .msFromTake = taking->msFromTake};
+}
+
+std::optional<glm::vec3> GameHandGrabWorld::TakePointOf(entt::entity creature, glm::vec3 hand) const
+{
+	return Locator::creatureObjectActionSystem::has_value()
+	           ? Locator::creatureObjectActionSystem::value().TakePoint(creature, hand)
+	           : std::nullopt;
+}
+
+bool GameHandGrabWorld::StillTaking(entt::entity creature) const
+{
+	return Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsTakingFromHand(creature);
+}
+
+float GameHandGrabWorld::CreatureSizeOf(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	return body != nullptr ? ShownSize(*body) : 1.0f;
+}
+
+void GameHandGrabWorld::CallOffGiving(entt::entity creature)
+{
+	// It gives up taking as a failure, and its hand closes on nothing if it was already reaching
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetTakingFromHand(creature).has_value())
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().AbandonAction(creature);
+	}
+}
+
+bool GameHandGrabWorld::RightHanded() const
+{
+	return Locator::config::has_value() && Locator::config::value().rightHandedHand;
 }
 
 bool GameHandGrabWorld::HoldsLooseLeash() const
