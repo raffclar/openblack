@@ -16,6 +16,9 @@
 #include <optional>
 #include <string_view>
 
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+
 #include "3D/AllMeshes.h"
 
 /// What a creature does with the things about it: picking them up, holding, examining, eating, putting down, tossing
@@ -45,6 +48,8 @@ enum class Kind : uint8_t
 	Catch,
 	/// Reaching out to take what the player's hand gives it, which it takes from the hand at a moment of the animation
 	TakeFromHand,
+	/// Kicking a thing in front of it, which flies off as the foot meets it
+	Kick,
 };
 [[nodiscard]] std::string_view Name(Kind kind);
 
@@ -96,6 +101,20 @@ enum class Status : uint8_t
 	Done,
 	Failed,
 };
+
+/// The kicking animation
+constexpr size_t k_KickAnimation = 117;
+/// A thing kicked flies off at this many times the creature's size
+constexpr float k_KickSpeedPerSize = 45.0f;
+/// How the creature leans with the land under it: the rise across its width, by the heights a radius to either side of
+/// it, times this share, at most this much either way
+constexpr float k_LeanShare = 0.6f;
+constexpr float k_MostLean = 0.3f;
+/// How the creature leans along the land's two axes, from the land's heights a radius to either side of it along each
+[[nodiscard]] glm::vec2 LeanOf(float plusX, float minusX, float plusZ, float minusZ, float radius);
+/// How a thing it kicks starts to fly: half up and half ahead of the creature, the ahead part tipped up or down with the
+/// creature's lean, at the kick's speed for its size
+[[nodiscard]] glm::vec3 KickVelocity(glm::vec2 forward, glm::vec2 lean, float size);
 
 /// Whether a throw is over: its animation has played out, and, thrown into a store, what it threw has stopped flying
 [[nodiscard]] bool ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying);
@@ -210,11 +229,28 @@ enum class Thing : uint8_t
 	/// Statics with kinds of their own that a hand could hold but a creature never picks up
 	Vortex,
 	TeleportStone,
+	/// A thing built or set into the land that stones can knock about: a building, temple, totem or worship site, a
+	/// feature other than a magic mushroom, an animated static or flowers
+	Fixture,
 };
 /// How a creature decides on picking up a kind of thing
 [[nodiscard]] KindRule RuleOf(Thing thing);
 /// Whether a hand may hold a kind of thing at all
 [[nodiscard]] bool Holdable(Thing thing);
+/// Whether a kind of thing is alive: villagers, animals, birds and creatures
+[[nodiscard]] bool IsLiving(Thing thing);
+/// Whether a creature may throw things at a thing to knock it down: a living thing while it lives, and whatever is
+/// built or set into the land (shields too), but no tree, lantern, vortex or teleport stone, nor anything lying about
+[[nodiscard]] bool CanBeStoned(Thing thing, bool dead);
+/// Whether a thing does damage when a creature throws it: the statics, rocks and dead trees, but not the toys
+[[nodiscard]] bool DoesThrowingDamage(Thing thing, bool toy);
+/// Whether a creature may throw a thing to impress: anything but the living, vortices and teleport stones, as long as
+/// the thing's height is less than two thirds (0.64) of the creature's weight. The game sets the thing's height against
+/// the creature's weight, so in practice any such thing a creature can pick up will do.
+[[nodiscard]] bool CanBeThrownToImpress(Thing thing, float thingHeight, float creatureWeight);
+constexpr float k_ThrowToImpressWeightShare = 0.64f;
+/// Whether a creature may throw a thing into the sea in play: what lies about, the statics, rocks, dead trees and trees
+[[nodiscard]] bool CanBeThrownInTheSea(Thing thing);
 
 /// The toys among the statics, known by their models
 enum class Toy : uint8_t
@@ -231,6 +267,7 @@ enum class Toy : uint8_t
 /// What the kind of a thing says about its being picked up by a creature
 struct KindFacts
 {
+	Thing thing {Thing::Other};
 	KindRule rule {KindRule::Never};
 	/// A hand may hold it at all, so a hand may give it to a creature and a creature may catch it: villagers, animals,
 	/// things lying about, pots and piles, statics and rocks, dead trees and trees

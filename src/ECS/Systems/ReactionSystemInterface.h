@@ -84,6 +84,9 @@ public:
 		/// The age at which its time started: as it was made for one made as its miracle was cast, else as the first
 		/// living thing took it up; none until then
 		std::optional<uint32_t> firstTaken;
+		/// The dance the villagers taking it up dance round its thing, made as the first of them joins; it goes with
+		/// the reaction
+		entt::entity dance {entt::null};
 	};
 
 	virtual ~ReactionSystemInterface() = default;
@@ -103,6 +106,8 @@ public:
 	virtual void Remove(uint32_t id) = 0;
 	/// A reaction now comes from another object, as a fire's alarm follows the fire to what its object became
 	virtual void SetInitiator(uint32_t id, entt::entity initiator) = 0;
+	/// The dance villagers taking a reaction up dance in, which goes when the reaction goes
+	virtual void SetDance(uint32_t /*id*/, entt::entity /*dance*/) {}
 	/// Whether a reaction is still going
 	[[nodiscard]] virtual bool IsActive(uint32_t id) const = 0;
 	/// A living thing lets go of the reaction it has taken up, leaving what it is doing as it is, and remembers that it

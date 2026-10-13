@@ -74,6 +74,7 @@ public:
 	[[nodiscard]] float GetPointerSpeedMultiplier() const final { return _pointerSpeedMultiplier; }
 	[[nodiscard]] glm::ivec2 GetPointerPosition() const final;
 	[[nodiscard]] uint32_t GetPointerButtons() const final;
+	[[nodiscard]] bool IsPointerKnown() const final;
 	void WarpCursor(glm::ivec2 position) final;
 	[[nodiscard]] std::optional<glm::ivec2> GetCursorWarp() const final;
 	void SetBlockedActions(BindableActionMap actions) final { _blocked = actions; }

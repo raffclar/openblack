@@ -17,6 +17,7 @@
 
 #include <MindFile.h>
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
@@ -92,6 +93,8 @@ struct CreatureMindState
 		uint32_t action;
 	};
 	std::optional<ActionUnderway> underway;
+	/// The action it last carried out to its end, by its number, which the towns watching it judge it by
+	std::optional<uint32_t> lastActionDone;
 
 	/// How far the creature has grown up, which decides the desires it has and which of its body's needs it feels, and
 	/// the stage they were last set for. Until the game's story moves it on, a creature starts fully grown up.
@@ -157,6 +160,13 @@ struct CreatureMindState
 	/// How often it has been told to hold things of each kind (by the game's belief types): it plays with what it holds
 	/// only the first times
 	std::map<uint32_t, uint32_t> heldKinds;
+	/// Where the thing stood that the player did something to which the creature last set about copying (the land's
+	/// corner until then): it takes no tree from near there to plant
+	glm::vec2 copiedAt {0.0f};
+	/// It ate a magic mushroom, and becomes high once it is done with what it is doing
+	bool highPending {false};
+	/// The trees it planted others by most recently, by entity number, oldest first: it never takes one of them to plant
+	std::vector<uint32_t> plantedBy;
 };
 
 } // namespace openblack::ecs::components

@@ -29,6 +29,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureTattoo.h"
+#include "ECS/CreatureAttitudeRules.h"
 #include "Enums.h"
 #include "Particles/ParticleDrawPath.h"
 #include "TestbedCrowd.h"
@@ -264,13 +265,16 @@ struct ObjectSetup
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
 	/// A villager belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A villager goes to make love with the scenario's object of this index once the walk delay is up, as a breeder
+	/// sends one: both walk to meet and kiss there
+	std::optional<size_t> mateWith;
 	/// A villager is put down on the nearest teleport stone after this many seconds, as the hand drops one, and jumps at
 	/// once to the stone nearest where it was walking
 	std::optional<float> dropOnStoneSeconds;
 	/// A villager sets off to worship at this point once the walk delay is up, going through its player's teleport
 	/// stones when the point is further than villagers walk to worship
 	std::optional<glm::vec2> worshipAt;
-	/// A villager's or animal's life, 0 (dead) to 1, full when not given
+	/// A villager's, animal's or building's life, 0 (dead) to 1, full when not given; a building is hurt down to it
 	std::optional<float> life;
 	/// A villager carries this much wood and food, which slows it, none when not given
 	int16_t woodHeld {0};
@@ -299,8 +303,15 @@ struct ObjectSetup
 	/// A planned building is the plan of one that had been finished and went from the land, which its town wants
 	/// rebuilt as a repair
 	bool wasBuilt {false};
+	/// A building stands only this much built, a site open for its town's builders to finish it
+	std::optional<float> built;
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
+	/// The thing is set alight as it is made, burning as at the start of a fire
+	bool alight {false};
+	/// The thing makes a reaction of this kind as it is made, as the game makes one about a thing (a thing coming to rest
+	/// makes one to look at it), by the scenario's player
+	std::optional<Reaction> reaction;
 };
 
 /// A particle effect played on the land
@@ -658,9 +669,19 @@ struct Command
 		/// The player is put in a room of the temple (value, by the temple's rooms: 0 the challenge room). Needs no
 		/// creature
 		EnterTemple,
+		/// The explorers' boat film plays as a script's PLAY_JC_SPECIAL 6 plays it on Land 1, moved to the testbed: its
+		/// dry dock at the point (from the middle of the map) on the land there, and its sailing starting in the lake's
+		/// north-east corner. Needs no creature
+		PlayBoatFilm,
 		/// A land's script (script, by its name) starts as a script's "run script" starts it, given its arguments in
 		/// order (scriptArguments); the scripts' globals named are set first (scriptGlobals). Needs no creature
 		RunScript,
+		/// The player's hand lets go of a handful of wood (value, how much) slowly over a point of the land (point, from
+		/// the middle of the map), pouring it there as a slow let-go does. Needs no creature
+		HandPour,
+		/// A script tells the creature to do an action of the game's table (action, by its name) to the scenario's object,
+		/// with another of the scenario's objects (with) when given, as a script's creature action command does
+		DoAction,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -681,6 +702,9 @@ struct Command
 	float hour {12.0f};
 	/// The object picked up, knocked down or tied to, by its place in the scenario's objects
 	size_t object {0};
+	/// The action a script tells it to do, by its name in the game's table, and the object it does it with
+	std::string_view action;
+	std::optional<size_t> with;
 	/// The leash put on
 	LeashType leash {LeashType::Rope};
 	/// The part of the body stroked, by its place in the hand's parts (the head first)
@@ -758,6 +782,8 @@ struct TempleSetup
 	float angle {0.0f};
 	/// How much of it is built, 0 to 1, for a temple still going up; built when not given
 	std::optional<float> built;
+	/// Its heart's life, 0 to 1, for a temple already hurt; whole when not given
+	std::optional<float> life;
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
@@ -846,6 +872,9 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town believes this much in the player from the start, so that it stays the
 	/// player's rather than going back to the neutral player at its first turn
 	std::optional<float> townBeliefInPlayer;
+	/// A testbed set-up step: the scenario's town feels so about each of the scenario's creatures from the start, as if
+	/// the creature had just shown it, rather than first seeing them as it plays
+	std::optional<ecs::creature_attitude::Attitude> townFeelingAboutCreatures;
 	/// A crowd spawned a batch a frame, after the creatures and objects above; the runner measures the frames once it
 	/// is all there
 	std::optional<Crowd> crowd;

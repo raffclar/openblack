@@ -116,9 +116,11 @@ TEST(GuidanceRules, AlignmentRemarks)
 
 TEST(GuidanceRules, OneOffs)
 {
-	EXPECT_EQ(Rule(OneOff::FullMoon).text, 3326u);
-	EXPECT_FLOAT_EQ(Rule(OneOff::FullMoon).chance, 0.1f);
-	EXPECT_EQ(Rule(OneOff::HandNearby).text, 3325u);
+	// Each check says its own remark, with that remark's chance
+	EXPECT_EQ(Rule(OneOff::FullMoon).text, 3325u);
+	EXPECT_FLOAT_EQ(Rule(OneOff::FullMoon).chance, 0.05f);
+	EXPECT_EQ(Rule(OneOff::HandNearby).text, 3326u);
+	EXPECT_FLOAT_EQ(Rule(OneOff::HandNearby).chance, 0.1f);
 	EXPECT_TRUE(OneOffSaid(0.1f, 0.1f));
 	EXPECT_FALSE(OneOffSaid(0.11f, 0.1f));
 }

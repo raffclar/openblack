@@ -25,6 +25,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureReactionRules.h"
 #include "Enums.h"
 
 namespace openblack::creaturemind
@@ -159,6 +160,10 @@ public:
 	virtual void ReactToNastyMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
 	/// A nice miracle of its own player's was cast near the creature: it goes to look at it, and learns it
 	virtual void ReactToNiceMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
+	/// The creature takes up a reaction to a thing: it comes across the thing, drops what it was doing for the plan the
+	/// reaction makes (done to the thing or to itself), learns the skill it watches, and moves a source of its desires,
+	/// as the reaction's kind says
+	virtual void TakeUpReaction(entt::entity /*creature*/, entt::entity /*thing*/, const creature_reaction::Setup& /*setup*/) {}
 	/// The creature tries a miracle at an object, as its casting pose's loop begins or in a fight: in a fight it pays
 	/// stamina first; a try short of the sightings it needs fizzles; a miracle it can't cast frustrates it. Whether it
 	/// was cast.
@@ -186,6 +191,9 @@ public:
 		/// The thing used, if any
 		std::optional<entt::entity> instrument;
 	};
+	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
+	/// about to already
+	virtual void AteMagicMushroom(entt::entity /*creature*/) {}
 	/// The creature gives up what it was doing for the plan, which nothing it wants replaces until it is done. Returns
 	/// whether it could be carried out.
 	virtual bool ForcePlan(entt::entity /*creature*/, const ForcedPlan& /*plan*/) { return false; }

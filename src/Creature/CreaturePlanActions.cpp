@@ -15,6 +15,7 @@
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureFireAgenda.h"
+#include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureScriptAgendas.h"
 
@@ -33,6 +34,13 @@ constexpr size_t k_PickMe = 74;
 constexpr float k_FollowSeconds = 8.0f;
 constexpr float k_GazeSeconds = 6.0f;
 
+/// A chance from 0 to 1 in fine steps, from the whole-number random
+float RandomFraction(const creature_mind::Random& random)
+{
+	constexpr uint32_t k_Steps = 1U << 24U;
+	return static_cast<float>(random(k_Steps)) / static_cast<float>(k_Steps);
+}
+
 constexpr std::array k_Executors {
     Executor {.action = "EatAfterExamining", .target = Target::Food, .build = Build::Eat, .activity = Activity::Eat},
     Executor {.action = "EatAlive", .target = Target::LiveFood, .build = Build::Eat, .activity = Activity::Eat},
@@ -45,33 +53,83 @@ constexpr std::array k_Executors {
     Executor {.action = "FishAndEat", .build = Build::FishAndEat, .activity = Activity::Eat},
     Executor {.action = "GiveFishToStoragePit", .target = Target::StoragePit, .build = Build::GiveFishToStore},
     Executor {.action = "TakeFishHome", .build = Build::TakeFishHome},
+    Executor {.action = "GetHigh", .target = Target::Anything, .build = Build::GetHigh, .activity = Activity::Eat},
+    // Trees: given to a town's store as wood, or planted by something
+    Executor {.action = "GiveWoodFromTreeToStoragePit",
+              .target = Target::StoragePit,
+              .use = Target::PickableTree,
+              .build = Build::GiveWoodToStore},
+    Executor {.action = "GiveWoodFromTreeToBuildingSite",
+              .target = Target::BuildingBeingBuilt,
+              .use = Target::PickableTree,
+              .build = Build::GiveWoodToStore},
+    Executor {.action = "HelpRepairHouse",
+              .target = Target::NeedsRepair,
+              .use = Target::PickableTree,
+              .build = Build::HelpRepairHouse},
+    Executor {.action = "PlantTree",
+              .target = Target::Anything,
+              .use = Target::PlantableTree,
+              .notWhatItHolds = true,
+              .build = Build::PlantTree},
     Executor {.action = "ExamineByPickingUp",
               .target = Target::Pickable,
               .build = Build::ExamineByPickingUp,
               .activity = Activity::Examine},
     Executor {.action = "ExamineByLooking", .target = Target::Anything, .build = Build::ExamineByLooking},
     Executor {.action = "ExamineByFollowing", .target = Target::Living, .build = Build::ExamineByFollowing},
+    Executor {.action = "ThrowBallAtObject",
+              .target = Target::Anything,
+              .use = Target::Toy,
+              .build = Build::ThrowToy,
+              .activity = Activity::PlayWithObject},
+    // Practising a throw on what it may pick up, and throwing living things about
+    Executor {.action = "PracticeThrow",
+              .target = Target::Pickable,
+              .build = Build::PracticeThrow,
+              .activity = Activity::PlayWithObject},
     Executor {
-        .action = "ThrowBallAtObject", .target = Target::Toy, .build = Build::ThrowAbout, .activity = Activity::PlayWithObject},
-    // Throwing things about and into the sea, kicking a ball about and throwing to impress are all throwing what it
-    // picks up somewhere nearby, as the throws aimed at the sea or at an audience need systems that aren't here yet
-    Executor {
-        .action = "ThrowAround", .target = Target::Pickable, .build = Build::ThrowAbout, .activity = Activity::PlayWithObject},
+        .action = "BreakRock", .target = Target::PickableRock, .build = Build::BreakRock, .activity = Activity::PlayWithObject},
+    // Stamping on a rock, which breaks in two
+    Executor {.action = "SmashStoneInHalf", .target = Target::Rock, .build = Build::Destroy},
+    // Toys: stroking a cuddly one, taking one home, throwing a die
+    // The game's data names stroking a toy "StrokToy"
+    Executor {.action = "StrokToy", .target = Target::CuddlyToy, .build = Build::StrokeToy},
+    Executor {.action = "TakeToyHome", .target = Target::ToyAwayFromHome, .build = Build::TakeToyHome},
+    Executor {.action = "ThrowDie", .target = Target::Die, .build = Build::ThrowDie, .activity = Activity::PlayWithObject},
+    Executor {.action = "PlayThrowingGameWithPlayer",
+              .use = Target::Toy,
+              .build = Build::ThrowToPlayer,
+              .activity = Activity::PlayWithObject},
+    Executor {.action = "ThrowAround",
+              .target = Target::AnyLiving,
+              .build = Build::PracticeThrow,
+              .activity = Activity::PlayWithObject},
     Executor {.action = "KickBallAround",
               .target = Target::ToyBall,
-              .build = Build::ThrowAbout,
+              .build = Build::KickBallAround,
               .activity = Activity::PlayWithObject},
+    // TODO(creature-kind-actions): the game walks to the nearest coast it hasn't visited and throws the thing into the
+    // nearest sea it hasn't visited, by the creature's map of where it has been, which isn't here yet; until then it
+    // throws the thing somewhere nearby
     Executor {.action = "ThrowInTheSea",
-              .target = Target::Pickable,
+              .target = Target::SeaThrowable,
               .build = Build::ThrowAbout,
               .activity = Activity::PlayWithObject},
     Executor {.action = "ThrowToImpress",
-              .target = Target::Pickable,
-              .build = Build::ThrowAbout,
-              .activity = Activity::PlayWithObject},
+              .target = Target::Anything,
+              .use = Target::ThrowableToImpress,
+              .notWhatItHolds = true,
+              .build = Build::Hurl,
+              .activity = Activity::Hurl},
     Executor {.action = "KickTree", .target = Target::Tree, .build = Build::Destroy},
     Executor {.action = "PullSillyFaces", .build = Build::Emote, .animation = animations::k_FeelPlayful},
-    Executor {.action = "Hurl", .target = Target::Pickable, .build = Build::Hurl, .activity = Activity::Hurl},
+    Executor {.action = "Hurl",
+              .target = Target::Stonable,
+              .use = Target::ThrowingDamage,
+              .notWhatItHolds = true,
+              .build = Build::Hurl,
+              .activity = Activity::Hurl},
     Executor {.action = "Stomp", .target = Target::Destroyable, .build = Build::Destroy},
     Executor {.action = "Kick", .target = Target::Destroyable, .build = Build::Destroy},
     Executor {.action = "SitDown", .build = Build::SitDown, .activity = Activity::Sit},
@@ -187,9 +245,6 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return situation.fishing.has_value();
 	case Build::TakeFishHome:
 		return situation.fishing.has_value() && situation.home.has_value();
-	case Build::Hurl:
-		// What to hurl is given, or it hurls what it picks up at somewhere it finds
-		return situation.instrument.has_value() || situation.hurlTarget.has_value();
 	case Build::SleepAtHome:
 		return situation.home.has_value();
 	case Build::SleepByObject:
@@ -224,6 +279,67 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	{
 	case Build::Eat:
 		return creature_mind::Eat(*object);
+	case Build::GiveWoodToStore:
+	{
+		// Holding a tree, it gives that; with none to take either, it idles
+		std::optional<creature_mind::TreeToTake> take;
+		if (!situation.holdingTree)
+		{
+			if (!situation.instrument.has_value())
+			{
+				return creature_mind::BeIdle(random);
+			}
+			take = creature_mind::TreeToTake {
+			    .tree = *situation.instrument, .point = situation.instrumentPoint, .radius = situation.instrumentRadius};
+		}
+		return creature_mind::GiveWoodToStore(take, *object, situation.radius, situation.height);
+	}
+	case Build::ThrowToy:
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::ThrowToyAt(*situation.instrument, *object, objectPoint, situation.height, random);
+	case Build::HelpRepairHouse:
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::HelpRepairHouse(situation.handFull ? std::nullopt : situation.instrument, *object,
+		                                      *situation.instrument);
+	case Build::ThrowToPlayer:
+		if (!situation.playerHand.has_value() || !situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::ThrowToPlayer(*situation.instrument, *situation.playerHand, situation.handFull);
+	case Build::StrokeToy:
+		return creature_mind::StrokeToy(*object);
+	case Build::TakeToyHome:
+		if (!situation.home.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::TakeToyHome(*object, *situation.home, situation.height, random,
+		                                  [&random] { return RandomFraction(random); });
+	case Build::ThrowDie:
+		return creature_mind::ThrowDie(situation.handFull ? std::nullopt : object, *object, situation.position,
+		                               situation.height, random);
+	case Build::BreakRock:
+		return creature_mind::BreakRock(situation.handFull ? std::nullopt : object, *object, situation.position,
+		                                situation.height);
+	case Build::KickBallAround:
+		return creature_mind::KickBallAround(*object, random);
+	case Build::GetHigh:
+		return creature_mind::GetHigh(situation.holdingMushroom ? std::nullopt : object, *object);
+	case Build::PracticeThrow:
+		return creature_mind::PracticeThrow(situation.handFull ? std::nullopt : object, situation.position, situation.height);
+	case Build::PlantTree:
+		if (!situation.holdingTree && !situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::PlantTreeBy(situation.holdingTree ? std::nullopt : situation.instrument, *object);
 	case Build::EatFromPile:
 		// TODO(creature-actions-3): with something it can eat in its hand already, the game does something else; what
 		// isn't known yet, so it goes to the pile all the same
@@ -252,12 +368,12 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::ThrowAbout:
 		return creature_mind::ThrowAbout(*object, random);
 	case Build::Hurl:
-		if (situation.instrument.has_value())
+		// With nothing to throw, it can't
+		if (!situation.instrument.has_value())
 		{
-			return creature_mind::HurlAt(*situation.instrument, *object, objectPoint, situation.height, situation.handFull,
-			                             random);
+			return std::nullopt;
 		}
-		return creature_mind::Hurl(*object, *situation.hurlTarget, random);
+		return creature_mind::HurlAt(*situation.instrument, *object, objectPoint, situation.height, situation.handFull, random);
 	case Build::SleepAtHome:
 		return creature_mind::SleepAtHome(*situation.home, situation.height, random);
 	case Build::SleepByObject:

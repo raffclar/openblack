@@ -17,6 +17,7 @@
 #include <tuple>
 
 #include <Common/GUtilsAngle.h>
+#include <ECS/Components/LivingAction.h>
 #include <ECS/Components/Transform.h>
 #include <ECS/Components/Villager.h>
 #include <ECS/Components/WallHug.h>
@@ -36,6 +37,19 @@
 
 using nlohmann::json;
 using namespace openblack;
+
+namespace
+{
+/// Puts a villager in the plain walk, the state in which the game walks it
+void PutInWalk(entt::entity villager)
+{
+	using namespace openblack::ecs::components;
+	if (auto* action = Locator::entitiesRegistry::value().TryGet<LivingAction>(villager); action != nullptr)
+	{
+		action->states.at(static_cast<size_t>(LivingAction::Index::Top)) = static_cast<uint8_t>(VillagerStates::MoveToPos);
+	}
+}
+} // namespace
 
 enum MOVE_STATE
 {
@@ -223,6 +237,7 @@ protected:
 		registry.Each<ecs::components::WallHug>([&registry, this](entt::entity entity, ecs::components::WallHug& wallHug) {
 			using namespace openblack::ecs::components;
 			registry.Assign<MoveStateLinearTag>(entity);
+			PutInWalk(entity);
 			// The recordings hold the speed in metres a turn; the walk holds it in metres a second
 			wallHug.speed = _expectedStates[0].speed * openblack::ecs::wall_hug::k_TurnsPerSecond;
 			// and the step in metres; the walk holds it in whole map units
@@ -484,6 +499,7 @@ protected:
 		openblack::lhscriptx::Script script;
 		script.Load(std::string(std::istreambuf_iterator<char> {ifs}, {}));
 		_walker = Locator::entitiesRegistry::value().Front<const ecs::components::Villager>();
+		PutInWalk(_walker);
 	}
 
 	void TearDown() override { _game.reset(); }
@@ -596,6 +612,45 @@ TEST_F(WalkerToGoal, AScriptsWalkGoesStraightThroughThingsInTheWay)
 	EXPECT_LT(furthestOffLine, 0.05f);
 	// Its 16 m at a fifth of a metre a turn, in a straight line
 	EXPECT_EQ(walk.turns, 80u);
+}
+
+// A villager called away mid-walk into a state that doesn't walk it (a kiss) stands where it was, and goes on with the
+// same walk once back in it, as the game walks a villager only in the states that walk it
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, AWalkWaitsWhileTheVillagerIsCalledAway)
+{
+	using namespace openblack::ecs::components;
+	Load("goal_beside_trees.txt");
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::entitiesMap::value().Sync();
+	registry.Get<Transform>(_walker).position = glm::vec3(2161.24f, 0.0f, 2276.99f);
+	auto& wallHug = registry.Get<WallHug>(_walker);
+	registry.Assign<MoveStateLinearTag>(_walker);
+	wallHug.speed = 2.0f;
+	wallHug.step = {0, 0};
+	wallHug.goal = {2150.0f, 2250.0f};
+	for (int turn = 0; turn < 10; ++turn)
+	{
+		Locator::pathfindingSystem::value().Update();
+	}
+	const auto midWalk = registry.Get<const WallHug>(_walker).position;
+	auto& top = registry.Get<LivingAction>(_walker).states.at(static_cast<size_t>(LivingAction::Index::Top));
+	top = static_cast<uint8_t>(VillagerStates::HavingSex);
+	for (int turn = 0; turn < 10; ++turn)
+	{
+		Locator::pathfindingSystem::value().Update();
+	}
+	EXPECT_EQ(registry.Get<const WallHug>(_walker).position, midWalk);
+	EXPECT_TRUE(registry.AllOf<MoveStateLinearTag>(_walker));
+
+	top = static_cast<uint8_t>(VillagerStates::MoveToPos);
+	uint32_t turns = 0;
+	for (; turns < 2000 && !registry.AnyOf<MoveStateFinalStepTag, MoveStateArrivedTag>(_walker); ++turns)
+	{
+		Locator::pathfindingSystem::value().Update();
+	}
+	// The rest of its 147 turns
+	EXPECT_EQ(turns, 137u);
 }
 
 /// A walker that went round a circle on its way, given a trial of both ways round as one that came up against a fence

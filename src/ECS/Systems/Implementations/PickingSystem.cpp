@@ -11,11 +11,14 @@
 
 #include "PickingSystem.h"
 
+#include <algorithm>
+#include <iterator>
 #include <span>
 #include <vector>
 
 #include <LNDFile.h>
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
@@ -27,6 +30,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AppleBarrel.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -39,6 +43,7 @@
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/UndrawnPickModel.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/PosedModel.h"
@@ -47,6 +52,7 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/UndrawnPicks.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -242,11 +248,50 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	_candidates.clear();
 	_candidateEntities.clear();
 	_candidateModels.clear();
+	_candidateMeshes.clear();
 	// The miracle held in the hand is one of the things the hand holds
 	const auto heldSeed =
 	    Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeed() : std::optional<entt::entity> {};
-	for (const auto& [entity, model] : Locator::rendereringSystem::value().GetContext().drawnObjects)
+	// Models that are never drawn but take the cursor, each tested just before the drawn thing it goes with
+	const auto& drawnObjects = Locator::rendereringSystem::value().GetContext().drawnObjects;
+	_drawnEntities.clear();
+	std::ranges::transform(drawnObjects, std::back_inserter(_drawnEntities), &RenderContext::DrawnObject::entity);
+	_undrawnShapes.clear();
+	registry.Each<const UndrawnPickModel>([this](const entt::entity entity, const UndrawnPickModel& shape) {
+		if (shape.takesCursor)
+		{
+			_undrawnShapes.push_back({.entity = entity, .drawnWith = shape.drawnWith});
+		}
+	});
+	ecs::undrawn_picks::TestOrder(_drawnEntities, _undrawnShapes, _testOrder);
+	for (const auto& turn : _testOrder)
 	{
+		if (turn.undrawn.has_value())
+		{
+			const auto entity = *turn.undrawn;
+			const auto& shape = registry.Get<const UndrawnPickModel>(entity);
+			const auto* transform = registry.TryGet<const Transform>(entity);
+			if (transform == nullptr || !meshes.Contains(shape.mesh))
+			{
+				continue;
+			}
+			// Placed, turned, then scaled, as a drawn model is
+			const auto model = glm::translate(glm::mat4(1.0f), transform->position) * glm::mat4(transform->rotation) *
+			                   glm::scale(glm::mat4(1.0f), transform->scale);
+			const auto box = meshes.Handle(shape.mesh)->GetBoundingBox();
+			const auto halfExtents = box.Size() * 0.5f;
+			_candidates.push_back({
+			    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
+			    .radius = glm::length(halfExtents) * transform->scale.x,
+			    .origin = transform->position,
+			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+			});
+			_candidateEntities.push_back(entity);
+			_candidateModels.push_back(model);
+			_candidateMeshes.push_back(shape.mesh);
+			continue;
+		}
+		const auto& [entity, model] = drawnObjects[turn.drawnIndex];
 		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity) || heldSeed == entity)
 		{
 			continue;
@@ -256,8 +301,9 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			continue;
 		}
-		// So are the lanterns at a temple's entrance, by its creature's pen: the cursor meets what is behind them
-		if (registry.AllOf<TempleLantern>(entity))
+		// So are the lanterns at a temple's entrance, by its creature's pen, and the explorers' boat film: the cursor
+		// meets what is behind them
+		if (registry.AnyOf<TempleLantern, BoatFilmPart>(entity))
 		{
 			continue;
 		}
@@ -303,6 +349,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		}
 		_candidateEntities.push_back(entity);
 		_candidateModels.push_back(model);
+		_candidateMeshes.push_back(meshComponent->id);
 	}
 
 	// How far along the view an object's first triangle under the cursor is
@@ -321,7 +368,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			const auto* transform = registry.TryGet<const Transform>(entity);
 			const float scale = transform != nullptr ? transform->scale.x : 1.0f;
-			const float halfHeight = meshes.Handle(registry.Get<const Mesh>(entity).id)->GetBoundingBox().Size().y * 0.5f;
+			const float halfHeight = meshes.Handle(_candidateMeshes[i])->GetBoundingBox().Size().y * 0.5f;
 			return screen_pick::SphereDistance(view, _candidates[i].origin, halfHeight * scale, _candidates[i].radius);
 		}
 		// A broken building is picked by its broken model's triangles, along the cursor's line
@@ -330,7 +377,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 			const auto along = BrokenAlong(broken->mesh, view.camera, frame.nearPoint - view.camera);
 			return along.has_value() ? std::optional<float>(*along * view.near) : std::nullopt;
 		}
-		const auto mesh = meshes.Handle(registry.Get<const Mesh>(entity).id);
+		const auto mesh = meshes.Handle(_candidateMeshes[i]);
 		// A tree of a forest is picked through its leaves' holes
 		const auto* info = world_objects::InfoOf(entity);
 		const bool throughHoles = info != nullptr && info->type == ObjectType::ForestTree;

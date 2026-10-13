@@ -32,6 +32,7 @@
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
@@ -57,6 +58,7 @@
 #include "Game.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/VillagerReactionRules.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -291,7 +293,23 @@ void Finish(entt::entity building)
 				player_statistics::CountBuilt(registry, *owner, info.abodeType);
 			}
 		}
-		// TODO(villager-social): the town's people react to a new civic building
+		// The people about a new building of the town's own come to dance round it
+		if (const auto* abode = registry.TryGet<const Abode>(building);
+		    abode != nullptr && abode->info != AbodeInfo::None && TownOf(building).has_value() &&
+		    Locator::infoConstants::has_value() && Locator::reactionSystem::has_value())
+		{
+			const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(abode->info));
+			if (magic::villager_reaction::ReactedToWhenBuilt(info.abodeType))
+			{
+				Locator::reactionSystem::value().Create(
+				    {.initiator = building,
+				     .type = Reaction::ReactToNewBuilding,
+				     .player = world_objects::PlayerOf(building).value_or(PlayerNames::NEUTRAL),
+				     .position = registry.Get<const Transform>(building).position,
+				     .impressiveValue =
+				         world_objects::InfoOf(building) != nullptr ? world_objects::InfoOf(building)->impressiveValue : 0.0f});
+			}
+		}
 	}
 }
 
@@ -389,7 +407,26 @@ bool construction::IsBuilt(entt::entity object)
 void construction::SetBuilt(entt::entity building, float built)
 {
 	auto& registry = Entities();
-	if (!registry.Valid(building) || !(registry.AllOf<Temple>(building) || world_objects::IsBuilding(building)))
+	if (!registry.Valid(building))
+	{
+		return;
+	}
+	// A feature, such as the explorers' ark, keeps how much of it is built and nothing more: it has no town to build it
+	// and no site, and once all of it is built it stands whole
+	if (registry.AllOf<Feature>(building))
+	{
+		if (const auto progress = building_construction::SetBuilt(built); progress.finished)
+		{
+			registry.Remove<BuildProgress>(building);
+		}
+		else
+		{
+			registry.AssignOrReplace<BuildProgress>(building, progress.built);
+		}
+		registry.SetDirty();
+		return;
+	}
+	if (!(registry.AllOf<Temple>(building) || world_objects::IsBuilding(building)))
 	{
 		return;
 	}

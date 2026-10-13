@@ -77,10 +77,11 @@ private:
 	/// Each villager's reaction lasts as long as its kind says
 	void ProcessVillagers();
 	[[nodiscard]] uint8_t PriorityFor(entt::entity villager, const ShieldReaction& reaction, float distance) const;
-	/// How long before a villager reacts to the same kind again, and how long it keeps reacting: the table's turns,
-	/// whatever its distance, but for the shield's own reaction
-	[[nodiscard]] uint32_t AgainTurnsFor(entt::entity villager, const ShieldReaction& reaction) const;
-	[[nodiscard]] uint32_t ReactTurnsFor(entt::entity villager, const ShieldReaction& reaction) const;
+	/// How long before a villager reacts to the same kind again, by its distance to the shield as the reaction spreads,
+	/// and how long it keeps reacting, by its distance to the shield now: the table's turns, longer the nearer it is, with
+	/// the shield's own reaction's rules on top
+	[[nodiscard]] uint32_t AgainTurnsFor(entt::entity villager, const ShieldReaction& reaction, float distance) const;
+	[[nodiscard]] int32_t ReactTurnsFor(entt::entity villager, const ShieldReaction& reaction) const;
 	/// Whether something in a physical shield's dome is cut off from a reaction outside it
 	[[nodiscard]] bool Blocked(glm::vec3 living, glm::vec3 source) const;
 	/// A thrown thing struck a dome

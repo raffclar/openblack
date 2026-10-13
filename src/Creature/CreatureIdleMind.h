@@ -157,6 +157,8 @@ struct ObjectOrder
 		TakeFromPile,
 		/// Reaching out to take what the player's hand gives it, with its left hand when mirrored
 		TakeFromHand,
+		/// Kicking the object, which flies off ahead of it
+		Kick,
 	};
 	Kind kind {Kind::PickUp};
 	/// What it acts on, by its entity's number. Pointing at an object, it points at wherever the object is, turn by
@@ -249,6 +251,20 @@ enum class Effect : uint8_t
 	TookFromHand,
 };
 
+/// How the eyes should look
+enum class Eyes : uint8_t
+{
+	Unchanged,
+	/// Drooping and slowly blinking, as if just woken up
+	Sleepy,
+	Normal,
+	Closed,
+	/// Wide open and darting about
+	Stoned,
+	/// Wide open, as when frightened
+	Wide,
+};
+
 /// What a creature's head is made to look at: a thing (its top, or its foot), a point, or the player's camera
 struct Gaze
 {
@@ -284,6 +300,16 @@ struct Step
 		WaitInMap,
 		/// Dousing the step's object with water at once, as a creature does after casting the water miracle at a fire
 		Douse,
+		/// Breaking the step's object, a rock, in two at once; when it isn't a rock, the rest of the agenda is given up
+		Shatter,
+		/// Watching the step's object fly, the turn it starts on counting as the first: done once it is no longer
+		/// really in the air, or by the whole seconds watched: not in the first three, half the time each turn in the
+		/// fourth, at four at the latest (see WatchingFlyingGoesOn)
+		WatchFlying,
+		/// Mending the step's object, a building, by a fifth of its life at once
+		Repair,
+		/// Doing away with the step's object at once, as with the tree used up mending a building
+		UseUp,
 		/// Watching its player's camera: turning to it whenever it is more than a quarter turn away, until whole seconds
 		/// of turns more than the step's seconds have gone by, or the camera is right overhead or more than 100 away. A
 		/// creature without a player is done at once. With the step's turns set it watches for that many turns whatever
@@ -329,6 +355,11 @@ struct Step
 	creature_face::Cue face {creature_face::Cue::None};
 	/// What its head looks at while the step lasts, in place of looking about
 	std::optional<Gaze> gaze;
+	/// How its eyes look from the step's start until it next takes up something else to do: stoned (wide and darting
+	/// about) or wide open, as when frightened
+	std::optional<Eyes> heldEyes;
+	/// It flutters its eyelids, blinking far more often, from the step's start until it next takes up something else
+	bool flutterEyelids {false};
 };
 
 struct IdleMind
@@ -341,6 +372,9 @@ struct IdleMind
 	bool sitEnding {false};
 	/// Seconds until the step's face is pulled again, and the count that varies the faces it pulls
 	float faceSeconds {0.0f};
+	/// Its eyes look as a step held them, and look as usual again once it takes up something else to do
+	bool eyesHeld {false};
+	bool eyesToClear {false};
 	uint32_t faceVariety {0};
 	/// Seconds until it may show a desire again
 	float showDesireSeconds {0.0f};
@@ -429,6 +463,8 @@ struct Senses
 	HandsState hands {HandsState::Idle};
 	/// Whether the object a step waits for is on the map, none when the object is gone
 	std::optional<bool> objectInMap;
+	/// Whether the object a step watches fly is still really in the air
+	bool objectInTheAir {false};
 	/// What picks the faces it pulls
 	creature_face::Feelings feelings {};
 	/// Whether it chooses what to do next by itself when its agenda runs out; under a script's control it only does
@@ -463,16 +499,6 @@ constexpr float k_WatchCameraFurthest = 100.0f;
 constexpr float k_WatchCameraOverhead = 0.1f;
 constexpr float k_WatchCameraTurn = 1.5707963f;
 
-/// How the eyes should look
-enum class Eyes : uint8_t
-{
-	Unchanged,
-	/// Drooping and slowly blinking, as if just woken up
-	Sleepy,
-	Normal,
-	Closed,
-};
-
 /// What the mind tells the body
 struct Commands
 {
@@ -506,6 +532,15 @@ struct Commands
 	bool releaseCast {false};
 	/// An object to douse with water, by its entity's number
 	std::optional<uint32_t> douse;
+	/// A rock to break in two, by its entity's number
+	std::optional<uint32_t> shatter;
+	/// Sitting down this turn, it rests a little
+	bool restSitting {false};
+	/// How often its eyes now blink, when that changes
+	std::optional<int32_t> blinkIntervalMs;
+	/// A building to mend, and a thing to do away with, by their entities' numbers
+	std::optional<uint32_t> repair;
+	std::optional<uint32_t> useUp;
 	/// What the head looks at this turn, for a step that gives it something to look at
 	std::optional<Gaze> gaze;
 	/// A swap of minds: bring every spell on it to its end, start the beam to the other creature, take on a turn more of
@@ -517,6 +552,16 @@ struct Commands
 
 /// random(n) is a whole number from 0 to n - 1
 using Random = std::function<uint32_t(uint32_t)>;
+
+/// Fluttering its eyelids, the creature blinks every 0.625 to 1.875 seconds
+constexpr int32_t k_FlutterBlinkIntervalMs = 1250;
+
+/// Watching a thing fly goes on, after so many whole seconds of watching, while they are fewer than two seconds and a
+/// chance of up to two more drawn each turn: always within the first three seconds, half the time in the fourth, never
+/// after
+[[nodiscard]] bool WatchingFlyingGoesOn(uint32_t wholeSeconds, const Random& random);
+constexpr uint32_t k_WatchFlyingSeconds = 2;
+constexpr uint32_t k_WatchFlyingMoreSeconds = 2;
 
 /// Being idle: wait a second or two looking about, then a tired yawn with sleepy eyes, twice
 [[nodiscard]] std::vector<Step> BeIdle(const Random& random);

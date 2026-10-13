@@ -44,6 +44,7 @@
 #include "VillagerBuild.h"
 #include "VillagerChecks.h"
 #include "VillagerCover.h"
+#include "VillagerCreatureReactions.h"
 #include "VillagerDance.h"
 #include "VillagerDiscipleWork.h"
 #include "VillagerDisciples.h"
@@ -93,6 +94,7 @@ namespace villager_shepherd = openblack::ecs::villager_shepherd;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_housewife = openblack::ecs::villager_housewife;
 namespace villager_mourning = openblack::ecs::villager_mourning;
+namespace villager_creature = openblack::ecs::villager_creature;
 namespace villager_checks = openblack::ecs::villager_checks;
 namespace villager_breeding = openblack::ecs::villager_breeding;
 namespace villager_worship = openblack::ecs::villager_worship;
@@ -225,10 +227,12 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* MOVE_TO_POS */
     VillagerStateTableEntry {
         .state = &villager_home::MoveToPos,
+        .exitState = &villager_home::ExitMoveToPos,
     },
     /* MOVE_TO_OBJECT */
     VillagerStateTableEntry {
         .state = &villager_move_to_object::MoveToObject,
+        .exitState = &villager_home::ExitMoveToPos,
     },
     /* MOVE_ON_STRUCTURE */ k_TodoEntry,
     /* IN_SCRIPT */
@@ -745,9 +749,21 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_food::DoesNothing,
     },
-    /* INSPECT_CREATURE_REACTION */ k_TodoEntry,
-    /* PERFORM_INSPECT_CREATURE_REACTION */ k_TodoEntry,
-    /* APPROACH_CREATURE_REACTION */ k_TodoEntry,
+    /* INSPECT_CREATURE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_creature::InspectCreatureReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
+    /* PERFORM_INSPECT_CREATURE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_creature::PerformInspectCreatureReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
+    /* APPROACH_CREATURE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_creature::ApproachCreatureReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* INITIALISE_BEWILDERED_BY_MAGIC_TREE_REACTION */ k_TodoEntry,
     /* PERFORM_BEWILDERED_BY_MAGIC_TREE_REACTION */ k_TodoEntry,
     /* TURN_TO_FACE_MAGIC_TREE */ k_TodoEntry,
@@ -757,12 +773,32 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_dance::MoveToDancePos,
     },
-    /* INITIALISE_RESPECT_CREATURE_REACTION */ k_TodoEntry,
-    /* PERFORM_RESPECT_CREATURE_REACTION */ k_TodoEntry,
-    /* FINISH_RESPECT_CREATURE_REACTION */ k_TodoEntry,
+    /* INITIALISE_RESPECT_CREATURE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_creature::InitialiseRespectCreatureReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
+    /* PERFORM_RESPECT_CREATURE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_creature::PerformRespectCreatureReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
+    /* FINISH_RESPECT_CREATURE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_creature::FinishRespectCreatureReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* APPROACH_HAND_REACTION */ k_TodoEntry,
-    /* FLEEING_FROM_CREATURE_REACTION */ k_TodoEntry,
-    /* TURN_TO_FACE_CREATURE_REACTION */ k_TodoEntry,
+    /* FLEEING_FROM_CREATURE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_creature::FleeingFromCreatureReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
+    /* TURN_TO_FACE_CREATURE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_creature::TurnToFaceCreatureReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* WATCH_FLYING_OBJECT_REACTION */ k_TodoEntry,
     /* POINT_AT_FLYING_OBJECT_REACTION */
     VillagerStateTableEntry {
@@ -779,7 +815,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_food::DoesNothing,
     },
     /* RUN_AWAY_FROM_OBJECT_REACTION */ k_TodoEntry,
-    /* MOVE_TOWARDS_CREATURE_REACTION */ k_TodoEntry,
+    /* MOVE_TOWARDS_CREATURE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_creature::MoveTowardsCreatureReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* AMAZED_BY_MAGIC_SHIELD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_shield::AmazedByMagicShield,
@@ -858,7 +898,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_teleport::TeleportReaction,
         .exitState = &villager_reactions::ExitReaction,
     },
-    /* DANCE_WHILE_REACTING */ k_TodoEntry,
+    /* DANCE_WHILE_REACTING */
+    VillagerStateTableEntry {
+        .state = &villager_reactions::DanceWhileReacting,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* CONTROLLED_BY_CREATURE */ k_TodoEntry,
     /* POINT_AT_DEAD_PERSON */
     VillagerStateTableEntry {

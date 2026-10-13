@@ -19,9 +19,9 @@ bool creature_hand::MayHold(const Holdable& creature)
 	       !creature.frozen;
 }
 
-bool creature_hand::ShowsInteractTip(PlayerNames player, PlayerNames owner, bool asleep)
+bool creature_hand::ShowsInteractTip(PlayerNames player, PlayerNames owner, bool asleep, bool handInInfluence)
 {
-	return player != PlayerNames::NEUTRAL && owner == player && !asleep;
+	return player != PlayerNames::NEUTRAL && owner != PlayerNames::NEUTRAL && (owner == player || handInInfluence) && !asleep;
 }
 
 bool creature_hand::IsClick(float heldMs, bool strokedOrSlapped)

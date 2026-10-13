@@ -75,6 +75,7 @@
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/BlendedByMaterial.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -196,17 +197,20 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownArtefact.h"
+#include "ECS/Components/TownCreatureAttitude.h"
 #include "ECS/Components/TownDeaths.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/UndrawnPickModel.h"
 #include "ECS/Components/Unlit.h"
 #include "ECS/Components/Velocity.h"
 #include "ECS/Components/VillageLight.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerCreatureInspection.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerHiding.h"
 #include "ECS/Components/VillagerLabel.h"
@@ -218,6 +222,7 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureAttitudeRules.h"
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/RewardRules.h"
@@ -412,6 +417,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::hunger>("hunger")
 	    .Field<&components::Animal::animation>("animation")
 	    .Field<&components::Animal::clipPlace>("clipPlace")
+	    .Field<&components::Animal::groundCarry>("groundCarry")
 	    .Field<&components::Animal::previousPosition>("previousPosition")
 	    .Field<&components::Animal::position>("position")
 	    .Field<&components::Animal::previousHeading>("previousHeading")
@@ -490,6 +496,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::group>("group");
 	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
 	Reflect<components::BlendedByMaterial> {context};
+	Reflect<components::BoatFilmPart>(context)
+	    .Field<&components::BoatFilmPart::role>("role")
+	    .Field<&components::BoatFilmPart::index>("index")
+	    .Field<&components::BoatFilmPart::clipTime>("clipTime")
+	    .Field<&components::BoatFilmPart::castsShadow>("castsShadow");
+	Reflect<components::DrawnMatrix>(context).Field<&components::DrawnMatrix::model>("model");
 	Reflect<components::Lover>(context).Field<&components::Lover::partner>("partner");
 	Reflect<components::BreederSpot>(context).Field<&components::BreederSpot::spot>("spot");
 	Reflect<components::BuildingDamage>(context)
@@ -747,6 +759,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::interactionMagnitude>("interactionMagnitude")
 	    .Field<&components::CreatureMindState::actionCounts>("actionCounts")
 	    .Field<&components::CreatureMindState::underway>("underway")
+	    .Field<&components::CreatureMindState::lastActionDone>("lastActionDone")
 	    .Field<&components::CreatureMindState::developmentPhase>("developmentPhase")
 	    .Field<&components::CreatureMindState::desiresPhase>("desiresPhase")
 	    .Field<&components::CreatureMindState::inDevelopmentScript>("inDevelopmentScript")
@@ -772,7 +785,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::resourceChecked>("resourceChecked")
 	    .Field<&components::CreatureMindState::pendingTeaching>("pendingTeaching")
 	    .Field<&components::CreatureMindState::leash>("leash")
-	    .Field<&components::CreatureMindState::heldKinds>("heldKinds");
+	    .Field<&components::CreatureMindState::heldKinds>("heldKinds")
+	    .Field<&components::CreatureMindState::copiedAt>("copiedAt")
+	    .Field<&components::CreatureMindState::highPending>("highPending")
+	    .Field<&components::CreatureMindState::plantedBy>("plantedBy");
 	Reflect<components::CreatureNeeds>(context)
 	    .Field<&components::CreatureNeeds::started>("started")
 	    .Field<&components::CreatureNeeds::needs>("needs")
@@ -1217,7 +1233,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::LivingReaction::reaction>("reaction")
 	    .Field<&components::LivingReaction::type>("type")
 	    .Field<&components::LivingReaction::startTurn>("startTurn")
-	    .Field<&components::LivingReaction::creatureMemory>("creatureMemory");
+	    .Field<&components::LivingReaction::creatureMemory>("creatureMemory")
+	    .Field<&components::LivingReaction::sawFlying>("sawFlying")
+	    .Field<&components::LivingReaction::sawCrushed>("sawCrushed");
 	Reflect<components::MagicFireBall>(context)
 	    .Field<&components::MagicFireBall::strength>("strength")
 	    .Field<&components::MagicFireBall::radius>("radius")
@@ -1677,6 +1695,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TownArtefact::symbolMilliseconds>("symbolMilliseconds");
 	Reflect<components::TownArtefactGifts>(context).Field<&components::TownArtefactGifts::lastGift>("lastGift",
 	                                                                                                {k_PlayerNamesNames});
+	Reflect<components::TownCreatureAttitude>(context).Field<&components::TownCreatureAttitude::creatures>("creatures");
 	Reflect<components::TownDeaths>(context).Field<&components::TownDeaths::counts>("counts");
 	Reflect<components::DesireSort>(context)
 	    .Field<&components::DesireSort::boosts>("boosts")
@@ -1740,6 +1759,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Tree::growthCountdown>("growthCountdown")
 	    .Field<&components::Tree::madeToGrow>("madeToGrow")
 	    .Field<&components::Tree::nonScenic>("nonScenic");
+	Reflect<components::UndrawnPickModel>(context)
+	    .Field<&components::UndrawnPickModel::mesh>("mesh")
+	    .Field<&components::UndrawnPickModel::drawnWith>("drawnWith")
+	    .Field<&components::UndrawnPickModel::takesCursor>("takesCursor");
 	Reflect<components::Unlit> {context};
 	Reflect<components::Velocity>(context)
 	    .Field<&components::Velocity::dX>("dX")
@@ -1791,6 +1814,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Villager::mother>("mother")
 	    .Field<&components::Villager::crechePath>("crechePath")
 	    .Field<&components::Villager::crecheLeg>("crecheLeg");
+	Reflect<components::VillagerCreatureInspection>(context)
+	    .Field<&components::VillagerCreatureInspection::keep>("keep")
+	    .Field<&components::VillagerCreatureInspection::lookTurns>("lookTurns");
 	Reflect<components::VillagerDeath>(context)
 	    .Field<&components::VillagerDeath::turnsLeft>("turnsLeft")
 	    .Field<&components::VillagerDeath::skeleton>("skeleton")
@@ -1810,6 +1836,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::VillagerPose>(context)
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
+	    .Field<&components::VillagerPose::groundCarry>("groundCarry")
 	    .Field<&components::VillagerPose::bones>("bones")
 	    .Field<&components::VillagerPose::clipBones>("clipBones")
 	    .Field<&components::VillagerPose::turnStart>("turnStart")
@@ -2233,6 +2260,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::stepSeconds>("stepSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::sitEnding>("sitEnding")
 	    .Field<&openblack::creature_mind::IdleMind::faceSeconds>("faceSeconds")
+	    .Field<&openblack::creature_mind::IdleMind::eyesHeld>("eyesHeld")
+	    .Field<&openblack::creature_mind::IdleMind::eyesToClear>("eyesToClear")
 	    .Field<&openblack::creature_mind::IdleMind::faceVariety>("faceVariety")
 	    .Field<&openblack::creature_mind::IdleMind::showDesireSeconds>("showDesireSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::shown>("shown")
@@ -2274,7 +2303,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::order>("order")
 	    .Field<&openblack::creature_mind::Step::cast>("cast")
 	    .Field<&openblack::creature_mind::Step::face>("face")
-	    .Field<&openblack::creature_mind::Step::gaze>("gaze");
+	    .Field<&openblack::creature_mind::Step::gaze>("gaze")
+	    .Field<&openblack::creature_mind::Step::heldEyes>("heldEyes")
+	    .Field<&openblack::creature_mind::Step::flutterEyelids>("flutterEyelids");
 	Reflect<openblack::creature_mind_model::Learnt>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::Learnt::opinions>("opinions")
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")
@@ -2542,6 +2573,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::living>("living")
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::destination>("destination")
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::finalState>("finalState");
+	Reflect<openblack::ecs::components::TownCreatureAttitude::Watched>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::TownCreatureAttitude::Watched::creature>("creature")
+	    .Field<&openblack::ecs::components::TownCreatureAttitude::Watched::feeling>("feeling");
 	Reflect<openblack::ecs::components::Vortex::Arrival>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Vortex::Arrival::town>("town")
 	    .Field<&openblack::ecs::components::Vortex::Arrival::gatheringPlace>("gatheringPlace")
@@ -2558,6 +2592,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::WorshipSite::BuildRequest>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::town>("town")
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::desireBoost>("desireBoost");
+	Reflect<openblack::ecs::creature_attitude::Feeling>(context, ValueOnly {})
+	    .Field<&openblack::ecs::creature_attitude::Feeling::attitude>("attitude")
+	    .Field<&openblack::ecs::creature_attitude::Feeling::shownTurn>("shownTurn")
+	    .Field<&openblack::ecs::creature_attitude::Feeling::lapsedTurn>("lapsedTurn");
 	Reflect<openblack::ecs::heartbeat::State>(context, ValueOnly {})
 	    .Field<&openblack::ecs::heartbeat::State::stress>("stress")
 	    .Field<&openblack::ecs::heartbeat::State::rate>("rate")

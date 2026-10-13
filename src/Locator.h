@@ -140,6 +140,7 @@ class DialogueControlSystemInterface;
 class HelpSpeechSystemInterface;
 class HighDetailSystemInterface;
 class IntroSystemInterface;
+class BoatLaunchSystemInterface;
 class WalkPathSystemInterface;
 class DanceSystemInterface;
 class SharkSystemInterface;
@@ -296,6 +297,7 @@ struct Locator
 	using helpSpeechSystem = entt::locator<ecs::systems::HelpSpeechSystemInterface>;
 	using highDetailSystem = entt::locator<ecs::systems::HighDetailSystemInterface>;
 	using introSystem = entt::locator<ecs::systems::IntroSystemInterface>;
+	using boatLaunchSystem = entt::locator<ecs::systems::BoatLaunchSystemInterface>;
 	using walkPathSystem = entt::locator<ecs::systems::WalkPathSystemInterface>;
 	using danceSystem = entt::locator<ecs::systems::DanceSystemInterface>;
 	using sharkSystem = entt::locator<ecs::systems::SharkSystemInterface>;

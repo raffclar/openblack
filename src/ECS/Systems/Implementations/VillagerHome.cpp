@@ -1069,6 +1069,14 @@ uint32_t villager_home::MoveToPos(LivingAction& action)
 	return 0;
 }
 
+bool villager_home::ExitMoveToPos(LivingAction& action, VillagerStates /*next*/)
+{
+	auto& registry = WorldRegistry();
+	const auto villager = EntityOf(action);
+	registry.Remove<WallHugObjectReference, WallHugLookahead>(villager);
+	return false;
+}
+
 uint32_t villager_home::GoHome(LivingAction& action)
 {
 	return DoGoingHome(action, VillagerStates::ArrivesHome, VillagerStates::SleepInTent);

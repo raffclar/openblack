@@ -89,6 +89,22 @@ void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Command
 	}
 }
 
+/// One turn of watching a thing fly, the turn it starts on counting as the first
+void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
+{
+	if (!senses.objectInTheAir || !(senses.seconds > 0.0f))
+	{
+		FinishStep(mind);
+		return;
+	}
+	const auto turnsPerSecond = static_cast<uint32_t>(std::lround(1.0f / senses.seconds));
+	const auto turns = static_cast<uint32_t>(std::lround(mind.stepSeconds / senses.seconds)) + 1;
+	if (!WatchingFlyingGoesOn(turns / turnsPerSecond, random))
+	{
+		FinishStep(mind);
+	}
+}
+
 /// A start, loop and end held for some seconds
 Step Static(std::array<size_t, 3> sequence, float seconds)
 {
@@ -452,6 +468,17 @@ std::vector<Step> creature_mind::RunFrom(glm::vec2 point)
 	return WithFace({flee}, creature_face::Cue::Fear);
 }
 
+bool creature_mind::WatchingFlyingGoesOn(uint32_t wholeSeconds, const Random& random)
+{
+	// Seconds below two go on, and beyond them the drawn chance from 0 to 2 counts in whole parts: the watch goes on
+	// while the seconds past two are no more than the whole part drawn
+	if (wholeSeconds < k_WatchFlyingSeconds)
+	{
+		return true;
+	}
+	return wholeSeconds - k_WatchFlyingSeconds <= random(k_WatchFlyingMoreSeconds);
+}
+
 std::vector<Step> creature_mind::DestroyThing(uint32_t object)
 {
 	return WithFace({Object({.kind = ObjectOrder::Kind::Destroy, .object = object})}, creature_face::Cue::Anger);
@@ -597,6 +624,8 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.sitEnding = false;
 	mind.wakeWanted = false;
 	mind.gaveUp = false;
+	// Taking up something else, its eyes look as usual again
+	mind.eyesToClear = mind.eyesHeld;
 }
 
 void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Random& random)
@@ -716,6 +745,24 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		mind.stepSeconds = 0.0f;
 		// Each step pulls the face it is meant to as it starts, held for as long as the face goes with
 		commands.face = PullFace(mind, step.face, senses, random);
+		if (step.heldEyes.has_value())
+		{
+			commands.eyes = *step.heldEyes;
+			mind.eyesHeld = true;
+			mind.eyesToClear = false;
+		}
+		else if (mind.eyesToClear)
+		{
+			commands.eyes = Eyes::Normal;
+			mind.eyesHeld = false;
+			mind.eyesToClear = false;
+		}
+		if (step.flutterEyelids)
+		{
+			// Its eyes go back to their usual blinking once it takes up something else
+			commands.blinkIntervalMs = k_FlutterBlinkIntervalMs;
+			mind.eyesHeld = true;
+		}
 		switch (step.kind)
 		{
 		case Step::Kind::Action:
@@ -770,6 +817,18 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.douse = step.object;
 			FinishStep(mind);
 			break;
+		case Step::Kind::Shatter:
+			commands.shatter = step.object;
+			FinishStep(mind);
+			break;
+		case Step::Kind::Repair:
+			commands.repair = step.object;
+			FinishStep(mind);
+			break;
+		case Step::Kind::UseUp:
+			commands.useUp = step.object;
+			FinishStep(mind);
+			break;
 		case Step::Kind::Observe:
 			// Taken in at once
 			commands.effect = Effect::Observed;
@@ -778,6 +837,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::WatchCamera:
 			WatchCamera(mind, step, senses, commands);
+			break;
+		case Step::Kind::WatchFlying:
+			WatchFlying(mind, senses, random);
 			break;
 		case Step::Kind::SwapMind:
 			commands.playOnce = step.animation;
@@ -822,6 +884,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Static:
 	{
 		commands.lookAbout = senses.bodyLooping && !step.closedEyes;
+		// Sitting rests it a little every turn until it is told to get up
+		commands.restSitting = !mind.sitEnding && step.sequence[1] == animations::k_Sit;
 		const bool done = mind.wakeWanted || (step.untilRested ? senses.rested : mind.stepSeconds >= step.seconds);
 		if (!senses.bodyBusy)
 		{
@@ -902,9 +966,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		break;
 	case Step::Kind::Douse:
+	case Step::Kind::Shatter:
+	case Step::Kind::Repair:
+	case Step::Kind::UseUp:
 	case Step::Kind::Observe:
 		// Done as it starts
 		FinishStep(mind);
+		break;
+	case Step::Kind::WatchFlying:
+		WatchFlying(mind, senses, random);
 		break;
 	case Step::Kind::WatchCamera:
 		WatchCamera(mind, step, senses, commands);

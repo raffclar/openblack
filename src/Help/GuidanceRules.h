@@ -120,10 +120,12 @@ enum class OneOff : uint8_t
 	UpTooLate = 1,
 	Sunrise = 2,
 	QuitTheYacking = 3,
-	/// Another player's hand close to the player's
-	HandNearby = 4,
-	/// The full moon at night, when the computer's clock says it is night as well
-	FullMoon = 5,
+	/// The full moon at night, when the computer's clock says it is night as well: "There's a full moon tonight...".
+	/// The original game had this remark and the next the wrong way round, the full moon warning of miracles nearby and
+	/// another player's hand speaking of the full moon; each now says its own (a deviation the user chose)
+	FullMoon = 4,
+	/// Another player's hand close to the player's: "I detect Miracles being used near you..."
+	HandNearby = 5,
 	EnemyLeaving = 6,
 };
 constexpr size_t k_OneOffCount = 7;

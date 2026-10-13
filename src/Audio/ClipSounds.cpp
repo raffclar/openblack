@@ -112,6 +112,12 @@ std::vector<size_t> clip_sounds::Passed(std::span<const sas::FrameSound> sounds,
 	return passed;
 }
 
+std::vector<size_t> clip_sounds::AllOf(std::span<const sas::FrameSound> sounds, uint32_t duration)
+{
+	// The stretch from the start to the end, with no end to come round
+	return Passed(sounds, 0, duration, 0, false);
+}
+
 SoundSize clip_sounds::SizeOf(int32_t soundType, bool isVillager, bool child, bool woman)
 {
 	if (soundType != k_PeopleSounds)
