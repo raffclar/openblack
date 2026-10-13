@@ -2541,6 +2541,20 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 1, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "leash.pulled_out_of_fight",
+	    .name = "The leash pulls a creature out of its fight",
+	    .facet = Facet::Leash,
+	    .description = "The player's red tiger wears the learning leash held in the hand and fights a blue tiger, both "
+	                   "by themselves. Hold the hand near the red tiger, then move it well away so the rope pulls taut.",
+	    .expected = "With the hand near, the rope hangs slack and the duel goes on. Pulled taut, the red tiger is "
+	                "taken out of the fight: the fight is called off with no winner, the help says \"You pulled your "
+	                "Creature away from what he was trying to do.\" and the red tiger walks to the hand.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
 	// Big against small: the game never resizes a creature for a fight; it only refuses one outside half to twice its
 	// height
 	auto big = Fighter(left, 90.0f, "big tiger", PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
