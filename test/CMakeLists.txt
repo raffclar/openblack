@@ -135,6 +135,7 @@ openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
+openblack_setup_and_add_test(test_hand_reach hand/test_hand_reach.cpp)
 openblack_setup_and_add_test(test_villager_pickup hand/test_villager_pickup.cpp)
 openblack_setup_and_add_test(test_hand_click hand/test_hand_click.cpp)
 target_link_libraries(test_hand_click PRIVATE ScriptLibrary)

@@ -347,7 +347,12 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 		break;
 	}
 
-	const auto object = _world->ObjectUnderCursor();
+	// With nothing under the cursor the hand reaches for what stands nearest the land behind it
+	auto object = _world->ObjectUnderCursor();
+	if (!object.has_value())
+	{
+		object = _world->ObjectNearHand();
+	}
 	// A pile is scooped from at once
 	if (object.has_value() && StartScoop(*grab, *object))
 	{
