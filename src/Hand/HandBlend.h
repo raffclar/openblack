@@ -44,12 +44,16 @@ enum class HandMode : uint8_t
 	Seed,
 	/// The hand knocks on a building
 	Knocking,
+	/// The hand is in the rooms of the temple
+	Temple,
 };
 
 /// What the game knows about the hand in this frame
 struct ModeInputs
 {
 	bool shown {true};
+	/// The player is inside the temple
+	bool insideTemple {false};
 	/// The hand holds a thing or a seed
 	bool holds {false};
 	/// What the hand holds is the seed of a miracle
@@ -63,8 +67,8 @@ struct ModeInputs
 	bool movesCamera {false};
 };
 
-/// The mode of the hand. A hand that holds or pulls a thing ignores the other inputs. A hand that knocks ignores the
-/// totem, the creature and the camera.
+/// The mode of the hand. Inside the temple, the hand ignores the other inputs. A hand that holds or pulls a thing
+/// ignores the inputs after these. A hand that knocks ignores the totem, the creature and the camera.
 [[nodiscard]] HandMode ModeOf(const ModeInputs& inputs);
 
 /// What the hand does in this frame, for the changes that start a blend

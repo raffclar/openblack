@@ -19,6 +19,10 @@ HandMode hand_blend::ModeOf(const ModeInputs& inputs)
 	{
 		return HandMode::Hidden;
 	}
+	if (inputs.insideTemple)
+	{
+		return HandMode::Temple;
+	}
 	if (inputs.holds || inputs.pulls)
 	{
 		if (inputs.holdsSeed)

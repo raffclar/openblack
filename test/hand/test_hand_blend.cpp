@@ -27,6 +27,7 @@ TEST(HandBlend, TheModeOfTheHandFollowsWhatItHoldsBeforeWhatItTouches)
 {
 	EXPECT_EQ(ModeOf({}), HandMode::Normal);
 	EXPECT_EQ(ModeOf({.shown = false, .holds = true}), HandMode::Hidden);
+	EXPECT_EQ(ModeOf({.insideTemple = true, .holds = true, .movesCamera = true}), HandMode::Temple);
 	EXPECT_EQ(ModeOf({.holds = true, .holdsSeed = true, .movesCamera = true}), HandMode::Seed);
 	EXPECT_EQ(ModeOf({.pulls = true, .knocks = true}), HandMode::Pulling);
 	EXPECT_EQ(ModeOf({.holds = true, .gripsTotem = true}), HandMode::Holding);
@@ -42,7 +43,7 @@ TEST(HandBlend, EachChangeOfModeStartsABlendButTheFirstFrameDoesNot)
 	EXPECT_EQ(tracker.Step(InMode(HandMode::Normal)).count, 0);
 	EXPECT_EQ(tracker.Step(InMode(HandMode::Normal)).count, 0);
 	for (const auto mode : {HandMode::Holding, HandMode::Hidden, HandMode::Normal, HandMode::Knocking, HandMode::Totem,
-	                        HandMode::Seed, HandMode::Pulling})
+	                        HandMode::Seed, HandMode::Pulling, HandMode::Temple})
 	{
 		EXPECT_EQ(tracker.Step(InMode(mode)).count, 1);
 		EXPECT_EQ(tracker.Step(InMode(mode)).count, 0);

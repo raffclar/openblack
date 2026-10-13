@@ -2802,6 +2802,7 @@ bool Game::Update() noexcept
 				const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
 				const auto mode = hand_blend::ModeOf({
 				    .shown = IsHandDrawn(),
+				    .insideTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
 				    .holds = heldThing.has_value(),
 				    .holdsSeed = heldSeed.has_value(),
 				    .pulls = pulls,
