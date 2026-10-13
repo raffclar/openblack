@@ -2020,17 +2020,17 @@ bool Game::Update() noexcept
 	{
 		// The animals are drawn between their last two turns, their models posed by their clips
 		auto animals = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
-		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
+		Locator::animalSystem::value().Update(clock.GetFrameGameTime(), clock.GetTurnFraction());
 		// The clips the villagers' states play go on, and the sounds of their frames play
-		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
+		Locator::livingActionSystem::value().UpdatePoses(clock.GetFrameGameTime(), clock.GetTurnFraction());
 		// The sharks swim between their last two turns and leave their wakes
 		Locator::sharkSystem::value().Update(gameTime, clock.GetTurnFraction());
 		// The opening's light falls and its hand lifts the boy and sets him down, by the frame's game time
 		Locator::introSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
-		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
+		Locator::animatedStaticSystem::value().Update(clock.GetFrameGameTime());
 		// The apple barrel goes to the local player's storage pit nearest their temple and its worm wriggles on
-		Locator::appleBarrelSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
+		Locator::appleBarrelSystem::value().Update(clock.GetFrameGameTime());
 	}
 	{
 		// The creatures are drawn moving between the last two turns
@@ -4236,10 +4236,6 @@ void Game::PrepareNewLand(land_change::Kind change)
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
-	if (Locator::animatedStaticSystem::has_value())
-	{
-		Locator::animatedStaticSystem::value().Reset();
-	}
 	if (Locator::objectDrawListSystem::has_value())
 	{
 		Locator::objectDrawListSystem::value().Reset();

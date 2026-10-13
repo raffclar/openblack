@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -34,9 +35,9 @@ public:
 
 	/// A turn of every animal
 	virtual void ProcessTurn() = 0;
-	/// Each frame: the animals are drawn between their last two turns, each posed by its own clip as the game's clock
-	/// of the turn and the share of it gone tell
-	virtual void Update(uint32_t turn, float turnFraction) = 0;
+	/// Each frame: the animals are drawn between their last two turns, each posed by its own clip played on by the
+	/// frame's game time
+	virtual void Update(std::chrono::milliseconds frameGameTime, float turnFraction) = 0;
 	virtual void Reset() = 0;
 
 	/// A new flock with nobody in it yet, made at a point its leader's legs wander about
