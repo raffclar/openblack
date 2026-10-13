@@ -29,7 +29,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
-#include "Animals/BirdRules.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureActionAgendas.h"
@@ -295,11 +294,9 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	case Target::Anything:
 		return true;
 	case Target::PooedOn:
-	{
-		// Not a field, a fish farm or a bird
-		const auto* animal = registry.TryGet<const Animal>(entity);
-		return !registry.AnyOf<Field, FishFarm>(entity) && (animal == nullptr || !animals::birds::IsBird(animal->type));
-	}
+		// A thing that is not alive and is taller than 1.5 m, but not a field or a fish farm
+		return !registry.AnyOf<Villager, Animal, Creature, Field, FishFarm>(entity) &&
+		       object_measures::Height(registry, entity) > creature_plan_actions::k_PooedOnTallerThan;
 	case Target::StoragePit:
 		return registry.AllOf<StoragePit>(entity);
 	case Target::MagicFoodPile:

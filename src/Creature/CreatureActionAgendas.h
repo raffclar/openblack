@@ -34,6 +34,12 @@ constexpr uint32_t k_AngryBeforeHurlingLots = 6;
 constexpr uint32_t k_YawnBeforeSleepingLots = 2;
 constexpr float k_FurthestFromHomeToSleep = 5.0f;
 
+/// A poo at home: walking home until within two times its height, then the steps of a poo, which it does by itself
+[[nodiscard]] std::vector<Step> PooAtHome(glm::vec2 home, float height, uint32_t self, const Random& random);
+/// It poos at home only when it is this near to its home, in metres
+constexpr float k_NearHomeToPoo = 20.0f;
+constexpr float k_PooAtHomeHeights = 2.0f;
+
 /// Sleeping by a thing, at a clear place found about it: walking there until within its own radius, half the time a
 /// sleepy yawn, facing down the slope, sleeping until rested and getting up dazed with a grimace
 [[nodiscard]] std::vector<Step> SleepByObject(glm::vec2 place, float radius, const Random& random);
