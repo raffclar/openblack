@@ -214,6 +214,20 @@ std::vector<Step> creature_mind::WaveAt(uint32_t thing, float height)
 	};
 }
 
+std::vector<Step> creature_mind::ShowImpressiveAnimation(std::optional<uint32_t> thing, float height, const Random& random)
+{
+	std::vector<Step> steps;
+	if (thing.has_value())
+	{
+		steps.push_back(GoNear(*thing, k_ShowOffHeights * height, creature_face::Cue::AttitudeToPlayer));
+		steps.push_back(FaceThing(*thing, k_ShowOffFaceSeconds, creature_face::Cue::AttitudeToPlayer, Gaze {.object = thing}));
+	}
+	steps.push_back(PlayOnce(k_LookAtMeAnimation, false, creature_face::Cue::AttitudeToPlayer));
+	steps.push_back(
+	    PlayOnce(random(2) == 0 ? animations::k_Impress : animations::k_Summon, false, creature_face::Cue::AttitudeToPlayer));
+	return steps;
+}
+
 std::vector<Step> creature_mind::BeFrightenedOnTheSpot()
 {
 	return {

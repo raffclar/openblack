@@ -367,6 +367,34 @@ TEST(CreaturePlanner, ADesireAboutAWholeThingFindsThePartAfterTheAction)
 	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Hunger, false));
 }
 
+TEST(CreaturePlanner, AnActionThatNeedsNoThingActsOnThePartOfTheWholeThing)
+{
+	// Under a desire about a whole thing, an action with no thing of its own still gets the part as its object
+	const std::vector<creature_planner::ActionCandidate> actions {{.action = 39}};
+	const auto planning = [&](creature_planner::PlanOrder order) {
+		return creature_planner::PlanDesire({
+		    .desire = Desire::Impress,
+		    .strength = 0.5f,
+		    .order = order,
+		    .actions = actions,
+		    .activityUsefulness = 0.2f,
+		    .findObject =
+		        [](const creature_planner::ActionCandidate&) {
+			        return std::optional(creature_planner::ObjectCandidate {.id = 12, .usefulness = 0.3f});
+		        },
+		    .findUsed = [](const creature_planner::ActionCandidate&,
+		                   std::optional<uint32_t>) { return std::optional<creature_planner::UsedChoice> {}; },
+		});
+	};
+	const auto part = planning(creature_planner::PlanOrder::ActionThenPart);
+	ASSERT_TRUE(part.has_value());
+	EXPECT_EQ(part->object, 12u);
+	// Not about a whole thing, such an action acts on nothing
+	const auto alone = planning(creature_planner::PlanOrder::ActionFirst);
+	ASSERT_TRUE(alone.has_value());
+	EXPECT_FALSE(alone->object.has_value());
+}
+
 TEST(CreaturePlanner, AngerFindsThePartFirst)
 {
 	// Only the actions that can act on the part count, and the part's usefulness counts in the priority

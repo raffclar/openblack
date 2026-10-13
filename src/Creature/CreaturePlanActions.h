@@ -148,6 +148,8 @@ enum class Build : uint8_t
 	PooAtHome,
 	SmileAt,
 	WaveAt,
+	/// Showing off to a thing: going near it and playing two impressive actions
+	ShowOff,
 	BeFrightened,
 	PutDown,
 	DeadForever,
