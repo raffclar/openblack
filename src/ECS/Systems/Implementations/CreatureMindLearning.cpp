@@ -30,6 +30,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
+#include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureActionAgendas.h"
@@ -1850,6 +1851,45 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	{
 		situation.eyeDistance = glm::distance(*situation.eye, transform->position);
 	}
+	situation.hangAround = HangAroundPlacesOf(creature);
+	situation.turnSeconds = k_TurnSeconds;
+}
+
+creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto onGround = [](glm::vec3 point) {
+		const auto ground =
+		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({point.x, point.z}) : point.y;
+		return glm::vec3(point.x, ground, point.z);
+	};
+	creature_mind::HangAroundPlaces places;
+	const auto* body = registry.TryGet<const Creature>(creature);
+	places.height = body != nullptr ? k_HeightOfSizeOne * ShownSize(*body) : 0.0f;
+	// TODO(creature-hang-around): the game keeps the place where a creature without a temple was made as its home.
+	// openblack does not keep that place, so a creature without a home hangs around where it stands.
+	if (const auto home = ecs::creature_home::HomeOf(registry, creature))
+	{
+		places.home = onGround(*home);
+	}
+	else if (const auto* at = registry.TryGet<const Transform>(creature))
+	{
+		places.home = onGround(at->position);
+	}
+	if (const auto* leash = registry.TryGet<const CreatureLeash>(creature))
+	{
+		places.confinementRadius = leash->confinementRadius;
+	}
+	if (body != nullptr)
+	{
+		registry.Each<const Temple, const Transform>([&](entt::entity, const Temple& temple, const Transform& transform) {
+			if (temple.owner == body->owner && !places.temple.has_value())
+			{
+				places.temple = onGround(transform.position);
+			}
+		});
+	}
+	return places;
 }
 
 bool CreatureMindSystem::HasPlayed(entt::entity creature) const

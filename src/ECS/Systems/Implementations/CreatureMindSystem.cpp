@@ -1496,6 +1496,9 @@ void CreatureMindSystem::ProcessTurn()
 		        .camera = CameraViewOf(registry, entity, mind.idle),
 		        .swap = SwapViewOf(entity),
 		        .overlayPlaying = animation.gesture.animation.has_value(),
+		        // The places to hang around at are only looked for when it is free to choose what to do next
+		        .hangAround =
+		            mind.idle.step >= mind.idle.agenda.size() ? HangAroundPlacesOf(entity) : creature_mind::HangAroundPlaces {},
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    Apply(commands, animation, eyes);

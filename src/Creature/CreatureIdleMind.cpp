@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <numbers>
 
+#include <glm/geometric.hpp>
+
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 
@@ -597,24 +599,82 @@ bool creature_mind::IsUnconscious(const IdleMind& mind)
 	return step != nullptr && step->kind == Step::Kind::Static && step->holdLoop;
 }
 
-std::vector<Step> creature_mind::HangAround(const Random& random)
+std::vector<Step> creature_mind::HangAround(const HangAroundPlaces& places, float turnSeconds, const Random& random)
 {
-	constexpr uint32_t k_Degrees = 360;
-	const auto angle = static_cast<float>(random(k_Degrees)) * std::numbers::pi_v<float> / 180.0f;
-	const auto distance = k_HangAroundDistance + static_cast<float>(random(k_HangAroundExtra));
-	std::vector<Step> agenda {{.kind = Step::Kind::Move,
-	                           .seconds = 0.0f,
-	                           .animation = 0,
-	                           .sleepyEyes = false,
-	                           .movement = {.kind = Movement::Kind::Nearby,
-	                                        .point = distance * glm::vec2(std::cos(angle), std::sin(angle)),
-	                                        .object = std::nullopt,
-	                                        .run = false,
-	                                        .minDistance = 0.0f,
-	                                        .maxDistance = 1.0f},
-	                           .gaze = GoingLook()},
-	                          SitDown(random)};
-	return WithFace(std::move(agenda), creature_face::Cue::Idle);
+	const glm::vec2 home {places.home.x, places.home.z};
+	std::vector<Step> agenda;
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .movement = {.kind = Movement::Kind::ToPoint,
+	                               .point = home,
+	                               .maxDistance = std::min(places.height, k_HangAroundHomeReach)},
+	                  .gaze = GoingLook()});
+	// The wait counts whole turns
+	auto wait = k_HangAroundWaitSeconds + (k_HangAroundWaitExtraSeconds * RandomFraction(random));
+	if (turnSeconds > 0.0f)
+	{
+		const auto turnsPerSecond = std::round(1.0f / turnSeconds);
+		wait = std::trunc(wait * turnsPerSecond) / turnsPerSecond;
+	}
+	agenda.push_back({.kind = Step::Kind::Wait, .seconds = wait, .face = creature_face::Cue::Idle});
+
+	const auto lot = places.temple.has_value() ? random(k_HangAroundLots) : 0;
+	if (lot == 0)
+	{
+		auto yawn = Action(animations::k_Tired, true);
+		yawn.face = creature_face::Cue::Idle;
+		agenda.push_back(yawn);
+		return agenda;
+	}
+	const auto temple = *places.temple;
+	const auto sit = [&random]() {
+		auto step = Static({animations::k_StartSit, animations::k_Sit, animations::k_EndSit},
+		                   k_HangAroundSitSeconds + (k_HangAroundSitExtraSeconds * RandomFraction(random)));
+		step.mirrorAtRandom = true;
+		return step;
+	};
+	const auto face = [](glm::vec3 point) {
+		return Step {.kind = Step::Kind::Move,
+		             .movement = {.kind = Movement::Kind::FacePoint, .point = {point.x, point.z}},
+		             .gaze = Gaze {.point = point}};
+	};
+	if (lot <= k_HangAroundOutLots)
+	{
+		// The way out from home is away from the temple, and it includes the difference in height
+		auto away = places.home - temple;
+		if (std::abs(away.x) > k_HangAroundSameSpot || std::abs(away.z) > k_HangAroundSameSpot)
+		{
+			away = glm::normalize(away);
+		}
+		else
+		{
+			away = {1.0f, 0.0f, 0.0f};
+		}
+		const auto out = places.home + (away * (places.confinementRadius * k_HangAroundOutPart));
+		const auto view = places.home + (away * k_HangAroundViewDistance);
+		agenda.push_back(
+		    {.kind = Step::Kind::Move,
+		     .movement = {.kind = Movement::Kind::ToPoint, .point = {out.x, out.z}, .maxDistance = k_HangAroundOutReach},
+		     .gaze = GoingLook()});
+		agenda.push_back(face(view));
+		if (random(2) == 0)
+		{
+			agenda.push_back(sit());
+		}
+		else
+		{
+			agenda.push_back({.kind = Step::Kind::Object,
+			                  .order = {.kind = ObjectOrder::Kind::PointAt,
+			                            .point = {view.x, view.z},
+			                            .pointHeight = view.y,
+			                            .seconds = k_HangAroundPointSeconds},
+			                  .face = creature_face::Cue::Amazed,
+			                  .gaze = Gaze {.point = view}});
+		}
+	}
+	// After the look out, and in the last two lots, it turns to the temple and sits
+	agenda.push_back(face(temple));
+	agenda.push_back(sit());
+	return agenda;
 }
 
 void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda)
@@ -677,7 +737,7 @@ void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Rando
 	}
 	else if (lot == k_ActivityLots - 1)
 	{
-		Plan(mind, Activity::HangAround, HangAround(random));
+		Plan(mind, Activity::HangAround, HangAround(senses.hangAround, senses.seconds, random));
 	}
 	else
 	{

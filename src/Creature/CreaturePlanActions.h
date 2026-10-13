@@ -246,6 +246,9 @@ struct Situation
 	float chance {0.0f};
 	/// A clear place by the thing to sleep there, none when there is none (or it wasn't looked for)
 	std::optional<glm::vec2> clearArea;
+	/// The places that the creature uses when it hangs around at home, and the length of a game turn in seconds
+	creature_mind::HangAroundPlaces hangAround;
+	float turnSeconds {0.0f};
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

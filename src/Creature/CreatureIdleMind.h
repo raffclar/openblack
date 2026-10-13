@@ -62,9 +62,29 @@ constexpr float k_MinDesireShown = 0.2f;
 /// around, the rest being idle. The game chooses between its idle activities by the strength of the desire to rest and
 /// what the creature has learnt; this stands in for that.
 constexpr uint32_t k_ActivityLots = 4;
-/// Hanging around, the creature walks this far away and up to this much further, in a random direction
-constexpr float k_HangAroundDistance = 20.0f;
-constexpr uint32_t k_HangAroundExtra = 21;
+/// Hanging around at home, the creature walks home and stops at its height from home, or at this distance when the
+/// creature is taller
+constexpr float k_HangAroundHomeReach = 5.0f;
+/// At home it waits for two seconds and up to three more, in whole turns
+constexpr float k_HangAroundWaitSeconds = 2.0f;
+constexpr float k_HangAroundWaitExtraSeconds = 3.0f;
+/// With a temple, the creature does one of these lots at random. The first lot is a tired yawn. The next seven send
+/// it out from home, and the last two make it sit and look at the temple.
+constexpr uint32_t k_HangAroundLots = 10;
+constexpr uint32_t k_HangAroundOutLots = 7;
+/// It walks out from home, away from the temple, for this part of the radius of the area that holds it. It stops at
+/// this distance from that point.
+constexpr float k_HangAroundOutPart = 0.8f;
+constexpr float k_HangAroundOutReach = 2.0f;
+/// Out from home, it faces a point this far from home, away from the temple. Half the time it sits, else it points
+/// at the point for this many seconds.
+constexpr float k_HangAroundViewDistance = 50.0f;
+constexpr float k_HangAroundPointSeconds = 1.0f;
+/// Sitting while it hangs around lasts ten seconds and up to five more
+constexpr float k_HangAroundSitSeconds = 10.0f;
+constexpr float k_HangAroundSitExtraSeconds = 5.0f;
+/// When home and the temple are this near along each ground axis, the creature goes out along the x axis
+constexpr float k_HangAroundSameSpot = 0.001f;
 /// A need this strong is seen to. The game weighs needs against everything else the creature might do through its
 /// planner; this stands in for that.
 constexpr float k_ActOnNeed = 0.3f;
@@ -456,6 +476,18 @@ enum class SubMove : uint8_t
 	Failed,
 };
 
+/// The places that the creature uses when it hangs around at home
+struct HangAroundPlaces
+{
+	/// Its home, on the ground
+	glm::vec3 home {0.0f};
+	/// The heart of its player's temple, none when its player has no temple
+	std::optional<glm::vec3> temple;
+	/// The radius of the area that holds it, 0 when no area holds it
+	float confinementRadius {0.0f};
+	/// Its height
+	float height {0.0f};
+};
 /// What the mind knows this turn
 struct Senses
 {
@@ -507,6 +539,8 @@ struct Senses
 	SwapView swap {};
 	/// Whether something plays on top of the body, as talking or nodding
 	bool overlayPlaying {false};
+	/// The places that it uses when it chooses to hang around at home
+	HangAroundPlaces hangAround {};
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -583,8 +617,12 @@ constexpr uint32_t k_WatchFlyingMoreSeconds = 2;
 [[nodiscard]] std::vector<Step> BeIdle(const Random& random);
 /// Sitting for ten to fourteen seconds
 [[nodiscard]] Step SitDown(const Random& random);
-/// Hanging around: walking 20 to 40 units away in a random direction, then sitting there
-[[nodiscard]] std::vector<Step> HangAround(const Random& random);
+/// Hanging around at home. The creature walks home and waits there while it looks about. Then it does one of these:
+/// - With no temple, or one time in ten, it yawns with sleepy eyes.
+/// - Seven times in ten, it walks out from home, away from the temple. It faces away from the temple and sits or
+///   points. Then it turns to the temple and sits.
+/// - Two times in ten, it turns to the temple and sits.
+[[nodiscard]] std::vector<Step> HangAround(const HangAroundPlaces& places, float turnSeconds, const Random& random);
 /// Sleeping on the spot: half the time a tired yawn first, then sleeping with its eyes closed until rested, then a dazed
 /// look about with sleepy eyes
 [[nodiscard]] std::vector<Step> Sleep(const Random& random);

@@ -409,7 +409,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::BeIdle:
 		return creature_mind::BeIdle(random);
 	case Build::HangAround:
-		return creature_mind::HangAround(random);
+		return creature_mind::HangAround(situation.hangAround, situation.turnSeconds, random);
 	case Build::ShowDesire:
 		return creature_mind::Emote(*situation.showDesireAnimation);
 	case Build::Emote:
