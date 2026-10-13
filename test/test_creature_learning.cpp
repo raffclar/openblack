@@ -297,6 +297,21 @@ TEST(CreaturePlanner, NothingReplacesAForcedPlan)
 	EXPECT_FALSE(creature_planner::Choose(state).has_value());
 }
 
+TEST(CreaturePlanner, APlanOfItsOwnReplacesACatchOnlyWhenTwiceAsPressing)
+{
+	// A catch or a gift from the hand has a score of 1, so a plan of the creature with a score above 2 replaces it
+	creature_planner::PlannerState state;
+	state.current = creature_planner::Plan {.desire = Desire::Play,
+	                                        .action = 2,
+	                                        .goalUsefulness = creature_planner::k_CatchOrGiftScore,
+	                                        .actionPriority = creature_planner::k_CatchOrGiftScore,
+	                                        .priority = creature_planner::k_CatchOrGiftScore};
+	state.best.at(0) = creature_planner::Plan {.desire = Desire::Impress, .action = 1, .priority = 2.0f};
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	state.best.at(0)->priority = 2.5f;
+	EXPECT_TRUE(creature_planner::Choose(state).has_value());
+}
+
 TEST(CreaturePlanner, ChoosesOnlyWhatIsPressingEnough)
 {
 	creature_planner::PlannerState state;

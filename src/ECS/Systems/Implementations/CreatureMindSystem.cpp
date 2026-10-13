@@ -1962,9 +1962,9 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 		mind->planner.current = creature_planner::Plan {.desire = Desire::Play,
 		                                                .action = *action,
 		                                                .object = entt::to_integral(object),
-		                                                .goalUsefulness = creature_planner::k_ForcedScore,
-		                                                .actionPriority = creature_planner::k_ForcedScore,
-		                                                .priority = creature_planner::k_ForcedScore};
+		                                                .goalUsefulness = creature_planner::k_CatchOrGiftScore,
+		                                                .actionPriority = creature_planner::k_CatchOrGiftScore,
+		                                                .priority = creature_planner::k_CatchOrGiftScore};
 		mind->planActive = true;
 		mind->planSerial = mind->idle.serial;
 		mind->agendaSeen = mind->idle.serial;
@@ -2010,9 +2010,9 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	mind->planner.current = creature_planner::Plan {.desire = Desire::Curiosity,
 	                                                .action = *action,
 	                                                .object = self,
-	                                                .goalUsefulness = creature_planner::k_ForcedScore,
-	                                                .actionPriority = creature_planner::k_ForcedScore,
-	                                                .priority = creature_planner::k_ForcedScore};
+	                                                .goalUsefulness = creature_planner::k_CatchOrGiftScore,
+	                                                .actionPriority = creature_planner::k_CatchOrGiftScore,
+	                                                .priority = creature_planner::k_CatchOrGiftScore};
 	mind->planActive = true;
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
