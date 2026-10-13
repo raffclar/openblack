@@ -152,7 +152,7 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> HandHeldCreature() const = 0;
 	/// Whether creatures act on objects at all, and whether one can pick a thing up
 	[[nodiscard]] virtual bool HasCreatureActions() const = 0;
-	[[nodiscard]] virtual bool CanPickUp(entt::entity object) const = 0;
+	[[nodiscard]] virtual bool CanPickUp(entt::entity creature, entt::entity object) const = 0;
 	/// A creature's action catches a thing, with no mind to choose it
 	virtual void Catch(entt::entity creature, entt::entity object) = 0;
 	/// The creature stops where it is

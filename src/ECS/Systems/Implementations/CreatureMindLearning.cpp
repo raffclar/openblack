@@ -233,7 +233,7 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	case Target::LiveFood:
 		return !heldByOther && registry.AllOf<Villager>(entity) && FoodValueOf(entity).has_value();
 	case Target::Pickable:
-		return !heldByOther && registry.AnyOf<MobileObject, Ball>(entity) && hands != nullptr && hands->CanPickUp(entity);
+		return !heldByOther && registry.AnyOf<MobileObject, Ball>(entity) && hands != nullptr && hands->CanPickUp(self, entity);
 	case Target::Destroyable:
 		return hands != nullptr && hands->CanDestroy(entity);
 	case Target::Tree:

@@ -127,3 +127,12 @@ bool creature_object_actions::BringsBackUp(bool indestructible, bool heldDuringC
 {
 	return indestructible || heldDuringCutscene;
 }
+
+bool creature_object_actions::MayPickUp(const PickUpFacts& facts)
+{
+	if (facts.computerCreatureNotScripted && facts.inScript)
+	{
+		return false;
+	}
+	return !facts.cannotBePickedUp && !facts.villagerAtHome && !facts.worshippingForCreaturesPlayer;
+}
