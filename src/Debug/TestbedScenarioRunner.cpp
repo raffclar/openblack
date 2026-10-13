@@ -1512,7 +1512,8 @@ std::string Runner::GiveFightCommand(entt::entity creature, const Command& comma
 	case Kind::StartFight:
 		if (const auto opponent = CreatureAt(command.value))
 		{
-			constexpr std::array<std::string_view, 4> k_Results {"started", "no opponent", "busy", "too weak"};
+			constexpr std::array<std::string_view, 6> k_Results {"started",  "no opponent", "busy",
+			                                                     "too weak", "no arena",    "refused"};
 			return std::string(k_Results.at(static_cast<size_t>(fights.StartFight(creature, *opponent))));
 		}
 		return "it is gone";
@@ -1535,6 +1536,11 @@ std::string Runner::GiveFightCommand(entt::entity creature, const Command& comma
 	case Kind::FightAuto:
 		fights.SetAutoFighting(creature, command.value != 0);
 		return fights.IsFighting(creature) ? "" : "not fighting";
+	case Kind::FightSpell:
+		return fights.QueueMove(
+		           creature, {.kind = creature_fight::Move::Kind::Spell, .value = static_cast<uint32_t>(command.value)}, false)
+		           ? ""
+		           : "not fighting";
 	case Kind::KnockOut:
 		fights.KnockOut(creature);
 		return {};
@@ -1845,6 +1851,7 @@ void Runner::Give(const Command& command)
 	case Kind::FightStep:
 	case Kind::FightSpecial:
 	case Kind::FightAuto:
+	case Kind::FightSpell:
 	case Kind::KnockOut:
 	case Kind::BringRound:
 	case Kind::TieLeashToCreature:

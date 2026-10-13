@@ -1290,7 +1290,7 @@ void LeashSystem::ProcessTurn()
 			{
 				SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is pulled out of its fight by the leash",
 				                   entt::to_integral(entity));
-				Locator::creatureFightSystem::value().AbortFight(entity);
+				Locator::creatureFightSystem::value().CallOff(entity);
 				Pull(entity);
 			}
 			continue;
@@ -1807,6 +1807,27 @@ bool LeashSystem::OrderOn(PlayerNames player, entt::entity object)
 	return TakeThingOrder(*creature, object);
 }
 
+bool LeashSystem::TakeOutOfFight(entt::entity creature)
+{
+	if (!Locator::creatureFightSystem::has_value())
+	{
+		return true;
+	}
+	auto& fights = Locator::creatureFightSystem::value();
+	// On its way to a fight it takes no orders; once duelling, an order calls the fight off
+	if (fights.IsSettingUpFight(creature))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders on its way to a fight",
+		                   entt::to_integral(creature));
+		return false;
+	}
+	if (fights.IsFighting(creature))
+	{
+		fights.CallOff(creature);
+	}
+	return true;
+}
+
 bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1864,6 +1885,10 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		leashes.help = CreatureLeash::Help::Inaccessible;
 		leashes.helpDesire.reset();
 		TellHelp(creature, {.kind = creature_help::Kind::FailureExplanation, .parameter = creature_help::k_Inaccessible});
+		return false;
+	}
+	if (!TakeOutOfFight(creature))
+	{
 		return false;
 	}
 	if (order.acknowledged)
@@ -1966,6 +1991,10 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	if (registry.AllOf<BigForest>(object))
 	{
 		return TakeGroundOrder(creature, objectAt);
+	}
+	if (!TakeOutOfFight(creature))
+	{
+		return false;
 	}
 	const auto& body = registry.Get<const Creature>(creature);
 	const auto& transform = registry.Get<const Transform>(creature);

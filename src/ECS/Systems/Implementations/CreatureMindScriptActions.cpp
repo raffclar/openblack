@@ -14,11 +14,8 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Creature/CreatureCastMoves.h"
-#include "Creature/CreatureFight.h"
 #include "Creature/CreatureMindTables.h"
 #include "CreatureMindSystem.h"
-#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/ScriptControl.h"
@@ -91,30 +88,25 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	return true;
 }
 
+bool CreatureMindSystem::IsLyingDead(entt::entity creature)
+{
+	const auto* tables = GetTables();
+	const auto& registry = Locator::entitiesRegistry::value();
+	return tables != nullptr && registry.Valid(creature) && LyingDead(registry, creature, *tables);
+}
+
 bool CreatureMindSystem::FightForScript(entt::entity creature, entt::entity opponent)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& mind = registry.Get<CreatureMindState>(creature);
-	const auto* tables = GetTables();
 	// What it was doing is given up as a failure, whatever comes of the fight
 	Abandon(mind);
 	creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
-	const auto* body = registry.TryGet<const Creature>(creature);
-	const auto* other = registry.Valid(opponent) ? registry.TryGet<const Creature>(opponent) : nullptr;
-	if (body == nullptr || other == nullptr || tables == nullptr || !Locator::creatureFightSystem::has_value())
+	if (!Locator::creatureFightSystem::has_value())
 	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} has no other creature to fight", entt::to_integral(creature));
 		return true;
 	}
-	const bool agrees = creature_fight::AgreesToFight(
-	    creature_cast_moves::k_HeightOfSizeOne * ShownSize(*other), creature_cast_moves::k_HeightOfSizeOne * ShownSize(*body),
-	    LyingDead(registry, opponent, *tables), registry.AllOf<ScriptControlled>(opponent), true);
-	if (!agrees)
-	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} won't fight creature {}", entt::to_integral(opponent),
-		                    entt::to_integral(creature));
-		return true;
-	}
+	// The other creature is asked first, and may refuse
 	[[maybe_unused]] const auto started = Locator::creatureFightSystem::value().StartFight(creature, opponent);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} picks a fight with creature {}: {}", entt::to_integral(creature),
 	                    entt::to_integral(opponent), static_cast<int>(started));
