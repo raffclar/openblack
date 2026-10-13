@@ -15,6 +15,7 @@
 #include <functional>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 #include <glm/vec2.hpp>
 
@@ -105,6 +106,33 @@ inline constexpr uint8_t k_InspectCreatureUrgency = 0xff;
 [[nodiscard]] bool InspectDue(std::optional<uint32_t> inspected, uint32_t turn, uint32_t waitTurns);
 /// The wait in turns from the creature's wait in seconds, at whole turns a second: cut down to a whole turn
 [[nodiscard]] uint32_t InspectWaitTurns(float seconds, uint32_t turnsPerSecond);
+
+/// What a creature does this turn when it watches a different creature. It continues to watch, it acts on a desire,
+/// or it examines the desires again without fear.
+struct WatchVerdict
+{
+	std::optional<creature_desires::Desire> act;
+	bool weighAgainWithoutFear {false};
+};
+/// Find what the creature does when it watches a different creature:
+/// - If it has no desire about the other creature, it continues to watch.
+/// - If it is angry, it acts on anger.
+/// - If the other creature is angry with it, it acts on anger when anger has more value than fear. If not, it acts
+///   on fear.
+/// - If it has a desire that is not fear, it acts on that desire.
+/// - If both creatures are afraid and it is dominant, it examines the desires again without fear.
+/// - If not, it acts on fear.
+/// The function calls the value and dominance functions only when it must.
+[[nodiscard]] WatchVerdict WeighWatch(std::optional<creature_desires::Desire> mine,
+                                      std::optional<creature_desires::Desire> theirs,
+                                      const std::function<std::pair<float, float>()>& angerAndFearWorth,
+                                      const std::function<bool()>& dominant);
+/// The value of a desire about a different creature. This is the strength of the desire, multiplied by the learnt
+/// usefulness and the nearness. The value is between zero and one.
+[[nodiscard]] float WorthAbout(float strength, float usefulness, float nearness);
+/// Whether a creature is dominant over a different creature. If the ages have a difference of more than ten years,
+/// the older creature is dominant. If not, the creature that is later in the order of the game is dominant.
+[[nodiscard]] bool IsDominant(uint32_t age, uint32_t otherAge, bool laterInOrder);
 
 /// How urgent a kind is to a creature before its distance counts, for the kinds a creature weighs its own way; none for
 /// the kinds it weighs as everything alive does. A draw below a range is asked for only where the rule draws one.

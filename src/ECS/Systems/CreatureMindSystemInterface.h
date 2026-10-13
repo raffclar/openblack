@@ -197,6 +197,8 @@ public:
 		std::optional<std::vector<creature_mind::Step>> agenda;
 		/// The thing used, if any
 		std::optional<entt::entity> instrument;
+		/// What the desire is about, if anything: what the thing acted on belongs to, say
+		std::optional<entt::entity> activityObject;
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
 	/// about to already
