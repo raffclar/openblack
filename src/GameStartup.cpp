@@ -21,7 +21,11 @@
 #include "Audio/MusicPlayer.h"
 #include "Common/MachineClock.h"
 #include "Common/UserData.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
+#include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
@@ -54,6 +58,8 @@ constexpr auto k_LongestFrameWait = std::chrono::seconds(25);
 /// The colour the screen is cleared to between the game's own frames, and the sky's while the game runs
 constexpr uint32_t k_StartupClearColour = 0x000000ff;
 constexpr uint32_t k_GameClearColour = 0x274659ff;
+/// The frames that the renderer can have in work on the GPU at one time (the bgfx default)
+constexpr uint32_t k_RendererFramesInFlight = 3;
 
 /// What the player did since the last frame
 struct StartupInput
@@ -397,10 +403,6 @@ void Game::RenderLoadingFrame(bool drawNow)
 void Game::FinishLoadingBehindScreen()
 {
 	auto& resources = Locator::resources::value();
-	if (resources.LoadingCount() == 0)
-	{
-		return;
-	}
 	// If the game uses a resource before the loading threads load it, the resource loads in the middle of a frame and
 	// makes that frame slow. Thus all the resources load before the first frame of the game, as in the original game.
 	const auto start = std::chrono::steady_clock::now();
@@ -411,11 +413,51 @@ void Game::FinishLoadingBehindScreen()
 		RenderLoadingFrame();
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
+	const auto loaded = std::chrono::steady_clock::now();
+	PrepareFirstFrames();
 	// The renderer makes the last resources in one more loading frame, so that the first frame of the game does not
-	// make them
-	RenderLoadingFrame(true);
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Load: {} prefetched resources finished behind the loading screen in {:.1f} ms",
-	                   count, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+	// make them. The renderer releases the memory that it used to send the resources to the GPU only when it uses the
+	// frame's command buffers again. Thus it draws more loading frames, one for each frame that the GPU can have in
+	// work. Else the first frames of the game release that memory, which can take hundreds of milliseconds.
+	for (uint32_t frame = 0; frame <= k_RendererFramesInFlight; ++frame)
+	{
+		RenderLoadingFrame(true);
+	}
+	const auto prepared = std::chrono::steady_clock::now();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"),
+	                   "Load: {} prefetched resources finished behind the loading screen in {:.1f} ms, then the first "
+	                   "frames prepared in {:.1f} ms",
+	                   count, std::chrono::duration<double, std::milli>(loaded - start).count(),
+	                   std::chrono::duration<double, std::milli>(prepared - loaded).count());
+}
+
+void Game::PrepareFirstFrames()
+{
+	const auto& config = Locator::config::value();
+	// The first scene draw bakes the shadows of the whole island into the land, which takes tens of milliseconds
+	if (config.drawEntities && Locator::rendererInterface::has_value())
+	{
+		Locator::rendererInterface::value().BakeLandShadows(config.drawVegetation);
+	}
+	// A creature's first move finds where creatures can walk on the whole land
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		[[maybe_unused]] const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+	}
+	// The first start of each effect reads its file, its models and its light maps
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().LoadAllTypes();
+	}
+	// The first frame loads the models of the globes and the gesture templates
+	if (Locator::miracleFxSystem::has_value())
+	{
+		Locator::miracleFxSystem::value().LoadMeshes();
+	}
+	if (Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().LoadTemplates();
+	}
 }
 
 void Game::EndLoadingScreen()

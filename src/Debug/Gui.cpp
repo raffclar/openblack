@@ -128,6 +128,11 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	IMGUI_CHECKVERSION();
 	auto* imgui = ImGui::CreateContext();
 	ImGui::GetIO().BackendRendererName = "imgui_impl_bgfx";
+	// Read the places of the windows now. Else the first frame of the game reads the file.
+	if (const char* settings = ImGui::GetIO().IniFilename; settings != nullptr)
+	{
+		ImGui::LoadIniSettingsFromDisk(settings);
+	}
 
 	std::vector<std::unique_ptr<Window>> debugWindows;
 	debugWindows.emplace_back(new Profiler);

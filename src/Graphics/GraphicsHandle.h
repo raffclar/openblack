@@ -39,6 +39,11 @@ struct DynamicVertexBufferHandle
 	uint32_t id = 0;
 };
 
+struct DynamicIndexBufferHandle
+{
+	uint32_t id = 0;
+};
+
 struct TextureHandle
 {
 	uint32_t id = 0;

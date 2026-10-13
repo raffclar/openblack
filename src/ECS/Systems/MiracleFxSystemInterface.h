@@ -44,6 +44,9 @@ public:
 	/// The globes some seconds of game time on, once a frame after the hand has placed what it holds: each turns to face
 	/// the camera about its middle, wherever it now is, and its miracle spins inside
 	virtual void UpdateGlobes(float gameSeconds) = 0;
+	/// Loads the models of the globes and their bands, if they are not loaded. The first update of the globes also
+	/// loads them.
+	virtual void LoadMeshes() {}
 	/// A miracle came to the hand at a power-up level, or powered up from one: the hand wears a bracelet for it and one
 	/// for each power-up; bands fly onto it with their sound unless the level fell; the announcer names the power-up
 	virtual void SeedInHand(int powerUp, int previousPowerUp) = 0;

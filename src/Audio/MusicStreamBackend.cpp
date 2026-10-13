@@ -10,6 +10,8 @@
 #include "MusicStreamBackend.h"
 
 #include <algorithm>
+#include <chrono>
+#include <iterator>
 #include <numeric>
 #include <span>
 #include <utility>
@@ -26,9 +28,10 @@ namespace
 constexpr float k_PercentToRate = 0.01f;
 } // namespace
 
-MusicStreamBackend::MusicStreamBackend(AudioPlayerInterface& player, Decoder decoder)
+MusicStreamBackend::MusicStreamBackend(AudioPlayerInterface& player, Decoder decoder, Clock clock)
     : _player(player)
     , _decoder(std::move(decoder))
+    , _clock(std::move(clock))
 {
 }
 
@@ -42,9 +45,10 @@ MusicStreamBackend::~MusicStreamBackend()
 
 MusicBackend::Stream MusicStreamBackend::CreateStream(int32_t pitchPercent)
 {
-	const auto source = _player.CreateSource(static_cast<float>(pitchPercent) * k_PercentToRate, true);
+	const auto rate = static_cast<float>(pitchPercent) * k_PercentToRate;
+	const auto source = _player.CreateSource(rate, true);
 	const auto stream = _nextStream++;
-	_streams.emplace(stream, StreamState {.source = source});
+	_streams.emplace(stream, StreamState {.source = source, .rate = rate});
 	return stream;
 }
 
@@ -52,30 +56,23 @@ MusicBackend::Stream MusicStreamBackend::CreateStream(int32_t pitchPercent)
 // synthesis filter, so the first few hundred samples it gives are wrong, mostly silence, which clicks against the end
 // of the chunk before. Decoding the chunk after the one that plays before it, and dropping that one's samples, gives
 // exactly what decoding the whole stream would.
-bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32_t chunk, uint32_t skipFrames)
+MusicStreamBackend::DecodedChunk MusicStreamBackend::Decode(const Decoder& decoder, const ChunkReader& read, int sampleRate,
+                                                            std::optional<uint32_t> before, uint64_t beforeFrames,
+                                                            uint32_t chunk, uint32_t skipFrames)
 {
-	const auto found = _streams.find(stream);
-	if (found == _streams.end() || chunk >= bank.GetChunkCount())
-	{
-		return false;
-	}
-	auto& state = found->second;
-	const auto sampleRate = chunk < bank.chunkSampleRates.size() ? static_cast<int>(bank.chunkSampleRates[chunk]) : 0;
-	const auto decode = [this, &bank, sampleRate](std::optional<uint32_t> before, uint32_t chunk) {
-		if (!before)
+	const auto decode = [&decoder, &read, sampleRate](std::optional<uint32_t> first, uint32_t second) {
+		if (!first)
 		{
-			const auto data = bank.ReadChunk(chunk);
-			return _decoder(std::span<const uint8_t>(data.data(), data.size()), sampleRate);
+			const auto data = read(second);
+			return decoder(std::span<const uint8_t>(data.data(), data.size()), sampleRate);
 		}
-		auto data = bank.ReadChunk(*before);
-		const auto second = bank.ReadChunk(chunk);
-		data.insert(data.end(), second.begin(), second.end());
-		return _decoder(std::span<const uint8_t>(data.data(), data.size()), sampleRate);
+		auto data = read(*first);
+		const auto more = read(second);
+		data.insert(data.end(), more.begin(), more.end());
+		return decoder(std::span<const uint8_t>(data.data(), data.size()), sampleRate);
 	};
 
 	// What plays before: the chunk queued last, or the one before in the bank when starting part way through
-	std::optional<uint32_t> before = state.lastChunk;
-	uint64_t beforeFrames = state.lastChunkFrames;
 	if (!before && chunk > 0)
 	{
 		if (const auto alone = decode(std::nullopt, chunk - 1); alone.sound)
@@ -97,21 +94,48 @@ bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32
 		beforeFrames = 0;
 		result = decode(std::nullopt, chunk);
 	}
+	DecodedChunk decoded {.number = chunk};
 	if (!result.sound)
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("audio"), "Could not decode chunk {} of {}: {}", chunk, bank.path, result.error);
-		state.lastChunk.reset();
-		return false;
+		decoded.error = result.error;
+		return decoded;
 	}
 	auto& sound = *result.sound;
-	state.lastChunk = chunk;
-	state.lastChunkFrames = sound.frames - beforeFrames;
+	decoded.chunk = chunk;
+	decoded.chunkFrames = sound.frames - beforeFrames;
 
 	// Leave out the chunk decoded first, and when starting in time with another channel, the part of this one it has
 	// played already
 	const auto channels = sound.channelLayout == ChannelLayout::Stereo ? 2u : 1u;
 	const auto skipSamples = std::min<size_t>(static_cast<size_t>(beforeFrames + skipFrames) * channels, sound.samples.size());
 	sound.samples.erase(sound.samples.begin(), sound.samples.begin() + static_cast<std::ptrdiff_t>(skipSamples));
+	decoded.sound = std::move(sound);
+	return decoded;
+}
+
+bool MusicStreamBackend::QueueDecoded(StreamState& state, DecodedChunk decoded)
+{
+	state.lastChunk = decoded.chunk;
+	state.lastChunkFrames = decoded.chunkFrames;
+	if (!decoded.sound)
+	{
+		if (const auto logger = spdlog::get("audio"); logger != nullptr)
+		{
+			SPDLOG_LOGGER_WARN(logger, "Could not decode chunk {} of {}: {}", decoded.number, decoded.bank, decoded.error);
+		}
+		return false;
+	}
+	auto& sound = *decoded.sound;
+	const auto channels = sound.channelLayout == ChannelLayout::Stereo ? 2u : 1u;
+	if (decoded.skipFrames > 0)
+	{
+		// A chunk that starts in time with another channel also leaves out what the other channel played during the
+		// decode
+		const auto waited = std::chrono::duration<float>(_clock() - decoded.requested).count();
+		const auto frames = static_cast<size_t>(waited * static_cast<float>(sound.sampleRate) * state.rate);
+		const auto samples = std::min(frames * channels, sound.samples.size());
+		sound.samples.erase(sound.samples.begin(), sound.samples.begin() + static_cast<std::ptrdiff_t>(samples));
+	}
 	if (sound.samples.empty())
 	{
 		return false;
@@ -123,6 +147,59 @@ bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32
 	return true;
 }
 
+void MusicStreamBackend::QueueFinishedDecodes(StreamState& state)
+{
+	while (!state.decoding.empty() && state.decoding.front().wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+	{
+		auto decoded = state.decoding.front().get();
+		state.decoding.pop_front();
+		if (!QueueDecoded(state, std::move(decoded)))
+		{
+			++state.failed;
+		}
+	}
+}
+
+bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32_t chunk, uint32_t skipFrames)
+{
+	const auto found = _streams.find(stream);
+	if (found == _streams.end() || chunk >= bank.GetChunkCount())
+	{
+		return false;
+	}
+	auto& state = found->second;
+	const auto sampleRate = chunk < bank.chunkSampleRates.size() ? static_cast<int>(bank.chunkSampleRates[chunk]) : 0;
+	// The reader keeps its own copy of how to read the bank: the bank can go before the decode ends
+	ChunkReader read = [readChunk = bank.readChunk, count = bank.GetChunkCount()](uint32_t index) {
+		return readChunk && index < count ? readChunk(index) : std::vector<uint8_t> {};
+	};
+
+	// Another thread decodes the chunk after the chunk before it, so that a frame of the game does not wait for the
+	// decode. The chunk plays after the chunks queued before it.
+	const auto requested = _clock();
+	std::shared_future<DecodedChunk> previous;
+	if (!state.decoding.empty())
+	{
+		previous = state.decoding.back();
+	}
+	auto job = [decoder = _decoder, read = std::move(read), sampleRate, previous, before = state.lastChunk,
+	            beforeFrames = state.lastChunkFrames, chunk, skipFrames, path = bank.path, requested]() mutable {
+		if (previous.valid())
+		{
+			const auto& last = previous.get();
+			before = last.chunk;
+			beforeFrames = last.chunkFrames;
+		}
+		auto decoded = Decode(decoder, read, sampleRate, before, beforeFrames, chunk, skipFrames);
+		decoded.bank = std::move(path);
+		decoded.skipFrames = skipFrames;
+		decoded.requested = requested;
+		return decoded;
+	};
+	state.decoding.push_back(std::async(std::launch::async, std::move(job)).share());
+	return true;
+}
+
 uint32_t MusicStreamBackend::ReleasePlayedChunks(Stream stream)
 {
 	const auto found = _streams.find(stream);
@@ -131,6 +208,10 @@ uint32_t MusicStreamBackend::ReleasePlayedChunks(Stream stream)
 		return 0;
 	}
 	auto& state = found->second;
+	QueueFinishedDecodes(state);
+	std::erase_if(_abandoned, [](const std::shared_future<DecodedChunk>& decode) {
+		return decode.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+	});
 	const auto played = _player.UnqueueProcessedBuffers(state.source);
 	for (const auto buffer : played)
 	{
@@ -142,7 +223,9 @@ uint32_t MusicStreamBackend::ReleasePlayedChunks(Stream stream)
 			state.bufferFrames.pop_front();
 		}
 	}
-	return static_cast<uint32_t>(played.size());
+	// A chunk that could not be decoded counts as played, so that the player stops to wait for it
+	const auto failed = std::exchange(state.failed, 0u);
+	return static_cast<uint32_t>(played.size()) + failed;
 }
 
 uint32_t MusicStreamBackend::GetPlayPosition(Stream stream) const
@@ -239,6 +322,8 @@ void MusicStreamBackend::Destroy(Stream stream)
 		return;
 	}
 	auto& state = found->second;
+	// The decodes still running end on their own threads; the frame does not wait for them
+	std::ranges::move(state.decoding, std::back_inserter(_abandoned));
 	// A stopped source has played all of its buffers, so they can all be taken off it
 	_player.StopSource(state.source);
 	for (const auto buffer : _player.UnqueueProcessedBuffers(state.source))
@@ -247,6 +332,18 @@ void MusicStreamBackend::Destroy(Stream stream)
 	}
 	_player.DeleteSource(state.source);
 	_streams.erase(found);
+}
+
+void MusicStreamBackend::WaitForDecodes()
+{
+	for (auto& [stream, state] : _streams)
+	{
+		for (const auto& decode : state.decoding)
+		{
+			decode.wait();
+		}
+		QueueFinishedDecodes(state);
+	}
 }
 
 void MusicStreamBackend::SetOutputVolume(float volume)

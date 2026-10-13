@@ -42,6 +42,8 @@ public:
 
 	// GestureSystemInterface
 	void Update(const Frame& frame) override;
+	/// The game's templates, loaded through the resource caches the first time they are wanted
+	void LoadTemplates() override;
 	void DrawPath(std::vector<glm::vec2> path, bool holdingAction) override;
 	[[nodiscard]] bool IsDrawingPath() const override { return !_drawing.empty(); }
 	[[nodiscard]] std::optional<glm::vec2> GetDrawingPoint() const override
@@ -62,8 +64,6 @@ public:
 	void ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size) override;
 
 private:
-	/// The game's templates, loaded through the resource caches the first time they are wanted
-	void LoadTemplates();
 	/// What the hand holds and the player's creature, for the requests
 	[[nodiscard]] gesture::HandContext ContextOf(const Frame& frame);
 	/// Carries out a recognised gesture

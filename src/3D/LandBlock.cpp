@@ -63,7 +63,9 @@ const IndexBuffer& LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coars
 		    land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, flags), [](std::span<const uint16_t> indices) {
 			    // bgfx keeps a copy: the list is gone before it reads it
 			    const auto* memory = bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t)));
-			    return std::make_unique<IndexBuffer>("LandBlockTriangles", memory, IndexBuffer::Type::Uint16);
+			    // The sets come as the camera moves, so they go in the shared buffer and do not make a buffer each
+			    return std::make_unique<IndexBuffer>("LandBlockTriangles", memory, IndexBuffer::Type::Uint16,
+			                                         IndexBuffer::Storage::Shared);
 		    });
 	}
 	return *triangles;

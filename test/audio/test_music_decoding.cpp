@@ -14,6 +14,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <span>
@@ -59,6 +60,12 @@ DecodeResult ColdDecoder(std::span<const uint8_t> data, int expectedSampleRate)
 	sound.frames = sound.samples.size();
 	result.sound = std::move(sound);
 	return result;
+}
+
+/// A clock that does not move, so that a decode takes no time
+std::chrono::steady_clock::time_point StillClock()
+{
+	return {};
 }
 
 /// Keeps what is queued on each source
@@ -141,7 +148,7 @@ std::vector<int16_t> DecodeWhole(const MusicBank& bank, const std::vector<uint32
 std::vector<int16_t> Queue(const MusicBank& bank, const std::vector<uint32_t>& chunks, uint32_t skipFrames = 0)
 {
 	RecordingPlayer player;
-	MusicStreamBackend backend(player, ColdDecoder);
+	MusicStreamBackend backend(player, ColdDecoder, StillClock);
 	const auto stream = backend.CreateStream(100);
 	bool first = true;
 	for (const auto chunk : chunks)
@@ -149,6 +156,7 @@ std::vector<int16_t> Queue(const MusicBank& bank, const std::vector<uint32_t>& c
 		EXPECT_TRUE(backend.QueueChunk(stream, bank, chunk, first ? skipFrames : 0));
 		first = false;
 	}
+	backend.WaitForDecodes();
 	auto queued = player.sources.begin()->second;
 	backend.Destroy(stream);
 	return queued;
@@ -188,4 +196,67 @@ TEST(MusicDecoding, StartingInTimeLeavesOutWhatHasPlayed)
 	const auto whole = DecodeWhole(bank, {9, 10, 11});
 	ASSERT_EQ(queued.size(), whole.size() - k_ChunkFrames - 300);
 	EXPECT_TRUE(std::equal(queued.begin(), queued.end(), whole.begin() + k_ChunkFrames + 300));
+}
+
+TEST(MusicDecoding, ChunksAreQueuedInSequenceWhenTheyAreDecoded)
+{
+	const auto bank = MakeBank(6);
+	RecordingPlayer player;
+	MusicStreamBackend backend(player, ColdDecoder, StillClock);
+	const auto stream = backend.CreateStream(100);
+	for (uint32_t chunk = 0; chunk < 4; ++chunk)
+	{
+		EXPECT_TRUE(backend.QueueChunk(stream, bank, chunk, 0));
+	}
+	// Other threads decode the chunks: none is on the source before the stream gets them
+	EXPECT_TRUE(player.buffers.empty());
+	backend.WaitForDecodes();
+	EXPECT_EQ(player.buffers.size(), 4u);
+	EXPECT_EQ(player.sources.begin()->second, DecodeWhole(bank, {0, 1, 2, 3}));
+	// A chunk queued after the others were decoded continues from them
+	EXPECT_TRUE(backend.QueueChunk(stream, bank, 4, 0));
+	backend.WaitForDecodes();
+	EXPECT_EQ(player.sources.begin()->second, DecodeWhole(bank, {0, 1, 2, 3, 4}));
+	backend.Destroy(stream);
+}
+
+TEST(MusicDecoding, StartingInTimeAlsoLeavesOutTheTimeOfTheDecode)
+{
+	const auto bank = MakeBank(20);
+	RecordingPlayer player;
+	// Each look at the clock is ten milliseconds after the one before
+	auto now = std::chrono::steady_clock::time_point {};
+	MusicStreamBackend backend(player, ColdDecoder, [&now]() {
+		now += std::chrono::milliseconds(10);
+		return now;
+	});
+	const auto stream = backend.CreateStream(100);
+	EXPECT_TRUE(backend.QueueChunk(stream, bank, 10, 300));
+	backend.WaitForDecodes();
+	// The other channel played 10 ms more, 220 frames at 22050 frames a second
+	const auto whole = DecodeWhole(bank, {9, 10});
+	const auto& queued = player.sources.begin()->second;
+	constexpr size_t k_Waited = 220;
+	ASSERT_EQ(queued.size(), whole.size() - k_ChunkFrames - 300 - k_Waited);
+	EXPECT_TRUE(std::equal(queued.begin(), queued.end(), whole.begin() + k_ChunkFrames + 300 + k_Waited));
+	backend.Destroy(stream);
+}
+
+TEST(MusicDecoding, AChunkThatCannotBeDecodedCountsAsPlayed)
+{
+	auto bank = MakeBank(3);
+	bank.readChunk = [good = bank.readChunk](uint32_t chunk) { return chunk == 1 ? std::vector<uint8_t> {} : good(chunk); };
+	RecordingPlayer player;
+	const auto decoder = [](std::span<const uint8_t> data, int sampleRate) {
+		return data.empty() ? DecodeResult {} : ColdDecoder(data, sampleRate);
+	};
+	MusicStreamBackend backend(player, decoder, StillClock);
+	const auto stream = backend.CreateStream(100);
+	EXPECT_TRUE(backend.QueueChunk(stream, bank, 0, 0));
+	EXPECT_TRUE(backend.QueueChunk(stream, bank, 1, 0));
+	backend.WaitForDecodes();
+	// The player hears of the chunk that failed as of a played one
+	EXPECT_EQ(backend.ReleasePlayedChunks(stream), 1u);
+	EXPECT_EQ(backend.ReleasePlayedChunks(stream), 0u);
+	backend.Destroy(stream);
 }

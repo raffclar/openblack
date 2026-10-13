@@ -266,6 +266,9 @@ public:
 	virtual void Reset(glm::u16vec2 resolution) const noexcept = 0;
 	virtual void DrawScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
 	virtual void Frame() noexcept = 0;
+	/// Bakes the shadows of the things on the land into the land, as the next scene draw does. Call it behind the
+	/// loading screen, so that the first frame of a land does not do the bake of the whole island.
+	virtual void BakeLandShadows(bool drawVegetation) const noexcept = 0;
 	/// Asks for the frame being made to be written to a PNG once drawn; the file appears whole once written
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
 	/// Why a picture asked for was given up, once; none while it may still come
