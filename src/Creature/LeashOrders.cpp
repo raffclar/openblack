@@ -142,7 +142,12 @@ std::optional<uint32_t> creature_leash_orders::ToolTipFor(const Leash& leash, co
 
 bool creature_leash_orders::TakesOrders(const Body& body)
 {
-	return body.leashWorks && body.life > 0.0f && body.exhaustion < k_TooExhausted;
+	return body.leashWorks && body.life > 0.0f && body.exhaustion < k_TooExhausted && !body.frozen;
+}
+
+bool creature_leash_orders::TakesGroundOrders(const Body& body)
+{
+	return TakesOrders(body) && !body.scriptControlled;
 }
 
 GroundOrder creature_leash_orders::OnGround(glm::vec2 place, const Ground& ground)

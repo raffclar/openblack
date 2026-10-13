@@ -14,6 +14,7 @@
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 namespace openblack
 {
@@ -23,6 +24,11 @@ class LandIslandInterface;
 namespace openblack::ecs
 {
 class Registry;
+}
+
+namespace openblack::ecs::components
+{
+struct PlacedHeight;
 }
 
 namespace openblack::ecs::land_followers
@@ -56,5 +62,13 @@ struct Follower
 
 /// Once the land's changed heights are in, each of them keeps its height above the land under it
 void Follow(Registry& registry, const LandIslandInterface& land, std::span<const Follower> followers);
+
+/// A static thing's height above the land is the one it was put down at: kept as it was when the land under it is
+/// changed after. The height kept for it while it still lies where it was kept, else its height above the land now.
+[[nodiscard]] float PlacedHeightOf(glm::vec3 position, float ground, const components::PlacedHeight* kept);
+
+/// Before the land's heights are changed between two corners in metres, each static thing lying on the land there keeps
+/// its height above it, unless it already keeps one from where it lies
+void KeepPlacedHeights(Registry& registry, const LandIslandInterface& land, glm::vec2 lowest, glm::vec2 highest);
 
 } // namespace openblack::ecs::land_followers

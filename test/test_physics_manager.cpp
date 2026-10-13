@@ -28,6 +28,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
@@ -202,6 +203,26 @@ TEST_F(PhysicsClassesTest, GatesTheCaveAndThePhoneBoxCollideWithModelsOfTheirOwn
 	EXPECT_EQ(make(AnimatedStaticInfo::PhoneBox).collisionMesh, static_cast<uint32_t>(MeshId::GateTotemPlinthePhys1));
 	EXPECT_EQ(make(AnimatedStaticInfo::PiperCaveEntrance).collisionMesh, static_cast<uint32_t>(MeshId::PiperEntrancePhys1));
 	EXPECT_FALSE(make(AnimatedStaticInfo::ChessKingTeamA).interacts);
+}
+
+TEST_F(PhysicsClassesTest, OnlyTheWayOutOfALandIsInTheWayOfWhatFlies)
+{
+	const auto make = [this](VortexType type) {
+		const auto entity = _registry.Create();
+		_registry.Assign<Vortex>(entity, Vortex {.type = type});
+		return Classify(entity);
+	};
+	const auto out = make(VortexType::In);
+	EXPECT_TRUE(out.interacts);
+	EXPECT_TRUE(out.checksPoints);
+	EXPECT_FALSE(out.canBecomePhysicsObject);
+	EXPECT_FALSE(out.dynamic);
+	EXPECT_FALSE(out.fixedMass.has_value());
+	EXPECT_EQ(out.row, MaterialRow::Vortex);
+	EXPECT_EQ(out.body, physics_classes::BodyKind::CollisionModel);
+	EXPECT_EQ(out.collisionMesh, static_cast<uint32_t>(MeshId::SpellVortexCylinder));
+	EXPECT_FALSE(make(VortexType::Out).interacts);
+	EXPECT_FALSE(make(VortexType::Volcano).interacts);
 }
 
 TEST_F(PhysicsClassesTest, PotsFlyByTheirInfoAndAreHitUnlessInAStoragePit)

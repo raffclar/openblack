@@ -29,7 +29,7 @@ class LivingActionSystem final: public LivingActionSystemInterface
 public:
 	void Update() override;
 	void StartTurnPlaces() override;
-	void UpdatePoses(uint32_t turn, float turnFraction) override;
+	void UpdatePoses(std::chrono::milliseconds frameGameTime, float turnFraction) override;
 	void PoseVillagersInView(const glm::mat4& viewProjection) override;
 
 	[[nodiscard]] VillagerStates VillagerGetState(const components::LivingAction& action,
@@ -88,9 +88,6 @@ private:
 	/// Now and then a villager stops for a second before going into a state, more often when hurt
 	bool PausesBefore(components::LivingAction& action, VillagerStates state) const;
 	void SetTopState(components::LivingAction& action, VillagerStates state) const;
-
-	/// The game's clock in milliseconds at the last frame the villagers were posed
-	uint32_t _poseDrawTime {0};
 	/// The old clip's pose of a high-detail villager changing clip, reused from frame to frame
 	std::vector<glm::mat4> _blendBones;
 };

@@ -19,6 +19,7 @@
 #include <span>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 
 #include <glm/gtx/transform.hpp>
 
@@ -32,6 +33,7 @@
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/BlendedByMaterial.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -200,6 +202,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool instanceAlpha;
 		/// Every instance is a posed villager
 		bool villagers;
+		/// Every instance is a thing of the explorers' boat film
+		bool film;
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
 	std::unordered_map<entt::id_type, uint32_t> fadingCounts;
@@ -214,12 +218,14 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .translucent = false,
 		                                                                     .additiveShare = std::nullopt,
 		                                                                     .instanceAlpha = false,
-		                                                                     .villagers = true}));
+		                                                                     .villagers = true,
+		                                                                     .film = true}));
 		count.first->second.count++;
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
 		count.first->second.villagers &= registry.AllOf<VillagerPose>(entity) && !morphWithTerrain;
+		count.first->second.film &= registry.AllOf<BoatFilmPart>(entity);
 		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
 		{
 			count.first->second.translucent = true;
@@ -321,8 +327,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.perEntity = desc.perEntity;
 		// The villagers of a mesh are drawn together, their bones read from the bone palette
 		drawDesc->second.bonePalette = desc.villagers;
-		// The sea doesn't reflect villagers
-		drawDesc->second.hiddenFromReflection = desc.villagers;
+		// The sea doesn't reflect villagers, nor the explorers' boat film, which it mirrors in a look of its own
+		drawDesc->second.hiddenFromReflection = desc.villagers || desc.film;
 		// Blended by its materials, over the opaque things
 		drawDesc->second.materialBlending = desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
@@ -353,7 +359,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.bonePalette = villagers;
 		drawDesc->second.unlit = desc.has_value() && desc->unlit;
 		drawDesc->second.instanceAlpha = true;
-		drawDesc->second.hiddenFromReflection = villagers;
+		// The sea doesn't reflect villagers, nor the explorers' boat film, which it mirrors in a look of its own
+		drawDesc->second.hiddenFromReflection = villagers || (desc.has_value() && desc->film);
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);
 		_fadingSlots.emplace(meshId, InstanceSlots {.offset = offset,
 		                                            .count = count,
@@ -469,6 +476,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.entityDraws.clear();
 	_renderContext.drawnObjects.clear();
 	_renderContext.highDetailDraws.clear();
+	_renderContext.filmShadowDraws.clear();
+	_renderContext.filmReflections.clear();
+	auto lastFilmLevels = std::exchange(_filmReflectionLevels, {});
 	_renderContext.inHandDraws.clear();
 	_renderContext.bonePalette.clear();
 	_heldThings.clear();
@@ -476,7 +486,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &meshes, &fits, drawBoundingBox, camera, modelDetail,
+	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, drawBoundingBox, camera, modelDetail,
 	     drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // A villager is drawn gliding between its turns and turning after the way it faces; one held by the opening's
 		    // hand is drawn in its grip
@@ -489,10 +499,30 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto modelMatrix = glm::mat4(rotation);
 		    modelMatrix = glm::translate(modelMatrix, drawnAt * rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
+		    // A thing a film moves by a whole matrix is drawn by it
+		    if (const auto* exact = registry.TryGet<const DrawnMatrix>(entity); exact != nullptr)
+		    {
+			    modelMatrix = exact->model;
+		    }
 		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
 		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
+
+		    // The sea mirrors the explorers' boat, and no other part of its film, wherever it is and however far off, at the
+		    // detail it was drawn at the frame before
+		    const auto* filmPart = registry.TryGet<const BoatFilmPart>(entity);
+		    const bool mirroredBoat = filmPart != nullptr && filmPart->role == BoatFilmPart::Role::Boat;
+		    if (mirroredBoat)
+		    {
+			    const auto last = lastFilmLevels.find(entity);
+			    const auto lastLevel = last != lastFilmLevels.end()
+			                               ? last->second
+			                               : graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High);
+			    _filmReflectionLevels[entity] = lastLevel;
+			    _renderContext.filmReflections.push_back(
+			        {.mesh = DrawnMeshOf(entity, mesh), .model = modelMatrix, .detailLevel = lastLevel});
+		    }
 
 		    // A thing on the land is drawn in less detail the further off it is, fades out, then isn't drawn; a villager
 		    // then shows only as a smudge on a blob while it stands above the sea. One flying in the physics or one that
@@ -573,6 +603,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    }
 				    }
 			    }
+		    }
+
+		    if (mirroredBoat && !gone)
+		    {
+			    _filmReflectionLevels[entity] = graphics::mesh_detail::LevelBit(level);
 		    }
 
 		    // A thing too far off to be drawn keeps a place at the back of its mesh's instances, only for what it leaves on
@@ -752,8 +787,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
 		    // what of it stands can still be pointed at
+		    // (a feature is drawn going up only if it is the ark's dry dock)
 		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
-		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id;
+		    const auto* feature = registry.TryGet<const Feature>(entity);
+		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id &&
+		                         (feature == nullptr || building_construction::FeatureDrawnGoingUp(feature->type));
 		    if (goingUp)
 		    {
 			    look.z = 1.0f;
@@ -853,6 +891,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 			    _renderContext.highDetailDraws.push_back(
 			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = castModel});
+		    }
+		    if (const auto* film = registry.TryGet<const BoatFilmPart>(entity);
+		        film != nullptr && film->castsShadow && look.z != 1.0f)
+		    {
+			    _renderContext.filmShadowDraws.push_back(
+			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = modelMatrix});
 		    }
 		    if (registry.AllOf<InHand>(entity) && look.z != 1.0f)
 		    {

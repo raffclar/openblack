@@ -153,7 +153,9 @@ TEST(SpiritDistance, HoverAtTheFilesDepthOnTheirPixel)
 				EXPECT_NEAR(f.Depth(point), k_GoodNear, 1e-3f);
 				const auto projected = ProjectPoint(f.view, point);
 				ASSERT_TRUE(projected.has_value());
-				const auto expectedX = static_cast<int32_t>((hx + 1.0f) * static_cast<float>(screen.HalfWidth()));
+				// in hover units, half the width of the screen's 4:3 middle
+				const auto expectedX =
+				    static_cast<int32_t>(hx * static_cast<float>(screen.HoverUnit()) + static_cast<float>(screen.HalfWidth()));
 				EXPECT_NEAR(projected->x, expectedX, 1);
 				EXPECT_NEAR(projected->y, screen.HalfHeight(), 1);
 			}

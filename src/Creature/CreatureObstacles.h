@@ -59,6 +59,8 @@ enum class Avoidance : uint8_t
 	Creature,
 	/// A shield: another player's, unless a script controls the creature
 	Shield,
+	/// A vortex out of the land: unless the creature may be taken through it
+	VortexOutOfTheLand,
 };
 
 /// The circles a thing is planned round with
@@ -89,6 +91,9 @@ struct Walker
 	bool scriptControlled;
 	/// The player it belongs to
 	PlayerNames owner;
+	/// Whether a vortex out of the land may take it: let through by a script and on the leash, or controlled by a
+	/// script
+	bool mayBeTakenByVortex {false};
 };
 
 /// A thing that may stand in the creature's way

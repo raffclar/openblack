@@ -113,9 +113,25 @@ TEST(TempleHeartDamage, TheWaitShrinksFromThreeSecondsToFourTenths)
 	// 100 ms turns: 10 turns a second
 	EXPECT_EQ(DamageInterval(100, 0.0f), 4u);
 	EXPECT_EQ(DamageInterval(100, 1.0f), 30u);
-	// 1.7 s of turns in float, cut short to whole turns
-	EXPECT_EQ(DamageInterval(100, 0.5f), 16u);
+	// The game works it all in single precision: 1.7 s comes out just under, but ten times it rounds up to 17 whole turns
+	EXPECT_EQ(DamageInterval(100, 0.5f), 17u);
 	EXPECT_LT(DamageInterval(100, 0.2f), DamageInterval(100, 0.8f));
+}
+
+TEST(TempleHeartDamage, EachBeamLastsTheWaitAndBrightensAsTheHeartWeakens)
+{
+	const auto whole = DamageLookAt(1.0f);
+	EXPECT_FLOAT_EQ(whole.life, 3.0f);
+	EXPECT_EQ(whole.alpha, 20);
+	const auto none = DamageLookAt(0.0f);
+	EXPECT_FLOAT_EQ(none.life, 0.4f);
+	EXPECT_EQ(none.alpha, 100);
+	const auto half = DamageLookAt(0.5f);
+	EXPECT_FLOAT_EQ(half.life, 1.7f);
+	EXPECT_EQ(half.alpha, 60);
+	// The alpha is cut down to a whole number
+	EXPECT_EQ(DamageLookAt(0.3f).alpha, 76);
+	EXPECT_EQ(DamageLookAt(0.99f).alpha, 20);
 }
 
 TEST(TempleHeartDamage, ABeamIsDueOnceTheIntervalIsStrictlyPast)

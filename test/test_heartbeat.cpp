@@ -9,12 +9,14 @@
 
 #include <array>
 #include <numbers>
+#include <optional>
 
 #include <gtest/gtest.h>
 
 #include "ECS/Heartbeat.h"
 
 using namespace openblack::ecs::heartbeat;
+using openblack::PlayerNames;
 
 namespace
 {
@@ -127,4 +129,41 @@ TEST(Heartbeat, CellsAreMeasuredTheLongerWayAndHalfTheShorter)
 	EXPECT_EQ(CellDistance({0, 0}, {10, 3}), 11u);
 	EXPECT_EQ(CellDistance({0, 0}, {3, -10}), 11u);
 	EXPECT_EQ(CellDistance({5, 5}, {5, 5}), 0u);
+}
+
+TEST(Heartbeat, AKeptHeartIsHandedOverOnceToItsOwnPlayer)
+{
+	KeptHearts kept;
+	State racing;
+	racing.rate = 85.0f;
+	racing.phase = 0.4f;
+	racing.believerShare = 0.6f;
+	kept.Keep(PlayerNames::PLAYER_ONE, racing);
+
+	EXPECT_FALSE(kept.Take(PlayerNames::PLAYER_TWO).has_value());
+	const auto taken = kept.Take(PlayerNames::PLAYER_ONE);
+	ASSERT_TRUE(taken.has_value());
+	EXPECT_FLOAT_EQ(taken->rate, 85.0f);
+	EXPECT_FLOAT_EQ(taken->phase, 0.4f);
+	EXPECT_FLOAT_EQ(taken->believerShare, 0.6f);
+	EXPECT_FALSE(kept.Take(PlayerNames::PLAYER_ONE).has_value());
+}
+
+TEST(Heartbeat, ForgettingTheKeptHeartsStartsEveryoneCalm)
+{
+	KeptHearts kept;
+	kept.Keep(PlayerNames::PLAYER_ONE, State {.rate = 70.0f});
+	kept.Forget();
+	EXPECT_FALSE(kept.Take(PlayerNames::PLAYER_ONE).has_value());
+	EXPECT_FLOAT_EQ(State {}.rate, k_CalmRate);
+}
+
+TEST(Heartbeat, ATemplesDestructionHoldsTheHeartUntilItEnds)
+{
+	// Held at the destruction's beats while the temple is destroyed
+	EXPECT_FLOAT_EQ(HeldBeats(0.0f, 1.5f), 1.5f);
+	EXPECT_FLOAT_EQ(HeldBeats(1.5f, 2.0f), 2.0f);
+	// No temple being destroyed, as on the next land when it went with the last: the heart stays held
+	EXPECT_FLOAT_EQ(HeldBeats(2.0f, std::nullopt), 2.0f);
+	EXPECT_FLOAT_EQ(HeldBeats(0.0f, std::nullopt), 0.0f);
 }

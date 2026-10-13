@@ -38,11 +38,13 @@ public:
 	void AddPlasma(uint32_t source, const particles::PlasmaCommand& command) override;
 	[[nodiscard]] std::vector<model_surface::Triangle> DrawnTrianglesOf(entt::entity object) const override;
 	[[nodiscard]] glm::mat4 PlacementOf(entt::entity object) const override;
+	[[nodiscard]] std::vector<physics::temple_heart::Town> HeartTowns(PlayerNames owner) override;
 	[[nodiscard]] GameRandomInterface* Random() override;
 	[[nodiscard]] float RandomShare(float spread) override;
 	void StartScript(std::string_view name) override;
 	void Remove(entt::entity object) override;
 	void RemoveWorshipSites(entt::entity temple) override;
+	void EndHeartbeatHold(PlayerNames player) override;
 };
 
 } // namespace openblack::ecs::systems

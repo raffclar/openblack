@@ -136,13 +136,13 @@ ecs::heartbeat::Danger DangerOf(const ecs::Registry& registry, PlayerNames playe
 }
 
 /// The beats a second this computer's player's temple holds their heart at while it is destroyed, none otherwise
-float DestructionBeatsOf(const ecs::Registry& registry, PlayerNames player)
+std::optional<float> DestructionBeatsOf(const ecs::Registry& registry, PlayerNames player)
 {
 	if (!Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() != player)
 	{
-		return 0.0f;
+		return std::nullopt;
 	}
-	float beats = 0.0f;
+	std::optional<float> beats;
 	registry.Each<const Temple>([&beats, player](const Temple& temple) {
 		if (temple.owner == player && temple.destroying)
 		{
@@ -164,11 +164,13 @@ void HeartbeatSystem::ProcessTurn(uint32_t turn)
 			players.push_back(entity);
 		}
 	});
+	// A player's heart beats on from the land before, when they kept one, else it starts calm
 	for (const auto entity : players)
 	{
 		if (!registry.AllOf<Heartbeat>(entity))
 		{
-			registry.Assign<Heartbeat>(entity);
+			const auto kept = _kept.Take(registry.Get<const Player>(entity).name);
+			registry.Assign<Heartbeat>(entity, kept.value_or(ecs::heartbeat::State {}));
 		}
 	}
 
@@ -199,7 +201,7 @@ void HeartbeatSystem::ProcessTurn(uint32_t turn)
 		{
 			heartbeat::Measure(state, DangerOf(registry, name, towns, worldPopulation, totalInfluence, creatureDistances));
 		}
-		state.destructionBeats = DestructionBeatsOf(registry, name);
+		state.destructionBeats = heartbeat::HeldBeats(state.destructionBeats, DestructionBeatsOf(registry, name));
 		heartbeat::Step(state, secondsPerTurn);
 	}
 }
@@ -225,4 +227,27 @@ std::optional<ecs::heartbeat::State> HeartbeatSystem::StateOf(PlayerNames player
 		    }
 	    });
 	return found;
+}
+
+void HeartbeatSystem::KeepForNextLand()
+{
+	_kept.Forget();
+	Locator::entitiesRegistry::value().Each<const Player, const Heartbeat>(
+	    [this](const Player& player, const Heartbeat& heartbeat) { _kept.Keep(player.name, heartbeat.state); });
+}
+
+void HeartbeatSystem::ForgetKept()
+{
+	_kept.Forget();
+}
+
+void HeartbeatSystem::EndDestruction(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const Player, Heartbeat>([player](const Player& owner, Heartbeat& heartbeat) {
+		if (owner.name == player)
+		{
+			heartbeat.state.destructionBeats = 0.0f;
+		}
+	});
 }

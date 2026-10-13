@@ -721,7 +721,14 @@ void FeatureScriptCommands::CreateMobileStatic(glm::vec3 position, MobileStaticI
 void FeatureScriptCommands::CreateMobileUStatic(glm::vec3 position, MobileStaticInfo type, float verticalOffset,
                                                 float xRotation, float yRotation, float zRotation, float scale)
 {
-	LastObject() = MobileStaticArchetype::Create(position, type, verticalOffset, xRotation, yRotation, zRotation, scale);
+	// Its height above the land is the line's own: a script read about a raised place (the crossing file, about the
+	// vortex) doesn't raise it
+	glm::vec3 onLand = position;
+	if (Locator::terrainSystem::has_value())
+	{
+		onLand.y = Locator::terrainSystem::value().GetHeightAt({position.x, position.z});
+	}
+	LastObject() = MobileStaticArchetype::Create(onLand, type, verticalOffset, xRotation, yRotation, zRotation, scale);
 }
 
 void FeatureScriptCommands::CreateScaffold(int32_t, [[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)

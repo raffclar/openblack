@@ -43,6 +43,8 @@
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
+#include "Creature/CreatureDesires.h"
+#include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
 #include "ECS/ArtefactRules.h"
@@ -50,6 +52,7 @@
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/AudioEmitter.h"
+#include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
@@ -57,6 +60,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHelp.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -97,6 +101,7 @@
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
+#include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -300,6 +305,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"danceSystem", "living.dances"},
     LocatorCoverage {"sharkSystem", "living.sharks"},
     LocatorCoverage {"introSystem", "living.intro"},
+    LocatorCoverage {"boatLaunchSystem", "living.boat_launch"},
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
@@ -977,6 +983,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                                 {"state", static_cast<int>(animal.state)},
 		                                 {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
 		                                 {"turns_in_state", animal.turnsInState},
+		                                 {"birth_turn", animal.birthTurn},
 		                                 {"clip", static_cast<int>(animal.animation)},
 		                                 {"speed", animal.move.speed},
 		                                 {"flock", Id(animal.flock)},
@@ -992,8 +999,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			                  result["grazer"] = {{"hunger", grazer->needs.hunger},
 			                                      {"sleep", grazer->needs.sleep},
 			                                      {"breed", grazer->needs.breed},
-			                                      {"meals", grazer->meals},
-			                                      {"birth_turn", grazer->birthTurn}};
+			                                      {"meals", grazer->meals}};
 		                  }
 		                  return QueryResult::Value(std::move(result));
 	                  }));
@@ -1079,6 +1085,45 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  }
 		                  return json;
 	                  }));
+	provider->Add(
+	    Query("boat_launch", "The explorers' boat film: the stage, its clocks, where it plays, where the boat is drawn and "
+	                         "the things drawn in it with their clips' places"),
+	    Serve<Locator::boatLaunchSystem>(
+	        "the explorers' boat", [](const ecs::systems::BoatLaunchSystemInterface& film, const QueryContext&) {
+		        const auto state = film.GetState();
+		        Json wakes = Json::array();
+		        for (const auto phase : state.clocks.wakes)
+		        {
+			        wakes.push_back(phase);
+		        }
+		        Json parts = Json::array();
+		        if (const auto* registry = Registry(); registry != nullptr)
+		        {
+			        registry->Each<const BoatFilmPart, const Transform>(
+			            [&parts, registry](entt::entity entity, const BoatFilmPart& part, const Transform& transform) {
+				            auto item = Listed(*registry, entity);
+				            item["role"] = static_cast<int32_t>(part.role);
+				            item["index"] = part.index;
+				            item["at"] = Point(transform.position);
+				            item["clip_time"] = part.clipTime;
+				            parts.push_back(std::move(item));
+			            });
+		        }
+		        Json json {{"playing", state.playing},
+		                   {"stage", state.clocks.stage == ecs::boat_launch::Stage::Launch ? "launch" : "sailing"},
+		                   {"elapsed", state.clocks.elapsed},
+		                   {"boat_time", state.clocks.boatTime},
+		                   {"pushing", state.clocks.pushing},
+		                   {"wakes", std::move(wakes)},
+		                   {"dock", Point(state.places.dock)},
+		                   {"sailing_start", Point(state.places.sailingStart)},
+		                   {"parts", std::move(parts)}};
+		        if (state.boat.has_value())
+		        {
+			        json["boat"] = Point(glm::vec3((*state.boat)[3]));
+		        }
+		        return json;
+	        }));
 	provider->Add(Query("walk_paths", "The things walking the camera editor's tracks: the track, how far and up to where", {},
 	                    ResultKind::List),
 	              Serve<Locator::walkPathSystem>(
@@ -2301,19 +2346,16 @@ void AddAdvisorPlacement(Json& item, const ecs::systems::AdvisorSystemInterface&
 {
 	const auto& controller = advisors.GetController();
 	const auto& dude = controller.Dude(draw.advisor);
-	const auto& layout = controller.GetScreen();
-	const auto& stage = advisors.GetStage();
-	const auto& screen = stage.screen;
-	const auto halfWidth = static_cast<float>(layout.HalfWidth());
+	const auto& screen = controller.GetScreen();
+	const auto unit = static_cast<float>(screen.HoverUnit());
 	const auto hover = dude.Hover();
 	item["state"] = dude.State();
 	item["hover"] = {hover.x, hover.y};
-	// Both of the hover's axes are measured in half the advisors' area's width from its middle; the pixel is the screen's
-	const auto hoverPixel =
-	    stage.ToScreen({(hover.x + 1.0f) * halfWidth, hover.y * halfWidth + static_cast<float>(layout.HalfHeight())});
-	item["hover_pixel"] = {hoverPixel.x, hoverPixel.y};
-	item["stage"] = {{"left", stage.left}, {"width", layout.width}, {"share", stage.share}};
-	item["draw_share"] = dude.DrawShare();
+	// Both of the hover's axes are measured in hover units from the screen's middle
+	item["hover_pixel"] = {hover.x * unit + static_cast<float>(screen.HalfWidth()),
+	                       hover.y * unit + static_cast<float>(screen.HalfHeight())};
+	item["screen"] = {
+	    {"width", screen.width}, {"height", screen.height}, {"hover_unit", screen.HoverUnit()}, {"reach", screen.Reach()}};
 	item["cling_edge"] = static_cast<int>(dude.ClingEdge());
 	item["cling_target"] = {dude.ClingTarget().x, dude.ClingTarget().y};
 	if (camera == nullptr || draw.bones.empty())
@@ -2355,47 +2397,47 @@ void AddAdvisorPlacement(Json& item, const ecs::systems::AdvisorSystemInterface&
 std::unique_ptr<ProviderInterface> AdvisorsProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("advisors");
-	provider->Add(Query("draws",
-	                    "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in "
-	                    "the world, where they hover and cling on the screen (and the 4:3 area they are laid out in and the "
-	                    "share of their size they are drawn at) and where their bones are drawn, and how "
-	                    "close their posed meshes come to the camera beside its near plane",
-	                    {}, ResultKind::List),
-	              Serve<Locator::advisorSystem>(
-	                  "the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors, const QueryContext& /*c*/) {
-		                  const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
-		                  Json items = Json::array();
-		                  for (const auto& draw : advisors.GetDraws())
-		                  {
-			                  Json item = {{"advisor", draw.advisor},    {"near_screen", draw.nearScreen},
-			                               {"alpha", draw.alpha},        {"in_world", draw.inWorld},
-			                               {"bones", draw.bones.size()}, {"sprites", draw.sprites.size()}};
-			                  if (!draw.bones.empty())
-			                  {
-				                  item["root"] = Point(glm::vec3(draw.bones.front()[3]));
-			                  }
-			                  AddAdvisorPlacement(item, advisors, draw, camera);
-			                  const auto* model = advisors.GetModel(draw.advisor);
-			                  if (camera != nullptr && model != nullptr)
-			                  {
-				                  item["near_clip"] = camera->GetNearClip();
-				                  if (const auto depths = MeasureAdvisorDepths(*model, draw.bones, *camera))
-				                  {
-					                  item["nearest_vertex_depth"] = depths->nearestVertex;
-					                  item["furthest_vertex_depth"] = depths->furthestVertex;
-					                  item["vertices"] = depths->vertices;
-					                  item["vertices_closer_than_near"] = depths->closerThanNear;
-					                  item["vertices_clipped_near"] = depths->clippedNear;
-					                  item["vertices_clipped_far"] = depths->clippedFar;
-					                  item["triangles_clockwise"] = depths->clockwise;
-					                  item["triangles_counter_clockwise"] = depths->counterClockwise;
-					                  item["mirrored_bones"] = depths->mirroredBones;
-				                  }
-			                  }
-			                  items.push_back(std::move(item));
-		                  }
-		                  return items;
-	                  }));
+	provider->Add(
+	    Query("draws",
+	          "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in "
+	          "the world, where they hover and cling on the screen (and the screen they move on: its size, the pixels in "
+	          "a hover unit and how many hover units out its sides lie) and where their bones are drawn, and how "
+	          "close their posed meshes come to the camera beside its near plane",
+	          {}, ResultKind::List),
+	    Serve<Locator::advisorSystem>("the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors,
+	                                                     const QueryContext& /*c*/) {
+		    const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+		    Json items = Json::array();
+		    for (const auto& draw : advisors.GetDraws())
+		    {
+			    Json item = {{"advisor", draw.advisor},  {"near_screen", draw.nearScreen}, {"alpha", draw.alpha},
+			                 {"in_world", draw.inWorld}, {"bones", draw.bones.size()},     {"sprites", draw.sprites.size()}};
+			    if (!draw.bones.empty())
+			    {
+				    item["root"] = Point(glm::vec3(draw.bones.front()[3]));
+			    }
+			    AddAdvisorPlacement(item, advisors, draw, camera);
+			    const auto* model = advisors.GetModel(draw.advisor);
+			    if (camera != nullptr && model != nullptr)
+			    {
+				    item["near_clip"] = camera->GetNearClip();
+				    if (const auto depths = MeasureAdvisorDepths(*model, draw.bones, *camera))
+				    {
+					    item["nearest_vertex_depth"] = depths->nearestVertex;
+					    item["furthest_vertex_depth"] = depths->furthestVertex;
+					    item["vertices"] = depths->vertices;
+					    item["vertices_closer_than_near"] = depths->closerThanNear;
+					    item["vertices_clipped_near"] = depths->clippedNear;
+					    item["vertices_clipped_far"] = depths->clippedFar;
+					    item["triangles_clockwise"] = depths->clockwise;
+					    item["triangles_counter_clockwise"] = depths->counterClockwise;
+					    item["mirrored_bones"] = depths->mirroredBones;
+				    }
+			    }
+			    items.push_back(std::move(item));
+		    }
+		    return items;
+	    }));
 	return provider;
 }
 
@@ -2550,6 +2592,74 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              {
 			              result["skin_revision"] = skin->revision;
 			              result["skin_system"] = Locator::creatureSkinSystem::has_value();
+		              }
+		              return QueryResult::Value(std::move(result));
+	              }));
+	provider->Add(Query("leash",
+	                    "A creature's leash (the local player's creature by default): the leashes it knows, the one worn and "
+	                    "picked, whether it works, is tied and to what, its rope (ends, lengths, tension) and whether the rope "
+	                    "pulls the creature now, the order it carries out, the desire the leash makes rule it, and the local "
+	                    "player's hand on the rope (away, over or holding)",
+	                    {{.name = "id", .type = "integer", .description = "The creature's entity id"}}),
+	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) {
+		              if (!Locator::leashSystem::has_value())
+		              {
+			              return QueryResult::Error("no leash system");
+		              }
+		              const auto& leash = Locator::leashSystem::value();
+		              const auto local = Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer()
+		                                                                    : PlayerNames::PLAYER_ONE;
+		              auto entity = EntityParam(context.params);
+		              if (!context.params.contains("id"))
+		              {
+			              entity = leash.PlayersCreature(local);
+		              }
+		              if (!entity.has_value() || !registry.AllOf<Creature>(*entity))
+		              {
+			              return QueryResult::Error("no creature with that id");
+		              }
+		              const auto creature = *entity;
+		              Json result = {{"id", ToId(creature)},
+		                             {"rope_hand", static_cast<int>(leash.RopeHand(local))},
+		                             {"rope_hand_name",
+		                              std::array {"away", "over", "holding"}.at(static_cast<size_t>(leash.RopeHand(local)))}};
+		              const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+		              if (leashes == nullptr)
+		              {
+			              result["leashed"] = false;
+			              return QueryResult::Value(std::move(result));
+		              }
+		              result["known"] = {leashes->known.test(0), leashes->known.test(1), leashes->known.test(2)};
+		              result["selected"] = static_cast<int>(leashes->selected);
+		              result["leashed"] = leashes->worn.has_value();
+		              result["control"] = static_cast<int>(leashes->control);
+		              result["pull"] = leashes->pull;
+		              result["order_target"] = Optional(leash.OrderTarget(creature));
+		              if (Locator::creatureMindSystem::has_value())
+		              {
+			              const auto ruling = Locator::creatureMindSystem::value().DominantDesire(creature);
+			              result["ruling_desire"] =
+			                  ruling.has_value() ? Json(std::string(creature_desires::Name(*ruling))) : Json(nullptr);
+		              }
+		              if (leashes->worn.has_value())
+		              {
+			              const auto& worn = *leashes->worn;
+			              const auto& rope = worn.rope;
+			              result["type"] = static_cast<int>(worn.type);
+			              result["works"] = worn.works;
+			              result["tied_to"] = Id(worn.tiedTo);
+			              result["held_rope"] = worn.held.has_value();
+			              result["rope"] = {{"start", {rope.start.x, rope.start.y, rope.start.z}},
+			                                {"end", {rope.end.x, rope.end.y, rope.end.z}},
+			                                {"slack_length", rope.slackLength},
+			                                {"max_length", rope.maxLength},
+			                                {"tension", rope.tension}};
+			              result["pulls"] =
+			                  creature_leash::Pulls({.tension = rope.tension,
+			                                         .works = worn.works,
+			                                         .tied = worn.tiedTo.has_value(),
+			                                         .orderInForce = leashes->order.has_value(),
+			                                         .scriptControlled = registry.AllOf<ScriptControlled>(creature)});
 		              }
 		              return QueryResult::Value(std::move(result));
 	              }));

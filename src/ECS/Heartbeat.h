@@ -11,9 +11,13 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <span>
+#include <unordered_map>
 
 #include <glm/vec2.hpp>
+
+#include "Enums.h"
 
 /// A player's heartbeat: how fast their god's heart beats, quickening with the danger their people are in. The beat's
 /// pulse makes the temple's column of light throb; while the temple is destroyed a clock of its own drives it instead.
@@ -96,5 +100,37 @@ void Step(State& state, float secondsPerTurn);
 /// The beats a second the temple's destruction holds the heart at, by how far into it the clock is: quickening from
 /// about 0.64 to 1.27 over nineteen seconds, and to about 3.98 at twenty-five
 [[nodiscard]] float DestructionBeats(float clock);
+
+/// The beats a second the heart is held at this turn: those of the temple being destroyed, else those it was held at
+/// already. Only the destruction's end lets the heart go, so a temple that goes with its land while it is destroyed
+/// leaves the heart held at its last beats on the next land, as in Black & White
+[[nodiscard]] constexpr float HeldBeats(float held, std::optional<float> destruction)
+{
+	return destruction.value_or(held);
+}
+
+/// The players' hearts kept while one land goes, each to beat on as it was on the next land. Black & White's hearts
+/// are the players', which outlast their lands: only a new game starts them calm
+class KeptHearts
+{
+public:
+	void Keep(PlayerNames player, const State& state) { _hearts.insert_or_assign(player, state); }
+	/// A player's kept heart, handed over once; none when nothing was kept for them
+	[[nodiscard]] std::optional<State> Take(PlayerNames player)
+	{
+		const auto found = _hearts.find(player);
+		if (found == _hearts.end())
+		{
+			return std::nullopt;
+		}
+		const auto state = found->second;
+		_hearts.erase(found);
+		return state;
+	}
+	void Forget() { _hearts.clear(); }
+
+private:
+	std::unordered_map<PlayerNames, State> _hearts;
+};
 
 } // namespace openblack::ecs::heartbeat

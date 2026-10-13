@@ -56,6 +56,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -189,6 +190,8 @@ entt::entity AnimalSystem::CreateBird(AnimalInfo type, glm::vec2 position, uint3
 	const auto entity =
 	    ecs::archetypes::AnimalArchetype::Create(type, point, gutils::ConvertGameAngleTo3D(0), scale, PlayerNames::NEUTRAL);
 	auto& animal = registry.Get<Animal>(entity);
+	// Born as long ago as its age, which also set its size
+	animal.birthTurn = villager_age::BirthTurnFor(Locator::time::value().GetTurn(), bornAt);
 	animal.height = height;
 	animal.goalHeight = height;
 	animal.move.position = Fixed(position);
@@ -335,6 +338,8 @@ entt::entity AnimalSystem::CreateSpellAnimal(AnimalInfo type, glm::vec2 position
 	const auto entity =
 	    ecs::archetypes::AnimalArchetype::Create(type, point, gutils::ConvertGameAngleTo3D(angle), scale, owner);
 	auto& animal = registry.Get<Animal>(entity);
+	// Born as long ago as its age, which also set its size
+	animal.birthTurn = villager_age::BirthTurnFor(Locator::time::value().GetTurn(), bornAt);
 	animal.flock = flockEntity;
 	animal.height = heightAboveLand;
 	animal.goalHeight = heightAboveLand;
@@ -1817,14 +1822,11 @@ void AnimalSystem::LeaveFlock(entt::entity entity, Animal& animal)
 
 // Drawing
 
-void AnimalSystem::Update(uint32_t turn, float turnFraction)
+void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFraction)
 {
 	auto& registry = EntityRegistry();
 	const float t = std::clamp(turnFraction, 0.0f, 1.0f);
-	// The milliseconds of the game's clock since the last frame, none when the clock went back
-	const auto now = animals::DrawTime(turn, t);
-	const uint32_t elapsed = now >= _drawTime ? now - _drawTime : 0;
-	_drawTime = now;
+	const auto elapsed = static_cast<uint32_t>(frameGameTime.count());
 	const float elapsedSeconds = static_cast<float>(elapsed) * 0.001f;
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
@@ -1906,7 +1908,6 @@ void AnimalSystem::Update(uint32_t turn, float turnFraction)
 
 void AnimalSystem::Reset()
 {
-	_drawTime = 0;
 	_turn = 0;
 	_flocksMade = 0;
 }

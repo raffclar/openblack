@@ -119,3 +119,25 @@ TEST(GestureSystem, MovingTheCameraWipesThePathUnlessItShakes)
 	drawn({2.0f, 50.0f, 0.0f}, false, 3);
 	EXPECT_EQ(system.GetPath().Count(), 4u);
 }
+
+TEST(GestureSystem, ANewLandKeepsThePathUntilTheCameraMoves)
+{
+	GestureSystem system;
+	int step = 0;
+	const auto drawn = [&system, &step](glm::vec3 eye, int samples) {
+		for (int i = 0; i < samples; ++i, ++step)
+		{
+			auto frame = Frame(gesture::k_SampleSeconds);
+			frame.cursor = {100.0f + static_cast<float>(step * 20), 100.0f};
+			frame.view.cameraEye = eye;
+			system.Update(frame);
+		}
+	};
+	drawn({0.0f, 50.0f, 0.0f}, 5);
+	ASSERT_EQ(system.GetPath().Count(), 5u);
+	system.Reset();
+	EXPECT_EQ(system.GetPath().Count(), 5u);
+	// The camera's first move on the new land wipes it, as any camera move does
+	drawn({300.0f, 80.0f, 900.0f}, 1);
+	EXPECT_LE(system.GetPath().Count(), 1u);
+}
