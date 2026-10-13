@@ -333,6 +333,41 @@ TEST(CreatureObjectActions, OnlyAThingsOwnStateKeepsItFromBeingCaught)
 	EXPECT_FALSE(MayBeCaught({.villagerAtHome = true}));
 }
 
+TEST(CreatureObjectActions, EachKindOfThingHasItsOwnRuleForBeingPickedUp)
+{
+	using creature_object_actions::KindRule;
+	using creature_object_actions::MayPickUpKind;
+	const creature_object_actions::PickUpFacts outOfReach {.townArtefact = true, .inMapOrHeldByCreature = false};
+	// Never, whatever holds
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Never, .holdable = true}, {}));
+	// The football and a creed always, even out of the map or too big
+	EXPECT_TRUE(MayPickUpKind({.rule = KindRule::Always, .holdable = true}, outOfReach));
+	// A bird only when low over the land, whatever else holds
+	EXPECT_TRUE(MayPickUpKind({.rule = KindRule::Bird, .holdable = true, .low = true}, outOfReach));
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Bird, .holdable = true, .low = false}, {}));
+	// A pile unless a script said no, and only a kind that may fly about
+	EXPECT_TRUE(MayPickUpKind({.rule = KindRule::Pile, .holdable = true, .mayFly = true}, outOfReach));
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Pile, .holdable = true, .mayFly = false}, {}));
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Pile, .holdable = true, .mayFly = true}, {.cannotBePickedUp = true}));
+	// Anything else by the whole rule
+	EXPECT_TRUE(MayPickUpKind({.rule = KindRule::Whole, .holdable = true}, {}));
+	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Whole, .holdable = true}, outOfReach));
+}
+
+TEST(CreatureObjectActions, OnlyWhatAHandCanHoldIsGivenOrCaught)
+{
+	using creature_object_actions::KindRule;
+	// A bird high in the air may still be given or caught: those go by what a hand may hold
+	const creature_object_actions::KindFacts highBird {.rule = KindRule::Bird, .holdable = true, .low = false};
+	EXPECT_TRUE(creature_object_actions::MayTakeKindFromHand(highBird, {}));
+	EXPECT_TRUE(creature_object_actions::MayCatchKind(highBird, {}));
+	const creature_object_actions::KindFacts never {.rule = KindRule::Never, .holdable = false};
+	EXPECT_FALSE(creature_object_actions::MayTakeKindFromHand(never, {}));
+	EXPECT_FALSE(creature_object_actions::MayCatchKind(never, {}));
+	// Giving still minds the size and the leash
+	EXPECT_FALSE(creature_object_actions::MayTakeKindFromHand(highBird, {.leashTiedToIt = true}));
+}
+
 TEST(CreatureFeedback, AStrokeLandsOnTheNearestPart)
 {
 	std::array<glm::vec3, creature_feedback::k_BodyPartCount> parts {};

@@ -1342,19 +1342,51 @@ std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object
 	return value > 0.0f ? std::optional(value) : std::nullopt;
 }
 
-bool CreatureObjectActionSystem::KindCanBePickedUp(entt::entity object) const
+creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt::entity object) const
 {
+	using creature_object_actions::KindRule;
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
+	if (!registry.Valid(object) || !registry.AllOf<Transform>(object) || registry.AllOf<Creature>(object))
 	{
-		return false;
+		return {};
 	}
-	// Of pots and piles, only food can be picked up, to eat; of animals, those the animals' own rules allow, as a bird
-	// low over the land
-	return registry.AnyOf<MobileObject, Ball, Villager>(object) ||
-	       (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value()) ||
-	       (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value() &&
-	        Locator::animalSystem::value().CanBePickedUpByCreature(object));
+	if (registry.AllOf<Villager>(object))
+	{
+		return {.rule = KindRule::Whole, .holdable = true};
+	}
+	if (registry.AllOf<Animal>(object))
+	{
+		// A bird goes by its height over the land alone; the other animals by the whole rule
+		const auto bird = Locator::animalSystem::has_value()
+		                      ? Locator::animalSystem::value().BirdCanBePickedUpByCreature(object)
+		                      : std::nullopt;
+		return bird.has_value() ? creature_object_actions::KindFacts {.rule = KindRule::Bird, .holdable = true, .low = *bird}
+		                        : creature_object_actions::KindFacts {.rule = KindRule::Whole, .holdable = true};
+	}
+	// The football is always picked up
+	if (registry.AllOf<Ball>(object))
+	{
+		return {.rule = KindRule::Always, .holdable = true};
+	}
+	if (const auto* pot = registry.TryGet<const Pot>(object))
+	{
+		// A pile of food or wood goes by its own say and whether its kind may fly about; a pot by the whole rule
+		const auto kind = static_cast<size_t>(pot->type);
+		const auto* info = Locator::infoConstants::has_value() && kind < Locator::infoConstants::value().pot.size()
+		                       ? &Locator::infoConstants::value().pot.at(kind)
+		                       : nullptr;
+		if (info != nullptr && info->potType != PotType::Pot)
+		{
+			return {.rule = KindRule::Pile, .holdable = true, .mayFly = info->canBecomeAPhysicsObject != 0};
+		}
+		return {.rule = KindRule::Whole, .holdable = true};
+	}
+	if (const auto* mobile = registry.TryGet<const MobileObject>(object))
+	{
+		// A creed is always picked up
+		return {.rule = mobile->type == MobileObjectInfo::Creed ? KindRule::Always : KindRule::Whole, .holdable = true};
+	}
+	return {};
 }
 
 creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(entt::entity creature, entt::entity object) const
@@ -1410,20 +1442,23 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 
 bool CreatureObjectActionSystem::CanPickUp(entt::entity creature, entt::entity object) const
 {
-	return KindCanBePickedUp(object) && creature_object_actions::MayPickUp(PickUpFactsOf(creature, object));
+	const auto kind = KindFactsOf(object);
+	return kind.rule != creature_object_actions::KindRule::Never &&
+	       creature_object_actions::MayPickUpKind(kind, PickUpFactsOf(creature, object));
 }
 
 bool CreatureObjectActionSystem::CanTakeFromHand(entt::entity creature, entt::entity object) const
 {
-	return KindCanBePickedUp(object) && creature_object_actions::MayPickUpWhereverItIs(PickUpFactsOf(creature, object));
+	const auto kind = KindFactsOf(object);
+	return kind.holdable && creature_object_actions::MayTakeKindFromHand(kind, PickUpFactsOf(creature, object));
 }
 
 bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	return KindCanBePickedUp(object) &&
-	       creature_object_actions::MayBeCaught({.cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
-	                                             .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
+	return creature_object_actions::MayCatchKind(KindFactsOf(object),
+	                                             {.cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
+	                                              .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
 }
 
 bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const

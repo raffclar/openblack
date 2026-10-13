@@ -62,8 +62,8 @@ public:
 	[[nodiscard]] std::optional<float> PickUpStraightReach(entt::entity creature) const override;
 
 private:
-	/// Whether the thing is of a kind a creature picks up at all: things, villagers, food and low birds
-	[[nodiscard]] bool KindCanBePickedUp(entt::entity object) const;
+	/// What the thing's kind says about a creature picking it up
+	[[nodiscard]] creature_object_actions::KindFacts KindFactsOf(entt::entity object) const;
 	/// What the rules for a creature picking the thing up depend on
 	[[nodiscard]] creature_object_actions::PickUpFacts PickUpFactsOf(entt::entity creature, entt::entity object) const;
 	/// Catches made to wait while a creature's body acted out something else start once it is free
