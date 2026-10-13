@@ -492,6 +492,7 @@ Game::Game(Arguments&& args) noexcept
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
+	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.resolution = {args.windowWidth, args.windowHeight};
 	config.displayMode = args.displayMode;
 	config.graphicsBackend = args.graphicsBackend;

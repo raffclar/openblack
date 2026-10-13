@@ -16,6 +16,7 @@
 #include <string_view>
 #include <utility>
 
+#include "Creature/CreatureSwap.h"
 #include "Graphics/LandDetail.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -88,6 +89,9 @@ struct EngineConfig
 	/// Trees cast their shadows as they are drawn each frame, swaying with them and bent away from the hand, rather than
 	/// baked into the land once as the game does (off: as the game does)
 	bool dynamicTreeShadows {false};
+	/// Debug: the Creature Breeder's bonus creatures taken as unlocked. Vanilla only had them once an unlock from outside
+	/// the game was installed; none is unlocked by default, as on a normal install
+	creature_swap::Unlocked unlockedBonusCreatures;
 
 	bool vsync {false};
 	bool running {false};

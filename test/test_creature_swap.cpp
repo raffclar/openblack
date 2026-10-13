@@ -69,6 +69,30 @@ TEST(CreatureSwap, AnUnlockedBonusCreatureIsAvailable)
 	EXPECT_FALSE(BonusOf(11).has_value());
 }
 
+// The debug option names the bonus creatures to unlock: all, none, or a list of names
+TEST(CreatureSwap, TheDebugOptionNamesTheBonusCreatures)
+{
+	EXPECT_EQ(ParseUnlocked("all"), Unlocked {}.set());
+	EXPECT_EQ(ParseUnlocked("ALL"), Unlocked {}.set());
+	EXPECT_EQ(ParseUnlocked("none"), Unlocked {});
+	const auto two = ParseUnlocked("Leopard, rhino");
+	ASSERT_TRUE(two.has_value());
+	EXPECT_TRUE(IsAvailable(3, *two));
+	EXPECT_TRUE(IsAvailable(15, *two));
+	EXPECT_FALSE(IsAvailable(6, *two));
+	EXPECT_FALSE(IsAvailable(14, *two));
+	EXPECT_FALSE(IsAvailable(16, *two));
+	EXPECT_FALSE(ParseUnlocked("leopard,tiger").has_value());
+	EXPECT_FALSE(ParseUnlocked("").has_value());
+	for (size_t i = 0; i < k_BonusCount; ++i)
+	{
+		const auto one = ParseUnlocked(NameOf(static_cast<Bonus>(i)));
+		ASSERT_TRUE(one.has_value());
+		EXPECT_EQ(one->count(), 1U);
+		EXPECT_TRUE(one->test(i));
+	}
+}
+
 // Each turn the body closes 4% of the gap to its new size and alignment
 TEST(CreatureSwap, EachTurnClosesAShareOfTheGap)
 {

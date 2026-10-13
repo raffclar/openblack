@@ -728,6 +728,22 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
+			if (ImGui::BeginMenu("Bonus Creatures"))
+			{
+				// The breeder's bonus creatures, which vanilla only had once unlocked from outside the game
+				for (size_t i = 0; i < creature_swap::k_BonusCount; ++i)
+				{
+					const auto name = creature_swap::NameOf(static_cast<creature_swap::Bonus>(i));
+					bool unlocked = config.unlockedBonusCreatures.test(i);
+					if (ImGui::Checkbox(std::string(name).c_str(), &unlocked))
+					{
+						config.unlockedBonusCreatures.set(i, unlocked);
+					}
+				}
+
+				ImGui::EndMenu();
+			}
+
 			if (ImGui::BeginMenu("Hand"))
 			{
 				ImGui::Checkbox("Right Handed", &config.rightHandedHand);

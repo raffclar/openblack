@@ -30,6 +30,7 @@
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
 #include "Creature/CreatureFight.h"
+#include "Creature/CreatureSwap.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/UploadPacer.h"
@@ -131,6 +132,8 @@ struct Arguments
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
 	bool dynamicTreeShadows {false};
+	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
+	creature_swap::Unlocked unlockedBonusCreatures;
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
 	std::string playVideo;
 	/// Play the pre-intro film at start-up, as on a first run

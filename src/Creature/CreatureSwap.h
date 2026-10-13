@@ -14,6 +14,7 @@
 
 #include <bitset>
 #include <optional>
+#include <string_view>
 
 /// Swapping creatures: a script can move the player's creature's mind into another creature's body, and that creature's
 /// mind into the player's old one. What it has learnt, how it feels, its physique and its tattoos go with the mind; each
@@ -42,6 +43,13 @@ using Unlocked = std::bitset<k_BonusCount>;
 
 /// Whether a species can be offered, as scripts ask: a bonus creature only once unlocked, any other species always
 [[nodiscard]] bool IsAvailable(int32_t species, const Unlocked& unlocked);
+
+/// A bonus creature's name, as the debug option spells it: leopard, horse, mandrill, gorilla or rhino
+[[nodiscard]] std::string_view NameOf(Bonus bonus);
+
+/// The bonus creatures a debug option unlocks: "all", "none", or names joined by commas (in any case); none when the
+/// text names something else
+[[nodiscard]] std::optional<Unlocked> ParseUnlocked(std::string_view text);
 
 /// A body's size and alignment, which it takes from the other body over a swap
 struct Shape
