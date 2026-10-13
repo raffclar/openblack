@@ -57,8 +57,8 @@ public:
 	static void CreateNewAnimal(glm::vec3 position, int32_t, int32_t, int32_t, int32_t);
 	static void CreateForest(int32_t forestId, glm::vec3 position);
 	static void CreateTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t rotation, int32_t scale);
-	static void CreateDeadTree(glm::vec3 position, const std::string& player, TreeInfo treeType, float scale, float roll,
-	                           float yaw, float pitch);
+	static void CreateDeadTree(glm::vec3 position, const std::string& player, TreeInfo treeType, float life, float xAngle,
+	                           float yAngle, float zAngle);
 	static void CreateNewTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t isNonScenic, float rotation,
 	                          float currentSize, float maxSize);
 	static void CreateField(glm::vec3 position, FieldTypeInfo type);

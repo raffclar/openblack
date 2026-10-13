@@ -1825,7 +1825,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Vortex::afterLandEffect>("afterLandEffect")
 	    .Field<&components::Vortex::objectMoverEffect>("objectMoverEffect")
 	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect")
-	    .Field<&components::Vortex::arrival>("arrival");
+	    .Field<&components::Vortex::arrival>("arrival")
+	    .Field<&components::Vortex::throwingOut>("throwingOut");
 	Reflect<components::DrawnIntoVortex>(context).Field<&components::DrawnIntoVortex::vortex>("vortex");
 	Reflect<components::WalkPath>(context)
 	    .Field<&components::WalkPath::number>("number")
@@ -2523,6 +2524,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::Vortex::Arrival::flockDistance>("flockDistance")
 	    .Field<&openblack::ecs::components::Vortex::Arrival::flockRadius>("flockRadius")
 	    .Field<&openblack::ecs::components::Vortex::Arrival::flock>("flock");
+	Reflect<openblack::ecs::components::Vortex::ThrowingOut>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::lines>("lines")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::nextLine>("nextLine")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::reading>("reading")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::villagersOut>("villagersOut")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::thrown>("thrown")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::animalFlock>("animalFlock");
 	Reflect<openblack::ecs::components::WorshipSite::BuildRequest>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::town>("town")
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::desireBoost>("desireBoost");

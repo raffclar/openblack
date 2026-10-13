@@ -10,7 +10,11 @@
 #include "FeatureScriptCommands.h"
 
 #include <algorithm>
+#include <iterator>
+#include <limits>
 #include <tuple>
+#include <utility>
+#include <vector>
 
 #include <glm/gtx/polar_coordinates.hpp>
 #include <glm/gtx/string_cast.hpp>
@@ -47,7 +51,10 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Stream.h"
+#include "ECS/Components/Town.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -57,8 +64,10 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "InfoConstants.h"
@@ -125,6 +134,36 @@ entt::entity& LastObject()
 	return Locator::entitiesRegistry::value().Context().mapScriptGlobals.lastObject;
 }
 
+/// The town a land script numbers, none for none
+entt::entity TownWithId(int32_t townId)
+{
+	if (townId < 0)
+	{
+		return entt::null;
+	}
+	const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+	const auto town = towns.find(static_cast<uint32_t>(townId));
+	return town != towns.end() ? town->second : entt::null;
+}
+
+/// The nearest town to a place however far, by the game's measure of distance across the land, the towns taken in the
+/// order they were made and the first met winning a tie
+entt::entity NearestTownAnywhere(const glm::vec3& position)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<std::pair<uint32_t, ecs::script_find::Candidate>> towns;
+	registry.Each<const Town, const Transform>([&towns](entt::entity entity, const Town& town, const Transform& transform) {
+		towns.emplace_back(
+		    town.id, ecs::script_find::Candidate {.entity = entity,
+		                                          .at = map_coords::FromMetres({transform.position.x, transform.position.z})});
+	});
+	std::ranges::sort(towns, {}, &std::pair<uint32_t, ecs::script_find::Candidate>::first);
+	std::vector<ecs::script_find::Candidate> ordered;
+	ordered.reserve(towns.size());
+	std::ranges::transform(towns, std::back_inserter(ordered), [](const auto& town) { return town.second; });
+	return ecs::script_find::FindNearestTown(map_coords::FromMetres({position.x, position.z}),
+	                                         std::numeric_limits<float>::infinity(), ordered);
+}
 } // namespace
 
 const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Signatures = {{
@@ -449,14 +488,30 @@ void FeatureScriptCommands::CreateVillager(glm::vec3 param1, glm::vec3 param2, c
 
 void FeatureScriptCommands::CreateTownVillager(int32_t townId, glm::vec3 position, const std::string& villagerType, int32_t age)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, townId, glm::to_string(position), villagerType, age);
+	const auto [tribe, number] = GetVillagerTribeAndNumber(villagerType);
+	CreateSpecialTownVillager(townId, position, static_cast<int32_t>(GVillagerInfo::Find(tribe, number)), age);
 }
 
-void FeatureScriptCommands::CreateSpecialTownVillager(int32_t param1, glm::vec3 position, int32_t param3, int32_t param4)
+void FeatureScriptCommands::CreateSpecialTownVillager(int32_t townId, glm::vec3 position, int32_t row, int32_t age)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, param1, glm::to_string(position), param3, param4);
+	// A villager by its row of the villagers' table, at an age, joining the town with the number, or the nearest town
+	// however far when there is none with it
+	if (row < 0 || std::cmp_greater_equal(row, Locator::infoConstants::value().villager.size()))
+	{
+		return;
+	}
+	const auto villager = VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(row),
+	                                                static_cast<uint32_t>(age), VillagerArchetype::Joins::Nobody);
+	LastObject() = villager;
+	auto town = TownWithId(townId);
+	if (town == entt::null)
+	{
+		town = NearestTownAnywhere(position);
+	}
+	if (town != entt::null && Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().AddVillagerToTown(town, villager);
+	}
 }
 
 void FeatureScriptCommands::CreateVillagerPos(glm::vec3 abodePosition, glm::vec3 position, const std::string& tribeAndNumber,
@@ -507,21 +562,6 @@ void FeatureScriptCommands::CreatePlannedWorshipSite(glm::vec3 /*position*/, int
 	// tribe once the temple stands
 }
 
-namespace
-{
-/// The town a land script numbers, none for none
-entt::entity TownWithId(int32_t townId)
-{
-	if (townId < 0)
-	{
-		return entt::null;
-	}
-	const auto& towns = Locator::entitiesRegistry::value().Context().towns;
-	const auto town = towns.find(static_cast<uint32_t>(townId));
-	return town != towns.end() ? town->second : entt::null;
-}
-} // namespace
-
 void FeatureScriptCommands::CreateAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t townId)
 {
 	// As a new animal at no age, which takes a random one
@@ -543,10 +583,15 @@ void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, in
 	const auto years = static_cast<uint32_t>(std::max(age, 0));
 	if (animals::grazers::IsGrazer(kind))
 	{
-		animals.CreateGrazer(kind, xz, years, flock, TownWithId(townId));
+		LastObject() = animals.CreateGrazer(kind, xz, years, flock, TownWithId(townId));
 		return;
 	}
-	if (animals.CreateBird(kind, xz, years, flock) == entt::null)
+	const auto bird = animals.CreateBird(kind, xz, years, flock);
+	if (bird != entt::null)
+	{
+		LastObject() = bird;
+	}
+	else
 	{
 		// TODO(land-animals): the hunters (lions, tigers, leopards, wolves), which openblack doesn't make yet
 		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "LHScriptX: animal kind {} isn't made yet", type);
@@ -567,10 +612,14 @@ void FeatureScriptCommands::CreateTree(int32_t forestId, glm::vec3 position, Tre
 }
 
 void FeatureScriptCommands::CreateDeadTree(glm::vec3 position, [[maybe_unused]] const std::string& player, TreeInfo treeType,
-                                           float scale, [[maybe_unused]] float roll, float yaw, [[maybe_unused]] float pitch)
+                                           float life, [[maybe_unused]] float xAngle, float yAngle,
+                                           [[maybe_unused]] float zAngle)
 {
-	// TODO: tilt the tree by its roll and pitch
-	LastObject() = DeadTreeArchetype::Create(position, treeType, yaw, scale);
+	// The fourth number is the dead tree's life; it is always made at its model's own size
+	// TODO: tilt the tree about x and z
+	const auto deadTree = DeadTreeArchetype::Create(position, treeType, yAngle, 1.0f);
+	ecs::world_objects::SetLife(deadTree, life);
+	LastObject() = deadTree;
 }
 
 void FeatureScriptCommands::CreateNewTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t isNonScenic,
@@ -642,9 +691,14 @@ void FeatureScriptCommands::CreatePitch([[maybe_unused]] glm::vec3 position, int
 	// __func__);
 }
 
-void FeatureScriptCommands::CreatePot(glm::vec3 position, PotInfo type, int32_t /*unused*/, int32_t amount)
+void FeatureScriptCommands::CreatePot(glm::vec3 position, PotInfo type, int32_t /*resource*/, int32_t amount)
 {
-	PotArchetype::Create(position, 0.0f, type, amount);
+	// A pot that would hold nothing is never made
+	if (amount <= 0)
+	{
+		return;
+	}
+	LastObject() = PotArchetype::Create(position, 0.0f, type, amount);
 }
 
 void FeatureScriptCommands::CreateTownTemporaryPots(int32_t, int32_t, int32_t)

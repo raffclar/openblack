@@ -122,6 +122,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
@@ -2643,6 +2644,28 @@ uint32_t Runner::StartParticle(size_t index) const
 	return effect;
 }
 
+void Runner::WriteCrossingFile(std::span<const std::string_view> lines)
+{
+	// Where the profile keeps it, as a vortex out of the last land writes it
+	if (!Locator::playerProfileSystem::has_value())
+	{
+		return;
+	}
+	const auto folder = Locator::playerProfileSystem::value().SavedGamesFolder();
+	if (!folder.has_value())
+	{
+		return;
+	}
+	std::error_code error;
+	std::filesystem::create_directories(*folder, error);
+	std::ofstream file(*folder / "vortex.txt", std::ios::out | std::ios::trunc | std::ios::binary);
+	for (const auto line : lines)
+	{
+		file << line << '\n';
+	}
+	Log(fmt::format("Wrote {} lines to the crossing file in {}", lines.size(), folder->string()));
+}
+
 void Runner::UpdateVortices()
 {
 	if (!Locator::vortexSystem::has_value() || !Locator::terrainSystem::has_value())
@@ -2657,7 +2680,20 @@ void Runner::UpdateVortices()
 		if (running.vortex == entt::null && _seconds >= setup.delaySeconds)
 		{
 			const auto point = MapPoint(_middle, setup.offset);
+			if (!setup.crossingLines.empty())
+			{
+				WriteCrossingFile(setup.crossingLines);
+			}
 			running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
+			if (setup.gatheringOffset.has_value())
+			{
+				const auto gathering = MapPoint(_middle, *setup.gatheringOffset);
+				vortices.SetArrival(running.vortex, {.town = entt::null,
+				                                     .gatheringPlace = {gathering.x, 0.0f, gathering.y},
+				                                     .flockDistance = setup.flockDistance,
+				                                     .flockRadius = setup.flockRadius,
+				                                     .flock = entt::null});
+			}
 			Log(fmt::format("Vortex {} opened at {:.0f}, {:.0f}", i, point.x, point.y));
 		}
 		if (running.vortex != entt::null && !running.fading && setup.fadeOutAfterSeconds.has_value() &&

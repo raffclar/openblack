@@ -25,6 +25,11 @@ using namespace openblack::lhscriptx;
 
 Script::Script() = default;
 
+Script::Script(glm::vec3 origin)
+    : _origin(origin)
+{
+}
+
 void Script::Load(const std::string& source, const std::function<void()>& afterCommand)
 {
 	Lexer lexer(source);
@@ -109,7 +114,9 @@ bool Script::IsCommand(const std::string& identifier) const
 	                   [&identifier](const auto& s) { return s.name.data() == identifier; });
 }
 
-ScriptCommandParameter GetParameter(Token& argument)
+namespace
+{
+ScriptCommandParameter GetParameter(Token& argument, glm::vec3 origin)
 {
 	const auto type = argument.GetType();
 
@@ -131,15 +138,15 @@ ScriptCommandParameter GetParameter(Token& argument)
 		{
 			const auto delim = str.find(',');
 			char* floatEnd;
-			const auto x = std::strtof(str.c_str(), &floatEnd);
+			const auto x = std::strtof(str.c_str(), &floatEnd) + origin.x;
 			if (str.c_str() + delim == floatEnd)
 			{
-				const auto z = std::strtof(floatEnd + 1, &floatEnd);
+				const auto z = std::strtof(floatEnd + 1, &floatEnd) + origin.z;
 				if (static_cast<size_t>(floatEnd - str.c_str()) == static_cast<size_t>(str.length()))
 				{
 					const auto& island = Locator::terrainSystem::value();
 
-					return {x, island.GetHeightAt(glm::vec2(x, z)), z};
+					return {x, island.GetHeightAt(glm::vec2(x, z)) + origin.y, z};
 				}
 			}
 		}
@@ -155,6 +162,7 @@ ScriptCommandParameter GetParameter(Token& argument)
 		throw std::runtime_error("Missing switch case for script token argument");
 	}
 }
+} // namespace
 
 void Script::RunCommand(const std::string& identifier, const std::vector<Token>& args)
 {
@@ -181,7 +189,7 @@ void Script::RunCommand(const std::string& identifier, const std::vector<Token>&
 
 	for (auto arg : args)
 	{
-		const ScriptCommandParameter param = GetParameter(arg);
+		const ScriptCommandParameter param = GetParameter(arg, _origin);
 		parameters.push_back(param);
 	}
 
