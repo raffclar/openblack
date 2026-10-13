@@ -41,7 +41,7 @@ const std::array<ObjectSetup, 10> k_Kinds {
     ObjectSetup {.type = MobileStaticInfo::RockChalk},
     ObjectSetup {.type = MobileStaticInfo::Boulder1Lime},
     ObjectSetup {.type = MobileObjectInfo::EgyptPotA},
-    ObjectSetup {.type = PotInfo::FoodPile, .amount = 200},
+    ObjectSetup {.type = PotInfo::HandFood, .amount = 200},
     ObjectSetup {.type = PotInfo::WoodPile_1, .amount = 200},
     ObjectSetup {.type = MobileObjectInfo::EgyptBarrel},
     ObjectSetup {.type = VillagerInfo::CelticFarmerMale},

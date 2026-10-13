@@ -153,7 +153,7 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Cow, .offset = k_OnThePlane + glm::vec2(12.0f, -6.0f)},
 	                {.type = TreeInfo::Oak, .offset = k_OnThePlane + glm::vec2(6.0f, 14.0f)},
 	                {.type = MobileStaticInfo::Rock, .offset = k_OnThePlane + glm::vec2(-14.0f, -10.0f)},
-	                {.type = PotInfo::FoodPile, .offset = k_OnThePlane + glm::vec2(0.0f, -18.0f), .amount = 3000},
+	                {.type = PotInfo::MagicFood, .offset = k_OnThePlane + glm::vec2(0.0f, -18.0f), .amount = 1000},
 	                {.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(20.0f, 18.0f), .yawDegrees = 90.0f},
 	                {.type = AnimalInfo::Cow, .offset = k_OnThePlane + glm::vec2(45.0f, 0.0f)}},
 	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},

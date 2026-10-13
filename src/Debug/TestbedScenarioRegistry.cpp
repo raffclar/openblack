@@ -1727,6 +1727,27 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.pile_kinds",
+	    .name = "The kinds of food and wood piles",
+	    .facet = Facet::Objects,
+	    .description = "From west to east: a store's food pile, the food miracle's pile, a small pile of food such as the "
+	                   "hand drops, a pot of food, a pile of wood, the wood miracle's pile, a small pile of wood such as "
+	                   "the hand drops and a pot of wood.",
+	    .expected = "Each one is drawn where it stands, on the ground, and rises out of the ground for what it holds. The "
+	                "store's food pile half full is a low heap of grain; the food miracle's pile full is a wide heap.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-50.0f, 25.0f}, {50.0f, 60.0f}}},
+	    .objects = {{.type = PotInfo::StoragePitFoodPile, .offset = {-40.0f, 45.0f}, .amount = 7500},
+	                {.type = PotInfo::MagicFood, .offset = {-10.0f, 40.0f}, .amount = 1000},
+	                {.type = PotInfo::HandFood, .offset = {12.0f, 40.0f}},
+	                {.type = PotInfo::FoodPot, .offset = {18.0f, 40.0f}},
+	                {.type = PotInfo::WoodPile_1, .offset = {26.0f, 40.0f}, .amount = 2500},
+	                {.type = PotInfo::MagicWood, .offset = {34.0f, 40.0f}, .amount = 1000},
+	                {.type = PotInfo::HandWood, .offset = {40.0f, 40.0f}},
+	                {.type = PotInfo::WoodPot, .offset = {46.0f, 40.0f}}},
+	});
+
+	all.push_back({
 	    .id = "objects.give_wood",
 	    .name = "Giving a tree to a store as wood",
 	    .facet = Facet::Objects,
@@ -4066,6 +4087,12 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if (!valid || object.scale <= 0.0f || !ValidOffset(object.offset))
 		{
 			problems.emplace_back("an object of no such kind, size or place");
+		}
+		// The model of this kind of food pile is the grain at the side of a worship site. It lies about 50 m from the
+		// point where the pile is, so you do not see the pile there. Use a different kind of food pile.
+		if (const auto* pot = std::get_if<PotInfo>(&object.type); pot != nullptr && *pot == PotInfo::FoodPile)
+		{
+			problems.emplace_back("a food pile of the kind whose model is far from its point");
 		}
 	}
 	for (const auto& footpath : scenario.footpaths)

@@ -38,7 +38,7 @@ std::vector<ObjectSetup> VillageAndWood()
 		objects.push_back({.type = i % 2 == 0 ? VillagerInfo::CelticFarmerMale : VillagerInfo::CelticForesterMale,
 		                   .offset = k_Villagers.at(i)});
 	}
-	objects.push_back({.type = PotInfo::FoodPile, .offset = {8.0f, 58.0f}, .amount = 2000});
+	objects.push_back({.type = PotInfo::MagicFood, .offset = {24.0f, 58.0f}, .amount = 1000});
 	objects.push_back({.type = PotInfo::WoodPile_1, .offset = {-10.0f, 60.0f}, .amount = 2000});
 	// A wood to the north, where the storm drifts the way it was thrown
 	constexpr std::array k_Trees {
@@ -124,7 +124,7 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 40.0f}, {25.0f, 80.0f}}},
 	    .objects = {{.type = PotInfo::HandFood, .offset = {-4.0f, 58.0f}, .amount = 300},
 	                {.type = PotInfo::HandWood, .offset = {4.0f, 62.0f}, .amount = 300},
-	                {.type = PotInfo::FoodPile, .offset = {10.0f, 56.0f}, .amount = 2000},
+	                {.type = PotInfo::StoragePitFoodPile, .offset = {10.0f, 56.0f}, .amount = 2000},
 	                {.type = PotInfo::WoodPile_1, .offset = {-10.0f, 64.0f}, .amount = 2000}},
 	    .miracles = {{.type = MagicType::Tornado,
 	                  .point = k_Centre,

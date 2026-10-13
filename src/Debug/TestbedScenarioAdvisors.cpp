@@ -225,7 +225,8 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	                   "over each, and over the bare ground and the sea, and press F1.",
 	    .expected = "Each press has the advisors say the thing's help text in the dialogue box: the villager, belonging "
 	                "to no town, gets one of the remarks about vagrants; the sheep, the oak, the hut, the statue, the "
-	                "rock, the food pile (\"a food pile\") and the scroll their own descriptions; the player's tiger its "
+	                "rock, the small pile of food (\"a small pile of food\") and the scroll their own descriptions; the "
+	                "player's tiger its "
 	                "species' text. Over bare ground the text tells what the ground is made of (grass, earth, sand...); "
 	                "over the sea or land at sea level, shallow water. A new press cuts short the one before.",
 	    .environment = {.dispenserGrid = false},
@@ -237,7 +238,7 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	                {.type = AbodeInfo::CelticHut, .offset = {-7.0f, 10.0f}},
 	                {.type = FeatureInfo::AztcStatue, .offset = {6.0f, 10.0f}},
 	                {.type = MobileStaticInfo::Rock, .offset = {15.0f, 10.0f}},
-	                {.type = PotInfo::FoodPile, .offset = {22.0f, 10.0f}}},
+	                {.type = PotInfo::HandFood, .offset = {22.0f, 10.0f}}},
 	    .highlights = {{.kind = 0, .offset = {30.0f, 10.0f}}},
 	});
 }
