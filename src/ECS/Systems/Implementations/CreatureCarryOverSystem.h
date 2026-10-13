@@ -46,6 +46,7 @@ public:
 	std::optional<entt::entity> LoadPlayersCreature(glm::vec2 place) override;
 	void ProcessTurn() override;
 	void Reset() override;
+	void StartGame() override;
 
 private:
 	struct Arriving
@@ -63,6 +64,8 @@ private:
 
 	std::optional<std::filesystem::path> _folder;
 	ProfileFile _profileFile;
+	/// The profile's file the game being played keeps its creature in, taken when it started; none before the first game
+	std::optional<std::string> _gameFile;
 	std::shared_ptr<const creaturemind::MindFileData> _kept;
 	std::vector<Arriving> _arriving;
 };

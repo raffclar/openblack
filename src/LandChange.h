@@ -52,6 +52,9 @@ struct Rules
 	bool playersCarried;
 	/// The player starts as good or evil as their profile last kept them
 	bool alignmentFromProfile;
+	/// A new game starts: it is played as the profile picked now, which keeps its creature from now on, the last game's
+	/// creature having been kept for the profile that game was played as
+	bool gameStarts;
 };
 
 [[nodiscard]] constexpr Rules RulesFor(Kind kind)
@@ -63,19 +66,22 @@ struct Rules
 		        .scriptScreenKept = true,
 		        .heartbeatsCarried = true,
 		        .playersCarried = true,
-		        .alignmentFromProfile = false};
+		        .alignmentFromProfile = false,
+		        .gameStarts = false};
 	case Kind::FreshScripts:
 		return {.advisors = Advisors::SentHome,
 		        .scriptScreenKept = false,
 		        .heartbeatsCarried = true,
 		        .playersCarried = true,
-		        .alignmentFromProfile = false};
+		        .alignmentFromProfile = false,
+		        .gameStarts = false};
 	case Kind::NewGame:
 		return {.advisors = Advisors::Afresh,
 		        .scriptScreenKept = false,
 		        .heartbeatsCarried = false,
 		        .playersCarried = false,
-		        .alignmentFromProfile = true};
+		        .alignmentFromProfile = true,
+		        .gameStarts = true};
 	case Kind::Testbed:
 		break;
 	}
@@ -83,7 +89,8 @@ struct Rules
 	        .scriptScreenKept = false,
 	        .heartbeatsCarried = false,
 	        .playersCarried = false,
-	        .alignmentFromProfile = false};
+	        .alignmentFromProfile = false,
+	        .gameStarts = false};
 }
 
 } // namespace openblack::land_change

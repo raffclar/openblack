@@ -4139,6 +4139,12 @@ void Game::PrepareNewLand(land_change::Kind change)
 			Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
 		}
 		Locator::creatureCarryOverSystem::value().Reset();
+		// A new game is played as the profile picked now: the profile picked during the last game took over only now,
+		// once that game's creature was kept for the profile it was played as
+		if (rules.gameStarts)
+		{
+			Locator::creatureCarryOverSystem::value().StartGame();
+		}
 	}
 	if (Locator::playerSystem::has_value())
 	{

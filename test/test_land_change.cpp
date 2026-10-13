@@ -52,6 +52,14 @@ TEST(LandChange, OnlyANewGameStartsThePlayerAtTheirProfilesAlignment)
 	EXPECT_FALSE(RulesFor(Kind::Testbed).alignmentFromProfile);
 }
 
+TEST(LandChange, OnlyANewGameIsPlayedAsTheProfilePickedNow)
+{
+	EXPECT_TRUE(RulesFor(Kind::NewGame).gameStarts);
+	EXPECT_FALSE(RulesFor(Kind::Story).gameStarts);
+	EXPECT_FALSE(RulesFor(Kind::FreshScripts).gameStarts);
+	EXPECT_FALSE(RulesFor(Kind::Testbed).gameStarts);
+}
+
 TEST(ProfileAlignment, ANewGameStartsThePlayerAtTheKeptAlignmentNoFurtherThanGoodOrEvil)
 {
 	using namespace openblack::profile_alignment;
