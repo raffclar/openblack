@@ -13,8 +13,8 @@
 #include "Enums.h"
 
 /// What the right mouse button does on a creature. Clicked, it puts the leash on the player's own creature. Held, the
-/// hand takes hold of the creature to stroke and slap it, which the game allows for any god's creature, not only the
-/// player's own: Khazar's, Lethys's or another player's.
+/// hand takes hold of the player's own creature to stroke and slap it, inside the player's influence or out. Another
+/// god's creature is never held, even inside the influence (an allied god's would be, but allies aren't modelled).
 namespace openblack::creature_hand
 {
 
@@ -34,9 +34,9 @@ struct Holdable
 /// Whether a creature lets a hand take hold of it at all: one belonging to a player, not an ogre, not asleep, frozen or
 /// under a script's control
 [[nodiscard]] bool TakesHold(const Holdable& creature);
-/// Whether the hand may take hold of a creature to stroke and slap it. The game lets the hand hold any creature that
-/// belongs to a player, whichever player, unless it is asleep or frozen. Ogres never can be.
-[[nodiscard]] bool MayHold(const Holdable& creature);
+/// Whether a player's hand may take hold of a creature to stroke and slap it: only the player's own creature, wherever
+/// it is, and only while it takes hold at all
+[[nodiscard]] bool MayHold(const Holdable& creature, PlayerNames handPlayer);
 /// Whether the hand, empty, shows its tooltip for interacting with a creature it is over. Never for a creature of no
 /// player or one under a script's control. Out of the player's influence (asked at the creature) only for the player's
 /// own creature. Within it for any player's, except one that would take hold while a hand already holds it; one that

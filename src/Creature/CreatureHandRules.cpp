@@ -19,9 +19,10 @@ bool creature_hand::TakesHold(const Holdable& creature)
 	       !creature.frozen && !creature.scriptControlled;
 }
 
-bool creature_hand::MayHold(const Holdable& creature)
+bool creature_hand::MayHold(const Holdable& creature, PlayerNames handPlayer)
 {
-	return TakesHold(creature);
+	// An allied god's creature would be held too; allies aren't modelled
+	return TakesHold(creature) && creature.owner == handPlayer;
 }
 
 bool creature_hand::ShowsInteractTip(PlayerNames player, const Holdable& creature, bool held, bool handInInfluence)

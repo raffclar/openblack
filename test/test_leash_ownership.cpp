@@ -216,19 +216,21 @@ TEST(LeashKeys, TheLeashKeyTakesTheLeashOffHoweverManyItKnows)
 	          (KeyCommand {.kind = Kind::TakeOff}));
 }
 
-TEST(CreatureHand, TheHandHoldsAnyPlayersCreature)
+TEST(CreatureHand, TheHandHoldsOnlyItsOwnPlayersCreature)
 {
-	using creature_hand::Holdable;
 	using creature_hand::MayHold;
-	EXPECT_TRUE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger}));
-	// Khazar's, Lethys's or any other god's
-	EXPECT_TRUE(MayHold({.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tortoise}));
-	EXPECT_TRUE(MayHold({.owner = PlayerNames::PLAYER_FOUR, .species = CreatureType::Wolf}));
+	constexpr auto k_Hand = PlayerNames::PLAYER_ONE;
+	EXPECT_TRUE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger}, k_Hand));
+	// Never Khazar's, Lethys's or any other god's
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tortoise}, k_Hand));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_FOUR, .species = CreatureType::Wolf}, k_Hand));
+	// Another god's hand holds that god's own
+	EXPECT_TRUE(MayHold({.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tortoise}, PlayerNames::PLAYER_THREE));
 	// Not nobody's, nor an ogre, nor one asleep or frozen
-	EXPECT_FALSE(MayHold({.owner = PlayerNames::NEUTRAL, .species = CreatureType::Tiger}));
-	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Ogre}));
-	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true}));
-	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .frozen = true}));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::NEUTRAL, .species = CreatureType::Tiger}, k_Hand));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Ogre}, k_Hand));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true}, k_Hand));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .frozen = true}, k_Hand));
 }
 
 TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureAnywhereAndOthersInTheInfluence)
@@ -283,8 +285,8 @@ TEST(CreatureHand, ACreatureAlreadyHeldOffersNoInteractTipWithinTheInfluence)
 
 TEST(CreatureHand, ACreatureUnderAScriptsControlCantBeHeld)
 {
-	EXPECT_FALSE(
-	    creature_hand::MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .scriptControlled = true}));
+	EXPECT_FALSE(creature_hand::MayHold(
+	    {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .scriptControlled = true}, PlayerNames::PLAYER_ONE));
 }
 
 TEST(CreatureHand, AQuickPressIsAClickAndALongOneAHold)

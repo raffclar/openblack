@@ -21,7 +21,7 @@ namespace openblack::ecs::systems
 {
 
 /// The player's hand on a creature (see components::HandOnCreature). The hand can't pick a creature up: holding the
-/// right button on one holds the hand to it, if it is any player's and awake (creature_hand::MayHold).
+/// right button on one holds the hand to it, if it is the player's own and awake (creature_hand::MayHold).
 /// Let go quickly, the press was a click, which puts the leash on instead. While the button holds it, the camera
 /// turns to look at the creature, and gives way back when the hand lets go. Resting on its body the hand strokes it, swept fast
 /// across it the hand slaps it, and the creature reacts to each. When the hand lets go the creature's mind is told how it was

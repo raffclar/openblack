@@ -260,11 +260,11 @@ bool CreatureHandSystem::MayHold(entt::entity creature) const
 	{
 		return false;
 	}
-	if (!creature_hand::MayHold(*holdable))
+	if (!creature_hand::MayHold(*holdable, k_LocalPlayer))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
-		                   "The hand can't hold creature {}: it belongs to nobody, is an ogre, or is asleep, frozen or "
-		                   "under a script's control",
+		                   "The hand can't hold creature {}: it isn't the player's own, is an ogre, or is asleep, frozen "
+		                   "or under a script's control",
 		                   entt::to_integral(creature));
 		return false;
 	}
