@@ -226,6 +226,11 @@ void HelpTextSystem::Reset()
 	{
 		_dialogue->ClearAllText();
 	}
+	StopVoices();
+}
+
+void HelpTextSystem::StopVoices()
+{
 	_voices.Stop(k_GoodAdvisor);
 	_voices.Stop(k_EvilAdvisor);
 }

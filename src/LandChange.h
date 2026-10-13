@@ -58,6 +58,8 @@ struct Rules
 	/// A new game starts: it is played as the profile picked now, which keeps its creature from now on, the last game's
 	/// creature having been kept for the profile that game was played as
 	bool gameStarts;
+	/// The help's texts stay in the dialogue as they were, only their voices stopping with every other sound
+	bool helpTextsKept;
 };
 
 [[nodiscard]] constexpr Rules RulesFor(Kind kind)
@@ -70,14 +72,16 @@ struct Rules
 		        .heartbeatsCarried = true,
 		        .playersCarried = true,
 		        .alignmentFromProfile = false,
-		        .gameStarts = false};
+		        .gameStarts = false,
+		        .helpTextsKept = true};
 	case Kind::FreshScripts:
 		return {.advisors = Advisors::SentHome,
 		        .scriptScreenKept = false,
 		        .heartbeatsCarried = true,
 		        .playersCarried = true,
 		        .alignmentFromProfile = false,
-		        .gameStarts = false};
+		        .gameStarts = false,
+		        .helpTextsKept = false};
 	case Kind::NewGame:
 	case Kind::Skirmish:
 		return {.advisors = Advisors::Afresh,
@@ -85,7 +89,8 @@ struct Rules
 		        .heartbeatsCarried = false,
 		        .playersCarried = false,
 		        .alignmentFromProfile = true,
-		        .gameStarts = true};
+		        .gameStarts = true,
+		        .helpTextsKept = false};
 	case Kind::Testbed:
 		break;
 	}
@@ -94,7 +99,8 @@ struct Rules
 	        .heartbeatsCarried = false,
 	        .playersCarried = false,
 	        .alignmentFromProfile = false,
-	        .gameStarts = false};
+	        .gameStarts = false,
+	        .helpTextsKept = false};
 }
 
 /// How a land picked from the land menu is loaded: a playground land starts a skirmish, a new game on it; any other land

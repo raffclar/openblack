@@ -26,6 +26,7 @@ public:
 	[[nodiscard]] std::optional<heartbeat::State> StateOf(PlayerNames player) const override;
 	void KeepForNextLand() override;
 	void ForgetKept() override;
+	void EndDestruction(PlayerNames player) override;
 
 private:
 	heartbeat::KeptHearts _kept;

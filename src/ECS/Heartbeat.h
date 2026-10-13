@@ -101,6 +101,14 @@ void Step(State& state, float secondsPerTurn);
 /// about 0.64 to 1.27 over nineteen seconds, and to about 3.98 at twenty-five
 [[nodiscard]] float DestructionBeats(float clock);
 
+/// The beats a second the heart is held at this turn: those of the temple being destroyed, else those it was held at
+/// already. Only the destruction's end lets the heart go, so a temple that goes with its land while it is destroyed
+/// leaves the heart held at its last beats on the next land, as in Black & White
+[[nodiscard]] constexpr float HeldBeats(float held, std::optional<float> destruction)
+{
+	return destruction.value_or(held);
+}
+
 /// The players' hearts kept while one land goes, each to beat on as it was on the next land. Black & White's hearts
 /// are the players', which outlast their lands: only a new game starts them calm
 class KeptHearts

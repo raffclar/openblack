@@ -22,6 +22,7 @@ TEST(LandChange, TheStoryKeepsEverythingThatIsNotTheLands)
 	EXPECT_TRUE(rules.heartbeatsCarried);
 	EXPECT_TRUE(rules.playersCarried);
 	EXPECT_FALSE(rules.alignmentFromProfile);
+	EXPECT_TRUE(rules.helpTextsKept);
 }
 
 TEST(LandChange, TheLandMenuStartsTheScriptsAgainButKeepsThePlayers)
@@ -32,6 +33,7 @@ TEST(LandChange, TheLandMenuStartsTheScriptsAgainButKeepsThePlayers)
 	EXPECT_TRUE(rules.heartbeatsCarried);
 	EXPECT_TRUE(rules.playersCarried);
 	EXPECT_FALSE(rules.alignmentFromProfile);
+	EXPECT_FALSE(rules.helpTextsKept);
 }
 
 TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
@@ -43,6 +45,7 @@ TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
 		EXPECT_FALSE(rules.scriptScreenKept);
 		EXPECT_FALSE(rules.heartbeatsCarried);
 		EXPECT_FALSE(rules.playersCarried);
+		EXPECT_FALSE(rules.helpTextsKept);
 	}
 }
 
