@@ -21,7 +21,6 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
-#include "3D/L3DRayCast.h"
 #include "3D/TempleExteriorMorph.h"
 #include "3D/TempleLanterns.h"
 #include "Common/Bitmap16B.h"
@@ -31,11 +30,13 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
-#include "ECS/Components/VillageLight.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/UndrawnPickModel.h"
+#include "ECS/Components/VillageLight.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/UndrawnPicks.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
@@ -50,9 +51,6 @@ namespace
 constexpr float k_ShareOfNoInfluence = 0.01f;
 /// The mesh the temples' are made from, which the outsides are blended into
 constexpr std::string_view k_FirstTemple = "temple/b_first_temple_l3d";
-/// The entrance's mesh, which isn't drawn, only picked
-/// UNVERIFIED: whether the game draws it; it is untextured, and the temples' meshes have their doorways
-constexpr std::string_view k_Entrance = "temple/entrance_l3d";
 } // namespace
 
 void TempleExteriorSystem::UpdateTurn()
@@ -75,8 +73,7 @@ void TempleExteriorSystem::UpdateTurn()
 			    const auto placed = registry.Get<const Transform>(entity);
 			    for (size_t i = 0; i < temple_lanterns::k_Positions.size(); ++i)
 			    {
-				    const auto position =
-				        temple_lanterns::WorldPosition(i, placed.position, placed.rotation, placed.scale);
+				    const auto position = temple_lanterns::WorldPosition(i, placed.position, placed.rotation, placed.scale);
 				    const auto lantern = registry.Create();
 				    registry.Assign<Transform>(lantern, position, glm::mat3(1.0f), glm::vec3(1.0f));
 				    registry.Assign<Mesh>(lantern, resources::HashIdentifier(MeshId::ObjectTownLight), static_cast<int8_t>(0),
@@ -85,6 +82,10 @@ void TempleExteriorSystem::UpdateTurn()
 				    registry.Assign<TempleLantern>(lantern, entity, light);
 			    }
 		    }
+		    // From the first turn its player has a temple standing fully built, their temple entrances take the cursor
+		    auto& entrancesTakeCursor = registry.Context().templeEntrancesTakeCursor[static_cast<size_t>(temple.owner)];
+		    entrancesTakeCursor =
+		        undrawn_picks::EntranceTakesCursor(entrancesTakeCursor, progress != nullptr ? progress->built : 1.0f);
 		    if (follow.refile && Locator::entitiesMap::has_value())
 		    {
 			    Locator::entitiesMap::value().Refile(entity);
@@ -102,40 +103,13 @@ void TempleExteriorSystem::UpdateTurn()
 			    exterior.morphed = look;
 		    }
 	    });
-}
-
-std::optional<PlayerNames> TempleExteriorSystem::EntranceAt(glm::vec3 origin, glm::vec3 direction) const
-{
-	const auto& files = Locator::resources::value().GetL3DFiles();
-	const auto id = entt::hashed_string(k_Entrance.data()).value();
-	if (!files.Contains(id))
-	{
-		return std::nullopt;
-	}
-	const auto& entranceMesh = *files.Handle(id);
-	const auto& registry = Locator::entitiesRegistry::value();
-	std::optional<std::pair<float, PlayerNames>> nearest;
-	registry.Each<const TempleEntrance, const Transform>(
-	    [&](const entt::entity, const TempleEntrance& entrance, const Transform& transform) {
-		    const auto* temple = registry.TryGet<const Temple>(entrance.temple);
-		    // A temple's entrance can be clicked only once the temple is built
-		    if (temple == nullptr || registry.AllOf<BuildProgress>(entrance.temple))
-		    {
-			    return;
-		    }
-		    // Into the entrance's space, where its distance along the ray is as in the world's
-		    // As the meshes are drawn: placed, turned, then scaled
-		    const auto toEntrance = glm::inverse(glm::translate(glm::mat4(1.0f), transform.position) *
-		                                         glm::mat4(transform.rotation) * glm::scale(glm::mat4(1.0f), transform.scale));
-		    const auto localOrigin = glm::vec3(toEntrance * glm::vec4(origin, 1.0f));
-		    const auto localDirection = glm::vec3(toEntrance * glm::vec4(direction, 0.0f));
-		    if (const auto distance = RayCast(entranceMesh, localOrigin, localDirection);
-		        distance.has_value() && (!nearest.has_value() || *distance < nearest->first))
-		    {
-			    nearest = std::make_pair(*distance, temple->owner);
-		    }
+	// Its entrances take the cursor while their player's do
+	registry.Each<const TempleEntrance, UndrawnPickModel>(
+	    [&registry](const entt::entity, const TempleEntrance& entrance, UndrawnPickModel& pick) {
+		    const auto* temple = registry.Valid(entrance.temple) ? registry.TryGet<const Temple>(entrance.temple) : nullptr;
+		    pick.takesCursor =
+		        temple != nullptr && registry.Context().templeEntrancesTakeCursor[static_cast<size_t>(temple->owner)];
 	    });
-	return nearest.has_value() ? std::optional<PlayerNames>(nearest->second) : std::nullopt;
 }
 
 void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleExterior& exterior, PlayerNames owner)

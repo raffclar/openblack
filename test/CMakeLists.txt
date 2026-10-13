@@ -888,3 +888,4 @@ openblack_setup_and_add_test(test_cinema_hides gui/test_cinema_hides.cpp)
 openblack_setup_and_add_test(
   test_creature_cut_scene_look test_creature_cut_scene_look.cpp
 )
+openblack_setup_and_add_test(test_undrawn_picks test_undrawn_picks.cpp)

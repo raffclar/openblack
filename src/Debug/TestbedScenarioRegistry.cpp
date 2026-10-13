@@ -928,6 +928,28 @@ void AddStory(std::vector<Scenario>& all)
 	    // Room 3 is the main room, the one the entrance leads to
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
 	});
+	all.push_back({
+	    .id = "temple.entrance_pick",
+	    .name = "The hand over the player's temple entrance",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle, fully built. The pointer rests on the land beside "
+	                   "it, then over the temple's walls, then over its entrance for a few seconds, and then the right "
+	                   "mouse button is clicked there.",
+	    .expected = "Over the land and the walls the hand offers nothing about the temple but its health. Over the "
+	                "entrance it picks the entrance (not the temple behind it) and offers \"Enter Temple\" with the "
+	                "right mouse button. The click takes the player inside, the camera flying in from the entrance.",
+	    .environment = {.dispenserGrid = false},
+	    // From the west, where its entrance faces, a little above the land
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Temple.x - 90.0f, 40.0f, k_Temple.y},
+	                .look = {k_Temple.x, 10.0f, k_Temple.y}},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.2f, 0.8f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.45f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.447f, 0.604f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 4.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
 	AddBreederOffers(all);
 }
 

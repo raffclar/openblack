@@ -23,6 +23,7 @@
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/UndrawnPickModel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
@@ -68,6 +69,9 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	const auto entrance = registry.Create();
 	registry.Assign<Transform>(entrance, position, rotation, size);
 	registry.Assign<TempleEntrance>(entrance, entity);
+	// The entrance is never drawn: the cursor finds it by the entrance model's triangles, tested with the temple, once
+	// its player's temple has stood fully built
+	registry.Assign<UndrawnPickModel>(entrance, entt::hashed_string("temple/entrance_l3d").value(), entity, false);
 	// It takes its worship sites' places; standing built, its player's towns are given their sites at once, and one
 	// under construction gives them once it is finished
 	if (Locator::worshipSiteSystem::has_value())
