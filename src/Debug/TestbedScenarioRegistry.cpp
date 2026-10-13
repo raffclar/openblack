@@ -3104,11 +3104,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
 	    scenario.vortices.empty() && scenario.rewards.empty() && scenario.fireflyRewards.empty() &&
-	    scenario.landStorms.empty() &&
+	    scenario.landStorms.empty() && scenario.highlights.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
-		                      "chests, crowd, fireflies' rewards, land storms, player's commands or alignment for the hand");
+		problems.emplace_back(
+		    "no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
+		    "chests, crowd, fireflies' rewards, land storms, scrolls or signs, player's commands or alignment for the "
+		    "hand");
 	}
 	for (const auto& storm : scenario.landStorms)
 	{
