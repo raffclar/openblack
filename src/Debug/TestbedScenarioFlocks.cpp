@@ -185,6 +185,22 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "animals.wolves_spare_indestructible_cow",
+	    .name = "Wolves leave alone a cow that nothing can kill",
+	    .facet = Facet::Miracles,
+	    .description = "The ground flock cast at a point south of a cow that a script made indestructible.",
+	    .expected = "The wolves run past the cow and do not hunt it. The cow continues to graze and wander as before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 80.0f}}, .distance = 0.6f},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 50.0f}, .indestructible = true}},
+	    .miracles = {{.type = MagicType::FlockGround,
+	                  .point = k_Spot,
+	                  .handOffset = k_HandBehind,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "animals.thrown_and_landed",
 	    .name = "Farm animals thrown",
 	    .facet = Facet::Miracles,

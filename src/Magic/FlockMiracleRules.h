@@ -127,6 +127,18 @@ struct PreyFacts
 	bool onCorridor {true};
 	/// The hunter is fading away
 	bool hunterFading {false};
+	/// A script made it indestructible
+	bool indestructible {false};
+	/// The hunter can get to it: it is on the map, out of any hand, flight or tornado, and not hidden in a building
+	bool reachable {true};
+	/// A script controls it. Only a hunter that a script holds hunts it
+	bool scriptControlled {false};
+	bool hunterInScript {false};
+	/// The hunter is in a flock. A hunter on its own does not hunt
+	bool hunterInFlock {true};
+	/// A young hunter hunts only a thing that a hunter brought down before
+	bool hunterYoung {false};
+	bool broughtDown {false};
 };
 /// Nothing more than this above the land is hunted
 inline constexpr float k_PreyMaxHeight = 2.0f;

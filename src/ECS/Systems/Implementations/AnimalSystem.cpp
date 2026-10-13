@@ -1392,18 +1392,36 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		facts.heightAboveLand = transform.position.y - Ground(Xz(transform.position));
 		cells[{cell.x, cell.y}].emplace_back(entity, facts);
 	};
+	// What the hunter itself is
+	const bool hunterInScript = registry.AllOf<InScript>(wolf);
+	const bool hunterInFlock = registry.AllOf<Flock>(animal.flock);
+	const bool hunterYoung = AgeOf(animal) < InfoOf(animal.type).grownUpAge;
+	// The facts that every prey has: whether a script protects or controls it, whether the hunter can get to it, and
+	// whether a hunter brought it down before
+	const auto withCommonFacts = [&](entt::entity entity, flock_rules::PreyFacts prey) {
+		prey.indestructible = registry.AllOf<Indestructible>(entity);
+		prey.reachable = PreyReachable(entity) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(entity);
+		prey.scriptControlled = registry.AllOf<ScriptControlled>(entity);
+		prey.hunterInScript = hunterInScript;
+		prey.hunterInFlock = hunterInFlock;
+		prey.hunterYoung = hunterYoung;
+		prey.broughtDown = registry.AllOf<BroughtDown>(entity);
+		return prey;
+	};
 	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& /*villager*/, const Transform& t) {
 		// A walking skeleton has no meat for it
 		add(entity, t,
-		    {.isVillager = true, .skeleton = registry.AllOf<WalkingSkeleton>(entity), .helpless = OutOfTheHunt(entity)});
+		    withCommonFacts(
+		        entity,
+		        {.isVillager = true, .skeleton = registry.AllOf<WalkingSkeleton>(entity), .helpless = OutOfTheHunt(entity)}));
 	});
 	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& other, const Transform& t) {
 		if (entity != wolf)
 		{
 			add(entity, t,
-			    {.isOtherAnimal = other.type != animal.type,
-			     .hasMeat = InfoOf(other.type).foodValue > 0.0f,
-			     .helpless = OutOfTheHunt(entity)});
+			    withCommonFacts(entity, {.isOtherAnimal = other.type != animal.type,
+			                             .hasMeat = InfoOf(other.type).foodValue > 0.0f,
+			                             .helpless = OutOfTheHunt(entity)}));
 		}
 	});
 	// So many cells spiralling out from its own, and the first prey met there is its prey

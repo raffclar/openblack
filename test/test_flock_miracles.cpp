@@ -195,6 +195,24 @@ TEST(FlockMiracleRules, WhatAWolfHunts)
 	EXPECT_FALSE(flock::IsPrey({.isOtherAnimal = true, .hasMeat = false}));
 }
 
+TEST(FlockMiracleRules, AWolfLeavesAloneWhatItCannotGetToOrKill)
+{
+	EXPECT_FALSE(flock::IsPrey({.isOtherAnimal = true, .indestructible = true}));
+	// In a hand, in the air or hidden in a building
+	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .reachable = false}));
+	// A thing that a script controls is prey only to a hunter that a script holds
+	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .scriptControlled = true}));
+	EXPECT_TRUE(flock::IsPrey({.isVillager = true, .scriptControlled = true, .hunterInScript = true}));
+	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .hunterInFlock = false}));
+}
+
+TEST(FlockMiracleRules, AYoungWolfHuntsOnlyWhatAHunterBroughtDownBefore)
+{
+	EXPECT_FALSE(flock::IsPrey({.isOtherAnimal = true, .hunterYoung = true}));
+	EXPECT_TRUE(flock::IsPrey({.isOtherAnimal = true, .hunterYoung = true, .broughtDown = true}));
+	EXPECT_TRUE(flock::IsPrey({.isOtherAnimal = true, .broughtDown = true}));
+}
+
 TEST(FlockMiracleRules, HuntersLeaveAloneWhatIsDownOrWasBroughtDown)
 {
 	EXPECT_FALSE(flock::OutOfTheHunt(LivingStates::LivingMoveToPos, false));

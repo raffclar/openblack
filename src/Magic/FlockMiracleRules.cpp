@@ -193,6 +193,14 @@ bool flock::IsPrey(const PreyFacts& prey)
 	{
 		return false;
 	}
+	if (prey.indestructible || !prey.reachable || (prey.scriptControlled && !prey.hunterInScript) || !prey.hunterInFlock)
+	{
+		return false;
+	}
+	if (prey.hunterYoung && !prey.broughtDown)
+	{
+		return false;
+	}
 	if (prey.heightAboveLand > k_PreyMaxHeight)
 	{
 		return false;
