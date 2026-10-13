@@ -124,4 +124,8 @@ struct PredatorWatch
 /// confused): its time is then weighed at no distance
 [[nodiscard]] bool ReactsToItself(Reaction type);
 
+/// Whether keeping a kind of reaction leaves a living thing (other than a villager, whose states say so) looking at the
+/// thing: an object or miracle to look at, a nice or impressive miracle, a scaffold
+[[nodiscard]] bool LooksAtThing(Reaction type);
+
 } // namespace openblack::magic::reaction_timing

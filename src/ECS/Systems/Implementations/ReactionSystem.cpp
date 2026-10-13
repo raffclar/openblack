@@ -266,8 +266,12 @@ reaction_timing::PredatorWatch PredatorWatchOf(const ecs::Registry& registry, en
 		    final == VillagerStates::GoAndHideInNearbyBuilding || final == VillagerStates::LookToSeeIfItIsSafe;
 		watch.lookingIfSafe = final == VillagerStates::LookToSeeIfItIsSafe;
 	}
-	// TODO(raffclar): an animal's own state numbering differs from the game's, which ends an animal's reaction to a
-	// predator charging at it while it looks at something; no predator makes reactions yet
+	// An animal looks at a thing while it keeps one of the reactions to look at something
+	if (const auto* state = registry.TryGet<const LivingReaction>(living);
+	    state != nullptr && state->reaction != 0 && registry.AllOf<Animal>(living))
+	{
+		watch.lookingAtThing = reaction_timing::LooksAtThing(state->type);
+	}
 	return watch;
 }
 

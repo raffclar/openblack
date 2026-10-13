@@ -169,3 +169,9 @@ bool reaction_timing::ReactsToItself(Reaction type)
 {
 	return type == Reaction::Fainting || type == Reaction::Confused;
 }
+
+bool reaction_timing::LooksAtThing(Reaction type)
+{
+	return type == Reaction::LookAtObject || type == Reaction::LookAtSpell || type == Reaction::LookAtNiceSpell ||
+	       type == Reaction::ReactToImpressiveSpell || type == Reaction::ReactToScaffold;
+}

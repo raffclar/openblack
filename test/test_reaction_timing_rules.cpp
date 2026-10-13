@@ -148,3 +148,20 @@ TEST(ReactionTimingRules, RowFromTable)
 	EXPECT_FLOAT_EQ(row.distance.maxDistance, 5.0f);
 	EXPECT_FLOAT_EQ(row.distance.importance, 0.25f);
 }
+
+// Keeping a reaction to look at something leaves an animal looking at the thing, as the predator rule asks; fleeing or
+// anything else doesn't
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionTimingRules, LookingKinds)
+{
+	for (const auto type : {Reaction::LookAtObject, Reaction::LookAtSpell, Reaction::LookAtNiceSpell,
+	                        Reaction::ReactToImpressiveSpell, Reaction::ReactToScaffold})
+	{
+		EXPECT_TRUE(timing::LooksAtThing(type));
+	}
+	for (const auto type : {Reaction::FleeFromObject, Reaction::FollowObject, Reaction::ReactToFlyingObject,
+	                        Reaction::FleeFromPredator, Reaction::ReactToFire})
+	{
+		EXPECT_FALSE(timing::LooksAtThing(type));
+	}
+}
