@@ -101,6 +101,10 @@ inline constexpr uint32_t k_BeamSounds = 5;
 /// between beams is 3 seconds at nearly all its life, down to 0.4 seconds at none, in whole turns.
 inline constexpr float k_DamageWaitFull = 3.0f;
 inline constexpr float k_DamageWaitNone = 0.4f;
+/// Each of those beams lasts as long as the wait, and fades in to an alpha of 20 of 255 at nearly all its life, up to 100
+/// at none; it moves at the speed of the heart's other beams
+inline constexpr float k_DamageAlphaFull = 20.0f;
+inline constexpr float k_DamageAlphaNone = 100.0f;
 /// It sounds a beam sound only once it has this much life or less
 inline constexpr float k_DamageSoundLife = 0.6f;
 
@@ -108,6 +112,14 @@ inline constexpr float k_DamageSoundLife = 0.6f;
 [[nodiscard]] std::optional<float> DamageEffectLife(float life);
 /// The turns between a hurt heart's beams, by its life from the damage effect's: whole turns a second, times the wait
 [[nodiscard]] uint32_t DamageInterval(uint32_t millisecondsPerTurn, float life);
+/// How a hurt heart's beam looks, by its life from the damage effect's
+struct DamageBeamLook
+{
+	/// Seconds
+	float life {0.0f};
+	uint8_t alpha {0};
+};
+[[nodiscard]] DamageBeamLook DamageLookAt(float life);
 /// The turn after the interval, once the last beam is more than that many turns gone. Due, it is the beam's turn now.
 [[nodiscard]] bool DamageBeamDue(uint32_t& lastTurn, uint32_t turn, uint32_t interval);
 /// Whether a hurt heart's beam sounds, by its life from the damage effect's
