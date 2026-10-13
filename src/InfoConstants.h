@@ -1175,7 +1175,8 @@ struct GVillagerStateTableInfo
 	float lifeDrain;
 	/// The help text telling what a villager in the state is doing, as its details show it
 	uint32_t helpText;
-	uint32_t field0x100;
+	/// The text the Help key gives about a villager in the state, 0 for none
+	uint32_t queryText;
 };
 
 struct GVillagerInfo: GLivingInfo

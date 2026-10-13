@@ -889,3 +889,4 @@ openblack_setup_and_add_test(
   test_creature_cut_scene_look test_creature_cut_scene_look.cpp
 )
 openblack_setup_and_add_test(test_guidance_rules test_guidance_rules.cpp)
+openblack_setup_and_add_test(test_help_query test_help_query.cpp)
