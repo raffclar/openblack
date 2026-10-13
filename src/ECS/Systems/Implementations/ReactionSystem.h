@@ -36,6 +36,7 @@ public:
 	void RemoveFrom(entt::entity initiator, Reaction type) override;
 	void Remove(uint32_t id) override;
 	void StopReacting(entt::entity living) override;
+	void TakeUp(uint32_t id, entt::entity living) override;
 	void SetInitiator(uint32_t id, entt::entity initiator) override;
 	void SetDance(uint32_t id, entt::entity dance) override;
 	[[nodiscard]] bool IsActive(uint32_t id) const override;
@@ -66,6 +67,9 @@ private:
 	/// A living thing takes up a reaction: it is impressed by it, and does what it does about it
 	/// A living takes up a reaction; one taking it over from another it reacted to counts as reacting already
 	void Start(Active& reaction, entt::entity living, components::LivingReaction& state, bool takingOver = false);
+	/// A villager takes up a reaction, counting as reacting already when it held another: it does what it does about it,
+	/// and is impressed by it unless it doesn't take it up after all or joins a dance round it
+	void StartVillager(const Active& reaction, entt::entity living, components::LivingReaction& state, bool wasReacting);
 	/// A living thing stops reacting, a villager going back to what it was doing when asked
 	void Stop(entt::entity living, components::LivingReaction& state, bool resetState);
 	/// A turn of each living thing's reaction: it stops once it has reacted its time, or its reaction has gone
@@ -82,6 +86,8 @@ private:
 	/// The next reaction spread again, in turn
 	size_t _cursor {0};
 	uint32_t _turn {0};
+	/// How many times villagers have taken up a reaction, which orders those holding the same one
+	uint32_t _joins {0};
 	/// The things' and the miracles' balances of impressiveness
 	std::array<float, 3> _landBalances {1.0f, 1.0f, 1.0f};
 	/// When the villagers' voices of belief were last heard

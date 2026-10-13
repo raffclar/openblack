@@ -35,6 +35,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -54,6 +55,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/FightWatchRules.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -697,6 +699,16 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		const auto kind = ecs::villager_creature::Priority(living, reaction.source.initiator);
 		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
+	// A villager heeds an arena only while a fight is on in it
+	if (reaction.source.type == Reaction::ReactToFight && registry.AllOf<Villager>(living))
+	{
+		const auto* arena = registry.Valid(reaction.source.initiator)
+		                        ? registry.TryGet<const CreatureArena>(reaction.source.initiator)
+		                        : nullptr;
+		const auto kind = ecs::fight_watch::Priority(arena != nullptr && arena->fightOn,
+		                                             static_cast<uint8_t>(std::min<uint32_t>(info->priority, 255)));
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
 	// A villager heeds a burning thing in the hand when near it or the thing moves fast
 	if (reaction.source.type == Reaction::ReactToBurningObjectInHand && registry.AllOf<Villager>(living))
 	{
@@ -1032,24 +1044,14 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		return;
 	}
 	const bool wasReacting = takingOver || state.reaction != 0;
+	if (registry.AllOf<Villager>(living))
+	{
+		StartVillager(reaction, living, state, wasReacting);
+		return;
+	}
 	state.reaction = reaction.id;
 	state.type = reaction.source.type;
 	state.startTurn = _turn;
-	if (registry.AllOf<Villager>(living))
-	{
-		// A villager is impressed only by what it takes up the usual way: not joining a dance round the thing
-		const auto taken = villager_reactions::Start(living, reaction.source.type, state, wasReacting);
-		if (taken == villager_reactions::Taken::No)
-		{
-			state.reaction = 0;
-			state.type = Reaction::None;
-		}
-		else if (taken == villager_reactions::Taken::Impressed)
-		{
-			Impress(reaction, living, registry.Get<const Transform>(living).position);
-		}
-		return;
-	}
 	Impress(reaction, living, registry.Get<const Transform>(living).position);
 	// A creature goes to put out a fire or runs from it
 	if (source.type == Reaction::ReactToFire && registry.AllOf<Creature>(living) && Locator::creatureMindSystem::has_value())
@@ -1097,6 +1099,43 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 			seed->learnedFrom = true;
 		}
 	}
+}
+
+void ReactionSystem::StartVillager(const Active& reaction, entt::entity living, LivingReaction& state, bool wasReacting)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	state.reaction = reaction.id;
+	state.type = reaction.source.type;
+	state.startTurn = _turn;
+	state.joined = ++_joins;
+	// A villager is impressed only by what it takes up the usual way: not joining a dance round the thing
+	const auto taken = villager_reactions::Start(living, reaction.source.type, state, wasReacting);
+	if (taken == villager_reactions::Taken::No)
+	{
+		state.reaction = 0;
+		state.type = Reaction::None;
+	}
+	else if (taken == villager_reactions::Taken::Impressed)
+	{
+		Impress(reaction, living, registry.Get<const Transform>(living).position);
+	}
+}
+
+void ReactionSystem::TakeUp(uint32_t id, entt::entity living)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto found = std::ranges::find(_reactions, id, &Active::id);
+	if (found == _reactions.end() || !registry.Valid(living) || !registry.AllOf<Villager, Transform>(living))
+	{
+		return;
+	}
+	auto* state = registry.TryGet<LivingReaction>(living);
+	if (state == nullptr)
+	{
+		state = &registry.Assign<LivingReaction>(living);
+	}
+	// Its memory of the kind is left as it was, and the reaction's time doesn't start for it
+	StartVillager(*found, living, *state, state->reaction != 0);
 }
 
 void ReactionSystem::Stop(entt::entity living, LivingReaction& state, bool resetState)
@@ -1455,6 +1494,7 @@ void ReactionSystem::Reset()
 	_reactions.clear();
 	_cursor = 0;
 	_turn = 0;
+	_joins = 0;
 	_voice = {};
 	_landBalances = {1.0f, 1.0f, 1.0f};
 }

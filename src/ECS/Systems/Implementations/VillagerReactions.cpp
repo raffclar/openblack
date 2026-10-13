@@ -449,6 +449,10 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 			}
 		}
 		break;
+	case Reaction::ReactToFight:
+		// It goes to its place round the arena to watch the fight
+		SetTop(*action, VillagerStates::InitialiseFightReaction);
+		break;
 	case Reaction::ReactToFood:
 		// It goes to the food
 		SetTop(*action, VillagerStates::GotoFoodReaction);

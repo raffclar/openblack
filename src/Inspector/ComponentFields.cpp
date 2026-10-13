@@ -658,6 +658,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFightRecord::wins>("wins")
 	    .Field<&components::CreatureFightRecord::secondsSinceFight>("secondsSinceFight")
 	    .Field<&components::CreatureFightRecord::control>("control")
+	    .Field<&components::CreatureFightRecord::struckTurn>("struckTurn")
 	    .Field<&components::CreatureFightRecord::health>("health");
 	Reflect<components::CreatureKnockedOut>(context)
 	    .Field<&components::CreatureKnockedOut::stage>("stage")
@@ -1220,6 +1221,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::LivingReaction::reaction>("reaction")
 	    .Field<&components::LivingReaction::type>("type")
 	    .Field<&components::LivingReaction::startTurn>("startTurn")
+	    .Field<&components::LivingReaction::joined>("joined")
 	    .Field<&components::LivingReaction::creatureMemory>("creatureMemory")
 	    .Field<&components::LivingReaction::sawFlying>("sawFlying")
 	    .Field<&components::LivingReaction::sawCrushed>("sawCrushed");
