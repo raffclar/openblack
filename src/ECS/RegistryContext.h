@@ -54,6 +54,8 @@ struct RegistryContext
 	uint32_t nextHeartBeamSound {0};
 	/// The same five, for the beams of a hurt heart, which keep their own turn
 	uint32_t nextDamageBeamSound {0};
+	/// How many creatures the game made, which gives each creature its place in the order of creation
+	uint64_t creaturesMade {0};
 	/// The order towns are gained by their players in, the next to be given
 	uint32_t nextTownGained {0};
 	/// Where creatures may go on the land, worked out once the land is there and first asked for

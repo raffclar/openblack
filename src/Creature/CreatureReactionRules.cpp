@@ -239,9 +239,9 @@ float creature_reaction::WorthAbout(float strength, float usefulness, float near
 	return std::clamp(usefulness * strength * nearness, 0.0f, 1.0f);
 }
 
-bool creature_reaction::IsDominant(uint32_t age, uint32_t otherAge, bool laterInOrder)
+bool creature_reaction::IsDominant(uint32_t age, uint32_t otherAge, bool madeFirst)
 {
 	constexpr uint32_t k_DominantYears = 10;
 	const auto gap = age > otherAge ? age - otherAge : otherAge - age;
-	return gap > k_DominantYears ? otherAge < age : laterInOrder;
+	return gap > k_DominantYears ? otherAge < age : madeFirst;
 }

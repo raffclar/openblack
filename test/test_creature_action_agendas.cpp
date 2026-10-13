@@ -330,6 +330,22 @@ TEST(CreatureActionAgendas, SmilingAndWavingGoNearAndFaceTheOther)
 	EXPECT_EQ(wave[2].animation, animations::k_FriendlyWave);
 }
 
+TEST(CreatureActionAgendas, ShowingOffGoesNearThePartFacesItAndPlaysTwoActions)
+{
+	const auto first = ShowImpressiveAnimation(5, 10.0f, [](uint32_t) { return 0u; });
+	ASSERT_EQ(first.size(), 4);
+	EXPECT_EQ(first[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(first[0].movement.maxDistance, 30.0f);
+	EXPECT_EQ(first[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(first[1].seconds, 0.1f);
+	EXPECT_EQ(first[2].animation, k_LookAtMeAnimation);
+	EXPECT_EQ(first[3].animation, animations::k_Impress);
+	const auto other = ShowImpressiveAnimation(std::nullopt, 10.0f, [](uint32_t) { return 1u; });
+	ASSERT_EQ(other.size(), 2);
+	EXPECT_EQ(other[0].animation, k_LookAtMeAnimation);
+	EXPECT_EQ(other[1].animation, animations::k_Summon);
+}
+
 TEST(CreatureActionAgendas, FrightenedPuttingDownAndLyingDead)
 {
 	const auto frightened = BeFrightenedOnTheSpot();

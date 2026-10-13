@@ -1482,6 +1482,22 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    WeighWatchedCreature(entity, mind, static_cast<entt::entity>(*mind.idle.agenda[mind.idle.step].object));
 		    }
+		    // It finds no way to the thing that it goes to: it gives up what it does, and it leaves the thing alone for a
+		    // time
+		    if (mind.idle.step < mind.idle.agenda.size())
+		    {
+			    const auto& step = mind.idle.agenda[mind.idle.step];
+			    const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
+			    if (walk != nullptr && walk->failed && mind.idle.stepStarted && step.kind == creature_mind::Step::Kind::Move &&
+			        step.movement.object.has_value())
+			    {
+				    mind.beliefs.MarkBlocked(static_cast<entt::entity>(*step.movement.object), mind.turn);
+				    Abandon(mind);
+				    mind.idle.step = mind.idle.agenda.size();
+				    mind.idle.stepStarted = false;
+				    mind.idle.gaveUp = true;
+			    }
+		    }
 		    const bool moving =
 		        Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity);
 		    if (mind.idle.step < mind.idle.agenda.size())

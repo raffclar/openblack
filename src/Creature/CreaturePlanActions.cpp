@@ -152,7 +152,7 @@ constexpr std::array k_Executors {
     Executor {.action = "Sneeze", .build = Build::Emote, .animation = k_Sneeze},
     Executor {.action = "ShowHotness", .build = Build::Emote, .animation = animations::k_Hot},
     Executor {.action = "RunAwayFromPlayer", .build = Build::RunFromPlayer},
-    Executor {.action = "ShowImpressiveAnimation", .build = Build::Emote, .animation = animations::k_Impress},
+    Executor {.action = "ShowImpressiveAnimation", .build = Build::ShowOff},
     Executor {
         .action = "Stroke", .target = Target::Villager, .build = Build::ApproachEmote, .animation = animations::k_FeelingNice},
     Executor {.action = "SmileAtFriend", .target = Target::Creature, .build = Build::SmileAt},
@@ -399,6 +399,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::SleepAtHome(*situation.home, situation.height, random);
 	case Build::SmileAt:
 		return creature_mind::SmileAt(*object, situation.height, situation.chance, random);
+	case Build::ShowOff:
+		return creature_mind::ShowImpressiveAnimation(object, situation.height, random);
 	case Build::WaveAt:
 		return creature_mind::WaveAt(*object, situation.height);
 	case Build::InspectCreature:

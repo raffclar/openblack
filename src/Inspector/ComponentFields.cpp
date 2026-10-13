@@ -577,6 +577,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Creature::fatness>("fatness")
 	    .Field<&components::Creature::strength>("strength")
 	    .Field<&components::Creature::size>("size")
+	    .Field<&components::Creature::made>("made")
 	    .Field<&components::Creature::penSize>("penSize")
 	    .Field<&components::Creature::autoScale>("autoScale")
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")

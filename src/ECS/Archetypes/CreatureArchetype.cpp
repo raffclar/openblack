@@ -102,7 +102,8 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	                                            .alignment = body.alignment,
 	                                            .fatness = body.fatness,
 	                                            .strength = body.strength,
-	                                            .size = scale});
+	                                            .size = scale,
+	                                            .made = ++registry.Context().creaturesMade});
 	// The body is drawn with the base mesh's skins, its shape blended towards the other meshes
 	registry.Assign<Mesh>(entity, creature::GetIdFromType(creatureType, CreatureBody::Appearance::Base));
 	registry.Assign<CreatureMorph>(entity, CreatureMorph {.shownFatness = body.fatness, .drawn = morph, .revision = 0});

@@ -37,6 +37,10 @@ inline constexpr uint32_t k_KindCount = 24;
 inline constexpr std::array<uint32_t, k_KindCount> k_Capacity {40,  50,  20,  100, 50,  100, 100, 100, 100, 30,  100, 40,
                                                                100, 100, 100, 100, 100, 100, 100, 100, 1,   100, 40,  20};
 
+/// A creature keeps its beliefs in two lists. The first list holds the whole things that a desire can be about:
+/// towns, forests, temples, creatures and flocks. The second list holds all other things.
+[[nodiscard]] bool InListOfWholeThings(uint32_t kind);
+
 /// What a creature believes about one thing: its kind and where it was when the creature last came across it
 struct Belief
 {
@@ -50,7 +54,16 @@ struct Belief
 	std::optional<entt::entity> partOf;
 	/// The order in which the beliefs were made: a newer belief has a larger number
 	uint64_t order {0};
+	/// The game turn on which the creature last found no way to the thing, none if it never did
+	std::optional<uint32_t> blockedTurn;
 };
+
+/// After the creature finds no way to a thing, it does not choose the thing for a time: 10 seconds for a thing that
+/// moves, 60 seconds for a thing that is fixed in the land (a building, a tree), at 10 game turns each second
+inline constexpr uint32_t k_BlockedTurns = 100;
+inline constexpr uint32_t k_BlockedTurnsFixed = 600;
+/// Whether the creature found no way to the thing in the time before this turn
+[[nodiscard]] bool BlockedRecently(const Belief& belief, uint32_t turn, bool fixed);
 
 /// A creature's beliefs about things, a fixed number of places for each kind
 class Store
@@ -88,12 +101,17 @@ public:
 			Forget(thing);
 		}
 	}
+	/// Records that the creature found no way to the thing on a turn, if the store has a belief about the thing
+	void MarkBlocked(entt::entity thing, uint32_t turn);
 	/// Records that the thing is part of a whole thing, if the store has a belief about the thing
 	void JoinTo(entt::entity part, entt::entity whole);
 	/// The beliefs about the parts of a whole thing, the newest first
 	[[nodiscard]] std::vector<Belief> PartsOf(entt::entity whole) const;
 	/// Every belief, the newest first
 	[[nodiscard]] std::vector<Belief> NewestFirst() const;
+	/// Every belief in the order that the creature looks through its two lists: the list of whole things first, then
+	/// the list of all other things. Each list has the newest belief first.
+	[[nodiscard]] std::vector<Belief> InListOrder() const;
 	/// How many beliefs it holds of a kind, and in all
 	[[nodiscard]] size_t Count(uint32_t kind) const;
 	[[nodiscard]] size_t Size() const { return _index.size(); }

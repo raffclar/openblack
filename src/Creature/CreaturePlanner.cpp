@@ -93,7 +93,8 @@ Plan MakePlan(const DesirePlanning& planning, const ActionCandidate& action, con
 {
 	const auto wanted = Wanted(action);
 	Plan plan {.desire = planning.desire, .action = action.action, .actionPriority = wanted};
-	if (object.has_value() && action.needsObject)
+	// An action under a desire about a whole thing acts on the part found for it, even an action that needs no thing
+	if (object.has_value() && (action.needsObject || planning.order != PlanOrder::ActionFirst))
 	{
 		plan.object = object->id;
 		plan.goalUsefulness = object->usefulness;
