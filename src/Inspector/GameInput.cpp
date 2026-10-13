@@ -45,7 +45,7 @@ namespace
 
 /// The gestures there are, by their numbers
 constexpr uint32_t k_FirstGesture = 1;
-constexpr uint32_t k_LastGesture = 21;
+constexpr uint32_t k_LastGesture = 23;
 
 std::string Lower(std::string_view text)
 {
