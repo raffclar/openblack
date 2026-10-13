@@ -12,28 +12,46 @@
 #include "VortexSystem.h"
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <string_view>
 #include <vector>
 
 #include <LNDFile.h>
 #include <glm/vec2.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "ECS/Archetypes/VortexArchetype.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/Indestructible.h"
+#include "ECS/Components/Mesh.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/LandFollowers.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TornadoSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/VortexCrossingLines.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/VortexCrossingRules.h"
 #include "Magic/VortexPullRules.h"
 #include "Magic/VortexRules.h"
 #include "Particles/ParticleEffect.h"
@@ -43,12 +61,19 @@
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
+using openblack::ecs::components::CarriedByTornado;
 using openblack::ecs::components::Creature;
+using openblack::ecs::components::DrawnIntoVortex;
 using openblack::ecs::components::Transform;
 using openblack::ecs::components::Vortex;
 
 namespace
 {
+/// A vortex steps the effect drawing things in once a game turn
+constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
+/// The crossing file, in the player's saved games
+constexpr std::string_view k_CrossingFile = "vortex.txt";
+
 /// The map's cells run 0 to 511 along each side
 bool OnMap(glm::ivec2 cell)
 {
@@ -94,9 +119,14 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	const glm::vec3 centre {position.x, ground + altitude, position.z};
 	const auto entity = archetypes::VortexArchetype::Create(centre, type, info->initialState, Locator::time::value().GetTurn());
 	auto& vortex = Locator::entitiesRegistry::value().Get<Vortex>(entity);
+	vortex.altitude = altitude;
 	// Until a script says otherwise, the animals that come out gather at the vortex itself
 	vortex.arrival.gatheringPlace = centre;
 	StartEffects(vortex);
+	if (type == VortexType::In)
+	{
+		StartCrossingFile(entity);
+	}
 	return entity;
 }
 
@@ -118,7 +148,8 @@ void VortexSystem::StartEffects(Vortex& vortex)
 		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect
 		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle);
 	};
-	vortex.objectMoverEffect = start(info->particleTypeObjectMover, vortex.centre);
+	// The vortex steps the effect that draws things in itself, each turn just after it has handed it what it takes
+	vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre);
 	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround);
 	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre);
 	vortex.lightMapEffect = start(info->particleTypeLightMap, vortex.centre);
@@ -255,11 +286,18 @@ void VortexSystem::ProcessTurn()
 	std::vector<entt::entity> gone;
 	bool levelled = false;
 	std::vector<ecs::land_followers::Follower> followers;
-	registry.Each<Vortex>([&gone, &levelled, &followers](entt::entity entity, Vortex& vortex) {
+	auto* effects = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	registry.Each<Vortex>([&gone, &levelled, &followers, effects](entt::entity entity, Vortex& vortex) {
 		// What is in it is dealt with first, as it stood before this turn's step of its fade
 		if (vortex.type == VortexType::In && vortex.state == VortexStateType::Active)
 		{
-			Pull(vortex);
+			Pull(entity, vortex);
+		}
+		// Then its effect drawing things in steps, taking what it was just handed
+		if (effects != nullptr && vortex.objectMoverEffect != ParticleSystemInterface::k_NoEffect &&
+		    !effects->ProcessForSpell(vortex.objectMoverEffect, {.power = 1.0f, .enabled = true}, k_TurnSeconds))
+		{
+			vortex.objectMoverEffect = ParticleSystemInterface::k_NoEffect;
 		}
 		const auto seconds = SecondsInState(vortex);
 		switch (vortex::Advance(vortex.state, seconds))
@@ -303,7 +341,13 @@ void VortexSystem::ProcessTurn()
 	{
 		DeleteEffects(registry.Get<Vortex>(entity));
 		registry.Destroy(entity);
+		if (entity == _crossingVortex)
+		{
+			_crossing.close();
+			_crossingVortex = entt::null;
+		}
 	}
+	RemoveTheTaken();
 	if (levelled)
 	{
 		Locator::terrainSystem::value().CommitAltitudeChanges();
@@ -311,7 +355,7 @@ void VortexSystem::ProcessTurn()
 	}
 }
 
-void VortexSystem::Pull(const Vortex& vortex)
+void VortexSystem::Pull(entt::entity entity, const Vortex& vortex)
 {
 	if (!Locator::entitiesMap::has_value())
 	{
@@ -319,25 +363,237 @@ void VortexSystem::Pull(const Vortex& vortex)
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& map = Locator::entitiesMap::value();
+	const auto* dynamics = Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
 	const auto centre = map_coords::FromMetres({vortex.centre.x, vortex.centre.z});
 	const auto reach = vortex::PullReach(Locator::time::value().GetTurn(), vortex::k_PullRadius);
 	for (const auto cell : vortex::CellsSearched(centre, reach))
 	{
-		for (const auto entity : map.GetAllInCell(cell))
+		// A copy: taking a pile may change the cell
+		const auto things = map.GetAllInCell(cell);
+		for (const auto thing : things)
 		{
-			const auto* transform = registry.TryGet<const Transform>(entity);
+			const auto* transform = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
 			// Only what stands in this cell; a thing over a cell's edge is met in its own
-			if (!registry.Valid(entity) || transform == nullptr || map_coords::CellOf(transform->position) != cell)
+			if (transform == nullptr || map_coords::CellOf(transform->position) != cell)
 			{
 				continue;
 			}
-			if (const auto* creature = registry.TryGet<const Creature>(entity); creature != nullptr)
+			// The creature is never drawn in: near the middle it sparkles away, if it may be taken
+			if (const auto* creature = registry.TryGet<const Creature>(thing); creature != nullptr)
 			{
-				PullCreature(entity, *creature, transform->position, centre);
+				PullCreature(thing, *creature, transform->position, centre);
+				continue;
 			}
-			// TODO(vortex-crossing): the other things it may take are carried in by its object mover and written to the
-			// crossing file, and piles give up pots
+			// Whatever could be thrown is drawn in; buildings, features and the like stay
+			if (dynamics != nullptr && dynamics->CanBecomePhysicsObject(thing))
+			{
+				HandOver(entity, vortex, thing);
+			}
+			else if (registry.AllOf<components::Pot>(thing))
+			{
+				TakeFromPile(entity, vortex, thing);
+			}
 		}
+	}
+}
+
+void VortexSystem::HandOver(entt::entity vortexEntity, const Vortex& vortex, entt::entity thing)
+{
+	if (vortex.objectMoverEffect == ParticleSystemInterface::k_NoEffect || !Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	Locator::entitiesRegistry::value().AssignOrReplace<DrawnIntoVortex>(thing, vortexEntity);
+	Locator::particleSystem::value().AddTarget(vortex.objectMoverEffect, thing);
+}
+
+void VortexSystem::TakeFromPile(entt::entity vortexEntity, const Vortex& vortex, entt::entity pile)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& pot = registry.Get<const components::Pot>(pile);
+	const auto& pots = Locator::infoConstants::value().pot;
+	const auto row = static_cast<size_t>(pot.type);
+	if (row >= pots.size() || (pots.at(row).potType != PotType::PileFood && pots.at(row).potType != PotType::PileWood) ||
+	    !Locator::tornadoSystem::has_value())
+	{
+		return;
+	}
+	// A pot of up to so much, drawn at a share of its size
+	const auto taken = Locator::tornadoSystem::value().TakeFromPile(pile, vortex::crossing::k_PileTake, 1.0f);
+	if (taken == entt::null)
+	{
+		return;
+	}
+	const float random = Locator::gameRandom::has_value()
+	                         ? Locator::gameRandom::value().GameFloatRand(vortex::crossing::k_PileShareRandom)
+	                         : 0.0f;
+	registry.Get<Transform>(taken).scale *= vortex::crossing::PileShare(random);
+	HandOver(vortexEntity, vortex, taken);
+}
+
+std::optional<VortexSystemInterface::Taken> VortexSystem::EnterVortex(const std::shared_ptr<particles::CarriedObject>& carried)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (carried == nullptr || !registry.Valid(carried->object))
+	{
+		return std::nullopt;
+	}
+	const auto thing = carried->object;
+	entt::entity vortexEntity = entt::null;
+	if (const auto* drawn = registry.TryGet<const DrawnIntoVortex>(thing))
+	{
+		vortexEntity = drawn->vortex;
+		registry.Remove<DrawnIntoVortex>(thing);
+	}
+	const auto* transform = registry.TryGet<const Transform>(thing);
+	if (transform == nullptr || registry.AnyOf<CarriedByTornado>(thing))
+	{
+		return std::nullopt;
+	}
+	// It leaves the land as a thing starting to move does, without a body of its own: refused when it is moving already
+	// or a script holds it where it is
+	if (Locator::dynamicsSystem::has_value() &&
+	    !Locator::dynamicsSystem::value().InitialisePhysics(thing, {.add = false}).started)
+	{
+		return std::nullopt;
+	}
+	const Taken taken {.position = transform->position,
+	                   .rotation = transform->rotation,
+	                   .velocity = glm::vec3(0.0f),
+	                   .indestructible = registry.AllOf<components::Indestructible>(thing)};
+	registry.Assign<CarriedByTornado>(thing, carried);
+	const auto* vortex = registry.Valid(vortexEntity) ? registry.TryGet<const Vortex>(vortexEntity) : nullptr;
+	if (taken.indestructible || vortex == nullptr)
+	{
+		return taken;
+	}
+	// It leaves the land for good: a villager its town, an animal its flock; then it is written down for the next land
+	if (registry.AllOf<components::Villager>(thing) && Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().RemoveVillager(thing);
+	}
+	if (Locator::animalSystem::has_value())
+	{
+		Locator::animalSystem::value().LeaveFlock(thing);
+	}
+	if (vortexEntity == _crossingVortex)
+	{
+		WriteCrossing(*vortex, thing);
+	}
+	return taken;
+}
+
+void VortexSystem::ThrowOutOfVortex(entt::entity object, float angle, float scale)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		return;
+	}
+	// Back onto the land where its particle left it, then thrown
+	if (const auto* carried = registry.TryGet<const CarriedByTornado>(object);
+	    carried != nullptr && carried->carried != nullptr)
+	{
+		auto& transform = registry.Get<Transform>(object);
+		transform.position = carried->carried->position;
+		transform.rotation = carried->carried->rotation;
+	}
+	registry.Remove<CarriedByTornado>(object);
+	if (!Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	auto& dynamics = Locator::dynamicsSystem::value();
+	dynamics.EndPhysicsAsObject(object, true, false);
+	float height = 0.0f;
+	if (const auto* mesh = registry.TryGet<const components::Mesh>(object);
+	    mesh != nullptr && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(mesh->id))
+	{
+		// Twice its model's reach above its origin, scaled
+		height = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox().maxima.y * 2.0f *
+		         registry.Get<const Transform>(object).scale.x;
+	}
+	auto& random = Locator::gameRandom::value();
+	const float out = random.GameFloatRand(vortex::crossing::k_ThrowOutRandom);
+	const float up = random.GameFloatRand(vortex::crossing::k_ThrowOutRandom);
+	const auto throwOut = vortex::crossing::ThrowOutOf(angle, out, up, scale, height);
+	dynamics.InitialisePhysics(object, {.velocity = throwOut.velocity, .spin = throwOut.spin});
+}
+
+void VortexSystem::StartCrossingFile(entt::entity vortex)
+{
+	_crossing.close();
+	_crossingVortex = entt::null;
+	if (!Locator::playerProfileSystem::has_value())
+	{
+		return;
+	}
+	const auto folder = Locator::playerProfileSystem::value().SavedGamesFolder();
+	if (!folder.has_value())
+	{
+		return;
+	}
+	std::error_code error;
+	std::filesystem::create_directories(*folder, error);
+	// Emptied by every new vortex that leads away
+	_crossing.open(*folder / k_CrossingFile, std::ios::out | std::ios::trunc | std::ios::binary);
+	if (_crossing.is_open())
+	{
+		_crossingVortex = vortex;
+	}
+	else if (const auto logger = spdlog::get("game"); logger != nullptr)
+	{
+		logger->warn("Vortex: could not write the crossing file in {}", folder->string());
+	}
+}
+
+void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
+{
+	if (!_crossing.is_open())
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& land = Locator::terrainSystem::value();
+	const auto& info = Locator::infoConstants::value();
+	const ecs::vortex_crossing::World world {
+	    .turn = Locator::time::value().GetTurn(),
+	    .ground = [&land](glm::vec2 xz) { return land.GetHeightAt(xz); },
+	    .villagerRow = [](Tribe tribe,
+	                      VillagerNumber number) { return static_cast<int32_t>(GVillagerInfo::Find(tribe, number)); },
+	    .potResource =
+	        [&info](PotInfo type) {
+		        const auto row = static_cast<size_t>(type);
+		        return row < info.pot.size() ? static_cast<int32_t>(info.pot.at(row).resourceType) : 0;
+	        },
+	    .life = [](entt::entity object) { return world_objects::LifeOf(object); },
+	    .player = [](entt::entity object) { return world_objects::PlayerOf(object); },
+	};
+	auto place = map_coords::FromMetres({vortex.centre.x, vortex.centre.z});
+	place.altitude = vortex.altitude;
+	if (const auto line = ecs::vortex_crossing::LineFor(registry, thing, place, world))
+	{
+		const auto text = vortex::crossing::Text(*line);
+		_crossing.write(text.data(), static_cast<std::streamsize>(text.size()));
+		_crossing.flush();
+	}
+}
+
+void VortexSystem::RemoveTheTaken()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> taken;
+	registry.Each<const CarriedByTornado>([&taken](entt::entity entity, const CarriedByTornado& carried) {
+		if (carried.carried != nullptr && carried.carried->carrier == particles::CarriedObject::Carrier::Vortex &&
+		    carried.carried->atom == nullptr)
+		{
+			taken.push_back(entity);
+		}
+	});
+	for (const auto entity : taken)
+	{
+		registry.Remove<CarriedByTornado>(entity);
+		world_objects::Remove(entity);
 	}
 }
 

@@ -219,6 +219,11 @@ const PhysicsGround* DynamicsSystem::Land()
 	return _ground.get();
 }
 
+bool DynamicsSystem::CanBecomePhysicsObject(entt::entity object) const
+{
+	return FactsOf(object).canBecomePhysicsObject;
+}
+
 const physics::Ground* DynamicsSystem::GetGround() const
 {
 	return _ground.get();

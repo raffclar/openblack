@@ -186,6 +186,8 @@ public:
 		return nullptr;
 	}
 	[[nodiscard]] virtual PhysicsEntry* Find([[maybe_unused]] entt::entity object) { return nullptr; }
+	/// Whether its kind can be thrown, dropped or knocked into flight (and so drawn into a vortex), as it is now
+	[[nodiscard]] virtual bool CanBecomePhysicsObject([[maybe_unused]] entt::entity object) const { return false; }
 	/// In the physics and moving, not a resting obstacle
 	[[nodiscard]] virtual bool IsFlying([[maybe_unused]] entt::entity object) const { return false; }
 	/// An object's weight as the physics weighs it: its table weight times its scale cubed, not kept from 0

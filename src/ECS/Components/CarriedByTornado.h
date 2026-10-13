@@ -19,8 +19,9 @@ struct CarriedObject;
 namespace openblack::ecs::components
 {
 
-/// Something a tornado has picked up: it is off the ground, its own doings stop, and it follows the particle carrying
-/// it until the particle has gone and it is let go where it was flung
+/// Something a tornado has picked up, or a vortex that leads away is drawing in: it is off the ground, its own doings
+/// stop, and it follows the particle carrying it until the particle has gone. A tornado then lets it go where it was
+/// flung; a vortex's is gone with it.
 struct CarriedByTornado
 {
 	std::shared_ptr<particles::CarriedObject> carried;

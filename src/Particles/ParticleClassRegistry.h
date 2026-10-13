@@ -116,6 +116,8 @@ void RegisterStormRules(ParticleClassRegistry& registry);
 void RegisterFlockRules(ParticleClassRegistry& registry);
 /// The tornado's rule: its funnel, what it picks up and flings, its dust and its pretend bushes and chickens
 void RegisterTornadoRules(ParticleClassRegistry& registry);
+/// The rule of a vortex that leads away from the land: what it is handed is drawn round and down into its middle
+void RegisterVortexRules(ParticleClassRegistry& registry);
 /// The simple beam's rule: wiggling ribbons of light from the effect's origin to the objects and points it is given
 void RegisterBeamRules(ParticleClassRegistry& registry);
 /// The temple heart's plasma beam
