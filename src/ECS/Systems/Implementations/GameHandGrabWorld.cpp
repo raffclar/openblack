@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <vector>
 
+#include <LNDFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
@@ -178,6 +179,25 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectUnderCursor() const
 	return Locator::pickingSystem::value().GetPick().object;
 }
 
+namespace
+{
+/// Whether a point is over a cell of water, a cell off the map or without land counting as water
+bool OverWater(glm::vec3 point)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return true;
+	}
+	const auto cell = map_coords::CellOf(point);
+	if (!map_coords::InBounds(cell))
+	{
+		return true;
+	}
+	const auto* landCell = Locator::terrainSystem::value().FindCell(glm::u16vec2(cell));
+	return landCell == nullptr || landCell->properties.hasWater != 0;
+}
+} // namespace
+
 std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
 {
 	if (!Locator::pickingSystem::has_value() || !Locator::entitiesMap::has_value())
@@ -193,6 +213,14 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
 	const auto behindHand = map_coords::FromMetres({behind->x, behind->z});
 	// The point the interface picked, the map's corner when it picked none
 	const auto picked = picking.GetPick().point;
+	// With the hand over water, a fish farm whose fish show under the picked point is taken first, as a farm has no model
+	if (OverWater(*behind) && picked.has_value() && Locator::fishFarmSystem::has_value())
+	{
+		if (const auto farm = Locator::fishFarmSystem::value().FarmWithFishAt({picked->x, picked->z}))
+		{
+			return farm;
+		}
+	}
 	const auto cursor = picked.has_value() ? map_coords::FromMetres({picked->x, picked->z}) : map_coords::MapCoords {};
 	// The things in the cells about the point, as a search meets them; broken pieces of buildings are passed by
 	const auto& registry = Locator::entitiesRegistry::value();
