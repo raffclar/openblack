@@ -10,6 +10,7 @@
 // gui.press and gui.close on the game's own dialogs: the start-of-game question's controls found by name and clicked
 // through input
 
+#include <array>
 #include <optional>
 #include <span>
 #include <string>
@@ -17,10 +18,12 @@
 #include <variant>
 #include <vector>
 
+#include <Gui/ScreenFit.h>
 #include <Gui/SkipBox.h>
 #include <Gui/TextDatabase.h>
 #include <Inspector/DialogControls.h>
 #include <Story/NewGameChoice.h>
+#include <glm/common.hpp>
 #include <gtest/gtest.h>
 
 #include "../gui/FakeGameFont.h"
@@ -243,4 +246,24 @@ TEST(InspectorDialogs, GuiCloseAnswersTheSkipBoxWithOk)
 	EXPECT_EQ(*picked.answer, Choice::DebugStartWithCow);
 	EXPECT_FALSE(picked.box.IsActive());
 	EXPECT_EQ(SkipBoxOk(picked.box).value_or(glm::ivec2(-1)), k_Ok);
+}
+
+// gui.press clicks a control on the screen where the game finds it, for every size of the window. The game places
+// the dialog space from the size of the window, also before it draws its first frame.
+TEST(InspectorDialogs, AClickFindsTheControlOnEveryScreen)
+{
+	const std::array<glm::ivec2, 6> screens {
+	    glm::ivec2(800, 600),   glm::ivec2(1280, 720),  glm::ivec2(1280, 1024),
+	    glm::ivec2(1920, 1080), glm::ivec2(3440, 1440), glm::ivec2(5120, 1440),
+	};
+	for (const auto& screen : screens)
+	{
+		const auto space = FrontEndSpace(screen.x, screen.y);
+		const auto onScreen = DialogToScreen(k_Ok, screen);
+		const auto back = glm::ivec2(glm::floor(space.ToLayout(glm::vec2(onScreen))));
+		EXPECT_GE(back.x, SkipBox::k_ButtonPosition.x) << screen.x << "x" << screen.y;
+		EXPECT_GE(back.y, SkipBox::k_ButtonPosition.y) << screen.x << "x" << screen.y;
+		EXPECT_LT(back.x, SkipBox::k_ButtonPosition.x + SkipBox::k_ButtonSize) << screen.x << "x" << screen.y;
+		EXPECT_LT(back.y, SkipBox::k_ButtonPosition.y + SkipBox::k_ButtonSize) << screen.x << "x" << screen.y;
+	}
 }

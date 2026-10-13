@@ -4577,9 +4577,9 @@ bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noex
 	return true;
 }
 
-void Game::HandleEscapeInPlay(uint16_t keyModifiers)
+escape_key::Situation Game::EscapeSituation(uint16_t keyModifiers) const
 {
-	auto& director = Locator::cinematicDirectorSystem::value();
+	const auto& director = Locator::cinematicDirectorSystem::value();
 	const auto fade = director.GetFadeColour();
 	escape_key::Situation situation {
 	    .shiftOrCtrl = (keyModifiers & (KMOD_SHIFT | KMOD_CTRL)) != 0,
@@ -4598,8 +4598,13 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 		situation.sinceMenuClosed =
 		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - *_menuClosedAt);
 	}
+	return situation;
+}
 
-	const auto response = escape_key::Respond(situation);
+void Game::HandleEscapeInPlay(uint16_t keyModifiers)
+{
+	auto& director = Locator::cinematicDirectorSystem::value();
+	const auto response = escape_key::Respond(EscapeSituation(keyModifiers));
 	if (response.clearScreenFade)
 	{
 		director.FadeBackToNormal(0);

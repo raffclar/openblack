@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
 #include <chrono>
+#include <optional>
+#include <string_view>
 
 #include <gtest/gtest.h>
 
@@ -79,4 +82,28 @@ TEST(EscapeKeyRules, ThePlaygroundNeverOpensTheMenu)
 	const auto fading = Respond({.inGodsPlayground = true, .screenClear = false});
 	EXPECT_EQ(fading.outcome, Outcome::Nothing);
 	EXPECT_FALSE(fading.clearScreenFade);
+}
+
+// The reason is empty only when Escape opens the menu, in all situations
+TEST(EscapeKeyRules, GivesAReasonOnlyWhenTheMenuStaysShut)
+{
+	const std::array<std::optional<milliseconds>, 3> closedTimes {std::nullopt, milliseconds(100), milliseconds(400)};
+	for (int bits = 0; bits < 16; ++bits)
+	{
+		for (const auto& sinceMenuClosed : closedTimes)
+		{
+			const Situation situation {
+			    .shiftOrCtrl = (bits & 1) != 0,
+			    .scriptHoldsCinemaBars = (bits & 2) != 0,
+			    .helpScriptHoldsDialogue = (bits & 4) != 0,
+			    .inGodsPlayground = (bits & 8) != 0,
+			    .screenClear = true,
+			    .playgroundLessonRunning = false,
+			    .sinceMenuClosed = sinceMenuClosed,
+			};
+			const bool opens = Respond(situation).outcome == Outcome::OpenMenu;
+			EXPECT_EQ(WhyMenuStaysShut(situation).empty(), opens) << bits;
+		}
+	}
+	EXPECT_NE(WhyMenuStaysShut({.scriptHoldsCinemaBars = true}).find("cinema bars"), std::string_view::npos);
 }
