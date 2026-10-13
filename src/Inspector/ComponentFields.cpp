@@ -417,6 +417,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::hunger>("hunger")
 	    .Field<&components::Animal::animation>("animation")
 	    .Field<&components::Animal::clipPlace>("clipPlace")
+	    .Field<&components::Animal::groundCarry>("groundCarry")
 	    .Field<&components::Animal::previousPosition>("previousPosition")
 	    .Field<&components::Animal::position>("position")
 	    .Field<&components::Animal::previousHeading>("previousHeading")
@@ -784,7 +785,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::resourceChecked>("resourceChecked")
 	    .Field<&components::CreatureMindState::pendingTeaching>("pendingTeaching")
 	    .Field<&components::CreatureMindState::leash>("leash")
-	    .Field<&components::CreatureMindState::heldKinds>("heldKinds");
+	    .Field<&components::CreatureMindState::heldKinds>("heldKinds")
+	    .Field<&components::CreatureMindState::copiedAt>("copiedAt")
+	    .Field<&components::CreatureMindState::highPending>("highPending")
+	    .Field<&components::CreatureMindState::plantedBy>("plantedBy");
 	Reflect<components::CreatureNeeds>(context)
 	    .Field<&components::CreatureNeeds::started>("started")
 	    .Field<&components::CreatureNeeds::needs>("needs")
@@ -1533,7 +1537,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellDispenser::orb>("orb")
 	    .Field<&components::SpellDispenser::orbPosition>("orbPosition")
 	    .Field<&components::SpellDispenser::effect>("effect")
-	    .Field<&components::SpellDispenser::building>("building");
+	    .Field<&components::SpellDispenser::building>("building")
+	    .Field<&components::SpellDispenser::town>("town");
 	Reflect<components::TestbedDispenser> {context};
 	Reflect<components::TownMagic>(context).Field<&components::TownMagic::held>("held");
 	Reflect<components::TownCentreIcon>(context)
@@ -1833,6 +1838,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::VillagerPose>(context)
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
+	    .Field<&components::VillagerPose::groundCarry>("groundCarry")
 	    .Field<&components::VillagerPose::bones>("bones")
 	    .Field<&components::VillagerPose::clipBones>("clipBones")
 	    .Field<&components::VillagerPose::turnStart>("turnStart")
@@ -2258,6 +2264,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::stepSeconds>("stepSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::sitEnding>("sitEnding")
 	    .Field<&openblack::creature_mind::IdleMind::faceSeconds>("faceSeconds")
+	    .Field<&openblack::creature_mind::IdleMind::eyesHeld>("eyesHeld")
+	    .Field<&openblack::creature_mind::IdleMind::eyesToClear>("eyesToClear")
 	    .Field<&openblack::creature_mind::IdleMind::faceVariety>("faceVariety")
 	    .Field<&openblack::creature_mind::IdleMind::showDesireSeconds>("showDesireSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::shown>("shown")
@@ -2302,7 +2310,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::order>("order")
 	    .Field<&openblack::creature_mind::Step::cast>("cast")
 	    .Field<&openblack::creature_mind::Step::face>("face")
-	    .Field<&openblack::creature_mind::Step::gaze>("gaze");
+	    .Field<&openblack::creature_mind::Step::gaze>("gaze")
+	    .Field<&openblack::creature_mind::Step::heldEyes>("heldEyes")
+	    .Field<&openblack::creature_mind::Step::flutterEyelids>("flutterEyelids");
 	Reflect<openblack::creature_mind_model::Learnt>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::Learnt::opinions>("opinions")
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")

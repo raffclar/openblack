@@ -274,7 +274,7 @@ struct ObjectSetup
 	/// A villager sets off to worship at this point once the walk delay is up, going through its player's teleport
 	/// stones when the point is further than villagers walk to worship
 	std::optional<glm::vec2> worshipAt;
-	/// A villager's or animal's life, 0 (dead) to 1, full when not given
+	/// A villager's, animal's or building's life, 0 (dead) to 1, full when not given; a building is hurt down to it
 	std::optional<float> life;
 	/// A tree belongs to the land's forest of this number, none for 0; and grows to this size, its scale when not given
 	uint32_t forest {0};
@@ -673,6 +673,12 @@ struct Command
 		/// A land's script (script, by its name) starts as a script's "run script" starts it, given its arguments in
 		/// order (scriptArguments); the scripts' globals named are set first (scriptGlobals). Needs no creature
 		RunScript,
+		/// The player's hand lets go of a handful of wood (value, how much) slowly over a point of the land (point, from
+		/// the middle of the map), pouring it there as a slow let-go does. Needs no creature
+		HandPour,
+		/// A script tells the creature to do an action of the game's table (action, by its name) to the scenario's object,
+		/// with another of the scenario's objects (with) when given, as a script's creature action command does
+		DoAction,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -693,6 +699,9 @@ struct Command
 	float hour {12.0f};
 	/// The object picked up, knocked down or tied to, by its place in the scenario's objects
 	size_t object {0};
+	/// The action a script tells it to do, by its name in the game's table, and the object it does it with
+	std::string_view action;
+	std::optional<size_t> with;
 	/// The leash put on
 	LeashType leash {LeashType::Rope};
 	/// The part of the body stroked, by its place in the hand's parts (the head first)

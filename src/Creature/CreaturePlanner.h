@@ -104,8 +104,8 @@ struct Plan
 	float goalUsefulness {k_DefaultUsefulness};
 	float actionPriority {0.0f};
 	float priority {0.0f};
-	/// For a plan forced on the creature: the thing the desire is served through (a burning house's town, say), and the
-	/// thing used to do it, if any
+	/// For a plan forced on the creature: the thing the desire is served through (a burning house's town, say); and the
+	/// thing used to do it, if any, for any plan
 	std::optional<uint32_t> activityObject;
 	std::optional<uint32_t> instrument;
 };
@@ -129,6 +129,20 @@ struct DesireOnThing
 /// That comparison does not include the strength of the best desire.
 /// If no desire has a score more than zero, there is no best desire.
 [[nodiscard]] std::optional<creature_desires::Desire> BestDesireOnThing(std::span<const DesireOnThing> desires);
+
+/// Something a planned action could use
+struct UsedCandidate
+{
+	/// The thing's entity number
+	uint32_t id {0};
+	float distance {0.0f};
+	bool held {false};
+};
+/// The thing to use for a planned action, among those it may use, never the goal itself: the one the distance weighs
+/// least against (something held most of all), the first of equals; none when there is none, or every one is too far to
+/// count
+[[nodiscard]] std::optional<uint32_t> ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,
+                                                 std::optional<uint32_t> goal);
 
 /// A plan forced on the creature, by a reaction or a catch, scores the most a score can be, so that no plan of its own is
 /// ever pressing enough to replace it

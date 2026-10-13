@@ -579,3 +579,43 @@ TEST(Picking, TheHoverTimeRunsWhileTheSameThingStaysPicked)
 	picking::CarryHover(previous, next, 0.25f);
 	EXPECT_FLOAT_EQ(next.hoverSeconds, 0.25f);
 }
+
+TEST(ScreenPick, AnInvisibleBallIsHitWithinItsWholePixelRadiusAtItsMiddlesDepth)
+{
+	// At 10 m a 1 m lift moves the middle up 51.96 pixels: the ball is 52 whole pixels round
+	const glm::vec3 middle(0.0f, 0.0f, -10.0f);
+	const auto hit = screen_pick::BallHit(View({400.0f, 351.0f}), middle, 1.0f);
+	ASSERT_TRUE(hit.has_value());
+	EXPECT_NEAR(*hit, 10.0f, 1e-4f);
+	EXPECT_FALSE(screen_pick::BallHit(View({400.0f, 352.0f}), middle, 1.0f).has_value());
+	// Only up and down count for its size: across, the cursor is within the same whole pixels
+	EXPECT_TRUE(screen_pick::BallHit(View({451.0f, 300.0f}), middle, 1.0f).has_value());
+	// Behind the near plane it is never hit
+	EXPECT_FALSE(screen_pick::BallHit(View(), {0.0f, 0.0f, -0.5f}, 3.0f).has_value());
+}
+
+TEST(ScreenPick, AThingWithAModelAndABallIsPickedByWhicheverIsNearer)
+{
+	const auto view = View();
+	// A scroll: its model, then its ball about the model's middle
+	const std::array<screen_pick::Candidate, 2> scroll = {{
+	    {.centre = {0.0f, 0.0f, -10.0f}, .radius = 1.0f, .origin = {0.0f, 0.0f, -10.0f}},
+	    {.centre = {0.0f, 0.0f, -10.0f}, .radius = 1.5f, .origin = {0.0f, 0.0f, -10.0f}, .ball = true},
+	}};
+	std::vector<size_t> tested;
+	// On the model's near face, the face's depth
+	auto picked = screen_pick::PickAmong(view, scroll, [&tested](size_t i) -> std::optional<float> {
+		tested.push_back(i);
+		return 9.2f;
+	});
+	ASSERT_TRUE(picked.has_value());
+	EXPECT_EQ(picked->index, 0u);
+	EXPECT_FLOAT_EQ(picked->distance, 9.2f);
+	// The ball is never measured by the model's test
+	EXPECT_EQ(tested, (std::vector<size_t> {0}));
+	// Off the model but on the ball, the ball's middle
+	picked = screen_pick::PickAmong(view, scroll, [](size_t) -> std::optional<float> { return std::nullopt; });
+	ASSERT_TRUE(picked.has_value());
+	EXPECT_EQ(picked->index, 1u);
+	EXPECT_NEAR(picked->distance, 10.0f, 1e-4f);
+}

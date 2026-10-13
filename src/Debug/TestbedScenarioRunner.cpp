@@ -49,6 +49,7 @@
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
+#include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "DebugGuiInterface.h"
@@ -83,6 +84,7 @@
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
@@ -138,6 +140,7 @@
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -399,6 +402,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 		if (auto* villager = registry.TryGet<ecs::components::Villager>(entity))
 		{
 			villager->life = std::clamp(*object.life, 0.0f, 1.0f);
+		}
+		// A building is hurt down to it, as anything that hurts it does, which opens a site for its repair
+		if (registry.AllOf<ecs::components::Abode>(entity))
+		{
+			static_cast<void>(ecs::world_objects::ReduceLife(entity, 1.0f - std::clamp(*object.life, 0.0f, 1.0f)));
 		}
 		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
 		{
@@ -1395,6 +1403,23 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto why = hand.WhyNotTake(*object);
 		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
 	}
+	case Kind::HandPour:
+	{
+		if (!Locator::resourceStoreSystem::has_value())
+		{
+			return "no stores";
+		}
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 point {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		const auto amount = static_cast<uint32_t>(command.value);
+		// What a store or pile didn't take is left as a new loose pile
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto loose = [&registry] { return registry.Size<ecs::components::MagicPile>(); };
+		const auto before = loose();
+		Locator::resourceStoreSystem::value().PourAt(ResourceType::Wood, point, amount, false, command.player, false);
+		return fmt::format("{} wood poured at ({:.1f}, {:.1f}): {}", amount, at.x, at.y,
+		                   loose() > before ? "left on the land as a new pile" : "taken in");
+	}
 	default:
 		return {};
 	}
@@ -1494,10 +1519,11 @@ std::string Runner::HandTakeFireBall()
 	// The first fireball the hand may hold now, the hand straight over it looking down
 	std::optional<glm::vec3> target;
 	Locator::entitiesRegistry::value().Each<const ecs::components::MagicFireBall>(
-	    [&target](const ecs::components::MagicFireBall& ball) {
+	    [this, &target](entt::entity entity, const ecs::components::MagicFireBall& ball) {
 		    if (!target.has_value() && ball.handTarget.has_value())
 		    {
 			    target = ball.handTarget;
+			    _fireBallTaken = entity;
 		    }
 	    });
 	if (!target.has_value())
@@ -1535,7 +1561,7 @@ void Runner::FinishTakingFireBall()
 	}
 	else
 	{
-		result = magic.TapAction() ? "caught it" : "it slipped through the hand";
+		result = magic.TapFireBall(_fireBallTaken) ? "caught it" : "it slipped through the hand";
 	}
 	magic.DriveHand(std::nullopt);
 	Log(fmt::format("{:.1f}s: hand on the fireball: {}", _seconds, result));
@@ -1721,7 +1747,7 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake)
+	    command.kind == Kind::HandTake || command.kind == Kind::HandPour)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -1889,6 +1915,18 @@ void Runner::Give(const Command& command)
 		             ? "playing"
 		             : "can't";
 		break;
+	case Kind::DoAction:
+	{
+		const auto* tables = minds.GetTables();
+		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
+		const auto target = ObjectAt(command.object);
+		const auto with = command.with.has_value() ? ObjectAt(*command.with) : std::nullopt;
+		result = !action.has_value()                                     ? "no such action"
+		         : !target.has_value()                                   ? "no such object"
+		         : minds.ScriptDoAction(*entity, *action, *target, with) ? fmt::format("doing {}", command.action)
+		                                                                 : "can't";
+		break;
+	}
 	case Kind::SwapMinds:
 		if (const auto other = CreatureAt(command.value))
 		{
@@ -2044,6 +2082,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::HandTake:
+	case Kind::HandPour:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:
@@ -2322,10 +2361,11 @@ void Runner::UpdateCamera()
 	switch (*_shot)
 	{
 	case Shot::Testbed:
-		// As the testbed leaves it: 120 units south of the middle and 60 up, looking at the middle
+		// As the testbed leaves it: south of the middle and up, looking north just east of the middle
 		placement = CameraPlacement {
-		    .origin = {_middle.x, land.GetHeightAt(_middle) + 60.0f, _middle.y - 120.0f},
-		    .focus = {_middle.x, land.GetHeightAt(_middle), _middle.y},
+		    .origin = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle) + flat_land::k_CameraHeight,
+		               _middle.y - flat_land::k_CameraBack},
+		    .focus = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle), _middle.y},
 		};
 		break;
 	case Shot::Overview:

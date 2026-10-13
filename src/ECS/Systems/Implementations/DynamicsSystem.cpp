@@ -647,11 +647,6 @@ PhysicsEntry* DynamicsSystem::AddProxy(entt::entity object)
 	return _entries.back().get();
 }
 
-void DynamicsSystem::LetGoOfLeashesTiedTo(entt::entity object)
-{
-	_world->UntieLeashesTiedTo(object);
-}
-
 PhysicsStarted DynamicsSystem::InitialisePhysics(entt::entity object, const PhysicsStart& start)
 {
 	return Hooks().InitialisePhysics(*this, object, start);
@@ -664,7 +659,7 @@ PhysicsStarted DynamicsSystem::StartPhysicsAsObject(entt::entity object, const P
 	{
 		return {};
 	}
-	LetGoOfLeashesTiedTo(object);
+	// A leash tied to the object stays tied while it flies: the rope follows it
 	registry.AssignOrReplace<InPhysics>(object);
 	// Out of the map's cells while it moves
 	registry.Remove<MapCellResident, MapCellMover>(object);

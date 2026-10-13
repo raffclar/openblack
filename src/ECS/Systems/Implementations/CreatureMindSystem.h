@@ -87,6 +87,7 @@ public:
 	void SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows) override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
+	void AteMagicMushroom(entt::entity creature) override;
 	bool SwapMinds(entt::entity from, entt::entity to) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
@@ -218,6 +219,8 @@ private:
 	[[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(entt::entity creature, MagicType type);
 	/// A fizzled try, shown as it next chooses what to do
 	void ShowFizzle(entt::entity creature, components::CreatureMindState& mind);
+	/// It is made to be high, as after eating a magic mushroom
+	void BecomeHigh(entt::entity creature);
 	/// Going near, getting away from or turning to face an object begins, and each turn it goes on
 	void StartSubMove(entt::entity creature, const creature_mind::Movement& movement, float seconds);
 	void StepSubMove(entt::entity creature, bool animating);

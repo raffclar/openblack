@@ -22,13 +22,11 @@
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
-#include "ECS/Components/Creature.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
-#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -256,21 +254,6 @@ void GameDynamicsWorld::RemoveReactions(entt::entity initiator, Reaction type)
 	{
 		Locator::reactionSystem::value().RemoveFrom(initiator, type);
 	}
-}
-
-void GameDynamicsWorld::UntieLeashesTiedTo(entt::entity object)
-{
-	if (!Locator::leashSystem::has_value())
-	{
-		return;
-	}
-	auto& leashes = Locator::leashSystem::value();
-	Entities().Each<const components::Creature>([&leashes, object](entt::entity creature, const components::Creature&) {
-		if (leashes.TiedTo(creature) == object)
-		{
-			leashes.UntieToHand(creature);
-		}
-	});
 }
 
 bool GameDynamicsWorld::IsComputerPlayer(PlayerNames player) const

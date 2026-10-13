@@ -36,11 +36,14 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/UndrawnPickModel.h"
@@ -327,41 +330,36 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		const float scale = transform != nullptr ? transform->scale.x : 1.0f;
 		const auto box = mesh->GetBoundingBox();
 		const auto halfExtents = box.Size() * 0.5f;
-		// A script's scroll is picked by a ball a little larger than its model, about the model's middle
-		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
-		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
-		{
-			_candidates.push_back({
-			    .centre = highlight->centre,
-			    .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin,
-			    .origin = highlight->centre,
-			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
-			});
-		}
-		else
-		{
-			_candidates.push_back({
-			    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
-			    .radius = glm::length(halfExtents) * scale,
-			    .origin = glm::vec3(model[3]),
-			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
-			});
-		}
+		_candidates.push_back({
+		    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
+		    .radius = glm::length(halfExtents) * scale,
+		    .origin = glm::vec3(model[3]),
+		    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+		});
 		_candidateEntities.push_back(entity);
 		_candidateModels.push_back(model);
 		_candidateMeshes.push_back(meshComponent->id);
+		// A script's scroll is also picked by a ball a little larger than its model, about the model's middle
+		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
+		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
+		{
+			AddBall(entity, model, meshComponent->id, halfExtents,
+			        {.centre = highlight->centre, .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin});
+		}
+		// A miracle dispenser is also picked by a wide ball round the bubble it floats, which takes the dispenser itself
+		if (registry.AllOf<SpellDispenser>(entity) && transform != nullptr)
+		{
+			AddBall(entity, model, meshComponent->id, halfExtents,
+			        ecs::pick_shapes::DispenserBall(transform->position, halfExtents, scale));
+		}
 	}
+	AddBubbles(view.camera);
+	AddFireBalls();
 
 	// How far along the view an object's first triangle under the cursor is
 	const auto distanceOf = [&](size_t i) -> std::optional<float> {
 		const auto entity = _candidateEntities[i];
 		const auto& model = _candidateModels[i];
-		// A scroll's ball is hit at its middle
-		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
-		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
-		{
-			return screen_pick::Depth(view, highlight->centre);
-		}
 		// People are picked by their bounding sphere alone: anywhere in its circle on the screen, at the sphere's
 		// distance rather than their body's
 		if (registry.AllOf<Villager>(entity))
@@ -475,6 +473,82 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 void PickingSystem::FindBehindHand(glm::vec3 camera, std::optional<glm::vec3> handMiddle)
 {
 	_behindHand = handMiddle.has_value() ? LandOrSeaAlong(camera, *handMiddle, camera) : std::nullopt;
+}
+
+void PickingSystem::AddBall(entt::entity entity, const glm::mat4& model, entt::id_type mesh, glm::vec3 halfExtents,
+                            const ecs::pick_shapes::Ball& ball)
+{
+	// Weighed against the land as the thing's own model is: by the model's footprint about its place
+	_candidates.push_back({
+	    .centre = ball.centre,
+	    .radius = ball.radius,
+	    .origin = glm::vec3(model[3]),
+	    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+	    .ball = true,
+	});
+	_candidateEntities.push_back(entity);
+	_candidateModels.push_back(model);
+	_candidateMeshes.push_back(mesh);
+}
+
+void PickingSystem::AddBubbles(glm::vec3 camera)
+{
+	// One-shot bubbles are drawn by the miracles' own pass, so they aren't among the drawn models: each is picked by its
+	// model moved towards the camera by its width, and by a ball about its middle
+	const auto& registry = Locator::entitiesRegistry::value();
+	auto& meshes = Locator::resources::value().GetMeshes();
+	const auto bubbleMesh = OneOffSpellSeed::k_MeshId.value();
+	if (!meshes.Contains(bubbleMesh))
+	{
+		return;
+	}
+	const auto box = meshes.Handle(bubbleMesh)->GetBoundingBox();
+	const auto halfExtents = box.Size() * 0.5f;
+	registry.Each<const OneOffSpellSeed, const Transform>(
+	    [&](entt::entity entity, const OneOffSpellSeed&, const Transform& transform) {
+		    if (registry.AnyOf<InHand, SeeThrough>(entity))
+		    {
+			    return;
+		    }
+		    const float scale = transform.scale.x;
+		    auto model = glm::mat4(transform.rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
+		    model[3] = glm::vec4(transform.position, 1.0f);
+		    const auto middle = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+		    auto pushed = model;
+		    pushed[3] += glm::vec4(ecs::pick_shapes::BubblePickOffset(middle, camera, halfExtents, scale), 0.0f);
+		    _candidates.push_back({
+		        .centre = glm::vec3(pushed * glm::vec4(box.Center(), 1.0f)),
+		        .radius = glm::length(halfExtents) * scale,
+		        .origin = transform.position,
+		        .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+		    });
+		    _candidateEntities.push_back(entity);
+		    _candidateModels.push_back(pushed);
+		    _candidateMeshes.push_back(bubbleMesh);
+		    AddBall(entity, model, bubbleMesh, halfExtents, ecs::pick_shapes::BubbleBall(middle, scale));
+	    });
+}
+
+void PickingSystem::AddFireBalls()
+{
+	// A fireball is picked by a ball of its size where its particle was last placed, while it shows bright enough to take
+	// hold of. It has no model, so the land as near as it wins.
+	const auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const MagicFireBall>([this](entt::entity entity, const MagicFireBall& fireBall) {
+		if (!fireBall.handTarget.has_value())
+		{
+			return;
+		}
+		_candidates.push_back({
+		    .centre = *fireBall.handTarget,
+		    .radius = fireBall.radius,
+		    .origin = *fireBall.handTarget,
+		    .ball = true,
+		});
+		_candidateEntities.push_back(entity);
+		_candidateModels.push_back(glm::mat4(1.0f));
+		_candidateMeshes.push_back(0);
+	});
 }
 
 void PickingSystem::RetargetObject(std::optional<entt::entity> object, float distance)
