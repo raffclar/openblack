@@ -1865,9 +1865,10 @@ void AddHand(std::vector<Scenario>& all)
 	    .description = "A food store in the middle of the view is looked at from a little way up and the pointer is left "
 	                   "alone. Run it as the game starts (ob-build run --scenario hand.spawn_point) without touching the "
 	                   "mouse.",
-	    .expected = "From the first frame the hand is under the cursor, or in the middle of the window over the food "
-	                "store when the cursor isn't over the window; never far off towards the top left corner, gliding "
-	                "back only once the mouse moves.",
+	    .expected = "From the first frame the hand is under the cursor when the cursor is over the window. When the "
+	                "cursor has never been over the window the pointer is the window's top left corner, as in the "
+	                "original, so the hand is off along the line through that corner until the cursor comes over the "
+	                "window. An agent holding the input puts it under the middle of the window, over the food store.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, -40.0f}, .look = {0.0f, 0.0f, 10.0f}},
 	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, 10.0f}}},

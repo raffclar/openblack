@@ -1832,8 +1832,10 @@ bool Game::Update() noexcept
 			_handPointer.Moved();
 		}
 		// The hand is put under the pointer every frame, moving or not: until the mouse first moves, under the pointer
-		// the game keeps, so from a land's first frame it is where the cursor is
-		_mousePosition = _handPointer.Frame(_mousePosition, actions.GetPointerPosition());
+		// the game keeps, so from a land's first frame it is where the cursor is, or the top left corner while the
+		// cursor has never been over the window
+		_mousePosition = _handPointer.Frame(
+		    _mousePosition, actions.IsPointerKnown() ? std::optional(actions.GetPointerPosition()) : std::nullopt);
 		ProcessTempleRoomKeys();
 		_shortcutKeys.Update();
 	}

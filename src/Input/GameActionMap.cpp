@@ -467,6 +467,11 @@ uint32_t GameActionMap::GetPointerButtons() const
 	return PointerState(nullptr);
 }
 
+bool GameActionMap::IsPointerKnown() const
+{
+	return _playerCursorSeen || _scriptedPointer.has_value() || _lock.Locked();
+}
+
 void GameActionMap::HoldScriptedKey(int scancode, bool held)
 {
 	if (scancode > 0 && static_cast<size_t>(scancode) < _scriptedKeys.size())
