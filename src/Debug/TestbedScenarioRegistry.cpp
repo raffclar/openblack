@@ -1489,6 +1489,63 @@ void AddObjects(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A tiger a tenth of the size beside it, for whom a villager is too heavy
+	auto small = Posed(CreatureType::Tiger, {30.0f, 0.0f});
+	small.size = 0.1f;
+	all.push_back({
+	    .id = "objects.pickup_limits",
+	    .name = "What is too big or heavy to lift, and putting down what can't be moved",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, with a ball eight times the usual size to its front right and a villager to its "
+	                   "front left whom a script has made immovable, though she may be picked up. A tiger a tenth of the "
+	                   "size stands 30 m east with a villager in front of it. The small tiger tries to pick up its "
+	                   "villager; the big one tries to pick up the giant ball, then picks up the villager and puts her "
+	                   "down, then picks her up again and throws her to the west.",
+	    .expected = "The small tiger gives up at once: the villager weighs more than 0.8 of its weight. The big tiger "
+	                "gives up on the ball at once: its size and the ball's together are beyond its reach. It picks up "
+	                "the villager; each time it lets her go, put down or thrown, she goes straight down onto the land "
+	                "under its hand and stands there, never left in the air.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -15.0f}, {35.0f, -15.0f}, {-40.0f, 5.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}), small},
+	    .objects =
+	        {{.type = VillagerInfo::NorseHousewifeFemale,
+	          .offset = {-6.0f, -k_Reach},
+	          .indestructible = true,
+	          .inScript = true,
+	          .immovable = true},
+	         {.type = MobileObjectInfo::Ball, .offset = {12.0f, -k_Reach}, .scale = 8.0f},
+	         {.type = VillagerInfo::NorseHousewifeFemale, .offset = {30.0f, -3.0f}, .indestructible = true, .inScript = true}},
+	    .commands = {OnObject(Kind::PickUp, 1, 2, 1.0f), OnObject(Kind::PickUp, 0, 1, 1.0f), OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 Act(Kind::PutDown, 0, 1.0f, true), OnObject(Kind::PickUp, 0, 0, 2.0f),
+	                 Go(Kind::ThrowAt, 0, {-40.0f, -10.0f}, 1.0f), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 2.0f),
+	                 Go(Kind::TurnToFace, 0, {0.0f, -60.0f}, 0.0f)},
+	});
+
+	all.push_back({
+	    .id = "objects.pickup_kinds",
+	    .name = "The kinds of thing a creature picks up",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with, in front of it from left to right, a toy ball, a rock, an idol, a birch and a "
+	                   "magic mushroom. It picks up and throws the toy ball and then the rock to the west, tries to pick up "
+	                   "the idol, pulls up the birch and puts it down, then picks up the mushroom and puts it down.",
+	    .expected = "The toy ball and the rock are lifted and thrown. The idol is refused at once: of the statics only "
+	                "toys are picked up. The birch creaks as it comes out of the ground and is planted again where it is "
+	                "put down. The mushroom is lifted and put down.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {25.0f, -15.0f}, {-60.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {-12.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {-6.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::Idol, .offset = {0.0f, -k_Reach}},
+	                {.type = TreeInfo::Birch, .offset = {6.0f, -k_Reach}},
+	                {.type = FeatureInfo::MagicMushroom, .offset = {12.0f, -k_Reach}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Go(Kind::ThrowAt, 0, {-60.0f, -10.0f}, 0.5f),
+	                 OnObject(Kind::PickUp, 0, 1, 1.0f), Go(Kind::ThrowAt, 0, {-60.0f, 10.0f}, 4.0f),
+	                 OnObject(Kind::PickUp, 0, 2, 1.0f), OnObject(Kind::PickUp, 0, 3, 1.0f), Act(Kind::PutDown, 0, 1.0f, true),
+	                 OnObject(Kind::PickUp, 0, 4, 1.0f), Act(Kind::PutDown, 0, 1.0f, true)},
+	});
+
 	auto hungry = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	hungry.needs = {.energy = 0.3f};
 	hungry.hold = false;
@@ -2994,9 +3051,9 @@ bool ValidOffset(glm::vec2 offset)
 	return std::abs(offset.x) <= k_MaxOffset && std::abs(offset.y) <= k_MaxOffset;
 }
 
-/// What is wrong with what a command acts on, if anything: the object it picks up must be a thing, an animal or a
-/// villager, what it knocks down a thing or a tree, the part it strokes, the way it looks something over and the leash
-/// put on real ones
+/// What is wrong with what a command acts on, if anything: the object it picks up must be of a kind a creature may pick
+/// up (a thing, pot, animal, villager, static, tree or magic mushroom), what it knocks down a thing or a tree, the
+/// part it strokes, the way it looks something over and the leash put on real ones
 std::string_view CommandProblem(const Command& command, std::span<const ObjectSetup> objects)
 {
 	const auto* object = command.object < objects.size() ? &objects[command.object] : nullptr;
@@ -3005,7 +3062,12 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 	case Kind::PickUp:
 		return object != nullptr &&
 		               (std::holds_alternative<MobileObjectInfo>(object->type) ||
-		                std::holds_alternative<AnimalInfo>(object->type) || std::holds_alternative<VillagerInfo>(object->type))
+		                std::holds_alternative<AnimalInfo>(object->type) ||
+		                std::holds_alternative<VillagerInfo>(object->type) || std::holds_alternative<PotInfo>(object->type) ||
+		                std::holds_alternative<MobileStaticInfo>(object->type) ||
+		                std::holds_alternative<TreeInfo>(object->type) ||
+		                (std::holds_alternative<FeatureInfo>(object->type) &&
+		                 std::get<FeatureInfo>(object->type) == FeatureInfo::MagicMushroom))
 		           ? ""
 		           : "picks up no thing";
 	case Kind::KnockDown:

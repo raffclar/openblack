@@ -107,9 +107,15 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld(entt::entity creature) const = 0;
 	/// What something is worth to eat, if anything
 	[[nodiscard]] virtual std::optional<float> FoodValueOf(entt::entity object) const = 0;
-	/// Whether a creature can pick something up: things and villagers, not the land's fixtures nor other creatures, nor
-	/// what a script or the thing's state keeps from it
+	/// Whether a creature can pick something up from where it is: things and villagers, not the land's fixtures nor other
+	/// creatures, nor what a script or the thing's state keeps from it, nor what is too big or heavy for it, a town's
+	/// artefact, what its leash is tied to, or a thing out of the map it isn't holding already
 	[[nodiscard]] virtual bool CanPickUp(entt::entity creature, entt::entity object) const = 0;
+	/// Whether a creature can take something from a hand that gives it: as picking up, but wherever the thing is, and
+	/// without the rules about artefacts, worshippers and what scripts hold
+	[[nodiscard]] virtual bool CanTakeFromHand(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
+	/// Whether a flying thing is of a kind creatures catch and its own state lets them, before its weight is compared
+	[[nodiscard]] virtual bool CanBeCaught(entt::entity /*object*/) const { return false; }
 	/// Whether a creature can knock something down: trees, homes and things
 	[[nodiscard]] virtual bool CanDestroy(entt::entity target) const = 0;
 	/// How far a creature's hand gets at its furthest stretch when picking up, measured straight, from where the hand

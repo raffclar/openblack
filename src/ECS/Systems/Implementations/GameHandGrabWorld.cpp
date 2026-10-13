@@ -483,7 +483,7 @@ std::optional<creature_giving::Verdict> GameHandGrabWorld::GiveVerdict(entt::ent
 	    .friendly = creature->owner == giver,
 	    .spellSeed = false,
 	    .creatureCanPickUp = Locator::creatureObjectActionSystem::has_value() &&
-	                         Locator::creatureObjectActionSystem::value().CanPickUp(target, held),
+	                         Locator::creatureObjectActionSystem::value().CanTakeFromHand(target, held),
 	});
 }
 

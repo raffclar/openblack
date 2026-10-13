@@ -398,10 +398,9 @@ bool GamePhysicsHooksWorld::HasCreatureActions() const
 	return Locator::creatureObjectActionSystem::has_value();
 }
 
-bool GamePhysicsHooksWorld::CanPickUp(entt::entity creature, entt::entity object) const
+bool GamePhysicsHooksWorld::CanBeCaught(entt::entity object) const
 {
-	return Locator::creatureObjectActionSystem::has_value() &&
-	       Locator::creatureObjectActionSystem::value().CanPickUp(creature, object);
+	return Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().CanBeCaught(object);
 }
 
 void GamePhysicsHooksWorld::Catch(entt::entity creature, entt::entity object)
