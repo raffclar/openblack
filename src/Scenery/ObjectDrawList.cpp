@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bitset>
 
 #include <glm/geometric.hpp>
 #include <glm/vec4.hpp>
@@ -94,6 +95,123 @@ float object_draw_list::BlockDistance(glm::vec3 eye, const Block& block)
 	const auto box = BoxOf(block);
 	const glm::vec3 middle {block.corner.x + (k_BlockSize * 0.5f), box.middle, block.corner.y + (k_BlockSize * 0.5f)};
 	return std::sqrt(DistanceSquared(middle, eye));
+}
+
+namespace
+{
+/// The five sides of the view in clip space. A point is on the inner side of a side when the value is zero or more.
+constexpr size_t k_Sides = 5;
+
+float SideValue(size_t side, float nearPlane, glm::vec4 p)
+{
+	switch (side)
+	{
+	case 0:
+		return p.w - nearPlane;
+	case 1:
+		return p.w - p.x;
+	case 2:
+		return p.w + p.x;
+	case 3:
+		return p.w - p.y;
+	default:
+		return p.w + p.y;
+	}
+}
+
+/// A triangle that the sides of the view cut: each side can add one corner
+using Polygon = std::array<glm::vec4, 3 + k_Sides>;
+
+/// Cuts the polygon to the inner side of a side of the view, and gives the number of corners that remain
+size_t Cut(size_t side, float nearPlane, const Polygon& in, size_t count, Polygon& out)
+{
+	size_t kept = 0;
+	for (size_t i = 0; i < count; ++i)
+	{
+		const auto from = in.at(i);
+		const auto to = in.at((i + 1) % count);
+		const float fromValue = SideValue(side, nearPlane, from);
+		const float toValue = SideValue(side, nearPlane, to);
+		if (fromValue >= 0.0f)
+		{
+			out.at(kept++) = from;
+		}
+		if ((fromValue >= 0.0f) != (toValue >= 0.0f))
+		{
+			out.at(kept++) = from + (to - from) * (fromValue / (fromValue - toValue));
+		}
+	}
+	return kept;
+}
+} // namespace
+
+bool object_draw_list::TriangleFacesEye(glm::vec3 eye, glm::vec3 a, glm::vec3 b, glm::vec3 c)
+{
+	// The land shows its upper side only
+	auto normal = glm::cross(b - a, c - a);
+	if (normal.y < 0.0f)
+	{
+		normal = -normal;
+	}
+	return glm::dot(normal, eye - a) > 0.0f;
+}
+
+bool object_draw_list::ClippedTriangleShows(float nearPlane, glm::vec4 a, glm::vec4 b, glm::vec4 c)
+{
+	// A triangle with all three corners beyond one side is gone; one with all corners in view stays whole
+	bool inside = true;
+	for (size_t side = 0; side < k_Sides; ++side)
+	{
+		const bool aOut = SideValue(side, nearPlane, a) < 0.0f;
+		const bool bOut = SideValue(side, nearPlane, b) < 0.0f;
+		const bool cOut = SideValue(side, nearPlane, c) < 0.0f;
+		if (aOut && bOut && cOut)
+		{
+			return false;
+		}
+		inside = inside && !aOut && !bOut && !cOut;
+	}
+	if (inside)
+	{
+		return true;
+	}
+	Polygon polygon {a, b, c};
+	Polygon cut {};
+	size_t count = 3;
+	for (size_t side = 0; side < k_Sides && count >= 3; ++side)
+	{
+		count = Cut(side, nearPlane, polygon, count, cut);
+		polygon = cut;
+	}
+	return count >= 3;
+}
+
+bool object_draw_list::TriangleShows(const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye, glm::vec3 a, glm::vec3 b,
+                                     glm::vec3 c)
+{
+	return TriangleFacesEye(eye, a, b, c) &&
+	       ClippedTriangleShows(nearPlane, viewProjection * glm::vec4(a, 1.0f), viewProjection * glm::vec4(b, 1.0f),
+	                            viewProjection * glm::vec4(c, 1.0f));
+}
+
+uint8_t object_draw_list::SidesBeyond(float nearPlane, glm::vec4 p)
+{
+	uint8_t beyond = 0;
+	for (size_t side = 0; side < k_Sides; ++side)
+	{
+		if (SideValue(side, nearPlane, p) < 0.0f)
+		{
+			beyond = static_cast<uint8_t>(beyond | (1u << side));
+		}
+	}
+	return beyond;
+}
+
+bool object_draw_list::BlockShows(const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye,
+                                  std::span<const glm::vec3> corners, std::span<const uint16_t> triangles)
+{
+	return BlockShowsWith(
+	    viewProjection, nearPlane, eye, corners.size(), [corners](uint16_t corner) { return corners[corner]; }, triangles);
 }
 
 bool object_draw_list::BlockListed(const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye, const Block& block)

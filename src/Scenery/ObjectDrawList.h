@@ -12,6 +12,9 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
+#include <array>
+#include <bitset>
 #include <optional>
 #include <span>
 #include <unordered_set>
@@ -21,12 +24,13 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 // Which of the land's objects the game draws on a frame, and so which of them play on in their clips. The game keeps a
-// list of the objects on the land's blocks that are in view and near, made again every few turns or when the blocks in
-// view change. On a frame where the camera has moved it draws every object in the list and notes which were on screen;
-// on a frame where it stands still it draws only those. Things that only move as they are drawn (the scripts' gates)
-// freeze while they aren't. Pure functions and a small clock, tested on their own.
+// list of the objects on the land's blocks that are in view and near, made again every few turns or when a block in
+// view starts or stops to show land triangles. On a frame where the camera has moved it draws every object in the list and
+// notes which were on screen; on a frame where it stands still it draws only those. Things that only move as they are drawn
+// (the scripts' gates) freeze while they aren't. Pure functions and a small clock, tested on their own.
 
 namespace openblack::object_draw_list
 {
@@ -57,6 +61,79 @@ struct Block
 [[nodiscard]] bool BlockInView(const glm::mat4& viewProjection, float nearPlane, const Block& block);
 /// How far the eye is from the block's middle: half way up its box, or at the water's level with the reflection drawn
 [[nodiscard]] float BlockDistance(glm::vec3 eye, const Block& block);
+/// Whether the upper side of a land triangle faces the eye and a part of the triangle is in view, as the game tests the
+/// triangles of a block that it draws. A triangle that the view cuts shows when a part of it remains.
+[[nodiscard]] bool TriangleShows(const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye, glm::vec3 a, glm::vec3 b,
+                                 glm::vec3 c);
+/// Whether the upper side of a land triangle faces the eye
+[[nodiscard]] bool TriangleFacesEye(glm::vec3 eye, glm::vec3 a, glm::vec3 b, glm::vec3 c);
+/// Whether a part of a triangle, given in clip space, remains after the view cuts it
+[[nodiscard]] bool ClippedTriangleShows(float nearPlane, glm::vec4 a, glm::vec4 b, glm::vec4 c);
+/// A bit for each side of the view that a point in clip space is beyond
+[[nodiscard]] uint8_t SidesBeyond(float nearPlane, glm::vec4 p);
+
+/// Whether one or more of a block's triangles show (see TriangleShows). `cornerAt(i)` gives corner i of the
+/// `cornerCount` corners in the world; the function asks for a corner only when a triangle needs it, and only once.
+template <typename CornerAt>
+[[nodiscard]] bool BlockShowsWith(const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye, size_t cornerCount,
+                                  CornerAt&& cornerAt, std::span<const uint16_t> triangles)
+{
+	constexpr size_t k_MostCorners = 17 * 17;
+	struct Corner
+	{
+		glm::vec3 world;
+		glm::vec4 clip;
+		uint8_t beyond;
+	};
+	std::array<Corner, k_MostCorners> cache;
+	std::bitset<k_MostCorners> known;
+	const auto cornerOf = [&](uint16_t i) -> const Corner& {
+		if (!known.test(i))
+		{
+			const auto world = cornerAt(i);
+			const auto clip = viewProjection * glm::vec4(world, 1.0f);
+			cache[i] = {.world = world, .clip = clip, .beyond = SidesBeyond(nearPlane, clip)};
+			known.set(i);
+		}
+		return cache[i];
+	};
+	const size_t count = std::min(cornerCount, k_MostCorners);
+	for (size_t t = 0; t + 2 < triangles.size(); t += 3)
+	{
+		if (triangles[t] >= count || triangles[t + 1] >= count || triangles[t + 2] >= count)
+		{
+			continue;
+		}
+		const auto& a = cornerOf(triangles[t]);
+		const auto& b = cornerOf(triangles[t + 1]);
+		const auto& c = cornerOf(triangles[t + 2]);
+		// All three corners beyond one side: the view cuts the whole triangle away
+		if ((a.beyond & b.beyond & c.beyond) != 0 || !TriangleFacesEye(eye, a.world, b.world, c.world))
+		{
+			continue;
+		}
+		if ((a.beyond | b.beyond | c.beyond) == 0 || ClippedTriangleShows(nearPlane, a.clip, b.clip, c.clip))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+/// Whether one or more of a block's triangles show (see TriangleShows). The corners are the block's 17 by 17 corners,
+/// [x * 17 + z], and each three triangle indices are one triangle.
+[[nodiscard]] bool BlockShows(const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye,
+                              std::span<const glm::vec3> corners, std::span<const uint16_t> triangles);
+/// Whether a block in view changes the list. The game keeps, for each block, whether it showed triangles when it was
+/// last in view. When a block in view shows triangles and did not, or did and does not now, the game makes the list
+/// again. A block that goes out of view keeps the last value, and does not change the list.
+[[nodiscard]] constexpr bool ShowingChanged(bool shows, bool& lastShown)
+{
+	const bool changed = shows != lastShown;
+	lastShown = shows;
+	return changed;
+}
+
 /// Whether a block's objects go in the list
 [[nodiscard]] bool BlockListed(const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye, const Block& block);
 

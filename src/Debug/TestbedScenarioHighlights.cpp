@@ -68,4 +68,23 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	    .highlights = {{.kind = 1, .offset = {-3.0f, 0.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}},
 	                   {.kind = 1, .offset = {6.0f, 25.0f}, .challenge = 0, .tip = std::pair {4129u, 3u}}},
 	});
+
+	// Signs in different land blocks: the game spins a sign only in the frames where its list of things to draw has it
+	all.push_back({
+	    .id = "scripts.sign_phases",
+	    .name = "Signs spin only while the game draws them",
+	    .facet = Facet::Objects,
+	    .description = "Four \"did you know\" signs whose tips are not read: two before the camera, one 300 behind it "
+	                   "and one 750 before it. Wait a few seconds, turn the camera round to the sign behind it, then turn "
+	                   "back.",
+	    .expected = "The two signs before the camera spin together, half a turn a second. The sign behind the camera "
+	                "did not spin while it was out of view, so it shows at a different angle from the others. The sign "
+	                "750 away does not show: the game draws no thing in a land block more than 700 from the camera.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -15.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .highlights = {{.kind = 1, .offset = {-3.0f, 0.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}},
+	                   {.kind = 1, .offset = {4.0f, 5.0f}, .challenge = 0, .tip = std::pair {4129u, 3u}},
+	                   {.kind = 1, .offset = {0.0f, -300.0f}, .challenge = 0, .tip = std::pair {4130u, 3u}},
+	                   {.kind = 1, .offset = {0.0f, 750.0f}, .challenge = 0, .tip = std::pair {4131u, 3u}}},
+	});
 }
