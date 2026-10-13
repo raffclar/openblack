@@ -479,3 +479,19 @@ TEST(CreatureKindActions, WatchingAThingFlyEndsWhenItLands)
 	static_cast<void>(Think(mind, senses, random));
 	EXPECT_EQ(mind.step, 1u);
 }
+
+TEST(CreatureKindActions, PlayingAThrowingGameThrowsTheToyToThePlayersHand)
+{
+	const auto agenda = ThrowToPlayer(4, {10.0f, 30.0f, 20.0f}, false);
+	ASSERT_EQ(agenda.size(), 3);
+	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[1].order.kind, ObjectOrder::Kind::Throw);
+	EXPECT_EQ(agenda[1].order.point, glm::vec2(10.0f, 20.0f));
+	EXPECT_EQ(agenda[1].order.pointHeight, 30.0f);
+	EXPECT_EQ(agenda[2].animation, creature_layers::animations::k_Happy);
+	// Holding something as it sets about it, it picks the toy up but throws nothing
+	EXPECT_EQ(ThrowToPlayer(4, {}, true).size(), 2);
+	const auto* game = plan_actions::For("PlayThrowingGameWithPlayer");
+	ASSERT_NE(game, nullptr);
+	EXPECT_EQ(game->use, plan_actions::Target::Toy);
+}

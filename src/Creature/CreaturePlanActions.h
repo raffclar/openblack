@@ -162,6 +162,8 @@ enum class Build : uint8_t
 	StrokeToy,
 	TakeToyHome,
 	ThrowDie,
+	/// Picking up the toy it uses and throwing it to its player's hand
+	ThrowToPlayer,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -221,6 +223,8 @@ struct Situation
 	/// Where the thing it uses is, and its radius on the ground
 	glm::vec2 instrumentPoint {0.0f};
 	float instrumentRadius {0.0f};
+	/// Where the nearest of its player's hands is, none when its player has no hand here
+	std::optional<glm::vec3> playerHand;
 	/// Where the camera is, whether the creature has a player (whose camera it can look to), whether a script controls
 	/// it, its radius on the ground, and a chance from 0 to 1 for what varies
 	std::optional<glm::vec3> eye;

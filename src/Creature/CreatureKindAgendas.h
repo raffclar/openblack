@@ -79,6 +79,10 @@ constexpr uint32_t k_ToyTossedBelow = 2;
 constexpr float k_DieThrowHeights = 1.2f;
 constexpr uint32_t k_DieOutcomeLots = 3;
 
+/// Playing a throwing game with the player: picking up the toy and, when its hand held nothing as it set about it,
+/// throwing it at the player's hand, watching the hand; then a happy jump
+[[nodiscard]] std::vector<Step> ThrowToPlayer(uint32_t toy, glm::vec3 hand, bool handFull);
+
 /// Kicking a ball about: going up to it, turning to face it a tenth of a second, going right up to it again and kicking
 /// it, watching it; then a quarter of the time pointing at it a second, else waiting 0.4 to 1 second (in whole turns).
 /// It kicks it again after each, two times at the least, each time going on while the count is under two plus a chance

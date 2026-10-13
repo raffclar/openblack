@@ -147,6 +147,19 @@ std::vector<Step> creature_mind::ThrowDie(std::optional<uint32_t> pickUp, uint32
 	return agenda;
 }
 
+std::vector<Step> creature_mind::ThrowToPlayer(uint32_t toy, glm::vec3 hand, bool handFull)
+{
+	std::vector<Step> agenda {PickUp(toy)};
+	if (!handFull)
+	{
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::Throw, .point = {hand.x, hand.z}, .pointHeight = hand.y},
+		                  .gaze = Gaze {.point = hand}});
+	}
+	agenda.push_back({.kind = Step::Kind::Action, .animation = creature_layers::animations::k_Happy});
+	return agenda;
+}
+
 std::vector<Step> creature_mind::KickBallAround(uint32_t ball, const Random& random)
 {
 	const Gaze watch {.object = ball};

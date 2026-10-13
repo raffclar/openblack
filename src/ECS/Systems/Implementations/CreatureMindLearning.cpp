@@ -93,6 +93,8 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "InfoConstants.h"
@@ -1785,6 +1787,21 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	if (const auto* at = registry.TryGet<const Transform>(creature))
 	{
 		situation.position = {at->position.x, at->position.z};
+		// Only the local player's hands are about to throw to
+		const bool local = body != nullptr && Locator::playerSystem::has_value() &&
+		                   body->owner == Locator::playerSystem::value().GetLocalPlayer();
+		if (local && Locator::handSystem::has_value())
+		{
+			for (const auto& hand : Locator::handSystem::value().GetPlayerHandPositions())
+			{
+				if (hand.has_value() &&
+				    (!situation.playerHand.has_value() ||
+				     glm::distance(*hand, at->position) < glm::distance(*situation.playerHand, at->position)))
+				{
+					situation.playerHand = hand;
+				}
+			}
+		}
 	}
 	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
 	{

@@ -89,6 +89,10 @@ constexpr std::array k_Executors {
     Executor {.action = "StrokToy", .target = Target::CuddlyToy, .build = Build::StrokeToy},
     Executor {.action = "TakeToyHome", .target = Target::ToyAwayFromHome, .build = Build::TakeToyHome},
     Executor {.action = "ThrowDie", .target = Target::Die, .build = Build::ThrowDie, .activity = Activity::PlayWithObject},
+    Executor {.action = "PlayThrowingGameWithPlayer",
+              .use = Target::Toy,
+              .build = Build::ThrowToPlayer,
+              .activity = Activity::PlayWithObject},
     Executor {.action = "ThrowAround",
               .target = Target::AnyLiving,
               .build = Build::PracticeThrow,
@@ -288,6 +292,12 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 			return std::nullopt;
 		}
 		return creature_mind::ThrowToyAt(*situation.instrument, *object, objectPoint, situation.height, random);
+	case Build::ThrowToPlayer:
+		if (!situation.playerHand.has_value() || !situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::ThrowToPlayer(*situation.instrument, *situation.playerHand, situation.handFull);
 	case Build::StrokeToy:
 		return creature_mind::StrokeToy(*object);
 	case Build::TakeToyHome:

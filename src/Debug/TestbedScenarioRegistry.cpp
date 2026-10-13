@@ -1821,6 +1821,21 @@ void AddObjects(std::vector<Scenario>& all)
 		});
 	}
 
+	all.push_back({
+	    .id = "objects.throw_to_player",
+	    .name = "Throwing a toy to the player",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger of the player's with a toy ball in front of it. A script tells it to play a throwing "
+	                   "game with the player; keep the hand in view.",
+	    .expected = "It picks the ball up and throws it at the player's hand, where the hand was as it set about it, "
+	                "looking at it; then it jumps for joy.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 4.0f, .action = "PlayThrowingGameWithPlayer", .with = 0}},
+	});
+
 	auto stoner = Content(CreatureType::Tiger, {0.0f, 0.0f});
 	stoner.desires = {{.desire = creature_desires::Desire::GetHigh, .fraction = 1.0f}};
 	all.push_back({
