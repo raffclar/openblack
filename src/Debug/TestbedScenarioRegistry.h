@@ -29,6 +29,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureTattoo.h"
+#include "ECS/CreatureAttitudeRules.h"
 #include "Enums.h"
 #include "Particles/ParticleDrawPath.h"
 #include "TestbedCrowd.h"
@@ -264,6 +265,9 @@ struct ObjectSetup
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
 	/// A villager belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A villager goes to make love with the scenario's object of this index once the walk delay is up, as a breeder
+	/// sends one: both walk to meet and kiss there
+	std::optional<size_t> mateWith;
 	/// A villager is put down on the nearest teleport stone after this many seconds, as the hand drops one, and jumps at
 	/// once to the stone nearest where it was walking
 	std::optional<float> dropOnStoneSeconds;
@@ -296,8 +300,15 @@ struct ObjectSetup
 	/// A planned building is the plan of one that had been finished and went from the land, which its town wants
 	/// rebuilt as a repair
 	bool wasBuilt {false};
+	/// A building stands only this much built, a site open for its town's builders to finish it
+	std::optional<float> built;
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
+	/// The thing is set alight as it is made, burning as at the start of a fire
+	bool alight {false};
+	/// The thing makes a reaction of this kind as it is made, as the game makes one about a thing (a thing coming to rest
+	/// makes one to look at it), by the scenario's player
+	std::optional<Reaction> reaction;
 };
 
 /// A particle effect played on the land
@@ -843,6 +854,9 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town believes this much in the player from the start, so that it stays the
 	/// player's rather than going back to the neutral player at its first turn
 	std::optional<float> townBeliefInPlayer;
+	/// A testbed set-up step: the scenario's town feels so about each of the scenario's creatures from the start, as if
+	/// the creature had just shown it, rather than first seeing them as it plays
+	std::optional<ecs::creature_attitude::Attitude> townFeelingAboutCreatures;
 	/// A crowd spawned a batch a frame, after the creatures and objects above; the runner measures the frames once it
 	/// is all there
 	std::optional<Crowd> crowd;

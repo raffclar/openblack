@@ -110,6 +110,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -122,6 +123,8 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
+#include "ECS/Systems/Implementations/VillagerBreeding.h"
+#include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -131,6 +134,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -551,6 +555,19 @@ void Runner::Start(const Scenario& scenario)
 			}
 		}
 	}
+	if (scenario.townFeelingAboutCreatures.has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+			for (const auto creature : _creatures)
+			{
+				ecs::villager_creature::SetFeeling(town->second, creature, *scenario.townFeelingAboutCreatures, turn);
+			}
+		}
+	}
 	if (scenario.tribalPower.has_value() && Locator::magicSystem::has_value())
 	{
 		Locator::magicSystem::value().SetTribalPower(PlayerNames::PLAYER_ONE, scenario.tribalPower->first,
@@ -919,9 +936,14 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 					    }
 					    return plan;
 				    }
-				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
-				                                                   object.storedFood.value_or(k_ScenarioTownFood),
-				                                                   object.storedWood.value_or(k_ScenarioTownWood));
+				    const auto abode = ecs::archetypes::AbodeArchetype::Create(
+				        ScenarioTown(middle), position, type, yaw, object.scale, object.storedFood.value_or(k_ScenarioTownFood),
+				        object.storedWood.value_or(k_ScenarioTownWood));
+				    if (object.built.has_value())
+				    {
+					    ecs::construction::SetBuilt(abode, *object.built);
+				    }
+				    return abode;
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {
@@ -954,6 +976,18 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		{
 			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
 			Locator::fireflySystem::value().Create(map_coords::FromWorld(land, placed.position));
+		}
+		if (object.alight && Locator::fireSystem::has_value())
+		{
+			Locator::fireSystem::value().SetOnFire(_objects.back(), 0.0f);
+		}
+		if (object.reaction.has_value() && Locator::reactionSystem::has_value())
+		{
+			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
+			Locator::reactionSystem::value().Create({.initiator = _objects.back(),
+			                                         .type = *object.reaction,
+			                                         .player = PlayerNames::PLAYER_ONE,
+			                                         .position = placed.position});
 		}
 	}
 }
@@ -2609,6 +2643,13 @@ void Runner::UpdateVillagerWalks()
 		{
 			Log(fmt::format("Villager {} got there in {} turns", i, Locator::time::value().GetTurn() - *walk.setOffTurn));
 			walk.setOffTurn.reset();
+		}
+		if (setup.mateWith.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
+		    *setup.mateWith < _objects.size() && registry.Valid(_objects.at(*setup.mateWith)))
+		{
+			walk.dropped = true;
+			ecs::villager_breeding::GoAndHaveSexWith(entity, _objects.at(*setup.mateWith));
+			Log(fmt::format("Villager {} goes to make love with object {}", i, *setup.mateWith));
 		}
 		if (setup.worshipAt.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
 		    Locator::teleportSystem::has_value() && Locator::terrainSystem::has_value())

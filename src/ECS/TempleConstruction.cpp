@@ -57,6 +57,7 @@
 #include "Game.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/VillagerReactionRules.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -291,7 +292,23 @@ void Finish(entt::entity building)
 				player_statistics::CountBuilt(registry, *owner, info.abodeType);
 			}
 		}
-		// TODO(villager-social): the town's people react to a new civic building
+		// The people about a new building of the town's own come to dance round it
+		if (const auto* abode = registry.TryGet<const Abode>(building);
+		    abode != nullptr && abode->info != AbodeInfo::None && TownOf(building).has_value() &&
+		    Locator::infoConstants::has_value() && Locator::reactionSystem::has_value())
+		{
+			const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(abode->info));
+			if (magic::villager_reaction::ReactedToWhenBuilt(info.abodeType))
+			{
+				Locator::reactionSystem::value().Create(
+				    {.initiator = building,
+				     .type = Reaction::ReactToNewBuilding,
+				     .player = world_objects::PlayerOf(building).value_or(PlayerNames::NEUTRAL),
+				     .position = registry.Get<const Transform>(building).position,
+				     .impressiveValue =
+				         world_objects::InfoOf(building) != nullptr ? world_objects::InfoOf(building)->impressiveValue : 0.0f});
+			}
+		}
 	}
 }
 
