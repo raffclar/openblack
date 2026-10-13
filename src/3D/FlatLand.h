@@ -58,6 +58,12 @@ constexpr int k_CellsPerSide = 512;
 constexpr float k_CellSize = 10.0f;
 /// The middle of the map, where the testbed's camera looks and where scenarios and the spawn area are
 constexpr glm::vec2 k_MapMiddle {static_cast<float>(k_CellsPerSide) * k_CellSize * 0.5f};
+/// The testbed's camera: from 120 units south of the middle and 60 above the land, looking north. It stands and looks
+/// one cell east of the middle, as the middle is on the corner of four blocks, so that the dark line along the block
+/// edge there doesn't run straight down the middle of the view.
+constexpr float k_CameraHeight = 60.0f;
+constexpr float k_CameraBack = 120.0f;
+constexpr float k_CameraAside = k_CellSize;
 
 /// The lake: 10 by 10 cells (100 by 100 units) of open water at sea level, from the first cell to before the last, in
 /// cells of the map. It lies north of the middle, beyond what the scenarios and the spawn area use, and in view of the
