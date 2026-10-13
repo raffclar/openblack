@@ -201,9 +201,10 @@ std::vector<Attempt> creature_leash_orders::OnThing(const Thing& thing)
 	const bool fight = thing.leash == LeashType::Evil && thing.creature && thing.distance < thing.height * k_FightReachHeights;
 	const auto fightOrDesires = fight ? Attempt::Fight : Attempt::Desires;
 	const auto fallback = thing.liftable ? Attempt::Hold : Attempt::Look;
+	// When the creature carries something, its desires choose first, also before a fight on the aggression leash
 	if (thing.carrying)
 	{
-		return {Attempt::DesiresUsingCarried, fightOrDesires, fallback};
+		return {Attempt::Desires, fightOrDesires, fallback};
 	}
 	if (!thing.liftable)
 	{

@@ -186,8 +186,9 @@ TEST(LeashOrders, WhatAThingIsTriedWith)
 	EXPECT_EQ(OnThing({.fishFarm = true, .hungry = true, .knowsFishing = true, .energy = 1.0f}), (std::vector {Desires, Look}));
 	EXPECT_EQ(OnThing({.liftable = true}), std::vector {Hold});
 	EXPECT_EQ(OnThing({}), (std::vector {Desires, Look}));
-	EXPECT_EQ(OnThing({.carrying = true}), (std::vector {DesiresUsingCarried, Desires, Look}));
-	EXPECT_EQ(OnThing({.carrying = true, .liftable = true}), (std::vector {DesiresUsingCarried, Desires, Hold}));
+	// The desires choose twice when it carries something, as the game asks them again before it gives up
+	EXPECT_EQ(OnThing({.carrying = true}), (std::vector {Desires, Desires, Look}));
+	EXPECT_EQ(OnThing({.carrying = true, .liftable = true}), (std::vector {Desires, Desires, Hold}));
 	EXPECT_TRUE(Acknowledges(OnThing({})));
 }
 
@@ -204,7 +205,7 @@ TEST(LeashOrders, TheAggressionLeashFightsCreaturesNearEnough)
 	EXPECT_EQ(OnThing(kind), (std::vector {Desires, Look}));
 	auto carrying = near;
 	carrying.carrying = true;
-	EXPECT_EQ(OnThing(carrying), (std::vector {DesiresUsingCarried, Fight, Look}));
+	EXPECT_EQ(OnThing(carrying), (std::vector {Desires, Fight, Look}));
 }
 
 TEST(LeashOrders, Agendas)

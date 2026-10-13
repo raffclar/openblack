@@ -1936,7 +1936,6 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 				desire = Desire::Hunger;
 			}
 			break;
-		case orders::Attempt::DesiresUsingCarried:
 		case orders::Attempt::Desires:
 			if (Locator::creatureMindSystem::has_value())
 			{
