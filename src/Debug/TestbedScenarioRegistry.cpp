@@ -2320,6 +2320,49 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
 
+	// The camera looks at a cuddly toy and a toy ball on flat land from 35 m. The hand takes each toy in turn.
+	all.push_back({
+	    .id = "hand.hold_toys",
+	    .name = "Holding toys",
+	    .facet = Facet::Hand,
+	    .description = "The hand takes the cuddly toy, holds it for three seconds and puts it down. Then it takes the "
+	                   "toy ball and holds it.",
+	    .expected = "The hand holds the cuddly toy from the side, as it holds a skittle. It holds the toy ball from "
+	                "above on its palm, as it holds a bowling ball or a die.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::ToyCuddly, .offset = {0.0f, 0.0f}},
+	                {.type = MobileStaticInfo::ToyBall, .offset = {0.0f, 6.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.75f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.41f, 0.48f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3}},
+	});
+
+	// The camera looks at a wood pile on flat land from 35 m. The hand scoops from it for four seconds.
+	all.push_back({
+	    .id = "hand.scoop_pile",
+	    .name = "Scooping from a pile",
+	    .facet = Facet::Hand,
+	    .description = "The hand takes wood from a wood pile and keeps the button down for four seconds. Then it lets "
+	                   "go of the button and moves away with the handful.",
+	    .expected = "While it scoops, the hand stays above the pile with the side hold of the handful, as it holds the "
+	                "handful after the scoop. It does not tip down. It stays as high above the pile as the handful "
+	                "hangs below it, and at least 1.9 m.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = PotInfo::WoodPile_1, .offset = {0.0f, 0.0f}, .amount = 2000}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 4.0f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
+	});
+
 	// The camera looks at a rock on flat land from 35 m. The hand does one thing after another, with a pause between them.
 	all.push_back({
 	    .id = "hand.state_blend",

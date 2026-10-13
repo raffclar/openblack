@@ -60,7 +60,6 @@ public:
 	[[nodiscard]] bool IsPulling() const override;
 	[[nodiscard]] std::optional<HeldPose> GetHeldPose() const override;
 	[[nodiscard]] float GetCursorRaise() const override;
-	[[nodiscard]] std::optional<float> GetScoopTip() const override;
 	bool HandOver(entt::entity object) override;
 	bool TakeIntoHand(entt::entity object) override;
 	bool LetGoAt(glm::vec3 velocity) override;

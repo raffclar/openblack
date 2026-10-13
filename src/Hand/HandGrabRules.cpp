@@ -162,6 +162,7 @@ HoldFacts hand_grab::HoldOf(GrabKind kind, MobileStaticInfo staticType, MeshId m
 			facts.type = HoldType::Side;
 			facts.loweringMultiplier = k_SingingStoneLowering;
 		}
+		// Of the toys, the hand holds the cuddly toy and the skittle from the side. It holds the other toys from above.
 		else if (mesh == MeshId::ObjectToyCuddly || mesh == MeshId::ObjectToySkittle)
 		{
 			facts.type = HoldType::Side;
@@ -437,13 +438,4 @@ uint32_t hand_grab::ScoopTaken(uint32_t wanted, uint32_t sourceHas, uint32_t hel
 		taken = std::min(taken, room);
 	}
 	return taken;
-}
-
-float hand_grab::ScoopTip(float height, float handLength)
-{
-	if (height >= k_ScoopTipLowHeight)
-	{
-		return k_ScoopTip;
-	}
-	return std::atan((k_ScoopTipLowHeight - height) / handLength) + k_ScoopTip;
 }

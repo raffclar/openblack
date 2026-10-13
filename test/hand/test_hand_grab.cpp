@@ -149,6 +149,18 @@ TEST(HandGrab, EachKindHangsItsOwnWay)
 	EXPECT_FLOAT_EQ(cuddly.loweringMultiplier, 0.0f);
 }
 
+TEST(HandGrab, TheHandHoldsOnlyTheCuddlyToyAndTheSkittleFromTheSide)
+{
+	const auto holdOf = [](MobileStaticInfo type, MeshId mesh) {
+		return HoldOf(GrabKind::MobileStatic, type, mesh, 1.0f, 1.0f).type;
+	};
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToyCuddly, MeshId::ObjectToyCuddly), HoldType::Side);
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToySkittle, MeshId::ObjectToySkittle), HoldType::Side);
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToyBall, MeshId::ObjectToyBall), HoldType::Above);
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToyBowlingBall, MeshId::ObjectToyBowlingBall), HoldType::Above);
+	EXPECT_EQ(holdOf(MobileStaticInfo::ToyDie, MeshId::ObjectToyDice), HoldType::Above);
+}
+
 TEST(HandGrab, TheHandRisesForWhatItHolds)
 {
 	// Taken to be pulled free, a thing is gripped no closer than a share of the hand's height
@@ -447,11 +459,4 @@ TEST(HandGrab, TheScoopingSoundRisesInPitchWithTheRamp)
 	EXPECT_EQ(ScoopSoundPitch(0.25f), 105u);
 	EXPECT_EQ(ScoopSoundPitch(0.999f), 239u);
 	EXPECT_EQ(ScoopSoundPitch(1.0f), 240u);
-}
-
-TEST(HandGrabRules, AScoopingHandTipsFurtherDownWhenLow)
-{
-	EXPECT_FLOAT_EQ(hand_grab::ScoopTip(3.0f, 3.2f), hand_grab::k_ScoopTip);
-	EXPECT_FLOAT_EQ(hand_grab::ScoopTip(2.5f, 3.2f), hand_grab::k_ScoopTip);
-	EXPECT_FLOAT_EQ(hand_grab::ScoopTip(-0.7f, 3.2f), hand_grab::k_ScoopTip + std::atan(1.0f));
 }
