@@ -578,6 +578,8 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.sitEnding = false;
 	mind.wakeWanted = false;
 	mind.gaveUp = false;
+	// Taking up something else, its eyes look as usual again
+	mind.eyesToClear = mind.eyesHeld;
 }
 
 void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Random& random)
@@ -697,6 +699,18 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		mind.stepSeconds = 0.0f;
 		// Each step pulls the face it is meant to as it starts, held for as long as the face goes with
 		commands.face = PullFace(mind, step.face, senses, random);
+		if (step.heldEyes.has_value())
+		{
+			commands.eyes = *step.heldEyes;
+			mind.eyesHeld = true;
+			mind.eyesToClear = false;
+		}
+		else if (mind.eyesToClear)
+		{
+			commands.eyes = Eyes::Normal;
+			mind.eyesHeld = false;
+			mind.eyesToClear = false;
+		}
 		switch (step.kind)
 		{
 		case Step::Kind::Action:
@@ -764,6 +778,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.playOnce = step.animation;
 			commands.mirrored = random(2) == 1;
 			commands.startSwapBeam = true;
+			break;
+		case Step::Kind::BodyGesture:
+			commands.bodyGesture = step.animation;
 			break;
 		case Step::Kind::Wait:
 		case Step::Kind::WaitInMap:
@@ -885,6 +902,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::WatchCamera:
 		WatchCamera(mind, step, senses, commands);
+		break;
+	case Step::Kind::BodyGesture:
+		if (!senses.gesturePlaying)
+		{
+			FinishStep(mind);
+		}
 		break;
 	case Step::Kind::SwapMind:
 		// From the turn after the beam starts it takes on the shape, done once it has, whether or not the action has

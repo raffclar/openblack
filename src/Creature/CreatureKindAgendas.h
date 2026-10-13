@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -52,6 +53,42 @@ constexpr float k_PracticeThrowHeights = 3.0f;
 [[nodiscard]] std::vector<Step> ThrowToyAt(uint32_t toy, uint32_t target, glm::vec2 targetPoint, float height,
                                            const Random& random);
 constexpr uint32_t k_HappyAroundToyThrowLots = 2;
+
+/// Getting high on a magic mushroom: unless it holds a mushroom, picking up the thing; then eating it. A magic
+/// mushroom eaten makes it high once it is done (see BecomeHigh).
+[[nodiscard]] std::vector<Step> GetHigh(std::optional<uint32_t> pickUp, uint32_t eaten);
+
+/// Where a creature high on a magic mushroom may sit down, when it does: the middle of a clear place about it four
+/// times its radius across, and its radius
+struct HighSeat
+{
+	glm::vec2 place {0.0f};
+	float radius {0.0f};
+};
+/// Being high, once a magic mushroom it ate is done: amazed, it watches the player's camera three seconds and talks;
+/// smiling with its eyes wide and darting about, it watches the camera two more seconds and waits a little over three;
+/// it plays a dazed action, half the time a happy jump, a confused one; waits a little over a second; half the time
+/// another dazed action, and a confused one again. Half the time it then goes to a clear place (when there is one,
+/// found by findSeat) and sits there, sad, ten to fifteen seconds, then plays out two dazed actions, the second
+/// frightened, and one of two more. At last, amazed, it watches the camera three seconds, talks and plays a dazed
+/// action once more. Its eyes stay wide and darting about until it next takes up something else to do.
+[[nodiscard]] std::vector<Step> BecomeHigh(const std::function<std::optional<HighSeat>()>& findSeat, const Random& random,
+                                           const std::function<float(float)>& randomFloat);
+constexpr size_t k_Talk = 205;
+constexpr size_t k_HighDazed = 218;
+constexpr size_t k_HighDazedAgain = 220;
+constexpr size_t k_HighConfused = 63;
+constexpr size_t k_HighSitDazed = 56;
+constexpr size_t k_HighFrightened = 61;
+constexpr size_t k_HighLastDazed = 219;
+constexpr float k_HighWatchSeconds = 3.0f;
+constexpr float k_HighStaredSeconds = 2.0f;
+constexpr float k_HighWaitSeconds = 3.1f;
+constexpr float k_HighPauseSeconds = 1.1f;
+constexpr float k_HighSitSeconds = 10.0f;
+constexpr float k_HighSitExtraSeconds = 5.0f;
+constexpr float k_HighSeatRadii = 4.0f;
+constexpr uint32_t k_HighChanceLots = 2;
 
 /// The most trees a creature remembers planting others by
 constexpr size_t k_PlantedRemembered = 10;

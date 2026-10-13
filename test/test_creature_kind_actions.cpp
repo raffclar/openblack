@@ -239,3 +239,68 @@ TEST(CreatureKindActions, ThrowingIntoTheSeaChoosesWhatMayGoInTheSea)
 	ASSERT_NE(sea, nullptr);
 	EXPECT_EQ(sea->target, plan_actions::Target::SeaThrowable);
 }
+
+TEST(CreatureKindActions, GettingHighEatsTheThingPickedUpUnlessAMushroomIsHeld)
+{
+	const auto agenda = GetHigh(7u, 7u);
+	ASSERT_EQ(agenda.size(), 2);
+	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[1].order.kind, ObjectOrder::Kind::Eat);
+	EXPECT_EQ(agenda[1].effect, Effect::Eat);
+	EXPECT_EQ(GetHigh(std::nullopt, 7u).size(), 1);
+	const auto* high = plan_actions::For("GetHigh");
+	ASSERT_NE(high, nullptr);
+	plan_actions::Situation holding;
+	holding.holdingMushroom = true;
+	EXPECT_EQ(plan_actions::Agenda(*high, 7u, {0.0f, 0.0f}, holding, KindActionsFirst)->size(), 1);
+}
+
+TEST(CreatureKindActions, BeingHighWithoutSittingDown)
+{
+	bool looked = false;
+	const auto agenda = BecomeHigh(
+	    [&looked]() {
+		    looked = true;
+		    return std::optional<HighSeat> {};
+	    },
+	    [](uint32_t range) { return range - 1; }, [](float) { return 0.0f; });
+	EXPECT_FALSE(looked);
+	ASSERT_EQ(agenda.size(), 11);
+	EXPECT_EQ(agenda[0].kind, Step::Kind::WatchCamera);
+	EXPECT_FLOAT_EQ(agenda[0].seconds, 3.0f);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Amazed);
+	EXPECT_EQ(agenda[1].kind, Step::Kind::BodyGesture);
+	EXPECT_EQ(agenda[1].animation, k_Talk);
+	EXPECT_FLOAT_EQ(agenda[2].seconds, 2.0f);
+	EXPECT_EQ(agenda[2].heldEyes, Eyes::Stoned);
+	EXPECT_EQ(agenda[3].kind, Step::Kind::Wait);
+	EXPECT_FLOAT_EQ(agenda[3].seconds, 3.1f);
+	EXPECT_EQ(agenda[4].animation, k_HighDazed);
+	EXPECT_EQ(agenda[5].animation, k_HighConfused);
+	EXPECT_FLOAT_EQ(agenda[6].seconds, 1.1f);
+	EXPECT_EQ(agenda[7].animation, k_HighConfused);
+	EXPECT_EQ(agenda[8].kind, Step::Kind::WatchCamera);
+	EXPECT_EQ(agenda[9].kind, Step::Kind::BodyGesture);
+	EXPECT_EQ(agenda[10].animation, k_HighDazed);
+}
+
+TEST(CreatureKindActions, BeingHighSittingDownWhereItIsClear)
+{
+	const auto agenda = BecomeHigh([]() { return std::optional(HighSeat {.place = {5.0f, 6.0f}, .radius = 3.0f}); },
+	                               KindActionsFirst, [](float most) { return most; });
+	ASSERT_EQ(agenda.size(), 18);
+	EXPECT_EQ(agenda[5].animation, creature_layers::animations::k_Happy);
+	EXPECT_EQ(agenda[8].animation, k_HighDazedAgain);
+	EXPECT_EQ(agenda[10].kind, Step::Kind::Move);
+	EXPECT_EQ(agenda[10].movement.point, glm::vec2(5.0f, 6.0f));
+	EXPECT_FLOAT_EQ(agenda[10].movement.maxDistance, 3.0f);
+	EXPECT_EQ(agenda[11].kind, Step::Kind::Static);
+	EXPECT_FLOAT_EQ(agenda[11].seconds, 15.0f);
+	EXPECT_EQ(agenda[11].sequence[1], creature_layers::animations::k_Sit);
+	EXPECT_EQ(agenda[11].face, creature_face::Cue::Sad);
+	EXPECT_EQ(agenda[12].animation, k_HighSitDazed);
+	EXPECT_EQ(agenda[13].animation, k_HighFrightened);
+	EXPECT_EQ(agenda[13].heldEyes, Eyes::Wide);
+	EXPECT_EQ(agenda[14].animation, k_HighSitDazed);
+	EXPECT_EQ(agenda.back().animation, k_HighDazed);
+}

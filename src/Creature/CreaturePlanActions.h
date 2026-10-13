@@ -143,6 +143,8 @@ enum class Build : uint8_t
 	PracticeThrow,
 	/// Picking up the toy it uses and throwing it at the thing
 	ThrowToy,
+	/// Picking up the thing, unless it holds a magic mushroom, and eating it
+	GetHigh,
 	/// An action whose agenda can never be made
 	Never,
 };

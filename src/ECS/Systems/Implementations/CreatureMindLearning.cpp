@@ -377,7 +377,10 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	    [&](entt::entity entity, const Creature&, const Transform& at) { consider(entity, at); });
 	registry.Each<const MobileObject, const Transform>(
 	    [&](entt::entity entity, const MobileObject&, const Transform& at) { consider(entity, at); });
-	const bool living = target == Target::AnyLiving || target == Target::Stonable;
+	// Anything at all is whatever it may come to know of: the living, what lies about, statics, features, trees and
+	// buildings
+	const bool anything = target == Target::Anything;
+	const bool living = target == Target::AnyLiving || target == Target::Stonable || anything;
 	// The animals and miracles that frighten it are only ever run from
 	if (target == Target::Frightening || living)
 	{
@@ -393,19 +396,19 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	const bool sea = target == Target::SeaThrowable;
 	// Of pots and piles, food is eaten, and any may be picked up or thrown into the sea
 	const bool pickable = target == Target::Pickable || target == Target::ThrowableToImpress;
-	if (target == Target::Food || target == Target::MagicFoodPile || pickable || sea)
+	if (target == Target::Food || target == Target::MagicFoodPile || pickable || sea || anything)
 	{
 		registry.Each<const Pot, const Transform>(
 		    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
 	}
 	// Whatever else it may pick up: animals, the football, statics and rocks, dead trees, trees and mushrooms
-	if (pickable || target == Target::Toy || target == Target::ToyBall || sea)
+	if (pickable || target == Target::Toy || target == Target::ToyBall || sea || anything)
 	{
 		registry.Each<const Ball, const Transform>(
 		    [&](entt::entity entity, const Ball&, const Transform& at) { consider(entity, at); });
 	}
 	const bool statics = pickable || target == Target::Toy || target == Target::ToyBall || sea || target == Target::Stonable ||
-	                     target == Target::ThrowingDamage;
+	                     target == Target::ThrowingDamage || anything;
 	if (statics)
 	{
 		registry.Each<const MobileStatic, const Transform>(
@@ -418,7 +421,7 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const Animal, const Transform>(
 		    [&](entt::entity entity, const Animal&, const Transform& at) { consider(entity, at); });
 	}
-	if (pickable || target == Target::Stonable)
+	if (pickable || target == Target::Stonable || anything)
 	{
 		registry.Each<const Feature, const Transform>(
 		    [&](entt::entity entity, const Feature&, const Transform& at) { consider(entity, at); });
@@ -436,7 +439,7 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
 	}
 	// What else is built or set into the land, which thrown things can knock about
-	if (target == Target::Stonable)
+	if (target == Target::Stonable || anything)
 	{
 		registry.Each<const Temple, const Transform>(
 		    [&](entt::entity entity, const Temple&, const Transform& at) { consider(entity, at); });
@@ -1305,6 +1308,14 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		return;
 	}
 	mind.plannedTurn = mind.turn;
+	// Having eaten a magic mushroom, once it is done with what it was doing it becomes high before it chooses anything
+	// else
+	if (mind.highPending && mind.idle.step >= mind.idle.agenda.size() && !registry.AllOf<ScriptControlled>(creature))
+	{
+		mind.highPending = false;
+		BecomeHigh(creature);
+		return;
+	}
 	const glm::vec2 position {transform->position.x, transform->position.z};
 	const auto& desires = *mind.desires;
 	const auto& learnt = *mind.learnt;
@@ -1512,6 +1523,35 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	{
 		mind.planner.best.at(static_cast<size_t>(choice->desire)).reset();
 	}
+}
+
+void CreatureMindSystem::AteMagicMushroom(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr)
+	{
+		mind->highPending = true;
+	}
+}
+
+void CreatureMindSystem::BecomeHigh(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (transform == nullptr)
+	{
+		return;
+	}
+	const glm::vec2 position {transform->position.x, transform->position.z};
+	const auto radius = object_measures::TwoDRadius(registry, creature);
+	const auto findSeat = [&]() -> std::optional<creature_mind::HighSeat> {
+		const auto place = ClearAreaFor(registry, creature, position, creature_mind::k_HighSeatRadii * radius, false);
+		return place.has_value() ? std::optional(creature_mind::HighSeat {.place = *place, .radius = radius}) : std::nullopt;
+	};
+	auto agenda = creature_mind::BecomeHigh(
+	    findSeat, [this](uint32_t range) { return Random(range); }, [this](float most) { return Chance() * most; });
+	static_cast<void>(
+	    ForcePlan(creature, {.desire = Desire::GetHigh, .action = "GetHigh", .object = creature, .agenda = std::move(agenda)}));
 }
 
 bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan)

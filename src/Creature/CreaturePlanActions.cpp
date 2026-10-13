@@ -46,6 +46,7 @@ constexpr std::array k_Executors {
     Executor {.action = "FishAndEat", .build = Build::FishAndEat, .activity = Activity::Eat},
     Executor {.action = "GiveFishToStoragePit", .target = Target::StoragePit, .build = Build::GiveFishToStore},
     Executor {.action = "TakeFishHome", .build = Build::TakeFishHome},
+    Executor {.action = "GetHigh", .target = Target::Anything, .build = Build::GetHigh, .activity = Activity::Eat},
     // Trees: given to a town's store as wood, or planted by something
     Executor {.action = "GiveWoodFromTreeToStoragePit",
               .target = Target::StoragePit,
@@ -271,6 +272,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 			return std::nullopt;
 		}
 		return creature_mind::ThrowToyAt(*situation.instrument, *object, objectPoint, situation.height, random);
+	case Build::GetHigh:
+		return creature_mind::GetHigh(situation.holdingMushroom ? std::nullopt : object, *object);
 	case Build::PracticeThrow:
 		return creature_mind::PracticeThrow(situation.handFull ? std::nullopt : object, situation.position, situation.height);
 	case Build::PlantTree:

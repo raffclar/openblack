@@ -1161,10 +1161,24 @@ bool CreatureObjectActionSystem::Lob(entt::entity creature)
 	return Start(creature, {.kind = Kind::Lob});
 }
 
+namespace
+{
+/// A magic mushroom growing on the land, or one of the mushrooms lying about
+bool IsMagicMushroom(const ecs::Registry& registry, entt::entity object)
+{
+	const auto* feature = registry.TryGet<const Feature>(object);
+	const auto* mobile = registry.TryGet<const MobileObject>(object);
+	return (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
+	       (mobile != nullptr &&
+	        (mobile->type == MobileObjectInfo::MagicMushroom || mobile->type == MobileObjectInfo::Toadstool));
+}
+} // namespace
+
 bool CreatureObjectActionSystem::EatHeld(entt::entity creature)
 {
 	const auto held = GetHeld(creature);
-	if (held.has_value() && !FoodValueOf(*held).has_value())
+	// A magic mushroom is eaten whatever it is worth as food
+	if (held.has_value() && !FoodValueOf(*held).has_value() && !IsMagicMushroom(Locator::entitiesRegistry::value(), *held))
 	{
 		auto action = CreatureObjectAction {.kind = Kind::Eat};
 		Fail(action, "what it holds can't be eaten");
@@ -1932,6 +1946,11 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 				break;
 			}
 			const auto value = FoodValueOf(*held);
+			// A magic mushroom makes it high once it is done with what it is doing
+			if (IsMagicMushroom(registry, *held) && Locator::creatureMindSystem::has_value())
+			{
+				Locator::creatureMindSystem::value().AteMagicMushroom(creature);
+			}
 			registry.Remove<CreatureHeldObject>(creature);
 			Consume(registry, *held);
 			if (value.has_value() && Locator::creaturePhysiologySystem::has_value())

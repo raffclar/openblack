@@ -1611,6 +1611,24 @@ void AddObjects(std::vector<Scenario>& all)
 	          .with = 2}},
 	});
 
+	auto stoner = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	stoner.desires = {{.desire = creature_desires::Desire::GetHigh, .fraction = 1.0f}};
+	all.push_back({
+	    .id = "objects.magic_mushroom",
+	    .name = "Eating a magic mushroom",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a magic mushroom in front of it, wanting to get high as much as it can. It "
+	                   "picks the mushroom up and eats it by itself.",
+	    .expected = "Once it has eaten it, it becomes high: amazed, it turns to the camera and talks; its eyes go wide and "
+	                "dart about, and smiling it stares at the camera, plays dazed and confused actions, half the time "
+	                "jumps for joy, and half the time walks to a clear place, sits there sadly ten to fifteen seconds and "
+	                "starts up frightened. At last it turns to the camera amazed, talks and plays a dazed action again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {stoner},
+	    .objects = {{.type = FeatureInfo::MagicMushroom, .offset = {0.0f, -k_Reach}}},
+	});
+
 	auto hungry = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	hungry.needs = {.energy = 0.3f};
 	hungry.hold = false;

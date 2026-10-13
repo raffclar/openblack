@@ -86,6 +86,73 @@ std::vector<Step> creature_mind::ThrowToyAt(uint32_t toy, uint32_t target, glm::
 	return agenda;
 }
 
+std::vector<Step> creature_mind::GetHigh(std::optional<uint32_t> pickUp, uint32_t eaten)
+{
+	std::vector<Step> agenda;
+	if (pickUp.has_value())
+	{
+		agenda.push_back(PickUp(*pickUp));
+	}
+	agenda.push_back(
+	    {.kind = Step::Kind::Object, .effect = Effect::Eat, .order = {.kind = ObjectOrder::Kind::Eat, .object = eaten}});
+	return agenda;
+}
+
+std::vector<Step> creature_mind::BecomeHigh(const std::function<std::optional<HighSeat>()>& findSeat, const Random& random,
+                                            const std::function<float(float)>& randomFloat)
+{
+	using creature_face::Cue;
+	const Gaze camera {.camera = true};
+	const auto action = [](size_t animation, Cue face = Cue::None) {
+		return Step {.kind = Step::Kind::Action, .animation = animation, .face = face, .heldEyes = Eyes::Stoned};
+	};
+	std::vector<Step> agenda;
+	agenda.push_back({.kind = Step::Kind::WatchCamera, .seconds = k_HighWatchSeconds, .face = Cue::Amazed, .gaze = camera});
+	// TODO(creature-kind-actions): while talking the game also flutters its eyelids looking at itself, which no
+	// creature here does yet
+	agenda.push_back({.kind = Step::Kind::BodyGesture, .animation = k_Talk});
+	agenda.push_back(
+	    {.kind = Step::Kind::WatchCamera, .seconds = k_HighStaredSeconds, .face = Cue::Smile, .heldEyes = Eyes::Stoned});
+	agenda.push_back({.kind = Step::Kind::Wait, .seconds = k_HighWaitSeconds, .face = Cue::Smile, .gaze = camera});
+	agenda.push_back(action(k_HighDazed));
+	if (random(k_HighChanceLots) == 0)
+	{
+		agenda.push_back(action(creature_layers::animations::k_Happy));
+	}
+	agenda.push_back(action(k_HighConfused, Cue::Amazed));
+	agenda.push_back({.kind = Step::Kind::Wait, .seconds = k_HighPauseSeconds, .face = Cue::Smile, .gaze = camera});
+	if (random(k_HighChanceLots) == 0)
+	{
+		agenda.push_back(action(k_HighDazedAgain, Cue::Amazed));
+	}
+	agenda.push_back(action(k_HighConfused, Cue::Amazed));
+	if (random(k_HighChanceLots) == 0)
+	{
+		if (const auto seat = findSeat())
+		{
+			agenda.push_back(
+			    {.kind = Step::Kind::Move,
+			     .movement = {.kind = Movement::Kind::ToPoint, .point = seat->place, .maxDistance = seat->radius}});
+			agenda.push_back({.kind = Step::Kind::Static,
+			                  .seconds = k_HighSitSeconds + randomFloat(k_HighSitExtraSeconds),
+			                  .sequence = {creature_layers::animations::k_StartSit, creature_layers::animations::k_Sit,
+			                               creature_layers::animations::k_EndSit},
+			                  .mirrorAtRandom = true,
+			                  .face = Cue::Sad,
+			                  .heldEyes = Eyes::Stoned});
+		}
+		agenda.push_back(action(k_HighSitDazed));
+		agenda.push_back(
+		    {.kind = Step::Kind::Action, .animation = k_HighFrightened, .face = Cue::Frightened, .heldEyes = Eyes::Wide});
+		agenda.push_back(
+		    {.kind = Step::Kind::Action, .animation = random(k_HighChanceLots) == 0 ? k_HighSitDazed : k_HighLastDazed});
+	}
+	agenda.push_back({.kind = Step::Kind::WatchCamera, .seconds = k_HighWatchSeconds, .face = Cue::Amazed, .gaze = camera});
+	agenda.push_back({.kind = Step::Kind::BodyGesture, .animation = k_Talk, .heldEyes = Eyes::Stoned});
+	agenda.push_back(action(k_HighDazed));
+	return agenda;
+}
+
 std::vector<Step> creature_mind::PlantTreeBy(std::optional<uint32_t> tree, uint32_t by)
 {
 	std::vector<Step> agenda;

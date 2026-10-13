@@ -321,7 +321,10 @@ void ApplyEyes(CreatureEyes* eyes, creature_mind::Eyes look)
 		return;
 	}
 	const bool sleepy = look == creature_mind::Eyes::Sleepy;
-	eyes->mode = look == creature_mind::Eyes::Closed ? creature_eyes::Mode::Closed : creature_eyes::Mode::Calm;
+	eyes->mode = look == creature_mind::Eyes::Closed   ? creature_eyes::Mode::Closed
+	             : look == creature_mind::Eyes::Stoned ? creature_eyes::Mode::Stoned
+	             : look == creature_mind::Eyes::Wide   ? creature_eyes::Mode::Wide
+	                                                   : creature_eyes::Mode::Calm;
 	eyes->openness = sleepy ? k_SleepyOpenness : 0.0f;
 	eyes->blink.intervalMs = sleepy ? k_SleepyBlinkIntervalMs : creature_eyes::k_BlinkIntervalMs;
 }
@@ -572,6 +575,13 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 		                                              commands.mirrored))
 		{
 			animation.body = *body;
+		}
+	}
+	if (commands.bodyGesture.has_value())
+	{
+		if (const auto gesture = creature_layers::PlayGesture(animation.gesture, *commands.bodyGesture))
+		{
+			animation.gesture = *gesture;
 		}
 	}
 	if (commands.relaxFace)
@@ -1308,6 +1318,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .seconds = k_TurnSeconds,
 		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
 		        .bodyLooping = creature_layers::IsLooping(animation.body),
+		        .gesturePlaying = animation.gesture.animation.has_value(),
 		        .moving = moving,
 		        .subMove = SubMoveOf(entity),
 		        .position = glm::vec2(transform.position.x, transform.position.z),

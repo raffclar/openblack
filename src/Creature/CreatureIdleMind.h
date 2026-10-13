@@ -249,6 +249,20 @@ enum class Effect : uint8_t
 	TookFromHand,
 };
 
+/// How the eyes should look
+enum class Eyes : uint8_t
+{
+	Unchanged,
+	/// Drooping and slowly blinking, as if just woken up
+	Sleepy,
+	Normal,
+	Closed,
+	/// Wide open and darting about
+	Stoned,
+	/// Wide open, as when frightened
+	Wide,
+};
+
 /// What a creature's head is made to look at: a thing (its top, or its foot), a point, or the player's camera
 struct Gaze
 {
@@ -294,6 +308,9 @@ struct Step
 		/// other creature; then it plays the step's animation (not while its body plays another), starting the beam
 		/// between them, and turn by turn it takes on the shape the swap gives it until it has
 		SwapMind,
+		/// Playing an animation (the step's) on top of the body, such as talking, done once it has played out; when one
+		/// already plays, it waits for that one instead
+		BodyGesture,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -323,6 +340,9 @@ struct Step
 	creature_face::Cue face {creature_face::Cue::None};
 	/// What its head looks at while the step lasts, in place of looking about
 	std::optional<Gaze> gaze;
+	/// How its eyes look from the step's start until it next takes up something else to do: stoned (wide and darting
+	/// about) or wide open, as when frightened
+	std::optional<Eyes> heldEyes;
 };
 
 struct IdleMind
@@ -335,6 +355,9 @@ struct IdleMind
 	bool sitEnding {false};
 	/// Seconds until the step's face is pulled again, and the count that varies the faces it pulls
 	float faceSeconds {0.0f};
+	/// Its eyes look as a step held them, and look as usual again once it takes up something else to do
+	bool eyesHeld {false};
+	bool eyesToClear {false};
 	uint32_t faceVariety {0};
 	/// Seconds until it may show a desire again
 	float showDesireSeconds {0.0f};
@@ -407,6 +430,8 @@ struct Senses
 	/// Whether the body plays an action or is on the move, and whether it is in the loop of an action, such as sitting
 	bool bodyBusy {false};
 	bool bodyLooping {false};
+	/// Whether an animation plays on top of the body
+	bool gesturePlaying {false};
 	/// Whether it is on its way somewhere or turning, and where it stands
 	bool moving {false};
 	/// How going near, getting away from or turning to face an object, or drawing a gesture, is going, by the
@@ -455,16 +480,6 @@ constexpr float k_WatchCameraFurthest = 100.0f;
 constexpr float k_WatchCameraOverhead = 0.1f;
 constexpr float k_WatchCameraTurn = 1.5707963f;
 
-/// How the eyes should look
-enum class Eyes : uint8_t
-{
-	Unchanged,
-	/// Drooping and slowly blinking, as if just woken up
-	Sleepy,
-	Normal,
-	Closed,
-};
-
 /// What the mind tells the body
 struct Commands
 {
@@ -503,6 +518,8 @@ struct Commands
 	bool finishSpells {false};
 	bool startSwapBeam {false};
 	bool easeSwap {false};
+	/// An animation to play on top of the body
+	std::optional<size_t> bodyGesture;
 };
 
 /// random(n) is a whole number from 0 to n - 1
