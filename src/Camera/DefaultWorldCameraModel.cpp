@@ -425,7 +425,9 @@ void DefaultWorldCameraModel::UpdateModePolar(glm::vec3 eulerAngles, bool recalc
 
 	if (recalculatePoint)
 	{
-		const auto diff = averageIslandPoint - ProjectPointOnForwardVector(_averageIslandDistance);
+		// The new line of sight goes to the point that the camera turns about
+		const auto diff =
+		    averageIslandPoint - (_targetOrigin + _averageIslandDistance * glm::normalize(_focusAtClick - _targetOrigin));
 		_targetOrigin += diff;
 		_focusAtClick += diff;
 	}
@@ -1238,20 +1240,15 @@ void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
 	_currentFocus = focus;
 	_targetOrigin = origin;
 	_targetFocus = focus;
-	// Turning, tilting and zooming start again from here
-	_originAtClick = origin;
-	_focusAtClick = focus;
-	_originFocusDistanceAtInteractionStart = glm::distance(origin, focus);
-	_arcBallRadius = 0.0f;
-	_screenSpaceMouseRaycastHitAtClick.reset();
+	// The command puts only the camera. The controls that the player holds keep their state and continue:
+	// - A turn or a tilt keeps the point that it turns about and its distance. The camera thus looks from the place
+	//   towards that point.
+	// - A turn about the hand keeps the land point under the hand and its distance.
+	// - A drag of the land continues with the grip, the cursor and the view of its start.
+	// - A hold of the controls after a push from the fence continues.
 	// A flight continues from here. Its clock stops, thus after its first part the camera stays here. A control of the
 	// camera stops the flight. A movement that runs for half the flight time starts the last part of the flight.
 	// A double tap that waits for this frame flies the camera from here.
-	_mode = _mode == Mode::FlyingToPoint ? Mode::FlyingToPoint : Mode::Cartesian;
-	_modePrev = Mode::Cartesian;
-	// A drag that the player holds continues with the grip, the cursor and the view of its start. Thus the next frame of
-	// a land drag moves the camera from where the drag started, not from this place. A hold of the controls after a push
-	// from the fence also continues.
 }
 
 glm::vec3 DefaultWorldCameraModel::GetTargetOrigin() const
