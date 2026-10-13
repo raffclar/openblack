@@ -182,14 +182,15 @@ AnimalClips living::ClipsOf(AnimalInfo kind)
 std::optional<AnimId> living::AnimalLandedClip(AnimalInfo kind, LandingPose pose)
 {
 	const auto clips = ClipsOf(kind);
+	// An animal put down with no body gets up from its left side, as from its back
 	switch (pose)
 	{
+	case LandingPose::Feet:
+		return clips.landedFeet;
 	case LandingPose::Front:
 		return clips.landedRight;
-	case LandingPose::Back:
-		return clips.landedLeft;
 	default:
-		return clips.landedFeet;
+		return clips.landedLeft;
 	}
 }
 

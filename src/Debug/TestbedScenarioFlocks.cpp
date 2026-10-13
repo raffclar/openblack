@@ -164,6 +164,72 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "animals.cow_rescued_from_wolf",
+	    .name = "The hand takes a cow from a wolf",
+	    .facet = Facet::Miracles,
+	    .description = "The ground flock cast at a point south of a cow, so that the wolves run at the cow. Pick the cow "
+	                   "up while it lies on the ground, then put it down or throw it.",
+	    .expected = "A wolf pounces and the cow falls in its dying clip, with a life of 0.05. Then the cow lies in its dead "
+	                "clip while the wolf eats it for 30 seconds, and then it dies and its body goes after 5 seconds. "
+	                "Picked up before then, the cow plays its clip for the hand and the count stops. Put down or thrown, "
+	                "it gets up, joins a herd near it if it can and wanders off. It lives on, and the wolves do not hunt "
+	                "it again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 80.0f}}, .distance = 0.6f},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 50.0f}}},
+	    .miracles = {{.type = MagicType::FlockGround,
+	                  .point = k_Spot,
+	                  .handOffset = k_HandBehind,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "animals.thrown_and_landed",
+	    .name = "Farm animals thrown",
+	    .facet = Facet::Miracles,
+	    .description = "A cow, a sheep, a pig and a horse are each thrown from the west every ten seconds. A herd of "
+	                   "three cows stands to the north for the hand to pick up.",
+	    .expected = "Each animal plays its kind's clip while it flies. It comes down and plays the clip to get up of how it "
+	                "lies: on its feet, on its right side, or on its left side. Its herd's home moves to where it came "
+	                "down. Then it joins a herd near it if it can and wanders off. Held in the hand, an animal plays its "
+	                "kind's clip for the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 10.0f}, {30.0f, 70.0f}}, .distance = 0.7f},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {-12.0f, 30.0f}},
+	                {.type = AnimalInfo::Sheep, .offset = {-4.0f, 30.0f}},
+	                {.type = AnimalInfo::Pig, .offset = {4.0f, 30.0f}},
+	                {.type = AnimalInfo::Horse, .offset = {12.0f, 30.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {-6.0f, 60.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {0.0f, 62.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {6.0f, 60.0f}}},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2 {-30.0f, 30.0f},
+	                .height = 4.0f,
+	                .velocity = {14.0f, 9.0f, 0.0f},
+	                .delaySeconds = 1.0f,
+	                .repeatSeconds = 10.0f},
+	               {.object = 1,
+	                .from = glm::vec2 {-30.0f, 38.0f},
+	                .height = 4.0f,
+	                .velocity = {14.0f, 9.0f, 0.0f},
+	                .delaySeconds = 1.5f,
+	                .repeatSeconds = 10.0f},
+	               {.object = 2,
+	                .from = glm::vec2 {-30.0f, 22.0f},
+	                .height = 4.0f,
+	                .velocity = {14.0f, 9.0f, 0.0f},
+	                .delaySeconds = 2.0f,
+	                .repeatSeconds = 10.0f},
+	               {.object = 3,
+	                .from = glm::vec2 {-30.0f, 46.0f},
+	                .height = 4.0f,
+	                .velocity = {14.0f, 9.0f, 0.0f},
+	                .delaySeconds = 2.5f,
+	                .repeatSeconds = 10.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.flock_wolves_fade",
 	    .name = "Ground flock: wolves fade as it ends",
 	    .facet = Facet::Miracles,

@@ -42,6 +42,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Animals/GrazerRules.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
@@ -962,6 +963,16 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, AnimalInfo>)
 			    {
+				    // A grazer lives its own life, as one that a land's script makes
+				    if (animals::grazers::IsGrazer(type) && Locator::animalSystem::has_value())
+				    {
+					    if (const auto grazer = Locator::animalSystem::value().CreateGrazer(
+					            type, glm::vec2(position.x, position.z), 0, entt::null, entt::null);
+					        grazer != entt::null)
+					    {
+						    return grazer;
+					    }
+				    }
 				    return ecs::archetypes::AnimalArchetype::Create(type, position, yaw, 1.0f, PlayerNames::NEUTRAL);
 			    }
 			    else if constexpr (std::is_same_v<T, MobileStaticInfo>)

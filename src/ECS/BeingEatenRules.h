@@ -11,28 +11,28 @@
 
 #include <cstdint>
 
-/// The rules for a villager that a hunter brought down. The hunter leaves it with a small life. The villager falls,
+/// The rules for a villager or an animal that a hunter brought down. The hunter leaves it with a small life. It falls,
 /// then the hunter eats it for a number of turns, then it dies. The count of these turns is a part of the state "being
-/// eaten". Thus a villager that goes out of this state (for example, in the hand) stays alive. Pure, tested on made-up
-/// values.
-namespace openblack::ecs::villager_eaten_rules
+/// eaten". Thus a villager or an animal that goes out of this state (for example, into the hand) stays alive. Pure,
+/// tested on made-up values.
+namespace openblack::ecs::being_eaten_rules
 {
 
-/// The life that a villager has after a hunter brings it down
+/// The life that a villager or an animal has after a hunter brings it down
 inline constexpr float k_BroughtDownLife = 0.05f;
-/// The turns that a hunter eats a villager before it dies
+/// The turns that a hunter eats a villager or an animal before it dies
 inline constexpr uint16_t k_BeingEatenTurns = 300;
 /// The count starts again from this number when the turns end
 inline constexpr uint16_t k_EatenAgainTurns = 50;
 
-/// What a turn of "being eaten" does to the villager
+/// What a turn of "being eaten" does to the villager or the animal
 enum class EatenTurn : uint8_t
 {
 	/// The hunter continues to eat it
 	Eaten,
-	/// The turns ended, but nothing can kill the villager: it gets up as after a fall
+	/// The turns ended, but nothing can kill it: it gets up as after a fall
 	GetsUp,
-	/// The turns ended: the villager dies
+	/// The turns ended: it dies
 	Dies,
 };
 
@@ -43,8 +43,8 @@ struct EatenStep
 	EatenTurn result;
 };
 
-/// Counts one turn of "being eaten". The count goes down by one each turn. At zero, the count starts again from 50 and
-/// the villager dies or gets up. A count that starts at zero goes round to the highest number.
+/// Counts one turn of "being eaten". The count goes down by one each turn. At zero, the count starts again from 50, and
+/// the villager or the animal dies or gets up. A count that starts at zero goes round to the highest number.
 [[nodiscard]] constexpr EatenStep BeingEatenTurn(uint16_t turnsLeft, bool indestructible)
 {
 	const auto left = static_cast<uint16_t>(turnsLeft - 1);
@@ -55,4 +55,4 @@ struct EatenStep
 	return {.turnsLeft = k_EatenAgainTurns, .result = indestructible ? EatenTurn::GetsUp : EatenTurn::Dies};
 }
 
-} // namespace openblack::ecs::villager_eaten_rules
+} // namespace openblack::ecs::being_eaten_rules

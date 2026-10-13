@@ -134,13 +134,9 @@ inline constexpr float k_PreyMaxHeight = 2.0f;
 [[nodiscard]] bool IsPrey(const PreyFacts& prey);
 /// A wolf this close to its prey brings it down
 inline constexpr float k_PounceReach = 1.0f;
-/// A hunter eats an animal that it brought down for this many turns, then the animal goes
-inline constexpr int k_BeingEatenTurns = 300;
 /// Whether a hunter does not hunt a living thing. The hunter does not hunt a thing that is dying, dead, brought down or
 /// eaten (as the state that the thing goes to shows). It also does not hunt a thing that a hunter brought down before.
 [[nodiscard]] bool OutOfTheHunt(LivingStates finalState, bool broughtDown);
-/// The turns a clip of so many milliseconds takes to play out, waiting a whole turn at a time
-[[nodiscard]] int TurnsToPlay(uint32_t playTime, uint32_t turnMilliseconds);
 /// Where a wolf goes to eat its prey: its scale short of the prey, the way from the wolf in three dimensions
 [[nodiscard]] glm::vec3 EatingPosition(glm::vec3 prey, glm::vec3 wolf, float scale);
 

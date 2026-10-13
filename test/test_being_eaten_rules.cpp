@@ -9,14 +9,14 @@
 
 #include <gtest/gtest.h>
 
-#include "ECS/VillagerEatenRules.h"
+#include "ECS/BeingEatenRules.h"
 
 namespace
 {
-namespace rules = openblack::ecs::villager_eaten_rules;
+namespace rules = openblack::ecs::being_eaten_rules;
 } // namespace
 
-TEST(VillagerEatenRules, AVillagerDiesAfterThreeHundredTurnsOfBeingEaten)
+TEST(BeingEatenRules, AVillagerDiesAfterThreeHundredTurnsOfBeingEaten)
 {
 	uint16_t left = rules::k_BeingEatenTurns;
 	for (int turn = 1; turn < 300; ++turn)
@@ -31,21 +31,21 @@ TEST(VillagerEatenRules, AVillagerDiesAfterThreeHundredTurnsOfBeingEaten)
 	EXPECT_EQ(last.turnsLeft, rules::k_EatenAgainTurns);
 }
 
-TEST(VillagerEatenRules, AVillagerThatNothingCanKillGetsUpAndTheCountStartsAgain)
+TEST(BeingEatenRules, AVillagerThatNothingCanKillGetsUpAndTheCountStartsAgain)
 {
 	const auto step = rules::BeingEatenTurn(1, true);
 	EXPECT_EQ(step.result, rules::EatenTurn::GetsUp);
 	EXPECT_EQ(step.turnsLeft, 50);
 }
 
-TEST(VillagerEatenRules, ACountThatStartsAtZeroGoesRoundToTheHighestNumber)
+TEST(BeingEatenRules, ACountThatStartsAtZeroGoesRoundToTheHighestNumber)
 {
 	const auto step = rules::BeingEatenTurn(0, false);
 	EXPECT_EQ(step.result, rules::EatenTurn::Eaten);
 	EXPECT_EQ(step.turnsLeft, 0xFFFF);
 }
 
-TEST(VillagerEatenRules, AHunterLeavesAVillagerWithASmallLife)
+TEST(BeingEatenRules, AHunterLeavesAVillagerWithASmallLife)
 {
 	EXPECT_FLOAT_EQ(rules::k_BroughtDownLife, 0.05f);
 }

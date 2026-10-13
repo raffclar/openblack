@@ -200,16 +200,6 @@ bool flock::IsPrey(const PreyFacts& prey)
 	return prey.isVillager || prey.isOtherAnimal;
 }
 
-int flock::TurnsToPlay(uint32_t playTime, uint32_t turnMilliseconds)
-{
-	int turns = 0;
-	while (turnMilliseconds != 0 && static_cast<uint32_t>(turns) * turnMilliseconds < playTime)
-	{
-		++turns;
-	}
-	return turns;
-}
-
 glm::vec3 flock::EatingPosition(glm::vec3 prey, glm::vec3 wolf, float scale)
 {
 	auto way = prey - wolf;

@@ -27,7 +27,6 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
-#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -276,35 +275,12 @@ void GamePhysicsHooksWorld::AddToPile(entt::entity pile, ResourceType type, uint
 	}
 }
 
-bool GamePhysicsHooksWorld::HasAnimals() const
-{
-	return Locator::animalSystem::has_value();
-}
-
 void GamePhysicsHooksWorld::SetDying(entt::entity animal)
 {
 	if (Locator::animalSystem::has_value())
 	{
 		Locator::animalSystem::value().SetDying(animal);
 	}
-}
-
-entt::entity GamePhysicsHooksWorld::LeaderOf(entt::entity flock) const
-{
-	return Locator::animalSystem::has_value() ? Locator::animalSystem::value().LeaderOf(flock) : entt::null;
-}
-
-void GamePhysicsHooksWorld::SetFlockCentre(entt::entity flock, glm::vec2 centre)
-{
-	if (Locator::animalSystem::has_value())
-	{
-		Locator::animalSystem::value().SetFlockCentre(flock, centre);
-	}
-}
-
-std::optional<glm::vec3> GamePhysicsHooksWorld::ForestLair(AnimalInfo kind, glm::vec3 from) const
-{
-	return Locator::forestSystem::has_value() ? Locator::forestSystem::value().ForestLair(kind, from) : std::nullopt;
 }
 
 bool GamePhysicsHooksWorld::HasMinds() const

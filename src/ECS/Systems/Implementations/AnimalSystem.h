@@ -167,8 +167,17 @@ private:
 	void FinishPouncing(entt::entity wolf, components::Animal& animal, entt::entity prey);
 	static void WaitForClip(components::Animal& animal, components::AnimalState next);
 	void Eat(entt::entity wolf, components::Animal& animal);
-	/// The villagers and animals brought down: eaten over the turns, then dead
-	void ProcessEaten();
+	/// A turn of a state that every kind has: brought down, eaten or landed. Returns whether the animal was in one
+	bool CommonStateTurn(entt::entity entity, components::Animal& animal);
+	/// Brought down: it waits for its fall to end, then the hunter eats it
+	static void Downed(components::Animal& animal);
+	/// A turn of being eaten: when the count ends, the animal dies or gets up
+	void BeingEatenTurn(entt::entity entity, components::Animal& animal);
+	/// Came down on the land: its flock gets a new home by its kind's rule, then it gets up
+	void Landed(entt::entity entity, components::Animal& animal);
+	/// It waits for the clip that it plays to end, then goes into the next state. The wait counts from the start of
+	/// its state, when the clip started
+	static void WaitForClipOfState(components::Animal& animal, components::AnimalState next);
 
 	/// The miracles' animals fade out and go
 	void ProcessFading();
