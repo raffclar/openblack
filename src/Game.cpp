@@ -79,6 +79,8 @@
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureFightHud.h"
+#include "Creature/CreatureRig.h"
+#include "Creature/CreatureSkin.h"
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FrameStatsLog.h"
@@ -3973,7 +3975,7 @@ bool Game::Run() noexcept
 		auto& renderer = Locator::rendererInterface::value();
 		ecs::challenge_pictures::Collect(
 		    Locator::entitiesRegistry::value(),
-		    {.take = [&renderer](const std::string& name) { return renderer.TakeCapturedFrame(name); },
+		    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 		     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
 		ShowInspectorCamera(false);
 
@@ -4990,6 +4992,22 @@ void Game::LoadCreatureRigs()
 		{
 			return;
 		}
+		// The creature paints its skins from the files of its base, evil and good meshes when it first shows.
+		// Register them, so that the game loads them behind the loading screen.
+		auto& files = Locator::resources::value().GetL3DFiles();
+		const auto registerSkins = [&files, &meshDirectory](const std::array<char, 0x20>& field) {
+			const std::string_view raw(field.data(), field.size());
+			const std::string name(raw.substr(0, raw.find(char {})));
+			if (!name.empty())
+			{
+				const auto skinPath = meshDirectory / (name + ".l3d");
+				RegisterFile(files, creature_skin::MeshFileId(name), skinPath, resources::L3DFileLoader::FromDiskTag {},
+				             skinPath);
+			}
+		};
+		registerSkins(header.baseMeshName);
+		registerSkins(header.variantMeshNames.at(static_cast<size_t>(creature::CreatureRig::Mesh::Evil) - 1));
+		registerSkins(header.variantMeshNames.at(static_cast<size_t>(creature::CreatureRig::Mesh::Good) - 1));
 		rigs.Register(
 		    creature::GetRigId(species),
 		    [path, block = *block, specDirectory, meshDirectory] {

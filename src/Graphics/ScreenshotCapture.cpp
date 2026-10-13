@@ -92,23 +92,51 @@ std::optional<std::string> ScreenshotFailures::Take(const std::string& path)
 	return why;
 }
 
-void CapturedFrames::Keep(std::string path, CapturedFrame frame)
+void ScreenPictures::Ask(std::string name, ScreenPicturer picturer)
 {
 	const std::scoped_lock lock(_mutex);
-	_frames.insert_or_assign(std::move(path), std::move(frame));
+	_made.erase(name);
+	_asked.insert_or_assign(std::move(name), std::move(picturer));
 }
 
-std::optional<CapturedFrame> CapturedFrames::Take(const std::string& path)
+bool ScreenPictures::Make(const std::string& name, const ScreenView& screen)
+{
+	ScreenPicturer picturer;
+	{
+		const std::scoped_lock lock(_mutex);
+		const auto found = _asked.find(name);
+		if (found == _asked.end())
+		{
+			return false;
+		}
+		picturer = std::move(found->second);
+		_asked.erase(found);
+	}
+	// Make the picture without the lock, so that the game thread does not wait for it
+	auto picture = picturer ? picturer(screen) : std::vector<uint8_t> {};
+	const std::scoped_lock lock(_mutex);
+	_made.insert_or_assign(name, std::move(picture));
+	return true;
+}
+
+std::optional<std::vector<uint8_t>> ScreenPictures::Take(const std::string& name)
 {
 	const std::scoped_lock lock(_mutex);
-	const auto found = _frames.find(path);
-	if (found == _frames.end())
+	const auto found = _made.find(name);
+	if (found == _made.end())
 	{
 		return std::nullopt;
 	}
-	auto frame = std::move(found->second);
-	_frames.erase(found);
-	return frame;
+	auto picture = std::move(found->second);
+	_made.erase(found);
+	return picture;
+}
+
+void ScreenPictures::Forget(const std::string& name)
+{
+	const std::scoped_lock lock(_mutex);
+	_asked.erase(name);
+	_made.erase(name);
 }
 
 std::string WriteScreenshotPng(const std::filesystem::path& path, uint32_t width, uint32_t height, uint32_t pitch,
@@ -183,7 +211,7 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 	_captures.push_back(std::move(capture));
 }
 
-void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failures, CapturedFrames& kept)
+void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failures, ScreenPictures& pictures)
 {
 	if (_redirected)
 	{
@@ -193,19 +221,19 @@ void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failur
 		}
 		_redirected = false;
 	}
-	std::erase_if(_captures, [frame, &failures, &kept](Capture& capture) {
+	std::erase_if(_captures, [frame, &failures, &pictures](Capture& capture) {
 		if (frame < capture.readyAt)
 		{
 			return false;
 		}
 		const bool yflip = bgfx::getCaps()->originBottomLeft;
-		if (CapturedFrames::InMemory(capture.path.string()))
+		if (ScreenPictures::InMemory(capture.path.string()))
 		{
-			kept.Keep(capture.path.string(), {.width = capture.size.x,
-			                                  .height = capture.size.y,
-			                                  .pitch = capture.size.x * k_BytesPerPixel,
-			                                  .yflip = yflip,
-			                                  .bgra = std::move(capture.pixels)});
+			pictures.Make(capture.path.string(), {.width = capture.size.x,
+			                                      .height = capture.size.y,
+			                                      .pitch = capture.size.x * k_BytesPerPixel,
+			                                      .yflip = yflip,
+			                                      .bgra = capture.pixels});
 			Release(capture);
 			return true;
 		}

@@ -59,8 +59,8 @@ struct Region
 /// The picture in high detail of a frame of the screen (BGRA, as read back): 256 by 128 pixels picked evenly across the
 /// region, each the mean of itself and the pixel picked before it in its row, then softened by blending each pixel half
 /// and half with the ones to its right, below it, and below to the right (the last row and column stay as picked).
-/// Empty if the frame is too small to hold its rows.
-[[nodiscard]] std::vector<uint8_t> Take(const graphics::CapturedFrame& screen);
+/// Empty if the frame is too small to hold its rows. It uses no game data, so the renderer can call it on its own thread.
+[[nodiscard]] std::vector<uint8_t> Take(const graphics::ScreenView& screen);
 
 /// The picture in low detail made from one in high detail
 [[nodiscard]] std::vector<uint8_t> Shrink(std::span<const uint8_t> full);
@@ -72,8 +72,8 @@ struct Region
 /// What the renderer has done with the pictures asked for
 struct Screens
 {
-	/// The picture asked for under a name, once it is back
-	std::function<std::optional<graphics::CapturedFrame>(const std::string& name)> take;
+	/// The picture in high detail made for a name (empty if the frame was too small), when it is back
+	std::function<std::optional<std::vector<uint8_t>>(const std::string& name)> take;
 	/// Whether the picture asked for under a name was given up
 	std::function<bool(const std::string& name)> failed;
 };

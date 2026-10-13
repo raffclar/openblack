@@ -393,14 +393,14 @@ struct BgfxCallback: public bgfx::CallbackI
 	void screenShot(const char* filePath, uint32_t width, uint32_t height, uint32_t pitch, const void* data, uint32_t size,
 	                bool yflip) override
 	{
-		if (graphics::CapturedFrames::InMemory(filePath))
+		if (graphics::ScreenPictures::InMemory(filePath))
 		{
-			const auto* pixels = static_cast<const uint8_t*>(data);
-			captured.Keep(filePath, {.width = width,
+			// Make the picture now from the pixels of bgfx, and do not copy the full frame
+			pictures.Make(filePath, {.width = width,
 			                         .height = height,
 			                         .pitch = pitch,
 			                         .yflip = yflip,
-			                         .bgra = std::vector<uint8_t>(pixels, pixels + size)});
+			                         .bgra = std::span(static_cast<const uint8_t*>(data), size)});
 			return;
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Taking a screenshot...");
@@ -437,8 +437,8 @@ struct BgfxCallback: public bgfx::CallbackI
 
 	/// The pictures bgfx gave up or couldn't write, told from its render thread
 	graphics::ScreenshotFailures failures;
-	/// The pictures asked for in memory
-	graphics::CapturedFrames captured;
+	/// The pictures that the game asked for in memory
+	graphics::ScreenPictures pictures;
 	/// The descriptor sets the last frame counted took under Vulkan, for the report if the renderer runs out of them
 	std::atomic<uint32_t> recentDescriptorSets {0};
 	/// The driver's compiled pipelines on disk. Only the Vulkan and Direct3D 12 renderers keep them, and only when the
@@ -560,6 +560,7 @@ Renderer::~Renderer() noexcept
 {
 	_offscreenShots.reset();
 	_creatureSkins.clear();
+	_spareCreatureSkins.clear();
 	_animalBoneTexture.reset();
 	_handSkins.clear();
 	_handSkinTextures.clear();
@@ -4080,13 +4081,10 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 			auto& texture = entry.textures[i];
 			if (!texture)
 			{
-				texture = std::make_unique<Texture2D>("Creature Skin");
-				texture->CreateWithinFrame(creature_tattoo::k_SkinSize, creature_tattoo::k_SkinSize, 1, TextureFormat::BGRA4,
-				                           Wrapping::Repeat, Filter::Linear, nullptr);
+				texture = TakeCreatureSkinTexture();
 				// Out of textures, as with thousands of creatures: this one keeps its species' skin as it was made
-				if (!bgfx::isValid(toBgfx(texture->GetNativeHandle())))
+				if (!texture)
 				{
-					texture.reset();
 					if (!_warnedOutOfSkins)
 					{
 						_warnedOutOfSkins = true;
@@ -4104,7 +4102,57 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 	});
 	// The skins of creatures no longer about go, looked up sorted rather than one by one through every creature's
 	std::ranges::sort(seen);
-	std::erase_if(_creatureSkins, [&seen](const auto& entry) { return !std::ranges::binary_search(seen, entry.first); });
+	std::erase_if(_creatureSkins, [this, &seen](auto& entry) {
+		if (std::ranges::binary_search(seen, entry.first))
+		{
+			return false;
+		}
+		// Keep the textures for the next creature
+		for (auto& texture : entry.second.textures)
+		{
+			if (texture)
+			{
+				_spareCreatureSkins.push_back(std::move(texture));
+			}
+		}
+		return true;
+	});
+}
+
+std::unique_ptr<Texture2D> Renderer::TakeCreatureSkinTexture() const
+{
+	if (!_spareCreatureSkins.empty())
+	{
+		auto texture = std::move(_spareCreatureSkins.back());
+		_spareCreatureSkins.pop_back();
+		return texture;
+	}
+	return MakeCreatureSkinTexture();
+}
+
+std::unique_ptr<Texture2D> Renderer::MakeCreatureSkinTexture()
+{
+	auto texture = std::make_unique<Texture2D>("Creature Skin");
+	texture->CreateWithinFrame(creature_tattoo::k_SkinSize, creature_tattoo::k_SkinSize, 1, TextureFormat::BGRA4,
+	                           Wrapping::Repeat, Filter::Linear, nullptr);
+	if (!bgfx::isValid(toBgfx(texture->GetNativeHandle())))
+	{
+		return nullptr;
+	}
+	return texture;
+}
+
+void Renderer::PrepareCreatureSkins(size_t count) const noexcept
+{
+	while (_spareCreatureSkins.size() < count)
+	{
+		auto texture = MakeCreatureSkinTexture();
+		if (!texture)
+		{
+			return;
+		}
+		_spareCreatureSkins.push_back(std::move(texture));
+	}
 }
 
 namespace
@@ -6748,7 +6796,7 @@ void Renderer::Frame() noexcept
 	{
 		WatchDescriptorSets(*sets);
 	}
-	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->captured);
+	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->pictures);
 }
 
 void Renderer::WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept
@@ -6841,10 +6889,21 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 
 std::optional<std::string> Renderer::TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept
 {
-	return _bgfxCallback->failures.Take(filepath.string());
+	auto failure = _bgfxCallback->failures.Take(filepath.string());
+	if (failure.has_value())
+	{
+		_bgfxCallback->pictures.Forget(filepath.string());
+	}
+	return failure;
 }
 
-std::optional<graphics::CapturedFrame> Renderer::TakeCapturedFrame(const std::filesystem::path& filepath) noexcept
+void Renderer::RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept
 {
-	return _bgfxCallback->captured.Take(filepath.string());
+	_bgfxCallback->pictures.Ask(name, std::move(picturer));
+	RequestScreenshot(name);
+}
+
+std::optional<std::vector<uint8_t>> Renderer::TakeScreenPicture(const std::string& name) noexcept
+{
+	return _bgfxCallback->pictures.Take(name);
 }

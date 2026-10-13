@@ -3546,7 +3546,8 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 		{
 			picture = &registry.Assign<ecs::components::ChallengePicture>(outcome.record);
 		}
-		Locator::rendererInterface::value().RequestScreenshot(ecs::challenge_pictures::Ask(*picture, outcome.record));
+		Locator::rendererInterface::value().RequestScreenPicture(ecs::challenge_pictures::Ask(*picture, outcome.record),
+		                                                         &ecs::challenge_pictures::Take);
 	}
 	if (!outcome.alignment.has_value() || !Locator::alignmentSystem::has_value() || !Locator::infoConstants::has_value())
 	{

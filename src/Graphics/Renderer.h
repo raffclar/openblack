@@ -87,12 +87,13 @@ public:
 
 	void DrawScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void BakeLandShadows(bool drawVegetation) const noexcept final;
+	void PrepareCreatureSkins(size_t count) const noexcept final;
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
-	[[nodiscard]] std::optional<graphics::CapturedFrame>
-	TakeCapturedFrame(const std::filesystem::path& filepath) noexcept final;
+	void RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept final;
+	[[nodiscard]] std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& name) noexcept final;
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
@@ -417,6 +418,10 @@ private:
 	/// Takes up the creatures' skins where they have been painted again, before their bodies are drawn with them; drops
 	/// those of creatures no longer on the land
 	void UploadCreatureSkins(const DrawSceneDesc& drawDesc) const;
+	/// A texture for a painted skin: a spare one, else a new one. None if bgfx has no more textures.
+	[[nodiscard]] std::unique_ptr<Texture2D> TakeCreatureSkinTexture() const;
+	/// A new texture for a painted skin. None if bgfx has no more textures.
+	[[nodiscard]] static std::unique_ptr<Texture2D> MakeCreatureSkinTexture();
 	/// The hand's skins as blended for its player's alignment (see components::HandMorph), taken up when they change
 	void UploadHandSkins() const;
 	/// Every animal's bones as posed this frame, in one texture, so that all the animals of a model, a flock's birds, are
@@ -550,6 +555,9 @@ private:
 		std::vector<std::pair<uint32_t, const Texture2D*>> drawn;
 	};
 	mutable std::unordered_map<entt::entity, CreatureSkins> _creatureSkins;
+	/// Textures for painted skins that no creature uses now. The game makes them behind the loading screen, so that the
+	/// first frame of a creature does not make them.
+	mutable std::vector<std::unique_ptr<Texture2D>> _spareCreatureSkins;
 	/// The animals of a model drawn at once this frame: where their bones start in the texture, how many each has, and
 	/// whether they take the brightest of the land's light, are white, or take the land's light where each stands
 	struct AnimalBoneGroup

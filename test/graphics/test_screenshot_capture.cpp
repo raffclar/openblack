@@ -11,6 +11,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <string>
 #include <system_error>
 #include <vector>
 
@@ -20,8 +21,10 @@
 #include "Windowing/WindowState.h"
 
 using openblack::graphics::PlanScreenshot;
+using openblack::graphics::ScreenPictures;
 using openblack::graphics::ScreenshotFailures;
 using openblack::graphics::ScreenshotRoute;
+using openblack::graphics::ScreenView;
 using openblack::graphics::UncapturedScreenshotPath;
 using openblack::graphics::WriteScreenshotPng;
 using openblack::windowing::WindowMinimised;
@@ -107,4 +110,38 @@ TEST(ScreenshotCapture, PixelsAreWrittenWhole)
 	EXPECT_NE(WriteScreenshotPng(shortOf, k_Width, k_Height + 1, k_Width * 4, pixels, false), "");
 	EXPECT_FALSE(std::filesystem::exists(shortOf));
 	std::filesystem::remove_all(folder, error);
+}
+
+// The renderer makes a picture from the frame that it reads, and the game takes the picture one time
+TEST(ScreenshotCapture, APictureIsMadeFromTheFrameAndTakenOnce)
+{
+	ScreenPictures pictures;
+	const std::string name = std::string(ScreenPictures::k_Prefix) + "test/1";
+	const std::vector<uint8_t> frame {1, 2, 3, 4, 5, 6, 7, 8};
+	const ScreenView view {.width = 2, .height = 1, .pitch = 8, .yflip = false, .bgra = frame};
+
+	EXPECT_TRUE(ScreenPictures::InMemory(name));
+	EXPECT_FALSE(pictures.Make(name, view));
+	EXPECT_FALSE(pictures.Take(name).has_value());
+
+	pictures.Ask(name, [](const ScreenView& screen) {
+		return std::vector<uint8_t> {screen.bgra[2], static_cast<uint8_t>(screen.width)};
+	});
+	EXPECT_FALSE(pictures.Take(name).has_value());
+	EXPECT_TRUE(pictures.Make(name, view));
+	EXPECT_FALSE(pictures.Make(name, view));
+	EXPECT_EQ(pictures.Take(name), (std::vector<uint8_t> {3, 2}));
+	EXPECT_FALSE(pictures.Take(name).has_value());
+}
+
+// A picture that the renderer gives up is not made
+TEST(ScreenshotCapture, AForgottenPictureIsNotMade)
+{
+	ScreenPictures pictures;
+	const std::string name = std::string(ScreenPictures::k_Prefix) + "test/2";
+	pictures.Ask(name, [](const ScreenView&) { return std::vector<uint8_t> {1}; });
+	pictures.Forget(name);
+	const std::vector<uint8_t> frame(4, 0);
+	EXPECT_FALSE(pictures.Make(name, {.width = 1, .height = 1, .pitch = 4, .yflip = false, .bgra = frame}));
+	EXPECT_FALSE(pictures.Take(name).has_value());
 }
