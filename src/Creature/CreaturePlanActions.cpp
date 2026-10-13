@@ -73,6 +73,8 @@ constexpr std::array k_Executors {
               .target = Target::Pickable,
               .build = Build::PracticeThrow,
               .activity = Activity::PlayWithObject},
+    Executor {
+        .action = "BreakRock", .target = Target::PickableRock, .build = Build::BreakRock, .activity = Activity::PlayWithObject},
     Executor {.action = "ThrowAround",
               .target = Target::AnyLiving,
               .build = Build::PracticeThrow,
@@ -272,6 +274,9 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 			return std::nullopt;
 		}
 		return creature_mind::ThrowToyAt(*situation.instrument, *object, objectPoint, situation.height, random);
+	case Build::BreakRock:
+		return creature_mind::BreakRock(situation.handFull ? std::nullopt : object, *object, situation.position,
+		                                situation.height);
 	case Build::KickBallAround:
 		return creature_mind::KickBallAround(*object, random);
 	case Build::GetHigh:

@@ -73,6 +73,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -1394,6 +1395,19 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    Order(registry, entity, commands);
 		    StepSwap(entity, commands);
+		    // A rock broken in two at once; anything else can't be, and the rest of the agenda is no use
+		    if (commands.shatter.has_value())
+		    {
+			    const auto rock = static_cast<entt::entity>(*commands.shatter);
+			    if (registry.Valid(rock) && object_physics::IsRock(rock) && Locator::dynamicsSystem::has_value())
+			    {
+				    object_physics::SplitRock(Locator::dynamicsSystem::value(), rock);
+			    }
+			    else
+			    {
+				    GiveUp(mind.idle);
+			    }
+		    }
 		    if (commands.douse.has_value())
 		    {
 			    if (Douse(entity, static_cast<entt::entity>(*commands.douse)))

@@ -1745,6 +1745,20 @@ void AddObjects(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "KickBallAround"}},
 	});
 
+	all.push_back({
+	    .id = "objects.break_rock",
+	    .name = "Breaking a rock",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a rock in front of it. A script tells it to break the rock.",
+	    .expected = "It picks the rock up and throws it off to one side; as the rock flies it breaks into two halves, "
+	                "which fly on as it flew and come down apart.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {80.0f, 80.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BreakRock"}},
+	});
+
 	auto stoner = Content(CreatureType::Tiger, {0.0f, 0.0f});
 	stoner.desires = {{.desire = creature_desires::Desire::GetHigh, .fraction = 1.0f}};
 	all.push_back({

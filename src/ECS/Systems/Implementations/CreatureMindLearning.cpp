@@ -329,6 +329,16 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return hands != nullptr && creature_object_actions::CanBeThrownInTheSea(hands->KindOf(entity).thing);
 	case Target::ThrowableToImpress:
 		return !heldByOther && hands != nullptr && hands->CanThrowToImpress(self, entity) && hands->CanPickUp(self, entity);
+	case Target::PickableRock:
+	{
+		if (heldByOther || hands == nullptr)
+		{
+			return false;
+		}
+		const auto thing = hands->KindOf(entity).thing;
+		return (thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire) &&
+		       hands->CanPickUp(self, entity);
+	}
 	case Target::PickableTree:
 		return !heldByOther && registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanPickUp(self, entity);
 	case Target::PlantableTree:
@@ -408,7 +418,7 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		    [&](entt::entity entity, const Ball&, const Transform& at) { consider(entity, at); });
 	}
 	const bool statics = pickable || target == Target::Toy || target == Target::ToyBall || sea || target == Target::Stonable ||
-	                     target == Target::ThrowingDamage || anything;
+	                     target == Target::ThrowingDamage || target == Target::PickableRock || anything;
 	if (statics)
 	{
 		registry.Each<const MobileStatic, const Transform>(

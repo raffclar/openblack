@@ -369,3 +369,23 @@ TEST(CreatureKindActions, AKickTipsUpWithTheLandAheadRisingAndTheLeanIsCapped)
 	EXPECT_NEAR(velocity.y, 45.0f * 1.15f / length, 1e-3f);
 	EXPECT_NEAR(velocity.z, 0.0f, 1e-4f);
 }
+
+TEST(CreatureKindActions, BreakingARockThrowsItOffToOneSideAndBreaksItAsItFlies)
+{
+	const auto agenda = BreakRock(7u, 7u, {100.0f, 200.0f}, 10.0f);
+	ASSERT_EQ(agenda.size(), 3);
+	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[1].order.kind, ObjectOrder::Kind::Throw);
+	EXPECT_EQ(agenda[1].order.point, glm::vec2(130.0f, 230.0f));
+	EXPECT_EQ(agenda[2].kind, Step::Kind::Shatter);
+	EXPECT_EQ(agenda[2].object, 7u);
+	// Holding something else, it throws that and breaks the rock where it lies
+	const auto holding = BreakRock(std::nullopt, 9u, {0.0f, 0.0f}, 10.0f);
+	ASSERT_EQ(holding.size(), 2);
+	EXPECT_EQ(holding[1].object, 9u);
+
+	const auto* breakRock = plan_actions::For("BreakRock");
+	ASSERT_NE(breakRock, nullptr);
+	EXPECT_EQ(breakRock->target, plan_actions::Target::PickableRock);
+	EXPECT_EQ(breakRock->build, plan_actions::Build::BreakRock);
+}

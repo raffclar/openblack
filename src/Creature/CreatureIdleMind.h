@@ -300,6 +300,8 @@ struct Step
 		WaitInMap,
 		/// Dousing the step's object with water at once, as a creature does after casting the water miracle at a fire
 		Douse,
+		/// Breaking the step's object, a rock, in two at once; when it isn't a rock, the rest of the agenda is given up
+		Shatter,
 		/// Watching its player's camera: turning to it whenever it is more than a quarter turn away, until whole seconds
 		/// of turns more than the step's seconds have gone by, or the camera is right overhead or more than 100 away. A
 		/// creature without a player is done at once. With the step's turns set it watches for that many turns whatever
@@ -518,6 +520,8 @@ struct Commands
 	bool releaseCast {false};
 	/// An object to douse with water, by its entity's number
 	std::optional<uint32_t> douse;
+	/// A rock to break in two, by its entity's number
+	std::optional<uint32_t> shatter;
 	/// What the head looks at this turn, for a step that gives it something to look at
 	std::optional<Gaze> gaze;
 	/// A swap of minds: bring every spell on it to its end, start the beam to the other creature, take on a turn more of

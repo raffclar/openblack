@@ -784,6 +784,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.douse = step.object;
 			FinishStep(mind);
 			break;
+		case Step::Kind::Shatter:
+			commands.shatter = step.object;
+			FinishStep(mind);
+			break;
 		case Step::Kind::Observe:
 			// Taken in at once
 			commands.effect = Effect::Observed;
@@ -916,6 +920,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		break;
 	case Step::Kind::Douse:
+	case Step::Kind::Shatter:
 	case Step::Kind::Observe:
 		// Done as it starts
 		FinishStep(mind);

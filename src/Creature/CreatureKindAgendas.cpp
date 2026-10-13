@@ -86,6 +86,13 @@ std::vector<Step> creature_mind::ThrowToyAt(uint32_t toy, uint32_t target, glm::
 	return agenda;
 }
 
+std::vector<Step> creature_mind::BreakRock(std::optional<uint32_t> pickUp, uint32_t rock, glm::vec2 from, float height)
+{
+	auto agenda = PracticeThrow(pickUp, from, height);
+	agenda.push_back({.kind = Step::Kind::Shatter, .object = rock});
+	return agenda;
+}
+
 std::vector<Step> creature_mind::KickBallAround(uint32_t ball, const Random& random)
 {
 	const Gaze watch {.object = ball};

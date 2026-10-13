@@ -54,6 +54,10 @@ constexpr float k_PracticeThrowHeights = 3.0f;
                                            const Random& random);
 constexpr uint32_t k_HappyAroundToyThrowLots = 2;
 
+/// Breaking a rock: practising a throw (unless its hand holds something, picking the rock up; then throwing what it
+/// holds three times its height further along both of the land's axes), then breaking the rock in two as it flies
+[[nodiscard]] std::vector<Step> BreakRock(std::optional<uint32_t> pickUp, uint32_t rock, glm::vec2 from, float height);
+
 /// Kicking a ball about: going up to it, turning to face it a tenth of a second, going right up to it again and kicking
 /// it, watching it; then a quarter of the time pointing at it a second, else waiting 0.4 to 1 second (in whole turns).
 /// It kicks it again after each, two times at the least, each time going on while the count is under two plus a chance

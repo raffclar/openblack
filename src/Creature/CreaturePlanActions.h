@@ -72,9 +72,11 @@ enum class Target : uint8_t
 	PlantableTree,
 	/// What it can pick up and throw to impress
 	ThrowableToImpress,
+	/// A rock (bonfires too) it can pick up
+	PickableRock,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::ThrowableToImpress) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::PickableRock) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -149,6 +151,8 @@ enum class Build : uint8_t
 	GetHigh,
 	/// Kicking the ball about a few times
 	KickBallAround,
+	/// Practising a throw with the rock, and breaking it in two as it flies
+	BreakRock,
 	/// An action whose agenda can never be made
 	Never,
 };
