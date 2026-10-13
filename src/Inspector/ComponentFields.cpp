@@ -947,6 +947,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::MissionaryControl::reaction>("reaction");
 	Reflect<components::DiscipleHeld>(context)
 	    .Field<&components::DiscipleHeld::atPickUp>("atPickUp")
+	    .Field<&components::DiscipleHeld::tradeTown>("tradeTown")
 	    .Field<&components::DiscipleHeld::touchedDown>("touchedDown");
 	Reflect<components::DiscipleInspect>(context).Field<&components::DiscipleInspect::thing>("thing");
 	Reflect<components::DiscipleMark>(context)

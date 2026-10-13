@@ -1401,6 +1401,21 @@ void HandGrabSystem::ForceDrop()
 	LetGo(*grab, glm::vec3(0.0f), true);
 }
 
+bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
+{
+	auto* grab = Grab();
+	if (grab == nullptr || (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	{
+		return false;
+	}
+	if (grab->scoopSource != entt::null)
+	{
+		EndScoop(*grab);
+	}
+	LetGo(*grab, velocity, false);
+	return true;
+}
+
 void HandGrabSystem::Reset()
 {
 	if (auto* grab = Grab())

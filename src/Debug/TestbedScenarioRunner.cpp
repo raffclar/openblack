@@ -1395,6 +1395,12 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto why = hand.WhyNotTake(*object);
 		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
 	}
+	case Kind::HandRelease:
+		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
+		{
+			return "the hand holds nothing";
+		}
+		return command.velocity == glm::vec3(0.0f) ? "put down" : "thrown";
 	default:
 		return {};
 	}
@@ -1721,7 +1727,7 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake)
+	    command.kind == Kind::HandTake || command.kind == Kind::HandRelease)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2044,6 +2050,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::HandTake:
+	case Kind::HandRelease:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:
