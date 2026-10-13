@@ -377,16 +377,16 @@ struct BgfxCallback: public bgfx::CallbackI
 	}
 	void profilerEnd() override {}
 	// The driver's compiled pipelines, kept between runs
-	uint32_t cacheReadSize(uint64_t /*id*/) override { return pipelines.has_value() ? pipelines->ReadSize() : 0; }
-	bool cacheRead(uint64_t /*id*/, void* data, uint32_t size) override
+	uint32_t cacheReadSize(uint64_t id) override { return pipelines.has_value() ? pipelines->ReadSize(id) : 0; }
+	bool cacheRead(uint64_t id, void* data, uint32_t size) override
 	{
-		return pipelines.has_value() && pipelines->Read(std::span(static_cast<std::byte*>(data), size));
+		return pipelines.has_value() && pipelines->Read(id, std::span(static_cast<std::byte*>(data), size));
 	}
-	void cacheWrite(uint64_t /*id*/, const void* data, uint32_t size) override
+	void cacheWrite(uint64_t id, const void* data, uint32_t size) override
 	{
 		if (pipelines.has_value())
 		{
-			pipelines->Write(std::span(static_cast<const std::byte*>(data), size));
+			pipelines->Write(id, std::span(static_cast<const std::byte*>(data), size));
 		}
 	}
 	// Saving a screenshot
@@ -441,8 +441,8 @@ struct BgfxCallback: public bgfx::CallbackI
 	graphics::CapturedFrames captured;
 	/// The descriptor sets the last frame counted took under Vulkan, for the report if the renderer runs out of them
 	std::atomic<uint32_t> recentDescriptorSets {0};
-	/// The driver's compiled pipelines on disk. Only the Vulkan renderer keeps them, and only when the system gives a user
-	/// folder.
+	/// The driver's compiled pipelines on disk. Only the Vulkan and Direct3D 12 renderers keep them, and only when the
+	/// system gives a user folder.
 	std::optional<graphics::PipelineCache> pipelines;
 };
 
@@ -488,10 +488,18 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 
 	uint32_t bgfxReset = BGFX_RESET_NONE;
 	auto bgfxCallback = std::make_unique<BgfxCallback>();
-	// Only the Vulkan renderer gives back one cache for all its pipelines
-	if (const auto folder = user_data::Folder(); folder.has_value() && backend == GraphicsBackend::Vulkan)
+	// The Vulkan renderer gives back one cache for all its pipelines, the Direct3D 12 renderer one cache for each
+	if (const auto folder = user_data::Folder(); folder.has_value())
 	{
-		bgfxCallback->pipelines.emplace(*folder / "cache" / "vulkan_pipelines.bin");
+		if (backend == GraphicsBackend::Vulkan)
+		{
+			bgfxCallback->pipelines.emplace(*folder / "cache" / "vulkan_pipelines.bin", graphics::PipelineCache::Kind::Shared);
+		}
+		else if (backend == GraphicsBackend::Direct3D12)
+		{
+			bgfxCallback->pipelines.emplace(*folder / "cache" / "d3d12_pipelines.bin",
+			                                graphics::PipelineCache::Kind::PerPipeline);
+		}
 	}
 	if (vsync)
 	{
