@@ -39,7 +39,6 @@ constexpr float k_CursorDamping = 0.03f;
 /// Smaller leans are not applied
 constexpr float k_MinLean = 0.0001f;
 /// Seconds spent cross-fading from the previous pose when the cycle or the state changes
-constexpr float k_FadeDuration = 0.13f;
 /// Height in world units of the hand's rest pose bones at its standard size
 constexpr float k_StandardHeight = 3.2f;
 /// Distances from the camera: the hand shrinks closer than k_ShrinkDistance and grows further than
@@ -92,9 +91,7 @@ bool HandAnimation::Load(const morph::MorphFile& file, const std::vector<uint32_
 	_restHeight = std::max(RestHeight(restMatrices), 0.001f);
 	_cycleTimes = {};
 	_springStarted = false;
-	_fadeTime.reset();
-	_lastPoses = EvaluatePoses(Cycle::Wiggle, 0, std::nullopt);
-	ComposeBoneMatrices(_lastPoses);
+	ComposeBoneMatrices(EvaluatePoses(Cycle::Wiggle, 0, std::nullopt));
 	return true;
 }
 
@@ -254,34 +251,6 @@ void HandAnimation::SettleCursor(glm::ivec2 cursor)
 	_cursorLag = glm::vec2(0.0f);
 }
 
-void HandAnimation::StartFade()
-{
-	_fadeFrom = _lastPoses;
-	_fadeTime = 0.0f;
-}
-
-void HandAnimation::ApplyFade(float seconds, std::vector<Pose>& poses)
-{
-	if (!_fadeTime)
-	{
-		return;
-	}
-	*_fadeTime += seconds;
-	if (*_fadeTime < k_FadeDuration && _fadeFrom.size() == poses.size())
-	{
-		const auto t = *_fadeTime / k_FadeDuration;
-		for (size_t i = 0; i < poses.size(); ++i)
-		{
-			poses[i].rotation = Lerp(_fadeFrom[i].rotation, poses[i].rotation, t);
-			poses[i].translation = (poses[i].translation - _fadeFrom[i].translation) * t + _fadeFrom[i].translation;
-		}
-	}
-	else
-	{
-		_fadeTime.reset();
-	}
-}
-
 glm::vec3 HandAnimation::LeafBoneCentre() const
 {
 	std::vector<bool> hasChild(_skeleton.parents.size(), false);
@@ -314,16 +283,8 @@ void HandAnimation::UpdateHeld(std::chrono::microseconds dt, Cycle cycle, uint32
 	const auto seconds = std::chrono::duration<float>(dt).count();
 	StepCursorSpring(seconds, glm::vec2(cursor));
 	_lean = glm::vec2(0.0f);
-	if (!_holding)
-	{
-		StartFade();
-		_holding = true;
-	}
 	_cycle = cycle;
-	auto poses = EvaluatePoses(cycle, timeMs, std::nullopt);
-	ApplyFade(seconds, poses);
-	_lastPoses = poses;
-	ComposeBoneMatrices(poses);
+	ComposeBoneMatrices(EvaluatePoses(cycle, timeMs, std::nullopt));
 }
 
 void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycle, glm::ivec2 cursor, float pinchShare)
@@ -354,23 +315,12 @@ void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycl
 	}
 
 	auto& time = _cycleTimes.at(static_cast<size_t>(state));
-	// Letting go of a seed fades back from the holding pose
-	if (_holding)
-	{
-		_holding = false;
-		StartFade();
-	}
 	if (state != _state || cycle != _cycle)
 	{
 		if (state != _state && (state == State::Camera || state == State::Creature))
 		{
 			// Starting to drag the camera, or taking hold of a creature, starts the state's cycle over
 			time = std::chrono::microseconds::zero();
-		}
-		if (state != _state || FadesBetween(state, _cycle, cycle))
-		{
-			_fadeFrom = _lastPoses;
-			_fadeTime = 0.0f;
 		}
 		_state = state;
 		_cycle = cycle;
@@ -387,20 +337,7 @@ void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycl
 	}
 	const auto timeMs = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(time).count());
 
-	auto poses = EvaluatePoses(cycle, timeMs, lean);
-	ApplyFade(seconds, poses);
-
-	_lastPoses = poses;
-	ComposeBoneMatrices(poses);
-}
-
-bool HandAnimation::FadesBetween(State state, Cycle from, Cycle to)
-{
-	if (from == to)
-	{
-		return false;
-	}
-	return !(state == State::Creature && to == Cycle::Wiggle);
+	ComposeBoneMatrices(EvaluatePoses(cycle, timeMs, lean));
 }
 
 } // namespace openblack

@@ -238,6 +238,7 @@
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/WorldToolTips.h"
+#include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandReach.h"
 #include "Hand/HandTrace.h"
@@ -2646,6 +2647,11 @@ bool Game::Update() noexcept
 			Locator::miracleFxSystem::value().UpdateGlobes(std::chrono::duration<float>(gameTime).count());
 		}
 
+		// The animation of the hand in this frame, and what is below the hand, for the blend of the drawn hand
+		auto handCycle = HandAnimation::Cycle::Wiggle;
+		bool nothingUnderHand = true;
+		bool gripsTotem = false;
+		bool pulls = false;
 		// Animate the hand: gripping while it drags the land, otherwise its normal pose. Turning the camera with the
 		// middle button leaves the hand idle.
 		if (_handAnimation)
@@ -2715,6 +2721,13 @@ bool Game::Update() noexcept
 			// Holding a town's totem, the hand takes its side hold on the icon, closed by how wide the icon is
 			const auto totemHold =
 			    Locator::villageTotemSystem::has_value() ? Locator::villageTotemSystem::value().GetHandHold() : std::nullopt;
+			handCycle = cycle;
+			gripsTotem = totemHold.has_value();
+			pulls = pull.has_value();
+			nothingUnderHand =
+			    ropeHand == leash_snap::Hand::Away &&
+			    !(Locator::magicSystem::has_value() && Locator::magicSystem::value().OrbUnderHand().has_value()) &&
+			    !(Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().object.has_value());
 			const auto* sideHold =
 			    totemHold.has_value() ? _handAnimation->GetAnimation(static_cast<size_t>(HandCycle::HoldSide)) : nullptr;
 			if (sideHold != nullptr)
@@ -2797,21 +2810,35 @@ bool Game::Update() noexcept
 			{
 				const float handSize =
 				    HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), handTransform->position));
-				// Starting or stopping pulling, holding or scooping, the drawn hand moves over from where it was
+				// Each change of what the hand does starts a blend of the drawn hand from how it looked before
 				const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
-				const auto stage =
-				    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
-				                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
+				const auto mode = hand_blend::ModeOf({
+				    .shown = IsHandDrawn(),
+				    .insideTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+				    .holds = heldThing.has_value(),
+				    .holdsSeed = heldSeed.has_value(),
+				    .pulls = pulls,
+				    .knocks = _handKnocking,
+				    .gripsTotem = gripsTotem,
+				    .touchesCreature = _handOnCreature.has_value(),
+				    .movesCamera = _handCameraState,
+				});
+				const auto changes = _handBlend.Step({
+				    .mode = mode,
+				    .cycle = handCycle,
+				    .held = heldThing.has_value() ? std::optional(heldThing->entity) : std::nullopt,
+				    .nothingUnderHand = nothingUnderHand,
+				});
 				const auto placed = handTransform->position;
-				// Each change of what the hand does (pulling, holding, scooping or none) blends the drawn hand from how it
-				// was last drawn
 				if (auto* hand = Locator::entitiesRegistry::value().TryGet<ecs::components::Hand>(handEntity))
 				{
-					_handHold.Fade(stage, heldThing.has_value() ? heldThing->entity : entt::null, deltaTime, *handTransform,
+					// Only a thing in the hand hangs from the blended place of the hand, not a seed
+					_handHold.Fade(changes, mode != hand_blend::HandMode::Hidden, mode == hand_blend::HandMode::Holding,
+					               heldThing.has_value() ? heldThing->entity : entt::null, HandStepSeconds(), *handTransform,
 					               hand->boneMatrices);
 				}
 				TraceHand("stage fade", handTransform->position);
-				EndHandTrace(placed, *handTransform, stage, grab);
+				EndHandTrace(placed, *handTransform, mode, grab);
 				// The land behind the hand's middle, as posed for this frame, which the hand reaches about when pressed
 				// with nothing under the cursor
 				if (Locator::pickingSystem::has_value())
@@ -5414,7 +5441,7 @@ float Game::HandStepSeconds() const
 	return static_cast<float>(static_cast<int32_t>(CameraStepTime().count())) * 0.001f;
 }
 
-void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transform& hand, magic::hand_hold::HandStage stage,
+void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transform& hand, hand_blend::HandMode mode,
                         const ecs::systems::HandGrabSystemInterface* grab)
 {
 	auto* trace = Locator::handSystem::value().GetTrace();
@@ -5450,7 +5477,7 @@ void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transfor
 	{
 		frame->wristScreen = glm::vec2(screen);
 	}
-	frame->stage = static_cast<uint8_t>(stage);
+	frame->stage = static_cast<uint8_t>(mode);
 	if (const auto picked = Locator::pickingSystem::value().GetPick().object)
 	{
 		frame->picked = static_cast<uint32_t>(entt::to_integral(*picked));
