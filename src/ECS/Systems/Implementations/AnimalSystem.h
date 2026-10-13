@@ -65,6 +65,8 @@ public:
 
 	[[nodiscard]] bool IsAvailableForReaction(entt::entity animal) const override;
 	bool SetupFleeFromObject(entt::entity entity, entt::entity object, Reaction reaction) override;
+	bool SetupFleeFromPredator(entt::entity entity, entt::entity predator) override;
+	[[nodiscard]] std::optional<uint8_t> TopGameStateOf(entt::entity animal) const override;
 	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
 	void StopReaction(entt::entity animal) override;
 
@@ -135,6 +137,13 @@ private:
 	// Fleeing what it reacts to, for any animal on the land
 	/// A turn of its flight or its watching; whether it was fleeing at all
 	bool Flee(entt::entity entity, components::Animal& animal);
+	/// A step away from the hunter it fled, at its fleeing speed; it goes on fleeing the hunter as any other thing
+	void FleeFromPredator(entt::entity entity, components::Animal& animal);
+	/// It stops being frightened: the reaction is let go and it decides again
+	void GiveUpReaction(entt::entity entity);
+	/// How the thing an animal flees moves, in metres a turn: an animal or a walker by its step, a thing in the physics by
+	/// its velocity
+	[[nodiscard]] glm::vec3 FledThingMovement(entt::entity thing) const;
 
 	// The wolves
 	void Wolf(entt::entity entity, components::Animal& animal);

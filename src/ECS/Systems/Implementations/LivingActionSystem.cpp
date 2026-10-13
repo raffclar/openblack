@@ -1041,7 +1041,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_artefact_dance::ArtefactDance,
         .exitState = &villager_artefact_dance::ExitDance,
     },
-    /* FLEEING_FROM_PREDATOR_REACTION */ k_TodoEntry,
+    /* FLEEING_FROM_PREDATOR_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_cover::FleeingFromPredatorReaction,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* WAIT_FOR_WOOD */ k_TodoEntry,
     /* INSPECT_OBJECT */
     VillagerStateTableEntry {
