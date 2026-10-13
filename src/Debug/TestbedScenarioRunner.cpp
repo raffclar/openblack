@@ -126,6 +126,7 @@
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
@@ -2540,6 +2541,16 @@ void Runner::UpdateMiracles(float seconds)
 			Locator::magicSystem::value().CloseDown(miracle.spell);
 			miracle.letGoAt.reset();
 		}
+		if (miracle.breakAt.has_value() && _seconds >= *miracle.breakAt)
+		{
+			miracle.breakAt.reset();
+			if (Locator::magicShieldSystem::has_value() && Locator::magicShieldSystem::value().HasObject(miracle.spell))
+			{
+				Locator::magicShieldSystem::value().ShieldStruck(miracle.spell, true);
+				Locator::magicSystem::value().CloseDown(miracle.spell);
+				Log("Shield broken");
+			}
+		}
 		if (!miracle.nextAt.has_value() || _seconds < *miracle.nextAt)
 		{
 			continue;
@@ -2549,6 +2560,10 @@ void Runner::UpdateMiracles(float seconds)
 		if (setup.holdSeconds.has_value() && miracle.spell != entt::null)
 		{
 			miracle.letGoAt = _seconds + *setup.holdSeconds;
+		}
+		if (setup.breakSeconds.has_value() && miracle.spell != entt::null)
+		{
+			miracle.breakAt = _seconds + *setup.breakSeconds;
 		}
 		miracle.nextAt = setup.repeatSeconds.has_value() ? std::optional(*miracle.nextAt + *setup.repeatSeconds) : std::nullopt;
 	}
