@@ -49,6 +49,7 @@
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureScriptPlay.h"
+#include "DebugGuiInterface.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -131,6 +132,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -501,6 +503,14 @@ void Runner::Start(const Scenario& scenario)
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
+	if (scenario.worshipShare.has_value())
+	{
+		SetUpWorship(*scenario.worshipShare);
+	}
+	if (!scenario.debugWindow.empty() && Locator::debugGui::has_value())
+	{
+		Locator::debugGui::value().OpenWindow(scenario.debugWindow);
 	}
 	if (Locator::fireflySystem::has_value())
 	{
@@ -910,6 +920,29 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
 			Locator::fireflySystem::value().Create(map_coords::FromWorld(land, placed.position));
 		}
+	}
+}
+
+void Runner::SetUpWorship(float share)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(k_ScenarioTownId);
+	if (found == towns.end() || !registry.Valid(found->second) || !Locator::worshipSiteSystem::has_value())
+	{
+		return;
+	}
+	const auto town = found->second;
+	const auto site = registry.Get<const ecs::components::Town>(town).worshipSite;
+	if (!registry.Valid(site))
+	{
+		return;
+	}
+	// Put up at once, as a land's script puts down a site already built, then the totem raised to the share
+	Locator::worshipSiteSystem::value().BuildBy(site, 1.0f);
+	if (Locator::villageTotemSystem::has_value())
+	{
+		Locator::villageTotemSystem::value().SetTownShare(town, share);
 	}
 }
 

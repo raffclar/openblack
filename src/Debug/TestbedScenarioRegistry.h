@@ -799,10 +799,17 @@ struct Scenario
 	/// The weights a caught firefly's miracle is drawn by, by the miracles' names, as a land's script sets them; the
 	/// testbed's land sets none
 	std::vector<std::pair<std::string_view, float>> fireflyRewards;
+	/// A testbed set-up step: the scenario's town has its worship site put up built, as a land's script can, and its
+	/// totem asks for this share of its people at worship, which sends them there as the game does
+	std::optional<float> worshipShare;
+	/// The debug window opened as the scenario starts, by its name; none when empty
+	std::string_view debugWindow;
 };
 
 /// A town centre's totem
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
+/// The villagers around the player's temple, with their debug window open
+void AddTempleVillagerScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry
 void AddMiracleScenarios(std::vector<Scenario>& all);
 /// The miracles' globes and dispensers close up, and the hand's miracle effects

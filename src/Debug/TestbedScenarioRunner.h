@@ -110,6 +110,8 @@ private:
 	void PlaceFootpaths(const Scenario& scenario, glm::vec2 middle);
 	/// The scenario's temples and its flocks of the land's birds
 	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
+	/// The scenario's town's worship site is put up built and its totem raised to the share
+	static void SetUpWorship(float share);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
 	/// Spawns the next batch of the crowd
 	void SpawnCrowd();

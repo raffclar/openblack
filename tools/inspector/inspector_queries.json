@@ -1224,6 +1224,23 @@
   "query": "temple.interior"
  },
  {
+  "description": "The villagers around the player's temple, as the Temple Villagers debug window shows them: its worship sites and the places at them, the towns worshipping there, every villager worshipping, on its way or within the radius with its state and walk, and those walking about inside the temple",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Villagers this near the temple's middle, in metres, are listed too (60 if not given)",
+    "name": "radius",
+    "type": "number"
+   },
+   {
+    "description": "The player, 0 if not given",
+    "name": "player",
+    "type": "integer"
+   }
+  ],
+  "query": "temple.villagers"
+ },
+ {
   "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, and whether films and 16-bit colour are on",
   "kind": "object",
   "parameters": [],
