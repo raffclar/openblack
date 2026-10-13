@@ -23,21 +23,6 @@ glm::vec2 HalfResolution(const Screen& screen)
 }
 } // namespace
 
-SpiritView help::spirits::OnStage(SpiritView view, const Stage& stage)
-{
-	view.screen = stage.layout;
-	if (stage.share != 1.0f)
-	{
-		// The area's half width reaches as far across as that many pixels of the real screen do, and the clipping space
-		// runs from -1 to 1 across the area instead of the screen
-		view.halfExtent.x *= stage.share;
-		glm::mat4 acrossArea(1.0f);
-		acrossArea[0][0] = 1.0f / stage.share;
-		view.viewProjection = acrossArea * view.viewProjection;
-	}
-	return view;
-}
-
 glm::vec3 help::spirits::PointFromScreen(const SpiritView& view, glm::vec2 pixel, float depth)
 {
 	const glm::vec2 half = HalfResolution(view.screen);
