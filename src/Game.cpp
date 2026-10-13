@@ -2063,12 +2063,6 @@ bool Game::Update() noexcept
 		Locator::fireflySystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
 		                                       clock.GetTurnFraction());
 	}
-	// The scrolls and signs spin, scale and glow towards the camera, and their glints play
-	if (Locator::scriptHighlightSystem::has_value())
-	{
-		Locator::scriptHighlightSystem::value().UpdateFrame(std::chrono::duration<float, std::milli>(gameTime).count(),
-		                                                    clock.GetTurnFraction(), camera.GetOrigin());
-	}
 	// The moving bodies are drawn between their last two turns, and the dust their landings threw up flies and fades
 	if (Locator::dynamicsSystem::has_value())
 	{
@@ -2094,8 +2088,6 @@ bool Game::Update() noexcept
 		Locator::introSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 		// The explorers' boat is pushed into the sea and sails away, by the frame's game time
 		Locator::boatLaunchSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
-		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
-		Locator::animatedStaticSystem::value().Update(clock.GetFrameGameTime());
 		// The apple barrel goes to the local player's storage pit nearest their temple and its worm wriggles on
 		Locator::appleBarrelSystem::value().Update(clock.GetFrameGameTime());
 	}
@@ -2867,6 +2859,18 @@ bool Game::Update() noexcept
 		// Update Entities
 		{
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
+			// The scrolls and signs spin, scale and glow towards the camera, and their glints play. The gates and the other
+			// scenery that the scripts open and close play on, and the stones of the plinths sit or sink. Both use the draw
+			// list of this frame.
+			const auto updateDrawnScenery = [&clock, &gameTime]() {
+				if (Locator::scriptHighlightSystem::has_value())
+				{
+					Locator::scriptHighlightSystem::value().UpdateFrame(
+					    std::chrono::duration<float, std::milli>(gameTime).count(), clock.GetTurnFraction(),
+					    Locator::camera::value().GetOrigin());
+				}
+				Locator::animatedStaticSystem::value().Update(clock.GetFrameGameTime());
+			};
 			if (config.drawEntities)
 			{
 				// The villagers in view are posed for the camera the frame is drawn from
@@ -2883,6 +2887,7 @@ bool Game::Update() noexcept
 				{
 					Locator::objectDrawListSystem::value().Update(clock.GetTurn());
 				}
+				updateDrawnScenery();
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				ShowInspectorCamera(false);
@@ -2891,6 +2896,10 @@ bool Game::Update() noexcept
 				ShowInspectorOverride(true);
 				PickUnderCursor(std::chrono::duration<float>(deltaTime).count());
 				ShowInspectorOverride(false);
+			}
+			else
+			{
+				updateDrawnScenery();
 			}
 		}
 	} // Update Uniforms
