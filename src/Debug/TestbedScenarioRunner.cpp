@@ -130,6 +130,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -1353,6 +1354,20 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto why = hand.WhyNotTake(*object);
 		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
 	}
+	case Kind::HandPour:
+	{
+		if (!Locator::resourceStoreSystem::has_value())
+		{
+			return "no stores";
+		}
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 point {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		const auto amount = static_cast<uint32_t>(command.value);
+		const bool taken =
+		    Locator::resourceStoreSystem::value().PourAt(ResourceType::Wood, point, amount, false, command.player, false);
+		return fmt::format("{} wood poured at ({:.1f}, {:.1f}): {}", amount, at.x, at.y,
+		                   taken ? "taken in" : "left on the land");
+	}
 	default:
 		return {};
 	}
@@ -1679,7 +1694,7 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake)
+	    command.kind == Kind::HandTake || command.kind == Kind::HandPour)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -1997,6 +2012,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::HandTake:
+	case Kind::HandPour:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:

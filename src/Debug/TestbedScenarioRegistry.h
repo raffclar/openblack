@@ -655,6 +655,9 @@ struct Command
 		/// A land's script (script, by its name) starts as a script's "run script" starts it, given its arguments in
 		/// order (scriptArguments); the scripts' globals named are set first (scriptGlobals). Needs no creature
 		RunScript,
+		/// The player's hand lets go of a handful of wood (value, how much) slowly over a point of the land (point, from
+		/// the middle of the map), pouring it there as a slow let-go does. Needs no creature
+		HandPour,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

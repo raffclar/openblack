@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include <glm/geometric.hpp>
+
 using namespace openblack;
 using namespace openblack::magic;
 
@@ -141,6 +143,11 @@ glm::ivec2 piles::CellOf(glm::vec2 xz)
 float piles::RadiusOnGround(glm::vec2 halfExtent, float scale)
 {
 	return std::max(halfExtent.x, halfExtent.y) * scale;
+}
+
+bool piles::WithinReach(glm::vec2 at, glm::vec2 from, float radius, float multiplier)
+{
+	return glm::distance(at, from) <= radius * multiplier;
 }
 
 bool piles::IsCapped(PotInfo nextPotForResource)
