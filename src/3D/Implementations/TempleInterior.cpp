@@ -56,6 +56,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
@@ -74,6 +75,7 @@
 #include "Magic/MiracleVisuals.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple/TempleHelpScripts.h"
+#include "Temple/TempleRoomAccess.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -913,6 +915,19 @@ bool TempleInterior::IsRoomDrawn(TempleRoom room) const
 	return room == TempleRoom::Main && !_transitionRoom.has_value() && _doors.GetSwing() > k_MainRoomOpenSwing;
 }
 
+bool TempleInterior::IsRoomAvailable(TempleRoom room) const
+{
+	const bool hasCreature =
+	    Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().PlayersCreature().has_value();
+	return temple::IsRoomAvailable(room, {.roomsOpened = _roomsOpened, .hasCreature = hasCreature, .keptIn = _lock.GetRoom()});
+}
+
+void TempleInterior::TellRoomNotAvailable()
+{
+	temple_help::GameScripts scripts;
+	temple_help::RoomNotAvailable(scripts);
+}
+
 void TempleInterior::SetCurrentRoom(TempleRoom room)
 {
 	_currentRoom = room;
@@ -948,6 +963,11 @@ void TempleInterior::GoToRoom(TempleRoom room)
 	if (_active && _lock.Leaves(room))
 	{
 		RequestLeave();
+		return;
+	}
+	// The player cannot go to a room that is not open
+	if (!IsRoomAvailable(room))
+	{
 		return;
 	}
 	if (_active && _cameraModel != nullptr)
@@ -1060,6 +1080,11 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 {
 	if (_active)
 	{
+		// When the temple draws the main room as the player's room, the other rooms open for the rest of the game
+		if (_currentRoom == TempleRoom::Main || _transitionRoom == TempleRoom::Main)
+		{
+			_roomsOpened = true;
+		}
 		const float milliseconds = std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(dt).count();
 		_waterfallSlide += milliseconds * k_WaterfallSlidePerMillisecond;
 		_waterfallSlide -= std::floor(_waterfallSlide);
@@ -1209,6 +1234,17 @@ void TempleInterior::Activate(TempleRoom room)
 	{
 		return;
 	}
+	// The player cannot enter the temple directly into a room that is not open
+	if (!IsRoomAvailable(room))
+	{
+		return;
+	}
+	// The help of the world stops. The temple keeps the dialogue of a script until the player leaves.
+	{
+		temple_help::GameScripts scripts;
+		temple_help::GameDialogue dialogue;
+		_heldDialogue = temple_help::PutAwayDialogue(scripts, dialogue);
+	}
 
 	auto& config = Locator::config::value();
 	auto& camera = Locator::camera::value();
@@ -1297,6 +1333,7 @@ void TempleInterior::Deactivate()
 		{
 			_interface->GetScreenFade().FadeFrom(1.0f, glm::vec3(0.0f));
 		}
+		BringBackDialogue();
 		temple_help::GameScripts scripts;
 		temple_help::Leave(scripts);
 		_leaveTo.reset();
@@ -1309,7 +1346,8 @@ void TempleInterior::Deactivate()
 		_interface->GetScreenFade().FadeFrom(1.0f, glm::vec3(1.0f));
 	}
 	ApplyLens();
-	// The help running stops as the player leaves
+	// The temple gives back the dialogue that it kept. Then the help that runs stops as the player leaves.
+	BringBackDialogue();
 	temple_help::GameScripts scripts;
 	temple_help::Leave(scripts);
 	auto& camera = Locator::camera::value();
@@ -1331,8 +1369,15 @@ void TempleInterior::CloseForNewLand()
 	}
 	// The new land places the camera and starts its own help, so nothing of the walk out is wanted
 	_lock.Clear();
+	_heldDialogue.reset();
 	Close();
 	_leaveTo.reset();
+}
+
+void TempleInterior::BringBackDialogue()
+{
+	temple_help::GameDialogue dialogue;
+	temple_help::BringBackDialogue(dialogue, _heldDialogue);
 }
 
 void TempleInterior::Close()

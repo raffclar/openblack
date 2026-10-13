@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "Temple/TempleHelp.h"
+#include "Temple/TempleRoomAccess.h"
 
 using namespace openblack;
 using namespace openblack::temple_help;
@@ -155,4 +156,165 @@ TEST(TempleHelp, ALateTurnIsCaughtUpOneAFrameUnlessFarBehind)
 	EXPECT_TRUE(TurnDue(last, 1400));
 	EXPECT_EQ(last, 1400u);
 	EXPECT_FALSE(TurnDue(last, 1450));
+}
+
+namespace
+{
+/// Records what the temple does to the dialogue, in order, into the same list as the scripts
+class FakeDialogue final: public Dialogue
+{
+public:
+	explicit FakeDialogue(std::vector<std::string>& calls)
+	    : _calls(calls)
+	{
+	}
+	void SendAdvisorsHome() override { _calls.emplace_back("advisors home"); }
+	[[nodiscard]] bool IsControlled() const override { return owner != 0 || wideScreen; }
+	[[nodiscard]] uint32_t GetOwner() const override { return owner; }
+	[[nodiscard]] bool IsTempleScript(uint32_t task) const override { return task == templeTask; }
+	void GiveTo(uint32_t task) override
+	{
+		_calls.push_back("give to " + std::to_string(task));
+		owner = task;
+		text = {};
+	}
+	void TakeAway() override
+	{
+		_calls.emplace_back("take away");
+		owner = 0;
+	}
+	[[nodiscard]] help::DialogueText::Held HoldText() const override { return text; }
+	void RestoreText(const help::DialogueText::Held& held) override
+	{
+		_calls.emplace_back("restore");
+		text = held;
+	}
+	void ShowTextAgain() override { _calls.emplace_back("show again"); }
+
+	uint32_t owner {0};
+	bool wideScreen {false};
+	uint32_t templeTask {999};
+	help::DialogueText::Held text;
+
+private:
+	std::vector<std::string>& _calls;
+};
+} // namespace
+
+TEST(TempleHelp, ARoomNotOpenStopsTheHelpAndSaysSo)
+{
+	FakeScripts scripts;
+	RoomNotAvailable(scripts);
+	EXPECT_EQ(scripts.calls, (std::vector<std::string> {"stop help", "start CitadelWorldRoomNotAvailable"}));
+}
+
+TEST(TempleHelp, AScriptsDialogueIsKeptWhileInsideAndGivenBackOnLeaving)
+{
+	FakeScripts scripts;
+	FakeDialogue dialogue(scripts.calls);
+	dialogue.owner = 7;
+	dialogue.text = {.texts = {40, 30, 0, 0, 0, 0}, .waitClick = true, .noClick = false};
+
+	auto held = PutAwayDialogue(scripts, dialogue);
+	ASSERT_TRUE(held.has_value());
+	EXPECT_EQ(held->owner, 7u);
+	EXPECT_EQ(held->text.texts[0], 40u);
+	EXPECT_TRUE(held->text.waitClick);
+	EXPECT_EQ(dialogue.owner, 0u);
+	EXPECT_EQ(scripts.calls, (std::vector<std::string> {"stop help", "advisors home", "take away"}));
+
+	scripts.calls.clear();
+	BringBackDialogue(dialogue, held);
+	EXPECT_FALSE(held.has_value());
+	EXPECT_EQ(dialogue.owner, 7u);
+	EXPECT_EQ(dialogue.text.texts[1], 30u);
+	EXPECT_TRUE(dialogue.text.waitClick);
+	EXPECT_EQ(scripts.calls, (std::vector<std::string> {"give to 7", "restore", "show again"}));
+}
+
+TEST(TempleHelp, ATempleScriptsDialogueAndNoDialogueAreNotKept)
+{
+	FakeScripts scripts;
+	FakeDialogue dialogue(scripts.calls);
+	EXPECT_FALSE(PutAwayDialogue(scripts, dialogue).has_value());
+
+	dialogue.owner = 3;
+	dialogue.templeTask = 3;
+	EXPECT_FALSE(PutAwayDialogue(scripts, dialogue).has_value());
+	EXPECT_EQ(dialogue.owner, 3u);
+	EXPECT_EQ(scripts.calls, (std::vector<std::string> {"stop help", "advisors home", "stop help", "advisors home"}));
+
+	// The temple kept nothing: when the player leaves, the box shows its texts again
+	scripts.calls.clear();
+	std::optional<HeldDialogue> none;
+	BringBackDialogue(dialogue, none);
+	EXPECT_EQ(scripts.calls, (std::vector<std::string> {"show again"}));
+}
+
+TEST(TempleHelp, TheCinemaBarsAloneAreKeptWithNoOwner)
+{
+	FakeScripts scripts;
+	FakeDialogue dialogue(scripts.calls);
+	dialogue.wideScreen = true;
+	const auto held = PutAwayDialogue(scripts, dialogue);
+	ASSERT_TRUE(held.has_value());
+	EXPECT_EQ(held->owner, 0u);
+}
+
+TEST(TempleHelp, TheDialogueTakenInsideIsNotGivenBack)
+{
+	FakeScripts scripts;
+	FakeDialogue dialogue(scripts.calls);
+	dialogue.owner = 7;
+	auto held = PutAwayDialogue(scripts, dialogue);
+	ASSERT_TRUE(held.has_value());
+
+	// Another script took the dialogue while the player was inside
+	dialogue.owner = 9;
+	scripts.calls.clear();
+	BringBackDialogue(dialogue, held);
+	EXPECT_FALSE(held.has_value());
+	EXPECT_EQ(dialogue.owner, 9u);
+	EXPECT_EQ(scripts.calls, (std::vector<std::string> {"show again"}));
+}
+
+TEST(TempleRoomAccess, OnlyTheMainRoomIsOpenUntilItHasBeenDrawn)
+{
+	using temple::IsRoomAvailable;
+	const temple::RoomAccessFacts closed {.roomsOpened = false, .hasCreature = true, .keptIn = std::nullopt};
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Main, closed));
+	for (const auto room : {TempleRoom::CreatureCave, TempleRoom::Challenge, TempleRoom::Multi, TempleRoom::Options,
+	                        TempleRoom::SaveGame, TempleRoom::Credits, TempleRoom::Unknown})
+	{
+		EXPECT_FALSE(IsRoomAvailable(room, closed));
+	}
+
+	const temple::RoomAccessFacts open {.roomsOpened = true, .hasCreature = true, .keptIn = std::nullopt};
+	for (const auto room : {TempleRoom::Main, TempleRoom::CreatureCave, TempleRoom::Challenge, TempleRoom::Multi,
+	                        TempleRoom::Options, TempleRoom::SaveGame, TempleRoom::Credits})
+	{
+		EXPECT_TRUE(IsRoomAvailable(room, open));
+	}
+	EXPECT_FALSE(IsRoomAvailable(TempleRoom::Unknown, open));
+}
+
+TEST(TempleRoomAccess, TheCreaturesRoomNeedsACreature)
+{
+	using temple::IsRoomAvailable;
+	EXPECT_FALSE(
+	    IsRoomAvailable(TempleRoom::CreatureCave, {.roomsOpened = true, .hasCreature = false, .keptIn = std::nullopt}));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Challenge, {.roomsOpened = true, .hasCreature = false, .keptIn = std::nullopt}));
+}
+
+TEST(TempleRoomAccess, TheRoomThePlayerIsKeptInIsOpen)
+{
+	using temple::IsRoomAvailable;
+	EXPECT_TRUE(
+	    IsRoomAvailable(TempleRoom::SaveGame, {.roomsOpened = false, .hasCreature = false, .keptIn = TempleRoom::SaveGame}));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Multi, {.roomsOpened = false, .hasCreature = false, .keptIn = TempleRoom::Multi}));
+	// Only these two rooms open when the game keeps the player in them
+	EXPECT_FALSE(
+	    IsRoomAvailable(TempleRoom::Credits, {.roomsOpened = false, .hasCreature = false, .keptIn = TempleRoom::Credits}));
+	EXPECT_FALSE(
+	    IsRoomAvailable(TempleRoom::Multi, {.roomsOpened = false, .hasCreature = false, .keptIn = TempleRoom::SaveGame}));
 }

@@ -529,3 +529,44 @@ TEST(DialogueText, ScriptWordsCanWaitForAClick)
 	EXPECT_TRUE(dialogue.IsWaitingForClick());
 	EXPECT_FALSE(dialogue.IsTextRead());
 }
+
+TEST(DialogueText, TextsKeptByTheTempleComeBackWithAFreshReadingTime)
+{
+	Fixture f;
+	f.texts[10] = {.narrator = 2, .text = u"one two three"};
+	f.texts[11] = {.narrator = 3, .text = u"four"};
+	auto dialogue = f.Make();
+	dialogue.RunText(false, 11, 0);
+	dialogue.RunText(false, 10, 1);
+	const auto held = dialogue.Hold();
+	EXPECT_EQ(held.texts[0], 10u);
+	EXPECT_EQ(held.texts[1], 11u);
+	EXPECT_TRUE(held.waitClick);
+
+	// The box closes and keeps the texts
+	dialogue.CloseBox();
+	EXPECT_FALSE(dialogue.GetDisplay().IsBoxShown());
+	EXPECT_EQ(dialogue.GetCurrentText(), 10u);
+
+	// The owner gets the dialogue back: the box clears the texts, then the texts come back later in the game
+	dialogue.ClearAllText();
+	EXPECT_FALSE(dialogue.IsWaitingForClick());
+	f.turn = 500;
+	dialogue.Restore(held);
+	dialogue.ShowAgain();
+	EXPECT_EQ(dialogue.GetCurrentText(), 10u);
+	EXPECT_TRUE(dialogue.IsWaitingForClick());
+	EXPECT_TRUE(dialogue.GetDisplay().IsBoxShown());
+	EXPECT_FALSE(dialogue.GetDisplay().IsHidden());
+	// The newest text's 23 turns start again from now
+	EXPECT_EQ(dialogue.GetEndTurn(), 523u);
+}
+
+TEST(DialogueText, ShowingAgainWithNoTextsLeavesTheBoxHidden)
+{
+	Fixture f;
+	auto dialogue = f.Make();
+	dialogue.ShowAgain();
+	EXPECT_TRUE(dialogue.GetDisplay().IsHidden());
+	EXPECT_EQ(dialogue.GetEndTurn(), 0u);
+}

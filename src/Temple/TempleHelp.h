@@ -18,6 +18,7 @@
 #include "3D/CreatureCaveTargets.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleScrolls.h"
+#include "Help/DialogueText.h"
 
 /// What the temple asks of the scripts while the player is inside: the help scripts its rooms, scrolls and places
 /// start and stop, and the clock of the turns the temple's scripts get while the world outside stands still. Each help
@@ -60,6 +61,49 @@ void LeaveScroll(Scripts& scripts, TempleRoom room);
 void ZoomToCaveTarget(Scripts& scripts, CreatureCaveTargets::Target target);
 /// The player leaves the temple: the help scripts running stop
 void Leave(Scripts& scripts);
+
+/// The player clicks the door of a room that is not open to them. The help running stops and the help that tells
+/// them starts. The camera stays where it is.
+void RoomNotAvailable(Scripts& scripts);
+
+/// The dialogue of the world. The temple keeps it when the player enters and gives it back when the player leaves.
+class Dialogue
+{
+public:
+	virtual ~Dialogue() = default;
+	/// Both advisors fly home, the evil one first
+	virtual void SendAdvisorsHome() = 0;
+	/// Whether a script has the dialogue, or has the cinema bars in
+	[[nodiscard]] virtual bool IsControlled() const = 0;
+	/// The script task that has the dialogue, 0 for none
+	[[nodiscard]] virtual uint32_t GetOwner() const = 0;
+	/// Whether a task runs a temple help or temple special script. These scripts continue inside the temple.
+	[[nodiscard]] virtual bool IsTempleScript(uint32_t task) const = 0;
+	/// The task asks for the dialogue. It gets the dialogue if no task has it, and the box clears its texts.
+	virtual void GiveTo(uint32_t task) = 0;
+	/// No task has the dialogue now, and the text box closes and keeps its texts
+	virtual void TakeAway() = 0;
+	[[nodiscard]] virtual help::DialogueText::Held HoldText() const = 0;
+	virtual void RestoreText(const help::DialogueText::Held& held) = 0;
+	/// The box shows the texts it keeps again, and the newest starts its reading time again
+	virtual void ShowTextAgain() = 0;
+};
+
+/// The world's dialogue that the temple keeps while the player is inside
+struct HeldDialogue
+{
+	uint32_t owner {0};
+	help::DialogueText::Held text;
+};
+
+/// The player enters the temple. The help scripts stop and the advisors fly home. If a script that is not one of
+/// the temple's has the dialogue, the temple keeps its owner and texts, and then nobody has the dialogue and the box
+/// closes. Returns what is kept.
+[[nodiscard]] std::optional<HeldDialogue> PutAwayDialogue(Scripts& scripts, Dialogue& dialogue);
+
+/// The player leaves the temple. If the temple kept the dialogue and nobody has it now, its owner gets it back with its
+/// texts and click waits. Then, kept or not, the box shows the texts again. The help scripts stop after this.
+void BringBackDialogue(Dialogue& dialogue, std::optional<HeldDialogue>& held);
 
 /// The temple's scripts take a turn every tenth of a second of real time while the player is inside, whatever the
 /// game's speed. A late turn is caught up on the frames after, one a frame, unless it falls more than two turns behind,

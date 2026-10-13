@@ -25,6 +25,21 @@ public:
 	void Stop(std::string_view name) override;
 };
 
+/// The game's dialogue: the dialogue's owner, the help text and the advisors
+class GameDialogue final: public Dialogue
+{
+public:
+	void SendAdvisorsHome() override;
+	[[nodiscard]] bool IsControlled() const override;
+	[[nodiscard]] uint32_t GetOwner() const override;
+	[[nodiscard]] bool IsTempleScript(uint32_t task) const override;
+	void GiveTo(uint32_t task) override;
+	void TakeAway() override;
+	[[nodiscard]] help::DialogueText::Held HoldText() const override;
+	void RestoreText(const help::DialogueText::Held& held) override;
+	void ShowTextAgain() override;
+};
+
 /// Whether the help system is on, which a room's help needs to start
 [[nodiscard]] bool HelpSystemOn();
 

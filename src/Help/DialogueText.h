@@ -131,6 +131,23 @@ public:
 	void ClearAllText();
 	/// The texts are taken away and the box closed
 	void CloseDialogue();
+
+	/// The last six texts and the click waits of the newest, which the temple keeps while the player is inside
+	struct Held
+	{
+		/// The text last shown, then the five before it; 0 for none
+		std::array<uint32_t, 6> texts {};
+		bool waitClick {false};
+		bool noClick {false};
+	};
+	[[nodiscard]] Held Hold() const { return {.texts = _texts, .waitClick = _waitClick, .noClick = _noClick}; }
+	/// The box closes. The texts stay, so they can come back.
+	void CloseBox() { _display.Close(); }
+	/// The texts and click waits that the temple kept come back. The box shows nothing until ShowAgain.
+	void Restore(const Held& held);
+	/// The box hides its texts. Then it adds each kept text again, the oldest first and without its number. The
+	/// reading time of the newest text starts again.
+	void ShowAgain();
 	/// The player clicked (or holds the keypad's Enter): it may end the wait for a click or cut the text short
 	void ProcessClick(bool click, bool skipKey);
 

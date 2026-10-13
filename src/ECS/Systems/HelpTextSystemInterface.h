@@ -16,6 +16,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "Help/DialogueText.h"
 #include "Help/HelpTextDisplay.h"
 
 namespace openblack::gui
@@ -25,7 +26,6 @@ class TextDatabase;
 
 namespace openblack::help
 {
-class DialogueText;
 class AdvisorVoices;
 } // namespace openblack::help
 
@@ -89,6 +89,14 @@ public:
 	virtual void ClearAllText() = 0;
 	/// The texts are taken away and their box closed
 	virtual void CloseDialogue() = 0;
+	/// The last texts and their click waits, which the temple keeps while the player is inside; none before Start
+	[[nodiscard]] virtual help::DialogueText::Held HoldText() const = 0;
+	/// The box closes and keeps its texts
+	virtual void CloseTextBox() = 0;
+	/// The texts and click waits that the temple kept come back. The box shows nothing until ShowTextAgain.
+	virtual void RestoreText(const help::DialogueText::Held& held) = 0;
+	/// The box shows the texts it keeps again, and the newest starts its reading time again
+	virtual void ShowTextAgain() = 0;
 	/// Both advisors are cut short in what they say
 	virtual void InterruptAdvisors() = 0;
 	/// Both advisors are cut short by the player's Escape, which picks among more interruption lines
