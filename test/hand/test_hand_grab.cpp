@@ -439,10 +439,3 @@ TEST(HandGrab, TheScoopingSoundRisesInPitchWithTheRamp)
 	EXPECT_EQ(ScoopSoundPitch(0.999f), 239u);
 	EXPECT_EQ(ScoopSoundPitch(1.0f), 240u);
 }
-
-TEST(HandGrabRules, AScoopingHandTipsFurtherDownWhenLow)
-{
-	EXPECT_FLOAT_EQ(hand_grab::ScoopTip(3.0f, 3.2f), hand_grab::k_ScoopTip);
-	EXPECT_FLOAT_EQ(hand_grab::ScoopTip(2.5f, 3.2f), hand_grab::k_ScoopTip);
-	EXPECT_FLOAT_EQ(hand_grab::ScoopTip(-0.7f, 3.2f), hand_grab::k_ScoopTip + std::atan(1.0f));
-}

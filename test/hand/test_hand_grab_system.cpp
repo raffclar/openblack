@@ -1005,10 +1005,14 @@ TEST_F(HandGrabSystemWithWorld, APileIsScoopedIntoAHandfulThatGrowsWhileTheButto
 	// The scooping sound is asked for every turn but its loop starts only once
 	EXPECT_EQ(world->scoopSoundStarts, 1u);
 	EXPECT_EQ(world->scoopSoundStops, 0u);
-	// The hand hovers over the pile, three above its height
+	// The hand stays above the pile. Above the height of the pile, it rises at least 1.9 m.
 	const auto hovering = Frame(10, {30.0f, 0.0f, 0.0f});
 	EXPECT_FLOAT_EQ(hovering.x, 0.0f);
-	EXPECT_FLOAT_EQ(hovering.y, 3.0f + 3.0f);
+	EXPECT_FLOAT_EQ(hovering.y, 3.0f + 1.9f);
+	// A larger handful hangs further below the hand, and the hand rises by that distance
+	world->sizes[*handful] = {.radius = 1.0f, .height = 4.0f};
+	Frame(20, {30.0f, 0.0f, 0.0f});
+	EXPECT_FLOAT_EQ(Frame(30, {30.0f, 0.0f, 0.0f}).y, 3.0f + 0.7f * 4.0f);
 	// Let go, the scoop ends, its stream stops and the cursor is free
 	Release();
 	EXPECT_EQ(world->stopped, std::vector<uint32_t> {1u});
