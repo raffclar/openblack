@@ -12,6 +12,7 @@
 #include "VillagerChecks.h"
 
 #include "Common/GameRandom.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/ScriptControl.h"
@@ -172,6 +173,7 @@ void ecs::villager_checks::CheckEveryTime(LivingAction& action)
 	        .atHome = registry.AllOf<AtHome>(villager),
 	        .stateSendsHome = row.woundedGoesHome != 0,
 	        .stateKeepsWounded = row.woundedStays != 0,
+	        .broughtDown = registry.AllOf<BroughtDown>(villager),
 	        .goingForFood =
 	            states.checks == VillagerStates::GotoFoodReaction || states.checks == VillagerStates::ArrivesAtFoodReaction,
 	        .food = person.food,

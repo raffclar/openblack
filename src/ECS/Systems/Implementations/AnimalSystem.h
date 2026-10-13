@@ -156,6 +156,8 @@ private:
 	void ReactToFoodNeeds(entt::entity entity, components::Animal& animal);
 	/// The first prey it meets searching the map cells about it, none for nothing
 	[[nodiscard]] entt::entity FindPrey(entt::entity wolf, const components::Animal& animal);
+	/// Whether hunters leave the thing alone: it dies, is dead or is down, or a hunter brought it down before
+	[[nodiscard]] bool OutOfTheHunt(entt::entity prey) const;
 	[[nodiscard]] bool IsHuntingTargetValid(entt::entity wolf, const components::Animal& animal, entt::entity prey) const;
 	void SetupMoveToTarget(entt::entity wolf, components::Animal& animal, entt::entity prey);
 	void Abandon(entt::entity wolf, components::Animal& animal);

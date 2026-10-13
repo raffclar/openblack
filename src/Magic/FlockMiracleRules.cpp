@@ -181,6 +181,12 @@ bool flock::WolfArrived(glm::vec2 wolf, glm::vec2 destination)
 	return glm::distance(wolf, destination) < k_WolfArrival;
 }
 
+bool flock::OutOfTheHunt(LivingStates finalState, bool broughtDown)
+{
+	return broughtDown || finalState == LivingStates::LivingDying || finalState == LivingStates::LivingDead ||
+	       finalState == LivingStates::LivingDowned || finalState == LivingStates::LivingBeingEaten;
+}
+
 bool flock::IsPrey(const PreyFacts& prey)
 {
 	if (prey.hunterFading || prey.uneatable || prey.skeleton || prey.helpless || !prey.hasMeat || !prey.onCorridor)

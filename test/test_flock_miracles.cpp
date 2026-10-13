@@ -195,6 +195,18 @@ TEST(FlockMiracleRules, WhatAWolfHunts)
 	EXPECT_FALSE(flock::IsPrey({.isOtherAnimal = true, .hasMeat = false}));
 }
 
+TEST(FlockMiracleRules, HuntersLeaveAloneWhatIsDownOrWasBroughtDown)
+{
+	EXPECT_FALSE(flock::OutOfTheHunt(LivingStates::LivingMoveToPos, false));
+	EXPECT_FALSE(flock::OutOfTheHunt(LivingStates::LivingLanded, false));
+	EXPECT_TRUE(flock::OutOfTheHunt(LivingStates::LivingDying, false));
+	EXPECT_TRUE(flock::OutOfTheHunt(LivingStates::LivingDead, false));
+	EXPECT_TRUE(flock::OutOfTheHunt(LivingStates::LivingDowned, false));
+	EXPECT_TRUE(flock::OutOfTheHunt(LivingStates::LivingBeingEaten, false));
+	// A villager that the hand took from a wolf crawls away, but no hunter hunts it again
+	EXPECT_TRUE(flock::OutOfTheHunt(LivingStates::LivingMoveToPos, true));
+}
+
 TEST(AnimalRules, TurnAngles)
 {
 	EXPECT_NEAR(animals::TurnAngleRadians(0x200), k_Pi * 0.5f, k_Epsilon);
