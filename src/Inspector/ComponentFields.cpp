@@ -2418,9 +2418,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_sway::Sway::upperVelocity>("upperVelocity")
 	    .Field<&openblack::creature_sway::Sway::lowerOffset>("lowerOffset")
 	    .Field<&openblack::creature_sway::Sway::upperOffset>("upperOffset")
-	    .Field<&openblack::creature_sway::Sway::drive>("drive")
 	    .Field<&openblack::creature_sway::Sway::active>("active")
-	    .Field<&openblack::creature_sway::Sway::leashDrag>("leashDrag")
 	    .Field<&openblack::creature_sway::Sway::frameSeconds>("frameSeconds");
 	Reflect<openblack::creature_tattoo::Slot>(context, ValueOnly {})
 	    .Field<&openblack::creature_tattoo::Slot::design>("design")
