@@ -289,6 +289,24 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {52.0f, 0.0f}, .yawDegrees = 0.0f}},
 	});
 
+	// A creature seeing a thing crushed in front of it and another behind it
+	all.push_back({
+	    .id = "creatures.reaction_examine",
+	    .name = "A creature looking at a thing crushed",
+	    .facet = Facet::Objects,
+	    .description = "A creature stands facing south, towards the camera. A cart 20 metres in front of it makes the "
+	                   "reaction of a thing crushed by the player; a second cart 20 metres behind it makes the same "
+	                   "reaction.",
+	    .expected = "The creature drops what it was doing and goes to look at the cart in front of it, which it sees; the "
+	                "one behind it, out of its sight, it takes no notice of. For a minute after it takes no notice of "
+	                "another thing crushed.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {35.0f, 12.0f, -10.0f}, .look = {0.0f, 6.0f, -10.0f}},
+	    .creatures = {{.offset = {0.0f, 0.0f}, .facingDegrees = 0.0f}},
+	    .objects = {{.type = MobileObjectInfo::Cart, .offset = {0.0f, -20.0f}, .reaction = Reaction::ReactToObjectCrushed},
+	                {.type = MobileObjectInfo::Cart, .offset = {0.0f, 20.0f}, .reaction = Reaction::ReactToObjectCrushed}},
+	});
+
 	// A town whose store has run out of food, with fields to farm
 	std::vector<ObjectSetup> hungry {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},

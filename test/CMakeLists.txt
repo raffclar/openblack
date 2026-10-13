@@ -893,3 +893,6 @@ openblack_setup_and_add_test(
   test_reaction_timing_rules test_reaction_timing_rules.cpp
 )
 openblack_setup_and_add_test(test_shared_index_lists test_shared_index_lists.cpp)
+openblack_setup_and_add_test(
+  test_creature_reaction_rules test_creature_reaction_rules.cpp
+)

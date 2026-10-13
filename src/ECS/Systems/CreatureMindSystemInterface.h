@@ -25,6 +25,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureReactionRules.h"
 #include "Enums.h"
 
 namespace openblack::creaturemind
@@ -157,6 +158,10 @@ public:
 	virtual void ReactToNastyMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
 	/// A nice miracle of its own player's was cast near the creature: it goes to look at it, and learns it
 	virtual void ReactToNiceMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
+	/// The creature takes up a reaction to a thing: it comes across the thing, drops what it was doing for the plan the
+	/// reaction makes (done to the thing or to itself), learns the skill it watches, and moves a source of its desires,
+	/// as the reaction's kind says
+	virtual void TakeUpReaction(entt::entity /*creature*/, entt::entity /*thing*/, const creature_reaction::Setup& /*setup*/) {}
 	/// The creature tries a miracle at an object, as its casting pose's loop begins or in a fight: in a fight it pays
 	/// stamina first; a try short of the sightings it needs fizzles; a miracle it can't cast frustrates it. Whether it
 	/// was cast.

@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <optional>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -24,15 +25,23 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureFireReaction.h"
+#include "Creature/CreatureLocomotion.h"
+#include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureReactionRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/Hand.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
@@ -57,6 +66,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownDesire.h"
@@ -259,6 +269,123 @@ reaction_timing::PredatorWatch PredatorWatchOf(const ecs::Registry& registry, en
 	// TODO(raffclar): an animal's own state numbering differs from the game's, which ends an animal's reaction to a
 	// predator charging at it while it looks at something; no predator makes reactions yet
 	return watch;
+}
+
+/// The plan a creature is carrying out, if any
+const creature_planner::Plan* CurrentPlanOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	return mind != nullptr && mind->planner.current.has_value() ? &*mind->planner.current : nullptr;
+}
+
+/// Whether the creature's plan is an action of the game's table by its name
+bool PlanIs(const ecs::Registry& registry, entt::entity creature, std::string_view action)
+{
+	const auto* plan = CurrentPlanOf(registry, creature);
+	if (plan == nullptr || !Locator::creatureMindSystem::has_value())
+	{
+		return false;
+	}
+	const auto* tables = Locator::creatureMindSystem::value().GetTables();
+	return tables != nullptr && plan->action < tables->actions.size() && tables->actions[plan->action].name == action;
+}
+
+/// Whether a creature sees a point: near enough the way its head looks, or the way it faces when it looks at nothing, or
+/// in its own map cell
+bool CreatureSees(const ecs::Registry& registry, entt::entity creature, const glm::vec3& point)
+{
+	const auto& at = registry.Get<const Transform>(creature).position;
+	glm::vec2 way {0.0f};
+	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
+	if (body != nullptr && body->lookAt.has_value() && glm::vec2(body->lookAt->x, body->lookAt->z) != glm::vec2(at.x, at.z))
+	{
+		way = {body->lookAt->x - at.x, body->lookAt->z - at.z};
+	}
+	else if (const auto* walker = registry.TryGet<const CreatureLocomotion>(creature))
+	{
+		way = creature_locomotion::DirectionOf(walker->heading);
+	}
+	const glm::vec2 from(at.x, at.z);
+	const glm::vec2 to(point.x, point.z);
+	const bool sameCell = map_coords::Cell(map_coords::FromMetres(from)) == map_coords::Cell(map_coords::FromMetres(to));
+	return creature_reaction::CanSee(creature_reaction::LookAngle(way), gutils::GetAngleFromXZ(from, to), sameCell);
+}
+
+/// What a creature knows as it weighs a reaction
+creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::entity creature,
+                                         const ReactionSystem::Active& reaction, const ReactionInfo& info, uint32_t turn)
+{
+	const auto& source = reaction.source;
+	const auto& body = registry.Get<const Creature>(creature);
+	const auto thing = source.initiator;
+	const bool there = thing != entt::null && registry.Valid(thing);
+	const bool computer = Locator::playerSystem::has_value()
+	                          ? Locator::playerSystem::value().IsComputerPlayer(body.owner)
+	                          : body.owner != PlayerNames::PLAYER_ONE && body.owner != PlayerNames::NEUTRAL;
+	creature_reaction::Facts facts {
+	    .tablePriority = static_cast<uint8_t>(std::min<uint32_t>(info.priority, 255)),
+	    .humanPlayer = !computer,
+	    .otherPlayers = !source.playerless && source.player != body.owner,
+	    .seesThing = CreatureSees(registry, creature, ThingAt(registry, reaction)),
+	    .thingIsSelf = thing == creature,
+	    .thingGone = !there,
+	    .thingIsCreature = there && registry.AllOf<Creature>(thing),
+	    .turn = turn,
+	    .catching = PlanIs(registry, creature, "Catch"),
+	    .fighting = PlanIs(registry, creature, "Fight"),
+	};
+	if (const auto* state = registry.TryGet<const LivingReaction>(creature))
+	{
+		facts.sawFlying = state->sawFlying;
+		facts.sawCrushed = state->sawCrushed;
+	}
+	if (const auto* plan = CurrentPlanOf(registry, creature))
+	{
+		facts.angry = plan->desire == creature_desires::Desire::Anger;
+	}
+	if (facts.thingIsCreature && Locator::creatureFightSystem::has_value())
+	{
+		facts.thingFightsSelf = Locator::creatureFightSystem::value().OpponentOf(thing) == std::optional(creature);
+	}
+	if (source.type == Reaction::ReactToFlyingObject && there)
+	{
+		const auto* entry = Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(thing) : nullptr;
+		facts.thrownFromHand = entry != nullptr && entry->Has(ecs::PhysicsEntry::k_FromHand);
+		facts.inTheAir = ecs::villager_physics::IsActuallyInTheAir(thing);
+	}
+	if (source.type == Reaction::ReactToHandPickUp && there)
+	{
+		const auto* grab = registry.TryGet<const HandGrab>(thing);
+		facts.ownPlayersHand = registry.AllOf<Hand>(thing) && source.player == body.owner;
+		facts.handHolds = grab != nullptr && registry.Valid(grab->object) &&
+		                  (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow);
+	}
+	return facts;
+}
+
+/// What a creature does on taking up a reaction, for the kinds whose rules are its own; none for fire, teleport stones and
+/// miracles
+std::optional<creature_reaction::Setup> CreatureSetupOf(const ecs::Registry& registry, const ReactionSystem::Active& reaction)
+{
+	const auto thing = reaction.source.initiator;
+	const bool inTheAir = reaction.source.type == Reaction::ReactToFlyingObject && thing != entt::null &&
+	                      registry.Valid(thing) && ecs::villager_physics::IsActuallyInTheAir(thing);
+	return creature_reaction::SetupFor(reaction.source.type, inTheAir);
+}
+
+/// Whether a creature keeps a reaction it takes up: not another player's nice miracle or shield, nor a magic tree's,
+/// nor the kinds it heeds without keeping
+bool CreatureKeeps(const ecs::Registry& registry, entt::entity creature, const ReactionSystem::Active& reaction)
+{
+	const auto& source = reaction.source;
+	const bool nice = source.type == Reaction::LookAtNiceSpell || source.type == Reaction::ReactToImpressiveSpell ||
+	                  source.type == Reaction::ReactToMagicShield;
+	if ((nice && source.player != registry.Get<const Creature>(creature).owner) || source.type == Reaction::ReactToMagicTree)
+	{
+		return false;
+	}
+	const auto setup = CreatureSetupOf(registry, reaction);
+	return !setup.has_value() || setup->keeps;
 }
 
 /// The kinds of reaction a living thing took up lately: a villager's shared with the shields
@@ -540,6 +667,20 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		           ? ecs::villager_breeding::ReactToBreederPriority(living, reaction.source.initiator)
 		           : 0;
 	}
+	// A creature weighs several kinds its own way: by whether it sees the thing, whether a person plays its player, and
+	// what it is doing
+	if (registry.AllOf<Creature>(living) && registry.AllOf<Transform>(living))
+	{
+		const auto random = [](uint32_t range) {
+			return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : 0u;
+		};
+		if (const auto kind = creature_reaction::Priority(reaction.source.type,
+		                                                  CreatureFactsOf(registry, living, reaction, *info, _turn), random);
+		    kind.has_value())
+		{
+			return villager_reaction::Priority(*kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+		}
+	}
 	// A villager weighs a creature by how its town feels about it
 	// TODO(villager-social): creatures and animals weigh a creature by rules of their own that aren't ported yet; until
 	// then they take no notice of it
@@ -740,6 +881,13 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			{
 				continue;
 			}
+			// A creature heeds the new one, but keeps what it reacts to rather than change to one it doesn't keep
+			// TODO(raffclar): the game also drops the creature from the list of the reaction it keeps, as for villagers
+			if (registry.AllOf<Creature>(entity) && !CreatureKeeps(registry, entity, reaction))
+			{
+				Start(reaction, entity, *state, true);
+				continue;
+			}
 			Stop(entity, *state, false);
 			Start(reaction, entity, *state, true);
 		}
@@ -827,14 +975,33 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	const auto& source = reaction.source;
 	const bool nice = source.type == Reaction::LookAtNiceSpell || source.type == Reaction::ReactToImpressiveSpell;
 	const bool shield = source.type == Reaction::ReactToMagicShield;
-	if (const auto* creature = registry.TryGet<const Creature>(living))
+	if (registry.AllOf<Creature>(living))
 	{
-		// A creature takes no notice of another player's nice miracle or shield, nor of a shield struck or gone; it
-		// takes up a magic tree's reaction without doing anything about it, so not at all
-		const bool othersPlayer = source.player != creature->owner;
-		if (((nice || shield) && othersPlayer) || source.type == Reaction::ReactToMagicShieldStruck ||
-		    source.type == Reaction::ReactToMagicShieldDestroyed || source.type == Reaction::ReactToMagicTree)
+		// It notes when it took up a flying or crushed thing's reaction, whether it keeps it or not
+		const auto setup = CreatureSetupOf(registry, reaction);
+		if (setup.has_value() && setup->notesFlying)
 		{
+			state.sawFlying = _turn;
+		}
+		if (setup.has_value() && setup->notesCrushed)
+		{
+			state.sawCrushed = _turn;
+		}
+		// What it doesn't keep it heeds without being impressed by it, carrying on with what it was reacting to
+		if (!CreatureKeeps(registry, living, reaction))
+		{
+			return;
+		}
+		if (setup.has_value())
+		{
+			state.reaction = reaction.id;
+			state.type = reaction.source.type;
+			state.startTurn = _turn;
+			if (Locator::creatureMindSystem::has_value())
+			{
+				Locator::creatureMindSystem::value().TakeUpReaction(living, source.initiator, *setup);
+			}
+			Impress(reaction, living, registry.Get<const Transform>(living).position);
 			return;
 		}
 	}

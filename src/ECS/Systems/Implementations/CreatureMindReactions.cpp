@@ -104,3 +104,37 @@ void CreatureMindSystem::ReactToNiceMagic(entt::entity creature, const glm::vec3
 		WatchMiracle(creature, *learn);
 	}
 }
+
+void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thing, const creature_reaction::Setup& setup)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr)
+	{
+		return;
+	}
+	const bool there = thing != entt::null && registry.Valid(thing);
+	if (setup.comesAcross && there)
+	{
+		ComeAcross(*mind, thing);
+	}
+	if (setup.plan.has_value() && (setup.plan->onSelf || there))
+	{
+		// TODO(creature-reaction-holding): looking at a flying thing has no agenda yet (pointing at it half the time,
+		// then watching it); until it has, the creature keeps to what it was doing rather than stand idle
+		if (setup.plan->action != "LookAtFlyingObject")
+		{
+			ForceActivity(creature, {.desire = setup.plan->desire,
+			                         .action = setup.plan->action,
+			                         .actionObject = setup.plan->onSelf ? creature : thing});
+		}
+	}
+	if (setup.skill.has_value())
+	{
+		WatchSkill(creature, *setup.skill);
+	}
+	if (setup.desireSource.has_value() && mind->desires.has_value())
+	{
+		creature_desires::ChangeSource(*mind->desires, setup.desireSource->first, setup.desireSource->second);
+	}
+}
