@@ -945,7 +945,7 @@ void AddStory(std::vector<Scenario>& all)
 	                .look = {k_Temple.x, 10.0f, k_Temple.y}},
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.2f, 0.8f}},
-	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.45f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.36f}},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.447f, 0.604f}},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 4.0f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
@@ -2199,19 +2199,25 @@ void AddHand(std::vector<Scenario>& all)
 	});
 	// The camera looks down on the north edge of the player's influence, 400 m from the middle: a wood pile and another
 	// player's tiger just inside, a wood pile, another player's tiger and the player's own tiger just outside, all clear
-	// of the testbed's window. The hand rests on the land between visits, so that each tooltip is submitted afresh.
+	// of the testbed's window. The hand rests on the land between visits, so that each tooltip is submitted afresh. A
+	// birch stands just inside, so tall that the land under the cursor on its crown lies outside.
 	all.push_back({
 	    .id = "hand.tooltips_influence",
-	    .name = "The hand's tooltips either side of the influence border",
+	    .name = "The hand's tooltips and grabs either side of the influence border",
 	    .facet = Facet::Hand,
 	    .description = "The hand starts over the wood pile outside the player's influence, then goes over the other "
 	                   "player's tiger outside and the player's own tiger outside. It comes in over the wood pile and the "
 	                   "other player's tiger inside, then goes back out over the outside wood pile, rests out on the land "
-	                   "for twenty seconds and tries the pile again.",
+	                   "for twenty seconds and tries the pile again. Then it presses on the crown of the birch standing "
+	                   "just inside, against the land outside, drops what it took on the land inside, and holds the "
+	                   "button down on the other player's tiger inside and then on the player's own tiger outside.",
 	    .expected = "Outside, the wood pile shows no amount and the other player's tiger no \"Interact\"; the player's "
 	                "own tiger shows \"Interact\" anywhere. Inside, the wood pile shows its amount and the other player's "
 	                "tiger \"Interact\". Back out at once, the outside pile shows its amount, as the hand keeps some of "
-	                "the player's influence past the border; once that has run out it shows nothing again.",
+	                "the player's influence past the border; once that has run out it shows nothing again. The birch is "
+	                "pulled up and held, as it stands inside though the land under the cursor is outside. The other "
+	                "player's tiger is never taken hold of, even inside (the log says so); the player's own tiger is, "
+	                "outside, and the camera turns to it.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 45.0f, 355.0f}, .look = {0.0f, 0.0f, 410.0f}},
 	    .creatures = {{.label = "own outside",
@@ -2233,7 +2239,8 @@ void AddHand(std::vector<Scenario>& all)
 	                   .size = 0.5f,
 	                   .pauseMind = true}},
 	    .objects = {{.type = PotInfo::WoodPile_1, .offset = {0.0f, 390.0f}, .amount = 300},
-	                {.type = PotInfo::WoodPile_1, .offset = {15.0f, 428.0f}, .amount = 300}},
+	                {.type = PotInfo::WoodPile_1, .offset = {15.0f, 428.0f}, .amount = 300},
+	                {.type = TreeInfo::Birch, .offset = {30.0f, 396.0f}}},
 	    .commands =
 	        {// Outside: the wood pile, the other player's tiger, the land, the player's own tiger, the land
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.626f, 0.379f}},
@@ -2249,7 +2256,23 @@ void AddHand(std::vector<Scenario>& all)
 	         // Straight back out over the outside pile, out on the land until nothing is kept, and the pile again
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.626f, 0.379f}},
 	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.7f, 0.45f}},
-	         {.kind = Kind::PointerTo, .delaySeconds = 20.0f, .point = {0.626f, 0.379f}}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 20.0f, .point = {0.626f, 0.379f}},
+	         // With nothing kept, the birch standing just inside, its top against the land outside: pulled up and held
+	         {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.887f, 0.547f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3},
+	         // Dropped on the land inside
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.62f, 0.9f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	         // The other player's tiger inside, held down on: never taken hold of
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.759f, 0.71f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3},
+	         // The player's own tiger outside, held down on: taken hold of
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.909f, 0.327f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3}},
 	});
 	// The camera stands as in the tutorial's throwing demonstration, 9 m over the land and 35 m behind the rock, which
 	// sits in the middle of the screen; the flat land beyond leaves the throw room to land
@@ -2411,6 +2434,68 @@ void AddHand(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Sheep, .offset = {-9.0f, -3.0f}},
 	                {.type = AnimalInfo::Horse, .offset = {-12.0f, 8.0f}},
 	                {.type = AnimalInfo::Pig, .offset = {-6.0f, 5.0f}}},
+	});
+
+	// One of each kind of thing the cursor picks by its own shape, in a row on bare land
+	all.push_back({
+	    .id = "hand.pick_kinds",
+	    .name = "What the cursor picks, kind by kind",
+	    .facet = Facet::Hand,
+	    .description = "In a row on bare land, left to right: a person, a pig, an oak, a \"did you know\" sign, a silver "
+	                   "scroll, a fire dispenser floating its globe, and a lightning globe on its own. Move the pointer "
+	                   "round each and press the Action button on it.",
+	    .expected = "A person is picked anywhere in the circle their bounding ball makes, at that ball's near side; the "
+	                "pig, the oak and the sign only on their bodies. The scroll is picked on its model or a little "
+	                "round it, whichever is nearer. The dispenser is picked on its building and in a wide ball round "
+	                "its globe, and a press there knocks on it; on the globe itself the globe is picked, being pushed "
+	                "towards the camera, and a quick press puts its miracle in the hand. The loose globe is picked on "
+	                "its model or within a ball about its middle 1.2 times its size.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -28.0f}, .look = {0.0f, 3.0f, 8.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-18.0f, 6.0f}, .inScript = true},
+	                {.type = AnimalInfo::Pig, .offset = {-13.0f, 6.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-7.0f, 10.0f}}},
+	    .dispensers = {{.type = MagicType::Fireball, .offset = {11.0f, 10.0f}},
+	                   {.type = MagicType::LightningBolt, .offset = {19.0f, 6.0f}, .bubbleHeight = 3.0f}},
+	    .highlights = {{.kind = 1, .offset = {-1.0f, 6.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}},
+	                   {.kind = 2, .offset = {4.0f, 6.0f}}},
+	});
+	// A healing dispenser floats its globe in the middle of the screen, and a second healing globe floats on its own to
+	// its left, both in the player's influence on flat land
+	all.push_back({
+	    .id = "hand.globe_carry",
+	    .name = "Carrying and throwing one-shot globes",
+	    .facet = Facet::Hand,
+	    .description = "The hand holds the Action button on the dispenser's globe until it takes it, carries it to the "
+	                   "right and lets it go gently. Then it takes the globe floating on its own and throws it with a "
+	                   "quick upward sweep of the pointer.",
+	    .expected = "Held past a tap, each globe is lifted from where it floats and carried hanging from the side of the "
+	                "hand, still turned to the camera with its miracle spinning inside; the dispenser floats a new globe "
+	                "once its time has passed. Let go gently, the globe falls to the land and settles there, whole. Thrown, it "
+	                "flies off "
+	                "like any loose thing and lands, whole: a globe never bursts or casts by landing. A quick press on a "
+	                "globe still puts its miracle in the hand instead.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-16.0f, 14.0f, 0.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 0.0f}},
+	                   {.type = MagicType::Heal, .offset = {0.0f, 6.0f}, .bubbleHeight = 3.0f}},
+	    .commands =
+	        {// Takes the dispenser's globe, holding the button past a tap
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.31f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.6f, .value = 3},
+	         // Carries it to the right and lets it go there gently
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.2f, 0.1f}, .amount = 1.5f},
+	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	         // Takes the lone globe and throws it with a quick upward sweep
+	         {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.26f, 0.37f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.6f, .value = 3},
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.45f, 0.85f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
 }
 
@@ -2715,13 +2800,13 @@ void AddLeash(std::vector<Scenario>& all)
 
 	all.push_back({
 	    .id = "leash.other_gods_creatures",
-	    .name = "Slapping other gods' creatures",
+	    .name = "Other gods' creatures can't be slapped",
 	    .facet = Facet::Leash,
 	    .description = "Your tiger on the left, a tortoise of player three (as Khazar's is) in the middle and a wolf of "
-	                   "player four (as Lethys's is) on the right. The hand slaps the tortoise and the wolf, as it may "
-	                   "any god's creature, then tries to leash the tortoise.",
-	    .expected = "The tortoise and the wolf are slapped and reel. Leashing the tortoise is refused, as it isn't "
-	                "yours, and the log says so.",
+	                   "player four (as Lethys's is) on the right. The hand tries to slap the tortoise and the wolf, "
+	                   "then to leash the tortoise.",
+	    .expected = "Neither is slapped: the hand never takes hold of another god's creature, inside the player's "
+	                "influence or out, and the log says so. Leashing the tortoise is refused too, as it isn't yours.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {-40.0f, 60.0f}),
 	                  [] {
@@ -3032,6 +3117,31 @@ void AddCombat(std::vector<Scenario>& all)
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
 	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 0.5f), Fight(Kind::FightAuto, 0, 1, 0.2f),
 	                 Go(Kind::LeashOrderAt, 0, {0.0f, -20.0f}, 16.0f, false)},
+	});
+
+	// A fight next to a village: its people come to watch
+	all.push_back({
+	    .id = "combat.villagers_watch",
+	    .name = "Villagers watching a fight",
+	    .facet = Facet::Combat,
+	    .description = "A hut of the player's town south of an arena with six of its people about it. The player's red "
+	                   "tiger and a blue tiger fight there, both by themselves.",
+	    .expected = "Once the fight is on, the villagers within the arena's reach take up its reaction and walk to places "
+	                "spread round a ring 1.4 times the arena's radius, the newest first at the east, the next opposite, "
+	                "then the quarters. There they face the arena: for fifteen seconds after a blow lands they cheer "
+	                "when the tiger they don't support took it last and despair when theirs did, otherwise they chat. "
+	                "They go back to what they were doing when the reaction's time is up or the arena goes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, -25.0f}, {60.0f, 95.0f}}, .distance = 0.8f},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, -20.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-2.0f, -12.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, -6.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {2.0f, -8.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, -14.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {6.0f, -10.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-12.0f, -8.0f}, .joinTown = true}},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 }
 
@@ -3685,7 +3795,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
-	       IsPointerCommand(kind);
+	       kind == Kind::HandPour || kind == Kind::HandRelease || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -3712,7 +3822,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 109> k_Names {
+	constexpr std::array<std::string_view, 111> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3821,6 +3931,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "enter temple",
 	    "play boat film",
 	    "run script",
+	    "hand release",
+	    "hand pour",
 	    "do action",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
@@ -3870,11 +3982,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
 	    scenario.vortices.empty() && scenario.rewards.empty() && scenario.fireflyRewards.empty() &&
-	    scenario.landStorms.empty() &&
+	    scenario.landStorms.empty() && scenario.highlights.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
-		                      "chests, crowd, fireflies' rewards, land storms, player's commands or alignment for the hand");
+		problems.emplace_back(
+		    "no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
+		    "chests, crowd, fireflies' rewards, land storms, scrolls or signs, player's commands or alignment for the "
+		    "hand");
 	}
 	for (const auto& storm : scenario.landStorms)
 	{

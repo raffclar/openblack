@@ -45,11 +45,13 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -58,6 +60,7 @@
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -96,6 +99,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
+#include "Magic/MagicTables.h"
 #include "Magic/ResourcePiles.h"
 #include "Physics/Body.h"
 #include "Physics/LivingRules.h"
@@ -217,6 +221,11 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
 	}
 	const auto nearest = hand_reach::Nearest(behindHand, cursor, places);
 	return nearest.has_value() ? std::optional<entt::entity>(things[*nearest]) : std::nullopt;
+}
+
+std::optional<glm::vec3> GameHandGrabWorld::PickedPoint() const
+{
+	return Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
 }
 
 bool GameHandGrabWorld::InInfluence(PlayerNames player, glm::vec3 point) const
@@ -476,6 +485,25 @@ bool GameHandGrabWorld::HoldsLeash(PlayerNames player)
 	       leashes.HolderPoint(*creature).has_value();
 }
 
+void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
+{
+	const auto* info = Info();
+	const auto* component = Entities().TryGet<const OneOffSpellSeed>(globe);
+	if (info == nullptr || component == nullptr || !Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto* data = Entities().TryGet<Player>(Locator::playerSystem::value().GetPlayer(player));
+	if (data == nullptr)
+	{
+		return;
+	}
+	// The miracle the globe holds at its power-up counts as ever enabled for the player, though it enables nothing
+	const auto type =
+	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(*info, component->seedType), component->powerUp);
+	player_miracles::MarkMagicTypeEverEnabled(data->miracles, type);
+}
+
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
 {
 	// A rock tall enough breaks when tapped
@@ -484,9 +512,9 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
 		return true;
 	}
-	// A town's building is knocked on, whoever's town it is, unless the hand holds its creature's leash, which takes the
-	// tap to send the creature there
-	if (Entities().AllOf<Abode>(object) && Locator::abodeKnockSystem::has_value() && !HoldsLeash(player))
+	// A town's building, a miracle dispenser among them, is knocked on, whoever's town it is, unless the hand holds its
+	// creature's leash, which takes the tap to send the creature there
+	if (Entities().AnyOf<Abode, SpellDispenser>(object) && Locator::abodeKnockSystem::has_value() && !HoldsLeash(player))
 	{
 		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
 		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
@@ -496,6 +524,11 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	{
 		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
 		return Locator::scriptHighlightSystem::value().Tap(object, ownHand);
+	}
+	// A one-shot miracle's globe gives the hand its miracle
+	if (Entities().AllOf<OneOffSpellSeed>(object) && Locator::magicSystem::has_value())
+	{
+		return Locator::magicSystem::value().TapGlobe(object);
 	}
 	// A reward chest is opened by its player's tap
 	if (Entities().AllOf<Reward>(object) && Locator::rewardSystem::has_value())

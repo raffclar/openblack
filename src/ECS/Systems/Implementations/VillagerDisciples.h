@@ -40,6 +40,10 @@ void LetGo(entt::entity villager, std::optional<PlayerNames> player, bool forced
 /// A villager the hand put down where it stood: the player at this machine hears the guidance's line when its work
 /// changed while held
 void PutDown(entt::entity villager, std::optional<PlayerNames> player);
+/// A hand (of the player or of a creature) released a villager, but did not put it on the land below it. The physics
+/// did not accept the villager, or the villager flies. The villager gets back the work that it had at the pick-up. The
+/// work that the hand showed to it has no effect.
+void NotPutDown(entt::entity villager);
 
 /// Each turn in the hand it takes up the work of what it is held near
 uint32_t InHand(components::LivingAction& action);

@@ -61,9 +61,11 @@ public:
 		Locator::entitiesRegistry::value().Destroy(seed);
 	}
 	void UpdateHand(const HandFrame&, float) override {}
-	bool TapAction() override { return false; }
-	bool PressOrb(uint32_t, uint32_t) override { return false; }
-	void ReleaseOrb(uint32_t, uint32_t) override {}
+	bool TapFireBall(entt::entity) override { return false; }
+	bool TapGlobe(entt::entity) override { return false; }
+	bool PressFireBall(uint32_t, uint32_t) override { return false; }
+	void HoldFireBall(uint32_t, uint32_t) override {}
+	void ReleaseFireBall(uint32_t, uint32_t) override {}
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override { return std::nullopt; }
 	bool PressAction() override { return false; }
 	void ReleaseAction() override {}
@@ -71,7 +73,6 @@ public:
 	[[nodiscard]] magic::PourPose GetHandPour(float) const override { return {}; }
 	[[nodiscard]] HandCastState GetHandCastState() const override { return {}; }
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return std::nullopt; }
-	[[nodiscard]] std::optional<entt::entity> OrbAlong(glm::vec3, glm::vec3) const override { return std::nullopt; }
 	[[nodiscard]] HandResult GetLastHandResult() const override { return {}; }
 	bool SendSpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
 	float ForcePayForSpell(entt::entity, float) override { return 0.0f; }

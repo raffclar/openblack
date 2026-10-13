@@ -234,14 +234,20 @@ public:
 
 	/// Once a frame, before any press or release
 	virtual void UpdateHand(const HandFrame& frame, float seconds) = 0;
-	/// The left button tapped: another player's fireball under the cursor is caught into the hand. Whether one was, so the
-	/// hand doesn't grip the land with the press.
-	virtual bool TapAction() = 0;
-	/// The action button went down with an empty hand: a one-shot bubble under the hand, within the player's influence,
-	/// takes the press. Whether one did, so nothing behind it is taken.
-	virtual bool PressOrb(uint32_t nowMs, uint32_t turn) = 0;
-	/// The action button came up: let go quickly, the bubble pressed is tapped and its miracle goes into the hand
-	virtual void ReleaseOrb(uint32_t nowMs, uint32_t turn) = 0;
+	/// A fireball tapped by the empty hand within the player's influence: another player's is caught into the hand, the
+	/// player's own slips through. Whether it was caught.
+	virtual bool TapFireBall(entt::entity ball) = 0;
+	/// A one-shot globe tapped by the empty hand: its miracle goes into the hand, charged in full, and the globe pops.
+	/// Whether the hand took the miracle.
+	virtual bool TapGlobe(entt::entity globe) = 0;
+	/// The action button went down with an empty hand: a fireball under the hand, within the player's influence, takes
+	/// the press. Whether one did, so nothing behind it is taken.
+	virtual bool PressFireBall(uint32_t nowMs, uint32_t turn) = 0;
+	/// Once a frame while the action button is down: a fireball pressed for as long as a tap may last is taken, which
+	/// catches it as a tap would
+	virtual void HoldFireBall(uint32_t nowMs, uint32_t turn) = 0;
+	/// The action button came up: let go quickly, the fireball pressed is tapped
+	virtual void ReleaseFireBall(uint32_t nowMs, uint32_t turn) = 0;
 	/// The one-shot bubble under the hand now, if any
 	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;
 	/// The action button went down with a miracle in the hand: it is armed, locked on or cast. Whether the miracles took
@@ -255,8 +261,6 @@ public:
 	[[nodiscard]] virtual magic::PourPose GetHandPour(float fraction) const = 0;
 	[[nodiscard]] virtual HandCastState GetHandCastState() const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeed() const = 0;
-	/// The one-shot bubble nearest along a line of sight, if any
-	[[nodiscard]] virtual std::optional<entt::entity> OrbAlong(glm::vec3 origin, glm::vec3 direction) const = 0;
 	[[nodiscard]] virtual HandResult GetLastHandResult() const = 0;
 	/// Once a frame, once the hand is posed: where the held miracle's in-hand effect sits, and how large the hand is
 	/// drawn, which is how large the effect is

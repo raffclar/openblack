@@ -41,6 +41,14 @@ void player_miracles::SetMagicTypeEnabled(Player::Miracles& miracles, MagicType 
 	}
 }
 
+void player_miracles::MarkMagicTypeEverEnabled(Player::Miracles& miracles, MagicType type)
+{
+	if (Known(type))
+	{
+		miracles.everEnabled.at(static_cast<size_t>(type)) = true;
+	}
+}
+
 bool player_miracles::IsMagicTypeEnabled(const Player::Miracles& miracles, MagicType type)
 {
 	if (miracles.allEnabled)

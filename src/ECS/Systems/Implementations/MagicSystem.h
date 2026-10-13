@@ -170,9 +170,11 @@ public:
 	void DeleteSeed(entt::entity seed) override;
 
 	void UpdateHand(const HandFrame& frame, float seconds) override;
-	bool TapAction() override;
-	bool PressOrb(uint32_t nowMs, uint32_t turn) override;
-	void ReleaseOrb(uint32_t nowMs, uint32_t turn) override;
+	bool TapFireBall(entt::entity ball) override;
+	bool TapGlobe(entt::entity globe) override;
+	bool PressFireBall(uint32_t nowMs, uint32_t turn) override;
+	void HoldFireBall(uint32_t nowMs, uint32_t turn) override;
+	void ReleaseFireBall(uint32_t nowMs, uint32_t turn) override;
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override;
 	bool PressAction() override;
 	void ReleaseAction() override;
@@ -180,9 +182,9 @@ public:
 	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override { return magic::PourPoseAt(_pour, fraction); }
 	[[nodiscard]] HandCastState GetHandCastState() const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return _held; }
-	[[nodiscard]] std::optional<entt::entity> OrbAlong(glm::vec3 origin, glm::vec3 direction) const override;
 	/// The nearest fireball the ray passes through that the hand may hold now, if any
-	[[nodiscard]] std::optional<entt::entity> FireBallAlong(glm::vec3 origin, glm::vec3 direction) const;
+	/// What the cursor picked under the hand, while the hand is over the world
+	[[nodiscard]] std::optional<entt::entity> PickedUnderHand() const;
 	/// A fireball of another player the hand takes hold of, as a tap or a grab starts, is caught into a fireball seed in
 	/// the hand; whether it was
 	bool CatchFireBall(entt::entity ball);
@@ -344,8 +346,6 @@ private:
 	[[nodiscard]] std::optional<Tribe> TribalPowerTribe(PlayerNames player, MagicType type) const;
 	/// A seed in the hand cast a new miracle: a tribe's power behind it is announced
 	void AfterSeedCast(const components::SpellSeed& seed, MagicType type);
-	/// A bubble taken by the hand: its miracle in the hand, the bubble popped
-	bool TapOrb(entt::entity orb);
 	/// Whether the hand, holding no miracle, has its point on the land in its player's influence
 	[[nodiscard]] bool EmptyHandInInfluence() const;
 	void DestroyOrb(entt::entity orb);
@@ -388,14 +388,14 @@ private:
 	magic::CastInput _input;
 	/// The action button is down
 	bool _actionDown {false};
-	/// A one-shot bubble the action button went down on, and when
-	struct OrbPress
+	/// A fireball the action button went down on, and when
+	struct FireBallPress
 	{
-		entt::entity orb {entt::null};
+		entt::entity ball {entt::null};
 		uint32_t pressMs {0};
 		uint32_t pressTurn {0};
 	};
-	std::optional<OrbPress> _orbPress;
+	std::optional<FireBallPress> _fireBallPress;
 	/// The hum of an armed seed
 	entt::entity _holdLoop {entt::null};
 	/// The pour of food or wood lifting and tipping the hand

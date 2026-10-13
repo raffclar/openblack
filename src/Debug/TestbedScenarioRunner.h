@@ -195,6 +195,8 @@ private:
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
 	std::optional<int> _fireBallTakeFrames;
+	/// The fireball the hand goes over to tap
+	entt::entity _fireBallTaken {entt::null};
 	/// When the miracles' positions are next logged, for a scenario that logs them
 	float _nextMiracleLog {0.0f};
 	Timeline _timeline;

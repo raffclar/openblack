@@ -950,7 +950,11 @@ struct GCreatureInfo: GLivingInfo
 	float field0x36c;
 	/// The poo a meal builds up for each unit of energy it gains
 	float pooPerEnergy;
-	std::array<uint8_t, 0xc> field0x374;
+	float field0x374;
+	/// How a creature's size turns into how much it impresses villagers: added to its size, which is then held between 1
+	/// and 4, and multiplied by this
+	float impressiveSizeAddition;
+	float impressiveSizeMultiplier;
 	/// How much its size counts against its strength in turning chants into energy
 	float spellSizeFactor;
 };
@@ -977,6 +981,8 @@ static_assert(offsetof(GCreatureInfo, secondsPerAgeTick) == 0x200);
 static_assert(offsetof(GCreatureInfo, field0x24c) == 0x24c);
 static_assert(offsetof(GCreatureInfo, field0x36c) == 0x36c);
 static_assert(offsetof(GCreatureInfo, field0x374) == 0x374);
+static_assert(offsetof(GCreatureInfo, impressiveSizeAddition) == 0x378);
+static_assert(offsetof(GCreatureInfo, impressiveSizeMultiplier) == 0x37c);
 
 struct GMagicRadiusSpellInfo: GMagicInfo
 {
@@ -1519,7 +1525,7 @@ struct DifferentCreatureInfo
 	float pooPerEnergy;
 	/// Overrides the creature row's field0x36c
 	float field0x54;
-	/// Overrides the creature row's field0x374 (its first four bytes)
+	/// Overrides the creature row's field0x374
 	float field0x58;
 };
 static_assert(sizeof(DifferentCreatureInfo) == 0x5c);
@@ -1883,7 +1889,8 @@ struct CreatureActionInfo
 	float energyCost;
 	float exhaustionCost;
 	uint32_t field0xc;
-	float field0x10;
+	/// How much doing the action impresses villagers watching the creature
+	float impressiveness;
 	std::array<char, 0x20> name;
 	uint32_t field0x34;
 	uint32_t field0x38;

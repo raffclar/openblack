@@ -33,6 +33,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerWorship.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Editor/EditorEntities.h"
@@ -220,7 +221,17 @@ void TempleVillagers::Draw() noexcept
 	DrawInside(survey);
 	if (_marks)
 	{
+		// The marks use the view on the screen. When the inspector overrides the camera, the marks use the override.
+		const bool inspector = Locator::inspector::has_value();
+		if (inspector)
+		{
+			Locator::inspector::value().ShowOverrideToPointer();
+		}
 		DrawMarks(survey);
+		if (inspector)
+		{
+			Locator::inspector::value().GiveCameraBack();
+		}
 	}
 }
 

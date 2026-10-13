@@ -15,9 +15,12 @@
 
 #include <cstdint>
 
+#include <span>
+
 #include <entt/entity/entity.hpp>
 
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "Enums.h"
 
 namespace openblack::ecs::systems
 {
@@ -32,6 +35,10 @@ public:
 	bool TakeHandKnock() override;
 
 private:
+	/// The knock on a building of a kind, built so far, of a town (none for none), with these people inside
+	bool Knock(AbodeType type, float built, entt::entity town, std::span<const entt::entity> inhabitants, glm::vec3 handPoint,
+	           bool ownHand);
+
 	/// The town last knocked on
 	entt::entity _knockedTown {entt::null};
 	/// Milliseconds left of the read-out, 0 when it isn't showing

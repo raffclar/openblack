@@ -34,6 +34,7 @@
 #include "Locator.h"
 #include "VillagerBuild.h"
 #include "VillagerDance.h"
+#include "VillagerFightWatch.h"
 #include "VillagerScript.h"
 
 using namespace openblack;
@@ -248,8 +249,7 @@ int32_t villager_animate::StateClip(entt::entity entity)
 		// TODO(villagers): the state of the town's match, once villagers play football
 		return Clip(animation::FootballWatchMatchClip(std::nullopt, random));
 	case animation::ClipChoice::WatchFight:
-		// TODO(villagers): watching fights; with no fight the game stands them
-		return Clip(AnimId::PStand);
+		return Clip(villager_fight_watch::WatchClip(entity));
 	case animation::ClipChoice::Dance:
 		// Its group's part of the dance; standing in none
 		return villager_dance::DanceClip(entity, Clip(WalkClipOf(entity, villager)));
