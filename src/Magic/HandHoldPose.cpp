@@ -183,102 +183,84 @@ glm::mat3 hand_hold::SeedTurn(const glm::mat3& basis, float yRotate, bool rightH
 	return {UnitOrNone(turnedX), UnitOrNone(basis[1]), UnitOrNone(turnedZ)};
 }
 
-void WorldPoseFade::Start()
+void WorldPoseFade::Change()
 {
-	_from = _lastDrawn;
+	std::swap(_drawn, _kept);
 	_time = 0.0f;
 }
 
-void WorldPoseFade::Apply(float seconds, const glm::mat4& model, std::vector<glm::mat4>& bones)
+void WorldPoseFade::Apply(float seconds, const glm::mat4& model, std::vector<glm::mat4>& bones, bool poseIntoKept)
 {
-	// A hand drawn at no size can't be posed back from the world
+	// The bones of a hand with no size cannot come back from the world
 	if (glm::determinant(glm::mat3(model)) == 0.0f)
 	{
 		return;
 	}
-	std::vector<glm::mat4> drawn(bones.size());
-	std::ranges::transform(bones, drawn.begin(), [&model](const glm::mat4& bone) { return model * bone; });
+	std::vector<glm::mat4> world(bones.size());
+	std::ranges::transform(bones, world.begin(), [&model](const glm::mat4& bone) { return model * bone; });
+	(poseIntoKept ? _kept : _drawn) = world;
+	// A pose that the hand never drew before is the pose of the frame
+	if (_drawn.size() != world.size())
+	{
+		_drawn = world;
+	}
+	if (_kept.size() != world.size())
+	{
+		_kept = world;
+	}
+	bool blended = false;
 	if (_time.has_value())
 	{
 		*_time += seconds;
-		if (*_time >= k_FadeSeconds || _from.size() != drawn.size())
+		if (*_time < k_FadeSeconds)
 		{
-			_time.reset();
+			const float t = *_time / k_FadeSeconds;
+			for (size_t bone = 0; bone < _drawn.size(); ++bone)
+			{
+				_drawn[bone] = (_drawn[bone] - _kept[bone]) * t + _kept[bone];
+			}
+			blended = true;
 		}
 		else
 		{
-			const float t = *_time / k_FadeSeconds;
-			const auto toModel = glm::inverse(model);
-			for (size_t bone = 0; bone < drawn.size(); ++bone)
-			{
-				drawn[bone] = _from[bone] + (drawn[bone] - _from[bone]) * t;
-				bones[bone] = toModel * drawn[bone];
-			}
+			_time.reset();
 		}
 	}
-	_lastDrawn = std::move(drawn);
+	if (!blended && !poseIntoKept)
+	{
+		return;
+	}
+	const auto toModel = glm::inverse(model);
+	for (size_t bone = 0; bone < bones.size(); ++bone)
+	{
+		bones[bone] = toModel * _drawn[bone];
+	}
 }
 
-void HandFade::Start(glm::vec3 position, const glm::mat3& rotation)
+void HeldFade::Change()
 {
-	_fromPosition = position;
-	_fromRotation = rotation;
+	_from = _placed.value_or(_from);
 	_time = 0.0f;
 }
 
-void HandFade::Step(float seconds, glm::vec3& position, glm::mat3& rotation)
+glm::vec3 HeldFade::Step(float seconds, glm::vec3 placed)
 {
+	// When the hand has no place yet, the blend starts at the place of this frame
+	if (!_placed.has_value())
+	{
+		_from = placed;
+	}
+	_placed = placed;
 	if (!_time.has_value())
 	{
-		return;
+		return glm::vec3(0.0f);
 	}
 	*_time += seconds;
 	if (*_time >= k_FadeSeconds)
 	{
 		_time.reset();
-		return;
+		return glm::vec3(0.0f);
 	}
 	const float t = *_time / k_FadeSeconds;
-	position = glm::mix(_fromPosition, position, t);
-	for (glm::length_t column = 0; column < 3; ++column)
-	{
-		rotation[column] = glm::mix(_fromRotation[column], rotation[column], t);
-	}
-}
-
-HandStage hand_hold::StageOf(bool holdsSeed, bool pulling, bool scooping, bool holdsThing)
-{
-	if (holdsSeed)
-	{
-		return HandStage::Holding;
-	}
-	if (pulling)
-	{
-		return HandStage::Pulling;
-	}
-	if (scooping)
-	{
-		return HandStage::Scooping;
-	}
-	return holdsThing ? HandStage::Holding : HandStage::Free;
-}
-
-glm::vec3 StageFade::Step(HandStage stage, float seconds, glm::vec3& position, glm::mat3& rotation)
-{
-	// The hand fades from where it was drawn; what it holds from where the hand was placed
-	if (_stage.has_value() && stage != *_stage && _placed.has_value())
-	{
-		_fade.Start(_drawn, _drawnRotation);
-		_heldFade.Start(*_placed, _drawnRotation);
-	}
-	_stage = stage;
-	_placed = position;
-	const auto placed = position;
-	auto held = position;
-	auto heldRotation = rotation;
-	_heldFade.Step(seconds, held, heldRotation);
-	_fade.Step(seconds, position, rotation);
-	_drawn = position;
-	_drawnRotation = rotation;
-	return held - placed;
+	return (placed - _from) * t + _from - placed;
 }

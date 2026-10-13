@@ -14,7 +14,6 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
-#include "3D/HandAnimation.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Common/Zoomer.h"
@@ -202,20 +201,6 @@ TEST(CreatureTouch, TheCameraWooshesFlyingBackFromFarAway)
 {
 	EXPECT_FALSE(creature_interact::WooshesFlyingBack({0.0f, 0.0f, 0.0f}, {150.0f, 0.0f, 0.0f}));
 	EXPECT_TRUE(creature_interact::WooshesFlyingBack({0.0f, 0.0f, 0.0f}, {150.1f, 0.0f, 0.0f}));
-}
-
-TEST(CreatureTouch, HeldToACreatureTheHandDropsToTheWiggleAtOnceButFadesIntoEveryOtherCycle)
-{
-	using State = HandAnimation::State;
-	using Cycle = HandAnimation::Cycle;
-	// Leaving the body, the caress turns back to the wiggle without a fade
-	EXPECT_FALSE(HandAnimation::FadesBetween(State::Creature, Cycle::Tickle, Cycle::Wiggle));
-	// Into the caress or the slap it fades, as everywhere else
-	EXPECT_TRUE(HandAnimation::FadesBetween(State::Creature, Cycle::Wiggle, Cycle::Tickle));
-	EXPECT_TRUE(HandAnimation::FadesBetween(State::Creature, Cycle::Tickle, Cycle::Slap));
-	EXPECT_TRUE(HandAnimation::FadesBetween(State::Creature, Cycle::Slap, Cycle::Tickle));
-	EXPECT_TRUE(HandAnimation::FadesBetween(State::Normal, Cycle::Stroke, Cycle::Wiggle));
-	EXPECT_FALSE(HandAnimation::FadesBetween(State::Creature, Cycle::Slap, Cycle::Slap));
 }
 
 TEST(CreatureTouch, TakingHoldTheHandsBackFacesTheCamera)

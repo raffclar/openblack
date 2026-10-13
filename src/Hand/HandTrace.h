@@ -56,7 +56,7 @@ struct Frame
 	/// Its wrist as posed, and that on the screen: a turn of the hand about its fingertips swings the wrist
 	glm::vec3 wrist {0.0f};
 	std::optional<glm::vec2> wristScreen;
-	/// What it is doing, as far as its drawing goes (0 free, 1 pulling, 2 holding, 3 scooping)
+	/// What the hand does, for its drawn pose: the value of hand_blend::HandMode
 	uint8_t stage {0};
 	bool busy {false};
 	std::optional<uint32_t> held;

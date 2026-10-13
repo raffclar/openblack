@@ -35,7 +35,7 @@ class MorphFile;
 /// The hand animations live in Data/CTR/hh.hbn, named by Data/hndspec5.txt. Each hand state plays a cycle (a C
 /// animation) and leans the hand with the two pose ranges that follow it in the spec (L animations, _lr and _fb).
 /// The lean comes from how far a spring-smoothed copy of the cursor trails the real one, so the hand sways as the
-/// mouse moves and settles when it stops. Changing pose cross-fades from the last one.
+/// mouse moves and settles when it stops.
 class HandAnimation
 {
 public:
@@ -81,11 +81,8 @@ public:
 	/// Advances the animation by a frame. cursor is the mouse position in window pixels. The fingers' pinch of a leash's
 	/// rope (HoldFingers) doesn't play: it is held still at pinchShare of its length.
 	void Update(std::chrono::microseconds dt, State state, Cycle cycle, glm::ivec2 cursor, float pinchShare = 0.0f);
-	/// Whether changing from one cycle to another cross-fades from the last pose or changes at once. Held to a creature,
-	/// a caress dropping back to the wiggle as the hand leaves the body changes at once; every other change fades.
-	[[nodiscard]] static bool FadesBetween(State state, Cycle from, Cycle to);
-	/// A frame of the hand holding a miracle's seed: a still frame of a cycle, without leaning. Taking hold, and letting
-	/// go (the next Update), cross-fade from the last pose; changing how it holds doesn't.
+	/// A frame of the hand that holds a thing: a still frame of a cycle, without lean. The blend of the drawn hand is not
+	/// part of the animation (see hand_blend).
 	void UpdateHeld(std::chrono::microseconds dt, Cycle cycle, uint32_t timeMs, glm::ivec2 cursor);
 	/// The spring-smoothed copy of the cursor catches it up at once, so no lean is left to build up from
 	void SettleCursor(glm::ivec2 cursor);
@@ -123,10 +120,6 @@ private:
 	void ComposeBoneMatrices(const std::vector<Pose>& poses);
 	/// The spring-smoothed cursor follows the cursor for some seconds
 	void StepCursorSpring(float seconds, glm::vec2 mouse);
-	/// The poses blended from the pose faded from, while a cross-fade lasts
-	void ApplyFade(float seconds, std::vector<Pose>& poses);
-	/// Starts a cross-fade from the last pose
-	void StartFade();
 
 	std::vector<std::optional<Animation>> _animations;
 	skeletal_animation::Skeleton _skeleton;
@@ -144,13 +137,6 @@ private:
 	glm::vec2 _smoothedVelocity {0.0f, 0.0f};
 	glm::vec2 _lean {0.0f, 0.0f};
 	glm::vec2 _cursorLag {0.0f, 0.0f};
-	/// It holds a miracle's seed
-	bool _holding {false};
-
-	/// The pose being faded from after the cycle or state changed
-	std::vector<Pose> _fadeFrom;
-	std::vector<Pose> _lastPoses;
-	std::optional<float> _fadeTime;
 };
 
 } // namespace openblack
