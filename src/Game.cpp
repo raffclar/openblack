@@ -1032,11 +1032,6 @@ void Game::UpdateHandInterface()
 	{
 		return;
 	}
-	// Nor is the panel shown while a script has the cinema bars in, whether or not the player's interface is put away
-	if (Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0)
-	{
-		return;
-	}
 	// The creature the hand is held to, or else the one it is over, any player's
 	const auto& creatureHand = Locator::creatureHandSystem::value();
 	auto creature = creatureHand.GetCreature();
@@ -2374,7 +2369,12 @@ bool Game::Update() noexcept
 
 		// Update Hand
 		{
-			// Put away, it stays where it was and does nothing until it comes back
+			// Put away, it stays where it was and does nothing until it comes back. The creature's panel is wanted afresh
+			// every frame, so with the hand away (a cut scene, a menu) it isn't left up from before
+			if (!IsHandDrawn() && _interface)
+			{
+				_interface->SetCreaturePanel(std::nullopt);
+			}
 			if (IsHandDrawn())
 			{
 				const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
