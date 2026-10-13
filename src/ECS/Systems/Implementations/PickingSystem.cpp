@@ -418,6 +418,13 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		const float scale = transform != nullptr ? transform->scale.x : 1.0f;
 		const auto box = mesh->GetBoundingBox();
 		const auto halfExtents = box.Size() * 0.5f;
+		// A miracle dispenser is also picked by a wide ball round the bubble it floats, which takes the dispenser itself.
+		// It is tested before the building, so it wins a tie
+		if (registry.AllOf<SpellDispenser>(entity) && transform != nullptr)
+		{
+			AddBall(entity, model, meshComponent->id, halfExtents,
+			        ecs::pick_shapes::DispenserBall(transform->position, halfExtents, scale));
+		}
 		_candidates.push_back({
 		    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
 		    .radius = glm::length(halfExtents) * scale,
@@ -433,12 +440,6 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			AddBall(entity, model, meshComponent->id, halfExtents,
 			        {.centre = highlight->centre, .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin});
-		}
-		// A miracle dispenser is also picked by a wide ball round the bubble it floats, which takes the dispenser itself
-		if (registry.AllOf<SpellDispenser>(entity) && transform != nullptr)
-		{
-			AddBall(entity, model, meshComponent->id, halfExtents,
-			        ecs::pick_shapes::DispenserBall(transform->position, halfExtents, scale));
 		}
 		// A miracle icon is also picked by a ball round the miracle's picture it holds up
 		if (const auto* shown = registry.TryGet<const IconSeed>(entity); shown != nullptr && shown->seed != SpellSeedType::None)
