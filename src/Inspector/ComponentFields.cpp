@@ -848,7 +848,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::cheat>("cheat");
 	Reflect<components::CreatureSwap>(context)
 	    .Field<&components::CreatureSwap::other>("other")
-	    .Field<&components::CreatureSwap::target>("target");
+	    .Field<&components::CreatureSwap::target>("target")
+	    .Field<&components::CreatureSwap::beam>("beam");
 	Reflect<components::DanceMove>(context)
 	    .Field<&components::DanceMove::action>("action")
 	    .Field<&components::DanceMove::first>("first")

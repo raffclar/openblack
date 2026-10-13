@@ -16,7 +16,7 @@
 #include <string_view>
 #include <utility>
 
-#include "Creature/CreatureSwap.h"
+#include "Creature/BonusCreatures.h"
 #include "Graphics/LandDetail.h"
 #include "Windowing/WindowingInterface.h"
 

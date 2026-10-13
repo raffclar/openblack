@@ -26,6 +26,7 @@
 #endif
 
 #include "Common/CrashHandler.h"
+#include "Creature/BonusCreatures.h"
 #include "EngineConfig.h"
 #include "Game.h"
 

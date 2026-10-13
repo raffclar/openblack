@@ -49,6 +49,7 @@
 #include "Camera.h"
 #include "Camera/Camera.h"
 #include "Console.h"
+#include "Creature/BonusCreatures.h"
 #include "CreatureSpawner.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"

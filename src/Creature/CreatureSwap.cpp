@@ -12,90 +12,38 @@
 #include <cmath>
 
 #include <algorithm>
-#include <array>
-#include <ranges>
+
+#include "Common/ModelInverseSquareRoot.h"
 
 using namespace openblack;
 using namespace openblack::creature_swap;
 
-std::optional<Bonus> creature_swap::BonusOf(int32_t species)
+bool creature_swap::IsBeamTurn(uint32_t turn)
 {
-	switch (species)
-	{
-	case 3:
-		return Bonus::Leopard;
-	case 6:
-		return Bonus::Horse;
-	case 14:
-		return Bonus::Mandrill;
-	case 15:
-		return Bonus::Rhino;
-	case 16:
-		return Bonus::Gorilla;
-	default:
-		return std::nullopt;
-	}
+	return turn % k_BeamEveryTurns == 0;
 }
 
-bool creature_swap::IsAvailable(int32_t species, const Unlocked& unlocked)
+particles::PlasmaCommand creature_swap::Beam(glm::vec3 from, glm::vec3 to, uint32_t alphaDraw)
 {
-	const auto bonus = BonusOf(species);
-	return !bonus.has_value() || unlocked.test(static_cast<size_t>(*bonus));
-}
-
-namespace
-{
-constexpr std::array<std::string_view, k_BonusCount> k_BonusNames {"leopard", "horse", "mandrill", "gorilla", "rhino"};
-
-bool SameIgnoringCase(std::string_view a, std::string_view b)
-{
-	const auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
-	return std::ranges::equal(a, b, {}, lower, lower);
-}
-
-std::string_view Trimmed(std::string_view text)
-{
-	const auto first = text.find_first_not_of(" \t");
-	if (first == std::string_view::npos)
+	// Points nearer each other than a hundredth have the beam leave straight up
+	constexpr float k_SamePointSquared = 0.0001f;
+	auto direction = to - from;
+	if (direction.z * direction.z + direction.y * direction.y + direction.x * direction.x < k_SamePointSquared)
 	{
-		return {};
+		direction = {0.0f, 1.0f, 0.0f};
 	}
-	return text.substr(first, text.find_last_not_of(" \t") - first + 1);
-}
-} // namespace
-
-std::string_view creature_swap::NameOf(Bonus bonus)
-{
-	return k_BonusNames.at(static_cast<size_t>(bonus));
-}
-
-std::optional<Unlocked> creature_swap::ParseUnlocked(std::string_view text)
-{
-	Unlocked unlocked;
-	if (SameIgnoringCase(Trimmed(text), "all"))
-	{
-		return unlocked.set();
-	}
-	if (SameIgnoringCase(Trimmed(text), "none"))
-	{
-		return unlocked;
-	}
-	if (Trimmed(text).empty())
-	{
-		return std::nullopt;
-	}
-	for (const auto part : text | std::views::split(','))
-	{
-		const auto name = Trimmed(std::string_view(part.begin(), part.end()));
-		const auto found =
-		    std::ranges::find_if(k_BonusNames, [name](std::string_view known) { return SameIgnoringCase(known, name); });
-		if (found == k_BonusNames.end())
-		{
-			return std::nullopt;
-		}
-		unlocked.set(static_cast<size_t>(std::distance(k_BonusNames.begin(), found)));
-	}
-	return unlocked;
+	// Normalised with the 3D engine's own inverse square root
+	direction *=
+	    gutils::ModelInverseSquareRoot(direction.z * direction.z + direction.y * direction.y + direction.x * direction.x);
+	return {
+	    .start = from,
+	    .end = to,
+	    .startTangent = direction,
+	    .endTangent = direction,
+	    .life = k_BeamLife,
+	    .speed = k_BeamSpeed,
+	    .alpha = static_cast<uint8_t>(k_BeamLowestAlpha + alphaDraw),
+	};
 }
 
 bool creature_swap::IsSettled(const Shape& now, const Shape& target)

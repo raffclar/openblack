@@ -42,6 +42,7 @@
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "Creature/BonusCreatures.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/ArtefactRules.h"
 #include "ECS/Components/Animal.h"
