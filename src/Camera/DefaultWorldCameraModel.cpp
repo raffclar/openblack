@@ -1242,10 +1242,12 @@ void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
 	_originFocusDistanceAtInteractionStart = glm::distance(origin, focus);
 	_arcBallRadius = 0.0f;
 	_screenSpaceMouseRaycastHitAtClick.reset();
-	// No flight carries it off, and a drag of the land held meanwhile grips the land again as the camera now looks at it
-	_flightPath.reset();
-	_mode = Mode::Cartesian;
+	// A flight continues from here. Its clock stops, thus after its first part the camera stays here. A control of the
+	// camera stops the flight. A movement that runs for half the flight time starts the last part of the flight.
+	// A double tap that waits for this frame flies the camera from here.
+	_mode = _mode == Mode::FlyingToPoint ? Mode::FlyingToPoint : Mode::Cartesian;
 	_modePrev = Mode::Cartesian;
+	// A drag of the land that the player holds takes the land again as the camera now looks at it
 	_dragging = false;
 	_dragGivenUp = false;
 	_landGrip.reset();

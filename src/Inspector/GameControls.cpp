@@ -270,7 +270,7 @@ std::string GameCamera::Set(const CameraPose& pose)
 	{
 		return "a script holds the camera and moves it itself";
 	}
-	// Still, with any flight, drag or easing under way forgotten, so that it stays until the player or a script moves it
+	// Put the camera there with no speed, as the script commands do. A flight continues as the camera model decides.
 	camera.Place(pose.origin, pose.focus);
 	return {};
 }
