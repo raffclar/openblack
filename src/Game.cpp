@@ -4207,8 +4207,18 @@ void Game::PrepareNewLand(land_change::Kind change)
 			break;
 		}
 	}
-	// The scripts start again, and the help's texts and voices with them
-	Locator::helpTextSystem::value().Reset();
+	// The help's texts stay through the story's change of land, still to be read: the game's turns start again from
+	// nothing on the next land, so a text timed by turns reads as read only once they pass its end on the last land, and
+	// is clicked away only once they pass when it came. Its voices stop with every other sound. When the scripts start
+	// again, the texts go with them
+	if (rules.helpTextsKept)
+	{
+		Locator::helpTextSystem::value().StopVoices();
+	}
+	else
+	{
+		Locator::helpTextSystem::value().Reset();
+	}
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints, nor a scare of its fish

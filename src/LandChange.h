@@ -47,6 +47,8 @@ struct Rules
 	bool scriptScreenKept;
 	/// Each player's heartbeat beats on as it was, rather than starting calm
 	bool heartbeatsCarried;
+	/// The help's texts stay in the dialogue as they were, only their voices stopping with every other sound
+	bool helpTextsKept;
 };
 
 [[nodiscard]] constexpr Rules RulesFor(Kind kind)
@@ -54,14 +56,14 @@ struct Rules
 	switch (kind)
 	{
 	case Kind::Story:
-		return {.advisors = Advisors::CarryOn, .scriptScreenKept = true, .heartbeatsCarried = true};
+		return {.advisors = Advisors::CarryOn, .scriptScreenKept = true, .heartbeatsCarried = true, .helpTextsKept = true};
 	case Kind::FreshScripts:
-		return {.advisors = Advisors::SentHome, .scriptScreenKept = false, .heartbeatsCarried = true};
+		return {.advisors = Advisors::SentHome, .scriptScreenKept = false, .heartbeatsCarried = true, .helpTextsKept = false};
 	case Kind::NewGame:
 	case Kind::Testbed:
 		break;
 	}
-	return {.advisors = Advisors::Afresh, .scriptScreenKept = false, .heartbeatsCarried = false};
+	return {.advisors = Advisors::Afresh, .scriptScreenKept = false, .heartbeatsCarried = false, .helpTextsKept = false};
 }
 
 } // namespace openblack::land_change

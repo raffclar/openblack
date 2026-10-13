@@ -19,6 +19,7 @@ TEST(LandChange, TheStoryKeepsEverythingThatIsNotTheLands)
 	EXPECT_EQ(rules.advisors, Advisors::CarryOn);
 	EXPECT_TRUE(rules.scriptScreenKept);
 	EXPECT_TRUE(rules.heartbeatsCarried);
+	EXPECT_TRUE(rules.helpTextsKept);
 }
 
 TEST(LandChange, TheLandMenuStartsTheScriptsAgainButKeepsThePlayers)
@@ -27,6 +28,7 @@ TEST(LandChange, TheLandMenuStartsTheScriptsAgainButKeepsThePlayers)
 	EXPECT_EQ(rules.advisors, Advisors::SentHome);
 	EXPECT_FALSE(rules.scriptScreenKept);
 	EXPECT_TRUE(rules.heartbeatsCarried);
+	EXPECT_FALSE(rules.helpTextsKept);
 }
 
 TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
@@ -37,5 +39,6 @@ TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
 		EXPECT_EQ(rules.advisors, Advisors::Afresh);
 		EXPECT_FALSE(rules.scriptScreenKept);
 		EXPECT_FALSE(rules.heartbeatsCarried);
+		EXPECT_FALSE(rules.helpTextsKept);
 	}
 }
