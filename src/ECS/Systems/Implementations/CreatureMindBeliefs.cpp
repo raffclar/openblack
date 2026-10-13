@@ -21,30 +21,38 @@
 
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "3D/L3DMesh.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureLook.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "CreatureMindSystem.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/LandForest.h"
+#include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
+#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -121,6 +129,58 @@ glm::vec3 PlaceOf(const ecs::Registry& registry, entt::entity thing)
 	return glm::vec3(0.0f);
 }
 
+/// How tall a creature is at size 1
+constexpr float k_CreatureHeightOfSizeOne = 15.0f;
+
+/// Whether a thing moved in its last game turn, as a creature sees it:
+/// - A creature moves while it walks to a place or to a thing.
+/// - A firefly always moves.
+/// - A thing in the air moves.
+/// - An animal or a villager moves when its last turn took it across the land.
+/// - Nothing else moves.
+bool MovedLastTurn(const ecs::Registry& registry, entt::entity thing)
+{
+	if (registry.AllOf<Creature>(thing))
+	{
+		const auto* walk = registry.TryGet<const CreatureLocomotion>(thing);
+		return walk != nullptr && walk->destination.has_value() && !walk->facingOnly;
+	}
+	if (registry.AnyOf<Firefly, InPhysics>(thing))
+	{
+		return true;
+	}
+	if (const auto* animal = registry.TryGet<const Animal>(thing))
+	{
+		return glm::xz(animal->position) != glm::xz(animal->previousPosition);
+	}
+	if (const auto* pose = registry.TryGet<const VillagerPose>(thing))
+	{
+		return pose->movedLastTurn;
+	}
+	return false;
+}
+
+/// How tall a thing is: a creature by its size, anything else by its model as the thing is scaled, and 0 without a model
+float HeightOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (const auto* creature = registry.TryGet<const Creature>(thing))
+	{
+		return k_CreatureHeightOfSizeOne * ShownSize(*creature);
+	}
+	const auto* transform = registry.TryGet<const Transform>(thing);
+	const auto* mesh = registry.TryGet<const Mesh>(thing);
+	if (transform == nullptr || mesh == nullptr || !Locator::resources::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(mesh->id))
+	{
+		return 0.0f;
+	}
+	return meshes.Handle(mesh->id)->GetBoundingBox().Size().y * transform->scale.y;
+}
+
 /// The way a creature looks, as a game angle: towards what its head is turned to, or else the way its body faces
 uint16_t LookingAngle(const Transform& transform, const std::optional<glm::vec3>& lookAt)
 {
@@ -164,12 +224,20 @@ entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapC
 }
 } // namespace
 
-void CreatureMindSystem::ComeAcross(components::CreatureMindState& mind, entt::entity thing)
+void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureMindState& mind, entt::entity thing)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(thing))
 	{
 		return;
+	}
+	// The last moving thing that it comes across is the one that it noticed last, whatever the thing is
+	if (creature_look::Notices(thing == creature, MovedLastTurn(registry, thing)))
+	{
+		// An animal is drawn between its last two turns: the creature notices where the animal is now
+		const auto* animal = registry.TryGet<const Animal>(thing);
+		const auto at = animal != nullptr ? animal->position : PlaceOf(registry, thing);
+		mind.noticedMover = {.at = glm::xz(at), .height = HeightOf(registry, thing), .turn = mind.turn};
 	}
 	const auto kind = BeliefKindOf(registry, thing);
 	if (!kind.has_value())
@@ -184,7 +252,7 @@ void CreatureMindSystem::ComeAcross(components::CreatureMindState& mind, entt::e
 	}
 	if (const auto owner = BelongsTo(thing); owner.has_value() && *owner != thing)
 	{
-		ComeAcross(mind, *owner);
+		ComeAcross(creature, mind, *owner);
 	}
 }
 
@@ -194,7 +262,8 @@ void CreatureMindSystem::ForgetGoneThings(components::CreatureMindState& mind)
 	mind.beliefs.ForgetIf([&registry](entt::entity thing) { return !registry.Valid(thing); });
 }
 
-void CreatureMindSystem::NoteNearestTemple(components::CreatureMindState& mind, const Transform& transform)
+void CreatureMindSystem::NoteNearestTemple(entt::entity creature, components::CreatureMindState& mind,
+                                           const Transform& transform)
 {
 	// Each time it goes into another cell it looks for the nearest temple, which it comes across if it is another than
 	// the last it found
@@ -209,11 +278,11 @@ void CreatureMindSystem::NoteNearestTemple(components::CreatureMindState& mind, 
 	if (temple != entt::null && temple != mind.nearestTemple)
 	{
 		mind.nearestTemple = temple;
-		ComeAcross(mind, temple);
+		ComeAcross(creature, mind, temple);
 	}
 }
 
-void CreatureMindSystem::SweepEyes(const Creature& creature, components::CreatureMindState& mind,
+void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature, components::CreatureMindState& mind,
                                    const CreatureAnimation& animation, const Transform& transform)
 {
 	if (!Locator::entitiesMap::has_value())
@@ -238,7 +307,7 @@ void CreatureMindSystem::SweepEyes(const Creature& creature, components::Creatur
 		// The things that stay put, then the things that move
 		for (const auto thing : map.GetAllInCell(cell))
 		{
-			ComeAcross(mind, thing);
+			ComeAcross(entity, mind, thing);
 		}
 	}
 }

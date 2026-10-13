@@ -2544,6 +2544,32 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "senses.look_at_mover",
+	    .name = "Looks at a thing that moves as it walks",
+	    .facet = Facet::Senses,
+	    .description = "A tiger on the learning leash is told to go to a point far to the north. Behind it, two "
+	                   "villagers walk away to the west and to the east.",
+	    .expected = "On its way the head looks at the point for two seconds. For the next two seconds it turns back to "
+	                "a villager that walks, at the place where the tiger last saw the villager move. Then it looks from "
+	                "side to side for two seconds. Near the point it looks only at the point.",
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}, {0.0f, 110.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticForesterMale,
+	                 .offset = {-30.0f, -5.0f},
+	                 .walkTo = glm::vec2(-90.0f, -5.0f),
+	                 .walkAfterSeconds = 1.0f,
+	                 .walkRepeatSeconds = 30.0f},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {30.0f, -5.0f},
+	                 .walkTo = glm::vec2(90.0f, -5.0f),
+	                 .walkAfterSeconds = 1.0f,
+	                 .walkRepeatSeconds = 30.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {0.0f, 110.0f}, 2.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, 0.0f}, 30.0f, false)},
+	    .repeatFrom = 1,
+	});
+
+	all.push_back({
 	    .id = "leash.temple_leashes",
 	    .name = "The leashes hanging on the temple",
 	    .facet = Facet::Leash,

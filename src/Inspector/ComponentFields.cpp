@@ -742,6 +742,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::scriptPlay>("scriptPlay")
 	    .Field<&components::CreatureMindState::look>("look")
 	    .Field<&components::CreatureMindState::goingLook>("goingLook")
+	    .Field<&components::CreatureMindState::noticedMover>("noticedMover")
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
@@ -1843,6 +1844,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::bones>("bones")
 	    .Field<&components::VillagerPose::clipBones>("clipBones")
 	    .Field<&components::VillagerPose::turnStart>("turnStart")
+	    .Field<&components::VillagerPose::movedLastTurn>("movedLastTurn")
 	    .Field<&components::VillagerPose::drawnAt>("drawnAt")
 	    .Field<&components::VillagerPose::drawnHeading>("drawnHeading")
 	    .Field<&components::VillagerPose::easedHeading>("easedHeading")
@@ -2230,6 +2232,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_locomotion::Speeds>(context, ValueOnly {})
 	    .Field<&openblack::creature_locomotion::Speeds::walk>("walk")
 	    .Field<&openblack::creature_locomotion::Speeds::run>("run");
+	Reflect<openblack::creature_look::NoticedMover>(context, ValueOnly {})
+	    .Field<&openblack::creature_look::NoticedMover::at>("at")
+	    .Field<&openblack::creature_look::NoticedMover::height>("height")
+	    .Field<&openblack::creature_look::NoticedMover::turn>("turn");
 	Reflect<openblack::creature_look::Target>(context, ValueOnly {})
 	    .Field<&openblack::creature_look::Target::id>("id")
 	    .Field<&openblack::creature_look::Target::kind>("kind")

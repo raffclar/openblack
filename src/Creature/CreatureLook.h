@@ -107,7 +107,8 @@ struct WhileGoing
 	{
 		/// At the place
 		Place,
-		/// At what it watches, or else at the place
+		/// At what it watches. If it watches nothing, at the last moving thing that it noticed in the last two seconds.
+		/// If there is no such thing, at the place.
 		Watched,
 		/// The sweep from side to side
 		Sweep,
@@ -130,6 +131,25 @@ constexpr float k_WhileGoingLeast = 8.0f;
 /// Each look continues for two seconds of turns, then the next look starts
 constexpr float k_WhileGoingLookSeconds = 2.0f;
 
+/// The last moving thing that the creature noticed. The creature keeps the point where it noticed the thing, the height
+/// of the thing and the game turn. The point does not follow the thing.
+struct NoticedMover
+{
+	glm::vec2 at {0.0f};
+	/// The height of the thing above the ground
+	float height {0.0f};
+	uint32_t turn {0};
+};
+
+/// Whether the creature notices a thing that it comes across, so that the thing becomes its last noticed mover. The
+/// thing must move, and it must not be the creature itself.
+[[nodiscard]] bool Notices(bool itself, bool moving);
+
+/// The look uses a noticed mover for this many seconds of turns after the creature noticed it
+constexpr float k_MoverSeconds = 2.0f;
+/// Whether the creature noticed a mover in a turn that is recent enough for the look in this game turn
+[[nodiscard]] bool IsRecent(uint32_t noticedTurn, uint32_t turn, float turnsPerSecond);
+
 /// What the creature knows as it walks, for its look
 struct WhileGoingView
 {
@@ -139,6 +159,12 @@ struct WhileGoingView
 	glm::vec2 place {0.0f};
 	/// The point of what the creature watches, if it watches something
 	std::optional<glm::vec3> watched;
+	/// The point of the last moving thing that the creature noticed. Its y is the ground below the point plus the height
+	/// of the thing.
+	std::optional<glm::vec3> mover;
+	/// The game turn when the creature noticed the mover, and the game turn now
+	uint32_t moverTurn {0};
+	uint32_t turn {0};
 	float turnsPerSecond {10.0f};
 };
 /// What the head looks at in this turn of the walk. It is empty within k_WhileGoingLeast of the place: then the creature

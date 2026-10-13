@@ -48,6 +48,9 @@ struct CreatureMindState
 	creature_look::Target look {};
 	/// The look while it walks to a place, started from the creature info at the first walk
 	std::optional<creature_look::WhileGoing> goingLook;
+	/// The last moving thing that it noticed as it came across things, for the look while it walks. The turn is a turn of
+	/// this mind.
+	std::optional<creature_look::NoticedMover> noticedMover;
 	/// Whether the head turns to what it watches this turn
 	bool lookingAbout {false};
 	/// What a script has it keep its head turned to, whatever it is doing, until the script lets it go: a thing (looked

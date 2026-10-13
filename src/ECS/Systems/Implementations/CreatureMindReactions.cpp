@@ -116,7 +116,7 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	const bool there = thing != entt::null && registry.Valid(thing);
 	if (setup.comesAcross && there)
 	{
-		ComeAcross(*mind, thing);
+		ComeAcross(creature, *mind, thing);
 	}
 	if (setup.plan.has_value() && (setup.plan->onSelf || there))
 	{

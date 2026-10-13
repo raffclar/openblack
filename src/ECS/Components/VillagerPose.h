@@ -39,6 +39,8 @@ struct VillagerPose
 	std::vector<glm::mat4> clipBones;
 	/// Where it stood when the last turn began, from where its drawing glides while it walks
 	std::optional<glm::vec3> turnStart;
+	/// Whether the last turn took it across the land, from where it stood when that turn began
+	bool movedLastTurn {false};
 	/// Where it is drawn this frame and the heading it is drawn with (the game's angle), once its drawing has worked
 	/// them out; none while it lies in the physics or the hand holds it, when it is drawn where it is
 	std::optional<glm::vec3> drawnAt;

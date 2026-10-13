@@ -284,6 +284,7 @@ void Fish(std::vector<Step>& agenda, const creature_mind::FishingTrip& trip)
 	Step walk {.kind = Step::Kind::Move};
 	walk.movement = {
 	    .kind = Movement::Kind::ToPoint, .point = trip.shoal, .maxDistance = trip.arriveWithin, .giveUpIfUnreachable = true};
+	walk.gaze = GoingLook();
 	agenda.push_back(walk);
 	// Its hand must be free to take the food
 	if (trip.putDownFirst)
@@ -328,6 +329,7 @@ std::vector<Step> creature_mind::TakeFishTo(const std::optional<FishingTrip>& tr
 	}
 	Step walk {.kind = Step::Kind::Move};
 	walk.movement = {.kind = Movement::Kind::ToPoint, .point = place, .maxDistance = height, .giveUpIfUnreachable = true};
+	walk.gaze = GoingLook();
 	agenda.push_back(walk);
 	agenda.push_back(Object({.kind = ObjectOrder::Kind::PutDown}));
 	return agenda;
@@ -346,7 +348,8 @@ std::vector<Step> creature_mind::Drink(glm::vec2 shore, glm::vec2 water)
 	                      .object = std::nullopt,
 	                      .run = false,
 	                      .minDistance = 0.0f,
-	                      .maxDistance = k_DrinkReach}},
+	                      .maxDistance = k_DrinkReach},
+	         .gaze = GoingLook()},
 	        {.kind = Step::Kind::Move,
 	         .seconds = 0.0f,
 	         .animation = 0,
@@ -608,7 +611,8 @@ std::vector<Step> creature_mind::HangAround(const Random& random)
 	                                        .object = std::nullopt,
 	                                        .run = false,
 	                                        .minDistance = 0.0f,
-	                                        .maxDistance = 1.0f}},
+	                                        .maxDistance = 1.0f},
+	                           .gaze = GoingLook()},
 	                          SitDown(random)};
 	return WithFace(std::move(agenda), creature_face::Cue::Idle);
 }

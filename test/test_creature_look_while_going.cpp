@@ -114,3 +114,54 @@ TEST(CreatureLookWhileGoing, TheSweepLooksAtTheGroundAhead)
 	EXPECT_NEAR(glm::length(point->at), 15.0f, 0.05f);
 	EXPECT_FALSE(point->height.has_value());
 }
+
+TEST(CreatureLookWhileGoing, WithNothingWatchedTheSecondLookIsAtARecentMover)
+{
+	auto state = StartWhileGoing(k_Info);
+	state.look = WhileGoing::Look::Watched;
+	auto view = k_Far;
+	view.mover = glm::vec3(-20.0f, 7.0f, 50.0f);
+	view.moverTurn = 100;
+	view.turn = 119;
+	const auto mover = LookWhileGoing(state, k_Info, view);
+	ASSERT_TRUE(mover.has_value());
+	EXPECT_NEAR(mover->at.x, -20.0f, k_Tolerance);
+	EXPECT_NEAR(mover->at.y, 50.0f, k_Tolerance);
+	ASSERT_TRUE(mover->height.has_value());
+	EXPECT_NEAR(*mover->height, 7.0f, k_Tolerance);
+	// What it watches comes first
+	view.watched = glm::vec3(40.0f, 12.0f, 30.0f);
+	const auto watched = LookWhileGoing(state, k_Info, view);
+	ASSERT_TRUE(watched.has_value());
+	EXPECT_NEAR(watched->at.x, 40.0f, k_Tolerance);
+}
+
+TEST(CreatureLookWhileGoing, AMoverNoticedTwoSecondsAgoIsTooOld)
+{
+	auto state = StartWhileGoing(k_Info);
+	state.look = WhileGoing::Look::Watched;
+	auto view = k_Far;
+	view.mover = glm::vec3(-20.0f, 7.0f, 50.0f);
+	view.moverTurn = 100;
+	view.turn = 120;
+	const auto point = LookWhileGoing(state, k_Info, view);
+	ASSERT_TRUE(point.has_value());
+	EXPECT_NEAR(point->at.y, 100.0f, k_Tolerance);
+	EXPECT_FALSE(point->height.has_value());
+}
+
+TEST(CreatureLookWhileGoing, ARecentMoverIsInTheLastTwoSecondsOfTurns)
+{
+	EXPECT_TRUE(IsRecent(100, 100, 10.0f));
+	EXPECT_TRUE(IsRecent(100, 119, 10.0f));
+	EXPECT_FALSE(IsRecent(100, 120, 10.0f));
+	// The count of turns can go round to zero
+	EXPECT_TRUE(IsRecent(0xFFFFFFFFu, 5, 10.0f));
+}
+
+TEST(CreatureLookWhileGoing, ItNoticesOnlyAMovingThingThatIsNotItself)
+{
+	EXPECT_TRUE(Notices(false, true));
+	EXPECT_FALSE(Notices(true, true));
+	EXPECT_FALSE(Notices(false, false));
+}
