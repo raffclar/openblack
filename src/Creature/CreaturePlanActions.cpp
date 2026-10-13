@@ -30,7 +30,6 @@ namespace
 {
 /// Actions of the creature's animation set that have no name elsewhere
 constexpr size_t k_Sneeze = 62;
-constexpr size_t k_LookAtMe = 69;
 constexpr size_t k_PickMe = 74;
 /// Following something about and gazing at the view last this long
 constexpr float k_FollowSeconds = 8.0f;
@@ -49,10 +48,7 @@ constexpr std::array k_Executors {
     Executor {
         .action = "EatFromFoodPile", .target = Target::MagicFoodPile, .build = Build::EatFromPile, .activity = Activity::Eat},
     Executor {.action = "SleepOnTheSpot", .build = Build::Sleep, .activity = Activity::Sleep},
-    // TODO(creature-poo-steps): the game does a poo by a thing (Target::PooedOn). The planner here weighs the actions in
-    // groups by their target, but the game chooses the action first and then the thing. Until the planner does that, a
-    // poo by a thing almost never wins against a fart, so the poo is done on the spot
-    Executor {.action = "Poo", .build = Build::Poo, .activity = Activity::Poo},
+    Executor {.action = "Poo", .target = Target::PooedOn, .build = Build::Poo, .activity = Activity::Poo},
     Executor {.action = "Fart", .build = Build::Fart, .activity = Activity::Poo},
     Executor {.action = "PooAtHome", .build = Build::PooAtHome, .activity = Activity::Poo},
     Executor {.action = "Puke", .build = Build::Puke, .activity = Activity::Puke},
@@ -144,7 +140,7 @@ constexpr std::array k_Executors {
     Executor {.action = "HangAroundAtHome", .build = Build::HangAround, .activity = Activity::HangAround},
     Executor {.action = "CommunicateState", .build = Build::ShowDesire, .activity = Activity::ShowDesire},
     Executor {.action = "WaveAtPlayer", .build = Build::FaceCameraEmote, .animation = animations::k_FriendlyWave},
-    Executor {.action = "LookAtHand", .build = Build::FaceCameraEmote, .animation = k_LookAtMe},
+    Executor {.action = "LookAtHand", .build = Build::LookAtHand},
     Executor {.action = "PointAtCamera", .build = Build::PointAtCamera},
     Executor {.action = "BePatheticToPlayer", .build = Build::FaceCameraEmote, .animation = k_PickMe},
     Executor {.action = "HowlAtPlayer", .build = Build::FaceCameraEmote, .animation = animations::k_Summon},
@@ -160,6 +156,8 @@ constexpr std::array k_Executors {
     Executor {
         .action = "Stroke", .target = Target::Villager, .build = Build::ApproachEmote, .animation = animations::k_FeelingNice},
     Executor {.action = "SmileAtFriend", .target = Target::Creature, .build = Build::SmileAt},
+    Executor {.action = "InspectCreature", .target = Target::Creature, .build = Build::InspectCreature},
+    Executor {.action = "LookAtFlyingObject", .target = Target::Anything, .build = Build::LookAtFlyingObject},
     Executor {.action = "WaveAtFriend",
               .target = Target::Creature,
               .build = Build::ApproachEmote,
@@ -403,6 +401,12 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::SmileAt(*object, situation.height, situation.chance, random);
 	case Build::WaveAt:
 		return creature_mind::WaveAt(*object, situation.height);
+	case Build::InspectCreature:
+		return creature_mind::InspectCreature(*object, situation.height);
+	case Build::LookAtFlyingObject:
+		return creature_mind::LookAtFlyingObject(*object, random);
+	case Build::LookAtHand:
+		return creature_mind::LookAtHand();
 	case Build::BeFrightened:
 		return creature_mind::BeFrightenedOnTheSpot();
 	case Build::PutDown:
