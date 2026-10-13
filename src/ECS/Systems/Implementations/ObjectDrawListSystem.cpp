@@ -12,6 +12,7 @@
 #include "ObjectDrawListSystem.h"
 
 #include <algorithm>
+#include <array>
 
 #include <LNDFile.h>
 
@@ -24,6 +25,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "Graphics/LandDetail.h"
 #include "Locator.h"
 
 using namespace openblack::ecs::systems;
@@ -32,6 +34,9 @@ namespace object_draw_list = openblack::object_draw_list;
 
 namespace
 {
+/// Bit 1 of a cell's flags marks open sea, where the land is not drawn
+constexpr uint8_t k_OpenSeaFlag = 0x02;
+
 /// Things drawn on their own, never by the list: the temple, and things the scripts draw in high detail
 bool DrawnOnTheirOwn(const openblack::ecs::Registry& registry, entt::entity entity)
 {
@@ -75,8 +80,10 @@ void ObjectDrawListSystem::LoadBlocks()
 	{
 		return;
 	}
-	for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+	for (size_t i = 0; i < blocks.size(); ++i)
 	{
+		const auto& block = blocks[i];
 		const auto& lnd = block.GetLndBlock();
 		if (lnd == nullptr)
 		{
@@ -88,8 +95,17 @@ void ObjectDrawListSystem::LoadBlocks()
 		{
 			highest = std::max(highest, cell.altitude);
 		}
-		_blocks.push_back({.block = {.corner = block.GetMapPosition(), .highestAltitude = highest, .reflected = true},
-		                   .at = block.GetBlockPosition()});
+		// Its triangles as the game draws a near block: every cell, with the open sea left out
+		std::array<graphics::land_detail::CellFlags, graphics::land_detail::k_CornerCount> flags;
+		std::ranges::transform(lnd->cells, flags.begin(), [](const lnd::LNDCell& cell) {
+			return graphics::land_detail::CellFlags {.split = cell.properties.split != 0,
+			                                         .openSea = (cell.flags & k_OpenSeaFlag) != 0};
+		});
+		_blocks.push_back(
+		    {.block = {.corner = block.GetMapPosition(), .highestAltitude = highest, .reflected = true},
+		     .at = block.GetBlockPosition(),
+		     .landIndex = i,
+		     .triangles = graphics::land_detail::BlockTriangles(graphics::land_detail::Mesh::Full, 0, true, flags)});
 	}
 }
 
@@ -111,13 +127,16 @@ void ObjectDrawListSystem::Update(uint32_t turn)
 	                                .focalHeight = projection[1][1],
 	                                .aspect = projection[0][0] != 0.0f ? projection[1][1] / projection[0][0] : 1.0f,
 	                                .eye = camera.GetOrigin()};
-	// A change in the blocks in view makes the list again
+	// A block in view that starts or stops to show triangles makes the list again
 	bool changed = false;
 	for (auto& block : _blocks)
 	{
-		const bool inView = object_draw_list::BlockInView(_view->viewProjection, _view->nearPlane, block.block);
-		changed = changed || inView != block.inView;
-		block.inView = inView;
+		block.inView = object_draw_list::BlockInView(_view->viewProjection, _view->nearPlane, block.block);
+		if (block.inView)
+		{
+			const bool shows = Shows(block, _view->viewProjection, _view->nearPlane, _view->eye);
+			changed = object_draw_list::ShowingChanged(shows, block.shown) || changed;
+		}
 	}
 	// Things made since the last frame go onto their blocks now, as the game puts them there when they are made
 	static_cast<void>(Locator::entitiesMap::value().GetOffBlocks());
@@ -131,6 +150,26 @@ void ObjectDrawListSystem::Update(uint32_t turn)
 		_madeAt = turn;
 		MakeList();
 	}
+}
+
+bool ObjectDrawListSystem::Shows(const LandBlock& block, const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye)
+{
+	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+	const auto* cells = block.landIndex < blocks.size() ? blocks[block.landIndex].GetCells() : nullptr;
+	if (cells == nullptr)
+	{
+		return false;
+	}
+	// The corners stand at the heights the cells have now
+	const auto cornerAt = [&block, cells](uint16_t corner) {
+		const auto x = static_cast<float>(corner / graphics::land_detail::k_CornersPerSide);
+		const auto z = static_cast<float>(corner % graphics::land_detail::k_CornersPerSide);
+		return glm::vec3(block.block.corner.x + x * LandIslandInterface::k_CellSize,
+		                 static_cast<float>(cells[corner].altitude) * object_draw_list::k_AltitudeUnit,
+		                 block.block.corner.y + z * LandIslandInterface::k_CellSize);
+	};
+	return object_draw_list::BlockShowsWith(viewProjection, nearPlane, eye, graphics::land_detail::k_CornerCount, cornerAt,
+	                                        block.triangles);
 }
 
 void ObjectDrawListSystem::MakeList()

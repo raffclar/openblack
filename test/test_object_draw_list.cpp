@@ -7,9 +7,14 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
+#include <array>
 #include <map>
 #include <vector>
 
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/MapCells.h"
@@ -221,4 +226,52 @@ TEST(BlockLists, TheCellListsKeepTheBlocks)
 	EXPECT_EQ(ToVector(cells.Blocks().OnBlock({3, 4})), (std::vector {E(1), E(2)}));
 	cells.Remove(cell, E(1));
 	EXPECT_EQ(ToVector(cells.Blocks().OnBlock({3, 4})), (std::vector {E(2)}));
+}
+
+namespace
+{
+/// A camera above the land at x = 80, z = -100 that looks along +z and a little down, 90 degrees across a 2 to 1 screen
+glm::mat4 AboveLand()
+{
+	const auto projection = glm::perspectiveLH_NO(2.0f * std::atan(0.5f), 2.0f, 1.0f, 5000.0f);
+	return projection *
+	       glm::lookAtLH(glm::vec3(80.0f, 100.0f, -100.0f), glm::vec3(80.0f, 0.0f, 300.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+}
+constexpr glm::vec3 k_Eye {80.0f, 100.0f, -100.0f};
+} // namespace
+
+TEST(ObjectDrawList, ATriangleShowsItsUpperSideWhenAPartIsInView)
+{
+	const auto view = AboveLand();
+	// Flat land in front, either way round
+	EXPECT_TRUE(TriangleShows(view, 1.0f, k_Eye, {0.0f, 0.0f, 100.0f}, {160.0f, 0.0f, 100.0f}, {0.0f, 0.0f, 260.0f}));
+	EXPECT_TRUE(TriangleShows(view, 1.0f, k_Eye, {0.0f, 0.0f, 100.0f}, {0.0f, 0.0f, 260.0f}, {160.0f, 0.0f, 100.0f}));
+	// Land above the eye turns its upper side away
+	EXPECT_FALSE(TriangleShows(view, 1.0f, k_Eye, {0.0f, 300.0f, 100.0f}, {160.0f, 300.0f, 100.0f}, {0.0f, 300.0f, 260.0f}));
+	// Behind the eye
+	EXPECT_FALSE(TriangleShows(view, 1.0f, k_Eye, {0.0f, 0.0f, -300.0f}, {160.0f, 0.0f, -300.0f}, {0.0f, 0.0f, -200.0f}));
+	// Far to the side
+	EXPECT_FALSE(TriangleShows(view, 1.0f, k_Eye, {3000.0f, 0.0f, 100.0f}, {3160.0f, 0.0f, 100.0f}, {3000.0f, 0.0f, 260.0f}));
+	// No corner in view, but a part of it in view
+	EXPECT_TRUE(TriangleShows(view, 1.0f, k_Eye, {-5000.0f, 0.0f, 200.0f}, {5000.0f, 0.0f, 200.0f}, {0.0f, 0.0f, 5000.0f}));
+}
+
+TEST(ObjectDrawList, ABlockShowsWhenOneOfItsTrianglesShows)
+{
+	const auto view = AboveLand();
+	const std::array<glm::vec3, 4> corners {glm::vec3(0.0f, 0.0f, 100.0f), glm::vec3(160.0f, 0.0f, 100.0f),
+	                                        glm::vec3(0.0f, 0.0f, 260.0f), glm::vec3(0.0f, 300.0f, 260.0f)};
+	EXPECT_TRUE(BlockShows(view, 1.0f, k_Eye, corners, std::array<uint16_t, 6> {3, 3, 3, 0, 1, 2}));
+	EXPECT_FALSE(BlockShows(view, 1.0f, k_Eye, corners, std::array<uint16_t, 3> {3, 3, 3}));
+}
+
+// Only a block in view is looked at: one that goes out of view and comes back as it was does not change the list
+TEST(ObjectDrawList, ABlockChangesTheListWhenItStartsOrStopsToShow)
+{
+	bool lastShown = false;
+	EXPECT_FALSE(ShowingChanged(false, lastShown));
+	EXPECT_TRUE(ShowingChanged(true, lastShown));
+	EXPECT_TRUE(lastShown);
+	EXPECT_FALSE(ShowingChanged(true, lastShown));
+	EXPECT_TRUE(ShowingChanged(false, lastShown));
 }
