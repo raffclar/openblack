@@ -41,6 +41,8 @@ enum class Kind : uint8_t
 	Point,
 	/// Catching something flying at it with the four catching animations blended
 	Catch,
+	/// Reaching out to take what the player's hand gives it, which it takes from the hand at a moment of the animation
+	TakeFromHand,
 };
 [[nodiscard]] std::string_view Name(Kind kind);
 
@@ -100,6 +102,25 @@ enum class Status : uint8_t
 /// or one the scripts hold while they own the widescreen bars, can't be eaten. The creature then lets it fall and is
 /// sick, and isn't hungry for a while.
 [[nodiscard]] bool BringsBackUp(bool indestructible, bool heldDuringCutscene);
+/// What decides whether a creature may pick up a thing whose kind can be picked up
+struct PickUpFacts
+{
+	/// A script said it can't be picked up, as a land's script says of a villager it is showing the player
+	bool cannotBePickedUp {false};
+	/// A villager inside its home
+	bool villagerAtHome {false};
+	/// A villager on its way to worship at, or worshipping at, the creature's own player's worship site
+	bool worshippingForCreaturesPlayer {false};
+	/// A script holds a reference to the thing
+	bool inScript {false};
+	/// The creature belongs to a computer player, and isn't under a script's control
+	bool computerCreatureNotScripted {false};
+};
+/// Whether a creature may pick the thing up: never one a script said can't be picked up, a villager at home or one off
+/// to worship for the creature's own player; and a computer player's creature, when no script controls it, leaves alone
+/// whatever a script holds. A player's creature may pick up what a script holds once the script allows it.
+[[nodiscard]] bool MayPickUp(const PickUpFacts& facts);
+
 /// How long a creature that brought its food back up isn't hungry for
 constexpr float k_NotHungryAfterBringingUpSeconds = 20.0f;
 } // namespace openblack::creature_object_actions

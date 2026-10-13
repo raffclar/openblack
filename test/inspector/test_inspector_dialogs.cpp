@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// gui.press on the game's own dialogs: the start-of-game question's controls found by name and clicked through input
+// gui.press and gui.close on the game's own dialogs: the start-of-game question's controls found by name and clicked
+// through input
 
 #include <optional>
 #include <span>
@@ -63,7 +64,8 @@ struct InspectedSkipBox
 	glm::ivec2 pointer {400, 300};
 	std::optional<Choice> answer;
 
-	InspectedSkipBox() { box.Show(true); } // a returning profile with a creature: every choice is on offer
+	/// For a returning profile with a creature every choice is on offer; without one, keeping the old creature isn't
+	explicit InspectedSkipBox(bool profileHasCreature = true) { box.Show(profileHasCreature); }
 
 	void Send(std::span<const InputEvent> events)
 	{
@@ -88,6 +90,18 @@ struct InspectedSkipBox
 				break;
 			}
 		}
+	}
+
+	/// What gui.close does for the skip box: presses its OK, as the player closes it by answering it
+	bool Close()
+	{
+		const auto ok = SkipBoxOk(box);
+		if (!ok.has_value())
+		{
+			return false;
+		}
+		Send(ClickAt(*ok));
+		return true;
 	}
 
 	/// What gui.press does for the skip box: finds the control by name and clicks its middle
@@ -189,4 +203,44 @@ TEST(InspectorDialogs, ControlsWithoutANameAreLeftOut)
 	EXPECT_EQ(controls[0].middle, glm::ivec2(20, 30));
 	EXPECT_EQ(controls[1].name, "Cancel");
 	EXPECT_EQ(std::get<glm::ivec2>(FindDialogControl(controls, {std::string("cancel")})), glm::ivec2(110, 30));
+}
+
+// For a profile without a creature, keeping the old creature isn't offered: the other answers keep their own start
+// names, so the developers' Cow is still pressed as cow, and the answer picked is named after its own radio button
+TEST(InspectorDialogs, AnswersNotOnOfferDontShiftTheOthersNames)
+{
+	InspectedSkipBox f(false);
+	const auto controls = SkipBoxControls(f.box);
+	ASSERT_EQ(controls.size(), 5u);
+	const std::vector<std::string> answers {"A", "B", "AB", "Debug: Start with Cow"};
+	const std::vector<std::string> starts {"normal", "creature", "story", "cow"};
+	for (size_t i = 0; i < answers.size(); ++i)
+	{
+		EXPECT_EQ(controls[i + 1].name, answers[i]) << i;
+		EXPECT_EQ(controls[i + 1].aliases, std::vector<std::string> {starts[i]}) << i;
+	}
+	EXPECT_EQ(SkipBoxPicked(f.box), "A");
+	EXPECT_FALSE(f.Press({std::string("old")}));
+	ASSERT_TRUE(f.Press({std::string("cow")}));
+	EXPECT_EQ(f.box.GetSelection(), Choice::DebugStartWithCow);
+	EXPECT_EQ(SkipBoxPicked(f.box), "Debug: Start with Cow");
+}
+
+// gui.close on the skip box answers it as the player does, pressing OK with the answer picked, and the box goes
+TEST(InspectorDialogs, GuiCloseAnswersTheSkipBoxWithOk)
+{
+	InspectedSkipBox untouched;
+	ASSERT_TRUE(untouched.Close());
+	ASSERT_TRUE(untouched.answer.has_value());
+	EXPECT_EQ(*untouched.answer, Choice::StartNormally);
+	EXPECT_FALSE(untouched.box.IsActive());
+
+	InspectedSkipBox picked(false);
+	ASSERT_TRUE(picked.Press({std::string("cow")}));
+	EXPECT_FALSE(picked.answer.has_value());
+	ASSERT_TRUE(picked.Close());
+	ASSERT_TRUE(picked.answer.has_value());
+	EXPECT_EQ(*picked.answer, Choice::DebugStartWithCow);
+	EXPECT_FALSE(picked.box.IsActive());
+	EXPECT_EQ(SkipBoxOk(picked.box).value_or(glm::ivec2(-1)), k_Ok);
 }

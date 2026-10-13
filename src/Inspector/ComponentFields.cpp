@@ -38,6 +38,7 @@
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureFizz.h"
+#include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
@@ -757,6 +758,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::satisfiedByEffect>("satisfiedByEffect")
 	    .Field<&components::CreatureMindState::desireSeenTo>("desireSeenTo")
 	    .Field<&components::CreatureMindState::observedKinds>("observedKinds")
+	    .Field<&components::CreatureMindState::givenKinds>("givenKinds")
 	    .Field<&components::CreatureMindState::takenFood>("takenFood")
 	    .Field<&components::CreatureMindState::takenFrom>("takenFrom")
 	    .Field<&components::CreatureMindState::planSerial>("planSerial")
@@ -1116,6 +1118,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandGrab::scoopStreamSeconds>("scoopStreamSeconds")
 	    .Field<&components::HandGrab::handSize>("handSize")
 	    .Field<&components::HandGrab::handPoint>("handPoint")
+	    .Field<&components::HandGrab::offeredTo>("offeredTo")
+	    .Field<&components::HandGrab::offer>("offer")
+	    .Field<&components::HandGrab::givenTo>("givenTo")
+	    .Field<&components::HandGrab::offerTurn>("offerTurn")
+	    .Field<&components::HandGrab::lastHand>("lastHand")
+	    .Field<&components::HandGrab::givePress>("givePress")
 	    .Field<&components::HandGrab::lastPickedUp>("lastPickedUp")
 	    .Field<&components::HandGrab::lastDropped>("lastDropped");
 	Reflect<components::HandMiracleFx>(context)
@@ -1817,7 +1825,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Vortex::afterLandEffect>("afterLandEffect")
 	    .Field<&components::Vortex::objectMoverEffect>("objectMoverEffect")
 	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect")
-	    .Field<&components::Vortex::arrival>("arrival");
+	    .Field<&components::Vortex::arrival>("arrival")
+	    .Field<&components::Vortex::throwingOut>("throwingOut");
 	Reflect<components::DrawnIntoVortex>(context).Field<&components::DrawnIntoVortex::vortex>("vortex");
 	Reflect<components::WalkPath>(context)
 	    .Field<&components::WalkPath::number>("number")
@@ -2087,6 +2096,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fizz::Fizz::target>("target")
 	    .Field<&openblack::creature_fizz::Fizz::perSecond>("perSecond")
 	    .Field<&openblack::creature_fizz::Fizz::goesForGood>("goesForGood");
+	Reflect<openblack::creature_giving::Offer>(context, ValueOnly {}).Field<&openblack::creature_giving::Offer::ms>("ms");
 	Reflect<openblack::creature_hair::Strand>(context, ValueOnly {})
 	    .Field<&openblack::creature_hair::Strand::positions>("positions")
 	    .Field<&openblack::creature_hair::Strand::velocities>("velocities");
@@ -2226,7 +2236,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::ObjectOrder::point>("point")
 	    .Field<&openblack::creature_mind::ObjectOrder::animation>("animation")
 	    .Field<&openblack::creature_mind::ObjectOrder::pointHeight>("pointHeight")
-	    .Field<&openblack::creature_mind::ObjectOrder::seconds>("seconds");
+	    .Field<&openblack::creature_mind::ObjectOrder::seconds>("seconds")
+	    .Field<&openblack::creature_mind::ObjectOrder::mirrored>("mirrored");
 	Reflect<openblack::creature_mind::Step>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Step::kind>("kind")
 	    .Field<&openblack::creature_mind::Step::seconds>("seconds")
@@ -2513,6 +2524,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::Vortex::Arrival::flockDistance>("flockDistance")
 	    .Field<&openblack::ecs::components::Vortex::Arrival::flockRadius>("flockRadius")
 	    .Field<&openblack::ecs::components::Vortex::Arrival::flock>("flock");
+	Reflect<openblack::ecs::components::Vortex::ThrowingOut>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::lines>("lines")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::nextLine>("nextLine")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::reading>("reading")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::villagersOut>("villagersOut")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::thrown>("thrown")
+	    .Field<&openblack::ecs::components::Vortex::ThrowingOut::animalFlock>("animalFlock");
 	Reflect<openblack::ecs::components::WorshipSite::BuildRequest>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::town>("town")
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::desireBoost>("desireBoost");

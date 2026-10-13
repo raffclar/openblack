@@ -76,6 +76,53 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.creature_puts_down_actor",
+	    .name = "A creature puts a villager down on land a vortex levelled",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the lake's south bank after a second, as Land 1's opens beside the "
+	                   "fisherman's wife on the cliff. On the slope above, within the square it levels but beyond its "
+	                   "pull, two villagers stand still held by a script: on the right one the script has said can't be "
+	                   "picked up or moved, as the wife is while she waits for the player; on the left one it has let "
+	                   "be picked up, as the wife is after the rescue's first cinema. When the land is level the tiger "
+	                   "tries to pick up the right one, then picks up the left one and puts her down; a while later it "
+	                   "picks her up again and throws her a little way along the slope.",
+	    .expected = "Both go down with the land as it is levelled. The tiger can't pick up the right one: it gives up at "
+	                "once and she stays where she stands. Each time the left one is put down or thrown she falls to the "
+	                "levelled land and stands on it, her feet and shadow on the ground, never floating at the height the "
+	                "land had before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnTheBank.x - 30.0f, 14.0f, k_OnTheBank.y - 52.0f},
+	                .look = {k_OnTheBank.x - 8.0f, 6.0f, k_OnTheBank.y - 44.0f}},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_OnTheBank + glm::vec2(-8.0f, -60.0f),
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .hold = true,
+	                   .pauseMind = true}},
+	    .objects = {{.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_OnTheBank + glm::vec2(-8.0f, -44.0f),
+	                 .indestructible = true,
+	                 .inScript = true},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_OnTheBank + glm::vec2(-8.0f, -38.0f),
+	                 .indestructible = true,
+	                 .inScript = true,
+	                 .cannotBePickedUp = true,
+	                 .immovable = true}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnTheBank, .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Command::Kind::PickUp, .creature = 0, .delaySeconds = 9.0f, .waitUntilFree = true, .object = 1},
+	                 {.kind = Command::Kind::PutDown, .creature = 0, .delaySeconds = 1.0f, .waitUntilFree = true},
+	                 {.kind = Command::Kind::PickUp, .creature = 0, .delaySeconds = 2.0f, .waitUntilFree = true, .object = 0},
+	                 {.kind = Command::Kind::PutDown, .creature = 0, .delaySeconds = 1.0f, .waitUntilFree = true},
+	                 {.kind = Command::Kind::PickUp, .creature = 0, .delaySeconds = 4.0f, .waitUntilFree = true, .object = 0},
+	                 {.kind = Command::Kind::ThrowAt,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f,
+	                  .waitUntilFree = true,
+	                  .point = k_OnTheBank + glm::vec2(-14.0f, -58.0f)}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_pulls_things_in",
 	    .name = "A vortex out of the land pulls things in",
 	    .facet = Facet::Miracles,
@@ -103,6 +150,46 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                {.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(20.0f, 18.0f), .yawDegrees = 90.0f},
 	                {.type = AnimalInfo::Cow, .offset = k_OnThePlane + glm::vec2(45.0f, 0.0f)}},
 	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "story.vortex_throws_things_out",
+	    .name = "A vortex into the land throws out what crossed",
+	    .facet = Facet::Miracles,
+	    .description = "A vortex into a land opens on the flat plane after a second, as Land 2's opens when the player "
+	                   "arrives, with a crossing file written as Land 1's vortex would have left it: a villager, two cows "
+	                   "and a sheep, an oak, a rock, a pot of food and a dead tree. A hut stands 40 m off; the animals "
+	                   "gather 30 m to the south, kept within 27 m and 48 m as Land 2's script says. It is told to fade "
+	                   "out 3 seconds after it opens, long before all are out.",
+	    .expected = "Every fifth of a second, in a random direction, something is thrown out of the vortex about 16 m from "
+	                "its middle, flying 8 to 13 m a second outwards and 10 to 15 upwards, tumbling: first the file's "
+	                "things, each where it lay about the old vortex (the dead tree is whole, at its model's size), then "
+	                "new villagers until 30 have come out, every fifth a child. The villagers join the hut's town; the "
+	                "two cows gather as one flock, the sheep in a new one. Nothing thrown out can be destroyed while the "
+	                "vortex lasts. Though told to fade out, the vortex stays open until the last villager is out, "
+	                "then fades over 5 seconds and goes 7 seconds after the last.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 40.0f, 50.0f, k_OnThePlane.y - 70.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(40.0f, 0.0f), .yawDegrees = 90.0f}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = k_OnThePlane,
+	                  .delaySeconds = 1.0f,
+	                  .fadeOutAfterSeconds = 3.0f,
+	                  .crossingLines = {"CREATE_TOWN_VILLAGER(-1, \"-10.00,8.00\", NORSE_FARMER, 30)",
+	                                    "CREATE_NEW_ANIMAL(\"12.00,-6.00\", 8, -1, -1, 6)",
+	                                    "CREATE_NEW_ANIMAL(\"10.00,-9.00\", 8, -1, -1, 3)",
+	                                    "CREATE_NEW_ANIMAL(\"-4.00,12.00\", 4, -1, -1, 2)",
+	                                    "CREATE_NEW_TREE(-1, \"6.00,14.00\", 5, 1, 0.000000, 0.800000, 1.000000)",
+	                                    "CREATE_MOBILE_STATIC(\"-14.00,-10.00\", 2, 0.000000, 0.000000, 0.500000, 0.000000, "
+	                                    "1.000000)",
+	                                    "CREATE_POT(\"0.00,-18.00\", 12, 0, 1000)",
+	                                    "CREATE_DEAD_TREE(\"8.00,-12.00\", \"NEUTRAL\", 5, 1.000000, 0.000000, 1.000000, "
+	                                    "0.000000)"},
+	                  .gatheringOffset = k_OnThePlane + glm::vec2(0.0f, -30.0f),
+	                  .flockDistance = 27.0f,
+	                  .flockRadius = 48.0f}},
 	});
 
 	all.push_back({

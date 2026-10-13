@@ -277,6 +277,10 @@ struct ObjectSetup
 	bool indestructible {false};
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes
 	bool inScript {false};
+	/// A script has said it can't be picked up, and can't be moved, as Land 1's script says of the fisherman's wife
+	/// while she waits for the player
+	bool cannotBePickedUp {false};
+	bool immovable {false};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
 	/// A building of the town holds this much wood, rather than the scenario town's usual stock
@@ -317,6 +321,13 @@ struct VortexSetup
 	/// Seconds into the scenario it is made, and after that it is told to fade out; none to stay
 	float delaySeconds {0.0f};
 	std::optional<float> fadeOutAfterSeconds;
+	/// For a vortex into the land: the crossing file's lines, written just before it is made, as a vortex out of the last
+	/// land would have written them (none leaves the file as it is); and where the animals that come out gather, as one
+	/// flock keeping within the distance and the radius, as a land's script tells it
+	std::vector<std::string_view> crossingLines;
+	std::optional<glm::vec2> gatheringOffset;
+	float flockDistance {0.0f};
+	float flockRadius {0.0f};
 };
 
 /// A reward chest given to the player as a challenge's script gives one: dropped from the sky or put on the land
@@ -597,6 +608,10 @@ struct Command
 		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
 		/// flight, say). Needs no creature
 		Reframe,
+		/// The player's hand takes the scenario's object at once, as if picked up from where it stands (needs no
+		/// creature); the hand gives what it holds to the creature, as the Action button pressed over it does
+		HandTake,
+		HandGive,
 		/// A script swaps the minds of the creature and another (value, by its place in the scenario's creatures), as
 		/// "swap creature from A to B" does
 		SwapMinds,
@@ -799,10 +814,17 @@ struct Scenario
 	/// The weights a caught firefly's miracle is drawn by, by the miracles' names, as a land's script sets them; the
 	/// testbed's land sets none
 	std::vector<std::pair<std::string_view, float>> fireflyRewards;
+	/// A testbed set-up step: the scenario's town has its worship site put up built, as a land's script can, and its
+	/// totem asks for this share of its people at worship, which sends them there as the game does
+	std::optional<float> worshipShare;
+	/// The debug window opened as the scenario starts, by its name; none when empty
+	std::string_view debugWindow;
 };
 
 /// A town centre's totem
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
+/// The villagers around the player's temple, with their debug window open
+void AddTempleVillagerScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry
 void AddMiracleScenarios(std::vector<Scenario>& all);
 /// The miracles' globes and dispensers close up, and the hand's miracle effects

@@ -270,6 +270,29 @@ TEST_F(InspectorRegistry, ObjectsOfATypeWithinARadiusNearestFirst)
 	EXPECT_EQ(villagers["items"][0]["label"], "Villager: Adult FEMALE, number 0");
 }
 
+// A client that puts near and radius in params with the query's own filters, as every other query takes its
+// arguments, gets the same objects as one that puts them beside params
+TEST_F(InspectorRegistry, ObjectsFindTakesNearAndRadiusInsideParams)
+{
+	const auto beside = Ask(_inspector, R"({"query": "objects.find", "params": {"component": "Tree"},
+	                                       "near": [22, 0, 0], "radius": 15})");
+	const auto inside = Ask(_inspector, R"({"query": "objects.find",
+	                                       "params": {"component": "Tree", "near": [22, 0, 0], "radius": 15}})");
+	ASSERT_EQ(inside["total"], 3);
+	EXPECT_EQ(inside, beside);
+	EXPECT_EQ(inside["items"][0]["id"], ToId(_trees[2]));
+
+	const auto planar = Ask(_inspector, R"({"query": "objects.find",
+	                                       "params": {"kind": "villager", "near": [0, 0], "radius": 100, "limit": 5}})");
+	ASSERT_EQ(planar["total"], 1);
+
+	// A filter the query doesn't take is refused, not ignored
+	const auto decoded = DecodeRequest(R"({"query": "objects.find", "params": {"type": "Tree", "near": [0, 0], "radius": 9}})");
+	const auto refused = _inspector.Answer(std::get<Request>(decoded));
+	EXPECT_FALSE(refused.Ok());
+	EXPECT_NE(refused.error.find("doesn't take type"), std::string::npos) << refused.error;
+}
+
 TEST_F(InspectorRegistry, EntitiesAreIdsAndLabelsByDefault)
 {
 	const auto all = Ask(_inspector, R"({"query": "ecs.entities", "limit": 2})");

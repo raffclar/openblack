@@ -61,6 +61,11 @@ public:
 	[[nodiscard]] std::optional<HeldPose> GetHeldPose() const override;
 	[[nodiscard]] float GetCursorRaise() const override;
 	[[nodiscard]] std::optional<float> GetScoopTip() const override;
+	bool HandOver(entt::entity object) override;
+	bool TakeIntoHand(entt::entity object) override;
+	bool GiveHeldTo(entt::entity creature) override;
+	[[nodiscard]] std::optional<entt::entity> GetOfferedCreature() const override;
+	[[nodiscard]] float GetOfferTurn() const override;
 
 private:
 	/// What the hand last took from a pile, until the interface has shown it
@@ -108,6 +113,13 @@ private:
 	/// The second press with the pointer on something the held thing is used on (a store, a pile of the same): it is
 	/// given to it at once, without being thrown. Whether it was.
 	bool ApplyTo(components::HandGrab& grab, entt::entity target);
+	/// Gives what it holds to the creature it offers it to, or to a creature under the cursor that would take it
+	bool Give(components::HandGrab& grab, std::optional<entt::entity> under);
+	/// Each frame it holds something: the offer to a creature under it is kept up or runs down, the held thing turns over
+	/// to offer it, and while the creature reaches for it the hand is drawn to the creature's hand. Where the hand is to
+	/// be, before it rises for what it holds.
+	glm::vec3 UpdateOffer(components::HandGrab& grab, const Frame& frame);
+	static void ForgetOffer(components::HandGrab& grab);
 	/// The hand lets go of what it holds at a velocity, put down or thrown; made to, it starts from where it is held
 	/// and is never planted again
 	void LetGo(components::HandGrab& grab, glm::vec3 velocity, bool forced);

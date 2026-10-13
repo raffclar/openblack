@@ -43,6 +43,9 @@ public:
 	bool PointAt(entt::entity creature, const glm::vec3& point) override;
 	bool PointAtFor(entt::entity creature, const glm::vec3& point, float seconds, std::optional<entt::entity> thing) override;
 	bool Catch(entt::entity creature, entt::entity object) override;
+	bool TakeFromHand(entt::entity creature, entt::entity object, bool mirrored) override;
+	[[nodiscard]] std::optional<TakingFromHand> GetTakingFromHand(entt::entity creature) const override;
+	[[nodiscard]] std::optional<glm::vec3> TakePoint(entt::entity creature, glm::vec3 facing) const override;
 	void Cancel(entt::entity creature) override;
 	void Drop(entt::entity creature) override;
 
@@ -51,7 +54,7 @@ public:
 	[[nodiscard]] std::optional<float> GetProgress(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity creature) const override;
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;
-	[[nodiscard]] bool CanPickUp(entt::entity object) const override;
+	[[nodiscard]] bool CanPickUp(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
 	[[nodiscard]] std::optional<float> PickUpStraightReach(entt::entity creature) const override;
 

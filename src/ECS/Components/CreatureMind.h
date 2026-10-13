@@ -120,6 +120,8 @@ struct CreatureMindState
 	bool desireSeenTo {false};
 	/// The kinds of thing (as its beliefs sort them) it has had a good look at, which it is far less curious about since
 	std::set<uint32_t> observedKinds;
+	/// The kinds of thing it has been given from the hand with no desire for them, which it looked over the first time
+	std::set<uint32_t> givenKinds;
 	/// The food it took from a pile and is picking up, and the pile, which gives the food up once it has picked it up
 	entt::entity takenFood {entt::null};
 	entt::entity takenFrom {entt::null};

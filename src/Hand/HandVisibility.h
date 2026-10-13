@@ -13,11 +13,12 @@ namespace openblack::hand_visibility
 {
 
 /// Whether the player's hand is out. It is put away while a dialog shows its own pointer, and while a script's cinema
-/// bars have taken the interface. Put away, it is drawn nowhere, casts no shadow, stays where it was without following
-/// the cursor, and bends no trees; it comes back from where it was.
-[[nodiscard]] constexpr bool IsShown(bool dialogOpen, bool interfaceActive)
+/// bars have taken the interface, except inside the temple, whose rooms draw the hand under the cursor whatever the
+/// scripts do. Put away, it is drawn nowhere, casts no shadow, stays where it was without following the cursor, and
+/// bends no trees; it comes back from where it was.
+[[nodiscard]] constexpr bool IsShown(bool dialogOpen, bool interfaceActive, bool insideTemple)
 {
-	return !dialogOpen && interfaceActive;
+	return !dialogOpen && (interfaceActive || insideTemple);
 }
 
 /// Whether a press of a mouse button reaches the player's hand. While a script's cinema bars have taken the interface the

@@ -38,8 +38,8 @@ inline constexpr int32_t k_MostCellsSearched = 9999;
 /// distance is measured from the vortex's place moved by whole cells, as the game measures it.
 [[nodiscard]] std::vector<glm::ivec2> CellsSearched(const map_coords::MapCoords& centre, float reach);
 
-/// Whether a creature may be taken by a vortex that leads away: let through by a script while on the leash, or being
-/// moved by a script
+/// Whether a creature may be taken by a vortex that leads away: let through by a script while on the leash, or
+/// controlled by a script
 [[nodiscard]] bool CreatureMayBeTaken(bool letThrough, bool leashed, bool movedByScript);
 
 /// A creature that may be taken sparkles away once within this share of the vortex model's radius of its middle

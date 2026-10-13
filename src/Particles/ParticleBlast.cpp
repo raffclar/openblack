@@ -18,6 +18,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "3D/MapCoords.h"
 #include "ParticleObjectEffects.h"
 
 using namespace openblack;
@@ -30,6 +31,18 @@ constexpr float k_UpwardShare = 0.5f;
 /// A scale across this small draws the height as nothing
 constexpr float k_SmallestAcross = 0.0001f;
 } // namespace
+
+blast::HeapAge blast::AgeHeap(float millisecondsLeft, std::optional<uint8_t> alpha, float frameMilliseconds)
+{
+	// Full alpha over the last second
+	constexpr float k_AlphaPerMillisecond = 0.255f;
+	if (millisecondsLeft <= k_RubbleFadeMilliseconds)
+	{
+		alpha = static_cast<uint8_t>(map_coords::FtoL(millisecondsLeft * k_AlphaPerMillisecond));
+	}
+	const float left = millisecondsLeft - frameMilliseconds;
+	return {.millisecondsLeft = left, .alpha = alpha, .gone = left < 1.0f};
+}
 
 bool blast::SendsEvents(float age, const ExplosionRules& rules)
 {

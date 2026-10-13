@@ -792,6 +792,25 @@ void AddStory(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
 	});
+	all.push_back({
+	    .id = "temple.intro_movement",
+	    .name = "Looking about the temple while the advisors introduce it",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle; after a second the player goes into it for the "
+	                   "first time, and the advisors' introduction of its main room plays. Turn and tilt the room with the "
+	                   "camera's keys, move the hand about, and click and drag while they talk.",
+	    .expected = "The camera flies in from the entrance to the main room by itself while the good and evil advisors "
+	                "come out and talk through their nine lines. Throughout, the hand follows the cursor over the room "
+	                "and the camera's keys turn and tilt the room as they do after the scene. Clicks and drags do nothing "
+	                "until the scene is over: the flight isn't cut short and the room isn't dragged round.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {40.0f}, k_Temple + glm::vec2 {40.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    // Room 3 is the main room, the one the entrance leads to
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
+	});
 }
 
 void AddAppearance(std::vector<Scenario>& all)
@@ -1504,6 +1523,47 @@ void AddObjects(std::vector<Scenario>& all)
 	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::EatHeld, 0, 0.5f, true)},
 	});
 
+	// Giving from the player's hand: the hand takes the thing, held in front of the creature, and gives it
+	const std::vector<Command> giving {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                                   {.kind = Kind::HandGive, .creature = 0, .delaySeconds = 1.5f}};
+	const HandHold offering {.offset = {0.0f, -k_Reach}, .height = 12.0f};
+	// Its mind runs, to take the thing and choose what to do with it
+	auto hungryThinking = hungry;
+	hungryThinking.pauseMind = false;
+	all.push_back({
+	    .id = "creature.give_food",
+	    .name = "Giving food from the hand",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a pile of food and, held in front of a hungry tiger, gives it to it.",
+	    .expected = "The hand turns its palm over to offer the food; the tiger turns to the camera looking curious, reaches "
+	                "out, and the hand meets its hand as it takes the food; hungry, it then eats it.",
+	    .environment = {.cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungryThinking},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
+	auto curious = Posed(CreatureType::Tiger, {0.0f, 0.0f});
+	curious.hold = false;
+	curious.pauseMind = false;
+	all.push_back({
+	    .id = "creature.give_villager",
+	    .name = "Giving a villager from the hand",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a villager and, held in front of a tiger that isn't hungry, gives her to it.",
+	    .expected = "The hand turns the villager a quarter round to offer her; the tiger turns to the camera, reaches out and "
+	                "takes her from the hand, then does with her what its desires say: looks her over the first time if it "
+	                "wants nothing much, eats her if hungry, or throws her at the camera if it wants to play.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {curious},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
 	all.push_back({
 	    .id = "objects.knock_down_trees",
 	    .name = "Knocking down trees",
@@ -1738,6 +1798,22 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.7f}},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 8.0f, .alignment = -1.0f},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
+	});
+
+	// The camera looks along the land ahead and nothing moves the pointer, so the hand shows where it starts
+	all.push_back({
+	    .id = "hand.spawn_point",
+	    .name = "The hand before the mouse moves",
+	    .facet = Facet::Hand,
+	    .description = "A food store in the middle of the view is looked at from a little way up and the pointer is left "
+	                   "alone. Run it as the game starts (ob-build run --scenario hand.spawn_point) without touching the "
+	                   "mouse.",
+	    .expected = "From the first frame the hand is under the cursor, or in the middle of the window over the food "
+	                "store when the cursor isn't over the window; never far off towards the top left corner, gliding "
+	                "back only once the mouse moves.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, -40.0f}, .look = {0.0f, 0.0f, 10.0f}},
+	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, 10.0f}}},
 	});
 
 	// The camera looks down at the land just ahead, so the hand is seen up close
@@ -2815,6 +2891,7 @@ std::vector<Scenario> Build()
 	AddHandLookScenarios(all);
 	AddGateScenarios(all);
 	AddVillageTotemScenarios(all);
+	AddTempleVillagerScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
 	AddHighlightScenarios(all);
@@ -2926,7 +3003,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
-	       kind == Kind::RunHelpMessage || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || IsPointerCommand(kind);
+	       kind == Kind::RunHelpMessage || kind == Kind::RecordChallenge || kind == Kind::EnterTemple ||
+	       kind == Kind::HandTake || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2953,7 +3031,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 102> k_Names {
+	constexpr std::array<std::string_view, 104> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3053,6 +3131,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "run text",
 	    "play hand demo",
 	    "reframe",
+	    "hand take",
+	    "hand give",
 	    "swap minds",
 	    "record challenge",
 	    "enter temple",

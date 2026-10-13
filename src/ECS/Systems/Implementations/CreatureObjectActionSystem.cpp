@@ -32,6 +32,7 @@
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureGiving.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureReach.h"
@@ -40,13 +41,16 @@
 #include "Creature/CreatureThrow.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
@@ -69,7 +73,10 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -936,7 +943,8 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		{
 			Fail(action, "there is nothing there");
 		}
-		else if (action.kind == Kind::PickUp && (!CanPickUp(*action.target) || registry.AllOf<HeldByCreature>(*action.target)))
+		else if (action.kind == Kind::PickUp &&
+		         (!CanPickUp(creature, *action.target) || registry.AllOf<HeldByCreature>(*action.target)))
 		{
 			Fail(action, "it can't be picked up");
 		}
@@ -1000,6 +1008,14 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		case Kind::Catch:
 			now = StartCatch(creature, action, *points);
 			break;
+		case Kind::TakeFromHand:
+		{
+			// It reaches with the hand it was asked to, whatever it holds
+			const bool mirrored = action.mirrored;
+			single(creature_giving::k_TakeAnimation, points->takeFromHandMs);
+			action.mirrored = mirrored;
+			break;
+		}
 		}
 		if (now)
 		{
@@ -1046,6 +1062,48 @@ void CreatureObjectActionSystem::StartPendingCatches()
 			Start(creature, {.kind = Kind::Catch, .target = object});
 		}
 	}
+}
+
+bool CreatureObjectActionSystem::TakeFromHand(entt::entity creature, entt::entity object, bool mirrored)
+{
+	return Start(creature, {.kind = Kind::TakeFromHand, .target = object, .mirrored = mirrored});
+}
+
+std::optional<CreatureObjectActionSystemInterface::TakingFromHand>
+CreatureObjectActionSystem::GetTakingFromHand(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
+	if (action == nullptr || action->kind != Kind::TakeFromHand || action->phase != Phase::Playing ||
+	    (action->status != Status::Running && action->status != Status::Contact) || !action->target.has_value())
+	{
+		return std::nullopt;
+	}
+	return TakingFromHand {.object = *action->target, .msFromTake = action->timeMs - action->eventMs};
+}
+
+std::optional<glm::vec3> CreatureObjectActionSystem::TakePoint(entt::entity creature, glm::vec3 facing) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.AllOf<Creature, Transform>(creature))
+	{
+		return std::nullopt;
+	}
+	const auto* points = PointsOf(registry.Get<const Creature>(creature));
+	const auto& transform = registry.Get<const Transform>(creature);
+	if (points == nullptr)
+	{
+		return std::nullopt;
+	}
+	// The right hand at the moment of taking, with the creature turned to face the point
+	const auto hand = HandAt(creature, transform, *points, creature_giving::k_TakeAnimation, points->takeFromHandMs);
+	if (!hand.has_value())
+	{
+		return std::nullopt;
+	}
+	const glm::vec2 towards {facing.x - transform.position.x, facing.z - transform.position.z};
+	const auto heading = glm::length(towards) > 0.0f ? std::atan2(-towards.x, -towards.y) : 0.0f;
+	return transform.position + glm::vec3(glm::eulerAngleY(heading) * glm::vec4(*hand, 0.0f));
 }
 
 bool CreatureObjectActionSystem::PickUp(entt::entity creature, entt::entity object)
@@ -1277,7 +1335,7 @@ std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object
 	return value > 0.0f ? std::optional(value) : std::nullopt;
 }
 
-bool CreatureObjectActionSystem::CanPickUp(entt::entity object) const
+bool CreatureObjectActionSystem::CanPickUp(entt::entity creature, entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
@@ -1286,10 +1344,30 @@ bool CreatureObjectActionSystem::CanPickUp(entt::entity object) const
 	}
 	// Of pots and piles, only food can be picked up, to eat; of animals, those the animals' own rules allow, as a bird
 	// low over the land
-	return registry.AnyOf<MobileObject, Ball, Villager>(object) ||
-	       (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value()) ||
-	       (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value() &&
-	        Locator::animalSystem::value().CanBePickedUpByCreature(object));
+	const bool kindCanBePickedUp = registry.AnyOf<MobileObject, Ball, Villager>(object) ||
+	                               (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value()) ||
+	                               (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value() &&
+	                                Locator::animalSystem::value().CanBePickedUpByCreature(object));
+	if (!kindCanBePickedUp)
+	{
+		return false;
+	}
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	const auto owner = body != nullptr ? std::optional(body->owner) : std::nullopt;
+	const auto* action = registry.AllOf<Villager>(object) ? registry.TryGet<const LivingAction>(object) : nullptr;
+	const bool worshipping = action != nullptr && owner.has_value() &&
+	                         action->states[static_cast<size_t>(LivingAction::Index::Final)] ==
+	                             static_cast<uint8_t>(VillagerStates::WorshippingAtWorshipSite) &&
+	                         ecs::world_objects::PlayerOf(object) == owner;
+	const bool computerCreature =
+	    owner.has_value() && Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(*owner);
+	return creature_object_actions::MayPickUp({
+	    .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
+	    .villagerAtHome = registry.AllOf<Villager, AtHome>(object),
+	    .worshippingForCreaturesPlayer = worshipping,
+	    .inScript = registry.AllOf<InScript>(object),
+	    .computerCreatureNotScripted = computerCreature && !registry.AllOf<ScriptControlled>(creature),
+	});
 }
 
 bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
@@ -1648,6 +1726,20 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			{
 				Locator::creaturePhysiologySystem::value().Eat(creature, *value);
 			}
+			break;
+		}
+		case Kind::TakeFromHand:
+		{
+			// It takes the thing only if the player's hand still gives it; otherwise its hand closes on nothing
+			const auto object = *action.target;
+			if (!registry.Valid(object) || !Locator::handGrabSystem::has_value() ||
+			    !Locator::handGrabSystem::value().HandOver(object))
+			{
+				Fail(action, "the hand no longer gives it");
+				break;
+			}
+			TakeInHand(registry, creature, object, action, *points, animation, transform);
+			action.status = Status::Contact;
 			break;
 		}
 		case Kind::Keep:
