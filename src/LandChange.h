@@ -24,6 +24,9 @@ enum class Kind
 	FreshScripts,
 	/// A new game, the game's first start included: everything starts afresh
 	NewGame,
+	/// A skirmish on a playground land, picked from the land menu: a new game on that land, everything starting afresh,
+	/// with the challenge's scripts started again from scratch
+	Skirmish,
 	/// The developers' testbed: a workbench outside the game, where nothing carries over
 	Testbed,
 };
@@ -76,6 +79,7 @@ struct Rules
 		        .alignmentFromProfile = false,
 		        .gameStarts = false};
 	case Kind::NewGame:
+	case Kind::Skirmish:
 		return {.advisors = Advisors::Afresh,
 		        .scriptScreenKept = false,
 		        .heartbeatsCarried = false,
@@ -91,6 +95,13 @@ struct Rules
 	        .playersCarried = false,
 	        .alignmentFromProfile = false,
 	        .gameStarts = false};
+}
+
+/// How a land picked from the land menu is loaded: a playground land starts a skirmish, a new game on it; any other land
+/// is loaded with the challenge's scripts started again, the game going on
+[[nodiscard]] constexpr Kind FromLandMenu(bool playgroundLand)
+{
+	return playgroundLand ? Kind::Skirmish : Kind::FreshScripts;
 }
 
 } // namespace openblack::land_change
