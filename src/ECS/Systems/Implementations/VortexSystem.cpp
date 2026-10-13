@@ -351,6 +351,9 @@ void VortexSystem::ProcessTurn()
 			// The living about it keep their height above the land as it is levelled under them
 			const auto reach = static_cast<float>(vortex::k_LevelHalfSide + 1) * LandIslandInterface::k_CellSize;
 			const glm::vec2 centre {vortex.centre.x, vortex.centre.z};
+			// The static things about it don't move with the land, but keep the height above it they were put down at
+			ecs::land_followers::KeepPlacedHeights(Locator::entitiesRegistry::value(), Locator::terrainSystem::value(),
+			                                       centre - reach, centre + reach);
 			for (const auto& follower : ecs::land_followers::Capture(
 			         Locator::entitiesRegistry::value(), Locator::terrainSystem::value(), centre - reach, centre + reach))
 			{

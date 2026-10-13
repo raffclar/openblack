@@ -298,3 +298,25 @@ TEST(VortexCrossingLines, EveryAnimalIsWrittenWithItsAge)
 	EXPECT_EQ(LineText(registry, bird),
 	          fmt::format("CREATE_NEW_ANIMAL(\"0.00,0.00\", {}, -1, -1, 3)\n", static_cast<int>(AnimalInfo::Dove)));
 }
+
+TEST(VortexCrossingLines, ARockIsWrittenAtTheHeightItWasPutDownAt)
+{
+	Registry registry;
+	// Put down 2 m above land that the vortex has since lowered by 3 m under it
+	const auto rock = Thing(registry, {1000.0f, k_Ground + 5.0f, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<MobileStatic>(rock, MobileStaticInfo::Rock);
+	registry.Assign<PlacedHeight>(rock, PlacedHeight {.height = 2.0f, .position = {1000.0f, k_Ground + 5.0f, 2000.0f}});
+	const auto twin = Thing(registry, {1000.0f, k_Ground + 2.0f, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<MobileStatic>(twin, MobileStaticInfo::Rock);
+	EXPECT_EQ(LineText(registry, rock), fmt::format("CREATE_MOBILE_STATIC(\"0.00,0.00\", {}, 2.000000, 0.000000, 0.000000, "
+	                                                "0.000000, 1.000000)\n",
+	                                                static_cast<int>(MobileStaticInfo::Rock)));
+	// Its fellow is found by that height
+	EXPECT_EQ(vortex_crossing::IdenticalStatics(registry, rock, FakeWorld()), std::vector<entt::entity> {twin});
+	// The height is the vortex's place's own height away
+	auto raised = k_Vortex;
+	raised.altitude = 0.5f;
+	const auto line = vortex_crossing::LineFor(registry, rock, raised, FakeWorld());
+	ASSERT_TRUE(line.has_value());
+	EXPECT_FLOAT_EQ(std::get<vortex::crossing::MobileStaticLine>(*line).offset.altitude, 1.5f);
+}

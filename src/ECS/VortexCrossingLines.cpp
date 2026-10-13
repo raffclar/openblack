@@ -32,6 +32,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/LandFollowers.h"
 #include "ECS/Registry.h"
 #include "ECS/VillagerAge.h"
 
@@ -61,6 +62,16 @@ glm::vec3 AnglesOf(const glm::mat3& rotation)
 	glm::vec3 negated {0.0f};
 	glm::extractEulerAngleXYZ(glm::mat4(rotation), negated.x, negated.y, negated.z);
 	return glm::vec3(0.0f) - negated;
+}
+
+/// Where a static thing lies, at the height above the land it was put down at
+map_coords::MapCoords StaticPlace(const ecs::Registry& registry, entt::entity thing, const ecs::vortex_crossing::World& world)
+{
+	const auto& position = registry.Get<const Transform>(thing).position;
+	auto place = ecs::vortex_crossing::MapPlace(position, world.ground({position.x, position.z}));
+	place.altitude = ecs::land_followers::PlacedHeightOf(position, world.ground({position.x, position.z}),
+	                                                     registry.TryGet<const PlacedHeight>(thing));
+	return place;
 }
 
 bool PartOfStoragePit(const ecs::Registry& registry, entt::entity pot)
@@ -143,6 +154,9 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 	}
 	if (const auto* still = registry.TryGet<const MobileStatic>(thing))
 	{
+		// Its height is the one it was put down at, whatever has been done to the land under it since
+		auto staticOffset = offset;
+		staticOffset.altitude = StaticPlace(registry, thing, world).altitude - vortex.altitude;
 		const auto angles = AnglesOf(transform->rotation);
 		// An artefact of a player stays one, of no town: it joins its player's nearest as it is made again
 		const auto* artefact = registry.TryGet<const TownArtefact>(thing);
@@ -152,7 +166,7 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 			artefactLine = ArtefactLine {.player = std::string(k_PlayerNamesStrs.at(static_cast<size_t>(*artefact->player))),
 			                             .value = artefact->value};
 		}
-		return MobileStaticLine {.offset = offset,
+		return MobileStaticLine {.offset = staticOffset,
 		                         .row = static_cast<int32_t>(still->type),
 		                         .xAngle = angles.x,
 		                         .yAngle = angles.y,
@@ -193,18 +207,16 @@ std::vector<entt::entity> ecs::vortex_crossing::IdenticalStatics(const Registry&
 	{
 		return identical;
 	}
-	const auto& at = transform->position;
-	const auto place = MapPlace(at, world.ground({at.x, at.z}));
+	const auto place = StaticPlace(registry, thing, world);
 	registry.Each<const MobileStatic, const Transform>(
-	    [&](entt::entity other, const MobileStatic& otherStill, const Transform& otherTransform) {
+	    [&](entt::entity other, const MobileStatic& otherStill, const Transform& /*unused*/) {
 		    // Only those lying on the land are found there: not one flying, held or being taken
 		    if (other == thing || otherStill.type != still->type ||
 		        registry.AnyOf<InPhysics, InHand, CarriedByTornado>(other) || !world.filedAsStatic(other))
 		    {
 			    return;
 		    }
-		    const auto& position = otherTransform.position;
-		    const auto otherPlace = MapPlace(position, world.ground({position.x, position.z}));
+		    const auto otherPlace = StaticPlace(registry, other, world);
 		    // The very same place across the land and the very same height above it
 		    if (otherPlace.x == place.x && otherPlace.z == place.z && otherPlace.altitude == place.altitude)
 		    {

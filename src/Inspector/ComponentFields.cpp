@@ -1296,6 +1296,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Mobile>(context).Field<&components::Mobile::dummy>("dummy");
 	Reflect<components::MobileStatic>(context).Field<&components::MobileStatic::type>("type");
 	Reflect<components::MobileObject>(context).Field<&components::MobileObject::type>("type");
+	Reflect<components::PlacedHeight>(context)
+	    .Field<&components::PlacedHeight::height>("height")
+	    .Field<&components::PlacedHeight::position>("position");
 	Reflect<components::Rock> {context};
 	Reflect<components::MorphWithTerrain>(context).Field<&components::MorphWithTerrain::dummy>("dummy");
 	Reflect<components::NeverFades> {context};
