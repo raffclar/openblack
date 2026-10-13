@@ -215,7 +215,7 @@ struct Situation
 	/// Where the player looks from, the nearest water's edge and the water, and the action that shows its strongest
 	/// desire
 	std::optional<glm::vec2> camera;
-	std::optional<creature_mind::Wants::WaterSpot> water;
+	std::optional<creature_mind::WaterSpot> water;
 	std::optional<size_t> showDesireAnimation;
 	/// Fishing at the nearest fish farm: its shoal (the farm itself without one), where the creature would stand to fish
 	/// for itself (the shoal, or the nearest place it can stand near enough to it; none for none), how near it goes,

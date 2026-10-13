@@ -584,35 +584,6 @@ TEST(CreatureDesires, FeedbackPushesEverySourceOfAType)
 	EXPECT_FLOAT_EQ(desires[creature_desires::Desire::Anger].sources.front().value, 1.0f);
 }
 
-TEST(CreatureIdleMind, ACuriousCreatureLooksSomethingOver)
-{
-	creature_mind::Wants wants {.curiosity = 0.5f, .object = 7u};
-	const auto plan = creature_mind::ChooseObjectActivity(wants, First);
-	ASSERT_TRUE(plan.has_value());
-	EXPECT_EQ(plan->activity, creature_mind::Activity::Examine);
-	ASSERT_EQ(plan->agenda.size(), 3u);
-	EXPECT_EQ(plan->agenda[0].order.kind, creature_mind::ObjectOrder::Kind::PickUp);
-	EXPECT_EQ(plan->agenda[0].order.object, 7u);
-	EXPECT_EQ(plan->agenda[1].order.kind, creature_mind::ObjectOrder::Kind::Keep);
-	EXPECT_EQ(plan->agenda[1].order.animation, creature_object_actions::k_FirstKeepAnimation);
-	// rand(10) of 0 tosses it away rather than putting it down
-	EXPECT_EQ(plan->agenda[2].order.kind, creature_mind::ObjectOrder::Kind::Discard);
-	// Not curious enough, or nothing at hand, it doesn't
-	wants.curiosity = 0.1f;
-	EXPECT_FALSE(creature_mind::ChooseObjectActivity(wants, First).has_value());
-	wants = {.anger = 0.9f, .object = 7u};
-	EXPECT_FALSE(creature_mind::ChooseObjectActivity(wants, First).has_value());
-	wants.hurlTarget = glm::vec2(10.0f, 20.0f);
-	const auto hurl = creature_mind::ChooseObjectActivity(wants, First);
-	ASSERT_TRUE(hurl.has_value());
-	EXPECT_EQ(hurl->activity, creature_mind::Activity::Hurl);
-	EXPECT_EQ(hurl->agenda.back().order.kind, creature_mind::ObjectOrder::Kind::Throw);
-	// Holding something it has no use for, it puts it down
-	const auto putDown = creature_mind::ChooseObjectActivity({.holding = true}, First);
-	ASSERT_TRUE(putDown.has_value());
-	EXPECT_EQ(putDown->activity, creature_mind::Activity::PutDown);
-}
-
 TEST(CreatureIdleMind, EatingIsPickingUpExaminingAndEating)
 {
 	const auto agenda = creature_mind::Eat(3u);

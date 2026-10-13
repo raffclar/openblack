@@ -40,14 +40,13 @@ namespace openblack::creature_mind_tables
 struct Tables;
 }
 
-/// What the creature mind system's files share: how a species' desires start, and finding food, water and things to
-/// hurl at about a creature
+/// What the files of the creature mind system share: how the desires of a species start, and how to find the food and
+/// the water near a creature
 namespace openblack::ecs::systems::mind_detail
 {
 [[nodiscard]] std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> SetupFor(CreatureType species);
 [[nodiscard]] std::optional<float> FoodValueOf(entt::entity entity);
-[[nodiscard]] std::optional<creature_mind::Wants::WaterSpot> NearestWater(glm::vec2 from);
-[[nodiscard]] std::optional<glm::vec2> NearestHurlTarget(ecs::Registry& registry, glm::vec2 from);
+[[nodiscard]] std::optional<creature_mind::WaterSpot> NearestWater(glm::vec2 from);
 /// What a creature knows of a thing, as far as the world here tells it
 [[nodiscard]] std::optional<creature_tree::Belief> BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                             entt::entity self);
@@ -67,9 +66,6 @@ namespace openblack::ecs::systems::mind_detail
 /// let creatures attack it.
 [[nodiscard]] bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
                                   const creature_mind_tables::Tables& tables);
-/// How useful the creature has learnt a food is to eat, 0.1 when nothing is known
-[[nodiscard]] float FoodUsefulness(const ecs::Registry& registry, const components::CreatureMindState& mind, entt::entity self,
-                                   entt::entity food);
 /// How often a creature has seen a miracle cast, and how often it must see it to learn it; none for a miracle it can't
 /// learn by watching
 [[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(const components::CreatureMindState& mind,
