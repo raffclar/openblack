@@ -159,6 +159,14 @@ bool HelpMessageSystem::RunMessageSet(size_t set, std::optional<messages::Texts>
 	return true;
 }
 
+void HelpMessageSystem::TriggerCategory(uint32_t category)
+{
+	if (category < _categoryTurn.size())
+	{
+		_categoryTurn.at(category) = Turn();
+	}
+}
+
 void HelpMessageSystem::HelpQuery()
 {
 	// Not while a script's cut scene has the player's controls

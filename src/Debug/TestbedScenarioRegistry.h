@@ -619,6 +619,9 @@ struct Command
 		WalkHome,
 		/// One of the help's message sets (value) runs, as the help system runs it. Needs no creature
 		RunHelpMessage,
+		/// Every kind of the advisors' guidance counts as heard as long ago as can be, so the next remark due is said
+		/// at once rather than after its usual wait. Needs no creature
+		EndGuidanceWaits,
 		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
 		/// loses the last of its life. Needs no creature
 		DestroyTemple,
