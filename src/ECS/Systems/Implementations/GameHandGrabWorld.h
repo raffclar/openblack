@@ -54,6 +54,7 @@ public:
 	void HeatHeld(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
+	void GlobeIntoHand(entt::entity globe, PlayerNames player) override;
 	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity held) const override;
 	void SayCantPickUp(entt::entity creature) override;
 	bool GiveTo(entt::entity creature, entt::entity held, bool leftHand) override;

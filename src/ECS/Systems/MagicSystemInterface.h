@@ -237,12 +237,17 @@ public:
 	/// A fireball tapped by the empty hand within the player's influence: another player's is caught into the hand, the
 	/// player's own slips through. Whether it was caught.
 	virtual bool TapFireBall(entt::entity ball) = 0;
-	/// The action button went down with an empty hand: a one-shot bubble or a fireball under the hand, within the
-	/// player's influence, takes the press. Whether one did, so nothing behind it is taken.
-	virtual bool PressOrb(uint32_t nowMs, uint32_t turn) = 0;
-	/// The action button came up: let go quickly, the bubble pressed is tapped and its miracle goes into the hand, or the
-	/// fireball pressed is tapped
-	virtual void ReleaseOrb(uint32_t nowMs, uint32_t turn) = 0;
+	/// A one-shot globe tapped by the empty hand: its miracle goes into the hand, charged in full, and the globe pops.
+	/// Whether the hand took the miracle.
+	virtual bool TapGlobe(entt::entity globe) = 0;
+	/// The action button went down with an empty hand: a fireball under the hand, within the player's influence, takes
+	/// the press. Whether one did, so nothing behind it is taken.
+	virtual bool PressFireBall(uint32_t nowMs, uint32_t turn) = 0;
+	/// Once a frame while the action button is down: a fireball pressed for as long as a tap may last is taken, which
+	/// catches it as a tap would
+	virtual void HoldFireBall(uint32_t nowMs, uint32_t turn) = 0;
+	/// The action button came up: let go quickly, the fireball pressed is tapped
+	virtual void ReleaseFireBall(uint32_t nowMs, uint32_t turn) = 0;
 	/// The one-shot bubble under the hand now, if any
 	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;
 	/// The action button went down with a miracle in the hand: it is armed, locked on or cast. Whether the miracles took

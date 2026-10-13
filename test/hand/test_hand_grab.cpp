@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 
 #include "Hand/HandGrabRules.h"
+#include "Magic/HandHoldPose.h"
 
 using namespace openblack;
 using namespace openblack::hand_grab;
@@ -90,6 +91,26 @@ TEST(HandGrab, APressIsTimedByTheClockButNoLongerThanTheTurnsAllow)
 	// By the clock 500 ms, but the game has only moved on from turn 10 to turn 11
 	EXPECT_EQ(ElapsedMs(1500, 1000, 11, 10), 200u);
 	EXPECT_EQ(ElapsedMs(1100, 1000, 20, 10), 100u);
+}
+
+TEST(HandGrab, AOneShotGlobeHangsItsBaseBelowTheHandAndOpensItByItsRadius)
+{
+	// The model of the globe at a scale of 1 is 4.457 units tall. Its radius is 2.3 units.
+	constexpr float k_Height = 4.457f;
+	constexpr float k_Radius = 2.3f;
+	const auto globe = HoldOf(GrabKind::MobileObject, MobileStaticInfo::None, MeshId::Dummy, k_Height, k_Radius);
+	EXPECT_EQ(globe.type, HoldType::Side);
+	// The base of the globe hangs 0.7 of its height below the point of the hand. Thus the point of the hand is in the
+	// globe, 0.2 of its height above the middle.
+	const float hang = magic::hand_hold::SeedHang(globe.type, globe.loweringMultiplier, k_Height);
+	EXPECT_FLOAT_EQ(hang, 0.7f * k_Height);
+	EXPECT_NEAR(k_Height * 0.5f - hang, -0.2f * k_Height, 1e-5f);
+	// The hand rises by the hang, because the hang is more than the minimum rise
+	EXPECT_FLOAT_EQ(magic::hand_hold::HoldLift(globe.type, hang, 1.0f), hang);
+	// The radius of the globe opens the hand. At the standard size, the hand opens by 2.3 of its height of 3.2.
+	EXPECT_FLOAT_EQ(globe.holdRadius, k_Radius);
+	EXPECT_EQ(magic::hand_hold::HoldTimeMs(globe.type, 533, globe.holdRadius, 1.0f),
+	          static_cast<uint32_t>(266.0f * (k_Radius / 3.2f)));
 }
 
 TEST(HandGrab, EachKindHangsItsOwnWay)

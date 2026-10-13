@@ -46,10 +46,9 @@ public:
 	[[nodiscard]] const graphics::Texture2D* GetTextTexture() const override;
 	[[nodiscard]] entt::id_type BubbleMesh() override;
 	[[nodiscard]] entt::id_type BandMesh() override;
+	void UpdateGlobes(float gameSeconds) override;
 
 private:
-	/// The globes: their glint and rings run on, they face the camera, and the miracle in each spins or plays
-	void UpdateGlobes(float seconds);
 	/// The hand: its bands fly and spin, and it glows while it holds a miracle
 	void UpdateHand(float seconds);
 	/// The piles: each eases to how far it is raised for what it holds, from under the ground where it was made

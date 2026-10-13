@@ -219,6 +219,15 @@ TEST(PlayerMiracles, AMagicTypeStaysEnabledWhileAnythingEnablesIt)
 	EXPECT_TRUE(miracles.everEnabled.at(static_cast<size_t>(MagicType::Fireball)));
 }
 
+// A globe taken into the hand marks its miracle as ever enabled, without enabling it
+TEST(PlayerMiracles, AMagicTypeMarkedEverEnabledIsNotEnabled)
+{
+	components::Player::Miracles miracles;
+	player_miracles::MarkMagicTypeEverEnabled(miracles, MagicType::Heal);
+	EXPECT_TRUE(miracles.everEnabled.at(static_cast<size_t>(MagicType::Heal)));
+	EXPECT_FALSE(player_miracles::IsMagicTypeEnabled(miracles, MagicType::Heal));
+}
+
 TEST(PlayerMiracles, EveryTypeIsEnabledWhenAllAre)
 {
 	components::Player::Miracles miracles;
