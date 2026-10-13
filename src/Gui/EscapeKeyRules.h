@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <optional>
+#include <string_view>
 
 /// What the Escape key does in play, once a full-screen video and the game's open dialogs have had their turn. Free of
 /// game state so that the game and the tests share it.
@@ -68,5 +69,8 @@ struct Response
 
 /// What Escape does. While a script has the cinema bars in, nothing: there is no skipping a script's cut scene
 [[nodiscard]] Response Respond(const Situation& situation) noexcept;
+
+/// The reason that Escape does not open the menu in this situation. It is empty when Escape opens the menu.
+[[nodiscard]] std::string_view WhyMenuStaysShut(const Situation& situation) noexcept;
 
 } // namespace openblack::escape_key

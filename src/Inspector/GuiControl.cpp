@@ -102,7 +102,11 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 		};
 	};
 	provider->Add(
-	    Write("open", "Opens a window by its name, from gui.windows", {Required("window", "string", "The window's name")}),
+	    Write("open",
+	          "Opens a window by its name, from gui.windows. The game's menu opens with Escape, as the player opens it. "
+	          "When the game does not open the menu on Escape now (a cut scene, the start-of-game question, a video), "
+	          "no key is sent and the answer gives the reason",
+	          {Required("window", "string", "The window's name")}),
 	    openOrClose(true));
 	provider->Add(Write("close",
 	                    "Closes a window by its name. The start-of-game question (skip_box) closes as the player closes "
@@ -117,7 +121,9 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 	          "radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The "
 	          "game's dialogs are clicked through the game's input, in order behind any input still to come. A debug "
 	          "window's button inside a table row or another scope its window pushed needs path: the labels and numbers "
-	          "leading to it. The press is made at the window's next frame; read what it changed after",
+	          "leading to it. The press is made at the window's next frame; read what it changed after. When another dialog "
+	          "takes the clicks, no "
+	          "click is sent and the answer gives the reason",
 	          {Required("window", "string", "The window's name"),
 	           Required("button", "string", "The button's label"),
 	           {.name = "path",

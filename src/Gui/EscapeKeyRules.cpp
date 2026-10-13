@@ -47,4 +47,26 @@ Response Respond(const Situation& situation) noexcept
 	};
 }
 
+std::string_view WhyMenuStaysShut(const Situation& situation) noexcept
+{
+	if (situation.inGodsPlayground)
+	{
+		return "on the Gods' Playground, Escape does not open the menu";
+	}
+	if (situation.shiftOrCtrl)
+	{
+		return "Shift or Ctrl is held, and Escape does nothing then";
+	}
+	if (situation.scriptHoldsCinemaBars)
+	{
+		return "a script has the cinema bars in for its cut scene, and Escape does nothing then; load a scenario or "
+		       "wait for the bars to go";
+	}
+	if (!MenuMayOpen(situation.sinceMenuClosed))
+	{
+		return "the menu closed less than 300 ms ago; try again after that time";
+	}
+	return {};
+}
+
 } // namespace openblack::escape_key

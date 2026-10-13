@@ -593,7 +593,9 @@ TOOLS = [
     },
     {
         "name": "gui_open",
-        "description": "Opens a window by name (gui_windows); the menu opens with Escape as the player's does.",
+        "description": "Opens a window by name (gui_windows); the menu opens with Escape as the player's does. When the "
+                       "game keeps the menu shut on Escape now (a cut scene, the start-of-game question, a video), "
+                       "no key is sent and the error gives the reason.",
         "inputSchema": schema({"window": {"type": "string"}}, ["window"]),
         "query": "gui.open",
         "params": ["window"],
@@ -615,7 +617,8 @@ TOOLS = [
                        "through the game's input, behind any input still to come; gui_windows lists them; path [n] "
                        "for the n-th of a name. A "
                        "debug button inside a table row or other scope needs path: the labels and numbers its window "
-                       "pushed before it.",
+                       "pushed before it. When another dialog takes the clicks, no click is sent and the error gives "
+                       "the reason.",
         "inputSchema": schema({"window": {"type": "string"}, "button": {"type": "string"},
                                "path": {"type": "array"}}, ["window", "button"]),
         "query": "gui.press",
