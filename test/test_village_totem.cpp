@@ -92,6 +92,39 @@ TEST(VillageTotemEase, ItArrivesOnceWithinTheBellsReach)
 	EXPECT_FALSE(vt::TakeArrival(ease));
 }
 
+TEST(VillageTotemEase, ItMovesOnByTheRealTimeSinceItLastMovedOn)
+{
+	vt::Ease ease;
+	vt::SetShare(ease, 1.0f);
+	ease.clockMs = 1000;
+	vt::StepTo(ease, 3600);
+	EXPECT_NEAR(ease.share, 0.6875f, 1e-4f);
+	// The same time again moves it no further
+	vt::StepTo(ease, 3600);
+	EXPECT_NEAR(ease.share, 0.6875f, 1e-4f);
+	EXPECT_EQ(ease.clockMs, 3600u);
+	vt::StepTo(ease, 6200);
+	EXPECT_FLOAT_EQ(ease.share, 1.0f);
+}
+
+TEST(VillageTotemEase, ANewStatueCountsFromTheStartOfTheClock)
+{
+	// The first move of a new statue takes all the time since the clock started, so it is at its share at once
+	vt::Ease ease;
+	vt::SetShare(ease, 1.0f);
+	vt::StepTo(ease, 60000);
+	EXPECT_FLOAT_EQ(ease.share, 1.0f);
+}
+
+TEST(VillageTotemEase, TheDifferenceStaysCorrectWhenTheClockWraps)
+{
+	vt::Ease ease;
+	vt::SetShare(ease, 1.0f);
+	ease.clockMs = 0xFFFFFFFFu - 1299u;
+	vt::StepTo(ease, 1300);
+	EXPECT_FLOAT_EQ(ease.elapsed, 2600.0f);
+}
+
 TEST(VillageTotemRules, TheHandSlidesThreeIconHeightsAScreenAndStopsAtTheLand)
 {
 	EXPECT_FLOAT_EQ(vt::HandSlide(100.0f, 600.0f, 4.0f, 10.0f), 2.0f);
@@ -213,10 +246,29 @@ TEST(VillageTotemSystem, ItWearsItsPlayersCreatureAndStartsWithNoOneAtWorship)
 	auto& registry = village.world->registry;
 	EXPECT_EQ(registry.Get<Mesh>(village.icon).id, k_ApeIcon);
 	EXPECT_FLOAT_EQ(registry.Get<Town>(village.town).worshipShare, 0.0f);
-	village.system->Update(10.0f);
+	village.system->ProcessTurn(10);
 	// Set to none from none it arrives at once: the grinding stops and the bell rings
 	EXPECT_EQ(village.world->moving, (std::vector {true, false}));
 	EXPECT_EQ(village.world->bells, 1);
+}
+
+TEST(VillageTotemSystem, ItEasesEachFrameButRingsTheBellOnlyInAGameTurn)
+{
+	// While the game is paused no turns occur: the totem eases to its share by the real clock, but the bell is silent
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	auto& system = *village.system;
+	system.ProcessTurn(100);
+	ASSERT_EQ(village.world->bells, 1);
+	system.SetTownShare(village.town, 0.5f);
+	system.Update(100 + 2600);
+	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.5f * 8.0f);
+	system.Update(100 + 5000);
+	EXPECT_EQ(village.world->bells, 1);
+	// The first turn after the pause rings the bell once
+	system.ProcessTurn(100 + 5100);
+	system.ProcessTurn(100 + 5200);
+	EXPECT_EQ(village.world->bells, 2);
 }
 
 TEST(VillageTotemSystem, ANewPrimaryCreatureChangesTheIconOnTheOwnersTotemsAndLeavesTheirShares)
@@ -254,12 +306,16 @@ TEST(VillageTotemSystem, TheHandSlidesItAndLettingGoSetsTheTownsShare)
 	// only what the hand held, so the statue drops back and rises again
 	const auto& totem = registry.Get<VillageTotem>(village.totem);
 	EXPECT_FLOAT_EQ(totem.ease.duration, 0.2f * 5200.0f);
-	system.Update(520.0f);
+	system.Update(520);
 	EXPECT_NEAR(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.2f * 0.6875f * 8.0f, 1e-3f);
+	system.ProcessTurn(520);
 	EXPECT_EQ(village.world->bells, 0);
-	system.Update(520.0f);
+	system.Update(1040);
 	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.2f * 8.0f);
-	// Arrived, the bell rings once
+	// The bell rings once, at the first game turn after it arrives
+	EXPECT_EQ(village.world->bells, 0);
+	system.ProcessTurn(1040);
+	system.ProcessTurn(1140);
 	EXPECT_EQ(village.world->bells, 1);
 }
 
@@ -324,11 +380,11 @@ TEST(VillageTotemSystem, HeldApartFromItsShareASeeThroughSecondTotemShowsTheTown
 	auto village = MakeVillage(true);
 	auto& registry = village.world->registry;
 	auto& system = *village.system;
-	system.Update(10.0f);
+	system.Update(10);
 	EXPECT_TRUE(registry.Get<VillageTotem>(village.totem).ghost == entt::null);
 	ASSERT_TRUE(system.Grip(village.totem, PlayerNames::PLAYER_ONE));
 	system.Slide(300.0f, 600.0f);
-	system.Update(10.0f);
+	system.Update(20);
 	const auto& totem = registry.Get<VillageTotem>(village.totem);
 	ASSERT_TRUE(registry.Valid(totem.ghost));
 	ASSERT_TRUE(registry.Valid(totem.ghostIcon));
@@ -341,10 +397,10 @@ TEST(VillageTotemSystem, HeldApartFromItsShareASeeThroughSecondTotemShowsTheTown
 	EXPECT_EQ(registry.Get<Mesh>(totem.ghostIcon).id, k_ApeIcon);
 	// Let go, it eases to its share with the second where it is going; once there the second goes
 	system.LetGo();
-	system.Update(10.0f);
+	system.Update(30);
 	ASSERT_TRUE(registry.Valid(totem.ghost));
 	EXPECT_FLOAT_EQ(registry.Get<Transform>(totem.ghost).position.y, 3.0f + 0.3f * 8.0f);
-	system.Update(5200.0f);
+	system.Update(5230);
 	EXPECT_TRUE(totem.ghost == entt::null);
 	EXPECT_TRUE(totem.ghostIcon == entt::null);
 }
@@ -354,21 +410,21 @@ TEST(VillageTotemSystem, AsItMovesItsPlayerSeesTheShareItIsHeldAtButNotJustAfter
 	auto village = MakeVillage(true);
 	auto& system = *village.system;
 	// Drawn afresh with its icon, it shows nothing
-	system.Update(10.0f);
+	system.Update(10);
 	EXPECT_FALSE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
 	// Standing still it shows nothing either
-	system.Update(10.0f);
+	system.Update(20);
 	EXPECT_FALSE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
 	ASSERT_TRUE(system.Grip(village.totem, PlayerNames::PLAYER_ONE));
 	system.Slide(150.0f, 600.0f);
-	system.Update(10.0f);
+	system.Update(30);
 	const auto tip = system.TakeShareToolTip(PlayerNames::PLAYER_ONE);
 	ASSERT_TRUE(tip.has_value());
 	EXPECT_EQ(tip->totem, village.totem);
 	EXPECT_NEAR(tip->percent, 15.0f, 1e-4f);
 	// Taken, it is gone until it moves again; other players see none
 	EXPECT_FALSE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
-	system.Update(10.0f);
+	system.Update(40);
 	EXPECT_TRUE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
 	EXPECT_FALSE(system.TakeShareToolTip(PlayerNames::PLAYER_TWO).has_value());
 }

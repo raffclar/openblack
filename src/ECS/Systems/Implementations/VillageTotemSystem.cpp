@@ -246,7 +246,7 @@ void VillageTotemSystem::Remove(entt::entity totem)
 	registry.Destroy(totem);
 }
 
-void VillageTotemSystem::Update(float gameMilliseconds)
+void VillageTotemSystem::Update(uint32_t realMs)
 {
 	auto& registry = _world->Entities();
 	std::vector<entt::entity> totems;
@@ -260,13 +260,7 @@ void VillageTotemSystem::Update(float gameMilliseconds)
 			Remove(totem);
 			continue;
 		}
-		village_totem::Step(totemComponent.ease, gameMilliseconds);
-		// Come to its share, its moving sound stops and the village bell rings
-		if (village_totem::TakeArrival(totemComponent.ease))
-		{
-			_world->SetMovingSound(totem, false);
-			_world->RingBell(registry.Get<const Transform>(totem).position);
-		}
+		village_totem::StepTo(totemComponent.ease, realMs);
 		Place(totem);
 		// The second totem shows the other share, and the player sees the share as it moves
 		const auto shown = village_totem::ShownShares(totemComponent.ease.share, totemComponent.held, totemComponent.gripped);
@@ -276,6 +270,29 @@ void VillageTotemSystem::Update(float gameMilliseconds)
 	if (_gripped != entt::null && !registry.Valid(_gripped))
 	{
 		_gripped = entt::null;
+	}
+}
+
+void VillageTotemSystem::ProcessTurn(uint32_t realMs)
+{
+	auto& registry = _world->Entities();
+	std::vector<entt::entity> arrived;
+	registry.Each<VillageTotem>([&registry, &arrived, realMs](entt::entity totem, VillageTotem& totemComponent) {
+		if (!registry.Valid(totemComponent.townCentre))
+		{
+			return;
+		}
+		village_totem::StepTo(totemComponent.ease, realMs);
+		if (village_totem::TakeArrival(totemComponent.ease))
+		{
+			arrived.push_back(totem);
+		}
+	});
+	// A totem at its share stops the sound of its movement and rings the village bell
+	for (const auto totem : arrived)
+	{
+		_world->SetMovingSound(totem, false);
+		_world->RingBell(registry.Get<const Transform>(totem).position);
 	}
 }
 

@@ -2636,7 +2636,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::village_totem::Ease::acceleration>("acceleration")
 	    .Field<&openblack::ecs::village_totem::Ease::jerk>("jerk")
 	    .Field<&openblack::ecs::village_totem::Ease::snap>("snap")
-	    .Field<&openblack::ecs::village_totem::Ease::moving>("moving");
+	    .Field<&openblack::ecs::village_totem::Ease::moving>("moving")
+	    .Field<&openblack::ecs::village_totem::Ease::clockMs>("clockMs");
 	Reflect<openblack::ecs::villager_draw::ClipBlend>(context, ValueOnly {})
 	    .Field<&openblack::ecs::villager_draw::ClipBlend::from>("from")
 	    .Field<&openblack::ecs::villager_draw::ClipBlend::fromPlace>("fromPlace")
