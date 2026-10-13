@@ -30,6 +30,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/DynamicsWorld.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
@@ -370,4 +371,34 @@ TEST_F(DynamicsSystemTest, ARockSinkingInTheSeaIsDrawnUntilWhollyUnderAndDeleted
 	}
 	EXPECT_TRUE(sawUnderSea);
 	EXPECT_FALSE(_world->Entities().Valid(rock)) << "it never sank deep enough to be deleted";
+}
+
+TEST_F(DynamicsSystemTest, AnImmovableVillagerLetGoGoesBackDownButAnImmovableThingStaysOutOfTheMap)
+{
+	auto& registry = _world->Entities();
+	// A villager a script made immovable, let go 5 m above the land
+	const auto villager = Rock({1000.0f, 1000.0f});
+	registry.Remove<MobileStatic>(villager);
+	registry.Assign<Villager>(villager);
+	registry.Assign<Immovable>(villager);
+	registry.Get<Transform>(villager).position = {1004.0f, FakeWorld::k_LandHeight + 5.0f, 1000.0f};
+	_world->filed.erase(villager);
+	const auto released = _dynamics->LetGoFromHand(villager, {.velocity = {0.0f, 0.0f, 0.0f}});
+	EXPECT_TRUE(released.accepted);
+	EXPECT_EQ(released.entry, nullptr);
+	// It leaves the physics at once and is back in the map where it was let go
+	EXPECT_FALSE(registry.AllOf<InPhysics>(villager));
+	ASSERT_EQ(_world->filed.count(villager), 1u);
+	EXPECT_EQ(_world->filed.at(villager), FakeWorld::CellOf({1004.0f, 0.0f, 1000.0f}));
+
+	// Any other immovable thing is left as the game leaves it: counted in the physics, out of the map, where it was let go
+	const auto rock = Rock({1020.0f, 1000.0f});
+	registry.Assign<Immovable>(rock);
+	registry.Get<Transform>(rock).position.y += 5.0f;
+	_world->filed.erase(rock);
+	EXPECT_TRUE(_dynamics->LetGoFromHand(rock, {.velocity = {0.0f, 0.0f, 0.0f}}).accepted);
+	EXPECT_TRUE(registry.AllOf<InPhysics>(rock));
+	EXPECT_EQ(_world->filed.count(rock), 0u);
+	EXPECT_FLOAT_EQ(registry.Get<const Transform>(rock).position.y, FakeWorld::k_LandHeight + 5.0f);
+	EXPECT_EQ(Entries(), 0u);
 }
