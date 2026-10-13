@@ -140,6 +140,15 @@ public:
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
 	/// plan's desire opposes are held back.
 	virtual bool ForceActivity(entt::entity /*creature*/, const ForcedActivity& /*plan*/) { return false; }
+	/// The player's hand gives the creature a thing: it drops what it was doing, turns to the camera at a point on the
+	/// ground looking curious, and reaches to take the thing from the hand, with its left hand when asked; then its
+	/// desires choose what to do with it. Whether it took the giving.
+	virtual bool TakeFromHand(entt::entity /*creature*/, entt::entity /*object*/, bool /*leftHand*/, glm::vec2 /*camera*/)
+	{
+		return false;
+	}
+	/// Whether the creature is still about taking a thing from the hand: turning to the player or reaching for it
+	[[nodiscard]] virtual bool IsTakingFromHand(entt::entity /*creature*/) const { return false; }
 	/// A fire reaches the creature: it goes to put out a fire on something it cares for enough, once it has seen the
 	/// water miracle often enough to cast it, and runs from the burning thing otherwise
 	virtual void ReactToFire(entt::entity /*creature*/, entt::entity /*burning*/) {}
