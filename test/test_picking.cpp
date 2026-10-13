@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <array>
 #include <optional>
 #include <vector>
@@ -468,6 +470,36 @@ TEST(ScreenPick, OnlyAStrictlyNearerObjectTakesThePick)
 	// A miss is nothing picked
 	EXPECT_FALSE(
 	    screen_pick::PickAmong(view, candidates, [](size_t) -> std::optional<float> { return std::nullopt; }).has_value());
+}
+
+TEST(ScreenPick, APersonIsAsFarAsTheirMiddleLessTheirSphereAndTheNearPlane)
+{
+	const auto view = View();
+	// The middle is half the model's height above the feet; the sphere's radius and the near plane come off
+	EXPECT_FLOAT_EQ(screen_pick::SphereDistance(view, {0.0f, 0.0f, -10.0f}, 1.0f, 1.0f), std::sqrt(101.0f) - 2.0f);
+	EXPECT_FLOAT_EQ(screen_pick::SphereDistance(view, {3.0f, -4.0f, 0.0f}, 0.0f, 0.5f), 3.5f);
+}
+
+// The cursor just beside a person, off their body but inside their sphere's circle, with a tree's leaves under it a
+// little further back: the person is picked, as their sphere's distance is nearer than the tree's triangle
+TEST(ScreenPick, APersonIsPickedAnywhereInTheirSpheresCircle)
+{
+	const auto view = View();
+	const glm::vec3 feet {0.6f, -0.9f, -10.0f};
+	const std::array<screen_pick::Candidate, 2> candidates = {{
+	    {.centre = {0.0f, 0.0f, -11.0f}, .radius = 3.0f, .origin = {0.0f, -3.0f, -11.0f}},
+	    {.centre = feet + glm::vec3(0.0f, 0.9f, 0.0f), .radius = 1.0f, .origin = feet},
+	}};
+	ASSERT_TRUE(screen_pick::CursorOverSphere(view, candidates[1].centre, candidates[1].radius, candidates[1].origin));
+	const auto picked = screen_pick::PickAmong(view, candidates, [&](size_t i) -> std::optional<float> {
+		return i == 0 ? std::optional<float>(11.0f) : screen_pick::SphereDistance(view, feet, 0.9f, 1.0f);
+	});
+	ASSERT_TRUE(picked.has_value());
+	EXPECT_EQ(picked->index, 1u);
+	EXPECT_LT(picked->distance, 11.0f);
+	// Outside the circle the person isn't there for the cursor
+	EXPECT_FALSE(screen_pick::CursorOverSphere(View({400.0f + 200.0f, 300.0f}), candidates[1].centre, candidates[1].radius,
+	                                           candidates[1].origin));
 }
 
 // A creature resting in its pen stands inside the temple's model, which holds the pen's walls: neither has priority,

@@ -2029,6 +2029,44 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3}},
 	});
+
+	// The camera looks down on a few people and animals from about 25 m, as in play: three people stand still at different
+	// distances, two more walk to and fro, two stand by an oak, and a cow, a sheep, a horse and a pig graze to the left
+	all.push_back({
+	    .id = "hand.pick_living",
+	    .name = "Picking up people and animals",
+	    .facet = Facet::Hand,
+	    .description = "Three people stand still near, middling and far from the camera, two walk to and fro across the "
+	                   "view, two stand by an oak, and a cow, a sheep, a horse and a pig graze. Move the hand near "
+	                   "each and press to pick them up.",
+	    .expected = "A person is taken whenever the pointer is inside the circle their bounding ball makes on the screen, "
+	                "not only on their body: a little beside, above or below a person still picks them. Of two people "
+	                "under the pointer the nearer to the camera is taken; by the oak the person is taken rather than "
+	                "the tree unless the pointer is on the tree nearer the camera. Animals are taken only with the "
+	                "pointer on their bodies.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -25.0f}, .look = {0.0f, 0.0f, 6.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-4.0f, 0.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, 8.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, 22.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {-12.0f, 12.0f},
+	                 .walkTo = glm::vec2(12.0f, 12.0f),
+	                 .walkAfterSeconds = 1.0f,
+	                 .walkRepeatSeconds = 12.0f},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {12.0f, 16.0f},
+	                 .walkTo = glm::vec2(-12.0f, 16.0f),
+	                 .walkAfterSeconds = 1.0f,
+	                 .walkRepeatSeconds = 12.0f},
+	                {.type = TreeInfo::Oak, .offset = {10.0f, 3.0f}},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {8.5f, 2.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {11.5f, 2.0f}, .inScript = true},
+	                {.type = AnimalInfo::Cow, .offset = {-14.0f, 2.0f}},
+	                {.type = AnimalInfo::Sheep, .offset = {-9.0f, -3.0f}},
+	                {.type = AnimalInfo::Horse, .offset = {-12.0f, 8.0f}},
+	                {.type = AnimalInfo::Pig, .offset = {-6.0f, 5.0f}}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)

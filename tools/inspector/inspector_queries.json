@@ -1109,7 +1109,7 @@
   "query": "players.hand"
  },
  {
-  "description": "What the cursor picks: the object, the point and the land under it",
+  "description": "What the cursor picks: the object, the point and the land under it, and the land behind the hand's middle, about which a press with nothing under the cursor reaches",
   "kind": "object",
   "parameters": [],
   "query": "players.pick"
