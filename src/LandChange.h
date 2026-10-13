@@ -39,19 +39,9 @@ enum class Advisors
 	Afresh,
 };
 
-/// What becomes of the help texts and the advisors' voices saying them
-enum class HelpTexts
-{
-	/// The texts stay, but every sound stops with the land, the advisors' voices too
-	VoicesStop,
-	/// The texts go and the voices stop
-	Cleared,
-};
-
 struct Rules
 {
 	Advisors advisors;
-	HelpTexts helpTexts;
 	/// The scripts' hold on the screen stays: their fade, their cinema bars, their texts on screen, the interface
 	/// switched off
 	bool scriptScreenKept;
@@ -64,21 +54,14 @@ struct Rules
 	switch (kind)
 	{
 	case Kind::Story:
-		return {.advisors = Advisors::CarryOn,
-		        .helpTexts = HelpTexts::VoicesStop,
-		        .scriptScreenKept = true,
-		        .heartbeatsCarried = true};
+		return {.advisors = Advisors::CarryOn, .scriptScreenKept = true, .heartbeatsCarried = true};
 	case Kind::FreshScripts:
-		return {.advisors = Advisors::SentHome,
-		        .helpTexts = HelpTexts::Cleared,
-		        .scriptScreenKept = false,
-		        .heartbeatsCarried = true};
+		return {.advisors = Advisors::SentHome, .scriptScreenKept = false, .heartbeatsCarried = true};
 	case Kind::NewGame:
 	case Kind::Testbed:
 		break;
 	}
-	return {
-	    .advisors = Advisors::Afresh, .helpTexts = HelpTexts::Cleared, .scriptScreenKept = false, .heartbeatsCarried = false};
+	return {.advisors = Advisors::Afresh, .scriptScreenKept = false, .heartbeatsCarried = false};
 }
 
 } // namespace openblack::land_change

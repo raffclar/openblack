@@ -17,7 +17,6 @@ TEST(LandChange, TheStoryKeepsEverythingThatIsNotTheLands)
 {
 	constexpr auto rules = RulesFor(Kind::Story);
 	EXPECT_EQ(rules.advisors, Advisors::CarryOn);
-	EXPECT_EQ(rules.helpTexts, HelpTexts::VoicesStop);
 	EXPECT_TRUE(rules.scriptScreenKept);
 	EXPECT_TRUE(rules.heartbeatsCarried);
 }
@@ -26,7 +25,6 @@ TEST(LandChange, TheLandMenuStartsTheScriptsAgainButKeepsThePlayers)
 {
 	constexpr auto rules = RulesFor(Kind::FreshScripts);
 	EXPECT_EQ(rules.advisors, Advisors::SentHome);
-	EXPECT_EQ(rules.helpTexts, HelpTexts::Cleared);
 	EXPECT_FALSE(rules.scriptScreenKept);
 	EXPECT_TRUE(rules.heartbeatsCarried);
 }
@@ -37,7 +35,6 @@ TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
 	{
 		const auto rules = RulesFor(kind);
 		EXPECT_EQ(rules.advisors, Advisors::Afresh);
-		EXPECT_EQ(rules.helpTexts, HelpTexts::Cleared);
 		EXPECT_FALSE(rules.scriptScreenKept);
 		EXPECT_FALSE(rules.heartbeatsCarried);
 	}
