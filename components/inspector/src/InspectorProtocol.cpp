@@ -93,7 +93,9 @@ std::optional<size_t> ReadCount(const Json& value)
 	return std::nullopt;
 }
 
-std::optional<std::string> ReadOptions(const Json& object, QueryOptions& options)
+} // namespace
+
+std::optional<std::string> openblack::inspector::ReadShapingOptions(const Json& object, QueryOptions& options)
 {
 	if (const auto it = object.find("fields"); it != object.end())
 	{
@@ -197,8 +199,6 @@ std::optional<std::string> ReadOptions(const Json& object, QueryOptions& options
 	return std::nullopt;
 }
 
-} // namespace
-
 std::optional<FilterOp> openblack::inspector::ParseFilterOp(std::string_view op)
 {
 	if (op == "=")
@@ -277,7 +277,7 @@ std::variant<Request, std::string> openblack::inspector::DecodeRequest(std::stri
 		}
 		request.params = *it;
 	}
-	if (auto error = ReadOptions(object, request.options); error.has_value())
+	if (auto error = ReadShapingOptions(object, request.options); error.has_value())
 	{
 		return *std::move(error);
 	}

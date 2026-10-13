@@ -30,7 +30,9 @@
 ///      "where": [{"field": "label", "op": "contains", "value": "Oak"}],
 ///      "limit": 20, "cursor": 0, "count": false, "summary": "distance", "max_bytes": 16384}
 ///
-/// Only "query" is required. The answer echoes the id:
+/// Only "query" is required. The shaping members (fields, where, near, radius, limit, cursor, count, summary, max_bytes)
+/// may also go inside "params", as tools put every argument there, for a query without parameters of those names. The
+/// answer echoes the id:
 ///
 ///     {"id": 7, "ok": true, "result": {...}}      or      {"id": 7, "ok": false, "error": "..."}
 ///
@@ -102,6 +104,14 @@ struct Request
 	Json params = Json::object();
 	QueryOptions options;
 };
+
+/// The members of a request that shape its answer rather than go to its query, the same for every query
+inline constexpr std::array<std::string_view, 9> k_ShapingMembers {
+    "fields", "where", "near", "radius", "limit", "cursor", "count", "summary", "max_bytes",
+};
+
+/// Reads an object's shaping members into the options, leaving the others as they are; why not when one doesn't read
+[[nodiscard]] std::optional<std::string> ReadShapingOptions(const Json& object, QueryOptions& options);
 
 /// The point to search around and its radius from an object's near and radius members, none when it has neither; why
 /// not when they don't read
