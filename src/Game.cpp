@@ -85,6 +85,7 @@
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
+#include "ECS/ChallengePictures.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -1773,6 +1774,7 @@ bool Game::Update() noexcept
 			{
 				continue;
 			}
+			actions.PointPlayerEvent(e);
 			Locator::events::value().Create<SDL_Event>(e);
 		}
 		FollowWindowSize();
@@ -1898,6 +1900,10 @@ bool Game::Update() noexcept
 	{
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
+		if (std::exchange(_restartRequested, false))
+		{
+			RestartForProfile();
+		}
 	}
 	GripLandscapeEffect::Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 
@@ -2500,20 +2506,6 @@ bool Game::Update() noexcept
 				};
 			}
 		}
-		// Each change of what the hand does (pulling, holding, scooping or none) fades its pose from how it was last
-		// drawn, as its place fades (see magic::hand_hold::StageFade)
-		if (_handAnimation)
-		{
-			const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
-			const auto stage =
-			    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
-			                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
-			if (_handPoseStage.has_value() && stage != *_handPoseStage)
-			{
-				_handAnimation->FadeFromLastPose();
-			}
-			_handPoseStage = stage;
-		}
 		bool holdingSeed = false;
 		{
 			const auto handEntity = Locator::handSystem::value()
@@ -2683,7 +2675,13 @@ bool Game::Update() noexcept
 				    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
 				                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
 				const auto placed = handTransform->position;
-				_handHold.Fade(stage, heldThing.has_value() ? heldThing->entity : entt::null, deltaTime, *handTransform);
+				// Each change of what the hand does (pulling, holding, scooping or none) blends the drawn hand from how it
+				// was last drawn
+				if (auto* hand = Locator::entitiesRegistry::value().TryGet<ecs::components::Hand>(handEntity))
+				{
+					_handHold.Fade(stage, heldThing.has_value() ? heldThing->entity : entt::null, deltaTime, *handTransform,
+					               hand->boneMatrices);
+				}
 				TraceHand("stage fade", handTransform->position);
 				EndHandTrace(placed, *handTransform, stage, grab);
 				_handHold.PlaceHandEffect(heldSeed, _handAnimation.get(), *handTransform, handSize);
@@ -3265,18 +3263,23 @@ bool Game::Initialize() noexcept
 		auto playerName = gui::ToUtf16(user != nullptr ? user : "Player");
 		// The settings the menu starts with are the game's
 		gui::MenuSettings settings;
+		settings.leftHandedHand = !Locator::config::value().rightHandedHand;
+		// The options the player keeps with their profile, the game's own without one
 		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
 		{
 			playerName = gui::ToUtf16(profile->name);
 			settings.creatureName = gui::ToUtf16(profile->creatureName);
 			settings.symbol = profile->symbol;
+			gui::TakeProfileSettings(settings, profile->settings);
 		}
 		auto& audio = Locator::audio::value();
 		settings.sfxVolume = audio.GetSfxVolume();
 		settings.musicVolume = audio.GetMusicVolume();
-		settings.leftHandedHand = !Locator::config::value().rightHandedHand;
 		settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
+		const auto kept = gui::ToProfileSettings(settings);
 		_interface = gui::GameInterface::Create(playerName, std::move(settings));
+		ApplyPlayerSettings(kept);
+		RefreshPlayersPage();
 		if (!_interface)
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game's menu is not available, Escape quits");
@@ -3836,6 +3839,12 @@ bool Game::Run() noexcept
 			auto section = profiler.BeginScoped(Profiler::Stage::RendererFrame);
 			Locator::rendererInterface::value().Frame();
 		}
+		// The challenges' pictures whose screens are back
+		auto& renderer = Locator::rendererInterface::value();
+		ecs::challenge_pictures::Collect(
+		    Locator::entitiesRegistry::value(),
+		    {.take = [&renderer](const std::string& name) { return renderer.TakeCapturedFrame(name); },
+		     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
 		ShowInspectorCamera(false);
 
 		// Clear the stale screenshot request
@@ -4307,6 +4316,23 @@ void Game::HandleInterfaceAction()
 		Locator::time::value().SetPaused(false);
 	}
 
+	// The edits on the Players page are kept with the profile played, before anything its buttons do
+	if (const auto edits = _interface->GetMenu().TakePlayerEdits(); edits.has_value())
+	{
+		Locator::playerProfileSystem::value().EditCurrentProfile(edits->creatureName, edits->symbol);
+		NameCreatureAfterProfile();
+	}
+	// A profile made in the new player's box from the Players page is played from now on
+	if (auto& box = _interface->GetNewPlayerBox(); !box.IsActive())
+	{
+		if (const auto answer = box.TakeAnswer(); answer.has_value())
+		{
+			Locator::playerProfileSystem::value().CreateProfile(answer->name, answer->symbol);
+			PlayerProfileChanged();
+		}
+		(void)box.TakeCancelled();
+	}
+
 	// The settings the player changes take effect at once
 	if (_interface->TakeSettingsChanged())
 	{
@@ -4314,11 +4340,10 @@ void Game::HandleInterfaceAction()
 		auto& audio = Locator::audio::value();
 		audio.SetSfxVolume(settings.sfxVolume);
 		audio.SetMusicVolume(settings.musicVolume);
-		Locator::config::value().rightHandedHand = !settings.leftHandedHand;
-		if (Locator::creatureHelpSystem::has_value())
-		{
-			Locator::creatureHelpSystem::value().SetHelpOn(settings.creatureHelp);
-		}
+		const auto kept = gui::ToProfileSettings(settings);
+		ApplyPlayerSettings(kept);
+		// The player's options are kept with their profile
+		Locator::playerProfileSystem::value().SetCurrentSettings(kept);
 	}
 
 	// The menu pauses the game while it is open
@@ -4340,19 +4365,159 @@ void Game::HandleInterfaceAction()
 	case Action::Quit:
 		RequestQuit();
 		break;
+	case Action::CreatePlayer:
+		AskForAnotherPlayer(true);
+		break;
+	case Action::PickPlayer:
+		if (const auto picked = _interface->GetMenu().GetPickedPlayer(); picked.has_value())
+		{
+			auto& profiles = Locator::playerProfileSystem::value();
+			const auto& list = profiles.GetProfiles().profiles;
+			if (*picked < list.size())
+			{
+				profiles.SelectProfile(gui::ToUtf16(list.at(*picked).name));
+				PlayerProfileChanged();
+			}
+		}
+		break;
+	case Action::DeletePlayer:
+	{
+		auto& profiles = Locator::playerProfileSystem::value();
+		profiles.DeleteProfile(_interface->GetMenu().GetPlayerToDelete());
+		const auto next = _interface->GetMenu().GetPickedPlayer();
+		const auto& list = profiles.GetProfiles().profiles;
+		if (next.has_value() && *next < list.size())
+		{
+			profiles.SelectProfile(gui::ToUtf16(list.at(*next).name));
+			PlayerProfileChanged();
+		}
+		else
+		{
+			// With no profile left the new player's box asks for one, and can't be cancelled
+			PlayerProfileChanged();
+			AskForAnotherPlayer(false);
+		}
+		break;
+	}
+	case Action::StartNewGame:
+	case Action::Restart:
+		// Starting again as the profile picked carries on from its last automatic save, and with none, which openblack
+		// can't make yet, starts a new game, as Start a New Game does
+		// The land is loaded again between frames, not while the input is handled
+		_interface->GetMenu().Close();
+		_restartRequested = true;
+		break;
 	case Action::StartSkirmish:
 	case Action::JoinOnline:
 	case Action::Statistics:
-	case Action::CreatePlayer:
-	case Action::DeletePlayer:
 	case Action::EditTattoo:
-	case Action::StartNewGame:
 	case Action::RedefineControl:
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");
 		break;
 	case Action::Continue:
 	case Action::None:
 		break;
+	}
+}
+
+void Game::RefreshPlayersPage()
+{
+	if (!_interface || !Locator::playerProfileSystem::has_value())
+	{
+		return;
+	}
+	const auto& profiles = Locator::playerProfileSystem::value().GetProfiles();
+	std::vector<std::u16string> names;
+	names.reserve(profiles.profiles.size());
+	std::optional<size_t> current;
+	for (const auto& profile : profiles.profiles)
+	{
+		if (profile.name == profiles.current)
+		{
+			current = names.size();
+		}
+		names.push_back(gui::ToUtf16(profile.name));
+	}
+	_interface->GetMenu().SetPlayers(std::move(names), current);
+}
+
+void Game::PlayerProfileChanged()
+{
+	RefreshPlayersPage();
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (!profile.has_value() || !_interface)
+	{
+		return;
+	}
+	// The page shows the profile's creature's name, symbol and options, which take effect
+	_interface->GetMenu().ShowPlayer(gui::ToUtf16(profile->creatureName), profile->symbol, profile->settings);
+	ApplyPlayerSettings(profile->settings);
+	NameCreatureAfterProfile();
+}
+
+void Game::NameCreatureAfterProfile()
+{
+	// The player's creature takes the name its profile gives it
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (!profile.has_value() || !Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	const auto creature = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!creature.has_value() || !registry.Valid(*creature))
+	{
+		return;
+	}
+	if (auto* component = registry.TryGet<ecs::components::Creature>(*creature); component != nullptr)
+	{
+		component->name = gui::ToUtf16(profile->creatureName);
+	}
+}
+
+void Game::AskForAnotherPlayer(bool canCancel)
+{
+	auto& profiles = Locator::playerProfileSystem::value();
+	SDL_StartTextInput();
+	_interface->ShowNewPlayerBoxOverGame(canCancel && profiles.GetProfileCount() > 0,
+	                                     [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
+}
+
+void Game::RestartForProfile()
+{
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (profile.has_value())
+	{
+		_interface->SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName), profile->symbol,
+		                             profile->settings);
+		RefreshPlayersPage();
+	}
+	if (!StartNewGame(std::nullopt))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game could not start again");
+	}
+}
+
+void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
+{
+	Locator::config::value().rightHandedHand = !settings.leftHanded;
+	if (Locator::creatureHelpSystem::has_value())
+	{
+		Locator::creatureHelpSystem::value().SetHelpOn(settings.creatureHelp);
+	}
+	if (Locator::chlapi::has_value())
+	{
+		Locator::chlapi::value().SetPlayerHelpLevel(static_cast<uint32_t>(std::max(settings.helpLevel, 0)));
+	}
+	if (Locator::helpTextSystem::has_value())
+	{
+		Locator::helpTextSystem::value().SetTextChoices(
+		    {.textDraw = settings.storyText, .topToBottom = settings.textFromBottom, .readSpeed = settings.readSpeed});
+	}
+	if (_interface)
+	{
+		constexpr int k_Levels = 4;
+		_interface->GetToolTips().SetLevel(static_cast<gui::ToolTipLevel>(std::clamp(settings.toolTips, 0, k_Levels - 1)));
 	}
 }
 
@@ -4686,13 +4851,16 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		}
 
 		// The furthest the hand may be is the land less its height, so its fingers hang down to the land, or the
-		// water over the sea. Over a thing it eases to where it rests on the thing, touching it.
+		// water over the sea; holding something, the land itself. Over a thing it eases to where it rests on the thing,
+		// touching it.
+		const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
 		const auto overSea =
 		    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
 		const auto hover = hand_feel::HoverDistancesOf({
 		    .camera = eye,
 		    .land = _cursorLand,
 		    .landIsSea = overSea,
+		    .holding = holding,
 		    .restOnThing = _handRestOnThing,
 		    .handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance),
 		    .currentDistance = _handDistance,
@@ -4700,14 +4868,10 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		    .reach = handReach,
 		});
 
-		// The hand eases out slowly away from the camera and quickly towards it
-		const auto easeTime = _handHoverZoomer.GetValue() <= hover.target ? k_HandEaseOutTime : k_HandEaseInTime;
-		_handHoverZoomer.SetDestination(hover.target, easeTime);
-		_handHoverZoomer.Update(deltaSeconds);
-		if (_handHoverZoomer.GetValue() < 1.0f)
-		{
-			_handHoverZoomer.Reset(1.0f);
-		}
+		// The hand eases out slowly away from the camera and quickly towards it, but not while it pulls a thing out of
+		// the ground: the pull places it then
+		const bool pulling = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsPulling();
+		hand_feel::EaseHover(_handHoverZoomer, hover.target, deltaSeconds, pulling);
 		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), hover.limit), k_HandMinDistance, handReach);
 	}
 	_handPosition = eye + _handRayDirection * _handDistance;
@@ -5025,6 +5189,10 @@ void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transfor
 		if (const auto held = grab->GetHeld())
 		{
 			frame->held = static_cast<uint32_t>(entt::to_integral(*held));
+			if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(*held))
+			{
+				frame->heldAt = transform->position;
+			}
 		}
 	}
 	trace->EndFrame();

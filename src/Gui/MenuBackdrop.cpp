@@ -129,6 +129,11 @@ uint8_t SixteenBitLevel(uint8_t level)
 	return static_cast<uint8_t>((level >> 4u) * k_Levels);
 }
 
+float FrameMilliseconds(std::optional<uint32_t> last, uint32_t now)
+{
+	return last.has_value() ? static_cast<float>(now - *last) : 0.0f;
+}
+
 bool FadeOver(const Fade& fade)
 {
 	return fade.boxGone && fade.milliseconds > k_FadeLast;

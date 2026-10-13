@@ -755,6 +755,7 @@ openblack_setup_and_add_test(
   test_camera_edge_turn camera/test_camera_edge_turn.cpp
 )
 openblack_setup_and_add_test(test_mouse_motion input/test_mouse_motion.cpp)
+openblack_setup_and_add_test(test_pointer_speed input/test_pointer_speed.cpp)
 openblack_setup_and_add_test(test_graveyard_rules test_graveyard_rules.cpp)
 openblack_setup_and_add_test(test_villager_labels test_villager_labels.cpp)
 openblack_setup_and_add_test(test_special_villagers test_special_villagers.cpp)
@@ -873,3 +874,4 @@ openblack_setup_and_add_test(test_footpath_rules test_footpath_rules.cpp)
 openblack_setup_and_add_test(test_statistics_rules test_statistics_rules.cpp)
 openblack_setup_and_add_test(test_vortex_crossing_rules test_vortex_crossing_rules.cpp)
 openblack_setup_and_add_test(test_vortex_crossing_lines test_vortex_crossing_lines.cpp)
+openblack_setup_and_add_test(test_challenge_pictures test_challenge_pictures.cpp)

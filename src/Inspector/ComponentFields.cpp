@@ -77,6 +77,7 @@
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/ChallengePicture.h"
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
@@ -505,6 +506,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CameraBookmark::savedOrigin>("savedOrigin");
 	Reflect<components::CarriedByTornado>(context).Field<&components::CarriedByTornado::carried>("carried");
 	Reflect<components::CaughtByTornado> {context};
+	Reflect<components::ChallengePicture>(context)
+	    .Field<&components::ChallengePicture::full>("full")
+	    .Field<&components::ChallengePicture::small>("small")
+	    .Field<&components::ChallengePicture::waiting>("waiting")
+	    .Field<&components::ChallengePicture::asked>("asked")
+	    .Field<&components::ChallengePicture::taken>("taken");
 	Reflect<components::ChallengeRecord>(context)
 	    .Field<&components::ChallengeRecord::challenge>("challenge")
 	    .Field<&components::ChallengeRecord::order>("order")
@@ -1092,6 +1099,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandGrab::springOn>("springOn")
 	    .Field<&components::HandGrab::springPending>("springPending")
 	    .Field<&components::HandGrab::recordedThrow>("recordedThrow")
+	    .Field<&components::HandGrab::lastThrow>("lastThrow")
 	    .Field<&components::HandGrab::lastTarget>("lastTarget")
 	    .Field<&components::HandGrab::scoopSource>("scoopSource")
 	    .Field<&components::HandGrab::scoopTurns>("scoopTurns")
@@ -2473,6 +2481,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::Footpath::Node>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Footpath::Node::position>("position")
 	    .Field<&openblack::ecs::components::Footpath::Node::place>("place");
+	Reflect<openblack::ecs::components::HandGrab::Throw>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::HandGrab::Throw::velocity>("velocity")
+	    .Field<&openblack::ecs::components::HandGrab::Throw::springVelocity>("springVelocity")
+	    .Field<&openblack::ecs::components::HandGrab::Throw::from>("from");
 	Reflect<openblack::ecs::components::HandMorph::Skin>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandMorph::Skin::id>("id")
 	    .Field<&openblack::ecs::components::HandMorph::Skin::texels>("texels");

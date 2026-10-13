@@ -423,7 +423,13 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		// Letting go onto the land counts as one more turn for what the hand keeps of the player's influence past the
 		// border, before the throw
 		_world->HeldThingUsedOnLand(_world->HandPlayer());
-		LetGo(*grab, hand_grab::ThrowVelocity(grab->recordedThrow, grab->springOn, grab->spring.Velocity()), false);
+		const auto velocity = hand_grab::ThrowVelocity(grab->recordedThrow, grab->springOn, grab->spring.Velocity());
+		grab->lastThrow = HandGrab::Throw {
+		    .velocity = velocity,
+		    .springVelocity = hand_grab::ThrowVelocity(std::nullopt, grab->springOn, grab->spring.Velocity()),
+		    .from = grab->spring.Position(),
+		};
+		LetGo(*grab, velocity, false);
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
@@ -1114,7 +1120,7 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	grab->lastTarget = frame.target;
 	auto target = frame.target + glm::vec3(0.0f, grab->rise, 0.0f);
 	// The game time spent holding is counted whether the spring is on or not, scooping too
-	grab->spring.Count(frame.gameMs);
+	grab->spring.Count(frame.gameMs, frame.seconds * 1000.0f);
 	if (grab->scoopSource != entt::null && Exists(grab->scoopSource))
 	{
 		// Scooping, the hand stays where it began, over the land by the height of what it scoops from and three more
@@ -1235,6 +1241,13 @@ bool HandGrabSystem::IsBusy() const
 {
 	const auto* grab = Grab();
 	return grab != nullptr && grab->state != HandGrab::State::Empty;
+}
+
+bool HandGrabSystem::IsPulling() const
+{
+	const auto* grab = Grab();
+	// Once it has come free the pull is over, though the hand takes it a frame later
+	return grab != nullptr && grab->state == HandGrab::State::Grabbing && grab->pulling;
 }
 
 std::optional<HandGrabSystemInterface::HeldPose> HandGrabSystem::GetHeldPose() const

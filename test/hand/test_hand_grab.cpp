@@ -143,11 +143,14 @@ TEST(HandGrab, TheHandRisesForWhatItHolds)
 	EXPECT_FLOAT_EQ(CursorRaise(3.0f), 1.8f);
 }
 
-TEST(HandGrab, TheSpringStepsAtLeastOnceAFrame)
+// A frame at the 60 Hz screen refresh the game drew at
+constexpr float k_RefreshMs = 1000.0f / 60.0f;
+
+TEST(HandGrab, TheSpringStepsAtLeastOnceARefresh)
 {
 	HandSpring spring;
 	spring.Start({0.0f, 0.0f, 0.0f});
-	spring.Count(0);
+	spring.Count(0, k_RefreshMs);
 	spring.Step({1.0f, 0.0f, 0.0f});
 	// One step of 10 ms: v = 260 * 1 * 0.01, then x = v * 0.01
 	EXPECT_EQ(spring.StepsTaken(), 1u);
@@ -158,7 +161,7 @@ TEST(HandGrab, TheSpringStepsAtLeastOnceAFrame)
 TEST(HandGrab, TheSpringTakesAsManyStepsAsTheGameTimeAllows)
 {
 	const auto frame = [](HandSpring& spring, uint32_t ms) {
-		spring.Count(ms);
+		spring.Count(ms, k_RefreshMs);
 		spring.Step({1.0f, 0.0f, 0.0f});
 	};
 	HandSpring once;
@@ -187,17 +190,69 @@ TEST(HandGrab, TheSpringCatchesUpWithTheTimeHeldBeforeItTookHold)
 	HandSpring spring;
 	for (int i = 0; i < 50; ++i)
 	{
-		spring.Count(10);
+		spring.Count(10, 10.0f);
 	}
 	spring.Start({0.0f, 0.0f, 0.0f});
-	spring.Count(10);
+	spring.Count(10, 10.0f);
 	spring.Step({1.0f, 0.0f, 0.0f});
 	EXPECT_EQ(spring.StepsTaken(), 51u);
 	// Taking hold again keeps the time counted
 	spring.Start({0.0f, 0.0f, 0.0f});
-	spring.Count(10);
+	spring.Count(10, 10.0f);
 	spring.Step({1.0f, 0.0f, 0.0f});
 	EXPECT_EQ(spring.StepsTaken(), 1u);
+}
+
+TEST(HandGrab, ShortFramesTakeNoStepsBeyondTheGameTime)
+{
+	// Frames of 2 ms take a step only every fifth frame, as the game time owes one
+	HandSpring spring;
+	spring.Start({0.0f, 0.0f, 0.0f});
+	uint32_t steps = 0;
+	for (int i = 0; i < 100; ++i)
+	{
+		spring.Count(2, 2.0f);
+		spring.Step({1.0f, 0.0f, 0.0f});
+		steps += spring.StepsTaken();
+	}
+	EXPECT_EQ(steps, 20u);
+	EXPECT_EQ(spring.SteppedMs(), spring.CountedMs());
+}
+
+TEST(HandGrab, AStoppedGameStillStepsTheSpringOnceARefresh)
+{
+	// No game time at all, and frames of 4 ms: one step for every sixtieth of a second of real time
+	HandSpring spring;
+	spring.Start({0.0f, 0.0f, 0.0f});
+	uint32_t steps = 0;
+	for (int i = 0; i < 251; ++i)
+	{
+		spring.Count(0, 4.0f);
+		spring.Step({1.0f, 0.0f, 0.0f});
+		steps += spring.StepsTaken();
+	}
+	EXPECT_EQ(steps, 60u);
+}
+
+TEST(HandGrab, AThrowLeavesTheHandAtTheSameSpeedAtAnyFrameRate)
+{
+	// The hand's target sweeps across at 20 units a second for 0.4 s; the spring's speed then is the throw's
+	const auto throwSpeed = [](uint32_t frameMs) {
+		HandSpring spring;
+		spring.Start({0.0f, 0.0f, 0.0f});
+		for (uint32_t t = frameMs; t <= 400; t += frameMs)
+		{
+			spring.Count(frameMs, static_cast<float>(frameMs));
+			spring.Step({0.02f * static_cast<float>(t), 0.0f, 0.0f});
+		}
+		return spring.Velocity().x;
+	};
+	const float atRefresh = throwSpeed(16);
+	EXPECT_GT(atRefresh, 18.0f);
+	for (const uint32_t frameMs : {1u, 2u, 4u, 7u, 33u})
+	{
+		EXPECT_NEAR(throwSpeed(frameMs), atRefresh, 0.5f) << frameMs << " ms frames";
+	}
 }
 
 TEST(HandGrab, TheSpringSettlesOnItsTargetAndIsCapped)
@@ -206,14 +261,14 @@ TEST(HandGrab, TheSpringSettlesOnItsTargetAndIsCapped)
 	spring.Start({0.0f, 0.0f, 0.0f});
 	for (int i = 0; i < 200; ++i)
 	{
-		spring.Count(10);
+		spring.Count(10, 10.0f);
 		spring.Step({3.0f, 1.0f, -2.0f});
 	}
 	EXPECT_NEAR(spring.Position().x, 3.0f, 1e-3f);
 	EXPECT_NEAR(spring.Position().z, -2.0f, 1e-3f);
 	HandSpring far;
 	far.Start({0.0f, 0.0f, 0.0f});
-	far.Count(10);
+	far.Count(10, 10.0f);
 	far.Step({10000.0f, 0.0f, 0.0f});
 	EXPECT_FLOAT_EQ(glm::length(far.Velocity()), k_MaxThrowSpeed);
 }

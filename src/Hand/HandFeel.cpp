@@ -120,7 +120,7 @@ hand_feel::HoverDistances hand_feel::HoverDistancesOf(const Hover& hover)
 	if (hover.land.has_value())
 	{
 		limit = glm::length(*hover.land - hover.camera);
-		if (!hover.landIsSea)
+		if (!hover.landIsSea && !hover.holding)
 		{
 			limit -= hover.handHeight;
 		}
@@ -128,4 +128,18 @@ hand_feel::HoverDistances hand_feel::HoverDistancesOf(const Hover& hover)
 	limit = limit <= hover.minDistance ? hover.minDistance : std::min(limit, hover.reach);
 	const float target = hover.restOnThing.has_value() ? glm::length(*hover.restOnThing - hover.camera) : limit;
 	return {.target = std::max(target, 1.0f), .limit = limit};
+}
+
+void hand_feel::EaseHover(Zoomer& hover, float target, float seconds, bool pulling)
+{
+	if (pulling)
+	{
+		return;
+	}
+	hover.SetDestination(target, hover.GetValue() <= target ? k_HoverEaseOutSeconds : k_HoverEaseInSeconds);
+	hover.Update(seconds);
+	if (hover.GetValue() < 1.0f)
+	{
+		hover.Reset(1.0f);
+	}
 }

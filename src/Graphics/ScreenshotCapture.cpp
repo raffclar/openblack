@@ -92,6 +92,25 @@ std::optional<std::string> ScreenshotFailures::Take(const std::string& path)
 	return why;
 }
 
+void CapturedFrames::Keep(std::string path, CapturedFrame frame)
+{
+	const std::scoped_lock lock(_mutex);
+	_frames.insert_or_assign(std::move(path), std::move(frame));
+}
+
+std::optional<CapturedFrame> CapturedFrames::Take(const std::string& path)
+{
+	const std::scoped_lock lock(_mutex);
+	const auto found = _frames.find(path);
+	if (found == _frames.end())
+	{
+		return std::nullopt;
+	}
+	auto frame = std::move(found->second);
+	_frames.erase(found);
+	return frame;
+}
+
 std::string WriteScreenshotPng(const std::filesystem::path& path, uint32_t width, uint32_t height, uint32_t pitch,
                                std::span<const uint8_t> bgra, bool yflip)
 {
@@ -164,7 +183,7 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 	_captures.push_back(std::move(capture));
 }
 
-void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failures)
+void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failures, CapturedFrames& kept)
 {
 	if (_redirected)
 	{
@@ -174,12 +193,22 @@ void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failur
 		}
 		_redirected = false;
 	}
-	std::erase_if(_captures, [frame, &failures](const Capture& capture) {
+	std::erase_if(_captures, [frame, &failures, &kept](Capture& capture) {
 		if (frame < capture.readyAt)
 		{
 			return false;
 		}
 		const bool yflip = bgfx::getCaps()->originBottomLeft;
+		if (CapturedFrames::InMemory(capture.path.string()))
+		{
+			kept.Keep(capture.path.string(), {.width = capture.size.x,
+			                                  .height = capture.size.y,
+			                                  .pitch = capture.size.x * k_BytesPerPixel,
+			                                  .yflip = yflip,
+			                                  .bgra = std::move(capture.pixels)});
+			Release(capture);
+			return true;
+		}
 		if (auto why = WriteScreenshotPng(capture.path, capture.size.x, capture.size.y, capture.size.x * k_BytesPerPixel,
 		                                  capture.pixels, yflip);
 		    !why.empty())

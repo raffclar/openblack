@@ -18,6 +18,7 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
+#include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/HiddenByState.h"
@@ -95,7 +96,12 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 		    draw(glm::vec3(model * glm::vec4(centre, 1.0f)), owner->second, light_column::k_TownAlpha);
 	    });
 
-	// Over each temple, where it stands, beating with its player's heart
+	// Over each temple, where it stands, beating with its player's heart. The temple's column is seen only from outside,
+	// so it isn't drawn while the player is inside the temple
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return;
+	}
 	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
 	desc.entities.Each<const Temple, const Transform>([&](const Temple& temple, const Transform& transform) {
 		if (!light_column::Shown(temple.owner, influence.IsBorderShown(temple.owner)) ||
