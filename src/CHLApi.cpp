@@ -181,6 +181,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -1044,6 +1045,16 @@ ecs::components::HandClicked* LocalHandClicked()
 	return &registry.Assign<ecs::components::HandClicked>(hand);
 }
 
+/// Make the land's draw list again on the next frame. The commands that move the camera or change the detail of a
+/// thing use this.
+void RemakeDrawList()
+{
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().RequestRebuild(1);
+	}
+}
+
 void None() {} // 000 NONE
 
 void SetCameraPosition() // 001 SET_CAMERA_POSITION
@@ -1053,6 +1064,7 @@ void SetCameraPosition() // 001 SET_CAMERA_POSITION
 	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
 	{
 		camera->SetOrigin(position);
+		RemakeDrawList();
 	}
 }
 
@@ -1062,6 +1074,7 @@ void SetCameraFocus() // 002 SET_CAMERA_FOCUS
 	if (auto* camera = ScriptCameraToMove(); camera != nullptr)
 	{
 		camera->SetFocus(position);
+		RemakeDrawList();
 	}
 }
 
@@ -4472,6 +4485,8 @@ void SetCameraToFaceObject() // 106 SET_CAMERA_TO_FACE_OBJECT
 			camera->SetOrigin(view->origin);
 			camera->SetFocus(view->focus);
 		}
+		// Do this also when there is no thing to face
+		RemakeDrawList();
 	}
 }
 
@@ -7138,6 +7153,7 @@ void SetHighGraphicsDetail() // 290 SET_HIGH_GRAPHICS_DETAIL
 	{
 		highDetail.Release(object);
 	}
+	RemakeDrawList();
 }
 
 void SetSkeleton() // 291 SET_SKELETON

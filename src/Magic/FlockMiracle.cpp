@@ -22,6 +22,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FlockMiracleRules.h"
@@ -264,6 +265,11 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 		// Facing where it is going from where it appears, and then sized by the miracle whatever its size as it was born
 		const auto facing = gutils::GetAngleFromXZ(created, *target);
 		const auto animal = animals.CreateSpellAnimal(type, created, height, facing, spell.caster.player, data.flock, entity);
+		// Make the land's draw list again for each animal
+		if (Locator::objectDrawListSystem::has_value())
+		{
+			Locator::objectDrawListSystem::value().RequestRebuild(1);
+		}
 		animals.SetScale(animal, flock::SpawnScale(wolf, services.GameRandom(maxExtra)));
 		services.AddEffectTarget(spell, animal);
 		if (wolf && Locator::particleSystem::has_value())

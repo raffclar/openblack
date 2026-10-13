@@ -1148,7 +1148,8 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 		{
 			// It comes to rest: it stops breaking buildings, takes the body's place (a villager stands at its centre) and its
 			// kind ends its physics. Whatever happens to its object, the body stays in the list as a resting obstacle until
-			// the next turn's start.
+			// the next turn's start. Make the land's draw list again, so that the list shows the object where it stopped.
+			_world->RemakeDrawList();
 			const auto object = entry.entity;
 			if (IsAvailable(object))
 			{
@@ -1189,6 +1190,7 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 				if (facts.canBecomePhysicsObject && !facts.immovable && InitialisePhysics(entry.entity, {.add = false}).started)
 				{
 					body.resting = false;
+					_world->RemakeDrawList();
 				}
 			}
 			break;

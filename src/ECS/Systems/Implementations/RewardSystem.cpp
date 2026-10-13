@@ -33,6 +33,7 @@
 #include "ECS/RewardOpening.h"
 #include "ECS/RewardRules.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "GameRewardOpeningWorld.h"
 #include "InfoConstants.h"
@@ -175,6 +176,11 @@ entt::entity RewardSystem::Create(glm::vec3 position, RewardObjectInfo type, std
 		// Put on the land, it stands in the map's cells at once
 		chest.state = Reward::State::Landed;
 		registry.Assign<RewardOnLand>(entity);
+	}
+	// Make the land's draw list again when a player gets the chest
+	if (player.has_value() && Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().RequestRebuild(1);
 	}
 	return entity;
 }

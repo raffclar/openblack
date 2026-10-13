@@ -820,6 +820,11 @@ glm::vec3 HandGrabSystem::Pull(HandGrab& grab, const Frame& frame)
 			{
 				_world->LeaveRootsHole(object);
 			}
+			// Make the land's draw list again when the hand pulls a living thing free
+			if (const auto kind = KindOf(object); kind == GrabKind::Villager || kind == GrabKind::Animal)
+			{
+				_world->RemakeDrawList();
+			}
 			grab.pulling = false;
 		}
 		// It is drawn leaning, and stretched up towards the hand
