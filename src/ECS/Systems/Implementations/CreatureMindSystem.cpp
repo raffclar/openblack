@@ -1428,6 +1428,14 @@ void CreatureMindSystem::ProcessTurn()
 				                       .object = entity});
 			    }
 		    }
+		    // When the creature examines a different creature, it finds the desires of the two creatures each turn.
+		    // It does not do this on the first turn.
+		    if (!scripted && mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
+		        mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Inspect &&
+		        mind.idle.agenda[mind.idle.step].object.has_value())
+		    {
+			    WeighWatchedCreature(entity, mind, static_cast<entt::entity>(*mind.idle.agenda[mind.idle.step].object));
+		    }
 		    const bool moving =
 		        Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity);
 		    if (mind.idle.step < mind.idle.agenda.size())
@@ -2113,10 +2121,13 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 	// plan's action takes a thing of this sort (see bw1-decomp creature/creature_giving.md section 4); not done yet. While
 	// the creature holds a reaction, the plan it goes back to is the one it had when it took the reaction up (or the hand
 	// picked something up), not the reaction's own
+	// It comes across what it was given, then weighs it as a thing to act on for each desire it could serve; held, it
+	// counts as near as can be
+	ComeAcross(*mind, object);
 	const auto& desires = *mind->desires;
 	const auto weigh = [&](Desire desire) {
 		return creature_giving::Weighed {.desire = desires[desire].value,
-		                                 .usefulness = ActivityUsefulness(creature, *mind, desire, object)};
+		                                 .usefulness = ObjectToActOnUsefulness(creature, *mind, desire, object)};
 	};
 	const auto belief = BeliefOf(registry, object, creature);
 	const auto kind = belief.has_value() ? belief->type : creature_tree::belief_types::k_Other;
@@ -2133,18 +2144,23 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		mind->givenKinds.insert(kind);
 	}
 	const auto number = entt::to_integral(object);
+	// The plan is about what the thing belongs to, if anything
+	const auto owner = BelongsTo(object);
 	switch (choice.use)
 	{
 	case creature_giving::Use::Examine:
 		ForcePlan(creature, {.desire = Desire::Curiosity,
 		                     .action = k_ExamineGivenAction,
 		                     .object = object,
-		                     .agenda = creature_mind::ExamineGiven(number)});
+		                     .agenda = creature_mind::ExamineGiven(number),
+		                     .activityObject = owner});
 		break;
 	case creature_giving::Use::Eat:
-		ForcePlan(
-		    creature,
-		    {.desire = Desire::Hunger, .action = k_EatGivenAction, .object = object, .agenda = creature_mind::EatGiven()});
+		ForcePlan(creature, {.desire = Desire::Hunger,
+		                     .action = k_EatGivenAction,
+		                     .object = object,
+		                     .agenda = creature_mind::EatGiven(),
+		                     .activityObject = owner});
 		break;
 	case creature_giving::Use::Throw:
 	{
@@ -2152,7 +2168,8 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		ForcePlan(creature, {.desire = Desire::PlayWithPlayer,
 		                     .action = k_ThrowGivenAction,
 		                     .object = object,
-		                     .agenda = creature_mind::ThrowGiven(eye)});
+		                     .agenda = creature_mind::ThrowGiven(eye),
+		                     .activityObject = owner});
 		break;
 	}
 	case creature_giving::Use::AsLed:
@@ -2176,8 +2193,8 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	{
 		return false;
 	}
-	// What it was doing stops as a failure, whatever comes of the new plan; a reaction it was in has been ended by
-	// whatever forces the plan
+	// The current action stops as a failure. This occurs also when the creature finds no new plan.; a reaction it was in has
+	// been ended by whatever forces the plan
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
@@ -2234,18 +2251,21 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	if (const auto source = creature_learning::PlanSource(desire); source.has_value())
 	{
 		const auto& info = tables->actions[*action];
-		creature_learning::Remember(mind->learnt->contexts,
-		                            {
-		                                .action = *action,
-		                                .desire = forced.desire,
-		                                .object = actionObject,
-		                                .belief = actionObject.has_value()
-		                                              ? BeliefOf(registry, static_cast<entt::entity>(*actionObject), creature)
-		                                              : std::nullopt,
-		                                .learnable = info.learnable,
-		                                .windowSeconds = info.learningWindowSeconds,
-		                                .source = *source,
-		                            });
+		creature_learning::Remember(
+		    mind->learnt->contexts,
+		    {
+		        .action = *action,
+		        .desire = forced.desire,
+		        .object = actionObject,
+		        .belief = actionObject.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*actionObject), creature)
+		                                           : std::nullopt,
+		        .activity = toNumber(forced.activityObject),
+		        .activityBelief =
+		            forced.activityObject.has_value() ? BeliefOf(registry, *forced.activityObject, creature) : std::nullopt,
+		        .learnable = info.learnable,
+		        .windowSeconds = info.learningWindowSeconds,
+		        .source = *source,
+		    });
 	}
 	creature_learning::SuppressOpposed(*mind->desires, forced.desire, tables->dependencies, k_TurnsPerSecond);
 	return true;

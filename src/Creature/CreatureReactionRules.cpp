@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include <algorithm>
+
 #include "Common/GUtilsAngle.h"
 
 using namespace openblack;
@@ -202,4 +204,44 @@ std::optional<Setup> creature_reaction::SetupFor(Reaction type, bool thingInTheA
 	default:
 		return std::nullopt;
 	}
+}
+
+creature_reaction::WatchVerdict creature_reaction::WeighWatch(std::optional<Desire> mine, std::optional<Desire> theirs,
+                                                              const std::function<std::pair<float, float>()>& angerAndFearWorth,
+                                                              const std::function<bool()>& dominant)
+{
+	if (!mine.has_value())
+	{
+		return {};
+	}
+	if (*mine == Desire::Anger)
+	{
+		return {.act = Desire::Anger};
+	}
+	if (theirs == Desire::Anger)
+	{
+		const auto [anger, fear] = angerAndFearWorth();
+		return {.act = fear < anger ? Desire::Anger : Desire::Fear};
+	}
+	if (*mine != Desire::Fear)
+	{
+		return {.act = mine};
+	}
+	if (theirs == Desire::Fear && dominant())
+	{
+		return {.weighAgainWithoutFear = true};
+	}
+	return {.act = Desire::Fear};
+}
+
+float creature_reaction::WorthAbout(float strength, float usefulness, float nearness)
+{
+	return std::clamp(usefulness * strength * nearness, 0.0f, 1.0f);
+}
+
+bool creature_reaction::IsDominant(uint32_t age, uint32_t otherAge, bool laterInOrder)
+{
+	constexpr uint32_t k_DominantYears = 10;
+	const auto gap = age > otherAge ? age - otherAge : otherAge - age;
+	return gap > k_DominantYears ? otherAge < age : laterInOrder;
 }

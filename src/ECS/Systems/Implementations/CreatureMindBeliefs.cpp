@@ -188,6 +188,22 @@ void CreatureMindSystem::ComeAcross(components::CreatureMindState& mind, entt::e
 	}
 }
 
+std::optional<glm::vec3> CreatureMindSystem::BelievedPlace(const components::CreatureMindState& mind, entt::entity thing)
+{
+	if (const auto* known = mind.beliefs.Find(thing))
+	{
+		return known->place;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing) || BeliefKindOf(registry, thing).has_value())
+	{
+		return std::nullopt;
+	}
+	// TODO(usefulness-use-tree): the game keeps beliefs about loose objects (food, balls, pots and the like) too, which
+	// the store here doesn't yet; until it does, such a thing counts as known where it is
+	return PlaceOf(registry, thing);
+}
+
 void CreatureMindSystem::ForgetGoneThings(components::CreatureMindState& mind)
 {
 	const auto& registry = Locator::entitiesRegistry::value();

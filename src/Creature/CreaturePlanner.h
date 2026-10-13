@@ -22,10 +22,11 @@
 
 /// How a creature decides what to do. Each desire it has gets a plan: the thing to act on (the goal), and the action to
 /// take. The goal is the thing the creature finds most useful for the desire, by what its decision trees have learnt,
-/// the nearer the better. Among the actions that satisfy the desire, its opinion of each and how long since it last did
-/// it break the ties. A plan's priority is the desire's strength times how useful the goal and the action are. Two
-/// desires are planned again each game turn, and the creature changes what it is doing only for a plan more than twice
-/// as pressing as the one it carries out.
+/// the nearer the better: a thing the desire is about by what it has learnt of such things as the point of a desire,
+/// anything else by what it has learnt of acting on them. Among the actions that satisfy the desire, its opinion of each and
+/// how long since it last did it break the ties. A plan's priority is the desire's strength times how useful the goal and the
+/// action are. Two desires are planned again each game turn, and the creature changes what it is doing only for a plan more
+/// than twice as pressing as the one it carries out.
 namespace openblack::creature_planner
 {
 /// The farthest a goal counts as being, and how much a held thing is preferred
@@ -66,11 +67,19 @@ struct ObjectCandidate
 {
 	/// The thing's entity number
 	uint32_t id {0};
-	float distance {0.0f};
-	bool held {false};
-	/// How useful the creature has learnt it is for the desire
-	float usefulness {k_DefaultUsefulness};
+	/// How much it is worth acting on for the desire, the distance to it already counted: the goal is the one worth the
+	/// most, and only something worth more than nothing can be a goal
+	float usefulness {0.0f};
+	/// What it counts for in the plan's priority: as what the desire is about, and as what is acted on; the default
+	/// usefulness for either it doesn't count as
+	std::optional<float> activityUsefulness;
+	std::optional<float> actedOnUsefulness;
 };
+
+/// Whether a desire's plan counts what it acts on in its priority. A desire that is about something in itself (a town to
+/// help, a creature to befriend) counts only that, but for anger, which counts both; every other desire counts what it
+/// acts on.
+[[nodiscard]] bool CountsActedOn(creature_desires::Desire desire, bool aboutSomething);
 
 /// An action that satisfies a desire, by its row in the game's action table
 struct ActionCandidate
@@ -101,15 +110,38 @@ struct Plan
 	std::optional<uint32_t> instrument;
 };
 
-/// The best plan for a desire of a strength: the goal by distance and usefulness, then the action most wanted
+/// The best plan for a desire of a strength: the goal worth the most, the first of equals, then the action most wanted
 [[nodiscard]] std::optional<Plan> PlanDesire(creature_desires::Desire desire, float strength,
-                                             std::span<const ObjectCandidate> objects, float distanceWeight,
+                                             std::span<const ObjectCandidate> objects,
                                              std::span<const ActionCandidate> actions);
 
+/// One desire that a creature examines for one thing
+struct DesireOnThing
+{
+	creature_desires::Desire desire {creature_desires::Desire::Impress};
+	/// The strength of the desire. The usefulness of the thing for the desire, with its distance included.
+	float strength {0.0f};
+	float usefulness {0.0f};
+};
+/// Find the desire that the creature most wants to do about one thing. Examine the desires in their order.
+/// The score of a desire is its strength multiplied by the usefulness of the thing.
+/// A desire becomes the best when its score is more than the usefulness of the best desire before it.
+/// That comparison does not include the strength of the best desire.
+/// If no desire has a score more than zero, there is no best desire.
+[[nodiscard]] std::optional<creature_desires::Desire> BestDesireOnThing(std::span<const DesireOnThing> desires);
+
+/// Something a planned action could use
+struct UsedCandidate
+{
+	/// The thing's entity number
+	uint32_t id {0};
+	float distance {0.0f};
+	bool held {false};
+};
 /// The thing to use for a planned action, among those it may use, never the goal itself: the one the distance weighs
 /// least against (something held most of all), the first of equals; none when there is none, or every one is too far to
 /// count
-[[nodiscard]] std::optional<uint32_t> ChooseUsed(std::span<const ObjectCandidate> objects, float distanceWeight,
+[[nodiscard]] std::optional<uint32_t> ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,
                                                  std::optional<uint32_t> goal);
 
 /// A plan forced on the creature, by a reaction or a catch, scores the most a score can be, so that no plan of its own is

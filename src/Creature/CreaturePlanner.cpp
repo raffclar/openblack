@@ -61,19 +61,23 @@ bool creature_planner::ShouldSwitch(float best, float current)
 	return best - current > current;
 }
 
-std::optional<Plan> creature_planner::PlanDesire(Desire desire, float strength, std::span<const ObjectCandidate> objects,
-                                                 float distanceWeight, std::span<const ActionCandidate> actions)
+bool creature_planner::CountsActedOn(Desire desire, bool aboutSomething)
 {
-	// The goal: the thing that is most useful for the distance
+	return !aboutSomething || desire == Desire::Anger;
+}
+
+std::optional<Plan> creature_planner::PlanDesire(Desire desire, float strength, std::span<const ObjectCandidate> objects,
+                                                 std::span<const ActionCandidate> actions)
+{
+	// The goal: the thing worth the most, if any is worth anything
 	const ObjectCandidate* goal = nullptr;
 	float goalScore = 0.0f;
 	for (const auto& object : objects)
 	{
-		const auto score = DistancePriority(object.held, object.distance, distanceWeight) * object.usefulness;
-		if (goal == nullptr || score > goalScore)
+		if (object.usefulness > goalScore)
 		{
 			goal = &object;
-			goalScore = score;
+			goalScore = object.usefulness;
 		}
 	}
 	// The action: the one most wanted, which nothing else is used for here
@@ -100,18 +104,35 @@ std::optional<Plan> creature_planner::PlanDesire(Desire desire, float strength, 
 		return std::nullopt;
 	}
 	Plan plan {.desire = desire, .action = chosen->action, .actionPriority = chosenPriority};
-	std::optional<float> goalUsefulness;
+	std::optional<float> activityUsefulness;
+	float actedOnUsefulness = k_DefaultUsefulness;
 	if (chosen->needsObject && goal != nullptr)
 	{
 		plan.object = goal->id;
 		plan.goalUsefulness = goal->usefulness;
-		goalUsefulness = goal->usefulness;
+		activityUsefulness = goal->activityUsefulness;
+		actedOnUsefulness = goal->actedOnUsefulness.value_or(k_DefaultUsefulness);
 	}
-	plan.priority = Priority(strength, goalUsefulness, chosenPriority, k_DefaultUsefulness, std::nullopt);
+	plan.priority = Priority(strength, activityUsefulness, chosenPriority, actedOnUsefulness, std::nullopt);
 	return plan;
 }
 
-std::optional<uint32_t> creature_planner::ChooseUsed(std::span<const ObjectCandidate> objects, float distanceWeight,
+std::optional<Desire> creature_planner::BestDesireOnThing(std::span<const DesireOnThing> desires)
+{
+	std::optional<Desire> best;
+	float bestUsefulness = 0.0f;
+	for (const auto& weighed : desires)
+	{
+		if (weighed.strength * weighed.usefulness > bestUsefulness)
+		{
+			best = weighed.desire;
+			bestUsefulness = weighed.usefulness;
+		}
+	}
+	return best;
+}
+
+std::optional<uint32_t> creature_planner::ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,
                                                      std::optional<uint32_t> goal)
 {
 	std::optional<uint32_t> chosen;

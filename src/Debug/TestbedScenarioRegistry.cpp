@@ -3372,6 +3372,25 @@ void AddMind(std::vector<Scenario>& all)
 	                  .delaySeconds = 6.0f,
 	                  .value = static_cast<size_t>(creature_cave::Page::Mind)}},
 	});
+	// A hungry tiger, its mind running, looks north at a villager some way off; a nearer one stands behind it, out of sight
+	auto peckish = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "yours");
+	peckish.needs = {.energy = 0.3f};
+	peckish.hold = false;
+	peckish.pauseMind = false;
+	all.push_back({
+	    .id = "mind.goal_it_knows",
+	    .name = "Choosing only among the things it has seen",
+	    .facet = Facet::Mind,
+	    .description = "A hungry tiger looks north at a villager 45 m away. Another stands 14 m behind it, where it can't "
+	                   "see. Its mind runs; after two seconds it is made as hungry as can be.",
+	    .expected = "It goes for the villager ahead, the one it has seen, though the other is nearer: a creature weighs only "
+	                "the things it knows of, each by what it has learnt of acting on such things and by how near it is.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {peckish},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 25.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -34.0f}}},
+	    .commands = {setDesire(Desire::Hunger, 1.0f, 2.0f)},
+	});
 	// The player's evil, big tiger swaps minds with a small, neutral sheep that belongs to nobody, as The Lost Flock's
 	// sheep offers; then back again
 	auto swapper = Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "player's tiger");

@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <Creature/CreatureReactionRules.h>
@@ -325,4 +326,41 @@ TEST(CreatureReactionRules, TakingUpAnotherCreatureLooksItOverWhenOfUse)
 	EXPECT_EQ(setup->plan->action, "InspectCreature");
 	EXPECT_TRUE(setup->plan->onlyIfUseful);
 	EXPECT_FALSE(setup->plan->onSelf);
+}
+
+TEST(CreatureReactionRules, WatchVerdict)
+{
+	const auto worths = [](float anger, float fear) { return [anger, fear]() { return std::pair {anger, fear}; }; };
+	const auto dominant = [](bool value) { return [value]() { return value; }; };
+	// No desire about the other creature: the creature continues to watch
+	EXPECT_FALSE(creature_reaction::WeighWatch(std::nullopt, Desire::Anger, worths(1.0f, 0.0f), dominant(true)).act);
+	// Anger of the creature always wins
+	EXPECT_EQ(creature_reaction::WeighWatch(Desire::Anger, Desire::Fear, worths(0.0f, 1.0f), dominant(false)).act,
+	          Desire::Anger);
+	// The other creature is angry: anger when it has more value than fear, if not fear
+	EXPECT_EQ(creature_reaction::WeighWatch(Desire::BeFriends, Desire::Anger, worths(0.6f, 0.5f), dominant(false)).act,
+	          Desire::Anger);
+	EXPECT_EQ(creature_reaction::WeighWatch(Desire::BeFriends, Desire::Anger, worths(0.5f, 0.5f), dominant(false)).act,
+	          Desire::Fear);
+	// A desire that is not fear
+	EXPECT_EQ(creature_reaction::WeighWatch(Desire::BeFriends, Desire::Fear, worths(0.0f, 0.0f), dominant(false)).act,
+	          Desire::BeFriends);
+	// Both afraid: the dominant creature examines again without fear, the other creature acts on fear
+	EXPECT_TRUE(
+	    creature_reaction::WeighWatch(Desire::Fear, Desire::Fear, worths(0.0f, 0.0f), dominant(true)).weighAgainWithoutFear);
+	EXPECT_EQ(creature_reaction::WeighWatch(Desire::Fear, Desire::Fear, worths(0.0f, 0.0f), dominant(false)).act, Desire::Fear);
+	EXPECT_EQ(creature_reaction::WeighWatch(Desire::Fear, Desire::BeFriends, worths(0.0f, 0.0f), dominant(true)).act,
+	          Desire::Fear);
+}
+
+TEST(CreatureReactionRules, WorthAndDominance)
+{
+	EXPECT_FLOAT_EQ(creature_reaction::WorthAbout(0.5f, 0.1f, 0.9f), 0.045f);
+	EXPECT_FLOAT_EQ(creature_reaction::WorthAbout(2.0f, 0.9f, 1.6f), 1.0f);
+	EXPECT_FLOAT_EQ(creature_reaction::WorthAbout(-1.0f, 0.1f, 1.0f), 0.0f);
+	// More than ten years older is dominant; with ten years or less, the order decides
+	EXPECT_TRUE(creature_reaction::IsDominant(25, 14, false));
+	EXPECT_FALSE(creature_reaction::IsDominant(14, 25, true));
+	EXPECT_TRUE(creature_reaction::IsDominant(14, 24, true));
+	EXPECT_FALSE(creature_reaction::IsDominant(24, 14, false));
 }

@@ -12,26 +12,42 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <algorithm>
+#include <span>
+#include <string_view>
+#include <vector>
+
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMiracleReactions.h"
+#include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureReactionRules.h"
 #include "Creature/CreatureWatching.h"
 #include "CreatureMindSystem.h"
+#include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
+using creature_desires::Desire;
 
 namespace
 {
@@ -175,4 +191,190 @@ bool CreatureMindSystem::NoticeCreatureToInspect(entt::entity creature, entt::en
 	}
 	belief->inspected = turn;
 	return true;
+}
+
+namespace
+{
+/// The names of the actions in the action table that show a dead creature
+constexpr std::string_view k_DieAction = "Die";
+constexpr std::string_view k_DeadForeverAction = "DeadForever";
+
+/// Whether a creature is dead. A dead creature has a plan with one of these actions.
+bool IsDead(const ecs::Registry& registry, entt::entity creature, const creature_mind_tables::Tables& tables)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->planActive || !mind->planner.current.has_value() ||
+	    mind->planner.current->action >= tables.actions.size())
+	{
+		return false;
+	}
+	const auto& name = tables.actions[mind->planner.current->action].name;
+	return name == k_DieAction || name == k_DeadForeverAction;
+}
+
+/// Whether a creature can be angry with a different creature. The other creature must not be dead. Its species must
+/// let creatures attack it.
+// TODO(usefulness-use-tree): The game also refuses anger when one creature is in a list of the other creature.
+// It has two of these lists. One list contains the creatures that copy the action of the creature. These lists do not
+// exist in openblack.
+bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
+                    const creature_mind_tables::Tables& tables)
+{
+	if (other == creature || IsDead(registry, other, tables) || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& rows = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(registry.Get<const Creature>(other).species);
+	return row < rows.size() && rows.at(row).canCreatureAttackMe != 0;
+}
+
+/// Whether a desire can be about a different creature:
+/// - Anger can, if the creature can be angry with the other creature.
+/// - The desire to impress cannot. That desire is about the towns of other players.
+/// - Compassion and the desires about friends and creatures can.
+bool AppliesToCreature(const ecs::Registry& registry, Desire desire, entt::entity other, entt::entity creature,
+                       const creature_mind_tables::Tables& tables)
+{
+	switch (desire)
+	{
+	case Desire::Impress:
+		return false;
+	case Desire::Anger:
+		return MayBeAngryWith(registry, other, creature, tables);
+	default:
+		return true;
+	}
+}
+} // namespace
+
+std::optional<Desire> CreatureMindSystem::DesireAboutCreature(entt::entity creature, const CreatureMindState& mind,
+                                                              entt::entity other, std::span<const Desire> leftOut)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	const auto place = BelievedPlace(mind, other);
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (tables == nullptr || !mind.desires.has_value() || !mind.learnt.has_value() || !place.has_value() || at == nullptr ||
+	    !registry.AllOf<Creature>(other))
+	{
+		return std::nullopt;
+	}
+	// TODO(usefulness-use-tree): A script can let a creature attack the town of its player. Then the creature is not
+	// angry with a creature of its player. openblack does not keep this script setting yet.
+	std::vector<creature_planner::DesireOnThing> weighed;
+	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+	{
+		const auto desire = static_cast<Desire>(d);
+		const auto& state = mind.desires->desires.at(d);
+		if (!state.activated || state.suppressedTurns != 0 || !tables->rules.at(d).aboutSomething ||
+		    !AppliesToCreature(registry, desire, other, creature, *tables) ||
+		    std::ranges::find(leftOut, desire) != leftOut.end())
+		{
+			continue;
+		}
+		const auto nearness = ecs::systems::mind_detail::Nearness(registry, creature, at->position, other, *place,
+		                                                          tables->rules.at(d).distanceWeight);
+		weighed.push_back({.desire = desire,
+		                   .strength = state.value,
+		                   .usefulness = ActivityUsefulness(creature, mind, desire, other) * nearness});
+	}
+	return creature_planner::BestDesireOnThing(weighed);
+}
+
+bool CreatureMindSystem::ForceDesireAbout(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
+{
+	if (!mind.desires.has_value())
+	{
+		return false;
+	}
+	// The current action stops as a failure. This occurs also when the creature finds no new plan.
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
+	Abandon(mind);
+	if (Locator::magicSystem::has_value())
+	{
+		Locator::magicSystem::value().ReleaseCreatureCast(creature);
+	}
+	creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
+	creature_learning::MakeFullyDominant(*mind.desires, desire);
+	mind.leash.obeying = false;
+	mind.leash.actOn = {entt::to_integral(thing)};
+	mind.plannedTurn = mind.turn + 1;
+	PlanCreature(creature, mind, false, desire);
+	mind.leash.actOn.clear();
+	return mind.planActive && mind.planner.current.has_value() && mind.planner.current->desire == desire;
+}
+
+bool CreatureMindSystem::WeighWatchedCreature(entt::entity creature, CreatureMindState& mind, entt::entity other)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* otherMind = registry.Valid(other) ? registry.TryGet<CreatureMindState>(other) : nullptr;
+	const auto* tables = GetTables();
+	if (otherMind == nullptr || tables == nullptr || !mind.desires.has_value())
+	{
+		return false;
+	}
+	std::vector<Desire> leftOut;
+	for (;;)
+	{
+		// Find the desire of the creature about the other creature. The other creature sees this creature, and finds
+		// its desire about this creature.
+		const auto mine = DesireAboutCreature(creature, mind, other, leftOut);
+		ComeAcross(*otherMind, creature);
+		const auto theirs = DesireAboutCreature(other, *otherMind, creature, {});
+		if (!mine.has_value())
+		{
+			return false;
+		}
+		const auto worths = [&]() {
+			ComeAcross(mind, other);
+			const auto* at = registry.TryGet<const Transform>(creature);
+			const auto place = BelievedPlace(mind, other);
+			const auto worth = [&](Desire desire) {
+				if (at == nullptr || !place.has_value())
+				{
+					return 0.0f;
+				}
+				const auto d = static_cast<size_t>(desire);
+				return creature_reaction::WorthAbout(
+				    mind.desires->desires.at(d).value, ActivityUsefulness(creature, mind, desire, other),
+				    ecs::systems::mind_detail::Nearness(registry, creature, at->position, other, *place,
+				                                        tables->rules.at(d).distanceWeight));
+			};
+			return std::pair {worth(Desire::Anger), worth(Desire::Fear)};
+		};
+		const auto dominant = [&]() {
+			const auto* ownNeeds = registry.TryGet<const CreatureNeeds>(creature);
+			const auto* otherNeeds = registry.TryGet<const CreatureNeeds>(other);
+			// TODO(usefulness-use-tree): When the ages have a difference of ten years or less, the game uses the order
+			// of the creatures in its object store. openblack does not have this order. It uses the entity index.
+			return creature_reaction::IsDominant(ownNeeds != nullptr ? ownNeeds->needs.age : 0,
+			                                     otherNeeds != nullptr ? otherNeeds->needs.age : 0,
+			                                     entt::to_entity(other) < entt::to_entity(creature));
+		};
+		const auto verdict = creature_reaction::WeighWatch(mine, theirs, worths, dominant);
+		if (verdict.weighAgainWithoutFear)
+		{
+			leftOut.push_back(Desire::Fear);
+			continue;
+		}
+		if (!verdict.act.has_value())
+		{
+			return false;
+		}
+		[[maybe_unused]] const bool planned = ForceDesireAbout(creature, mind, *verdict.act, other);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} stops its watch of {} for desire {} ({})",
+		                    entt::to_integral(creature), entt::to_integral(other), static_cast<int>(*verdict.act),
+		                    planned ? "planned" : "no plan");
+		// The creature records the turn when it examined the other creature
+		if (auto* belief = mind.beliefs.Find(other); belief != nullptr && Locator::reactionSystem::has_value())
+		{
+			belief->inspected = Locator::reactionSystem::value().CurrentTurn();
+		}
+		return true;
+	}
 }
