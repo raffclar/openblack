@@ -2163,6 +2163,7 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		                     {"blocks_walked", summary.blocksWalked},
 		                     {"farthest_walked", summary.farthestWalked},
 		                     {"things", summary.things},
+		                     {"kept", summary.kept},
 		                     {"full", summary.full},
 		                     {"rebuilds_asked", summary.rebuildsAsked}};
 		        if (const auto entity = EntityParam(context.params); entity.has_value())

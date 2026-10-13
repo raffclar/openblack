@@ -206,8 +206,11 @@ void ObjectDrawListSystem::MakeList()
 		if (index >= _listedByIndex.size())
 		{
 			_listedByIndex.resize(index + 1, entt::null);
+			_keptByIndex.resize(index + 1, false);
 		}
 		_listedByIndex[index] = entity;
+		// The full frame that follows decides it
+		_keptByIndex[index] = false;
 	}
 }
 
@@ -228,7 +231,19 @@ bool ObjectDrawListSystem::Drawn(const Registry& registry, entt::entity entity) 
 	{
 		return true;
 	}
-	return Listed(entity);
+	if (!Listed(entity))
+	{
+		return false;
+	}
+	return _frame.drawAll || _keptByIndex[static_cast<size_t>(entt::to_entity(entity))];
+}
+
+void ObjectDrawListSystem::NoteFullFrame(entt::entity entity, bool staysDrawn)
+{
+	if (_frame.drawAll && Listed(entity))
+	{
+		_keptByIndex[static_cast<size_t>(entt::to_entity(entity))] = staysDrawn;
+	}
 }
 
 ObjectDrawListSystemInterface::Summary ObjectDrawListSystem::GetSummary() const
@@ -240,6 +255,8 @@ ObjectDrawListSystemInterface::Summary ObjectDrawListSystem::GetSummary() const
 	        .blocksWalked = _blocksWalked,
 	        .farthestWalked = _farthestWalked,
 	        .things = static_cast<uint32_t>(_list.size()),
+	        .kept = static_cast<uint32_t>(std::ranges::count_if(
+	            _list, [this](entt::entity entity) { return _keptByIndex[static_cast<size_t>(entt::to_entity(entity))]; })),
 	        .full = _list.size() >= object_draw_list::k_MostObjects,
 	        .rebuildsAsked = _requests.Left()};
 }

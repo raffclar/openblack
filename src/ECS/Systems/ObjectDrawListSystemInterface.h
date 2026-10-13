@@ -49,6 +49,8 @@ public:
 		/// The further of the blocks walked
 		float farthestWalked {0.0f};
 		uint32_t things {0};
+		/// The listed things that the last full frame kept for the frames that do not draw all of the list
+		uint32_t kept {0};
 		/// It holds as many as it can, so more were left out
 		bool full {false};
 		uint32_t rebuildsAsked {0};
@@ -79,8 +81,12 @@ public:
 	[[nodiscard]] virtual const std::optional<object_draw_list::View>& GetView() const = 0;
 	/// Whether a thing is in the list as it was last made
 	[[nodiscard]] virtual bool Listed(entt::entity entity) const = 0;
-	/// Whether the list lets a thing be drawn: true for anything it doesn't decide
+	/// Whether the list lets a thing be drawn: true for anything it doesn't decide. A frame that does not draw all of
+	/// the list draws only the listed things that the last full frame kept (see NoteFullFrame).
 	[[nodiscard]] virtual bool Drawn(const Registry& registry, entt::entity entity) const = 0;
+	/// On a frame that draws all of the list, the renderer tells for each listed thing whether it stays drawn on the
+	/// next frames that do not (see object_draw_list::StaysDrawn)
+	virtual void NoteFullFrame(entt::entity entity, bool staysDrawn) = 0;
 	/// The list as it was last made, nearest blocks first
 	[[nodiscard]] virtual std::span<const entt::entity> GetList() const = 0;
 	[[nodiscard]] virtual Summary GetSummary() const = 0;
