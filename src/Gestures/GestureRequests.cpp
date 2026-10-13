@@ -38,6 +38,8 @@ std::string_view gesture::Name(Purpose purpose)
 		return "special move";
 	case Purpose::FightMiracle:
 		return "fight miracle";
+	case Purpose::HiddenScript:
+		return "hidden script";
 	}
 	return "";
 }
@@ -50,6 +52,7 @@ bool gesture::ShowsRecognition(Purpose purpose)
 	case Purpose::ShakeOffLeash:
 	case Purpose::ShakeOffHeld:
 	case Purpose::ClosePicker:
+	case Purpose::HiddenScript:
 		return false;
 	case Purpose::SizeCircle:
 	case Purpose::PowerUp:
@@ -60,6 +63,11 @@ bool gesture::ShowsRecognition(Purpose purpose)
 		return true;
 	}
 	return false;
+}
+
+bool gesture::RestsAfter(Purpose purpose)
+{
+	return purpose != Purpose::HiddenScript;
 }
 
 std::string_view gesture::Name(GestureType gesture)
@@ -145,6 +153,11 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 	{
 		// The picker: a scribble closes it; each other leash the creature knows is a gesture away
 		requests.push_back({.gesture = GestureType::Scribble, .purpose = Purpose::ClosePicker});
+		// On Land 1, the square wave starts the hidden script. The picker shows no hint for it.
+		if (context.hiddenScriptLand)
+		{
+			requests.push_back({.gesture = GestureType::SquareWave, .purpose = Purpose::HiddenScript});
+		}
 		for (size_t i = 0; i < context.creature->knows.size(); ++i)
 		{
 			const auto leash = static_cast<LeashType>(i + 1);

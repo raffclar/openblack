@@ -32,7 +32,11 @@ public:
 		widths.push_back(n);
 		return n == 0 ? 0 : (answer.value_or(n - 1));
 	}
-	float GameFloatRand(float /*x*/) override { return 0.0f; }
+	float GameFloatRand(float x) override
+	{
+		floatWidths.push_back(x);
+		return floatAnswer.value_or(0.0f);
+	}
 	uint32_t LocalRand(int32_t /*n*/) override
 	{
 		++localDraws;
@@ -48,6 +52,8 @@ public:
 
 	std::optional<uint32_t> answer;
 	std::vector<uint32_t> widths;
+	std::optional<float> floatAnswer;
+	std::vector<float> floatWidths;
 	int localDraws {0};
 };
 
@@ -92,4 +98,28 @@ TEST(ScriptRandom, AReversedRangeWrapsRoundUnsigned)
 	random.answer = 5;
 	EXPECT_EQ(WholeNumberBetween(10, 4, random), 15u);
 	EXPECT_EQ(random.widths, (std::vector<uint32_t> {0xFFFFFFFBu}));
+}
+
+TEST(ScriptRandom, NumberFromIsAWholeNumberInTheRange)
+{
+	// The hidden phone box: "number from 1 to 10" picks one of ten calls
+	WidthRecordingRandom random;
+	random.floatAnswer = 0.0f;
+	EXPECT_EQ(NumberFrom(1.0f, 10.0f, random), 1.0f);
+	random.floatAnswer = 3.7f;
+	EXPECT_EQ(NumberFrom(1.0f, 10.0f, random), 4.0f);
+	random.floatAnswer = 9.999f;
+	EXPECT_EQ(NumberFrom(1.0f, 10.0f, random), 10.0f);
+	EXPECT_EQ(random.floatWidths, (std::vector<float> {10.0f, 10.0f, 10.0f}));
+	EXPECT_TRUE(random.widths.empty());
+	EXPECT_EQ(random.localDraws, 0);
+}
+
+TEST(ScriptRandom, NumberFromCutsTheFractionTowardsZero)
+{
+	WidthRecordingRandom random;
+	// -3 + 1.5 is -1.5, which becomes -1, not -2
+	random.floatAnswer = 1.5f;
+	EXPECT_EQ(NumberFrom(-3.0f, 3.0f, random), -1.0f);
+	EXPECT_EQ(random.floatWidths, (std::vector<float> {7.0f}));
 }

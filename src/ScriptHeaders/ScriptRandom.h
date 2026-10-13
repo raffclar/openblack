@@ -25,4 +25,9 @@ namespace openblack::script::random
 /// and gives low
 [[nodiscard]] uint32_t WholeNumberBetween(uint32_t low, uint32_t high, GameRandomInterface& random);
 
+/// A whole number from low to high, both included, as "number from low to high" gives it, from the game's synced random
+/// numbers. The game draws a float below the width plus 1, adds low, and cuts off the fraction towards zero. The game
+/// does the subtraction, the two additions and the cut at double precision.
+[[nodiscard]] float NumberFrom(float low, float high, GameRandomInterface& random);
+
 } // namespace openblack::script::random

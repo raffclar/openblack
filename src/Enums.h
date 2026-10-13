@@ -334,8 +334,8 @@ enum class GestureType : uint32_t
 	Infinity = 19,
 	WShape = 20,
 	House = 21,
-	// InverseSquareSpiral = 22, // CREATUREISLE
-	// SquareWave          = 23, // CREATUREISLE
+	InverseSquareSpiral = 22,
+	SquareWave = 23,
 };
 
 enum class FieldTypeInfo
