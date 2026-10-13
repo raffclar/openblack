@@ -43,6 +43,7 @@
 #include "VillagerBreeding.h"
 #include "VillagerBuild.h"
 #include "VillagerChecks.h"
+#include "VillagerCover.h"
 #include "VillagerDance.h"
 #include "VillagerDiscipleWork.h"
 #include "VillagerDisciples.h"
@@ -70,6 +71,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace villager_home = openblack::ecs::villager_home;
+namespace villager_cover = openblack::ecs::villager_cover;
 namespace villager_eaten = openblack::ecs::villager_eaten;
 namespace villager_teleport = openblack::ecs::villager_teleport;
 namespace villager_shield = openblack::ecs::villager_shield;
@@ -1001,8 +1003,16 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_reactions::WaitForMate,
         .exitState = &villager_reactions::ExitReaction,
     },
-    /* GO_AND_HIDE_IN_NEARBY_BUILDING */ k_TodoEntry,
-    /* LOOK_TO_SEE_IF_IT_IS_SAFE */ k_TodoEntry,
+    /* GO_AND_HIDE_IN_NEARBY_BUILDING */
+    VillagerStateTableEntry {
+        .state = &villager_cover::GoAndHideInNearbyBuilding,
+        .exitState = &villager_reactions::ExitReaction,
+    },
+    /* LOOK_TO_SEE_IF_IT_IS_SAFE */
+    VillagerStateTableEntry {
+        .state = &villager_cover::LookToSeeIfItIsSafe,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* SLEEP_IN_TENT */
     VillagerStateTableEntry {
         .state = &villager_home::SleepInTent,
@@ -1011,7 +1021,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &VillagerPauseForASecond,
     },
-    /* PANIC_REACTION */ k_TodoEntry,
+    /* PANIC_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_cover::PanicReaction,
+    },
     /* GET_FOOD_AT_WORSHIP_SITE */
     VillagerStateTableEntry {
         .state = &villager_worship::GetFoodAtWorshipSite,

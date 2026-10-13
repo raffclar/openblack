@@ -883,3 +883,4 @@ openblack_setup_and_add_test(
   test_temple_villagers_survey temple/test_temple_villagers_survey.cpp
 )
 openblack_setup_and_add_test(test_hand_pointer input/test_hand_pointer.cpp)
+openblack_setup_and_add_test(test_villager_hiding test_villager_hiding.cpp)

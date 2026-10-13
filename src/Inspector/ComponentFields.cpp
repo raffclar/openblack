@@ -208,6 +208,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/VillagerHiding.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/VillagerWork.h"
@@ -1789,6 +1790,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerDeath::killer>("killer")
 	    .Field<&components::VillagerDeath::onBack>("onBack")
 	    .Field<&components::VillagerDeath::noticed>("noticed");
+	Reflect<components::VillagerHiding>(context)
+	    .Field<&components::VillagerHiding::building>("building")
+	    .Field<&components::VillagerHiding::turns>("turns")
+	    .Field<&components::VillagerHiding::threat>("threat")
+	    .Field<&components::VillagerHiding::threatKind>("threatKind");
+	Reflect<components::VillagerPanic>(context).Field<&components::VillagerPanic::point>("point");
 	Reflect<components::NamedVillager>(context).Field<&components::NamedVillager::row>("row");
 	Reflect<components::DetailsShown>(context).Field<&components::DetailsShown::dummy>("dummy");
 	Reflect<components::NameHidden>(context).Field<&components::NameHidden::dummy>("dummy");

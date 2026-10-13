@@ -44,6 +44,33 @@ CreatureSetup Thrower(glm::vec2 offset, float facing, PlayerNames owner = Player
 	        .pauseMind = true};
 }
 
+/// A town's people under the player's spiritual shield when it breaks, twenty seconds after it is cast; the town's huts
+/// where given
+Scenario ShieldFall(std::string_view id, std::string_view name, std::string_view description, std::string_view expected,
+                    const std::vector<glm::vec2>& huts)
+{
+	std::vector<ObjectSetup> objects;
+	for (const auto& hut : huts)
+	{
+		objects.push_back({.type = AbodeInfo::CelticHut, .offset = hut});
+	}
+	objects.push_back({.type = VillagerInfo::CelticFarmerMale, .offset = {-15.0f, 35.0f}, .joinTown = true});
+	objects.push_back({.type = VillagerInfo::CelticForesterMale, .offset = {12.0f, 48.0f}, .joinTown = true});
+	objects.push_back({.type = VillagerInfo::CelticHousewifeFemale, .offset = {-4.0f, 55.0f}, .joinTown = true});
+	objects.push_back({.type = VillagerInfo::CelticFishermanMale, .offset = {18.0f, 28.0f}, .joinTown = true});
+	return {
+	    .id = id,
+	    .name = name,
+	    .facet = Facet::Miracles,
+	    .description = description,
+	    .expected = expected,
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-70.0f, 0.0f}, {70.0f, 90.0f}}},
+	    .objects = objects,
+	    .miracles = {{.type = MagicType::Shield, .point = k_ShieldSpot, .delaySeconds = 1.0f, .breakSeconds = 20.0f}},
+	};
+}
+
 void AddShields(std::vector<Scenario>& all)
 {
 	all.push_back({
@@ -173,6 +200,25 @@ void AddShields(std::vector<Scenario>& all)
 	         {.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 1.0f, .waitUntilFree = true, .point = {-80.0f, 40.0f}}},
 	    .repeatFrom = 0,
 	});
+
+	all.push_back(ShieldFall(
+	    "miracles.shield_fall_hide", "A town's people hide when their shield falls",
+	    "Four villagers of the player's town about a spiritual shield of radius 30, between two huts, one 50 to the "
+	    "west and one 55 to the east; the shield breaks twenty seconds after it is cast (a testbed set-up step standing "
+	    "for a blow its caster can't pay for).",
+	    "When the shield breaks its people take up its fall: each walks along the paths to the hut of its town nearest "
+	    "to it by the hut's door (within 100), vanishes inside, stays 15 to 30 seconds, then steps out a metre and a half "
+	    "to three from the door, looks about for 2.5 to 5 seconds and goes back to what it was doing.",
+	    {{-50.0f, 45.0f}, {55.0f, 40.0f}}));
+
+	all.push_back(ShieldFall(
+	    "miracles.shield_fall_panic", "A town's people with nowhere to hide when their shield falls",
+	    "As the hiding scenario, but the town's only hut stands 150 east of the shield, too far to hide in.",
+	    "When the shield breaks its people take up its fall but have nowhere within 100 to hide: each is set to run off "
+	    "away from where the shield stood, give or take an eighth of a turn, and then to look back there in panic. As in "
+	    "the original game, nothing keeps them at it: on the next turn they give the reaction up and go back to what they "
+	    "were doing, so no one runs or looks back.",
+	    {{170.0f, 40.0f}}));
 }
 
 void AddForests(std::vector<Scenario>& all)
