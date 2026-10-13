@@ -19,6 +19,7 @@
 
 #include "Common/GameRandom.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
@@ -670,6 +671,27 @@ TEST_F(Reactions, TheCreatureIsImpressedByItsOwnPlayersMiracle)
 	ASSERT_NE(impression, nullptr);
 	EXPECT_FLOAT_EQ(impression->byOwnPlayer, 2.0f * 4.0f);
 	EXPECT_FLOAT_EQ(impression->byOtherCreatures, 0.0f);
+}
+
+// A creature a script has told to take no notice, one a script controls, and one carrying out its player's order take
+// up no reaction, so aren't impressed by one
+TEST_F(Reactions, ACreatureToldToTakeNoNoticeOrBusyWithAnOrderIsNotImpressed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto impressed = [&]() {
+		const auto* impression = registry.TryGet<const CreatureImpression>(_creature);
+		return impression != nullptr && impression->byOwnPlayer > 0.0f;
+	};
+	registry.Assign<CreatureReactionsOff>(_creature);
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	registry.Remove<CreatureReactionsOff>(_creature);
+	registry.Assign<CreatureLeash>(_creature).order = CreatureLeash::Order {};
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	registry.Remove<CreatureLeash>(_creature);
+	_reactions.Create(Miracle());
+	EXPECT_TRUE(impressed());
 }
 
 TEST_F(Reactions, AnotherPlayersMiracleImpressesACreatureNotAtAllWhoeverCastIt)

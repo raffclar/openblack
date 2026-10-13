@@ -164,6 +164,13 @@ public:
 	/// reaction makes (done to the thing or to itself), learns the skill it watches, and moves a source of its desires,
 	/// as the reaction's kind says
 	virtual void TakeUpReaction(entt::entity /*creature*/, entt::entity /*thing*/, const creature_reaction::Setup& /*setup*/) {}
+	/// The creature weighs looking another creature over: it comes across it, and when it never has looked it over, or
+	/// not for more than the wait in turns, it is due a look, and notes the turn as when it last looked. Whether it is due
+	[[nodiscard]] virtual bool NoticeCreatureToInspect(entt::entity /*creature*/, entt::entity /*other*/, uint32_t /*turn*/,
+	                                                   uint32_t /*waitTurns*/)
+	{
+		return false;
+	}
 	/// The creature tries a miracle at an object, as its casting pose's loop begins or in a fight: in a fight it pays
 	/// stamina first; a try short of the sightings it needs fizzles; a miracle it can't cast frustrates it. Whether it
 	/// was cast.

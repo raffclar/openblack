@@ -62,6 +62,12 @@ const Belief* Store::Find(entt::entity thing) const
 	return known != _index.end() ? &*_pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
 }
 
+Belief* Store::Find(entt::entity thing)
+{
+	const auto known = _index.find(thing);
+	return known != _index.end() ? &*_pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
+}
+
 bool Store::Forget(entt::entity thing)
 {
 	const auto known = _index.find(thing);

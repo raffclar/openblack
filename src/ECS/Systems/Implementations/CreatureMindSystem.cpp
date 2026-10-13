@@ -86,7 +86,9 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -449,6 +451,27 @@ bool IsSubMove(creature_mind::Movement::Kind kind)
 
 /// Where the creature's head looks for a step that gives it something to look at: the top of a thing, or its foot, a
 /// point, or the camera. It doesn't look at a thing it holds, nor at one it is walking past within ten of it.
+/// Where the player's hand nearest a creature is, none for a creature without a player or when there is no hand
+std::optional<glm::vec3> NearestHand(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (body == nullptr || body->owner == PlayerNames::NEUTRAL || transform == nullptr || !Locator::handSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	std::optional<glm::vec3> nearest;
+	for (const auto& hand : Locator::handSystem::value().GetPlayerHandPositions())
+	{
+		if (hand.has_value() &&
+		    (!nearest.has_value() || glm::distance(*hand, transform->position) < glm::distance(*nearest, transform->position)))
+		{
+			nearest = hand;
+		}
+	}
+	return nearest;
+}
+
 std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity creature, const creature_mind::Gaze& gaze,
                                    bool moving)
 {
@@ -456,6 +479,10 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	if (gaze.camera)
 	{
 		return Locator::camera::has_value() ? std::optional(Locator::camera::value().GetOrigin()) : std::nullopt;
+	}
+	if (gaze.hand)
+	{
+		return NearestHand(registry, creature);
 	}
 	if (!gaze.object.has_value())
 	{
@@ -470,6 +497,10 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	     glm::distance(glm::vec2(self->position.x, self->position.z), glm::vec2(at->x, at->z)) < k_NoLookWhileMovingWithin))
 	{
 		return std::nullopt;
+	}
+	if (gaze.itself)
+	{
+		return *at;
 	}
 	const glm::vec2 flat {at->x, at->z};
 	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(flat) : at->y;
@@ -577,6 +608,32 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 	const auto offset = point - glm::vec2(transform->position.x, transform->position.z);
 	return creature_mind::Senses::CameraView {
 	    .distance = glm::distance(eye, transform->position),
+	    .groundDistance = glm::length(offset),
+	    .point = point,
+	    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
+	};
+}
+
+/// The player's hand as a creature watching it sees it, only while its step watches the hand; none for a creature
+/// without a player
+std::optional<creature_mind::Senses::CameraView> HandViewOf(const ecs::Registry& registry, entt::entity creature,
+                                                            const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WatchHand)
+	{
+		return std::nullopt;
+	}
+	const auto hand = NearestHand(registry, creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
+	if (!hand.has_value() || transform == nullptr || self == nullptr)
+	{
+		return std::nullopt;
+	}
+	const glm::vec2 point {hand->x, hand->z};
+	const auto offset = point - glm::vec2(transform->position.x, transform->position.z);
+	return creature_mind::Senses::CameraView {
+	    .distance = glm::distance(*hand, transform->position),
 	    .groundDistance = glm::length(offset),
 	    .point = point,
 	    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
@@ -924,6 +981,7 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 		break;
 	case Effect::Completed:
 	case Effect::Observed:
+	case Effect::Inspected:
 	case Effect::TookFromPile:
 	case Effect::TookFromHand:
 	case Effect::None:
@@ -1407,6 +1465,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .feelings = FeelingsOf(mind),
 		        .choosesNext = !scripted,
 		        .camera = CameraViewOf(registry, entity, mind.idle),
+		        .hand = HandViewOf(registry, entity, mind.idle),
 		        .swap = SwapViewOf(entity),
 		        .overlayPlaying = animation.gesture.animation.has_value(),
 		    };
@@ -1488,10 +1547,19 @@ void CreatureMindSystem::ProcessTurn()
 				    mind.observedKinds.insert(creature_tree::belief_types::k_Animal);
 			    }
 		    }
+		    // Having looked another creature over, it notes when, and waits a while before it does again
+		    if (commands.effect == creature_mind::Effect::Inspected && commands.effectObject.has_value())
+		    {
+			    if (auto* inspected = mind.beliefs.Find(static_cast<entt::entity>(*commands.effectObject));
+			        inspected != nullptr && Locator::reactionSystem::has_value())
+			    {
+				    inspected->inspected = Locator::reactionSystem::value().CurrentTurn();
+			    }
+		    }
 		    CountCompleted(entity, mind, commands, GetTables());
 		    // Taking in what a thing is does nothing for the desire the plan serves
 		    if (commands.effect != creature_mind::Effect::None && commands.effect != creature_mind::Effect::Observed &&
-		        commands.effect != creature_mind::Effect::TookFromPile &&
+		        commands.effect != creature_mind::Effect::Inspected && commands.effect != creature_mind::Effect::TookFromPile &&
 		        commands.effect != creature_mind::Effect::TookFromHand)
 		    {
 			    mind.satisfiedByEffect = true;
@@ -2042,7 +2110,9 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		return;
 	}
 	// TODO(creature-giving): the game first carries on the plan the creature had before it was given the thing, when that
-	// plan's action takes a thing of this sort (see bw1-decomp creature/creature_giving.md section 4); not done yet
+	// plan's action takes a thing of this sort (see bw1-decomp creature/creature_giving.md section 4); not done yet. While
+	// the creature holds a reaction, the plan it goes back to is the one it had when it took the reaction up (or the hand
+	// picked something up), not the reaction's own
 	const auto& desires = *mind->desires;
 	const auto weigh = [&](Desire desire) {
 		return creature_giving::Weighed {.desire = desires[desire].value,

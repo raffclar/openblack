@@ -136,6 +136,47 @@ std::vector<Step> creature_mind::ExamineByLooking(uint32_t thing, float height, 
 	};
 }
 
+std::vector<Step> creature_mind::InspectCreature(uint32_t other, float height)
+{
+	// TODO(creature-reactions-2): each turn of the watch the game also weighs which of its desires it would act on with
+	// the other creature, and which the other would act on with it, and on finding one drops the watch to act on it then
+	// (anger, and fear unless anger is the stronger, settled first); the planner can't yet weigh a desire for one given
+	// thing, so the watch always runs its time
+	return {
+	    GoNear(other, height * k_InspectHeights),
+	    FaceThing(other, k_InspectFaceSeconds, creature_face::Cue::Curiosity),
+	    {.kind = Step::Kind::Inspect,
+	     .seconds = k_InspectSeconds,
+	     .extraSeconds = k_InspectExtraSeconds,
+	     .object = other,
+	     .face = creature_face::Cue::Curiosity,
+	     .gaze = Gaze {.object = other}},
+	};
+}
+
+std::vector<Step> creature_mind::LookAtFlyingObject(uint32_t thing, const Random& random)
+{
+	const Gaze follow {.object = thing, .itself = true};
+	std::vector<Step> agenda;
+	if (random(k_PointAtFlyingLots) == 0)
+	{
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = thing, .seconds = k_PointAtFlyingSeconds},
+		                  .face = creature_face::Cue::Amazed,
+		                  .gaze = follow});
+	}
+	agenda.push_back({.kind = Step::Kind::WatchFlying, .object = thing, .face = creature_face::Cue::Amazed, .gaze = follow});
+	return agenda;
+}
+
+std::vector<Step> creature_mind::LookAtHand()
+{
+	return {{.kind = Step::Kind::WatchHand,
+	         .turns = k_LookAtHandTurns,
+	         .face = creature_face::Cue::Curiosity,
+	         .gaze = Gaze {.hand = true}}};
+}
+
 std::vector<Step> creature_mind::SmileAt(uint32_t friendly, float height, float chance, const Random& random)
 {
 	const Gaze look {.object = friendly};

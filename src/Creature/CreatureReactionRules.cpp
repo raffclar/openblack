@@ -71,6 +71,22 @@ uint16_t creature_reaction::LookAngle(glm::vec2 way)
 	                             static_cast<uint32_t>(gutils::k_GameAngleMask));
 }
 
+bool creature_reaction::BlocksInspecting(const Facts& facts)
+{
+	return facts.thingIsSelf || facts.thingGone || !facts.thingIsCreature || facts.orderedByPlayer || facts.hasOpponent ||
+	       facts.planActsOnThing;
+}
+
+bool creature_reaction::InspectDue(std::optional<uint32_t> inspected, uint32_t turn, uint32_t waitTurns)
+{
+	return !inspected.has_value() || turn - *inspected > waitTurns;
+}
+
+uint32_t creature_reaction::InspectWaitTurns(float seconds, uint32_t turnsPerSecond)
+{
+	return static_cast<uint32_t>(static_cast<float>(turnsPerSecond) * seconds);
+}
+
 std::optional<uint8_t> creature_reaction::Priority(Reaction type, const Facts& facts,
                                                    const std::function<uint32_t(uint32_t)>& random)
 {
@@ -78,6 +94,8 @@ std::optional<uint8_t> creature_reaction::Priority(Reaction type, const Facts& f
 	const auto othersPassedOver = [&]() { return facts.otherPlayers && random(k_OtherPlayersDraw) >= k_OtherPlayersChance; };
 	switch (type)
 	{
+	case Reaction::ReactToCreature:
+		return !BlocksInspecting(facts) && facts.inspectDue ? k_InspectCreatureUrgency : 0;
 	case Reaction::ReactToFood:
 		return facts.humanPlayer && facts.seesThing ? facts.tablePriority : 0;
 	case Reaction::ReactToMagicTree:
@@ -131,6 +149,8 @@ std::optional<Setup> creature_reaction::SetupFor(Reaction type, bool thingInTheA
 	case Reaction::FollowObject:
 	case Reaction::FollowSpell:
 		return Setup {};
+	case Reaction::ReactToCreature:
+		return Setup {.plan = Plan {.desire = Desire::Curiosity, .action = "InspectCreature", .onlyIfUseful = true}};
 	case Reaction::ReactToFood:
 	case Reaction::ReactToGiftFromCreature:
 		return Setup {.comesAcross = true};
@@ -144,7 +164,8 @@ std::optional<Setup> creature_reaction::SetupFor(Reaction type, bool thingInTheA
 		              .comesAcross = true,
 		              .plan = Plan {.desire = Desire::Curiosity, .action = "LookAtFlyingObject"}};
 	case Reaction::ReactToHandPickUp:
-		return Setup {.plan = Plan {.desire = Desire::Curiosity, .action = "LookAtHand", .onSelf = true}};
+		return Setup {.plan = Plan {.desire = Desire::Curiosity, .action = "LookAtHand", .onSelf = true},
+		              .longHandWatch = true};
 	case Reaction::ReactToHandUsingTotem:
 		return Setup {.comesAcross = true,
 		              .plan = Plan {.desire = Desire::Curiosity, .action = "ExamineByLooking"},

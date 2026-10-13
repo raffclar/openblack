@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/GameRandom.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 
@@ -84,22 +85,6 @@ void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Command
 	const auto turnsPerSecond = std::lround(1.0f / senses.seconds);
 	const auto turns = std::lround(mind.stepSeconds / senses.seconds) + 1;
 	if (turns / turnsPerSecond > static_cast<long>(step.seconds) || senses.camera->distance > k_WatchCameraFurthest)
-	{
-		FinishStep(mind);
-	}
-}
-
-/// One turn of watching a thing fly, the turn it starts on counting as the first
-void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
-{
-	if (!senses.objectInTheAir || !(senses.seconds > 0.0f))
-	{
-		FinishStep(mind);
-		return;
-	}
-	const auto turnsPerSecond = static_cast<uint32_t>(std::lround(1.0f / senses.seconds));
-	const auto turns = static_cast<uint32_t>(std::lround(mind.stepSeconds / senses.seconds)) + 1;
-	if (!WatchingFlyingGoesOn(turns / turnsPerSecond, random))
 	{
 		FinishStep(mind);
 	}
@@ -468,17 +453,6 @@ std::vector<Step> creature_mind::RunFrom(glm::vec2 point)
 	return WithFace({flee}, creature_face::Cue::Fear);
 }
 
-bool creature_mind::WatchingFlyingGoesOn(uint32_t wholeSeconds, const Random& random)
-{
-	// Seconds below two go on, and beyond them the drawn chance from 0 to 2 counts in whole parts: the watch goes on
-	// while the seconds past two are no more than the whole part drawn
-	if (wholeSeconds < k_WatchFlyingSeconds)
-	{
-		return true;
-	}
-	return wholeSeconds - k_WatchFlyingSeconds <= random(k_WatchFlyingMoreSeconds);
-}
-
 std::vector<Step> creature_mind::DestroyThing(uint32_t object)
 {
 	return WithFace({Object({.kind = ObjectOrder::Kind::Destroy, .object = object})}, creature_face::Cue::Anger);
@@ -696,6 +670,61 @@ std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, cr
 	return face;
 }
 
+bool creature_mind::KeepsWatchingFlying(uint32_t turns, uint32_t turnsPerSecond, float limit, bool flying)
+{
+	return flying && static_cast<float>(turns / turnsPerSecond) < limit;
+}
+
+bool creature_mind::WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint32_t turnsPerSecond)
+{
+	const auto limit = std::min(static_cast<float>(limitTurns / turnsPerSecond), k_LongestHandWatchSeconds);
+	return static_cast<float>(turns / turnsPerSecond) > limit;
+}
+
+namespace
+{
+/// A turn of watching the player's hand
+void WatchHand(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
+{
+	++mind.watchTurns;
+	if (!senses.hand.has_value() || !(senses.seconds > 0.0f))
+	{
+		FinishStep(mind);
+		return;
+	}
+	bool turning = senses.moving;
+	if (senses.hand->groundDistance >= k_WatchCameraOverhead && std::abs(senses.hand->turn) > k_WatchCameraTurn)
+	{
+		commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = senses.hand->point};
+		turning = true;
+	}
+	const auto turnsPerSecond = static_cast<uint32_t>(std::lround(1.0f / senses.seconds));
+	if (!turning && WatchedHandEnough(mind.watchTurns, step.turns.value_or(0), turnsPerSecond))
+	{
+		FinishStep(mind);
+	}
+}
+
+/// A turn of watching a flying thing: the limit is picked afresh each turn, before anything else is looked at
+void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
+{
+	const auto limit =
+	    static_cast<float>(random(game_random::k_FloatRandRange)) * k_WatchFlyingExtraSeconds * game_random::k_FloatRandScale +
+	    k_WatchFlyingSeconds;
+	++mind.watchTurns;
+	if (!(senses.seconds > 0.0f))
+	{
+		FinishStep(mind);
+		return;
+	}
+	const auto turnsPerSecond = static_cast<uint32_t>(std::lround(1.0f / senses.seconds));
+	if (!KeepsWatchingFlying(mind.watchTurns, turnsPerSecond, limit, senses.objectInTheAir))
+	{
+		FinishStep(mind);
+	}
+}
+} // namespace
+
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	Commands commands;
@@ -838,9 +867,6 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::WatchCamera:
 			WatchCamera(mind, step, senses, commands);
 			break;
-		case Step::Kind::WatchFlying:
-			WatchFlying(mind, senses, random);
-			break;
 		case Step::Kind::SwapMind:
 			commands.playOnce = step.animation;
 			commands.mirrored = random(2) == 1;
@@ -850,6 +876,23 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			// Nothing starts on top of the body while something already plays there; the step waits for it all the same
 			commands.playOverlay = step.animation;
 			break;
+		case Step::Kind::WatchFlying:
+			mind.watchTurns = 0;
+			WatchFlying(mind, senses, random);
+			break;
+		case Step::Kind::WatchHand:
+			mind.watchTurns = 0;
+			WatchHand(mind, step, senses, commands);
+			break;
+		case Step::Kind::Inspect:
+		{
+			// The time is picked as the step starts, and counted in whole turns from the next
+			const auto turnsPerSecond = static_cast<float>(std::lround(1.0f / senses.seconds));
+			const auto extra =
+			    static_cast<float>(random(game_random::k_FloatRandRange)) * step.extraSeconds * game_random::k_FloatRandScale;
+			mind.inspectTurns = static_cast<uint32_t>((extra + step.seconds) * turnsPerSecond);
+			break;
+		}
 		case Step::Kind::Wait:
 		case Step::Kind::WaitInMap:
 			break;
@@ -973,15 +1016,30 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		// Done as it starts
 		FinishStep(mind);
 		break;
-	case Step::Kind::WatchFlying:
-		WatchFlying(mind, senses, random);
-		break;
 	case Step::Kind::WatchCamera:
 		WatchCamera(mind, step, senses, commands);
 		break;
 	case Step::Kind::Overlay:
 		if (!senses.overlayPlaying)
 		{
+			FinishStep(mind);
+		}
+		break;
+	case Step::Kind::WatchFlying:
+		WatchFlying(mind, senses, random);
+		break;
+	case Step::Kind::WatchHand:
+		WatchHand(mind, step, senses, commands);
+		break;
+	case Step::Kind::Inspect:
+		if (mind.inspectTurns > 0)
+		{
+			--mind.inspectTurns;
+		}
+		if (mind.inspectTurns == 0)
+		{
+			commands.effect = Effect::Inspected;
+			commands.effectObject = step.object;
 			FinishStep(mind);
 		}
 		break;

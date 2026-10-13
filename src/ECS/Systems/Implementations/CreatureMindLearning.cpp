@@ -1352,6 +1352,60 @@ float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const Creatu
 	return ObjectUsefulness(registry, *mind.learnt, mind, desire, object, creature);
 }
 
+float CreatureMindSystem::ObjectToActOnUsefulness(entt::entity creature, const CreatureMindState& mind, Desire desire,
+                                                  entt::entity object)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* known = mind.beliefs.Find(object);
+	const auto* tables = GetTables();
+	if (!mind.learnt.has_value() || known == nullptr || tables == nullptr || !registry.AllOf<Transform>(creature))
+	{
+		return 0.0f;
+	}
+	const auto& at = registry.Get<const Transform>(creature).position;
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	// Kept within an area, it doesn't act on what it believes lies farther from it than the area's radius
+	// TODO(creature-reactions-2): the game makes one exception, for one desire and a sort of thing that answers a test of
+	// its own; no creature, villager, animal or other living thing answers it, and the rest aren't mapped yet
+	if (leashes != nullptr)
+	{
+		const bool leashed = leashes->worn.has_value();
+		const bool works = !leashed || leashes->worn->works;
+		if (creature_leash::IsConfined(leashes->confinementRadius, leashed, works) &&
+		    gutils::GetDistanceInMetres(at, known->place) > leashes->confinementRadius)
+		{
+			return 0.0f;
+		}
+	}
+	const auto belief = BeliefOf(registry, object, creature);
+	// Curious, a kind it has had a good look at is a hundredth as useful
+	// TODO(creature-reactions-2): the game makes a thing five times as useful to a curious creature while it does
+	// something the creature finds interesting (only a villager can), and has a rule of its own for one more desire
+	const float share = ObservedShare(registry, mind, desire, object, belief);
+	// The distance counts from where its player's leash is tied, when it is, else from the creature; a thing it holds
+	// counts as near as can be
+	glm::vec3 from = at;
+	if (leashes != nullptr && leashes->worn.has_value() && leashes->worn->tiedTo.has_value() &&
+	    registry.Valid(*leashes->worn->tiedTo))
+	{
+		if (const auto* tied = registry.TryGet<const Transform>(*leashes->worn->tiedTo))
+		{
+			from = tied->position;
+		}
+	}
+	const auto* held = registry.TryGet<const HeldByCreature>(object);
+	const auto distance = creature_planner::DistancePriority(held != nullptr && held->creature == creature,
+	                                                         gutils::GetDistanceInMetres(known->place, from),
+	                                                         tables->rules.at(static_cast<size_t>(desire)).distanceWeight);
+	float learnt = creature_planner::k_DefaultUsefulness;
+	if (belief.has_value())
+	{
+		const auto& tree = mind.learnt->trees.at(static_cast<size_t>(TreeKind::Use)).at(static_cast<size_t>(desire));
+		learnt = creature_tree::Usefulness(creature_tree::Evaluate(tree, *belief));
+	}
+	return learnt * distance * share;
+}
+
 void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, bool everyDesire)
 {
 	const auto* tables = GetTables();

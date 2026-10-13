@@ -79,6 +79,8 @@ public:
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	void ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	void TakeUpReaction(entt::entity creature, entt::entity thing, const creature_reaction::Setup& setup) override;
+	[[nodiscard]] bool NoticeCreatureToInspect(entt::entity creature, entt::entity other, uint32_t turn,
+	                                           uint32_t waitTurns) override;
 	bool TryMiracle(entt::entity creature, MagicType type, entt::entity target) override;
 	void KnowMiracle(entt::entity creature, size_t miracle) override;
 	void SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows) override;
@@ -154,6 +156,12 @@ private:
 	/// within an area and the thing lies outside it
 	[[nodiscard]] float ActivityUsefulness(entt::entity creature, const components::CreatureMindState& mind,
 	                                       creature_desires::Desire desire, entt::entity object) const;
+	/// How useful a thing the creature believes in is to do an action to for a desire: by what it has learnt of acting
+	/// on such things, by how far it is from the creature (or from where its player's leash is tied), and for curiosity a
+	/// hundredth as much for a kind it has had a good look at; nothing when it is kept within an area and the thing lies
+	/// outside it, or it has no belief about the thing
+	[[nodiscard]] float ObjectToActOnUsefulness(entt::entity creature, const components::CreatureMindState& mind,
+	                                            creature_desires::Desire desire, entt::entity object);
 	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
 	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
 	bool Douse(entt::entity creature, entt::entity object);

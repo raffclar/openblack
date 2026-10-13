@@ -149,6 +149,12 @@ enum class Build : uint8_t
 	SleepByObject,
 	/// Taking food from a pile and eating it
 	EatFromPile,
+	/// Looking another creature over
+	InspectCreature,
+	/// Looking at a thing flying through the air
+	LookAtFlyingObject,
+	/// Looking at the player's hand
+	LookAtHand,
 	/// Giving the tree it uses to the store as wood, and planting the tree it uses by the thing
 	GiveWoodToStore,
 	PlantTree,

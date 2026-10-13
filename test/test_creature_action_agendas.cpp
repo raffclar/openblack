@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <Common/GameRandom.h>
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureActionAgendas.h"
@@ -127,6 +128,160 @@ TEST(CreatureActionAgendas, TakingInAThingIsDoneAtOnce)
 	const auto commands = Think(mind, {.seconds = 0.1f, .choosesNext = false}, NeverFirst);
 	EXPECT_EQ(commands.effect, Effect::Observed);
 	EXPECT_EQ(commands.effectObject, 3u);
+	EXPECT_EQ(mind.step, 1u);
+}
+
+// "InspectCreature": near it at four of its own heights, a tenth of a second facing it, curious, then watching it
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, LookingACreatureOverGoesNearItFacesItAndWatchesIt)
+{
+	const auto agenda = InspectCreature(7, 10.0f);
+	ASSERT_EQ(agenda.size(), 3);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 40.0f);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda[1].seconds, 0.1f);
+	EXPECT_EQ(agenda[1].face, creature_face::Cue::Curiosity);
+	EXPECT_EQ(agenda[2].kind, Step::Kind::Inspect);
+	EXPECT_EQ(agenda[2].object, 7u);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::Curiosity);
+	ASSERT_TRUE(agenda[2].gaze.has_value());
+	EXPECT_EQ(agenda[2].gaze->object, 7u);
+	EXPECT_NE(plan_actions::For("InspectCreature"), nullptr);
+}
+
+// The watch lasts five seconds and a draw of up to ten more, in whole turns from the turn after it starts, and then it
+// has looked the creature over
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, LookingACreatureOverLastsFiveToFifteenSeconds)
+{
+	for (const auto& [draw, turns] : {std::pair {0u, 50u}, std::pair {0xfffeu, 149u}, std::pair {0x8000u, 100u}})
+	{
+		SCOPED_TRACE(draw);
+		IdleMind mind;
+		Plan(mind, Activity::Planned, InspectCreature(7, 10.0f));
+		mind.step = 2;
+		// The faces it pulls draw too; only the time's draw is fixed
+		const auto random = [draw](uint32_t range) { return range == game_random::k_FloatRandRange ? draw : 0u; };
+		const creature_mind::Senses senses {.seconds = 0.1f, .choosesNext = false};
+		const auto faces = [](uint32_t /*range*/) { return 0u; };
+		auto commands = Think(mind, senses, random);
+		EXPECT_EQ(mind.inspectTurns, turns);
+		uint32_t watched = 0;
+		while (commands.effect != Effect::Inspected && watched < 1000)
+		{
+			commands = Think(mind, senses, faces);
+			++watched;
+		}
+		EXPECT_EQ(watched, turns);
+		EXPECT_EQ(commands.effectObject, 7u);
+		EXPECT_EQ(mind.step, 3u);
+	}
+}
+
+// "LookAtFlyingObject": half the time pointing at it two seconds first, then watching it, amazed, its head on the thing
+// itself
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, LookingAtAFlyingThingPointsHalfTheTimeThenWatches)
+{
+	const auto pointing = LookAtFlyingObject(4, [](uint32_t range) {
+		EXPECT_EQ(range, 2u);
+		return 0u;
+	});
+	ASSERT_EQ(pointing.size(), 2);
+	EXPECT_EQ(pointing[0].kind, Step::Kind::Object);
+	EXPECT_EQ(pointing[0].order.kind, ObjectOrder::Kind::PointAt);
+	EXPECT_EQ(pointing[0].order.object, 4u);
+	EXPECT_EQ(pointing[0].order.seconds, std::optional(2.0f));
+	EXPECT_EQ(pointing[0].face, creature_face::Cue::Amazed);
+	EXPECT_EQ(pointing[1].kind, Step::Kind::WatchFlying);
+	EXPECT_EQ(pointing[1].face, creature_face::Cue::Amazed);
+	ASSERT_TRUE(pointing[1].gaze.has_value());
+	EXPECT_TRUE(pointing[1].gaze->itself);
+	const auto watching = LookAtFlyingObject(4, [](uint32_t /*range*/) { return 1u; });
+	ASSERT_EQ(watching.size(), 1);
+	EXPECT_EQ(watching[0].kind, Step::Kind::WatchFlying);
+	EXPECT_NE(plan_actions::For("LookAtFlyingObject"), nullptr);
+}
+
+// The watch goes on while the thing flies and its whole seconds come under the limit drawn each turn
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, WatchingAFlyingThingLastsWhileItFliesUpToFourSeconds)
+{
+	EXPECT_TRUE(KeepsWatchingFlying(19, 10, 2.0f, true));
+	EXPECT_FALSE(KeepsWatchingFlying(20, 10, 2.0f, true));
+	EXPECT_TRUE(KeepsWatchingFlying(39, 10, 3.5f, true));
+	EXPECT_FALSE(KeepsWatchingFlying(1, 10, 3.5f, false));
+	// The lowest draw every turn: it counts the turn it starts on, and stops on the twentieth
+	IdleMind mind;
+	Plan(mind, Activity::Planned, LookAtFlyingObject(4, [](uint32_t /*range*/) { return 1u; }));
+	creature_mind::Senses senses {.seconds = 0.1f, .objectInTheAir = true, .choosesNext = false};
+	const auto lowest = [](uint32_t /*range*/) { return 0u; };
+	uint32_t turns = 0;
+	while (mind.step == 0 && turns < 100)
+	{
+		(void)Think(mind, senses, lowest);
+		++turns;
+	}
+	EXPECT_EQ(turns, 20u);
+	// Down on the land, it stops at once
+	Plan(mind, Activity::Planned, LookAtFlyingObject(4, [](uint32_t /*range*/) { return 1u; }));
+	senses.objectInTheAir = false;
+	(void)Think(mind, senses, lowest);
+	EXPECT_EQ(mind.step, 1u);
+}
+
+// "LookAtHand": watching the player's hand, curious, its head on the hand, for a turn and a half of its own
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, LookingAtTheHandWatchesIt)
+{
+	const auto agenda = LookAtHand();
+	ASSERT_EQ(agenda.size(), 1);
+	EXPECT_EQ(agenda[0].kind, Step::Kind::WatchHand);
+	EXPECT_EQ(agenda[0].turns, std::optional<uint32_t>(15));
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Curiosity);
+	ASSERT_TRUE(agenda[0].gaze.has_value());
+	EXPECT_TRUE(agenda[0].gaze->hand);
+	ASSERT_NE(plan_actions::For("LookAtHand"), nullptr);
+	EXPECT_EQ(plan_actions::For("LookAtHand")->build, plan_actions::Build::LookAtHand);
+}
+
+// The watch is done once its whole seconds pass those of its turns, five at most; never while it turns to the hand
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, WatchingTheHandLastsItsTurnsUpToFiveSeconds)
+{
+	// A turn and a half is one whole second: done on the twentieth turn
+	EXPECT_FALSE(WatchedHandEnough(19, 15, 10));
+	EXPECT_TRUE(WatchedHandEnough(20, 15, 10));
+	// A minute or more is five seconds: done on the sixtieth
+	EXPECT_FALSE(WatchedHandEnough(59, 900, 10));
+	EXPECT_TRUE(WatchedHandEnough(60, 900, 10));
+
+	IdleMind mind;
+	Plan(mind, Activity::Planned, LookAtHand());
+	creature_mind::Senses senses {.seconds = 0.1f, .choosesNext = false};
+	senses.hand = creature_mind::Senses::CameraView {.distance = 30.0f, .groundDistance = 20.0f, .point = {0.0f, 20.0f}};
+	uint32_t turns = 0;
+	while (mind.step == 0 && turns < 100)
+	{
+		const auto commands = Think(mind, senses, NeverFirst);
+		EXPECT_FALSE(commands.move.has_value());
+		++turns;
+	}
+	EXPECT_EQ(turns, 20u);
+	// More than a quarter turn away it turns to the hand, and isn't done while it turns
+	Plan(mind, Activity::Planned, LookAtHand());
+	senses.hand->turn = 2.0f;
+	for (int i = 0; i < 30; ++i)
+	{
+		const auto commands = Think(mind, senses, NeverFirst);
+		ASSERT_TRUE(commands.move.has_value());
+		EXPECT_EQ(commands.move->kind, Movement::Kind::TurnToFace);
+	}
+	EXPECT_EQ(mind.step, 0u);
+	// Without a player there is no hand to watch
+	senses.hand.reset();
+	(void)Think(mind, senses, NeverFirst);
 	EXPECT_EQ(mind.step, 1u);
 }
 
