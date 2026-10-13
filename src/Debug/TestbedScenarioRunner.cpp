@@ -124,6 +124,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerBreeding.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
@@ -922,9 +923,14 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 					    }
 					    return plan;
 				    }
-				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
-				                                                   object.storedFood.value_or(k_ScenarioTownFood),
-				                                                   object.storedWood.value_or(k_ScenarioTownWood));
+				    const auto abode = ecs::archetypes::AbodeArchetype::Create(
+				        ScenarioTown(middle), position, type, yaw, object.scale, object.storedFood.value_or(k_ScenarioTownFood),
+				        object.storedWood.value_or(k_ScenarioTownWood));
+				    if (object.built.has_value())
+				    {
+					    ecs::construction::SetBuilt(abode, *object.built);
+				    }
+				    return abode;
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {
@@ -2623,6 +2629,13 @@ void Runner::UpdateVillagerWalks()
 		{
 			Log(fmt::format("Villager {} got there in {} turns", i, Locator::time::value().GetTurn() - *walk.setOffTurn));
 			walk.setOffTurn.reset();
+		}
+		if (setup.mateWith.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
+		    *setup.mateWith < _objects.size() && registry.Valid(_objects.at(*setup.mateWith)))
+		{
+			walk.dropped = true;
+			ecs::villager_breeding::GoAndHaveSexWith(entity, _objects.at(*setup.mateWith));
+			Log(fmt::format("Villager {} goes to make love with object {}", i, *setup.mateWith));
 		}
 		if (setup.worshipAt.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
 		    Locator::teleportSystem::has_value() && Locator::terrainSystem::has_value())

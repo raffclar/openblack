@@ -112,6 +112,8 @@ struct Animal
 	/// The clip it plays and its place in it, in milliseconds
 	AnimId animation {AnimId::Invalid};
 	uint32_t clipPlace {0};
+	/// The part of a millisecond of its clip the ground it covered left over from the last frame, under one
+	float groundCarry {0.0f};
 	/// Where it was and is at the turn's ends, which it is drawn between, and the way it faced, in radians from +x
 	/// towards +z
 	glm::vec3 previousPosition {0.0f};

@@ -42,7 +42,9 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Dances.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -59,9 +61,11 @@
 #include "Magic/ReactionRules.h"
 #include "Magic/VillagerReactionRules.h"
 #include "MagicLiving.h"
+#include "ObjectMeasures.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
+#include "VillagerDance.h"
 #include "VillagerFire.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
@@ -74,6 +78,8 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
+/// A building at least this wide, in metres from its middle, is danced round by the large building dance
+constexpr float k_LargeBuildingRadius = 10.0f;
 /// A watching villager turns this much a turn towards what it watches: an eighth of a half turn
 constexpr float k_WatchTurn = std::numbers::pi_v<float> / 8.0f;
 
@@ -278,6 +284,43 @@ void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, G
 	                             .minDistance = k_VoiceReach * k_VoiceNearShare,
 	                             .maxDistance = k_VoiceReach});
 }
+/// The dance a new building's reaction is danced round, made as the first villager joins: the small or the large
+/// building dance by how wide the building is. Whether the villager joined a group of it (else it has no room); none
+/// when there is no dance to join.
+std::optional<bool> JoinNewBuildingDance(entt::entity villager, uint32_t reactionId)
+{
+	auto& registry = EntityRegistry();
+	if (!Locator::reactionSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& reactions = Locator::reactionSystem::value();
+	const auto reaction = reactions.Find(reactionId);
+	if (!reaction.has_value())
+	{
+		return std::nullopt;
+	}
+	auto dance = reaction->dance;
+	if (dance == entt::null || !registry.Valid(dance))
+	{
+		const auto building = reaction->source.initiator;
+		if (!Locator::danceSystem::has_value() || !registry.Valid(building) || !registry.AllOf<Transform>(building))
+		{
+			return std::nullopt;
+		}
+		const auto type = object_measures::TwoDRadius(registry, building) < k_LargeBuildingRadius ? DanceInfo::BuildingSmall
+		                                                                                          : DanceInfo::BuildingLarge;
+		const auto& info = Locator::infoConstants::value().dance.at(static_cast<size_t>(type));
+		dance = Locator::danceSystem::value().Create(type, registry.Get<const Transform>(building).position, building,
+		                                             info.duration, false);
+		if (dance == entt::null)
+		{
+			return std::nullopt;
+		}
+		reactions.SetDance(reactionId, dance);
+	}
+	return ecs::dances::AddDancer(registry, dance, villager, ecs::villager_dance::DanceSex(villager));
+}
 } // namespace
 
 bool villager_reactions::Available(entt::entity villager, Reaction type)
@@ -321,13 +364,29 @@ bool villager_reactions::Available(entt::entity villager, Reaction type)
 	return type == Reaction::ReactToFood || component->life > InfoOf(*component).lifeWhenCrawlsWounded;
 }
 
-void villager_reactions::Start(entt::entity villager, Reaction type, LivingReaction& state, bool wasReacting)
+villager_reactions::Taken villager_reactions::Start(entt::entity villager, Reaction type, LivingReaction& state,
+                                                    bool wasReacting)
 {
 	auto& registry = EntityRegistry();
 	auto* action = registry.TryGet<LivingAction>(villager);
 	if (action == nullptr)
 	{
-		return;
+		return Taken::Impressed;
+	}
+	// A new building: it joins the dance round it, or with no room in the dance looks at it
+	if (type == Reaction::ReactToNewBuilding)
+	{
+		const auto joined = JoinNewBuildingDance(villager, state.reaction);
+		if (!joined.has_value())
+		{
+			return Taken::No;
+		}
+		if (!wasReacting)
+		{
+			villager_reactions::RememberStateToGoBackTo(*action);
+		}
+		SetTop(*action, *joined ? VillagerStates::DanceWhileReacting : VillagerStates::LookingAtObjectReaction);
+		return *joined ? Taken::NotImpressed : Taken::Impressed;
 	}
 	if (!wasReacting)
 	{
@@ -386,6 +445,12 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 		// It goes to the breeder to make love
 		SetTop(*action, VillagerStates::ReactToBreeder);
 		break;
+	case Reaction::ReactToTownCelebration:
+		// Its own town celebrating with no town centre, it looks at the town
+		// TODO(villager-social): the game also makes a dance about the town (the dance about a person) that no one is
+		// put in; whether a town's dances draw dancers of their own is not known yet
+		SetTop(*action, VillagerStates::LookingAtObjectReaction);
+		break;
 	case Reaction::ReactToDeath:
 		// It points at the dead, goes to look or, at a dead creature, watches it
 		if (const auto dead = ReactingTo(villager); dead.has_value())
@@ -406,6 +471,7 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 	default:
 		break;
 	}
+	return Taken::Impressed;
 }
 
 bool villager_reactions::ActsOut(Reaction type)
@@ -424,6 +490,8 @@ bool villager_reactions::ActsOut(Reaction type)
 	case Reaction::ReactToBreeder:
 	case Reaction::ReactToDeath:
 	case Reaction::ReactToFire:
+	case Reaction::ReactToNewBuilding:
+	case Reaction::ReactToTownCelebration:
 		return true;
 	default:
 		return false;
@@ -491,6 +559,14 @@ void villager_reactions::GoBackAfterReacting(LivingAction& action)
 void villager_reactions::LetGo(entt::entity villager)
 {
 	auto& registry = EntityRegistry();
+	// Dancing in its reaction's dance, it leaves the dance
+	if (const auto* action = registry.TryGet<const LivingAction>(villager);
+	    action != nullptr && Locator::livingActionSystem::has_value() &&
+	    StateOf(*action, LivingAction::Index::Top) == VillagerStates::DanceWhileReacting &&
+	    ecs::dances::DanceOf(registry, villager) != entt::null)
+	{
+		ecs::dances::RemoveDancer(registry, villager);
+	}
 	if (auto* fire = registry.TryGet<VillagerFireState>(villager))
 	{
 		fire->reaction = 0;
@@ -605,6 +681,19 @@ uint32_t villager_reactions::Watching(LivingAction& action)
 	}
 	TurnTowards(villager, reaction->source.position);
 	return 0;
+}
+
+uint32_t villager_reactions::DanceWhileReacting(LivingAction& action)
+{
+	auto& registry = EntityRegistry();
+	const auto villager = registry.ToEntity(action);
+	if (ecs::dances::DanceOf(registry, villager) == entt::null)
+	{
+		// Out of the dance, it decides what to do at once
+		SetTop(action, VillagerStates::DecideWhatToDo);
+		return Locator::livingActionSystem::value().VillagerCallState(action, LivingAction::Index::Top);
+	}
+	return ecs::villager_dance::PerformDance(action, VillagerStates::DanceWhileReacting);
 }
 
 uint32_t villager_reactions::ReactToVillagerInHandPriority(entt::entity villager, entt::entity held)

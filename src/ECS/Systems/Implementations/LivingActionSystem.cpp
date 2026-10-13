@@ -225,10 +225,12 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* MOVE_TO_POS */
     VillagerStateTableEntry {
         .state = &villager_home::MoveToPos,
+        .exitState = &villager_home::ExitMoveToPos,
     },
     /* MOVE_TO_OBJECT */
     VillagerStateTableEntry {
         .state = &villager_move_to_object::MoveToObject,
+        .exitState = &villager_home::ExitMoveToPos,
     },
     /* MOVE_ON_STRUCTURE */ k_TodoEntry,
     /* IN_SCRIPT */
@@ -858,7 +860,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_teleport::TeleportReaction,
         .exitState = &villager_reactions::ExitReaction,
     },
-    /* DANCE_WHILE_REACTING */ k_TodoEntry,
+    /* DANCE_WHILE_REACTING */
+    VillagerStateTableEntry {
+        .state = &villager_reactions::DanceWhileReacting,
+        .exitState = &villager_reactions::ExitReaction,
+    },
     /* CONTROLLED_BY_CREATURE */ k_TodoEntry,
     /* POINT_AT_DEAD_PERSON */
     VillagerStateTableEntry {

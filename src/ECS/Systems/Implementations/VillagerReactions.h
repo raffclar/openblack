@@ -37,8 +37,16 @@ namespace openblack::ecs::systems::villager_reactions
 
 /// Whether a villager may take up a reaction: able and alive, in a state that allows it
 [[nodiscard]] bool Available(entt::entity villager, Reaction type);
+/// How a villager took a reaction up: not at all after all, joining in without being impressed (dancing round a new
+/// building), or the usual way, impressed by it
+enum class Taken : uint8_t
+{
+	No,
+	NotImpressed,
+	Impressed,
+};
 /// A villager takes up a reaction of a kind: it keeps what it was doing to go back to, unless it was reacting already
-void Start(entt::entity villager, Reaction type, components::LivingReaction& state, bool wasReacting);
+Taken Start(entt::entity villager, Reaction type, components::LivingReaction& state, bool wasReacting);
 /// Whether villagers act out a kind of reaction, going into its states, rather than only holding it
 [[nodiscard]] bool ActsOut(Reaction type);
 /// A villager stops reacting; when asked, it goes back to what it was doing
@@ -70,6 +78,8 @@ bool ExitReaction(components::LivingAction& action, VillagerStates next);
 
 /// A villager turns towards a point, a step a turn, as one watching something does: whether it now faces it
 bool LookAt(entt::entity villager, const glm::vec3& point);
+/// Dancing round what it reacts to, in the reaction's dance: out of the dance it decides what to do
+uint32_t DanceWhileReacting(components::LivingAction& action);
 /// The states of fleeing, and of watching (after fleeing, or a nice miracle)
 uint32_t Fleeing(components::LivingAction& action);
 uint32_t Watching(components::LivingAction& action);
