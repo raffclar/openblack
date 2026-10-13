@@ -70,7 +70,7 @@ public:
 
 private:
 	[[nodiscard]] QueryResult Describe(const Json& params) const;
-	[[nodiscard]] QueryResult Writes(const Request& request) const;
+	[[nodiscard]] QueryResult Writes(const QueryOptions& options) const;
 	void Remember(const Request& request, const QueryResult& answer) const;
 
 	std::vector<std::unique_ptr<ProviderInterface>> _providers;

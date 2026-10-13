@@ -13,6 +13,7 @@
 #include <iterator>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -57,6 +58,69 @@ std::optional<std::string> UnknownParameters(std::string_view query, const Json&
 		takes += (takes.empty() ? "" : ", ") + name;
 	}
 	return std::string(query) + " doesn't take " + unknown + "; it takes " + (takes.empty() ? "no parameters" : takes);
+}
+
+/// Shaping members given inside a request's params, as tools put every argument, taken as if given beside them and
+/// taken out of the params: limit, near and the others work the same in either place. A member the query takes as a
+/// parameter of its own stays its parameter; near and radius stay together. Why not when one doesn't read or is given
+/// in both places.
+std::optional<std::string> TakeShapingFromParams(std::string_view query, const std::vector<std::string>& own, Json& params,
+                                                 QueryOptions& options)
+{
+	const auto owns = [&own](std::string_view name) { return std::ranges::find(own, name) != own.end(); };
+	const bool ownsNear = owns("near") || owns("radius");
+	Json inside = Json::object();
+	for (const auto name : k_ShapingMembers)
+	{
+		const bool isNear = name == "near" || name == "radius";
+		if (const auto it = params.find(name); it != params.end() && !(isNear ? ownsNear : owns(name)))
+		{
+			inside[std::string(name)] = *it;
+		}
+	}
+	if (inside.empty())
+	{
+		return std::nullopt;
+	}
+	const auto hint = std::string(" (shaping options such as near, radius and limit go beside params or inside them)");
+	QueryOptions taken;
+	if (auto why = ReadShapingOptions(inside, taken); why.has_value())
+	{
+		return std::string(query) + ": " + *why + hint;
+	}
+
+	// Each taken from params, unless it was given beside them too
+	const QueryOptions unset;
+	std::string twice;
+	const auto take = [&inside, &twice](std::string_view name, bool besideToo, const auto& apply) {
+		if (!inside.contains(name))
+		{
+			return;
+		}
+		if (besideToo)
+		{
+			twice += (twice.empty() ? "" : ", ") + std::string(name);
+			return;
+		}
+		apply();
+	};
+	take("fields", !options.fields.empty(), [&] { options.fields = taken.fields; });
+	take("where", !options.where.empty(), [&] { options.where = taken.where; });
+	take("near", options.near.has_value(), [&] { options.near = taken.near; });
+	take("limit", options.limit != unset.limit, [&] { options.limit = taken.limit; });
+	take("cursor", options.cursor != unset.cursor, [&] { options.cursor = taken.cursor; });
+	take("count", options.countOnly != unset.countOnly, [&] { options.countOnly = taken.countOnly; });
+	take("summary", options.summary.has_value(), [&] { options.summary = taken.summary; });
+	take("max_bytes", options.maxBytes != unset.maxBytes, [&] { options.maxBytes = taken.maxBytes; });
+	if (!twice.empty())
+	{
+		return std::string(query) + ": " + twice + " given twice, beside params and inside them";
+	}
+	for (const auto& [name, value] : inside.items())
+	{
+		params.erase(name);
+	}
+	return std::nullopt;
 }
 
 } // namespace
@@ -198,33 +262,39 @@ QueryResult Inspector::Answer(const Request& request) const
 	{
 		const auto known =
 		    request.query == "describe" ? std::vector<std::string> {"provider", "query"} : std::vector<std::string> {};
-		if (auto unknown = UnknownParameters(request.query, request.params, known); unknown.has_value())
+		auto params = request.params;
+		auto options = request.options;
+		// ping shapes nothing, so it takes no shaping options in its params either
+		if (request.query != "ping")
+		{
+			if (auto why = TakeShapingFromParams(request.query, known, params, options); why.has_value())
+			{
+				return error(*std::move(why));
+			}
+		}
+		if (auto unknown = UnknownParameters(request.query, params, known); unknown.has_value())
 		{
 			return error(*std::move(unknown));
 		}
-	}
-	if (request.query == "ping")
-	{
-		Json answer = _identity.is_object() ? _identity : Json::object();
-		answer["pong"] = true;
-		// Answered here, the game is serving its frames; while it loads, the loading answer says otherwise
-		answer["ready"] = true;
-		return QueryResult::Value(std::move(answer));
-	}
-	if (request.query == "writes")
-	{
-		return Writes(request);
-	}
-	if (request.query == "describe")
-	{
-		auto described = Describe(request.params);
+		if (request.query == "ping")
+		{
+			Json answer = _identity.is_object() ? _identity : Json::object();
+			answer["pong"] = true;
+			// Answered here, the game is serving its frames; while it loads, the loading answer says otherwise
+			answer["ready"] = true;
+			return QueryResult::Value(std::move(answer));
+		}
+		if (request.query == "writes")
+		{
+			return Writes(options);
+		}
+		auto described = Describe(params);
 		if (!described.Ok())
 		{
 			return error(std::move(described.error));
 		}
 		// The catalogue of every query outgrows the size an ordinary answer is held to, so describe is held only to the
 		// largest size unless the caller set its own
-		auto options = request.options;
 		if (options.maxBytes == k_DefaultMaxBytes)
 		{
 			options.maxBytes = k_MostBytes;
@@ -249,26 +319,12 @@ QueryResult Inspector::Answer(const Request& request) const
 	std::vector<std::string> known;
 	known.reserve(description->parameters.size());
 	std::ranges::transform(description->parameters, std::back_inserter(known), &ParameterDescription::name);
-	// near and radius go beside params, but given inside them, as tools put every parameter, they are taken the same
-	// for a query that has no parameters of those names
+	// Shaping options go beside params, but given inside them, as tools put every argument, they are taken the same
 	auto params = request.params;
 	auto options = request.options;
-	if (const bool ownNear = std::ranges::any_of(known, [](const auto& name) { return name == "near" || name == "radius"; });
-	    !ownNear && (params.contains("near") || params.contains("radius")))
+	if (auto why = TakeShapingFromParams(request.query, known, params, options); why.has_value())
 	{
-		if (options.near.has_value())
-		{
-			return error(request.query + ": near and radius are given twice, beside params and inside them");
-		}
-		auto near = ReadNear(params);
-		if (auto* why = std::get_if<std::string>(&near))
-		{
-			return error(*why + " (near and radius go beside params: {\"query\": ..., \"near\": [x, y, z], "
-			                    "\"radius\": r})");
-		}
-		options.near = std::get<std::optional<Near>>(near);
-		params.erase("near");
-		params.erase("radius");
+		return error(*std::move(why));
 	}
 	if (auto unknown = UnknownParameters(request.query, params, known); unknown.has_value())
 	{
@@ -283,7 +339,7 @@ QueryResult Inspector::Answer(const Request& request) const
 	}
 	if (description->needsNear && !options.near.has_value())
 	{
-		return error(request.query + " searches around a point: give near and radius beside params");
+		return error(request.query + " searches around a point: give near and radius beside params or inside them");
 	}
 
 	auto answered = provider->Run(queryName, QueryContext {.params = params, .options = options});
@@ -302,14 +358,14 @@ QueryResult Inspector::Answer(const Request& request) const
 	return QueryResult::Value(ShapeObject(answered.value, options));
 }
 
-QueryResult Inspector::Writes(const Request& request) const
+QueryResult Inspector::Writes(const QueryOptions& options) const
 {
 	Json items = Json::array();
 	for (const auto& write : _writes)
 	{
 		items.push_back(write);
 	}
-	return QueryResult::Value(ShapeList(std::move(items), request.options));
+	return QueryResult::Value(ShapeList(std::move(items), options));
 }
 
 void Inspector::Remember(const Request& request, const QueryResult& answer) const
