@@ -792,6 +792,25 @@ void AddStory(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
 	});
+	all.push_back({
+	    .id = "temple.intro_movement",
+	    .name = "Looking about the temple while the advisors introduce it",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle; after a second the player goes into it for the "
+	                   "first time, and the advisors' introduction of its main room plays. Turn and tilt the room with the "
+	                   "camera's keys, move the hand about, and click and drag while they talk.",
+	    .expected = "The camera flies in from the entrance to the main room by itself while the good and evil advisors "
+	                "come out and talk through their nine lines. Throughout, the hand follows the cursor over the room "
+	                "and the camera's keys turn and tilt the room as they do after the scene. Clicks and drags do nothing "
+	                "until the scene is over: the flight isn't cut short and the room isn't dragged round.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {40.0f}, k_Temple + glm::vec2 {40.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    // Room 3 is the main room, the one the entrance leads to
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
+	});
 }
 
 void AddAppearance(std::vector<Scenario>& all)
