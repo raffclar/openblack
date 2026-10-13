@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -452,6 +453,41 @@ TEST(Inspector, WhileLoadingOnlyWhatReadsNothingOfTheGameIsAnswered)
 	EXPECT_EQ(provider->asked, 0);
 
 	EXPECT_EQ(ask("not json")["ok"], false);
+}
+
+// A request that can wait for the load is given to the game's queue, which answers it instead of the refusal; the others
+// are refused as ever
+TEST(Inspector, WhileLoadingARequestTheGameQueuesIsAnsweredByTheQueue)
+{
+	Inspector inspector;
+	auto fake = std::make_unique<FakeProvider>();
+	auto* provider = fake.get();
+	inspector.Add(std::move(fake));
+	std::vector<std::string> queued;
+	const auto queue = [&queued](const Request& request) -> std::optional<QueryResult> {
+		if (request.query != "game.scenario")
+		{
+			return std::nullopt;
+		}
+		queued.push_back(request.params["id"].get<std::string>());
+		return QueryResult::Value({{"queued", true}});
+	};
+	const auto ask = [&inspector, &queue](const std::string& line) {
+		return Parse(inspector.HandleWhileLoading(line, "game data", queue)).value_or(Json());
+	};
+
+	const auto scenario = ask(R"({"id": 4, "query": "game.scenario", "params": {"id": "idle.fidget"}})");
+	EXPECT_EQ(scenario["id"], 4);
+	EXPECT_EQ(scenario["ok"], true);
+	EXPECT_EQ(scenario["result"]["queued"], true);
+	EXPECT_EQ(scenario["loading"], "game data");
+	EXPECT_EQ(queued, std::vector<std::string> {"idle.fidget"});
+
+	const auto other = ask(R"({"id": 5, "query": "fake.all"})");
+	EXPECT_EQ(other["ok"], false);
+	EXPECT_EQ(provider->asked, 0);
+	EXPECT_EQ(ask(R"({"query": "game.state"})")["result"]["ready"], false);
+	EXPECT_EQ(queued.size(), 1u);
 }
 
 // The catalogue is every query in full, as tools build their schemas from it
