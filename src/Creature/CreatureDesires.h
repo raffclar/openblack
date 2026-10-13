@@ -230,6 +230,29 @@ void SetValueFromScript(Desires& desires, Desire desire, float value);
 /// the first desire when none is wanted at all
 [[nodiscard]] Desire Dominant(const Desires& desires);
 [[nodiscard]] std::optional<size_t> EmoteFor(Desire desire);
-/// The strongest activated desire the creature can show, if any is above a minimum
-[[nodiscard]] std::optional<Desire> StrongestShowable(const Desires& desires, float minimum);
+/// The strongest activated desire that the creature can show, if one has a value more than 0. When two desires have the
+/// same value, the first desire wins.
+[[nodiscard]] std::optional<Desire> StrongestShowable(const Desires& desires);
+
+/// The creature shows the player how it feels after a stroke or a slap in the last 10 seconds.
+constexpr uint32_t k_CommunicateFeedbackSeconds = 10;
+/// After the creature communicates, its desire to show its state cannot grow for 60 seconds.
+constexpr float k_CommunicateSuppressSeconds = 60.0f;
+
+/// What the creature shows the player when it communicates its state
+struct Communication
+{
+	/// The animation that it plays, or none when it has nothing to show
+	std::optional<size_t> animation;
+	/// The desire that it shows, or none when it shows its feeling about a stroke or a slap
+	std::optional<Desire> desire;
+};
+
+/// What the creature shows when it communicates its state:
+/// - After a stroke or a slap in the last 10 seconds, and before it completes a plan to show its state, it is happy.
+///   When its attitude to the player is less than 0, it is sad.
+/// - Else it shows its strongest desire that it can show.
+/// The turns since the feedback are none when the creature has had no feedback.
+[[nodiscard]] Communication Communicate(const Desires& desires, std::optional<uint32_t> turnsSinceFeedback,
+                                        uint32_t turnsPerSecond, float attitudeToPlayer);
 } // namespace openblack::creature_desires

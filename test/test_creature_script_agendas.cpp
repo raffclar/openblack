@@ -81,7 +81,6 @@ namespace
 Senses Watching(float distance, float turn)
 {
 	return {.seconds = 0.1f,
-	        .choosesNext = false,
 	        .camera =
 	            Senses::CameraView {.distance = distance, .groundDistance = distance, .point = {5.0f, 6.0f}, .turn = turn}};
 }
@@ -118,7 +117,7 @@ TEST(CreatureScriptAgendas, WatchingTheCameraTurnsToItPastAQuarterTurn)
 // The camera more than 100 away or right overhead ends the look, as does the camera going away (no player)
 TEST(CreatureScriptAgendas, WatchingTheCameraEndsWhenItIsOutOfReach)
 {
-	for (const auto& senses : {Watching(100.5f, 0.0f), Watching(0.05f, 0.0f), Senses {.seconds = 0.1f, .choosesNext = false}})
+	for (const auto& senses : {Watching(100.5f, 0.0f), Watching(0.05f, 0.0f), Senses {.seconds = 0.1f}})
 	{
 		IdleMind mind;
 		Plan(mind, Activity::Told, LookAtCamera(true));
@@ -243,18 +242,13 @@ TEST(CreatureScriptAgendas, DownTheSlopeIsTheLowestGroundAbout)
 	EXPECT_EQ(off, glm::vec2(0.0f, 0.0f));
 }
 
-// Under a script's control the mind chooses nothing for itself when its agenda is over; a step with something to look
-// at says so instead of looking about
-TEST(CreatureScriptAgendas, UnderAScriptTheMindChoosesNothingAndLooksWhereItIsTold)
+// The mind chooses nothing for itself when its agenda is done. A step with something to look at gives the point to look
+// at, and the creature does not look about.
+TEST(CreatureScriptAgendas, TheMindChoosesNothingAndLooksWhereItIsTold)
 {
 	IdleMind mind;
-	auto senses = Free();
-	senses.choosesNext = false;
-	static_cast<void>(Think(mind, senses, NoRandom));
+	static_cast<void>(Think(mind, Free(), NoRandom));
 	EXPECT_TRUE(mind.agenda.empty());
-	senses.choosesNext = true;
-	static_cast<void>(Think(mind, senses, NoRandom));
-	EXPECT_FALSE(mind.agenda.empty());
 
 	IdleMind told;
 	Plan(told, Activity::Told, LookForever(5));
