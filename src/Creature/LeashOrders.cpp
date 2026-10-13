@@ -71,7 +71,7 @@ Tap creature_leash_orders::OnTap(const Leash& leash, const Tapped& tapped)
 	{
 		return Tap::OrderOnLand;
 	}
-	if (*tapped.object == leash.creature || !tapped.leashTarget)
+	if (*tapped.object == leash.creature || !tapped.leashTarget || leash.carriedByTeleport)
 	{
 		return Tap::Normal;
 	}

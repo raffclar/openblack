@@ -64,6 +64,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Sprite.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -351,6 +352,20 @@ std::optional<entt::entity> HeldBy(entt::entity creature)
 {
 	return Locator::creatureObjectActionSystem::has_value() ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
 	                                                        : std::nullopt;
+}
+
+/// A teleport stone carries the creature now: it fades out, or fades back in at the far stone
+bool CarriedByTeleport(entt::entity creature)
+{
+	const auto* traveller = Locator::entitiesRegistry::value().TryGet<const TeleportTraveller>(creature);
+	return traveller != nullptr && traveller->transported;
+}
+
+/// The creature uses a teleport stone: from the start of the jump until it arrives where it was going
+bool TravelsByTeleport(const Registry& registry, entt::entity creature)
+{
+	const auto* traveller = registry.TryGet<const TeleportTraveller>(creature);
+	return traveller != nullptr && (traveller->transported || traveller->jumped);
 }
 
 using ForcedPlan = CreatureMindSystemInterface::ForcedPlan;
@@ -1193,6 +1208,7 @@ bool LeashSystem::ShouldWalkBack(entt::entity creature) const
 	    .orderInForce = OrderInForce(creature),
 	    .mimicking = mind != nullptr && mind->learnt.has_value() && mind->learnt->mimicry.has_value(),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
+	    .teleporting = TravelsByTeleport(registry, creature),
 	    .distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), centre),
 	    .centreOpen = centreOpen,
 	    .returnToCentre = leashes.returnTo.has_value()
@@ -1607,6 +1623,7 @@ void LeashSystem::ActOnTap(PlayerNames player, entt::entity creature, const Unde
 	    .tiedTo =
 	        worn && leashes->worn->tiedTo.has_value() ? std::optional(entt::to_integral(*leashes->worn->tiedTo)) : std::nullopt,
 	    .creature = entt::to_integral(creature),
+	    .carriedByTeleport = CarriedByTeleport(creature),
 	};
 	// The temple's taps are its own: on its entrance they take the player inside
 	const orders::Tapped tapped {
@@ -1687,7 +1704,9 @@ bool LeashSystem::TapThing(PlayerNames player, entt::entity object)
 	    .leashTarget = !registry.AnyOf<LeashPost, Temple, LeashMarker>(object),
 	    .miracleBubble = registry.AllOf<OneOffSpellSeed>(object),
 	};
-	if (orders::OnTap({.worn = true, .creature = entt::to_integral(*creature)}, tapped) != orders::Tap::OrderOnThing)
+	if (orders::OnTap(
+	        {.worn = true, .creature = entt::to_integral(*creature), .carriedByTeleport = CarriedByTeleport(*creature)},
+	        tapped) != orders::Tap::OrderOnThing)
 	{
 		return false;
 	}

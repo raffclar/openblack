@@ -35,6 +35,15 @@ Leash TiedTo(uint32_t object)
 }
 } // namespace
 
+TEST(LeashOrders, ATapOnAThingGivesNoOrderWhileATeleportCarriesTheCreature)
+{
+	auto carried = Held();
+	carried.carriedByTeleport = true;
+	EXPECT_EQ(OnTap(carried, {.object = k_Cow}), Tap::Normal);
+	// A tap on the land still gives an order
+	EXPECT_EQ(OnTap(carried, {}), Tap::OrderOnLand);
+}
+
 TEST(LeashOrders, ASingleTapGivesAnOrderAndNeverTies)
 {
 	EXPECT_EQ(OnTap(Held(), {.object = k_Cow}), Tap::OrderOnThing);

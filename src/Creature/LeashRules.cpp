@@ -134,7 +134,8 @@ bool creature_leash::IsConfined(float radius, bool leashed, bool leashWorks)
 bool creature_leash::WalksBack(const Confinement& confinement)
 {
 	if (!IsConfined(confinement.radius, confinement.leashed, confinement.leashWorks) || confinement.orderInForce ||
-	    confinement.mimicking || confinement.scriptControlled || confinement.distance <= confinement.radius)
+	    confinement.mimicking || confinement.scriptControlled || confinement.teleporting ||
+	    confinement.distance <= confinement.radius)
 	{
 		return false;
 	}

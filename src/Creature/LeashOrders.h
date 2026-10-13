@@ -57,6 +57,8 @@ struct Leash
 	uint32_t creature {0};
 	/// The creature is in the middle of a game with another creature, which no order breaks into
 	bool playingGame {false};
+	/// A teleport stone carries the creature now. A tap on a thing gives no order then.
+	bool carriedByTeleport {false};
 };
 
 /// What was tapped

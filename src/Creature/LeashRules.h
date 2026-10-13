@@ -98,6 +98,8 @@ struct Confinement
 	bool mimicking {false};
 	/// A script controls the creature
 	bool scriptControlled {false};
+	/// The creature uses a teleport stone
+	bool teleporting {false};
 	/// The distance from the creature to the centre of the area
 	float distance {0.0f};
 	/// A creature can walk on the land at the centre of the area
@@ -112,7 +114,7 @@ constexpr float k_ReturnShare = 0.5f;
 constexpr float k_ReturnLeast = 5.0f;
 /// The creature walks back when it is further than the radius from the centre, unless one of these is true:
 /// - the area does not hold it, or it wears a leash that does not work
-/// - it does an order of the leash, it copies the player, or a script controls it
+/// - it does an order of the leash, it copies the player, a script controls it, or it uses a teleport stone
 /// - a creature cannot walk on the land at the centre
 /// - it walks back already, to a place near the centre
 [[nodiscard]] bool WalksBack(const Confinement& confinement);

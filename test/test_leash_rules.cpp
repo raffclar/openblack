@@ -98,6 +98,9 @@ TEST(LeashRules, OrdersCopiesScriptsAndBadLandStopTheWalkBack)
 	check.scriptControlled = true;
 	EXPECT_FALSE(WalksBack(check));
 	check = k_Out;
+	check.teleporting = true;
+	EXPECT_FALSE(WalksBack(check));
+	check = k_Out;
 	check.centreOpen = false;
 	EXPECT_FALSE(WalksBack(check));
 }
