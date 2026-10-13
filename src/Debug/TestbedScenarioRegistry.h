@@ -597,6 +597,9 @@ struct Command
 		/// The camera is put back where the scenario's shot puts it, as when the scenario starts (after a miracle's camera
 		/// flight, say). Needs no creature
 		Reframe,
+		/// A script swaps the minds of the creature and another (value, by its place in the scenario's creatures), as
+		/// "swap creature from A to B" does
+		SwapMinds,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

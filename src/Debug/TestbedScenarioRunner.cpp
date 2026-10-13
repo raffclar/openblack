@@ -1647,6 +1647,16 @@ void Runner::Give(const Command& command)
 		             ? "playing"
 		             : "can't";
 		break;
+	case Kind::SwapMinds:
+		if (const auto other = CreatureAt(command.value))
+		{
+			result = minds.SwapMinds(*entity, *other) ? "swapped" : "can't";
+		}
+		else
+		{
+			result = "no such creature";
+		}
+		break;
 	case Kind::WalkHome:
 		if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
 		    leash != nullptr && leash->home.has_value())

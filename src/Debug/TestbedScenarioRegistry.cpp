@@ -2344,6 +2344,33 @@ void AddMind(std::vector<Scenario>& all)
 	                  .delaySeconds = 6.0f,
 	                  .value = static_cast<size_t>(creature_cave::Page::Mind)}},
 	});
+	// The player's evil, big tiger swaps minds with a small, neutral sheep that belongs to nobody, as The Lost Flock's
+	// sheep offers; then back again
+	auto swapper = Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "player's tiger");
+	swapper.alignment = -0.9f;
+	swapper.size = 1.5f;
+	swapper.tattoos.push_back({.design = 3, .site = 0, .colour = {220, 40, 40}});
+	swapper.tattoos.push_back({.design = 7, .site = 2, .colour = {40, 90, 230}});
+	auto sheep = Content(CreatureType::Sheep, {15.0f, 0.0f}, 270.0f, "sheep");
+	sheep.owner = PlayerNames::NEUTRAL;
+	sheep.alignment = 0.0f;
+	sheep.size = 0.6f;
+	all.push_back({
+	    .id = "mind.creature_swap",
+	    .name = "Swapping creatures",
+	    .facet = Facet::Mind,
+	    .description = "The player's evil tiger (size 1.5, two tattoos) and a neutral sheep of nobody's (size 0.6) face "
+	                   "each other. Three seconds in, a script swaps their minds, as The Lost Flock's sheep lets the "
+	                   "player; twenty seconds later it swaps them back.",
+	    .expected = "At the swap both play their creation action and the beam starts; the tattoos move to the sheep at once "
+	                "while each keeps its name. Over about ten seconds the sheep grows to the tiger's size and turns "
+	                "evil, while the tiger shrinks to the sheep's size and turns neutral. The sheep is now the player's "
+	                "creature, which the leash and the spawner show. Swapped back, it all goes the other way.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {swapper, sheep},
+	    .commands = {{.kind = Kind::SwapMinds, .creature = 0, .delaySeconds = 3.0f, .value = 1},
+	                 {.kind = Kind::SwapMinds, .creature = 1, .delaySeconds = 20.0f, .value = 0}},
+	});
 }
 
 void AddParticles(std::vector<Scenario>& all)
@@ -2738,7 +2765,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 99> k_Names {
+	constexpr std::array<std::string_view, 100> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2838,6 +2865,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "run text",
 	    "play hand demo",
 	    "reframe",
+	    "swap minds",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
