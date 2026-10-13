@@ -357,6 +357,12 @@ bool ActuallyInTheAir(entt::entity object, const PhysicsEntry& entry)
 }
 } // namespace
 
+bool villager_physics::IsActuallyInTheAir(entt::entity object)
+{
+	const auto* entry = Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(object) : nullptr;
+	return entry != nullptr && ActuallyInTheAir(object, *entry);
+}
+
 void villager_physics::SetupReactToFlyingObject(entt::entity villager, entt::entity object)
 {
 	auto& registry = Entities();

@@ -16,22 +16,32 @@
 #include <algorithm>
 #include <array>
 #include <optional>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
 #include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureFireReaction.h"
+#include "Creature/CreatureLocomotion.h"
+#include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureReactionRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/Hand.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
@@ -43,6 +53,7 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -55,6 +66,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownDesire.h"
@@ -63,11 +75,13 @@
 #include "Magic/AreaEffect.h"
 #include "Magic/Impressiveness.h"
 #include "Magic/ReactionRules.h"
+#include "Magic/ReactionTimingRules.h"
 #include "Magic/TownBelief.h"
 #include "Magic/VillagerReactionRules.h"
 #include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
 #include "VillagerBreeding.h"
+#include "VillagerCreatureReactions.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
 #include "VillagerForester.h"
@@ -79,6 +93,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace villager_reaction = openblack::magic::villager_reaction;
+namespace reaction_timing = openblack::magic::reaction_timing;
 
 namespace
 {
@@ -179,6 +194,202 @@ villager_reaction::Distance DistanceOf(const ReactionInfo& info)
 float SpreadDistance(const glm::vec3& at, const glm::vec3& source)
 {
 	return villager_reaction::SpreadDistance({at.x, at.z}, {source.x, source.z});
+}
+
+/// Who is reacting, as the reaction's timing tells them apart
+reaction_timing::Reacting WhoOf(const ecs::Registry& registry, entt::entity living)
+{
+	if (registry.AllOf<Villager>(living))
+	{
+		return reaction_timing::Reacting::Villager;
+	}
+	return registry.AllOf<Creature>(living) ? reaction_timing::Reacting::Creature : reaction_timing::Reacting::Other;
+}
+
+/// Where the thing a reaction is about is now: the thing itself while it is there, else where the reaction is
+glm::vec3 ThingAt(const ecs::Registry& registry, const ReactionSystem::Active& reaction)
+{
+	const auto thing = reaction.source.initiator;
+	if (thing != entt::null && registry.Valid(thing))
+	{
+		if (const auto* transform = registry.TryGet<const Transform>(thing))
+		{
+			return transform->position;
+		}
+	}
+	return reaction.source.position;
+}
+
+/// Whether what a living reacts to has gone: deleted, or a villager dying
+bool ThingGone(const ecs::Registry& registry, entt::entity thing)
+{
+	if (thing == entt::null)
+	{
+		return false;
+	}
+	if (!registry.Valid(thing))
+	{
+		return true;
+	}
+	const auto* action = registry.TryGet<const LivingAction>(thing);
+	return registry.AllOf<Villager>(thing) && action != nullptr && Locator::livingActionSystem::has_value() &&
+	       Locator::livingActionSystem::value().VillagerGetState(*action, LivingAction::Index::Final) == VillagerStates::Dying;
+}
+
+/// What a living weighs about a predator it reacts to
+reaction_timing::PredatorWatch PredatorWatchOf(const ecs::Registry& registry, entt::entity living, entt::entity predator,
+                                               const ReactionInfo& info)
+{
+	reaction_timing::PredatorWatch watch {.leastRunDistance = info.minDistanceToRunAwayFromObject};
+	if (predator == entt::null || !registry.Valid(predator) || !registry.AllOf<Transform>(predator) ||
+	    !registry.AllOf<Transform>(living))
+	{
+		return watch;
+	}
+	const auto& predatorAt = registry.Get<const Transform>(predator).position;
+	const auto& livingAt = registry.Get<const Transform>(living).position;
+	watch.animal = registry.AllOf<Animal>(predator);
+	watch.distance = gutils::GetDistanceInMetres(livingAt, predatorAt);
+	if (const auto* walker = registry.TryGet<const WallHug>(predator))
+	{
+		watch.speed = walker->speed;
+		watch.comingAt = reaction_timing::ComingAt(predatorAt, glm::vec2(walker->step), livingAt);
+	}
+	if (const auto* action = registry.TryGet<const LivingAction>(living);
+	    action != nullptr && registry.AllOf<Villager>(living) && Locator::livingActionSystem::has_value())
+	{
+		const auto& states = Locator::livingActionSystem::value();
+		const auto top = states.VillagerGetState(*action, LivingAction::Index::Top);
+		const auto final = states.VillagerGetState(*action, LivingAction::Index::Final);
+		watch.lookingAtThing = top == VillagerStates::LookingAtObjectReaction;
+		watch.hidingOrLooking =
+		    final == VillagerStates::GoAndHideInNearbyBuilding || final == VillagerStates::LookToSeeIfItIsSafe;
+		watch.lookingIfSafe = final == VillagerStates::LookToSeeIfItIsSafe;
+	}
+	// An animal looks at a thing while it keeps one of the reactions to look at something
+	if (const auto* state = registry.TryGet<const LivingReaction>(living);
+	    state != nullptr && state->reaction != 0 && registry.AllOf<Animal>(living))
+	{
+		watch.lookingAtThing = reaction_timing::LooksAtThing(state->type);
+	}
+	return watch;
+}
+
+/// The plan a creature is carrying out, if any
+const creature_planner::Plan* CurrentPlanOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	return mind != nullptr && mind->planner.current.has_value() ? &*mind->planner.current : nullptr;
+}
+
+/// Whether the creature's plan is an action of the game's table by its name
+bool PlanIs(const ecs::Registry& registry, entt::entity creature, std::string_view action)
+{
+	const auto* plan = CurrentPlanOf(registry, creature);
+	if (plan == nullptr || !Locator::creatureMindSystem::has_value())
+	{
+		return false;
+	}
+	const auto* tables = Locator::creatureMindSystem::value().GetTables();
+	return tables != nullptr && plan->action < tables->actions.size() && tables->actions[plan->action].name == action;
+}
+
+/// Whether a creature sees a point: near enough the way its head looks, or the way it faces when it looks at nothing, or
+/// in its own map cell
+bool CreatureSees(const ecs::Registry& registry, entt::entity creature, const glm::vec3& point)
+{
+	const auto& at = registry.Get<const Transform>(creature).position;
+	glm::vec2 way {0.0f};
+	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
+	if (body != nullptr && body->lookAt.has_value() && glm::vec2(body->lookAt->x, body->lookAt->z) != glm::vec2(at.x, at.z))
+	{
+		way = {body->lookAt->x - at.x, body->lookAt->z - at.z};
+	}
+	else if (const auto* walker = registry.TryGet<const CreatureLocomotion>(creature))
+	{
+		way = creature_locomotion::DirectionOf(walker->heading);
+	}
+	const glm::vec2 from(at.x, at.z);
+	const glm::vec2 to(point.x, point.z);
+	const bool sameCell = map_coords::Cell(map_coords::FromMetres(from)) == map_coords::Cell(map_coords::FromMetres(to));
+	return creature_reaction::CanSee(creature_reaction::LookAngle(way), gutils::GetAngleFromXZ(from, to), sameCell);
+}
+
+/// What a creature knows as it weighs a reaction
+creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::entity creature,
+                                         const ReactionSystem::Active& reaction, const ReactionInfo& info, uint32_t turn)
+{
+	const auto& source = reaction.source;
+	const auto& body = registry.Get<const Creature>(creature);
+	const auto thing = source.initiator;
+	const bool there = thing != entt::null && registry.Valid(thing);
+	const bool computer = Locator::playerSystem::has_value()
+	                          ? Locator::playerSystem::value().IsComputerPlayer(body.owner)
+	                          : body.owner != PlayerNames::PLAYER_ONE && body.owner != PlayerNames::NEUTRAL;
+	creature_reaction::Facts facts {
+	    .tablePriority = static_cast<uint8_t>(std::min<uint32_t>(info.priority, 255)),
+	    .humanPlayer = !computer,
+	    .otherPlayers = !source.playerless && source.player != body.owner,
+	    .seesThing = CreatureSees(registry, creature, ThingAt(registry, reaction)),
+	    .thingIsSelf = thing == creature,
+	    .thingGone = !there,
+	    .thingIsCreature = there && registry.AllOf<Creature>(thing),
+	    .turn = turn,
+	    .catching = PlanIs(registry, creature, "Catch"),
+	    .fighting = PlanIs(registry, creature, "Fight"),
+	};
+	if (const auto* state = registry.TryGet<const LivingReaction>(creature))
+	{
+		facts.sawFlying = state->sawFlying;
+		facts.sawCrushed = state->sawCrushed;
+	}
+	if (const auto* plan = CurrentPlanOf(registry, creature))
+	{
+		facts.angry = plan->desire == creature_desires::Desire::Anger;
+	}
+	if (facts.thingIsCreature && Locator::creatureFightSystem::has_value())
+	{
+		facts.thingFightsSelf = Locator::creatureFightSystem::value().OpponentOf(thing) == std::optional(creature);
+	}
+	if (source.type == Reaction::ReactToFlyingObject && there)
+	{
+		const auto* entry = Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(thing) : nullptr;
+		facts.thrownFromHand = entry != nullptr && entry->Has(ecs::PhysicsEntry::k_FromHand);
+		facts.inTheAir = ecs::villager_physics::IsActuallyInTheAir(thing);
+	}
+	if (source.type == Reaction::ReactToHandPickUp && there)
+	{
+		const auto* grab = registry.TryGet<const HandGrab>(thing);
+		facts.ownPlayersHand = registry.AllOf<Hand>(thing) && source.player == body.owner;
+		facts.handHolds = grab != nullptr && registry.Valid(grab->object) &&
+		                  (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow);
+	}
+	return facts;
+}
+
+/// What a creature does on taking up a reaction, for the kinds whose rules are its own; none for fire, teleport stones and
+/// miracles
+std::optional<creature_reaction::Setup> CreatureSetupOf(const ecs::Registry& registry, const ReactionSystem::Active& reaction)
+{
+	const auto thing = reaction.source.initiator;
+	const bool inTheAir = reaction.source.type == Reaction::ReactToFlyingObject && thing != entt::null &&
+	                      registry.Valid(thing) && ecs::villager_physics::IsActuallyInTheAir(thing);
+	return creature_reaction::SetupFor(reaction.source.type, inTheAir);
+}
+
+/// Whether a creature keeps a reaction it takes up: not another player's nice miracle or shield, nor a magic tree's,
+/// nor the kinds it heeds without keeping
+bool CreatureKeeps(const ecs::Registry& registry, entt::entity creature, const ReactionSystem::Active& reaction)
+{
+	const auto& source = reaction.source;
+	const bool nice = source.type == Reaction::LookAtNiceSpell || source.type == Reaction::ReactToImpressiveSpell ||
+	                  source.type == Reaction::ReactToMagicShield;
+	if ((nice && source.player != registry.Get<const Creature>(creature).owner) || source.type == Reaction::ReactToMagicTree)
+	{
+		return false;
+	}
+	const auto setup = CreatureSetupOf(registry, reaction);
+	return !setup.has_value() || setup->keeps;
 }
 
 /// The kinds of reaction a living thing took up lately: a villager's shared with the shields
@@ -460,6 +671,38 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		           ? ecs::villager_breeding::ReactToBreederPriority(living, reaction.source.initiator)
 		           : 0;
 	}
+	// A creature weighs several kinds its own way: by whether it sees the thing, whether a person plays its player, and
+	// what it is doing
+	if (registry.AllOf<Creature>(living) && registry.AllOf<Transform>(living))
+	{
+		const auto random = [](uint32_t range) {
+			return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : 0u;
+		};
+		if (const auto kind = creature_reaction::Priority(reaction.source.type,
+		                                                  CreatureFactsOf(registry, living, reaction, *info, _turn), random);
+		    kind.has_value())
+		{
+			return villager_reaction::Priority(*kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+		}
+	}
+	// A villager weighs a creature by how its town feels about it
+	// TODO(villager-social): creatures and animals weigh a creature by rules of their own that aren't ported yet; until
+	// then they take no notice of it
+	if (reaction.source.type == Reaction::ReactToCreature)
+	{
+		if (!registry.AllOf<Villager>(living))
+		{
+			return 0;
+		}
+		const auto kind = ecs::villager_creature::Priority(living, reaction.source.initiator);
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
+	// A villager heeds a burning thing in the hand when near it or the thing moves fast
+	if (reaction.source.type == Reaction::ReactToBurningObjectInHand && registry.AllOf<Villager>(living))
+	{
+		const auto kind = villager_reactions::BurningInHandPriority(living, reaction.source.initiator, info->priority);
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
 	// A villager heeds its town's celebration only when the town itself makes it
 	if (reaction.source.type == Reaction::ReactToTownCelebration && registry.AllOf<Villager>(living))
 	{
@@ -467,7 +710,7 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		const auto* disciple = registry.TryGet<const Disciple>(living);
 		const auto kind = villager_reaction::TownCelebrationPriority(
 		    {.disciple = disciple != nullptr && disciple->type != VillagerDisciple::None,
-		     .scripted = registry.AllOf<ScriptControlled>(living),
+		     .dancing = registry.AllOf<Dancer>(living),
 		     .hasTown = villager.town != entt::null,
 		     .madeByOwnTown = villager.town != entt::null && villager.town == reaction.source.initiator},
 		    info->priority);
@@ -555,7 +798,6 @@ void ReactionSystem::Spread(Active& reaction)
 
 void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::entity>& mobiles)
 {
-	const auto* info = InfoOf(reaction.source.type);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto type = static_cast<uint32_t>(reaction.source.type);
 	for (const auto entity : mobiles)
@@ -590,13 +832,7 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			state = &registry.Assign<LivingReaction>(entity);
 		}
 		auto& memory = MemoryOf(registry, entity, *state);
-		const bool creature = registry.AllOf<Creature>(entity);
-		// A forester at work goes for wood again straight away
-		const auto again = creature ? info->numGameTurnsForCreatureBeforeReactingAgain
-		                   : reaction.source.type == Reaction::ReactToWood && registry.AllOf<Villager>(entity) &&
-		                           ecs::villager_forester::ReactsToWoodAgainAtOnce(entity)
-		                       ? 0u
-		                       : info->numGameTurnsForNormalThingsBeforeReactingAgain;
+		const auto again = AgainTurns(reaction, entity, at);
 		// Impressed without reacting, it is the last in the cell the reaction reaches
 		if (BelievesWithoutReacting(registry, entity, reaction.source.type))
 		{
@@ -649,9 +885,91 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			{
 				continue;
 			}
+			// A creature heeds the new one, but keeps what it reacts to rather than change to one it doesn't keep
+			// TODO(raffclar): the game also drops the creature from the list of the reaction it keeps, as for villagers
+			if (registry.AllOf<Creature>(entity) && !CreatureKeeps(registry, entity, reaction))
+			{
+				Start(reaction, entity, *state, true);
+				continue;
+			}
 			Stop(entity, *state, false);
 			Start(reaction, entity, *state, true);
 		}
+	}
+}
+
+uint32_t ReactionSystem::AgainTurns(const Active& reaction, entt::entity living, const glm::vec3& at) const
+{
+	const auto* info = InfoOf(reaction.source.type);
+	if (info == nullptr)
+	{
+		return 0;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto who = WhoOf(registry, living);
+	const auto thing = reaction.source.initiator;
+	// Weighed by how far it is from the reaction's thing as the reaction spreads
+	const float distance = SpreadDistance(at, ThingAt(registry, reaction));
+	const auto standard = reaction_timing::StandardTurnsBeforeReactingAgain(reaction_timing::RowOf(*info), who, distance);
+	int32_t turns = standard;
+	switch (reaction_timing::AgainRule(reaction.source.type))
+	{
+	case reaction_timing::Rule::Creature:
+		// Waiting for a creature goes by how impressive it is and how the town feels about it, for all alike
+		turns = static_cast<int32_t>(ecs::villager_creature::TurnsBeforeReactingAgain(living, thing, distance));
+		break;
+	case reaction_timing::Rule::Predator:
+		turns =
+		    reaction_timing::PredatorTurnsBeforeReactingAgain(PredatorWatchOf(registry, living, thing, *info), who, standard);
+		break;
+	case reaction_timing::Rule::BurningObject:
+		if (who == reaction_timing::Reacting::Villager)
+		{
+			turns = static_cast<int32_t>(
+			    villager_reactions::BurningInHandAgainTurns(living, thing, static_cast<uint32_t>(standard)));
+		}
+		break;
+	case reaction_timing::Rule::Wood:
+		// A forester at work goes for wood again straight away
+		if (who == reaction_timing::Reacting::Villager && ecs::villager_forester::ReactsToWoodAgainAtOnce(living))
+		{
+			turns = 0;
+		}
+		break;
+	default:
+		break;
+	}
+	// The wait is counted as a whole number of turns, so a negative one is a very long wait
+	return static_cast<uint32_t>(turns);
+}
+
+int32_t ReactionSystem::TurnsToReact(const Active& reaction, entt::entity living, Reaction type) const
+{
+	const auto* info = InfoOf(type);
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (info == nullptr || !registry.AllOf<Transform>(living))
+	{
+		return 0;
+	}
+	const auto who = WhoOf(registry, living);
+	const auto thing = reaction.source.initiator;
+	// Weighed by how far it is from what it reacts to: the thing, or itself
+	const auto& at = registry.Get<const Transform>(living).position;
+	const float distance =
+	    reaction_timing::ReactsToItself(type) ? 0.0f : gutils::GetDistanceInMetres(at, ThingAt(registry, reaction));
+	const auto standard = reaction_timing::StandardTurnsToReact(reaction_timing::RowOf(*info), who, distance);
+	switch (reaction_timing::ReactRule(type))
+	{
+	case reaction_timing::Rule::Creature:
+		return static_cast<int32_t>(ecs::villager_creature::TurnsToReact(living, thing, distance));
+	case reaction_timing::Rule::Predator:
+		return reaction_timing::PredatorTurnsToReact(PredatorWatchOf(registry, living, thing, *info), who, standard);
+	case reaction_timing::Rule::None:
+		return 0;
+	default:
+		// A burning thing in the hand and a shield go by the standard turns for whoever holds them here (the shields'
+		// villagers are timed by the shields)
+		return standard;
 	}
 }
 
@@ -661,14 +979,33 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	const auto& source = reaction.source;
 	const bool nice = source.type == Reaction::LookAtNiceSpell || source.type == Reaction::ReactToImpressiveSpell;
 	const bool shield = source.type == Reaction::ReactToMagicShield;
-	if (const auto* creature = registry.TryGet<const Creature>(living))
+	if (registry.AllOf<Creature>(living))
 	{
-		// A creature takes no notice of another player's nice miracle or shield, nor of a shield struck or gone; it
-		// takes up a magic tree's reaction without doing anything about it, so not at all
-		const bool othersPlayer = source.player != creature->owner;
-		if (((nice || shield) && othersPlayer) || source.type == Reaction::ReactToMagicShieldStruck ||
-		    source.type == Reaction::ReactToMagicShieldDestroyed || source.type == Reaction::ReactToMagicTree)
+		// It notes when it took up a flying or crushed thing's reaction, whether it keeps it or not
+		const auto setup = CreatureSetupOf(registry, reaction);
+		if (setup.has_value() && setup->notesFlying)
 		{
+			state.sawFlying = _turn;
+		}
+		if (setup.has_value() && setup->notesCrushed)
+		{
+			state.sawCrushed = _turn;
+		}
+		// What it doesn't keep it heeds without being impressed by it, carrying on with what it was reacting to
+		if (!CreatureKeeps(registry, living, reaction))
+		{
+			return;
+		}
+		if (setup.has_value())
+		{
+			state.reaction = reaction.id;
+			state.type = reaction.source.type;
+			state.startTurn = _turn;
+			if (Locator::creatureMindSystem::has_value())
+			{
+				Locator::creatureMindSystem::value().TakeUpReaction(living, source.initiator, *setup);
+			}
+			Impress(reaction, living, registry.Get<const Transform>(living).position);
 			return;
 		}
 	}
@@ -814,22 +1151,26 @@ void ReactionSystem::ProcessLiving()
 			Stop(entity, state, false);
 			continue;
 		}
+		// What it reacts to gone (deleted, or a villager dying), it stops at once; fainting or confused, it reacts to
+		// itself
 		const auto* info = InfoOf(state.type);
-		// What it reacts to gone, it stops at once
-		if (info == nullptr || !registry.AllOf<Transform>(entity) ||
-		    (reaction->source.initiator != entt::null && !registry.Valid(reaction->source.initiator)))
+		const auto target = reaction_timing::ReactsToItself(state.type) ? entity : reaction->source.initiator;
+		if (info == nullptr || !registry.AllOf<Transform>(entity) || ThingGone(registry, target))
 		{
 			Stop(entity, state, true);
 			continue;
 		}
-		// Its time counts from when it last took up a reaction of the kind, the same wherever it stands
-		const bool creature = registry.AllOf<Creature>(entity);
-		const auto turns =
-		    static_cast<int32_t>(creature ? info->numGameTurnsForCreatureToReact : info->numGameTurnsForNormalThingsToReact);
+		// Its time counts from when it last took up a reaction of the kind, and lasts by how far it is from what it reacts
+		// to now
 		const auto since =
 		    static_cast<int32_t>(_turn - MemoryOf(registry, entity, state).LastReacted(static_cast<uint32_t>(state.type)));
-		if (since > turns)
+		if (const auto turns = TurnsToReact(*reaction, entity, state.type); since > turns)
 		{
+			if (const auto logger = spdlog::get("game"); logger != nullptr)
+			{
+				SPDLOG_LOGGER_DEBUG(logger, "Reaction: {} stops reacting to kind {} after {} turns (its time {})",
+				                    static_cast<uint32_t>(entity), static_cast<int>(state.type), since, turns);
+			}
 			Stop(entity, state, true);
 		}
 	}
@@ -860,13 +1201,34 @@ void ReactionSystem::ProcessTurn()
 	{
 		ShutDown(id);
 	}
-	// A reaction to a flying thing, to a villager held in the hand, or to a creature, is where the thing is now; a
+	// Every creature has a reaction of its own, which follows it for as long as it lives
+	std::vector<Source> creatures;
+	registry.Each<const Creature, const Transform>(
+	    [this, &creatures](entt::entity creature, const Creature& component, const Transform& transform) {
+		    const bool has = std::ranges::any_of(_reactions, [creature](const Active& reaction) {
+			    return reaction.source.initiator == creature && reaction.source.type == Reaction::ReactToCreature;
+		    });
+		    if (!has)
+		    {
+			    creatures.push_back({.initiator = creature,
+			                         .type = Reaction::ReactToCreature,
+			                         .player = component.owner,
+			                         .position = transform.position});
+		    }
+	    });
+	for (const auto& source : creatures)
+	{
+		Create(source);
+	}
+	// A reaction to a flying thing, to a villager or a burning thing held in the hand, or to a creature, is where the
+	// thing is now; a
 	// creature moves the way it faces, as far as matters to those fleeing it
 	for (auto& reaction : _reactions)
 	{
 		const bool creature = registry.Valid(reaction.source.initiator) && registry.AllOf<Creature>(reaction.source.initiator);
 		const bool follows = creature || reaction.source.type == Reaction::ReactToFlyingObject ||
-		                     reaction.source.type == Reaction::ReactToVillagerInHand;
+		                     reaction.source.type == Reaction::ReactToVillagerInHand ||
+		                     reaction.source.type == Reaction::ReactToBurningObjectInHand;
 		if (!follows || !registry.Valid(reaction.source.initiator))
 		{
 			continue;

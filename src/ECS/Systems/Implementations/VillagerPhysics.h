@@ -47,6 +47,8 @@ bool Sink(PhysicsEntry& entry);
 void SetupReactToFlyingObject(entt::entity villager, entt::entity object);
 /// Whether a villager takes a flying-object reaction at all: not while flying or landing
 [[nodiscard]] bool TakesFlyingObjectReaction(entt::entity villager);
+/// Whether a thing in the physics is still really in the air: fast, or not yet down on the land
+[[nodiscard]] bool IsActuallyInTheAir(entt::entity object);
 
 /// The player who threw what a villager was hit by or dropped it, as the hand let it go
 [[nodiscard]] std::optional<PlayerNames> DropperOf(entt::entity object);

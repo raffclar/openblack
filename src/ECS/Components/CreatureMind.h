@@ -92,6 +92,8 @@ struct CreatureMindState
 		uint32_t action;
 	};
 	std::optional<ActionUnderway> underway;
+	/// The action it last carried out to its end, by its number, which the towns watching it judge it by
+	std::optional<uint32_t> lastActionDone;
 
 	/// How far the creature has grown up, which decides the desires it has and which of its body's needs it feels, and
 	/// the stage they were last set for. Until the game's story moves it on, a creature starts fully grown up.

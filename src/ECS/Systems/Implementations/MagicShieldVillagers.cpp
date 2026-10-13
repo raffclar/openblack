@@ -25,6 +25,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/LivingAction.h"
@@ -45,6 +46,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Magic/ReactionTimingRules.h"
 #include "Magic/ShieldRules.h"
 #include "Magic/VillagerReactionRules.h"
 #include "MagicShieldSystem.h"
@@ -347,10 +349,12 @@ uint8_t MagicShieldSystem::PriorityFor(entt::entity villager, const ShieldReacti
 	return villager_reaction::Priority(priority, KindReacts(person, reaction.type), DistanceOf(reaction.type), distance);
 }
 
-uint32_t MagicShieldSystem::AgainTurnsFor(entt::entity villager, const ShieldReaction& reaction) const
+uint32_t MagicShieldSystem::AgainTurnsFor(entt::entity villager, const ShieldReaction& reaction, float distance) const
 {
 	auto& registry = EntityRegistry();
-	const auto standard = RowOf(reaction.type).numGameTurnsForNormalThingsBeforeReactingAgain;
+	// The row's turns, longer the nearer the villager is to the shield as the reaction spreads
+	const auto standard = static_cast<uint32_t>(magic::reaction_timing::StandardTurnsBeforeReactingAgain(
+	    magic::reaction_timing::RowOf(RowOf(reaction.type)), magic::reaction_timing::Reacting::Villager, distance));
 	if (reaction.type != Reaction::ReactToMagicShield)
 	{
 		return standard;
@@ -370,10 +374,13 @@ uint32_t MagicShieldSystem::AgainTurnsFor(entt::entity villager, const ShieldRea
 	                                  standard);
 }
 
-uint32_t MagicShieldSystem::ReactTurnsFor(entt::entity villager, const ShieldReaction& reaction) const
+int32_t MagicShieldSystem::ReactTurnsFor(entt::entity villager, const ShieldReaction& reaction) const
 {
 	auto& registry = EntityRegistry();
-	const auto standard = RowOf(reaction.type).numGameTurnsForNormalThingsToReact;
+	// The row's turns, longer the nearer the villager now is to the shield
+	const auto distance = gutils::GetDistanceInMetres(PositionOf(villager), PositionOf(reaction.object));
+	const auto standard = magic::reaction_timing::StandardTurnsToReact(magic::reaction_timing::RowOf(RowOf(reaction.type)),
+	                                                                   magic::reaction_timing::Reacting::Villager, distance);
 	if (reaction.type != Reaction::ReactToMagicShield)
 	{
 		return standard;
@@ -391,8 +398,9 @@ uint32_t MagicShieldSystem::ReactTurnsFor(entt::entity villager, const ShieldRea
 			roll50 = random.GameRand(50);
 		}
 	}
-	return shield::VillagerReactTurns(town.hasTown, roll4, roll50, town.sinceAttacked,
-	                                  VillagerInfoOf(person).numGameTurnsAfterAggressionInterestedInShield, standard);
+	return static_cast<int32_t>(shield::VillagerReactTurns(town.hasTown, roll4, roll50, town.sinceAttacked,
+	                                                       VillagerInfoOf(person).numGameTurnsAfterAggressionInterestedInShield,
+	                                                       static_cast<uint32_t>(standard)));
 }
 
 void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
@@ -419,7 +427,7 @@ void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
 		return;
 	}
 	const float distance = villager_reaction::SpreadDistance(glm::xz(at), PositionOf(reaction.object));
-	const auto again = AgainTurnsFor(villager, reaction);
+	const auto again = AgainTurnsFor(villager, reaction, distance);
 	auto* memory = registry.TryGet<VillagerReactionMemory>(villager);
 	if (memory == nullptr)
 	{
@@ -605,7 +613,7 @@ void MagicShieldSystem::ProcessVillagers()
 			const auto* memory = registry.TryGet<const VillagerReactionMemory>(villager);
 			const auto elapsed =
 			    turn - (memory != nullptr ? memory->memory.LastReacted(static_cast<uint32_t>(current.type)) : 0);
-			if (static_cast<int32_t>(elapsed) <= static_cast<int32_t>(ReactTurnsFor(villager, found->second)))
+			if (static_cast<int32_t>(elapsed) <= ReactTurnsFor(villager, found->second))
 			{
 				return;
 			}
