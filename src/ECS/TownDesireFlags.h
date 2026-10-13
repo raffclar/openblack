@@ -32,8 +32,8 @@ inline constexpr uint32_t k_FirstFlagPoint = 12;
 inline constexpr float k_RiseHeight = 4.4f;
 /// A flag that has just come out grows to its whole size over this share of the room above its first showing
 inline constexpr float k_GrowShare = 0.2f;
-/// How much snow a flag can carry, of 256: less than a field's crop
-inline constexpr float k_SnowCap = 45.0f;
+/// A flag carries less snow than a field crop. Its rate of snow and its maximum level of snow are both this value.
+inline constexpr int32_t k_SnowCap = 45;
 /// The hand's tooltip over a flag ("Need"), among the game's tooltips. The words shown are the flag's own.
 inline constexpr uint32_t k_NeedToolTip = 21;
 

@@ -117,6 +117,16 @@ int32_t ObjectLevel(float depth, int32_t rate, int32_t cap)
 	return std::min((beyond * rate) >> 8, cap);
 }
 
+int32_t LevelStep(int32_t gameMilliseconds)
+{
+	return gameMilliseconds >> 4;
+}
+
+int32_t EaseLevel(int32_t level, int32_t target, int32_t step)
+{
+	return std::clamp(target, level - step, level + step);
+}
+
 int32_t ObjectThreshold(int32_t level)
 {
 	const auto clamped = std::clamp(level, 0, 255);

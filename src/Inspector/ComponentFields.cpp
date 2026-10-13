@@ -180,6 +180,7 @@
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -1491,6 +1492,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Moon::placement>("placement")
 	    .Field<&components::Moon::colour>("colour")
 	    .Field<&components::Moon::strength>("strength");
+	Reflect<components::SnowLevel>(context).Field<&components::SnowLevel::level>("level");
 	Reflect<components::SoundTag>(context)
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")

@@ -109,7 +109,7 @@ struct RenderContext
 		glm::mat4 model {1.0f};
 		/// x: 1 while someone is home, which lights its windows at night. y: a colour, 0xRRGGBB, the land's light on it
 		/// is multiplied by, or 0 for none. z: 1 while it isn't drawn at all, or minus the share of it fizzed out of sight. w:
-		/// how much of the snow lying under it shows on it, of 256, and the most it shows, or 0 for all of it.
+		/// the snow that it shows, 0 to 255, or for a frozen creature minus the share of the freeze.
 		/// A villager drawn from the bone palette carries where its bones start in it in the w of the model matrix's first
 		/// column (see graphics::bone_palette).
 		glm::vec4 look {0.0f};
@@ -129,7 +129,7 @@ struct RenderContext
 		glm::mat4 modelMatrix;
 		/// While it has a fire on it: x the grey of 256 its light is scaled by, no brighter than the trees' brightness,
 		/// and y the alpha below which its foliage is cut away, of 1; 0 for none. z: while it fades out in the distance,
-		/// how much of it is faded, of 1.
+		/// how much of it is faded, of 1. w: the snow that it shows, 0 to 255.
 		glm::vec4 burning {0.0f};
 	};
 

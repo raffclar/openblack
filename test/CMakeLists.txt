@@ -934,3 +934,4 @@ openblack_setup_and_add_test(test_menu_pause gui/test_menu_pause.cpp)
 openblack_setup_and_add_test(
   test_creature_look_while_going test_creature_look_while_going.cpp
 )
+openblack_setup_and_add_test(test_snow_levels test_snow_levels.cpp)
