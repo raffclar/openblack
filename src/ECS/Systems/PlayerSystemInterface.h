@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 
 #include <entt/fwd.hpp>
@@ -32,8 +34,11 @@ public:
 	/// them, how the things their hand throws fly and what their hand keeps of their influence past the border, for when
 	/// they are made again on a later land
 	virtual void KeepForNextLand() = 0;
-	/// Every player forgets what they kept, so that the next players made start as on a first land
+	/// Every player forgets what they kept, so that the next players made start as on a first land, as in a new game
 	virtual void ForgetKept() = 0;
+	/// Whether the local player's alignment is due to be kept with their profile at this game turn; when it is, the turn
+	/// is noted as the last it was kept at. That goes on from land to land and starts again from nothing in a new game
+	[[nodiscard]] virtual bool KeepAlignmentAt(uint32_t turn) = 0;
 	/// A player made on a land takes up what they kept from the lands before
 	virtual void TakeUpKept(entt::entity playerEntity) = 0;
 	/// The player at this machine, whose hand the mouse moves. openblack is played by one player, the first.

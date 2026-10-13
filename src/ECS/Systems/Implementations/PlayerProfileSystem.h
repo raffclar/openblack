@@ -55,6 +55,7 @@ public:
 	bool DeleteProfile(std::u16string_view name) final;
 	void EditCurrentProfile(std::u16string_view creatureName, int symbol) final;
 	void SetCurrentSettings(const player_profiles::Settings& settings) final;
+	void SetCurrentAlignment(double alignment) final;
 
 	/// The computer's own: its account's name, and the milliseconds since it started
 	[[nodiscard]] static Machine ThisMachine();
