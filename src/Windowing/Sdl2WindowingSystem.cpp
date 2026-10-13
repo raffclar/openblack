@@ -31,6 +31,38 @@ void* cbSetupMetalLayer(void* wnd);
 
 using namespace openblack::windowing;
 
+namespace
+{
+// SDL's own messages go through the game's logger, so the player's log settings apply to them too. SDL's information
+// messages are its internals' (one of its builds prints every relative mouse movement), so they are logged as debug.
+void LogFromSdl(void* /*userdata*/, int /*category*/, SDL_LogPriority priority, const char* message)
+{
+	const auto logger = spdlog::get("graphics");
+	if (logger == nullptr)
+	{
+		return;
+	}
+	switch (priority)
+	{
+	case SDL_LOG_PRIORITY_VERBOSE:
+		logger->trace("SDL: {}", message);
+		break;
+	case SDL_LOG_PRIORITY_WARN:
+		logger->warn("SDL: {}", message);
+		break;
+	case SDL_LOG_PRIORITY_ERROR:
+		logger->error("SDL: {}", message);
+		break;
+	case SDL_LOG_PRIORITY_CRITICAL:
+		logger->critical("SDL: {}", message);
+		break;
+	default:
+		logger->debug("SDL: {}", message);
+		break;
+	}
+}
+} // namespace
+
 void Sdl2WindowingSystem::SDLDestroyer::operator()(SDL_Window* window) const
 {
 	SDL_DestroyWindow(window);
@@ -50,6 +82,8 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	                   compiledVersion.major, compiledVersion.minor, compiledVersion.patch);
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "SDL Version/Linked {}.{}.{}", //
 	                   linkedVersion.major, linkedVersion.minor, linkedVersion.patch);
+
+	SDL_LogSetOutputFunction(LogFromSdl, nullptr);
 
 	// Initialize SDL
 	if (SDL_WasInit(0) == 0)
