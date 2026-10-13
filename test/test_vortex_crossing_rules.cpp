@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
@@ -141,4 +142,48 @@ TEST(VortexCrossing, EachKindWritesItsLine)
 	          "CREATE_MOBILEOBJECT(\"0.00,0.00\", 6, 1234, 1000)\n");
 	EXPECT_EQ(Text(DeadTreeLine {.offset = Offset(0.0f, 0.0f), .player = "PLAYER_ONE", .row = 2, .life = 1.0f, .yAngle = 0.5f}),
 	          "CREATE_DEAD_TREE(\"0.00,0.00\", \"PLAYER_ONE\", 2, 1.000000, 0.000000, 0.500000, 0.000000)\n");
+}
+
+TEST(VortexCrossing, ThingsComeOutAboutSixteenMetresAwayByWholeCells)
+{
+	// A vortex at cell (100, 200), 3.5 m and 7.25 m into it
+	const auto vortex = map_coords::FromMetres({1003.5f, 2007.25f});
+	const auto fraction = [](int32_t fixed) { return static_cast<uint32_t>(fixed) & 0xffffu; };
+	const auto cell = [](int32_t fixed) { return static_cast<uint32_t>(fixed) >> 16u; };
+	// Straight along -z: 16 m out is 1.6 cells, cut to one whole cell back from 198.4
+	const auto north = ThrowOutPlace(vortex, 0.0f);
+	EXPECT_EQ(cell(north.x), 100u);
+	EXPECT_EQ(cell(north.z), 198u);
+	EXPECT_EQ(fraction(north.x), fraction(vortex.x));
+	EXPECT_EQ(fraction(north.z), fraction(vortex.z));
+	// A quarter turn: along +x, 101.6 cut to 101
+	const auto east = ThrowOutPlace(vortex, glm::half_pi<float>());
+	EXPECT_EQ(cell(east.x), 101u);
+	EXPECT_EQ(cell(east.z), 200u);
+}
+
+TEST(VortexCrossing, TheFadeWaitsForTheFileAndThirtyVillagers)
+{
+	EXPECT_TRUE(HoldsFade(true, 40));
+	EXPECT_TRUE(HoldsFade(false, 29));
+	EXPECT_FALSE(HoldsFade(false, 30));
+}
+
+TEST(VortexCrossing, EveryFifthNewVillagerIsAChild)
+{
+	EXPECT_EQ(NewVillagerAgeLimit(5), 9u);
+	EXPECT_EQ(NewVillagerAge(5, 0), 1u);
+	EXPECT_EQ(NewVillagerAge(10, 8), 9u);
+	EXPECT_EQ(NewVillagerAgeLimit(1), 6u);
+	EXPECT_EQ(NewVillagerAge(1, 0), 16u);
+	EXPECT_EQ(NewVillagerAge(4, 5), 21u);
+}
+
+TEST(VortexCrossing, HalfTheNewVillagersAreHousewives)
+{
+	// Norse (7) rows start at 49: the housewife, then forester, fisherman, farmer, shepherd and leader
+	EXPECT_EQ(NewVillagerRow(7, 0.49f, 4), 49);
+	EXPECT_EQ(NewVillagerRow(7, 0.5f, 0), 50);
+	EXPECT_EQ(NewVillagerRow(7, 0.9f, 4), 54);
+	EXPECT_EQ(NewVillagerRow(0, 0.7f, 2), 3);
 }

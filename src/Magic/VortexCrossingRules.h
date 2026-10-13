@@ -190,4 +190,34 @@ using Line = std::variant<VillagerLine, SpecialVillagerLine, AnimalLine, PotLine
 /// The line, ending in a new line
 [[nodiscard]] std::string Text(const Line& line);
 
+// The vortex the player arrives through on the next land throws things out: every second game turn, at a random angle,
+// the next line of the crossing file makes its thing again about a place 16 m out, which is then thrown out across the
+// land; once the file is read, new villagers are made until 30 have come out.
+
+/// The arriving vortex brings this many villagers, the crossing's and new ones together
+inline constexpr uint32_t k_ArrivalVillagers = 30;
+/// It takes the nearest town within this distance as its own when a script gave it none
+inline constexpr float k_ArrivalTownReach = 200.0f;
+/// Every fifth new villager is a child of 1 to 9; the others are adults of 16 to 21
+inline constexpr uint32_t k_ChildAgeRandom = 9;
+inline constexpr uint32_t k_AdultAgeRandom = 6;
+/// Half the new villagers are housewives; the others take one of the five jobs after it
+inline constexpr float k_HousewifeShare = 0.5f;
+inline constexpr uint32_t k_JobRandom = 5;
+/// Without a town, the new villagers are Norse
+inline constexpr int32_t k_ArrivalTribeWithoutTown = 7;
+
+/// Where things come out at an angle: the vortex's place moved about 16 m along (sin a, -cos a), by whole map cells, so
+/// it keeps its place within its cell
+[[nodiscard]] map_coords::MapCoords ThrowOutPlace(const map_coords::MapCoords& vortex, float angle);
+/// The vortex keeps fading out from the start while its file is still being read or fewer than its villagers have
+/// come out
+[[nodiscard]] bool HoldsFade(bool reading, uint32_t villagersOut);
+/// The random limit for the age of the new villager that brings the count to `count`, and its age from the number drawn
+[[nodiscard]] uint32_t NewVillagerAgeLimit(uint32_t count);
+[[nodiscard]] uint32_t NewVillagerAge(uint32_t count, uint32_t random);
+/// The row of the villagers' table a new villager of a tribe takes: its tribe's housewife when the first number is under
+/// a half, else one of the five jobs after it by the second
+[[nodiscard]] int32_t NewVillagerRow(int32_t tribe, float housewifeRandom, uint32_t jobRandom);
+
 } // namespace openblack::vortex::crossing

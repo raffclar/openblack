@@ -14,10 +14,16 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <iterator>
+#include <stdexcept>
+#include <string>
 #include <string_view>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include <LNDFile.h>
+#include <glm/gtc/constants.hpp>
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
@@ -26,30 +32,40 @@
 #include "3D/LandIslandInterface.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Archetypes/VortexArchetype.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/LandFollowers.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
+#include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/VortexCrossingLines.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
+#include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Magic/VortexCrossingRules.h"
 #include "Magic/VortexPullRules.h"
@@ -126,6 +142,10 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	if (type == VortexType::In)
 	{
 		StartCrossingFile(entity);
+	}
+	else if (type == VortexType::Out)
+	{
+		ReadCrossingFile(vortex);
 	}
 	return entity;
 }
@@ -293,6 +313,10 @@ void VortexSystem::ProcessTurn()
 		{
 			Pull(entity, vortex);
 		}
+		else if (vortex.type == VortexType::Out)
+		{
+			ThrowOut(entity, vortex);
+		}
 		// Then its effect drawing things in steps, taking what it was just handed
 		if (effects != nullptr && vortex.objectMoverEffect != ParticleSystemInterface::k_NoEffect &&
 		    !effects->ProcessForSpell(vortex.objectMoverEffect, {.power = 1.0f, .enabled = true}, k_TurnSeconds))
@@ -340,6 +364,7 @@ void VortexSystem::ProcessTurn()
 	for (const auto entity : gone)
 	{
 		DeleteEffects(registry.Get<Vortex>(entity));
+		LetGoOfThrown(registry.Get<Vortex>(entity));
 		registry.Destroy(entity);
 		if (entity == _crossingVortex)
 		{
@@ -499,12 +524,21 @@ void VortexSystem::ThrowOutOfVortex(entt::entity object, float angle, float scal
 		transform.rotation = carried->carried->rotation;
 	}
 	registry.Remove<CarriedByTornado>(object);
+	if (Locator::dynamicsSystem::has_value())
+	{
+		Locator::dynamicsSystem::value().EndPhysicsAsObject(object, true, false);
+	}
+	// TODO(vortex-crossing): the game names the vortex as the thrower here too; the particle doesn't know its vortex
+	Throw(object, angle, scale, entt::null);
+}
+
+void VortexSystem::Throw(entt::entity object, float angle, float scale, entt::entity thrower)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	if (!Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
-	auto& dynamics = Locator::dynamicsSystem::value();
-	dynamics.EndPhysicsAsObject(object, true, false);
 	float height = 0.0f;
 	if (const auto* mesh = registry.TryGet<const components::Mesh>(object);
 	    mesh != nullptr && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(mesh->id))
@@ -517,7 +551,8 @@ void VortexSystem::ThrowOutOfVortex(entt::entity object, float angle, float scal
 	const float out = random.GameFloatRand(vortex::crossing::k_ThrowOutRandom);
 	const float up = random.GameFloatRand(vortex::crossing::k_ThrowOutRandom);
 	const auto throwOut = vortex::crossing::ThrowOutOf(angle, out, up, scale, height);
-	dynamics.InitialisePhysics(object, {.velocity = throwOut.velocity, .spin = throwOut.spin});
+	Locator::dynamicsSystem::value().InitialisePhysics(
+	    object, {.velocity = throwOut.velocity, .spin = throwOut.spin, .thrower = thrower});
 }
 
 void VortexSystem::StartCrossingFile(entt::entity vortex)
@@ -577,6 +612,246 @@ void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 		_crossing.write(text.data(), static_cast<std::streamsize>(text.size()));
 		_crossing.flush();
 	}
+}
+
+void VortexSystem::ReadCrossingFile(Vortex& vortex)
+{
+	// The file is read from the start; none is as good as an empty one
+	auto& progress = vortex.throwingOut;
+	progress = {};
+	Locator::entitiesRegistry::value().Context().mapScriptGlobals.lastObject = entt::null;
+	if (!Locator::playerProfileSystem::has_value())
+	{
+		return;
+	}
+	const auto folder = Locator::playerProfileSystem::value().SavedGamesFolder();
+	if (!folder.has_value())
+	{
+		return;
+	}
+	std::ifstream file(*folder / k_CrossingFile, std::ios::binary);
+	for (std::string line; std::getline(file, line);)
+	{
+		if (!line.empty() && line.back() == '\r')
+		{
+			line.pop_back();
+		}
+		progress.lines.push_back(std::move(line));
+	}
+}
+
+void VortexSystem::ThrowOut(entt::entity entity, Vortex& vortex)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& progress = vortex.throwingOut;
+	auto& arrival = vortex.arrival;
+	// Flocks and a town that have gone are forgotten; with no town it takes the nearest
+	if (!registry.Valid(progress.animalFlock) || !registry.AllOf<components::Flock>(progress.animalFlock))
+	{
+		progress.animalFlock = entt::null;
+	}
+	if (!registry.Valid(arrival.flock) || !ecs::script_flocks::IsFlock(registry, arrival.flock))
+	{
+		arrival.flock = entt::null;
+	}
+	if (!registry.Valid(arrival.town) || !registry.AllOf<components::Town>(arrival.town))
+	{
+		arrival.town =
+		    NearestTownWithin(map_coords::FromMetres({vortex.centre.x, vortex.centre.z}), vortex::crossing::k_ArrivalTownReach);
+	}
+	// What it threw that has gone leaves its keeping; the villagers it still keeps stay at full life
+	std::erase_if(progress.thrown, [&registry](entt::entity thing) { return !registry.Valid(thing); });
+	for (const auto thing : progress.thrown)
+	{
+		if (registry.AllOf<components::Villager>(thing))
+		{
+			world_objects::SetLife(thing, 1.0f);
+		}
+	}
+	// It doesn't start to fade out until the file is read and all its villagers are out
+	const auto turn = Locator::time::value().GetTurn();
+	if (vortex::crossing::HoldsFade(progress.reading, progress.villagersOut))
+	{
+		vortex.stateStartTurn = turn;
+	}
+	auto& lastObject = registry.Context().mapScriptGlobals.lastObject;
+	if (!registry.Valid(lastObject))
+	{
+		lastObject = entt::null;
+	}
+	// Every second turn something comes out at a random angle
+	if (turn % 2 != 0 || !Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	auto& random = Locator::gameRandom::value();
+	const float angle = random.GameFloatRand(glm::two_pi<float>());
+	auto vortexPlace = map_coords::FromMetres({vortex.centre.x, vortex.centre.z});
+	vortexPlace.altitude = vortex.altitude;
+	const auto place = vortex::crossing::ThrowOutPlace(vortexPlace, angle);
+	const auto placeMetres = map_coords::ToMetres(place);
+	if (progress.reading)
+	{
+		// The file's next line makes its thing again about the place; at its end the reading stops
+		if (progress.nextLine >= progress.lines.size())
+		{
+			progress.reading = false;
+			progress.lines.clear();
+			return;
+		}
+		const auto& line = progress.lines.at(progress.nextLine++);
+		try
+		{
+			lhscriptx::Script script(glm::vec3(placeMetres.x, place.altitude, placeMetres.y));
+			script.Load(line);
+		}
+		catch (const std::runtime_error& error)
+		{
+			if (const auto logger = spdlog::get("game"); logger != nullptr)
+			{
+				logger->warn("Vortex: the crossing line \"{}\" failed: {}", line, error.what());
+			}
+		}
+		// The thing the line made or, when it made none, the last thing made before it that is still there
+		const auto thing = lastObject;
+		if (!registry.Valid(thing))
+		{
+			return;
+		}
+		if (registry.AllOf<components::Villager>(thing))
+		{
+			++progress.villagersOut;
+		}
+		JoinAndThrow(entity, vortex, thing, angle);
+		return;
+	}
+	if (progress.villagersOut >= vortex::crossing::k_ArrivalVillagers)
+	{
+		return;
+	}
+	// Then new villagers of its town's tribe, every fifth a child
+	const auto count = ++progress.villagersOut;
+	const auto* tribe = registry.Valid(arrival.town) ? registry.TryGet<const Tribe>(arrival.town) : nullptr;
+	const auto tribeNumber = tribe != nullptr ? static_cast<int32_t>(*tribe) : vortex::crossing::k_ArrivalTribeWithoutTown;
+	const float housewife = random.GameFloatRand(1.0f);
+	const uint32_t job = housewife < vortex::crossing::k_HousewifeShare ? 0 : random.GameRand(vortex::crossing::k_JobRandom);
+	const auto row = vortex::crossing::NewVillagerRow(tribeNumber, housewife, job);
+	const auto age = vortex::crossing::NewVillagerAge(count, random.GameRand(vortex::crossing::NewVillagerAgeLimit(count)));
+	if (row < 0 || std::cmp_greater_equal(row, Locator::infoConstants::value().villager.size()))
+	{
+		return;
+	}
+	const glm::vec3 position {placeMetres.x, Locator::terrainSystem::value().GetHeightAt(placeMetres) + place.altitude,
+	                          placeMetres.y};
+	const auto villager = archetypes::VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(row), age,
+	                                                            archetypes::VillagerArchetype::Joins::Nobody);
+	if (villager != entt::null)
+	{
+		JoinAndThrow(entity, vortex, villager, angle);
+	}
+}
+
+void VortexSystem::JoinAndThrow(entt::entity entity, Vortex& vortex, entt::entity thing, float angle)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& progress = vortex.throwingOut;
+	const auto& arrival = vortex.arrival;
+	// Never twice
+	if (std::ranges::find(progress.thrown, thing) != progress.thrown.end())
+	{
+		return;
+	}
+	if (const auto* person = registry.TryGet<const components::Villager>(thing))
+	{
+		// A villager joins the vortex's town, leaving its own; given a flock, it comes as a disciple from the vortex
+		if (arrival.town != entt::null && Locator::townSystem::has_value())
+		{
+			auto& towns = Locator::townSystem::value();
+			if (registry.Valid(person->town))
+			{
+				towns.RemoveVillager(thing);
+			}
+			towns.AddVillagerToTown(arrival.town, thing);
+			if (arrival.flock != entt::null)
+			{
+				villager_disciple::SetType(thing, VillagerDisciple::FromVortex);
+			}
+		}
+		// It joins the flock, and a flock a script holds hands it to the script, which takes control of it
+		if (arrival.flock != entt::null)
+		{
+			ecs::script_flocks::AddLiving(registry, arrival.flock, thing);
+			if (registry.AllOf<components::InScript>(arrival.flock) && Locator::scriptObjects::has_value())
+			{
+				Locator::scriptObjects::value().AddReference(thing);
+				registry.AssignOrReplace<components::ScriptControlled>(thing);
+			}
+		}
+	}
+	bool dove = false;
+	if (const auto* animal = registry.TryGet<const components::Animal>(thing);
+	    animal != nullptr && Locator::animalSystem::has_value())
+	{
+		// An animal joins the flock gathering where the script said: a new one when the flock's leader is of another kind
+		auto& animals = Locator::animalSystem::value();
+		const auto kind = animal->type;
+		const auto leader = progress.animalFlock != entt::null ? animals.LeaderOf(progress.animalFlock) : entt::null;
+		const auto* leading = registry.Valid(leader) ? registry.TryGet<const components::Animal>(leader) : nullptr;
+		if (progress.animalFlock == entt::null || (leading != nullptr && leading->type != kind))
+		{
+			progress.animalFlock = animals.CreateFlock({arrival.gatheringPlace.x, arrival.gatheringPlace.z},
+			                                           arrival.flockRadius, arrival.flockDistance);
+		}
+		animals.JoinFlock(thing, progress.animalFlock);
+		registry.Get<components::Animal>(thing).town = arrival.town;
+		dove = kind == AnimalInfo::Dove || kind == AnimalInfo::SpellDove;
+	}
+	// Doves fly off on their own; everything else is kept and thrown out
+	if (dove)
+	{
+		return;
+	}
+	progress.thrown.push_back(thing);
+	Throw(thing, angle, 1.0f, entity);
+	registry.AssignOrReplace<components::Indestructible>(thing);
+}
+
+void VortexSystem::LetGoOfThrown(const Vortex& vortex)
+{
+	// What it threw out can be destroyed again once it has gone
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto thing : vortex.throwingOut.thrown)
+	{
+		if (registry.Valid(thing))
+		{
+			registry.Remove<components::Indestructible>(thing);
+		}
+	}
+}
+
+entt::entity VortexSystem::NearestTownWithin(const map_coords::MapCoords& place, float reach)
+{
+	// Each player's towns in turn and the neutral ones last, the first met winning a tie
+	const auto& registry = Locator::entitiesRegistry::value();
+	struct Entry
+	{
+		PlayerNames owner;
+		uint32_t id;
+		ecs::script_find::Candidate candidate;
+	};
+	std::vector<Entry> towns;
+	registry.Each<const components::Town, const Transform>(
+	    [&towns](entt::entity town, const components::Town& data, const Transform& transform) {
+		    towns.push_back(
+		        {.owner = data.owner,
+		         .id = data.id,
+		         .candidate = {.entity = town, .at = map_coords::FromMetres({transform.position.x, transform.position.z})}});
+	    });
+	std::ranges::sort(towns, [](const Entry& a, const Entry& b) { return std::tie(a.owner, a.id) < std::tie(b.owner, b.id); });
+	std::vector<ecs::script_find::Candidate> ordered;
+	ordered.reserve(towns.size());
+	std::ranges::transform(towns, std::back_inserter(ordered), &Entry::candidate);
+	return ecs::script_find::FindNearestTown(place, reach, ordered);
 }
 
 void VortexSystem::RemoveTheTaken()

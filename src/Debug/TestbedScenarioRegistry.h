@@ -317,6 +317,13 @@ struct VortexSetup
 	/// Seconds into the scenario it is made, and after that it is told to fade out; none to stay
 	float delaySeconds {0.0f};
 	std::optional<float> fadeOutAfterSeconds;
+	/// For a vortex into the land: the crossing file's lines, written just before it is made, as a vortex out of the last
+	/// land would have written them (none leaves the file as it is); and where the animals that come out gather, as one
+	/// flock keeping within the distance and the radius, as a land's script tells it
+	std::vector<std::string_view> crossingLines;
+	std::optional<glm::vec2> gatheringOffset;
+	float flockDistance {0.0f};
+	float flockRadius {0.0f};
 };
 
 /// A reward chest given to the player as a challenge's script gives one: dropped from the sky or put on the land

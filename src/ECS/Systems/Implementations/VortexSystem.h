@@ -54,6 +54,18 @@ private:
 	static void HandOver(entt::entity vortexEntity, const components::Vortex& vortex, entt::entity thing);
 	/// A pile it reaches gives up a pot of what it holds, which it takes
 	static void TakeFromPile(entt::entity vortexEntity, const components::Vortex& vortex, entt::entity pile);
+	/// A thing thrown out at an angle, at a scale of the usual speeds, passing through what threw it
+	static void Throw(entt::entity object, float angle, float scale, entt::entity thrower);
+	/// A vortex that leads into the land reads the crossing file as it is made
+	static void ReadCrossingFile(components::Vortex& vortex);
+	/// Each turn it keeps what it threw, holds its fade until it is done, and every second turn throws the next thing out
+	static void ThrowOut(entt::entity entity, components::Vortex& vortex);
+	/// What comes out joins its town or flock and, but for a dove, is kept and thrown out at the angle
+	static void JoinAndThrow(entt::entity entity, components::Vortex& vortex, entt::entity thing, float angle);
+	/// As it goes, what it threw out can be destroyed again
+	static void LetGoOfThrown(const components::Vortex& vortex);
+	/// The nearest town strictly within a reach of a place, by the game's measure of distance
+	[[nodiscard]] static entt::entity NearestTownWithin(const map_coords::MapCoords& place, float reach);
 	/// A new vortex that leads away empties the crossing file and writes to it until it goes
 	void StartCrossingFile(entt::entity vortex);
 	/// The line of a thing taken, relative to the vortex

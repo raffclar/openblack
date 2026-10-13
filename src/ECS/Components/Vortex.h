@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -60,6 +61,21 @@ struct Vortex
 		entt::entity flock {entt::null};
 	};
 
+	/// How far a vortex that leads into the land has got with throwing things out
+	struct ThrowingOut
+	{
+		/// The crossing file's lines, read as the vortex was made, and the next to make; reading stops at the end
+		std::vector<std::string> lines;
+		size_t nextLine {0};
+		bool reading {true};
+		/// How many villagers have come out, from the file or new
+		uint32_t villagersOut {0};
+		/// What it has thrown out and still keeps: they can't be destroyed while it lasts, villagers kept at full life
+		std::vector<entt::entity> thrown;
+		/// The flock of the animals that came out, at the gathering place; a new one for an animal of another kind
+		entt::entity animalFlock {entt::null};
+	};
+
 	VortexType type {VortexType::In};
 	VortexStateType state {VortexStateType::FadeIn};
 	/// The game turn its state began on
@@ -81,6 +97,7 @@ struct Vortex
 	uint32_t lightMapEffect {0};
 	/// Only a vortex that leads into the land keeps one
 	Arrival arrival;
+	ThrowingOut throwingOut;
 };
 
 /// A thing a vortex that leads away has handed to its effect this turn, to be drawn in once the effect next steps
