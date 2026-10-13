@@ -102,6 +102,12 @@ public:
 	void ShowSkipBox(bool currentProfileHasCreature);
 	/// The answer to the start-of-game question, once
 	std::optional<new_game_choice::Choice> TakeSkipBoxAnswer() { return std::exchange(_skipBoxAnswer, std::nullopt); }
+	/// Closes the start-of-game question with no answer. Returns true when the question was open.
+	bool WithdrawSkipBox()
+	{
+		_skipBoxAnswer.reset();
+		return _skipBox->Withdraw();
+	}
 	/// The start-of-game question's box, up or not
 	[[nodiscard]] const SkipBox& GetSkipBox() const noexcept { return *_skipBox; }
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
