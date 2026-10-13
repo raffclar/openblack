@@ -3727,7 +3727,7 @@ bool Game::Run() noexcept
 		// A first start: the new player is asked their name before the first land; closing the window meanwhile ends
 		// the game at its first frame
 		AskForNewPlayer();
-		if (!LoadMap(_startMap))
+		if (!LoadMap(_startMap, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame))
 		{
 			return false;
 		}
@@ -3955,7 +3955,7 @@ bool Game::Run() noexcept
 	return true;
 }
 
-bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look) noexcept
+bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change) noexcept
 {
 	const ecs::systems::InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
@@ -3971,7 +3971,7 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	const auto data = fileSystem.ReadAll(path);
 	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 
-	PrepareNewLand(false);
+	PrepareNewLand(change);
 	timer.Step("reset");
 	RenderLoadingFrame();
 
@@ -4037,7 +4037,7 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	return true;
 }
 
-bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
+bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) noexcept
 {
 	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
 	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
@@ -4067,7 +4067,7 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 			                    err.what());
 		}
 	}
-	return LoadMap(path);
+	return LoadMap(path, loading::LoadingClock::Mode::Tips, change);
 }
 
 void Game::LoadTestbed() noexcept
@@ -4079,7 +4079,7 @@ void Game::LoadTestbed() noexcept
 		Locator::vm::value().StopAllTasks();
 	}
 	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
-	PrepareNewLand(true);
+	PrepareNewLand(land_change::Kind::Testbed);
 	_landPath = k_TestbedLandPath;
 	RenderLoadingFrame();
 	InitializeLevel(flat_land::Build());
@@ -4121,8 +4121,10 @@ void Game::LoadTestbed() noexcept
 	}
 }
 
-void Game::PrepareNewLand(bool toTestbed)
+void Game::PrepareNewLand(land_change::Kind change)
 {
+	const bool toTestbed = change == land_change::Kind::Testbed;
+	const auto rules = land_change::RulesFor(change);
 	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
 	// creature's room's flames and smoke, keeps entities of the land after they have gone
 	if (Locator::temple::has_value())
@@ -4153,21 +4155,38 @@ void Game::PrepareNewLand(bool toTestbed)
 			Locator::playerSystem::value().ForgetKept();
 		}
 	}
+	// The players' hearts beat on from land to land; a new game starts them calm
+	if (Locator::heartbeatSystem::has_value())
+	{
+		if (carryOver && rules.heartbeatsCarried)
+		{
+			Locator::heartbeatSystem::value().KeepForNextLand();
+		}
+		else
+		{
+			Locator::heartbeatSystem::value().ForgetKept();
+		}
+	}
 	// The last land's scripts forget what they held: the land's objects go with it before anything could be let go back
 	// into the game
 	if (Locator::scriptObjects::has_value())
 	{
 		Locator::scriptObjects::value().ClearForNewLand();
 	}
-	// A new land has no weather of the last one, and none of its script's fades, cinema bars or clipping
+	// A new land has no weather of the last one
 	if (Locator::weatherSystem::has_value())
 	{
 		Locator::weatherSystem::value().Reset();
 		Locator::snowSystem::value().Reset();
 		Locator::waterRingSystem::value().Reset();
 	}
-	Locator::cinematicDirectorSystem::value().Reset();
-	// Nor the opening's light and hand
+	// The scripts' hold on the screen goes on through the story's change of land: a fade to black made on the last land
+	// stays black while the next loads, for that land's scripts to fade in. It goes when the scripts start again
+	if (!rules.scriptScreenKept)
+	{
+		Locator::cinematicDirectorSystem::value().Reset();
+	}
+	// The opening's light and hand go
 	Locator::introSystem::value().ReleaseAll();
 	// Nor does any script keep the camera, the game's speed or the dialogue
 	if (Locator::camera::has_value())
@@ -4184,6 +4203,22 @@ void Game::PrepareNewLand(bool toTestbed)
 	if (Locator::cameraBookmarkSystem::has_value())
 	{
 		Locator::cameraBookmarkSystem::value().SetEnabled(true);
+	}
+	// The advisors carry on through the story's change of land, out or on their way home as they were. The land menu
+	// starting the scripts again sends them home, and a new game starts them at home, out of sight
+	if (Locator::advisorSystem::has_value())
+	{
+		switch (rules.advisors)
+		{
+		case land_change::Advisors::CarryOn:
+			break;
+		case land_change::Advisors::SentHome:
+			SendAdvisorsHome(false);
+			break;
+		case land_change::Advisors::Afresh:
+			Locator::advisorSystem::value().Reset();
+			break;
+		}
 	}
 	// The scripts start again, and the help's texts and voices with them
 	Locator::helpTextSystem::value().Reset();
@@ -4327,7 +4362,7 @@ bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noex
 	_startTestbed = false;
 	// A new game always begins on the first land
 	const auto land = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "Land1.txt";
-	if (!LoadMapWithFreshScripts(land))
+	if (!LoadMapWithFreshScripts(land, land_change::Kind::NewGame))
 	{
 		return false;
 	}
