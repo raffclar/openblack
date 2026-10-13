@@ -264,15 +264,16 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .id = "needs.poo_lumps",
 	    .name = "Lumps of poo",
 	    .facet = Facet::Needs,
-	    .description = "Two tigers facing east, 30 m apart: a small one (size 0.5) and a large one (size 2). Their bowels "
-	                   "stay empty, so they do not choose to poo or fart. Each is told to poo every so often.",
+	    .description = "Two tigers facing east, 60 m apart: a small one (size 0.5) and a large one (size 2). Their bowels "
+	                   "stay empty, so they do not choose to poo or fart. Each is told to poo every so often. The distance "
+	                   "keeps the lumps of one tiger away from the other tiger.",
 	    .expected = "A third of the time a tiger shows it needs a poo first. Then it squats for 4 seconds of game time. "
 	                "All through the squat's loop, every fifth game turn (each half second at normal speed), a lump of "
 	                "poo comes out at its rear and is thrown back along the ground, so a short row of lumps lies behind "
 	                "it. The frame rate has no effect on the count. The large tiger plays its clips more slowly, so its "
 	                "loop starts later and it drops fewer lumps. Each lump is 1.5 times the tiger's size.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 20.0f}, {25.0f, 80.0f}}, .distance = 0.7f},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 20.0f}, {25.0f, 110.0f}}, .distance = 0.7f},
 	    .creatures = {{.label = "small",
 	                   .species = CreatureType::Tiger,
 	                   .offset = {0.0f, 30.0f},
@@ -282,7 +283,7 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                   .hold = true},
 	                  {.label = "large",
 	                   .species = CreatureType::Tiger,
-	                   .offset = {0.0f, 60.0f},
+	                   .offset = {0.0f, 90.0f},
 	                   .facingDegrees = 90.0f,
 	                   .size = 2.0f,
 	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
@@ -291,6 +292,41 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                 {.kind = Command::Kind::Poo, .creature = 1, .delaySeconds = 0.0f},
 	                 {.kind = Command::Kind::Poo, .creature = 0, .delaySeconds = 20.0f, .waitUntilFree = true},
 	                 {.kind = Command::Kind::Poo, .creature = 1, .delaySeconds = 0.0f, .waitUntilFree = true}},
+	    .repeatFrom = 2,
+	});
+
+	// A creature catches the lump of poo of another creature. The catch stops its own squat
+	all.push_back({
+	    .id = "needs.poo_lump_caught",
+	    .name = "Catching a lump of poo",
+	    .facet = Facet::Needs,
+	    .description = "A small tiger (size 0.5) and a large tiger (size 2) 8 m behind it. Their bowels stay empty. Each is "
+	                   "told to poo every so often, the small tiger first.",
+	    .expected = "The small tiger squats for its poo, and the large tiger squats a moment later. The lumps of poo of the "
+	                "small tiger fly back at the large tiger. When a lump comes near enough, the large tiger stops its squat "
+	                "to catch the lump. The end of its squat plays at two times the usual speed, and it drops no more lumps. "
+	                "Then it turns to the lump and catches it if the lump is still in the air. A told poo is not safe from a "
+	                "catch.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 25.0f}, {25.0f, 55.0f}}, .distance = 0.6f},
+	    .creatures = {{.label = "small",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {0.0f, 40.0f},
+	                   .facingDegrees = 90.0f,
+	                   .size = 0.5f,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .hold = true},
+	                  {.label = "large",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {8.0f, 40.0f},
+	                   .facingDegrees = 90.0f,
+	                   .size = 2.0f,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .hold = true}},
+	    .commands = {{.kind = Command::Kind::Poo, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Command::Kind::Poo, .creature = 1, .delaySeconds = 0.5f},
+	                 {.kind = Command::Kind::Poo, .creature = 0, .delaySeconds = 20.0f, .waitUntilFree = true},
+	                 {.kind = Command::Kind::Poo, .creature = 1, .delaySeconds = 0.5f, .waitUntilFree = true}},
 	    .repeatFrom = 2,
 	});
 

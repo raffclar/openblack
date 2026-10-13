@@ -172,6 +172,29 @@ TEST(CreatureLayers, ACreatureLyingWhereItFellGetsUpWhenItsPlanChanges)
 	EXPECT_EQ(CurrentAnimation(body), animations::k_GetUp);
 }
 
+TEST(CreatureLayers, AHurriedBodyEndsItsActionAtTwiceTheSpeed)
+{
+	// A creature that starts to catch ends its squat at two times the usual speed, through the end of the squat
+	auto body = *PlaySequence({}, animations::k_StartPoo, animations::k_Poo, animations::k_EndPoo);
+	body = AdvanceBody(AdvanceBody(body, 500.0f, 500), 100.0f, 1000);
+	ASSERT_TRUE(IsLooping(body));
+	body = AdvanceBody(EndLoop(Hurry(body)), 16.0f, 1000);
+	EXPECT_EQ(CurrentAnimation(body), animations::k_EndPoo);
+	body = AdvanceBody(body, 100.0f, 1000);
+	EXPECT_NEAR(body.timeMs, 200.0f, k_Tolerance);
+	body = AdvanceBody(body, 400.0f, 1000);
+	EXPECT_FALSE(IsPlaying(body));
+	// The body stands again and plays the next action at the usual speed
+	body = *PlayOnce(body, animations::k_Happy, false);
+	body = AdvanceBody(body, 100.0f, 1000);
+	EXPECT_NEAR(body.timeMs, 100.0f, k_Tolerance);
+}
+
+TEST(CreatureLayers, ABodyThatStandsIsNotHurried)
+{
+	EXPECT_FALSE(Hurry({}).hurried);
+}
+
 TEST(CreatureLayers, ABodyTimedByWhatPlaysItStaysWherePut)
 {
 	// A fight sets its fighter's move at the move's own time each frame; the frame mustn't move it on as well, or the

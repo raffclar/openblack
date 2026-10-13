@@ -144,9 +144,12 @@ struct UsedCandidate
 [[nodiscard]] std::optional<uint32_t> ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,
                                                  std::optional<uint32_t> goal);
 
-/// A plan forced on the creature, by a reaction or a catch, scores the most a score can be, so that no plan of its own is
-/// ever pressing enough to replace it
+/// A plan that a reaction, a script or an order forces on the creature has the highest possible score. No plan that the
+/// creature makes itself can replace it.
 constexpr float k_ForcedScore = std::numeric_limits<float>::max();
+/// A catch and a gift from the hand have a score of 1. A plan that the creature makes itself replaces them when its score
+/// is more than two times this score.
+constexpr float k_CatchOrGiftScore = 1.0f;
 
 /// What the planner holds between turns
 struct PlannerState

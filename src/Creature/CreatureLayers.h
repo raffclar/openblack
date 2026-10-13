@@ -125,6 +125,8 @@ struct BodyAction
 	/// Its time is set each frame by what plays it, as a fight plays its fighters' moves at their own pace, so the frame
 	/// doesn't move it on as well
 	bool timedByPlayer {false};
+	/// The body plays at two times the usual speed until it stands again
+	bool hurried {false};
 };
 
 [[nodiscard]] bool IsPlaying(const BodyAction& body);
@@ -142,6 +144,9 @@ struct BodyAction
 /// once is left to play to its end. This is also what a change of plan does to the body: whatever the creature turns to
 /// next waits for the body to finish.
 [[nodiscard]] BodyAction EndLoop(BodyAction body);
+/// The action that the body plays continues at two times the usual speed until the body stands again. A catch and a
+/// gift from the hand do this when they start. A body that stands does not change.
+[[nodiscard]] BodyAction Hurry(BodyAction body);
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no
 /// such animation. Each animation starts from its beginning, without blending into the last. A body timed by what plays it
 /// stays where it was put.

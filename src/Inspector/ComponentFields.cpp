@@ -2179,7 +2179,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_layers::BodyAction::mirrored>("mirrored")
 	    .Field<&openblack::creature_layers::BodyAction::endWanted>("endWanted")
 	    .Field<&openblack::creature_layers::BodyAction::holdLoop>("holdLoop")
-	    .Field<&openblack::creature_layers::BodyAction::timedByPlayer>("timedByPlayer");
+	    .Field<&openblack::creature_layers::BodyAction::timedByPlayer>("timedByPlayer")
+	    .Field<&openblack::creature_layers::BodyAction::hurried>("hurried");
 	Reflect<openblack::creature_layers::FaceLayer>(context, ValueOnly {})
 	    .Field<&openblack::creature_layers::FaceLayer::current>("current")
 	    .Field<&openblack::creature_layers::FaceLayer::timeMs>("timeMs")
