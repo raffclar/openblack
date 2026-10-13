@@ -209,9 +209,17 @@ private:
 class PlainHooks final: public PhysicsClassHooks
 {
 public:
+	explicit PlainHooks(std::vector<entt::entity>& notPutDown)
+	    : _notPutDown(notPutDown)
+	{
+	}
 	[[nodiscard]] SoundCollisionType CollideSoundType(entt::entity) const override { return SoundCollisionType::Default; }
 	void ForgetBuildingHitter(entt::entity) override {}
 	[[nodiscard]] bool RaisesObjects(entt::entity) const override { return true; }
+	void NotPutDownByHand(entt::entity object) override { _notPutDown.push_back(object); }
+
+private:
+	std::vector<entt::entity>& _notPutDown;
 };
 
 class DynamicsSystemTest: public ::testing::Test
@@ -225,7 +233,7 @@ protected:
 		auto world = std::make_unique<FakeWorld>(landHeight);
 		_world = world.get();
 		_dynamics = std::make_unique<DynamicsSystem>(std::move(world));
-		_dynamics->SetClassHooks(std::make_unique<PlainHooks>());
+		_dynamics->SetClassHooks(std::make_unique<PlainHooks>(_notPutDown));
 	}
 
 	/// A rock standing on the land, filed in the map's cells
@@ -261,6 +269,8 @@ protected:
 		return std::nullopt;
 	}
 
+	/// The things that a hand released but did not put on the land below it
+	std::vector<entt::entity> _notPutDown;
 	FakeWorld* _world {nullptr};
 	std::unique_ptr<DynamicsSystem> _dynamics;
 };
@@ -410,6 +420,42 @@ TEST_F(DynamicsSystemTest, AnImmovableVillagerLetGoGoesBackDownButAnImmovableThi
 	EXPECT_EQ(_world->filed.count(rock), 0u);
 	EXPECT_FLOAT_EQ(registry.Get<const Transform>(rock).position.y, FakeWorld::k_LandHeight + 5.0f);
 	EXPECT_EQ(Entries(), 0u);
+}
+
+TEST_F(DynamicsSystemTest, OnlyAThingPutDownWhereItWasCountsAsPutDown)
+{
+	auto& registry = _world->Entities();
+	const auto person = [&](glm::vec2 xz, float height) {
+		const auto villager = Rock(xz);
+		registry.Remove<MobileStatic>(villager);
+		registry.Assign<Villager>(villager);
+		registry.Get<Transform>(villager).position.y += height;
+		_world->filed.erase(villager);
+		return villager;
+	};
+
+	// The hand puts the villager on the land below it
+	const auto placed = person({1000.0f, 1000.0f}, 0.0f);
+	const auto put = _dynamics->LetGoFromHand(placed, {.velocity = {0.0f, 0.0f, 0.0f}});
+	ASSERT_TRUE(put.accepted);
+	ASSERT_TRUE(put.landed);
+	EXPECT_TRUE(_notPutDown.empty());
+
+	// The hand throws the villager. The villager flies, thus the hand did not put it on the land.
+	const auto thrown = person({1100.0f, 1000.0f}, 5.0f);
+	const auto flew = _dynamics->LetGoFromHand(thrown, {.velocity = {20.0f, 2.0f, 0.0f}});
+	ASSERT_TRUE(flew.accepted);
+	EXPECT_FALSE(flew.landed);
+	EXPECT_EQ(_notPutDown, std::vector {thrown});
+
+	// The physics does not accept an immovable villager. The game puts it on the land, but the hand did not put it there.
+	_notPutDown.clear();
+	const auto immovable = person({1200.0f, 1000.0f}, 5.0f);
+	registry.Assign<Immovable>(immovable);
+	const auto refused = _dynamics->LetGoFromHand(immovable, {.velocity = {0.0f, 0.0f, 0.0f}});
+	ASSERT_TRUE(refused.accepted);
+	EXPECT_EQ(refused.entry, nullptr);
+	EXPECT_EQ(_notPutDown, std::vector {immovable});
 }
 
 TEST_F(DynamicsSystemTest, AThrownGlobeFliesAsItsDomesShapeAndComesToRestWhereItLands)
