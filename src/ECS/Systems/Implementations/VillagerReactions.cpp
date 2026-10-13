@@ -406,9 +406,8 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 			villager_reactions::RememberStateToGoBackTo(*action);
 		}
 		SetTop(*action, *first);
-		// TODO(villager-social): the game impresses the villager by the creature's last action, its size and its town's
-		// feeling; that measure isn't ported yet, so the creature impresses no one
-		return Taken::NotImpressed;
+		// The creature impresses it by its size, what it last did and how its town feels about it
+		return Taken::Impressed;
 	}
 	if (!wasReacting)
 	{

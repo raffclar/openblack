@@ -78,6 +78,10 @@ private:
 	void BelieveInTowns();
 	/// The reaction's impression on the living thing taking it up
 	void Impress(const Active& reaction, entt::entity living, const glm::vec3& at);
+	/// How much a creature impresses a villager taking up its reaction, by its size and what it last did, at the town's
+	/// weariness; none for any other reaction
+	[[nodiscard]] std::optional<float> CreatureImpressiveValue(const Active& reaction, entt::entity villager, entt::entity town,
+	                                                           float boredom) const;
 	/// Every living thing reacting to it stops, and it goes
 	void ShutDown(uint32_t id);
 
