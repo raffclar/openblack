@@ -28,6 +28,7 @@
 
 #include <InspectorDiscovery.h>
 #include <LHVM.h>
+#include <SDL_keyboard.h>
 #include <bgfx/bgfx.h>
 #include <glm/trigonometric.hpp>
 
@@ -49,6 +50,7 @@
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "Editor/EditorEntities.h"
 #include "EntityDescription.h"
 #include "Game.h"
@@ -199,6 +201,60 @@ std::pair<lhvm::VMValue, lhvm::DataType> ToVm(const ScriptValue& value)
 		break;
 	}
 	return {lhvm::VMValue(value.number), lhvm::DataType::Float};
+}
+
+/// The point on the screen at a point of the game's dialog space, for the size of the window now
+glm::ivec2 DialogPointOnScreen(glm::ivec2 dialog)
+{
+	const auto size = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(800, 600);
+	return DialogToScreen(dialog, size);
+}
+
+/// The reason that Escape does not open the game's menu now. The checks follow the order in which the game gives
+/// Escape to its parts. The reason is empty when Escape opens the menu.
+std::string WhyEscapeKeepsMenuShut(Game& game, gui::GameInterface& interface)
+{
+	if (Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying())
+	{
+		return "a full-screen video plays, and Escape skips the video; send input_key Escape to skip it";
+	}
+	if (interface.GetTattooEditor().IsOpen())
+	{
+		return "the tattoo editor is open, and it takes Escape";
+	}
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return "the player is in the temple, and Escape leads out of the temple";
+	}
+	if (Locator::creatureCaveSystem::has_value() && Locator::creatureCaveSystem::value().IsOpen() &&
+	    !Locator::creatureCaveSystem::value().InTemple())
+	{
+		return "the Creature Cave is open, and Escape closes it";
+	}
+	if (interface.GetSkipBox().IsActive())
+	{
+		return "the start-of-game question is open, and no key gets past it; answer it with gui.press skip_box OK";
+	}
+	return std::string(escape_key::WhyMenuStaysShut(game.EscapeSituation(static_cast<uint16_t>(SDL_GetModState()))));
+}
+
+/// The reason that a click on the game's menu does not get to the menu now. The reason is empty when the click gets
+/// to the menu.
+std::string WhyMenuMissesClicks(gui::GameInterface& interface)
+{
+	if (interface.GetTattooEditor().IsOpen())
+	{
+		return "the tattoo editor is open, and it takes the clicks";
+	}
+	if (interface.GetSkipBox().IsActive())
+	{
+		return "the start-of-game question is open, and it takes the clicks; answer it with gui.press skip_box OK";
+	}
+	if (interface.GetNewPlayerBox().IsActive())
+	{
+		return "the new player's box is open, and it takes the clicks";
+	}
+	return {};
 }
 
 } // namespace
@@ -436,9 +492,14 @@ std::string GameGui::Open(std::string_view window)
 		{
 			return "the game's menu isn't made yet";
 		}
-		// Opened as the player opens it, with the Escape key
+		// Opened as the player opens it, with the Escape key. When the game does not open the menu on Escape now, the
+		// inspector sends no key and gives the reason.
 		if (!game->GetInterface()->GetMenu().IsOpen())
 		{
+			if (auto why = WhyEscapeKeepsMenuShut(*game, *game->GetInterface()); !why.empty())
+			{
+				return "the game does not open its menu now: " + why;
+			}
 			const std::array escape {InputEvent {.kind = InputEvent::Kind::KeyDown, .key = "Escape"},
 			                         InputEvent {.kind = InputEvent::Kind::KeyUp, .key = "Escape"}};
 			return Send(escape);
@@ -503,7 +564,7 @@ std::string GameGui::Close(std::string_view window)
 		{
 			return "the start-of-game question has no OK button";
 		}
-		return Send(ClickAt(interface.DialogToScreen(*ok)));
+		return Send(ClickAt(DialogPointOnScreen(*ok)));
 	}
 	if (Lower(window) == k_TattooEditor)
 	{
@@ -602,6 +663,10 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 			{
 				return "the game's menu isn't open: gui.open it first";
 			}
+			if (auto why = WhyMenuMissesClicks(interface); !why.empty())
+			{
+				return "the click does not get to the menu: " + why;
+			}
 			controls = DialogControls(menu.GetNamedControls());
 			where = "the menu's " + std::string(menu.IsAskingToQuit() ? "question" : PageName(menu.GetPage()));
 		}
@@ -630,7 +695,7 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 		{
 			return where + ": " + *why + "; gui.windows lists them";
 		}
-		return Send(ClickAt(interface.DialogToScreen(std::get<glm::ivec2>(found))));
+		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
 	}
 	const auto name = DebugWindowNamed(window);
 	if (!name.has_value())

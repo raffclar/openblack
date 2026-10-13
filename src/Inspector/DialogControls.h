@@ -67,6 +67,10 @@ struct DialogControl
 [[nodiscard]] std::variant<glm::ivec2, std::string> FindDialogControl(std::span<const DialogControl> controls,
                                                                       const std::vector<ButtonPathStep>& path);
 
+/// The point on a screen of this size at a point of the dialog space. The game places the dialog space from the
+/// window's size, so the answer is correct before the game draws its first frame.
+[[nodiscard]] glm::ivec2 DialogToScreen(glm::ivec2 dialog, glm::ivec2 screenSize);
+
 /// A click as the player makes it: the pointer to a point of the screen, the left button pressed there and let go
 [[nodiscard]] std::array<InputEvent, 3> ClickAt(glm::ivec2 screen);
 

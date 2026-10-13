@@ -34,6 +34,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/UploadPacer.h"
+#include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
 #include "Input/HandPointer.h"
@@ -278,6 +279,9 @@ public:
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept { return _landPath; }
 
 	static Game* Instance() { return sInstance; }
+
+	/// The situation that Escape in play finds now, with these modifier keys held
+	[[nodiscard]] escape_key::Situation EscapeSituation(uint16_t keyModifiers) const;
 
 private:
 	static Game* sInstance;

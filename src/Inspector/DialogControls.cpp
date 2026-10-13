@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <optional>
 
+#include "Gui/ScreenFit.h"
 #include "Gui/SkipBox.h"
 #include "Story/NewGameChoice.h"
 
@@ -143,6 +144,12 @@ std::variant<glm::ivec2, std::string> openblack::inspector::FindDialogControl(st
 		}
 	}
 	return "no control " + label;
+}
+
+glm::ivec2 openblack::inspector::DialogToScreen(glm::ivec2 dialog, glm::ivec2 screenSize)
+{
+	// The same place as the dialog painter uses for the input that it gets
+	return glm::ivec2(gui::FrontEndSpace(screenSize.x, screenSize.y).ToScreen(glm::vec2(dialog)));
 }
 
 std::array<InputEvent, 3> openblack::inspector::ClickAt(glm::ivec2 screen)
