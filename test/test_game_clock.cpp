@@ -151,6 +151,93 @@ TEST(GameClock, TheFrameClockFollowsTheTurn)
 	EXPECT_FLOAT_EQ(clock.time.GetTurnFraction(), 0.0f);
 }
 
+namespace
+{
+/// Plays turns until the given one, 100 ms apart
+void PlayTo(Clock& clock, uint32_t turn)
+{
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	while (clock.time.GetTurn() < turn)
+	{
+		clock.now += 100;
+		clock.Frame();
+	}
+}
+
+/// The story's next land loads during a turn, taking this long, and the frame ends
+void LoadNextLandInATurn(Clock& clock, uint32_t loadMs)
+{
+	clock.now += 100;
+	ASSERT_TRUE(clock.time.IsTurnDue());
+	clock.time.StartTurn();
+	clock.time.RestartTurns();
+	clock.now += loadMs;
+	clock.time.UpdateFrame();
+}
+} // namespace
+
+TEST(GameClock, TheStorysNextLandRestartsTheTurnsAndTheClockRunsOn)
+{
+	Clock clock;
+	PlayTo(clock, 50);
+	LoadNextLandInATurn(clock, 3000);
+	EXPECT_EQ(clock.time.GetTurn(), 0);
+	// The frame clock went back with the turn: the frame of the load takes no time
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 0);
+	// The clock is far ahead of turn 0: the next turn plays at once and gives that time up
+	clock.now += 16;
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 1);
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 1);
+	clock.now += 99;
+	EXPECT_FALSE(clock.Frame());
+	clock.now += 1;
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 2);
+}
+
+TEST(GameClock, AClockLessThanTwoSecondsAheadOfTheRestartedTurnsCatchesUpATurnAFrame)
+{
+	Clock clock;
+	PlayTo(clock, 5);
+	// The clock is at 500 ms as the land starts to load and 1500 ms after: turns 1 to 16 play, one a frame
+	LoadNextLandInATurn(clock, 1000);
+	for (uint32_t turn = 1; turn <= 16; ++turn)
+	{
+		clock.now += 1;
+		EXPECT_TRUE(clock.Frame());
+		EXPECT_EQ(clock.time.GetTurn(), turn);
+	}
+	clock.now += 1;
+	EXPECT_FALSE(clock.Frame());
+}
+
+TEST(GameClock, TheStorysNextLandKeepsTheSpeedAndThePause)
+{
+	Clock clock;
+	PlayTo(clock, 5);
+	clock.time.SetSpeed(2.0f);
+	LoadNextLandInATurn(clock, 0);
+	EXPECT_FLOAT_EQ(clock.time.GetSpeed(), 2.0f);
+	EXPECT_FALSE(clock.time.IsPaused());
+	clock.time.SetPaused(true);
+	clock.time.RestartTurns();
+	EXPECT_TRUE(clock.time.IsPaused());
+	EXPECT_FLOAT_EQ(clock.time.GetSpeed(), 2.0f);
+}
+
+TEST(GameClock, ANewLandsClockStartsAtTurnZeroAndItsFirstFrameTakesTheTurn)
+{
+	Clock clock;
+	PlayTo(clock, 50);
+	clock.now += 3000;
+	clock.time.StartGameClock(false);
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 1);
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 100);
+}
+
 TEST(GameClock, TheFrameRealTimeIsWholeMillisecondsOfTheWallClockAndNeverNone)
 {
 	Clock clock;

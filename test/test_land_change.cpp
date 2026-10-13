@@ -23,6 +23,7 @@ TEST(LandChange, TheStoryKeepsEverythingThatIsNotTheLands)
 	EXPECT_TRUE(rules.playersCarried);
 	EXPECT_FALSE(rules.alignmentFromProfile);
 	EXPECT_TRUE(rules.helpTextsKept);
+	EXPECT_TRUE(rules.gameClockRunsOn);
 }
 
 TEST(LandChange, TheLandMenuStartsTheScriptsAgainButKeepsThePlayers)
@@ -34,6 +35,8 @@ TEST(LandChange, TheLandMenuStartsTheScriptsAgainButKeepsThePlayers)
 	EXPECT_TRUE(rules.playersCarried);
 	EXPECT_FALSE(rules.alignmentFromProfile);
 	EXPECT_FALSE(rules.helpTextsKept);
+	// The land menu's challenges start as a new game does, the clock with them
+	EXPECT_FALSE(rules.gameClockRunsOn);
 }
 
 TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
@@ -46,6 +49,7 @@ TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
 		EXPECT_FALSE(rules.heartbeatsCarried);
 		EXPECT_FALSE(rules.playersCarried);
 		EXPECT_FALSE(rules.helpTextsKept);
+		EXPECT_FALSE(rules.gameClockRunsOn);
 	}
 }
 

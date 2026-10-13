@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 
 #include <entt/entity/fwd.hpp>
@@ -34,7 +35,7 @@ public:
 	/// sounds of the clip's frames it passed are played, and the keyframes it has reached are kept for posing it. Its
 	/// drawing glides between its last two turns' places while it walks, and its drawn heading turns after the way it
 	/// faces.
-	virtual void UpdatePoses(uint32_t turn, float turnFraction) = 0;
+	virtual void UpdatePoses(std::chrono::milliseconds frameGameTime, float turnFraction) = 0;
 	/// Every frame, once the camera has moved: the villagers the camera sees, and those flying in the physics or held
 	/// in the hand that it sees reflected in the sea, are posed between the keyframes their clips have reached
 	virtual void PoseVillagersInView(const glm::mat4& viewProjection) = 0;

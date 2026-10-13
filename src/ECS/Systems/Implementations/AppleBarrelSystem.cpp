@@ -139,16 +139,13 @@ void AppleBarrelSystem::Remove()
 	_barrel = entt::null;
 }
 
-void AppleBarrelSystem::Update(uint32_t turn, float turnFraction)
+void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 {
 	if (!Locator::resources::has_value() || !Locator::terrainSystem::has_value() || !Locator::terrainSystem::value().IsLoaded())
 	{
 		return;
 	}
-	const auto now = animals::DrawTime(turn, std::clamp(turnFraction, 0.0f, 1.0f));
-	// The milliseconds of the game's clock since the last frame, none when the clock went back
-	const uint32_t elapsed = _drawTime.has_value() && now >= *_drawTime ? now - *_drawTime : 0;
-	_drawTime = now;
+	const auto elapsed = static_cast<uint32_t>(frameGameTime.count());
 
 	auto& registry = Locator::entitiesRegistry::value();
 	if (_barrel != entt::null && !registry.Valid(_barrel))
@@ -211,5 +208,4 @@ void AppleBarrelSystem::Update(uint32_t turn, float turnFraction)
 void AppleBarrelSystem::Reset()
 {
 	_barrel = entt::null;
-	_drawTime.reset();
 }

@@ -25,7 +25,7 @@ namespace openblack::ecs::systems
 class AppleBarrelSystem final: public AppleBarrelSystemInterface
 {
 public:
-	void Update(uint32_t turn, float turnFraction) override;
+	void Update(std::chrono::milliseconds frameGameTime) override;
 	[[nodiscard]] entt::entity GetBarrel() const override { return _barrel; }
 	void Reset() override;
 
@@ -35,8 +35,6 @@ private:
 	void Remove();
 
 	entt::entity _barrel {entt::null};
-	/// The game's clock at the last frame, none before the first
-	std::optional<uint32_t> _drawTime;
 	/// The worm's place in its clip, in milliseconds: one worm for the whole game, so it carries on from land to land
 	uint32_t _wormPlace {0};
 };
