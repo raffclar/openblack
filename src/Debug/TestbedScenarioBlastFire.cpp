@@ -220,7 +220,7 @@ void AddFire(std::vector<Scenario>& all)
 	             .yawDegrees = 180.0f,
 	             .storedFood = 2000,
 	             .storedWood = 1000},
-	            {.type = PotInfo::FoodPile, .offset = {-20.0f, 44.0f}, .amount = 1000},
+	            {.type = PotInfo::MagicFood, .offset = {-20.0f, 44.0f}, .amount = 1000},
 	            {.type = PotInfo::WoodPile_1, .offset = {0.0f, 44.0f}, .amount = 300},
 	        },
 	    .miracles = {{.type = MagicType::Fireball,
