@@ -813,7 +813,7 @@ std::string GameLevels::Load(std::string_view name, LoadHow how)
 	{
 		return "no land " + std::string(name);
 	}
-	const bool loaded = how == LoadHow::Story ? game->LoadMap(*path) : game->LoadMapWithFreshScripts(*path);
+	const bool loaded = how == LoadHow::Story ? game->LoadMap(*path) : game->LoadFromLandMenu(*path);
 	return loaded ? std::string {} : "the land " + std::string(name) + " didn't load";
 }
 

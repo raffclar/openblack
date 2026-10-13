@@ -38,8 +38,8 @@ struct LevelInfo
 	bool valid {false};
 };
 
-/// How a land is loaded: as the land menu loads it, the scripts starting again from scratch; or as the story changes
-/// land, the scripts going on running
+/// How a land is loaded: as the land menu loads it, the scripts starting again from scratch (a playground land starting a
+/// skirmish, a new game on it); or as the story changes land, the scripts going on running
 enum class LoadHow : uint8_t
 {
 	Fresh,

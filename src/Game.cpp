@@ -3979,14 +3979,7 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	RenderLoadingFrame();
 
 	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
-	// The script is matched by where its file is found, however its path was given
-	const auto scriptFile = Level::ResolveScriptPath(path);
-	bool skirmish = false;
-	Locator::resources::value().GetLevels().Each([&scriptFile, &skirmish](entt::id_type /*id*/, const Level& level) {
-		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
-		                        Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
-	});
-	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
+	Locator::entitiesRegistry::value().Context().skirmish = IsPlaygroundLand(path);
 	_landPath = path;
 
 	Script script;
@@ -4043,6 +4036,25 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	timer.Step("start");
 	EndLoadingScreen();
 	return true;
+}
+
+bool Game::IsPlaygroundLand(const std::filesystem::path& path)
+{
+	// The script is matched by where its file is found, however its path was given
+	const auto scriptFile = Level::ResolveScriptPath(path);
+	bool playground = false;
+	Locator::resources::value().GetLevels().Each([&scriptFile, &playground](entt::id_type /*id*/, const Level& level) {
+		playground = playground || (level.GetType() == Level::LandType::Skirmish &&
+		                            Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
+	});
+	return playground;
+}
+
+bool Game::LoadFromLandMenu(const std::filesystem::path& path) noexcept
+{
+	// A playground land starts a skirmish: a new game on that land, the last game's creature kept for the profile it was
+	// played as, every player starting afresh and the player as good or evil as their profile last kept them
+	return LoadMapWithFreshScripts(path, land_change::FromLandMenu(IsPlaygroundLand(path)));
 }
 
 bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) noexcept
@@ -4152,6 +4164,12 @@ void Game::PrepareNewLand(land_change::Kind change)
 			Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
 		}
 		Locator::creatureCarryOverSystem::value().Reset();
+		// A new game is played as the profile picked now: the profile picked during the last game took over only now,
+		// once that game's creature was kept for the profile it was played as
+		if (rules.gameStarts)
+		{
+			Locator::creatureCarryOverSystem::value().StartGame();
+		}
 	}
 	if (Locator::playerSystem::has_value())
 	{
