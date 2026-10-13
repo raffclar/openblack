@@ -2716,6 +2716,7 @@ std::vector<Scenario> Build()
 	AddVillageTotemScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
+	AddDiscipleScenarios(all);
 	AddHighlightScenarios(all);
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);

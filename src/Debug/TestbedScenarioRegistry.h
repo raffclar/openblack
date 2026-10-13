@@ -277,6 +277,8 @@ struct ObjectSetup
 	bool indestructible {false};
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes
 	bool inScript {false};
+	/// A villager is made a disciple of this work, as a land's script makes one
+	VillagerDisciple disciple {VillagerDisciple::None};
 	/// A building of the town holds this much food, rather than the scenario town's usual stock
 	std::optional<uint32_t> storedFood;
 	/// A building of the town holds this much wood, rather than the scenario town's usual stock
@@ -853,6 +855,7 @@ void AddHandLookScenarios(std::vector<Scenario>& all);
 /// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
 void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+void AddDiscipleScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);
 /// The moon at night, seen to the east, for trying its phases and its path with the moon debug window

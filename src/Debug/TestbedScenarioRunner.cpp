@@ -116,6 +116,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -404,6 +405,10 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	if (object.inScript && registry.AllOf<ecs::components::Villager>(entity) && Locator::livingActionSystem::has_value())
 	{
 		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);
+	}
+	if (object.disciple != VillagerDisciple::None && registry.AllOf<ecs::components::Villager>(entity))
+	{
+		ecs::villager_disciple::SetType(entity, object.disciple);
 	}
 }
 } // namespace
