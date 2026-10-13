@@ -43,20 +43,25 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -79,6 +84,8 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "ObjectMeasures.h"
+#include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerPhysics.h"
 
@@ -1335,7 +1342,7 @@ std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object
 	return value > 0.0f ? std::optional(value) : std::nullopt;
 }
 
-bool CreatureObjectActionSystem::CanPickUp(entt::entity creature, entt::entity object) const
+bool CreatureObjectActionSystem::KindCanBePickedUp(entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
@@ -1344,14 +1351,15 @@ bool CreatureObjectActionSystem::CanPickUp(entt::entity creature, entt::entity o
 	}
 	// Of pots and piles, only food can be picked up, to eat; of animals, those the animals' own rules allow, as a bird
 	// low over the land
-	const bool kindCanBePickedUp = registry.AnyOf<MobileObject, Ball, Villager>(object) ||
-	                               (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value()) ||
-	                               (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value() &&
-	                                Locator::animalSystem::value().CanBePickedUpByCreature(object));
-	if (!kindCanBePickedUp)
-	{
-		return false;
-	}
+	return registry.AnyOf<MobileObject, Ball, Villager>(object) ||
+	       (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value()) ||
+	       (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value() &&
+	        Locator::animalSystem::value().CanBePickedUpByCreature(object));
+}
+
+creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(entt::entity creature, entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
 	const auto owner = body != nullptr ? std::optional(body->owner) : std::nullopt;
 	const auto* action = registry.AllOf<Villager>(object) ? registry.TryGet<const LivingAction>(object) : nullptr;
@@ -1361,13 +1369,61 @@ bool CreatureObjectActionSystem::CanPickUp(entt::entity creature, entt::entity o
 	                         ecs::world_objects::PlayerOf(object) == owner;
 	const bool computerCreature =
 	    owner.has_value() && Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(*owner);
-	return creature_object_actions::MayPickUp({
+	// In the map: in its cells, and out of any hand, flight or tornado
+	const auto* holder = registry.TryGet<const HeldByCreature>(object);
+	const bool inMap =
+	    registry.AllOf<MapCellResident>(object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
+	const bool heldByThisCreature = holder != nullptr && holder->creature == creature;
+	const auto* leash = registry.Valid(creature) ? registry.TryGet<const CreatureLeash>(creature) : nullptr;
+	const bool leashTied = leash != nullptr && leash->worn.has_value() && leash->worn->tiedTo == object;
+
+	std::optional<creature_object_actions::LiftFacts> lift;
+	if (body != nullptr)
+	{
+		if (const auto reach = PickUpStraightReach(creature))
+		{
+			const auto* morph = registry.TryGet<const CreatureMorph>(creature);
+			lift = creature_object_actions::LiftFacts {
+			    .creatureRadius = object_measures::TwoDRadius(registry, creature),
+			    .thingRadius = object_measures::TwoDRadius(registry, object),
+			    .reach = *reach,
+			    .creatureWeight =
+			        physics::living::CreatureMass(ShownSize(*body), morph != nullptr ? morph->drawn.thinFat : 0.0f,
+			                                      morph != nullptr ? morph->drawn.weakStrong : 0.0f),
+			    .thingWeight = Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().WeightOf(object) : 0.0f,
+			};
+		}
+	}
+	return {
 	    .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
 	    .villagerAtHome = registry.AllOf<Villager, AtHome>(object),
 	    .worshippingForCreaturesPlayer = worshipping,
 	    .inScript = registry.AllOf<InScript>(object),
-	    .computerCreatureNotScripted = computerCreature && !registry.AllOf<ScriptControlled>(creature),
-	});
+	    .computerCreatureNotScripted =
+	        computerCreature && registry.Valid(creature) && !registry.AllOf<ScriptControlled>(creature),
+	    .townArtefact = registry.AllOf<TownArtefact>(object),
+	    .inMapOrHeldByCreature = inMap || heldByThisCreature,
+	    .leashTiedToIt = leashTied,
+	    .lift = lift,
+	};
+}
+
+bool CreatureObjectActionSystem::CanPickUp(entt::entity creature, entt::entity object) const
+{
+	return KindCanBePickedUp(object) && creature_object_actions::MayPickUp(PickUpFactsOf(creature, object));
+}
+
+bool CreatureObjectActionSystem::CanTakeFromHand(entt::entity creature, entt::entity object) const
+{
+	return KindCanBePickedUp(object) && creature_object_actions::MayPickUpWhereverItIs(PickUpFactsOf(creature, object));
+}
+
+bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	return KindCanBePickedUp(object) &&
+	       creature_object_actions::MayBeCaught({.cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
+	                                             .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
 }
 
 bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
@@ -1379,20 +1435,37 @@ bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
 
 std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entity creature) const
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(creature) || !Locator::creatureAnimationSystem::has_value())
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
 	{
 		return std::nullopt;
+	}
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	// Measured once in the model's own size, the first time it is wanted, and scaled as the creature is drawn
+	if (const auto* kept = registry.TryGet<const PickUpReach>(creature))
+	{
+		return kept->straightReach * transform->scale.x;
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
 	const auto* points = body != nullptr ? PointsOf(*body) : nullptr;
-	if (transform == nullptr || points == nullptr)
+	if (points == nullptr || !Locator::creatureAnimationSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto reach = MeasureReach(creature, *transform, *points, creature_reach::k_PickUpAnimations, points->pickUpMs);
-	return reach.has_value() ? std::optional(creature_reach::StraightReach(*reach)) : std::nullopt;
+	auto unscaled = *transform;
+	unscaled.scale = glm::vec3(1.0f);
+	const auto reach = MeasureReach(creature, unscaled, *points, creature_reach::k_PickUpAnimations, points->pickUpMs);
+	if (!reach.has_value())
+	{
+		return std::nullopt;
+	}
+	const float straight = creature_reach::StraightReach(*reach);
+	registry.AssignOrReplace<PickUpReach>(creature, PickUpReach {.straightReach = straight});
+	return straight * transform->scale.x;
 }
 
 void CreatureObjectActionSystem::ProcessTurn()

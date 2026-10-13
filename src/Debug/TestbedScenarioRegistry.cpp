@@ -1489,6 +1489,39 @@ void AddObjects(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A tiger a tenth of the size beside it, for whom a villager is too heavy
+	auto small = Posed(CreatureType::Tiger, {30.0f, 0.0f});
+	small.size = 0.1f;
+	all.push_back({
+	    .id = "objects.pickup_limits",
+	    .name = "What is too big or heavy to lift, and putting down what can't be moved",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, with a ball eight times the usual size to its front right and a villager to its "
+	                   "front left whom a script has made immovable, though she may be picked up. A tiger a tenth of the "
+	                   "size stands 30 m east with a villager in front of it. The small tiger tries to pick up its "
+	                   "villager; the big one tries to pick up the giant ball, then picks up the villager and puts her "
+	                   "down, then picks her up again and throws her to the west.",
+	    .expected = "The small tiger gives up at once: the villager weighs more than 0.8 of its weight. The big tiger "
+	                "gives up on the ball at once: its size and the ball's together are beyond its reach. It picks up "
+	                "the villager; each time it lets her go, put down or thrown, she goes straight down onto the land "
+	                "under its hand and stands there, never left in the air.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -15.0f}, {35.0f, -15.0f}, {-40.0f, 5.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}), small},
+	    .objects =
+	        {{.type = VillagerInfo::NorseHousewifeFemale,
+	          .offset = {-6.0f, -k_Reach},
+	          .indestructible = true,
+	          .inScript = true,
+	          .immovable = true},
+	         {.type = MobileObjectInfo::Ball, .offset = {12.0f, -k_Reach}, .scale = 8.0f},
+	         {.type = VillagerInfo::NorseHousewifeFemale, .offset = {30.0f, -3.0f}, .indestructible = true, .inScript = true}},
+	    .commands = {OnObject(Kind::PickUp, 1, 2, 1.0f), OnObject(Kind::PickUp, 0, 1, 1.0f), OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 Act(Kind::PutDown, 0, 1.0f, true), OnObject(Kind::PickUp, 0, 0, 2.0f),
+	                 Go(Kind::ThrowAt, 0, {-40.0f, -10.0f}, 1.0f), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 2.0f),
+	                 Go(Kind::TurnToFace, 0, {0.0f, -60.0f}, 0.0f)},
+	});
+
 	auto hungry = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	hungry.needs = {.energy = 0.3f};
 	hungry.hold = false;

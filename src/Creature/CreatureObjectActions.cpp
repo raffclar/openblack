@@ -128,11 +128,35 @@ bool creature_object_actions::BringsBackUp(bool indestructible, bool heldDuringC
 	return indestructible || heldDuringCutscene;
 }
 
+bool creature_object_actions::CanLift(const LiftFacts& facts)
+{
+	return facts.thingRadius + facts.creatureRadius <= facts.reach &&
+	       facts.thingWeight <= facts.creatureWeight * k_MostLiftedWeightShare;
+}
+
+bool creature_object_actions::MayBeCaught(const PickUpFacts& facts)
+{
+	return !facts.cannotBePickedUp && !facts.villagerAtHome;
+}
+
+bool creature_object_actions::MayPickUpWhereverItIs(const PickUpFacts& facts)
+{
+	if (facts.leashTiedToIt || (facts.lift.has_value() && !CanLift(*facts.lift)))
+	{
+		return false;
+	}
+	return MayBeCaught(facts);
+}
+
 bool creature_object_actions::MayPickUp(const PickUpFacts& facts)
 {
 	if (facts.computerCreatureNotScripted && facts.inScript)
 	{
 		return false;
 	}
-	return !facts.cannotBePickedUp && !facts.villagerAtHome && !facts.worshippingForCreaturesPlayer;
+	if (facts.townArtefact || facts.worshippingForCreaturesPlayer || !facts.inMapOrHeldByCreature)
+	{
+		return false;
+	}
+	return MayPickUpWhereverItIs(facts);
 }
