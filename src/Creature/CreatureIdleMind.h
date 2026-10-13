@@ -193,6 +193,9 @@ struct Movement
 		GoNearObject,
 		GetAwayFromObject,
 		TurnToFaceObject,
+		/// Turning so that its back is to an object, then waiting until the turn ends. Right on top of the object it
+		/// does not turn
+		TurnToFaceAwayFromObject,
 		/// Going to where it can throw into an object: nearer than its height three times over plus the object's radius
 		/// it backs away, further than three and a half times its height it walks up; the step's distance is the
 		/// creature's height
@@ -232,6 +235,8 @@ enum class Effect : uint8_t
 	Eat,
 	Drink,
 	Poo,
+	/// Did a fart
+	Fart,
 	Puke,
 	/// Wakes up rested
 	Slept,
@@ -622,8 +627,17 @@ struct FishingTrip
 /// Fishing when it has no food in its hand, then walking to a place until within its height of it and putting the food
 /// down there
 [[nodiscard]] std::vector<Step> TakeFishTo(const std::optional<FishingTrip>& trip, glm::vec2 place, float height);
-/// A poo on the spot, a third of the time showing it needs one first
-[[nodiscard]] std::vector<Step> Poo(const Random& random);
+/// The thing a creature poos by, by its entity's number. The creature can poo by itself
+struct PooBy
+{
+	uint32_t object {0};
+	bool itself {false};
+};
+/// A poo, a third of the time showing it needs one first. With a thing to poo by, it goes up to the thing and looks at it,
+/// then turns its back to it. It does not look at itself
+[[nodiscard]] std::vector<Step> Poo(const Random& random, std::optional<PooBy> by);
+/// A fart: the creature does the same steps as for a poo, but it makes a cloud, not a lump
+[[nodiscard]] std::vector<Step> Fart(const Random& random, std::optional<PooBy> by);
 /// Being sick on the spot
 [[nodiscard]] std::vector<Step> Puke();
 /// Fainting where it stands, lying out cold a while, then getting up

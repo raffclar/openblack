@@ -906,3 +906,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_pick_shapes test_pick_shapes.cpp)
 openblack_setup_and_add_test(test_creature_activity test_creature_activity.cpp)
+openblack_setup_and_add_test(test_creature_fart test_creature_fart.cpp)

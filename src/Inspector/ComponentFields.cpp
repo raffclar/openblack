@@ -102,6 +102,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/CreatureSquat.h"
 #include "ECS/Components/CreatureSwap.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
@@ -865,6 +866,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::smallestSize>("smallestSize")
 	    .Field<&components::CreatureSpells::largestSize>("largestSize")
 	    .Field<&components::CreatureSpells::cheat>("cheat");
+	Reflect<components::CreatureSquat>(context).Field<&components::CreatureSquat::frames>("frames");
 	Reflect<components::CreatureSwap>(context)
 	    .Field<&components::CreatureSwap::other>("other")
 	    .Field<&components::CreatureSwap::target>("target")

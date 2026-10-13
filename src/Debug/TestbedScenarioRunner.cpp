@@ -2004,6 +2004,10 @@ void Runner::Give(const Command& command)
 	case Kind::Poo:
 		result = minds.Poo(*entity) ? "started" : "can't";
 		break;
+	case Kind::Fart:
+		// A fart is always a plan for the desire to poo
+		result = minds.ForcePlan(*entity, {.desire = creature_desires::Desire::Poo, .action = "Fart"}) ? "started" : "can't";
+		break;
 	case Kind::Puke:
 		result = minds.Puke(*entity) ? "started" : "can't";
 		break;

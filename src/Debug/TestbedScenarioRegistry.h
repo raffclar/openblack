@@ -485,12 +485,13 @@ struct Command
 		SitDown,
 		StandUp,
 		/// Seeing to a need now: sleeping, waking, eating the nearest food, drinking at the nearest water, having a
-		/// poo, being sick, fainting
+		/// poo, a fart, being sick, fainting
 		Sleep,
 		Wake,
 		Eat,
 		Drink,
 		Poo,
+		Fart,
 		Puke,
 		Faint,
 		/// As if the player's hand stroked or slapped it

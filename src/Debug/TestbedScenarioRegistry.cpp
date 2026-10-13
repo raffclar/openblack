@@ -484,8 +484,9 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .name = "Needs to poo",
 	    .facet = Facet::Needs,
 	    .description = "A tiger full of poo with its desire to go as strong as it gets.",
-	    .expected = "It may show it needs a poo first, then squats and goes; a lump of poo comes out at its groin and is "
-	                "thrown back along the ground behind it, and the desire is held back for a while.",
+	    .expected = "It may show it needs a poo first, then squats. All through the squat's loop, every fifth frame drawn, "
+	                "a lump of poo comes out at its rear and is thrown back along the ground behind it, and the desire "
+	                "is held back for a minute.",
 	    .framing = {.shot = Shot::Follow},
 	    .creatures = {CreatureSetup {
 	        .species = CreatureType::Tiger,
@@ -3796,7 +3797,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 110> k_Names {
+	constexpr std::array<std::string_view, 111> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3815,6 +3816,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "eat",
 	    "drink",
 	    "poo",
+	    "fart",
 	    "puke",
 	    "faint",
 	    "stroke",

@@ -34,8 +34,8 @@ public:
 	virtual void Eat(entt::entity creature, float foodValue) = 0;
 	/// Drank its fill
 	virtual void Drink(entt::entity creature) = 0;
-	/// Had a poo, which drops behind it
-	virtual void Poo(entt::entity creature) = 0;
+	/// Finished the squat of a poo or of a fart: the bowels are empty. The lumps of a poo drop during the squat
+	virtual void EmptyBowels(entt::entity creature) = 0;
 	/// Sat for a game turn, resting a little
 	virtual void SitTurn(entt::entity creature) = 0;
 	/// Was sick, spraying drops of it in front

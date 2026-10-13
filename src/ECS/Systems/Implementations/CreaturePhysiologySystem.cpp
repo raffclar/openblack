@@ -22,27 +22,34 @@
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
+#include "3D/ChimneySmoke.h"
 #include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureFart.h"
+#include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
+#include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSquat.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -328,6 +335,93 @@ void CreaturePhysiologySystem::Update(float seconds)
 	{
 		registry.SetDirty();
 	}
+	StepSquats();
+}
+
+void CreaturePhysiologySystem::StepSquats()
+{
+	if (!Locator::time::has_value() || !Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	const auto& time = Locator::time::value();
+	// Count a frame only at the refresh rate of the screen, and only when the game time moves
+	if (frame_pace::Step(_squatPace, time.GetFrameRealTime(), time.GetFrameGameTime()).count() <= 0)
+	{
+		return;
+	}
+	const auto* tables = Locator::creatureMindSystem::value().GetTables();
+	const auto fart = tables != nullptr ? creature_mind_tables::FindAction(*tables, "Fart") : std::nullopt;
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> winds;
+	std::vector<entt::entity> lumps;
+	registry.Each<const CreatureAnimation, const CreatureMindState>(
+	    [&](entt::entity creature, const CreatureAnimation& animation, const CreatureMindState& mind) {
+		    if (!creature_fart::PlaysSquatLoop(animation.body))
+		    {
+			    return;
+		    }
+		    // Each squat counts its frames
+		    auto* squat = registry.TryGet<CreatureSquat>(creature);
+		    if (squat == nullptr)
+		    {
+			    squat = &registry.Assign<CreatureSquat>(creature);
+		    }
+		    if (!creature_fart::CountFrame(squat->frames))
+		    {
+			    return;
+		    }
+		    // A fart makes a cloud. Any other squat drops a lump of poo
+		    const bool farting = fart.has_value() && mind.planActive && mind.planner.current.has_value() &&
+		                         mind.planner.current->action == *fart;
+		    (creature_fart::BurstOf(farting) == creature_fart::Burst::Cloud ? winds : lumps).push_back(creature);
+	    });
+	for (const auto creature : winds)
+	{
+		LetOutWind(creature);
+	}
+	for (const auto creature : lumps)
+	{
+		DropPooLump(creature);
+	}
+}
+
+void CreaturePhysiologySystem::LetOutWind(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* self = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (self == nullptr || transform == nullptr || !Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	const float size = ShownSize(*self);
+	// A cloud of grey dust moves out behind the creature
+	const auto ahead = AheadOf(*transform);
+	auto& random = Locator::gameRandom::value();
+	const auto velocities = creature_fart::PuffVelocities(glm::vec2(ahead.x, ahead.z), size,
+	                                                      [&random](float limit) { return random.GameFloatRand(limit); });
+	if (Locator::dynamicsSystem::has_value())
+	{
+		for (const auto& velocity : velocities)
+		{
+			Locator::dynamicsSystem::value().AddPuff(transform->position, velocity, size * creature_fart::k_PuffSize,
+			                                         creature_fart::k_PuffColour);
+		}
+	}
+	// A new white smoke starts at the groin. It replaces the last smoke of the creature
+	registry.AssignOrReplace<ChimneySmoke>(
+	    creature, chimney_smoke::Create(GroinOf(registry, creature, *self, *transform), chimney_smoke::k_HomeSmoke,
+	                                    [&random](float a, float b) { return random.CrtRandom(a, b); }));
+	// If the body of the creature looks evil, the villagers near it faint
+	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
+	if (morph != nullptr && creature_fart::Stinks(morph->drawn.evilGood) && Locator::reactionSystem::has_value())
+	{
+		// TODO(gossip-and-fainting): the creature must impress the villagers by its size and its last action. The
+		// reactions do not have this value yet, thus the fart impresses no villager
+		Locator::reactionSystem::value().Create(
+		    {.initiator = creature, .type = Reaction::Fainting, .player = self->owner, .position = transform->position});
+	}
 }
 
 void CreaturePhysiologySystem::Eat(entt::entity creature, float foodValue)
@@ -371,7 +465,7 @@ void CreaturePhysiologySystem::SitTurn(entt::entity creature)
 	physiology::SitTurn(needs->needs, species);
 }
 
-void CreaturePhysiologySystem::Poo(entt::entity creature)
+void CreaturePhysiologySystem::DropPooLump(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* needs = registry.TryGet<CreatureNeeds>(creature);
@@ -382,6 +476,15 @@ void CreaturePhysiologySystem::Poo(entt::entity creature)
 		return;
 	}
 	physiology::Poo(needs->needs);
+	// The desire to poo becomes zero and stops for a time
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ChangeDesires(creature, [](creature_desires::Desires& desires) {
+			desires[creature_desires::Desire::Poo].value = 0.0f;
+			creature_desires::Suppress(desires, creature_desires::Desire::Poo, physiology::k_PooHoldsDesireBackSeconds,
+			                           k_TurnsPerSecond);
+		});
+	}
 	// The lump comes out at the groin as the body squats, turned any way, and is thrown back along the ground
 	if (!Locator::infoConstants::has_value() || !Locator::gameRandom::has_value())
 	{
@@ -396,6 +499,14 @@ void CreaturePhysiologySystem::Poo(entt::entity creature)
 	if (Locator::dynamicsSystem::has_value())
 	{
 		Locator::dynamicsSystem::value().InitialisePhysics(entity, {.velocity = lump.velocity, .thrower = creature});
+	}
+}
+
+void CreaturePhysiologySystem::EmptyBowels(entt::entity creature)
+{
+	if (auto* needs = Locator::entitiesRegistry::value().TryGet<CreatureNeeds>(creature); needs != nullptr)
+	{
+		physiology::Poo(needs->needs);
 	}
 }
 

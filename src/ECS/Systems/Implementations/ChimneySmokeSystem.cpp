@@ -96,4 +96,13 @@ void ChimneySmokeSystem::Update(std::chrono::duration<float, std::milli> gameTim
 		}
 		chimney_smoke::Advance(smoke, gameTime.count(), chimney_smoke::Drift(smoke.chimney, _handWind, random));
 	});
+	// A smoke that is not on a home (for example, the smoke of a creature fart) continues until something removes it
+	Locator::entitiesRegistry::value().Each<ChimneySmoke>(
+	    [&](ChimneySmoke& smoke) {
+		    if (chimney_smoke::UpdateState(smoke, true))
+		    {
+			    chimney_smoke::Advance(smoke, gameTime.count(), chimney_smoke::Drift(smoke.chimney, _handWind, random));
+		    }
+	    },
+	    entt::exclude<Abode>);
 }
