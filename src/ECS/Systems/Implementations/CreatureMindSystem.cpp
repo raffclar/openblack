@@ -2052,7 +2052,9 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		return;
 	}
 	// TODO(creature-giving): the game first carries on the plan the creature had before it was given the thing, when that
-	// plan's action takes a thing of this sort (see bw1-decomp creature/creature_giving.md section 4); not done yet
+	// plan's action takes a thing of this sort (see bw1-decomp creature/creature_giving.md section 4); not done yet. While
+	// the creature holds a reaction, the plan it goes back to is the one it had when it took the reaction up (or the hand
+	// picked something up), not the reaction's own
 	const auto& desires = *mind->desires;
 	const auto weigh = [&](Desire desire) {
 		return creature_giving::Weighed {.desire = desires[desire].value,

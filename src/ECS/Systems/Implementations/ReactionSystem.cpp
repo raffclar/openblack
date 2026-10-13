@@ -1135,6 +1135,11 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	// A miracle from a seed teaches only the first creature that learns from it
 	auto* seed = SeedOf(registry, source.initiator);
 	const bool seedSpent = seed != nullptr && seed->learnedFrom;
+	// TODO(creature-reactions-2): the game ignores outright (holding nothing, looking at nothing, learning nothing) a
+	// miracle a spell icon cast without a seed; a nasty one still makes it run or look first. Miracles here don't keep
+	// what cast them. On any leash, a creature seeing a nasty miracle it knows is also set to cast it at the first thing
+	// other than itself within 64 cells of the hand, carried out by the leash later; that needs the leash's waiting
+	// action, which isn't here yet. Both: bw1-decomp docs/openblack/creature/creature_reactions.md
 	if (source.type == Reaction::FleeFromSpell)
 	{
 		const bool learnable = (byCreature || (!computer && source.player != PlayerNames::NEUTRAL)) && !seedSpent;
