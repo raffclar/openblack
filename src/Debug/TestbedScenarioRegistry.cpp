@@ -3058,6 +3058,31 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 0.5f), Fight(Kind::FightAuto, 0, 1, 0.2f),
 	                 Go(Kind::LeashOrderAt, 0, {0.0f, -20.0f}, 16.0f, false)},
 	});
+
+	// A fight next to a village: its people come to watch
+	all.push_back({
+	    .id = "combat.villagers_watch",
+	    .name = "Villagers watching a fight",
+	    .facet = Facet::Combat,
+	    .description = "A hut of the player's town south of an arena with six of its people about it. The player's red "
+	                   "tiger and a blue tiger fight there, both by themselves.",
+	    .expected = "Once the fight is on, the villagers within the arena's reach take up its reaction and walk to places "
+	                "spread round a ring 1.4 times the arena's radius, the newest first at the east, the next opposite, "
+	                "then the quarters. There they face the arena: for fifteen seconds after a blow lands they cheer "
+	                "when the tiger they don't support took it last and despair when theirs did, otherwise they chat. "
+	                "They go back to what they were doing when the reaction's time is up or the arena goes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, -25.0f}, {60.0f, 95.0f}}, .distance = 0.8f},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, -20.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-2.0f, -12.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, -6.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {2.0f, -8.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, -14.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {6.0f, -10.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-12.0f, -8.0f}, .joinTown = true}},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
 }
 
 void AddMind(std::vector<Scenario>& all)

@@ -22,6 +22,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
 
@@ -56,5 +57,15 @@ entt::entity ArenaArchetype::Create(const glm::ivec2& place, float radius, bool 
 	                                                      .first = entt::null,
 	                                                      .second = entt::null,
 	                                                      .ring = std::move(ring)});
+	// Every arena makes a reaction round itself, which villagers heed while a fight is on in it; it belongs to no player
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().Create({
+		    .initiator = entity,
+		    .type = Reaction::ReactToFight,
+		    .position = registry.Get<const Transform>(entity).position,
+		    .playerless = true,
+		});
+	}
 	return entity;
 }

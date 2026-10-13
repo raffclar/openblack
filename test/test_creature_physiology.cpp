@@ -536,8 +536,7 @@ TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
 	float raw = 0.0f;
 	std::memcpy(&raw, creature->field0x24c.data(), sizeof(raw));
 	EXPECT_FLOAT_EQ(raw, 28.0f);
-	std::memcpy(&raw, creature->field0x374.data(), sizeof(raw));
-	EXPECT_FLOAT_EQ(raw, 0.2f);
+	EXPECT_FLOAT_EQ(creature->field0x374, 0.2f);
 	// What the balance row doesn't hold stays as it was
 	EXPECT_FLOAT_EQ(creature->startEnergy, 0.75f);
 	EXPECT_FLOAT_EQ(creature->comfortTemperature, 0.5f);

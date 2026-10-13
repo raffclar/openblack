@@ -569,3 +569,32 @@ TEST(Impressiveness, CloserMeansMoreUrgentToFlee)
 }
 
 // What a miracle looks to a creature like its player did
+
+// A creature's size impresses between 1 and 4 times its species' multiplier, after its species' addition
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(MagicFoundation, CreatureImpressiveSizeIsHeldBetweenOneAndFour)
+{
+	EXPECT_FLOAT_EQ(magic::CreatureImpressiveSize(0.5f, 0.2f, 2.0f), 2.0f);
+	EXPECT_FLOAT_EQ(magic::CreatureImpressiveSize(1.5f, 0.5f, 2.0f), 4.0f);
+	EXPECT_FLOAT_EQ(magic::CreatureImpressiveSize(3.5f, 1.0f, 0.5f), 2.0f);
+}
+
+// A creature impresses by its size, the town's weariness, the distance, what it last did times the reaction's
+// multiplier, and the land's balance; a town only curious about it takes its one-off belief for seeing a creature instead
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(MagicFoundation, CreatureImpressiveValue)
+{
+	magic::CreatureImpressionInputs inputs {.landBalance = 2.0f,
+	                                        .actionImpressiveness = 3.0f,
+	                                        .reactionMultiplier = 0.5f,
+	                                        .distance = 0.0f,
+	                                        .maxDistance = 100.0f,
+	                                        .boredom = 0.5f,
+	                                        .size = 2.0f,
+	                                        .sizeAddition = 0.0f,
+	                                        .sizeMultiplier = 1.0f};
+	const float near = magic::DistanceChangeToBelief(0.0f, 100.0f);
+	EXPECT_FLOAT_EQ(magic::CreatureImpressiveValue(inputs), 2.0f * 0.5f * near * 1.5f * 2.0f);
+	inputs.curiousTownBelief = 4.0f;
+	EXPECT_FLOAT_EQ(magic::CreatureImpressiveValue(inputs), 2.0f * 0.5f * near * 4.0f * 2.0f);
+}
