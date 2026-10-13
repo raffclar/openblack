@@ -28,6 +28,7 @@
 #include "3D/LandIslandInterface.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -123,12 +124,21 @@ public:
 	[[nodiscard]] float LifeOf(entt::entity) const override { return 1.0f; }
 	[[nodiscard]] float HeightOf(entt::entity) const override { return 1.0f; }
 	void Remove(entt::entity object) override { _registry.Destroy(object); }
-	[[nodiscard]] std::optional<dynamics::ModelSize> SizeOfModel(entt::id_type) const override
+	// Every model is a unit cube; no model at all has none
+	[[nodiscard]] std::optional<dynamics::ModelSize> SizeOfModel(entt::id_type id) const override
 	{
+		if (id == 0)
+		{
+			return std::nullopt;
+		}
 		return dynamics::ModelSize {.size = {1.0f, 1.0f, 1.0f}};
 	}
-	[[nodiscard]] std::optional<dynamics::Model> ModelOf(entt::id_type) const override
+	[[nodiscard]] std::optional<dynamics::Model> ModelOf(entt::id_type id) const override
 	{
+		if (id == 0)
+		{
+			return std::nullopt;
+		}
 		dynamics::Model model;
 		model.size = {1.0f, 1.0f, 1.0f};
 		model.indices.push_back(_cubeFaces);
@@ -401,4 +411,23 @@ TEST_F(DynamicsSystemTest, AnImmovableVillagerLetGoGoesBackDownButAnImmovableThi
 	EXPECT_EQ(_world->filed.count(rock), 0u);
 	EXPECT_FLOAT_EQ(registry.Get<const Transform>(rock).position.y, FakeWorld::k_LandHeight + 5.0f);
 	EXPECT_EQ(Entries(), 0u);
+}
+
+TEST_F(DynamicsSystemTest, AThrownGlobeFliesAsItsDomesShapeAndComesToRestWhereItLands)
+{
+	auto& registry = _world->Entities();
+	const auto globe = registry.Create();
+	const glm::vec3 made {1000.0f, FakeWorld::k_LandHeight + 3.0f, 1000.0f};
+	registry.Assign<Transform>(globe, made, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<OneOffSpellSeed>(globe, OneOffSpellSeed {.seedType = SpellSeedType::Heal, .position = made});
+
+	// It has no mesh of its own, yet it moves with its dome's shape
+	const auto started = _dynamics->InitialisePhysics(globe, {.velocity = {4.0f, 2.0f, 0.0f}});
+	ASSERT_TRUE(started.started);
+	ASSERT_NE(started.entry, nullptr);
+	EXPECT_TRUE(_dynamics->IsFlying(globe));
+
+	ASSERT_TRUE(RunUntilEmpty(600).has_value()) << "it never left the physics";
+	EXPECT_FALSE(registry.AllOf<InPhysics>(globe));
+	EXPECT_GT(registry.Get<const Transform>(globe).position.x, made.x);
 }

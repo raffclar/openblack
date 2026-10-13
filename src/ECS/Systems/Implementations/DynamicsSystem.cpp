@@ -363,6 +363,11 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, con
 	{
 		meshId = meshComponent->id;
 	}
+	else if (registry.AllOf<OneOffSpellSeed>(object))
+	{
+		// A globe moves with its dome's shape
+		meshId = OneOffSpellSeed::k_MeshId.value();
+	}
 	const auto model = _world->SizeOfModel(meshId);
 	if (!model.has_value())
 	{
