@@ -73,6 +73,7 @@ public:
 	void ForceCatch(entt::entity creature, entt::entity object) override;
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
 	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
+	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;

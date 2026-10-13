@@ -2365,6 +2365,87 @@ void AddCombat(std::vector<Scenario>& all)
 	    .creatures = {lion, small},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 1, 1, 0.2f)},
 	});
+
+	// Big against small: the game never resizes a creature for a fight; it only refuses one outside half to twice its
+	// height
+	auto big = Fighter(left, 90.0f, "big tiger", PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
+	big.size = 1.5f;
+	auto smaller = Fighter(right, 270.0f, "small tiger", PlayerNames::PLAYER_TWO, 0.5f, 0.0f);
+	smaller.size = 0.8f;
+	all.push_back({
+	    .id = "combat.big_vs_small",
+	    .name = "A big creature fights a small one",
+	    .facet = Facet::Combat,
+	    .description = "A big tiger (size 1.5) fights a small one (size 0.8), just under twice its height, both by "
+	                   "themselves.",
+	    .expected = "The fight starts and both keep their sizes throughout: the arena is sized for the big one, its "
+	                "blows reach further and hit harder, and the small one has to step in to land its own.",
+	    .framing = ringside,
+	    .creatures = {big, smaller},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 Fight(Kind::FightAuto, 1, 1, 0.0f)},
+	});
+	auto tiny = Fighter(right, 270.0f, "tiny tiger", PlayerNames::PLAYER_TWO, 0.5f, 0.0f);
+	tiny.size = 0.6f;
+	all.push_back({
+	    .id = "combat.too_small",
+	    .name = "A creature too small to fight",
+	    .facet = Facet::Combat,
+	    .description = "A big tiger (size 1.5) is told to fight a tiny one (size 0.6), less than half its height.",
+	    .expected = "The tiny tiger refuses: no arena appears and neither moves to fight (the command reports "
+	                "\"refused\").",
+	    .framing = ringside,
+	    .creatures = {big, tiny},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f)},
+	});
+
+	// Miracles in a fight: the player's hurt tiger heals itself, then strikes its opponent with lightning
+	auto hurt = red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
+	hurt.needs.life = 0.3f;
+	all.push_back({
+	    .id = "combat.casting",
+	    .name = "Casting miracles in a fight",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger, hurt (life 0.3, so fight health 0.65), knows Heal and Lightning. In "
+	                   "the fight it is given Heal, as drawing Heal's gesture does, then Lightning, then Heal again; the "
+	                   "blue tiger fights by itself.",
+	    .expected = "Each miracle is cast from the fight stance: the creature raises its arms (start of the cast), "
+	                "casts as the start ends, holds the casting pose only a moment and lowers its arms. Heal is cast on "
+	                "itself and its fight health bar rises; Lightning strikes the blue tiger, which reels. Each cast "
+	                "takes from the red tiger's stamina (the blue bar); without enough stamina a cast does nothing.",
+	    .framing = ringside,
+	    .creatures = {hurt, blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands =
+	        {{.kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Heal)},
+	         {.kind = Kind::KnowMiracle,
+	          .creature = 0,
+	          .delaySeconds = 0.0f,
+	          .value = static_cast<size_t>(MagicType::LightningBolt)},
+	         Fight(Kind::StartFight, 0, 1, 0.5f),
+	         Fight(Kind::FightAuto, 1, 1, 0.2f),
+	         Fight(Kind::FightSpell, 0, static_cast<size_t>(MagicType::Heal), 8.0f),
+	         Fight(Kind::FightSpell, 0, static_cast<size_t>(MagicType::LightningBolt), 6.0f),
+	         Fight(Kind::FightSpell, 0, static_cast<size_t>(MagicType::Heal), 6.0f)},
+	});
+
+	// Forfeiting: there is no forfeit, but taking the creature away ends the fight with no winner
+	all.push_back({
+	    .id = "combat.forfeit",
+	    .name = "Taking a creature out of a fight",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger wears the leash held in the hand and fights a blue tiger, both by "
+	                   "themselves. Ten seconds into the duel the player gives a leash order to go to a point, as the "
+	                   "Action button outside the fight view does. Try it yourself too: pull the leash taut by moving "
+	                   "the hand well away from the red tiger.",
+	    .expected = "The fight is called off with no winner: both tigers finish the move they are making, play their "
+	                "finish and stand, without celebrating or sulking; the ring of light goes. The red tiger then walks "
+	                "to the point. Pulled away by the leash instead, the help says \"You pulled your Creature away from "
+	                "what he was trying to do.\"",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 0.5f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, -20.0f}, 16.0f, false)},
+	});
 }
 
 void AddMind(std::vector<Scenario>& all)
@@ -2993,7 +3074,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 104> k_Names {
+	constexpr std::array<std::string_view, 105> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3048,6 +3129,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fight step",
 	    "fight special",
 	    "fight by itself",
+	    "fight miracle",
 	    "knock out",
 	    "bring round",
 	    "tie leash to creature",
@@ -3351,7 +3433,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		    (command.kind == Kind::SetMiracleSightings && (command.value >= k_Miracles || command.amount < 0.0f)) ||
 		    (command.kind == Kind::ShowFeeling && command.value >= creature_face::k_CueCount) ||
 		    (command.kind == Kind::SeeSkill && command.value >= k_Skills) ||
-		    ((command.kind == Kind::SeeMiracle || command.kind == Kind::KnowMiracle || command.kind == Kind::CastMiracle) &&
+		    ((command.kind == Kind::SeeMiracle || command.kind == Kind::KnowMiracle || command.kind == Kind::CastMiracle ||
+		      command.kind == Kind::FightSpell) &&
 		     command.value >= k_Miracles) ||
 		    (command.kind == Kind::CastMiracle &&
 		     (command.atCreature.has_value() ? *command.atCreature >= scenario.creatures.size()

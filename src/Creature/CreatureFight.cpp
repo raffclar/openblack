@@ -675,6 +675,38 @@ State creature_fight::AfterAnimation(State state, bool hasOpponent)
 	return State::Idle;
 }
 
+std::optional<State> creature_fight::StopTransition(State state, bool animationDone)
+{
+	switch (state)
+	{
+	case State::Stance:
+		return State::Finish;
+	case State::Block:
+		return State::BlockEnd;
+	case State::Cast:
+		return State::CastEnd;
+	case State::Start:
+	case State::Action:
+		return animationDone ? std::optional(State::Finish) : std::nullopt;
+	case State::BlockStart:
+	case State::BlockRecoil:
+		return animationDone ? std::optional(State::BlockEnd) : std::nullopt;
+	case State::CastStart:
+		return animationDone ? std::optional(State::CastEnd) : std::nullopt;
+	default:
+		return std::nullopt;
+	}
+}
+
+bool creature_fight::StateDone(State state, float animationMs, float durationMs, float stateMs)
+{
+	if (state == State::Cast)
+	{
+		return stateMs > k_CastHoldMs;
+	}
+	return durationMs <= 0.0f || animationMs >= durationMs;
+}
+
 bool creature_fight::IsBlocking(State state, float timeMs, float startBlockDurationMs)
 {
 	const auto half = startBlockDurationMs * 0.5f;
@@ -707,6 +739,7 @@ void creature_fight::Enter(Fighter& fighter, State state, std::optional<size_t> 
 	fighter.state = state;
 	fighter.animation = animation.value_or(AnimationOf(state));
 	fighter.timeMs = 0.0f;
+	fighter.stateMs = 0.0f;
 	fighter.speed = speed;
 	fighter.landed = false;
 	fighter.special = state == State::Action && IsSpecialAttack(fighter.animation);

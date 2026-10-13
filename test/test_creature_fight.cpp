@@ -593,3 +593,36 @@ TEST(CreatureFight, ACreatureAgreesToFightOnlyOneOfASizeAndControlledAsItIs)
 	EXPECT_FALSE(AgreesToFight(10.0f, 10.0f, false, true, false));
 	EXPECT_FALSE(AgreesToFight(10.0f, 10.0f, false, false, true));
 }
+
+TEST(CreatureFight, TheCastingPoseIsHeldOnlyAMoment)
+{
+	// The pose is held until more than two milliseconds of game time have passed, whatever its animation's length
+	EXPECT_FALSE(StateDone(State::Cast, 0.0f, 1000.0f, 0.0f));
+	EXPECT_FALSE(StateDone(State::Cast, 0.0f, 1000.0f, 2.0f));
+	EXPECT_TRUE(StateDone(State::Cast, 1.0f, 1000.0f, 16.0f));
+	// Other states play their animation through
+	EXPECT_FALSE(StateDone(State::CastStart, 500.0f, 1000.0f, 5000.0f));
+	EXPECT_TRUE(StateDone(State::CastStart, 1000.0f, 1000.0f, 0.0f));
+	EXPECT_TRUE(StateDone(State::Action, 0.0f, 0.0f, 0.0f));
+}
+
+TEST(CreatureFight, AFightCalledOffWindsDownAndFinishes)
+{
+	// At once from the stance, a block and the casting pose
+	EXPECT_EQ(StopTransition(State::Stance, false), State::Finish);
+	EXPECT_EQ(StopTransition(State::Block, false), State::BlockEnd);
+	EXPECT_EQ(StopTransition(State::Cast, false), State::CastEnd);
+	// The move under way plays out first
+	EXPECT_FALSE(StopTransition(State::Action, false).has_value());
+	EXPECT_EQ(StopTransition(State::Action, true), State::Finish);
+	EXPECT_EQ(StopTransition(State::Start, true), State::Finish);
+	EXPECT_EQ(StopTransition(State::BlockStart, true), State::BlockEnd);
+	EXPECT_EQ(StopTransition(State::BlockRecoil, true), State::BlockEnd);
+	// A cast started is never cast: it goes straight to ending the cast
+	EXPECT_FALSE(StopTransition(State::CastStart, false).has_value());
+	EXPECT_EQ(StopTransition(State::CastStart, true), State::CastEnd);
+	// Ending a block or a cast carries on to the stance, then the finish
+	EXPECT_FALSE(StopTransition(State::BlockEnd, true).has_value());
+	EXPECT_FALSE(StopTransition(State::CastEnd, true).has_value());
+	EXPECT_FALSE(StopTransition(State::Finish, true).has_value());
+}
