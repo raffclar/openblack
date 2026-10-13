@@ -129,6 +129,12 @@ bool creature_leash::ShouldPull(float tension)
 	return tension > k_PullTension;
 }
 
+bool creature_leash::Pulls(const Pull& pull)
+{
+	return pull.works && !pull.tied && !pull.orderInForce && !pull.scriptControlled && !pull.takingFromHand &&
+	       ShouldPull(pull.tension);
+}
+
 std::optional<float> creature_leash::RecordPull(PullMemory& memory, Desire desire)
 {
 	auto& count = memory.counts.at(static_cast<size_t>(desire));

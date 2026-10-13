@@ -126,9 +126,17 @@ struct Body
 	float life {1.0f};
 	/// How exhausted it is, 0 to 1
 	float exhaustion {0.0f};
+	/// A freeze miracle has stopped its mind
+	bool frozen {false};
+	/// A script controls the creature
+	bool scriptControlled {false};
 };
-/// Whether the creature takes orders: not when the leash doesn't work, it has no life left, or it is wholly exhausted
+/// Whether the creature takes orders: not when the leash doesn't work, it has no life left, it is wholly exhausted, or
+/// it is frozen
 [[nodiscard]] bool TakesOrders(const Body& body);
+/// Whether it takes an order to go somewhere: as any order, and not while a script controls it (an order on a thing it
+/// still takes)
+[[nodiscard]] bool TakesGroundOrders(const Body& body);
 /// A creature this exhausted or more takes no orders
 constexpr float k_TooExhausted = 1.0f;
 
