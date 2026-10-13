@@ -231,12 +231,18 @@ TEST(CreatureHand, TheHandHoldsAnyPlayersCreature)
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .frozen = true}));
 }
 
-TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureOnly)
+TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureAnywhereAndOthersInTheInfluence)
 {
 	using creature_hand::ShowsInteractTip;
-	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false));
-	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE, false));
-	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, true));
+	// The player's own creature, inside the influence or out
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false, true));
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false, false));
+	// Another player's creature only inside it
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE, false, true));
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE, false, false));
+	// A creature of no player never
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::NEUTRAL, false, true));
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, true, true));
 }
 
 TEST(CreatureHand, AQuickPressIsAClickAndALongOneAHold)

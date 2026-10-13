@@ -154,7 +154,16 @@ struct TreeLine
 	float scale {1.0f};
 	float maxScale {1.0f};
 };
-/// A rock or any other static thing lying about
+/// What makes the thing made last an artefact of a player, worth so much. Written after the static thing's own line; the
+/// town is never kept through a vortex, so the artefact joins the nearest town of its player as it is made again.
+struct ArtefactLine
+{
+	int32_t town {-1};
+	/// Its player as the land scripts name them ("PLAYER_ONE")
+	std::string player;
+	float value {0.0f};
+};
+/// A rock or any other static thing lying about, with the line making it an artefact when it is one of a player's
 struct MobileStaticLine
 {
 	map_coords::MapCoords offset;
@@ -163,6 +172,7 @@ struct MobileStaticLine
 	float yAngle {0.0f};
 	float zAngle {0.0f};
 	float scale {1.0f};
+	std::optional<ArtefactLine> artefact;
 };
 struct MobileObjectLine
 {
@@ -182,8 +192,15 @@ struct DeadTreeLine
 	float yAngle {0.0f};
 	float zAngle {0.0f};
 };
+/// A globe holding a miracle, written by the name of the miracle it gives; it is made again from the first seed that casts
+/// that miracle, at the power-up that casts it, at the usual strength
+struct OneOffSpellLine
+{
+	map_coords::MapCoords offset;
+	std::string magic;
+};
 using Line = std::variant<VillagerLine, SpecialVillagerLine, AnimalLine, PotLine, TreeLine, MobileStaticLine, MobileObjectLine,
-                          DeadTreeLine>;
+                          DeadTreeLine, OneOffSpellLine>;
 
 /// The land scripts' text for a command: its name, then each parameter by its letter (A a place or plain text, N a whole
 /// number, F a number, L quoted text), comma separated in brackets, ending the line

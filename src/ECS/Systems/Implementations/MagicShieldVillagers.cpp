@@ -36,6 +36,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerHiding.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
@@ -49,6 +50,7 @@
 #include "Magic/ShieldRules.h"
 #include "Magic/VillagerReactionRules.h"
 #include "MagicShieldSystem.h"
+#include "VillagerCover.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
 #include "VillagerShieldShelter.h"
@@ -414,6 +416,11 @@ void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
 		return;
 	}
 	auto& reaction = _reactions.at(id);
+	// As with every reaction, only one whose state lets it react, and that isn't dying, takes it up
+	if (!villager_reactions::Available(villager, reaction.type))
+	{
+		return;
+	}
 	const auto at = registry.Get<const Transform>(villager).position;
 	if (Blocked(at, registry.Get<const Transform>(reaction.object).position))
 	{
@@ -491,30 +498,43 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id)
 		return;
 	}
 
+	// Its fall: first it runs to hide in a building of its town nearby. It is not held by the reaction while it hides;
+	// one leaving another shield's reaction for it still keeps to that one, and to that shield as what it hides from.
+	if (reaction.type == Reaction::ReactToMagicShieldDestroyed &&
+	    ecs::villager_cover::SetupGoAndHideInNearbyBuilding(action, current != nullptr ? current->shield : entt::null,
+	                                                        current != nullptr ? current->type : Reaction::None))
+	{
+		return;
+	}
+
 	// Not reacting yet, it remembers what it was doing to go back to
 	if (current == nullptr)
 	{
 		ecs::systems::villager_reactions::RememberStateToGoBackTo(action);
 	}
+	// What it watches while it reacts: a standing shield; for a fall, nothing, unless it was watching another shield
+	// before, which it goes on watching (it stops reacting as soon as it watches nothing)
+	auto watched = reaction.type == Reaction::ReactToMagicShield ? reaction.object : entt::null;
+	if (reaction.type == Reaction::ReactToMagicShieldDestroyed && current != nullptr)
+	{
+		watched = current->shield;
+	}
 	auto& reacting = registry.AssignOrReplace<VillagerShieldReaction>(
 	    villager,
-	    VillagerShieldReaction {.reaction = id,
-	                            .type = reaction.type,
-	                            .shield = reaction.type == Reaction::ReactToMagicShield ? reaction.object : entt::null,
-	                            .lookAt = at,
-	                            .animation = 0});
+	    VillagerShieldReaction {.reaction = id, .type = reaction.type, .shield = watched, .lookAt = at, .animation = 0});
 	reaction.reacting.push_back(villager);
 
 	if (reaction.type == Reaction::ReactToMagicShieldDestroyed)
 	{
-		// Its fall: it runs from where the shield stood
+		// With nowhere to hide it runs from where the shield stood, then looks back there in panic
 		const auto& row = RowOf(reaction.type);
 		const auto away = at - centre;
 		const float angle = std::atan2(away.y, away.x) + random.GameFloatRand(k_FleeTurnRange) - (k_FleeTurnRange * 0.5f);
 		const float distance = row.minDistanceToRunAwayFromObject +
 		                       random.GameFloatRand(row.maxDistanceToRunAwayFromObject - row.minDistanceToRunAwayFromObject);
 		ecs::villager_home::SetupMoveTo(action, at + glm::vec2(std::cos(angle), std::sin(angle)) * distance,
-		                                VillagerStates::DecideWhatToDo);
+		                                VillagerStates::PanicReaction);
+		ecs::villager_cover::SetPanicPoint(villager, centre);
 		return;
 	}
 
@@ -548,7 +568,7 @@ void MagicShieldSystem::StopReacting(entt::entity villager, bool setState)
 	{
 		memory->memory.Refresh(static_cast<uint32_t>(current->type), GameTurn());
 	}
-	registry.Remove<VillagerShieldReaction>(villager);
+	registry.Remove<VillagerShieldReaction, VillagerPanic>(villager);
 	if (setState)
 	{
 		if (auto* action = registry.TryGet<LivingAction>(villager))
@@ -569,34 +589,37 @@ void MagicShieldSystem::ProcessVillagers()
 	const auto& living = Locator::livingActionSystem::value();
 	const auto turn = GameTurn();
 	std::vector<std::pair<entt::entity, bool>> stops;
-	registry.Each<const VillagerShieldReaction, const LivingAction>(
-	    [&](entt::entity villager, const VillagerShieldReaction& current, const LivingAction& action) {
-		    const auto top = living.VillagerGetState(action, LivingAction::Index::Top);
-		    const auto final = living.VillagerGetState(action, LivingAction::Index::Final);
-		    // Leaving the reaction's state for another ends the reaction
-		    const bool reactionState =
-		        top == VillagerStates::AmazedByMagicShieldReaction ||
-		        (top == VillagerStates::MoveToPos && (final == VillagerStates::AmazedByMagicShieldReaction ||
-		                                              current.type == Reaction::ReactToMagicShieldDestroyed));
-		    const auto found = _reactions.find(current.reaction);
-		    if (!reactionState || found == _reactions.end())
-		    {
-			    stops.emplace_back(villager, false);
-			    return;
-		    }
-		    // It reacts to the shield while it stands, for as long as its reaction lasts
-		    if (StandingShield(current.shield) != nullptr)
-		    {
-			    const auto* memory = registry.TryGet<const VillagerReactionMemory>(villager);
-			    const auto elapsed =
-			        turn - (memory != nullptr ? memory->memory.LastReacted(static_cast<uint32_t>(current.type)) : 0);
-			    if (static_cast<int32_t>(elapsed) <= ReactTurnsFor(villager, found->second))
-			    {
-				    return;
-			    }
-		    }
-		    stops.emplace_back(villager, true);
-	    });
+	registry.Each<const VillagerShieldReaction, const LivingAction>([&](entt::entity villager,
+	                                                                    const VillagerShieldReaction& current,
+	                                                                    const LivingAction& action) {
+		const auto top = living.VillagerGetState(action, LivingAction::Index::Top);
+		const auto final = living.VillagerGetState(action, LivingAction::Index::Final);
+		// Leaving the reaction's state for another ends the reaction
+		// Hiding from a shield's fall, one that left another shield's reaction for it keeps to that reaction
+		const bool hiding = final == VillagerStates::GoAndHideInNearbyBuilding || final == VillagerStates::LookToSeeIfItIsSafe;
+		const bool fleeing = current.type == Reaction::ReactToMagicShieldDestroyed &&
+		                     (top == VillagerStates::MoveToPos || top == VillagerStates::PanicReaction);
+		const bool reactionState = top == VillagerStates::AmazedByMagicShieldReaction || hiding || fleeing ||
+		                           (top == VillagerStates::MoveToPos && final == VillagerStates::AmazedByMagicShieldReaction);
+		const auto found = _reactions.find(current.reaction);
+		if (!reactionState || found == _reactions.end())
+		{
+			stops.emplace_back(villager, false);
+			return;
+		}
+		// It reacts to the shield while it stands, for as long as its reaction lasts
+		if (StandingShield(current.shield) != nullptr)
+		{
+			const auto* memory = registry.TryGet<const VillagerReactionMemory>(villager);
+			const auto elapsed =
+			    turn - (memory != nullptr ? memory->memory.LastReacted(static_cast<uint32_t>(current.type)) : 0);
+			if (static_cast<int32_t>(elapsed) <= ReactTurnsFor(villager, found->second))
+			{
+				return;
+			}
+		}
+		stops.emplace_back(villager, true);
+	});
 	for (const auto& [villager, setState] : stops)
 	{
 		StopReacting(villager, setState);

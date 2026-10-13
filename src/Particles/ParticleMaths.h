@@ -108,6 +108,11 @@ void AdvanceFrame(float& previous, float& current, float dt, float rate, int fra
 /// The whole frame drawn: wrapped into the animation when it loops, held at its ends when it plays once
 [[nodiscard]] int FrameIndex(float frame, int frames, bool loop);
 
+/// A turning drawn between two steps, t of the way from the first: turned evenly from one to the other, so it stays a
+/// turning (blending the two matrices themselves would squash and shrink what is drawn with it, and a model placed by
+/// such a matrix would be drawn far from its place)
+[[nodiscard]] glm::mat3 LerpRotation(const glm::mat3& from, const glm::mat3& to, float t);
+
 /// A sprite sheet cell's corner in texture space and its size: the sheet is cellsPerRow cells across, and the cell number
 /// keeps only its low six bits
 struct UvRect

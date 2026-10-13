@@ -16,6 +16,7 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include "Common/GameRandom.h"
 
@@ -294,4 +295,9 @@ float maths::ValueNoise::At(const glm::vec3& point) const
 glm::vec2 maths::ValueNoise::Wind(const glm::vec3& point) const
 {
 	return {At(point), At({point.y, point.z, point.x})};
+}
+
+glm::mat3 maths::LerpRotation(const glm::mat3& from, const glm::mat3& to, float t)
+{
+	return glm::mat3_cast(glm::slerp(glm::quat_cast(from), glm::quat_cast(to), t));
 }

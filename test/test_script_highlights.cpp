@@ -391,6 +391,28 @@ TEST(ScriptHighlights, AShownScrollSpinsScalesAndGlows)
 	EXPECT_FALSE(world->registry.Valid(glow));
 }
 
+// Why a sign is hard to keep the hand on: until its tip is read it spins like a scroll, its board turning edge on to the
+// camera twice a second, at its own size wherever the camera is; only once tapped does it stand still facing the camera
+TEST(ScriptHighlights, ASignSpinsAtItsOwnSizeUntilTappedThenFacesTheCamera)
+{
+	auto [world, system] = Make();
+	const auto sign = system->Create(k_Sign, {0.0f, 0.0f, 0.0f}, 0);
+	system->SetProperties(sign, 4127, 3);
+	const glm::vec3 camera {0.0f, 20.0f, 40.0f};
+	system->UpdateFrame(500.0f, 0.0f, camera);
+	EXPECT_NEAR(world->registry.Get<ScriptHighlight>(sign).yAngle, glm::half_pi<float>(), 1e-5f);
+	system->UpdateFrame(500.0f, 0.0f, camera);
+	EXPECT_NEAR(world->registry.Get<ScriptHighlight>(sign).yAngle, glm::pi<float>(), 1e-5f);
+	EXPECT_FLOAT_EQ(world->registry.Get<Transform>(sign).scale.x, 1.0f);
+
+	system->Tap(sign, true);
+	system->UpdateFrame(500.0f, 0.0f, camera);
+	const float facing = world->registry.Get<ScriptHighlight>(sign).yAngle;
+	EXPECT_NEAR(facing, FacingAngle(camera, {0.0f, 0.0f, 0.0f}), 1e-5f);
+	system->UpdateFrame(500.0f, 0.0f, camera);
+	EXPECT_FLOAT_EQ(world->registry.Get<ScriptHighlight>(sign).yAngle, facing);
+}
+
 TEST(ScriptHighlights, AGoneHighlightEndsItsEffects)
 {
 	auto [world, system] = Make();

@@ -135,6 +135,7 @@ openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
+openblack_setup_and_add_test(test_hand_reach hand/test_hand_reach.cpp)
 openblack_setup_and_add_test(test_villager_pickup hand/test_villager_pickup.cpp)
 openblack_setup_and_add_test(test_hand_click hand/test_hand_click.cpp)
 target_link_libraries(test_hand_click PRIVATE ScriptLibrary)
@@ -670,8 +671,8 @@ openblack_setup_and_add_test(test_spirit_pose test_spirit_pose.cpp)
 target_link_libraries(test_spirit_pose PRIVATE helpdude)
 openblack_setup_and_add_test(test_spirit_cling test_spirit_cling.cpp)
 target_link_libraries(test_spirit_cling PRIVATE helpdude)
-openblack_setup_and_add_test(test_spirit_stage test_spirit_stage.cpp)
-target_link_libraries(test_spirit_stage PRIVATE helpdude)
+openblack_setup_and_add_test(test_spirit_screen test_spirit_screen.cpp)
+target_link_libraries(test_spirit_screen PRIVATE helpdude)
 openblack_setup_and_add_test(test_text_splitter test_text_splitter.cpp)
 openblack_setup_and_add_test(test_help_text_display test_help_text_display.cpp)
 openblack_setup_and_add_test(test_dialogue_text test_dialogue_text.cpp)
@@ -724,6 +725,7 @@ openblack_setup_and_add_test(test_hand_tricons hand/test_hand_tricons.cpp)
 openblack_setup_and_add_test(test_double_click input/test_double_click.cpp)
 openblack_setup_and_add_test(test_force_field camera/test_force_field.cpp)
 openblack_setup_and_add_test(test_intro_rules test_intro_rules.cpp)
+openblack_setup_and_add_test(test_boat_launch_rules test_boat_launch_rules.cpp)
 openblack_setup_and_add_test(test_grazer_rules test_grazer_rules.cpp)
 openblack_setup_and_add_test(test_temple_help test_temple_help.cpp)
 openblack_setup_and_add_test(test_script_create test_script_create.cpp)
@@ -880,18 +882,9 @@ openblack_setup_and_add_test(test_creature_swap test_creature_swap.cpp)
 openblack_setup_and_add_test(test_leash_snap test_leash_snap.cpp)
 openblack_setup_and_add_test(test_creature_giving test_creature_giving.cpp)
 openblack_setup_and_add_test(
-  test_villager_walk_rules test_villager_walk_rules.cpp
-)
-openblack_setup_and_add_test(
   test_temple_villagers_survey temple/test_temple_villagers_survey.cpp
 )
-openblack_setup_and_add_test(
-  test_creature_attitude_rules test_creature_attitude_rules.cpp
-)
 openblack_setup_and_add_test(test_hand_pointer input/test_hand_pointer.cpp)
-openblack_setup_and_add_test(
-  test_reaction_timing_rules test_reaction_timing_rules.cpp
-)
 openblack_setup_and_add_test(test_shared_index_lists test_shared_index_lists.cpp)
 openblack_setup_and_add_test(test_cinema_hides gui/test_cinema_hides.cpp)
 openblack_setup_and_add_test(
@@ -901,5 +894,14 @@ openblack_setup_and_add_test(test_guidance_rules test_guidance_rules.cpp)
 openblack_setup_and_add_test(test_help_query test_help_query.cpp)
 openblack_setup_and_add_test(test_land_change test_land_change.cpp)
 openblack_setup_and_add_test(
-  test_creature_reaction_rules test_creature_reaction_rules.cpp
+  test_villager_walk_rules test_villager_walk_rules.cpp
 )
+openblack_setup_and_add_test(test_villager_hiding test_villager_hiding.cpp)
+openblack_setup_and_add_test(test_undrawn_picks test_undrawn_picks.cpp)
+openblack_setup_and_add_test(test_creature_attitude_rules test_creature_attitude_rules.cpp)
+openblack_setup_and_add_test(test_reaction_timing_rules test_reaction_timing_rules.cpp)
+openblack_setup_and_add_test(test_creature_reaction_rules test_creature_reaction_rules.cpp)
+openblack_setup_and_add_test(
+  test_creature_kind_actions test_creature_kind_actions.cpp
+)
+openblack_setup_and_add_test(test_pick_shapes test_pick_shapes.cpp)

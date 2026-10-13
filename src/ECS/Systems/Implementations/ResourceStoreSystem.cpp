@@ -75,6 +75,7 @@
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
+#include "ECS/WorshipSites.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
@@ -746,7 +747,12 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 		{
 			radius *= piles::ProportionRaised(type, pot->amount, PotInfoOf(pot->type).maxAmountInPot);
 		}
-		return glm::distance(at, glm::vec2(transform.position.x, transform.position.z)) <= radius * multiplier;
+		// A worship site is measured from its middle, which stands well out from where the site is set down; everything
+		// else from where it stands
+		const auto from = IsWorshipSite(entity)
+		                      ? ecs::worship_site::CentreOnLand(transform.position, transform.rotation, transform.scale.x)
+		                      : glm::vec2(transform.position.x, transform.position.z);
+		return piles::WithinReach(at, from, radius, multiplier);
 	};
 
 	const auto giver = player != PlayerNames::NEUTRAL ? std::optional(player) : std::nullopt;
@@ -770,8 +776,9 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 			{
 				continue;
 			}
-			if (registry.AllOf<StoragePit, Abode>(entity) ||
-			    (IsBuildingSite(entity) && ecs::store_rules::BuildingSiteStores(type)))
+			// Anything that stores it (a storage pit, a worship site's food, a building going up's wood), but not a
+			// store's own piles, which take it as piles do
+			if (!registry.AllOf<Pot>(entity) && IsStore(entity, type))
 			{
 				if (near(entity, piles::k_StoreReachMultiplier))
 				{

@@ -121,6 +121,14 @@ struct Countdown
 [[nodiscard]] glm::vec2 MeetingPoint(glm::vec2 from, glm::vec2 to, float gap);
 /// Whether two things touch within a gap, edge to edge
 [[nodiscard]] bool Touching(float centreDistance, float radiusA, float radiusB, float gap);
+/// Whether a villager that has reached its meeting point waits for its partner instead of starting the kiss: when the
+/// partner, near enough to kiss, is still walking to its own point. The game started the kiss at once, the partner
+/// stopping short wherever it was, often too far off for the kiss to meet (deviations list)
+[[nodiscard]] bool WaitsForPartner(bool partnerTouching, bool partnerWalkingToMeet);
+/// Whether a villager leaving one of the love-making states stops making love with its partner: only on going on to a
+/// state that is an end in itself (not on its way somewhere first, as when it walks to meet the partner again) and
+/// isn't one of the love-making states
+[[nodiscard]] bool LeavesLove(bool nextIsLoveState, bool nextIsFinal);
 
 /// What a breeder weighs of its town: its children and adults against their places in its homes
 struct TownHeadcount

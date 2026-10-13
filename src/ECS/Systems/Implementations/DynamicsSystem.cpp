@@ -49,6 +49,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/PhysicsGround.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
@@ -138,6 +139,11 @@ float DynamicsSystem::InfoWeight(entt::entity object) const
 	{
 		// The physical shield's row
 		return info.mapShield[1].weight;
+	}
+	if (registry.AllOf<Vortex>(object))
+	{
+		// A vortex weighs what the statics' vortex row says
+		return row(info.mobileStatic, MobileStaticInfo::Vortex);
 	}
 	const auto* found = _world->InfoOf(object);
 	return found != nullptr ? found->weight : 0.0f;
@@ -356,6 +362,11 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, con
 	else if (const auto* meshComponent = registry.TryGet<const Mesh>(object))
 	{
 		meshId = meshComponent->id;
+	}
+	else if (registry.AllOf<OneOffSpellSeed>(object))
+	{
+		// A globe moves with its dome's shape
+		meshId = OneOffSpellSeed::k_MeshId.value();
 	}
 	const auto model = _world->SizeOfModel(meshId);
 	if (!model.has_value())
@@ -636,11 +647,6 @@ PhysicsEntry* DynamicsSystem::AddProxy(entt::entity object)
 	return _entries.back().get();
 }
 
-void DynamicsSystem::LetGoOfLeashesTiedTo(entt::entity object)
-{
-	_world->UntieLeashesTiedTo(object);
-}
-
 PhysicsStarted DynamicsSystem::InitialisePhysics(entt::entity object, const PhysicsStart& start)
 {
 	return Hooks().InitialisePhysics(*this, object, start);
@@ -653,7 +659,7 @@ PhysicsStarted DynamicsSystem::StartPhysicsAsObject(entt::entity object, const P
 	{
 		return {};
 	}
-	LetGoOfLeashesTiedTo(object);
+	// A leash tied to the object stays tied while it flies: the rope follows it
 	registry.AssignOrReplace<InPhysics>(object);
 	// Out of the map's cells while it moves
 	registry.Remove<MapCellResident, MapCellMover>(object);
@@ -1015,7 +1021,8 @@ void DynamicsSystem::WakeNearMovingBodies()
 	walked.reserve(k_MostWalkedCells);
 	const auto full = [this]() { return _entries.size() >= _capacity; };
 	const auto wake = [&](entt::entity object) {
-		if (!FactsOf(object).interacts)
+		const auto facts = FactsOf(object);
+		if (!facts.interacts)
 		{
 			return;
 		}
@@ -1023,7 +1030,8 @@ void DynamicsSystem::WakeNearMovingBodies()
 		{
 			known->flags |= PhysicsEntry::k_Awake;
 		}
-		else if (registry.AllOf<Mesh>(object))
+		// Only a thing with a model, drawn or not, gets a body
+		else if (registry.AllOf<Mesh>(object) || facts.collisionMesh.has_value())
 		{
 			AddProxy(object);
 		}

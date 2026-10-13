@@ -150,6 +150,8 @@ private:
 	[[nodiscard]] std::string GiveAdvisorCommand(const Command& command) const;
 	/// Records a challenge as its script would, its picture of a view the camera is put at first
 	[[nodiscard]] std::string RecordChallenge(const Command& command) const;
+	/// The explorers' boat film played on the testbed, the dry dock at the command's point
+	[[nodiscard]] std::string PlayBoatFilm(const Command& command) const;
 	/// Starts a land's script as another script's call starts it; what came of that
 	[[nodiscard]] std::string RunScript(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
@@ -193,6 +195,8 @@ private:
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
 	std::optional<int> _fireBallTakeFrames;
+	/// The fireball the hand goes over to tap
+	entt::entity _fireBallTaken {entt::null};
 	/// When the miracles' positions are next logged, for a scenario that logs them
 	float _nextMiracleLog {0.0f};
 	Timeline _timeline;
@@ -236,6 +240,8 @@ private:
 		std::optional<float> nextAt;
 		std::optional<float> letGoAt;
 		entt::entity spell {entt::null};
+		/// A shield is broken then
+		std::optional<float> breakAt;
 		/// Cast by hand: when its button is pressed and let go, and where the hand is
 		std::optional<float> pressAt;
 		std::optional<float> releaseAt;

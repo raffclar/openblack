@@ -67,8 +67,6 @@ constexpr float k_InspectExtraSeconds = 10.0f;
 [[nodiscard]] std::vector<Step> LookAtFlyingObject(uint32_t thing, const Random& random);
 constexpr uint32_t k_PointAtFlyingLots = 2;
 constexpr float k_PointAtFlyingSeconds = 2.0f;
-constexpr float k_WatchFlyingSeconds = 2.0f;
-constexpr float k_WatchFlyingExtraSeconds = 2.0f;
 
 /// Looking at the player's hand: watching it, curious, its head on the hand, for whole seconds more than those of a
 /// turn and a half, unless the hand picking something up has the creature watch longer (five seconds at most)

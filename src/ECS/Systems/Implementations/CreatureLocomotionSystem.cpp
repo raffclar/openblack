@@ -74,18 +74,21 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
 #include "Magic/ShieldRules.h"
+#include "Magic/VortexPullRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -609,6 +612,26 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 		return thing;
 	}
 
+	if (const auto* vortex = registry.TryGet<const Vortex>(entity))
+	{
+		// A vortex is one circle at its place, as wide and tall as its unseen cylinder. The way out of a land is kept
+		// clear of unless the creature may be taken through it; the way in and the volcano's mouth by their height, as
+		// anything else lying on the land
+		thing.avoidance =
+		    vortex->type == VortexType::In ? obstacles::Avoidance::VortexOutOfTheLand : obstacles::Avoidance::Object;
+		thing.shape = obstacles::Shape::AtPlace;
+		const auto meshId = resources::HashIdentifier(MeshId::SpellVortexCylinder);
+		if (Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(meshId))
+		{
+			const auto box = Locator::resources::value().GetMeshes().Handle(meshId)->GetBoundingBox();
+			thing.boxCentre = box.Center();
+			thing.boxHalfSize = box.Size() * 0.5f;
+			thing.height = obstacles::ModelHeight(thing.boxHalfSize, thing.scale);
+			thing.width = obstacles::ModelWidth(thing.boxHalfSize, thing.scale);
+		}
+		return thing;
+	}
+
 	// The model's box gives most things their size
 	if (const auto* mesh = registry.TryGet<const Mesh>(entity);
 	    mesh != nullptr && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(mesh->id))
@@ -708,11 +731,14 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 obstacles::Walker WalkerOf(const ecs::Registry& registry, entt::entity entity, const Creature& body,
                            const CreatureLocomotion& self, glm::vec2 position)
 {
+	const bool scripted = registry.AnyOf<ScriptControlled>(entity);
+	const bool leashed = Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(entity);
 	return {.position = position,
 	        .height = obstacles::k_HeightPerSize * ShownSize(body),
 	        .radius = self.radius,
-	        .scriptControlled = registry.AnyOf<ScriptControlled>(entity),
-	        .owner = body.owner};
+	        .scriptControlled = scripted,
+	        .owner = body.owner,
+	        .mayBeTakenByVortex = vortex::CreatureMayBeTaken(body.mayGoThroughVortex, leashed, scripted)};
 }
 
 /// What stands in a cell, added to what a creature walks round the first time its route search reaches the cell's

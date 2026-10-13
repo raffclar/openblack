@@ -18,13 +18,17 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleHeartTowns.h"
 #include "ECS/WorldObjects.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Particles/ParticleEffect.h"
 
@@ -90,6 +94,10 @@ std::optional<uint32_t> GameTempleDestructionWorld::StartSpotVisual(SpotVisualTy
 	}
 	auto& particles = Locator::particleSystem::value();
 	const auto id = particles.StartSpotVisual(type, position, turns, entt::null, 1.0f);
+	if (id == ParticleSystemInterface::k_NoEffect)
+	{
+		return std::nullopt;
+	}
 	particles.SetPlayer(id, static_cast<int>(player));
 	return id;
 }
@@ -135,6 +143,28 @@ std::vector<model_surface::Triangle> GameTempleDestructionWorld::DrawnTrianglesO
 glm::mat4 GameTempleDestructionWorld::PlacementOf(entt::entity object) const
 {
 	return world_objects::PlacementOf(object);
+}
+
+std::vector<physics::temple_heart::Town> GameTempleDestructionWorld::HeartTowns(PlayerNames owner)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	return temple_heart_towns::Gather(
+	    registry, owner,
+	    {
+	        .lifeOf = [](entt::entity abode) { return world_objects::LifeOf(abode); },
+	        .footballPitch =
+	            [](entt::entity abode) {
+		            const auto* info = world_objects::AbodeInfoOf(abode);
+		            return info != nullptr && info->abodeType == AbodeType::FootballPitch;
+	            },
+	        .dying =
+	            [&registry](entt::entity villager) {
+		            const auto* action = registry.TryGet<const components::LivingAction>(villager);
+		            return action != nullptr && Locator::livingActionSystem::has_value() &&
+		                   Locator::livingActionSystem::value().VillagerGetState(
+		                       *action, components::LivingAction::Index::Final) == VillagerStates::Dying;
+	            },
+	    });
 }
 
 GameRandomInterface* GameTempleDestructionWorld::Random()

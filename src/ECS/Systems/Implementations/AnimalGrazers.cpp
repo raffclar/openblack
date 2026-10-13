@@ -113,8 +113,8 @@ entt::entity AnimalSystem::CreateGrazer(AnimalInfo type, glm::vec2 position, uin
 	animal.previousHeading = animal.heading;
 	// Lit by the land where it stands, as other things are
 	registry.Assign<AnimalPose>(entity, AnimalPose {.light = AnimalLight::Land});
+	animal.birthTurn = villager_age::BirthTurnFor(GameTurn(), bornAt);
 	auto& grazer = registry.Assign<Grazer>(entity);
-	grazer.birthTurn = villager_age::BirthTurnFor(GameTurn(), bornAt);
 	// Alone, it is a herd of its own about where it is, as far as its kind wanders
 	if (!joins)
 	{
@@ -193,9 +193,9 @@ std::optional<grazers::HerdSize> AnimalSystem::HerdSizeOf(const Animal& animal) 
 	return grazers::HerdSize {.members = static_cast<uint32_t>(herd->members.size()), .most = herd->most};
 }
 
-uint32_t AnimalSystem::AgeOf(const Grazer& grazer) const
+uint32_t AnimalSystem::AgeOf(const Animal& animal) const
 {
-	return villager_age::AgeOf(GameTurn(), grazer.birthTurn);
+	return villager_age::AgeOf(GameTurn(), animal.birthTurn);
 }
 
 void AnimalSystem::SetNewWander(entt::entity entity, Animal& animal, std::optional<glm::ivec2> centre, int32_t inner,
@@ -332,7 +332,7 @@ bool AnimalSystem::ReactToGrazerNeeds(entt::entity entity, Animal& animal, Graze
 {
 	const auto& info = InfoOf(animal.type);
 	switch (
-	    grazers::NeedToSee(grazer.needs, LimitsOf(info), AgeOf(grazer), HerdSizeOf(animal), grazer.sleepingCell.has_value()))
+	    grazers::NeedToSee(grazer.needs, LimitsOf(info), AgeOf(animal), HerdSizeOf(animal), grazer.sleepingCell.has_value()))
 	{
 	case grazers::Need::Breed:
 		SetTopState(animal, AnimalState::GivesBirth);
@@ -511,7 +511,7 @@ void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& graze
 	// Seeing to its needs, and growing a quarter of a year at a time while young
 	if (SeesToNeedsIn(animal.state))
 	{
-		const auto age = AgeOf(grazer);
+		const auto age = AgeOf(animal);
 		grazers::GrowNeeds(grazer.needs, LimitsOf(info), age, HerdSizeOf(animal));
 		// A herd's leader counts the turns of its leg, unless a shepherd leads the herd
 		if (auto* herd = registry.TryGet<Flock>(animal.flock);

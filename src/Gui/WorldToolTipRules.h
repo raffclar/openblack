@@ -27,8 +27,63 @@
 namespace openblack::gui::world_tooltip
 {
 
+/// What the hand shows a tooltip over
+enum class Subject : uint8_t
+{
+	/// A temple: its health
+	Temple,
+	/// A village centre or its totem: the town's belief and its population
+	VillageCentre,
+	/// The way into a temple
+	TempleEntrance,
+	/// A village store: its food and wood
+	Store,
+	/// A pile of food or wood: its amount
+	Pile,
+	/// A flag of a town's store: how much the town wants its thing
+	DesireFlag,
+	/// The player's own creature: that the hand can take hold of it
+	OwnCreature,
+	/// Another player's creature: the same
+	OthersCreature,
+};
+
+/// Whether the hand shows its tooltip over a thing only while the hand is within the player's influence. A temple's
+/// health, a village centre's belief and population and the player's own creature show anywhere; everything else the
+/// hand could take, tap or interact with needs the influence. Over a thing, the influence is asked at the thing's own
+/// position.
+[[nodiscard]] constexpr bool NeedsInfluence(Subject subject)
+{
+	switch (subject)
+	{
+	case Subject::Temple:
+	case Subject::VillageCentre:
+	case Subject::OwnCreature:
+		return false;
+	case Subject::TempleEntrance:
+	case Subject::Store:
+	case Subject::Pile:
+	case Subject::DesireFlag:
+	case Subject::OthersCreature:
+		return true;
+	}
+	return true;
+}
+
+/// Whether the hand shows its tooltip over a thing, by whether the hand is within the player's influence
+[[nodiscard]] constexpr bool Shows(Subject subject, bool handInInfluence)
+{
+	return handInInfluence || !NeedsInfluence(subject);
+}
+
 /// "Enter Temple", over the way into the player's own temple, by the Apply button
 constexpr uint32_t k_EnterTemple = 88;
+/// Over the way into a temple, the hand offers to enter it only for the player's own temple, standing fully built, and
+/// only while the hand is within the player's influence
+[[nodiscard]] constexpr bool OffersEnterTemple(bool ownTemple, bool templeBuilt, bool handInInfluence)
+{
+	return ownTemple && templeBuilt && Shows(Subject::TempleEntrance, handInInfluence);
+}
 /// "%3.0f Belief Left", over any village centre: the belief the town holds in the player beyond any other player's
 constexpr uint32_t k_BeliefLeft = 89;
 /// "%3.0f Belief Needed": the words the belief tooltip shows instead while another player is ahead in the town, with

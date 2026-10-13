@@ -236,6 +236,11 @@ PooLump creature_physiology::PooLumpOf(glm::vec3 groin, glm::vec2 ahead, float s
 	};
 }
 
+void creature_physiology::SitTurn(Needs& needs, const Species& species)
+{
+	needs.exhaustion = Clamp01(needs.exhaustion - (species.sleepRecover * k_SitRestShare));
+}
+
 bool creature_physiology::SleepTurn(Needs& needs, const Species& species, float size, uint32_t turnsAsleep, bool night)
 {
 	needs.life = Clamp01(needs.life + species.sleepHeal);

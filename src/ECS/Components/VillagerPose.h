@@ -30,6 +30,9 @@ struct VillagerPose
 {
 	AnimId clip {AnimId::Invalid};
 	uint32_t place {0};
+	/// Walking with a clip that keeps pace with the ground: the part of a millisecond of it the last frame's ground was
+	/// worth beyond the whole milliseconds played, which the next frame plays on
+	float groundCarry {0.0f};
 	std::vector<glm::mat4> bones;
 	/// Drawn in high detail and changing clip: its clip's own pose, before the old clip's is mixed in, which its shadow
 	/// is cast in. Empty when the bones are the clip's own.

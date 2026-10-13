@@ -12,6 +12,7 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -70,6 +71,13 @@ SoundCollisionType PhysicsClassHooks::CollideSoundType(entt::entity object) cons
 			return SoundCollisionType::HollowWood;
 		}
 	}
+	// A vortex sounds as the statics' vortex row says
+	if (registry.AllOf<components::Vortex>(object) && Locator::infoConstants::has_value())
+	{
+		const auto& statics = Locator::infoConstants::value().mobileStatic;
+		const auto row = static_cast<size_t>(MobileStaticInfo::Vortex);
+		return row < statics.size() ? statics[row].collideSound : SoundCollisionType::Default;
+	}
 	const auto* info = world_objects::InfoOf(object);
 	return info != nullptr ? info->collideSound : SoundCollisionType::Default;
 }
@@ -88,8 +96,10 @@ void PhysicsClassHooks::ForgetBuildingHitter(entt::entity object)
 
 bool PhysicsClassHooks::RaisesObjects(entt::entity object) const
 {
-	// A shield's dome never lifts what is dropped inside it
-	return !Locator::entitiesRegistry::value().AllOf<components::MagicShield>(object);
+	// A shield's dome never lifts what is dropped inside it, nor does the way out of a land
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* vortex = registry.TryGet<const components::Vortex>(object);
+	return !registry.AllOf<components::MagicShield>(object) && (vortex == nullptr || vortex->type != VortexType::In);
 }
 
 void PhysicsClassHooks::StartFlyingFromHand([[maybe_unused]] DynamicsSystemInterface& dynamics,

@@ -41,6 +41,7 @@ public:
 	bool Throw(entt::entity creature, const glm::vec3& target) override;
 	bool ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds) override;
 	bool Destroy(entt::entity creature, entt::entity target) override;
+	bool Kick(entt::entity creature, entt::entity target) override;
 	bool PointAt(entt::entity creature, const glm::vec3& point) override;
 	bool PointAtFor(entt::entity creature, const glm::vec3& point, float seconds, std::optional<entt::entity> thing) override;
 	bool Catch(entt::entity creature, entt::entity object) override;
@@ -58,6 +59,8 @@ public:
 	[[nodiscard]] bool CanPickUp(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] bool CanTakeFromHand(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] bool CanBeCaught(entt::entity object) const override;
+	[[nodiscard]] bool CanThrowToImpress(entt::entity creature, entt::entity object) const override;
+	[[nodiscard]] creature_object_actions::KindFacts KindOf(entt::entity object) const override { return KindFactsOf(object); }
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
 	[[nodiscard]] std::optional<float> PickUpStraightReach(entt::entity creature) const override;
 

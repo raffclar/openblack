@@ -112,6 +112,8 @@ struct Animal
 	/// The clip it plays and its place in it, in milliseconds
 	AnimId animation {AnimId::Invalid};
 	uint32_t clipPlace {0};
+	/// The part of a millisecond of its clip the ground it covered left over from the last frame, under one
+	float groundCarry {0.0f};
 	/// Where it was and is at the turn's ends, which it is drawn between, and the way it faced, in radians from +x
 	/// towards +z
 	glm::vec3 previousPosition {0.0f};
@@ -121,13 +123,15 @@ struct Animal
 
 	/// 0 to 1; an animal with none left is dead, which the miracles hurt and heal as the other living things
 	float life {1.0f};
+	/// The game turn it was born on: its age counts in years from it, as every living thing's does
+	uint32_t birthTurn {0};
 	/// Once killed, the turns its body lies dead before it goes
 	int32_t deadTurns {0};
 
 	[[nodiscard]] bool Dead() const { return !(life > 0.0f); }
 };
 
-/// A grazing animal's own life: its needs, its herd's sleeping place, what is left of its meal and when it was born
+/// A grazing animal's own life: its needs, its herd's sleeping place and what is left of its meal
 struct Grazer
 {
 	animals::grazers::Needs needs;
@@ -135,8 +139,6 @@ struct Grazer
 	std::optional<glm::ivec2> sleepingCell;
 	/// The grazing clips left of its meal
 	int16_t meals {0};
-	/// The game turn it was born on: its age counts in years from it
-	uint32_t birthTurn {0};
 };
 
 /// The doves or bats about a temple: its flock, made the first time it is seen to, and the look of the temple's model

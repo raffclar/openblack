@@ -707,7 +707,17 @@ uint32_t villager_breeding::StartHavingSex(LivingAction& action)
 	const auto mate = LoverOf(villager);
 	if (mate != entt::null && IsAvailable(mate))
 	{
-		if (!AreTouching(mate, villager, k_KissingGap))
+		const bool touching = AreTouching(mate, villager, k_KissingGap);
+		// The first to arrive waits for its partner to reach its own point, so that they kiss as far apart as the kiss is
+		// made for (the game started at once; deviations list)
+		const auto& mateAction = Entities().Get<const LivingAction>(mate);
+		const bool mateWalkingToMeet = TopState(mateAction) != VillagerStates::StartHavingSex &&
+		                               Living().VillagerGetFinalState(mateAction) == VillagerStates::StartHavingSex;
+		if (WaitsForPartner(touching, mateWalkingToMeet))
+		{
+			return 1;
+		}
+		if (!touching)
 		{
 			GoAndHaveSexWith(villager, mate);
 			return 1;
@@ -755,7 +765,11 @@ uint32_t villager_breeding::StopHavingSex(LivingAction& action)
 
 bool villager_breeding::ExitSex(LivingAction& action, VillagerStates next)
 {
-	if (next == VillagerStates::StartHavingSex || next == VillagerStates::HavingSex || next == VillagerStates::StopHavingSex)
+	const bool nextIsLoveState =
+	    next == VillagerStates::StartHavingSex || next == VillagerStates::HavingSex || next == VillagerStates::StopHavingSex;
+	const bool nextIsFinal = Locator::infoConstants::has_value() &&
+	                         Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(next)).isFinalState != 0;
+	if (!LeavesLove(nextIsLoveState, nextIsFinal))
 	{
 		return false;
 	}

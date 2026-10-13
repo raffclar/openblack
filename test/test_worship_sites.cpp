@@ -20,6 +20,7 @@
 
 #include <DanceFile.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Dance.h"
@@ -217,6 +218,25 @@ TEST(WorshipSitePlaces, APointIsTurnedAboutTheSpotAsTheGameTurnsModels)
 	const auto turned = ws::TurnedPoint({10.0f, 20.0f}, std::numbers::pi_v<float> / 2.0f, {1.0f, 0.0f, 0.0f});
 	EXPECT_NEAR(turned.x, 10.0f, 1e-5f);
 	EXPECT_NEAR(turned.y, 21.0f, 1e-5f);
+}
+
+TEST(WorshipSitePlaces, ThePourIsJudgedFromTheSiteMiddleWellOutFromWhereItIsSetDown)
+{
+	// Unturned, the middle is the model's own middle point from where the site is set down
+	const auto unturned = ws::CentreOnLand({100.0f, 5.0f, 200.0f}, glm::mat3(1.0f), 1.0f);
+	EXPECT_NEAR(unturned.x, 112.55f, 1e-4f);
+	EXPECT_NEAR(unturned.y, 173.9f, 1e-4f);
+	// Turned as the site is drawn (a negative turn about the up axis by its facing), it matches the places' turning
+	const float facing = 1.1f;
+	const auto rotation = glm::mat3(glm::rotate(glm::mat4(1.0f), -facing, glm::vec3(0.0f, 1.0f, 0.0f)));
+	const auto turned = ws::CentreOnLand({10.0f, 0.0f, 20.0f}, rotation, 1.0f);
+	const auto expected = ws::TurnedPoint({10.0f, 20.0f}, facing, ws::k_CentrePoint);
+	EXPECT_NEAR(turned.x, expected.x, 1e-4f);
+	EXPECT_NEAR(turned.y, expected.y, 1e-4f);
+	// A scaled site has its middle scaled out with it
+	const auto doubled = ws::CentreOnLand({0.0f, 0.0f, 0.0f}, glm::mat3(1.0f), 2.0f);
+	EXPECT_NEAR(doubled.x, 25.1f, 1e-4f);
+	EXPECT_NEAR(doubled.y, -52.2f, 1e-4f);
 }
 
 TEST(WorshipSitePlaces, TheFreePlaceNearestTheSpotIsChosen)

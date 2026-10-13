@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed's scenarios of the villagers around the player's temple, with their debug window open
+// The testbed's scenarios of the villagers around the player's temple, with their debug window open, and of the
+// town's worship site going up
 
 #include <array>
 #include <vector>
@@ -26,6 +27,13 @@ constexpr glm::vec2 k_Centre {0.0f, 40.0f};
 constexpr glm::vec2 k_Temple {0.0f, -30.0f};
 /// The town's belief in the player, so that it stays theirs rather than going back to the neutral player
 constexpr float k_TownBelief = 1000.0f;
+/// Where the hand pours wood: at the edge of the town's worship site as it goes up, on its side away from the site's
+/// wood pile, 33 m from the temple's middle but 15 m from the site's own middle, within its reach (its radius on the
+/// ground, 14.1 m, times 1.2); then a little further out, 21 m from the site's middle, beyond it
+constexpr glm::vec2 k_SiteEdge {-15.0f, -1.0f};
+constexpr glm::vec2 k_BeyondTheSite {-21.0f, -1.0f};
+/// How much wood each pour lets go of
+constexpr size_t k_Handful = 300;
 /// The main room of the temple, by the temple's rooms
 constexpr size_t k_MainRoom = 3;
 
@@ -92,5 +100,23 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 1.0f,
 	    .debugWindow = debug::gui::k_TempleVillagersWindow,
+	});
+	all.push_back({
+	    .id = "town.worship_site_pour",
+	    .name = "Wood poured on a worship site going up",
+	    .facet = Facet::Objects,
+	    .description = "The same town and temple, the town's worship site just started and not yet built. The player's "
+	                   "hand pours a handful of wood (300) at the site's edge, well out from the temple's middle, then another "
+	                   "a few metres further out, beyond the site.",
+	    .expected = "The first pour goes into the site's wood pile for its builders (the pile grows and no loose wood is left "
+	                "there), because a worship site takes what is poured within its reach of its own middle, not the "
+	                "temple's. The second, beyond that reach, is left on the land as a loose pile of wood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Temple - glm::vec2(40.0f), k_Temple + glm::vec2(40.0f)}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::HandPour, .delaySeconds = 3.0f, .point = k_SiteEdge, .value = k_Handful},
+	                 {.kind = Command::Kind::HandPour, .delaySeconds = 4.0f, .point = k_BeyondTheSite, .value = k_Handful}},
+	    .townBeliefInPlayer = k_TownBelief,
 	});
 }

@@ -86,10 +86,26 @@ std::optional<float> DamageEffectLife(float life)
 	return life;
 }
 
+namespace
+{
+/// The wait between a hurt heart's beams in seconds, worked in single precision as the game works it
+float DamageWait(float life)
+{
+	return ((k_DamageWaitFull - k_DamageWaitNone) * life) + k_DamageWaitNone;
+}
+} // namespace
+
 uint32_t DamageInterval(uint32_t millisecondsPerTurn, float life)
 {
-	const float wait = ((k_DamageWaitFull - k_DamageWaitNone) * life) + k_DamageWaitNone;
-	return static_cast<uint32_t>(static_cast<double>(1000u / millisecondsPerTurn) * static_cast<double>(wait));
+	// Whole turns a second times the wait, rounded to single precision before it is cut down to whole turns
+	const float turns = static_cast<float>(1000u / millisecondsPerTurn) * DamageWait(life);
+	return static_cast<uint32_t>(turns);
+}
+
+DamageBeamLook DamageLookAt(float life)
+{
+	const float alpha = ((k_DamageAlphaFull - k_DamageAlphaNone) * life) + k_DamageAlphaNone;
+	return {.life = DamageWait(life), .alpha = static_cast<uint8_t>(static_cast<int32_t>(alpha))};
 }
 
 bool DamageBeamDue(uint32_t& lastTurn, uint32_t turn, uint32_t interval)

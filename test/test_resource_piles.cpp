@@ -112,6 +112,16 @@ TEST(ResourcePiles, PouringSpiralsOutFromItsCell)
 	EXPECT_NEAR(RadiusOnGround({2.0f, 3.0f}, 0.5f), 1.5f, k_Epsilon);
 }
 
+TEST(ResourcePiles, APourReachesAStoreWithinItsRadiusTimesItsMultiplier)
+{
+	// A store 20 m across reaches 12 m out from the point it is measured from, the edge itself included
+	EXPECT_TRUE(WithinReach({112.0f, 50.0f}, {100.0f, 50.0f}, 10.0f, k_StoreReachMultiplier));
+	EXPECT_FALSE(WithinReach({112.5f, 50.0f}, {100.0f, 50.0f}, 10.0f, k_StoreReachMultiplier));
+	// A pile reaches twice its radius
+	EXPECT_TRUE(WithinReach({0.0f, 3.9f}, {0.0f, 0.0f}, 2.0f, k_PotReachMultiplier));
+	EXPECT_FALSE(WithinReach({0.0f, 4.1f}, {0.0f, 0.0f}, 2.0f, k_PotReachMultiplier));
+}
+
 TEST(ResourcePiles, OnlyPilesLeadingOnHoldNoMoreThanFull)
 {
 	EXPECT_TRUE(IsCapped(PotInfo::WoodPile_2));

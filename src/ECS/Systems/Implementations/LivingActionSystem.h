@@ -14,6 +14,7 @@
 
 #include <glm/mat4x4.hpp>
 
+#include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 
@@ -88,6 +89,8 @@ private:
 	/// Now and then a villager stops for a second before going into a state, more often when hurt
 	bool PausesBefore(components::LivingAction& action, VillagerStates state) const;
 	void SetTopState(components::LivingAction& action, VillagerStates state) const;
+	/// The game's screen refreshes, at which villagers' clips held at their end play their sounds again
+	ecs::clip_sound_player::RefreshPace _soundPace;
 	/// The old clip's pose of a high-detail villager changing clip, reused from frame to frame
 	std::vector<glm::mat4> _blendBones;
 };

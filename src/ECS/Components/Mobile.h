@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <glm/vec3.hpp>
+
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -27,6 +29,14 @@ struct MobileStatic
 struct MobileObject
 {
 	MobileObjectInfo type; ///< This is 32 bits but could be 8 bits if stored in uint8_t
+};
+
+/// A static thing's height above the land as it was put down, kept once the land under it has been changed (it doesn't
+/// move with the land): its height then, and where it lay, for as long as it still lies there
+struct PlacedHeight
+{
+	float height {0.0f};
+	glm::vec3 position {0.0f};
 };
 
 /// A mobile static that is a rock: a thing of its own to the scripts

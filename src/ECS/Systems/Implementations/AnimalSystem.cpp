@@ -56,6 +56,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -189,6 +190,8 @@ entt::entity AnimalSystem::CreateBird(AnimalInfo type, glm::vec2 position, uint3
 	const auto entity =
 	    ecs::archetypes::AnimalArchetype::Create(type, point, gutils::ConvertGameAngleTo3D(0), scale, PlayerNames::NEUTRAL);
 	auto& animal = registry.Get<Animal>(entity);
+	// Born as long ago as its age, which also set its size
+	animal.birthTurn = villager_age::BirthTurnFor(Locator::time::value().GetTurn(), bornAt);
 	animal.height = height;
 	animal.goalHeight = height;
 	animal.move.position = Fixed(position);
@@ -335,6 +338,8 @@ entt::entity AnimalSystem::CreateSpellAnimal(AnimalInfo type, glm::vec2 position
 	const auto entity =
 	    ecs::archetypes::AnimalArchetype::Create(type, point, gutils::ConvertGameAngleTo3D(angle), scale, owner);
 	auto& animal = registry.Get<Animal>(entity);
+	// Born as long ago as its age, which also set its size
+	animal.birthTurn = villager_age::BirthTurnFor(Locator::time::value().GetTurn(), bornAt);
 	animal.flock = flockEntity;
 	animal.height = heightAboveLand;
 	animal.goalHeight = heightAboveLand;
@@ -1822,6 +1827,9 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 	auto& registry = EntityRegistry();
 	const float t = std::clamp(turnFraction, 0.0f, 1.0f);
 	const auto elapsed = static_cast<uint32_t>(frameGameTime.count());
+	// A screen refresh of the game's, when a clip held at its end plays its sounds again; none while the game is paused
+	const bool refresh = Locator::time::has_value() && !Locator::time::value().IsPaused() &&
+	                     _soundPace.Step(static_cast<float>(Locator::time::value().GetFrameRealTime().count()));
 	const float elapsedSeconds = static_cast<float>(elapsed) * 0.001f;
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
@@ -1855,15 +1863,15 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 		                    (animal.move.stage != animals::MoveStage::AtGoal &&
 		                     (animal.state == AnimalState::MoveToPos || animal.state == AnimalState::SpecialMoveToPos ||
 		                      animal.state == AnimalState::FollowFlock || animal.state == AnimalState::Chase));
-		const auto played = moving && !timing.playedByTime
-		                        ? animals::MovingPlay(timing, animal.move.speed, elapsed, transform.scale.x)
-		                        : static_cast<int32_t>(elapsed);
+		// The part of a millisecond each moving frame leaves is carried on to the next, so that the legs keep pace with
+		// the ground at any frame rate (the game dropped it every frame; deviations list)
+		const auto carried =
+		    animals::FramePlay(timing, moving, animal.move.speed, elapsed, transform.scale.x, animal.groundCarry);
+		const auto played = carried.played;
+		animal.groundCarry = carried.carry;
 		// The sounds on the clip's frames it passes play from the animal
-		if (played > 0)
-		{
-			ecs::clip_sound_player::Play(entity, animal.animation, *clip, animal.clipPlace, static_cast<uint32_t>(played),
-			                             transform.position);
-		}
+		ecs::clip_sound_player::Play(entity, animal.animation, *clip, animal.clipPlace,
+		                             static_cast<uint32_t>(std::max(played, 0)), transform.position, refresh);
 		animal.clipPlace = animals::AdvanceClip(timing, animal.clipPlace, played);
 
 		// A wolf fades out of sight as it goes; the doves and bats stay whole until they go
