@@ -278,6 +278,22 @@ std::optional<float> creature_desires::SourceValue(const DesireState& desire, ui
 	return found->value;
 }
 
+Desire creature_desires::Dominant(const Desires& desires)
+{
+	auto dominant = Desire::Impress;
+	float most = 0.0f;
+	for (size_t i = 0; i < k_DesireCount; ++i)
+	{
+		const auto& state = desires.desires.at(i);
+		if (state.activated && state.value > most)
+		{
+			most = state.value;
+			dominant = static_cast<Desire>(i);
+		}
+	}
+	return dominant;
+}
+
 std::optional<size_t> creature_desires::EmoteFor(Desire desire)
 {
 	const auto found = std::ranges::find(k_Emotes, desire, &Emote::desire);

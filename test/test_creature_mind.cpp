@@ -222,6 +222,19 @@ TEST(CreatureDesires, TheStrongestShowableDesire)
 	EXPECT_FALSE(creature_desires::StrongestShowable(desires, 0.55f).has_value());
 }
 
+TEST(CreatureDesires, TheDominantDesireIsTheFirstActiveOneWantedMost)
+{
+	Desires desires;
+	EXPECT_EQ(creature_desires::Dominant(desires), Desire::Impress);
+	desires[Desire::Anger].value = 0.7f;
+	desires[Desire::Play].value = 0.9f;
+	desires[Desire::Play].activated = false;
+	desires[Desire::Hunger].value = 0.7f;
+	// Held down, it still counts
+	desires[Desire::Anger].suppressedTurns = 10;
+	EXPECT_EQ(creature_desires::Dominant(desires), Desire::Anger);
+}
+
 TEST(CreatureDesires, AnUrgeIsSatisfiedOnceEnoughPlansForItAreCarriedOut)
 {
 	creature_desires::DesireState desire;

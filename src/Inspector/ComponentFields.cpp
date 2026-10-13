@@ -177,7 +177,6 @@
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Shark.h"
-#include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Spell.h"
@@ -676,7 +675,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLeash::control>("control")
 	    .Field<&components::CreatureLeash::pull>("pull")
 	    .Field<&components::CreatureLeash::pulls>("pulls")
-	    .Field<&components::CreatureLeash::turnsWithOther>("turnsWithOther")
 	    .Field<&components::CreatureLeash::confinementCentre>("confinementCentre")
 	    .Field<&components::CreatureLeash::confinementRadius>("confinementRadius")
 	    .Field<&components::CreatureLeash::home>("home")
@@ -1427,9 +1425,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Shark::turnStart>("turnStart")
 	    .Field<&components::Shark::heading>("heading")
 	    .Field<&components::Shark::clipPlace>("clipPlace");
-	Reflect<components::SkinOverride>(context)
-	    .Field<&components::SkinOverride::texture>("texture")
-	    .Field<&components::SkinOverride::uvOffset>("uvOffset");
 	Reflect<components::SkyDome>(context)
 	    .Field<&components::SkyDome::meshId>("meshId")
 	    .Field<&components::SkyDome::textureId>("textureId")
@@ -2151,8 +2146,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_leash::Lesson::desire>("desire")
 	    .Field<&openblack::creature_leash::Lesson::change>("change");
 	Reflect<openblack::creature_leash::MindHooks>(context, ValueOnly {})
-	    .Field<&openblack::creature_leash::MindHooks::forcedDesire>("forcedDesire")
-	    .Field<&openblack::creature_leash::MindHooks::forcedValue>("forcedValue")
+	    .Field<&openblack::creature_leash::MindHooks::attitudeTurn>("attitudeTurn")
 	    .Field<&openblack::creature_leash::MindHooks::obeying>("obeying")
 	    .Field<&openblack::creature_leash::MindHooks::learningInHand>("learningInHand")
 	    .Field<&openblack::creature_leash::MindHooks::miracleSightingWeight>("miracleSightingWeight")
@@ -2447,7 +2441,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTo>("tiedTo")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTurn>("tiedTurn")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::rope>("rope")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::ropeStarted>("ropeStarted");
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::ropeStarted>("ropeStarted")
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::held>("held");
+	Reflect<openblack::ecs::components::CreatureLeash::Worn::HeldRopes>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toCollar>("toCollar")
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toTied>("toTied");
 	Reflect<openblack::ecs::components::CreatureLocomotion::Move>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::animations>("animations")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::timeMs>("timeMs")

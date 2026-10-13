@@ -82,10 +82,18 @@ class FakeLeash final: public ecs::systems::LeashSystemInterface
 public:
 	void ProcessTurn() override {}
 	void Update(float /*seconds*/) override {}
-	void HandleInput(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, glm::vec2 /*cursor*/,
-	                 uint32_t /*milliseconds*/, bool /*actionTaken*/) override
+	void ShowPosts(bool /*handShown*/) override {}
+	bool PressAction(PlayerNames /*player*/, const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/,
+	                 glm::vec2 /*cursor*/, uint32_t /*milliseconds*/) override
 	{
+		return false;
 	}
+	bool TapThing(PlayerNames /*player*/, entt::entity /*object*/) override { return false; }
+	void UpdateRopeHover(PlayerNames /*player*/, const RopeFrame& /*frame*/) override {}
+	[[nodiscard]] leash_snap::Hand RopeHand(PlayerNames /*player*/) const override { return leash_snap::Hand::Away; }
+	bool PressRope(PlayerNames /*player*/) override { return false; }
+	void LetGoOfRope(PlayerNames /*player*/, std::optional<glm::vec3> /*place*/) override {}
+	void HandleInput(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, bool /*actionTaken*/) override {}
 	[[nodiscard]] bool Knows(entt::entity /*creature*/, LeashType /*type*/) const override { return false; }
 	void SetKnown(entt::entity /*creature*/, LeashType /*type*/, bool /*known*/) override {}
 	[[nodiscard]] bool IsLeashable(entt::entity /*creature*/) const override { return false; }

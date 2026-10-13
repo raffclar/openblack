@@ -148,5 +148,8 @@ constexpr float k_HiddenFizz = 0.4f;
 /// Whether the rope is drawn. The scripts' switch alone hides nothing: it only lets the rope show through a script's
 /// cinema bars and while the player's hand is put away. The player's own rope always shows over their creature fizzing.
 [[nodiscard]] bool Shown(const Showing& showing);
+/// Whether the two ropes of a tied leash whose rope the hand holds are drawn: the player's own, only while the scripts'
+/// switch is on
+[[nodiscard]] bool HeldRopesShown(const Showing& showing);
 
 } // namespace openblack::leash_rope

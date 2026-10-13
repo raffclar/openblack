@@ -311,10 +311,11 @@ TEST(GestureRequests, TheLeash)
 {
 	HandContext context;
 	context.creature = HandContext::Creature {.knows = {false, true, false}};
-	// Unleashed, knowing a leash: the leash gesture puts it on
+	// Unleashed, knowing a leash: the leash gesture puts it on, the leash picked to put on next
 	auto requests = Requests(context);
 	ASSERT_EQ(requests.size(), 1u);
-	EXPECT_EQ(requests[0], (Request {.gesture = GestureType::SquareSpirial, .purpose = Purpose::LeashGesture}));
+	EXPECT_EQ(requests[0],
+	          (Request {.gesture = GestureType::SquareSpirial, .purpose = Purpose::LeashGesture, .leash = LeashType::Rope}));
 
 	// Held in the hand, knowing one leash: a scribble shakes it off; the leash gesture has nothing to pick
 	context.creature->leashed = true;

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "Creature/LeashOrders.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -27,8 +28,8 @@ class LeashSystem final: public LeashSystemInterface
 public:
 	void ProcessTurn() override;
 	void Update(float seconds) override;
-	void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor, uint32_t milliseconds,
-	                 bool actionTaken) override;
+	void ShowPosts(bool handShown) override;
+	void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken) override;
 
 	[[nodiscard]] bool Knows(entt::entity creature, LeashType type) const override;
 	void SetKnown(entt::entity creature, LeashType type, bool known) override;
@@ -57,6 +58,13 @@ public:
 	bool OrderAt(PlayerNames player, const glm::vec3& place) override;
 	bool OrderOn(PlayerNames player, entt::entity object) override;
 	[[nodiscard]] std::optional<glm::vec3> OrderTarget(entt::entity creature) const override;
+	bool PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
+	                 uint32_t milliseconds) override;
+	bool TapThing(PlayerNames player, entt::entity object) override;
+	void UpdateRopeHover(PlayerNames player, const RopeFrame& frame) override;
+	[[nodiscard]] leash_snap::Hand RopeHand(PlayerNames player) const override;
+	bool PressRope(PlayerNames player) override;
+	void LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place) override;
 	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
 	bool TapPost(entt::entity post) override;
@@ -76,6 +84,8 @@ private:
 	void PlacePostsAtTemples();
 	/// A taut rope in the hand pulls the creature to the hand
 	void Pull(entt::entity creature);
+	/// What the worn leash does to the creature's desires this turn, and to those of a creature it is tied to
+	void UpdateMoods(entt::entity creature, const components::CreatureLeash::Worn& worn);
 	/// The creature takes an order on the land or on a thing, unless it refuses
 	bool TakeGroundOrder(entt::entity creature, const glm::vec3& place);
 	bool TakeThingOrder(entt::entity creature, entt::entity object);
@@ -89,15 +99,35 @@ private:
 	[[nodiscard]] bool OrderInForce(entt::entity creature) const;
 	/// The ring of the player's own creature's order follows its target and throbs
 	void UpdateMarkers(float seconds);
+	/// The player's worn leash while it is tied to something, or none (which drops any rope the hand held)
+	components::CreatureLeash::Worn* TiedLeash(PlayerNames player);
+	/// The player's tied leash while the hand holds its rope
+	components::CreatureLeash::Worn* HeldLeash(PlayerNames player);
 	/// The temple's leashes hang if the creature knows them, tumble and glow, the picked one carried in the hand
 	void UpdatePosts(float seconds);
 	/// Whether the posts have been looked for at the temples yet
 	bool _postsPlaced {false};
+	/// Whether the hand was out when the posts were last shown
+	bool _handShown {true};
 	/// The two leash-tying sounds play in turn
 	bool _secondAttachSound {false};
 	std::optional<Refused> _lastRefusal;
 	/// Tells the Action button's double taps from single ones
 	creature_leash_orders::DoubleTaps _doubleTaps;
+	/// The last press of the Action button was the second of a double tap
+	bool _lastPressDouble {false};
+	/// What the local player's hand does about the rope of their tied leash
+	leash_snap::Hand _ropeHand {leash_snap::Hand::Away};
+	/// What the thing under the cursor is to an Action tap: the object the interface picked, a creature along the ray when
+	/// it picked none, and the land
+	struct Under
+	{
+		std::optional<entt::entity> object;
+		std::optional<glm::vec3> land;
+	};
+	[[nodiscard]] Under TappedUnder(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) const;
+	/// A single or double tap of the Action button with the leash, acting on what is under the cursor
+	void ActOnTap(PlayerNames player, entt::entity creature, const Under& under, bool doubleTap);
 	/// The clock every order's ring throbs by, in milliseconds of game time
 	float _markerClockMs {0.0f};
 };

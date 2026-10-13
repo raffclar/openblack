@@ -52,6 +52,9 @@ struct Hint
 
 /// A leash's hint comes in the row after its number plus this
 inline constexpr int k_LeashOrderBase = 3;
+/// The leash gesture's own hint, with the collar of the leash it is about, comes nearer the screen's left than any
+/// leash's
+inline constexpr int k_LeashGestureOrder = 2;
 
 /// A gesture's shape: its points evenly along it, and its length in the square it was drawn in (see
 /// gesture::TrailSymbol)
@@ -65,7 +68,8 @@ using ShapeOf = std::function<std::optional<Shape>(GestureType)>;
 /// The dot runs along a circle in this many seconds, along other gestures in as many more as they are longer
 inline constexpr float k_CirclePeriod = 2.0f;
 
-/// The hints for what the hand waits for: a hint for each leash the picker offers, in the order of the row. A gesture
+/// The hints for what the hand waits for: the leash gesture with the collar of the leash it is about, and a hint for
+/// each leash the picker offers, in the order of the row. A gesture
 /// without a shape of its own takes the circle's.
 [[nodiscard]] std::vector<Hint> HintsFor(std::span<const gesture::Request> requests, const ShapeOf& shapeOf);
 /// Whether a new row of hints differs from the one shown; the row is then replaced, every dot starting again
