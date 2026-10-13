@@ -418,6 +418,12 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 			}
 		}
 	}
+	if (auto* villager = registry.TryGet<ecs::components::Villager>(entity);
+	    villager != nullptr && (object.woodHeld != 0 || object.foodHeld != 0))
+	{
+		villager->woodHeld = object.woodHeld;
+		villager->foodHeld = object.foodHeld;
+	}
 	if (object.poisoned)
 	{
 		registry.AssignOrReplace<ecs::components::Poisoned>(entity);

@@ -165,22 +165,6 @@ const GVillagerInfo* InfoOf(entt::entity villager)
 	return kind < infos.size() ? &infos[kind] : nullptr;
 }
 
-/// The villager moves at the speed of a state, as its table says
-void SetStateSpeed(entt::entity villager, VillagerStates state)
-{
-	auto* wallHug = Entities().TryGet<WallHug>(villager);
-	const auto* info = InfoOf(villager);
-	if (wallHug == nullptr || info == nullptr)
-	{
-		return;
-	}
-	const auto& speeds = info->speedGroup;
-	const std::array<SpeedState, 6> table {speeds.speedDefault, speeds.speedFleeing, speeds.speed2,
-	                                       speeds.speed3,       speeds.speed4,       speeds.speed5};
-	const auto index = std::min<size_t>(StateInfo(state).speedIndex, table.size() - 1);
-	wallHug->speed = GetSpeedStateSpeed(table.at(index));
-}
-
 VillagerFireState& FireStateOf(entt::entity villager)
 {
 	auto& registry = Entities();
@@ -541,7 +525,6 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 		                              info.minDistanceToRunAwayFromObject
 		                        : GameFloatRandom(k_SafeMargin) + reach->safeRadius;
 		WalkTo(action, FleeingPosition(here, reach->position, runTo), VillagerStates::ReactToFire);
-		SetStateSpeed(villager, VillagerStates::ReactToFire);
 		return 1;
 	}
 	if (IsFireFightingState(FinalState(action)))
@@ -764,7 +747,6 @@ uint32_t villager_fire::OnFire(LivingAction& action)
 		goal = CoordsToMetres(ToCoords(Across(here)) + PosFromAngle(angle, distance));
 	}
 	WalkTo(action, goal, VillagerStates::OnFire);
-	SetStateSpeed(villager, VillagerStates::OnFire);
 	if (State(action, LivingAction::Index::Previous) == VillagerStates::InvalidState)
 	{
 		SetPrevious(action, VillagerStates::DecideWhatToDo);
