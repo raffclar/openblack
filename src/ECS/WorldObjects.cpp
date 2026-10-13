@@ -10,6 +10,7 @@
 #include "WorldObjects.h"
 
 #include <algorithm>
+#include <optional>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -272,16 +273,26 @@ world_objects::Size world_objects::SizeOf(entt::entity object)
 	Size size {.radius = k_DefaultRadius, .height = k_DefaultHeight};
 	const auto* transform = registry.TryGet<const Transform>(object);
 	const auto* mesh = registry.TryGet<const Mesh>(object);
-	if (transform == nullptr || mesh == nullptr || !Locator::resources::has_value())
+	// A one-shot miracle's globe is drawn by the miracles' own pass, with its dome's model
+	std::optional<entt::id_type> model;
+	if (mesh != nullptr)
+	{
+		model = mesh->id;
+	}
+	else if (registry.AllOf<OneOffSpellSeed>(object))
+	{
+		model = OneOffSpellSeed::k_MeshId.value();
+	}
+	if (transform == nullptr || !model.has_value() || !Locator::resources::has_value())
 	{
 		return size;
 	}
 	auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(mesh->id))
+	if (!meshes.Contains(*model))
 	{
 		return size;
 	}
-	const auto box = meshes.Handle(mesh->id)->GetBoundingBox().Size() * transform->scale;
+	const auto box = meshes.Handle(*model)->GetBoundingBox().Size() * transform->scale;
 	size.radius = std::max(box.x, box.z) * 0.5f;
 	size.height = box.y;
 	return size;

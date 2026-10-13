@@ -67,6 +67,7 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
+#include "VillagerCover.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDance.h"
 #include "VillagerFire.h"
@@ -406,9 +407,24 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 			villager_reactions::RememberStateToGoBackTo(*action);
 		}
 		SetTop(*action, *first);
-		// TODO(villager-social): the game impresses the villager by the creature's last action, its size and its town's
-		// feeling; that measure isn't ported yet, so the creature impresses no one
-		return Taken::NotImpressed;
+		// The creature impresses it by its size, what it last did and how its town feels about it
+		return Taken::Impressed;
+	}
+	// A hunter: one on its way to hide counts its time inside afresh and is neither taken up nor impressed; any other
+	// is frightened by it
+	if (type == Reaction::FleeFromPredator)
+	{
+		if (FinalStateOf(*action) == VillagerStates::GoAndHideInNearbyBuilding)
+		{
+			ecs::villager_cover::ResetHidingTurns(villager);
+			return Taken::No;
+		}
+		if (!wasReacting)
+		{
+			villager_reactions::RememberStateToGoBackTo(*action);
+		}
+		SetTop(*action, VillagerStates::FleeingFromPredatorReaction);
+		return Taken::Impressed;
 	}
 	if (!wasReacting)
 	{
@@ -448,6 +464,10 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 				villager_physics::SetupReactToFlyingObject(villager, reaction->source.initiator);
 			}
 		}
+		break;
+	case Reaction::ReactToFight:
+		// It goes to its place round the arena to watch the fight
+		SetTop(*action, VillagerStates::InitialiseFightReaction);
 		break;
 	case Reaction::ReactToFood:
 		// It goes to the food
@@ -529,6 +549,7 @@ bool villager_reactions::ActsOut(Reaction type)
 	case Reaction::ReactToTownCelebration:
 	case Reaction::ReactToCreature:
 	case Reaction::Fainting:
+	case Reaction::FleeFromPredator:
 		return true;
 	default:
 		return false;

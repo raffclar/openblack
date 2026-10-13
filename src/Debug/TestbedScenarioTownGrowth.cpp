@@ -168,7 +168,9 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .description = "A hut of the player's town north of the middle with six of its people about it, and the player's "
 	                   "tiger standing still, its mind paused, thirty metres to the east.",
 	    .expected = "The town has never seen the creature, so it is curious: the villagers within reach take up its "
-	                "reaction and stand looking at it from where they are for a second and a half to four and a half, "
+	                "reaction, each giving the town belief in the player (the town's one-off belief for seeing a creature, "
+	                "by the tiger's size and distance, less each time as the town tires of it), and stand looking at it from "
+	                "where they are for a second and a half to four and a half, "
 	                "then walk to twenty metres from it and look again for one and a half to eight and a half seconds, "
 	                "and if there is time step to twelve metres, then four. Fifteen seconds after the town first noticed it, "
 	                "with the creature doing "
@@ -325,6 +327,34 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "to a point straight away from it, 1.2 times the reaction's reach off; with the tiger meaning nothing "
 	                "they stand. Thirty seconds after the tiger last frightened the town its fear lapses into "
 	                "indifference and they go back to what they were doing.");
+
+	// Animals near a creature
+	all.push_back({
+	    .id = "animals.flee_creature",
+	    .name = "Animals running from a creature",
+	    .facet = Facet::Objects,
+	    .description = "Four sheep and two cows grazing round the middle, and the player's tiger standing still, its mind "
+	                   "paused, twenty metres to the east.",
+	    .expected = "The animals within the creature's reaction reach take it up as their table says and run from the "
+	                "tiger, as they run from a thing to flee, then go back to grazing once they are far enough away and "
+	                "their time with it is up.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 25.0f}, {35.0f, 55.0f}}, .distance = 0.7f},
+	    .creatures = {{.label = "watched",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {20.0f, 40.0f},
+	                   .facingDegrees = 270.0f,
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .hold = true,
+	                   .pauseMind = true}},
+	    .objects = {{.type = AnimalInfo::Sheep, .offset = {-2.0f, 36.0f}},
+	                {.type = AnimalInfo::Sheep, .offset = {-4.0f, 44.0f}},
+	                {.type = AnimalInfo::Sheep, .offset = {2.0f, 40.0f}},
+	                {.type = AnimalInfo::Sheep, .offset = {-8.0f, 38.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {-12.0f, 46.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {-14.0f, 34.0f}}},
+	});
 
 	// A burning cart near a town's people, taken up in the hand
 	all.push_back({

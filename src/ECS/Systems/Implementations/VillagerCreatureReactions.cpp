@@ -43,6 +43,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
+#include "VillagerFightWatch.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
 #include "VillagerWorship.h"
@@ -211,9 +212,7 @@ void FollowTownFeeling(LivingAction& action)
 	}
 	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsFighting(*creature))
 	{
-		StopReacting(action);
-		// TODO(villager-social): the game then has the villager take up the fight's own reaction to watch it, which
-		// villagers don't act out yet
+		ecs::villager_fight_watch::WatchCreaturesFight(action, *creature);
 		return;
 	}
 	const auto town = TownOf(villager);

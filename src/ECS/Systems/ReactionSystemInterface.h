@@ -113,6 +113,9 @@ public:
 	/// A living thing lets go of the reaction it has taken up, leaving what it is doing as it is, and remembers that it
 	/// last reacted to that kind now
 	virtual void StopReacting(entt::entity living) = 0;
+	/// A villager takes up a reaction straight away, whatever else is more urgent to it and however lately it reacted to
+	/// that kind: a villager watching a creature goes to watch the fight the creature went into
+	virtual void TakeUp(uint32_t /*id*/, entt::entity /*living*/) {}
 	/// Whether an initiator has a reaction going
 	[[nodiscard]] virtual bool HasReaction(entt::entity initiator) const = 0;
 	/// Once a game turn: the reactions age, and impress who is in their reach

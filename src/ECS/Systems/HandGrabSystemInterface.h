@@ -84,6 +84,10 @@ public:
 	/// holds to a creature, as the Action button pressed over the creature does. Whether it could.
 	virtual bool TakeIntoHand(entt::entity /*object*/) { return false; }
 	virtual bool GiveHeldTo(entt::entity /*creature*/) { return false; }
+	/// For the debug tools: the hand releases the thing that it holds, as a release of the Action button does. With no
+	/// velocity, the hand puts the thing on the land below it. Else, the hand throws the thing at the velocity. This
+	/// function returns true if the hand held a thing.
+	virtual bool LetGoAt(glm::vec3 /*velocity*/) { return false; }
 	/// The creature the hand offers what it holds to, while it does; the creature reaching for it once given
 	[[nodiscard]] virtual std::optional<entt::entity> GetOfferedCreature() const { return std::nullopt; }
 	/// How far round what the hand holds is turned as it is offered, rolled with the hand about the line to the camera,

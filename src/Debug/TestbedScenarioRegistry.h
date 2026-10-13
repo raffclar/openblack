@@ -674,6 +674,9 @@ struct Command
 		/// A land's script (script, by its name) starts as a script's "run script" starts it, given its arguments in
 		/// order (scriptArguments); the scripts' globals named are set first (scriptGlobals). Needs no creature
 		RunScript,
+		/// The player's hand releases the thing that it holds, as a release of the Action button does. With no velocity, the
+		/// hand puts the thing on the land below it. Else, the hand throws the thing at the velocity. No creature is necessary.
+		HandRelease,
 		/// The player's hand lets go of a handful of wood (value, how much) slowly over a point of the land (point, from
 		/// the middle of the map), pouring it there as a slow let-go does. Needs no creature
 		HandPour,
@@ -693,6 +696,8 @@ struct Command
 	bool waitUntilFree {false};
 	/// The point gone to, fled from or faced, from the middle of the map
 	glm::vec2 point {0.0f};
+	/// The velocity at which the player's hand throws the thing that it releases
+	glm::vec3 velocity {0.0f};
 	/// The animation played, the creature followed or fought, the band of a blow (high, middle, low), the step
 	/// (forward, back, right, left), or whether it fights by itself (1) or not
 	size_t value {0};

@@ -39,8 +39,11 @@ class MiracleFxSystemInterface
 public:
 	virtual ~MiracleFxSystemInterface() = default;
 
-	/// The hand some seconds on, and the globes and the piles of food and wood some seconds of game time on
+	/// The hand some seconds on, and the piles of food and wood some seconds of game time on
 	virtual void Update(float seconds, float gameSeconds) = 0;
+	/// The globes some seconds of game time on, once a frame after the hand has placed what it holds: each turns to face
+	/// the camera about its middle, wherever it now is, and its miracle spins inside
+	virtual void UpdateGlobes(float gameSeconds) = 0;
 	/// A miracle came to the hand at a power-up level, or powered up from one: the hand wears a bracelet for it and one
 	/// for each power-up; bands fly onto it with their sound unless the level fell; the announcer names the power-up
 	virtual void SeedInHand(int powerUp, int previousPowerUp) = 0;

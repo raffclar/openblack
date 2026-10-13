@@ -33,6 +33,7 @@ class CreatureHandSystem final: public CreatureHandSystemInterface
 public:
 	bool Grab() override;
 	[[nodiscard]] bool MayHold(entt::entity creature) const override;
+	[[nodiscard]] bool ShowsInteractTip(entt::entity creature, bool handInInfluence) const override;
 	[[nodiscard]] bool IsClick() const override;
 	std::optional<HandPose> Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
 	                               float screenWidth, float seconds) override;

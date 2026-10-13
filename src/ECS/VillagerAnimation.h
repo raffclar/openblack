@@ -142,6 +142,10 @@ struct BuildingClipChoice
 
 [[nodiscard]] AnimId FootballWaitForKickOffClip(const IntRandom& random);
 [[nodiscard]] AnimId FootballMatchPausedClip(const IntRandom& random);
+/// A villager watching a fight cheers when the creature it doesn't support took the latest blow, or despairs when the one
+/// it supports did, as long as either was struck within fifteen seconds; otherwise it chats. By the whole seconds since
+/// each was last struck.
+[[nodiscard]] AnimId WatchFightClip(uint32_t supportedStruckSeconds, uint32_t otherStruckSeconds, const IntRandom& random);
 /// The crowd at a match cheers a goal, chats while it goes on, or is unimpressed in between; with no match they gossip
 [[nodiscard]] AnimId FootballWatchMatchClip(std::optional<uint32_t> matchState, const IntRandom& random);
 
