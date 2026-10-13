@@ -276,6 +276,9 @@ struct ObjectSetup
 	std::optional<glm::vec2> worshipAt;
 	/// A villager's, animal's or building's life, 0 (dead) to 1, full when not given; a building is hurt down to it
 	std::optional<float> life;
+	/// A villager carries this much wood and food, which slows it, none when not given
+	int16_t woodHeld {0};
+	int16_t foodHeld {0};
 	/// A tree belongs to the land's forest of this number, none for 0; and grows to this size, its scale when not given
 	uint32_t forest {0};
 	std::optional<float> fullSize;
@@ -948,6 +951,8 @@ void AddHandLookScenarios(std::vector<Scenario>& all);
 /// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
 void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+/// Villagers walking side by side, each at the speed its life, load, town and state give
+void AddVillagerSpeedScenarios(std::vector<Scenario>& all);
 void AddDiscipleScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);
