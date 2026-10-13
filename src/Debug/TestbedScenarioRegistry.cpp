@@ -2798,7 +2798,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
-	       kind == Kind::RunHelpMessage || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || IsPointerCommand(kind);
+	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
+	       kind == Kind::EnterTemple || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2825,7 +2826,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 101> k_Names {
+	constexpr std::array<std::string_view, 102> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2920,6 +2921,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "tell an advisor",
 	    "walk home",
 	    "run a help message",
+	    "end the guidance's waits",
 	    "destroy temple",
 	    "script play",
 	    "run text",

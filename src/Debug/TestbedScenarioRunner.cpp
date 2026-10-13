@@ -111,6 +111,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -1597,6 +1598,15 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::EndGuidanceWaits)
+	{
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().EndWaits();
+		}
+		Log(fmt::format("{:.1f}s: the guidance's waits are over", _seconds));
+		return;
+	}
 	if (command.kind == Kind::RunHelpMessage)
 	{
 		const bool started =
@@ -1819,6 +1829,7 @@ void Runner::Give(const Command& command)
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
 	case Kind::RunHelpMessage:
+	case Kind::EndGuidanceWaits:
 	case Kind::RunText:
 	case Kind::PlayHandDemo:
 	case Kind::Reframe:
