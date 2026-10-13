@@ -11,6 +11,7 @@
 // the doves or bats about a temple, and many flocks at once for measuring their cost
 
 #include <array>
+#include <vector>
 
 #include "TestbedScenarioRegistry.h"
 
@@ -78,8 +79,8 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Animals,
 	    .description = "A flock of ten doves wandering up to 20 m about a point 30 m north of a camera on the ground, "
 	                   "looking up at them. Run it at a high frame rate to see the flapping at hundreds of frames a "
-	                   "second. (Every animal moving with a clip that keeps pace with the ground plays it the same way; "
-	                   "the testbed's own animals other than birds stand unposed, so the doves show it.)",
+	                   "second. (Every animal moving with a clip that keeps pace with the ground plays it the same way, "
+	                   "such as the living grazers of animals.every_kind.)",
 	    .expected = "A flying dove flaps at the same beat for its speed at 30, 100 or 500 frames a second: the clip keeps "
 	                "pace with the distance flown instead of slowing as the frame rate rises. Gliding or standing, its "
 	                "clips play by the clock as before.",
@@ -178,5 +179,38 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-300.0f, 0.0f}, {300.0f, 480.0f}}},
 	    .birdFlocks = flocks,
+	});
+
+	// One animal of each kind in the table of the game stays at its position. Behind them, grazers and birds live.
+	std::vector<ObjectSetup> animals;
+	constexpr int k_KindCount = static_cast<int>(AnimalInfo::_COUNT);
+	constexpr int k_PerRow = 16;
+	constexpr float k_Spacing = 8.0f;
+	for (int kind = 0; kind < k_KindCount; ++kind)
+	{
+		const auto column = static_cast<float>(kind % k_PerRow) - (static_cast<float>(k_PerRow - 1) * 0.5f);
+		const auto row = static_cast<float>(kind / k_PerRow);
+		animals.push_back({.type = static_cast<AnimalInfo>(kind), .offset = {column * k_Spacing, 30.0f + (row * 12.0f)}});
+	}
+	constexpr std::array k_Living {AnimalInfo::Sheep, AnimalInfo::Tortoise, AnimalInfo::Cow, AnimalInfo::Horse,
+	                               AnimalInfo::Pig,   AnimalInfo::Crow,     AnimalInfo::Dove};
+	for (size_t i = 0; i < k_Living.size(); ++i)
+	{
+		const auto column = static_cast<float>(i) - (static_cast<float>(k_Living.size() - 1) * 0.5f);
+		animals.push_back({.type = k_Living.at(i), .offset = {column * 12.0f, 75.0f}, .living = true});
+	}
+	all.push_back({
+	    .id = "animals.every_kind",
+	    .name = "Animals: every kind, still and living",
+	    .facet = Facet::Animals,
+	    .description = "Two rows north of the camera with one animal of each kind of the game's table (lion to puzzle "
+	                   "pig), which stay where they are put. Behind them a sheep, a tortoise, a cow, a horse and a pig "
+	                   "live as a land's script makes them, with a crow and a dove.",
+	    .expected = "Each animal in the rows stands in its kind's standing clip, posed and not in the model's bind pose; "
+	                "the birds among them show their flying clip on the ground. The grazers behind them walk, graze and "
+	                "stand in their own herds, and the crow and dove fly up and wander.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-70.0f, 20.0f}, {70.0f, 85.0f}}},
+	    .objects = animals,
 	});
 }
