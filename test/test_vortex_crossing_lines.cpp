@@ -16,6 +16,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
@@ -25,6 +26,8 @@
 #include "ECS/Registry.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VortexCrossingLines.h"
+#include "LHScriptX/FeatureScriptCommands.h"
+#include "LHScriptX/Lexer.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -45,7 +48,64 @@ vortex_crossing::World FakeWorld()
 	    .potResource = [](PotInfo) { return 1; },
 	    .life = [](entt::entity) { return 0.75f; },
 	    .player = [](entt::entity) { return std::optional<PlayerNames> {}; },
+	    .magicName = [](SpellSeedType seed,
+	                    int powerUp) { return fmt::format("MAGIC_{}_{}", static_cast<int>(seed), powerUp); },
 	};
+}
+
+/// A line as the land scripts' reader takes it: its command and the kind of each value
+struct ReadLine
+{
+	std::string command;
+	std::vector<lhscriptx::ParameterType> kinds;
+	std::vector<lhscriptx::Token> values;
+};
+
+/// Reads a line back as the reader's lexer does, a quoted place "x,z" being a place and other quoted text text
+ReadLine Read(const std::string& text)
+{
+	using lhscriptx::ParameterType;
+	using lhscriptx::Token;
+	lhscriptx::Lexer lexer(text);
+	ReadLine read;
+	read.command = lexer.GetToken().Identifier();
+	for (auto token = lexer.GetToken(); !token.IsEOF() && !token.IsEOL(); token = lexer.GetToken())
+	{
+		switch (token.GetType())
+		{
+		case Token::Type::Identifier:
+			read.kinds.push_back(ParameterType::String);
+			break;
+		case Token::Type::String:
+			read.kinds.push_back(std::ranges::count(token.StringValue(), ',') == 1 ? ParameterType::Vector
+			                                                                       : ParameterType::String);
+			break;
+		case Token::Type::Integer:
+			read.kinds.push_back(ParameterType::Number);
+			break;
+		case Token::Type::Float:
+			read.kinds.push_back(ParameterType::Float);
+			break;
+		default:
+			continue;
+		}
+		read.values.push_back(token);
+	}
+	return read;
+}
+
+/// Whether the reader knows the command and takes its values as they are written
+bool ReaderTakes(const ReadLine& read)
+{
+	const auto& signatures = lhscriptx::FeatureScriptCommands::k_Signatures;
+	const auto signature =
+	    std::ranges::find_if(signatures, [&read](const auto& each) { return read.command == each.name.data(); });
+	if (signature == signatures.end())
+	{
+		return false;
+	}
+	const auto expected = std::ranges::find(signature->parameters, lhscriptx::ParameterType::None);
+	return std::ranges::equal(signature->parameters.begin(), expected, read.kinds.begin(), read.kinds.end());
 }
 
 std::string LineText(const Registry& registry, entt::entity thing)
@@ -128,4 +188,48 @@ TEST(VortexCrossingLines, ABuildingHasNoLine)
 	Registry registry;
 	const auto thing = Thing(registry, {1000.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 1.0f);
 	EXPECT_EQ(LineText(registry, thing), "");
+}
+
+TEST(VortexCrossingLines, AGlobeIsWrittenByTheMiracleItsSeedCastsAtItsPowerUp)
+{
+	Registry registry;
+	const auto globe = Thing(registry, {1000.0f, k_Ground + 3.0f, 1990.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<OneOffSpellSeed>(globe, OneOffSpellSeed {.seedType = SpellSeedType::Food, .powerUp = 1});
+	const auto text = LineText(registry, globe);
+	EXPECT_EQ(text, fmt::format("CREATE_ONE_SHOT_SPELL_PU(\"0.00,-10.00\", \"MAGIC_{}_1\")\n",
+	                            static_cast<int>(SpellSeedType::Food)));
+	const auto read = Read(text);
+	EXPECT_TRUE(ReaderTakes(read));
+	EXPECT_EQ(read.values.at(0).StringValue(), "0.00,-10.00");
+	EXPECT_EQ(read.values.at(1).StringValue(), fmt::format("MAGIC_{}_1", static_cast<int>(SpellSeedType::Food)));
+}
+
+TEST(VortexCrossingLines, TheReaderTakesEveryKindsLine)
+{
+	Registry registry;
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, Town {.id = 3});
+	std::vector<entt::entity> things;
+	const auto add = [&registry, &things](glm::vec3 position) {
+		things.push_back(Thing(registry, position, glm::mat3(1.0f), 1.0f));
+		return things.back();
+	};
+	auto& villager = registry.Assign<Villager>(add({1010.0f, k_Ground, 2020.0f}));
+	villager.tribe = Tribe::CELTIC;
+	villager.number = VillagerNumber::Farmer;
+	villager.town = town;
+	auto& special = registry.Assign<Villager>(add({1010.0f, k_Ground, 2020.0f}));
+	special.tribe = Tribe::NONE;
+	registry.Assign<Animal>(add({1000.0f, k_Ground, 2000.0f})).type = AnimalInfo::Cow;
+	registry.Assign<Pot>(add({1000.0f, k_Ground, 2000.0f}), Pot {.amount = 10, .maxAmount = 1000, .type = PotInfo::HandFood});
+	registry.Assign<Tree>(add({1000.0f, k_Ground, 2000.0f}), Tree {.type = TreeInfo::Oak, .maxSize = 1.0f});
+	registry.Assign<MobileStatic>(add({1000.0f, k_Ground, 2000.0f}), MobileStaticInfo::Rock);
+	registry.Assign<MobileObject>(add({1000.0f, k_Ground, 2000.0f}), MobileObjectInfo::EgyptBarrel);
+	registry.Assign<DeadTree>(add({1000.0f, k_Ground, 2000.0f}), DeadTree {.type = TreeInfo::Oak});
+	registry.Assign<OneOffSpellSeed>(add({1000.0f, k_Ground, 2000.0f}), OneOffSpellSeed {.seedType = SpellSeedType::Food});
+	for (const auto thing : things)
+	{
+		const auto text = LineText(registry, thing);
+		EXPECT_TRUE(ReaderTakes(Read(text))) << text;
+	}
 }

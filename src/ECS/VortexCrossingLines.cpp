@@ -21,6 +21,7 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
@@ -133,6 +134,11 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 		                 .yAngle = YAngleOf(transform->rotation),
 		                 .scale = scale,
 		                 .maxScale = tree->maxSize};
+	}
+	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(thing))
+	{
+		// Written by the miracle its seed casts at its power-up, not by the seed
+		return OneOffSpellLine {.offset = offset, .magic = world.magicName(globe->seedType, globe->powerUp)};
 	}
 	if (const auto* still = registry.TryGet<const MobileStatic>(thing))
 	{

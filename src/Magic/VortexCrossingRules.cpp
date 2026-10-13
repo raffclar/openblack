@@ -184,6 +184,10 @@ std::string Text(const Line& line)
 			    return fmt::sprintf(CommandFormat("CREATE_MOBILEOBJECT", "ANNN"), place, l.row,
 			                        map_coords::FtoL(l.yAngle * k_Thousand), map_coords::FtoL(l.scale * k_Thousand));
 		    }
+		    else if constexpr (std::is_same_v<T, OneOffSpellLine>)
+		    {
+			    return fmt::sprintf(CommandFormat("CREATE_ONE_SHOT_SPELL_PU", "AL"), place, l.magic);
+		    }
 		    else
 		    {
 			    static_assert(std::is_same_v<T, DeadTreeLine>);

@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <optional>
+#include <string>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
@@ -45,13 +46,16 @@ struct World
 	std::function<float(entt::entity)> life;
 	/// The player it belongs to, none for nobody
 	std::function<std::optional<PlayerNames>(entt::entity)> player;
+	/// The name of the miracle a seed casts at a power-up level
+	std::function<std::string(SpellSeedType, int)> magicName;
 };
 
 /// Where a thing stands as a map position: across the land, and its height above the land there
 [[nodiscard]] map_coords::MapCoords MapPlace(glm::vec3 position, float ground);
 
 /// The line making the thing again relative to the vortex's place: a villager, an animal, a pot (not one of a storage
-/// pit's piles), a tree, a rock or other static thing, a thing lying about or a dead tree. None for anything else.
+/// pit's piles), a tree, a rock or other static thing, a thing lying about, a dead tree or a globe holding a miracle. None
+/// for anything else.
 [[nodiscard]] std::optional<vortex::crossing::Line> LineFor(const Registry& registry, entt::entity thing,
                                                             const map_coords::MapCoords& vortex, const World& world);
 

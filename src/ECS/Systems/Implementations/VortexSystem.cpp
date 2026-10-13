@@ -68,6 +68,7 @@
 #include "InfoConstants.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 #include "Magic/VortexCrossingRules.h"
 #include "Magic/VortexPullRules.h"
 #include "Magic/VortexRules.h"
@@ -653,6 +654,13 @@ void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 	        },
 	    .life = [](entt::entity object) { return world_objects::LifeOf(object); },
 	    .player = [](entt::entity object) { return world_objects::PlayerOf(object); },
+	    .magicName =
+	        [&info](SpellSeedType seed, int powerUp) {
+		        const auto& record = magic::GetMagicInfoFromPowerUpLevel(info, magic::GetSpellSeedInfo(info, seed), powerUp);
+		        // The name fills its field up to the first nought, if it has one
+		        const auto& name = magic::GetMagicEffectInfo(info, record.magicType).debugString;
+		        return std::string(name.begin(), std::ranges::find(name, '\0'));
+	        },
 	};
 	auto place = map_coords::FromMetres({vortex.centre.x, vortex.centre.z});
 	place.altitude = vortex.altitude;

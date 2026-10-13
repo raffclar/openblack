@@ -182,8 +182,15 @@ struct DeadTreeLine
 	float yAngle {0.0f};
 	float zAngle {0.0f};
 };
+/// A globe holding a miracle, written by the name of the miracle it gives; it is made again from the first seed that casts
+/// that miracle, at the power-up that casts it, at the usual strength
+struct OneOffSpellLine
+{
+	map_coords::MapCoords offset;
+	std::string magic;
+};
 using Line = std::variant<VillagerLine, SpecialVillagerLine, AnimalLine, PotLine, TreeLine, MobileStaticLine, MobileObjectLine,
-                          DeadTreeLine>;
+                          DeadTreeLine, OneOffSpellLine>;
 
 /// The land scripts' text for a command: its name, then each parameter by its letter (A a place or plain text, N a whole
 /// number, F a number, L quoted text), comma separated in brackets, ending the line
