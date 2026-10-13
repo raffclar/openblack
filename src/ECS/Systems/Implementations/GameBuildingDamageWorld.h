@@ -42,6 +42,7 @@ public:
 	[[nodiscard]] std::optional<magic::EffectValues> Crush() const override;
 	void ApplyEffect(entt::entity object, const magic::EffectValues& values, const magic::EffectSource& source) override;
 	void PlayerDid(size_t deed, glm::vec3 point, entt::entity object, PlayerNames player) override;
+	void BuildingWrecked(entt::entity building, std::optional<PlayerNames> player, float remaining) override;
 };
 
 } // namespace openblack::ecs::systems
