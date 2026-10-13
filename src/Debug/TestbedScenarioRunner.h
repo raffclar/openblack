@@ -236,6 +236,8 @@ private:
 		std::optional<float> nextAt;
 		std::optional<float> letGoAt;
 		entt::entity spell {entt::null};
+		/// A shield is broken then
+		std::optional<float> breakAt;
 		/// Cast by hand: when its button is pressed and let go, and where the hand is
 		std::optional<float> pressAt;
 		std::optional<float> releaseAt;
