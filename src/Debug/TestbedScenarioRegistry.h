@@ -24,6 +24,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/BonusCreatures.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreaturePhysiology.h"
@@ -145,6 +146,9 @@ struct Environment
 	/// Where the player's temple stands, from the middle of the map, x east and y north in units of the land; with it
 	/// standing their influence border shows, as on a land. The testbed has none when not given.
 	std::optional<glm::vec2> temple;
+	/// The Creature Breeder's bonus creatures taken as unlocked while the scenario runs, as the debug option takes them;
+	/// the option is put back when it stops
+	std::optional<creature_swap::Unlocked> unlockedBonusCreatures;
 };
 
 /// Where the camera looks as the scenario starts
@@ -425,6 +429,24 @@ struct MiracleCast
 };
 
 /// Something a creature is told to do, in turn with the scenario's other commands
+/// A value a scenario hands a land's script, as another script's call hands it: a number, a marker made at a point from
+/// the middle of the map so high above the land, or one of the scenario's objects or creatures, by its place
+struct ScriptArgument
+{
+	enum class Kind : uint8_t
+	{
+		Number,
+		Marker,
+		Object,
+		Creature,
+	};
+	Kind kind {Kind::Number};
+	float number {0.0f};
+	glm::vec2 point {0.0f};
+	float height {0.0f};
+	size_t index {0};
+};
+
 struct Command
 {
 	enum class Kind : uint8_t
@@ -625,6 +647,9 @@ struct Command
 		/// The player is put in a room of the temple (value, by the temple's rooms: 0 the challenge room). Needs no
 		/// creature
 		EnterTemple,
+		/// A land's script (script, by its name) starts as a script's "run script" starts it, given its arguments in
+		/// order (scriptArguments); the scripts' globals named are set first (scriptGlobals). Needs no creature
+		RunScript,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -690,6 +715,10 @@ struct Command
 	std::string_view handDemo;
 	/// The title of a challenge recorded, by its help text's name
 	std::string_view title;
+	/// A script run, its arguments, and the globals set before it runs
+	std::string_view script;
+	std::vector<ScriptArgument> scriptArguments;
+	std::vector<std::pair<std::string_view, ScriptArgument>> scriptGlobals;
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 /// Whether a command is the player's mouse, which needs no creature

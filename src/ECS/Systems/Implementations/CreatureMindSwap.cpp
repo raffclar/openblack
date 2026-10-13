@@ -20,14 +20,17 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureRig.h"
 #include "Creature/CreatureSpells.h"
 #include "Creature/CreatureSwap.h"
 #include "Creature/CreatureWatching.h"
 #include "CreatureMindSystem.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -38,6 +41,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -72,6 +76,42 @@ bool SpellFree(const ecs::Registry& registry, entt::entity creature)
 }
 
 /// The player whose colour the creature's beam takes: its own, or the local player's when it has none
+/// A point of a creature's body: one of its bones, drawn at random, where it was last posed; its place when it has no pose
+glm::vec3 RandomBodyPoint(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto& transform = registry.Get<const Transform>(creature);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto bones = animation != nullptr ? static_cast<uint32_t>(animation->boneMatrices.size()) : 0u;
+	const auto bone = Locator::gameRandom::value().GameRand(bones);
+	if (animation == nullptr || bone >= bones)
+	{
+		return transform.position;
+	}
+	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	return glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
+}
+
+/// Every third game turn of the swap, while the other is still a creature and its beam of light still runs, a beam runs
+/// from a random point of this body to a random point of the other's
+void FireSwapBeam(const ecs::Registry& registry, entt::entity creature, const CreatureSwap& swap)
+{
+	if (!Locator::particleSystem::has_value() || !Locator::time::has_value() || !Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	if (!creature_swap::IsBeamTurn(Locator::time::value().GetTurn()) || !registry.Valid(swap.other) ||
+	    !registry.AllOf<Creature, Transform>(swap.other) || swap.beam == ParticleSystemInterface::k_NoEffect ||
+	    !particles.IsRunning(swap.beam))
+	{
+		return;
+	}
+	const auto from = RandomBodyPoint(registry, creature);
+	const auto to = RandomBodyPoint(registry, swap.other);
+	particles.AddPlasma(swap.beam,
+	                    creature_swap::Beam(from, to, Locator::gameRandom::value().GameRand(creature_swap::k_BeamAlphaDraws)));
+}
+
 int BeamPlayer(PlayerNames owner)
 {
 	if (owner != PlayerNames::NEUTRAL)
@@ -267,10 +307,20 @@ void CreatureMindSystem::StepSwap(entt::entity creature, const creature_mind::Co
 	{
 		const auto& body = registry.Get<const Creature>(creature);
 		auto& particles = Locator::particleSystem::value();
+		auto* swap = registry.TryGet<CreatureSwap>(creature);
+		// A beam of an earlier swap still about it goes first
+		if (swap != nullptr && swap->beam != ParticleSystemInterface::k_NoEffect)
+		{
+			particles.CloseDown(swap->beam);
+		}
 		const auto beam =
 		    particles.StartSpotVisual(SpotVisualType::MagicBeamCreatureSwap, registry.Get<const Transform>(creature).position,
 		                              k_SwapBeamTurns, entt::null, 1.0f);
 		particles.SetPlayer(beam, BeamPlayer(body.owner));
+		if (swap != nullptr)
+		{
+			swap->beam = beam;
+		}
 	}
 	if (commands.easeSwap)
 	{
@@ -287,5 +337,6 @@ void CreatureMindSystem::StepSwap(entt::entity creature, const creature_mind::Co
 		{
 			transform->scale = glm::vec3(archetypes::CreatureArchetype::DrawnScale(body.species, ShownSize(body)));
 		}
+		FireSwapBeam(registry, creature, *swap);
 	}
 }
