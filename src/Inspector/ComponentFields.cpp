@@ -470,6 +470,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlinthStone>(context)
 	    .Field<&components::PlinthStone::plinth>("plinth")
 	    .Field<&components::PlinthStone::pickable>("pickable");
+	Reflect<components::GateLantern>(context).Field<&components::GateLantern::gate>("gate");
 	Reflect<components::AppleBarrel>(context)
 	    .Field<&components::AppleBarrel::store>("store")
 	    .Field<&components::AppleBarrel::worm>("worm");

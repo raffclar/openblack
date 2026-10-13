@@ -209,6 +209,29 @@ TEST(AnimatedStaticRules, AResizedGateSpreadsItsCirclesByItsSizeTwice)
 	EXPECT_FLOAT_EQ(circles.back().radius, k_GateRouteRadius);
 }
 
+TEST(AnimatedStaticRules, AGateLanternShowsOnlyWhileTheGateIsListedAndOnScreen)
+{
+	const glm::vec2 gate {1781.0f, 2810.0f};
+	const glm::vec2 lantern {1796.0f, 2808.0f};
+	EXPECT_TRUE(GateLanternLook(true, true, gate, lantern).shown);
+	EXPECT_FALSE(GateLanternLook(true, false, gate, lantern).shown);
+	EXPECT_FALSE(GateLanternLook(false, true, gate, lantern).shown);
+	EXPECT_FALSE(GateLanternLook(false, false, gate, lantern).shown);
+}
+
+TEST(AnimatedStaticRules, AGateLanternTakesTheLightOfThePointWhereTheGateStands)
+{
+	const glm::vec2 gate {1781.0f, 2810.0f};
+	const glm::vec2 lantern {1796.0f, 2808.0f};
+	const auto look = GateLanternLook(true, true, gate, lantern);
+	EXPECT_FLOAT_EQ(look.lightOffset.x, -15.0f);
+	EXPECT_FLOAT_EQ(look.lightOffset.y, 2.0f);
+	EXPECT_EQ(lantern + look.lightOffset, gate);
+	// The gate gives the lantern no snow level, and the shader shows no snow under a level of five
+	EXPECT_LT(look.snowCap, 5.0f);
+	EXPECT_GT(look.snowCap, 0.0f);
+}
+
 TEST(AnimatedStaticRules, AClosingPlinthDrawsItsStonesBothSinkingAndStacked)
 {
 	const PlinthLook look {.openState = k_Closed,

@@ -936,3 +936,6 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_snow_levels test_snow_levels.cpp)
 openblack_setup_and_add_test(test_camera_rays camera/test_camera_rays.cpp)
+openblack_setup_and_add_test(
+  test_instance_light_point graphics/test_instance_light_point.cpp
+)

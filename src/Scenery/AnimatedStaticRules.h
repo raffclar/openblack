@@ -107,4 +107,19 @@ constexpr size_t k_GateRouteGap = 5;
 [[nodiscard]] std::vector<RouteCircle> GateRouteCircles(glm::vec2 middle, glm::vec2 across, float halfWidth, float size,
                                                         bool openAndStill);
 
+/// How the gate draws a lantern that it holds up. The lantern shows only on a frame when the gate is in the land's draw
+/// list and on screen. The lantern takes the land's light and colour from the point where the gate stands, not from
+/// its own point. The offset goes from the lantern to that point, on the land. Snow never shows on the lantern, because
+/// the gate does not give it a snow level.
+struct LanternLook
+{
+	bool shown {false};
+	glm::vec2 lightOffset {0.0f};
+	/// The most snow that can show on the lantern, of 255. The object shader shows no snow below a level of five.
+	float snowCap {0.0f};
+};
+/// A snow cap that shows no snow
+constexpr float k_NoSnowCap = 1.0f;
+[[nodiscard]] LanternLook GateLanternLook(bool gateInDrawList, bool gateOnScreen, glm::vec2 gate, glm::vec2 lantern);
+
 } // namespace openblack::animated_static
