@@ -13,6 +13,7 @@
 
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -69,33 +70,43 @@ private:
 	std::unordered_map<std::string, std::string> _failures;
 };
 
-/// A picture of a frame kept in memory rather than written out: BGRA8 pixels, rows pitch bytes apart, the bottom row
-/// first when yflip
-struct CapturedFrame
+/// A frame as the renderer reads it back: BGRA8 pixels, rows pitch bytes apart, the bottom row first when yflip. The
+/// pixels stay valid only while the function that gets the view runs.
+struct ScreenView
 {
 	uint32_t width {0};
 	uint32_t height {0};
 	uint32_t pitch {0};
 	bool yflip {false};
-	std::vector<uint8_t> bgra;
+	std::span<const uint8_t> bgra;
 };
 
-/// The pictures asked for in memory, by the path they were asked for under (one starting with k_Prefix). Kept from the
-/// render thread, taken from the game's.
-class CapturedFrames
+/// Makes a picture from a frame. The renderer calls it on its own thread, so it must not use the game's data.
+using ScreenPicturer = std::function<std::vector<uint8_t>(const ScreenView& screen)>;
+
+/// The pictures that the game asks for in memory, by the name it asks under (a name that starts with k_Prefix). The
+/// renderer makes each picture from the frame when it reads the frame. Thus it does not copy the full frame, and the
+/// game thread does not read it.
+class ScreenPictures
 {
 public:
-	/// A picture asked for at a path starting with this is kept in memory, not written to a file
+	/// The renderer keeps a picture in memory when it reads the frame for a path that starts with this
 	static constexpr std::string_view k_Prefix = "memory:";
 	[[nodiscard]] static bool InMemory(std::string_view path) { return path.starts_with(k_Prefix); }
 
-	void Keep(std::string path, CapturedFrame frame);
-	/// The picture asked for at a path, once; none while it may still come
-	[[nodiscard]] std::optional<CapturedFrame> Take(const std::string& path);
+	/// Keeps the function that makes the picture for a name, until the frame for it is read
+	void Ask(std::string name, ScreenPicturer picturer);
+	/// Makes the picture for a name from the frame. Returns false if nobody asked for a picture under the name.
+	bool Make(const std::string& name, const ScreenView& screen);
+	/// The picture made for a name, one time; none while it is not made
+	[[nodiscard]] std::optional<std::vector<uint8_t>> Take(const std::string& name);
+	/// Removes a picture that the renderer gave up
+	void Forget(const std::string& name);
 
 private:
 	std::mutex _mutex;
-	std::unordered_map<std::string, CapturedFrame> _frames;
+	std::unordered_map<std::string, ScreenPicturer> _asked;
+	std::unordered_map<std::string, std::vector<uint8_t>> _made;
 };
 
 /// Writes BGRA8 pixels, rows pitch bytes apart, to a PNG without their alpha. The file is written aside and renamed once
@@ -131,9 +142,10 @@ public:
 
 	/// Draws the frame being made aside, at the window's size, for a picture written to path once read back
 	void Begin(const std::filesystem::path& path, glm::u16vec2 size);
-	/// Once bgfx has taken the frame it numbers frame: gives the window its passes back and writes the pictures whose
-	/// pixels are back (or keeps those asked for in memory), recording those that couldn't be written
-	void FrameEnded(uint32_t frame, ScreenshotFailures& failures, CapturedFrames& kept);
+	/// Call this when bgfx has the frame with the number frame. It gives the passes back to the window. It writes each
+	/// picture whose pixels are back, or makes it when the game asked for it in memory. It records each picture that
+	/// it cannot write.
+	void FrameEnded(uint32_t frame, ScreenshotFailures& failures, ScreenPictures& pictures);
 
 private:
 	struct Capture
