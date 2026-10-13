@@ -285,11 +285,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     },
     /* DOWNED */
     VillagerStateTableEntry {
-        .state = &villager_eaten::LiesStill,
+        .state = &villager_eaten::Downed,
     },
     /* BEING_EATEN */
     VillagerStateTableEntry {
-        .state = &villager_eaten::LiesStill,
+        .state = &villager_eaten::BeingEaten,
     },
     /* GOTO_FOOD_REACTION */
     VillagerStateTableEntry {

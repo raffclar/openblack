@@ -58,6 +58,8 @@ struct WoundedInputs
 	/// Its state sends the wounded home, and doesn't keep them where they are
 	bool stateSendsHome {false};
 	bool stateKeepsWounded {false};
+	/// A hunter brought it down before. Such a villager never goes home for its wounds
+	bool broughtDown {false};
 	/// It is on its way to food it found, and how full it is against the hungry mark: a hungry one goes on to the food
 	bool goingForFood {false};
 	float food {1.0f};
@@ -66,7 +68,7 @@ struct WoundedInputs
 /// Whether it goes home to recover
 [[nodiscard]] constexpr bool WoundedGoesHome(const WoundedInputs& in)
 {
-	return in.life < in.goHomeLife && !in.atHome && in.stateSendsHome && !in.stateKeepsWounded &&
+	return in.life < in.goHomeLife && !in.atHome && in.stateSendsHome && !in.broughtDown && !in.stateKeepsWounded &&
 	       (!in.goingForFood || in.hungryForFood < in.food);
 }
 

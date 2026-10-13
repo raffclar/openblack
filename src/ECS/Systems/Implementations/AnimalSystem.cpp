@@ -61,6 +61,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
+#include "ECS/VillagerEatenRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -68,7 +69,6 @@
 #include "Physics/LivingRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
-#include "VillagerFire.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -118,8 +118,6 @@ constexpr float k_ScriptAnimalFlockDistance = 1.0f;
 constexpr float k_ScriptAnimalTownReach = 500.0f;
 /// The prey brought down plays its fall the turn after, and waits for it from the turn after that
 constexpr int k_FallStartsAfter = 2;
-/// The clip a villager brought down plays before it is eaten
-constexpr auto k_VillagerAttacked = static_cast<AnimId>(206);
 
 } // namespace
 
@@ -1057,8 +1055,8 @@ void AnimalSystem::SetupMoveToTarget(entt::entity wolf, Animal& animal, entt::en
 	const auto goal = animals::WorkingPosition(preyPoint, RadiusOf(prey), Metres(animal.move.position), RadiusOf(wolf));
 	Banked(animal, animals::SetUpMove(animal.move, Fixed(goal), TurnAngleOf(animal)));
 	animal.goalHeight = 0.0f;
-	// Prey already down is eaten; any other is chased, in whatever clip it has
-	if (registry.AllOf<BeingEaten>(prey))
+	// The hunter eats prey that a hunter brought down before. It chases all other prey, in the clip that the prey has
+	if (registry.AllOf<BroughtDown>(prey))
 	{
 		FinishPouncing(wolf, animal, prey);
 		return;
@@ -1074,20 +1072,42 @@ void AnimalSystem::Abandon(entt::entity wolf, Animal& animal)
 	RunToFinalDestination(wolf, animal);
 }
 
+bool AnimalSystem::OutOfTheHunt(entt::entity prey) const
+{
+	const auto& registry = EntityRegistry();
+	auto finalState = LivingStates::LivingInvalid;
+	if (const auto* action = registry.TryGet<const LivingAction>(prey);
+	    action != nullptr && registry.AllOf<Villager>(prey) && Locator::livingActionSystem::has_value())
+	{
+		finalState = static_cast<LivingStates>(Locator::livingActionSystem::value().VillagerGetFinalState(*action));
+	}
+	else if (const auto* other = registry.TryGet<const Animal>(prey); other != nullptr)
+	{
+		// An animal that a hunter brought down stays in one state while the hunter eats it
+		switch (other->state)
+		{
+		case AnimalState::Downed:
+			finalState = LivingStates::LivingDowned;
+			break;
+		case AnimalState::Dying:
+			finalState = LivingStates::LivingDying;
+			break;
+		case AnimalState::Dead:
+			finalState = LivingStates::LivingDead;
+			break;
+		default:
+			break;
+		}
+	}
+	return flock_rules::OutOfTheHunt(finalState, registry.AllOf<BroughtDown>(prey));
+}
+
 bool AnimalSystem::IsHuntingTargetValid(entt::entity wolf, const Animal& animal, entt::entity prey) const
 {
 	const auto& registry = EntityRegistry();
 	const auto& run = registry.Get<const SpellWolf>(wolf);
 	const auto* spellAnimal = registry.TryGet<const SpellAnimal>(wolf);
-	if ((spellAnimal != nullptr && spellAnimal->Fading()) || !registry.Valid(prey) || registry.AllOf<BeingEaten>(prey))
-	{
-		return false;
-	}
-	if (const auto* villager = registry.TryGet<const Villager>(prey); villager != nullptr && villager->life <= 0.0f)
-	{
-		return false;
-	}
-	if (const auto* other = registry.TryGet<const Animal>(prey); other != nullptr && other->state == AnimalState::Downed)
+	if ((spellAnimal != nullptr && spellAnimal->Fading()) || !registry.Valid(prey) || OutOfTheHunt(prey))
 	{
 		return false;
 	}
@@ -1197,7 +1217,7 @@ void AnimalSystem::Pounce(entt::entity wolf, Animal& animal)
 	}
 	if (leap <= leapt)
 	{
-		if (registry.AllOf<BeingEaten>(run.prey))
+		if (registry.AllOf<BroughtDown>(run.prey))
 		{
 			FinishPouncing(wolf, animal, run.prey);
 		}
@@ -1225,13 +1245,15 @@ void AnimalSystem::IntoHand(entt::entity animal)
 void AnimalSystem::BringDown(entt::entity wolf, entt::entity prey)
 {
 	auto& registry = EntityRegistry();
-	// Each turn the wolf is on it, it falls again for as long as its fall plays out, then is eaten over the turns
-	int fallTurns = 0;
-	if (auto* villager = registry.TryGet<Villager>(prey))
+	// The wolf brings the prey down again each turn that it is on the prey. The mark stays for all of the life of the prey
+	registry.AssignOrReplace<BroughtDown>(prey);
+	ecs::world_objects::SetLife(prey, ecs::villager_eaten_rules::k_BroughtDownLife);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} brought down by wolf #{}", static_cast<uint32_t>(prey),
+	                    static_cast<uint32_t>(wolf));
+	if (registry.AllOf<Villager>(prey))
 	{
-		const float before = ecs::world_objects::LifeOf(prey);
-		villager->life = flock_rules::k_DownedLife;
-		ecs::world_objects::CountInjury(prey, before, flock_rules::k_DownedLife);
+		// The villager falls, then the wolf eats it. The states of the villager count the turns, but only while it stays
+		// in these states
 		if (auto* wallHug = registry.TryGet<WallHug>(prey))
 		{
 			wallHug->goal = Xz(registry.Get<const Transform>(prey).position);
@@ -1239,21 +1261,19 @@ void AnimalSystem::BringDown(entt::entity wolf, entt::entity prey)
 		if (auto* action = registry.TryGet<LivingAction>(prey); action != nullptr && Locator::livingActionSystem::has_value())
 		{
 			Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Top, VillagerStates::Downed,
-			                                                      true);
+			                                                      false);
 		}
-		fallTurns = flock_rules::TurnsToPlay(PlayTimeOf(k_VillagerAttacked), k_TurnMilliseconds);
+		return;
 	}
-	else if (auto* other = registry.TryGet<Animal>(prey))
+	if (auto* other = registry.TryGet<Animal>(prey))
 	{
 		SetTopState(*other, AnimalState::Downed);
-		fallTurns = flock_rules::TurnsToPlay(PlayTimeOf(other->animation), k_TurnMilliseconds);
+		const int fallTurns = flock_rules::TurnsToPlay(PlayTimeOf(other->animation), k_TurnMilliseconds);
+		registry.AssignOrReplace<BeingEaten>(prey, BeingEaten {.hunter = wolf,
+		                                                       .turns = 0,
+		                                                       .eatenFrom = k_FallStartsAfter + fallTurns,
+		                                                       .left = flock_rules::k_BeingEatenTurns});
 	}
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} brought down by wolf #{}", static_cast<uint32_t>(prey),
-	                    static_cast<uint32_t>(wolf));
-	registry.AssignOrReplace<BeingEaten>(prey, BeingEaten {.hunter = wolf,
-	                                                       .turns = 0,
-	                                                       .eatenFrom = k_FallStartsAfter + fallTurns,
-	                                                       .left = flock_rules::k_BeingEatenTurns});
 }
 
 void AnimalSystem::FinishPouncing(entt::entity wolf, Animal& animal, entt::entity prey)
@@ -1300,12 +1320,10 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		facts.heightAboveLand = transform.position.y - Ground(Xz(transform.position));
 		cells[{cell.x, cell.y}].emplace_back(entity, facts);
 	};
-	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& villager, const Transform& t) {
+	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& /*villager*/, const Transform& t) {
 		// A walking skeleton has no meat for it
 		add(entity, t,
-		    {.isVillager = true,
-		     .skeleton = registry.AllOf<WalkingSkeleton>(entity),
-		     .helpless = villager.life <= 0.0f || registry.AllOf<BeingEaten>(entity)});
+		    {.isVillager = true, .skeleton = registry.AllOf<WalkingSkeleton>(entity), .helpless = OutOfTheHunt(entity)});
 	});
 	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& other, const Transform& t) {
 		if (entity != wolf)
@@ -1313,7 +1331,7 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 			add(entity, t,
 			    {.isOtherAnimal = other.type != animal.type,
 			     .hasMeat = InfoOf(other.type).foodValue > 0.0f,
-			     .helpless = other.state == AnimalState::Downed || registry.AllOf<BeingEaten>(entity)});
+			     .helpless = OutOfTheHunt(entity)});
 		}
 	});
 	// So many cells spiralling out from its own, and the first prey met there is its prey
@@ -1354,17 +1372,8 @@ void AnimalSystem::ProcessEaten()
 	std::vector<entt::entity> eaten;
 	registry.Each<BeingEaten>([&](entt::entity entity, BeingEaten& being) {
 		++being.turns;
-		// Its fall played out, it is eaten, a turn at a time
-		if (being.turns == being.eatenFrom)
-		{
-			if (auto* action = registry.TryGet<LivingAction>(entity);
-			    action != nullptr && Locator::livingActionSystem::has_value())
-			{
-				Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Top,
-				                                                      VillagerStates::BeingEaten, true);
-			}
-		}
-		else if (being.turns > being.eatenFrom && --being.left == 0)
+		// After its fall, the hunter eats it one turn at a time
+		if (being.turns > being.eatenFrom && --being.left == 0)
 		{
 			eaten.push_back(entity);
 		}
@@ -1372,20 +1381,7 @@ void AnimalSystem::ProcessEaten()
 	for (const auto entity : eaten)
 	{
 		registry.Remove<BeingEaten>(entity);
-		if (registry.AllOf<Villager>(entity))
-		{
-			// Eaten, the villager dies as any villager dies: it falls, its town and the people about it hear of it, and
-			// its body lies until it goes. Its death is put down to its own player, weighing with its town the life it
-			// had left.
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: villager #{} eaten, dies", static_cast<uint32_t>(entity));
-			villager_fire::DieByEffect(entity, villager_fire::DeathCause {.reason = DeathReason::Animal,
-			                                                              .killer = ecs::world_objects::PlayerOf(entity),
-			                                                              .weight = ecs::world_objects::LifeOf(entity)});
-		}
-		else
-		{
-			Remove(entity);
-		}
+		Remove(entity);
 	}
 }
 

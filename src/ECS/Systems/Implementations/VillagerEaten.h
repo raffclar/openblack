@@ -16,12 +16,14 @@ namespace openblack::ecs::components
 struct LivingAction;
 }
 
-/// A villager a hunter brought down: it lies where it fell while it is eaten, and then dead. The animals' system counts
-/// the turns and moves it on; these are the living action system's state functions for the while.
+/// The states of a villager that a hunter brought down. First it falls. Then the hunter eats it for a number of turns,
+/// and then it dies. The villager keeps the count of these turns only while it stays in the state "being eaten".
 namespace openblack::ecs::villager_eaten
 {
 
-/// Brought down, being eaten, or dead: it lies still
-uint32_t LiesStill(components::LivingAction& action);
+/// Brought down: the villager plays its fall to the end, then the hunter eats it
+uint32_t Downed(components::LivingAction& action);
+/// Being eaten: the villager lies still and counts the turns. At the end it dies, or gets up if nothing can kill it
+uint32_t BeingEaten(components::LivingAction& action);
 
 } // namespace openblack::ecs::villager_eaten

@@ -283,6 +283,14 @@ TEST(VillagerCheckRules, TheWoundedGoHomeUnlessHomeKeptOrHungryForFood)
 	EXPECT_FALSE(checks::WoundedGoesHome(in));
 }
 
+TEST(VillagerCheckRules, AVillagerThatAHunterBroughtDownNeverGoesHomeForItsWounds)
+{
+	checks::WoundedInputs in {.life = 0.05f, .stateSendsHome = true};
+	EXPECT_TRUE(checks::WoundedGoesHome(in));
+	in.broughtDown = true;
+	EXPECT_FALSE(checks::WoundedGoesHome(in));
+}
+
 TEST(VillagerFoodRules, FoodLyingAboutCatchesAHungryEyeWithRoomToCarry)
 {
 	FoodInterestInputs in {.desireForFood = 0.875f, .maxCarried = 150, .stateInterest = 1.0f, .distanceModifier = 0.5f};
