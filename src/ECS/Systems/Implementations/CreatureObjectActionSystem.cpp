@@ -1542,6 +1542,21 @@ bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
 	                                              .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
 }
 
+bool CreatureObjectActionSystem::CanThrowToImpress(entt::entity creature, entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr || !registry.Valid(object))
+	{
+		return false;
+	}
+	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
+	const auto weight = physics::living::CreatureMass(ShownSize(*body), morph != nullptr ? morph->drawn.thinFat : 0.0f,
+	                                                  morph != nullptr ? morph->drawn.weakStrong : 0.0f);
+	return creature_object_actions::CanBeThrownToImpress(KindFactsOf(object).thing, object_measures::Height(registry, object),
+	                                                     weight);
+}
+
 bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();

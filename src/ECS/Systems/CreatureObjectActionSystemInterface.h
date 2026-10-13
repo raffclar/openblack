@@ -120,6 +120,8 @@ public:
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity /*object*/) const { return false; }
 	/// What kind of thing something is to a creature's hands, and what its kind says of its being picked up
 	[[nodiscard]] virtual creature_object_actions::KindFacts KindOf(entt::entity /*object*/) const { return {}; }
+	/// Whether a creature may throw a thing to impress, by its kind, its height and the creature's weight
+	[[nodiscard]] virtual bool CanThrowToImpress(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
 	/// Whether a creature can knock something down: trees, homes and things
 	[[nodiscard]] virtual bool CanDestroy(entt::entity target) const = 0;
 	/// How far a creature's hand gets at its furthest stretch when picking up, measured straight, from where the hand

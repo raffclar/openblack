@@ -1582,6 +1582,35 @@ void AddObjects(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "PlantTree", .with = 0}},
 	});
 
+	all.push_back({
+	    .id = "objects.kind_throws",
+	    .name = "Throwing the kinds of thing about",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a villager, a rock and a toy ball in front of it, a hut off to the north and a "
+	                   "birch to the north-east. A script tells it in turn to throw the villager about, to hurl the rock "
+	                   "at the hut, and to throw the toy ball at the birch.",
+	    .expected = "It picks up the villager and throws her off to one side. It picks up the rock, goes to where it can "
+	                "throw at the hut and hurls the rock at it, angry. Half the time it jumps for joy, then picks up the "
+	                "toy ball and throws it at the birch, angry, sometimes jumping for joy again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -15.0f}, {0.0f, -90.0f}, {50.0f, -70.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-12.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -k_Reach}},
+	                {.type = MobileStaticInfo::ToyBall, .offset = {12.0f, -k_Reach}},
+	                {.type = AbodeInfo::CelticHut, .offset = {0.0f, -90.0f}},
+	                {.type = TreeInfo::Birch, .offset = {50.0f, -70.0f}}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "ThrowAround"},
+	         {.kind = Kind::DoAction, .delaySeconds = 6.0f, .waitUntilFree = true, .object = 3, .action = "Hurl", .with = 1},
+	         {.kind = Kind::DoAction,
+	          .delaySeconds = 6.0f,
+	          .waitUntilFree = true,
+	          .object = 4,
+	          .action = "ThrowBallAtObject",
+	          .with = 2}},
+	});
+
 	auto hungry = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	hungry.needs = {.energy = 0.3f};
 	hungry.hold = false;

@@ -225,6 +225,11 @@ enum class Thing : uint8_t
 [[nodiscard]] bool CanBeStoned(Thing thing, bool dead);
 /// Whether a thing does damage when a creature throws it: the statics, rocks and dead trees, but not the toys
 [[nodiscard]] bool DoesThrowingDamage(Thing thing, bool toy);
+/// Whether a creature may throw a thing to impress: anything but the living, vortices and teleport stones, as long as
+/// the thing's height is less than two thirds (0.64) of the creature's weight. The game sets the thing's height against
+/// the creature's weight, so in practice any such thing a creature can pick up will do.
+[[nodiscard]] bool CanBeThrownToImpress(Thing thing, float thingHeight, float creatureWeight);
+constexpr float k_ThrowToImpressWeightShare = 0.64f;
 /// Whether a creature may throw a thing into the sea in play: what lies about, the statics, rocks, dead trees and trees
 [[nodiscard]] bool CanBeThrownInTheSea(Thing thing);
 

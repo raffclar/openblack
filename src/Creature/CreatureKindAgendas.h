@@ -42,6 +42,17 @@ constexpr float k_FaceStoreForWoodSeconds = 0.1f;
 /// to face it, and putting the tree down there, where it takes root
 [[nodiscard]] std::vector<Step> PlantTreeBy(std::optional<uint32_t> tree, uint32_t by);
 
+/// Practising a throw: unless its hand holds something, picking the thing up; then throwing what it holds at the point
+/// three times its height further along both of the land's axes than where it stood as it set about it
+[[nodiscard]] std::vector<Step> PracticeThrow(std::optional<uint32_t> pickUp, glm::vec2 from, float height);
+constexpr float k_PracticeThrowHeights = 3.0f;
+
+/// Throwing a toy at a thing: half the time a happy jump first; picking the toy up; going to where it can throw at the
+/// thing and throwing the toy at it, angry, watching it; then half the time another happy jump
+[[nodiscard]] std::vector<Step> ThrowToyAt(uint32_t toy, uint32_t target, glm::vec2 targetPoint, float height,
+                                           const Random& random);
+constexpr uint32_t k_HappyAroundToyThrowLots = 2;
+
 /// The most trees a creature remembers planting others by
 constexpr size_t k_PlantedRemembered = 10;
 

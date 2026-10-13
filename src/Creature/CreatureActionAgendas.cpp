@@ -65,7 +65,6 @@ std::vector<Step> creature_mind::HurlAt(uint32_t thrown, uint32_t target, glm::v
 	                  .face = creature_face::Cue::Anger,
 	                  .gaze = watch});
 	agenda.push_back({.kind = Step::Kind::Object,
-	                  .effect = Effect::Hurled,
 	                  .order = {.kind = ObjectOrder::Kind::Throw, .object = target, .point = targetPoint},
 	                  .face = creature_face::Cue::Anger,
 	                  .gaze = watch});

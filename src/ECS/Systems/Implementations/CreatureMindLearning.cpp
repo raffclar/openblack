@@ -327,6 +327,8 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	}
 	case Target::SeaThrowable:
 		return hands != nullptr && creature_object_actions::CanBeThrownInTheSea(hands->KindOf(entity).thing);
+	case Target::ThrowableToImpress:
+		return !heldByOther && hands != nullptr && hands->CanThrowToImpress(self, entity) && hands->CanPickUp(self, entity);
 	case Target::PickableTree:
 		return !heldByOther && registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanPickUp(self, entity);
 	case Target::PlantableTree:
@@ -390,13 +392,13 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	}
 	const bool sea = target == Target::SeaThrowable;
 	// Of pots and piles, food is eaten, and any may be picked up or thrown into the sea
-	if (target == Target::Food || target == Target::MagicFoodPile || target == Target::Pickable || sea)
+	const bool pickable = target == Target::Pickable || target == Target::ThrowableToImpress;
+	if (target == Target::Food || target == Target::MagicFoodPile || pickable || sea)
 	{
 		registry.Each<const Pot, const Transform>(
 		    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
 	}
 	// Whatever else it may pick up: animals, the football, statics and rocks, dead trees, trees and mushrooms
-	const bool pickable = target == Target::Pickable;
 	if (pickable || target == Target::Toy || target == Target::ToyBall || sea)
 	{
 		registry.Each<const Ball, const Transform>(
@@ -1035,6 +1037,47 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	mind.underway = CreatureMindState::ActionUnderway {.serial = idle.serial, .action = *action};
 }
 
+namespace
+{
+/// Whether a creature kept within an area by its leash has the thing farther from it than the area's radius
+bool OutsideConfinement(const ecs::Registry& registry, entt::entity creature, entt::entity object)
+{
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	if (leashes == nullptr)
+	{
+		return false;
+	}
+	const bool leashed = leashes->worn.has_value();
+	const bool works = !leashed || leashes->worn->works;
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto* objectAt = registry.TryGet<const Transform>(object);
+	return creature_leash::IsConfined(leashes->confinementRadius, leashed, works) && at != nullptr && objectAt != nullptr &&
+	       gutils::GetDistanceInMetres(at->position, objectAt->position) > leashes->confinementRadius;
+}
+
+/// The thing a creature at a point uses for an action, of a kind, other than the goal
+std::optional<uint32_t> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
+                                std::optional<uint32_t> goal)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<creature_planner::ObjectCandidate> candidates;
+	for (const auto& found : Gather(registry, use, creature, position))
+	{
+		// Nothing farther than the area its leash keeps it within, nor another creature
+		if (registry.AllOf<Creature>(found.entity) || OutsideConfinement(registry, creature, found.entity))
+		{
+			continue;
+		}
+		const auto* held = registry.TryGet<const HeldByCreature>(found.entity);
+		candidates.push_back({.id = entt::to_integral(found.entity),
+		                      .distance = found.distance,
+		                      .held = held != nullptr && held->creature == creature});
+	}
+	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
+}
+
+} // namespace
+
 bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, const creature_planner::Plan& plan,
                                const creature_plan_actions::Situation& situation)
 {
@@ -1051,10 +1094,17 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	}
 	const auto& info = tables->actions[plan.action];
 	auto situated = situation;
-	if (plan.instrument.has_value())
+	Situate(creature, situated);
+	// An action done with something takes up the thing to use too, as the plan found it or, for a plan made otherwise
+	// (copying the player, doing it again), as the planner would
+	auto chosen = plan;
+	if (const auto* executor = creature_plan_actions::For(info.name);
+	    executor != nullptr && executor->use != Target::None && !chosen.instrument.has_value())
 	{
-		situated.instrument = plan.instrument;
+		chosen.instrument = UsedFor(creature, executor->use, situated.position,
+		                            tables->rules.at(static_cast<size_t>(plan.desire)).distanceWeight, plan.object);
 	}
+	situated.instrument = chosen.instrument;
 	auto built = PlanAgenda(creature, plan.action, plan.object, situated);
 	if (!built.has_value())
 	{
@@ -1076,7 +1126,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} sets about {} on {} ({} steps)", entt::to_integral(creature),
 	                    info.name, plan.object.value_or(0), mind.idle.agenda.size());
 	auto& learnt = *mind.learnt;
-	mind.planner.current = plan;
+	mind.planner.current = chosen;
 	mind.planActive = true;
 	mind.planSerial = mind.idle.serial;
 	mind.agendaSeen = mind.idle.serial;
@@ -1201,43 +1251,6 @@ float ObservedShare(const ecs::Registry& registry, const CreatureMindState& mind
 	return creature_mind::CuriosityShare(mind.observedKinds.contains(belief->type), false);
 }
 
-/// Whether a creature kept within an area by its leash has the thing farther from it than the area's radius
-bool OutsideConfinement(const ecs::Registry& registry, entt::entity creature, entt::entity object)
-{
-	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
-	if (leashes == nullptr)
-	{
-		return false;
-	}
-	const bool leashed = leashes->worn.has_value();
-	const bool works = !leashed || leashes->worn->works;
-	const auto* at = registry.TryGet<const Transform>(creature);
-	const auto* objectAt = registry.TryGet<const Transform>(object);
-	return creature_leash::IsConfined(leashes->confinementRadius, leashed, works) && at != nullptr && objectAt != nullptr &&
-	       gutils::GetDistanceInMetres(at->position, objectAt->position) > leashes->confinementRadius;
-}
-
-/// The thing a creature at a point uses for an action, of a kind, other than the goal
-std::optional<uint32_t> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
-                                std::optional<uint32_t> goal)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<creature_planner::ObjectCandidate> candidates;
-	for (const auto& found : Gather(registry, use, creature, position))
-	{
-		// Nothing farther than the area its leash keeps it within, nor another creature
-		if (registry.AllOf<Creature>(found.entity) || OutsideConfinement(registry, creature, found.entity))
-		{
-			continue;
-		}
-		const auto* held = registry.TryGet<const HeldByCreature>(found.entity);
-		candidates.push_back({.id = entt::to_integral(found.entity),
-		                      .distance = found.distance,
-		                      .held = held != nullptr && held->creature == creature});
-	}
-	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
-}
-
 /// How useful a thing is to act on for a desire, by what the creature has learnt and what it has looked over
 float ObjectUsefulness(const ecs::Registry& registry, const creature_mind_model::Learnt& learnt, const CreatureMindState& mind,
                        Desire desire, entt::entity object, entt::entity creature)
@@ -1312,7 +1325,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	}
 	const auto random = [this](uint32_t range) { return Random(range); };
 	bool waterLooked = false;
-	bool hurlLooked = false;
 	bool fishingLooked = false;
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
 		const bool fishing = executor.build == creature_plan_actions::Build::FishAndEat ||
@@ -1331,11 +1343,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		{
 			waterLooked = true;
 			situation.water = NearestWater(position);
-		}
-		if (executor.build == creature_plan_actions::Build::Hurl && !hurlLooked)
-		{
-			hurlLooked = true;
-			situation.hurlTarget = NearestHurlTarget(registry, position);
 		}
 	};
 
@@ -1709,6 +1716,10 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 		                            (mobile != nullptr && (mobile->type == MobileObjectInfo::MagicMushroom ||
 		                                                   mobile->type == MobileObjectInfo::Toadstool));
 	}
+	if (const auto* at = registry.TryGet<const Transform>(creature))
+	{
+		situation.position = {at->position.x, at->position.z};
+	}
 	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
 	{
 		situation.eyeDistance = glm::distance(*situation.eye, transform->position);
@@ -1937,7 +1948,6 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 				const auto eye = Locator::camera::value().GetOrigin();
 				situation.camera = glm::vec2(eye.x, eye.z);
 			}
-			situation.hurlTarget = NearestHurlTarget(registry, position);
 			Adopt(creature, mind, again, situation);
 			return;
 		}
@@ -2044,7 +2054,6 @@ void CreatureMindSystem::LearnTurn()
 				const auto desire = static_cast<Desire>(
 				    std::min<uint32_t>(tables->actions.at(action).desire, creature_desires::k_DesireCount - 1));
 				creature_plan_actions::Situation situation;
-				situation.hurlTarget = NearestHurlTarget(registry, glm::vec2(transform->position.x, transform->position.z));
 				if (Adopt(creature, *mind,
 				          {.desire = desire,
 				           .action = action,

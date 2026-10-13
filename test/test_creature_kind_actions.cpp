@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureKindAgendas.h"
+#include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
@@ -166,4 +167,75 @@ TEST(CreatureKindActions, PlantingATreePutsItDownRightByTheThing)
 	EXPECT_TRUE(plant->notWhatItHolds);
 	// Nothing to plant, nothing done
 	EXPECT_FALSE(plan_actions::Agenda(*plant, 9u, {0.0f, 0.0f}, {}, KindActionsFirst).has_value());
+}
+
+TEST(CreatureKindActions, ThrowingToImpressTakesAnythingButTheLivingThatIsntTooTall)
+{
+	EXPECT_TRUE(creature_object_actions::CanBeThrownToImpress(Thing::Rock, 5.0f, 100.0f));
+	EXPECT_TRUE(creature_object_actions::CanBeThrownToImpress(Thing::Tree, 63.0f, 100.0f));
+	EXPECT_FALSE(creature_object_actions::CanBeThrownToImpress(Thing::Tree, 64.0f, 100.0f));
+	EXPECT_FALSE(creature_object_actions::CanBeThrownToImpress(Thing::Villager, 1.0f, 100.0f));
+	EXPECT_FALSE(creature_object_actions::CanBeThrownToImpress(Thing::Vortex, 1.0f, 100.0f));
+	EXPECT_FALSE(creature_object_actions::CanBeThrownToImpress(Thing::TeleportStone, 1.0f, 100.0f));
+}
+
+TEST(CreatureKindActions, PractisingAThrowThrowsOffToOneSide)
+{
+	const auto agenda = PracticeThrow(7u, {100.0f, 200.0f}, 10.0f);
+	ASSERT_EQ(agenda.size(), 2);
+	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[0].order.object, 7u);
+	EXPECT_EQ(agenda[1].order.kind, ObjectOrder::Kind::Throw);
+	EXPECT_EQ(agenda[1].order.point, glm::vec2(130.0f, 230.0f));
+	// Holding something, it throws that
+	EXPECT_EQ(PracticeThrow(std::nullopt, {0.0f, 0.0f}, 10.0f).size(), 1);
+
+	const auto* around = plan_actions::For("ThrowAround");
+	ASSERT_NE(around, nullptr);
+	EXPECT_EQ(around->target, plan_actions::Target::AnyLiving);
+	EXPECT_EQ(around->build, plan_actions::Build::PracticeThrow);
+	const auto* practice = plan_actions::For("PracticeThrow");
+	ASSERT_NE(practice, nullptr);
+	EXPECT_EQ(practice->target, plan_actions::Target::Pickable);
+}
+
+TEST(CreatureKindActions, ThrowingAToyAtAThing)
+{
+	const auto agenda = ThrowToyAt(4u, 9u, {10.0f, 20.0f}, 15.0f, KindActionsFirst);
+	ASSERT_EQ(agenda.size(), 5);
+	EXPECT_EQ(agenda[0].animation, creature_layers::animations::k_Happy);
+	EXPECT_EQ(agenda[1].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[1].order.object, 4u);
+	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::ToThrowPosition);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::Anger);
+	EXPECT_EQ(agenda[3].order.kind, ObjectOrder::Kind::Throw);
+	EXPECT_EQ(agenda[3].order.object, 9u);
+	EXPECT_EQ(agenda[4].animation, creature_layers::animations::k_Happy);
+	EXPECT_EQ(ThrowToyAt(4u, 9u, {10.0f, 20.0f}, 15.0f, [](uint32_t range) { return range - 1; }).size(), 3);
+}
+
+TEST(CreatureKindActions, HurlingAndThrowingToImpressNeedSomethingToThrow)
+{
+	for (const auto name : {"Hurl", "ThrowToImpress"})
+	{
+		const auto* hurl = plan_actions::For(name);
+		ASSERT_NE(hurl, nullptr);
+		EXPECT_TRUE(hurl->notWhatItHolds);
+		EXPECT_FALSE(plan_actions::Agenda(*hurl, 9u, {0.0f, 0.0f}, {}, KindActionsFirst).has_value());
+		plan_actions::Situation with;
+		with.instrument = 4u;
+		const auto agenda = plan_actions::Agenda(*hurl, 9u, {0.0f, 0.0f}, with, KindActionsFirst);
+		ASSERT_TRUE(agenda.has_value());
+		EXPECT_EQ(agenda->back().order.kind, ObjectOrder::Kind::Throw);
+	}
+	EXPECT_EQ(plan_actions::For("Hurl")->target, plan_actions::Target::Stonable);
+	EXPECT_EQ(plan_actions::For("Hurl")->use, plan_actions::Target::ThrowingDamage);
+	EXPECT_EQ(plan_actions::For("ThrowToImpress")->use, plan_actions::Target::ThrowableToImpress);
+}
+
+TEST(CreatureKindActions, ThrowingIntoTheSeaChoosesWhatMayGoInTheSea)
+{
+	const auto* sea = plan_actions::For("ThrowInTheSea");
+	ASSERT_NE(sea, nullptr);
+	EXPECT_EQ(sea->target, plan_actions::Target::SeaThrowable);
 }

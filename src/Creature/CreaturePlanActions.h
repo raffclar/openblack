@@ -70,9 +70,11 @@ enum class Target : uint8_t
 	/// one near where the player did what it last copied
 	PickableTree,
 	PlantableTree,
+	/// What it can pick up and throw to impress
+	ThrowableToImpress,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::PlantableTree) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::ThrowableToImpress) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -137,6 +139,10 @@ enum class Build : uint8_t
 	/// Giving the tree it uses to the store as wood, and planting the tree it uses by the thing
 	GiveWoodToStore,
 	PlantTree,
+	/// Throwing what it holds, or else the thing after picking it up, at a point off to one side of it
+	PracticeThrow,
+	/// Picking up the toy it uses and throwing it at the thing
+	ThrowToy,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -163,11 +169,10 @@ struct Executor
 /// What the agenda needs to know of where the creature is
 struct Situation
 {
-	/// Where the player looks from, the nearest water's edge and the water, somewhere to hurl things at, and the action
-	/// that shows its strongest desire
+	/// Where the player looks from, the nearest water's edge and the water, and the action that shows its strongest
+	/// desire
 	std::optional<glm::vec2> camera;
 	std::optional<creature_mind::Wants::WaterSpot> water;
-	std::optional<glm::vec2> hurlTarget;
 	std::optional<size_t> showDesireAnimation;
 	/// Fishing at the nearest fish farm: its shoal (the farm itself without one), where the creature would stand to fish
 	/// for itself (the shoal, or the nearest place it can stand near enough to it; none for none), how near it goes,
@@ -192,6 +197,8 @@ struct Situation
 	/// Whether what its hand holds is a tree, or a magic mushroom
 	bool holdingTree {false};
 	bool holdingMushroom {false};
+	/// Where it stands
+	glm::vec2 position {0.0f};
 	/// Where the thing it uses is, and its radius on the ground
 	glm::vec2 instrumentPoint {0.0f};
 	float instrumentRadius {0.0f};

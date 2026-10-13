@@ -275,6 +275,15 @@ bool creature_object_actions::DoesThrowingDamage(Thing thing, bool toy)
 	}
 }
 
+bool creature_object_actions::CanBeThrownToImpress(Thing thing, float thingHeight, float creatureWeight)
+{
+	if (IsLiving(thing) || thing == Thing::Vortex || thing == Thing::TeleportStone)
+	{
+		return false;
+	}
+	return thingHeight < creatureWeight * k_ThrowToImpressWeightShare;
+}
+
 bool creature_object_actions::CanBeThrownInTheSea(Thing thing)
 {
 	switch (thing)
