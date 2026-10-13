@@ -17,6 +17,7 @@
 #include <glm/vec3.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
@@ -46,9 +47,11 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -73,6 +76,8 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<SpellDispenser>();
 	func.template operator()<TeleportStone>();
 	func.template operator()<WorshipSite>();
+	// A vortex, standing in the land as a rock does, over its unseen cylinder
+	func.template operator()<Vortex>();
 	// A temple's heart, which stands in the land as a building does
 	func.template operator()<Temple>();
 	// Trees, shields and the scripts' scrolls and signs, each in one cell
@@ -92,19 +97,30 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<RewardOnLand>();
 }
 
-/// A building's outline on the ground, from its model's box as it is placed
-std::optional<map_cells::Outline> OutlineOf(const Transform& transform, entt::id_type meshId)
+/// The model whose box a thing covers: its own, or a vortex's cylinder, which is never drawn
+std::optional<entt::id_type> OutlineMeshOf(const Registry& registry, entt::entity entity)
 {
-	if (!Locator::resources::has_value())
+	if (registry.AllOf<Vortex>(entity))
+	{
+		return resources::HashIdentifier(MeshId::SpellVortexCylinder);
+	}
+	const auto* mesh = registry.TryGet<const Mesh>(entity);
+	return mesh != nullptr ? std::optional(mesh->id) : std::nullopt;
+}
+
+/// A building's outline on the ground, from its model's box as it is placed
+std::optional<map_cells::Outline> OutlineOf(const Transform& transform, std::optional<entt::id_type> meshId)
+{
+	if (!meshId.has_value() || !Locator::resources::has_value())
 	{
 		return std::nullopt;
 	}
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(meshId))
+	if (!meshes.Contains(*meshId))
 	{
 		return std::nullopt;
 	}
-	const auto box = meshes.Handle(meshId)->GetBoundingBox();
+	const auto box = meshes.Handle(*meshId)->GetBoundingBox();
 	return map_cells::OutlineOfBox(transform.position, transform.rotation, transform.scale.x, box.Center(), box.Size() * 0.5f);
 }
 } // namespace
@@ -152,7 +168,11 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}
-	// Dead trees are rocks of a kind, so they cover their outline as other rocks do
+	// Dead trees are rocks of a kind, so they cover their outline as other rocks do; so does a vortex
+	if (registry.AnyOf<Vortex>(entity))
+	{
+		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
+	}
 	if (registry.AnyOf<MobileStatic, DeadTree>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = true};
@@ -226,8 +246,7 @@ std::vector<uint32_t> MapProduction::CellsFor(entt::entity entity, const Kind& k
 	std::vector<uint32_t> cells;
 	if (kind.coversOutline)
 	{
-		const auto* mesh = _registry->TryGet<const Mesh>(entity);
-		const auto outline = mesh != nullptr ? OutlineOf(transform, mesh->id) : std::nullopt;
+		const auto outline = OutlineOf(transform, OutlineMeshOf(*_registry, entity));
 		if (!outline.has_value())
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Map: a building without a model can't be put in the map's cells");

@@ -12,12 +12,14 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
@@ -104,7 +106,18 @@ struct Vortex
 /// vortex throws it back out if it can't be destroyed
 struct DrawnIntoVortex
 {
+	/// A thing flying in the physics when it struck the vortex: its velocity and where and how its body was turned then.
+	/// It leaves the physics as the vortex takes it.
+	struct Flight
+	{
+		glm::vec3 velocity {0.0f};
+		glm::vec3 position {0.0f};
+		glm::mat3 rotation {1.0f};
+	};
+
 	entt::entity vortex {entt::null};
+	/// None for a thing the vortex drew in from the land
+	std::optional<Flight> flight;
 };
 
 } // namespace openblack::ecs::components
