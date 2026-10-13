@@ -755,7 +755,11 @@ uint32_t villager_breeding::StopHavingSex(LivingAction& action)
 
 bool villager_breeding::ExitSex(LivingAction& action, VillagerStates next)
 {
-	if (next == VillagerStates::StartHavingSex || next == VillagerStates::HavingSex || next == VillagerStates::StopHavingSex)
+	const bool nextIsLoveState =
+	    next == VillagerStates::StartHavingSex || next == VillagerStates::HavingSex || next == VillagerStates::StopHavingSex;
+	const bool nextIsFinal = Locator::infoConstants::has_value() &&
+	                         Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(next)).isFinalState != 0;
+	if (!LeavesLove(nextIsLoveState, nextIsFinal))
 	{
 		return false;
 	}

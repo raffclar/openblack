@@ -181,6 +181,15 @@ TEST(VillagerBreeding, TouchingIsEdgeToEdgeWithinAGap)
 	EXPECT_FALSE(Touching(1.2f, 0.3f, 0.3f, k_KissingGap));
 }
 
+TEST(VillagerBreeding, LoveEndsOnlyOnGoingOnToAnEndInItselfOutsideLove)
+{
+	EXPECT_TRUE(LeavesLove(false, true));
+	// Walking to meet the partner again is on the way to love, not an end in itself
+	EXPECT_FALSE(LeavesLove(false, false));
+	EXPECT_FALSE(LeavesLove(true, true));
+	EXPECT_FALSE(LeavesLove(true, false));
+}
+
 TEST(VillagerBreeding, ABreederBreedsUntilItsTownIsTooFarOverFull)
 {
 	const TownHeadcount full {.children = 10, .childPlaces = 10, .adults = 20, .adultPlaces = 20};
