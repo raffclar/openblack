@@ -209,6 +209,17 @@ void PlayerProfileSystem::SetCurrentSettings(const player_profiles::Settings& se
 	Save();
 }
 
+void PlayerProfileSystem::SetCurrentAlignment(double alignment)
+{
+	auto* profile = CurrentProfile();
+	if (profile == nullptr || profile->alignment == alignment)
+	{
+		return;
+	}
+	profile->alignment = alignment;
+	Save();
+}
+
 void PlayerProfileSystem::Save() const
 {
 	if (_store.developer || !_store.folder.has_value())

@@ -128,11 +128,127 @@ bool creature_object_actions::BringsBackUp(bool indestructible, bool heldDuringC
 	return indestructible || heldDuringCutscene;
 }
 
+bool creature_object_actions::CanLift(const LiftFacts& facts)
+{
+	return facts.thingRadius + facts.creatureRadius <= facts.reach &&
+	       facts.thingWeight <= facts.creatureWeight * k_MostLiftedWeightShare;
+}
+
+bool creature_object_actions::MayBeCaught(const PickUpFacts& facts)
+{
+	return !facts.cannotBePickedUp && !facts.villagerAtHome;
+}
+
+bool creature_object_actions::MayPickUpWhereverItIs(const PickUpFacts& facts)
+{
+	if (facts.leashTiedToIt || (facts.lift.has_value() && !CanLift(*facts.lift)))
+	{
+		return false;
+	}
+	return MayBeCaught(facts);
+}
+
 bool creature_object_actions::MayPickUp(const PickUpFacts& facts)
 {
 	if (facts.computerCreatureNotScripted && facts.inScript)
 	{
 		return false;
 	}
-	return !facts.cannotBePickedUp && !facts.villagerAtHome && !facts.worshippingForCreaturesPlayer;
+	if (facts.townArtefact || facts.worshippingForCreaturesPlayer || !facts.inMapOrHeldByCreature)
+	{
+		return false;
+	}
+	return MayPickUpWhereverItIs(facts);
+}
+
+creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
+{
+	switch (thing)
+	{
+	case Thing::Other:
+	case Thing::Creature:
+	case Thing::Lantern:
+	case Thing::Shield:
+	case Thing::Vortex:
+	case Thing::TeleportStone:
+		return KindRule::Never;
+	case Thing::Static:
+		return KindRule::Toy;
+	case Thing::Ball:
+	case Thing::Creed:
+		return KindRule::Always;
+	case Thing::Bird:
+		return KindRule::Bird;
+	case Thing::Pile:
+		return KindRule::Pile;
+	case Thing::MagicMushroom:
+		return KindRule::Mushroom;
+	case Thing::Villager:
+	case Thing::Animal:
+	case Thing::MobileObject:
+	case Thing::Pot:
+	case Thing::Rock:
+	case Thing::Bonfire:
+	case Thing::DeadTree:
+	case Thing::Tree:
+		return KindRule::Whole;
+	}
+	return KindRule::Never;
+}
+
+std::optional<creature_object_actions::Toy> creature_object_actions::ToyOf(MeshId mesh)
+{
+	switch (mesh)
+	{
+	case MeshId::ObjectToyBall:
+		return Toy::Ball;
+	case MeshId::ObjectToyBowlingBall:
+		return Toy::BowlingBall;
+	case MeshId::ObjectToyCuddly:
+		return Toy::Cuddly;
+	case MeshId::ObjectToyDice:
+		return Toy::Die;
+	case MeshId::ObjectToySkittle:
+		return Toy::Skittle;
+	default:
+		return std::nullopt;
+	}
+}
+
+bool creature_object_actions::Holdable(Thing thing)
+{
+	return thing != Thing::Other && thing != Thing::Creature && thing != Thing::Lantern && thing != Thing::Shield &&
+	       thing != Thing::MagicMushroom;
+}
+
+bool creature_object_actions::MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts)
+{
+	switch (kind.rule)
+	{
+	case KindRule::Never:
+		return false;
+	case KindRule::Always:
+		return true;
+	case KindRule::Toy:
+		return kind.toy;
+	case KindRule::Bird:
+		return kind.low;
+	case KindRule::Mushroom:
+		return !facts.cannotBePickedUp;
+	case KindRule::Pile:
+		return !facts.cannotBePickedUp && kind.mayFly;
+	case KindRule::Whole:
+		return kind.holdable && MayPickUp(facts);
+	}
+	return false;
+}
+
+bool creature_object_actions::MayTakeKindFromHand(const KindFacts& kind, const PickUpFacts& facts)
+{
+	return kind.holdable && MayPickUpWhereverItIs(facts);
+}
+
+bool creature_object_actions::MayCatchKind(const KindFacts& kind, const PickUpFacts& facts)
+{
+	return kind.holdable && MayBeCaught(facts);
 }

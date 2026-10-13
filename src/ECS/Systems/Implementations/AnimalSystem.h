@@ -70,7 +70,7 @@ public:
 
 	[[nodiscard]] bool IsFrighteningToCreature(entt::entity animal) const override;
 	[[nodiscard]] bool CanPlayerPickUp(entt::entity animal) const override;
-	[[nodiscard]] bool CanBePickedUpByCreature(entt::entity animal) const override;
+	[[nodiscard]] std::optional<bool> BirdCanBePickedUpByCreature(entt::entity animal) const override;
 	[[nodiscard]] bool CanBeStompedOnByCreature(entt::entity animal, float creatureHeight) const override;
 
 private:

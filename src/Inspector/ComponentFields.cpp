@@ -822,6 +822,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureHeldObject::middle>("middle");
 	Reflect<components::PendingCatch>(context).Field<&components::PendingCatch::object>("object");
 	Reflect<components::CatchHands>(context).Field<&components::CatchHands::hands>("hands");
+	Reflect<components::PickUpReach>(context).Field<&components::PickUpReach::straightReach>("straightReach");
 	Reflect<components::HeldByCreature>(context).Field<&components::HeldByCreature::creature>("creature");
 	Reflect<components::CreatureTownAttitude>(context)
 	    .Field<&components::CreatureTownAttitude::attitude>("attitude")
@@ -848,7 +849,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::cheat>("cheat");
 	Reflect<components::CreatureSwap>(context)
 	    .Field<&components::CreatureSwap::other>("other")
-	    .Field<&components::CreatureSwap::target>("target");
+	    .Field<&components::CreatureSwap::target>("target")
+	    .Field<&components::CreatureSwap::beam>("beam");
 	Reflect<components::DanceMove>(context)
 	    .Field<&components::DanceMove::action>("action")
 	    .Field<&components::DanceMove::first>("first")
@@ -1071,7 +1073,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::GroundMark>(context)
 	    .Field<&components::GroundMark::millisecondsLeft>("millisecondsLeft")
 	    .Field<&components::GroundMark::alpha>("alpha");
-	Reflect<components::GuidanceHeard>(context).Field<&components::GuidanceHeard::lastTurn>("lastTurn");
+	Reflect<components::GuidanceHeard>(context)
+	    .Field<&components::GuidanceHeard::lastTurn>("lastTurn")
+	    .Field<&components::GuidanceHeard::alignmentDrift>("alignmentDrift")
+	    .Field<&components::GuidanceHeard::oneOffSaid>("oneOffSaid");
 	Reflect<components::Hand>(context)
 	    .Field<&components::Hand::rightHanded>("rightHanded")
 	    .Field<&components::Hand::renderType>("renderType")
@@ -2244,6 +2249,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_mind::Step>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Step::kind>("kind")
 	    .Field<&openblack::creature_mind::Step::seconds>("seconds")
+	    .Field<&openblack::creature_mind::Step::turns>("turns")
 	    .Field<&openblack::creature_mind::Step::animation>("animation")
 	    .Field<&openblack::creature_mind::Step::sleepyEyes>("sleepyEyes")
 	    .Field<&openblack::creature_mind::Step::movement>("movement")

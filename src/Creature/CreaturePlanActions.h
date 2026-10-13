@@ -55,9 +55,12 @@ enum class Target : uint8_t
 	StoragePit,
 	/// A pile of food the food miracle made, away from any storage pit
 	MagicFoodPile,
+	/// A toy it can pick up, or only a ball (the football or the toy ball)
+	Toy,
+	ToyBall,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::MagicFoodPile) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::ToyBall) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -104,6 +107,8 @@ enum class Build : uint8_t
 	LookButDontApproach,
 	LookAtCamera,
 	PointAtThing,
+	/// Looking at the camera while a script's cut scene is on, as every creature free to think for itself is made to
+	LookAtCameraInCutScene,
 	PointAtCamera,
 	/// Hurling, sleeping at home, smiling or waving at someone, being frightened on the spot, putting down what it
 	/// holds and lying dead for good, as the game builds them whoever chose them

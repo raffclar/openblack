@@ -67,7 +67,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeLevelProvider(Level
 	provider->Add(
 	    Description("load",
 	                "Loads a land by its name (level.list). how fresh (the default) loads it as the land menu "
-	                "does, the scripts starting again; how story changes land as the story does, through the "
+	                "does, the scripts starting again (a playground land starting a skirmish, a new game on it); how story "
+	                "changes land as the story does, through the "
 	                "game's own change of land, the scripts going on. Answers once it has loaded",
 	                {Parameter("name", "string", "The land's name", true), Parameter("how", "string", "fresh or story", false)},
 	                true),

@@ -97,7 +97,15 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 	    object, {.velocity = release.velocity, .thrower = release.creature, .player = release.player, .fromHand = !byCreature});
 	if (entry == nullptr)
 	{
-		// A thing with no shape to move with is left as the game leaves it: counted in the physics, out of the map
+		// A villager or animal the physics won't move, as one a script made immovable, is put straight back down: on the
+		// land under where it was let go, back in the map, landing as if it had come down there
+		if (registry.AnyOf<Villager, Animal>(object))
+		{
+			Hooks().EndPhysics(*this, nullptr, object, true);
+			return {.accepted = true, .entry = nullptr, .landed = true};
+		}
+		// Anything else with no shape to move with is left as the game leaves it: counted in the physics, out of the map,
+		// where the hand let it go
 		return {.accepted = true};
 	}
 	auto& body = *entry->body;

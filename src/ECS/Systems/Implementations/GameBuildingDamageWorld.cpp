@@ -26,6 +26,7 @@
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -257,5 +258,13 @@ void GameBuildingDamageWorld::PlayerDid(size_t deed, glm::vec3 point, entt::enti
 	if (Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().PlayerDid(deed, point, object, player);
+	}
+}
+
+void GameBuildingDamageWorld::BuildingWrecked(entt::entity building, std::optional<PlayerNames> player, float remaining)
+{
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().BuildingBroken(building, player, remaining);
 	}
 }

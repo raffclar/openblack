@@ -53,6 +53,25 @@ void FinishStep(IdleMind& mind)
 /// camera is right overhead or out of sight
 void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
 {
+	if (step.turns.has_value())
+	{
+		// Watching for a set number of turns: only having no player ends it early
+		if (!senses.camera.has_value() || !(senses.seconds > 0.0f))
+		{
+			FinishStep(mind);
+			return;
+		}
+		if (senses.camera->groundDistance >= k_WatchCameraOverhead && std::abs(senses.camera->turn) > k_WatchCameraTurn)
+		{
+			commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = senses.camera->point};
+		}
+		const auto turns = std::lround(mind.stepSeconds / senses.seconds) + 1;
+		if (turns > static_cast<long>(*step.turns))
+		{
+			FinishStep(mind);
+		}
+		return;
+	}
 	if (!senses.camera.has_value() || senses.camera->groundDistance < k_WatchCameraOverhead || !(senses.seconds > 0.0f))
 	{
 		FinishStep(mind);
@@ -765,6 +784,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.mirrored = random(2) == 1;
 			commands.startSwapBeam = true;
 			break;
+		case Step::Kind::Overlay:
+			// Nothing starts on top of the body while something already plays there; the step waits for it all the same
+			commands.playOverlay = step.animation;
+			break;
 		case Step::Kind::Wait:
 		case Step::Kind::WaitInMap:
 			break;
@@ -885,6 +908,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::WatchCamera:
 		WatchCamera(mind, step, senses, commands);
+		break;
+	case Step::Kind::Overlay:
+		if (!senses.overlayPlaying)
+		{
+			FinishStep(mind);
+		}
 		break;
 	case Step::Kind::SwapMind:
 		// From the turn after the beam starts it takes on the shape, done once it has, whether or not the action has

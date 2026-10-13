@@ -7,12 +7,17 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+#include <cstdint>
+
+#include <algorithm>
 #include <array>
 #include <numbers>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "Camera/CameraLens.h"
 #include "ECS/DiscipleRules.h"
 
 using namespace openblack;
@@ -228,6 +233,41 @@ TEST(DiscipleRules, SymbolsAndSamples)
 	EXPECT_EQ(MadeSample(ChangeHouse, -0.9f, 0.2f), 16u);
 	EXPECT_EQ(MadeSample(ChangeHouse, -0.9f, 0.7f), 15u);
 	EXPECT_FALSE(MadeSample(Worship, 0.0f, 0.0f).has_value());
+}
+
+/// The symbol's height on the screen, in pixels, through the camera's view on a screen of that size
+static float SymbolPixelsOnScreen(float distance, int32_t width, int32_t height)
+{
+	constexpr float k_Lens = 70.0f * std::numbers::pi_v<float> / 180.0f;
+	const float aspect = static_cast<float>(width) / static_cast<float>(height);
+	const float halfView = distance * std::tan(camera_lens::VerticalFieldOfView(k_Lens, aspect) * 0.5f);
+	return SymbolSize(distance, width, height) / halfView * (static_cast<float>(height) * 0.5f);
+}
+
+TEST(DiscipleRules, TheSymbolIsTheGamesSizeOnItsDefaultScreen)
+{
+	// 16 pixels over half of 800, halved
+	EXPECT_FLOAT_EQ(SymbolSize(50.0f, 800, 600), 50.0f * (16.0f / 400.0f) * 0.5f);
+	EXPECT_FLOAT_EQ(SymbolSize(0.0f, 800, 600), 0.0001f);
+}
+
+TEST(DiscipleRules, TheSymbolTakesTheSameShareOfTheScreensFourByThreeMiddleOnEveryScreen)
+{
+	// Its share of the height of the 4:3 middle, as on the default screen
+	const float reference = SymbolPixelsOnScreen(30.0f, 800, 600) / 600.0f;
+	constexpr std::array<std::array<int32_t, 2>, 6> k_Screens {
+	    {{1280, 1024}, {1600, 1200}, {1920, 1080}, {2560, 1440}, {3440, 1440}, {5120, 1440}}};
+	for (const auto& [width, height] : k_Screens)
+	{
+		const float middleHeight = std::min(static_cast<float>(height), static_cast<float>(width) * 0.75f);
+		for (const float distance : {5.0f, 30.0f, 400.0f})
+		{
+			EXPECT_NEAR(SymbolPixelsOnScreen(distance, width, height) / middleHeight, reference, 1e-5f)
+			    << width << "x" << height << " at " << distance;
+		}
+	}
+	// Twice the pixels on a 4:3 screen twice the default's size, where the game drew it the same 16 pixels
+	EXPECT_NEAR(SymbolPixelsOnScreen(30.0f, 1600, 1200), 2.0f * SymbolPixelsOnScreen(30.0f, 800, 600), 1e-3f);
 }
 
 TEST(DiscipleRules, AlignmentFollowsWhatTheTownWants)

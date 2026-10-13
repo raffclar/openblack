@@ -104,6 +104,13 @@ TEST(LeashOrders, SomeStatesRefuseOrders)
 	EXPECT_FALSE(TakesOrders({.life = 0.0f}));
 	EXPECT_FALSE(TakesOrders({.exhaustion = 1.0f}));
 	EXPECT_TRUE(TakesOrders({.exhaustion = 0.99f}));
+	// Frozen by a miracle, its mind is stopped
+	EXPECT_FALSE(TakesOrders({.frozen = true}));
+	// Under a script's control it still acts on a thing, but isn't sent anywhere
+	EXPECT_TRUE(TakesOrders({.scriptControlled = true}));
+	EXPECT_FALSE(TakesGroundOrders({.scriptControlled = true}));
+	EXPECT_TRUE(TakesGroundOrders({}));
+	EXPECT_FALSE(TakesGroundOrders({.frozen = true}));
 }
 
 TEST(LeashOrders, TheLandSendsItThere)

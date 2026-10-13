@@ -69,7 +69,7 @@ public:
 	[[nodiscard]] std::optional<float> CatchMs(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> HandHeldCreature() const override;
 	[[nodiscard]] bool HasCreatureActions() const override;
-	[[nodiscard]] bool CanPickUp(entt::entity creature, entt::entity object) const override;
+	[[nodiscard]] bool CanBeCaught(entt::entity object) const override;
 	void Catch(entt::entity creature, entt::entity object) override;
 	void StopCreature(entt::entity creature) override;
 	void DropCarriedLog(systems::DynamicsSystemInterface& dynamics, entt::entity villager,

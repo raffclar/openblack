@@ -51,16 +51,14 @@ constexpr std::array k_Executors {
               .activity = Activity::Examine},
     Executor {.action = "ExamineByLooking", .target = Target::Anything, .build = Build::ExamineByLooking},
     Executor {.action = "ExamineByFollowing", .target = Target::Living, .build = Build::ExamineByFollowing},
-    Executor {.action = "ThrowBallAtObject",
-              .target = Target::Pickable,
-              .build = Build::ThrowAbout,
-              .activity = Activity::PlayWithObject},
+    Executor {
+        .action = "ThrowBallAtObject", .target = Target::Toy, .build = Build::ThrowAbout, .activity = Activity::PlayWithObject},
     // Throwing things about and into the sea, kicking a ball about and throwing to impress are all throwing what it
     // picks up somewhere nearby, as the throws aimed at the sea or at an audience need systems that aren't here yet
     Executor {
         .action = "ThrowAround", .target = Target::Pickable, .build = Build::ThrowAbout, .activity = Activity::PlayWithObject},
     Executor {.action = "KickBallAround",
-              .target = Target::Pickable,
+              .target = Target::ToyBall,
               .build = Build::ThrowAbout,
               .activity = Activity::PlayWithObject},
     Executor {.action = "ThrowInTheSea",
@@ -143,6 +141,8 @@ constexpr std::array k_Executors {
     Executor {.action = "LookButDontApproach", .target = Target::Anything, .build = Build::LookButDontApproach},
     Executor {.action = "LookAtCamera", .build = Build::LookAtCamera},
     Executor {.action = "PointAtObject", .target = Target::Anything, .build = Build::PointAtThing},
+    // What a script's cut scene makes every creature free to think for itself do
+    Executor {.action = "LookAtCameraInWideScreen", .build = Build::LookAtCameraInCutScene},
 };
 
 /// The trip to the shoal to bring food out of the sea, none when it already has food in its hand; it walks straight to the
@@ -329,6 +329,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::LookAtCamera(situation.hasPlayer);
 	case Build::PointAtThing:
 		return creature_mind::PointAtThing(*object);
+	case Build::LookAtCameraInCutScene:
+		return creature_mind::LookAtCameraInCutScene(situation.eye, random);
 	case Build::PointAtCamera:
 		return creature_mind::PointAtCamera(situation.hasPlayer, *situation.eye);
 	case Build::Never:

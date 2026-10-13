@@ -17,6 +17,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Creature/CreatureLayers.h"
+
 using namespace openblack::creature_mind;
 
 namespace
@@ -75,6 +77,51 @@ std::vector<Step> openblack::creature_mind::LookAtCamera(bool hasPlayer)
 	         .seconds = k_LookAtCameraSeconds,
 	         .face = creature_face::Cue::Curiosity,
 	         .gaze = Gaze {.camera = true}}};
+}
+
+std::vector<Step> openblack::creature_mind::LookAtCameraInCutScene(const std::optional<glm::vec3>& camera, const Random& random)
+{
+	namespace animations = creature_layers::animations;
+	const Gaze atCamera {.camera = true};
+	const Step watch {.kind = Step::Kind::WatchCamera,
+	                  .seconds = k_LookAtCameraSeconds,
+	                  .turns = k_CutSceneWatchTurns,
+	                  .face = creature_face::Cue::Curiosity,
+	                  .gaze = atCamera};
+	const Step talk {
+	    .kind = Step::Kind::Overlay, .animation = animations::k_Talk, .face = creature_face::Cue::Curiosity, .gaze = atCamera};
+	const auto play = [&atCamera](size_t animation) {
+		return Step {.kind = Step::Kind::Action, .animation = animation, .face = creature_face::Cue::Amazed, .gaze = atCamera};
+	};
+
+	std::vector<Step> agenda;
+	if (random(k_CutScenePointLots) == 0 && camera.has_value())
+	{
+		agenda.push_back(
+		    Point({.point = {camera->x, camera->z}, .pointHeight = camera->y}, k_PointAtCameraSeconds, {.point = *camera}));
+	}
+	// Without a player there is no camera of its own to watch: the watching is done at once
+	agenda.push_back(watch);
+	if (random(k_CutSceneWaveLots) == 0)
+	{
+		agenda.push_back(play(animations::k_FriendlyWave));
+	}
+	if (random(k_CutSceneTalkLots) == 0)
+	{
+		agenda.push_back(talk);
+	}
+	if (random(k_CutSceneConfusedLots) == 0)
+	{
+		agenda.push_back(play(animations::k_Confused));
+		agenda.push_back(talk);
+	}
+	agenda.push_back(watch);
+	return agenda;
+}
+
+bool openblack::creature_mind::StartsLookAtCameraInCutScene(bool barsIn, uint32_t barsOwner, bool lookingAlready)
+{
+	return barsIn && barsOwner != 0 && !lookingAlready;
 }
 
 std::vector<Step> openblack::creature_mind::PointAtThing(uint32_t thing)

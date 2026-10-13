@@ -26,6 +26,7 @@
 #include <type_traits>
 #include <variant>
 
+#include <LHVM.h>
 #include <MindFile.h>
 #include <SDL_events.h>
 #include <SDL_mouse.h>
@@ -61,6 +62,7 @@
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
+#include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
@@ -113,12 +115,14 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBreeding.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -129,6 +133,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
@@ -418,6 +423,10 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);
 	}
+	if (object.disciple != VillagerDisciple::None && registry.AllOf<ecs::components::Villager>(entity))
+	{
+		ecs::villager_disciple::SetType(entity, object.disciple);
+	}
 }
 } // namespace
 
@@ -595,6 +604,12 @@ void Runner::Stop()
 		return;
 	}
 	_running = false;
+	// The debug option's bonus creatures are as they were
+	if (_unlockedBefore.has_value() && Locator::config::has_value())
+	{
+		Locator::config::value().unlockedBonusCreatures = *_unlockedBefore;
+	}
+	_unlockedBefore.reset();
 	// The mouse is the player's again
 	_sweep.reset();
 	if (Locator::gameActionSystem::has_value())
@@ -738,6 +753,15 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	if (environment.drawFootpaths && Locator::config::has_value())
 	{
 		Locator::config::value().drawFootpaths = true;
+	}
+	if (environment.unlockedBonusCreatures.has_value() && Locator::config::has_value())
+	{
+		auto& unlocked = Locator::config::value().unlockedBonusCreatures;
+		if (!_unlockedBefore.has_value())
+		{
+			_unlockedBefore = unlocked;
+		}
+		unlocked = *environment.unlockedBonusCreatures;
 	}
 	if (environment.cursor && Locator::windowing::has_value())
 	{
@@ -1340,6 +1364,74 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 }
 
+std::string Runner::RunScript(const Command& command)
+{
+	if (!Locator::vm::has_value() || !Locator::scriptObjects::has_value())
+	{
+		return "no script machine";
+	}
+	auto& vm = Locator::vm::value();
+	if (std::ranges::none_of(vm.GetScripts(), [&command](const auto& script) { return script.name == command.script; }))
+	{
+		return fmt::format("no script {}", command.script);
+	}
+	// What a script is handed: a number, or an object the scripts' table knows of, a marker made for it
+	const auto& land = Locator::terrainSystem::value();
+	const auto value = [this, &land](const ScriptArgument& argument) -> std::optional<lhvm::VMValue> {
+		std::optional<entt::entity> object;
+		switch (argument.kind)
+		{
+		case ScriptArgument::Kind::Number:
+			return lhvm::VMValue(argument.number);
+		case ScriptArgument::Kind::Marker:
+		{
+			const auto point = MapPoint(_middle, argument.point);
+			const auto marker =
+			    ecs::archetypes::ScriptMarkerArchetype::Create({point.x, land.GetHeightAt(point) + argument.height, point.y});
+			Locator::scriptObjects::value().Register(marker, true);
+			return lhvm::VMValue(static_cast<uint32_t>(marker));
+		}
+		case ScriptArgument::Kind::Object:
+			object = ObjectAt(argument.index);
+			break;
+		case ScriptArgument::Kind::Creature:
+			object = CreatureAt(argument.index);
+			break;
+		}
+		if (!object.has_value())
+		{
+			return std::nullopt;
+		}
+		Locator::scriptObjects::value().Register(*object, false);
+		return lhvm::VMValue(static_cast<uint32_t>(*object));
+	};
+	const auto type = [](const ScriptArgument& argument) {
+		return argument.kind == ScriptArgument::Kind::Number ? lhvm::DataType::Float : lhvm::DataType::Object;
+	};
+	const auto& globals = vm.GetVariables();
+	for (const auto& [name, argument] : command.scriptGlobals)
+	{
+		const auto found = std::ranges::find_if(globals, [name](const auto& global) { return global.name == name; });
+		const auto given = value(argument);
+		if (found == globals.end() || !given.has_value())
+		{
+			return fmt::format("no global {} or nothing to set it to", name);
+		}
+		vm.SetVariable(static_cast<uint32_t>(std::distance(globals.begin(), found)), *given);
+	}
+	for (const auto& argument : command.scriptArguments)
+	{
+		const auto given = value(argument);
+		if (!given.has_value())
+		{
+			return "an argument names nothing of the scenario's";
+		}
+		vm.Push(*given, type(argument));
+	}
+	const auto task = vm.StartScript(std::string(command.script), lhvm::ScriptType::All);
+	return task != 0 ? fmt::format("{} runs as task {}", command.script, task) : fmt::format("{} didn't start", command.script);
+}
+
 std::string Runner::HandTapObject(size_t index)
 {
 	const auto object = ObjectAt(index);
@@ -1607,6 +1699,11 @@ void Runner::Give(const Command& command)
 		Log(line);
 		return;
 	}
+	if (command.kind == Kind::RunScript)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RunScript(command)));
+		return;
+	}
 	if (command.kind == Kind::RecordChallenge)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
@@ -1664,6 +1761,15 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::EndGuidanceWaits)
+	{
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().EndWaits();
+		}
+		Log(fmt::format("{:.1f}s: the guidance's waits are over", _seconds));
+		return;
+	}
 	if (command.kind == Kind::RunHelpMessage)
 	{
 		const bool started =
@@ -1700,8 +1806,9 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::WideScreen)
 	{
-		// Held by a script, as the land's scripts hold them
-		constexpr uint32_t k_ScriptOwner = 1;
+		// Held by a script, as the land's scripts hold them, under a number no script task has: a task of that number
+		// stopping would take the bars away with it
+		constexpr uint32_t k_ScriptOwner = std::numeric_limits<uint32_t>::max();
 		if (Locator::cinematicDirectorSystem::has_value())
 		{
 			Locator::cinematicDirectorSystem::value().SetWideScreen(command.value != 0, k_ScriptOwner);
@@ -1903,6 +2010,7 @@ void Runner::Give(const Command& command)
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
 	case Kind::RunHelpMessage:
+	case Kind::EndGuidanceWaits:
 	case Kind::RunText:
 	case Kind::PlayHandDemo:
 	case Kind::Reframe:

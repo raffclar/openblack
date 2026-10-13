@@ -78,6 +78,7 @@
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
+#include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
@@ -114,6 +115,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/Map.h"
+#include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -159,6 +161,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -494,6 +497,7 @@ Game::Game(Arguments&& args) noexcept
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
+	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.resolution = {args.windowWidth, args.windowHeight};
 	config.displayMode = args.displayMode;
 	config.graphicsBackend = args.graphicsBackend;
@@ -1025,14 +1029,7 @@ void Game::UpdateHandInterface()
 	_interface->SetCreaturePanel(std::nullopt);
 	// The temple places the hand's tooltip itself
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	// The fighters' health and stamina, while a fight is on
-	_interface->SetFightPanel(inTemple ? std::nullopt : Locator::creatureFightSystem::value().GetPanel());
 	if (inTemple)
-	{
-		return;
-	}
-	// Nor is the panel shown while a script has the cinema bars in, whether or not the player's interface is put away
-	if (Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0)
 	{
 		return;
 	}
@@ -1567,6 +1564,11 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::helpMessageSystem::value().ProcessTurn();
 	}
+	// The advisors' guidance: a new land's first stamps, and a look at the moon at night
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().ProcessTurn();
+	}
 	// The help's count of what the player has done moves on a turn, and its tip bubble stays while its sign shows
 	if (Locator::helpProfileSystem::has_value())
 	{
@@ -1933,6 +1935,13 @@ bool Game::Update() noexcept
 	Locator::highDetailSystem::value().Update();
 	if (_interface)
 	{
+		// The fighters' health and stamina while a fight is on, wanted afresh every frame whether or not the hand is out
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const bool scriptHasCamera =
+		    Locator::scriptControlSystem::has_value() && Locator::scriptControlSystem::value().GetCameraOwner() != 0;
+		_interface->SetFightPanel(creature_fight_hud::PanelAllowed(inTemple, scriptHasCamera)
+		                              ? Locator::creatureFightSystem::value().GetPanel()
+		                              : std::nullopt);
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		if (std::exchange(_restartRequested, false))
@@ -1950,6 +1959,8 @@ bool Game::Update() noexcept
 			return false; // Quit event
 		}
 	}
+
+	KeepAlignmentInProfile();
 
 	// The frame's game time: none while paused, quicker or slower with the game speed
 	auto& clock = Locator::time::value();
@@ -2373,7 +2384,12 @@ bool Game::Update() noexcept
 
 		// Update Hand
 		{
-			// Put away, it stays where it was and does nothing until it comes back
+			// Put away, it stays where it was and does nothing until it comes back. The creature's panel is wanted afresh
+			// every frame, so with the hand away (a cut scene, a menu) it isn't left up from before
+			if (!IsHandDrawn() && _interface)
+			{
+				_interface->SetCreaturePanel(std::nullopt);
+			}
 			if (IsHandDrawn())
 			{
 				const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
@@ -3714,7 +3730,7 @@ bool Game::Run() noexcept
 		// A first start: the new player is asked their name before the first land; closing the window meanwhile ends
 		// the game at its first frame
 		AskForNewPlayer();
-		if (!LoadMap(_startMap))
+		if (!LoadMap(_startMap, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame))
 		{
 			return false;
 		}
@@ -3942,7 +3958,7 @@ bool Game::Run() noexcept
 	return true;
 }
 
-bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look) noexcept
+bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change) noexcept
 {
 	const ecs::systems::InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
@@ -3958,19 +3974,12 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	const auto data = fileSystem.ReadAll(path);
 	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 
-	PrepareNewLand(false);
+	PrepareNewLand(change);
 	timer.Step("reset");
 	RenderLoadingFrame();
 
 	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
-	// The script is matched by where its file is found, however its path was given
-	const auto scriptFile = Level::ResolveScriptPath(path);
-	bool skirmish = false;
-	Locator::resources::value().GetLevels().Each([&scriptFile, &skirmish](entt::id_type /*id*/, const Level& level) {
-		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
-		                        Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
-	});
-	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
+	Locator::entitiesRegistry::value().Context().skirmish = IsPlaygroundLand(path);
 	_landPath = path;
 
 	Script script;
@@ -4017,6 +4026,11 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	}
 
 	timer.Step("forests");
+	// A new game starts the player as good or evil as their profile last kept them, once the land is set up
+	if (land_change::RulesFor(change).alignmentFromProfile)
+	{
+		StartPlayerAtProfileAlignment();
+	}
 	RenderLoadingFrame();
 	StartNewLand();
 	timer.Step("start");
@@ -4024,7 +4038,26 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	return true;
 }
 
-bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
+bool Game::IsPlaygroundLand(const std::filesystem::path& path)
+{
+	// The script is matched by where its file is found, however its path was given
+	const auto scriptFile = Level::ResolveScriptPath(path);
+	bool playground = false;
+	Locator::resources::value().GetLevels().Each([&scriptFile, &playground](entt::id_type /*id*/, const Level& level) {
+		playground = playground || (level.GetType() == Level::LandType::Skirmish &&
+		                            Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
+	});
+	return playground;
+}
+
+bool Game::LoadFromLandMenu(const std::filesystem::path& path) noexcept
+{
+	// A playground land starts a skirmish: a new game on that land, the last game's creature kept for the profile it was
+	// played as, every player starting afresh and the player as good or evil as their profile last kept them
+	return LoadMapWithFreshScripts(path, land_change::FromLandMenu(IsPlaygroundLand(path)));
+}
+
+bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) noexcept
 {
 	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
 	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
@@ -4054,7 +4087,7 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 			                    err.what());
 		}
 	}
-	return LoadMap(path);
+	return LoadMap(path, loading::LoadingClock::Mode::Tips, change);
 }
 
 void Game::LoadTestbed() noexcept
@@ -4066,7 +4099,7 @@ void Game::LoadTestbed() noexcept
 		Locator::vm::value().StopAllTasks();
 	}
 	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
-	PrepareNewLand(true);
+	PrepareNewLand(land_change::Kind::Testbed);
 	_landPath = k_TestbedLandPath;
 	RenderLoadingFrame();
 	InitializeLevel(flat_land::Build());
@@ -4108,8 +4141,10 @@ void Game::LoadTestbed() noexcept
 	}
 }
 
-void Game::PrepareNewLand(bool toTestbed)
+void Game::PrepareNewLand(land_change::Kind change)
 {
+	const bool toTestbed = change == land_change::Kind::Testbed;
+	const auto rules = land_change::RulesFor(change);
 	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
 	// creature's room's flames and smoke, keeps entities of the land after they have gone
 	if (Locator::temple::has_value())
@@ -4117,9 +4152,10 @@ void Game::PrepareNewLand(bool toTestbed)
 		Locator::temple::value().CloseForNewLand();
 	}
 	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
-	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment. Nothing is
-	// carried onto the testbed or off it: its creatures never replace the player's own kept creature, and its players
-	// start afresh each time, with none of the last scenario's alignment, miracles or statistics.
+	// to load it again, a new game's included: it is the creature the profile keeps. The players keep what is theirs
+	// rather than the land's, such as their alignment, from one land to the next of a game; a new game makes them
+	// afresh. Nothing is carried onto the testbed or off it: its creatures never replace the player's own kept creature,
+	// and its players start afresh each time, with none of the last scenario's alignment, miracles or statistics.
 	const bool carryOver = !toTestbed && _landPath != k_TestbedLandPath;
 	if (Locator::creatureCarryOverSystem::has_value())
 	{
@@ -4128,10 +4164,16 @@ void Game::PrepareNewLand(bool toTestbed)
 			Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
 		}
 		Locator::creatureCarryOverSystem::value().Reset();
+		// A new game is played as the profile picked now: the profile picked during the last game took over only now,
+		// once that game's creature was kept for the profile it was played as
+		if (rules.gameStarts)
+		{
+			Locator::creatureCarryOverSystem::value().StartGame();
+		}
 	}
 	if (Locator::playerSystem::has_value())
 	{
-		if (carryOver)
+		if (carryOver && rules.playersCarried)
 		{
 			Locator::playerSystem::value().KeepForNextLand();
 		}
@@ -4140,21 +4182,38 @@ void Game::PrepareNewLand(bool toTestbed)
 			Locator::playerSystem::value().ForgetKept();
 		}
 	}
+	// The players' hearts beat on from land to land; a new game starts them calm
+	if (Locator::heartbeatSystem::has_value())
+	{
+		if (carryOver && rules.heartbeatsCarried)
+		{
+			Locator::heartbeatSystem::value().KeepForNextLand();
+		}
+		else
+		{
+			Locator::heartbeatSystem::value().ForgetKept();
+		}
+	}
 	// The last land's scripts forget what they held: the land's objects go with it before anything could be let go back
 	// into the game
 	if (Locator::scriptObjects::has_value())
 	{
 		Locator::scriptObjects::value().ClearForNewLand();
 	}
-	// A new land has no weather of the last one, and none of its script's fades, cinema bars or clipping
+	// A new land has no weather of the last one
 	if (Locator::weatherSystem::has_value())
 	{
 		Locator::weatherSystem::value().Reset();
 		Locator::snowSystem::value().Reset();
 		Locator::waterRingSystem::value().Reset();
 	}
-	Locator::cinematicDirectorSystem::value().Reset();
-	// Nor the opening's light and hand
+	// The scripts' hold on the screen goes on through the story's change of land: a fade to black made on the last land
+	// stays black while the next loads, for that land's scripts to fade in. It goes when the scripts start again
+	if (!rules.scriptScreenKept)
+	{
+		Locator::cinematicDirectorSystem::value().Reset();
+	}
+	// The opening's light and hand go
 	Locator::introSystem::value().ReleaseAll();
 	// Nor does any script keep the camera, the game's speed or the dialogue
 	if (Locator::camera::has_value())
@@ -4172,8 +4231,25 @@ void Game::PrepareNewLand(bool toTestbed)
 	{
 		Locator::cameraBookmarkSystem::value().SetEnabled(true);
 	}
+	// The advisors carry on through the story's change of land, out or on their way home as they were. The land menu
+	// starting the scripts again sends them home, and a new game starts them at home, out of sight
+	if (Locator::advisorSystem::has_value())
+	{
+		switch (rules.advisors)
+		{
+		case land_change::Advisors::CarryOn:
+			break;
+		case land_change::Advisors::SentHome:
+			SendAdvisorsHome(false);
+			break;
+		case land_change::Advisors::Afresh:
+			Locator::advisorSystem::value().Reset();
+			break;
+		}
+	}
 	// The scripts start again, and the help's texts and voices with them
 	Locator::helpTextSystem::value().Reset();
+	Locator::guidanceSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints, nor a scare of its fish
@@ -4227,6 +4303,13 @@ void Game::PrepareNewLand(bool toTestbed)
 		Locator::handGrabSystem::value().Reset();
 	}
 
+	// Every sound stops as the land goes, however it changes: the music at once, without fading, the atmosphere, and
+	// every sound and voice still playing. They go before their entities do, which would leave them playing on
+	if (Locator::audio::has_value())
+	{
+		Locator::audio::value().Stop();
+	}
+
 	// The sky goes on as it was: it is kept while every entity goes, and made again after
 	Locator::skySystem::value().KeepForNextLand();
 	// Reset everything. Deletes all entities and their components
@@ -4240,6 +4323,37 @@ void Game::PrepareNewLand(bool toTestbed)
 	auto& config = Locator::config::value();
 	const auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
 	Locator::camera::value().SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip);
+}
+
+void Game::StartPlayerAtProfileAlignment()
+{
+	if (!Locator::playerProfileSystem::has_value() || !Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	const auto alignment = profile_alignment::Starting(profile.has_value() ? profile->alignment : 0.0);
+	auto& players = Locator::playerSystem::value();
+	const auto local = players.GetLocalPlayer();
+	Locator::alignmentSystem::value().SetPlayerAlignment(local, alignment);
+	// The player's statistics note the alignment they start the game at
+	player_statistics::Made(players.GetPlayer(local));
+}
+
+void Game::KeepAlignmentInProfile()
+{
+	// The player's alignment is kept with their profile every so often as they play, never the testbed's
+	if (_landPath.empty() || _landPath == k_TestbedLandPath || !Locator::playerProfileSystem::has_value() ||
+	    !Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto& players = Locator::playerSystem::value();
+	if (players.KeepAlignmentAt(Locator::time::value().GetTurn()))
+	{
+		Locator::playerProfileSystem::value().SetCurrentAlignment(
+		    Locator::alignmentSystem::value().GetPlayerAlignment(players.GetLocalPlayer()));
+	}
 }
 
 void Game::StartNewLand()
@@ -4313,7 +4427,7 @@ bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noex
 	_startTestbed = false;
 	// A new game always begins on the first land
 	const auto land = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "Land1.txt";
-	if (!LoadMapWithFreshScripts(land))
+	if (!LoadMapWithFreshScripts(land, land_change::Kind::NewGame))
 	{
 		return false;
 	}
