@@ -145,6 +145,8 @@ private:
 	[[nodiscard]] std::string GiveAdvisorCommand(const Command& command) const;
 	/// Records a challenge as its script would, its picture of a view the camera is put at first
 	[[nodiscard]] std::string RecordChallenge(const Command& command) const;
+	/// Starts a land's script as another script's call starts it; what came of that
+	[[nodiscard]] std::string RunScript(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
 	std::string HandTapObject(size_t index);
@@ -182,6 +184,8 @@ private:
 	const Scenario* _scenario {nullptr};
 	bool _running {false};
 	float _seconds {0.0f};
+	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
+	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
 	std::optional<int> _fireBallTakeFrames;
 	/// When the miracles' positions are next logged, for a scenario that logs them
