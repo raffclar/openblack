@@ -56,6 +56,11 @@ namespace openblack::ecs::systems::mind_detail
 [[nodiscard]] std::optional<uint32_t> LessonActivity(const creature_mind_tables::Tables& tables,
                                                      creature_desires::Desire desire, std::optional<uint32_t> object,
                                                      std::optional<uint32_t> about);
+/// The value of nearness for a thing at a known place, from the distance weight of a desire. If the leash of the
+/// player is tied to a thing, the distance starts at that thing. If not, the distance starts at the creature. A thing
+/// that the creature holds has the highest value.
+[[nodiscard]] float Nearness(const ecs::Registry& registry, entt::entity creature, const glm::vec3& at, entt::entity object,
+                             const glm::vec3& place, float distanceWeight);
 /// How useful the creature has learnt a food is to eat, 0.1 when nothing is known
 [[nodiscard]] float FoodUsefulness(const ecs::Registry& registry, const components::CreatureMindState& mind, entt::entity self,
                                    entt::entity food);

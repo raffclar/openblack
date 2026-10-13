@@ -115,6 +115,21 @@ struct Plan
                                              std::span<const ObjectCandidate> objects,
                                              std::span<const ActionCandidate> actions);
 
+/// One desire that a creature examines for one thing
+struct DesireOnThing
+{
+	creature_desires::Desire desire {creature_desires::Desire::Impress};
+	/// The strength of the desire. The usefulness of the thing for the desire, with its distance included.
+	float strength {0.0f};
+	float usefulness {0.0f};
+};
+/// Find the desire that the creature most wants to do about one thing. Examine the desires in their order.
+/// The score of a desire is its strength multiplied by the usefulness of the thing.
+/// A desire becomes the best when its score is more than the usefulness of the best desire before it.
+/// That comparison does not include the strength of the best desire.
+/// If no desire has a score more than zero, there is no best desire.
+[[nodiscard]] std::optional<creature_desires::Desire> BestDesireOnThing(std::span<const DesireOnThing> desires);
+
 /// A plan forced on the creature, by a reaction or a catch, scores the most a score can be, so that no plan of its own is
 /// ever pressing enough to replace it
 constexpr float k_ForcedScore = std::numeric_limits<float>::max();

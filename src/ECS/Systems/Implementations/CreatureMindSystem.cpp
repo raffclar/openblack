@@ -1397,6 +1397,14 @@ void CreatureMindSystem::ProcessTurn()
 				                       .object = entity});
 			    }
 		    }
+		    // When the creature examines a different creature, it finds the desires of the two creatures each turn.
+		    // It does not do this on the first turn.
+		    if (!scripted && mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
+		        mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Inspect &&
+		        mind.idle.agenda[mind.idle.step].object.has_value())
+		    {
+			    WeighWatchedCreature(entity, mind, static_cast<entt::entity>(*mind.idle.agenda[mind.idle.step].object));
+		    }
 		    const bool moving =
 		        Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity);
 		    if (mind.idle.step < mind.idle.agenda.size())
@@ -2127,8 +2135,8 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	{
 		return false;
 	}
-	// What it was doing stops as a failure, whatever comes of the new plan; a reaction it was in has been ended by
-	// whatever forces the plan
+	// The current action stops as a failure. This occurs also when the creature finds no new plan.; a reaction it was in has
+	// been ended by whatever forces the plan
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{

@@ -11,6 +11,7 @@
 
 #include <optional>
 #include <random>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -134,9 +135,11 @@ private:
 	void UseGift(entt::entity creature, entt::entity object);
 	/// Held by the player's hand, it shows what it wants once its body is free
 	void ShowDesireOnHold(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& animation);
-	/// Plans the desires due this turn for one creature
-	/// Plans the desires due this turn for one creature, or all of them, at most once a turn
-	void PlanCreature(entt::entity creature, components::CreatureMindState& mind, bool everyDesire = false);
+	/// Plan the desires of one creature for this turn, a maximum of one time each turn. The planner examines the
+	/// desires for this turn, or all the desires, or only one desire. For only one desire, the creature starts the plan
+	/// immediately, if there is a plan.
+	void PlanCreature(entt::entity creature, components::CreatureMindState& mind, bool everyDesire = false,
+	                  std::optional<creature_desires::Desire> only = std::nullopt);
 	/// Uniform random numbers from 0 to n - 1, and from 0 to 1
 	uint32_t Random(uint32_t range);
 	float Chance();
@@ -166,6 +169,18 @@ private:
 	[[nodiscard]] creature_planner::ObjectCandidate GoalWorth(entt::entity creature, const components::CreatureMindState& mind,
 	                                                          creature_desires::Desire desire, entt::entity thing,
 	                                                          std::optional<float> townUsefulness);
+	/// Find the desire that a creature most wants to do about a different creature. The function does not examine the
+	/// desires in the list of excluded desires. There is no result when no desire has a value.
+	[[nodiscard]] std::optional<creature_desires::Desire>
+	DesireAboutCreature(entt::entity creature, const components::CreatureMindState& mind, entt::entity other,
+	                    std::span<const creature_desires::Desire> leftOut);
+	/// Stop the current action as a failure. Make the desire the strongest desire. Plan the desire for the thing only.
+	/// Return true if the creature found a plan.
+	bool ForceDesireAbout(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
+	                      entt::entity thing);
+	/// Find the desires of a creature and of the creature that it watches. The creature can stop the watch and act on
+	/// a desire. Return true if it did.
+	bool WeighWatchedCreature(entt::entity creature, components::CreatureMindState& mind, entt::entity other);
 	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
 	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
 	bool Douse(entt::entity creature, entt::entity object);

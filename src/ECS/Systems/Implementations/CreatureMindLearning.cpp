@@ -1124,11 +1124,17 @@ float ObservedShare(const ecs::Registry& registry, const CreatureMindState& mind
 	return creature_mind::CuriosityShare(mind.observedKinds.contains(belief->type), false);
 }
 
-/// How much nearness counts for a thing a creature believes is at a place, by a desire's distance weight: the distance
-/// counts from where its player's leash is tied, when it is, else from the creature; a thing it holds counts as near as
-/// can be
-float Nearness(const ecs::Registry& registry, entt::entity creature, const glm::vec3& at, entt::entity object,
-               const glm::vec3& place, float distanceWeight)
+/// How useful a thing is to act on for a desire, by what the creature has learnt and what it has looked over
+float ObjectUsefulness(const ecs::Registry& registry, const creature_mind_model::Learnt& learnt, const CreatureMindState& mind,
+                       Desire desire, entt::entity object, entt::entity creature)
+{
+	const auto belief = BeliefOf(registry, object, creature);
+	return Usefulness(learnt, desire, belief) * ObservedShare(registry, mind, desire, object, belief);
+}
+} // namespace
+
+float mind_detail::Nearness(const ecs::Registry& registry, entt::entity creature, const glm::vec3& at, entt::entity object,
+                            const glm::vec3& place, float distanceWeight)
 {
 	glm::vec3 from = at;
 	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
@@ -1144,15 +1150,6 @@ float Nearness(const ecs::Registry& registry, entt::entity creature, const glm::
 	return creature_planner::DistancePriority(held != nullptr && held->creature == creature,
 	                                          gutils::GetDistanceInMetres(place, from), distanceWeight);
 }
-
-/// How useful a thing is to act on for a desire, by what the creature has learnt and what it has looked over
-float ObjectUsefulness(const ecs::Registry& registry, const creature_mind_model::Learnt& learnt, const CreatureMindState& mind,
-                       Desire desire, entt::entity object, entt::entity creature)
-{
-	const auto belief = BeliefOf(registry, object, creature);
-	return Usefulness(learnt, desire, belief) * ObservedShare(registry, mind, desire, object, belief);
-}
-} // namespace
 
 float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const CreatureMindState& mind, Desire desire,
                                              entt::entity object) const
@@ -1276,7 +1273,8 @@ creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity cre
 	return candidate;
 }
 
-void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, bool everyDesire)
+void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, bool everyDesire,
+                                      std::optional<Desire> only)
 {
 	const auto* tables = GetTables();
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1376,6 +1374,15 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 	}
 
+	if (only.has_value())
+	{
+		goals.clear();
+		if (eligible.at(static_cast<size_t>(*only)))
+		{
+			goals.push_back(*only);
+		}
+	}
+
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
@@ -1463,6 +1470,15 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		mind.planner.best.at(d) = best;
 	}
 
+	// When the planner examines only one desire, the creature starts the plan immediately, if there is a plan
+	if (only.has_value())
+	{
+		if (const auto plan = mind.planner.best.at(static_cast<size_t>(*only)); plan.has_value())
+		{
+			Adopt(creature, mind, *plan, situation);
+		}
+		return;
+	}
 	// Doing something it chose for itself that isn't idling, it carries on
 	if (!mind.planActive && !Interruptible(mind.idle.activity) && mind.idle.step < mind.idle.agenda.size())
 	{

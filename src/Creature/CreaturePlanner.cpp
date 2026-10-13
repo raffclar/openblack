@@ -117,6 +117,21 @@ std::optional<Plan> creature_planner::PlanDesire(Desire desire, float strength, 
 	return plan;
 }
 
+std::optional<Desire> creature_planner::BestDesireOnThing(std::span<const DesireOnThing> desires)
+{
+	std::optional<Desire> best;
+	float bestUsefulness = 0.0f;
+	for (const auto& weighed : desires)
+	{
+		if (weighed.strength * weighed.usefulness > bestUsefulness)
+		{
+			best = weighed.desire;
+			bestUsefulness = weighed.usefulness;
+		}
+	}
+	return best;
+}
+
 std::vector<Desire> creature_planner::NextGoals(PlannerState& state,
                                                 const std::array<bool, creature_desires::k_DesireCount>& eligible, size_t count)
 {

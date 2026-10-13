@@ -256,6 +256,20 @@ TEST(CreaturePlanner, WeighsWhatADesireIsAbout)
 	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Curiosity, false));
 }
 
+TEST(CreaturePlanner, BestDesireOnOneThing)
+{
+	// The score of a desire is compared with the usefulness of the best desire before it, without its strength
+	const std::vector<creature_planner::DesireOnThing> desires {
+	    {.desire = Desire::Compassion, .strength = 0.5f, .usefulness = 0.08f},
+	    {.desire = Desire::Anger, .strength = 1.0f, .usefulness = 0.09f},
+	    {.desire = Desire::BeFriends, .strength = 0.9f, .usefulness = 0.095f},
+	};
+	EXPECT_EQ(creature_planner::BestDesireOnThing(desires), Desire::Anger);
+	// No score more than zero: no desire
+	const std::vector<creature_planner::DesireOnThing> none {{.desire = Desire::Anger, .strength = 0.0f, .usefulness = 0.1f}};
+	EXPECT_FALSE(creature_planner::BestDesireOnThing(none).has_value());
+}
+
 TEST(CreaturePlanner, OpinionBreaksTies)
 {
 	const std::vector<creature_planner::ActionCandidate> actions {{.action = 1, .opinion = 1.0f, .turnsSinceDone = 0},
