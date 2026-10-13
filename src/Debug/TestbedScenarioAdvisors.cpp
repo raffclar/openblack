@@ -92,9 +92,10 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Advisors,
 	    .description = "Both advisors come out and fly out towards their sides of the screen, then are sent home; then "
 	                   "they come out again and are sent home from the middle of the screen.",
-	    .expected = "From near the sides each flies off past its own side of the screen in a second; from the middle each "
-	                "flies off past the top or bottom. On every screen shape each leaves the screen completely before it "
-	                "is gone: neither vanishes while still in view.",
+	    .expected = "Each flies in a second to the nearest of its homes beyond the screen's edges: past its own side of "
+	                "the screen when near that side, past the bottom or top when nearer the middle (the advisors drift apart "
+	                "before they are sent, so where they leave varies). On every screen shape each leaves the screen "
+	                "completely before it is gone: neither vanishes while still in view.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = AdvisorsFraming(),
 	    .commands = {Tell(k_Good, Action::Out, 0.5f), Tell(k_Evil, Action::Out, 0.0f),
