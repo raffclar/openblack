@@ -220,6 +220,13 @@ struct Frame
 {
 	return listed && (frame.drawAll || lastOnScreen);
 }
+/// Whether a listed thing stays drawn on the next frames that do not draw all of the list. A full frame decides it:
+/// - A villager or a creature stays drawn, on the screen or not.
+/// - Another thing stays drawn when its sphere was on the screen and it did not fade out completely.
+[[nodiscard]] constexpr bool StaysDrawn(bool alwaysDrawn, bool onScreen, bool fadedOut)
+{
+	return alwaysDrawn || (onScreen && !fadedOut);
+}
 
 /// The frames that make the list again because an event asks. The game keeps one count of frames. Each request sets
 /// the count, so a later request replaces an earlier one, also a larger one. Each frame that makes the list again

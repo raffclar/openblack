@@ -11,6 +11,8 @@
 
 #include "RenderingSystem.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
 #include <iostream>
@@ -35,6 +37,7 @@
 #include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -483,7 +486,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.bonePalette.clear();
 	_heldThings.clear();
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
-	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
 	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, drawBoundingBox, camera, modelDetail,
@@ -533,6 +536,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto level = graphics::mesh_detail::Mesh::High;
 		    bool gone = false;
 		    const auto* detail = registry.TryGet<const DetailMeshes>(entity);
+		    // On a frame that draws all of the land's draw list, note which listed things stay drawn while the camera
+		    // stands still. A thing of several meshes uses the box of its standard mesh. Another thing uses its own mesh.
+		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->Listed(entity);
+		    const auto keptBox =
+		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : drawnMesh;
+		    bool noted = false;
 		    if (drawList != nullptr && !drawList->Drawn(registry, entity))
 		    {
 			    // Of the things on the land's blocks only those in the land's draw list are drawn. One left out leaves
@@ -564,6 +573,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					        return object_detail::Disappears(registry, entity, IsTownCentre(registry, entity));
 				        },
 				        *camera, modelDetail);
+				    if (noteKept)
+				    {
+					    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, keptBox,
+					             !choice.mesh.has_value());
+					    noted = true;
+				    }
 				    if (!choice.mesh.has_value())
 				    {
 					    if (detail == nullptr)
@@ -603,6 +618,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    }
 				    }
 			    }
+		    }
+
+		    if (noteKept && !noted)
+		    {
+			    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, keptBox, false);
 		    }
 
 		    if (mirroredBoat && !gone)
@@ -1213,7 +1233,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	const auto paperTurn =
 	    camera != nullptr ? graphics::mesh_detail::PaperTurn(camera->GetOrigin(), camera->GetFocus()) : glm::mat3(1.0f);
 
-	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 
 	// Each tree as it is drawn this frame, gathered first, then laid out by mesh and detail
 	_placedTrees.clear();
@@ -1254,6 +1274,10 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			    return;
 		    }
 
+		    // On a frame that draws all of the land's draw list, note whether a listed tree stays drawn while the camera
+		    // stands still
+		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->Listed(entity);
+
 		    // Drawn in less detail the further off it is, fading out, then not at all, unless something holds it
 		    auto group = Group::High;
 		    std::optional<uint8_t> fade;
@@ -1263,6 +1287,10 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			    const auto choice = ChooseDetail(
 			        *box, 0.0f, modelMatrix, transform.scale.x,
 			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *camera, modelDetail);
+			    if (noteKept)
+			    {
+				    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, !choice.mesh.has_value());
+			    }
 			    if (!choice.mesh.has_value())
 			    {
 				    // Too far off to be drawn: kept only for what the land keeps of it
@@ -1275,6 +1303,10 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			    }
 			    group = static_cast<Group>(*choice.mesh);
 			    fade = choice.alpha;
+		    }
+		    else if (noteKept)
+		    {
+			    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, false);
 		    }
 
 		    // A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
@@ -1389,6 +1421,24 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		             bgfx::copy(_renderContext.treeInstanceData.data(), size));
 	}
 	return fits;
+}
+
+void RenderingSystem::NoteKept(ObjectDrawListSystemInterface& drawList, const Registry& registry, entt::entity entity,
+                               const glm::mat4& model, float scale, entt::id_type boxMesh, bool fadedOut)
+{
+	// Villagers and creatures stay drawn wherever they are
+	const bool alwaysDrawn = registry.AnyOf<Villager, Creature>(entity);
+	bool onScreen = true;
+	if (!alwaysDrawn && !fadedOut && drawList.GetView().has_value())
+	{
+		if (const auto& box = MeshBox(boxMesh); box.has_value())
+		{
+			const auto centre = glm::vec3(model * glm::vec4(box->Center(), 1.0f));
+			const float radius = std::abs(scale) * glm::length(box->Size() * 0.5f);
+			onScreen = object_draw_list::SphereOnScreen(*drawList.GetView(), glm::vec3(model[3]), centre, radius);
+		}
+	}
+	drawList.NoteFullFrame(entity, object_draw_list::StaysDrawn(alwaysDrawn, onScreen, fadedOut));
 }
 
 const std::optional<openblack::AxisAlignedBoundingBox>& RenderingSystem::MeshBox(entt::id_type mesh)
