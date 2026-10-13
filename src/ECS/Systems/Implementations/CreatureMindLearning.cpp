@@ -820,22 +820,6 @@ std::optional<uint32_t> mind_detail::LessonActivity(const creature_mind_tables::
 	return creature_learning::ActivityOf(tables.rules.at(static_cast<size_t>(desire)).aboutSomething, object, about);
 }
 
-float mind_detail::FoodUsefulness(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity self,
-                                  entt::entity food)
-{
-	if (!mind.learnt.has_value())
-	{
-		return creature_planner::k_DefaultUsefulness;
-	}
-	const auto belief = BeliefOf(registry, food, self);
-	if (!belief.has_value())
-	{
-		return creature_planner::k_DefaultUsefulness;
-	}
-	const auto& tree = mind.learnt->trees.at(static_cast<size_t>(TreeKind::ActOn)).at(static_cast<size_t>(Desire::Hunger));
-	return creature_tree::Usefulness(creature_tree::Evaluate(tree, *belief));
-}
-
 uint32_t CreatureMindSystem::Random(uint32_t range)
 {
 	return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);

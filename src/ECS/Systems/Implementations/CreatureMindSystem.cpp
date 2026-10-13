@@ -161,9 +161,6 @@ constexpr std::string_view k_TakeFromHandAction = "TakeObjectFromHand";
 constexpr std::string_view k_ExamineGivenAction = "ExamineObjectInHand";
 constexpr std::string_view k_EatGivenAction = "EatObjectInHand";
 constexpr std::string_view k_ThrowGivenAction = "ThrowObjectInHand";
-/// A creature looks for things to pick up this far away at most, and for homes and trees to hurl them at
-constexpr float k_ObjectSearchDistance = 80.0f;
-constexpr float k_HurlSearchDistance = 120.0f;
 /// The creature wants the player's attention more the longer it is alone, fully after a minute, and from lack of
 /// anything to do with the player, fully after two
 constexpr float k_LonelySeconds = 60.0f;
@@ -719,32 +716,17 @@ std::optional<float> FoodValueOf(entt::entity entity)
 	                                                        : std::nullopt;
 }
 
-/// The food within reach of a point the creature would most like to eat, and where it is: the nearest, unless it has
-/// learnt to prefer some kinds of food (weigh says how useful each is, 0.1 for food nothing is known about); food it has
-/// learnt is worse than that it leaves alone
-std::optional<std::pair<entt::entity, glm::vec2>> NearestFood(ecs::Registry& registry, glm::vec2 from,
-                                                              const std::function<float(entt::entity)>& weigh)
+/// The nearest food that no creature holds, in the search distance from a point, and its position
+std::optional<std::pair<entt::entity, glm::vec2>> NearestFood(ecs::Registry& registry, glm::vec2 from)
 {
-	constexpr float k_FoodDistanceWeight = 0.05f;
 	std::optional<std::pair<entt::entity, glm::vec2>> nearest;
-	float best = 0.0f;
+	float best = k_FoodSearchDistance;
 	const auto consider = [&](entt::entity entity, const Transform& at) {
 		const glm::vec2 point {at.position.x, at.position.z};
 		const auto distance = glm::distance(point, from);
-		if (distance > k_FoodSearchDistance || registry.AllOf<HeldByCreature>(entity) || !FoodValueOf(entity).has_value())
+		if (distance <= best && !registry.AllOf<HeldByCreature>(entity) && FoodValueOf(entity).has_value())
 		{
-			return;
-		}
-		const auto usefulness = weigh ? weigh(entity) : creature_planner::k_DefaultUsefulness;
-		if (usefulness < creature_planner::k_DefaultUsefulness)
-		{
-			return;
-		}
-		const auto score = usefulness * creature_planner::DistancePriority(false, distance, k_FoodDistanceWeight) +
-		                   1e-6f * (k_FoodSearchDistance - distance);
-		if (score > best)
-		{
-			best = score;
+			best = distance;
 			nearest = {entity, point};
 		}
 	};
@@ -759,7 +741,7 @@ std::optional<std::pair<entt::entity, glm::vec2>> NearestFood(ecs::Registry& reg
 
 /// The nearest water to a point, searching the cells round it: shallow water it can wade into or open sea, and where it
 /// can stand at its edge
-std::optional<creature_mind::Wants::WaterSpot> NearestWater(glm::vec2 from)
+std::optional<creature_mind::WaterSpot> NearestWater(glm::vec2 from)
 {
 	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::terrainSystem::has_value())
 	{
@@ -804,89 +786,7 @@ std::optional<creature_mind::Wants::WaterSpot> NearestWater(glm::vec2 from)
 	{
 		return std::nullopt;
 	}
-	return creature_mind::Wants::WaterSpot {.shore = *shore, .water = *nearest};
-}
-
-/// The nearest thing a creature could pick up, and where it is
-std::optional<std::pair<entt::entity, glm::vec2>> NearestObject(ecs::Registry& registry, entt::entity creature, glm::vec2 from)
-{
-	if (!Locator::creatureObjectActionSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& hands = Locator::creatureObjectActionSystem::value();
-	std::optional<std::pair<entt::entity, glm::vec2>> nearest;
-	float best = k_ObjectSearchDistance;
-	registry.Each<const MobileObject, const Transform>([&](entt::entity entity, const MobileObject&, const Transform& at) {
-		const glm::vec2 point {at.position.x, at.position.z};
-		const auto distance = glm::distance(point, from);
-		if (distance <= best && !registry.AllOf<HeldByCreature>(entity) && hands.CanPickUp(creature, entity))
-		{
-			best = distance;
-			nearest = {entity, point};
-		}
-	});
-	return nearest;
-}
-
-/// The nearest home or tree, to hurl something at
-std::optional<glm::vec2> NearestHurlTarget(ecs::Registry& registry, glm::vec2 from)
-{
-	std::optional<glm::vec2> nearest;
-	float best = k_HurlSearchDistance;
-	const auto consider = [&](const Transform& at) {
-		const glm::vec2 point {at.position.x, at.position.z};
-		const auto distance = glm::distance(point, from);
-		if (distance <= best)
-		{
-			best = distance;
-			nearest = point;
-		}
-	};
-	registry.Each<const Abode, const Transform>([&](const Abode&, const Transform& at) { consider(at); });
-	registry.Each<const Tree, const Transform>([&](const Tree&, const Transform& at) { consider(at); });
-	return nearest;
-}
-
-/// The needs the mind might see to now, and the food and water at hand for them
-creature_mind::Wants WantsOf(ecs::Registry& registry, entt::entity creature, const creature_desires::Desires& desires,
-                             glm::vec2 position, const std::function<float(entt::entity)>& weighFood)
-{
-	creature_mind::Wants wants {
-	    .hunger = DesireValue(desires, Desire::Hunger),
-	    .tiredness = DesireValue(desires, Desire::Tiredness),
-	    .poo = DesireValue(desires, Desire::Poo),
-	    .water = DesireValue(desires, Desire::Water),
-	    .curiosity = DesireValue(desires, Desire::Curiosity),
-	    .play = DesireValue(desires, Desire::Play),
-	    .anger = DesireValue(desires, Desire::Anger),
-	    .holding = registry.AllOf<CreatureHeldObject>(creature),
-	};
-	if (!wants.holding && std::max({wants.curiosity, wants.play, wants.anger}) >= creature_mind::k_ActOnDesire)
-	{
-		if (const auto object = NearestObject(registry, creature, position))
-		{
-			wants.object = entt::to_integral(object->first);
-			wants.objectPoint = object->second;
-		}
-		if (wants.anger >= creature_mind::k_ActOnDesire)
-		{
-			wants.hurlTarget = NearestHurlTarget(registry, position);
-		}
-	}
-	if (wants.hunger >= creature_mind::k_ActOnNeed)
-	{
-		if (const auto food = NearestFood(registry, position, weighFood))
-		{
-			wants.food = entt::to_integral(food->first);
-			wants.foodPoint = food->second;
-		}
-	}
-	if (wants.water >= creature_mind::k_ActOnNeed)
-	{
-		wants.waterSpot = NearestWater(position);
-	}
-	return wants;
+	return creature_mind::WaterSpot {.shore = *shore, .water = *nearest};
 }
 
 /// The least a creature's desires are lessened to by its actions, by its species
@@ -1480,13 +1380,6 @@ void CreatureMindSystem::ProcessTurn()
 		        .strongest = creature_desires::StrongestShowable(*mind.desires, creature_mind::k_MinDesireShown),
 		        .feedbackSeconds = mind.feedbackSeconds,
 		        .feedbackWasStroke = mind.feedbackWasStroke,
-		        // Food and water are only looked for when it is free to choose what to do next
-		        .wants = mind.idle.step >= mind.idle.agenda.size()
-		                     ? WantsOf(registry, entity, *mind.desires, glm::vec2(transform.position.x, transform.position.z),
-		                               [&registry, &mind, entity](entt::entity food) {
-			                               return FoodUsefulness(registry, mind, entity, food);
-		                               })
-		                     : creature_mind::Wants {},
 		        .rested = needs != nullptr && needs->rested,
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
@@ -1962,7 +1855,7 @@ bool CreatureMindSystem::Eat(entt::entity creature, std::optional<entt::entity> 
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	if (!food.has_value() && transform != nullptr)
 	{
-		if (const auto nearest = NearestFood(registry, glm::vec2(transform->position.x, transform->position.z), {}))
+		if (const auto nearest = NearestFood(registry, glm::vec2(transform->position.x, transform->position.z)))
 		{
 			food = nearest->first;
 		}

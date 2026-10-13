@@ -30,11 +30,8 @@
 /// waiting a second or two then a tired yawn, twice. Each step pulls a face for what it does or feels as it starts, and
 /// again every few seconds while it lasts: idling, a random face for three seconds.
 ///
-/// Before any of that, a creature in need sees to it: hungry with food at hand it picks it up, looks it over and eats
-/// it, tired it sleeps on the spot, needing a poo it has one, thirsty with water in reach it goes and drinks. The
-/// strongest such need is seen to first. Exhausted, starved or out of life, it faints wherever it is, and comes round a
-/// little later. With no need, a curious creature picks up something nearby and looks it over, a playful one throws it
-/// about, and an angry one hurls it at a home or a tree. Holding something it has no more use for, it puts it down.
+/// Only the planner chooses the actions for the needs and the other desires: eat, drink, sleep, poo, examine, play and
+/// hurl. If the creature is exhausted, starved or has no life, it faints where it is and gets up a short time later.
 ///
 /// Only this choice of the next agenda is the idle policy; a planner that weighs desires against the actions that
 /// satisfy them can choose agendas in its place, and the steps play out the same way.
@@ -65,9 +62,6 @@ constexpr uint32_t k_ActivityLots = 4;
 /// Hanging around, the creature walks this far away and up to this much further, in a random direction
 constexpr float k_HangAroundDistance = 20.0f;
 constexpr uint32_t k_HangAroundExtra = 21;
-/// A need this strong is seen to. The game weighs needs against everything else the creature might do through its
-/// planner; this stands in for that.
-constexpr float k_ActOnNeed = 0.3f;
 /// Off to sleep, the creature yawns first one time in this many; off for a poo, it shows it needs one first one time in
 /// this many
 constexpr uint32_t k_YawnBeforeSleepLots = 2;
@@ -79,9 +73,6 @@ constexpr float k_PukeSeconds = 4.0f;
 constexpr float k_FaintSeconds = 10.0f;
 /// It drinks from anywhere this close to the water's edge
 constexpr float k_DrinkReach = 5.0f;
-/// A curious, playful or angry creature this strongly so does something about it with what is nearby. The game weighs
-/// these desires against everything else through its planner; this stands in for that.
-constexpr float k_ActOnDesire = 0.3f;
 /// Looking something over, it puts it down gently most times, out of this many, and tosses it away the rest
 constexpr uint32_t k_PutDownLots = 10;
 constexpr uint32_t k_TossLots = 2;
@@ -417,35 +408,11 @@ struct IdleMind
 	uint32_t watchTurns {0};
 };
 
-/// The needs it might see to, and the means at hand
-struct Wants
+/// The nearest water, and where the creature can stand at its edge to drink
+struct WaterSpot
 {
-	/// How strong each need's desire is, 0 for desires it doesn't have yet
-	float hunger {0.0f};
-	float tiredness {0.0f};
-	float poo {0.0f};
-	float water {0.0f};
-	/// The food nearest to hand, by its entity's number, and where it is
-	std::optional<uint32_t> food;
-	glm::vec2 foodPoint {0.0f};
-	/// The nearest water, and where it can stand at its edge to drink
-	struct WaterSpot
-	{
-		glm::vec2 shore;
-		glm::vec2 water;
-	};
-	std::optional<WaterSpot> waterSpot;
-	/// How curious, playful and angry it is, 0 for desires it doesn't have yet
-	float curiosity {0.0f};
-	float play {0.0f};
-	float anger {0.0f};
-	/// Whether it holds something
-	bool holding {false};
-	/// The nearest thing it could pick up, by its entity's number, and where it is
-	std::optional<uint32_t> object;
-	glm::vec2 objectPoint {0.0f};
-	/// The nearest home or tree it might hurl something at
-	std::optional<glm::vec2> hurlTarget;
+	glm::vec2 shore;
+	glm::vec2 water;
 };
 
 /// How what its hands were told to do is going
@@ -483,8 +450,7 @@ struct Senses
 	/// Seconds since the player last stroked or slapped it, and which
 	std::optional<float> feedbackSeconds;
 	bool feedbackWasStroke {false};
-	/// Its needs, and whether it has slept enough to wake
-	Wants wants {};
+	/// Whether it has slept enough to wake
 	bool rested {false};
 	HandsState hands {HandsState::Idle};
 	/// Whether the object a step waits for is on the map, none when the object is gone
@@ -668,16 +634,6 @@ struct PooBy
 [[nodiscard]] std::vector<Step> DestroyThing(uint32_t object);
 /// Waiting a while, looking about
 [[nodiscard]] std::vector<Step> LookAbout(float seconds);
-/// The need to see to first, if any is strong enough and the means are at hand, and the agenda for it
-struct NeedPlan
-{
-	Activity activity;
-	std::vector<Step> agenda;
-};
-[[nodiscard]] std::optional<NeedPlan> ChooseNeed(const Wants& wants, const Random& random);
-/// What to do about curiosity, play or anger, if any is strong enough and there is something at hand to do it with, or
-/// with something held and nothing more to do with it, putting it down
-[[nodiscard]] std::optional<NeedPlan> ChooseObjectActivity(const Wants& wants, const Random& random);
 /// Whether the creature is asleep, or out cold, in its current step
 [[nodiscard]] bool IsAsleep(const IdleMind& mind);
 [[nodiscard]] bool IsUnconscious(const IdleMind& mind);

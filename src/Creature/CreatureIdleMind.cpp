@@ -491,91 +491,6 @@ std::vector<Step> creature_mind::LookAbout(float seconds)
 	return WithFace({{.kind = Step::Kind::Wait, .seconds = seconds}}, creature_face::Cue::Idle);
 }
 
-std::optional<NeedPlan> creature_mind::ChooseNeed(const Wants& wants, const Random& random)
-{
-	struct Need
-	{
-		Activity activity;
-		float value;
-		bool possible;
-	};
-	const std::array<Need, 4> needs {{
-	    {.activity = Activity::Eat, .value = wants.hunger, .possible = wants.food.has_value() && !wants.holding},
-	    {.activity = Activity::Sleep, .value = wants.tiredness, .possible = true},
-	    {.activity = Activity::Poo, .value = wants.poo, .possible = true},
-	    {.activity = Activity::Drink, .value = wants.water, .possible = wants.waterSpot.has_value()},
-	}};
-	const Need* strongest = nullptr;
-	for (const auto& need : needs)
-	{
-		if (need.possible && need.value >= k_ActOnNeed && (strongest == nullptr || need.value > strongest->value))
-		{
-			strongest = &need;
-		}
-	}
-	if (strongest == nullptr)
-	{
-		return std::nullopt;
-	}
-	switch (strongest->activity)
-	{
-	case Activity::Eat:
-		return NeedPlan {.activity = Activity::Eat, .agenda = Eat(*wants.food)};
-	case Activity::Drink:
-		return NeedPlan {.activity = Activity::Drink, .agenda = Drink(wants.waterSpot->shore, wants.waterSpot->water)};
-	case Activity::Poo:
-		return NeedPlan {.activity = Activity::Poo, .agenda = Poo(random, std::nullopt)};
-	case Activity::Sleep:
-	default:
-		return NeedPlan {.activity = Activity::Sleep, .agenda = Sleep(random)};
-	}
-}
-
-std::optional<NeedPlan> creature_mind::ChooseObjectActivity(const Wants& wants, const Random& random)
-{
-	if (wants.holding)
-	{
-		return NeedPlan {.activity = Activity::PutDown, .agenda = PutDownHeld()};
-	}
-	if (!wants.object.has_value())
-	{
-		return std::nullopt;
-	}
-	struct Desire
-	{
-		Activity activity;
-		float value;
-		bool possible;
-	};
-	const std::array<Desire, 3> desires {{
-	    {.activity = Activity::Examine, .value = wants.curiosity, .possible = true},
-	    {.activity = Activity::PlayWithObject, .value = wants.play, .possible = true},
-	    {.activity = Activity::Hurl, .value = wants.anger, .possible = wants.hurlTarget.has_value()},
-	}};
-	const Desire* strongest = nullptr;
-	for (const auto& desire : desires)
-	{
-		if (desire.possible && desire.value >= k_ActOnDesire && (strongest == nullptr || desire.value > strongest->value))
-		{
-			strongest = &desire;
-		}
-	}
-	if (strongest == nullptr)
-	{
-		return std::nullopt;
-	}
-	switch (strongest->activity)
-	{
-	case Activity::PlayWithObject:
-		return NeedPlan {.activity = Activity::PlayWithObject, .agenda = ThrowAbout(*wants.object, random)};
-	case Activity::Hurl:
-		return NeedPlan {.activity = Activity::Hurl, .agenda = Hurl(*wants.object, *wants.hurlTarget, random)};
-	case Activity::Examine:
-	default:
-		return NeedPlan {.activity = Activity::Examine, .agenda = ExamineByPickingUp(*wants.object, random)};
-	}
-}
-
 namespace
 {
 const Step* CurrentStep(const IdleMind& mind)
@@ -632,16 +547,6 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 
 void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Random& random)
 {
-	if (auto need = ChooseNeed(senses.wants, random))
-	{
-		Plan(mind, need->activity, std::move(need->agenda));
-		return;
-	}
-	if (senses.wants.holding)
-	{
-		Plan(mind, Activity::PutDown, PutDownHeld());
-		return;
-	}
 	if (mind.showDesireSeconds <= 0.0f)
 	{
 		std::optional<size_t> emote;
@@ -662,11 +567,6 @@ void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Rando
 			mind.showDesireSeconds = k_ShowDesireSeconds;
 			return;
 		}
-	}
-	if (auto activity = ChooseObjectActivity(senses.wants, random))
-	{
-		Plan(mind, activity->activity, std::move(activity->agenda));
-		return;
 	}
 	const auto lot = random(k_ActivityLots);
 	if (lot == 0)

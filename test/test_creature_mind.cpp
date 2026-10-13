@@ -630,32 +630,25 @@ TEST(CreatureIdleMind, AFollowStepStopsWhenItsTimeIsUp)
 	EXPECT_LE(stoppedAt, 11);
 }
 
-TEST(CreatureNeedsMind, TheStrongestNeedWithTheMeansAtHandIsSeenTo)
+TEST(CreatureIdleMind, TheIdleChoiceLeavesTheNeedsAndThingsAboutItToThePlanner)
 {
-	creature_mind::Wants wants {.hunger = 0.9f, .tiredness = 0.5f, .poo = 0.4f, .water = 0.6f};
-	// Hungry with nothing to eat and thirsty with no water, it sleeps
-	auto plan = creature_mind::ChooseNeed(wants, Always(1));
-	ASSERT_TRUE(plan.has_value());
-	EXPECT_EQ(plan->activity, creature_mind::Activity::Sleep);
-	wants.waterSpot = {.shore = glm::vec2(10.0f, 20.0f), .water = glm::vec2(10.0f, 30.0f)};
-	plan = creature_mind::ChooseNeed(wants, Always(1));
-	ASSERT_TRUE(plan.has_value());
-	EXPECT_EQ(plan->activity, creature_mind::Activity::Drink);
-	wants.food = 42u;
-	plan = creature_mind::ChooseNeed(wants, Always(1));
-	ASSERT_TRUE(plan.has_value());
-	EXPECT_EQ(plan->activity, creature_mind::Activity::Eat);
-	// Nothing pressing, nothing to see to
-	EXPECT_FALSE(creature_mind::ChooseNeed({.hunger = 0.2f, .tiredness = 0.1f, .poo = 0.29f, .water = 0.0f}, Always(1)));
-}
-
-TEST(CreatureNeedsMind, ANeedComesBeforeIdling)
-{
-	creature_mind::IdleMind mind;
-	auto senses = FakeBody {}.Senses();
-	senses.wants = {.hunger = 0.0f, .tiredness = 0.0f, .poo = 0.8f, .water = 0.0f};
-	creature_mind::ChooseNext(mind, senses, Always(1));
-	EXPECT_EQ(mind.activity, creature_mind::Activity::Poo);
+	// For each random value, the idle choice gives only Sit, HangAround, BeIdle or ShowDesire. Only the planner chooses
+	// the actions for the needs and for the things near the creature.
+	for (uint32_t draw = 0; draw < creature_mind::k_ActivityLots; ++draw)
+	{
+		for (const bool showDue : {false, true})
+		{
+			creature_mind::IdleMind mind;
+			mind.showDesireSeconds = showDue ? 0.0f : creature_mind::k_ShowDesireSeconds;
+			auto senses = FakeBody {}.Senses();
+			senses.strongest = Desire::Hunger;
+			creature_mind::ChooseNext(mind, senses, Always(draw));
+			using enum creature_mind::Activity;
+			EXPECT_TRUE(mind.activity == Sit || mind.activity == HangAround || mind.activity == BeIdle ||
+			            mind.activity == ShowDesire)
+			    << creature_mind::Name(mind.activity);
+		}
+	}
 }
 
 TEST(CreatureNeedsMind, ItSleepsWithItsEyesClosedUntilRested)
