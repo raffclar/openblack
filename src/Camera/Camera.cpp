@@ -15,6 +15,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/TempleInteriorInterface.h"
 #include "CameraLens.h"
 #include "CameraLimits.h"
 #include "ECS/Registry.h"
@@ -69,9 +70,28 @@ glm::mat4 Camera::GetViewMatrix(Interpolation interpolation) const
 		const auto drawn = GetDrawnView();
 		return glm::lookAt(drawn.eye, drawn.focus, glm::vec3(0.0f, 1.0f, 0.0f));
 	}
-	// Invert the camera's rotation (transposed) and position (negated) to get the view matrix.
-	return glm::lookAt(GetOrigin(interpolation) + _shakeEye, GetFocus(interpolation) + _shakeFocus,
-	                   glm::vec3(0.0f, 1.0f, 0.0f));
+	const auto pose = DrawnPose(interpolation);
+	return glm::lookAt(pose.eye, pose.focus, glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+camera_drawn::Pose Camera::DrawnPose(Interpolation interpolation) const
+{
+	auto pose = camera_drawn::Pose {.eye = GetOrigin(interpolation), .focus = GetFocus(interpolation)};
+	// The frame draws the world from an eye that is not on its focus and not below the land. The temple draws its inside
+	// from its own camera. The editor's camera goes anywhere.
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (interpolation == Interpolation::Current && !inTemple)
+	{
+		pose = camera_drawn::Separate(pose);
+		if (_model != nullptr && _model->HeldInsideTheWorld() && Locator::terrainSystem::has_value())
+		{
+			pose = camera_drawn::AboveLand(pose, Locator::terrainSystem::value().GetHeightAt(glm::xz(pose.eye)));
+		}
+	}
+	// The shake moves the eye and the focus after these limits
+	pose.eye += _shakeEye;
+	pose.focus += _shakeFocus;
+	return pose;
 }
 
 Camera& Camera::SetShake(const glm::vec3& eye, const glm::vec3& focus)
@@ -103,9 +123,10 @@ glm::mat4 Camera::GetProjectionMatrix(Projection projection, Interpolation inter
 
 void Camera::KeepDrawnView()
 {
+	const auto pose = DrawnPose(Interpolation::Current);
 	_drawnView = View {
-	    .eye = GetOrigin() + _shakeEye,
-	    .focus = GetFocus() + _shakeFocus,
+	    .eye = pose.eye,
+	    .focus = pose.focus,
 	    .projection = _projectionMatrix,
 	    .nearClip = _nearClip,
 	};
@@ -117,10 +138,8 @@ Camera::View Camera::GetDrawnView() const
 	{
 		return *_drawnView;
 	}
-	return {.eye = GetOrigin() + _shakeEye,
-	        .focus = GetFocus() + _shakeFocus,
-	        .projection = _projectionMatrix,
-	        .nearClip = _nearClip};
+	const auto pose = DrawnPose(Interpolation::Current);
+	return {.eye = pose.eye, .focus = pose.focus, .projection = _projectionMatrix, .nearClip = _nearClip};
 }
 
 std::optional<ecs::components::Transform> Camera::RaycastMouseToLand(bool includeWater, Interpolation interpolation) const

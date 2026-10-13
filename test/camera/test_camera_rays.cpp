@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -21,6 +22,7 @@
 #include <Audio/AudioManagerNoOp.h>
 #include <Camera/Camera.h>
 #include <Camera/DefaultWorldCameraModel.h>
+#include <Camera/DrawnPose.h>
 #include <ECS/Registry.h>
 #include <Locator.h>
 
@@ -62,7 +64,10 @@ class DragAction final: public MockAction
 public:
 	[[nodiscard]] bool GetBindable(input::BindableActionMap actions) const override
 	{
-		return held && (static_cast<uint64_t>(actions) & static_cast<uint64_t>(input::BindableActionMap::MOVE)) != 0;
+		const auto asked = static_cast<uint64_t>(actions);
+		const auto bit = [asked](input::BindableActionMap action) { return (asked & static_cast<uint64_t>(action)) != 0; };
+		return (held && bit(input::BindableActionMap::MOVE)) || (turnLeft && bit(input::BindableActionMap::ROTATE_LEFT)) ||
+		       (middle && bit(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON));
 	}
 	[[nodiscard]] glm::uvec2 GetMousePosition() const override { return cursor; }
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const override { return delta; }
@@ -73,6 +78,10 @@ public:
 	}
 
 	bool held {false};
+	/// The key that turns the camera to the left
+	bool turnLeft {false};
+	/// The button that turns the camera about the land under the hand
+	bool middle {false};
 	glm::uvec2 cursor {k_Width / 2, k_Height * 3 / 4};
 	glm::ivec2 delta {0, 0};
 };
@@ -215,4 +224,88 @@ TEST_F(CameraRays, ALandDragThatThePlayerHoldsContinuesAfterAPlace)
 	const auto withoutPlace = drag(false);
 	ASSERT_GT(glm::distance(withoutPlace, k_StartOrigin), 1.0f) << "the drag did not move the camera";
 	EXPECT_LT(glm::distance(drag(true), withoutPlace), 0.5f);
+}
+
+// A command puts the camera while the player holds the key that turns it. The turn keeps the point that it turns about:
+// the next frame looks from the place towards that point, not the way that the command set.
+TEST_F(CameraRays, AKeyTurnThatThePlayerHoldsKeepsItsPointAfterAPlace)
+{
+	RunFrames(10);
+	_action->turnLeft = true;
+	RunFrames(20);
+	const auto point = _camera.GetFocus(Camera::Interpolation::Target);
+	// The place is to the side, and it looks across the old view
+	const auto aside = _camera.GetOrigin(Camera::Interpolation::Target) + glm::vec3(60.0f, 0.0f, 0.0f);
+	const auto across = glm::vec3(100.0f, -100.0f, 0.0f);
+	_camera.Place(aside, aside + across);
+	RunFrames(1);
+	const auto origin = _camera.GetOrigin(Camera::Interpolation::Target);
+	const auto look = glm::normalize(_camera.GetFocus(Camera::Interpolation::Target) - origin);
+	const auto towardsPoint = glm::normalize(point - aside);
+	// One frame turns the camera by much less than a tenth of a turn
+	EXPECT_GT(glm::dot(look, towardsPoint), 0.98f);
+	EXPECT_LT(glm::dot(look, glm::normalize(across)), 0.9f);
+}
+
+// A command puts the camera while the player turns it about the land under the hand. The turn keeps that land point and
+// its distance: on the next frame the camera looks at the point from the same distance, as if the camera was not put.
+TEST_F(CameraRays, ATurnAboutTheHandThatThePlayerHoldsKeepsItsPointAfterAPlace)
+{
+	const auto turn = [this](bool place) {
+		std::ignore = _camera.SetModel(std::make_unique<DefaultWorldCameraModel>(k_StartOrigin, k_StartFocus));
+		_camera.SetOrigin(k_StartOrigin).SetFocus(k_StartFocus);
+		_camera.KeepDrawnView();
+		*_action = DragAction();
+		_action->cursor = {k_Width / 2, k_Height / 2};
+		RunFrames(10);
+		_action->middle = true;
+		RunFrames(20);
+		if (place)
+		{
+			// Higher and further back, on the same line of sight
+			const auto back = glm::normalize(k_StartOrigin - k_StartFocus) * 80.0f;
+			const auto origin = _camera.GetOrigin(Camera::Interpolation::Target) + back;
+			_camera.Place(origin, origin + (k_StartFocus - k_StartOrigin));
+		}
+		RunFrames(1);
+		return std::pair {_camera.GetOrigin(Camera::Interpolation::Target), _camera.GetFocus(Camera::Interpolation::Target)};
+	};
+	const auto withoutPlace = turn(false);
+	const auto withPlace = turn(true);
+	EXPECT_LT(glm::distance(withPlace.second, withoutPlace.second), 0.5f);
+	EXPECT_LT(glm::distance(withPlace.first, withoutPlace.first), 0.5f);
+}
+
+// The eye moves away from a focus at almost the same point
+TEST(CameraDrawnPose, AnEyeOnItsFocusMovesAway)
+{
+	const auto pose = camera_drawn::Separate({.eye = {10.0f, 5.0f, 10.0f}, .focus = {10.0f, 5.0f, 10.01f}});
+	EXPECT_EQ(pose.eye, glm::vec3(9.0f, 6.0f, 10.0f));
+	const auto apart = camera_drawn::Separate({.eye = {10.0f, 5.0f, 10.0f}, .focus = {10.0f, 5.0f, 10.1f}});
+	EXPECT_EQ(apart.eye, glm::vec3(10.0f, 5.0f, 10.0f));
+}
+
+// The eye stays one unit above the land, and the focus moves with it
+TEST(CameraDrawnPose, AnEyeBelowTheLandMovesAboveIt)
+{
+	const auto low = camera_drawn::AboveLand({.eye = {0.0f, 3.0f, 0.0f}, .focus = {0.0f, 0.0f, 50.0f}}, 10.0f);
+	EXPECT_EQ(low.eye, glm::vec3(0.0f, 11.0f, 0.0f));
+	EXPECT_EQ(low.focus, glm::vec3(0.0f, 8.0f, 50.0f));
+	const auto high = camera_drawn::AboveLand({.eye = {0.0f, 11.5f, 0.0f}, .focus = {0.0f, 0.0f, 50.0f}}, 10.0f);
+	EXPECT_EQ(high.eye, glm::vec3(0.0f, 11.5f, 0.0f));
+	EXPECT_EQ(high.focus, glm::vec3(0.0f, 0.0f, 50.0f));
+}
+
+// The frame draws from above the land when the camera is below it, but the camera itself stays where it is
+TEST_F(CameraRays, TheDrawnViewIsAboveTheLand)
+{
+	const auto below = glm::vec3(1000.0f, -5.0f, 1000.0f);
+	const auto focus = glm::vec3(1000.0f, -10.0f, 1100.0f);
+	_camera.SetOrigin(below).SetFocus(focus);
+	_camera.KeepDrawnView();
+	EXPECT_EQ(_camera.GetOrigin(Camera::Interpolation::Drawn), glm::vec3(1000.0f, 1.0f, 1000.0f));
+	EXPECT_EQ(_camera.GetFocus(Camera::Interpolation::Drawn), glm::vec3(1000.0f, -4.0f, 1100.0f));
+	const auto eye = glm::vec3(glm::inverse(_camera.GetViewMatrix(Camera::Interpolation::Current))[3]);
+	EXPECT_LT(glm::distance(eye, glm::vec3(1000.0f, 1.0f, 1000.0f)), 1e-3f);
+	EXPECT_EQ(_camera.GetOrigin(), below);
 }
