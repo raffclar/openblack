@@ -211,7 +211,7 @@ struct AnimalPose
 	std::optional<glm::vec3> underSea;
 };
 
-/// A villager or animal a hunter brought down: it falls, then is eaten over the turns, then dies
+/// An animal that a hunter brought down: it falls, then the hunter eats it for a number of turns, then it goes
 struct BeingEaten
 {
 	entt::entity hunter {entt::null};
@@ -219,6 +219,13 @@ struct BeingEaten
 	/// The turn it starts being eaten, once its fall has played out, and the turns of eating left after that
 	int eatenFrom {0};
 	int left {0};
+};
+
+/// A villager or an animal that a hunter brought down. The mark stays for all of its life:
+/// - Hunters do not hunt it again. A hunter that comes back to it eats it.
+/// - The check of its wounds does not send a villager home.
+struct BroughtDown
+{
 };
 
 } // namespace openblack::ecs::components

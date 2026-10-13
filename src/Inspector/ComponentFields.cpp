@@ -457,6 +457,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::BeingEaten::turns>("turns")
 	    .Field<&components::BeingEaten::eatenFrom>("eatenFrom")
 	    .Field<&components::BeingEaten::left>("left");
+	Reflect<components::BroughtDown> {context};
 	Reflect<components::AnimatedStatic>(context)
 	    .Field<&components::AnimatedStatic::type>("type")
 	    .Field<&components::AnimatedStatic::openState>("openState")

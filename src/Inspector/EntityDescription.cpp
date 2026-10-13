@@ -67,6 +67,7 @@ bool IsSharedComponent(std::string_view name)
 	    "AtHome",
 	    "AudioEmitter",
 	    "BeingEaten",
+	    "BroughtDown",
 	    "CannotBePickedUp",
 	    "CarriedByTornado",
 	    "CaughtByTornado",

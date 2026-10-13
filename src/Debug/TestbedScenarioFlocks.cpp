@@ -144,6 +144,26 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "animals.wolf_pounce_downed",
+	    .name = "A wolf brings a villager down",
+	    .facet = Facet::Miracles,
+	    .description = "The ground flock cast at a point south of one villager, so that the wolves run at the villager. "
+	                   "Pick the villager up from the wolf while it lies on the ground to rescue it.",
+	    .expected = "A wolf pounces and the villager falls (the clip of an attack by a lion), with a life of 0.05. Then the "
+	                "villager lies in the clip of a death while the wolf eats it for 30 seconds, and then it dies. Picked "
+	                "up before then, it lives on: put down, it crawls. Its wounds never send it home, and the wolves do "
+	                "not hunt it again. A wolf that comes back to it only eats.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 80.0f}}, .distance = 0.6f},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 50.0f}}},
+	    .miracles = {{.type = MagicType::FlockGround,
+	                  .point = k_Spot,
+	                  .handOffset = k_HandBehind,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.flock_wolves_fade",
 	    .name = "Ground flock: wolves fade as it ends",
 	    .facet = Facet::Miracles,
