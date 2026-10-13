@@ -76,7 +76,7 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                 .offset = k_OnTheBank + glm::vec2(-8.0f, -18.0f),
 	                 .indestructible = true,
 	                 .inScript = true},
-	                {.type = AnimalInfo::Cow, .offset = k_OnTheBank + glm::vec2(-8.0f, -25.0f)},
+	                {.type = AnimalInfo::Cow, .offset = k_OnTheBank + glm::vec2(-8.0f, -25.0f), .living = true},
 	                {.type = TreeInfo::Oak, .offset = k_OnTheBank + glm::vec2(-8.0f, -11.0f)},
 	                {.type = AbodeInfo::NorseHut, .offset = k_OnTheBank + glm::vec2(-8.0f, -34.0f), .yawDegrees = 90.0f}},
 	    .vortices = {{.type = VortexType::In, .offset = k_OnTheBank, .delaySeconds = 1.0f}},
@@ -155,7 +155,7 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                {.type = MobileStaticInfo::Rock, .offset = k_OnThePlane + glm::vec2(-14.0f, -10.0f)},
 	                {.type = PotInfo::FoodPile, .offset = k_OnThePlane + glm::vec2(0.0f, -18.0f), .amount = 3000},
 	                {.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(20.0f, 18.0f), .yawDegrees = 90.0f},
-	                {.type = AnimalInfo::Cow, .offset = k_OnThePlane + glm::vec2(45.0f, 0.0f)}},
+	                {.type = AnimalInfo::Cow, .offset = k_OnThePlane + glm::vec2(45.0f, 0.0f), .living = true}},
 	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},
 	});
 

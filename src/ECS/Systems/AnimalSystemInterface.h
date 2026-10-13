@@ -66,6 +66,9 @@ public:
 	/// An animal a challenge script makes: as a land script's animal on its own, at a random age, but in a flock of its own
 	/// that keeps within 2 m of where it was made, and held still for the script. None for a kind openblack can't make yet.
 	virtual entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) = 0;
+	/// An animal of any kind that stays at its position, with a size and a heading. It is in no flock and does not move.
+	/// It shows the clip and the light of an animal that a script holds still.
+	virtual entt::entity CreateStillAnimal(AnimalInfo type, glm::vec3 position, float heading, float scale) = 0;
 	/// An animal leaves its flock, which goes when it is left empty, and joins another as its newest member
 	virtual void JoinFlock(entt::entity animal, entt::entity flock) = 0;
 	/// An animal leaves its flock, which goes once it has no one left

@@ -286,6 +286,10 @@ struct ObjectSetup
 	bool poisoned {false};
 	/// Made indestructible, as a script makes one
 	bool indestructible {false};
+	/// An animal lives as a land's script makes it: at a random age, in a herd or flock of its own, and free to move.
+	/// Only the grazers and the land's birds can live. Other kinds, and all animals without this flag, stay at their
+	/// position. They show the clip of an animal that a script holds still.
+	bool living {false};
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes
 	bool inScript {false};
 	/// A villager is made a disciple of this work, as a land's script makes one
