@@ -272,6 +272,8 @@ void TraceHand(std::string_view writer, const glm::vec3& position)
 /// The hand's splash, its sound and the scare it gives the fish are this high over the sea
 constexpr float k_HandSplashHeight = 0.2f;
 // Where the camera starts on the testbed: above and behind the middle of the map
+/// What the land's path reads while the testbed is loaded
+constexpr std::string_view k_TestbedLandPath = "testbed";
 constexpr float k_TestbedCameraHeight = 60.0f;
 /// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
 constexpr float k_TestbedInfluenceRadius = 400.0f;
@@ -3956,7 +3958,7 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	const auto data = fileSystem.ReadAll(path);
 	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 
-	PrepareNewLand();
+	PrepareNewLand(false);
 	timer.Step("reset");
 	RenderLoadingFrame();
 
@@ -4058,14 +4060,14 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 void Game::LoadTestbed() noexcept
 {
 	const ecs::systems::InspectorLoading loading("testbed");
-	_landPath = "testbed";
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
 	if (Locator::vm::has_value())
 	{
 		Locator::vm::value().StopAllTasks();
 	}
 	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
-	PrepareNewLand();
+	PrepareNewLand(true);
+	_landPath = k_TestbedLandPath;
 	RenderLoadingFrame();
 	InitializeLevel(flat_land::Build());
 	SetUpLandscape();
@@ -4106,7 +4108,7 @@ void Game::LoadTestbed() noexcept
 	}
 }
 
-void Game::PrepareNewLand()
+void Game::PrepareNewLand(bool toTestbed)
 {
 	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
 	// creature's room's flames and smoke, keeps entities of the land after they have gone
@@ -4115,15 +4117,28 @@ void Game::PrepareNewLand()
 		Locator::temple::value().CloseForNewLand();
 	}
 	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
-	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment
+	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment. Nothing is
+	// carried onto the testbed or off it: its creatures never replace the player's own kept creature, and its players
+	// start afresh each time, with none of the last scenario's alignment, miracles or statistics.
+	const bool carryOver = !toTestbed && _landPath != k_TestbedLandPath;
 	if (Locator::creatureCarryOverSystem::has_value())
 	{
-		Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
+		if (carryOver)
+		{
+			Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
+		}
 		Locator::creatureCarryOverSystem::value().Reset();
 	}
 	if (Locator::playerSystem::has_value())
 	{
-		Locator::playerSystem::value().KeepForNextLand();
+		if (carryOver)
+		{
+			Locator::playerSystem::value().KeepForNextLand();
+		}
+		else
+		{
+			Locator::playerSystem::value().ForgetKept();
+		}
 	}
 	// The last land's scripts forget what they held: the land's objects go with it before anything could be let go back
 	// into the game

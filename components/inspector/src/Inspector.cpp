@@ -409,7 +409,8 @@ std::string Inspector::Handle(std::string_view line) const
 	return EncodeResult(request.id, answer.value, extra);
 }
 
-std::string Inspector::HandleWhileLoading(std::string_view line, std::string_view loading) const
+std::string Inspector::HandleWhileLoading(std::string_view line, std::string_view loading,
+                                          const QueuedWhileLoading& queued) const
 {
 	Json extra = _tag.empty() ? Json::object() : Json {{"game", _tag}};
 	extra["loading"] = loading;
@@ -432,6 +433,14 @@ std::string Inspector::HandleWhileLoading(std::string_view line, std::string_vie
 	if (request.query == "game.state")
 	{
 		return EncodeResult(request.id, {{"ready", false}, {"loading", loading}}, extra);
+	}
+	if (queued)
+	{
+		if (const auto answer = queued(request); answer.has_value())
+		{
+			return answer->Ok() ? EncodeResult(request.id, answer->value, extra)
+			                    : EncodeError(request.id, answer->error, extra);
+		}
 	}
 	return EncodeError(request.id, "the game is loading (" + std::string(loading) + "); ask again once game.state says ready",
 	                   extra);

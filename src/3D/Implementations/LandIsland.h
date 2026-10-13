@@ -21,6 +21,7 @@
 #include <glm/vec2.hpp>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/SharedIndexLists.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -31,8 +32,9 @@ namespace openblack
 struct LandData;
 namespace graphics
 {
+class IndexBuffer;
 class VertexBuffer;
-}
+} // namespace graphics
 
 class LandIsland final: public LandIslandInterface
 {
@@ -122,6 +124,8 @@ private:
 	std::vector<glm::vec4> _coarsePageSlots;
 	/// Every block's vertices, a run of them each
 	std::unique_ptr<graphics::VertexBuffer> _blockVertices;
+	/// The blocks' triangle sets, each made once and shared by every block drawing the same triangles
+	std::unique_ptr<SharedIndexLists<graphics::IndexBuffer>> _blockTriangles;
 
 	std::unique_ptr<graphics::FrameBuffer> _footprintFrameBuffer;
 	std::unique_ptr<graphics::FrameBuffer> _landAlphaFrameBuffer;

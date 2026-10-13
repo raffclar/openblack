@@ -107,6 +107,11 @@ void PlayerSystem::KeepForNextLand()
 	});
 }
 
+void PlayerSystem::ForgetKept()
+{
+	_kept.clear();
+}
+
 void PlayerSystem::TakeUpKept(entt::entity playerEntity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
