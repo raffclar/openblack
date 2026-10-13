@@ -69,8 +69,6 @@ private:
 	entt::entity _advisorLine {entt::null};
 	/// That sound's length in milliseconds
 	float _advisorLineMs {0.0f};
-	/// The game clock the texts are timed by, in milliseconds
-	int32_t _clockMs {0};
 	bool _inTemple {false};
 };
 
