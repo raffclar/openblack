@@ -314,6 +314,22 @@ TEST_F(Reactions, VillagersInReachTakeUpANiceMiracleAndBelieveOnce)
 	EXPECT_FLOAT_EQ(town.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), 0.0f);
 }
 
+TEST_F(Reactions, AVillagerTooWeakToWalkTakesUpNoMiracle)
+{
+	for (auto& villager : _info->villager)
+	{
+		villager.lifeWhenCrawlsWounded = 0.15f;
+	}
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	// The one right by the miracle crawls, the next only limps
+	registry.Get<Villager>(_villagers[0]).life = 0.15f;
+	registry.Get<Villager>(_villagers[1]).life = 0.2f;
+	_reactions.Create(Miracle());
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::LookingAtObjectReaction);
+}
+
 TEST_F(Reactions, VillagersStopAfterTheirTimeAndGoBack)
 {
 	_reactions.Create(Miracle());

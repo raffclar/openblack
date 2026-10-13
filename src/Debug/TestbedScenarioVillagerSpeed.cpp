@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed's scenario of villagers walking side by side, each going at the speed its life, load, town and state give
+// The testbed's scenarios of villagers walking side by side, each going at the speed its life, load, town and state
+// give, and of wounded villagers that go home
 
 #include <vector>
 
@@ -88,5 +89,31 @@ void testbed_scenarios::AddVillagerSpeedScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {{k_Start, -25.0f}, {k_End, 25.0f}}},
 	    .objects = walkers,
 	    .townBeliefInPlayer = k_Belief,
+	});
+
+	constexpr glm::vec2 k_FirstHut {-12.0f, 30.0f};
+	constexpr glm::vec2 k_SecondHut {12.0f, 30.0f};
+	all.push_back({
+	    .id = "villagers.crawling_wounded",
+	    .name = "Wounded villagers going home",
+	    .facet = Facet::Movement,
+	    .description = "Two Celtic huts of the player's town, at midday, with five grown men 40 m away. Three belong to "
+	                   "the town: one at a tenth of his life, one at a quarter and one in full health. Two belong to no "
+	                   "town: one at a tenth of his life and one in full health.",
+	    .expected = "The two men at a tenth of their life take up nothing to watch. At the first check after they are made, "
+	                "each is sent home: often he first stands still for a moment, tired; then he goes down on his "
+	                "front and crawls to the door of a hut at under half his slowest pace, with no load shown and the "
+	                "crawl's sound. At the door he gets up and goes in. Inside he sleeps and gets back life with each "
+	                "rest, and comes out once he is well again. The man at a quarter of his life limps home at a half to "
+	                "three quarters of a walk once he is free of what he watches. The man of no town joins the town "
+	                "near him. The healthy men go about their day.",
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -20.0f}, {25.0f, 35.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_FirstHut, .yawDegrees = 180.0f},
+	                {.type = AbodeInfo::CelticHut, .offset = k_SecondHut, .yawDegrees = 180.0f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-10.0f, -10.0f}, .joinTown = true, .life = 0.1f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -10.0f}, .joinTown = true, .life = 0.25f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {10.0f, -10.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-20.0f, -15.0f}, .life = 0.1f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {20.0f, -15.0f}}},
 	});
 }
