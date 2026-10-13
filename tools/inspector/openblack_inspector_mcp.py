@@ -600,7 +600,8 @@ TOOLS = [
     },
     {
         "name": "gui_close",
-        "description": "Closes a window by name.",
+        "description": "Closes a window by name; the start-of-game question skip_box closes as the player closes "
+                       "it, its OK pressed (answering with the answer picked).",
         "inputSchema": schema({"window": {"type": "string"}}, ["window"]),
         "query": "gui.close",
         "params": ["window"],
@@ -610,7 +611,7 @@ TOOLS = [
         "description": "Presses a button by its label: a debug window's (made at its next frame), or any control "
                        "of the page the game's menu shows, or of its question (buttons, tabs, check boxes, sliders), "
                        "of the start-of-game question skip_box (OK; an answer's radio by its text or normal, "
-                       "creature, story, old) or of the tattoo_editor (OK, Cancel); the game's dialogs are clicked "
+                       "creature, story, old, cow) or of the tattoo_editor (OK, Cancel); the game's dialogs are clicked "
                        "through the game's input, behind any input still to come; gui_windows lists them; path [n] "
                        "for the n-th of a name. A "
                        "debug button inside a table row or other scope needs path: the labels and numbers its window "
