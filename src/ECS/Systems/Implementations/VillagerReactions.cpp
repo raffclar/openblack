@@ -421,8 +421,12 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 	case Reaction::ReactToBurningObjectInHand:
 		SetTop(*action, VillagerStates::FleeingFromObjectReaction);
 		break;
+	case Reaction::LookAtObject:
+	case Reaction::LookAtSpell:
 	case Reaction::LookAtNiceSpell:
 	case Reaction::ReactToImpressiveSpell:
+	case Reaction::ReactToScaffold:
+		// It looks at it: a thing that came to rest, a miracle, a scaffold put up for a building
 		SetTop(*action, VillagerStates::LookingAtObjectReaction);
 		break;
 	case Reaction::ReactToTeleport:
@@ -504,6 +508,9 @@ bool villager_reactions::ActsOut(Reaction type)
 	case Reaction::FleeFromObject:
 	case Reaction::FleeFromSpell:
 	case Reaction::ReactToBurningObjectInHand:
+	case Reaction::LookAtObject:
+	case Reaction::LookAtSpell:
+	case Reaction::ReactToScaffold:
 	case Reaction::LookAtNiceSpell:
 	case Reaction::ReactToImpressiveSpell:
 	case Reaction::ReactToTeleport:
