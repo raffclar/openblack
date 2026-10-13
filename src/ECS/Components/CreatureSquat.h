@@ -14,11 +14,11 @@
 namespace openblack::ecs::components
 {
 
-/// The squat of a creature, for a poo or for a fart. It counts the frames of the squat loop until the next cloud. The
-/// count continues from one squat to the next.
+/// The squat of a creature, for a poo or for a fart. It counts the game turns of the squat loop until the next cloud or
+/// lump. The count continues from one squat to the next.
 struct CreatureSquat
 {
-	uint32_t frames {0};
+	uint32_t turns {0};
 };
 
 } // namespace openblack::ecs::components

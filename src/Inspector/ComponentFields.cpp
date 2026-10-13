@@ -866,7 +866,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::smallestSize>("smallestSize")
 	    .Field<&components::CreatureSpells::largestSize>("largestSize")
 	    .Field<&components::CreatureSpells::cheat>("cheat");
-	Reflect<components::CreatureSquat>(context).Field<&components::CreatureSquat::frames>("frames");
+	Reflect<components::CreatureSquat>(context).Field<&components::CreatureSquat::turns>("turns");
 	Reflect<components::CreatureSwap>(context)
 	    .Field<&components::CreatureSwap::other>("other")
 	    .Field<&components::CreatureSwap::target>("target")

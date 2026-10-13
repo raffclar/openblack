@@ -302,6 +302,8 @@ void CreaturePhysiologySystem::ProcessTurn()
 	{
 		registry.SetDirty();
 	}
+	// The squats count real game turns. The time scale of the bodies has no effect on them
+	StepSquats();
 }
 
 void CreaturePhysiologySystem::Update(float seconds)
@@ -335,18 +337,11 @@ void CreaturePhysiologySystem::Update(float seconds)
 	{
 		registry.SetDirty();
 	}
-	StepSquats();
 }
 
 void CreaturePhysiologySystem::StepSquats()
 {
-	if (!Locator::time::has_value() || !Locator::creatureMindSystem::has_value())
-	{
-		return;
-	}
-	const auto& time = Locator::time::value();
-	// Count a frame only at the refresh rate of the screen, and only when the game time moves
-	if (frame_pace::Step(_squatPace, time.GetFrameRealTime(), time.GetFrameGameTime()).count() <= 0)
+	if (!Locator::creatureMindSystem::has_value())
 	{
 		return;
 	}
@@ -361,13 +356,13 @@ void CreaturePhysiologySystem::StepSquats()
 		    {
 			    return;
 		    }
-		    // Each squat counts its frames
+		    // The creature counts the game turns of its squat loops
 		    auto* squat = registry.TryGet<CreatureSquat>(creature);
 		    if (squat == nullptr)
 		    {
 			    squat = &registry.Assign<CreatureSquat>(creature);
 		    }
-		    if (!creature_fart::CountFrame(squat->frames))
+		    if (!creature_fart::CountTurn(squat->turns))
 		    {
 			    return;
 		    }

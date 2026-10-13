@@ -484,7 +484,7 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .name = "Needs to poo",
 	    .facet = Facet::Needs,
 	    .description = "A tiger full of poo with its desire to go as strong as it gets.",
-	    .expected = "It may show it needs a poo first, then squats. All through the squat's loop, every fifth frame drawn, "
+	    .expected = "It may show it needs a poo first, then squats. All through the squat's loop, every fifth game turn, "
 	                "a lump of poo comes out at its rear and is thrown back along the ground behind it, and the desire "
 	                "is held back for a minute.",
 	    .framing = {.shot = Shot::Follow},

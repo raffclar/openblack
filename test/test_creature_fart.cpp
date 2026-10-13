@@ -38,19 +38,29 @@ TEST(CreatureFart, OnlyTheSquatsLoopCounts)
 	EXPECT_FALSE(PlaysSquatLoop(BodyAction {}));
 }
 
-TEST(CreatureFart, TheWindComesOutEveryFifthFrame)
+TEST(CreatureFart, TheWindComesOutEveryFifthGameTurn)
 {
-	uint32_t frames = 0;
+	uint32_t turns = 0;
 	std::vector<int> bursts;
-	for (int frame = 1; frame <= 12; ++frame)
+	for (int turn = 1; turn <= 12; ++turn)
 	{
-		if (CountFrame(frames))
+		if (CountTurn(turns))
 		{
-			bursts.push_back(frame);
+			bursts.push_back(turn);
 		}
 	}
 	EXPECT_EQ(bursts, (std::vector<int> {5, 10}));
-	EXPECT_EQ(frames, 2u);
+	EXPECT_EQ(turns, 2u);
+}
+
+TEST(CreatureFart, TheCountOfTheLastSquatContinuesInTheNextSquat)
+{
+	// The last squat stopped two turns after its last lump. The next squat makes its first lump on its third turn
+	uint32_t turns = 2;
+	EXPECT_FALSE(CountTurn(turns));
+	EXPECT_FALSE(CountTurn(turns));
+	EXPECT_TRUE(CountTurn(turns));
+	EXPECT_EQ(turns, 0u);
 }
 
 TEST(CreatureFart, AFartMakesACloudAndAPooALumpOnEachBurst)

@@ -19,12 +19,12 @@
 
 #include "Creature/CreatureLayers.h"
 
-/// The rules for a creature fart. The creature squats as for a poo. On each fifth frame of the squat loop, a cloud of
-/// dust moves out behind it and a smoke starts at its groin. If the creature looks evil, the villagers near it faint.
+/// The rules for a creature fart. The creature squats as for a poo. On each fifth game turn of the squat loop, a cloud
+/// of dust moves out behind it and a smoke starts at its groin. If the creature looks evil, the villagers near it faint.
 namespace openblack::creature_fart
 {
-/// The squat loop makes a cloud on each fifth frame that the game draws
-constexpr uint32_t k_FramesPerBurst = 5;
+/// The squat loop makes a cloud or a lump on each fifth game turn. The frame rate has no effect on the count
+constexpr uint32_t k_TurnsPerBurst = 5;
 /// The number of dust puffs in each cloud
 constexpr size_t k_Puffs = 15;
 /// The speed of the cloud behind the creature, and the width of its spread, for each unit of the shown size
@@ -40,8 +40,9 @@ using FloatRandom = std::function<float(float)>;
 
 /// Tells if the body plays the squat loop, for a poo or for a fart
 [[nodiscard]] bool PlaysSquatLoop(const creature_layers::BodyAction& body);
-/// Counts a frame of the squat loop. Returns true on the frame that makes a cloud or a lump. Then the count starts again
-[[nodiscard]] bool CountFrame(uint32_t& frames);
+/// Counts a game turn of the squat loop. Returns true on the turn that makes a cloud or a lump. Then the count starts
+/// again. The count continues from one squat to the next
+[[nodiscard]] bool CountTurn(uint32_t& turns);
 /// What the squat makes on that frame: a cloud for a fart, else a lump of poo
 enum class Burst : uint8_t
 {

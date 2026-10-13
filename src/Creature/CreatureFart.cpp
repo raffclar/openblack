@@ -18,14 +18,14 @@ bool creature_fart::PlaysSquatLoop(const creature_layers::BodyAction& body)
 	       body.animations[1] == creature_layers::animations::k_Poo;
 }
 
-bool creature_fart::CountFrame(uint32_t& frames)
+bool creature_fart::CountTurn(uint32_t& turns)
 {
-	++frames;
-	if (frames < k_FramesPerBurst)
+	++turns;
+	if (turns < k_TurnsPerBurst)
 	{
 		return false;
 	}
-	frames = 0;
+	turns = 0;
 	return true;
 }
 
