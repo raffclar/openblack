@@ -130,6 +130,16 @@ public:
 	{
 		return false;
 	}
+	/// An animal frightened by a hunter runs from it: false only when it isn't an animal
+	virtual bool SetupFleeFromPredator([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity predator)
+	{
+		return false;
+	}
+	/// The game's number for the state an animal is in now, none for what isn't an animal
+	[[nodiscard]] virtual std::optional<uint8_t> TopGameStateOf([[maybe_unused]] entt::entity animal) const
+	{
+		return std::nullopt;
+	}
 	/// An animal takes up the reaction to a thing flying at a speed: it flees when the thing is nearer than it flies in
 	/// two seconds, remembering it; otherwise it takes no notice. Whether it took it up.
 	virtual bool SetupReactToFlyingObject([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity object,

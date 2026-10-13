@@ -154,6 +154,8 @@ inline size_t GameStateOf(AnimalState state)
 		return 45;
 	case AnimalState::InteractDecideWhatToDo:
 		return 48;
+	case AnimalState::FleeingFromPredator:
+		return 49;
 	case AnimalState::GivesBirth:
 		return 50;
 	case AnimalState::DecideWhatToDo:
