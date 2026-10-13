@@ -136,7 +136,7 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	const bool there = thing != entt::null && registry.Valid(thing);
 	if (setup.comesAcross && there)
 	{
-		ComeAcross(*mind, thing);
+		ComeAcross(creature, *mind, thing);
 	}
 	// A plan done only to a thing of some use drops nothing for one the plan already acts on or one of no use
 	const bool wanted =
@@ -183,7 +183,7 @@ bool CreatureMindSystem::NoticeCreatureToInspect(entt::entity creature, entt::en
 	{
 		return false;
 	}
-	ComeAcross(*mind, other);
+	ComeAcross(creature, *mind, other);
 	auto* belief = mind->beliefs.Find(other);
 	if (belief == nullptr || !creature_reaction::InspectDue(belief->inspected, turn, waitTurns))
 	{
@@ -323,14 +323,14 @@ bool CreatureMindSystem::WeighWatchedCreature(entt::entity creature, CreatureMin
 		// Find the desire of the creature about the other creature. The other creature sees this creature, and finds
 		// its desire about this creature.
 		const auto mine = DesireAboutCreature(creature, mind, other, leftOut);
-		ComeAcross(*otherMind, creature);
+		ComeAcross(other, *otherMind, creature);
 		const auto theirs = DesireAboutCreature(other, *otherMind, creature, {});
 		if (!mine.has_value())
 		{
 			return false;
 		}
 		const auto worths = [&]() {
-			ComeAcross(mind, other);
+			ComeAcross(creature, mind, other);
 			const auto* at = registry.TryGet<const Transform>(creature);
 			const auto place = BelievedPlace(mind, other);
 			const auto worth = [&](Desire desire) {

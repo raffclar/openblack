@@ -245,3 +245,18 @@ TEST(CreatureObjectBeliefs, ItKeepsWhenItLastLookedACreatureOver)
 	store.Forget(Thing(1));
 	EXPECT_FALSE(store.Add(Thing(1), k_Creature, {}).belief->inspected.has_value());
 }
+
+TEST(CreatureObjectBeliefs, ItListsItsBeliefsNewestFirst)
+{
+	Store store;
+	(void)store.Add(Thing(1), k_Forest, glm::vec3(0.0f));
+	(void)store.Add(Thing(2), k_Forest, glm::vec3(0.0f));
+	(void)store.Add(Thing(3), k_Forest, glm::vec3(0.0f));
+	// Coming across a thing again does not make its belief newer
+	(void)store.Add(Thing(1), k_Forest, glm::vec3(1.0f));
+	const auto newest = store.NewestFirst();
+	ASSERT_EQ(newest.size(), 3u);
+	EXPECT_EQ(newest[0].thing, Thing(3));
+	EXPECT_EQ(newest[1].thing, Thing(2));
+	EXPECT_EQ(newest[2].thing, Thing(1));
+}

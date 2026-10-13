@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <glm/geometric.hpp>
+#include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
@@ -122,6 +123,8 @@ void LivingActionSystem::StartTurnPlaces()
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Each<const Villager, const Transform, VillagerPose>(
 	    [](const Villager& /*unused*/, const Transform& transform, VillagerPose& pose) {
+		    // A villager that something put in a new place at once does not count as one that moved
+		    pose.movedLastTurn = pose.turnStart.has_value() && glm::xz(*pose.turnStart) != glm::xz(transform.position);
 		    pose.turnStart = transform.position;
 	    });
 }

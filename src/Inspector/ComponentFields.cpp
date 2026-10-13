@@ -740,6 +740,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::scriptPlay>("scriptPlay")
 	    .Field<&components::CreatureMindState::look>("look")
 	    .Field<&components::CreatureMindState::goingLook>("goingLook")
+	    .Field<&components::CreatureMindState::noticedMover>("noticedMover")
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
@@ -1844,6 +1845,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::bones>("bones")
 	    .Field<&components::VillagerPose::clipBones>("clipBones")
 	    .Field<&components::VillagerPose::turnStart>("turnStart")
+	    .Field<&components::VillagerPose::movedLastTurn>("movedLastTurn")
 	    .Field<&components::VillagerPose::drawnAt>("drawnAt")
 	    .Field<&components::VillagerPose::drawnHeading>("drawnHeading")
 	    .Field<&components::VillagerPose::easedHeading>("easedHeading")
@@ -2211,6 +2213,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_leash::MindHooks::miracleSightingWeight>("miracleSightingWeight")
 	    .Field<&openblack::creature_leash::MindHooks::shown>("shown")
 	    .Field<&openblack::creature_leash::MindHooks::actOn>("actOn")
+	    .Field<&openblack::creature_leash::MindHooks::actOnForced>("actOnForced")
+	    .Field<&openblack::creature_leash::MindHooks::actOnGroup>("actOnGroup")
 	    .Field<&openblack::creature_leash::MindHooks::attitudes>("attitudes");
 	Reflect<openblack::creature_leash::MindHooks::Attitude>(context, ValueOnly {})
 	    .Field<&openblack::creature_leash::MindHooks::Attitude::creature>("creature")
@@ -2229,6 +2233,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_locomotion::Speeds>(context, ValueOnly {})
 	    .Field<&openblack::creature_locomotion::Speeds::walk>("walk")
 	    .Field<&openblack::creature_locomotion::Speeds::run>("run");
+	Reflect<openblack::creature_look::NoticedMover>(context, ValueOnly {})
+	    .Field<&openblack::creature_look::NoticedMover::at>("at")
+	    .Field<&openblack::creature_look::NoticedMover::height>("height")
+	    .Field<&openblack::creature_look::NoticedMover::turn>("turn");
 	Reflect<openblack::creature_look::Target>(context, ValueOnly {})
 	    .Field<&openblack::creature_look::Target::id>("id")
 	    .Field<&openblack::creature_look::Target::kind>("kind")
@@ -2424,9 +2432,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_sway::Sway::upperVelocity>("upperVelocity")
 	    .Field<&openblack::creature_sway::Sway::lowerOffset>("lowerOffset")
 	    .Field<&openblack::creature_sway::Sway::upperOffset>("upperOffset")
-	    .Field<&openblack::creature_sway::Sway::drive>("drive")
 	    .Field<&openblack::creature_sway::Sway::active>("active")
-	    .Field<&openblack::creature_sway::Sway::leashDrag>("leashDrag")
 	    .Field<&openblack::creature_sway::Sway::frameSeconds>("frameSeconds");
 	Reflect<openblack::creature_tattoo::Slot>(context, ValueOnly {})
 	    .Field<&openblack::creature_tattoo::Slot::design>("design")

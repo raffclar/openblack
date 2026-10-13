@@ -81,7 +81,8 @@ std::vector<Step> creature_mind::SleepAtHome(glm::vec2 home, float height, const
 	agenda.push_back({.kind = Step::Kind::Move,
 	                  .movement = {.kind = Movement::Kind::ToPoint,
 	                               .point = home,
-	                               .maxDistance = std::min(k_FurthestFromHomeToSleep, height)}});
+	                               .maxDistance = std::min(k_FurthestFromHomeToSleep, height)},
+	                  .gaze = GoingLook()});
 	agenda.push_back({.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::FaceDownSlope}});
 	agenda.push_back({.kind = Step::Kind::Static,
 	                  .sequence = {animations::k_StartSleep, animations::k_Sleep, animations::k_EndSleep},
@@ -95,8 +96,9 @@ std::vector<Step> creature_mind::SleepAtHome(glm::vec2 home, float height, const
 std::vector<Step> creature_mind::SleepByObject(glm::vec2 place, float radius, const Random& random)
 {
 	std::vector<Step> agenda;
-	agenda.push_back(
-	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::ToPoint, .point = place, .maxDistance = radius}});
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .movement = {.kind = Movement::Kind::ToPoint, .point = place, .maxDistance = radius},
+	                  .gaze = GoingLook()});
 	if (random(k_YawnBeforeSleepingLots) == 0)
 	{
 		agenda.push_back(PlayOnce(animations::k_Tired, true));

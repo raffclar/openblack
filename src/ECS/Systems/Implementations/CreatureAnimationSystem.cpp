@@ -36,7 +36,6 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Physics/LivingRules.h"
@@ -78,17 +77,6 @@ bool StrikingToDestroy(const ecs::Registry& registry, entt::entity creature)
 	const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
 	return action != nullptr && action->kind == creature_object_actions::Kind::Destroy &&
 	       action->phase == CreatureObjectAction::Phase::Playing;
-}
-
-/// Where a bone of the creature is in the world, as posed last
-std::optional<glm::vec3> PosedBonePoint(const CreatureAnimation& animation, const Transform& transform, uint32_t bone)
-{
-	if (bone >= animation.boneMatrices.size())
-	{
-		return std::nullopt;
-	}
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	return glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
 }
 
 /// The sway kicked at a point, by the force over the creature's last frame
@@ -505,24 +493,9 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    animation.breathPhase =
 		        creature_animation::AdvanceBreath(animation.breathPhase, seconds * scale, animation.breathPeriod);
 
-		    // The body sways from what kicked it, and while the leash drags it, it leans away from the pull
+		    // The body sways from what kicked it
 		    animation.sway.frameSeconds = seconds;
-		    auto push = glm::vec3(0.0f);
-		    if (animation.sway.leashDrag > creature_sway::k_LeashPulling)
-		    {
-			    const auto holder = Locator::leashSystem::has_value()
-			                            ? Locator::leashSystem::value().HolderPoint(entity).value_or(transform.position)
-			                            : transform.position;
-			    const auto force =
-			        creature_sway::LeashForce(transform.position, holder, MassOf(creature, &morph), animation.sway.leashDrag);
-			    const auto head = rig != nullptr && rig->actionPoints.has_value()
-			                          ? PosedBonePoint(animation, transform, rig->actionPoints->head)
-			                          : std::nullopt;
-			    Kick(registry, entity, animation, force, head.value_or(transform.position));
-			    push = force * creature_sway::k_LeashLean;
-			    animation.sway.leashDrag = creature_sway::FadeLeashDrag(animation.sway.leashDrag);
-		    }
-		    creature_sway::Step(animation.sway, push, animation.sway.frameSeconds, MassOf(creature, &morph));
+		    creature_sway::Step(animation.sway, animation.sway.frameSeconds, MassOf(creature, &morph));
 
 		    if (rig != nullptr)
 		    {

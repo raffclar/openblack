@@ -33,34 +33,12 @@ void Kick(Sway& sway, glm::vec3 force, float heightAboveLand, float splitHeight,
 	sway.active = true;
 }
 
-void SetLeashDrag(Sway& sway, float drag)
-{
-	sway.leashDrag = drag >= k_LeashLeast ? drag : 0.0f;
-}
-
-glm::vec3 LeashForce(glm::vec3 creature, glm::vec3 holder, float mass, float drag)
-{
-	auto towards = holder - creature;
-	if (towards == glm::vec3(0.0f))
-	{
-		return towards;
-	}
-	return towards * (mass * drag * k_LeashForcePerMass / glm::length(towards));
-}
-
-float FadeLeashDrag(float drag)
-{
-	const float faded = drag * k_LeashFade;
-	return faded < k_LeashGone ? 0.0f : faded;
-}
-
-void Step(Sway& sway, glm::vec3 framePush, float seconds, float mass)
+void Step(Sway& sway, float seconds, float mass)
 {
 	if (!sway.active)
 	{
 		return;
 	}
-	sway.drive += (framePush - sway.drive) * k_DriveEase;
 	const float step = seconds * (1.0f / static_cast<float>(k_Substeps));
 	const float halfMass = mass * 0.5f;
 	const float stiffness = halfMass * k_Stiffness;
@@ -72,7 +50,7 @@ void Step(Sway& sway, glm::vec3 framePush, float seconds, float mass)
 	{
 		for (int i = 0; i < k_Substeps; ++i)
 		{
-			const auto push = sway.drive + stiffness * *offset;
+			const auto push = stiffness * *offset;
 			// The speed is kept within its limit before the spring acts on it
 			const float speedSquared = glm::dot(*velocity, *velocity);
 			if (speedSquared > k_MaxSwingSpeed * k_MaxSwingSpeed)

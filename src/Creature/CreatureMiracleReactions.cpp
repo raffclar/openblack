@@ -35,10 +35,12 @@ std::vector<Step> openblack::creature_mind::RunAwayFromMiracle(glm::vec2 point, 
 	{
 		agenda.push_back({.kind = Step::Kind::Action, .animation = k_FrightenedAnimation, .face = creature_face::Cue::Amazed});
 	}
-	agenda.push_back(
-	    {.kind = Step::Kind::Move,
-	     .movement = {
-	         .kind = Movement::Kind::FleeFrom, .point = point, .run = true, .maxDistance = k_MiracleApproachHeights * height}});
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .movement = {.kind = Movement::Kind::FleeFrom,
+	                               .point = point,
+	                               .run = true,
+	                               .maxDistance = k_MiracleApproachHeights * height},
+	                  .gaze = GoingLook()});
 	return agenda;
 }
 
@@ -55,7 +57,8 @@ std::vector<Step> openblack::creature_mind::ExamineMiracle(glm::vec2 point, floa
 	                  .movement = {.kind = Movement::Kind::ToPoint,
 	                               .point = point,
 	                               .minDistance = 0.0f,
-	                               .maxDistance = k_MiracleApproachHeights * height}});
+	                               .maxDistance = k_MiracleApproachHeights * height},
+	                  .gaze = GoingLook()});
 	agenda.push_back(TurnToFace(point));
 	if (first)
 	{

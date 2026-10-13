@@ -57,8 +57,9 @@ std::vector<Step> creature_mind::PracticeThrow(std::optional<uint32_t> pickUp, g
 	{
 		agenda.push_back(PickUp(*pickUp));
 	}
-	agenda.push_back({.kind = Step::Kind::Object,
-	                  .order = {.kind = ObjectOrder::Kind::Throw, .point = from + glm::vec2(k_PracticeThrowHeights * height)}});
+	const auto at = from + glm::vec2(k_PracticeThrowHeights * height);
+	agenda.push_back(
+	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Throw, .point = at}, .gaze = GoingLook(at)});
 	return agenda;
 }
 
@@ -123,7 +124,8 @@ std::vector<Step> creature_mind::TakeToyHome(uint32_t toy, glm::vec2 home, float
 	         .movement = {.kind = Movement::Kind::ToPoint,
 	                      .point = home + glm::vec2(alongX, alongZ),
 	                      .maxDistance = std::min(height, k_ToyHomeNearest)},
-	         .face = Cue::Compassion},
+	         .face = Cue::Compassion,
+	         .gaze = GoingLook()},
 	        {.kind = Step::Kind::Object,
 	         .order = {.kind = ObjectOrder::Kind::Discard, .animation = drop},
 	         .face = Cue::Compassion}};
@@ -137,8 +139,9 @@ std::vector<Step> creature_mind::ThrowDie(std::optional<uint32_t> pickUp, uint32
 	{
 		agenda.push_back(PickUp(*pickUp));
 	}
-	agenda.push_back({.kind = Step::Kind::Object,
-	                  .order = {.kind = ObjectOrder::Kind::Throw, .point = from + glm::vec2(k_DieThrowHeights * height)}});
+	const auto at = from + glm::vec2(k_DieThrowHeights * height);
+	agenda.push_back(
+	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Throw, .point = at}, .gaze = GoingLook(at)});
 	agenda.push_back(
 	    {.kind = Step::Kind::WatchFlying, .object = die, .face = creature_face::Cue::Amazed, .gaze = Gaze {.object = die}});
 	const bool happy = random(k_DieOutcomeLots) > 0;

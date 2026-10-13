@@ -282,9 +282,19 @@ struct Gaze
 	std::optional<glm::vec3> point;
 	bool camera {false};
 	/// The look of a creature that walks to the point: at the point, at what it watches, and a sweep from side to side
-	/// (see creature_look::LookWhileGoing)
+	/// (see creature_look::LookWhileGoing). Without a point, the look uses the place that the creature walks to.
 	bool whileGoing {false};
 };
+/// The look while the creature walks to the place of its walk
+[[nodiscard]] inline Gaze GoingLook()
+{
+	return {.whileGoing = true};
+}
+/// The look while the creature walks to a point, or throws something at it
+[[nodiscard]] inline Gaze GoingLook(glm::vec2 point)
+{
+	return {.point = glm::vec3(point.x, 0.0f, point.y), .whileGoing = true};
+}
 
 struct Step
 {
