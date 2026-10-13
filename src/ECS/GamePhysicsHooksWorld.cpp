@@ -15,6 +15,7 @@
 #include "Common/GameRandom.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
@@ -399,6 +400,10 @@ void GamePhysicsHooksWorld::Catch(entt::entity creature, entt::entity object)
 
 void GamePhysicsHooksWorld::StopCreature(entt::entity creature)
 {
+	if (auto* body = Entities().TryGet<CreatureAnimation>(creature))
+	{
+		body->body = creature_layers::Hurry(body->body);
+	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
