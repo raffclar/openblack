@@ -60,6 +60,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -707,7 +708,7 @@ void world_objects::Remove(entt::entity object)
 	registry.SetDirty();
 }
 
-void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor)
+void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature)
 {
 	if (!Locator::infoConstants::has_value())
 	{
@@ -757,6 +758,11 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	const bool owner = registry.Get<const Town>(town).owner == aggressor;
 	const uint32_t turn = Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
 	ecs::town_aggression::Attacked(aggression->record, aggressor, owner, amount, info.town.firstTimeDamageDoneAddition, turn);
+	// The advisors of the player at this machine may remark on the player attacking a town
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().TownAttacked(town, aggressor, byCreature);
+	}
 }
 
 void world_objects::CountInjury(entt::entity villager, float before, float after)

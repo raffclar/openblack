@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <chrono>
+
 #include <entt/entity/entity.hpp>
 
 namespace openblack::ecs::systems
@@ -23,8 +25,8 @@ public:
 	virtual ~AppleBarrelSystemInterface() = default;
 
 	/// Once a frame: the barrel and its worm go to the pit that carries them (made when one first does, gone while none
-	/// does), and the worm's clip plays on by the milliseconds of the game's clock since the last frame
-	virtual void Update(uint32_t turn, float turnFraction) = 0;
+	/// does), and the worm's clip plays on by the frame's game time
+	virtual void Update(std::chrono::milliseconds frameGameTime) = 0;
 
 	/// The barrel drawn now, none while no pit carries it
 	[[nodiscard]] virtual entt::entity GetBarrel() const = 0;

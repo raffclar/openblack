@@ -2563,6 +2563,20 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 1, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "leash.pulled_out_of_fight",
+	    .name = "The leash pulls a creature out of its fight",
+	    .facet = Facet::Leash,
+	    .description = "The player's red tiger wears the learning leash held in the hand and fights a blue tiger, both "
+	                   "by themselves. Hold the hand near the red tiger, then move it well away so the rope pulls taut.",
+	    .expected = "With the hand near, the rope hangs slack and the duel goes on. Pulled taut, the red tiger is "
+	                "taken out of the fight: the fight is called off with no winner, the help says \"You pulled your "
+	                "Creature away from what he was trying to do.\" and the red tiger walks to the hand.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
 	// Big against small: the game never resizes a creature for a fight; it only refuses one outside half to twice its
 	// height
 	auto big = Fighter(left, 90.0f, "big tiger", PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
@@ -3292,8 +3306,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
-	       kind == Kind::RunHelpMessage || kind == Kind::RecordChallenge || kind == Kind::EnterTemple ||
-	       kind == Kind::HandTake || kind == Kind::RunScript || IsPointerCommand(kind);
+	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
+	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -3320,7 +3334,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 106> k_Names {
+	constexpr std::array<std::string_view, 107> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -3416,6 +3430,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "tell an advisor",
 	    "walk home",
 	    "run a help message",
+	    "end the guidance's waits",
 	    "destroy temple",
 	    "script play",
 	    "run text",

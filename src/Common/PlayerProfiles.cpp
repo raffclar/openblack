@@ -32,6 +32,7 @@ constexpr uint32_t k_ScrambleSeed = 0x913;
 constexpr std::string_view k_CurrentKey = "current";
 constexpr std::string_view k_ProfileKey = "profile";
 constexpr std::string_view k_SettingKey = "setting";
+constexpr std::string_view k_AlignmentKey = "alignment";
 constexpr char k_Separator = '\t';
 
 char16_t FoldCase(char16_t c)
@@ -74,11 +75,12 @@ bool ParseNumber(std::string_view text, T& value)
 }
 
 /// A fraction written in the classic locale, whatever the computer's
-bool ParseFraction(std::string_view text, float& value)
+template <typename T>
+bool ParseFraction(std::string_view text, T& value)
 {
 	std::istringstream stream {std::string(text)};
 	stream.imbue(std::locale::classic());
-	float parsed = 0.0f;
+	T parsed {};
 	stream >> parsed;
 	if (!stream || stream.peek() != std::char_traits<char>::eof())
 	{
@@ -187,8 +189,12 @@ const Profile& Add(Profiles& profiles, std::u16string_view name, std::u16string_
 	if (found == nullptr)
 	{
 		const auto text = gui::ToUtf8(given);
-		profiles.profiles.push_back(
-		    {.name = text, .creatureFile = std::string(creatureFile), .creatureName = text, .symbol = symbol, .settings = {}});
+		profiles.profiles.push_back({.name = text,
+		                             .creatureFile = std::string(creatureFile),
+		                             .creatureName = text,
+		                             .symbol = symbol,
+		                             .settings = {},
+		                             .alignment = 0.0});
 		SortForTheList(profiles);
 		found = Find(profiles, given);
 	}
@@ -254,6 +260,7 @@ std::string Write(const Profiles& profiles)
 			text += std::format("{1}{0}{2}{0}{3}{0}{4}\n", k_Separator, k_SettingKey, profile.name, field.name,
 			                    field.write(profile.settings));
 		}
+		text += std::format("{1}{0}{2}{0}{3}\n", k_Separator, k_AlignmentKey, profile.name, profile.alignment);
 	}
 	return text;
 }
@@ -293,6 +300,17 @@ Profiles Read(std::string_view text)
 			}
 			continue;
 		}
+		if (key == k_AlignmentKey)
+		{
+			const auto owner = NextField(line);
+			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
+			// A value that can't be read leaves the profile neither good nor evil
+			if (profile != profiles.profiles.end())
+			{
+				ParseFraction(line, profile->alignment);
+			}
+			continue;
+		}
 		if (key != k_ProfileKey)
 		{
 			continue;
@@ -310,7 +328,8 @@ Profiles Read(std::string_view text)
 		                             .creatureFile = std::string(file),
 		                             .creatureName = std::string(line),
 		                             .symbol = symbol,
-		                             .settings = {}});
+		                             .settings = {},
+		                             .alignment = 0.0});
 	}
 	SortForTheList(profiles);
 	return profiles;

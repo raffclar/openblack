@@ -198,13 +198,17 @@ bool DialogueText::ShownLongEnough() const
 {
 	const float limit = _waitClick ? k_ClickWaitSeconds : k_ClickSeconds;
 	float shown = 0.0f;
+	// The milliseconds count as never less than none, but the turns may be fewer than when the text came, the game's
+	// turns starting again from nothing on the story's next land: then it has not been shown long enough until the turns
+	// catch up with it
 	if (InTemple())
 	{
-		shown = static_cast<float>(NowMs() - _startMs) * 0.001f;
+		shown = static_cast<float>(static_cast<uint32_t>(NowMs() - _startMs)) * 0.001f;
 	}
 	else
 	{
-		shown = static_cast<float>((Turn() - _startTurn) * _settings.msPerTurn) * 0.001f;
+		const auto turns = static_cast<int32_t>(Turn() - _startTurn);
+		shown = static_cast<float>(turns) * static_cast<float>(_settings.msPerTurn) * 0.001f;
 	}
 	return !(shown < limit);
 }

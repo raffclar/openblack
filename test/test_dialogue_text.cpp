@@ -230,6 +230,53 @@ TEST(DialogueText, AClickTooSoonDoesNothing)
 	EXPECT_FALSE(dialogue.IsWaitingForClick());
 }
 
+TEST(DialogueText, TurnsStartingAgainLeaveATextUnreadUntilTheyPassItsEnd)
+{
+	Fixture f;
+	f.turn = 5000;
+	f.texts[10] = {.text = u"one two three"};
+	auto dialogue = f.Make();
+	dialogue.RunText(false, 10, 0);
+	EXPECT_EQ(dialogue.GetEndTurn(), 5023u);
+	// The story's next land starts the turns again from nothing
+	f.turn = 0;
+	EXPECT_FALSE(dialogue.IsTextRead());
+	f.turn = 5023;
+	EXPECT_FALSE(dialogue.IsTextRead());
+	f.turn = 5024;
+	EXPECT_TRUE(dialogue.IsTextRead());
+}
+
+TEST(DialogueText, TurnsStartingAgainHoldOffTheClickUntilTheyPassWhenTheTextCame)
+{
+	Fixture f;
+	f.turn = 5000;
+	f.texts[10] = {.text = u"click me"};
+	auto dialogue = f.Make();
+	dialogue.RunText(false, 10, 1);
+	f.turn = 3;
+	dialogue.ProcessClick(true, false);
+	EXPECT_TRUE(dialogue.IsWaitingForClick());
+	f.turn = 5009;
+	dialogue.ProcessClick(true, false);
+	EXPECT_TRUE(dialogue.IsWaitingForClick());
+	f.turn = 5010;
+	dialogue.ProcessClick(true, false);
+	EXPECT_FALSE(dialogue.IsWaitingForClick());
+}
+
+TEST(DialogueText, TurnsStartingAgainDoNotHoldOffTheKey)
+{
+	Fixture f;
+	f.turn = 5000;
+	f.texts[10] = {.text = u"click me"};
+	auto dialogue = f.Make();
+	dialogue.RunText(false, 10, 1);
+	f.turn = 3;
+	dialogue.ProcessClick(false, true);
+	EXPECT_FALSE(dialogue.IsWaitingForClick());
+}
+
 TEST(DialogueText, TheKeyNeedsNoWait)
 {
 	Fixture f;

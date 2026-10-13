@@ -462,3 +462,43 @@ TEST_F(CreatureCarryOverSystem, ACreatureKeptSinceTheGameStartedIsNotReplacedByI
 	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
 	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
 }
+
+TEST_F(CreatureCarryOverSystem, AProfilePickedDuringAGameTakesOverOnlyWhenTheNextGameStarts)
+{
+	const TestFolder folder("carry_over_profiles");
+	creaturemind::MindFileData first;
+	first.name = u"Rex";
+	ASSERT_EQ(creaturemind::WriteFile(KeptFilesIn(folder.Path(), "CFirst.erc").mind, first), creaturemind::MindResult::Success);
+	creaturemind::MindFileData second;
+	second.name = u"Spot";
+	ASSERT_EQ(creaturemind::WriteFile(KeptFilesIn(folder.Path(), "CSecond.erc").mind, second),
+	          creaturemind::MindResult::Success);
+
+	std::string picked = "CFirst.erc";
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), [&picked]() { return std::optional(picked); });
+	carryOver.StartGame();
+	// Another profile is picked while the game goes on: the game's creature stays the first profile's
+	picked = "CSecond.erc";
+	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+	ASSERT_NE(carryOver.Kept(), nullptr);
+	EXPECT_EQ(carryOver.Kept()->name, u"Rex");
+
+	// The next game is played as the profile picked, whose own creature is read, not the last profile's
+	carryOver.StartGame();
+	EXPECT_EQ(carryOver.Kept(), nullptr);
+	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+	ASSERT_NE(carryOver.Kept(), nullptr);
+	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
+}
+
+TEST_F(CreatureCarryOverSystem, ANewGameAsTheSameProfileKeepsItsCreature)
+{
+	ecs::systems::CreatureCarryOverSystem carryOver(std::nullopt, ProfileFile);
+	carryOver.StartGame();
+	auto kept = std::make_shared<creaturemind::MindFileData>();
+	kept->name = u"Spot";
+	carryOver.Keep(kept);
+	carryOver.StartGame();
+	ASSERT_NE(carryOver.Kept(), nullptr);
+	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
+}

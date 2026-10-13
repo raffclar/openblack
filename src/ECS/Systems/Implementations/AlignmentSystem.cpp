@@ -20,7 +20,9 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
@@ -111,6 +113,13 @@ void AlignmentSystem::UpdateTurn(const glm::vec3& eye)
 	{
 		const auto& info = Locator::infoConstants::value();
 		const float change = info.player.maxAlignmentChangePerGameTurn;
+		// The advisors of the player at this machine watch which way its alignment is drifting, by the change waiting
+		// before it is held to a whole one
+		if (Locator::guidanceSystem::has_value() && Locator::playerSystem::has_value())
+		{
+			const auto here = Locator::playerSystem::value().GetLocalPlayer();
+			Locator::guidanceSystem::value().AlignmentTurn(GetPendingAlignment(here) * change);
+		}
 		auto& registry = Locator::entitiesRegistry::value();
 		registry.Each<Alignment>([change](entt::entity, Alignment& alignment) {
 			alignment.value = magic::StepPendingAlignment(alignment.value, alignment.pending, change);

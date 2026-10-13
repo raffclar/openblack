@@ -23,11 +23,17 @@ enum class GuidanceSound : uint8_t
 	DeathInVillage = 7,
 };
 
-/// When the player at this machine last heard each kind of guidance, by turn, on the player's entity
+/// When the player at this machine last heard each kind of guidance, by turn, on the player's entity, and what the
+/// advisors' remarks keep track of for them
 struct GuidanceHeard
 {
 	static constexpr size_t k_Kinds = 33;
+	static constexpr size_t k_OneOffs = 7;
 	std::array<uint32_t, k_Kinds> lastTurn {};
+	/// How far the player's alignment has been drifting lately
+	float alignmentDrift {0.0f};
+	/// The remarks said at most once a land, already said on this one
+	std::array<bool, k_OneOffs> oneOffSaid {};
 };
 
 } // namespace openblack::ecs::components

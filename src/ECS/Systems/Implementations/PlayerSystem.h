@@ -38,6 +38,7 @@ public:
 	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;
 	void KeepForNextLand() override;
 	void ForgetKept() override;
+	[[nodiscard]] bool KeepAlignmentAt(uint32_t turn) override;
 	void TakeUpKept(entt::entity playerEntity) override;
 
 private:
@@ -58,5 +59,7 @@ private:
 	std::unordered_map<PlayerNames, entt::entity> _players;
 	/// Each player's as of the last land they were on
 	std::unordered_map<PlayerNames, Kept> _kept;
+	/// The game turn the local player's alignment was last kept with their profile at
+	uint32_t _alignmentKeptTurn {0};
 };
 } // namespace openblack::ecs::systems
