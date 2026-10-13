@@ -20,6 +20,7 @@
 #include "CameraModel.h"
 #include "CameraZoomer.h"
 #include "Common/ZoomInterpolator.h"
+#include "DrawnPose.h"
 #include "ECS/Components/Transform.h"
 #include "KeyboardMoveSpeed.h"
 
@@ -222,6 +223,8 @@ protected:
 	std::optional<View> _drawnView;
 	/// The kept view, or the view now when there is no kept view
 	[[nodiscard]] View GetDrawnView() const;
+	/// The eye and the focus of the view, with the shake. The view now also has the limits of the drawn eye.
+	[[nodiscard]] camera_drawn::Pose DrawnPose(Interpolation interpolation) const;
 	[[nodiscard]] glm::mat4 GetProjectionMatrix(Projection projection, Interpolation interpolation) const;
 	float _keyboardMoveSpeed = k_KeyboardMoveSpeedDefault;
 };
