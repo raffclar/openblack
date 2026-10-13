@@ -196,6 +196,14 @@ enum class Thing : uint8_t
 	Rock,
 	Bonfire,
 	DeadTree,
+	/// Any other static: only the toys among them are picked up
+	Static,
+	/// Statics with kinds of their own that no hand holds
+	Lantern,
+	Shield,
+	/// Statics with kinds of their own that a hand could hold but a creature never picks up
+	Vortex,
+	TeleportStone,
 };
 /// How a creature decides on picking up a kind of thing
 [[nodiscard]] KindRule RuleOf(Thing thing);

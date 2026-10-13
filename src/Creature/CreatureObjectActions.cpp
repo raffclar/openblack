@@ -167,7 +167,13 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 	{
 	case Thing::Other:
 	case Thing::Creature:
+	case Thing::Lantern:
+	case Thing::Shield:
+	case Thing::Vortex:
+	case Thing::TeleportStone:
 		return KindRule::Never;
+	case Thing::Static:
+		return KindRule::Toy;
 	case Thing::Ball:
 	case Thing::Creed:
 		return KindRule::Always;
@@ -189,7 +195,7 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 
 bool creature_object_actions::Holdable(Thing thing)
 {
-	return thing != Thing::Other && thing != Thing::Creature;
+	return thing != Thing::Other && thing != Thing::Creature && thing != Thing::Lantern && thing != Thing::Shield;
 }
 
 bool creature_object_actions::MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts)

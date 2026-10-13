@@ -1414,10 +1414,32 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 		{
 			return Thing::DeadTree;
 		}
-		const auto* still = registry.TryGet<const MobileStatic>(object);
-		if (still != nullptr && still->type == MobileStaticInfo::Bonfire)
+		if (const auto* still = registry.TryGet<const MobileStatic>(object))
 		{
-			return Thing::Bonfire;
+			switch (still->type)
+			{
+			case MobileStaticInfo::Bonfire:
+				return Thing::Bonfire;
+			case MobileStaticInfo::StreetLantern:
+			case MobileStaticInfo::CountryLantern:
+				return Thing::Lantern;
+			case MobileStaticInfo::PhysicalShield:
+				return Thing::Shield;
+			case MobileStaticInfo::Vortex:
+				return Thing::Vortex;
+			case MobileStaticInfo::Teleport:
+				return Thing::TeleportStone;
+			default:
+				break;
+			}
+			// The toys are known by their models: a ball, a bowling ball, a cuddly toy, a die and a skittle
+			const auto kind = static_cast<size_t>(still->type);
+			if (Locator::infoConstants::has_value() && kind < Locator::infoConstants::value().mobileStatic.size())
+			{
+				const auto mesh = Locator::infoConstants::value().mobileStatic.at(kind).meshId;
+				facts.toy = mesh >= MeshId::ObjectToyBall && mesh <= MeshId::ObjectToySkittle;
+			}
+			return Thing::Static;
 		}
 		return Thing::Other;
 	}();

@@ -389,6 +389,28 @@ TEST(CreatureObjectActions, RocksBonfiresAndDeadTreesTakeTheWholeRule)
 	}
 }
 
+TEST(CreatureObjectActions, OfOtherStaticsOnlyTheToysArePickedUp)
+{
+	using creature_object_actions::KindRule;
+	using creature_object_actions::Thing;
+	EXPECT_EQ(creature_object_actions::RuleOf(Thing::Static), KindRule::Toy);
+	const creature_object_actions::KindFacts toy {.rule = KindRule::Toy, .holdable = true, .toy = true};
+	const creature_object_actions::KindFacts statue {.rule = KindRule::Toy, .holdable = true, .toy = false};
+	// A toy whatever else holds, even an artefact out of the map
+	EXPECT_TRUE(creature_object_actions::MayPickUpKind(toy, {.townArtefact = true, .inMapOrHeldByCreature = false}));
+	EXPECT_FALSE(creature_object_actions::MayPickUpKind(statue, {}));
+	// but a hand may give a creature any static that fits
+	EXPECT_TRUE(creature_object_actions::MayTakeKindFromHand(statue, {}));
+	// Lanterns and shields no hand holds; vortices and teleport stones a creature never picks up
+	for (const auto thing : {Thing::Lantern, Thing::Shield, Thing::Vortex, Thing::TeleportStone})
+	{
+		EXPECT_EQ(creature_object_actions::RuleOf(thing), KindRule::Never);
+	}
+	EXPECT_FALSE(creature_object_actions::Holdable(Thing::Lantern));
+	EXPECT_FALSE(creature_object_actions::Holdable(Thing::Shield));
+	EXPECT_TRUE(creature_object_actions::Holdable(Thing::Vortex));
+}
+
 TEST(CreatureObjectActions, OnlyWhatAHandCanHoldIsGivenOrCaught)
 {
 	using creature_object_actions::KindRule;
