@@ -220,27 +220,45 @@ void HandSpring::Start(glm::vec3 position)
 	_velocity = glm::vec3(0.0f);
 }
 
-void HandSpring::Count(uint32_t frameMs)
+void HandSpring::Count(uint32_t frameGameMs, float frameRealMs)
 {
-	_elapsedMs += frameMs;
+	_elapsedMs += frameGameMs;
+	_sinceRefreshMs += frameRealMs;
+}
+
+void HandSpring::StepOnce(glm::vec3 target)
+{
+	constexpr float k_Step = static_cast<float>(k_SpringStepMs) * 0.001f;
+	_steppedMs += k_SpringStepMs;
+	++_steps;
+	_velocity += (k_SpringStiffness * (target - _position) - k_SpringDamping * _velocity) * k_Step;
+	if (const float speed = glm::length(_velocity); speed > k_MaxThrowSpeed)
+	{
+		_velocity *= k_MaxThrowSpeed / speed;
+	}
+	_position += _velocity * k_Step;
 }
 
 void HandSpring::Step(glm::vec3 target)
 {
-	constexpr float k_Step = static_cast<float>(k_SpringStepMs) * 0.001f;
-	// At least one step a frame, then as many as the game's time has run
+	// As many steps as the game's time has run
 	_steps = 0;
-	do
+	while (_steppedMs < _elapsedMs)
 	{
-		_steppedMs += k_SpringStepMs;
-		++_steps;
-		_velocity += (k_SpringStiffness * (target - _position) - k_SpringDamping * _velocity) * k_Step;
-		if (const float speed = glm::length(_velocity); speed > k_MaxThrowSpeed)
-		{
-			_velocity *= k_MaxThrowSpeed / speed;
-		}
-		_position += _velocity * k_Step;
-	} while (_steppedMs < _elapsedMs);
+		StepOnce(target);
+	}
+	_steppedSinceRefresh = _steppedSinceRefresh || _steps > 0;
+	if (_sinceRefreshMs < k_SpringFrameMs)
+	{
+		return;
+	}
+	// A refresh with no step since the last takes one anyway, as the game's frame did
+	if (!_steppedSinceRefresh)
+	{
+		StepOnce(target);
+	}
+	_sinceRefreshMs = std::fmod(_sinceRefreshMs - k_SpringFrameMs, k_SpringFrameMs);
+	_steppedSinceRefresh = false;
 }
 
 Countdown hand_grab::CountDown(int32_t& msLeft, uint32_t frameMs)

@@ -184,9 +184,6 @@ public:
 	static constexpr float k_HandTempleTurnTime = 0.4f;
 	/// Land lower than this is the sea, which the hand rests on
 	static constexpr float k_HandSeaAltitude = 0.1f;
-	/// Seconds the hand eases over to land further from and nearer to the camera
-	static constexpr float k_HandEaseOutTime = 0.28f;
-	static constexpr float k_HandEaseInTime = 0.1f;
 	/// Seconds the hand takes to hold its distance from the camera as it drags by the edge of the screen
 	static constexpr float k_HandHoldTime = 0.4f;
 
@@ -374,8 +371,6 @@ private:
 	glm::vec3 _handGripPoint {0.0f, 0.0f, 0.0f};
 	/// The fade from where the hand was to where it is now held, as it grips the land or lets go
 	HandCrossFade _handCrossFade;
-	/// What the hand did as its pose was last chosen, to fade its pose when that changes
-	std::optional<magic::hand_hold::HandStage> _handPoseStage;
 	/// The hand's tap after it knocked on a house: it stays upright where it knocked while the tap plays through once.
 	/// Holding something puts it off, and it starts over once the hand lets go.
 	struct HandKnock
@@ -459,6 +454,18 @@ private:
 	/// developers' start), which leaves the land as it is rather than black at its start
 	bool AskNewGameChoice();
 	void HandleInterfaceAction();
+	/// The options the player keeps with their profile take effect: the hand, the help, the texts and the tooltips
+	void ApplyPlayerSettings(const player_profiles::Settings& settings);
+	/// The Players page lists the profiles, the one played picked
+	void RefreshPlayersPage();
+	/// Another profile is played: the menu and the options follow it
+	void PlayerProfileChanged();
+	/// The player's creature takes the name the profile played gives it
+	void NameCreatureAfterProfile();
+	/// The new player's box over the game, from the Players page
+	void AskForAnotherPlayer(bool canCancel);
+	/// The game starts again as the profile played
+	void RestartForProfile();
 	/// Escape in play with no dialog open: the menu opens, unless a script's cut scene is on, and a help script holding
 	/// the dialogue stops
 	void HandleEscapeInPlay(uint16_t keyModifiers);
@@ -509,6 +516,8 @@ private:
 	/// Whether the game was paused when the menu opened, which pauses it
 	bool _pausedBeforeMenu {true};
 	bool _menuWasOpen {false};
+	/// The menu asked for the game to start again as the profile played
+	bool _restartRequested {false};
 	/// When the menu last closed, on the computer's clock
 	std::optional<std::chrono::steady_clock::time_point> _menuClosedAt;
 };

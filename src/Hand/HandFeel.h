@@ -16,6 +16,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/Zoomer.h"
+
 /// How the hand rests over what the interface picked under the cursor: a villager or an animal it hovers before, at the
 /// thing's distance; a model it feels the triangles of, standing up off the face it meets; anything else it rests over
 /// the land, turned to the land's slope.
@@ -100,6 +102,9 @@ struct Hover
 	std::optional<glm::vec3> land;
 	/// The land under the cursor is the sea, which the hand rests on rather than hanging over
 	bool landIsSea {false};
+	/// The hand holds something, ready to drop or throw it: it then goes all the way to the land, its height not kept
+	/// off it
+	bool holding {false};
 	/// Where the hand rests on or before the thing under the cursor; none over the land, or over a thing it doesn't
 	/// rest on
 	std::optional<glm::vec3> restOnThing;
@@ -117,9 +122,19 @@ struct HoverDistances
 	float limit;
 };
 /// The furthest the hand may be is the land under the cursor less the hand's height, so its fingers hang down to the
-/// land (on the sea it rests on the water; under the sky it keeps its distance), held between the nearest and the reach.
+/// land (on the sea it rests on the water, and holding something it goes all the way to the land; under the sky it keeps
+/// its distance), held between the nearest and the reach.
 /// Over a thing it rests on, it eases to that resting point, so it touches the thing; elsewhere it eases to the
 /// furthest it may be. It never eases nearer than a unit from the camera.
 [[nodiscard]] HoverDistances HoverDistancesOf(const Hover& hover);
+
+/// How long the hand's hover takes to ease away from the camera, and towards it
+inline constexpr float k_HoverEaseOutSeconds = 0.28f;
+inline constexpr float k_HoverEaseInSeconds = 0.1f;
+
+/// The hand's hover moved on a frame towards the distance it aims at: out slowly, in quickly, and never nearer than a
+/// unit. While the hand pulls something out of the ground the pull places the hand and its hover is left as it was, so
+/// once the thing comes free the hand eases on from the distance it hovered at when it took hold.
+void EaseHover(Zoomer& hover, float target, float seconds, bool pulling);
 
 } // namespace openblack::hand_feel

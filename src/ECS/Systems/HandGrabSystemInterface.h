@@ -82,6 +82,8 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld() const = 0;
 	/// Whether the hand is taking, holding or about to throw a thing, so that other uses of the button leave it be
 	[[nodiscard]] virtual bool IsBusy() const = 0;
+	/// Whether the hand is pulling a thing out of the ground, from the press until it holds it
+	[[nodiscard]] virtual bool IsPulling() const = 0;
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] virtual bool IsInInfluence() const = 0;
 	/// Why a press of the Action button on a thing wouldn't take it (out of the influence, a thing the hand can't hold,

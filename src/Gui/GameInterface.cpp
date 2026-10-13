@@ -327,6 +327,12 @@ void GameInterface::ShowNewPlayerBox(bool canCancel, NewPlayerBox::CheckName che
 	_newPlayerBox->MouseMove(_painter.ToDialog(mouse));
 }
 
+void GameInterface::ShowNewPlayerBoxOverGame(bool canCancel, NewPlayerBox::CheckName checkName)
+{
+	_boxOverGameFade = menu_backdrop::Fade {};
+	ShowNewPlayerBox(canCancel, std::move(checkName));
+}
+
 bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution)
 {
 	_painter.Begin(resolution);
@@ -367,6 +373,21 @@ void GameInterface::DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mous
 	_pointerCanvas.Begin(resolution);
 	_painter.Begin(resolution);
 	_newPlayerBox->Update(frameMilliseconds / 1000.0f);
+	DrawMenuBackdrop(resolution, frameMilliseconds);
+	_newPlayerBox->Draw(_painter);
+	_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
+	// The screen fades from and to black over it all, the pointer too
+	if (black > 0)
+	{
+		_pointerCanvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f),
+		                        glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(black) / 255.0f), nullptr);
+	}
+	_canvas.End();
+	_pointerCanvas.End();
+}
+
+void GameInterface::DrawMenuBackdrop(glm::u16vec2 resolution, float frameMilliseconds)
+{
 	// The swirls turn on at most once a screen refresh; they start at random the first time
 	if (!_backdropSwirls.has_value())
 	{
@@ -413,24 +434,18 @@ void GameInterface::DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mous
 			}
 		}
 	}
-	_newPlayerBox->Draw(_painter);
-	_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
-	// The screen fades from and to black over it all, the pointer too
-	if (black > 0)
-	{
-		_pointerCanvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f),
-		                        glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(black) / 255.0f), nullptr);
-	}
-	_canvas.End();
-	_pointerCanvas.End();
 }
 
-void GameInterface::SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol)
+void GameInterface::SetPlayerProfile(std::u16string_view name, std::u16string_view creatureName, int symbol,
+                                     const player_profiles::Settings& kept)
 {
 	auto settings = _menu->GetSettings();
 	settings.creatureName = creatureName;
 	settings.symbol = symbol;
+	TakeProfileSettings(settings, kept);
+	const bool insideTemple = _menu->IsInsideTemple();
 	_menu = std::make_unique<GameMenu>(_texts, _font, name, std::move(settings));
+	_menu->SetInsideTemple(insideTemple);
 }
 
 bool GameInterface::ProcessSkipBoxEvent(const SDL_Event& event)
@@ -484,6 +499,16 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	if (_skipBox->IsActive())
 	{
 		return ProcessSkipBoxEvent(event);
+	}
+	// The new player's box, from the Players page, takes the input while it is up; nothing else does while its screen
+	// fades
+	if (_newPlayerBox->IsActive())
+	{
+		return ProcessNewPlayerBoxEvent(event, resolution);
+	}
+	if (_boxOverGameFade.has_value())
+	{
+		return true;
 	}
 	if (_tattooEditor->IsOpen() && Locator::tattooEditorSystem::has_value())
 	{
@@ -597,6 +622,7 @@ void GameInterface::Update(float deltaSeconds)
 {
 	_menu->Update(deltaSeconds);
 	_skipBox->Update(deltaSeconds);
+	_newPlayerBox->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
 	_screenFade.Update(deltaSeconds);
@@ -638,7 +664,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawTipBubble(resolution, mouse);
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
-	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
+	const bool menuOpen =
+	    (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() || _newPlayerBox->IsActive();
 	DrawFloatingNumbers(resolution);
 	if (_message.has_value())
 	{
@@ -666,14 +693,40 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		}
 		_tattooEditor->Draw(_painter, marker, milliseconds);
 	}
-	if (_menu->IsVisible())
+	// The new player's box from the Players page takes the screen as the first start's does: the front end's swirling
+	// backdrop on black, coming up from black and going back to black, the box and the pointer under the black too.
+	// The menu comes back once it is over.
+	const auto backdropMilliseconds = menu_backdrop::FrameMilliseconds(_lastBackdropTicks, milliseconds);
+	_lastBackdropTicks = _boxOverGameFade.has_value() ? std::optional(milliseconds) : std::nullopt;
+	if (_boxOverGameFade.has_value())
 	{
-		_menu->Draw(_painter);
-	}
-	_skipBox->Draw(_painter);
-	if (menuOpen || overDebugWindow)
-	{
+		menu_backdrop::StepFade(*_boxOverGameFade, !_newPlayerBox->IsActive(), static_cast<int>(backdropMilliseconds));
+		_canvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f),
+		                 glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), nullptr);
+		DrawMenuBackdrop(resolution, backdropMilliseconds);
+		_newPlayerBox->Draw(_painter);
 		_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
+		if (const auto black = _boxOverGameFade->alpha; black > 0)
+		{
+			_pointerCanvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f),
+			                        glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(black) / 255.0f), nullptr);
+		}
+		if (menu_backdrop::FadeOver(*_boxOverGameFade))
+		{
+			_boxOverGameFade.reset();
+		}
+	}
+	else
+	{
+		if (_menu->IsVisible())
+		{
+			_menu->Draw(_painter);
+		}
+		_skipBox->Draw(_painter);
+		if (menuOpen || overDebugWindow)
+		{
+			_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
+		}
 	}
 	// A video on a screen wider than its picture has black bars at its sides, which go with the cinema bars
 	const auto sides = static_cast<float>(DrawVideo(resolution));

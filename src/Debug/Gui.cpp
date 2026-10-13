@@ -77,6 +77,7 @@
 #include "Moon.h"
 #include "PathFinding.h"
 #include "Physics.h"
+#include "PointerSpeedSlider.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple.h"
@@ -730,6 +731,7 @@ bool Gui::ShowMenu() noexcept
 			if (ImGui::BeginMenu("Hand"))
 			{
 				ImGui::Checkbox("Right Handed", &config.rightHandedHand);
+				DrawPointerSpeedSlider();
 
 				ImGui::EndMenu();
 			}

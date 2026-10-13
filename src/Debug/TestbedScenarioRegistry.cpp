@@ -1672,6 +1672,30 @@ void AddHand(std::vector<Scenario>& all)
 	         // And comes back in
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.97f}}},
 	});
+	// The camera stands as in the tutorial's throwing demonstration, 9 m over the land and 35 m behind the rock, which
+	// sits in the middle of the screen; the flat land beyond leaves the throw room to land
+	all.push_back({
+	    .id = "hand.throw",
+	    .name = "Throwing a rock",
+	    .facet = Facet::Hand,
+	    .description = "The hand picks up a rock, makes ready to throw low on the screen and flings it with a quick "
+	                   "upward sweep of the pointer, in real time.",
+	    .expected = "The rock leaves the hand at the hand's speed (the inspector's HandGrab lastThrow), the same at any "
+	                "frame rate, and flies on the order of a hundred metres or more before it lands.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},
+	    .commands =
+	        {// Takes the rock under the middle of the screen
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	         // Makes ready low on the screen and sweeps up, letting go as the sweep ends
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.45f, 0.85f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
 
 	// The camera looks north over the land, a rock and a tiger to its east, all in the player's influence; the pointer stays
 	// east of the middle, clear of the testbed's window
@@ -1732,6 +1756,27 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Food)},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 8.0f, .alignment = -1.0f},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
+	});
+
+	// The camera looks down on an oak from about 150 m, as in play, the pointer on its crown
+	all.push_back({
+	    .id = "hand.tree_tug",
+	    .name = "Pulling a tree out of the ground",
+	    .facet = Facet::Hand,
+	    .description = "Seen from about 150 m up, the hand grips a large oak by its crown, pulls it up the screen until "
+	                   "it comes out of the ground, carries it a little, then puts it down.",
+	    .expected = "The hand hovers on the crown, drops to the trunk as it takes hold, and the oak leans and stretches "
+	                "towards the pull. When it comes out, leaving its roots hole, the hand and the oak move together to "
+	                "under the pointer; the hand never leaves the tree.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 110.0f, -80.0f}, .look = {0.0f, 4.0f, 20.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, 20.0f}, .scale = 1.6f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.47f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.25f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3}},
 	});
 }
 

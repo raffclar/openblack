@@ -12,9 +12,11 @@
 #include <cmath>
 
 #include <algorithm>
+#include <utility>
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
+#include <glm/matrix.hpp>
 
 using namespace openblack;
 using namespace openblack::magic;
@@ -179,6 +181,42 @@ glm::mat3 hand_hold::SeedTurn(const glm::mat3& basis, float yRotate, bool rightH
 	const auto turnedX = x * c + z * s;
 	const auto turnedZ = z * c - x * s;
 	return {UnitOrNone(turnedX), UnitOrNone(basis[1]), UnitOrNone(turnedZ)};
+}
+
+void WorldPoseFade::Start()
+{
+	_from = _lastDrawn;
+	_time = 0.0f;
+}
+
+void WorldPoseFade::Apply(float seconds, const glm::mat4& model, std::vector<glm::mat4>& bones)
+{
+	// A hand drawn at no size can't be posed back from the world
+	if (glm::determinant(glm::mat3(model)) == 0.0f)
+	{
+		return;
+	}
+	std::vector<glm::mat4> drawn(bones.size());
+	std::ranges::transform(bones, drawn.begin(), [&model](const glm::mat4& bone) { return model * bone; });
+	if (_time.has_value())
+	{
+		*_time += seconds;
+		if (*_time >= k_FadeSeconds || _from.size() != drawn.size())
+		{
+			_time.reset();
+		}
+		else
+		{
+			const float t = *_time / k_FadeSeconds;
+			const auto toModel = glm::inverse(model);
+			for (size_t bone = 0; bone < drawn.size(); ++bone)
+			{
+				drawn[bone] = _from[bone] + (drawn[bone] - _from[bone]) * t;
+				bones[bone] = toModel * drawn[bone];
+			}
+		}
+	}
+	_lastDrawn = std::move(drawn);
 }
 
 void HandFade::Start(glm::vec3 position, const glm::mat3& rotation)

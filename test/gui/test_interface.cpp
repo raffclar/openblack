@@ -262,6 +262,12 @@ TextDatabase MenuTexts()
 	    {u"HELP_TEXT_ACTIONS_SELECT", u"Move"},
 	    {u"HELP_TEXT_ACTIONS_LEFTMOUSEBUTTON", u"LMB"},
 	    {u"HELP_TEXT_ACTIONS_ZOOMON", u"Zoom On"},
+	    {u"HELP_TEXT_REQUESTER_BOXES_04", u"OK"},
+	    {u"HELP_TEXT_FRONT_END_12", u"Restart"},
+	    {u"HELP_TEXT_DIALOG_RESTART_WARNING", u"Restart?"},
+	    {u"HELP_TEXT_DIALOG_RESTART", u"Restarting now."},
+	    {u"HELP_TEXT_DIALOG_AERYOUSUREDELETE", u"Delete player %s?"},
+	    {u"HELP_TEXT_DIALOG_ADDITION_20", u"New game?"},
 	};
 	for (const auto& [name, text] : texts)
 	{
@@ -544,6 +550,188 @@ TEST(GameMenu, PlayersNameTheirCreatureAndPickASymbol)
 	f.menu.Update(0.6f);
 	f.menu.MouseUp(three);
 	EXPECT_EQ(f.menu.GetSettings().symbol, 3);
+}
+
+namespace
+{
+/// A point on a row of the Players page's list
+glm::ivec2 PlayerRow(const GameMenu& menu, size_t row)
+{
+	for (int y = 120; y < 280; ++y)
+	{
+		if (menu.GetPlayers().ItemAt(y) == row)
+		{
+			return {400, y};
+		}
+	}
+	return {400, 0};
+}
+
+/// The menu on the Players page, Ann, Bob and Matt kept and Matt played
+struct PlayersFixture: MenuFixture
+{
+	PlayersFixture()
+	{
+		menu.SetPlayers({u"Ann", u"Bob", u"Matt"}, 2);
+		Click(menu, ButtonCentre(3));
+		Click(menu, TabCentre(2));
+	}
+};
+
+constexpr glm::ivec2 k_Yes {216, 354};
+constexpr glm::ivec2 k_No {584, 354};
+constexpr glm::ivec2 k_Ok {400, 354};
+} // namespace
+
+TEST(GameMenu, PlayersPickAProfileAndLeavingStartsTheGameAgain)
+{
+	PlayersFixture f;
+	EXPECT_EQ(f.menu.GetPlayers().GetSelection(), 2u);
+	EXPECT_EQ(f.menu.GetPlayersBackLabel(), u"Back");
+	EXPECT_FALSE(f.menu.IsRestartPending());
+
+	// Picking another plays as it at once; leaving the page then starts the game again
+	EXPECT_EQ(Click(f.menu, PlayerRow(f.menu, 0)), Action::PickPlayer);
+	EXPECT_EQ(f.menu.GetPickedPlayer(), 0u);
+	EXPECT_TRUE(f.menu.IsRestartPending());
+	EXPECT_EQ(f.menu.GetPlayersBackLabel(), u"Restart");
+	// The one picked again is no change
+	EXPECT_EQ(Click(f.menu, PlayerRow(f.menu, 0)), Action::None);
+
+	// Escape can't leave the page
+	EXPECT_EQ(f.menu.Escape(), Action::None);
+	EXPECT_EQ(f.menu.GetPage(), Page::Players);
+	// Restart asks first; No stays
+	EXPECT_EQ(Click(f.menu, k_Back), Action::None);
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Restart?");
+	EXPECT_EQ(Click(f.menu, k_No), Action::None);
+	EXPECT_EQ(f.menu.GetPage(), Page::Players);
+	// So does another tab, but not the page's own
+	Click(f.menu, TabCentre(2));
+	EXPECT_FALSE(f.menu.IsAskingToQuit());
+	Click(f.menu, TabCentre(1));
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Restart?");
+	EXPECT_EQ(Click(f.menu, k_Yes), Action::Restart);
+
+	// Picking the one the game was started as again is Back once more
+	EXPECT_EQ(Click(f.menu, PlayerRow(f.menu, 2)), Action::PickPlayer);
+	EXPECT_FALSE(f.menu.IsRestartPending());
+	EXPECT_EQ(f.menu.GetPlayersBackLabel(), u"Back");
+	Click(f.menu, k_Back);
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+}
+
+TEST(GameMenu, PlayersAreDeletedAfterAskingByName)
+{
+	PlayersFixture f;
+	// Deleting another than the one the game was started as plays the one it was started as
+	Click(f.menu, PlayerRow(f.menu, 0));
+	Click(f.menu, f.menu.GetPlayerButtonRect(1).Centre());
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Delete player Ann?");
+	EXPECT_EQ(Click(f.menu, k_No), Action::None);
+	Click(f.menu, f.menu.GetPlayerButtonRect(1).Centre());
+	EXPECT_EQ(Click(f.menu, k_Yes), Action::DeletePlayer);
+	EXPECT_EQ(f.menu.GetPlayerToDelete(), u"Ann");
+	EXPECT_EQ(f.menu.GetPickedPlayer(), 1u);
+	f.menu.SetPlayers({u"Bob", u"Matt"}, 1);
+	EXPECT_FALSE(f.menu.IsRestartPending());
+
+	// Deleting the one it was started as plays the first left, and leaving the page must start the game again
+	Click(f.menu, f.menu.GetPlayerButtonRect(1).Centre());
+	EXPECT_EQ(Click(f.menu, k_Yes), Action::DeletePlayer);
+	EXPECT_EQ(f.menu.GetPlayerToDelete(), u"Matt");
+	EXPECT_EQ(f.menu.GetPickedPlayer(), 0u);
+	f.menu.SetPlayers({u"Bob"}, 0);
+	EXPECT_TRUE(f.menu.IsRestartPending());
+	EXPECT_EQ(f.menu.GetPlayersBackLabel(), u"Restart");
+	// It tells the player, with an OK
+	Click(f.menu, k_Back);
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Restarting now.");
+	EXPECT_EQ(Click(f.menu, k_Ok), Action::Restart);
+
+	// Deleting the last leaves none to play
+	Click(f.menu, f.menu.GetPlayerButtonRect(1).Centre());
+	EXPECT_EQ(Click(f.menu, k_Yes), Action::DeletePlayer);
+	EXPECT_FALSE(f.menu.GetPickedPlayer().has_value());
+}
+
+TEST(GameMenu, PlayersStartANewGameOrMakeAPlayerAfterAsking)
+{
+	PlayersFixture f;
+	Click(f.menu, f.menu.GetPlayerButtonRect(3).Centre());
+	EXPECT_EQ(f.menu.GetQuestionText(), u"New game?");
+	EXPECT_EQ(Click(f.menu, k_Yes), Action::StartNewGame);
+	EXPECT_EQ(Click(f.menu, f.menu.GetPlayerButtonRect(0).Centre()), Action::CreatePlayer);
+	// A profile made is played: the game must start again
+	f.menu.SetPlayers({u"Ann", u"Bob", u"Matt", u"Zed"}, 3);
+	EXPECT_TRUE(f.menu.IsRestartPending());
+}
+
+TEST(GameMenu, PlayersSquareButtonsSpreadOutWithEditTattooOrWithout)
+{
+	PlayersFixture f;
+	// Without Edit Tattoo, three
+	EXPECT_FALSE(f.menu.IsPlayerButtonVisible(2));
+	EXPECT_EQ(f.menu.GetPlayerButtonRect(0).min, glm::ivec2(188, 450));
+	EXPECT_EQ(f.menu.GetPlayerButtonRect(1).min, glm::ivec2(388, 450));
+	EXPECT_EQ(f.menu.GetPlayerButtonRect(3).min, glm::ivec2(588, 450));
+	EXPECT_EQ(f.menu.GetPlayerButtonRect(3).max, glm::ivec2(613, 475));
+	// With it, four
+	f.menu.SetTattooAvailable(true);
+	EXPECT_TRUE(f.menu.IsPlayerButtonVisible(2));
+	EXPECT_EQ(f.menu.GetPlayerButtonRect(0).min.x, 138);
+	EXPECT_EQ(f.menu.GetPlayerButtonRect(1).min.x, 305);
+	EXPECT_EQ(f.menu.GetPlayerButtonRect(2).min.x, 471);
+	EXPECT_EQ(f.menu.GetPlayerButtonRect(3).min.x, 638);
+	// Not while leaving the page starts the game again
+	Click(f.menu, PlayerRow(f.menu, 0));
+	EXPECT_FALSE(f.menu.IsPlayerButtonVisible(2));
+	EXPECT_EQ(f.menu.GetPlayerButtonRect(0).min.x, 188);
+}
+
+TEST(GameMenu, PlayersEditsAreKeptAsThePageIsLeft)
+{
+	PlayersFixture f;
+	EXPECT_FALSE(f.menu.TakePlayerEdits().has_value());
+	Click(f.menu, {400, 390});
+	f.menu.TextInput(u"Rex");
+	EXPECT_FALSE(f.menu.TakePlayerEdits().has_value());
+	f.menu.KeyDown(SDLK_RETURN);
+	auto edits = f.menu.TakePlayerEdits();
+	ASSERT_TRUE(edits.has_value());
+	EXPECT_EQ(edits->creatureName, u"Rex");
+	Click(f.menu, TabCentre(3));
+	EXPECT_TRUE(f.menu.TakePlayerEdits().has_value());
+	EXPECT_FALSE(f.menu.TakePlayerEdits().has_value());
+
+	// Another profile shows its own creature's name, symbol and options
+	openblack::player_profiles::Settings kept;
+	kept.helpLevel = 0;
+	f.menu.ShowPlayer(u"Spot", 7, kept);
+	EXPECT_EQ(f.menu.GetSettings().creatureName, u"Spot");
+	EXPECT_EQ(f.menu.GetSettings().symbol, 7);
+	EXPECT_EQ(f.menu.GetSettings().helpLevel, 0);
+}
+
+TEST(GameMenu, OptionsAreKeptWithTheProfileAsTheyAre)
+{
+	MenuSettings settings;
+	settings.toolTips = 0;
+	settings.storyText = 2;
+	settings.helpLevel = 1;
+	settings.creatureHelp = false;
+	settings.readSpeed = 0.75f;
+	settings.textFromBottom = true;
+	settings.leftHandedHand = true;
+	settings.pushScrolling = true;
+	settings.autoSave = false;
+	const auto kept = ToProfileSettings(settings);
+	MenuSettings back;
+	TakeProfileSettings(back, kept);
+	EXPECT_EQ(ToProfileSettings(back), kept);
+	EXPECT_EQ(kept.helpLevel, 1);
+	EXPECT_FALSE(kept.autoSave);
+	EXPECT_TRUE(kept.leftHanded);
 }
 
 TEST(SymbolPicture, RingComesUpAndGoes)

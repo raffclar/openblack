@@ -38,6 +38,17 @@ public:
 	[[nodiscard]] virtual player_profiles::NameCheck CheckNewName(std::u16string_view name) const = 0;
 	/// Makes a profile of the name with the player's symbol, plays as it and keeps it. The name must have been accepted
 	virtual void CreateProfile(std::u16string_view name, int symbol) = 0;
+	/// Every profile, in the order the Players page lists them, and the one played
+	[[nodiscard]] virtual const player_profiles::Profiles& GetProfiles() const = 0;
+	/// Plays as the profile of the name from now on, and keeps that choice; false when no profile has the name
+	virtual bool SelectProfile(std::u16string_view name) = 0;
+	/// Forgets the profile of the name for good; false when no profile has the name. Forgetting the one played leaves
+	/// none played
+	virtual bool DeleteProfile(std::u16string_view name) = 0;
+	/// Keeps the creature's name and the symbol the player gave on the Players page with the profile played
+	virtual void EditCurrentProfile(std::u16string_view creatureName, int symbol) = 0;
+	/// Keeps the options the player set with the profile played
+	virtual void SetCurrentSettings(const player_profiles::Settings& settings) = 0;
 };
 
 } // namespace openblack::ecs::systems

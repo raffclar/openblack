@@ -1554,6 +1554,7 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 			                 {"picked", frame.picked.has_value() ? Json(*frame.picked) : Json(nullptr)},
 			                 {"cursor_land", frame.cursorLand.has_value() ? vec(*frame.cursorLand) : Json(nullptr)},
 			                 {"rest_on_thing", frame.restOnThing.has_value() ? vec(*frame.restOnThing) : Json(nullptr)},
+			                 {"held_at", frame.heldAt.has_value() ? vec(*frame.heldAt) : Json(nullptr)},
 			                 {"writes", std::move(writes)},
 			                 {"writes_lost", frame.writesLost}};
 		    };

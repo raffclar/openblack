@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <numbers>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -244,4 +245,13 @@ TEST(MenuBackdrop, TheSwirlsTurnAtMostSixtyTimesASecond)
 	EXPECT_FALSE(menu_backdrop::StepPace(pace, 10.0f).has_value());
 	EXPECT_EQ(menu_backdrop::StepPace(pace, 10.0f), 20);
 	EXPECT_EQ(menu_backdrop::StepPace(pace, 40.0f), 40);
+}
+
+TEST(MenuBackdrop, TheFramesMillisecondsCountFromTheLastFrameItWasDrawn)
+{
+	// The first frame the backdrop is drawn over the game turns nothing; then each frame counts from the last
+	EXPECT_FLOAT_EQ(menu_backdrop::FrameMilliseconds(std::nullopt, 5000), 0.0f);
+	EXPECT_FLOAT_EQ(menu_backdrop::FrameMilliseconds(5000, 5016), 16.0f);
+	// The clock wrapping round still gives the time between
+	EXPECT_FLOAT_EQ(menu_backdrop::FrameMilliseconds(0xFFFFFFF0u, 0x10u), 32.0f);
 }

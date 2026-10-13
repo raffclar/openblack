@@ -12,8 +12,11 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
+#include <vector>
 
 #include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -109,6 +112,27 @@ public:
 private:
 	glm::vec3 _fromPosition {0.0f};
 	glm::mat3 _fromRotation {1.0f};
+	std::optional<float> _time;
+};
+
+/// The drawn hand's pose through its changes of stage, as the game blends it: for k_FadeSeconds after a change, every
+/// bone of the drawn hand moves in a straight line, in the world, from where it was last drawn to where the newly placed
+/// and posed hand has it. Blending the drawn bones themselves, rather than the hand's place and turn and its pose apart,
+/// keeps the hand together: turning between two very different holds can't fold it up or swing it away from what it
+/// holds.
+class WorldPoseFade
+{
+public:
+	/// A change of stage: the drawn hand fades from how it was last drawn
+	void Start();
+	/// The hand placed by a model matrix and posed by its bones this frame: some seconds on, the bones are made to draw
+	/// it between how it was last drawn and how it is now placed and posed
+	void Apply(float seconds, const glm::mat4& model, std::vector<glm::mat4>& bones);
+	[[nodiscard]] bool Fading() const { return _time.has_value(); }
+
+private:
+	std::vector<glm::mat4> _lastDrawn;
+	std::vector<glm::mat4> _from;
 	std::optional<float> _time;
 };
 
