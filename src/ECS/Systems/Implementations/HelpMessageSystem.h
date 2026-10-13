@@ -14,6 +14,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "Help/HelpQuery.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -36,8 +37,8 @@ public:
 	[[nodiscard]] const std::vector<Started>& GetStarted() const override { return _started; }
 
 private:
-	/// The Help key about a thing
-	void QueryThing(entt::entity thing);
+	/// Says the Help key's answer; a set that says a thing's texts says these
+	void Say(const help_query::Answer& answer, std::optional<help_messages::Texts> thing);
 	void Remember(Started started);
 
 	/// Each set's count of being said, and the turn it last was; each category's turn
@@ -50,8 +51,6 @@ private:
 	std::optional<size_t> _lastSet;
 	uint32_t _messageTurn {0};
 	std::vector<Started> _started;
-	bool _groundLogged {false};
-	bool _thingLogged {false};
 };
 
 } // namespace openblack::ecs::systems

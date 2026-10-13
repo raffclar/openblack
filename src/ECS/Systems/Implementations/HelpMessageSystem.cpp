@@ -12,14 +12,14 @@
 #include "HelpMessageSystem.h"
 
 #include <string>
+#include <variant>
 
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
 
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
-#include "ECS/Components/Abode.h"
-#include "ECS/Components/TownDesireFlag.h"
+#include "ECS/HelpQueryFacts.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
@@ -174,88 +174,39 @@ void HelpMessageSystem::HelpQuery()
 	{
 		return;
 	}
+	// What is in the hand, else what the hand is over, else the ground under it
 	std::optional<entt::entity> thing;
 	if (Locator::handGrabSystem::has_value())
 	{
 		thing = Locator::handGrabSystem::value().GetHeld();
 	}
-	if (!thing.has_value() && Locator::pickingSystem::has_value())
+	std::optional<glm::vec3> ground;
+	if (Locator::pickingSystem::has_value())
 	{
-		thing = Locator::pickingSystem::value().GetPick().object;
+		const auto& pick = Locator::pickingSystem::value().GetPick();
+		if (!thing.has_value())
+		{
+			thing = pick.object;
+		}
+		ground = pick.land;
 	}
 	if (thing.has_value() && Locator::entitiesRegistry::value().Valid(*thing))
 	{
-		QueryThing(*thing);
+		Say(help_query::About(ecs::help_query_facts::ThingOf(*thing)), ecs::help_query_facts::TextsOf(*thing));
 		return;
 	}
-	// TODO(creature-help-messages): the ground's answer by its material (and the fish farms and shallow water)
-	if (!_groundLogged)
-	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Help about the ground isn't implemented yet");
-		_groundLogged = true;
-	}
+	Say(help_query::AboutGround(ecs::help_query_facts::GroundAt(ground)), std::nullopt);
 }
 
-void HelpMessageSystem::QueryThing(entt::entity thing)
+void HelpMessageSystem::Say(const help_query::Answer& answer, std::optional<messages::Texts> thing)
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	if (!Locator::infoConstants::has_value())
+	if (const auto* set = std::get_if<help_query::SaySet>(&answer))
 	{
+		RunMessageSet(set->set, thing);
 		return;
 	}
-	const auto& info = Locator::infoConstants::value();
-
-	// A flag over a town's store: the need it flies for, how much the town wants it and why
-	if (const auto* flag = registry.TryGet<const TownDesireFlag>(thing); flag != nullptr)
-	{
-		const auto desire = static_cast<size_t>(flag->desire);
-		if (desire >= info.townDesire.size())
-		{
-			return;
-		}
-		const auto& row = info.townDesire.at(desire);
-		const auto first = static_cast<uint32_t>(row.helpStartEnum);
-		const auto last = static_cast<uint32_t>(row.helpEndEnum);
-		const auto stat = static_cast<uint32_t>(row.helpStatEnum);
-		if (first == 0)
-		{
-			RunMessageSet(messages::k_NotInterested);
-			return;
-		}
-		if (flag->town == entt::null || !registry.Valid(flag->town) || !Locator::townDesireSystem::has_value())
-		{
-			RunMessage(stat, stat, messages::Script::JustTalkWithText);
-			return;
-		}
-		const auto raw = Locator::townDesireSystem::value().GetRawDesire(flag->town, flag->desire);
-		RunMessage(first, last, messages::Script::TownNeeds, std::pair {stat, messages::TownNeed(raw)});
-		return;
-	}
-
-	// A town's centre: what the town is about
-	if (const auto* abode = registry.TryGet<const Abode>(thing); abode != nullptr)
-	{
-		const auto row = static_cast<size_t>(abode->info);
-		if (row < info.abode.size() && info.abode.at(row).abodeType == AbodeType::TownCentre)
-		{
-			const auto first = static_cast<uint32_t>(info.abode.at(row).helpStartEnum);
-			const auto last = static_cast<uint32_t>(info.abode.at(row).helpEndEnum);
-			if (first == 0)
-			{
-				RunMessageSet(messages::k_NotInterested);
-				return;
-			}
-			RunMessage(first, last, messages::Script::Town);
-			return;
-		}
-	}
-
-	// TODO(creature-help-messages): the other things' answers: their own texts, people by who they are, wonders
-	if (!_thingLogged)
-	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Help about this kind of thing isn't implemented yet");
-		_thingLogged = true;
-	}
+	const auto& say = std::get<help_query::SayTexts>(answer);
+	RunMessage(say.texts.first, say.texts.last, say.script, say.townNeed);
 }
 
 void HelpMessageSystem::ProcessTurn()
