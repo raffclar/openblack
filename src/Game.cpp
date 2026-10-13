@@ -3253,14 +3253,6 @@ bool Game::Initialize() noexcept
 		if (const auto path = fileSystem.GetPath<Path::Misc>() / "leash.l3d"; fileSystem.Exists(path))
 		{
 			registerMesh("misc/leash", path);
-			// Each player's temple hangs one of each leash, each drawn with its own copy of the collar
-			for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
-			{
-				for (const auto type : creature_leash::k_Types)
-				{
-					registerMesh(temple_leashes::CollarMeshName(static_cast<PlayerNames>(player), type), path);
-				}
-			}
 		}
 		// The eyes every creature is drawn with
 		for (const auto& [id, file] : {std::pair {ecs::components::CreatureEyes::k_EyeballMeshId, "Eyeball.l3d"},

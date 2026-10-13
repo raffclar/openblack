@@ -175,7 +175,6 @@
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Shark.h"
-#include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Spell.h"
@@ -1421,9 +1420,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Shark::turnStart>("turnStart")
 	    .Field<&components::Shark::heading>("heading")
 	    .Field<&components::Shark::clipPlace>("clipPlace");
-	Reflect<components::SkinOverride>(context)
-	    .Field<&components::SkinOverride::texture>("texture")
-	    .Field<&components::SkinOverride::uvOffset>("uvOffset");
 	Reflect<components::SkyDome>(context)
 	    .Field<&components::SkyDome::meshId>("meshId")
 	    .Field<&components::SkyDome::textureId>("textureId")

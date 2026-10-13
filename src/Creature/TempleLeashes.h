@@ -12,7 +12,6 @@
 #include <cstdint>
 
 #include <array>
-#include <string>
 
 #include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
@@ -113,10 +112,6 @@ struct Carried
 constexpr uint32_t k_AggressionTip = 85;
 constexpr uint32_t k_CompassionTip = 86;
 constexpr uint32_t k_LearningTip = 87;
-
-/// The name of the copy of the collar mesh a player's leash of a kind is drawn with: each slides its texture by its own
-/// random start, as each of the game's leashes does
-[[nodiscard]] std::string CollarMeshName(PlayerNames owner, LeashType type);
 
 /// Whether a leash hangs on the temple: its player has a creature, and the creature knows that leash
 [[nodiscard]] constexpr bool Hung(bool hasCreature, bool knows)

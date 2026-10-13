@@ -61,7 +61,6 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
-#include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -914,9 +913,7 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 			registry.Destroy(entity);
 		}
 	}
-	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& textures = Locator::resources::value().GetTextures();
-	const bool hasSkin = textures.Contains(LeashPost::k_TextureId);
 	const bool hasSmoke = textures.Contains(k_SmokeId.value()) && textures.Contains(k_SmokeAlphaId.value());
 	auto* random = Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
 	const auto draw = [random] { return random != nullptr ? random->CrtRand() : 0; };
@@ -944,19 +941,8 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 			                                           .facesCamera = true,
 			                                           .alpha = textures.Handle(k_SmokeAlphaId)->GetNativeHandle()});
 		}
+		// The renderer draws its collar
 		registry.Assign<LeashPost>(entity, post);
-		const auto collar = entt::hashed_string::value(temple_leashes::CollarMeshName(owner, post.type).c_str());
-		const auto meshId = meshes.Contains(collar) ? collar : LeashPost::k_MeshId;
-		if (meshes.Contains(meshId))
-		{
-			registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));
-			if (hasSkin && meshId != LeashPost::k_MeshId)
-			{
-				registry.Assign<SkinOverride>(
-				    entity, SkinOverride {.texture = textures.Handle(LeashPost::k_TextureId)->GetNativeHandle(),
-				                          .uvOffset = glm::vec2(post.look.scroll, temple_leashes::Band(post.type))});
-			}
-		}
 	}
 	registry.SetDirty();
 	_postsPlaced = true;
@@ -964,8 +950,7 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 
 void LeashSystem::UpdatePosts(float seconds)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<LeashPost>([this, seconds, &registry](entt::entity entity, LeashPost& post) {
+	Locator::entitiesRegistry::value().Each<LeashPost>([this, seconds](LeashPost& post) {
 		const auto creature = PlayersCreature(post.owner);
 		post.hung = temple_leashes::Hung(creature.has_value(), creature.has_value() && Knows(*creature, post.type));
 		if (!post.hung)
@@ -973,10 +958,6 @@ void LeashSystem::UpdatePosts(float seconds)
 			return;
 		}
 		post.look = temple_leashes::Advance(post.look, seconds);
-		if (auto* skin = registry.TryGet<SkinOverride>(entity))
-		{
-			skin->uvOffset = glm::vec2(post.look.scroll, temple_leashes::Band(post.type));
-		}
 	});
 }
 

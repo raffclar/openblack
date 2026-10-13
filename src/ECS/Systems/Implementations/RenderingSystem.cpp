@@ -55,7 +55,6 @@
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/RisingSoul.h"
 #include "ECS/Components/SeeThrough.h"
-#include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Swayable.h"
@@ -618,25 +617,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    ++slots->second.filled;
 			    return;
 		    }
-		    // A mesh drawn with another texture, slid across it: the temple's leashes, whether drawn whole or fading out
-		    if (const auto* skin = registry.TryGet<const SkinOverride>(entity))
-		    {
-			    auto& drawDescs = slotMap == &_fadingSlots ? _renderContext.fadingDrawDescs : _renderContext.instancedDrawDescs;
-			    if (const auto desc = drawDescs.find(slots->first); desc != drawDescs.end())
-			    {
-				    desc->second.uvOffset = skin->uvOffset;
-				    if (desc->second.subMeshTextures.empty())
-				    {
-					    const auto skinned =
-					        entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(slots->first);
-					    for (uint32_t i = 0; i < static_cast<uint32_t>(skinned->GetSubMeshes().size()); ++i)
-					    {
-						    desc->second.subMeshTextures.emplace_back(i, skin->texture);
-					    }
-				    }
-			    }
-		    }
-
 		    // A home with someone in lights its windows at night
 		    const auto* abode = registry.TryGet<const Abode>(entity);
 		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};

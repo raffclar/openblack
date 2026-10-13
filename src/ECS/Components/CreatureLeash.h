@@ -134,9 +134,8 @@ struct LeashMarker
 /// One of the three leashes hanging at a citadel, which its player taps to pick that leash
 struct LeashPost
 {
-	/// The collar mesh the posts are drawn with, Data/Misc/leash.l3d. Each player's leash of each kind has a copy of its
-	/// own (see temple_leashes::CollarMeshName), so that each is drawn with its own band of the leash texture and its own
-	/// slide of it.
+	/// The collar mesh the posts are drawn with, Data/Misc/leash.l3d, each with its own band of the leash texture and its
+	/// own slide of it
 	static constexpr entt::id_type k_MeshId = entt::hashed_string("misc/leash");
 	/// The leash texture with its alpha, which the collars are drawn with in place of their own skin
 	static constexpr entt::id_type k_TextureId = entt::hashed_string("raw/leash+alpha");

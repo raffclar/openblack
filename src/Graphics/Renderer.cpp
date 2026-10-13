@@ -6613,6 +6613,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
 					                         zsort::Depth(transform.position, cameraOrigin));
 				    });
+				DrawTempleLeashes(desc);
 			}
 		}
 	}

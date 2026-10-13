@@ -102,12 +102,7 @@ TEST(TempleLeashes, TheirToolTips)
 
 TEST(TempleLeashes, EachPlayersLeashSlidesItsTextureByItself)
 {
-	// Each player's leash of each kind is drawn with a collar of its own, so two temples' leashes of a kind slide their
-	// textures each from its own random start
-	EXPECT_NE(CollarMeshName(PlayerNames::PLAYER_ONE, LeashType::Evil),
-	          CollarMeshName(PlayerNames::PLAYER_TWO, LeashType::Evil));
-	EXPECT_NE(CollarMeshName(PlayerNames::PLAYER_ONE, LeashType::Evil),
-	          CollarMeshName(PlayerNames::PLAYER_ONE, LeashType::Good));
+	// Each leash slides its texture from its own random start
 	const auto first = Advance(Start({1000, 0, 0, 0}), 1.0f);
 	const auto second = Advance(Start({20000, 0, 0, 0}), 1.0f);
 	EXPECT_NE(first.scroll, second.scroll);
