@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 
 #include <entt/entity/entity.hpp>
@@ -35,9 +37,12 @@ public:
 	/// A town's share of its people at worship is set: always none without a worship site; otherwise its totem eases
 	/// there
 	virtual void SetTownShare(entt::entity town, float share) = 0;
-	/// Each frame: the totems ease on by the game's milliseconds, sound the bell as they arrive, and stand at their
-	/// share, or at the share the hand holds one at
-	virtual void Update(float gameMilliseconds) = 0;
+	/// Each frame: the totems move to their shares by the real clock, in whole milliseconds. Each totem stands at its
+	/// share, or at the share that the hand holds it at. The totems also move while the game is paused.
+	virtual void Update(uint32_t realMs) = 0;
+	/// Each game turn: the totems move by the real clock. A totem that arrives at its share stops the sound of its
+	/// movement and rings the village bell.
+	virtual void ProcessTurn(uint32_t realMs) = 0;
 
 	/// The totem a picked plinth or icon belongs to
 	[[nodiscard]] virtual std::optional<entt::entity> TotemOf(entt::entity picked) const = 0;
