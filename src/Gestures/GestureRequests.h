@@ -54,12 +54,17 @@ enum class Purpose : uint8_t
 	FightSpecialMove,
 	/// While the player's creature duels: a miracle it knows is added to its fight's queue
 	FightMiracle,
+	/// In the leash picker on Land 1, the square wave: the hidden script starts. The picker stays open.
+	HiddenScript,
 };
 
 [[nodiscard]] std::string_view Name(Purpose purpose);
 /// Whether recognising a gesture for a purpose is shown, with its sound and its trail on the land: every gesture but a
 /// scribble, which only shakes something off the hand
 [[nodiscard]] bool ShowsRecognition(Purpose purpose);
+/// Whether the hand stops for a short time after it recognises a gesture for a purpose. Only the gesture that starts
+/// the hidden script lets the hand record again at once.
+[[nodiscard]] bool RestsAfter(Purpose purpose);
 /// A recognised gesture is shown once at least this many of its points lie on the land
 inline constexpr size_t k_RecognitionShownPoints = 2;
 /// A point of the path lies on the land once any of its coordinates is further than this from 0
@@ -136,6 +141,8 @@ struct HandContext
 	std::optional<Creature> creature;
 	/// The leash picker is open
 	bool pickerOpen {false};
+	/// The land is Land 1 of the story, not a skirmish. Then the leash picker also waits for the square wave.
+	bool hiddenScriptLand {false};
 
 	/// The gesture that calls a creature's special move in a fight
 	GestureType specialMoveGesture {GestureType::Star};
@@ -147,6 +154,8 @@ struct HandContext
 
 /// How many leashes a creature knows
 [[nodiscard]] int KnownLeashes(const HandContext::Creature& creature);
+/// The script that the square wave starts
+inline constexpr std::string_view k_HiddenScript = "HiddenScript";
 /// The gestures waited for, in the order they are tried
 [[nodiscard]] std::vector<Request> Requests(const HandContext& context);
 

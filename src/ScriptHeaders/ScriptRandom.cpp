@@ -20,4 +20,12 @@ uint32_t WholeNumberBetween(uint32_t low, uint32_t high, GameRandomInterface& ra
 	return random.GameRand(width) + low;
 }
 
+float NumberFrom(float low, float high, GameRandomInterface& random)
+{
+	const double span = static_cast<double>(high) - static_cast<double>(low);
+	const auto width = static_cast<float>(span + 1.0);
+	const double drawn = static_cast<double>(random.GameFloatRand(width)) + static_cast<double>(low);
+	return static_cast<float>(static_cast<int32_t>(drawn));
+}
+
 } // namespace openblack::script::random

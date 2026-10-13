@@ -193,6 +193,7 @@ private:
 	float _seconds {0.0f};
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
+	std::optional<int32_t> _landNumberBefore;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
 	std::optional<int> _fireBallTakeFrames;
 	/// The fireball the hand goes over to tap
