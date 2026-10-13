@@ -4209,6 +4209,13 @@ void Game::PrepareNewLand(land_change::Kind change)
 {
 	const bool toTestbed = change == land_change::Kind::Testbed;
 	const auto rules = land_change::RulesFor(change);
+	// The start-of-game question is about the land that goes now. Close the question with no answer. Then release the
+	// pause that the question holds. If the question stays open, the hand stays hidden on the next land. A new game
+	// asks the question again.
+	if (_interface && _interface->WithdrawSkipBox())
+	{
+		Locator::time::value().SetPaused(false);
+	}
 	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
 	// creature's room's flames and smoke, keeps entities of the land after they have gone
 	if (Locator::temple::has_value())

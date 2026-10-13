@@ -68,6 +68,8 @@ public:
 	/// Brings the box up. A mouse button already held down doesn't count as a click. Keeping the old creature is offered
 	/// only when the current profile has one; a selection it can't take moves to the one it stands for.
 	void Show(bool currentProfileHasCreature);
+	/// Closes the box with no answer, and the box fades out. Returns true when the box was open.
+	bool Withdraw();
 	/// Up and taking input
 	[[nodiscard]] bool IsActive() const noexcept { return _active; }
 	/// Up, or fading out
