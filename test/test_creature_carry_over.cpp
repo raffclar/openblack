@@ -89,7 +89,11 @@ public:
 		return false;
 	}
 	bool TapThing(PlayerNames /*player*/, entt::entity /*object*/) override { return false; }
-	void UpdateRopeHover(PlayerNames /*player*/, const RopeFrame& /*frame*/) override {}
+	[[nodiscard]] std::optional<float> RopeUnderCursor(PlayerNames /*player*/, const RopeFrame& /*frame*/) override
+	{
+		return std::nullopt;
+	}
+	void SetRopeHovered(PlayerNames /*player*/, bool /*hovered*/) override {}
 	[[nodiscard]] leash_snap::Hand RopeHand(PlayerNames /*player*/) const override { return leash_snap::Hand::Away; }
 	bool PressRope(PlayerNames /*player*/) override { return false; }
 	void LetGoOfRope(PlayerNames /*player*/, std::optional<glm::vec3> /*place*/) override {}

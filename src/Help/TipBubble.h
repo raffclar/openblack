@@ -267,17 +267,6 @@ void LetGo(Scroll& scroll);
 
 /// Whether a pixel is inside the box, its edges left out
 [[nodiscard]] bool Inside(const Placement& placement, glm::vec2 pointer);
-/// What the hand points at besides the bubble, as depths in front of the camera
-struct UnderHand
-{
-	/// The object the interface picked
-	std::optional<float> objectDepth;
-	/// The land under the pointer
-	std::optional<float> landDepth;
-};
-/// Whether the hand is on the bubble rather than on what is under it: the pointer is inside the box, and neither an
-/// object nor the land under the pointer is nearer than the sign the bubble points at (an object as near wins too)
-[[nodiscard]] bool HandOnBubble(const Placement& placement, glm::vec2 pointer, const UnderHand& under);
 
 /// The sign's model as a ball: its middle in the world and its reach
 struct Ball

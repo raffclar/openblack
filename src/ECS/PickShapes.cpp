@@ -34,9 +34,29 @@ pick_shapes::Ball pick_shapes::DispenserBall(glm::vec3 position, glm::vec3 halfE
 	};
 }
 
-pick_shapes::Ball pick_shapes::BubbleBall(glm::vec3 modelMiddle, float scale)
+pick_shapes::Ball pick_shapes::PictureBall(glm::vec3 picture, float size, glm::vec3 seedModelMiddle)
 {
-	return {.centre = modelMiddle, .radius = scale * k_BubbleBallPerScale};
+	return {.centre = picture + seedModelMiddle, .radius = size * k_PictureBallPerSize};
+}
+
+pick_shapes::Ball pick_shapes::BubbleBall(glm::vec3 modelMiddle, float scale, glm::vec3 seedModelMiddle)
+{
+	return PictureBall(modelMiddle, scale * k_BubblePictureSize, seedModelMiddle);
+}
+
+pick_shapes::Ball pick_shapes::VortexBall(glm::vec3 centre, glm::vec3 cylinderHalfExtents)
+{
+	return {.centre = centre, .radius = FlatRadius(cylinderHalfExtents, 1.0f) * k_VortexBallWidth};
+}
+
+pick_shapes::Ball pick_shapes::TeleportBall(glm::vec3 position)
+{
+	return {.centre = position, .radius = k_TeleportBallRadius};
+}
+
+pick_shapes::Ball pick_shapes::LeashPostBall(glm::vec3 hangingPoint)
+{
+	return {.centre = hangingPoint, .radius = k_LeashPostBallRadius};
 }
 
 glm::vec3 pick_shapes::BubblePickOffset(glm::vec3 modelMiddle, glm::vec3 camera, glm::vec3 halfExtents, float scale)

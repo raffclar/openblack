@@ -78,20 +78,6 @@ TEST(LeashSnap, PointsBehindOrRightAtTheEyeAreNeverTouched)
 	EXPECT_FALSE(TouchDepth(points, {150, 100}, 1280.0f, 0.15f).has_value());
 }
 
-TEST(LeashSnap, TheRopeMustBeInFrontOfWhatElseIsUnderTheHand)
-{
-	// Over the land, in front of it
-	EXPECT_TRUE(RopeIsUnder(30.0f, {.landDepth = 40.0f}));
-	EXPECT_FALSE(RopeIsUnder(50.0f, {.landDepth = 40.0f}));
-	// Over the sky
-	EXPECT_TRUE(RopeIsUnder(50.0f, {}));
-	// A thing behind it gives way, one in front doesn't
-	EXPECT_TRUE(RopeIsUnder(30.0f, {.object = true, .objectDepth = 35.0f, .landDepth = 40.0f}));
-	EXPECT_FALSE(RopeIsUnder(30.0f, {.object = true, .objectDepth = 25.0f, .landDepth = 40.0f}));
-	// A creature always comes first
-	EXPECT_FALSE(RopeIsUnder(30.0f, {.object = true, .creature = true, .objectDepth = 35.0f, .landDepth = 40.0f}));
-}
-
 TEST(LeashSnap, LettingGoSetsTheLeashsLength)
 {
 	const auto far = LengthsOnLettingGo({30.0f, 0.0f, 40.0f}, {0.0f, 0.0f, 0.0f}, 3.0f);

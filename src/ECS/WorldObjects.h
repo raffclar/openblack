@@ -25,6 +25,11 @@ struct GObjectInfo;
 struct GAbodeInfo;
 } // namespace openblack
 
+namespace openblack::ecs
+{
+class Registry;
+} // namespace openblack::ecs
+
 /// What the world's objects have in common however they are made: the table row of their kind, how big they stand, their
 /// life and what happens as they lose it, and taking one away. Fire and the miracles that break things share these.
 namespace openblack::ecs::world_objects
@@ -98,6 +103,10 @@ void DestroyedByEffect(entt::entity object, const EffectDeath& death);
 /// tree the land made belong to nobody; a building without a town and anything else to the neutral player, whom a
 /// fire credits no more than nobody.
 [[nodiscard]] std::optional<PlayerNames> PlayerOf(entt::entity object);
+
+/// The player a miracle icon shows its miracle for: a stone hand's town's owner, a worship site icon's site's player,
+/// the neutral player for anything else
+[[nodiscard]] PlayerNames IconPlayer(const Registry& registry, entt::entity icon);
 
 /// A villager's life went from one value to another: its town counts one more of its people injured when it falls under
 /// seven tenths, one fewer when it rises back over

@@ -580,6 +580,95 @@ TEST(Picking, TheHoverTimeRunsWhileTheSameThingStaysPicked)
 	EXPECT_FLOAT_EQ(next.hoverSeconds, 0.25f);
 }
 
+TEST(Picking, TheTextBubbleWinsOverAFartherObjectAndTheLandBehindIt)
+{
+	using Pick = openblack::ecs::systems::PickingSystemInterface::Pick;
+	using Shapes = openblack::ecs::systems::PickingSystemInterface::ScreenShapes;
+	namespace picking = openblack::ecs::systems::picking;
+	const glm::vec3 landPoint(4.0f, 5.0f, 6.0f);
+	const glm::vec3 bubblePoint(7.0f, 8.0f, 9.0f);
+	const Pick withObject {.object = entt::entity {7},
+	                       .point = glm::vec3(1.0f, 2.0f, 3.0f),
+	                       .distance = 50.0f,
+	                       .land = landPoint,
+	                       .landDistance = 60.0f};
+	// Nearer than the object: the object is dropped and the bubble's point is picked at its distance
+	auto pick = withObject;
+	picking::WeighScreenShapes(pick, {.textBubble = 40.0f, .textBubblePoint = bubblePoint}, false);
+	EXPECT_FALSE(pick.object.has_value());
+	EXPECT_TRUE(pick.textBubble);
+	EXPECT_EQ(pick.point, bubblePoint);
+	EXPECT_FLOAT_EQ(pick.distance, 40.0f);
+	// As near as the object, or farther: the object keeps the cursor
+	pick = withObject;
+	picking::WeighScreenShapes(pick, Shapes {.textBubble = 50.0f, .textBubblePoint = bubblePoint}, false);
+	EXPECT_EQ(pick.object, entt::entity {7});
+	EXPECT_FALSE(pick.textBubble);
+	EXPECT_FLOAT_EQ(pick.distance, 50.0f);
+	// With no object, the land wins only when strictly nearer
+	const Pick overLand {.point = landPoint, .distance = 30.0f, .land = landPoint, .landDistance = 30.0f};
+	pick = overLand;
+	picking::WeighScreenShapes(pick, Shapes {.textBubble = 30.0f, .textBubblePoint = bubblePoint}, false);
+	EXPECT_TRUE(pick.textBubble);
+	pick = overLand;
+	picking::WeighScreenShapes(pick, Shapes {.textBubble = 31.0f, .textBubblePoint = bubblePoint}, false);
+	EXPECT_FALSE(pick.textBubble);
+	EXPECT_EQ(pick.point, landPoint);
+	EXPECT_FLOAT_EQ(pick.distance, 30.0f);
+	// An object nearer than the bubble that the land then drops still drops the bubble behind the nearer land
+	pick = withObject;
+	pick.landDistance = 45.0f;
+	picking::WeighScreenShapes(pick, Shapes {.textBubble = 48.0f, .textBubblePoint = bubblePoint}, false);
+	EXPECT_FALSE(pick.object.has_value());
+	EXPECT_FALSE(pick.textBubble);
+	EXPECT_EQ(pick.point, landPoint);
+	EXPECT_FLOAT_EQ(pick.distance, 45.0f);
+}
+
+TEST(Picking, TheRopeWinsOverWhatIsLeftWhenStrictlyNearerButNeverOverACreature)
+{
+	using Pick = openblack::ecs::systems::PickingSystemInterface::Pick;
+	using Shapes = openblack::ecs::systems::PickingSystemInterface::ScreenShapes;
+	namespace picking = openblack::ecs::systems::picking;
+	const glm::vec3 landPoint(4.0f, 5.0f, 6.0f);
+	const Pick withObject {.object = entt::entity {7},
+	                       .point = glm::vec3(1.0f, 2.0f, 3.0f),
+	                       .distance = 50.0f,
+	                       .land = landPoint,
+	                       .landDistance = 60.0f};
+	// In front of a thing: the thing is dropped, the point stays the land's
+	auto pick = withObject;
+	picking::WeighScreenShapes(pick, Shapes {.rope = 49.0f}, false);
+	EXPECT_FALSE(pick.object.has_value());
+	EXPECT_TRUE(pick.rope);
+	EXPECT_EQ(pick.point, landPoint);
+	EXPECT_FLOAT_EQ(pick.distance, 60.0f);
+	// As near: the thing keeps it
+	pick = withObject;
+	picking::WeighScreenShapes(pick, Shapes {.rope = 50.0f}, false);
+	EXPECT_EQ(pick.object, entt::entity {7});
+	EXPECT_FALSE(pick.rope);
+	// A creature always keeps it
+	pick = withObject;
+	picking::WeighScreenShapes(pick, Shapes {.rope = 10.0f}, true);
+	EXPECT_EQ(pick.object, entt::entity {7});
+	EXPECT_FALSE(pick.rope);
+	// In front of the text bubble, which is dropped
+	pick = withObject;
+	picking::WeighScreenShapes(pick, Shapes {.textBubble = 40.0f, .rope = 39.0f}, false);
+	EXPECT_TRUE(pick.rope);
+	EXPECT_FALSE(pick.textBubble);
+	EXPECT_EQ(pick.point, landPoint);
+	// Over the land alone, strictly in front of it
+	const Pick overLand {.point = landPoint, .distance = 30.0f, .land = landPoint, .landDistance = 30.0f};
+	pick = overLand;
+	picking::WeighScreenShapes(pick, Shapes {.rope = 29.0f}, false);
+	EXPECT_TRUE(pick.rope);
+	pick = overLand;
+	picking::WeighScreenShapes(pick, Shapes {.rope = 30.0f}, false);
+	EXPECT_FALSE(pick.rope);
+}
+
 TEST(ScreenPick, AnInvisibleBallIsHitWithinItsWholePixelRadiusAtItsMiddlesDepth)
 {
 	// At 10 m a 1 m lift moves the middle up 51.96 pixels: the ball is 52 whole pixels round

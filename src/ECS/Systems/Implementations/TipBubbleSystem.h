@@ -29,6 +29,8 @@ public:
 	void ProcessTurn() override;
 	void UpdateFrame(float gameMilliseconds) override;
 	void Hover() override;
+	void SetUnderPointer(std::optional<float> depth) override { _underPointer = depth; }
+	[[nodiscard]] std::optional<float> GetUnderPointer() const override { return _underPointer; }
 	void SetUnderHand(bool underHand) override { _underHand = underHand; }
 	[[nodiscard]] bool IsUnderHand() const override { return _underHand; }
 	void Grip() override { _gripped = true; }
@@ -49,6 +51,7 @@ private:
 	/// Kept from one opening to the next: the first bubble of a game shows only from the next turn
 	float _displayTime {0.0f};
 	help::tip_bubble::Scroll _scroll;
+	std::optional<float> _underPointer;
 	bool _underHand {false};
 	bool _gripped {false};
 };

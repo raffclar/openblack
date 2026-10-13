@@ -483,21 +483,3 @@ TEST(TipBubble, TheHandScrollsOnlyAsFarAsTheWordsGo)
 	EXPECT_FALSE(scroll.moreBelow);
 	EXPECT_TRUE(scroll.moreAbove);
 }
-
-TEST(TipBubble, TheHandIsOnTheBubbleUnlessSomethingIsNearer)
-{
-	const auto placement = Place({320.0f, 400.0f}, 50.0f, 640.0f, 1.0f);
-	ASSERT_TRUE(placement.has_value());
-	const auto middle = (placement->min + placement->max) * 0.5f;
-	EXPECT_TRUE(HandOnBubble(*placement, middle, {}));
-	// Its edges are outside
-	EXPECT_FALSE(HandOnBubble(*placement, placement->min, {}));
-	EXPECT_FALSE(HandOnBubble(*placement, {placement->max.x, middle.y}, {}));
-	// Things behind it don't count, nor the land behind it or as near
-	EXPECT_TRUE(HandOnBubble(*placement, middle, {.objectDepth = 60.0f, .landDepth = 50.0f}));
-	// An object as near or nearer takes the hand
-	EXPECT_FALSE(HandOnBubble(*placement, middle, {.objectDepth = 50.0f}));
-	EXPECT_FALSE(HandOnBubble(*placement, middle, {.objectDepth = 20.0f}));
-	// So does the land in front of it
-	EXPECT_FALSE(HandOnBubble(*placement, middle, {.landDepth = 49.0f}));
-}

@@ -27,9 +27,36 @@ TEST(PickShapes, ADispensersBallSitsHighOnItAndIsHalfAgainAsWide)
 
 TEST(PickShapes, ABubblesBallIsAboutItsMiddleAtOnePointTwoTimesItsScale)
 {
-	const auto ball = pick_shapes::BubbleBall({1.0f, 2.0f, 3.0f}, 1.5f);
+	const auto ball = pick_shapes::BubbleBall({1.0f, 2.0f, 3.0f}, 1.5f, glm::vec3(0.0f));
 	EXPECT_EQ(ball.centre, glm::vec3(1.0f, 2.0f, 3.0f));
 	EXPECT_FLOAT_EQ(ball.radius, 1.8f);
+}
+
+TEST(PickShapes, APicturesBallIsMovedByItsSeedModelsMiddleUnscaled)
+{
+	// A bubble at twice its size whose seed's model has its middle half a metre up: the ball moves by that half metre
+	const auto bubble = pick_shapes::BubbleBall({1.0f, 2.0f, 3.0f}, 2.0f, {0.0f, 0.5f, 0.0f});
+	EXPECT_EQ(bubble.centre, glm::vec3(1.0f, 2.5f, 3.0f));
+	EXPECT_FLOAT_EQ(bubble.radius, 2.4f);
+	// An icon's picture keeps its size of 1: a ball of 2 m
+	const auto icon = pick_shapes::PictureBall({10.0f, 5.0f, 0.0f}, pick_shapes::k_IconPictureSize, {0.25f, 0.0f, 0.0f});
+	EXPECT_EQ(icon.centre, glm::vec3(10.25f, 5.0f, 0.0f));
+	EXPECT_FLOAT_EQ(icon.radius, 2.0f);
+}
+
+TEST(PickShapes, AVortexsBallIsSevenTenthsOfItsCylindersWidth)
+{
+	const auto ball = pick_shapes::VortexBall({5.0f, 6.0f, 7.0f}, {10.0f, 30.0f, 20.0f});
+	EXPECT_EQ(ball.centre, glm::vec3(5.0f, 6.0f, 7.0f));
+	EXPECT_FLOAT_EQ(ball.radius, 14.0f);
+}
+
+TEST(PickShapes, ATeleportStonesAndALeashsBallsHaveFixedSizes)
+{
+	EXPECT_FLOAT_EQ(pick_shapes::TeleportBall({1.0f, 2.0f, 3.0f}).radius, 3.0f);
+	EXPECT_EQ(pick_shapes::TeleportBall({1.0f, 2.0f, 3.0f}).centre, glm::vec3(1.0f, 2.0f, 3.0f));
+	EXPECT_FLOAT_EQ(pick_shapes::LeashPostBall({4.0f, 5.0f, 6.0f}).radius, 1.0f);
+	EXPECT_EQ(pick_shapes::LeashPostBall({4.0f, 5.0f, 6.0f}).centre, glm::vec3(4.0f, 5.0f, 6.0f));
 }
 
 TEST(PickShapes, ABubbleIsPickedMovedTowardsTheCameraByItsWidth)
