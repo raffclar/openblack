@@ -4018,7 +4018,7 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 
 	timer.Step("forests");
 	RenderLoadingFrame();
-	StartNewLand();
+	StartNewLand(change);
 	timer.Step("start");
 	EndLoadingScreen();
 	return true;
@@ -4082,7 +4082,7 @@ void Game::LoadTestbed() noexcept
 	    .SetOrigin({middle.x, ground + k_TestbedCameraHeight, middle.y - k_TestbedCameraBack})
 	    .SetFocus({middle.x, ground, middle.y});
 
-	StartNewLand();
+	StartNewLand(land_change::Kind::Testbed);
 
 	// The testbed has no temple to give its player influence, so a source of influence over its middle gives them the
 	// reach a citadel would: the miracles cast only in influence may be cast there, and nowhere beyond. Their worship
@@ -4287,13 +4287,24 @@ void Game::PrepareNewLand(land_change::Kind change)
 	Locator::camera::value().SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip);
 }
 
-void Game::StartNewLand()
+void Game::StartNewLand(land_change::Kind change)
 {
 	_lastGameLoopTime = machine_clock::Ticks();
 	_turnDeltaTime = 0ns;
-	// The game starts running, as Black & White does
-	Locator::time::value().StartGameClock(false);
-	SetGameSpeed(Game::k_TurnDurationMultiplierNormal);
+	auto& clock = Locator::time::value();
+	if (land_change::RulesFor(change).gameClockRunsOn)
+	{
+		// The story's next land counts its turns from 0 again, but the game's clock runs on through the change at the
+		// speed it had. The clock is then far ahead of the new turns, and the next turn gives that time up as it does
+		// whenever the game falls more than two seconds behind
+		clock.RestartTurns();
+	}
+	else
+	{
+		// The game starts running, at the normal speed, as Black & White does
+		clock.StartGameClock(false);
+		SetGameSpeed(Game::k_TurnDurationMultiplierNormal);
+	}
 
 	if (!_atmosAudio)
 	{

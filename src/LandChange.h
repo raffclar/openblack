@@ -49,6 +49,9 @@ struct Rules
 	bool heartbeatsCarried;
 	/// The help's texts stay in the dialogue as they were, only their voices stopping with every other sound
 	bool helpTextsKept;
+	/// The game's clock runs on, at the speed it had: only the turn count starts again from 0. Otherwise the clock starts
+	/// afresh at turn 0, running at the normal speed, as a new game's does
+	bool gameClockRunsOn;
 };
 
 [[nodiscard]] constexpr Rules RulesFor(Kind kind)
@@ -56,14 +59,26 @@ struct Rules
 	switch (kind)
 	{
 	case Kind::Story:
-		return {.advisors = Advisors::CarryOn, .scriptScreenKept = true, .heartbeatsCarried = true, .helpTextsKept = true};
+		return {.advisors = Advisors::CarryOn,
+		        .scriptScreenKept = true,
+		        .heartbeatsCarried = true,
+		        .helpTextsKept = true,
+		        .gameClockRunsOn = true};
 	case Kind::FreshScripts:
-		return {.advisors = Advisors::SentHome, .scriptScreenKept = false, .heartbeatsCarried = true, .helpTextsKept = false};
+		return {.advisors = Advisors::SentHome,
+		        .scriptScreenKept = false,
+		        .heartbeatsCarried = true,
+		        .helpTextsKept = false,
+		        .gameClockRunsOn = false};
 	case Kind::NewGame:
 	case Kind::Testbed:
 		break;
 	}
-	return {.advisors = Advisors::Afresh, .scriptScreenKept = false, .heartbeatsCarried = false, .helpTextsKept = false};
+	return {.advisors = Advisors::Afresh,
+	        .scriptScreenKept = false,
+	        .heartbeatsCarried = false,
+	        .helpTextsKept = false,
+	        .gameClockRunsOn = false};
 }
 
 } // namespace openblack::land_change

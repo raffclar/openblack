@@ -305,8 +305,9 @@ private:
 	void PrepareNewLand(land_change::Kind change);
 	/// What every land starts with once its landscape is loaded: the sky's clock, a player and the land's physics
 	void SetUpLandscape();
-	/// Starts the game clock, the atmosphere's sounds and the music on the new land
-	void StartNewLand();
+	/// Starts the game clock, the atmosphere's sounds and the music on the new land. The story moving on keeps the game's
+	/// clock running and restarts only its turns
+	void StartNewLand(land_change::Kind change);
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
