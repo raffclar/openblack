@@ -9,6 +9,8 @@
 
 #include "CreatureCastAgenda.h"
 
+#include <algorithm>
+
 #include "Creature/CreatureLayers.h"
 
 using namespace openblack;
@@ -49,6 +51,33 @@ void TurnGestureAndCast(std::vector<Step>& agenda, uint32_t magicType, uint32_t 
 	                  .animation = k_CastPose[1],
 	                  .sequence = k_CastPose,
 	                  .cast = {.magicType = magicType, .object = object}});
+}
+
+/// The step in which the creature turns to face the object and holds still a moment
+Step TurnToFace(uint32_t object)
+{
+	return {.kind = Step::Kind::Move,
+	        .seconds = k_CastSettleSeconds,
+	        .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = object}};
+}
+
+/// The step in which the creature casts a miracle at the object from a pose and holds it for a time
+Step CastFromPose(uint32_t magicType, uint32_t object, const std::array<size_t, 3>& pose, float seconds)
+{
+	return {.kind = Step::Kind::Cast,
+	        .seconds = seconds,
+	        .animation = pose[1],
+	        .sequence = pose,
+	        .cast = {.magicType = magicType, .object = object}};
+}
+
+/// The step in which the creature points at the object for a short time, with an amazed face
+Step PointAt(uint32_t object)
+{
+	return {.kind = Step::Kind::Object,
+	        .order = {.kind = ObjectOrder::Kind::PointAt, .object = object, .seconds = k_ImpressPointSeconds},
+	        .face = creature_face::Cue::Amazed,
+	        .gaze = Gaze {.object = object}};
 }
 
 Style StyleOf(CastStyle style, float height)
@@ -128,6 +157,99 @@ std::vector<Step> creature_mind::CastFireballAt(uint32_t magicType, uint32_t ges
 	}
 	TurnGestureAndCast(agenda, magicType, gesture, object, creature_face::Cue::Anger);
 	return agenda;
+}
+
+std::vector<Step> creature_mind::CastFoodAt(uint32_t magicType, uint32_t gesture, uint32_t object)
+{
+	std::vector<Step> agenda;
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .movement = {.kind = Movement::Kind::GoNearObject, .object = object, .maxDistance = k_FoodCastDistance}});
+	agenda.push_back(TurnToFace(object));
+	if (gesture != 0)
+	{
+		agenda.push_back({.kind = Step::Kind::Gesture, .animation = gesture});
+	}
+	agenda.push_back(CastFromPose(magicType, object, k_ScatterPose, k_CastHoldSeconds));
+	return agenda;
+}
+
+std::vector<Step> creature_mind::CastShieldAt(uint32_t magicType, uint32_t object)
+{
+	return {TurnToFace(object), CastFromPose(magicType, object, k_CastPose, k_CastHoldSeconds)};
+}
+
+std::vector<Step> creature_mind::CastWaterAt(uint32_t magicType, uint32_t object, float height)
+{
+	return {
+	    {.kind = Step::Kind::Move,
+	     .movement = {.kind = Movement::Kind::GoNearObject, .object = object, .maxDistance = 2.0f * height}},
+	    TurnToFace(object),
+	    CastFromPose(magicType, object, k_ScatterPose, k_CastHoldSeconds),
+	};
+}
+
+std::vector<Step> creature_mind::CastWaterOnItself(uint32_t magicType, uint32_t self, glm::vec2 clearArea, float height)
+{
+	return {
+	    {.kind = Step::Kind::Move,
+	     .movement = {.kind = Movement::Kind::ToPoint, .point = clearArea, .maxDistance = 2.0f * height},
+	     .gaze = GoingLook()},
+	    CastFromPose(magicType, self, k_ScatterPose, k_CastHoldSeconds),
+	    {.kind = Step::Kind::CoolDown},
+	};
+}
+
+std::vector<Step> creature_mind::CastToImpress(std::optional<uint32_t> magicType, uint32_t object, float height,
+                                               const Random& random)
+{
+	std::vector<Step> agenda;
+	agenda.push_back(
+	    {.kind = Step::Kind::Move,
+	     .movement = {.kind = Movement::Kind::GoNearObject, .object = object, .maxDistance = k_ImpressCastHeights * height}});
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .movement = {.kind = Movement::Kind::GetAwayFromObject, .object = object, .maxDistance = 2.0f * height}});
+	const bool pointedFirst = random(k_ImpressPointLots) == 0;
+	if (pointedFirst)
+	{
+		agenda.push_back(PointAt(object));
+	}
+	if (random(k_ImpressBeckonLots) != 0)
+	{
+		agenda.push_back({.kind = Step::Kind::Action, .animation = animations::k_Summon});
+	}
+	agenda.push_back(TurnToFace(object));
+	if (magicType.has_value())
+	{
+		agenda.push_back(CastFromPose(*magicType, object, k_CastPose, k_CastHoldSeconds));
+	}
+	if (!pointedFirst)
+	{
+		agenda.push_back(PointAt(object));
+	}
+	return agenda;
+}
+
+std::optional<size_t> creature_mind::PickImpressiveMiracle(const std::array<bool, 4>& known,
+                                                           const std::array<uint32_t, 4>& castTurn)
+{
+	std::optional<size_t> picked;
+	for (size_t i = 0; i < known.size(); ++i)
+	{
+		// Of equal turns, the last miracle in the list wins
+		if (known.at(i) && (!picked.has_value() || !(castTurn.at(i) > castTurn.at(*picked))))
+		{
+			picked = i;
+		}
+	}
+	return picked;
+}
+
+bool creature_mind::CanCastToImpress(std::span<const ImpressiveMiracleState> miracles)
+{
+	return std::ranges::any_of(miracles, [](const ImpressiveMiracleState& miracle) {
+		const float share = miracle.seen / miracle.needed;
+		return miracle.known && miracle.canPay && share > 0.5f;
+	});
 }
 
 creature_mind::FizzleReaction creature_mind::ReactToFizzle(const Random& random, float chance)

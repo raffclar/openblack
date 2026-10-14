@@ -8,8 +8,10 @@
  *******************************************************************************/
 
 // The testbed's scenarios of creatures casting miracles: a spell at another creature, a lightning bolt, a fireball, an
-// explosion, a heal, a try that fizzles and one the creature is too tired for
+// explosion, a heal, food, wood, a shield, water, a miracle to impress, a try that fizzles and one the creature is too
+// tired for
 
+#include <string_view>
 #include <vector>
 
 #include "TestbedScenarioRegistry.h"
@@ -35,6 +37,11 @@ Command CastAtCreature(MagicType type, size_t target, float delay)
 Command CastAtObject(MagicType type, size_t object, float delay)
 {
 	return {.kind = Kind::CastMiracle, .delaySeconds = delay, .value = static_cast<size_t>(type), .object = object};
+}
+
+Command Do(std::string_view action, size_t object, float delay)
+{
+	return {.kind = Kind::DoAction, .delaySeconds = delay, .object = object, .action = action};
 }
 
 CreatureSetup Caster(glm::vec2 offset, std::string_view label, float exhaustion = 0.0f)
@@ -130,6 +137,74 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .commands = {Know(MagicType::Heal), CastAtObject(MagicType::Heal, 0, 0.5f)},
 	});
 
+	all.push_back({
+	    .id = "miracles.creature_casts_food",
+	    .name = "Creature casting: food into a storage pit",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the food miracle is told to cast it into a storage pit sixty metres away.",
+	    .expected = "It walks up to within two metres of the pit and turns to face it. It does not show how it feels "
+	                "first, and it does not back off. It draws the gesture of the food miracle if the miracle has one. "
+	                "Then it holds its arms out in the scatter pose for three seconds, and the food falls into the pit.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 75.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 60.0f}, .storedFood = 0}},
+	    .commands = {Know(MagicType::Food), Do("CastMagicFood", 0, 1.0f)},
+	});
+	all.push_back({
+	    .id = "miracles.creature_casts_wood",
+	    .name = "Creature casting: wood into a storage pit",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the wood miracle is told to cast it into a storage pit sixty metres away.",
+	    .expected = "One time in five it shows that it feels kind first. It walks up to within twice its height of the "
+	                "pit, backs off if it is nearer, turns to the pit and casts wood into it from the casting pose.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 75.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 60.0f}, .storedFood = 0}},
+	    .commands = {Know(MagicType::Wood), Do("CastMagicWood", 0, 1.0f)},
+	});
+	all.push_back({
+	    .id = "miracles.creature_casts_shield",
+	    .name = "Creature casting: a shield at a villager",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the shield is told to cast it at a villager forty metres away.",
+	    .expected = "It does not walk. It turns to face the villager and casts the shield from the casting pose, and "
+	                "holds it three seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 50.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {20.0f, 35.0f}}},
+	    .commands = {Know(MagicType::Shield), Do("CastShield", 0, 1.0f)},
+	});
+	all.push_back({
+	    .id = "miracles.creature_casts_water",
+	    .name = "Creature casting: water at a tree",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the water miracle is told to cast it at a tree eighty metres away.",
+	    .expected = "It walks up to within twice its height of the tree and turns to it. It does not draw a gesture. "
+	                "It holds its arms out in the scatter pose for three seconds, and the water rains on the tree.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 90.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {0.0f, 80.0f}}},
+	    .commands = {Know(MagicType::Water), CastAtObject(MagicType::Water, 0, 0.5f)},
+	});
+	all.push_back({
+	    .id = "miracles.creature_casts_to_impress",
+	    .name = "Creature casting: a miracle to impress a villager",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the heal is told to impress a villager sixty metres away with a miracle.",
+	    .expected = "It walks up to within one and a half times its height of the villager and backs off to twice "
+	                "its height. One time in two it points at the villager first. Two times in three it beckons. It "
+	                "turns to the villager and casts the heal from the casting pose. If it did not point first, it "
+	                "points now.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 70.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 60.0f}}},
+	    .commands = {Know(MagicType::Heal), Do("CastImpressiveSpell", 0, 1.0f)},
+	});
 	all.push_back({
 	    .id = "miracles.creature_cast_fizzles",
 	    .name = "Creature casting: a spell it hasn't learnt fizzles",

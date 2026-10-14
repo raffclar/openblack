@@ -11,7 +11,9 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -80,6 +82,66 @@ inline constexpr float k_FireballClearRadii = 5.0f;
 /// the object only when the object is living.
 [[nodiscard]] std::vector<Step> CastFireballAt(uint32_t magicType, uint32_t gesture, uint32_t object, bool objectLiving,
                                                glm::vec2 clearArea, float height, const Random& random);
+
+/// The start, loop and end of the pose in which the creature scatters a miracle from its hands. It casts food and water
+/// in this pose.
+inline constexpr std::array<size_t, 3> k_ScatterPose {46, 47, 48};
+/// The creature casts food from this distance from the thing
+inline constexpr float k_FoodCastDistance = 2.0f;
+/// To stop its own fire, the creature goes to a clear area. The area is this many times as wide as the creature is
+/// tall.
+inline constexpr float k_WaterOnItselfClearHeights = 1.7f;
+/// The creature casts a miracle to impress from this many times its height. One time in this many it points at the
+/// thing first, and in the other times it points after the cast. One time in this many it does not beckon.
+inline constexpr float k_ImpressCastHeights = 1.5f;
+inline constexpr uint32_t k_ImpressPointLots = 2;
+inline constexpr uint32_t k_ImpressBeckonLots = 3;
+/// The creature points at the thing for this long
+inline constexpr float k_ImpressPointSeconds = 1.0f;
+/// The miracles that a creature can cast to impress, in the order that it examines them
+inline constexpr std::array<uint32_t, 4> k_ImpressiveMiracles {10, 16, 11, 24};
+/// The miracles that let a creature choose to impress with a miracle. The list has food before the others, but the
+/// creature never casts food to impress.
+inline constexpr std::array<uint32_t, 5> k_ImpressMiraclesItMayKnow {14, 10, 16, 11, 24};
+
+/// The creature casts food at a thing from near it. It does not show how it feels first, and it does not get away
+/// from the thing. It turns, draws the gesture (0 for none) and casts in the scatter pose.
+[[nodiscard]] std::vector<Step> CastFoodAt(uint32_t magicType, uint32_t gesture, uint32_t object);
+
+/// The creature casts a shield at a thing from where it stands. It turns to face the thing and casts.
+[[nodiscard]] std::vector<Step> CastShieldAt(uint32_t magicType, uint32_t object);
+
+/// The creature casts water at a thing. It goes near to twice its height, turns, and casts in the scatter pose. It does
+/// not draw a gesture.
+[[nodiscard]] std::vector<Step> CastWaterAt(uint32_t magicType, uint32_t object, float height);
+
+/// The creature stops its own fire with water. It goes to the middle of a clear area, to within twice its height.
+/// It casts the water at itself in the scatter pose. Then its fire stops.
+[[nodiscard]] std::vector<Step> CastWaterOnItself(uint32_t magicType, uint32_t self, glm::vec2 clearArea, float height);
+
+/// The creature casts a miracle to impress the people of a thing (a villager). It goes near to one and a half times its
+/// height and gets away to twice its height. One time in two it points at the thing first. Two times in three it
+/// beckons. It turns and casts the miracle, if it has one. If it did not point first, it points now.
+[[nodiscard]] std::vector<Step> CastToImpress(std::optional<uint32_t> magicType, uint32_t object, float height,
+                                              const Random& random);
+
+/// The miracle that a creature casts to impress, by its place in k_ImpressiveMiracles. The creature must know the
+/// miracle. Of these, it picks the miracle that any creature cast to impress the longest time ago. For equal times, it
+/// picks the last. None if it knows none of them.
+[[nodiscard]] std::optional<size_t> PickImpressiveMiracle(const std::array<bool, 4>& known,
+                                                          const std::array<uint32_t, 4>& castTurn);
+
+/// Whether a creature can choose to impress with a miracle, by its state for each of k_ImpressMiraclesItMayKnow. For one
+/// of them, the creature must know it and can pay for it. It must also have seen it more than half the times that it
+/// must see it to learn it.
+struct ImpressiveMiracleState
+{
+	bool known {false};
+	bool canPay {false};
+	float seen {0.0f};
+	float needed {0.0f};
+};
+[[nodiscard]] bool CanCastToImpress(std::span<const ImpressiveMiracleState> miracles);
 
 /// What a creature does when its try at a miracle fizzles: it is embarrassed, then one time in two it is sad too. The
 /// sadness grows by the chance from 0 to 1 times this.

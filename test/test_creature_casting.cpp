@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
+#include <array>
 #include <optional>
 
 #include <gtest/gtest.h>
@@ -230,6 +232,154 @@ TEST(CreatureCastAgenda, AMoveTheBodySaysIsDoneTakesItsEffect)
 	commands = Think(mind, senses, Always(0));
 	EXPECT_EQ(commands.effect, Effect::Completed);
 	EXPECT_EQ(mind.step, 2u);
+}
+
+TEST(CreatureCastAgenda, EachHelpfulMiracleIsCastAtItsOwnThings)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	using Build = plan_actions::Build;
+	using Target = plan_actions::Target;
+	const auto executorOf = [](std::string_view action) {
+		const auto* executor = plan_actions::For(action);
+		EXPECT_NE(executor, nullptr) << action;
+		return executor != nullptr ? *executor : plan_actions::Executor {};
+	};
+	// The helpful miracles cast the way the heal is
+	EXPECT_EQ(executorOf("CastMagicFoodPU1").build, Build::CastHelpful);
+	EXPECT_EQ(executorOf("CastMagicFoodPU1").target, Target::Anything);
+	EXPECT_EQ(executorOf("CastMagicWood").build, Build::CastHelpful);
+	EXPECT_EQ(executorOf("CastMagicWood").target, Target::StoragePit);
+	EXPECT_EQ(executorOf("CastPhysicalShield").build, Build::CastHelpful);
+	EXPECT_EQ(executorOf("CastPhysicalShield").target, Target::Anything);
+	EXPECT_EQ(executorOf("CastShieldPU1").build, Build::CastHelpful);
+	EXPECT_EQ(executorOf("CastShieldPU1").target, Target::Anything);
+	// The miracles with their own way of casting
+	EXPECT_EQ(executorOf("CastMagicFood").build, Build::CastFood);
+	EXPECT_EQ(executorOf("CastMagicFood").target, Target::BuiltFoodStore);
+	EXPECT_EQ(executorOf("CastShield").build, Build::CastShield);
+	EXPECT_EQ(executorOf("CastShield").target, Target::Anything);
+	EXPECT_EQ(executorOf("CastMagicWater").build, Build::CastWaterOnItself);
+	EXPECT_EQ(executorOf("CastMagicWater").target, Target::None);
+	EXPECT_EQ(executorOf("CastImpressiveSpell").build, Build::CastToImpress);
+	EXPECT_EQ(executorOf("CastImpressiveSpell").target, Target::Villager);
+	for (const auto* name : {"CastMagicFood", "CastShield", "CastMagicWater", "CastImpressiveSpell"})
+	{
+		EXPECT_TRUE(plan_actions::IsCast(executorOf(name))) << name;
+	}
+}
+
+TEST(CreatureCastAgenda, FoodIsScatteredFromTwoAwayWithItsGesture)
+{
+	const auto agenda = CastFoodAt(14, 3, 7);
+	ASSERT_EQ(agenda.size(), 4u);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 2.0f);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda[1].seconds, 0.1f);
+	EXPECT_EQ(agenda[2].kind, Step::Kind::Gesture);
+	EXPECT_EQ(agenda[2].animation, 3u);
+	EXPECT_EQ(agenda[3].kind, Step::Kind::Cast);
+	EXPECT_EQ(agenda[3].cast.magicType, 14u);
+	EXPECT_EQ(*agenda[3].cast.object, 7u);
+	EXPECT_EQ(agenda[3].sequence, (std::array<size_t, 3> {46, 47, 48}));
+	EXPECT_FLOAT_EQ(agenda[3].seconds, 3.0f);
+	// No gesture, no gesture step
+	EXPECT_EQ(CastFoodAt(14, 0, 7).size(), 3u);
+}
+
+TEST(CreatureCastAgenda, AShieldIsCastFromWhereItStands)
+{
+	const auto agenda = CastShieldAt(19, 7);
+	ASSERT_EQ(agenda.size(), 2u);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(agenda[1].kind, Step::Kind::Cast);
+	EXPECT_EQ(agenda[1].cast.magicType, 19u);
+	EXPECT_EQ(agenda[1].sequence, (std::array<size_t, 3> {40, 41, 42}));
+}
+
+TEST(CreatureCastAgenda, WaterIsScatteredFromTwiceItsHeight)
+{
+	const auto agenda = CastWaterAt(22, 7, 15.0f);
+	ASSERT_EQ(agenda.size(), 3u);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 30.0f);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(agenda[2].cast.magicType, 22u);
+	EXPECT_EQ(agenda[2].sequence, k_ScatterPose);
+}
+
+TEST(CreatureCastAgenda, OnFireItGoesToAClearAreaCastsWaterOnItselfAndCools)
+{
+	const auto agenda = CastWaterOnItself(22, 9, {4.0f, 5.0f}, 15.0f);
+	ASSERT_EQ(agenda.size(), 3u);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::ToPoint);
+	EXPECT_EQ(agenda[0].movement.point, glm::vec2(4.0f, 5.0f));
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 30.0f);
+	ASSERT_TRUE(agenda[0].gaze.has_value());
+	EXPECT_TRUE(agenda[0].gaze->whileGoing);
+	EXPECT_EQ(agenda[1].kind, Step::Kind::Cast);
+	EXPECT_EQ(*agenda[1].cast.object, 9u);
+	EXPECT_EQ(agenda[1].sequence, k_ScatterPose);
+	EXPECT_EQ(agenda[2].kind, Step::Kind::CoolDown);
+	// With no clear area, the creature cannot stop its own fire
+	const auto* executor = openblack::creature_plan_actions::For("CastMagicWater");
+	ASSERT_NE(executor, nullptr);
+	const openblack::creature_plan_actions::CastInfo noRoom {.magicType = 22, .height = 10.0f};
+	EXPECT_FALSE(openblack::creature_plan_actions::Agenda(*executor, std::nullopt, {}, {}, Always(1), noRoom).has_value());
+}
+
+TEST(CreatureCastAgenda, ToImpressItPointsBeforeOrAfterAndBeckonsTwoTimesInThree)
+{
+	// Draws of 0: it points first and does not beckon
+	const auto first = CastToImpress(10, 7, 10.0f, Always(0));
+	ASSERT_EQ(first.size(), 5u);
+	EXPECT_EQ(first[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(first[0].movement.maxDistance, 15.0f);
+	EXPECT_EQ(first[1].movement.kind, Movement::Kind::GetAwayFromObject);
+	EXPECT_FLOAT_EQ(first[1].movement.maxDistance, 20.0f);
+	EXPECT_EQ(first[2].order.kind, ObjectOrder::Kind::PointAt);
+	EXPECT_FLOAT_EQ(*first[2].order.seconds, 1.0f);
+	EXPECT_EQ(first[3].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(first[4].kind, Step::Kind::Cast);
+	EXPECT_EQ(first[4].cast.magicType, 10u);
+	// Draws of 1: it beckons, casts, then points
+	const auto after = CastToImpress(16, 7, 10.0f, Always(1));
+	ASSERT_EQ(after.size(), 6u);
+	EXPECT_EQ(after[2].kind, Step::Kind::Action);
+	EXPECT_EQ(after[2].animation, 52u);
+	EXPECT_EQ(after[4].cast.magicType, 16u);
+	EXPECT_EQ(after[5].order.kind, ObjectOrder::Kind::PointAt);
+	// When it knows no miracle that impresses, it casts nothing
+	const auto none = CastToImpress(std::nullopt, 7, 10.0f, Always(1));
+	EXPECT_TRUE(std::ranges::none_of(none, [](const Step& step) { return step.kind == Step::Kind::Cast; }));
+}
+
+TEST(CreatureCastAgenda, ToImpressItCastsTheMiracleCastTheLongestTimeAgo)
+{
+	EXPECT_EQ(PickImpressiveMiracle({false, false, false, false}, {0, 0, 0, 0}), std::nullopt);
+	// The last of equals
+	EXPECT_EQ(PickImpressiveMiracle({true, true, true, true}, {0, 0, 0, 0}), 3u);
+	EXPECT_EQ(PickImpressiveMiracle({true, true, true, false}, {50, 20, 20, 0}), 2u);
+	EXPECT_EQ(PickImpressiveMiracle({true, false, true, false}, {10, 0, 20, 0}), 0u);
+}
+
+TEST(CreatureCastAgenda, ItChoosesToImpressKnowingAMiracleSeenMoreThanHalfItsTimes)
+{
+	const ImpressiveMiracleState known {.known = true, .canPay = true, .seen = 3.0f, .needed = 5.0f};
+	EXPECT_TRUE(CanCastToImpress(std::array {known}));
+	auto half = known;
+	half.seen = 2.5f;
+	EXPECT_FALSE(CanCastToImpress(std::array {half}));
+	auto unpaid = known;
+	unpaid.canPay = false;
+	EXPECT_FALSE(CanCastToImpress(std::array {unpaid}));
+	auto unknown = known;
+	unknown.known = false;
+	EXPECT_FALSE(CanCastToImpress(std::array {unknown}));
+	EXPECT_TRUE(CanCastToImpress(std::array {unknown, known}));
+	// Food lets it choose to impress, but it never casts food to impress
+	EXPECT_EQ(k_ImpressMiraclesItMayKnow.front(), 14u);
+	EXPECT_TRUE(std::ranges::find(k_ImpressiveMiracles, 14u) == k_ImpressiveMiracles.end());
 }
 
 TEST(CreatureCastMoves, RoutePlanRadiusAndArrival)

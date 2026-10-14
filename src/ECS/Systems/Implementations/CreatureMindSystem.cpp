@@ -86,6 +86,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -1514,6 +1515,11 @@ void CreatureMindSystem::ProcessTurn()
 		    if (commands.restSitting && Locator::creaturePhysiologySystem::has_value())
 		    {
 			    Locator::creaturePhysiologySystem::value().SitTurn(entity);
+		    }
+		    // Its own fire stops: it cools to the temperature of the air
+		    if (commands.coolDown && Locator::fireSystem::has_value())
+		    {
+			    Locator::fireSystem::value().PutOut(entity);
 		    }
 		    if (commands.douse.has_value())
 		    {

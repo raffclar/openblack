@@ -68,5 +68,8 @@ struct RegistryContext
 	/// details; a new land starts with both down
 	bool villagerNamesShown {false};
 	bool villagerDetailsShown {false};
+	/// The game turn on which any creature last cast each of the miracles that impress, in the order of
+	/// creature_mind::k_ImpressiveMiracles. A new land starts with all at 0.
+	std::array<uint32_t, 4> impressiveMiracleCastTurn {};
 };
 } // namespace openblack::ecs
