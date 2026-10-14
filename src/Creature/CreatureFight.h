@@ -322,7 +322,7 @@ constexpr float k_BiggestOpponentShare = 2.0f;
 [[nodiscard]] float FaintSeconds(float size);
 /// Taken home (fizzing out and back in, see creature_fizz), it waits this long before resting
 constexpr float k_WaitAfterHomeSeconds = 3.0f;
-/// It rests until at least this healthy and no more exhausted than this, then gets up
+/// After a faint, it rests to get better when its life is below this or it is more tired than this
 constexpr float k_GetUpLife = 0.4f;
 constexpr float k_RestedExhaustion = 0.3f;
 [[nodiscard]] bool NeedsRest(float life, float exhaustion);

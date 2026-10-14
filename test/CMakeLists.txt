@@ -977,3 +977,6 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_creature_lost_thing test_creature_lost_thing.cpp)
 openblack_setup_and_add_test(test_creature_follow_up test_creature_follow_up.cpp)
+openblack_setup_and_add_test(
+  test_creature_rest_and_home test_creature_rest_and_home.cpp
+)

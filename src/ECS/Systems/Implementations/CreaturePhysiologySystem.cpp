@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <chrono>
 #include <numbers>
+#include <optional>
+#include <string_view>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -218,6 +220,22 @@ glm::vec3 GroinOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	const auto groin = rigs.Handle(rigId)->actionPoints->groin;
 	return glm::vec3(creature::PosedBone(groin, animation->boneMatrices, placement)[3]);
 }
+/// The name of the action that the creature's plan carries out, none without a plan
+std::optional<std::string_view> PlanActionOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->planActive || !mind->planner.current.has_value() || !Locator::creatureMindSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* tables = Locator::creatureMindSystem::value().GetTables();
+	const auto action = mind->planner.current->action;
+	if (tables == nullptr || action >= tables->actions.size())
+	{
+		return std::nullopt;
+	}
+	return std::string_view(tables->actions[action].name);
+}
 } // namespace
 
 void CreaturePhysiologySystem::ProcessTurn()
@@ -254,10 +272,11 @@ void CreaturePhysiologySystem::ProcessTurn()
 			needs.rested = false;
 		}
 
+		const auto pace = physiology::PaceOfPlan(PlanActionOf(registry, entity));
 		const physiology::Turn turn {
 		    .moving = needs.moving,
-		    .asleep = needs.rest == CreatureNeeds::Rest::Asleep,
-		    .resting = needs.rest == CreatureNeeds::Rest::Resting,
+		    .slowEnergyUse = pace.slowEnergyUse,
+		    .fastGrowth = pace.fastGrowth,
 		    .phase = phase,
 		    .carriedWeight = needs.carriedWeight,
 		    .temperature = transform != nullptr ? TemperatureAt(transform->position) : 0.0f,
@@ -278,7 +297,7 @@ void CreaturePhysiologySystem::ProcessTurn()
 			}
 			physiology::TickTurn(needs.needs, shape, species, turn);
 			// Asleep or resting, it heals and rests, and may be ready to wake
-			if (turn.asleep || turn.resting)
+			if (needs.rest == CreatureNeeds::Rest::Asleep || needs.rest == CreatureNeeds::Rest::Resting)
 			{
 				++needs.restTurns;
 				needs.rested = physiology::SleepTurn(needs.needs, species, shape.size, needs.restTurns, night) || needs.rested;

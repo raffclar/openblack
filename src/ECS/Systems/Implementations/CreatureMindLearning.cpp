@@ -53,6 +53,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptPlay.h"
@@ -281,7 +282,8 @@ std::optional<creature_plan_actions::OneShot> OneShotOf(const ecs::Registry& reg
 	return creature_plan_actions::OneShot {.magicType = static_cast<uint32_t>(type),
 	                                       .aggressive = miracle.oneOffSpellIsAggressive != 0,
 	                                       .compassionate = miracle.oneOffSpellIsCompassionate != 0,
-	                                       .playful = miracle.oneOffSpellIsPlayful != 0};
+	                                       .playful = miracle.oneOffSpellIsPlayful != 0,
+	                                       .restoresHealth = miracle.oneOffSpellIsToRestoreHealth != 0};
 }
 
 /// The food pile of a storage pit, while the pile is there
@@ -476,6 +478,15 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity).has_value() && home.has_value() &&
 		       at.has_value() && gutils::GetDistanceInMetres(*home, glm::vec3(at->x, home->y, at->y)) > k_ToyAwayFromHome;
 	}
+	case Target::OneShotRestoreHealth:
+	{
+		// A globe that lies about: the game asks only that its miracle restores health
+		const auto oneShot = OneShotOf(registry, entity);
+		return oneShot.has_value() && oneShot->Is(creature_plan_actions::OneShotKind::RestoreHealth);
+	}
+	case Target::TemplePart:
+		// The temple of any player, or a worship site of any town
+		return registry.AllOf<Temple>(entity) || registry.AllOf<WorshipSite>(entity);
 	case Target::OneShotAggressive:
 	case Target::OneShotCompassionate:
 	case Target::OneShotPlayful:
@@ -1569,6 +1580,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	{
 		return std::nullopt;
 	}
+	BelieveInTempleToEnter(creature, *executor, situated);
 	// Planting by a tree, it remembers that tree, and won't take it to plant elsewhere for a while
 	auto& registry = Locator::entitiesRegistry::value();
 	if (executor->build == creature_plan_actions::Build::PlantTree && object.has_value() &&
@@ -2870,6 +2882,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			agenda = creature_plan_actions::Agenda(
 			    *executor, plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt, point,
 			    situation, random, cast);
+			if (agenda.has_value())
+			{
+				BelieveInTempleToEnter(creature, *executor, situation);
+			}
 			activity = executor->activity;
 		}
 	}
@@ -3025,6 +3041,62 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	}
 	situation.hangAround = HangAroundPlacesOf(creature);
 	situation.turnSeconds = k_TurnSeconds;
+	SituateHome(creature, situation);
+}
+
+void CreatureMindSystem::BelieveInTempleToEnter(entt::entity creature, const creature_plan_actions::Executor& executor,
+                                                const creature_plan_actions::Situation& situation)
+{
+	// As it sets off into its temple, the creature comes to believe in the temple's heart
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.TryGet<CreatureMindState>(creature);
+	if (executor.build != creature_plan_actions::Build::EnterTemple || !situation.templeHeart.has_value() || mind == nullptr)
+	{
+		return;
+	}
+	ComeAcross(creature, *mind, static_cast<entt::entity>(situation.templeHeart->temple));
+}
+
+void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_actions::Situation& situation)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (body == nullptr || at == nullptr)
+	{
+		return;
+	}
+	situation.standing = at->position;
+	if (const auto home = ecs::creature_home::HomeOf(registry, creature))
+	{
+		situation.home = glm::vec2(home->x, home->z);
+		situation.homeDistance = gutils::GetDistanceInMetres(situation.position, *situation.home);
+	}
+	// The heart of its player's temple is the temple itself, on the ground
+	registry.Each<const Temple, const Transform>([&](entt::entity temple, const Temple& building, const Transform& place) {
+		if (building.owner != body->owner || situation.templeHeart.has_value())
+		{
+			return;
+		}
+		const auto ground = Locator::terrainSystem::has_value()
+		                        ? Locator::terrainSystem::value().GetHeightAt({place.position.x, place.position.z})
+		                        : place.position.y;
+		situation.templeHeart = creature_plan_actions::Situation::TempleHeart {
+		    .temple = entt::to_integral(temple),
+		    .point = {place.position.x, ground, place.position.z},
+		    .radius = object_measures::TwoDRadius(registry, temple),
+		};
+	});
+	situation.hasTemple = situation.templeHeart.has_value();
+	// Every other creature counts, of any player, dead or alive
+	std::vector<float> others;
+	registry.Each<const Creature, const Transform>([&](entt::entity other, const Creature&, const Transform& place) {
+		if (other != creature)
+		{
+			others.push_back(gutils::GetDistanceInMetres(place.position, at->position));
+		}
+	});
+	situation.nothingFrighteningNear = creature_mind::NothingFrighteningNear(situation.height, others);
 }
 
 creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::entity creature)

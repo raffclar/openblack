@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <string_view>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -24,7 +25,7 @@
 /// Everything here works a game turn at a time, from the species' rates in the game's creature tables.
 namespace openblack::creature_physiology
 {
-/// Growth asleep is this many times faster
+/// Growth is this many times faster while the plan is to sleep at home or by a thing
 constexpr float k_SleepGrowthFactor = 3.0f;
 /// The slowest a creature ever grows, in size a game turn
 constexpr float k_MinGrowth = 2.7e-7f;
@@ -33,7 +34,8 @@ constexpr float k_YouthGrowthSlope = 8.0f;
 constexpr float k_MaxYouthGrowth = 2.0f;
 /// A creature grows by itself up to this size
 constexpr float k_MaxGrownSize = 2.0f;
-/// A bigger creature uses its energy more slowly, up to half as fast at size 2, and asleep or resting much more slowly
+/// A bigger creature uses its energy more slowly, up to half as fast at size 2. It uses its energy much more slowly while
+/// the plan is to sleep at home or to rest to get better.
 constexpr float k_EnergySizeFactor = 0.5f;
 constexpr float k_RestingEnergyDivisor = 3.0f;
 /// It burns fat while its energy is below this
@@ -126,9 +128,9 @@ struct Turn
 {
 	/// On its way somewhere
 	bool moving {false};
-	/// Asleep, or resting to get better
-	bool asleep {false};
-	bool resting {false};
+	/// The plan makes the body use its energy more slowly, or grow faster (see PaceOfPlan)
+	bool slowEnergyUse {false};
+	bool fastGrowth {false};
 	/// How far it has grown up, which stages of the body follow
 	uint32_t phase {13};
 	/// What it carries, as heavy as itself at 1, while it carries something
@@ -165,7 +167,19 @@ void TakeUp(Needs& needs, const Kept& kept);
 [[nodiscard]] float SigmoidThreshold(float threshold, float value);
 
 /// How much the creature grows this turn: fast while young, then slowly, all the more for energy it has to spare
-[[nodiscard]] float Growth(const Needs& needs, const Species& species, bool asleep, float turnsPerSecond);
+[[nodiscard]] float Growth(const Needs& needs, const Species& species, bool fastGrowth, float turnsPerSecond);
+
+/// How the action of the plan changes the body's pace. The plan decides, not the body: the walk home to sleep also
+/// counts, and a sleep on the spot does not.
+struct PlanPace
+{
+	/// To sleep at home, or to rest to get better: the body uses its energy more slowly
+	bool slowEnergyUse {false};
+	/// To sleep at home, or to sleep by a thing: the body grows faster
+	bool fastGrowth {false};
+};
+/// The pace of the plan's action, by the action's name in the game's table; none for no plan
+[[nodiscard]] PlanPace PaceOfPlan(std::optional<std::string_view> action);
 
 /// One game turn of the body as time passes, before the stage of growing up from which the body changes nothing
 void TickTurn(Needs& needs, Shape& shape, const Species& species, const Turn& turn);

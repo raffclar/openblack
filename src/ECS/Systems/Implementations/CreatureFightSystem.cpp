@@ -48,6 +48,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMode.h"
+#include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/FightMarks.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
@@ -3157,11 +3158,16 @@ void CreatureFightSystem::ProcessKnockedOut()
 			break;
 		}
 		case CreatureKnockedOut::Stage::Resting:
-			if (needs == nullptr || !fight::NeedsRest(needs->needs.life, needs->needs.exhaustion))
+		{
+			// It rests until its life is full, it is not tired at all, and the rest has lasted long enough
+			const auto turns = static_cast<uint32_t>(std::lround(knockedOut.seconds / k_TurnSeconds));
+			if (needs == nullptr || (creature_mind::IsBetter(needs->needs.life, needs->needs.exhaustion) &&
+			                         turns > creature_mind::k_FewestRestTurns))
 			{
 				getUp();
 			}
 			break;
+		}
 		case CreatureKnockedOut::Stage::GettingUp:
 			if (!creature_layers::IsPlaying(animation.body))
 			{
