@@ -3524,6 +3524,29 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	{
+		// A lion against a tiger, so that two species show their heads
+		auto lion = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
+		lion.species = CreatureType::Lion;
+		all.push_back({
+		    .id = "combat.head_look",
+		    .name = "Heads in a fight",
+		    .facet = Facet::Combat,
+		    .description = "The player's red lion and a blue tiger start to look at the camera. A second later they fight "
+		                   "by themselves, so each head has a point to look at from before the fight. The camera looks at "
+		                   "the arena from the side.",
+		    .expected = "Before the duel each creature looks at the other as it walks to its place. In the fight stance "
+		                "each head follows the head of the other creature. During a blow, a block, a cast or a fall the "
+		                "head turns back to straight ahead. No head looks off to the left or the right of the opponent.",
+		    .framing = ringside,
+		    .creatures = {lion, blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 0.5f, .object = 0, .action = "LookAtCamera"},
+		                 {.kind = Kind::DoAction, .delaySeconds = 0.0f, .object = 1, .action = "LookAtCamera"},
+		                 Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "combat.fight_view",
 	    .name = "Watching a fight",
@@ -3929,6 +3952,21 @@ void AddMind(std::vector<Scenario>& all)
 	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 0.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "LookAtCamera"},
 	                 {.kind = Kind::DoAction, .delaySeconds = 12.0f, .object = 0, .action = "LookAtCamera"}},
+	});
+
+	all.push_back({
+	    .id = "mind.head_look_hand",
+	    .name = "An idle lion watches the hand",
+	    .facet = Facet::Mind,
+	    .description = "A player's lion stands side on to the camera. A script tells it to look at the hand every six "
+	                   "seconds. Move the hand from side to side over the land in front of it.",
+	    .expected = "Its head turns to follow the hand, quickly at first and then easing to a stop on it. The head does "
+	                "not turn further than half a turn to either side or a quarter turn up or down.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 90.0f)},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "LookAtHand"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 6.0f, .object = 0, .action = "LookAtHand"}},
+	    .repeatFrom = 1,
 	});
 
 	all.push_back({

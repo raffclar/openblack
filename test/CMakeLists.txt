@@ -969,3 +969,6 @@ openblack_setup_and_add_test(test_town_miracle_tool test_town_miracle_tool.cpp)
 openblack_setup_and_add_test(
   test_creature_desire_sources test_creature_desire_sources.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_head_look test_creature_head_look.cpp
+)
