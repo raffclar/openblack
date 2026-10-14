@@ -112,6 +112,8 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	                       "light.rain_splashes_night",
 	                       "movement.course",
 	                       "movement.route_obstacles",
+	                       "movement.footstep_dust",
+	                       "movement.footstep_dust_snow",
 	                       "movement.trampling",
 	                       "footprints.trail",
 	                       "footprints.april_fools",

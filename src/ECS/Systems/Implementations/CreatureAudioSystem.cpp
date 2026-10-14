@@ -27,7 +27,9 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
+#include "Creature/CreatureFootstepPuffs.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/AudioEmitter.h"
@@ -36,8 +38,10 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/SnowDust.h"
 #include "ECS/SoundGround.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "InfoConstants.h"
@@ -152,6 +156,24 @@ creature_audio::Layers LayersOf(const CreatureAnimation& animation)
 	layers.soundingSlot = creature_audio::SoundingSlot(weights);
 	return layers;
 }
+
+/// The dust that a footstep throws up at the creature's place on the ground. Where snow lies, it shows the colour of
+/// the land's light
+void FootstepPuffs(const Creature& creature, const Transform& transform, int32_t count)
+{
+	if (count <= 0 || !Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	auto& random = Locator::gameRandom::value();
+	const float size = ShownSize(creature);
+	const auto colour = ecs::snow_dust::Tint(creature_footstep_puffs::k_Colour, ecs::snow_dust::SnowAt(transform.position));
+	for (int32_t i = 0; i < count; ++i)
+	{
+		const auto velocity = creature_footstep_puffs::VelocityOf(size, [&random](int32_t n) { return random.LocalRand(n); });
+		Locator::dynamicsSystem::value().AddPuff(transform.position, velocity, creature_footstep_puffs::SizeOf(size), colour);
+	}
+}
 } // namespace
 
 void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTime)
@@ -229,6 +251,8 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 				          : creatureGate.wideScreen ? "cut scene"
 				                                    : "another player's creature's voice");
 			    }
+			    // After the sound, a footstep throws up dust, heard or not
+			    FootstepPuffs(creature, transform, creature_footstep_puffs::CountOf(fired.event.action));
 		    }
 	    });
 

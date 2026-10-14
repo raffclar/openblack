@@ -1206,6 +1206,42 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A tiger walks to and fro between the grass and the near shallows, near the camera
+	const glm::vec2 onGrass {k_Lake.x - 20.0f, k_NearShallows - 30.0f};
+	const glm::vec2 inShallows {k_Lake.x + 10.0f, k_NearShallows};
+	all.push_back({
+	    .id = "movement.footstep_dust",
+	    .name = "Dust from the footsteps",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks to and fro between the grass and the near shallows of the testbed's lake at noon. "
+	                   "The camera looks at it from near.",
+	    .expected = "Each footstep makes a small cloud of brown dust at the tiger's feet, on the grass and in the "
+	                "shallows. The dust moves out a little and goes in about a second.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x - 35.0f, 8.0f, k_NearShallows - 45.0f},
+	                .look = {k_Lake.x - 5.0f, 1.0f, k_NearShallows - 15.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, onGrass, 45.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, inShallows, 1.0f), Go(Kind::WalkTo, 0, onGrass, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.footstep_dust_snow",
+	    .name = "Dust from the footsteps in the snow",
+	    .facet = Facet::Movement,
+	    .description = "Deep snow lies over the island and more snow falls. A tiger walks to and fro on the land near "
+	                   "the camera. The camera looks low across the land, so the snow falls near and far.",
+	    .expected = "The snow falls over all the land in view, to the far side of the view. Each footstep makes a "
+	                "small cloud of dust with the colour of the land's light, not brown.",
+	    .environment =
+	        {.hour = 12.0f, .clockRuns = false, .weather = Weather::Snow, .dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, -30.0f}, .look = {0.0f, 1.0f, 0.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {15.0f, 0.0f}, 1.0f), Go(Kind::WalkTo, 0, {-15.0f, 0.0f}, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
 	std::vector<ObjectSetup> wall;
 	for (int i = -3; i <= 3; ++i)
 	{
