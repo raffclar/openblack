@@ -133,6 +133,46 @@ TEST(SnowCover, LandWhitensOverTheNoise)
 	EXPECT_EQ(snow_cover::LandWhite(6), 14);
 }
 
+TEST(SnowCover, TexelDepthStepsInWholeParts)
+{
+	auto grid = Grid();
+	Cell(grid, 2, 3) = 10.0f;
+	Cell(grid, 3, 3) = 20.0f;
+	Cell(grid, 2, 4) = 30.0f;
+	Cell(grid, 3, 4) = 50.0f;
+	EXPECT_EQ(snow_cover::TexelDepth(grid, {2, 3}, {0, 0}), 10 * 65536);
+	EXPECT_EQ(snow_cover::TexelDepth(grid, {2, 3}, {32, 0}), 983040);
+	EXPECT_EQ(snow_cover::TexelDepth(grid, {2, 3}, {0, 32}), 1310720);
+	EXPECT_EQ(snow_cover::TexelDepth(grid, {2, 3}, {32, 32}), 1802240);
+	// A step is the difference over 64, cut towards zero, so a small rise adds less than a blend
+	Cell(grid, 6, 5) = 0.001f;
+	EXPECT_EQ(snow_cover::TexelDepth(grid, {5, 5}, {63, 0}), 63);
+	Cell(grid, 5, 5) = 0.001f;
+	Cell(grid, 6, 5) = 0.0f;
+	EXPECT_EQ(snow_cover::TexelDepth(grid, {5, 5}, {63, 0}), 2);
+	// Corners off the grid have no snow
+	Cell(grid, 127, 0) = 4.0f;
+	EXPECT_EQ(snow_cover::TexelDepth(grid, {127, 0}, {32, 0}), 2 * 65536);
+}
+
+TEST(SnowCover, CellsTakeSnowOverTheLeast)
+{
+	auto grid = Grid(5.0f);
+	EXPECT_FALSE(snow_cover::CellTakesSnow(grid, {10, 10}));
+	Cell(grid, 11, 11) = 5.0001f;
+	EXPECT_TRUE(snow_cover::CellTakesSnow(grid, {10, 10}));
+	EXPECT_FALSE(snow_cover::CellTakesSnow(grid, {8, 8}));
+}
+
+TEST(SnowCover, TexelsTakeTheSnowInFourBits)
+{
+	const glm::u8vec3 colour {8, 4, 2};
+	EXPECT_EQ(snow_cover::PaintTexel(colour, 0, 14), colour);
+	EXPECT_EQ(snow_cover::PaintTexel(colour, 4, 14), glm::u8vec3(9, 6, 4));
+	EXPECT_EQ(snow_cover::PaintTexel(colour, 15, 15), glm::u8vec3(14, 14, 14));
+	EXPECT_EQ(snow_cover::PaintTexel(colour, 16, 14), glm::u8vec3(14, 14, 15));
+}
+
 TEST(SnowSystem, StormsThatSnowLayItAndItMelts)
 {
 	ecs::systems::SnowSystem snow;
