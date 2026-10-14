@@ -22,7 +22,8 @@
 // when all of it, times the town's belief scale, is believed at once, no more than the town's cap for the player; a
 // symbol of the belief gained then rises from the town centre in the player's colour. The town also keeps a tally of
 // the belief each player has been given lately, which fades a little every turn. After its turn the town belongs to
-// the player it believes in most: when that is another player, the town changes hands. Pure, tested on its own.
+// the player it believes in most: when that is another player, the town changes hands. A town that belongs to a player
+// believes in them less while it wants things more than it did when it last gained belief. Pure, tested on its own.
 
 namespace openblack::magic::town_belief
 {
@@ -30,6 +31,19 @@ namespace openblack::magic::town_belief
 inline constexpr size_t k_PlayerCount = static_cast<size_t>(PlayerNames::_COUNT);
 /// Belief in a player is capped at this until a script sets another cap
 inline constexpr float k_DefaultCap = 10.0f;
+/// The number of things a town can want
+inline constexpr size_t k_DesireCount = 17;
+
+/// How one thing a town wants wears away its belief in its owner, from that desire's row of the town desire table
+struct DesireDecay
+{
+	/// Belief lost each turn for each unit of desire above the level
+	float toBelief {0.0f};
+	/// The level the desire goes back to each time the town gains belief
+	float levelAfterGain {0.0f};
+	/// How much the level falls each turn while it is above the least level
+	float levelFall {0.0f};
+};
 
 struct Belief
 {
@@ -49,6 +63,9 @@ struct Belief
 	float scale {1.0f};
 	/// What it believes in the neutral player, set again every turn: from the town tables, until a land script sets it
 	float neutral {0.0f};
+	/// For each thing it wants, the level above which wanting it costs its owner belief. None until the levels are
+	/// first set from the desire table, which is how a new town starts.
+	std::optional<std::array<float, k_DesireCount>> desireLevel;
 };
 
 /// Belief in a player is set, no more than the town's cap for them
@@ -71,6 +88,16 @@ struct Gained
 /// The town's turn: its recent tallies fade by the decay, and its pending belief is believed. The belief gained in each
 /// player that gained any, in player order.
 [[nodiscard]] std::vector<Gained> Turn(Belief& town, float recentDecay);
+
+/// The town got belief at its turn: each desire level goes back to the value in the desire table
+void ResetDesireLevels(Belief& town, std::span<const DesireDecay, k_DesireCount> table);
+
+/// After its belief turn, a town of a player loses belief in that player for each desire above its level. The loss is
+/// the difference times the rate of the desire. No cap or floor applies. Then each level above the least level falls by
+/// its step, so a town that stays in want loses more belief each turn. A town of the neutral player loses nothing and
+/// keeps its levels. `desire` is the desire of the town for each thing, with the boosts.
+void LoseBeliefToDesires(Belief& town, PlayerNames owner, std::span<const float, k_DesireCount> desire,
+                         std::span<const DesireDecay, k_DesireCount> table, float leastLevel);
 
 /// Who the town belongs to after its turn. Its belief in the neutral player is set back to what it keeps for them;
 /// then the player it believes in most takes it, starting from its owner and going through every player in player

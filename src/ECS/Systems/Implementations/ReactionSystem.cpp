@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -599,6 +600,30 @@ bool SameKindRetakes(Reaction type)
 {
 	return type == Reaction::ReactToFire || type == Reaction::FleeFromPredator || type == Reaction::ReactToMagicShieldStruck;
 }
+/// How each thing a town wants wears away its belief in its owner, from the town desire table
+std::array<magic::town_belief::DesireDecay, magic::town_belief::k_DesireCount>
+DesireDecayTable(std::span<const GTownDesireInfo, magic::town_belief::k_DesireCount> info)
+{
+	std::array<magic::town_belief::DesireDecay, magic::town_belief::k_DesireCount> table {};
+	std::ranges::transform(info, table.begin(), [](const GTownDesireInfo& row) {
+		return magic::town_belief::DesireDecay {.toBelief = row.desireToBeliefScale,
+		                                        .levelAfterGain = row.desireAffectsBeliefAfter,
+		                                        .levelFall = row.desireToBeliefThresholdDecay};
+	});
+	return table;
+}
+
+/// How much a town wants each thing, with the boosts, added in the game's order
+std::array<float, magic::town_belief::k_DesireCount> DesireWithBoosts(const TownDesire& wants)
+{
+	std::array<float, magic::town_belief::k_DesireCount> desire {};
+	for (size_t d = 0; d < desire.size(); ++d)
+	{
+		desire.at(d) = wants.boostA.at(d) + wants.boost.at(d) + wants.desire.at(d);
+	}
+	return desire;
+}
+
 } // namespace
 
 uint32_t ReactionSystem::Create(const Source& source)
@@ -1498,6 +1523,7 @@ void ReactionSystem::BelieveInTowns()
 	const auto& info = Locator::infoConstants::value();
 	const float decay = info.player.computerPlayerBeliefChangeDecay;
 	const float lostTownScale = registry.Context().mapScriptGlobals.lostTownScale;
+	const auto desireDecay = DesireDecayTable(info.townDesire);
 	// Towns that change hands this turn, given to their new players once every town has had its turn
 	std::vector<std::pair<entt::entity, PlayerNames>> claimed;
 	registry.Each<TownImpression>([&](entt::entity entity, TownImpression& impression) {
@@ -1525,6 +1551,17 @@ void ReactionSystem::BelieveInTowns()
 					villager_reactions::ShowTownBelief(*centre, player, amount);
 				}
 			}
+		}
+		// When the town gets belief, its desire levels go back to the table values. A town that wants more than a level
+		// loses belief in its owner. The loss shows no symbol.
+		if (!gained.empty())
+		{
+			magic::town_belief::ResetDesireLevels(impression.belief, desireDecay);
+		}
+		if (const auto* wants = registry.TryGet<const TownDesire>(entity))
+		{
+			magic::town_belief::LoseBeliefToDesires(impression.belief, town->owner, DesireWithBoosts(*wants), desireDecay,
+			                                        info.belief.minimumThreshold);
 		}
 		// The player it believes in most takes it; a player losing it believes less in every town they hold
 		const auto taker =

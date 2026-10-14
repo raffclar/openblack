@@ -1730,15 +1730,13 @@ bool AnimalSystem::IsFrighteningToCreature(entt::entity animal) const
 bool AnimalSystem::IsAvailableForReaction(entt::entity entity) const
 {
 	const auto& registry = EntityRegistry();
-	const auto* animal = registry.TryGet<const Animal>(entity);
-	if (animal == nullptr)
+	// The state is judged by the state it is to end up in
+	const auto state = FinalGameStateOf(entity);
+	if (!state.has_value())
 	{
 		return false;
 	}
-	// The state is judged by the state it is to end up in
-	const auto state = animal->state == AnimalState::MoveToPos ? animal->finalState : animal->state;
-	const bool busyState = state == AnimalState::Dying || state == AnimalState::Dead || state == AnimalState::Downed ||
-	                       state == AnimalState::BeingEaten || state == AnimalState::WaitForClip;
+	const bool busyState = animals::IsBusyForReaction(*state);
 	return animals::AvailableForReaction({
 	    .scriptControlled = registry.AllOf<ScriptControlled>(entity),
 	    .outOfTheWorld = registry.AnyOf<CarriedByTornado, InHand, InPhysics>(entity),

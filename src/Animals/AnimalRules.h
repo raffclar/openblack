@@ -62,9 +62,20 @@ struct ReactionFacts
 	bool scriptControlled {false};
 	/// It is in the hand, in the physics or carried by a storm
 	bool outOfTheWorld {false};
-	/// It is dying, dead, downed, being eaten or waiting for a clip, or about to be
+	/// It is dancing, dying, dead, drowning, downed, being eaten or waiting for a clip, or on its way into one of them
 	bool busyState {false};
 };
+/// Whether a state, by its number in the game's animal state table, keeps an animal from taking up a reaction: dancing
+/// (5), dying (14), dead (15), drowning (16), downed (17), being eaten (18) and waiting for a clip (23). The state to
+/// judge is the one the animal is to end up in, as the table says, not one it only passes through.
+[[nodiscard]] constexpr bool IsBusyForReaction(uint8_t gameState)
+{
+	constexpr uint8_t k_Dancing = 5;
+	constexpr uint8_t k_DyingFirst = 14;
+	constexpr uint8_t k_BeingEaten = 18;
+	constexpr uint8_t k_WaitingForClip = 23;
+	return gameState == k_Dancing || (gameState >= k_DyingFirst && gameState <= k_BeingEaten) || gameState == k_WaitingForClip;
+}
 /// An animal takes up no reaction while a script controls it: a script's animal stays where the script put it, even
 /// with a creature at its side
 [[nodiscard]] constexpr bool AvailableForReaction(const ReactionFacts& facts)
