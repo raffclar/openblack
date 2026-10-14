@@ -506,8 +506,8 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 		break;
 	case Reaction::ReactToTownCelebration:
 		// Its own town celebrating with no town centre, it looks at the town
-		// TODO(villager-social): the game also makes a dance about the town (the dance about a person) that no one is
-		// put in; whether a town's dances draw dancers of their own is not known yet
+		// TODO(villager-social): the game also makes an empty dance about the town (the dance about a person). A dance
+		// does not get dancers by itself: only a script or a villager that joins it puts dancers in it.
 		SetTop(*action, VillagerStates::LookingAtObjectReaction);
 		break;
 	case Reaction::ReactToDeath:

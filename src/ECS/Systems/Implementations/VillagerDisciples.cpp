@@ -29,7 +29,6 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
@@ -612,12 +611,11 @@ uint32_t DecideByWork(LivingAction& action)
 	return 0;
 }
 
-/// A villager that is about: not in the hand, not in flight, not in a tornado, not dead and not dying
+/// A villager that is about: one that is not dying. A villager in the hand is about too.
 bool IsAvailableVillager(entt::entity villager)
 {
 	auto& registry = Entities();
-	if (!registry.Valid(villager) || !registry.AllOf<Villager, LivingAction>(villager) ||
-	    registry.AnyOf<InHand, InPhysics, CarriedByTornado, VillagerDeath>(villager))
+	if (!registry.Valid(villager) || !registry.AllOf<Villager, LivingAction>(villager))
 	{
 		return false;
 	}
