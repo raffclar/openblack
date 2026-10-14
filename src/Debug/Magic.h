@@ -57,6 +57,9 @@ private:
 	void DrawCasting(ecs::systems::MagicSystemInterface& magic, glm::vec3 point) noexcept;
 	/// The player's prayer power, to read and set
 	void DrawPrayer() noexcept;
+	/// Gives a town a miracle or takes it away, through the same steps as the land's scripts. A town without a worship
+	/// site can then have its site, which goes up for its builders.
+	void DrawTownMiracles() noexcept;
 	/// The spawned effects given a time close down when it is up
 	void UpdateTimedEffects(float seconds) noexcept;
 	/// Where a spawned effect goes: the hand, or what the camera looks at, on the land
@@ -75,6 +78,15 @@ private:
 	MagicType _miracle {MagicType::Fireball};
 	/// The radius of a circle put in as if drawn
 	float _circleRadius {30.0f};
+
+	// The town miracles' tab
+	uint32_t _townId {0};
+	MagicType _townMiracle {MagicType::Heal};
+	bool _withPlain {true};
+	bool _allLevels {false};
+	bool _openSite {true};
+	bool _anyLand {true};
+	std::string _townResult;
 
 	// The sandbox
 	Tribe _tribe {Tribe::NORSE};

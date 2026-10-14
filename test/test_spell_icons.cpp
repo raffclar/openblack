@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <vector>
@@ -81,6 +82,38 @@ TEST(SpellIcons, TheSeedAboveAHandShowsTheHighestPowerUpLevel)
 	EXPECT_EQ(ShownPowerUp({false, false, false}), magic::k_BasePowerUpLevel);
 	EXPECT_EQ(ShownPowerUp({true, false, false}), 0);
 	EXPECT_EQ(ShownPowerUp({true, false, true}), 2);
+}
+
+TEST(SpellIcons, ASiteIconShowsTheHighestPowerUpLevelItsPlayerMayCast)
+{
+	// The water's levels: the first power-up, then none, as a seed with one power-up gesture has
+	const std::array levels {MagicType::WaterPowerUpOne, MagicType::None, MagicType::None};
+	const auto nothing = [](MagicType /*type*/) { return false; };
+	EXPECT_EQ(SiteShownPowerUp(levels, nothing), magic::k_BasePowerUpLevel);
+	const auto waterUp = [](MagicType type) { return type == MagicType::WaterPowerUpOne; };
+	EXPECT_EQ(SiteShownPowerUp(levels, waterUp), 0);
+	// An empty level asks after magic type none, as the game does
+	const auto noneToo = [](MagicType type) { return type == MagicType::None; };
+	EXPECT_EQ(SiteShownPowerUp(levels, noneToo), 2);
+}
+
+TEST(SpellIcons, ATownLetsGoOfAMagicTypeOnlyWhenItHoldsIt)
+{
+	HeldMagic held {};
+	EXPECT_FALSE(Release(held, MagicType::Heal));
+	EXPECT_TRUE(Hold(held, MagicType::Heal));
+	EXPECT_TRUE(Release(held, MagicType::Heal));
+	EXPECT_FALSE(held.at(static_cast<size_t>(MagicType::Heal)));
+	EXPECT_FALSE(Release(held, MagicType::Heal));
+}
+
+TEST(SpellIcons, ASiteIconGoesOnlyWhenNoOtherTownOffersItsMiracle)
+{
+	// After a town's heal hand goes, the other town of the site still offers the water only
+	const std::vector<std::vector<SpellSeedType>> after {{SpellSeedType::Water}, {SpellSeedType::Water}};
+	const auto kept = SiteSeeds(after);
+	EXPECT_EQ(std::ranges::find(kept, SpellSeedType::Heal), kept.end());
+	EXPECT_NE(std::ranges::find(kept, SpellSeedType::Water), kept.end());
 }
 
 TEST(SpellIcons, ASiteKeepsAnIconForEveryMiracleItsTownsOfferOnce)

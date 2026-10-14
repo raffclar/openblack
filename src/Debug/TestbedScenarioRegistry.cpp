@@ -4628,6 +4628,7 @@ std::vector<Scenario> Build()
 	AddCreatureDanceScenarios(all);
 	AddCreatureLearningScenarios(all);
 	AddWorldSoundScenarios(all);
+	AddTownMiracleScenarios(all);
 	return all;
 }
 

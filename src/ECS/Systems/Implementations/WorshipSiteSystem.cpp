@@ -140,8 +140,7 @@ void WorshipSiteSystem::CheckAddSite(entt::entity town)
 {
 	auto& registry = _world->Entities();
 	const auto& component = registry.Get<const Town>(town);
-	if (!ws::MayHaveSite(_world->LandNumber(), component.cannotHaveWorshipSite, _world->PopulationOf(town)) ||
-	    component.owner == PlayerNames::NEUTRAL)
+	if (!TownMayHaveSite(town) || component.owner == PlayerNames::NEUTRAL)
 	{
 		return;
 	}
@@ -251,6 +250,35 @@ void WorshipSiteSystem::SetCanHaveSites(entt::entity townOrTemple, bool can)
 		return;
 	}
 	Log(spdlog::level::err, "scripting", "Worship sites can only be allowed or stopped for a town or temple");
+}
+
+entt::entity WorshipSiteSystem::DebugAllowSite(entt::entity town, bool anyLand)
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return entt::null;
+	}
+	// The same two steps as the script of the second land, which gives the player's town its site
+	_debugAnyLand = anyLand;
+	SetCanHaveSites(town, true);
+	if (const auto temple = TempleOf(registry.Get<const Town>(town).owner); temple != entt::null)
+	{
+		SetCanHaveSites(temple, true);
+	}
+	_debugAnyLand = false;
+	return registry.Get<const Town>(town).worshipSite;
+}
+
+bool WorshipSiteSystem::TownMayHaveSite(entt::entity town) const
+{
+	const auto& component = _world->Entities().Get<const Town>(town);
+	const auto population = _world->PopulationOf(town);
+	if (_debugAnyLand)
+	{
+		return !component.cannotHaveWorshipSite && population != 0;
+	}
+	return ws::MayHaveSite(_world->LandNumber(), component.cannotHaveWorshipSite, population);
 }
 
 void WorshipSiteSystem::RemoveSites(entt::entity temple)
@@ -532,8 +560,7 @@ entt::entity WorshipSiteSystem::FindOrMakeForTown(entt::entity temple, entt::ent
 	{
 		return entt::null;
 	}
-	const auto& component = registry.Get<const Town>(town);
-	if (!ws::MayHaveSite(_world->LandNumber(), component.cannotHaveWorshipSite, _world->PopulationOf(town)))
+	if (!TownMayHaveSite(town))
 	{
 		return entt::null;
 	}

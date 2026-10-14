@@ -42,6 +42,7 @@ public:
 	void LandLaidOut() override;
 	entt::entity MakeBuiltSite(PlayerNames player, Tribe tribe) override;
 	void SetCanHaveSites(entt::entity townOrTemple, bool can) override;
+	entt::entity DebugAllowSite(entt::entity town, bool anyLand) override;
 	void RemoveSites(entt::entity temple) override;
 	void UpdateTurn() override;
 	void ProcessChants() override;
@@ -67,6 +68,8 @@ public:
 	void RemoveFoodOnTheWay(entt::entity site, int32_t amount) override;
 
 private:
+	/// Whether a town may have a worship site: on a land with sites, with people, and not stopped by a script
+	[[nodiscard]] bool TownMayHaveSite(entt::entity town) const;
 	/// A town of a player with a temple is given its tribe's site, if it may have one
 	void CheckAddSite(entt::entity town);
 	/// Each of the player's towns is given its tribe's site, and asked to build it, wanting to by the boost more
@@ -96,6 +99,8 @@ private:
 	void AddTownIfMissing(entt::entity site, entt::entity town);
 
 	std::unique_ptr<worship_site::WorldInterface> _world;
+	/// Only while the debug tools let a town have its site: the land without worship sites lets it have one too
+	bool _debugAnyLand {false};
 };
 
 } // namespace openblack::ecs::systems
