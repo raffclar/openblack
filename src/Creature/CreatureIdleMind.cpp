@@ -18,6 +18,7 @@
 
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDance.h"
+#include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 
@@ -831,6 +832,9 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::Inspect:
 	case Step::Kind::WatchFlying:
 	case Step::Kind::WatchHand:
+	case Step::Kind::Face:
+	case Step::Kind::FollowCamera:
+	case Step::Kind::Heal:
 	case Step::Kind::FollowHand:
 	case Step::Kind::WatchPlayer:
 		break;
@@ -968,6 +972,33 @@ void creature_mind::DanceOrderDone(IdleMind& mind, bool done)
 		GiveUpAgenda(mind);
 	}
 }
+
+namespace
+{
+/// A turn of following the camera's point of focus
+void FollowCamera(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
+{
+	const float reach = step.movement.maxDistance;
+	const auto action = creature_emote::FollowCameraTurn({.focus = senses.cameraFocus,
+	                                                      .position = senses.position,
+	                                                      .moving = senses.moving,
+	                                                      .focusAhead = senses.cameraFocusAhead},
+	                                                     mind.followCameraTurns, reach);
+	switch (action)
+	{
+	case creature_emote::FollowCameraAction::Done:
+		FinishStep(mind);
+		break;
+	case creature_emote::FollowCameraAction::MoveAgain:
+		commands.move = Movement {.kind = Movement::Kind::ToPoint,
+		                          .point = {senses.cameraFocus->x, senses.cameraFocus->z},
+		                          .maxDistance = reach - creature_emote::k_FollowCameraStopShort};
+		break;
+	case creature_emote::FollowCameraAction::Continue:
+		break;
+	}
+}
+} // namespace
 
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
@@ -1114,6 +1145,27 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.repair = step.object;
 			FinishStep(mind);
 			break;
+		case Step::Kind::Heal:
+			commands.heal = step.object;
+			FinishStep(mind);
+			break;
+		case Step::Kind::Face:
+			// The face is held for the step's seconds, and the next step starts on the next turn
+			if (const auto face = creature_face::FaceOf(step.animation))
+			{
+				commands.face =
+				    creature_face::Request {.face = *face, .milliseconds = step.seconds * 1000.0f, .cue = step.face};
+			}
+			commands.effect = step.effect;
+			FinishStep(mind);
+			break;
+		case Step::Kind::FollowCamera:
+		{
+			// The time is counted in whole turns from the next
+			const auto turnsPerSecond = static_cast<float>(std::lround(1.0f / senses.seconds));
+			mind.followCameraTurns = static_cast<uint32_t>(step.seconds * turnsPerSecond);
+			break;
+		}
 		case Step::Kind::UseUp:
 			commands.useUp = step.object;
 			FinishStep(mind);
@@ -1314,10 +1366,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			}
 		}
 		break;
+	case Step::Kind::FollowCamera:
+		FollowCamera(mind, step, senses, commands);
+		break;
 	case Step::Kind::Douse:
 	case Step::Kind::CoolDown:
 	case Step::Kind::Shatter:
 	case Step::Kind::Repair:
+	case Step::Kind::Heal:
+	case Step::Kind::Face:
 	case Step::Kind::UseUp:
 	case Step::Kind::UseUpHeld:
 	case Step::Kind::Observe:

@@ -35,6 +35,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsAngle.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
@@ -840,6 +841,37 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 	    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
 	    .handStillTurns = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandStillTurns() : 0,
 	};
+}
+
+/// The point of focus of the camera of a creature's player, on the land, while its step follows the camera; and whether
+/// the point is less than a sixth of a turn from the way its body faces, or in its own map cell. None for a creature
+/// without a player.
+std::pair<std::optional<glm::vec3>, bool> CameraFocusOf(const ecs::Registry& registry, entt::entity creature,
+                                                        const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::FollowCamera ||
+	    !Locator::camera::has_value())
+	{
+		return {std::nullopt, false};
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (body == nullptr || body->owner == PlayerNames::NEUTRAL || transform == nullptr)
+	{
+		return {std::nullopt, false};
+	}
+	const auto focus = Locator::camera::value().GetFocus();
+	const auto from = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
+	const auto to = map_coords::FromMetres(glm::vec2(focus.x, focus.z));
+	// The way the body faces, as the game turns it: a quarter turn on from the map's
+	const auto ahead = -(transform->rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+	const auto facing = static_cast<int32_t>(gutils::ConvertScawenAngleToGameAngle(
+	    static_cast<float>(std::atan2(static_cast<double>(ahead.x), -static_cast<double>(ahead.z)))));
+	// The game takes the difference of the two angles with no wrap at a full turn
+	const auto apart = std::abs(facing - static_cast<int32_t>(gutils::GetAngleFromXZ(from, to)));
+	const bool inView =
+	    apart < gutils::k_GameAngleCircle / creature_look::k_BodyViewParts || map_coords::Cell(from) == map_coords::Cell(to);
+	return {focus, inView};
 }
 
 /// The player's hand as a creature watching it sees it, only while its step watches the hand; none for a creature
@@ -1753,6 +1785,7 @@ void CreatureMindSystem::ProcessTurn()
 		    const auto inHand = Locator::creatureObjectActionSystem::has_value()
 		                            ? Locator::creatureObjectActionSystem::value().GetHeld(entity)
 		                            : std::nullopt;
+		    const auto [cameraFocus, cameraFocusAhead] = CameraFocusOf(registry, entity, mind.idle);
 		    const creature_mind::Senses senses {
 		        .seconds = k_TurnSeconds,
 		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
@@ -1774,6 +1807,8 @@ void CreatureMindSystem::ProcessTurn()
 		        .bodyPlaying = creature_layers::IsPlaying(animation.body),
 		        .dance = DanceViewOf(entity, mind.idle),
 		        .followed = FollowedViewOf(registry, transform.position, mind),
+		        .cameraFocus = cameraFocus,
+		        .cameraFocusAhead = cameraFocusAhead,
 		        .followHand = FollowHandViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
 		        .watchPlayer = WatchPlayerViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
 		    };

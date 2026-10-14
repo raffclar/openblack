@@ -2344,7 +2344,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Gaze::hand>("hand")
 	    .Field<&openblack::creature_mind::Gaze::point>("point")
 	    .Field<&openblack::creature_mind::Gaze::camera>("camera")
-	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing");
+	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing")
+	    .Field<&openblack::creature_mind::Gaze::runningAway>("runningAway");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::activity>("activity")
 	    .Field<&openblack::creature_mind::IdleMind::agenda>("agenda")
@@ -2369,7 +2370,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::followMoved>("followMoved")
 	    .Field<&openblack::creature_mind::IdleMind::danceTurns>("danceTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceEnding>("danceEnding")
-	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet");
+	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet")
+	    .Field<&openblack::creature_mind::IdleMind::followCameraTurns>("followCameraTurns");
 	Reflect<openblack::creature_mind::Movement>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Movement::kind>("kind")
 	    .Field<&openblack::creature_mind::Movement::point>("point")
