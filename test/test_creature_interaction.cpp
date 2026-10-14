@@ -22,6 +22,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureReach.h"
 #include "Creature/CreatureThrow.h"
@@ -586,12 +587,82 @@ TEST(CreatureDesires, FeedbackPushesEverySourceOfAType)
 
 TEST(CreatureIdleMind, EatingIsPickingUpExaminingAndEating)
 {
-	const auto agenda = creature_mind::Eat(3u);
+	const auto agenda = creature_mind::Eat(3u, false);
 	ASSERT_EQ(agenda.size(), 3u);
 	EXPECT_EQ(agenda[0].order.kind, creature_mind::ObjectOrder::Kind::PickUp);
 	EXPECT_EQ(agenda[1].order.animation, creature_object_actions::k_ExamineObject);
 	EXPECT_EQ(agenda[2].order.kind, creature_mind::ObjectOrder::Kind::Eat);
 	EXPECT_EQ(agenda[2].effect, creature_mind::Effect::Eat);
+}
+
+TEST(CreatureIdleMind, ACreatureEatsWhatItHoldsWithNoPickUp)
+{
+	const auto examined = creature_mind::Eat(3u, true);
+	ASSERT_EQ(examined.size(), 2u);
+	EXPECT_EQ(examined[0].order.animation, creature_object_actions::k_ExamineObject);
+	EXPECT_EQ(examined[1].order.kind, creature_mind::ObjectOrder::Kind::Eat);
+
+	const auto held = creature_mind::EatAlive(3u, true, First);
+	ASSERT_EQ(held.size(), 1u);
+	EXPECT_EQ(held[0].order.kind, creature_mind::ObjectOrder::Kind::Eat);
+	EXPECT_EQ(held[0].effect, creature_mind::Effect::Eat);
+}
+
+TEST(CreatureIdleMind, EatingAliveShowsHungerThenPicksUpAndEats)
+{
+	const auto hungry = creature_mind::EatAlive(3u, false, First);
+	ASSERT_EQ(hungry.size(), 3u);
+	EXPECT_EQ(hungry[0].animation, creature_layers::animations::k_Hungry);
+	EXPECT_EQ(hungry[1].order.kind, creature_mind::ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(hungry[2].order.kind, creature_mind::ObjectOrder::Kind::Eat);
+
+	const auto quiet = creature_mind::EatAlive(3u, false, [](uint32_t /*range*/) { return 1u; });
+	ASSERT_EQ(quiet.size(), 2u);
+	EXPECT_EQ(quiet[0].order.kind, creature_mind::ObjectOrder::Kind::PickUp);
+}
+
+TEST(CreatureObjectActions, ACreatureEatsWhatItCanPickUpButNotAToy)
+{
+	using creature_object_actions::EatFacts;
+	using creature_object_actions::KindFacts;
+	using creature_object_actions::MayEat;
+	using creature_object_actions::Thing;
+	const KindFacts pig {.thing = Thing::Animal};
+	EXPECT_TRUE(MayEat(pig, EatFacts {.mayPickUp = true}));
+	EXPECT_FALSE(MayEat(pig, EatFacts {.mayPickUp = false}));
+	// A sort of thing that it brought up once
+	EXPECT_FALSE(MayEat(pig, EatFacts {.mayPickUp = true, .refusedSort = true}));
+	// A computer player's creature leaves its own villagers
+	EXPECT_FALSE(MayEat(KindFacts {.thing = Thing::Villager}, EatFacts {.mayPickUp = true, .computersOwnVillager = true}));
+	// The toys: the football and the static toys
+	EXPECT_FALSE(MayEat(KindFacts {.thing = Thing::Ball}, EatFacts {.mayPickUp = true}));
+	EXPECT_FALSE(MayEat(KindFacts {.thing = Thing::Static, .toy = true}, EatFacts {.mayPickUp = true}));
+	EXPECT_TRUE(MayEat(KindFacts {.thing = Thing::Rock}, EatFacts {.mayPickUp = true}));
+}
+
+TEST(CreatureObjectActions, AStaticInTheHandIsFoodUnlessItIsAToy)
+{
+	using creature_object_actions::KindFacts;
+	using creature_object_actions::MayEatHeld;
+	using creature_object_actions::Thing;
+	EXPECT_TRUE(MayEatHeld(KindFacts {.thing = Thing::Rock}, false));
+	EXPECT_FALSE(MayEatHeld(KindFacts {.thing = Thing::Static, .toy = true}, true));
+	EXPECT_TRUE(MayEatHeld(KindFacts {.thing = Thing::Pot}, true));
+	EXPECT_FALSE(MayEatHeld(KindFacts {.thing = Thing::Pot}, false));
+}
+
+TEST(CreatureObjectActions, AMealWithTooLittleFoodComesBackUp)
+{
+	using creature_object_actions::BringsMealBackUp;
+	EXPECT_FALSE(BringsMealBackUp(5.0f, false, false, false));
+	EXPECT_TRUE(BringsMealBackUp(4.9f, false, false, false));
+	EXPECT_TRUE(BringsMealBackUp(400.0f, false, false, true));
+	// A magic mushroom and a pile of food stay down
+	EXPECT_FALSE(BringsMealBackUp(0.0f, true, false, false));
+	EXPECT_FALSE(BringsMealBackUp(0.0f, false, true, true));
+	// Poisoned food does not stop the creature from eating that sort of thing
+	EXPECT_TRUE(creature_object_actions::RefusesSortAfter(false));
+	EXPECT_FALSE(creature_object_actions::RefusesSortAfter(true));
 }
 
 TEST(CreatureIdleMind, AnObjectStepWaitsForTheHandsAndGivesUpWhenTheyFail)

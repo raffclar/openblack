@@ -45,7 +45,7 @@ float RandomFraction(const creature_mind::Random& random)
 
 constexpr std::array k_Executors {
     Executor {.action = "EatAfterExamining", .target = Target::Food, .build = Build::Eat, .activity = Activity::Eat},
-    Executor {.action = "EatAlive", .target = Target::LiveFood, .build = Build::Eat, .activity = Activity::Eat},
+    Executor {.action = "EatAlive", .target = Target::Food, .build = Build::EatAlive, .activity = Activity::Eat},
     Executor {
         .action = "EatFromFoodPile", .target = Target::MagicFoodPile, .build = Build::EatFromPile, .activity = Activity::Eat},
     Executor {.action = "SleepOnTheSpot", .build = Build::Sleep, .activity = Activity::Sleep},
@@ -343,7 +343,9 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	switch (executor.build)
 	{
 	case Build::Eat:
-		return creature_mind::Eat(*object);
+		return creature_mind::Eat(*object, situation.holdingEatable);
+	case Build::EatAlive:
+		return creature_mind::EatAlive(*object, situation.holdingEatable, random);
 	case Build::GiveWoodToStore:
 	{
 		// Holding a tree, it gives that; with none to take either, it idles

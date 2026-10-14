@@ -154,6 +154,42 @@ bool creature_object_actions::BringsBackUp(bool indestructible, bool heldDuringC
 	return indestructible || heldDuringCutscene;
 }
 
+bool creature_object_actions::IsToy(const KindFacts& kind)
+{
+	return kind.toy || kind.thing == Thing::Ball;
+}
+
+bool creature_object_actions::IsStatic(Thing thing)
+{
+	switch (thing)
+	{
+	case Thing::Rock:
+	case Thing::Bonfire:
+	case Thing::DeadTree:
+	case Thing::Static:
+	case Thing::Vortex:
+	case Thing::TeleportStone:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool creature_object_actions::MayEat(const KindFacts& kind, const EatFacts& facts)
+{
+	return !facts.refusedSort && !facts.computersOwnVillager && !IsToy(kind) && facts.mayPickUp;
+}
+
+bool creature_object_actions::MayEatHeld(const KindFacts& kind, bool mayPickUp)
+{
+	return IsStatic(kind.thing) ? !IsToy(kind) : mayPickUp;
+}
+
+bool creature_object_actions::BringsMealBackUp(float food, bool magicMushroom, bool foodPile, bool poisoned)
+{
+	return !magicMushroom && !foodPile && (food < k_LeastFoodKeptDown || poisoned);
+}
+
 bool creature_object_actions::CanLift(const LiftFacts& facts)
 {
 	return facts.thingRadius + facts.creatureRadius <= facts.reach &&

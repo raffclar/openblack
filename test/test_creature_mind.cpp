@@ -914,7 +914,7 @@ TEST(CreatureNeedsMind, AFartIsDoneByItselfWithoutLookingAtItself)
 TEST(CreatureNeedsMind, ItPicksFoodUpAndEatsIt)
 {
 	creature_mind::IdleMind mind;
-	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(7u));
+	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(7u, false));
 	FakeBody body;
 	auto senses = body.Senses();
 	// Its hands go and pick the food up
@@ -941,7 +941,7 @@ TEST(CreatureNeedsMind, ItPicksFoodUpAndEatsIt)
 TEST(CreatureNeedsMind, FoodItCantPickUpIsGivenUpUneaten)
 {
 	creature_mind::IdleMind mind;
-	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(7u));
+	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(7u, false));
 	FakeBody body;
 	auto senses = body.Senses();
 	static_cast<void>(creature_mind::Think(mind, senses, Always(1)));
@@ -952,7 +952,7 @@ TEST(CreatureNeedsMind, FoodItCantPickUpIsGivenUpUneaten)
 	EXPECT_GE(mind.step, mind.agenda.size());
 	EXPECT_TRUE(mind.gaveUp);
 	// The next agenda starts afresh
-	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(8u));
+	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(8u, false));
 	EXPECT_FALSE(mind.gaveUp);
 }
 

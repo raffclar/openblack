@@ -778,6 +778,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::desireSeenTo>("desireSeenTo")
 	    .Field<&components::CreatureMindState::observedKinds>("observedKinds")
 	    .Field<&components::CreatureMindState::givenKinds>("givenKinds")
+	    .Field<&components::CreatureMindState::refusedFoodSorts>("refusedFoodSorts")
 	    .Field<&components::CreatureMindState::takenFood>("takenFood")
 	    .Field<&components::CreatureMindState::takenFrom>("takenFrom")
 	    .Field<&components::CreatureMindState::planSerial>("planSerial")
@@ -1178,7 +1179,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandOnCreature::creature>("creature")
 	    .Field<&components::HandOnCreature::sum>("sum")
 	    .Field<&components::HandOnCreature::clocks>("clocks")
-	    .Field<&components::HandOnCreature::slapReadyMs>("slapReadyMs")
 	    .Field<&components::HandOnCreature::lastPart>("lastPart")
 	    .Field<&components::HandOnCreature::sinceStepMs>("sinceStepMs")
 	    .Field<&components::HandOnCreature::lastPoint>("lastPoint")
@@ -2128,7 +2128,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_feedback::StrokeClocks>(context, ValueOnly {})
 	    .Field<&openblack::creature_feedback::StrokeClocks::sinceTouch>("sinceTouch")
 	    .Field<&openblack::creature_feedback::StrokeClocks::ready>("ready")
-	    .Field<&openblack::creature_feedback::StrokeClocks::contact>("contact");
+	    .Field<&openblack::creature_feedback::StrokeClocks::contact>("contact")
+	    .Field<&openblack::creature_feedback::StrokeClocks::sinceHold>("sinceHold");
 	Reflect<openblack::creature_fight::Arena>(context, ValueOnly {})
 	    .Field<&openblack::creature_fight::Arena::centre>("centre")
 	    .Field<&openblack::creature_fight::Arena::radius>("radius");

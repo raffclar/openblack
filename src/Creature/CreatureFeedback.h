@@ -81,6 +81,8 @@ struct StrokeClocks
 	float ready {0.0f};
 	/// How long the hand has been on the body, in all, since taking hold or the last slap
 	float contact {0.0f};
+	/// Since taking hold. A slap needs k_SlapReadyMs of it. Strokes and slaps do not start it again.
+	float sinceHold {0.0f};
 };
 constexpr float k_ReadyForStrokeMs = 2000.0f;
 constexpr float k_ReadyAfterTouchMs = 1000.0f;
@@ -96,8 +98,12 @@ constexpr float k_StrokeWaitMs = 1250.0f;
 /// A stroke interrupts nothing that is less than this far through; a slap nothing less than this far
 constexpr float k_StrokeInterruptsAfter = 0.8f;
 constexpr float k_SlapInterruptsAfter = 0.35f;
-/// A slap needs this long since taking hold or the last stroke (slaps themselves don't hold the next one back)
+/// A slap needs this long since the hand took hold of the creature. Strokes and slaps do not start this time again.
 constexpr float k_SlapReadyMs = 1000.0f;
+/// Set the clocks after a stroke or a slap that plays. The time since the hand took hold does not change.
+void Touched(StrokeClocks& clocks);
+/// Whether the hand has held the creature long enough for a slap
+[[nodiscard]] bool SlapReady(const StrokeClocks& clocks);
 
 /// The hand's sweep is weighed as a slap only as it first comes onto the body, or as the cursor crosses the middle of the
 /// screen, on the body or not
