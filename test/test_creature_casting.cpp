@@ -14,6 +14,7 @@
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreaturePlanActions.h"
 
 using namespace openblack;
 using namespace openblack::creature_mind;
@@ -62,6 +63,99 @@ TEST(CreatureCastAgenda, OneTimeInFiveItShowsHowItFeelsFirst)
 	ASSERT_EQ(powered.size(), 5u);
 	EXPECT_EQ(powered[3].kind, Step::Kind::Gesture);
 	EXPECT_EQ(powered[3].animation, 1u);
+}
+
+TEST(CreatureCastAgenda, AttacksFromFiveTimesItsHeightBackingOffToTwice)
+{
+	// A tornado, the lightning storm and the power-ups of the explosion
+	const auto agenda = CastAt(CastStyle::Aggressive, 18, 0, 7, 10.0f, Always(0));
+	ASSERT_EQ(agenda.size(), 5u);
+	EXPECT_EQ(agenda[0].animation, 53u);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Anger);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(agenda[1].movement.maxDistance, 50.0f);
+	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::GetAwayFromObject);
+	EXPECT_FLOAT_EQ(agenda[2].movement.maxDistance, 20.0f);
+	EXPECT_EQ(agenda[4].cast.magicType, 18u);
+}
+
+TEST(CreatureCastAgenda, AnExplosionFromAHundredAngryOneTimeInThree)
+{
+	uint32_t asked = 0;
+	const auto agenda = CastAt(CastStyle::Explosion, 7, 0, 7, 10.0f, [&asked](uint32_t range) {
+		asked = range;
+		return 0u;
+	});
+	EXPECT_EQ(asked, 3u);
+	ASSERT_EQ(agenda.size(), 5u);
+	EXPECT_EQ(agenda[0].animation, 53u);
+	EXPECT_FLOAT_EQ(agenda[1].movement.maxDistance, 100.0f);
+	EXPECT_FLOAT_EQ(agenda[2].movement.maxDistance, 20.0f);
+	EXPECT_EQ(agenda[4].cast.magicType, 7u);
+}
+
+TEST(CreatureCastAgenda, AFireballFromAClearAreaNearItGettingAwayOnlyFromTheLiving)
+{
+	// At a living thing, angry: to the clear area, the anger, away from the thing, the turn and the cast
+	const auto living = CastFireballAt(1, 0, 7, true, {30.0f, 40.0f}, 10.0f, Always(0));
+	ASSERT_EQ(living.size(), 5u);
+	EXPECT_EQ(living[0].movement.kind, Movement::Kind::ToPoint);
+	EXPECT_EQ(living[0].movement.point, glm::vec2(30.0f, 40.0f));
+	EXPECT_FLOAT_EQ(living[0].movement.maxDistance, 20.0f);
+	EXPECT_EQ(living[1].kind, Step::Kind::Action);
+	EXPECT_EQ(living[1].animation, 53u);
+	EXPECT_EQ(living[2].movement.kind, Movement::Kind::GetAwayFromObject);
+	EXPECT_FLOAT_EQ(living[2].movement.maxDistance, 20.0f);
+	EXPECT_EQ(living[3].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(living[4].kind, Step::Kind::Cast);
+	EXPECT_EQ(living[4].cast.magicType, 1u);
+	// At a thing not living, not angry: to the clear area, the turn and the cast
+	const auto still = CastFireballAt(2, 0, 7, false, {30.0f, 40.0f}, 10.0f, Always(1));
+	ASSERT_EQ(still.size(), 3u);
+	EXPECT_EQ(still[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(still[2].cast.magicType, 2u);
+}
+
+TEST(CreatureCastAgenda, AFizzleEmbarrassesItAndOneTimeInTwoMakesItSadder)
+{
+	const auto sad = ReactToFizzle(Always(0), 0.5f);
+	ASSERT_EQ(sad.agenda.size(), 2u);
+	EXPECT_EQ(sad.agenda[0].animation, 73u);
+	EXPECT_EQ(sad.agenda[1].animation, 56u);
+	ASSERT_TRUE(sad.sadness.has_value());
+	EXPECT_FLOAT_EQ(*sad.sadness, 0.15f);
+	const auto embarrassed = ReactToFizzle(Always(1), 0.5f);
+	ASSERT_EQ(embarrassed.agenda.size(), 1u);
+	EXPECT_FALSE(embarrassed.sadness.has_value());
+}
+
+TEST(CreatureCastAgenda, EachMiracleThatAttacksIsCastItsOwnWay)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	using Build = plan_actions::Build;
+	const auto buildOf = [](std::string_view action) {
+		const auto* executor = plan_actions::For(action);
+		return executor != nullptr ? std::optional(executor->build) : std::nullopt;
+	};
+	EXPECT_EQ(buildOf("CastLightningBoltPU1"), Build::CastLightning);
+	EXPECT_EQ(buildOf("CastLightningBoltPU2"), Build::CastLightning);
+	EXPECT_EQ(buildOf("CastFireball"), Build::CastFireball);
+	EXPECT_EQ(buildOf("CastFireballPU1"), Build::CastFireball);
+	EXPECT_EQ(buildOf("CastFireballPU2"), Build::CastFireball);
+	EXPECT_EQ(buildOf("CastExplosion"), Build::CastExplosion);
+	EXPECT_EQ(buildOf("CastExplosionPU1"), Build::CastAggressive);
+	EXPECT_EQ(buildOf("CastExplosionPU2"), Build::CastAggressive);
+	EXPECT_EQ(buildOf("CastTornado"), Build::CastAggressive);
+	EXPECT_EQ(buildOf("CastLightningStorm"), Build::CastAggressive);
+	// With no clear area near it, the creature can't cast a fireball
+	const auto* fireball = plan_actions::For("CastFireball");
+	ASSERT_NE(fireball, nullptr);
+	EXPECT_TRUE(plan_actions::IsCast(*fireball));
+	const plan_actions::CastInfo noRoom {.magicType = 1, .height = 10.0f};
+	EXPECT_FALSE(plan_actions::Agenda(*fireball, 7u, {}, {}, Always(1), noRoom).has_value());
+	auto room = noRoom;
+	room.clearArea = glm::vec2(5.0f, 5.0f);
+	EXPECT_TRUE(plan_actions::Agenda(*fireball, 7u, {}, {}, Always(1), room).has_value());
 }
 
 TEST(CreatureCastAgenda, TheMiracleIsCastAsThePoseLoopsAndHeldThirtyTurns)

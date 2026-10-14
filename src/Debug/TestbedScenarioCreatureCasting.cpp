@@ -7,8 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed's scenarios of creatures casting miracles: a spell at another creature, a lightning bolt, a heal, a try
-// that fizzles and one the creature is too tired for
+// The testbed's scenarios of creatures casting miracles: a spell at another creature, a lightning bolt, a fireball, an
+// explosion, a heal, a try that fizzles and one the creature is too tired for
 
 #include <vector>
 
@@ -86,6 +86,35 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .commands = {Know(MagicType::LightningBolt), CastAtObject(MagicType::LightningBolt, 0, 0.5f)},
 	});
 
+	all.push_back({
+	    .id = "miracles.creature_casts_fireball",
+	    .name = "Creature casting: a fireball at a cow",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the fireball is told to cast it at a cow sixty metres away.",
+	    .expected = "It first walks to the middle of a clear area near where it stands, five times as wide as its "
+	                "radius. One time in five it then shows its anger. As the cow is living, it backs off if it is "
+	                "nearer than twice its height. It turns to the cow, raises its arms and a fireball flies from "
+	                "between its hands to the cow.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 70.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster"), Other({0.0f, 60.0f}, "target")},
+	    .commands = {Know(MagicType::Fireball), CastAtCreature(MagicType::Fireball, 1, 0.5f)},
+	});
+	all.push_back({
+	    .id = "miracles.creature_casts_explosion",
+	    .name = "Creature casting: an explosion at a rock",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the explosion is told to cast it at a pillar of rock a hundred and forty "
+	                   "metres away.",
+	    .expected = "One time in three it shows its anger first. It walks up to within a hundred metres of the rock, "
+	                "backs off if nearer than twice its height, turns to it, raises its arms and casts the explosion "
+	                "at the rock.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 0.0f}, {30.0f, 150.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = FeatureInfo::FatPilarChalk, .offset = {0.0f, 140.0f}, .scale = 0.5f}},
+	    .commands = {Know(MagicType::ExplosionOne), CastAtObject(MagicType::ExplosionOne, 0, 0.5f)},
+	});
 	all.push_back({
 	    .id = "miracles.creature_casts_heal",
 	    .name = "Creature casting: a heal at a hurt villager",
