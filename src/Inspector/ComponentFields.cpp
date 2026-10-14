@@ -94,6 +94,7 @@
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFizz.h"
+#include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -688,6 +689,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureKnockedOut::home>("home")
 	    .Field<&components::CreatureKnockedOut::fizzTurns>("fizzTurns");
 	Reflect<components::CreatureFizz>(context).Field<&components::CreatureFizz::fizz>("fizz");
+	Reflect<components::CreatureFriends>(context).Field<&components::CreatureFriends::friends>("friends");
 	Reflect<components::CreatureHair>(context)
 	    .Field<&components::CreatureHair::groups>("groups")
 	    .Field<&components::CreatureHair::started>("started");
@@ -785,6 +787,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::desireSeenTo>("desireSeenTo")
 	    .Field<&components::CreatureMindState::observedKinds>("observedKinds")
 	    .Field<&components::CreatureMindState::givenKinds>("givenKinds")
+	    .Field<&components::CreatureMindState::keptPlan>("keptPlan")
 	    .Field<&components::CreatureMindState::refusedFoodSorts>("refusedFoodSorts")
 	    .Field<&components::CreatureMindState::takenFood>("takenFood")
 	    .Field<&components::CreatureMindState::takenFrom>("takenFrom")

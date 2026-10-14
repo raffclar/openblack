@@ -146,6 +146,9 @@ private:
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
 	/// The creature has taken a thing the hand gave it: its desires choose what it does with it
 	void UseGift(entt::entity creature, entt::entity object);
+	/// The creature continues the plan that it kept with the thing that it took from the hand, if the thing suits
+	/// the plan; returns whether it did (CreatureMindLearning.cpp)
+	bool ContinueKeptPlanWith(entt::entity creature, components::CreatureMindState& mind, entt::entity gift);
 	/// Held by the player's hand, it shows what it wants once its body is free
 	void ShowDesireOnHold(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& animation);
 	/// Plan the desires of one creature for this turn, a maximum of one time each turn. The planner examines the

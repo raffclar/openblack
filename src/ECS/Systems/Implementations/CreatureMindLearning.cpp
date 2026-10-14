@@ -39,6 +39,7 @@
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureGiving.h"
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
@@ -1574,6 +1575,11 @@ float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const Creatu
 			return 0.0f;
 		}
 	}
+	// A creature is never angry with a friend
+	if (desire == Desire::Anger && registry.AllOf<Creature>(object) && mind_detail::AreFriends(registry, object, creature))
+	{
+		return 0.0f;
+	}
 	return ObjectUsefulness(registry, *mind.learnt, mind, desire, object, creature);
 }
 
@@ -1922,7 +1928,7 @@ creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity
 /// What a creature knows about a thing when it examines a desire for it. Only the facts that the desire uses cost time
 /// to find: the height for poo, and the pick-up rule for bringing stuff home.
 creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::entity creature, Desire desire,
-                                           entt::entity thing)
+                                           entt::entity thing, const creature_mind_tables::Tables* tables)
 {
 	using creature_activity::Thing;
 	const auto kind = KindOfThing(registry, thing);
@@ -1947,8 +1953,11 @@ creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::
 		facts.dead = animal->Dead();
 		facts.frightening = Frightens(animal->type);
 	}
-	// TODO(creature-desire-thing-tests): a creature also dies, and a script can make two creatures friends. A creature
-	// does not attack a dead creature or a friend. These states do not exist here yet.
+	else if (registry.AllOf<Creature>(thing))
+	{
+		facts.dead = tables != nullptr && mind_detail::IsDead(registry, thing, *tables);
+		facts.friendOfCreature = mind_detail::AreFriends(registry, thing, creature);
+	}
 	const auto* feature = registry.TryGet<const Feature>(thing);
 	const auto* mobile = registry.TryGet<const MobileObject>(thing);
 	facts.mushroom =
@@ -2056,7 +2065,7 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 		{
 			return;
 		}
-		if (creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing)))
+		if (creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing, GetTables())))
 		{
 			parts.push_back(GoalWorth(creature, mind, desire, thing, activity));
 		}
@@ -2091,7 +2100,7 @@ bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& m
 			}
 		}
 	}
-	return creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing));
+	return creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing, GetTables()));
 }
 
 std::vector<creature_planner::ObjectCandidate>
@@ -3439,6 +3448,59 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 	}
 }
 
+bool CreatureMindSystem::ContinueKeptPlanWith(entt::entity creature, CreatureMindState& mind, entt::entity gift)
+{
+	const auto* tables = GetTables();
+	const auto& kept = mind.keptPlan;
+	if (tables == nullptr || !kept.has_value() || kept->action >= tables->actions.size())
+	{
+		return false;
+	}
+	const auto& action = tables->actions.at(kept->action);
+	const auto* executor = creature_plan_actions::For(action.name);
+	// Only the actions that a creature can do here can continue
+	if (executor == nullptr)
+	{
+		return false;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* held = registry.TryGet<const HeldByCreature>(gift);
+	const bool holdsGift = held != nullptr && held->creature == creature;
+	const auto whole = kept->about.has_value() ? kept->about : kept->activityObject;
+	const bool needsThingToUse = creature_plan_actions::NeedsThingToUse(action.name);
+	const auto use = executor->use != Target::None ? executor->use : Target::Pickable;
+	const creature_giving::KeptPlanFacts facts {
+	    .complete = kept->action != 0 && kept->object.has_value(),
+	    .missesWhole = tables->rules.at(static_cast<size_t>(kept->desire)).aboutSomething && !whole.has_value(),
+	    .missesThingToUse = needsThingToUse && !kept->instrument.has_value(),
+	    .actsOnThing = action.actsOnThing,
+	    .needsThingToUse = needsThingToUse,
+	    .giftSuitsActOn = !(action.notOnWhatItHolds && holdsGift) &&
+	                      (executor->target == Target::None || Accepts(registry, executor->target, gift, creature)),
+	    .giftSuitsUse = !NoWayLately(registry, mind, gift) && !OutsideConfinement(registry, creature, gift) &&
+	                    LetsCreatureAct(registry, gift) && Accepts(registry, use, gift, creature),
+	};
+	const auto chosen = creature_giving::UseForKeptPlan(facts);
+	if (chosen == creature_giving::KeptPlanUse::None)
+	{
+		return false;
+	}
+	const auto toEntity = [](std::optional<uint32_t> number) {
+		return number.has_value() ? std::optional(static_cast<entt::entity>(*number)) : std::nullopt;
+	};
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} continues {} with the thing it was given ({}) as the thing {}",
+	                    entt::to_integral(creature), action.name, entt::to_integral(gift),
+	                    chosen == creature_giving::KeptPlanUse::ActOn ? "to act on" : "to use");
+	const bool actsOnGift = chosen == creature_giving::KeptPlanUse::ActOn;
+	return ForceActivity(creature, {
+	                                   .desire = kept->desire,
+	                                   .activityObject = toEntity(whole),
+	                                   .action = action.name,
+	                                   .actionObject = actsOnGift ? gift : static_cast<entt::entity>(*kept->object),
+	                                   .instrument = actsOnGift ? toEntity(kept->instrument) : std::optional(gift),
+	                               });
+}
+
 void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState& mind)
 {
 	const auto* tables = GetTables();
@@ -3469,10 +3531,7 @@ void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState
 	{
 	case creature_watching::MimicStage::Notice:
 	{
-		// It looks at the thing that the player did the deed to, if there is one.
-		// TODO(creature-desire-thing-tests): the five actions that notice a deed have no agenda here yet. The creature
-		// points at the thing, turns to the camera, looks at the camera two times with a face and plays an animation.
-		// Until then, the notice action cannot start and the creature makes its own plans.
+		// The creature shows the player that it saw the deed, if the deed had a thing
 		const auto object = mimicry->object.has_value() ? static_cast<entt::entity>(*mimicry->object) : entt::null;
 		if (registry.Valid(object) && rule.noticeAction < tables->actions.size())
 		{

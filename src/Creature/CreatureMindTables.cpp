@@ -66,6 +66,8 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .learningWindowSeconds = row.field0xd0,
 		    .learnable = row.field0xf0 != 0,
 		    .eatWhenStroked = row.field0xe0 != 0,
+		    .actsOnThing = row.field0x94 != 0,
+		    .notOnWhatItHolds = row.field0xa8 != 0,
 		    .needs = {.skills = {SkillNeeded(row.skillsNeeded[0]), SkillNeeded(row.skillsNeeded[1])},
 		              .miracle = row.magicType != k_NoMiracle ? std::optional<size_t>(row.magicType) : std::nullopt},
 		});

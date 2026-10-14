@@ -47,6 +47,9 @@ namespace openblack::ecs::systems::mind_detail
 [[nodiscard]] std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> SetupFor(CreatureType species);
 [[nodiscard]] std::optional<float> FoodValueOf(entt::entity entity);
 [[nodiscard]] std::optional<creature_mind::WaterSpot> NearestWater(glm::vec2 from);
+/// The sort of a thing, by the object type of its info (an animal's own info, or the info of any other thing); none for a
+/// thing without info. A creature remembers the sorts of things that it was given and that it cannot eat.
+[[nodiscard]] std::optional<uint32_t> ObjectSortOf(const ecs::Registry& registry, entt::entity thing);
 /// The kind of belief a creature keeps about a thing, by the game's belief types; none for the things it does not yet
 /// know the kind of here
 [[nodiscard]] std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing);
@@ -69,8 +72,12 @@ namespace openblack::ecs::systems::mind_detail
                              const glm::vec3& place, float distanceWeight);
 /// The town nearest a point along the ground, of any player or none; none when there is no town
 [[nodiscard]] entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point);
-/// Whether a creature can be angry with a different creature. The other creature must not be dead. Its species must
-/// let creatures attack it.
+/// Whether a creature lies dead: knocked out, or with a plan that has the action of dying or of lying dead for good
+[[nodiscard]] bool IsDead(const ecs::Registry& registry, entt::entity creature, const creature_mind_tables::Tables& tables);
+/// Whether a script made two creatures friends
+[[nodiscard]] bool AreFriends(const ecs::Registry& registry, entt::entity first, entt::entity second);
+/// Whether a creature can be angry with a different creature. The other creature must not be dead or a friend. Its
+/// species must let creatures attack it.
 [[nodiscard]] bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
                                   const creature_mind_tables::Tables& tables);
 /// How often a creature has seen a miracle cast, and how often it must see it to learn it; none for a miracle it can't

@@ -69,6 +69,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -260,6 +261,26 @@ entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapC
 	return nearest;
 }
 } // namespace
+
+std::optional<uint32_t> mind_detail::ObjectSortOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (!registry.Valid(thing) || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const GObjectInfo* info = nullptr;
+	if (const auto* animal = registry.TryGet<const Animal>(thing))
+	{
+		const auto& animals = Locator::infoConstants::value().animal;
+		const auto row = static_cast<size_t>(animal->type);
+		info = row < animals.size() ? &animals.at(row) : nullptr;
+	}
+	else
+	{
+		info = ecs::world_objects::InfoOf(thing);
+	}
+	return info != nullptr ? std::optional(static_cast<uint32_t>(info->type)) : std::nullopt;
+}
 
 std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry, entt::entity thing)
 {
