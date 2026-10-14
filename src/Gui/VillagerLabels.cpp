@@ -99,6 +99,11 @@ float StepNameFade(float fade, bool shown, float milliseconds)
 	return fade < target ? std::min(fade + step, target) : std::max(fade - step, target);
 }
 
+NameFadeFrame StepNameFadeFrame(float fade, bool shown, float milliseconds, bool landDrawn)
+{
+	return {.drawn = fade, .next = landDrawn ? StepNameFade(fade, shown, milliseconds) : fade};
+}
+
 Choice Choose(const Who& who)
 {
 	// A named villager's speech bubble takes the place of its label
@@ -352,6 +357,7 @@ bool Board::Add(const Request& request, float screenWidth, const WidthFn& width,
 		return false;
 	}
 	label.boxAlpha = static_cast<uint8_t>(size * k_BoxAlpha);
+	label.pointerAlpha = label.boxAlpha;
 	label.wordsAlpha = static_cast<uint8_t>(size * k_WordsAlpha);
 	const auto at = std::ranges::find_if(_labels, [&label](const Label& other) { return other.left >= label.left; });
 	_labels.insert(at, std::move(label));
