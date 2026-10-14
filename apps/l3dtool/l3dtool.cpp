@@ -10,13 +10,19 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <array>
 #include <filesystem>
 #include <iostream>
-#include <stack>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include <L3DFile.h>
+#include <MorphFile.h>
+#include <PackFile.h>
 #include <cxxopts.hpp>
+
+#include "GltfExport.h"
 
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_USE_CPP14
@@ -605,6 +611,14 @@ struct Arguments
 	{
 		std::filesystem::path inFilename;
 		std::filesystem::path gltfFile;
+		/// NAME=FILE pairs of meshes to add as morph targets
+		std::vector<std::string> targets;
+		/// A creature's .cbn file, which names its base mesh, its variant meshes and its animations
+		std::filesystem::path creature;
+		std::filesystem::path specDirectory;
+		std::filesystem::path meshDirectory;
+		bool animations;
+		bool rightHanded;
 	} extract;
 };
 
@@ -937,289 +951,80 @@ int WriteFile(const Arguments::Write& args) noexcept
 	return EXIT_SUCCESS;
 }
 
+/// The names the morph targets of a creature take, in the order of the variant meshes in its .cbn file
+constexpr std::array<std::string_view, 6> k_CreatureTargetNames = {"Evil", "Good", "Thin", "Fat", "Weak", "Strong"};
+
 int ExtractFile(const Arguments::Extract& args) noexcept
 {
-	openblack::l3d::L3DFile l3d {};
-
-	if (args.gltfFile.empty() || args.inFilename.empty())
+	if (args.gltfFile.empty())
 	{
 		return EXIT_FAILURE;
 	}
 
-	// Open file
-	const auto result = l3d.Open(args.inFilename);
-	if (result != openblack::l3d::L3DResult::Success)
+	openblack::l3dtool::GltfExportOptions options;
+	options.mesh = args.inFilename;
+	options.rightHanded = args.rightHanded;
+	for (const auto& target : args.targets)
 	{
-		std::cerr << openblack::l3d::ResultToStr(result) << '\n';
-	}
-
-	tinygltf::Model gltf;
-
-	gltf.asset.version = "2.0";
-	gltf.asset.generator = "l3dtool extract";
-
-	// Data buffer
-	tinygltf::Buffer vertexBuffer; // 0
-	const size_t sizeOfVertices = l3d.GetVertices().size() * sizeof(l3d.GetVertices()[0]);
-	vertexBuffer.data.resize(sizeOfVertices);
-	memcpy(vertexBuffer.data.data(), l3d.GetVertices().data(), sizeOfVertices);
-	gltf.buffers.push_back(vertexBuffer);
-
-	tinygltf::Buffer indexBuffer; // 1
-	const size_t sizeOfIndices = l3d.GetIndices().size() * sizeof(l3d.GetIndices()[0]);
-	indexBuffer.data.resize(sizeOfIndices);
-	memcpy(indexBuffer.data.data(), l3d.GetIndices().data(), sizeOfIndices);
-	gltf.buffers.push_back(indexBuffer);
-
-	// TODO(raffclar): No support for BINARY_TYPE https://github.com/syoyo/tinygltf/issues/360
-	std::map<std::string, tinygltf::Value> extras;
-	// extras["footprint"] = tinygltf::Value(
-	//     tinygltf::base64_encode(l3d.GetFootprintData().data(), static_cast<uint32_t>(l3d.GetFootprintData().size())));
-	extras["uv2"] =
-	    tinygltf::Value(tinygltf::base64_encode(l3d.GetUv2Data().data(), static_cast<uint32_t>(l3d.GetUv2Data().size())));
-	auto name = l3d.GetNameData();
-	// Resize to the first null terminator as the string can contain a lot of junk data
-	name.resize(std::strlen(name.data()));
-	extras["name"] = tinygltf::Value(name);
-	gltf.extras = tinygltf::Value(extras);
-
-	// TODO(#473): weights, skins
-
-	// Buffer views
-	tinygltf::BufferView vertexView; // 0
-	vertexView.name = "vertex position view";
-	vertexView.buffer = 0;
-	vertexView.byteOffset = 0;
-	vertexView.byteLength = sizeOfVertices;
-	vertexView.byteStride = sizeof(openblack::l3d::L3DVertex);
-	vertexView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
-	gltf.bufferViews.push_back(vertexView);
-	tinygltf::BufferView indexView; // 1
-	indexView.name = "index view";
-	indexView.buffer = 1;
-	indexView.byteOffset = 0;
-	indexView.byteLength = sizeOfIndices;
-	indexView.byteStride = 0;
-	indexView.target = TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER;
-	gltf.bufferViews.push_back(indexView);
-
-	auto rootNodeIndex = static_cast<uint32_t>(gltf.nodes.size());
-	gltf.nodes.emplace_back().name = "root node"; // 0
-
-	// Scene
-	tinygltf::Scene scene;
-	scene.name = "l3dtool exported scene from " + args.inFilename.string();
-	scene.nodes.push_back(0);
-	gltf.scenes.push_back(scene);
-	gltf.defaultScene = 0;
-
-	// Meshes
-	uint32_t vertexOffset = 0;
-	uint32_t indexOffset = 0;
-	gltf.meshes.resize(l3d.GetSubmeshHeaders().size());
-	for (uint32_t i = 0; i < l3d.GetSubmeshHeaders().size(); ++i)
-	{
-		auto& gltfMesh = gltf.meshes[i];
-		gltfMesh.name = "submesh #" + std::to_string(i);
-		gltfMesh.primitives.resize(l3d.GetPrimitiveSpan(i).size());
-		for (uint32_t j = 0; j < l3d.GetPrimitiveSpan(i).size(); ++j)
+		const auto split = target.find('=');
+		if (split == std::string::npos)
 		{
-			auto& gltfPrimitive = gltfMesh.primitives[j];
-			auto& l3dPrimitive = l3d.GetPrimitiveSpan(i)[j];
-
-			// Accessors
-			tinygltf::Accessor vertexPositionAccessor;
-			vertexPositionAccessor.bufferView = 0;
-			vertexPositionAccessor.name =
-			    "vertex position accessor for primitive #" + std::to_string(j) + " of " + gltfMesh.name;
-			vertexPositionAccessor.byteOffset =
-			    vertexOffset * sizeof(openblack::l3d::L3DVertex) + offsetof(openblack::l3d::L3DVertex, position);
-			vertexPositionAccessor.normalized = false;
-			vertexPositionAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-			vertexPositionAccessor.count = l3dPrimitive.numVertices;
-			vertexPositionAccessor.type = TINYGLTF_TYPE_VEC3;
-			gltfPrimitive.attributes["POSITION"] = static_cast<int>(gltf.accessors.size());
-			gltf.accessors.push_back(vertexPositionAccessor);
-
-			tinygltf::Accessor vertexTextureCoordinateAccessor;
-			vertexTextureCoordinateAccessor.bufferView = 0;
-			vertexTextureCoordinateAccessor.name =
-			    "vertex texture coordinate accessor for primitive #" + std::to_string(j) + " of " + gltfMesh.name;
-			vertexTextureCoordinateAccessor.byteOffset =
-			    vertexOffset * sizeof(openblack::l3d::L3DVertex) + offsetof(openblack::l3d::L3DVertex, texCoord);
-			vertexTextureCoordinateAccessor.normalized = false;
-			vertexTextureCoordinateAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-			vertexTextureCoordinateAccessor.count = l3dPrimitive.numVertices;
-			vertexTextureCoordinateAccessor.type = TINYGLTF_TYPE_VEC2;
-			gltfPrimitive.attributes["TEXCOORD_0"] = static_cast<int>(gltf.accessors.size());
-			gltf.accessors.push_back(vertexTextureCoordinateAccessor);
-
-			tinygltf::Accessor vertexNormalAccessor;
-			vertexNormalAccessor.bufferView = 0;
-			vertexNormalAccessor.name = "vertex normal accessor for primitive #" + std::to_string(j) + " of " + gltfMesh.name;
-			vertexNormalAccessor.byteOffset =
-			    vertexOffset * sizeof(openblack::l3d::L3DVertex) + offsetof(openblack::l3d::L3DVertex, normal);
-			vertexNormalAccessor.normalized = false;
-			vertexNormalAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-			vertexNormalAccessor.count = l3dPrimitive.numVertices;
-			vertexNormalAccessor.type = TINYGLTF_TYPE_VEC3;
-			gltfPrimitive.attributes["NORMAL"] = static_cast<int>(gltf.accessors.size());
-			gltf.accessors.push_back(vertexNormalAccessor);
-
-			tinygltf::Accessor indexAccessor;
-			indexAccessor.bufferView = 1;
-			indexAccessor.name = "index accessor for primitive #" + std::to_string(j) + " of " + gltfMesh.name;
-			indexAccessor.byteOffset = indexOffset * sizeof(uint16_t);
-			indexAccessor.normalized = false;
-			indexAccessor.componentType = TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT;
-			indexAccessor.count = l3dPrimitive.numTriangles * 3;
-			indexAccessor.type = TINYGLTF_TYPE_SCALAR;
-			gltfPrimitive.indices = static_cast<int>(gltf.accessors.size());
-			gltf.accessors.push_back(indexAccessor);
-
-			// TODO(#473): gltfPrimitive.material
-			gltfPrimitive.mode = TINYGLTF_MODE_TRIANGLES;
-			// TODO(#473): gltfPrimitive.targets
-
-			vertexOffset += l3dPrimitive.numVertices;
-			indexOffset += l3dPrimitive.numTriangles * 3;
+			std::cerr << "Err: a target is NAME=FILE, not " << target << '\n';
+			return EXIT_FAILURE;
 		}
-		// TODO(#473): gltfMesh.weights
-		gltf.nodes[rootNodeIndex].children.push_back(static_cast<int>(gltf.nodes.size()));
-		tinygltf::Node node;
-		node.name = gltfMesh.name + " node";
-		node.mesh = static_cast<int>(i);
-		gltf.nodes.push_back(node);
+		options.targets.push_back({.name = target.substr(0, split), .mesh = target.substr(split + 1)});
 	}
 
-	const auto& bones = l3d.GetBones();
-	std::vector<uint32_t> roots;
-	for (uint32_t i = 0; i < bones.size(); ++i)
+	openblack::morph::MorphFile morph;
+	if (!args.creature.empty())
 	{
-		if (bones[i].parent == std::numeric_limits<uint32_t>::max())
+		openblack::pack::PackFile pack;
+		if (const auto result = pack.Open(args.creature);
+		    result != openblack::pack::PackResult::Success || !pack.HasBlock("Creature"))
 		{
-			roots.push_back(i);
+			std::cerr << "Err: no Creature block in " << args.creature.string() << '\n';
+			return EXIT_FAILURE;
 		}
-	}
-
-	for (const uint32_t i : roots)
-	{
-		auto boneToNode = [](tinygltf::Node& node, const openblack::l3d::L3DBone& bone) {
-			node.translation.clear();
-			node.translation.push_back(bone.position.x);
-			node.translation.push_back(bone.position.y);
-			node.translation.push_back(bone.position.z);
-
-			node.rotation.clear();
-			auto& w = node.rotation.emplace_back(1);
-			auto& x = node.rotation.emplace_back(0);
-			auto& y = node.rotation.emplace_back(0);
-			auto& z = node.rotation.emplace_back(0);
-
-			// From glm quat_cast
-			const float fourXSquaredMinus1 = bone.orientation[0] - bone.orientation[4] - bone.orientation[8];
-			const float fourYSquaredMinus1 = bone.orientation[4] - bone.orientation[0] - bone.orientation[8];
-			const float fourZSquaredMinus1 = bone.orientation[8] - bone.orientation[0] - bone.orientation[4];
-			const float fourWSquaredMinus1 = bone.orientation[0] + bone.orientation[4] + bone.orientation[8];
-
-			int biggestIndex = 0;
-			float fourBiggestSquaredMinus1 = fourWSquaredMinus1;
-			if (fourXSquaredMinus1 > fourBiggestSquaredMinus1)
-			{
-				fourBiggestSquaredMinus1 = fourXSquaredMinus1;
-				biggestIndex = 1;
-			}
-			if (fourYSquaredMinus1 > fourBiggestSquaredMinus1)
-			{
-				fourBiggestSquaredMinus1 = fourYSquaredMinus1;
-				biggestIndex = 2;
-			}
-			if (fourZSquaredMinus1 > fourBiggestSquaredMinus1)
-			{
-				fourBiggestSquaredMinus1 = fourZSquaredMinus1;
-				biggestIndex = 3;
-			}
-
-			const float biggestVal = -std::sqrt(fourBiggestSquaredMinus1 + 1.0f) * 0.5f;
-			const float mult = 0.25f / biggestVal;
-
-			switch (biggestIndex)
-			{
-			case 0:
-				w = biggestVal;
-				x = (bone.orientation[5] - bone.orientation[7]) * mult;
-				y = (bone.orientation[6] - bone.orientation[2]) * mult;
-				z = (bone.orientation[1] - bone.orientation[3]) * mult;
-				break;
-			case 1:
-				w = (bone.orientation[5] - bone.orientation[7]) * mult;
-				x = biggestVal;
-				y = (bone.orientation[1] - bone.orientation[3]) * mult;
-				z = (bone.orientation[6] - bone.orientation[2]) * mult;
-				break;
-			case 2:
-				w = (bone.orientation[6] - bone.orientation[2]) * mult;
-				x = (bone.orientation[1] - bone.orientation[3]) * mult;
-				y = biggestVal;
-				z = (bone.orientation[5] - bone.orientation[7]) * mult;
-				break;
-			case 3:
-				w = (bone.orientation[1] - bone.orientation[3]) * mult;
-				x = (bone.orientation[6] - bone.orientation[2]) * mult;
-				y = (bone.orientation[5] - bone.orientation[7]) * mult;
-				z = biggestVal;
-				break;
-			default:
-				std::unreachable();
-			}
+		const auto specDirectory = args.specDirectory.empty() ? args.creature.parent_path().parent_path() : args.specDirectory;
+		if (const auto result = morph.Open(pack.GetBlock("Creature"), specDirectory);
+		    result != openblack::morph::MorphResult::Success)
+		{
+			std::cerr << "Err: " << openblack::morph::ResultToStr(result) << '\n';
+			return EXIT_FAILURE;
+		}
+		const auto meshDirectory =
+		    args.meshDirectory.empty() ? args.creature.parent_path().parent_path() / "CreatureMesh" : args.meshDirectory;
+		const auto meshPath = [&meshDirectory](const std::array<char, 0x20>& field) {
+			const std::string_view raw(field.data(), field.size());
+			return std::string(raw.substr(0, raw.find(char {})));
 		};
-
-		// l3d index of current node + gltf index of parent node
-		std::stack<std::pair<uint32_t, uint32_t>> traversalStack;
-		traversalStack.emplace(i, rootNodeIndex);
-
-		tinygltf::Node node;
-		uint32_t index;
-		uint32_t parentIndex;
-		while (!traversalStack.empty())
+		const auto& header = morph.GetHeader();
+		if (options.mesh.empty())
 		{
-			std::tie(index, parentIndex) = traversalStack.top();
-			traversalStack.pop();
-			if (parentIndex == rootNodeIndex)
+			options.mesh = meshDirectory / (meshPath(header.baseMeshName) + ".l3d");
+		}
+		for (size_t i = 0; i < header.variantMeshNames.size() && i < k_CreatureTargetNames.size(); ++i)
+		{
+			const auto variant = meshPath(header.variantMeshNames.at(i));
+			if (!variant.empty())
 			{
-				node.name = "Bones root node #" + std::to_string(i);
-			}
-			else
-			{
-				node.name = "Bone Child #" + std::to_string(index) + " of #" + std::to_string(i);
-			}
-
-			gltf.nodes[parentIndex].children.push_back(static_cast<int>(gltf.nodes.size()));
-			const auto& l3dNode = bones[index];
-			boneToNode(node, l3dNode);
-			gltf.nodes.emplace_back(node);
-
-			if (l3dNode.rightSibling != std::numeric_limits<uint32_t>::max())
-			{
-				traversalStack.emplace(l3dNode.rightSibling, parentIndex);
-			}
-
-			if (l3dNode.firstChild != std::numeric_limits<uint32_t>::max())
-			{
-				traversalStack.emplace(l3dNode.firstChild, static_cast<uint32_t>(gltf.nodes.size() - 1));
+				options.targets.push_back(
+				    {.name = std::string(k_CreatureTargetNames.at(i)), .mesh = meshDirectory / (variant + ".l3d")});
 			}
 		}
+		if (args.animations)
+		{
+			options.animations = &morph;
+		}
+		options.notes.emplace_back("creatureFile", args.creature.filename().string());
 	}
-	// TODO(474): Associate mesh and joints to node
 
-	tinygltf::TinyGLTF exporter;
-	if (!exporter.WriteGltfSceneToFile(&gltf, args.gltfFile.string(), true, true, true, false))
+	if (options.mesh.empty())
 	{
-		std::cerr << "Err: Failed to write glTF.\n";
+		std::cerr << "Err: no input mesh\n";
 		return EXIT_FAILURE;
 	}
-
-	return EXIT_SUCCESS;
+	return openblack::l3dtool::ExportGltf(options, args.gltfFile);
 }
 
 bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexcept
@@ -1250,6 +1055,17 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 	options.add_options("write/extract from and to glTF format")                            //
 	    ("o,output", "Output file (required).", cxxopts::value<std::filesystem::path>())    //
 	    ("i,input-mesh", "Input file (required).", cxxopts::value<std::filesystem::path>()) //
+	    ;
+	options.add_options("extract")                                                                                    //
+	    ("t,target", "Add a mesh as a morph target, NAME=FILE (repeat).", cxxopts::value<std::vector<std::string>>()) //
+	    ("c,creature", "A creature's .cbn file: export its base mesh with its variants as morph targets.",
+	     cxxopts::value<std::filesystem::path>()) //
+	    ("spec-directory", "Directory of the creature spec files (default: two folders up from the .cbn file).",
+	     cxxopts::value<std::filesystem::path>()) //
+	    ("mesh-directory", "Directory of the creature meshes (default: CreatureMesh next to the CTR folder).",
+	     cxxopts::value<std::filesystem::path>())                                                                        //
+	    ("a,animations", "Add the creature's animations.", cxxopts::value<bool>()->default_value("false"))               //
+	    ("right-handed", "Flip the z axis to glTF's right-handed axes.", cxxopts::value<bool>()->default_value("false")) //
 	    ;
 
 	options.parse_positional({"subcommand"});
@@ -1370,15 +1186,32 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 	}
 	else if (result["subcommand"].as<std::string>() == "extract")
 	{
-		args.write.outFilename = "";
-		if (result["output"].count() > 0)
+		if (result["output"].count() > 0 && (result["input-mesh"].count() > 0 || result["creature"].count() > 0))
 		{
 			args.mode = Arguments::Mode::Extract;
-			args.extract.inFilename = result["input-mesh"].as<std::filesystem::path>();
+			args.extract.gltfFile = result["output"].as<std::filesystem::path>();
 			if (result["input-mesh"].count() > 0)
 			{
-				args.extract.gltfFile = result["output"].as<std::filesystem::path>();
+				args.extract.inFilename = result["input-mesh"].as<std::filesystem::path>();
 			}
+			if (result["target"].count() > 0)
+			{
+				args.extract.targets = result["target"].as<std::vector<std::string>>();
+			}
+			if (result["creature"].count() > 0)
+			{
+				args.extract.creature = result["creature"].as<std::filesystem::path>();
+			}
+			if (result["spec-directory"].count() > 0)
+			{
+				args.extract.specDirectory = result["spec-directory"].as<std::filesystem::path>();
+			}
+			if (result["mesh-directory"].count() > 0)
+			{
+				args.extract.meshDirectory = result["mesh-directory"].as<std::filesystem::path>();
+			}
+			args.extract.animations = result["animations"].as<bool>();
+			args.extract.rightHanded = result["right-handed"].as<bool>();
 			return true;
 		}
 	}
