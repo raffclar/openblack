@@ -44,6 +44,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
@@ -76,6 +77,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureSight.h"
 #include "ECS/Map.h"
+#include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -101,6 +103,7 @@
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Hand/HandGrabRules.h"
+#include "Help/VillageVoices.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
@@ -453,6 +456,34 @@ std::vector<magic::EffectReceiver> GameMagicWorld::ReceiversIn(const magic::Cell
 	return receivers;
 }
 
+/// What harmed a town, for the cry of its people: the thing that applied the harm, or else the miracle
+static guidance::Attacker CryAttacker(const ecs::Registry& registry, const magic::EffectSource& source)
+{
+	if (source.appliedBy.has_value())
+	{
+		const auto thing = *source.appliedBy;
+		if (thing == entt::null || !registry.Valid(thing))
+		{
+			return guidance::Attacker::Other;
+		}
+		if (registry.AllOf<Creature>(thing))
+		{
+			return guidance::Attacker::Creature;
+		}
+		if (ecs::object_physics::IsRock(thing) || registry.AnyOf<DeadTree, BuildingPiece>(thing))
+		{
+			return guidance::Attacker::Rock;
+		}
+		return guidance::Attacker::Other;
+	}
+	if (source.magicType.has_value() && Locator::infoConstants::has_value() &&
+	    magic::GetMagicInfo(Locator::infoConstants::value(), *source.magicType).spellSeedType == SpellSeedType::LightningBolt)
+	{
+		return guidance::Attacker::Lightning;
+	}
+	return guidance::Attacker::Other;
+}
+
 void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const magic::EffectOutcome> outcomes,
                            const magic::EffectSource& source)
 {
@@ -461,6 +492,12 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 	const bool byCreature = source.casterCreature != entt::null && registry.Valid(source.casterCreature) &&
 	                        registry.AllOf<Creature>(source.casterCreature);
 	float alignment = 0.0f;
+	// The cry of a town that the harm attacks: none when nothing burns, crushes, hits or throws
+	std::optional<guidance::TownAttackVoice> cry;
+	if (const auto fire = guidance::FireLeads(values); fire.has_value())
+	{
+		cry = guidance::TownAttackVoice {.fire = *fire, .attacker = CryAttacker(registry, source)};
+	}
 	for (const auto& outcome : outcomes)
 	{
 		if (!registry.Valid(outcome.entity))
@@ -505,7 +542,8 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 			const auto& things = Locator::entitiesRegistry::value();
 			const bool appliedByCreature =
 			    source.appliedBy.has_value() && things.Valid(*source.appliedBy) && things.AllOf<Creature>(*source.appliedBy);
-			ecs::world_objects::AttackTown(outcome.entity, outcome.damaged + outcome.burnt, source.player, appliedByCreature);
+			ecs::world_objects::AttackTown(outcome.entity, outcome.damaged + outcome.burnt, source.player, appliedByCreature,
+			                               cry);
 		}
 		// A player's miracle, not a creature's, is remembered against them by the player whose object it harmed
 		const auto owner = ecs::world_objects::PlayerOf(outcome.entity);
