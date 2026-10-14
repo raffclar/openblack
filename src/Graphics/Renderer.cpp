@@ -5859,6 +5859,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				auto mesh = meshManager.Handle(meshId);
 
 				submitDesc.useMaterialBlending = useMaterialBlending;
+				submitDesc.alphaTexturedAdditive = placers.alphaTexturedAdditive;
 				submitDesc.additiveShare = placers.additiveShare;
 				submitDesc.instanceAlpha = placers.instanceAlpha;
 				// The game gives the rooms the temple's light; the hand keeps its own
