@@ -56,12 +56,12 @@ constexpr std::array k_Executors {
     Executor {.action = "Puke", .build = Build::Puke, .activity = Activity::Puke},
     Executor {.action = "DrinkFromTheSea", .build = Build::Drink, .activity = Activity::Drink},
     Executor {.action = "FishAndEat", .build = Build::FishAndEat, .activity = Activity::Eat},
-    Executor {.action = "GiveFishToStoragePit", .target = Target::StoragePit, .build = Build::GiveFishToStore},
+    Executor {.action = "GiveFishToStoragePit", .target = Target::BuiltStoragePit, .build = Build::GiveFishToStore},
     Executor {.action = "TakeFishHome", .build = Build::TakeFishHome},
     Executor {.action = "GetHigh", .target = Target::Anything, .build = Build::GetHigh, .activity = Activity::Eat},
     // Trees: given to a town's store as wood, or planted by something
     Executor {.action = "GiveWoodFromTreeToStoragePit",
-              .target = Target::StoragePit,
+              .target = Target::BuiltStoragePit,
               .use = Target::PickableTree,
               .build = Build::GiveWoodToStore},
     Executor {.action = "GiveWoodFromTreeToBuildingSite",
@@ -241,6 +241,38 @@ constexpr std::array k_Executors {
     Executor {.action = "WaterField", .target = Target::DryField, .build = Build::CastWater},
     Executor {
         .action = "WaterTreeForTown", .target = Target::Anything, .use = Target::AnyTree, .build = Build::WaterTreeForTown},
+    // The power-up of watering a tree for a town asks the creature to know the water power-up, but casts plain water
+    Executor {
+        .action = "WaterTreePU1ForTown", .target = Target::Anything, .use = Target::AnyTree, .build = Build::WaterTreeForTown},
+    // The one-shot miracles that it casts: the one in its hand, or one that it picks up first. The game's data cuts
+    // some of these names short.
+    Executor {.action = "CastOneOffSpellInHandAggressive",
+              .target = Target::Anything,
+              .build = Build::CastOneShotInHand,
+              .oneShot = OneShotKind::Aggressive},
+    Executor {.action = "CastOneOffSpellInHandCompassiona",
+              .target = Target::Anything,
+              .build = Build::CastOneShotInHand,
+              .oneShot = OneShotKind::Compassionate},
+    Executor {.action = "CastOneOffSpellInHandPlayful",
+              .target = Target::Creature,
+              .build = Build::CastOneShotInHand,
+              .oneShot = OneShotKind::Playful},
+    Executor {.action = "PickUpAndCastOneOffSpellAggressi",
+              .target = Target::Anything,
+              .use = Target::OneShotAggressive,
+              .build = Build::PickUpAndCastOneShot,
+              .oneShot = OneShotKind::Aggressive},
+    Executor {.action = "PickUpAndCastOneOffSpellCompassi",
+              .target = Target::Anything,
+              .use = Target::OneShotCompassionate,
+              .build = Build::PickUpAndCastOneShot,
+              .oneShot = OneShotKind::Compassionate},
+    Executor {.action = "PickUpAndCastOneOffSpellPlayful",
+              .target = Target::Creature,
+              .use = Target::OneShotPlayful,
+              .build = Build::PickUpAndCastOneShot,
+              .oneShot = OneShotKind::Playful},
     Executor {.action = "DeadForever", .build = Build::DeadForever},
     Executor {.action = "PointOutHighlight", .target = Target::Anything, .build = Build::PointOutHighlight},
     // The creature shows the player that it saw a deed of the player
@@ -249,8 +281,10 @@ constexpr std::array k_Executors {
     Executor {.action = "NoticeAction", .target = Target::Anything, .build = Build::Notice},
     Executor {.action = "NoticeStealingAction", .target = Target::Anything, .build = Build::Notice},
     Executor {.action = "NoticePlayfulAction", .target = Target::Anything, .build = Build::Notice},
-    Executor {
-        .action = "SleepByObject", .target = Target::Anything, .build = Build::SleepByObject, .activity = Activity::Sleep},
+    Executor {.action = "SleepByObject",
+              .target = Target::Anything,
+              .build = Build::SleepByObject,
+              .activity = Activity::Sleep},
     // What scripts force on creatures to stage their scenes
     Executor {.action = "LookForever", .target = Target::Anything, .build = Build::LookForever},
     Executor {.action = "LookButDontApproach", .target = Target::Anything, .build = Build::LookButDontApproach},
@@ -313,6 +347,20 @@ std::optional<creature_mind::FishingTrip> TripFor(const Situation::Fishing& fish
 	    .shoal = fishing.shoal, .arriveWithin = fishing.arriveWithin, .putDownFirst = fishing.putDownFirst};
 }
 } // namespace
+
+bool creature_plan_actions::OneShot::Is(OneShotKind kind) const
+{
+	switch (kind)
+	{
+	case OneShotKind::Aggressive:
+		return aggressive;
+	case OneShotKind::Compassionate:
+		return compassionate;
+	case OneShotKind::Playful:
+		return playful;
+	}
+	return false;
+}
 
 std::span<const Executor> creature_plan_actions::All()
 {
@@ -384,6 +432,9 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::Notice:
 		// It turns to the camera only when it has a player
 		return !situation.hasPlayer || situation.eye.has_value();
+	case Build::CastOneShotInHand:
+		// Only with a one-shot miracle of the action's kind in its hand
+		return situation.heldOneShot.has_value() && situation.heldOneShot->Is(executor.oneShot);
 	default:
 		return true;
 	}
@@ -659,6 +710,23 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::LookAtCameraInCutScene(situation.eye, random);
 	case Build::PointAtCamera:
 		return creature_mind::PointAtCamera(situation.hasPlayer, *situation.eye);
+	case Build::CastOneShotInHand:
+		return creature_mind::CastOneShotAt({.magicType = situation.heldOneShot->magicType,
+		                                     .target = *object,
+		                                     .height = situation.height,
+		                                     .getAway = executor.oneShot != OneShotKind::Compassionate});
+	case Build::PickUpAndCastOneShot:
+		// Without a one-shot miracle to use, the action fails
+		if (!situation.instrument.has_value() || !situation.usedOneShot.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::CastOneShotAt({.magicType = situation.usedOneShot->magicType,
+		                                     .target = *object,
+		                                     .height = situation.height,
+		                                     .pickUp = situation.handFull ? std::nullopt : situation.instrument,
+		                                     .used = situation.instrument,
+		                                     .getAway = true});
 	case Build::Never:
 		return std::nullopt;
 	}

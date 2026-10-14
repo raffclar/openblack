@@ -63,6 +63,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
@@ -1560,6 +1561,11 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 		if (const auto* mobile = registry.TryGet<const MobileObject>(object))
 		{
 			return mobile->type == MobileObjectInfo::Creed ? Thing::Creed : Thing::MobileObject;
+		}
+		// A one-shot miracle's globe lies about as any other thing does
+		if (registry.AllOf<OneOffSpellSeed>(object))
+		{
+			return Thing::MobileObject;
 		}
 		if (registry.AllOf<Rock>(object))
 		{

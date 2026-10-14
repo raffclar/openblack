@@ -275,3 +275,35 @@ creature_mind::FizzleReaction creature_mind::ReactToFizzle(const Random& random,
 	}
 	return reaction;
 }
+
+std::vector<Step> creature_mind::CastOneShotAt(const OneShotCast& cast)
+{
+	std::vector<Step> agenda;
+	if (cast.pickUp.has_value())
+	{
+		agenda.push_back({.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::PickUp, .object = *cast.pickUp}});
+	}
+	agenda.push_back(
+	    {.kind = Step::Kind::Move,
+	     .movement = {.kind = Movement::Kind::GoNearObject, .object = cast.target, .maxDistance = k_OneShotCastDistance}});
+	if (cast.getAway)
+	{
+		agenda.push_back({.kind = Step::Kind::Move,
+		                  .movement = {.kind = Movement::Kind::GetAwayFromObject,
+		                               .object = cast.target,
+		                               .maxDistance = 2.0f * cast.height}});
+	}
+	agenda.push_back(TurnToFace(cast.target));
+	agenda.push_back({.kind = Step::Kind::UseUpHeld});
+	agenda.push_back(CastFromPose(cast.magicType, cast.target, k_CastPose, k_CastHoldSeconds));
+	if (cast.used.has_value())
+	{
+		agenda.push_back({.kind = Step::Kind::UseUp, .object = *cast.used});
+	}
+	return agenda;
+}
+
+creature_mind::FizzleRecord creature_mind::ForgetGoneThing(const FizzleRecord& record, uint32_t gone)
+{
+	return record.lastThing == gone ? FizzleRecord {} : record;
+}

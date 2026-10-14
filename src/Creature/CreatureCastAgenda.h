@@ -152,6 +152,32 @@ struct ImpressiveMiracleState
 };
 [[nodiscard]] bool CanCastToImpress(std::span<const ImpressiveMiracleState> miracles);
 
+/// A creature goes this near the thing that it casts a one-shot miracle at
+inline constexpr float k_OneShotCastDistance = 50.0f;
+/// A one-shot miracle that the creature casts at a thing, by entity numbers
+struct OneShotCast
+{
+	/// The first miracle of the seed in the globe
+	uint32_t magicType {0};
+	uint32_t target {0};
+	/// The creature's height
+	float height {0.0f};
+	/// The globe that it picks up first, none when it holds the globe or its hand holds something else
+	std::optional<uint32_t> pickUp;
+	/// The globe that goes from the world after the cast, none for a globe in its hand
+	std::optional<uint32_t> used;
+	/// Whether it gets away from the thing to twice its height before it turns
+	bool getAway {true};
+};
+/// The creature casts a one-shot miracle at a thing. The steps are these:
+/// 1. It picks up the globe, when it must.
+/// 2. It goes near the thing, and gets away from the thing when it must.
+/// 3. It turns to face the thing.
+/// 4. What its hand holds goes from the world.
+/// 5. It casts the miracle from the casting pose.
+/// 6. The globe that it used goes from the world.
+[[nodiscard]] std::vector<Step> CastOneShotAt(const OneShotCast& cast);
+
 /// What a creature does when its try at a miracle fizzles: it is embarrassed, then one time in two it is sad too. The
 /// sadness grows by the chance from 0 to 1 times this.
 inline constexpr float k_SadnessFromFizzle = 0.3f;
@@ -162,5 +188,19 @@ struct FizzleReaction
 	std::optional<float> sadness;
 };
 [[nodiscard]] FizzleReaction ReactToFizzle(const Random& random, float chance);
+
+/// What a creature keeps of its tries that fizzled, by entity numbers: the thing of the last try at a thing that
+/// fizzled, and whether it has yet to show its feelings about a try that fizzled
+struct FizzleRecord
+{
+	std::optional<uint32_t> lastThing;
+	bool pending {false};
+
+	bool operator==(const FizzleRecord&) const = default;
+};
+/// The record after a thing goes from the world. When the thing is the thing of the last try that fizzled, the creature
+/// forgets the record: it keeps no thing for a later try at a place, and it does not show the feelings that it has yet
+/// to show.
+[[nodiscard]] FizzleRecord ForgetGoneThing(const FizzleRecord& record, uint32_t gone);
 
 } // namespace openblack::creature_mind

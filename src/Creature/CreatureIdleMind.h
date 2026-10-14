@@ -370,6 +370,8 @@ struct Step
 		Repair,
 		/// Doing away with the step's object at once, as with the tree used up mending a building
 		UseUp,
+		/// Doing away at once with what its hand holds now, as with a one-shot miracle that it casts
+		UseUpHeld,
 		/// Watching its player's camera: turning to it whenever it is more than a quarter turn away, until whole seconds
 		/// of turns more than the step's seconds have gone by, or the camera is right overhead or more than 100 away. A
 		/// creature without a player is done at once. With the step's turns set it watches for that many turns whatever
@@ -652,6 +654,8 @@ struct Commands
 	/// A building to mend, and a thing to do away with, by their entities' numbers
 	std::optional<uint32_t> repair;
 	std::optional<uint32_t> useUp;
+	/// What its hand holds goes from the world this turn
+	bool useUpHeld {false};
 	/// What the head looks at this turn, for a step that gives it something to look at
 	std::optional<Gaze> gaze;
 	/// A swap of minds: bring every spell on it to its end, start the beam to the other creature, take on a turn more of

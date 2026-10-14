@@ -86,6 +86,7 @@
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
@@ -120,6 +121,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 #include "MagicLiving.h"
 #include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
@@ -252,6 +254,24 @@ std::optional<creature_object_actions::Toy> ToyOf(const ecs::Registry& registry,
 	const auto& statics = Locator::infoConstants::value().mobileStatic;
 	const auto kind = static_cast<size_t>(still->type);
 	return kind < statics.size() ? creature_object_actions::ToyOf(statics.at(kind).meshId) : std::nullopt;
+}
+
+/// The one-shot miracle that a globe holds, as a creature sees it; none for a thing that is not a globe
+std::optional<creature_plan_actions::OneShot> OneShotOf(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto* globe = registry.Valid(entity) ? registry.TryGet<const OneOffSpellSeed>(entity) : nullptr;
+	if (globe == nullptr || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	// The kinds come from the first miracle of the globe's seed, whatever its power-up
+	const auto& info = Locator::infoConstants::value();
+	const auto type = magic::GetSpellSeedInfo(info, globe->seedType).magicTypes[0];
+	const auto& miracle = magic::GetMagicInfo(info, type);
+	return creature_plan_actions::OneShot {.magicType = static_cast<uint32_t>(type),
+	                                       .aggressive = miracle.oneOffSpellIsAggressive != 0,
+	                                       .compassionate = miracle.oneOffSpellIsCompassionate != 0,
+	                                       .playful = miracle.oneOffSpellIsPlayful != 0};
 }
 
 bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, entt::entity self)
@@ -403,12 +423,8 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	}
 	case Target::BuildingBeingBuilt:
 	{
-		// Of the towns' buildings and worship sites (the temple isn't one): still going up, or damaged and below its
-		// full life
-		if (!registry.AnyOf<Abode, WorshipSite>(entity) || registry.AllOf<Temple>(entity))
-		{
-			return false;
-		}
+		// Anything built that is still going up (a building, a worship site or the temple), or a building that its town
+		// repairs and that is below its full life
 		const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		return (progress != nullptr && progress->built < 1.0f) ||
 		       (registry.AllOf<RepairSite>(entity) && ecs::world_objects::LifeOf(entity) < 1.0f);
@@ -427,6 +443,17 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		const auto at = PointOf(registry, entity);
 		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity).has_value() && home.has_value() &&
 		       at.has_value() && gutils::GetDistanceInMetres(*home, glm::vec3(at->x, home->y, at->y)) > k_ToyAwayFromHome;
+	}
+	case Target::OneShotAggressive:
+	case Target::OneShotCompassionate:
+	case Target::OneShotPlayful:
+	{
+		// A globe that lies about or that it holds, but not one in a player's hand or another creature's hand
+		const auto kind = target == Target::OneShotAggressive      ? creature_plan_actions::OneShotKind::Aggressive
+		                  : target == Target::OneShotCompassionate ? creature_plan_actions::OneShotKind::Compassionate
+		                                                           : creature_plan_actions::OneShotKind::Playful;
+		const auto oneShot = OneShotOf(registry, entity);
+		return !heldByOther && !registry.AllOf<InHand>(entity) && oneShot.has_value() && oneShot->Is(kind);
 	}
 	case Target::PickableTree:
 		return !heldByOther && registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanPickUp(self, entity);
@@ -534,10 +561,10 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	}
 	if (target == Target::BuildingBeingBuilt)
 	{
-		registry.Each<const Abode, const Transform>(
-		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
-		registry.Each<const WorshipSite, const Transform>(
-		    [&](entt::entity entity, const WorshipSite&, const Transform& at) { consider(entity, at); });
+		registry.Each<const BuildProgress, const Transform>(
+		    [&](entt::entity entity, const BuildProgress&, const Transform& at) { consider(entity, at); });
+		registry.Each<const RepairSite, const Transform>(
+		    [&](entt::entity entity, const RepairSite&, const Transform& at) { consider(entity, at); });
 	}
 	const bool fire = target == Target::Burning || target == Target::Unburnt;
 	if (target == Target::Destroyable || target == Target::Tree || anything || fire || pickable || sea ||
@@ -584,6 +611,11 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	{
 		registry.Each<const Tree, const Transform>(
 		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::OneShotAggressive || target == Target::OneShotCompassionate || target == Target::OneShotPlayful)
+	{
+		registry.Each<const OneOffSpellSeed, const Transform>(
+		    [&](entt::entity entity, const OneOffSpellSeed&, const Transform& at) { consider(entity, at); });
 	}
 	if (target == Target::DryField || target == Target::Waterable)
 	{
@@ -1440,6 +1472,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		const auto& registry = Locator::entitiesRegistry::value();
 		situated.instrumentPoint = PointOf(registry, used).value_or(glm::vec2(0.0f));
 		situated.instrumentRadius = object_measures::TwoDRadius(registry, used);
+		situated.usedOneShot = OneShotOf(registry, used);
 	}
 	if (object.has_value())
 	{
@@ -2828,6 +2861,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	if (held.has_value())
 	{
 		situation.holdingEatable = Locator::creatureObjectActionSystem::value().CanEatHeld(creature);
+		situation.heldOneShot = OneShotOf(registry, *held);
 		const auto thing = Locator::creatureObjectActionSystem::value().KindOf(*held).thing;
 		const auto* mobile = registry.TryGet<const MobileObject>(*held);
 		situation.holdingTree = thing == creature_object_actions::Thing::Tree;

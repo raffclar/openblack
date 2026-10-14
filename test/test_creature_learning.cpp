@@ -1070,7 +1070,7 @@ TEST(CreaturePlanActions, GivingFishToAStorePitFishesTurnsToThePitAndThrowsItIn)
 	const auto random = [](uint32_t) { return 0u; };
 	const auto* give = creature_plan_actions::For("GiveFishToStoragePit");
 	ASSERT_NE(give, nullptr);
-	EXPECT_EQ(give->target, creature_plan_actions::Target::StoragePit);
+	EXPECT_EQ(give->target, creature_plan_actions::Target::BuiltStoragePit);
 	creature_plan_actions::Situation situation;
 	EXPECT_FALSE(creature_plan_actions::Possible(*give, situation));
 	// It walks straight to the shoal, even where it couldn't stand to fish for itself

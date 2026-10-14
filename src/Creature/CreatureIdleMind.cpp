@@ -967,6 +967,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.useUp = step.object;
 			FinishStep(mind);
 			break;
+		case Step::Kind::UseUpHeld:
+			commands.useUpHeld = true;
+			FinishStep(mind);
+			break;
 		case Step::Kind::Observe:
 			// Taken in at once
 			commands.effect = Effect::Observed;
@@ -1148,6 +1152,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Shatter:
 	case Step::Kind::Repair:
 	case Step::Kind::UseUp:
+	case Step::Kind::UseUpHeld:
 	case Step::Kind::Observe:
 		// Done as it starts
 		FinishStep(mind);
