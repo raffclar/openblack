@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 #include <entt/entity/fwd.hpp>
 
@@ -30,7 +31,10 @@ namespace openblack::ecs
 {
 struct RegistryContext
 {
-	std::unordered_map<components::Footpath::Id, entt::entity> footpaths;
+	/// The footpaths that the land's script made, the newest first, as the script's footpath commands count them
+	std::vector<entt::entity> scriptFootpaths;
+	/// The thing that the land's script made last, if it can keep footpaths. A footpath link command goes to it.
+	entt::entity scriptThingMadeLast {entt::null};
 	std::unordered_map<components::Stream::Id, entt::entity> streams;
 	std::unordered_map<uint32_t, entt::entity> towns;
 	components::VillageLightFlames villageLightFlames {.clock = 0, .starts = village_lights::k_FlameStarts};

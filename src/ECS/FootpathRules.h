@@ -14,6 +14,7 @@
 
 #include <optional>
 #include <span>
+#include <string_view>
 
 #include <glm/vec2.hpp>
 
@@ -107,5 +108,13 @@ struct Leg
 
 /// A node on the way, moved by two draws in [0, 0x2000): x first, then z
 [[nodiscard]] glm::ivec2 Jittered(glm::ivec2 place, uint32_t drawX, uint32_t drawZ);
+
+/// Whether a command of a land's script makes a thing. A footpath link command goes to the thing that the last of these
+/// commands made. When that thing cannot keep footpaths, the link command does nothing.
+[[nodiscard]] bool ScriptCommandMakesThing(std::string_view command);
+
+/// The position in a list of the script's footpaths, the newest first, of the footpath that the script gives this
+/// number. The script counts from the newest footpath, which is number 0. None when no footpath has the number.
+[[nodiscard]] std::optional<size_t> ScriptFootpathIndex(size_t count, int32_t number);
 
 } // namespace openblack::ecs::footpath_rules

@@ -10,12 +10,25 @@
 #include "Script.h"
 
 #include <algorithm>
+#include <array>
 #include <ranges>
 
+#include <entt/signal/sigh.hpp>
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/Feature.h"
+#include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flowers.h"
+#include "ECS/Components/LandForest.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/WorshipSite.h"
+#include "ECS/FootpathRules.h"
+#include "ECS/Registry.h"
 #include "FeatureScriptCommands.h"
 #include "Lexer.h"
 #include "Locator.h"
@@ -164,6 +177,52 @@ ScriptCommandParameter GetParameter(Token& argument, glm::vec3 origin)
 }
 } // namespace
 
+namespace
+{
+/// Keeps the first thing made that can keep footpaths, while a command of the land's script runs
+struct FirstFootpathKeeper
+{
+	entt::entity entity {entt::null};
+	void Made(entt::registry&, entt::entity made)
+	{
+		if (entity == entt::null)
+		{
+			entity = made;
+		}
+	}
+};
+
+/// Runs a command that makes a thing, and keeps that thing for the footpath link commands that follow. The kinds
+/// listed are those that can keep footpaths. Any other thing is kept as nothing, so that a link that follows it does
+/// nothing.
+template <typename Run>
+void RunAndKeepThingMade(Run&& run)
+{
+	using namespace ecs::components;
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		run();
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& underlying = registry.Underlying();
+	FirstFootpathKeeper keeper;
+	const std::array connections {
+	    entt::scoped_connection {underlying.on_construct<Abode>().connect<&FirstFootpathKeeper::Made>(keeper)},
+	    entt::scoped_connection {underlying.on_construct<Field>().connect<&FirstFootpathKeeper::Made>(keeper)},
+	    entt::scoped_connection {underlying.on_construct<FishFarm>().connect<&FirstFootpathKeeper::Made>(keeper)},
+	    entt::scoped_connection {underlying.on_construct<WorshipSite>().connect<&FirstFootpathKeeper::Made>(keeper)},
+	    entt::scoped_connection {underlying.on_construct<Feature>().connect<&FirstFootpathKeeper::Made>(keeper)},
+	    entt::scoped_connection {underlying.on_construct<Flowers>().connect<&FirstFootpathKeeper::Made>(keeper)},
+	    entt::scoped_connection {underlying.on_construct<AnimatedStatic>().connect<&FirstFootpathKeeper::Made>(keeper)},
+	    entt::scoped_connection {underlying.on_construct<MobileStatic>().connect<&FirstFootpathKeeper::Made>(keeper)},
+	    entt::scoped_connection {underlying.on_construct<LandForest>().connect<&FirstFootpathKeeper::Made>(keeper)},
+	};
+	run();
+	registry.Context().scriptThingMadeLast = keeper.entity;
+}
+} // namespace
+
 void Script::RunCommand(const std::string& identifier, const std::vector<Token>& args)
 {
 	const ScriptCommandSignature* commandSignature = nullptr;
@@ -222,6 +281,11 @@ void Script::RunCommand(const std::string& identifier, const std::vector<Token>&
 		}
 	}
 
+	if (ecs::footpath_rules::ScriptCommandMakesThing(identifier))
+	{
+		RunAndKeepThingMade([&]() { commandSignature->command(parameters); });
+		return;
+	}
 	commandSignature->command(parameters);
 }
 

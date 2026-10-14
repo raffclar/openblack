@@ -169,6 +169,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
 #include "LHScriptX/FeatureScriptCommands.h"
+#include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
@@ -569,6 +570,11 @@ void Runner::Start(const Scenario& scenario)
 	PlaceObjects(scenario, _middle);
 	PlaceHighlights(scenario, _middle);
 	PlaceFootpaths(scenario, _middle);
+	if (!scenario.landScript.empty())
+	{
+		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y});
+		landScript.Load(std::string(scenario.landScript));
+	}
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
