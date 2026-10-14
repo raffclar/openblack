@@ -1174,6 +1174,10 @@ void CreatureMindSystem::Abandon(CreatureMindState& mind)
 		mind.learnt->contexts.back().running = false;
 	}
 	mind.planActive = false;
+	if (mind.planner.current.has_value())
+	{
+		mind.planner.lastObject = mind.planner.current->object;
+	}
 	mind.planner.current.reset();
 }
 

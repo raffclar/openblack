@@ -2442,7 +2442,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_planner::PlannerState>(context, ValueOnly {})
 	    .Field<&openblack::creature_planner::PlannerState::best>("best", {k_CreatureDesiresDesireNames})
 	    .Field<&openblack::creature_planner::PlannerState::nextGoal>("nextGoal")
-	    .Field<&openblack::creature_planner::PlannerState::current>("current");
+	    .Field<&openblack::creature_planner::PlannerState::current>("current")
+	    .Field<&openblack::creature_planner::PlannerState::lastObject>("lastObject");
 	Reflect<openblack::creature_route::Circle>(context, ValueOnly {})
 	    .Field<&openblack::creature_route::Circle::centre>("centre")
 	    .Field<&openblack::creature_route::Circle::radius>("radius");
