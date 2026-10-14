@@ -32,6 +32,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -140,7 +141,9 @@ void CreatureSpawner::DrawHands(entt::entity entity) noexcept
 			ImGui::TextUnformatted("No feedback from the player yet");
 		}
 		ImGui::Text("Attitude to the player %+.3f, average feedback %+.2f", static_cast<double>(mind->attitudeToPlayer),
-		            static_cast<double>(mind->averageFeedback));
+		            static_cast<double>(Locator::creatureMindSystem::has_value()
+		                                    ? Locator::creatureMindSystem::value().GetAverageFeedback()
+		                                    : 0.0f));
 	}
 	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == entity)
 	{

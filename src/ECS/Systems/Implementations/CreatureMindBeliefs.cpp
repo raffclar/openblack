@@ -210,18 +210,6 @@ creature_look::Interest LookInterestOf(const ecs::Registry& registry, entt::enti
 	return Interest::Fixed;
 }
 
-/// How much things on the land catch the eye of a creature of a species, from its creature info
-float LookWeightOf(CreatureType species)
-{
-	if (!Locator::infoConstants::has_value())
-	{
-		return 0.0f;
-	}
-	const auto& creatures = Locator::infoConstants::value().creature;
-	const auto row = creature::InfoRow(species);
-	return row < creatures.size() ? creatures.at(row).lookAtObjectsWeight : 0.0f;
-}
-
 /// The way a creature looks, as a game angle: towards what its head is turned to, or else the way its body faces
 uint16_t LookingAngle(const Transform& transform, const std::optional<glm::vec3>& lookAt)
 {
@@ -491,7 +479,8 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 	const auto looking = LookingAngle(transform, animation.lookAt);
 	const auto facing = LookingAngle(transform, std::nullopt);
 	const auto range = creature_look::LookRange(ShownSize(creature));
-	const auto weight = LookWeightOf(creature.species);
+	// How much things on the land catch its own eye, which its personality spreads from its species' weight
+	const auto weight = mind.innate.objectsLookWeight;
 	// Whether a thing is in view, and how far it is along the ground
 	const auto view = [&](entt::entity thing) {
 		const auto at = PlaceOf(registry, thing);

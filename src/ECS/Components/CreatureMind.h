@@ -19,6 +19,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
+#include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLook.h"
@@ -57,8 +58,13 @@ struct CreatureMindState
 	/// at where it stands) or a point
 	std::optional<creature_mind::Gaze> scriptFocus;
 
-	/// Seconds since the player last paid it any attention
-	float secondsAlone {0.0f};
+	/// The personality it was born with, set with the desires
+	creature_desire_sources::InnateTraits innate {};
+	/// How much attention the player pays it, and how interesting it finds the player
+	creature_desire_sources::Attention attention {};
+	creature_desire_sources::PlayerInterest playerInterest {};
+	/// It has seen villages of other players, or of no player: a source of wanting to impress
+	float impressFromSeeing {0.0f};
 	/// Game turns its player's camera was looking at it, which over the turns it has lived is the attention its god has
 	/// paid it
 	uint32_t turnsLookedAt {0};
@@ -73,9 +79,8 @@ struct CreatureMindState
 	/// it had feedback then.
 	std::optional<float> feedbackSeconds {0.0f};
 	bool feedbackWasStroke {false};
-	/// How it feels about the player, which each stroke or slap nudges, and the average of what it has been given
+	/// How it feels about the player, which each stroke or slap nudges
 	float attitudeToPlayer {0.0f};
-	float averageFeedback {0.0f};
 	/// What it thinks its player wants, from what it has seen the player do
 	creature_perceived_desires::PerceivedDesires perceivedDesires {};
 	/// The last feedback the player gave it as the hand let go, from -1 (slapped) to 1 (stroked), and what it was doing

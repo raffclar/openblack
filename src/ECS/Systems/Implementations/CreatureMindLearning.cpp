@@ -39,6 +39,7 @@
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureKindAgendas.h"
@@ -1092,6 +1093,10 @@ void CreatureMindSystem::SetUpMind(entt::entity creature, const Creature& body, 
 		mind.desires = creature_desires::Create(SetupFor(body.species), [this](float low, float high) {
 			return high > low ? std::uniform_real_distribution<float>(low, high)(_random) : low;
 		});
+		// It is born with its species' personality, spread at random
+		mind.innate = creature_desire_sources::SpreadTraits(InnateTraitsOf(body.species), [this](float most) {
+			return most > 0.0f ? std::uniform_real_distribution<float>(0.0f, most)(_random) : 0.0f;
+		});
 	}
 	if (!mind.learnt.has_value())
 	{
@@ -1106,6 +1111,11 @@ void CreatureMindSystem::SetUpLearning(entt::entity creature, CreatureMindState&
 	auto knowledge = tables != nullptr ? creature_watching::StartKnowledge(tables->skills, tables->miracles)
 	                                   : creature_watching::Knowledge {};
 	mind.learnt = creature_mind_model::Fresh(*mind.desires, actionCount, std::move(knowledge));
+	// A new mind did each action a short time ago, picked at random for each
+	for (auto& turns : mind.learnt->turnsSinceDone)
+	{
+		turns = Random(creature_desire_sources::k_NewActionTurnsRange);
+	}
 	if (mind.resourceChecked)
 	{
 		return;
@@ -2628,6 +2638,11 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 void CreatureMindSystem::AteMagicMushroom(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// Every magic mushroom it eats counts, also while it is high
+	if (auto* body = registry.Valid(creature) ? registry.TryGet<Creature>(creature) : nullptr)
+	{
+		++body->magicMushroomsEaten;
+	}
 	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr)
 	{
 		mind->highPending = true;
@@ -3215,6 +3230,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	const auto d = static_cast<size_t>(desire);
 	const auto& texts = tables->texts.at(d);
 	context->credited = strength;
+	// It is taught: the player has dealt with it
+	mind.attention.turnsSinceInteraction = 0;
 	if (tables->rules.at(d).learnable)
 	{
 		creature_learning::LearnDesireLesson(desires, desire, creature_learning::DominantSource(desires[desire]), strength,
@@ -3851,7 +3868,8 @@ void CreatureMindSystem::WatchSkill(entt::entity creature, size_t skill)
 void CreatureMindSystem::WatchVillager(entt::entity creature, CreatureMindState& mind, entt::entity villager)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!mind.learnt.has_value() || !Locator::infoConstants::has_value() || !registry.AllOf<Villager>(villager))
+	const auto* person = registry.TryGet<const Villager>(villager);
+	if (person == nullptr)
 	{
 		return;
 	}
@@ -3860,8 +3878,25 @@ void CreatureMindSystem::WatchVillager(entt::entity creature, CreatureMindState&
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .planDesire = mind.planner.current.has_value() ? std::optional(mind.planner.current->desire) : std::nullopt,
 	};
+	if (!creature_watching::WatchesVillagers(watcher))
+	{
+		return;
+	}
+	WatchVillagerSkill(creature, mind, villager);
+	// A villager of another player's village, or of a village of no player, makes it want to impress more
+	const auto* town = registry.Valid(person->town) ? registry.TryGet<const Town>(person->town) : nullptr;
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (town != nullptr && (town->owner == PlayerNames::NEUTRAL || body == nullptr || town->owner != body->owner))
+	{
+		mind.impressFromSeeing = creature_desire_sources::ImpressAfterSighting(mind.impressFromSeeing);
+	}
+}
+
+void CreatureMindSystem::WatchVillagerSkill(entt::entity creature, CreatureMindState& mind, entt::entity villager)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	const auto* action = registry.TryGet<const LivingAction>(villager);
-	if (!creature_watching::WatchesVillagers(watcher) || action == nullptr)
+	if (!mind.learnt.has_value() || !Locator::infoConstants::has_value() || action == nullptr)
 	{
 		return;
 	}

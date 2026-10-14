@@ -13,6 +13,7 @@
 
 #include <algorithm>
 
+#include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureLayers.h"
 
 using namespace openblack;
@@ -136,14 +137,20 @@ Desires creature_desires::Create(const std::array<DesireSetup, k_DesireCount>& s
 		auto& desire = desires.desires.at(i);
 		desire.max = from.max;
 		desire.decay = uniform(from.decayMin, from.decayMax);
-		desire.increaseSeconds = from.increaseSeconds;
+		const auto upTo = [&uniform](float most) { return uniform(0.0f, most); };
+		desire.increaseSeconds = creature_desire_sources::SpreadIncreaseSeconds(from.increaseSeconds, upTo);
 		desire.weight = from.weight;
-		for (const auto& source : from.sources)
+		for (size_t s = 0; s < from.sources.size(); ++s)
 		{
-			if (source.type < k_NoSource && desire.sources.size() < k_MaxSources)
+			const auto& source = from.sources.at(s);
+			if (source.type >= k_NoSource || desire.sources.size() >= k_MaxSources)
 			{
-				desire.sources.push_back(source);
+				continue;
 			}
+			const auto spread = s < from.spreads.size() ? from.spreads.at(s) : DesireSetup::Spread {};
+			auto& added = desire.sources.emplace_back(source);
+			added.value = creature_desire_sources::SpreadSource(source.value, spread.value, upTo);
+			added.threshold = creature_desire_sources::SpreadSource(source.threshold, spread.threshold, upTo);
 		}
 	}
 	return desires;
@@ -231,6 +238,7 @@ void creature_desires::SetSource(Desires& desires, uint32_t type, float value)
 			}
 		}
 	}
+	desires.written.emplace_back(type, value);
 }
 
 void creature_desires::MakeSourcesFull(Desires& desires, Desire desire)
