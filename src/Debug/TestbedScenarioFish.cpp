@@ -10,6 +10,7 @@
 // The testbed's scenarios of a fish farm on the lake's shore: its shoal swimming, and the hand finding the farm through
 // its fish, scooping them and scaring them
 
+#include <string_view>
 #include <vector>
 
 #include "3D/FlatLand.h"
@@ -120,6 +121,35 @@ std::vector<FootpathSetup> ShoreFootpaths()
 	};
 }
 
+/// The hut and the empty storage pit by the lake-shore farm's place, and a fisherman of their town 30 m from the farm
+std::vector<ObjectSetup> ShoreTownForScriptFootpaths()
+{
+	return {
+	    {.type = AbodeInfo::NorseHut, .offset = k_ShoreFarm + glm::vec2(-30.0f, -60.0f), .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_ShoreFarm + glm::vec2(25.0f, -30.0f), .storedFood = 0},
+	    {.type = VillagerInfo::NorseFishermanMale, .offset = k_ShoreFarm + glm::vec2(-10.0f, -30.0f), .joinTown = true},
+	};
+}
+
+/// The land's script makes two footpaths and then the farm. The script makes the farm's path first, so the farm's path
+/// is number 1 after the script makes the second path. The link after the farm goes to the farm. The link after the
+/// tree does nothing, because a tree cannot keep footpaths. Each place is a distance from the middle of the map (the
+/// farm is at 5, 145).
+constexpr std::string_view k_ShoreScriptFootpaths = R"(CREATE_FOOTPATH(7)
+CREATE_FOOTPATH_NODE(0, "5.0,145.0")
+CREATE_FOOTPATH_NODE(0, "5.0,145.01")
+CREATE_FOOTPATH_NODE(0, "9.0,137.0")
+CREATE_FOOTPATH_NODE(0, "17.0,129.0")
+CREATE_FOOTPATH_NODE(0, "23.0,123.0")
+CREATE_FOOTPATH(8)
+CREATE_FOOTPATH_NODE(0, "-25.0,91.0")
+CREATE_FOOTPATH_NODE(0, "-10.0,97.0")
+CREATE_FISH_FARM("5.0,145.0", 0)
+LINK_FOOTPATH(1)
+CREATE_NEW_TREE(-1, "-40.0,120.0", 3, 1, 0.0, 0.6, 0.6)
+LINK_FOOTPATH(0)
+)";
+
 /// From above the middle of the paths, looking north over the farm to the lake
 Framing OverTheFootpaths()
 {
@@ -170,6 +200,24 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	    .framing = OverTheFootpaths(),
 	    .objects = ShoreFarmWithFootpaths(),
 	    .footpaths = ShoreFootpaths(),
+	});
+
+	all.push_back({
+	    .id = "villagers.script_footpaths",
+	    .name = "Footpaths made by the land's script",
+	    .facet = Facet::Movement,
+	    .description = "The lake-shore hut, its empty storage pit and a fisherman 30 m from the farm's place. Then lines "
+	                   "of a land's script make a footpath from the farm's place towards the pit, a second short "
+	                   "footpath, the fish farm, a link of footpath number 1 (the first one) to the farm, a tree, and a "
+	                   "link of footpath number 0 after the tree. The Footpaths debug lines show the footpaths.",
+	    .expected = "The town needs food, so the fisherman starts to walk to the farm. He walks to the nearest node of "
+	                "the farm's path. Then he walks along the path, node by node, to the farm. He walks to a point near "
+	                "each node, but to the last node exactly. Nobody uses the second path, because the link after the "
+	                "tree does nothing.",
+	    .environment = {.dispenserGrid = false, .drawFootpaths = true},
+	    .framing = OverTheFootpaths(),
+	    .objects = ShoreTownForScriptFootpaths(),
+	    .landScript = k_ShoreScriptFootpaths,
 	});
 
 	all.push_back({

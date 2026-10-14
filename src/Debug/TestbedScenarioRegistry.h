@@ -876,6 +876,9 @@ struct Scenario
 	std::vector<HighlightSetup> highlights;
 	/// The footpaths between the objects, laid once they are made
 	std::vector<FootpathSetup> footpaths;
+	/// Lines of a land's script. The runner does these lines after it lays the footpaths. Each place is a distance
+	/// from the middle of the map, as for the objects.
+	std::string_view landScript;
 	std::vector<Command> commands;
 	/// After the last command, the commands go round again from this one
 	std::optional<size_t> repeatFrom;
