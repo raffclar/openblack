@@ -37,6 +37,7 @@
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureAttention.h"
+#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
@@ -2927,6 +2928,24 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	}
 	situation.hangAround = HangAroundPlacesOf(creature);
 	situation.turnSeconds = k_TurnSeconds;
+	SituatePlayer(creature, situation);
+}
+
+void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_actions::Situation& situation)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
+	{
+		situation.attitudeToPlayer = mind->attitudeToPlayer;
+		situation.handMoving = situation.playerHand.has_value() && creature_player_attention::IsHandMoving(mind->handSpeed);
+	}
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (at != nullptr && situation.playerHand.has_value() && Locator::camera::has_value())
+	{
+		const auto& camera = Locator::camera::value();
+		situation.awayFromHand =
+		    creature_player_attention::AwayFromHand(at->position, *situation.playerHand, camera.GetOrigin(), camera.GetFocus());
+	}
 }
 
 creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::entity creature)

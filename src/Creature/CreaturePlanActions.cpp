@@ -20,6 +20,7 @@
 #include "Creature/CreatureFireAgenda.h"
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreaturePlayerAgendas.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Enums.h"
 
@@ -291,6 +292,13 @@ constexpr std::array k_Executors {
     Executor {.action = "PointAtObject", .target = Target::Anything, .build = Build::PointAtThing},
     // What a script's cut scene makes every creature free to think for itself do
     Executor {.action = "LookAtCameraInWideScreen", .build = Build::LookAtCameraInCutScene},
+    // What it does with its player to get attention, or to tell the player what it thinks
+    Executor {.action = "GoToHand", .build = Build::GoToHand},
+    Executor {.action = "PointAtHand", .build = Build::PointAtHand},
+    Executor {.action = "ShowPlayerHowNiceYouThinkHeIs", .build = Build::ShowHowNice},
+    Executor {.action = "PrayToPlayer", .build = Build::PrayToPlayer},
+    Executor {.action = "ThrowAtCamera", .target = Target::Pickable, .use = Target::Pickable, .build = Build::ThrowAtCamera},
+    Executor {.action = "WatchPlayer", .build = Build::WatchPlayer},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -433,6 +441,11 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::CastOneShotInHand:
 		// Only with a one-shot miracle of the action's kind in its hand
 		return situation.heldOneShot.has_value() && situation.heldOneShot->Is(executor.oneShot);
+	case Build::LookAtHand:
+		// Only while the player's hand moves
+		return situation.handMoving;
+	case Build::GoToHand:
+		return situation.awayFromHand;
 	default:
 		return true;
 	}
@@ -730,6 +743,37 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                                             : executor.oneShot == OneShotKind::Compassionate
 		                                                 ? creature_face::Cue::Compassion
 		                                                 : creature_face::Cue::Playfulness});
+	case Build::GoToHand:
+		return creature_player_attention::GoToHand(random);
+	case Build::PointAtHand:
+		// Without a hand of its player, or a camera, the action fails
+		if (!situation.playerHand.has_value() || !situation.camera.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_player_attention::PointAtHand(*situation.camera, *situation.playerHand);
+	case Build::ShowHowNice:
+		if (!situation.camera.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_player_attention::ShowHowNice(*situation.camera, situation.attitudeToPlayer);
+	case Build::PrayToPlayer:
+		if (!situation.camera.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_player_attention::PrayToPlayer(*situation.camera);
+	case Build::ThrowAtCamera:
+		// Without a camera of its player, or a thing to throw, the action fails
+		if (!situation.eye.has_value() || !situation.hasPlayer || !situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_player_attention::ThrowAtCamera(situation.handFull ? std::nullopt : situation.instrument,
+		                                                *situation.eye);
+	case Build::WatchPlayer:
+		return creature_player_attention::WatchPlayer();
 	case Build::Never:
 		return std::nullopt;
 	}

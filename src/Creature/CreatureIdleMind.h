@@ -22,6 +22,7 @@
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
+#include "Creature/CreaturePlayerAttention.h"
 
 /// What a creature does, decided once a game turn. It works through an agenda of steps: it waits while it looks about,
 /// plays an action, sits for a while or goes to a place. Each step pulls a face for what it does or feels as it starts.
@@ -324,6 +325,8 @@ struct Gaze
 	bool itself {false};
 	/// The player's hand nearest the creature
 	bool hand {false};
+	/// The player: the hand when it moved much lately, else the camera
+	bool player {false};
 	std::optional<glm::vec3> point;
 	bool camera {false};
 	/// The look of a creature that walks to the point: at the point, at what it watches, and a sweep from side to side
@@ -416,6 +419,14 @@ struct Step
 		/// within the step's movement distance, whenever it is further and still. Then it holds where it is for one to four
 		/// seconds, picked at random, and the step is done.
 		FollowWatching,
+		/// Following the player's hand: from the next turn, each turn for up to the step's seconds of whole turns, it
+		/// walks to the hand when it is further than its radius and a little more (see
+		/// creature_player_attention::FollowHandTurn). It is done when it is near the hand or the time is up; with the hand
+		/// off the map the rest of the agenda is given up.
+		FollowHand,
+		/// Watching the player while it waits for orders after it was told to go somewhere: it turns to the hand or the
+		/// camera (see creature_player_attention::WatchPlayerTurn). It is done once it waits for orders no more.
+		WatchPlayer,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -493,6 +504,8 @@ struct IdleMind
 	uint32_t followHoldTurns {0};
 	/// Whether it has set off back towards the villager, so that a walk that fails gives the agenda up
 	bool followMoved {false};
+	/// A step that follows the hand: the turns it follows the hand for yet
+	uint32_t followHandTurns {0};
 	/// A dance step: the turns it dances yet, and whether its dance stops next turn
 	uint32_t danceTurns {0};
 	bool danceEnding {false};
@@ -648,6 +661,9 @@ struct Senses
 		float distance {0.0f};
 	};
 	std::optional<FollowedView> followed;
+	/// The player's hand, while a step follows it, and the player, while a step watches the player
+	std::optional<creature_player_attention::FollowHandView> followHand;
+	std::optional<creature_player_attention::WatchPlayerView> watchPlayer;
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is

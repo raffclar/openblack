@@ -224,6 +224,14 @@ enum class Build : uint8_t
 	CastOneShotInHand,
 	/// Picking up the one-shot miracle that it uses, unless its hand holds something, and casting it at the thing
 	PickUpAndCastOneShot,
+	/// The actions with its player: going to the hand, pointing at the hand, showing the player how nice it thinks the
+	/// player is, praying to the player, throwing a thing at the camera and watching the player
+	GoToHand,
+	PointAtHand,
+	ShowHowNice,
+	PrayToPlayer,
+	ThrowAtCamera,
+	WatchPlayer,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -339,6 +347,10 @@ struct Situation
 	std::optional<glm::vec2> danceArea;
 	uint32_t fewestDancers {0};
 	uint32_t danceBeats {0};
+	/// Its attitude to its player, whether it is away from its player's hand, and whether that hand moves
+	float attitudeToPlayer {0.0f};
+	bool awayFromHand {false};
+	bool handMoving {false};
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo
