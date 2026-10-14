@@ -54,6 +54,7 @@
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/FootpathRules.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -922,29 +923,53 @@ void FeatureScriptCommands::CreateArena(glm::vec3 position, float radius)
 	ArenaArchetype::Create({map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)}, radius, false);
 }
 
-void FeatureScriptCommands::CreateFootpath(int32_t footpathId)
+void FeatureScriptCommands::CreateFootpath(int32_t)
 {
+	// The command does not use the number on the line. The new footpath becomes the script's number 0. The number
+	// of each older footpath increases by one.
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 	registry.Assign<Footpath>(entity);
-	auto& registryContext = registry.Context();
-	registryContext.footpaths.insert({footpathId, entity});
+	auto& footpaths = registry.Context().scriptFootpaths;
+	footpaths.insert(footpaths.begin(), entity);
 }
 
 void FeatureScriptCommands::CreateFootpathNode(int footpathId, glm::vec3 position)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& registryContext = registry.Context();
-	auto& footpath = registry.Get<Footpath>(registryContext.footpaths.at(footpathId));
-	footpath.nodes.emplace_back(Footpath::Node {position});
+	const auto& footpaths = registry.Context().scriptFootpaths;
+	const auto index = ecs::footpath_rules::ScriptFootpathIndex(footpaths.size(), footpathId);
+	if (!index)
+	{
+		return;
+	}
+	// The node goes on the land at the given place, as the land's footpath file puts its nodes
+	const auto place = glm::ivec2 {map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)};
+	const auto ground = map_coords::ToMetres(map_coords::MapCoords {.x = place.x, .z = place.y, .altitude = 0.0f});
+	const glm::vec3 onLand {ground.x, Locator::terrainSystem::value().GetHeightAt(ground), ground.y};
+	registry.Get<Footpath>(footpaths[*index]).nodes.push_back({.position = onLand, .place = place});
 }
 
 void FeatureScriptCommands::LinkFootpath(int32_t footpathId)
 {
-	// TODO(#482): The last MultiMapFixed created in this script is an implicit param
-	//             This Command adds the footpath to a list in a FootpathLink on the MultiMapFixed
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}) not implemented.", __FILE__, __LINE__,
-	                    __func__, footpathId);
+	// The footpath goes to the thing that the script made last, if that thing can keep footpaths. The newest link comes
+	// first, and a footpath linked twice is kept twice.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& context = registry.Context();
+	const auto thing = context.scriptThingMadeLast;
+	const auto index = ecs::footpath_rules::ScriptFootpathIndex(context.scriptFootpaths.size(), footpathId);
+	if (thing == entt::null || !registry.Valid(thing) || !index)
+	{
+		return;
+	}
+	const auto footpath = static_cast<Footpath::Id>(context.scriptFootpaths[*index]);
+	if (auto* link = registry.TryGet<FootpathLink>(thing))
+	{
+		link->footpaths.insert(link->footpaths.begin(), footpath);
+		return;
+	}
+	const auto& transform = registry.Get<const Transform>(thing);
+	registry.Assign<FootpathLink>(thing, transform.position, std::vector<Footpath::Id> {footpath});
 }
 
 void FeatureScriptCommands::CreateBonfire(glm::vec3 position, float rotation, [[maybe_unused]] float param3, float scale)

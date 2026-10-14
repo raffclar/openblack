@@ -48,6 +48,7 @@
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBuild.h"
+#include "ECS/Systems/Implementations/VillagerFootpath.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -379,11 +380,13 @@ entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesir
 	{
 		std::erase(registry.Get<Town>(town->second).planned, plan);
 	}
-	registry.Destroy(plan);
 	// The temple's heart goes up where it was planned, with nothing of it built, and a site for its builders
 	const auto temple =
 	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
 	registry.Get<Temple>(temple).town = planned.townId;
+	// Move the footpaths of the plan to the heart. Then remove the plan.
+	villager_footpath::HandOverFootpaths(plan, temple);
+	registry.Destroy(plan);
 	OpenSite(temple, siteDesire);
 	return temple;
 }
