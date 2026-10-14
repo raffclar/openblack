@@ -20,6 +20,7 @@
 
 #include <BinkFile.h>
 #include <DanceFile.h>
+#include <DanceShapeFile.h>
 #include <EDTFile.h>
 #include <EXCFile.h>
 #include <GLWFile.h>
@@ -845,6 +846,17 @@ DanceFileLoader::result_type DanceFileLoader::operator()(FromDiskTag, const std:
 	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path)); result != dance::DanceResult::Success)
 	{
 		throw std::runtime_error("Unable to load the dance " + path.string() + ": " + std::string(dance::ResultToStr(result)));
+	}
+	return file;
+}
+
+DanceShapeLoader::result_type DanceShapeLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	auto file = std::make_shared<dance::DanceShapeFile>();
+	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path)); result != dance::DanceResult::Success)
+	{
+		throw std::runtime_error("Unable to load the dance shape " + path.string() + ": " +
+		                         std::string(dance::ResultToStr(result)));
 	}
 	return file;
 }

@@ -33,5 +33,7 @@ bool EnterWaitForArtefactDance(components::LivingAction& action, VillagerStates 
 uint32_t ArtefactDance(components::LivingAction& action);
 /// Leaving a dance for a state that isn't another dance's, it leaves the dance; it is never kept back
 bool ExitDance(components::LivingAction& action, VillagerStates next);
+/// Whether a state shares this way to leave a dance
+[[nodiscard]] bool IsDanceState(VillagerStates state);
 
 } // namespace openblack::ecs::villager_artefact_dance

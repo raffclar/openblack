@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 
 using namespace openblack::ecs;
@@ -275,4 +276,11 @@ Shape dance_shapes::Build(std::size_t index)
 const char* dance_shapes::FileName(std::size_t index)
 {
 	return index < k_FileNames.size() ? k_FileNames.at(index) : "";
+}
+
+Shape dance_shapes::FromPoints(std::span<const glm::ivec2> points)
+{
+	Shape shape {};
+	std::ranges::copy(points.first(std::min(points.size(), shape.size())), shape.begin());
+	return shape;
 }

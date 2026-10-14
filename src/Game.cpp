@@ -114,6 +114,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/CreatureDanceMusic.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/Map.h"
 #include "ECS/ProfileAlignment.h"
@@ -1795,6 +1796,7 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 		    return registry.Get<const ecs::components::Transform>(entity).position;
 	    },
 	};
+	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
 	Locator::entitiesRegistry::value().Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(
 	    [&music](const ecs::components::Town& town, const Tribe tribe, const ecs::components::Transform& transform) {
 		    music.towns.push_back({

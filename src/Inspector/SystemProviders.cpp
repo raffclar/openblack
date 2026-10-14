@@ -172,6 +172,10 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "inspect";
 	case Kind::WatchHand:
 		return "watch_hand";
+	case Kind::StopMoving:
+		return "stop_moving";
+	case Kind::Dance:
+		return "dance";
 	case Kind::Communicate:
 		return "communicate";
 	}

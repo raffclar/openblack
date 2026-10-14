@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <array>
+#include <optional>
+
 #include "ECS/Systems/DanceSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -25,6 +28,11 @@ public:
 	                    bool madeByScript) override;
 	void Destroy(entt::entity dance) override;
 	void ProcessTurn() override;
+	[[nodiscard]] const std::array<dance_shapes::Shape, dance_shapes::k_ShapeCount>& Shapes() override;
+
+private:
+	/// The shapes, read once they are first needed
+	std::optional<std::array<dance_shapes::Shape, dance_shapes::k_ShapeCount>> _shapes;
 };
 
 } // namespace openblack::ecs::systems

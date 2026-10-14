@@ -354,7 +354,7 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 		_landType = MusicType::None;
 		return;
 	}
-	if (ProcessAttached(inputs))
+	if (ProcessCreatureDance(inputs) || ProcessAttached(inputs))
 	{
 		_landType = MusicType::None;
 		return;
@@ -454,6 +454,33 @@ bool GameMusic::ProcessScript()
 // Music attached to an object plays, heard from the object, while the camera is in its range. Of several in range the
 // one attached most recently plays. It joins its music group in time, fades in and loops; out of range, other music
 // takes over.
+// The chant of a creature's dance with villagers plays from the creature, in time with its music group, fading in
+bool GameMusic::ProcessCreatureDance(const TurnInputs& inputs)
+{
+	if (!inputs.creatureDance.has_value())
+	{
+		return false;
+	}
+	const auto& dance = *inputs.creatureDance;
+	const auto path = std::string(GetMusicBankPath(dance.type));
+	auto& audio = Locator::audio::value();
+	const auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
+	if (!info)
+	{
+		return false;
+	}
+	SaveResumeChunks();
+	audio.MusicPlay(path, MusicPlayOptions {
+	                          .volume = k_FullVolume,
+	                          .startChunk = GetResumeChunk(info->groupId),
+	                          .sync = true,
+	                          .fadeIn = true,
+	                          .position = dance.position,
+	                      });
+	_playing = dance.type;
+	return true;
+}
+
 bool GameMusic::ProcessAttached(const TurnInputs& inputs)
 {
 	if (_attached.empty() || !inputs.thingPosition)

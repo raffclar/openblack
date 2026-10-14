@@ -35,8 +35,9 @@ namespace openblack::ecs::villager_dance
 uint32_t InDance(components::LivingAction& action);
 /// Where a dancer's place in its group's shape is now, as walks reach it; none for one in no group
 [[nodiscard]] std::optional<glm::vec2> SlotOf(entt::entity villager);
-/// The same in any dance state: walking off, it comes back to that state at its place
-uint32_t PerformDance(components::LivingAction& action, VillagerStates danceState);
+/// The same in any dance state: walking off, it comes back to that state at its place. A move other than its group's
+/// can be given, by its number in the dance files.
+uint32_t PerformDance(components::LivingAction& action, VillagerStates danceState, std::optional<uint32_t> move = std::nullopt);
 /// Walking to its place in a dance: a place that moves this turn is walked to where it is now
 uint32_t MoveToDancePos(components::LivingAction& action);
 /// The clip a villager plays in its place in a dance, `walkClip` when its group's move has it walk

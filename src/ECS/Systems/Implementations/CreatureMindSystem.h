@@ -259,6 +259,25 @@ private:
 	/// A creature puts the water of five buckets on a thing (CreatureMindFire.cpp). Return true if the thing is not on
 	/// fire after this. Only the plain "put out fire" action has this step. The water miracle at a fire does not have it.
 	bool Douse(entt::entity creature, entt::entity object);
+	// Its dances with the villagers of a town (CreatureMindDance.cpp)
+	/// The creature's dance as its mind sees it, while a dance step is next or under way. It notes where each dancer
+	/// stands, to tell next turn which dancers move.
+	[[nodiscard]] static std::optional<creature_mind::Senses::DanceView> DanceViewOf(entt::entity creature,
+	                                                                                 const creature_mind::IdleMind& idle);
+	/// Carries out a stage of a dance with villagers that the mind ordered
+	static void CarryOutDance(entt::entity creature, creature_mind::IdleMind& idle, const creature_mind::DanceOrder& order);
+	/// The creature's dance stops when the creature stops dancing in it, as when it gives up its agenda
+	static void KeepDanceWithAgenda(entt::entity creature, const creature_mind::IdleMind& idle);
+	/// The clear place of a dance with a villager, about the villager; none when there is none
+	[[nodiscard]] static std::optional<glm::vec2> DanceAreaFor(entt::entity creature, glm::vec2 villager);
+	/// A dance with a villager is about to be planned: the creature notes the dance as one to impress, and the agenda
+	/// learns the clear place about the villager and what the dance's row of the table asks for
+	static void SituateDance(entt::entity creature, const creature_plan_actions::Executor& executor, glm::vec2 villager,
+	                         creature_plan_actions::Situation& situation);
+	/// The creature starts to make a dance to impress villagers: it notes the turn and the kind of the dance
+	static void NoteImpressiveDance(entt::entity creature, uint32_t type);
+	/// Whether the creature may choose to dance to impress villagers now
+	[[nodiscard]] static bool MayDanceToImpress(entt::entity creature);
 
 	// What it believes about the things about it (CreatureMindBeliefs.cpp)
 	/// It comes across a thing: its belief about it is brought up to date, or made, and a new one leads it on to what the

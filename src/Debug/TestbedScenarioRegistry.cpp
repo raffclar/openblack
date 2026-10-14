@@ -4350,6 +4350,7 @@ std::vector<Scenario> Build()
 	AddTownGrowthScenarios(all);
 	AddStatisticsScenarios(all);
 	AddTutorialScenarios(all);
+	AddCreatureDanceScenarios(all);
 	return all;
 }
 

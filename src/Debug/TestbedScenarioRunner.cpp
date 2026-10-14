@@ -1081,6 +1081,15 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			                                         .position = placed.position});
 		}
 	}
+	// A villager of the town moves into its building, as one born there lives in it
+	for (size_t i = 0; i < scenario.objects.size(); ++i)
+	{
+		const auto& home = scenario.objects[i].livesIn;
+		if (home.has_value() && *home < _objects.size() && Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().MoveInAnyway(_objects.at(*home), _objects.at(i));
+		}
+	}
 }
 
 void Runner::SetUpWorship(float share)
