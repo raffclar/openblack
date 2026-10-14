@@ -3585,8 +3585,10 @@ void AddMind(std::vector<Scenario>& all)
 	    .facet = Facet::Mind,
 	    .description = "A tiger stands alone with its mind on, side on to the camera. At once it wants to show its "
 	                   "state as much as possible, and it is very hungry.",
-	    .expected = "It turns to face the camera, with its head on the camera, then plays its hungry animation once. Then "
-	                "it does not want to show its state for a minute. When no plan is ready, it stands and does nothing.",
+	    .expected = "It turns to face the camera, with its head on the camera, then plays its happy animation once: its mind "
+	                "is less than ten seconds old, which counts as feedback from the player. Then it does not want to show "
+	                "its state for a minute. After that minute it shows its state again with its hungry animation. When no "
+	                "plan is ready, it stands and does nothing.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {communicative},
 	    // The desires are set as soon as it has them, so that its first communication shows them

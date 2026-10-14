@@ -187,6 +187,9 @@ bool Interruptible(creature_mind::Activity activity)
 	return activity == None || activity == BeIdle || activity == Sit || activity == HangAround;
 }
 
+/// A creature stroked for what it holds eats it as the action that eats a thing alive
+constexpr std::string_view k_EatHeldAction = "EatAlive";
+
 /// The action in the table of actions that gets the feedback for an agenda that no plan gave.
 /// Only the forced agendas to eat, sleep, poo, be sick or drink are such agendas.
 std::string_view ActionForActivity(creature_mind::Activity activity)
@@ -1165,7 +1168,10 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		return;
 	}
 	// Something the idle mind started counts as its action, for feedback
-	const auto action = creature_mind_tables::FindAction(*tables, ActionForActivity(idle.activity));
+	const auto action = mind.creditedAction.has_value() && mind.creditedSerial == idle.serial
+	                        ? mind.creditedAction
+	                        : creature_mind_tables::FindAction(*tables, ActionForActivity(idle.activity));
+	mind.creditedAction.reset();
 	if (!action.has_value() || tables->actions[*action].desire >= creature_desires::k_DesireCount)
 	{
 		return;
@@ -2921,7 +2927,12 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 				                           tables->attributes.at(static_cast<size_t>(Desire::Hunger)));
 			}
 			creature_mind_model::Think(learnt, "I've learnt to eat what I'm given");
-			Replan(creature, creature_mind::Activity::Eat, creature_mind::EatHeld());
+			if (Replan(creature, creature_mind::Activity::Eat, creature_mind::EatHeld()) && tables != nullptr)
+			{
+				// The feedback for this meal goes to eating a thing alive
+				mind.creditedAction = creature_mind_tables::FindAction(*tables, k_EatHeldAction);
+				mind.creditedSerial = mind.idle.serial;
+			}
 			return;
 		}
 	}

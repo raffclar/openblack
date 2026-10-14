@@ -783,6 +783,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::stepTurns>("stepTurns")
 	    .Field<&components::CreatureMindState::turn>("turn")
 	    .Field<&components::CreatureMindState::plannedTurn>("plannedTurn")
+	    .Field<&components::CreatureMindState::creditedAction>("creditedAction")
+	    .Field<&components::CreatureMindState::creditedSerial>("creditedSerial")
 	    .Field<&components::CreatureMindState::thinksWithoutPlan>("thinksWithoutPlan")
 	    .Field<&components::CreatureMindState::thinksWithoutPlanSerial>("thinksWithoutPlanSerial")
 	    .Field<&components::CreatureMindState::trainer>("trainer")

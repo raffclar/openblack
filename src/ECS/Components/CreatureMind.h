@@ -69,8 +69,9 @@ struct CreatureMindState
 	/// another cell, and the temple that was nearest then
 	std::optional<glm::ivec2> beliefCell;
 	entt::entity nearestTemple {entt::null};
-	/// Seconds since the player last stroked or slapped it, and which
-	std::optional<float> feedbackSeconds;
+	/// Seconds since the player last stroked or slapped it, and which. A new mind counts from the time it was made, as if
+	/// it had feedback then.
+	std::optional<float> feedbackSeconds {0.0f};
 	bool feedbackWasStroke {false};
 	/// How it feels about the player, which each stroke or slap nudges, and the average of what it has been given
 	float attitudeToPlayer {0.0f};
@@ -145,6 +146,10 @@ struct CreatureMindState
 	/// Game turns the mind has thought, and the turn it last planned
 	uint32_t turn {0};
 	uint32_t plannedTurn {0};
+	/// The action that gets the feedback for an agenda that no plan gave, when it is not the action of the agenda's
+	/// activity, and the number of that agenda
+	std::optional<uint32_t> creditedAction;
+	uint32_t creditedSerial {0};
 	/// The times it thought and had no plan to carry out since its last agenda started, and that agenda's number
 	uint32_t thinksWithoutPlan {0};
 	uint32_t thinksWithoutPlanSerial {0};
