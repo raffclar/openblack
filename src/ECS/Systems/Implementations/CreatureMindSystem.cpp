@@ -1483,6 +1483,8 @@ void CreatureMindSystem::ProcessTurn()
 		        .hand = HandViewOf(registry, entity, mind.idle),
 		        .swap = SwapViewOf(entity),
 		        .overlayPlaying = animation.gesture.animation.has_value(),
+		        .bodyPlaying = creature_layers::IsPlaying(animation.body),
+		        .dance = DanceViewOf(entity, mind.idle),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    if (commands.communicated.has_value())
@@ -1494,6 +1496,11 @@ void CreatureMindSystem::ProcessTurn()
 			                                                     : -1);
 			    Communicated(mind);
 		    }
+		    if (commands.dance.has_value())
+		    {
+			    CarryOutDance(entity, mind.idle, *commands.dance);
+		    }
+		    KeepDanceWithAgenda(entity, mind.idle);
 		    Apply(commands, animation, eyes);
 		    if (Move(entity, commands))
 		    {

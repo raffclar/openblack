@@ -585,6 +585,9 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		case creature_mind::Step::Kind::Overlay:
 			ImGui::Text("%s on top of its body", AnimationLabel(step.animation).c_str());
 			break;
+		case creature_mind::Step::Kind::Dance:
+			ImGui::Text("Dancing with villagers, stage %u", static_cast<unsigned>(step.dance.kind));
+			break;
 		default:
 			break;
 		}

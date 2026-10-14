@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <DanceFile.h>
+#include <DanceShapeFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
@@ -192,4 +193,44 @@ void DanceSystem::ProcessTurn()
 			dances::ProcessTurn(registry, entity, context);
 		}
 	}
+}
+
+const std::array<ecs::dance_shapes::Shape, ecs::dance_shapes::k_ShapeCount>& DanceSystem::Shapes()
+{
+	if (_shapes.has_value())
+	{
+		return *_shapes;
+	}
+	_shapes = ecs::dance_moves::Shapes();
+	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return *_shapes;
+	}
+	// The shapes from files are read from the data folder, one file a shape
+	auto& cache = Locator::resources::value().GetDanceShapes();
+	for (std::size_t i = ecs::dance_shapes::k_FirstFileShape; i < _shapes->size(); ++i)
+	{
+		const std::string name = ecs::dance_shapes::FileName(i);
+		const auto id = entt::hashed_string(("dance-shape/" + name).c_str()).value();
+		if (!cache.Contains(id))
+		{
+			try
+			{
+				cache.Load(id, resources::DanceShapeLoader::FromDiskTag {},
+				           Locator::filesystem::value().GetPath<filesystem::Path::Data>() / (name + ".DAN"));
+			}
+			catch (const std::runtime_error& error)
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The dance shape {} can't be loaded: {}", name, error.what());
+				continue;
+			}
+		}
+		const auto& file = *cache.Handle(id);
+		std::vector<glm::ivec2> points;
+		points.reserve(file.points.size());
+		std::ranges::transform(file.points, std::back_inserter(points),
+		                       [](const dance::DanceShapePoint& point) { return glm::ivec2(point.x, point.z); });
+		_shapes->at(i) = ecs::dance_shapes::FromPoints(points);
+	}
+	return *_shapes;
 }

@@ -229,6 +229,42 @@ struct CastOrder
 	std::optional<glm::vec3> place;
 };
 
+/// One stage of a creature's dance with the villagers of a town
+struct DanceOrder
+{
+	enum class Kind : uint8_t
+	{
+		/// Make a new dance of a row of the dance table at a point. The creature's last dance goes.
+		Set,
+		/// Call the free grown up people of a villager's town to the dance, at least the step's count of them
+		Summon,
+		/// Stop the head that looks about. No later step of the agenda turns the head.
+		StopLooking,
+		/// Send each called villager to its place in the dance, at a run
+		SendToPlaces,
+		/// Wait until none of the dancers moves
+		WaitUntilStill,
+		/// Start the dance from the start of its clock
+		Start,
+		/// Tell each called villager to dance and worship. The step fails when its villager is gone.
+		TellToDance,
+		/// Join the dance and dance in it for the step's count of turns, then stop the dance
+		Dance,
+		/// Stop the dance, at the end of the last step
+		Stop,
+		/// Remove the creature's last dance, the turn before it makes a new one
+		Clear,
+	};
+	Kind kind {Kind::Set};
+	/// Where the dance is, and its row of the dance table
+	glm::vec2 point {0.0f};
+	uint32_t type {0};
+	/// The villager the dance is for, by its entity's number
+	std::optional<uint32_t> villager;
+	/// The fewest villagers to call, or the turns to dance
+	uint32_t count {0};
+};
+
 /// What a step does to the creature's body
 enum class Effect : uint8_t
 {
@@ -364,6 +400,10 @@ struct Step
 		/// Communicating its state to the player: as it starts, it plays the animation of what it shows, once. With
 		/// nothing to show, the step is done at once.
 		Communicate,
+		/// Stopping where it is, done once its body plays no action. It starts even while the body moves.
+		StopMoving,
+		/// A stage of a dance with the villagers of a town (see DanceOrder)
+		Dance,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -402,6 +442,8 @@ struct Step
 	std::optional<Eyes> heldEyes;
 	/// It flutters its eyelids, blinking far more often, from the step's start until it next takes up something else
 	bool flutterEyelids {false};
+	/// What a dance step does
+	DanceOrder dance {};
 };
 
 struct IdleMind
@@ -433,6 +475,11 @@ struct IdleMind
 	uint32_t inspectTurns {0};
 	/// A step watching a flying thing: the turns it has watched it
 	uint32_t watchTurns {0};
+	/// A dance step: the turns it dances yet, and whether its dance stops next turn
+	uint32_t danceTurns {0};
+	bool danceEnding {false};
+	/// A step that makes a dance: whether it ordered the new dance yet
+	bool danceSet {false};
 };
 
 /// The nearest water, and where the creature can stand at its edge to drink
@@ -521,6 +568,29 @@ struct Senses
 	SwapView swap {};
 	/// Whether something plays on top of the body, as talking or nodding
 	bool overlayPlaying {false};
+	/// Whether its body plays an action, whether it moves or not
+	bool bodyPlaying {false};
+	/// Its dance with villagers, while a dance step is next or under way
+	struct DanceView
+	{
+		/// Whether its dance is still there, and whether a villager of the dance moved in the last turn
+		bool exists {false};
+		bool dancersMoving {false};
+		/// Whether the creature dances in a group of the dance, and that group's move: its number in the dance files
+		/// and its two arguments
+		bool inGroup {false};
+		uint32_t action {0};
+		uint32_t first {0};
+		float second {0.0f};
+		/// The way the dance faces (radians), the middle of the creature's group, and its own place in the group
+		float danceAngle {0.0f};
+		glm::vec2 groupCentre {0.0f};
+		glm::vec2 place {0.0f};
+		/// How far it is from its place, in metres, and the way it faces (radians, as its movement measures it)
+		float placeDistance {0.0f};
+		float heading {0.0f};
+	};
+	std::optional<DanceView> dance;
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -591,6 +661,8 @@ struct Commands
 	bool easeSwap {false};
 	/// The creature communicated its state this turn, and what it showed
 	std::optional<creature_desires::Communication> communicated;
+	/// A stage of a dance with villagers to carry out this turn
+	std::optional<DanceOrder> dance;
 };
 
 /// random(n) is a whole number from 0 to n - 1
@@ -702,6 +774,8 @@ void Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda);
 /// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on
 [[nodiscard]] std::optional<creature_face::Request> PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
                                                              const Random& random);
+/// The world carried out a dance stage that the mind ordered: the step is done, or the rest of the agenda is no use
+void DanceOrderDone(IdleMind& mind, bool done);
 /// One game turn of the mind
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random);
 /// Whether a creature goes on watching a flying thing: while the thing is still flying and the whole seconds of the

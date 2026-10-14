@@ -382,7 +382,9 @@ openblack_setup_and_add_test(test_temple_toggles temple/test_temple_toggles.cpp)
 openblack_setup_and_add_test(test_challenge_room temple/test_challenge_room.cpp)
 openblack_setup_and_add_test(test_temple_map temple/test_temple_map.cpp)
 target_link_libraries(test_temple_map PRIVATE lnd)
-openblack_setup_and_add_test(test_temple_map_spells temple/test_temple_map_spells.cpp)
+openblack_setup_and_add_test(
+  test_temple_map_spells temple/test_temple_map_spells.cpp
+)
 openblack_setup_and_add_test(test_frame_stats test_frame_stats.cpp)
 openblack_setup_and_add_test(test_benchmark test_benchmark.cpp)
 target_link_libraries(test_benchmark PRIVATE lnd)
@@ -924,15 +926,15 @@ openblack_setup_and_add_test(
   test_creature_kind_actions test_creature_kind_actions.cpp
 )
 openblack_setup_and_add_test(test_creature_fart test_creature_fart.cpp)
-openblack_setup_and_add_test(test_creature_footstep_puffs test_creature_footstep_puffs.cpp)
+openblack_setup_and_add_test(
+  test_creature_footstep_puffs test_creature_footstep_puffs.cpp
+)
 openblack_setup_and_add_test(test_pick_shapes test_pick_shapes.cpp)
 openblack_setup_and_add_test(test_fight_watch_rules test_fight_watch_rules.cpp)
 openblack_setup_and_add_test(test_predator_rules test_predator_rules.cpp)
 openblack_setup_and_add_test(test_hand_blend hand/test_hand_blend.cpp)
 openblack_setup_and_add_test(test_pipeline_cache test_pipeline_cache.cpp)
-openblack_setup_and_add_test(
-  test_being_eaten_rules test_being_eaten_rules.cpp
-)
+openblack_setup_and_add_test(test_being_eaten_rules test_being_eaten_rules.cpp)
 openblack_setup_and_add_test(test_menu_pause gui/test_menu_pause.cpp)
 openblack_setup_and_add_test(
   test_creature_look_while_going test_creature_look_while_going.cpp
@@ -945,9 +947,13 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_warm_up_views graphics/test_warm_up_views.cpp)
 openblack_setup_and_add_test(test_land_altitude test_land_altitude.cpp)
 target_link_libraries(test_land_altitude PRIVATE lnd)
+openblack_setup_and_add_test(test_creature_dance test_creature_dance.cpp)
+target_link_libraries(test_creature_dance PRIVATE dance)
 openblack_setup_and_add_test(test_creature_activity test_creature_activity.cpp)
 openblack_setup_and_add_test(test_hand_stillness hand/test_hand_stillness.cpp)
 openblack_setup_and_add_test(test_village_voices test_village_voices.cpp)
-openblack_setup_and_add_test(test_creature_deed_alignment test_creature_deed_alignment.cpp)
+openblack_setup_and_add_test(
+  test_creature_deed_alignment test_creature_deed_alignment.cpp
+)
 openblack_setup_and_add_test(test_light_shine graphics/test_light_shine.cpp)
 openblack_setup_and_add_test(test_animal_reactions test_animal_reactions.cpp)
