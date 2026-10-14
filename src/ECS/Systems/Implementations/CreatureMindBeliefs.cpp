@@ -32,26 +32,37 @@
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "CreatureMindSystem.h"
+#include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Firefly.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/Flowers.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Pot.h"
+#include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
@@ -70,56 +81,19 @@ namespace kinds = openblack::creature_tree::belief_types;
 
 namespace
 {
-/// The kind of belief a creature keeps about a thing, by the game's belief types; none for the things it doesn't yet
-/// know the kind of here
-std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing)
+/// The kind of belief for a thing that lies about and can move, by the kind of thing that its data row says it is: poo,
+/// magic food, or any other thing
+uint32_t KindOfLooseThing(MobileObjectInfo type)
 {
-	if (registry.AllOf<Temple>(thing))
+	switch (type)
 	{
-		// The temple here is one thing: the game's temple and the building that stands for it
-		return kinds::k_Citadel;
+	case MobileObjectInfo::LumpOfPoo:
+		return kinds::k_Poo;
+	case MobileObjectInfo::MagicFood:
+		return kinds::k_MagicFood;
+	default:
+		return kinds::k_MobileObject;
 	}
-	if (registry.AllOf<ForestTurns>(thing))
-	{
-		return kinds::k_Forest;
-	}
-	if (registry.AllOf<Flock>(thing))
-	{
-		return kinds::k_Flock;
-	}
-	if (registry.AllOf<Town>(thing))
-	{
-		return kinds::k_Town;
-	}
-	if (registry.AllOf<Creature>(thing))
-	{
-		return kinds::k_Creature;
-	}
-	if (registry.AllOf<Villager>(thing))
-	{
-		return kinds::k_Villager;
-	}
-	if (registry.AllOf<Animal>(thing))
-	{
-		return kinds::k_Animal;
-	}
-	if (registry.AllOf<Tree>(thing))
-	{
-		return kinds::k_Tree;
-	}
-	if (registry.AllOf<Abode>(thing))
-	{
-		return kinds::k_Abode;
-	}
-	if (registry.AllOf<Field>(thing))
-	{
-		return kinds::k_Field;
-	}
-	if (registry.AllOf<Feature>(thing))
-	{
-		return kinds::k_Feature;
-	}
-	return std::nullopt;
 }
 
 /// Where a thing is: where it stands, or a flock's own place
@@ -287,6 +261,95 @@ entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapC
 }
 } // namespace
 
+std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (registry.AllOf<Temple>(thing))
+	{
+		// The temple here is one thing: the game's temple and the building that stands for it
+		return kinds::k_Citadel;
+	}
+	if (registry.AllOf<ForestTurns>(thing))
+	{
+		return kinds::k_Forest;
+	}
+	if (registry.AllOf<Flock>(thing))
+	{
+		return kinds::k_Flock;
+	}
+	if (registry.AllOf<Town>(thing))
+	{
+		return kinds::k_Town;
+	}
+	if (registry.AllOf<Creature>(thing))
+	{
+		return kinds::k_Creature;
+	}
+	if (registry.AllOf<Villager>(thing))
+	{
+		return kinds::k_Villager;
+	}
+	if (registry.AllOf<Animal>(thing))
+	{
+		return kinds::k_Animal;
+	}
+	if (registry.AllOf<Tree>(thing))
+	{
+		return kinds::k_Tree;
+	}
+	// A worship site is a part of its player's temple
+	if (registry.AllOf<WorshipSite>(thing))
+	{
+		return kinds::k_CitadelPart;
+	}
+	if (const auto* abode = registry.TryGet<const Abode>(thing))
+	{
+		// A football pitch is a feature
+		return abode->type == AbodeNumber::FootballPitch ? kinds::k_Feature : kinds::k_Abode;
+	}
+	if (registry.AnyOf<Field, FishFarm>(thing))
+	{
+		return kinds::k_Field;
+	}
+	if (registry.AllOf<VillageTotem>(thing))
+	{
+		return kinds::k_TotemStatue;
+	}
+	if (registry.AnyOf<Feature, AnimatedStatic, Flowers>(thing))
+	{
+		return kinds::k_Feature;
+	}
+	if (registry.AllOf<Pot>(thing))
+	{
+		return kinds::k_Pot;
+	}
+	if (registry.AllOf<Rock>(thing))
+	{
+		return kinds::k_Rock;
+	}
+	if (registry.AnyOf<MobileStatic, DeadTree>(thing))
+	{
+		return kinds::k_MobileObject;
+	}
+	if (const auto* loose = registry.TryGet<const MobileObject>(thing))
+	{
+		return KindOfLooseThing(loose->type);
+	}
+	if (registry.AllOf<Ball>(thing) && Locator::infoConstants::has_value())
+	{
+		return KindOfLooseThing(Locator::infoConstants::value().ball.mobileType);
+	}
+	// A stone hand on a village centre is the icon of a miracle
+	if (registry.AllOf<TownCentreIcon>(thing))
+	{
+		return kinds::k_SpellIcon;
+	}
+	if (registry.AllOf<ecs::components::Spell>(thing))
+	{
+		return kinds::k_Spell;
+	}
+	return std::nullopt;
+}
+
 void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureMindState& mind, entt::entity thing)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -302,7 +365,7 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 		const auto at = animal != nullptr ? animal->position : PlaceOf(registry, thing);
 		mind.noticedMover = {.at = glm::xz(at), .height = HeightOf(registry, thing), .turn = mind.turn};
 	}
-	const auto kind = BeliefKindOf(registry, thing);
+	const auto kind = mind_detail::BeliefKindOf(registry, thing);
 	if (!kind.has_value())
 	{
 		return;
@@ -313,9 +376,14 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 	{
 		return;
 	}
+	// The belief about the thing is then joined to the belief about the whole thing, when the creature has one
 	if (const auto owner = BelongsTo(thing); owner.has_value() && *owner != thing)
 	{
 		ComeAcross(creature, mind, *owner);
+		if (mind.beliefs.Find(*owner) != nullptr)
+		{
+			mind.beliefs.JoinTo(thing, *owner);
+		}
 	}
 }
 
@@ -325,14 +393,7 @@ std::optional<glm::vec3> CreatureMindSystem::BelievedPlace(const components::Cre
 	{
 		return known->place;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(thing) || BeliefKindOf(registry, thing).has_value())
-	{
-		return std::nullopt;
-	}
-	// TODO(usefulness-use-tree): the game keeps beliefs about loose objects (food, balls, pots and the like) too, which
-	// the store here doesn't yet; until it does, such a thing counts as known where it is
-	return PlaceOf(registry, thing);
+	return std::nullopt;
 }
 
 void CreatureMindSystem::ForgetGoneThings(components::CreatureMindState& mind)

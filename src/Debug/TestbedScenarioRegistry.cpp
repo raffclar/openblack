@@ -3478,6 +3478,24 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.mimic_same_kind",
+	    .name = "Mimic the player on a thing of the same kind",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger. The player plays with a loose ball that is not a toy. A toy die lies near the "
+	                   "tiger and a cuddly toy lies far from it. Every 20 seconds the player plays again.",
+	    .expected = "The tiger cannot play with the player's ball, so it plays with the nearest thing of the same kind: "
+	                "the toy die. The log shows the pass and the thing for each copy.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {30.0f, -30.0f}},
+	                {.type = MobileStaticInfo::ToyDie, .offset = {12.0f, 8.0f}},
+	                {.type = MobileStaticInfo::ToyCuddly, .offset = {-35.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::PlayerDidOn, .creature = 0, .delaySeconds = 3.0f, .value = k_PlayWithToy, .object = 0},
+	                 Act(Kind::Stop, 0, 20.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "mind.watch_skill",
 	    .name = "Learn a skill by watching",
 	    .facet = Facet::Mind,
@@ -3585,6 +3603,97 @@ void AddMind(std::vector<Scenario>& all)
 	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 25.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -34.0f}}},
 	    .commands = {setDesire(Desire::Hunger, 1.0f, 2.0f)},
+	});
+	// A tiger with its mind on, alone, that wants to show its state and is a little hungry
+	auto communicative = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 90.0f, "yours");
+	communicative.hold = false;
+	communicative.pauseMind = false;
+	all.push_back({
+	    .id = "mind.communicate_state",
+	    .name = "Showing its state to the player",
+	    .facet = Facet::Mind,
+	    .description = "A tiger stands alone with its mind on, side on to the camera. After two seconds it wants to show "
+	                   "its state as much as possible, and it is a little hungry.",
+	    .expected = "It turns to face the camera, with its head on the camera, then plays its hungry animation once. Then "
+	                "it does not want to show its state for a minute. When no plan is ready, it stands and does nothing.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {communicative},
+	    .commands = {setDesire(Desire::ManifestState, 1.0f, 2.0f), setDesire(Desire::Hunger, 0.3f, 2.0f)},
+	});
+	// A tiger of another player looks north at a village of the player: a hut and three of its villagers
+	auto stranger = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "another player's");
+	stranger.owner = PlayerNames::PLAYER_TWO;
+	stranger.hold = false;
+	stranger.pauseMind = false;
+	const std::vector<ObjectSetup> village {
+	    {.type = AbodeInfo::CelticHut, .offset = {0.0f, 40.0f}},
+	    {.type = VillagerInfo::CelticFarmerMale, .offset = {-8.0f, 25.0f}, .joinTown = true},
+	    {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 22.0f}, .joinTown = true},
+	    {.type = VillagerInfo::CelticFarmerMale, .offset = {8.0f, 25.0f}, .joinTown = true},
+	};
+	// A rock by the tiger, which it can hurl
+	auto angryVillage = village;
+	angryVillage.push_back({.type = MobileStaticInfo::RockChalk, .offset = {6.0f, -14.0f}});
+	all.push_back({
+	    .id = "mind.angry_at_village",
+	    .name = "Anger at a village acts on one of its people",
+	    .facet = Facet::Mind,
+	    .description = "A tiger of another player looks north at a village of the player: a hut and three villagers. A rock "
+	                   "lies by it. Its mind runs; after two seconds it is made as angry as can be.",
+	    .expected = "Its anger is about the village (the Mind panel's plan shows the town as what the plan is about), and it "
+	                "acts on one of the villagers that it has seen, not on the town itself.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {stranger},
+	    .objects = angryVillage,
+	    .commands = {setDesire(Desire::Anger, 1.0f, 2.0f)},
+	});
+	all.push_back({
+	    .id = "mind.angry_at_temple",
+	    .name = "Anger at a temple acts on its heart",
+	    .facet = Facet::Mind,
+	    .description = "A tiger of another player looks north at a temple of the player. A rock lies by the tiger. Its mind "
+	                   "runs; after two seconds it is made as angry as can be.",
+	    .expected = "Its anger is about the temple, and it acts on the heart of the temple: the temple itself, as the "
+	                "temple here is one thing. It does not act on a worship site.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {stranger},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {6.0f, -14.0f}}},
+	    .temples = {{.offset = {0.0f, 70.0f}}},
+	    .commands = {setDesire(Desire::Anger, 1.0f, 2.0f)},
+	});
+	all.push_back({
+	    .id = "mind.impress_village",
+	    .name = "To impress a village it acts on one of its people",
+	    .facet = Facet::Mind,
+	    .description = "A tiger of another player looks north at a village of the player: a hut and three villagers. Its "
+	                   "mind runs; after two seconds its desire to impress is made as strong as can be.",
+	    .expected = "Its desire to impress is about the village, and it acts on one of the villagers that it has seen and "
+	                "that does not dance, never on the hut.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {stranger},
+	    .objects = village,
+	    .commands = {setDesire(Desire::Impress, 1.0f, 2.0f)},
+	});
+	// The player's tiger looks north at a village of the player, on the learning leash
+	auto ownTiger = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "player's");
+	ownTiger.hold = false;
+	ownTiger.pauseMind = false;
+	all.push_back({
+	    .id = "leash.shown_hut",
+	    .name = "A hut shown on the leash",
+	    .facet = Facet::Leash,
+	    .description = "The player's tiger on the learning leash looks north at a village of the player: a hut and three "
+	                   "villagers. Its compassion is made as strong as can be. Then the Action button of the leash "
+	                   "orders it onto the hut.",
+	    .expected = "First it tries the desire it wants most for the village of the hut: compassion. When compassion "
+	                "has no plan, it tries the next desire, up to 40 times. The log shows the desire that it uses and "
+	                "how many desires it tried.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {ownTiger},
+	    .objects = village,
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), setDesire(Desire::Compassion, 1.0f, 1.0f),
+	                 OnObject(Kind::LeashOrderOn, 0, 0, 0.5f, false), Act(Kind::TakeOffLeash, 0, 20.0f)},
+	    .repeatFrom = 0,
 	});
 	// The player's evil, big tiger swaps minds with a small, neutral sheep that belongs to nobody, as The Lost Flock's
 	// sheep offers; then back again
@@ -4040,7 +4149,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 112> k_Names {
+	constexpr std::array<std::string_view, 113> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -4106,6 +4215,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "see skill",
 	    "see miracle",
 	    "player did",
+	    "player did it to the object",
 	    "press C",
 	    "double click",
 	    "camera keys",
@@ -4424,7 +4534,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		    (command.kind == Kind::CastMiracle &&
 		     (command.atCreature.has_value() ? *command.atCreature >= scenario.creatures.size()
 		                                     : command.object >= scenario.objects.size())) ||
-		    (command.kind == Kind::PlayerDid && command.value >= k_Deeds) ||
+		    ((command.kind == Kind::PlayerDid || command.kind == Kind::PlayerDidOn) && command.value >= k_Deeds) ||
 		    (command.kind == Kind::CameraKeys && (command.value >= 4 || command.amount <= 0.0f)) ||
 		    (command.kind == Kind::PointerTo &&
 		     (!InRange(command.point.x, 0.0f, 1.0f) || !InRange(command.point.y, 0.0f, 1.0f))) ||

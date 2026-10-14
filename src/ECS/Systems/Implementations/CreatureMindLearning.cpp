@@ -34,6 +34,8 @@
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureActionAgendas.h"
+#include "Creature/CreatureActivity.h"
+#include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureKindAgendas.h"
@@ -59,6 +61,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -66,17 +69,23 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/HandGrab.h"
+#include "ECS/Components/LandForest.h"
+#include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -97,6 +106,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -146,9 +156,6 @@ constexpr float k_PooUseFeedback = 0.5f;
 constexpr float k_ViewDistance = 150.0f;
 /// Copying the player moves on a step once a second
 constexpr uint32_t k_MimicStepTurns = 10;
-/// Things nobody owns, and things of no player
-constexpr uint32_t k_Neutral = 1;
-constexpr uint32_t k_NoPlayer = 7;
 
 /// The land's script that curses the player's creature, and how tall a creature of size 1 is
 constexpr std::string_view k_CurseScript = "CreatureCurse";
@@ -173,7 +180,8 @@ bool Interruptible(creature_mind::Activity activity)
 	return activity == None || activity == BeIdle || activity == Sit || activity == HangAround;
 }
 
-/// The action of the game's table an idle activity counts as, for feedback to be credited to
+/// The action in the table of actions that gets the feedback for an agenda that no plan gave.
+/// Only the forced agendas to eat, sleep, poo, be sick or drink are such agendas.
 std::string_view ActionForActivity(creature_mind::Activity activity)
 {
 	using enum creature_mind::Activity;
@@ -181,12 +189,6 @@ std::string_view ActionForActivity(creature_mind::Activity activity)
 	{
 	case Eat:
 		return "EatAfterExamining";
-	case Examine:
-		return "ExamineByPickingUp";
-	case PlayWithObject:
-		return "PracticeThrow";
-	case Hurl:
-		return "Hurl";
 	case Sleep:
 		return "SleepOnTheSpot";
 	case Poo:
@@ -195,14 +197,6 @@ std::string_view ActionForActivity(creature_mind::Activity activity)
 		return "Puke";
 	case Drink:
 		return "DrinkFromTheSea";
-	case Sit:
-		return "SitDown";
-	case BeIdle:
-		return "BeIdle";
-	case HangAround:
-		return "HangAroundAtHome";
-	case ShowDesire:
-		return "CommunicateState";
 	default:
 		return {};
 	}
@@ -603,37 +597,6 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 	                                                  .height = height};
 }
 
-/// The town a creature's compassion is about, and how much it is worth: of the towns and other creatures it knows, the
-/// one most worth it for the distance, the first found winning a tie; none when that is a creature, for which compassion
-/// has nothing to do
-std::optional<std::pair<entt::entity, float>> CompassionTown(ecs::Registry& registry, entt::entity self, glm::vec2 position,
-                                                             const creature_mind_model::Learnt& learnt, float distanceWeight)
-{
-	std::optional<entt::entity> best;
-	bool bestIsTown = false;
-	float bestScore = 0.0f;
-	const auto consider = [&](entt::entity entity, const Transform& at, bool town) {
-		if (entity == self)
-		{
-			return;
-		}
-		const auto distance = glm::distance(glm::vec2(at.position.x, at.position.z), position);
-		const auto score = Usefulness(learnt, Desire::Compassion, BeliefOf(registry, entity, self)) *
-		                   creature_planner::DistancePriority(false, distance, distanceWeight);
-		if (score > bestScore)
-		{
-			best = entity;
-			bestIsTown = town;
-			bestScore = score;
-		}
-	};
-	registry.Each<const Town, const Transform>(
-	    [&](entt::entity entity, const Town&, const Transform& at) { consider(entity, at, true); });
-	registry.Each<const Creature, const Transform>(
-	    [&](entt::entity entity, const Creature&, const Transform& at) { consider(entity, at, false); });
-	return bestIsTown && best.has_value() ? std::optional(std::pair {*best, bestScore}) : std::nullopt;
-}
-
 /// How much a town feels each of its desires now, and its desires in its own order, most felt first
 struct TownFeelings
 {
@@ -657,18 +620,6 @@ TownFeelings TownFeelingsOf(const ecs::Registry& registry, entt::entity town)
 		feelings.order.push_back(sorted.index);
 	}
 	return feelings;
-}
-
-/// Whether a thing is part of a town, as the creature knows it: the town's buildings and its people
-bool PartOfTown(const ecs::Registry& registry, entt::entity entity, entt::entity town)
-{
-	if (const auto* villager = registry.TryGet<const Villager>(entity))
-	{
-		return villager->town == town;
-	}
-	const auto* abode = registry.TryGet<const Abode>(entity);
-	const auto* data = registry.TryGet<const Town>(town);
-	return abode != nullptr && data != nullptr && abode->townId == data->id;
 }
 
 /// Whether compassion is what a creature wants most: no desire it feels is stronger
@@ -737,86 +688,190 @@ void FinishedHelpingTown(const ecs::Registry& registry, CreatureMindState& mind,
 }
 } // namespace
 
-/// What a creature knows of a thing: its kind and attributes, as far as the game's world here tells them
-std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& registry, entt::entity entity,
-                                                           entt::entity self)
+namespace
 {
-	using creature_tree::Attribute;
-	namespace types = creature_tree::belief_types;
-	if (!registry.Valid(entity))
+std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::entity thing,
+                                        std::optional<entt::entity> belongsTo);
+
+/// The player number of a town, none when there is no town
+std::optional<uint32_t> PlayerOfTown(const ecs::Registry& registry, std::optional<entt::entity> town)
+{
+	const auto* data = town.has_value() && registry.Valid(*town) ? registry.TryGet<const Town>(*town) : nullptr;
+	return data != nullptr ? std::optional(PlayerNumberOf(data->owner)) : std::nullopt;
+}
+
+/// The number of the player a thing is of, none for a thing of no player. The things of a town are of its player; a
+/// miracle is of the player of its caster; the land's other things are of the neutral player or of none.
+std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (const auto* creature = registry.TryGet<const Creature>(thing))
+	{
+		return PlayerNumberOf(creature->owner);
+	}
+	if (const auto* town = registry.TryGet<const Town>(thing))
+	{
+		return PlayerNumberOf(town->owner);
+	}
+	if (const auto* temple = registry.TryGet<const Temple>(thing))
+	{
+		return PlayerNumberOf(temple->owner);
+	}
+	if (const auto* site = registry.TryGet<const WorshipSite>(thing))
+	{
+		return PlayerNumberOf(site->player);
+	}
+	if (const auto* spell = registry.TryGet<const ecs::components::Spell>(thing))
+	{
+		switch (spell->caster.kind)
+		{
+		case SpellCaster::Kind::Player:
+			return PlayerNumberOf(spell->caster.player);
+		case SpellCaster::Kind::Creature:
+		case SpellCaster::Kind::Object:
+			return registry.Valid(spell->caster.entity) && spell->caster.entity != thing
+			           ? BeliefPlayerOf(registry, spell->caster.entity)
+			           : std::nullopt;
+		default:
+			return std::nullopt;
+		}
+	}
+	if (const auto* pile = registry.TryGet<const MagicPile>(thing))
+	{
+		return PlayerNumberOf(pile->player);
+	}
+	if (const auto* icon = registry.TryGet<const TownCentreIcon>(thing))
+	{
+		return PlayerOfTown(registry, icon->town);
+	}
+	// A villager, a field or a fish farm with no town is of no player; a building, a totem or a pile with no town is of
+	// the neutral player
+	if (registry.AnyOf<Villager, Abode, Field, FishFarm, VillageTotem, Pot>(thing))
+	{
+		if (const auto player = PlayerOfTown(registry, TownOfThing(registry, thing, CreatureMindSystem::BelongsTo(thing))))
+		{
+			return player;
+		}
+		if (registry.AnyOf<Villager, Field, FishFarm>(thing))
+		{
+			return std::nullopt;
+		}
+		return PlayerNumberOf(PlayerNames::NEUTRAL);
+	}
+	// Trees, forests and flocks have no player
+	if (registry.AnyOf<Tree, ForestTurns, Flock>(thing))
 	{
 		return std::nullopt;
 	}
-	const auto* me = registry.TryGet<const Creature>(self);
-	creature_tree::Belief belief;
-	const auto common = [&belief](uint32_t type, uint32_t allegiance, uint32_t origin, uint32_t animate, uint32_t player) {
-		belief.type = type;
-		belief.Set(Attribute::Allegiance, allegiance);
-		belief.Set(Attribute::Origin, origin);
-		belief.Set(Attribute::Animate, animate);
-		belief.Set(Attribute::PlayerNumber, player);
-		belief.Set(Attribute::HarderThanMe, 0);
-		belief.Set(Attribute::CreatureType, 0);
-		belief.Set(Attribute::Type, type);
-	};
-	if (const auto* villager = registry.TryGet<const Villager>(entity))
+	return PlayerNumberOf(PlayerNames::NEUTRAL);
+}
+
+/// Whether a thing is natural, made by people, or made by magic
+uint32_t OriginOf(const ecs::Registry& registry, entt::entity thing)
+{
+	namespace origin = creature_tree::origin;
+	if (registry.AnyOf<Temple, ecs::components::Spell>(thing))
 	{
-		common(types::k_Villager, k_Neutral, 0, 1, k_NoPlayer);
-		belief.Set(Attribute::Sex, static_cast<uint32_t>(villager->sex));
-		belief.Set(Attribute::VillagerJob, static_cast<uint32_t>(villager->number));
-		belief.Set(Attribute::Life, villager->life > 0.0f ? 1 : 0);
-		belief.Set(Attribute::OnFire,
-		           Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity) ? 1 : 0);
-		belief.Set(Attribute::Tribe, static_cast<uint32_t>(villager->tribe));
-		return belief;
+		return origin::k_Magic;
 	}
-	if (const auto* creature = registry.TryGet<const Creature>(entity))
+	// A worship site is a part of the temple, which is natural
+	if (registry.AllOf<WorshipSite>(thing))
 	{
-		const bool mine = me != nullptr && me->owner == creature->owner;
-		common(types::k_Creature, mine ? 0 : 2, 0, 1, PlayerNumberOf(creature->owner));
-		belief.Set(Attribute::HarderThanMe,
-		           me != nullptr && creature->strength * ShownSize(*creature) > me->strength * ShownSize(*me) ? 1 : 0);
-		belief.Set(Attribute::CreatureType, static_cast<uint32_t>(creature::InfoRow(creature->species)));
-		belief.Set(Attribute::Height, static_cast<uint32_t>(std::lround(ShownSize(*creature) * 3.0f)));
-		belief.Set(Attribute::SpellKnowledge, 0);
-		belief.Set(Attribute::Carrying, registry.AllOf<CreatureHeldObject>(entity) ? 1 : 0);
-		uint32_t dominant = 0;
-		if (const auto* mind = registry.TryGet<const CreatureMindState>(entity); mind != nullptr && mind->desires.has_value())
+		return origin::k_Natural;
+	}
+	return registry.AnyOf<Town, Abode, Field>(thing) ? origin::k_ManMade : origin::k_Natural;
+}
+
+/// The size that the creature of a creature's player shows: the first creature of the player, else the creature itself
+float SizeOfPlayersCreature(const ecs::Registry& registry, const Creature& me)
+{
+	if (Locator::playerSystem::has_value())
+	{
+		if (const auto primary = Locator::playerSystem::value().GetPrimaryCreature(me.owner))
 		{
-			float strongest = 0.0f;
-			for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+			if (const auto* body = registry.TryGet<const Creature>(*primary))
 			{
-				const auto& state = mind->desires->desires.at(d);
-				if (state.activated && state.value > strongest)
-				{
-					strongest = state.value;
-					dominant = static_cast<uint32_t>(d);
-				}
+				return ShownSize(*body);
 			}
 		}
-		belief.Set(Attribute::DominantDesire, dominant);
-		return belief;
 	}
-	if (const auto* abode = registry.TryGet<const Abode>(entity))
+	return ShownSize(me);
+}
+
+/// How many trees a forest has, grown and growing
+size_t TreesInForest(entt::entity forest)
+{
+	if (!Locator::forestSystem::has_value())
 	{
-		common(types::k_Abode, k_Neutral, 1, 0, k_NoPlayer);
-		belief.Set(Attribute::AbodeType, static_cast<uint32_t>(abode->type));
-		belief.Set(Attribute::Life, 1);
-		belief.Set(Attribute::OnFire,
-		           Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity) ? 1 : 0);
-		belief.Set(Attribute::AbodeBeingBuilt, 0);
-		return belief;
+		return 0;
 	}
-	if (registry.AllOf<Tree>(entity))
+	const auto& forests = Locator::forestSystem::value();
+	return forests.TreesOf(forest, false).size() + forests.TreesOf(forest, true).size();
+}
+
+/// The desire that another creature feels most
+uint32_t StrongestDesireOf(const ecs::Registry& registry, entt::entity creature)
+{
+	uint32_t dominant = 0;
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->desires.has_value())
 	{
-		common(types::k_Tree, k_Neutral, 0, 0, k_NoPlayer);
-		return belief;
+		return dominant;
 	}
-	if (const auto* town = registry.TryGet<const Town>(entity))
+	float strongest = 0.0f;
+	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
 	{
-		// Its own player's town, or another's; made, not living
-		const bool mine = me != nullptr && me->owner == town->owner;
-		common(types::k_Town, mine ? 0 : 1, 1, 0, std::min(PlayerNumberOf(town->owner), k_NoPlayer));
+		const auto& state = mind->desires->desires.at(d);
+		if (state.activated && state.value > strongest)
+		{
+			strongest = state.value;
+			dominant = static_cast<uint32_t>(d);
+		}
+	}
+	return dominant;
+}
+
+/// The attributes only the beliefs about villagers, creatures, buildings, towns and forests have
+void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const Creature* me, creature_tree::Belief& belief)
+{
+	using creature_tree::Attribute;
+	namespace types = creature_tree::belief_types;
+	const auto onFire = [&registry, entity]() -> uint32_t {
+		return Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity) ? 1 : 0;
+	};
+	switch (belief.type)
+	{
+	case types::k_Villager:
+		if (const auto* villager = registry.TryGet<const Villager>(entity))
+		{
+			belief.Set(Attribute::Sex, static_cast<uint32_t>(villager->sex));
+			belief.Set(Attribute::VillagerJob, static_cast<uint32_t>(villager->number));
+			belief.Set(Attribute::Life, villager->life > 0.0f ? 1 : 0);
+			belief.Set(Attribute::OnFire, onFire());
+			belief.Set(Attribute::Tribe, static_cast<uint32_t>(villager->tribe));
+		}
+		break;
+	case types::k_Creature:
+		if (const auto* creature = registry.TryGet<const Creature>(entity))
+		{
+			belief.Set(Attribute::Height, creature_tree::CreatureHeight(ShownSize(*creature)));
+			// TODO(creature-belief-types-in-trees): the game knows which miracles the other creature knows, what kind
+			// of thing it carries, and takes the desire of the action it does as its strongest desire
+			belief.Set(Attribute::SpellKnowledge, 0);
+			belief.Set(Attribute::Carrying, registry.AllOf<CreatureHeldObject>(entity) ? 1 : 0);
+			belief.Set(Attribute::DominantDesire, StrongestDesireOf(registry, entity));
+		}
+		break;
+	case types::k_Abode:
+		if (const auto* abode = registry.TryGet<const Abode>(entity))
+		{
+			belief.Set(Attribute::AbodeType, static_cast<uint32_t>(abode->type));
+			belief.Set(Attribute::Life, 1);
+			belief.Set(Attribute::OnFire, onFire());
+			belief.Set(Attribute::AbodeBeingBuilt, 0);
+		}
+		break;
+	case types::k_Town:
+	{
 		float faith = 0.0f;
 		if (const auto* impression = registry.TryGet<const TownImpression>(entity); impression != nullptr && me != nullptr)
 		{
@@ -832,46 +887,65 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 		// No tribe counts as the last
 		belief.Set(Attribute::Tribe,
 		           tribe != nullptr ? std::min(static_cast<uint32_t>(*tribe), static_cast<uint32_t>(Tribe::TIBETAN)) : 0);
-		return belief;
+		break;
 	}
-	if (registry.AllOf<Temple>(entity))
+	case types::k_Forest:
+		belief.Set(Attribute::ForestSize, creature_tree::ForestSize(TreesInForest(entity)));
+		break;
+	default:
+		break;
+	}
+}
+} // namespace
+
+/// What a creature knows of a thing: its kind and attributes, as far as the game's world here tells them
+std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& registry, entt::entity entity,
+                                                           entt::entity self)
+{
+	if (!registry.Valid(entity))
 	{
-		common(types::k_Citadel, 0, 1, 0, me != nullptr ? PlayerNumberOf(me->owner) : 0);
-		return belief;
+		return std::nullopt;
 	}
-	if (registry.AllOf<Feature>(entity))
+	const auto type = BeliefKindOf(registry, entity);
+	if (!type.has_value())
 	{
-		common(types::k_Feature, k_Neutral, 0, 0, k_NoPlayer);
-		return belief;
+		return std::nullopt;
 	}
-	if (registry.AnyOf<MobileObject, Ball, Pot>(entity))
+	const auto* me = registry.TryGet<const Creature>(self);
+	const auto* creature = registry.TryGet<const Creature>(entity);
+	auto belief = creature_tree::CommonBelief({
+	    .type = *type,
+	    .origin = OriginOf(registry, entity),
+	    .animate = registry.AnyOf<Villager, Animal, Creature>(entity),
+	    .player = BeliefPlayerOf(registry, entity),
+	    .creaturesPlayer = me != nullptr ? std::optional(PlayerNumberOf(me->owner)) : std::nullopt,
+	    .harderThanMe = creature != nullptr && me != nullptr && ShownSize(*creature) > SizeOfPlayersCreature(registry, *me),
+	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
+	});
+	SetKindAttributes(registry, entity, me, belief);
+	return belief;
+}
+
+std::optional<creature_tree::Belief> mind_detail::ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,
+                                                                  entt::entity self)
+{
+	// The temple here is one thing. Acted on, it stands for its heart: a part of the temple of the temple's player.
+	if (const auto* temple = registry.Valid(entity) ? registry.TryGet<const Temple>(entity) : nullptr)
 	{
-		common(types::k_Other, k_Neutral, 1, 0, k_NoPlayer);
-		return belief;
+		const auto* me = registry.TryGet<const Creature>(self);
+		return creature_tree::CommonBelief({
+		    .type = creature_tree::belief_types::k_CitadelPart,
+		    .player = PlayerNumberOf(temple->owner),
+		    .creaturesPlayer = me != nullptr ? std::optional(PlayerNumberOf(me->owner)) : std::nullopt,
+		});
 	}
-	return std::nullopt;
+	return BeliefOf(registry, entity, self);
 }
 
 std::optional<uint32_t> mind_detail::LessonActivity(const creature_mind_tables::Tables& tables, Desire desire,
                                                     std::optional<uint32_t> object, std::optional<uint32_t> about)
 {
 	return creature_learning::ActivityOf(tables.rules.at(static_cast<size_t>(desire)).aboutSomething, object, about);
-}
-
-float mind_detail::FoodUsefulness(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity self,
-                                  entt::entity food)
-{
-	if (!mind.learnt.has_value())
-	{
-		return creature_planner::k_DefaultUsefulness;
-	}
-	const auto belief = BeliefOf(registry, food, self);
-	if (!belief.has_value())
-	{
-		return creature_planner::k_DefaultUsefulness;
-	}
-	const auto& tree = mind.learnt->trees.at(static_cast<size_t>(TreeKind::ActOn)).at(static_cast<size_t>(Desire::Hunger));
-	return creature_tree::Usefulness(creature_tree::Evaluate(tree, *belief));
 }
 
 uint32_t CreatureMindSystem::Random(uint32_t range)
@@ -1103,7 +1177,8 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	        .action = *action,
 	        .desire = static_cast<Desire>(info.desire),
 	        .object = object,
-	        .belief = object.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*object), creature) : std::nullopt,
+	        .belief =
+	            object.has_value() ? ActedOnBeliefOf(registry, static_cast<entt::entity>(*object), creature) : std::nullopt,
 	        .activity = activity,
 	        .activityBelief =
 	            activity.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*activity), creature) : std::nullopt,
@@ -1137,8 +1212,8 @@ bool OutsideConfinement(const ecs::Registry& registry, entt::entity creature, en
 }
 
 /// The thing a creature at a point uses for an action, of a kind, other than the goal
-std::optional<uint32_t> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
-                                std::optional<uint32_t> goal)
+std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
+                                                    std::optional<uint32_t> goal)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<creature_planner::UsedCandidate> candidates;
@@ -1183,7 +1258,8 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	    executor != nullptr && executor->use != Target::None && !chosen.instrument.has_value())
 	{
 		chosen.instrument = UsedFor(creature, executor->use, situated.position,
-		                            tables->rules.at(static_cast<size_t>(plan.desire)).distanceWeight, plan.object);
+		                            tables->rules.at(static_cast<size_t>(plan.desire)).distanceWeight, plan.object)
+		                        .transform([](const creature_planner::UsedChoice& used) { return used.id; });
 	}
 	situated.instrument = chosen.instrument;
 	auto built = PlanAgenda(creature, plan.action, plan.object, situated);
@@ -1225,7 +1301,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		        .action = plan.action,
 		        .desire = plan.desire,
 		        .object = plan.object,
-		        .belief = plan.object.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*plan.object), creature)
+		        .belief = plan.object.has_value() ? ActedOnBeliefOf(registry, static_cast<entt::entity>(*plan.object), creature)
 		                                          : std::nullopt,
 		        .activity = activity,
 		        .activityBelief =
@@ -1236,10 +1312,6 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		    });
 	}
 	creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
-	if (executor->build == creature_plan_actions::Build::ShowDesire)
-	{
-		mind.idle.showDesireSeconds = creature_mind::k_ShowDesireSeconds;
-	}
 	return true;
 }
 
@@ -1418,7 +1490,7 @@ float CreatureMindSystem::ObjectToActOnUsefulness(entt::entity creature, const C
 			return 0.0f;
 		}
 	}
-	const auto belief = BeliefOf(registry, object, creature);
+	const auto belief = ActedOnBeliefOf(registry, object, creature);
 	// Curious, a kind it has had a good look at is a hundredth as useful
 	// TODO(creature-reactions-2): the game makes a thing five times as useful to a curious creature while it does
 	// something the creature finds interesting (only a villager can), and has a rule of its own for one more desire
@@ -1434,9 +1506,560 @@ float CreatureMindSystem::ObjectToActOnUsefulness(entt::entity creature, const C
 	return learnt * distance * share;
 }
 
+namespace
+{
+/// A town counts as loyal to the player of the creature when its belief in that player is more than this share of its
+/// largest belief in another player
+constexpr float k_HalfOfMostOtherBelief = 0.5f;
+
+/// The player of a thing that can belong to a player: a town, a villager or a building by its town, a creature or a
+/// temple. A villager or a building has the player of the town that it belongs to. None for any other thing, or for a
+/// villager or a building with no town.
+std::optional<PlayerNames> PlayerOfThing(const ecs::Registry& registry, entt::entity thing,
+                                         std::optional<entt::entity> belongsTo)
+{
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (const auto* creature = registry.TryGet<const Creature>(thing))
+	{
+		return creature->owner;
+	}
+	if (const auto* temple = registry.TryGet<const Temple>(thing))
+	{
+		return temple->owner;
+	}
+	if (const auto* town = registry.TryGet<const Town>(thing))
+	{
+		return town->owner;
+	}
+	if (const auto owner = belongsTo; owner.has_value() && *owner != thing)
+	{
+		if (const auto* town = registry.TryGet<const Town>(*owner))
+		{
+			return town->owner;
+		}
+	}
+	return std::nullopt;
+}
+
+/// What a creature knows about a whole thing that it examines a desire about
+creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::entity creature, entt::entity whole,
+                                           creature_activity::Whole kind, const creature_mind_tables::Tables& tables)
+{
+	const auto& self = registry.Get<const Creature>(creature);
+	creature_activity::WholeFacts facts {.kind = kind};
+	switch (kind)
+	{
+	case creature_activity::Whole::Town:
+		if (const auto* town = registry.TryGet<const Town>(whole))
+		{
+			facts.samePlayer = town->owner == self.owner;
+		}
+		if (const auto* impression = registry.TryGet<const TownImpression>(whole))
+		{
+			const auto& belief = impression->belief.belief;
+			const auto mine = static_cast<size_t>(self.owner);
+			float mostOther = 0.0f;
+			for (size_t player = 0; player < belief.size(); ++player)
+			{
+				if (player != mine && belief.at(player) > mostOther)
+				{
+					mostOther = belief.at(player);
+				}
+			}
+			facts.believesInPlayer = mine < belief.size() && mostOther * k_HalfOfMostOtherBelief < belief.at(mine);
+		}
+		break;
+	case creature_activity::Whole::Creature:
+		facts.samePlayer = registry.Get<const Creature>(whole).owner == self.owner;
+		facts.attackable = mind_detail::MayBeAngryWith(registry, whole, creature, tables);
+		break;
+	case creature_activity::Whole::Citadel:
+		if (const auto* temple = registry.TryGet<const Temple>(whole))
+		{
+			facts.samePlayer = temple->owner == self.owner;
+		}
+		break;
+	case creature_activity::Whole::Forest:
+	case creature_activity::Whole::Flock:
+		// A forest and a flock have the neutral player
+		facts.samePlayer = self.owner == PlayerNames::NEUTRAL;
+		break;
+	}
+	// Only the player of the creature looks at it
+	if (self.owner == PlayerNames::PLAYER_ONE && Locator::camera::has_value())
+	{
+		const auto& camera = Locator::camera::value();
+		const auto* at = registry.TryGet<const Transform>(creature);
+		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), at->position);
+	}
+	return facts;
+}
+
+/// The town that a building belongs to, none when it has none
+std::optional<entt::entity> TownOfBuilding(const ecs::Registry& registry, uint32_t townId)
+{
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(townId);
+	return found != towns.end() && registry.Valid(found->second) ? std::optional(found->second) : std::nullopt;
+}
+
+/// The tribe of a town; none for no town or a town of no tribe
+std::optional<Tribe> TribeOfTown(const ecs::Registry& registry, std::optional<entt::entity> town)
+{
+	const auto* tribe = town.has_value() ? registry.TryGet<const Tribe>(*town) : nullptr;
+	return tribe != nullptr ? std::optional(*tribe) : std::nullopt;
+}
+
+/// A field has the data of the field building of its town's tribe, or of the first building for a field of no town
+const GAbodeInfo* FieldBuildingInfo(const ecs::Registry& registry, entt::entity field)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto& self = registry.Get<const Field>(field);
+	const auto tribe =
+	    TribeOfTown(registry, self.town >= 0 ? TownOfBuilding(registry, static_cast<uint32_t>(self.town)) : std::nullopt);
+	if (!tribe.has_value())
+	{
+		return &info.abode.at(0);
+	}
+	const auto row = static_cast<size_t>(GAbodeInfo::Find(*tribe, AbodeNumber::Field));
+	return row < info.abode.size() ? &info.abode.at(row) : nullptr;
+}
+
+/// The town of a village totem: the town of the village centre that it stands on
+std::optional<entt::entity> TownOfTotem(const ecs::Registry& registry, entt::entity totem)
+{
+	const auto& self = registry.Get<const VillageTotem>(totem);
+	const auto* centre = registry.Valid(self.townCentre) ? registry.TryGet<const Abode>(self.townCentre) : nullptr;
+	return centre != nullptr ? TownOfBuilding(registry, centre->townId) : std::nullopt;
+}
+
+/// The data of a village totem's statue, by the tribe of its town
+const GTotemStatueInfo* TotemStatueInfo(const ecs::Registry& registry, entt::entity totem)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& statues = Locator::infoConstants::value().totemStatue;
+	const auto tribe = TribeOfTown(registry, TownOfTotem(registry, totem));
+	const auto row = tribe.has_value() ? static_cast<size_t>(*tribe) : statues.size();
+	return row < statues.size() ? &statues.at(row) : nullptr;
+}
+
+/// Whether the creature found no way to a thing lately. A thing fixed in the land is left alone for longer.
+bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
+{
+	const auto* belief = mind.beliefs.Find(thing);
+	const bool fixed =
+	    registry.AnyOf<Abode, Tree, Feature, Field, FishFarm, AnimatedStatic, Flowers, Temple, WorshipSite, VillageTotem>(
+	        thing);
+	return belief != nullptr && creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
+}
+
+/// What a creature knows about a part of a whole thing; none for a thing that is not a part it can act on
+std::optional<creature_activity::PartFacts> PartFactsOf(const ecs::Registry& registry, entt::entity part)
+{
+	using creature_activity::Part;
+	if (!Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& info = Locator::infoConstants::value();
+	// The temple stands for its heart
+	if (registry.AllOf<Temple>(part))
+	{
+		return creature_activity::PartFacts {
+		    .kind = Part::Building,
+		    .canActOn = info.citadelHeart.canCreatureInteractWithMe != 0,
+		    .attackable = info.citadelHeart.canCreatureAttackMe != 0,
+		};
+	}
+	if (const auto* villager = registry.TryGet<const Villager>(part))
+	{
+		const auto row = static_cast<size_t>(GVillagerInfo::Find(villager->tribe, villager->number));
+		// A villager in its home, or one that may not be picked up, cannot have help
+		return creature_activity::PartFacts {
+		    .kind = Part::Villager,
+		    .attackable = row < info.villager.size() && info.villager.at(row).canCreatureAttackMe != 0,
+		    .dead = registry.AllOf<VillagerDeath>(part) || !(villager->life > 0.0f),
+		    .dancing = registry.AllOf<Dancer>(part),
+		    .pickable = !registry.AnyOf<AtHome, CannotBePickedUp>(part),
+		};
+	}
+	if (const auto* animal = registry.TryGet<const Animal>(part))
+	{
+		const auto row = static_cast<size_t>(animal->type);
+		return creature_activity::PartFacts {
+		    .kind = Part::Animal,
+		    .attackable = row < info.animal.size() && info.animal.at(row).canCreatureAttackMe != 0,
+		    .dead = animal->Dead(),
+		};
+	}
+	if (const auto* tree = registry.TryGet<const Tree>(part))
+	{
+		const auto row = static_cast<size_t>(tree->type);
+		return creature_activity::PartFacts {
+		    .kind = Part::Tree,
+		    .canActOn = row < info.tree.size() && info.tree.at(row).canCreatureInteractWithMe != 0,
+		    .attackable = true,
+		};
+	}
+	if (const auto* abode = registry.TryGet<const Abode>(part))
+	{
+		const auto row = static_cast<size_t>(abode->info);
+		const bool known = row < info.abode.size();
+		// A worship site never lets a creature act on it
+		return creature_activity::PartFacts {
+		    .kind = Part::Building,
+		    .canActOn = known && info.abode.at(row).canCreatureInteractWithMe != 0 && !registry.AllOf<WorshipSite>(part),
+		    .attackable = known && info.abode.at(row).canCreatureAttackMe != 0,
+		};
+	}
+	// A field has the data of its town's field building
+	if (registry.AllOf<Field>(part))
+	{
+		const auto* data = FieldBuildingInfo(registry, part);
+		return creature_activity::PartFacts {
+		    .kind = Part::Building,
+		    .canActOn = data != nullptr && data->canCreatureInteractWithMe != 0,
+		    .attackable = data != nullptr && data->canCreatureAttackMe != 0,
+		};
+	}
+	if (registry.AllOf<VillageTotem>(part))
+	{
+		const auto* data = TotemStatueInfo(registry, part);
+		return creature_activity::PartFacts {
+		    .kind = Part::TotemStatue,
+		    .canActOn = data != nullptr && data->canCreatureInteractWithMe != 0,
+		    .attackable = data != nullptr && data->canCreatureAttackMe != 0,
+		};
+	}
+	return std::nullopt;
+}
+
+/// A hungry creature does not eat a thing of a town for which it learnt a compassion worth more than this
+constexpr float k_MostCompassionToEatFrom = 0.1f;
+
+/// Whether a creature can act on a thing at all. The living and miracles can always have an action. A whole thing, a
+/// worship site and a thing without data cannot. Any other thing lets a creature act on it when its data says so. The
+/// temple here is one thing, which stands for its heart: the data of the heart says if a creature can act on it.
+// TODO(creature-belief-types-in-trees): the game also has the creature pens of a temple as parts that a creature can act
+// on. Here the pens are not things of their own.
+bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
+{
+	if (registry.AnyOf<Villager, Animal, Creature, ecs::components::Spell>(thing))
+	{
+		return true;
+	}
+	if (registry.AllOf<Temple>(thing))
+	{
+		return Locator::infoConstants::has_value() &&
+		       Locator::infoConstants::value().citadelHeart.canCreatureInteractWithMe != 0;
+	}
+	if (registry.AnyOf<WorshipSite, Town, Flock, ForestTurns>(thing))
+	{
+		return false;
+	}
+	// A field has the data of its town's field building, and a village totem the data of its statue
+	const GObjectInfo* info = nullptr;
+	if (registry.AllOf<Field>(thing))
+	{
+		info = FieldBuildingInfo(registry, thing);
+	}
+	else if (registry.AllOf<VillageTotem>(thing))
+	{
+		info = TotemStatueInfo(registry, thing);
+	}
+	else
+	{
+		info = ecs::world_objects::InfoOf(thing);
+	}
+	return info != nullptr && info->canCreatureInteractWithMe != 0;
+}
+
+/// The town of a thing: the town of a villager, a building, a field or a fish farm, of a pile in a storage pit, or of
+/// a village totem. None for any other thing.
+std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::entity thing,
+                                        std::optional<entt::entity> belongsTo)
+{
+	const auto town = [&registry](entt::entity found) {
+		return registry.Valid(found) && registry.AllOf<Town>(found) ? std::optional(found) : std::nullopt;
+	};
+	if (registry.AnyOf<Villager, Abode, Field>(thing) && !registry.AllOf<WorshipSite>(thing))
+	{
+		return belongsTo.has_value() ? town(*belongsTo) : std::nullopt;
+	}
+	if (const auto* farm = registry.TryGet<const FishFarm>(thing))
+	{
+		return town(farm->town);
+	}
+	if (registry.AllOf<VillageTotem>(thing))
+	{
+		return TownOfTotem(registry, thing);
+	}
+	if (registry.AllOf<Pot>(thing))
+	{
+		std::optional<entt::entity> pit;
+		registry.Each<const StoragePit>([&](entt::entity entity, const StoragePit& store) {
+			if (store.foodPile == thing || std::ranges::find(store.woodPiles, thing) != store.woodPiles.end())
+			{
+				pit = entity;
+			}
+		});
+		if (const auto* abode = pit.has_value() ? registry.TryGet<const Abode>(*pit) : nullptr)
+		{
+			const auto& towns = registry.Context().towns;
+			const auto found = towns.find(abode->townId);
+			return found != towns.end() ? town(found->second) : std::nullopt;
+		}
+	}
+	return std::nullopt;
+}
+} // namespace
+
+std::optional<CreatureMindSystem::ChosenActivity>
+CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindState& mind, Desire desire)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (tables == nullptr || at == nullptr || !registry.AllOf<Creature>(creature))
+	{
+		return std::nullopt;
+	}
+	const auto& rules = tables->rules.at(static_cast<size_t>(desire));
+	std::vector<ChosenActivity> found;
+	std::vector<float> worth;
+	for (const auto& belief : mind.beliefs.NewestFirst())
+	{
+		const auto kind = creature_activity::WholeOf(belief.kind);
+		if (!kind.has_value() || belief.thing == creature || !registry.Valid(belief.thing))
+		{
+			continue;
+		}
+		const auto facts = WholeFactsOf(registry, creature, belief.thing, *kind, *tables);
+		if (!creature_activity::CanBeAbout(desire, facts, mind.mayAttackOwnPlayer))
+		{
+			continue;
+		}
+		const auto usefulness =
+		    ActivityUsefulness(creature, mind, desire, belief.thing) *
+		    mind_detail::Nearness(registry, creature, at->position, belief.thing, belief.place, rules.distanceWeight);
+		found.push_back({.whole = belief.thing, .kind = *kind, .usefulness = usefulness});
+		worth.push_back(usefulness);
+	}
+	const auto best = creature_activity::MostUseful(worth);
+	return best.has_value() ? std::optional(found.at(*best)) : std::nullopt;
+}
+
+std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(entt::entity creature,
+                                                                                const CreatureMindState& mind, Desire desire,
+                                                                                const ChosenActivity& activity)
+{
+	// A creature is its own part, whatever the creature can do to it
+	if (activity.kind == creature_activity::Whole::Creature)
+	{
+		return {GoalWorth(creature, mind, desire, activity.whole, activity)};
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<creature_planner::ObjectCandidate> parts;
+	const auto add = [&](entt::entity thing) {
+		if (thing == creature || !registry.Valid(thing) || NoWayLately(registry, mind, thing))
+		{
+			return;
+		}
+		const auto facts = PartFactsOf(registry, thing);
+		if (facts.has_value() && creature_activity::PartSuits(desire, *facts))
+		{
+			parts.push_back(GoalWorth(creature, mind, desire, thing, activity));
+		}
+	};
+	for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
+	{
+		add(belief.thing);
+	}
+	// The temple is its own heart, the part that the creature came across first
+	if (activity.kind == creature_activity::Whole::Citadel)
+	{
+		add(activity.whole);
+	}
+	return parts;
+}
+
+bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing) || NoWayLately(registry, mind, thing))
+	{
+		return false;
+	}
+	if (desire == Desire::Hunger)
+	{
+		if (const auto town = TownOfThing(registry, thing, BelongsTo(thing)))
+		{
+			ComeAcross(creature, mind, *town);
+			if (ActivityUsefulness(creature, mind, Desire::Compassion, *town) > k_MostCompassionToEatFrom)
+			{
+				return false;
+			}
+		}
+	}
+	return LetsCreatureAct(registry, thing);
+}
+
+std::vector<creature_planner::ObjectCandidate>
+CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindState& mind, Desire desire,
+                                          const std::function<bool(entt::entity)>& suitsAction)
+{
+	std::vector<creature_planner::ObjectCandidate> found;
+	for (const auto& belief : mind.beliefs.InListOrder())
+	{
+		if (belief.thing == creature || !SuitsDesire(creature, mind, desire, belief.thing) || !suitsAction(belief.thing))
+		{
+			continue;
+		}
+		found.push_back(GoalWorth(creature, mind, desire, belief.thing, std::nullopt));
+	}
+	return found;
+}
+
+std::optional<entt::entity> CreatureMindSystem::WholeOfShownThing(entt::entity creature, CreatureMindState& mind,
+                                                                  entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	ComeAcross(creature, mind, thing);
+	// A creature is part of no whole thing
+	if (registry.AllOf<Creature>(thing))
+	{
+		return std::nullopt;
+	}
+	// The temple is its own heart, a part of itself
+	if (registry.AllOf<Temple>(thing))
+	{
+		return thing;
+	}
+	const auto whole = BelongsTo(thing);
+	if (!whole.has_value() || *whole == thing || !registry.Valid(*whole))
+	{
+		return std::nullopt;
+	}
+	ComeAcross(creature, mind, *whole);
+	return whole;
+}
+
+std::optional<entt::entity> CreatureMindSystem::WholeOfForcedPlan(entt::entity creature, CreatureMindState& mind, Desire desire,
+                                                                  entt::entity thing)
+{
+	if (auto whole = WholeOfShownThing(creature, mind, thing))
+	{
+		return whole;
+	}
+	// A desire about something, with no whole thing, is about the nearest town
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (tables == nullptr || at == nullptr || !tables->rules.at(static_cast<size_t>(desire)).aboutSomething)
+	{
+		return std::nullopt;
+	}
+	const auto town = mind_detail::NearestTown(registry, at->position);
+	if (town == entt::null)
+	{
+		return std::nullopt;
+	}
+	ComeAcross(creature, mind, town);
+	return town;
+}
+
+std::optional<CreatureMindSystem::ChosenActivity>
+CreatureMindSystem::ShownActivity(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto whole = WholeOfShownThing(creature, mind, thing);
+	const auto* belief = whole.has_value() ? mind.beliefs.Find(*whole) : nullptr;
+	const auto kind = belief != nullptr ? creature_activity::WholeOf(belief->kind) : std::nullopt;
+	if (tables == nullptr || at == nullptr || !kind.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto facts = WholeFactsOf(registry, creature, *whole, *kind, *tables);
+	if (!creature_activity::CanBeAbout(desire, facts, mind.mayAttackOwnPlayer))
+	{
+		return std::nullopt;
+	}
+	const auto usefulness = ActivityUsefulness(creature, mind, desire, *whole) *
+	                        mind_detail::Nearness(registry, creature, at->position, *whole, belief->place,
+	                                              tables->rules.at(static_cast<size_t>(desire)).distanceWeight);
+	return ChosenActivity {.whole = *whole, .kind = *kind, .usefulness = usefulness};
+}
+
+std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::ShownParts(entt::entity creature, CreatureMindState& mind,
+                                                                              Desire desire, entt::entity thing,
+                                                                              const ChosenActivity& activity)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto suits = [&](entt::entity part) {
+		const auto facts = PartFactsOf(registry, part);
+		return !NoWayLately(registry, mind, part) && facts.has_value() && creature_activity::PartSuits(desire, *facts) &&
+		       ObjectToActOnUsefulness(creature, mind, desire, part) > 0.0f;
+	};
+	if (suits(thing))
+	{
+		return {GoalWorth(creature, mind, desire, thing, activity)};
+	}
+	std::vector<creature_planner::ObjectCandidate> parts;
+	for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
+	{
+		if (belief.thing != creature && registry.Valid(belief.thing) && suits(belief.thing))
+		{
+			parts.push_back(GoalWorth(creature, mind, desire, belief.thing, activity));
+		}
+	}
+	return parts;
+}
+
+std::vector<creature_planner::ObjectCandidate>
+CreatureMindSystem::ShownThingsWithoutWhole(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto suits = [&](entt::entity found) {
+		return registry.Valid(found) && found != creature && SuitsDesire(creature, mind, desire, found) &&
+		       ObjectToActOnUsefulness(creature, mind, desire, found) > 0.0f;
+	};
+	if (suits(thing))
+	{
+		return {GoalWorth(creature, mind, desire, thing, std::nullopt)};
+	}
+	std::vector<creature_planner::ObjectCandidate> parts;
+	if (const auto whole = WholeOfShownThing(creature, mind, thing))
+	{
+		for (const auto& belief : mind.beliefs.PartsOf(*whole))
+		{
+			if (suits(belief.thing))
+			{
+				parts.push_back(GoalWorth(creature, mind, desire, belief.thing, std::nullopt));
+			}
+		}
+	}
+	return parts;
+}
+
 creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity creature, const CreatureMindState& mind,
                                                                 Desire desire, entt::entity thing,
-                                                                std::optional<float> townUsefulness)
+                                                                const std::optional<ChosenActivity>& activity)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* tables = GetTables();
@@ -1446,37 +2069,19 @@ creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity cre
 	{
 		return candidate;
 	}
-	// Compassion is about a town, whose worth counts for the plan, and weighs the town's things as most desires do
-	if (townUsefulness.has_value())
+	// A part of the whole thing that the desire is about has the worth that the creature learnt for things to act on.
+	// The worth of the whole thing counts for the plan. A creature is its own part, with the worth of the whole thing.
+	if (activity.has_value())
 	{
-		candidate.usefulness = ObjectToActOnUsefulness(creature, mind, desire, thing);
-		candidate.activityUsefulness = townUsefulness;
+		const auto partUsefulness = ObjectToActOnUsefulness(creature, mind, desire, thing);
+		candidate.usefulness = activity->kind == creature_activity::Whole::Creature ? activity->usefulness : partUsefulness;
+		candidate.activityUsefulness = activity->usefulness;
+		candidate.actedOnUsefulness = creature_activity::ActedOnUsefulness(desire, partUsefulness);
 		return candidate;
 	}
-	// Most desires weigh a thing by what the creature has learnt of acting on such things, for the distance
-	const auto& rules = tables->rules.at(static_cast<size_t>(desire));
-	if (!rules.aboutSomething)
-	{
-		candidate.usefulness = ObjectToActOnUsefulness(creature, mind, desire, thing);
-		candidate.actedOnUsefulness = candidate.usefulness;
-		return candidate;
-	}
-	// A desire about something in itself weighs that thing, which it must believe in, by what it has learnt of such
-	// things as the point of the desire, for the distance; only anger counts what it acts on as well
-	// TODO(usefulness-use-tree): the game keeps what such a desire is about apart from what it acts on (a town's villager
-	// for anger, say); openblack's plans other than compassion's act on the thing they are about
-	const auto place = BelievedPlace(mind, thing);
-	if (!place.has_value())
-	{
-		return candidate;
-	}
-	candidate.usefulness = ActivityUsefulness(creature, mind, desire, thing) *
-	                       Nearness(registry, creature, at->position, thing, *place, rules.distanceWeight);
-	candidate.activityUsefulness = candidate.usefulness;
-	if (creature_planner::CountsActedOn(desire, rules.aboutSomething))
-	{
-		candidate.actedOnUsefulness = ObjectToActOnUsefulness(creature, mind, desire, thing);
-	}
+	// Without a whole thing, a thing has the worth that the creature learnt for things to act on, for the distance
+	candidate.usefulness = ObjectToActOnUsefulness(creature, mind, desire, thing);
+	candidate.actedOnUsefulness = candidate.usefulness;
 	return candidate;
 }
 
@@ -1515,13 +2120,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		situation.camera = glm::vec2(eye.x, eye.z);
 	}
 	Situate(creature, situation);
-	if (mind.idle.showDesireSeconds <= 0.0f)
-	{
-		if (const auto strongest = creature_desires::StrongestShowable(desires, creature_mind::k_MinDesireShown))
-		{
-			situation.showDesireAnimation = creature_desires::EmoteFor(*strongest);
-		}
-	}
 	const auto random = [this](uint32_t range) { return Random(range); };
 	bool waterLooked = false;
 	bool fishingLooked = false;
@@ -1559,17 +2157,11 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 
 	// Something shown on the leash is the only goal there is this turn, for every desire
 	std::optional<entt::entity> leashTarget;
-	std::vector<entt::entity> leashGroup;
-	const bool leashForced = mind.leash.actOnForced;
 	if (!mind.leash.actOn.empty())
 	{
 		leashTarget = static_cast<entt::entity>(mind.leash.actOn.back());
 		mind.leash.actOn.clear();
-		std::ranges::transform(mind.leash.actOnGroup, std::back_inserter(leashGroup),
-		                       [](uint32_t id) { return static_cast<entt::entity>(id); });
 	}
-	mind.leash.actOnForced = false;
-	mind.leash.actOnGroup.clear();
 	auto goals =
 	    leashTarget.has_value() || everyDesire
 	        ? std::vector<Desire> {}
@@ -1601,27 +2193,66 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
-		std::optional<creature_planner::Plan> best;
-		// Actions are weighed in groups by the kind of thing they are done to, and whether that may be what it holds, so
-		// each has a goal it can be done to
-		std::array<std::vector<creature_planner::ActionCandidate>, creature_plan_actions::k_TargetCount * 2> groups {};
-		// Compassion is about a town, and what it may do is what the town desire it helps with asks for, done to the
-		// town's own buildings and people
+		// A desire about something is about a whole thing: a town, a forest, a temple, a flock or a creature. The plan
+		// acts on a part of the whole thing. Without a whole thing, the desire has no plan.
 		std::span<const uint32_t> actions = tables->desireActions.at(d);
 		std::vector<uint32_t> townActions;
-		std::optional<entt::entity> town;
-		std::optional<float> townUsefulness;
-		if (desire == Desire::Compassion)
+		std::optional<ChosenActivity> activity;
+		std::vector<creature_planner::ObjectCandidate> parts;
+		const bool aboutSomething = tables->rules.at(d).aboutSomething;
+		if (aboutSomething && (!leashTarget.has_value() || desire == Desire::Compassion))
 		{
-			if (const auto chosen = CompassionTown(registry, creature, position, learnt, tables->rules.at(d).distanceWeight))
+			activity = ChooseActivity(creature, mind, desire);
+			// Compassion does what the town desire that it helps with asks for
+			// TODO(creature-activity-object): find what compassion does for a creature that it is about
+			if (desire == Desire::Compassion && activity.has_value() && activity->kind != creature_activity::Whole::Town)
 			{
-				town = chosen->first;
-				townUsefulness = chosen->second;
-				townActions = TownCompassionActions(registry, creature, mind, *town, *tables, random);
+				activity.reset();
 			}
-			actions = townActions;
+			if (!activity.has_value())
+			{
+				mind.planner.best.at(d).reset();
+				continue;
+			}
+			if (desire == Desire::Compassion)
+			{
+				townActions = TownCompassionActions(registry, creature, mind, activity->whole, *tables, random);
+				actions = townActions;
+			}
+			parts = PartsToActOn(creature, mind, desire, *activity);
+			// Anger chooses the part to act on before the action: the part that is most useful to act on
+			if (desire == Desire::Anger)
+			{
+				std::vector<float> partWorth;
+				std::ranges::transform(parts, std::back_inserter(partWorth), &creature_planner::ObjectCandidate::usefulness);
+				const auto chosen = creature_activity::MostUseful(partWorth);
+				parts =
+				    chosen.has_value() ? std::vector {parts.at(*chosen)} : std::vector<creature_planner::ObjectCandidate> {};
+			}
 		}
-		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, townUsefulness); };
+		else if (aboutSomething)
+		{
+			// The thing shown on the leash makes the desire about the whole thing that the shown thing is part of. The
+			// plan acts on the shown thing when it suits the desire and is of use, else on the first part of the whole
+			// thing that is.
+			activity = ShownActivity(creature, mind, desire, *leashTarget);
+			if (!activity.has_value())
+			{
+				mind.planner.best.at(d).reset();
+				continue;
+			}
+			parts = ShownParts(creature, mind, desire, *leashTarget, *activity);
+		}
+		else if (leashTarget.has_value())
+		{
+			// A desire not about a whole thing acts on the shown thing when it suits the desire and is of use. If not, it
+			// acts on the first part of the whole thing that suits the desire and is of use.
+			parts = ShownThingsWithoutWhole(creature, mind, desire, *leashTarget);
+		}
+		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
+		// The actions of the desire, in the order of its list
+		std::vector<creature_planner::ActionCandidate> candidates;
+		std::vector<const creature_plan_actions::Executor*> executors;
 		for (const auto action : actions)
 		{
 			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
@@ -1630,90 +2261,103 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				continue;
 			}
 			prepare(*executor);
-			groups.at(static_cast<size_t>(executor->target) * 2 + (executor->notWhatItHolds ? 1 : 0))
-			    .push_back({
-			        .action = action,
-			        .needsObject = executor->target != Target::None,
-			        .opinion = learnt.opinions.at(action),
-			        .turnsSinceDone = learnt.turnsSinceDone.at(action),
-			        .servesFirstDesire = tables->actions.at(action).desire == 0,
-			        .disabled = !creature_plan_actions::Possible(*executor, situation) ||
-			                    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
-			                    (creature_plan_actions::IsCast(*executor) &&
-			                     !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))),
-			    });
+			candidates.push_back({
+			    .action = action,
+			    .needsObject = executor->target != Target::None,
+			    .usesThing = executor->use != Target::None,
+			    .opinion = learnt.opinions.at(action),
+			    .turnsSinceDone = learnt.turnsSinceDone.at(action),
+			    .servesFirstDesire = tables->actions.at(action).desire == 0,
+			    .disabled = !creature_plan_actions::Possible(*executor, situation) ||
+			                !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
+			                (creature_plan_actions::IsCast(*executor) &&
+			                 !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))),
+			});
+			executors.push_back(executor);
 		}
-		for (size_t g = 0; g < groups.size(); ++g)
+		const auto executorOf = [&](const creature_planner::ActionCandidate& candidate) {
+			const auto at = std::ranges::find(candidates, candidate.action, &creature_planner::ActionCandidate::action);
+			return executors.at(static_cast<size_t>(std::distance(candidates.begin(), at)));
+		};
+		const auto heldByItself = [&](entt::entity thing) {
+			const auto* held = registry.TryGet<const HeldByCreature>(thing);
+			return held != nullptr && held->creature == creature;
+		};
+		// The thing that an action can act on: the most useful, the first of equals, and only one that is worth more than
+		// nothing. An action that must not act on what the creature holds does not take a thing that it holds.
+		const auto mostUseful = [](const std::vector<creature_planner::ObjectCandidate>& found) {
+			std::optional<creature_planner::ObjectCandidate> best;
+			for (const auto& object : found)
+			{
+				if (object.usefulness > (best.has_value() ? best->usefulness : 0.0f))
+				{
+					best = object;
+				}
+			}
+			return best;
+		};
+		const auto findObject =
+		    [&](const creature_planner::ActionCandidate& candidate) -> std::optional<creature_planner::ObjectCandidate> {
+			const auto* executor = executorOf(candidate);
+			const auto suits = [&](entt::entity thing) {
+				return (executor->target == Target::None || Accepts(registry, executor->target, thing, creature)) &&
+				       !(executor->notWhatItHolds && heldByItself(thing));
+			};
+			std::vector<creature_planner::ObjectCandidate> found;
+			if (leashTarget.has_value() && desire != Desire::Compassion && (activity.has_value() || !aboutSomething))
+			{
+				// The first of the shown parts that the action can act on
+				const auto first = std::ranges::find_if(parts, [&](const creature_planner::ObjectCandidate& part) {
+					return suits(static_cast<entt::entity>(part.id));
+				});
+				return first != parts.end() ? std::optional(*first) : std::nullopt;
+			}
+			if (leashTarget.has_value())
+			{
+				if (suits(*leashTarget) && (!activity.has_value() || BelongsTo(*leashTarget) == activity->whole))
+				{
+					found.push_back(worth(*leashTarget));
+				}
+			}
+			else if (activity.has_value())
+			{
+				std::ranges::copy_if(parts, std::back_inserter(found), [&](const creature_planner::ObjectCandidate& part) {
+					return suits(static_cast<entt::entity>(part.id));
+				});
+			}
+			else
+			{
+				found = BelievedThingsToActOn(creature, mind, desire, suits);
+			}
+			return mostUseful(found);
+		};
+		const auto distanceWeight = tables->rules.at(d).distanceWeight;
+		const auto findUsed = [&](const creature_planner::ActionCandidate& candidate, std::optional<uint32_t> object) {
+			return UsedFor(creature, executorOf(candidate)->use, position, distanceWeight, object);
+		};
+		// A desire about a whole thing finds the action before the part, but anger finds the part first
+		auto order = creature_planner::PlanOrder::ActionFirst;
+		if (leashTarget.has_value() && desire != Desire::Compassion && (activity.has_value() || !aboutSomething))
 		{
-			if (groups.at(g).empty())
-			{
-				continue;
-			}
-			const auto target = static_cast<Target>(g / 2);
-			const bool notHeld = g % 2 != 0;
-			std::vector<creature_planner::ObjectCandidate> objects;
-			if (target != Target::None)
-			{
-				if (leashTarget.has_value())
-				{
-					const auto suits = [&](entt::entity thing) {
-						return registry.Valid(thing) && Accepts(registry, target, thing, creature) &&
-						       (!town.has_value() || PartOfTown(registry, thing, *town)) &&
-						       (!leashForced || ObjectUsefulness(registry, learnt, mind, desire, thing, creature) > 0.0f);
-					};
-					// Made to act on a thing, it acts on the thing, or else on the first thing of its group that suits
-					const auto chosen = leashForced           ? creature_leash::ForcedTarget(*leashTarget, leashGroup, suits)
-					                    : suits(*leashTarget) ? std::optional(*leashTarget)
-					                                          : std::nullopt;
-					if (chosen.has_value())
-					{
-						objects.push_back(worth(*chosen));
-					}
-				}
-				else
-				{
-					for (const auto& found : Gather(registry, target, creature, position))
-					{
-						if (town.has_value() && !PartOfTown(registry, found.entity, *town))
-						{
-							continue;
-						}
-						const auto* held = registry.TryGet<const HeldByCreature>(found.entity);
-						if (notHeld && held != nullptr && held->creature == creature)
-						{
-							continue;
-						}
-						objects.push_back(worth(found.entity));
-					}
-				}
-			}
-			const auto distanceWeight = tables->rules.at(d).distanceWeight;
-			auto plan = creature_planner::PlanDesire(desire, strengths.at(d), objects, groups.at(g));
-			// An action done with something takes up the thing to use too; with nothing to use, the next action is tried
-			while (plan.has_value())
-			{
-				const auto* executor = creature_plan_actions::For(tables->actions.at(plan->action).name);
-				if (executor == nullptr || executor->use == Target::None)
-				{
-					break;
-				}
-				plan->instrument = UsedFor(creature, executor->use, position, distanceWeight, plan->object);
-				if (plan->instrument.has_value())
-				{
-					break;
-				}
-				auto& tried = *std::ranges::find(groups.at(g), plan->action, &creature_planner::ActionCandidate::action);
-				tried.disabled = true;
-				plan = creature_planner::PlanDesire(desire, strengths.at(d), objects, groups.at(g));
-			}
-			if (plan.has_value() && (!best.has_value() || plan->priority > best->priority))
-			{
-				best = plan;
-				if (town.has_value())
-				{
-					best->about = entt::to_integral(*town);
-				}
-			}
+			order = creature_planner::PlanOrder::PartThenAction;
+		}
+		else if (activity.has_value() && !leashTarget.has_value())
+		{
+			order = desire == Desire::Anger ? creature_planner::PlanOrder::PartThenAction
+			                                : creature_planner::PlanOrder::ActionThenPart;
+		}
+		auto best = creature_planner::PlanDesire({
+		    .desire = desire,
+		    .strength = strengths.at(d),
+		    .order = order,
+		    .actions = candidates,
+		    .activityUsefulness = activity.has_value() ? std::optional(activity->usefulness) : std::nullopt,
+		    .findObject = findObject,
+		    .findUsed = findUsed,
+		});
+		if (best.has_value() && activity.has_value())
+		{
+			best->about = entt::to_integral(activity->whole);
 		}
 		mind.planner.best.at(d) = best;
 	}
@@ -1894,21 +2538,22 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	const auto lessonActivity = plan.activityObject.has_value() ? std::optional(entt::to_integral(*plan.activityObject))
 	                                                            : LessonActivity(*tables, plan.desire, object, std::nullopt);
 	creature_learning::Remember(
-	    learnt.contexts, {
-	                         .action = *action,
-	                         .desire = plan.desire,
-	                         .object = object,
-	                         .belief = plan.object.has_value() ? BeliefOf(registry, *plan.object, creature) : std::nullopt,
-	                         .activity = lessonActivity,
-	                         .activityBelief = lessonActivity.has_value()
-	                                               ? BeliefOf(registry, static_cast<entt::entity>(*lessonActivity), creature)
-	                                               : std::nullopt,
-	                         .learnable = info.learnable,
-	                         .windowSeconds = info.learningWindowSeconds,
-	                         .source = mind->desires.has_value() ? creature_learning::PlanSource((*mind->desires)[plan.desire])
-	                                                                   .value_or(creature_learning::k_NoTellingSource)
-	                                                             : creature_learning::k_NoTellingSource,
-	                     });
+	    learnt.contexts,
+	    {
+	        .action = *action,
+	        .desire = plan.desire,
+	        .object = object,
+	        .belief = plan.object.has_value() ? ActedOnBeliefOf(registry, *plan.object, creature) : std::nullopt,
+	        .activity = lessonActivity,
+	        .activityBelief = lessonActivity.has_value()
+	                              ? BeliefOf(registry, static_cast<entt::entity>(*lessonActivity), creature)
+	                              : std::nullopt,
+	        .learnable = info.learnable,
+	        .windowSeconds = info.learningWindowSeconds,
+	        .source = mind->desires.has_value() ? creature_learning::PlanSource((*mind->desires)[plan.desire])
+	                                                  .value_or(creature_learning::k_NoTellingSource)
+	                                            : creature_learning::k_NoTellingSource,
+	    });
 	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 	return true;
 }
@@ -2048,6 +2693,53 @@ bool CreatureMindSystem::HasPlayed(entt::entity creature) const
 	return mind == nullptr || creature_script_play::Played(mind->idle);
 }
 
+std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creature, CreatureMindState& mind,
+                                                              entt::entity thing, std::span<const Desire> tried)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (tables == nullptr || at == nullptr || !mind.desires.has_value() || !registry.AllOf<Creature>(creature))
+	{
+		return std::nullopt;
+	}
+	// The whole thing that the shown thing is part of, when there is one
+	const auto whole = WholeOfShownThing(creature, mind, thing);
+	const auto* wholeBelief = whole.has_value() ? mind.beliefs.Find(*whole) : nullptr;
+	const auto kind = wholeBelief != nullptr ? creature_activity::WholeOf(wholeBelief->kind) : std::nullopt;
+	std::vector<creature_planner::DesireOnThing> aboutWhole;
+	std::vector<creature_planner::DesireOnThing> withoutWhole;
+	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+	{
+		const auto desire = static_cast<Desire>(d);
+		const auto& state = mind.desires->desires.at(d);
+		if (!state.activated || state.suppressedTurns != 0 || std::ranges::find(tried, desire) != tried.end())
+		{
+			continue;
+		}
+		const auto& rule = tables->rules.at(d);
+		if (rule.aboutSomething)
+		{
+			if (!kind.has_value() ||
+			    !creature_activity::CanBeAbout(desire, WholeFactsOf(registry, creature, *whole, *kind, *tables),
+			                                   mind.mayAttackOwnPlayer))
+			{
+				continue;
+			}
+			const auto nearness =
+			    mind_detail::Nearness(registry, creature, at->position, *whole, wholeBelief->place, rule.distanceWeight);
+			aboutWhole.push_back({.desire = desire,
+			                      .strength = state.value,
+			                      .usefulness = ActivityUsefulness(creature, mind, desire, *whole) * nearness});
+		}
+		else if (creature_planner::TestsThingActedOn(desire))
+		{
+			withoutWhole.push_back({.desire = desire, .strength = state.value});
+		}
+	}
+	return creature_planner::DesireForShownThing(aboutWhole, withoutWhole);
+}
+
 std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::entity creature, entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2060,34 +2752,30 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 	Abandon(*mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 	ComeAcross(creature, *mind, object);
-	mind->leash.actOn = {entt::to_integral(object)};
-	mind->leash.actOnForced = true;
-	// The other things of its group that the creature believes in, newest belief first
-	mind->leash.actOnGroup.clear();
-	if (const auto group = BelongsTo(object); group.has_value() && *group != object)
+	// It finds the desire that it most wants for the shown thing, and plans that desire alone. With no plan, it leaves
+	// that desire out and tries the next desire.
+	std::vector<Desire> tried;
+	for (size_t attempt = 0; attempt < creature_planner::k_ShownThingTries; ++attempt)
 	{
-		for (const auto& belief : mind->beliefs.NewestFirst())
+		const auto desire = DesireForShownThing(creature, *mind, object, tried);
+		if (!desire.has_value())
 		{
-			if (belief.thing != object && BelongsTo(belief.thing) == group)
-			{
-				mind->leash.actOnGroup.push_back(entt::to_integral(belief.thing));
-			}
+			break;
 		}
+		mind->leash.actOn = {entt::to_integral(object)};
+		mind->plannedTurn = mind->turn + 1;
+		PlanCreature(creature, *mind, false, desire);
+		mind->leash.actOn.clear();
+		if (mind->planActive && mind->planner.current.has_value() && mind->planner.current->desire == *desire)
+		{
+			mind->planner.current->priority = std::numeric_limits<float>::max();
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} acts on the shown thing {} for desire {} after {} tries",
+			                    entt::to_integral(creature), entt::to_integral(object), static_cast<int>(*desire), attempt + 1);
+			return desire;
+		}
+		tried.push_back(*desire);
 	}
-	const auto group = mind->leash.actOnGroup;
-	mind->plannedTurn = mind->turn + 1;
-	PlanCreature(creature, *mind);
-	mind->leash.actOn.clear();
-	mind->leash.actOnForced = false;
-	mind->leash.actOnGroup.clear();
-	const auto planned = mind->planner.current.has_value() ? mind->planner.current->object : std::nullopt;
-	if (!mind->planActive || !planned.has_value() ||
-	    (*planned != entt::to_integral(object) && std::ranges::find(group, *planned) == group.end()))
-	{
-		return std::nullopt;
-	}
-	mind->planner.current->priority = std::numeric_limits<float>::max();
-	return mind->planner.current->desire;
+	return std::nullopt;
 }
 
 void CreatureMindSystem::PlanTurn()
@@ -2260,38 +2948,44 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	{
 		return;
 	}
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (transform == nullptr)
+	// It looks for the thing of the same kind that is most useful to act on, in the lists of what it believes in
+	const auto* known = context->object.has_value() ? mind.beliefs.Find(static_cast<entt::entity>(*context->object)) : nullptr;
+	const auto kind = known != nullptr ? known->kind : context->belief->type;
+	const auto found = BelievedThingsToActOn(creature, mind, desire, [&](entt::entity thing) {
+		const auto* belief = mind.beliefs.Find(thing);
+		return belief != nullptr && belief->kind == kind && Accepts(registry, executor->target, thing, creature);
+	});
+	std::optional<creature_planner::ObjectCandidate> best;
+	for (const auto& thing : found)
+	{
+		if (thing.usefulness > (best.has_value() ? best->usefulness : 0.0f))
+		{
+			best = thing;
+		}
+	}
+	if (!best.has_value())
 	{
 		return;
 	}
-	const glm::vec2 position {transform->position.x, transform->position.z};
-	for (const auto& found : Gather(registry, executor->target, creature, position))
+	const auto whole = WholeOfForcedPlan(creature, mind, desire, static_cast<entt::entity>(best->id));
+	const creature_planner::Plan again {
+	    .desire = desire,
+	    .action = context->action,
+	    .object = best->id,
+	    .about = whole.has_value() ? std::optional(entt::to_integral(*whole)) : std::nullopt,
+	    // As pressing as the planner would find it, so that something more pressing can still take over
+	    .priority =
+	        creature_planner::Priority(desires[desire].value, best->activityUsefulness,
+	                                   creature_planner::ActionPriority(learnt.opinions.at(context->action)),
+	                                   best->actedOnUsefulness.value_or(creature_planner::k_DefaultUsefulness), std::nullopt),
+	};
+	creature_plan_actions::Situation situation;
+	if (Locator::camera::has_value())
 	{
-		const auto belief = BeliefOf(registry, found.entity, creature);
-		if (belief.has_value() && belief->type == context->belief->type)
-		{
-			const auto goal = GoalWorth(creature, mind, desire, found.entity, std::nullopt);
-			const creature_planner::Plan again {
-			    .desire = desire,
-			    .action = context->action,
-			    .object = entt::to_integral(found.entity),
-			    // As pressing as the planner would find it, so that something more pressing can still take over
-			    .priority = creature_planner::Priority(desires[desire].value, goal.activityUsefulness,
-			                                           creature_planner::ActionPriority(learnt.opinions.at(context->action)),
-			                                           goal.actedOnUsefulness.value_or(creature_planner::k_DefaultUsefulness),
-			                                           std::nullopt),
-			};
-			creature_plan_actions::Situation situation;
-			if (Locator::camera::has_value())
-			{
-				const auto eye = Locator::camera::value().GetOrigin();
-				situation.camera = glm::vec2(eye.x, eye.z);
-			}
-			Adopt(creature, mind, again, situation);
-			return;
-		}
+		const auto eye = Locator::camera::value().GetOrigin();
+		situation.camera = glm::vec2(eye.x, eye.z);
 	}
+	Adopt(creature, mind, again, situation);
 }
 
 void CreatureMindSystem::LearnTurn()
@@ -2360,54 +3054,11 @@ void CreatureMindSystem::LearnTurn()
 			continue;
 		}
 		const auto& rule = tables->mimics.at(learnt.mimicry->rule);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player's {}: stage {}", entt::to_integral(creature),
+		                    rule.name, creature_watching::Name(learnt.mimicry->stage));
 		if (learnt.mimicry->stage == creature_watching::MimicStage::CopyAction)
 		{
-			// It does what the player did, to the same thing or one like it
-			const auto* transform = registry.TryGet<const Transform>(creature);
-			for (const auto action : rule.copyActions)
-			{
-				const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
-				if (executor == nullptr || transform == nullptr ||
-				    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs))
-				{
-					continue;
-				}
-				std::optional<uint32_t> object;
-				if (executor->target != Target::None)
-				{
-					if (learnt.mimicry->object.has_value() &&
-					    Accepts(registry, executor->target, static_cast<entt::entity>(*learnt.mimicry->object), creature))
-					{
-						object = learnt.mimicry->object;
-					}
-					else if (const auto found = Gather(registry, executor->target, creature,
-					                                   glm::vec2(transform->position.x, transform->position.z));
-					         !found.empty())
-					{
-						object = entt::to_integral(found.front().entity);
-					}
-					if (!object.has_value())
-					{
-						continue;
-					}
-				}
-				const auto desire = static_cast<Desire>(
-				    std::min<uint32_t>(tables->actions.at(action).desire, creature_desires::k_DesireCount - 1));
-				creature_plan_actions::Situation situation;
-				if (Adopt(creature, *mind,
-				          {.desire = desire,
-				           .action = action,
-				           .object = object,
-				           // Copying counts as pressing as a desire at its strongest, with nothing learnt
-				           .priority = creature_planner::Priority(1.0f, std::nullopt,
-				                                                  creature_planner::ActionPriority(learnt.opinions.at(action)),
-				                                                  creature_planner::k_DefaultUsefulness, std::nullopt)},
-				          situation))
-				{
-					creature_mind_model::Think(learnt, fmt::format("I'm copying you: {}", tables->actions.at(action).name));
-					break;
-				}
-			}
+			CopyPlayersDeed(creature, *mind);
 		}
 		else if (learnt.mimicry->stage == creature_watching::MimicStage::CopyDesire &&
 		         rule.desire < creature_desires::k_DesireCount)
@@ -2415,6 +3066,191 @@ void CreatureMindSystem::LearnTurn()
 			// It comes to want what the player seemed to want
 			creature_learning::MakeFullyDominant(*mind->desires, static_cast<Desire>(rule.desire));
 			creature_mind_model::Think(learnt, fmt::format("I want what you wanted: {}", tables->texts.at(rule.desire).desire));
+		}
+	}
+}
+
+namespace
+{
+/// The kind of a thing for copying the player
+creature_watching::MimicKind MimicKindOf(const ecs::Registry& registry, entt::entity thing)
+{
+	using Class = creature_watching::MimicFacts::Class;
+	creature_watching::MimicFacts facts;
+	if (const auto* villager = registry.TryGet<const Villager>(thing))
+	{
+		facts.kind = Class::Villager;
+		facts.child = villager->lifeStage == Villager::LifeStage::Child;
+		facts.female = villager->sex == Villager::Sex::FEMALE;
+	}
+	else if (registry.AllOf<Animal>(thing))
+	{
+		const auto* info = ecs::world_objects::InfoOf(thing);
+		facts.kind = Class::Animal;
+		facts.nasty = info != nullptr && info->alignmentType == AlignmentType::AnimalNasty;
+	}
+	else if (registry.AllOf<Creature>(thing))
+	{
+		facts.kind = Class::Creature;
+	}
+	else if (registry.AnyOf<WorshipSite, VillageTotem, FishFarm, Temple, Town>(thing))
+	{
+		facts.kind = Class::Other;
+	}
+	else if (registry.AnyOf<Abode, Field>(thing))
+	{
+		facts.kind = Class::Building;
+	}
+	else if (registry.AllOf<Tree>(thing))
+	{
+		facts.kind = Class::Tree;
+	}
+	else if (registry.AnyOf<Rock, DeadTree>(thing))
+	{
+		facts.kind = Class::Rock;
+	}
+	else if (registry.AnyOf<MobileStatic, MobileObject, Ball, Pot>(thing))
+	{
+		facts.kind = Class::LooseObject;
+	}
+	return creature_watching::KindToCopy(facts);
+}
+} // namespace
+
+void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindState& mind)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	if (tables == nullptr || !mind.learnt.has_value() || !mind.learnt->mimicry.has_value() ||
+	    !registry.AllOf<Transform>(creature))
+	{
+		return;
+	}
+	auto& learnt = *mind.learnt;
+	const auto& rule = tables->mimics.at(learnt.mimicry->rule);
+	// Every copy is for the desire the player seemed to have
+	if (rule.desire >= creature_desires::k_DesireCount)
+	{
+		return;
+	}
+	const auto desire = static_cast<Desire>(rule.desire);
+	std::optional<entt::entity> players;
+	if (learnt.mimicry->object.has_value())
+	{
+		const auto thing = static_cast<entt::entity>(*learnt.mimicry->object);
+		if (registry.Valid(thing))
+		{
+			ComeAcross(creature, mind, thing);
+			if (mind.beliefs.Find(thing) != nullptr)
+			{
+				// The player still holds the thing in the hand: it stops copying
+				if (registry.AllOf<InHand>(thing))
+				{
+					learnt.mimicry.reset();
+					return;
+				}
+				players = thing;
+			}
+		}
+	}
+
+	// It does what the player did, in three passes: to the player's thing, to the nearest thing of the same kind, and to
+	// the thing it finds most useful to act on. It may do it each time it can; after each time, it stops by random(2).
+	enum class Pass : uint8_t
+	{
+		PlayersThing,
+		SameKind,
+		MostUseful,
+	};
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto distanceWeight = tables->rules.at(static_cast<size_t>(desire)).distanceWeight;
+	const auto choose = [&](Pass pass, Target target) -> std::optional<entt::entity> {
+		const auto suits = [&](entt::entity thing) { return Accepts(registry, target, thing, creature); };
+		switch (pass)
+		{
+		case Pass::PlayersThing:
+			return players.has_value() && suits(*players) ? players : std::nullopt;
+		case Pass::SameKind:
+		{
+			if (!mind.copiedKind.has_value())
+			{
+				return std::nullopt;
+			}
+			std::vector<entt::entity> things;
+			std::vector<creature_watching::MimicCandidate> candidates;
+			for (const auto& belief : mind.beliefs.InListOrder())
+			{
+				if (belief.thing == creature || !SuitsDesire(creature, mind, desire, belief.thing) || !suits(belief.thing))
+				{
+					continue;
+				}
+				things.push_back(belief.thing);
+				candidates.push_back({
+				    .kind = MimicKindOf(registry, belief.thing),
+				    .nearness =
+				        mind_detail::Nearness(registry, creature, at->position, belief.thing, belief.place, distanceWeight),
+				});
+			}
+			const auto nearest = creature_watching::NearestOfKind(candidates, *mind.copiedKind);
+			return nearest.has_value() ? std::optional(things.at(*nearest)) : std::nullopt;
+		}
+		case Pass::MostUseful:
+		{
+			std::optional<creature_planner::ObjectCandidate> best;
+			for (const auto& thing : BelievedThingsToActOn(creature, mind, desire, suits))
+			{
+				if (thing.usefulness > (best.has_value() ? best->usefulness : 0.0f))
+				{
+					best = thing;
+				}
+			}
+			return best.has_value() ? std::optional(static_cast<entt::entity>(best->id)) : std::nullopt;
+		}
+		}
+		return std::nullopt;
+	};
+	for (const auto pass : {Pass::PlayersThing, Pass::SameKind, Pass::MostUseful})
+	{
+		for (const auto action : rule.copyActions)
+		{
+			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
+			if (executor == nullptr || !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs))
+			{
+				continue;
+			}
+			// An action that needs no thing acts on the creature itself
+			std::optional<entt::entity> object;
+			if (executor->target != Target::None)
+			{
+				object = choose(pass, executor->target);
+				if (!object.has_value())
+				{
+					continue;
+				}
+			}
+			const auto whole = WholeOfForcedPlan(creature, mind, desire, object.value_or(creature));
+			creature_plan_actions::Situation situation;
+			if (!Adopt(creature, mind,
+			           {.desire = desire,
+			            .action = action,
+			            .object = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt,
+			            .about = whole.has_value() ? std::optional(entt::to_integral(*whole)) : std::nullopt,
+			            // Copying counts as pressing as a desire at its strongest, with nothing learnt
+			            .priority = creature_planner::Priority(1.0f, std::nullopt,
+			                                                   creature_planner::ActionPriority(learnt.opinions.at(action)),
+			                                                   creature_planner::k_DefaultUsefulness, std::nullopt)},
+			           situation))
+			{
+				continue;
+			}
+			creature_mind_model::Think(learnt, fmt::format("I'm copying you: {}", tables->actions.at(action).name));
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player in pass {}: {} on {}",
+			                    entt::to_integral(creature), static_cast<int>(pass), tables->actions.at(action).name,
+			                    object.has_value() ? static_cast<int64_t>(entt::to_integral(*object)) : -1);
+			if (Random(2) == 0)
+			{
+				return;
+			}
 		}
 	}
 }
@@ -2601,9 +3437,20 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 		    const auto target = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt;
 		    if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target))
 		    {
+			    // When the player is angry with a thing of the player, the creature that copies the player can be angry
+			    // with the things of its player from now on
+			    if (object.has_value() && tables->mimics.at(deed).desire == static_cast<uint32_t>(Desire::Anger) &&
+			        PlayerOfThing(registry, *object, BelongsTo(*object)) == creature.owner)
+			    {
+				    mind.mayAttackOwnPlayer = true;
+			    }
 			    if (const auto copied = object.has_value() ? PointOf(registry, *object) : std::nullopt)
 			    {
 				    mind.copiedAt = *copied;
+			    }
+			    if (object.has_value() && registry.Valid(*object))
+			    {
+				    mind.copiedKind = MimicKindOf(registry, *object);
 			    }
 			    noticed.push_back(entity);
 		    }

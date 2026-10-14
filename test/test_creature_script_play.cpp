@@ -77,7 +77,7 @@ TEST(CreatureScriptPlay, TheMindPlaysAStaticActionForTenSeconds)
 		mind.activity = creature_mind::Activity::Told;
 		mind.agenda = Agenda({.animation = 47, .plays = 1});
 		const creature_mind::Random random = [draw](uint32_t range) { return range == 2 ? draw : 0u; };
-		creature_mind::Senses senses {.seconds = 0.1f, .choosesNext = false};
+		creature_mind::Senses senses {.seconds = 0.1f};
 		const auto start = creature_mind::Think(mind, senses, random);
 		ASSERT_TRUE(start.startSequence.has_value());
 		EXPECT_EQ(*start.startSequence, (std::array<size_t, 3> {46, 47, 48}));

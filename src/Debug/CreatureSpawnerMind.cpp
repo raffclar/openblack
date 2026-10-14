@@ -158,7 +158,7 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 		constexpr std::array<std::pair<const char*, std::optional<uint32_t>>, 6> k_Trainers {{
 		    {"No trainer", std::nullopt},
 		    {"Reward villagers", creature_tree::belief_types::k_Villager},
-		    {"Reward objects", creature_tree::belief_types::k_Other},
+		    {"Reward objects", creature_tree::belief_types::k_MobileObject},
 		    {"Reward trees", creature_tree::belief_types::k_Tree},
 		    {"Reward creatures", creature_tree::belief_types::k_Creature},
 		    {"Reward abodes", creature_tree::belief_types::k_Abode},

@@ -15,7 +15,29 @@
 #include <algorithm>
 #include <functional>
 
+#include "CreatureDecisionTree.h"
+
 using namespace openblack::creature_object_beliefs;
+
+bool openblack::creature_object_beliefs::InListOfWholeThings(uint32_t kind)
+{
+	namespace kinds = creature_tree::belief_types;
+	return kind == kinds::k_Town || kind == kinds::k_Forest || kind == kinds::k_Citadel || kind == kinds::k_Creature ||
+	       kind == kinds::k_Flock;
+}
+
+bool openblack::creature_object_beliefs::BlockedRecently(const Belief& belief, uint32_t turn, bool fixed)
+{
+	return belief.blockedTurn.has_value() && turn - *belief.blockedTurn <= (fixed ? k_BlockedTurnsFixed : k_BlockedTurns);
+}
+
+void Store::MarkBlocked(entt::entity thing, uint32_t turn)
+{
+	if (auto* belief = Find(thing))
+	{
+		belief->blockedTurn = turn;
+	}
+}
 
 Store::Added Store::Add(entt::entity thing, uint32_t kind, glm::vec3 place)
 {
@@ -52,7 +74,7 @@ Store::Added Store::Add(entt::entity thing, uint32_t kind, glm::vec3 place)
 		slot = pool.oldest.value_or(0);
 		_index.erase(pool.slots.at(slot)->thing);
 	}
-	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place, .serial = _nextSerial++};
+	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place, .order = ++_made};
 	_index[thing] = Place {.kind = kind, .slot = slot};
 	return {.belief = &*pool.slots.at(slot), .isNew = true};
 }
@@ -97,10 +119,32 @@ size_t Store::Count(uint32_t kind) const
 	return kind < k_KindCount ? _pools.at(kind).used : 0;
 }
 
+void Store::JoinTo(entt::entity part, entt::entity whole)
+{
+	if (auto* belief = Find(part))
+	{
+		belief->partOf = whole;
+	}
+}
+
+std::vector<Belief> Store::PartsOf(entt::entity whole) const
+{
+	auto parts = NewestFirst();
+	std::erase_if(parts, [whole](const Belief& belief) { return belief.partOf != whole; });
+	return parts;
+}
+
 std::vector<Belief> Store::NewestFirst() const
 {
 	auto all = All();
-	std::ranges::sort(all, std::ranges::greater {}, &Belief::serial);
+	std::ranges::sort(all, std::ranges::greater {}, &Belief::order);
+	return all;
+}
+
+std::vector<Belief> Store::InListOrder() const
+{
+	auto all = NewestFirst();
+	std::ranges::stable_partition(all, [](const Belief& belief) { return InListOfWholeThings(belief.kind); });
 	return all;
 }
 

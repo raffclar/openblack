@@ -48,10 +48,7 @@ constexpr std::array k_Executors {
     Executor {
         .action = "EatFromFoodPile", .target = Target::MagicFoodPile, .build = Build::EatFromPile, .activity = Activity::Eat},
     Executor {.action = "SleepOnTheSpot", .build = Build::Sleep, .activity = Activity::Sleep},
-    // TODO(creature-poo-steps): the game does a poo by a thing (Target::PooedOn). The planner here weighs the actions in
-    // groups by their target, but the game chooses the action first and then the thing. Until the planner does that, a
-    // poo by a thing almost never wins against a fart, so the poo is done on the spot
-    Executor {.action = "Poo", .build = Build::Poo, .activity = Activity::Poo},
+    Executor {.action = "Poo", .target = Target::PooedOn, .build = Build::Poo, .activity = Activity::Poo},
     Executor {.action = "Fart", .build = Build::Fart, .activity = Activity::Poo},
     Executor {.action = "PooAtHome", .build = Build::PooAtHome, .activity = Activity::Poo},
     Executor {.action = "Puke", .build = Build::Puke, .activity = Activity::Puke},
@@ -155,7 +152,7 @@ constexpr std::array k_Executors {
     Executor {.action = "Sneeze", .build = Build::Emote, .animation = k_Sneeze},
     Executor {.action = "ShowHotness", .build = Build::Emote, .animation = animations::k_Hot},
     Executor {.action = "RunAwayFromPlayer", .build = Build::RunFromPlayer},
-    Executor {.action = "ShowImpressiveAnimation", .build = Build::Emote, .animation = animations::k_Impress},
+    Executor {.action = "ShowImpressiveAnimation", .build = Build::ShowOff},
     Executor {
         .action = "Stroke", .target = Target::Villager, .build = Build::ApproachEmote, .animation = animations::k_FeelingNice},
     Executor {.action = "SmileAtFriend", .target = Target::Creature, .build = Build::SmileAt},
@@ -264,12 +261,11 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return situation.controlledByScript && (situation.clearArea.has_value() || situation.home.has_value());
 	case Build::FaceCameraEmote:
 	case Build::RunFromPlayer:
+	case Build::ShowDesire:
 		return situation.camera.has_value();
 	case Build::PointAtCamera:
 	case Build::PointOutHighlight:
 		return situation.eye.has_value();
-	case Build::ShowDesire:
-		return situation.showDesireAnimation.has_value();
 	default:
 		return true;
 	}
@@ -402,6 +398,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::SleepAtHome(*situation.home, situation.height, random);
 	case Build::SmileAt:
 		return creature_mind::SmileAt(*object, situation.height, situation.chance, random);
+	case Build::ShowOff:
+		return creature_mind::ShowImpressiveAnimation(object, situation.height, random);
 	case Build::WaveAt:
 		return creature_mind::WaveAt(*object, situation.height);
 	case Build::InspectCreature:
@@ -434,7 +432,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::HangAround:
 		return creature_mind::HangAround(situation.hangAround, situation.turnSeconds, random);
 	case Build::ShowDesire:
-		return creature_mind::Emote(*situation.showDesireAnimation);
+		return creature_mind::Communicate(*situation.camera);
 	case Build::Emote:
 		return creature_mind::Emote(executor.animation);
 	case Build::FaceCameraEmote:
