@@ -745,8 +745,8 @@ void FollowHand(IdleMind& mind, const Senses& senses, Commands& commands)
 /// A turn of watching the player while it waits for orders
 void WatchPlayer(IdleMind& mind, const Senses& senses, Commands& commands)
 {
-	const auto action = creature_player_attention::WatchPlayerTurn(senses.watchPlayer.value_or(
-	    creature_player_attention::WatchPlayerView {}));
+	const auto action =
+	    creature_player_attention::WatchPlayerTurn(senses.watchPlayer.value_or(creature_player_attention::WatchPlayerView {}));
 	if (action.done)
 	{
 		FinishStep(mind);
@@ -1224,9 +1224,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::FollowHand:
 			// The time is set as the step starts, and the hand is followed from the next turn
-			mind.followHandTurns =
-			    creature_player_attention::FollowHandTurns(
-			        static_cast<uint32_t>(std::lround(1.0f / std::max(senses.seconds, 1e-3f))));
+			mind.followHandTurns = creature_player_attention::FollowHandTurns(
+			    static_cast<uint32_t>(std::lround(1.0f / std::max(senses.seconds, 1e-3f))));
 			break;
 		case Step::Kind::WatchPlayer:
 			WatchPlayer(mind, senses, commands);

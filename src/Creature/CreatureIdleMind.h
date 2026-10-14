@@ -431,13 +431,14 @@ struct Step
 		/// within the step's movement distance, whenever it is further and still. Then it holds where it is for one to four
 		/// seconds, picked at random, and the step is done.
 		FollowWatching,
-		/// Following the player's hand: from the next turn, each turn for up to the step's seconds of whole turns, it
-		/// walks to the hand when it is further than its radius and a little more (see
-		/// creature_player_attention::FollowHandTurn). It is done when it is near the hand or the time is up; with the hand
-		/// off the map the rest of the agenda is given up.
+		/// The step that follows the player's hand. From the next turn, for the step's seconds in whole turns, the creature
+		/// walks to the hand when the hand is further than its radius and a little more (see
+		/// creature_player_attention::FollowHandTurn). The step is done when the creature is near the hand or the time is
+		/// up. If the hand is off the map, the creature stops the rest of the agenda.
 		FollowHand,
-		/// Watching the player while it waits for orders after it was told to go somewhere: it turns to the hand or the
-		/// camera (see creature_player_attention::WatchPlayerTurn). It is done once it waits for orders no more.
+		/// The step that watches the player while the creature waits for orders after a leash order to a place. The
+		/// creature turns to the hand or to the camera (see creature_player_attention::WatchPlayerTurn). The step is done
+		/// when the creature does not wait for orders.
 		WatchPlayer,
 	};
 	Kind kind {Kind::Wait};
@@ -516,7 +517,7 @@ struct IdleMind
 	uint32_t followHoldTurns {0};
 	/// Whether it has set off back towards the villager, so that a walk that fails gives the agenda up
 	bool followMoved {false};
-	/// A step that follows the hand: the turns it follows the hand for yet
+	/// For a step that follows the hand: the number of turns that are left
 	uint32_t followHandTurns {0};
 	/// A dance step: the turns it dances yet, and whether its dance stops next turn
 	uint32_t danceTurns {0};
@@ -679,7 +680,7 @@ struct Senses
 	std::optional<glm::vec3> cameraFocus;
 	/// Whether that point is less than a sixth of a turn from the way its body faces, or in its own map cell
 	bool cameraFocusAhead {false};
-	/// The player's hand, while a step follows it, and the player, while a step watches the player
+	/// The player's hand while a step follows the hand, and the player while a step watches the player
 	std::optional<creature_player_attention::FollowHandView> followHand;
 	std::optional<creature_player_attention::WatchPlayerView> watchPlayer;
 };

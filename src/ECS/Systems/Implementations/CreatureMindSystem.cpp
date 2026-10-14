@@ -33,9 +33,9 @@
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Common/GUtilsDistance.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
@@ -51,8 +51,8 @@
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePhysiology.h"
-#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/CreatureReach.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
@@ -900,8 +900,8 @@ std::optional<creature_mind::Senses::CameraView> HandViewOf(const ecs::Registry&
 	};
 }
 
-/// The player's hand as a creature that follows it sees it, only while its step follows the hand. The hand off the land
-/// counts as where it last was.
+/// The player's hand as a creature that follows the hand sees it, only while its step follows the hand. If the hand is off
+/// the land, the last position of the hand counts.
 std::optional<creature_player_attention::FollowHandView> FollowHandViewOf(const ecs::Registry& registry, entt::entity creature,
                                                                           const CreatureMindState& mind, bool bodyPlaying)
 {
@@ -938,8 +938,8 @@ std::optional<creature_player_attention::FollowHandView> FollowHandViewOf(const 
 }
 
 /// The player as a creature that watches it sees it, only while its step watches the player
-std::optional<creature_player_attention::WatchPlayerView> WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature,
-                                                                            const CreatureMindState& mind, bool bodyPlaying)
+std::optional<creature_player_attention::WatchPlayerView>
+WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const CreatureMindState& mind, bool bodyPlaying)
 {
 	const auto& idle = mind.idle;
 	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WatchPlayer)
@@ -950,9 +950,9 @@ std::optional<creature_player_attention::WatchPlayerView> WatchPlayerViewOf(cons
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
 	creature_player_attention::WatchPlayerView view {
-	    // TODO(creature-attention-actions): after a leash order to go to a place, the game makes the creature wait for orders
-	    // for fifteen seconds and decide nothing in that time. openblack does not keep that wait yet. Thus the watch ends at
-	    // once, as in the game at all other times.
+	    // TODO(creature-attention-actions): after a leash order to a place, the game makes the creature wait for orders for
+	    // fifteen seconds. The creature decides nothing in that time. openblack does not have that wait yet. Thus the watch
+	    // ends at once, as in the game at all other times.
 	    .waitingForOrders = false,
 	    .hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL,
 	    .bodyPlaying = bodyPlaying,

@@ -53,6 +53,7 @@
 #include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSpellMind.h"
@@ -763,6 +764,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::innate>("innate")
 	    .Field<&components::CreatureMindState::attention>("attention")
 	    .Field<&components::CreatureMindState::playerInterest>("playerInterest")
+	    .Field<&components::CreatureMindState::handSpeed>("handSpeed")
 	    .Field<&components::CreatureMindState::impressFromSeeing>("impressFromSeeing")
 	    .Field<&components::CreatureMindState::turnsLookedAt>("turnsLookedAt")
 	    .Field<&components::CreatureMindState::beliefs>("beliefs")
@@ -2342,6 +2344,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Gaze::bottom>("bottom")
 	    .Field<&openblack::creature_mind::Gaze::itself>("itself")
 	    .Field<&openblack::creature_mind::Gaze::hand>("hand")
+	    .Field<&openblack::creature_mind::Gaze::player>("player")
 	    .Field<&openblack::creature_mind::Gaze::point>("point")
 	    .Field<&openblack::creature_mind::Gaze::camera>("camera")
 	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing")
@@ -2368,6 +2371,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::followHolding>("followHolding")
 	    .Field<&openblack::creature_mind::IdleMind::followHoldTurns>("followHoldTurns")
 	    .Field<&openblack::creature_mind::IdleMind::followMoved>("followMoved")
+	    .Field<&openblack::creature_mind::IdleMind::followHandTurns>("followHandTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceTurns>("danceTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceEnding>("danceEnding")
 	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet")
@@ -2467,6 +2471,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_planner::PlannerState::best>("best", {k_CreatureDesiresDesireNames})
 	    .Field<&openblack::creature_planner::PlannerState::nextGoal>("nextGoal")
 	    .Field<&openblack::creature_planner::PlannerState::current>("current");
+	Reflect<openblack::creature_player_attention::HandSpeed>(context, ValueOnly {})
+	    .Field<&openblack::creature_player_attention::HandSpeed::velocity>("velocity");
 	Reflect<openblack::creature_route::Circle>(context, ValueOnly {})
 	    .Field<&openblack::creature_route::Circle::centre>("centre")
 	    .Field<&openblack::creature_route::Circle::radius>("radius");

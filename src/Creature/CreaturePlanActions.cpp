@@ -299,6 +299,11 @@ constexpr std::array k_Executors {
     Executor {.action = "PrayToPlayer", .build = Build::PrayToPlayer},
     Executor {.action = "ThrowAtCamera", .target = Target::Pickable, .use = Target::Pickable, .build = Build::ThrowAtCamera},
     Executor {.action = "WatchPlayer", .build = Build::WatchPlayer},
+    Executor {.action = "GoToMiddleOfScreen", .build = Build::GoToMiddleOfScreen},
+    Executor {.action = "FollowPlayer", .build = Build::FollowPlayer},
+    Executor {.action = "BeCrossWithPlayer", .build = Build::BeCrossWithPlayer},
+    Executor {.action = "ShowPlayerAnObject", .use = Target::Pickable, .build = Build::ShowPlayerAnObject},
+    Executor {.action = "BeSillyWithPlayer", .build = Build::BeSillyWithPlayer},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -446,6 +451,13 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return situation.handMoving;
 	case Build::GoToHand:
 		return situation.awayFromHand;
+	case Build::GoToMiddleOfScreen:
+		return creature_player_attention::AwayFromMiddleOfScreen(situation.hasPlayer, situation.lookedAt);
+	case Build::FollowPlayer:
+	case Build::ShowPlayerAnObject:
+		return creature_player_attention::FarFromCamera(situation.lookedAt);
+	case Build::BeCrossWithPlayer:
+		return creature_player_attention::IsCross(situation.attitudeToPlayer);
 	default:
 		return true;
 	}
@@ -774,6 +786,34 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                                                *situation.eye);
 	case Build::WatchPlayer:
 		return creature_player_attention::WatchPlayer();
+	case Build::GoToMiddleOfScreen:
+	case Build::FollowPlayer:
+	case Build::BeCrossWithPlayer:
+	case Build::BeSillyWithPlayer:
+		// The creature needs the camera to turn to it
+		if (!situation.camera.has_value())
+		{
+			return std::nullopt;
+		}
+		switch (executor.build)
+		{
+		case Build::GoToMiddleOfScreen:
+			return creature_player_attention::GoToMiddleOfScreen(*situation.camera, situation.height);
+		case Build::FollowPlayer:
+			return creature_player_attention::FollowPlayer(*situation.camera, situation.height);
+		case Build::BeCrossWithPlayer:
+			return creature_player_attention::BeCrossWithPlayer(*situation.camera, situation.height, random);
+		default:
+			return creature_player_attention::BeSillyWithPlayer(*situation.camera, random);
+		}
+	case Build::ShowPlayerAnObject:
+		// Without a camera, or a thing to show, the action fails
+		if (!situation.camera.has_value() || !situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_player_attention::ShowPlayerAnObject(situation.handFull ? std::nullopt : situation.instrument,
+		                                                     *situation.camera, situation.height);
 	case Build::Never:
 		return std::nullopt;
 	}

@@ -47,17 +47,44 @@ constexpr size_t k_HappyAnimation = 55;
 constexpr size_t k_SadAnimation = 56;
 constexpr size_t k_FriendlyWaveAnimation = 72;
 constexpr size_t k_PrayAnimation = 221;
-/// Going to the hand, it plays the happy clip at the end one time in this many
+constexpr size_t k_FeelPlayfulAnimation = 67;
+constexpr size_t k_LookAtMeAnimation = 69;
+constexpr size_t k_TauntAnimation = 70;
+constexpr size_t k_PutDownAnimation = 97;
+constexpr size_t k_TalkAnimation = 205;
+constexpr size_t k_LaughAnimation = 218;
+constexpr size_t k_RudeSignAnimation = 222;
+/// The first of the ten faces it pulls when it is silly, and how long it holds each
+constexpr size_t k_FirstSillyFace = 16;
+constexpr uint32_t k_SillyFaceCount = 10;
+constexpr float k_SillyFaceSeconds = 5.0f;
+/// When the creature is silly with the player: how many times it does the steps, and the chances in the steps
+constexpr int k_SillyRounds = 4;
+constexpr uint32_t k_SillyPlayfulLots = 4;
+constexpr uint32_t k_SillyLaughLots = 2;
+/// When the creature is cross, it makes the rude sign one time in this many
+constexpr uint32_t k_CrossLots = 2;
+/// After the creature goes to the hand, it plays the happy clip one time in this many
 constexpr uint32_t k_HappyAtHandLots = 2;
-/// Pointing at the hand lasts this many seconds
+/// The creature points at the hand for this many seconds
 constexpr float k_PointAtHandSeconds = 1.0f;
+
+/// The rules that use the camera of the player. The creature is away from the middle of the screen when the camera
+/// looks at it. The creature is far from the camera when the camera does not look at it.
+[[nodiscard]] constexpr bool AwayFromMiddleOfScreen(bool hasPlayer, bool lookedAt)
+{
+	return hasPlayer && lookedAt;
+}
+[[nodiscard]] constexpr bool FarFromCamera(bool lookedAt)
+{
+	return !lookedAt;
+}
 
 /// Whether the creature is cross with its player
 [[nodiscard]] bool IsCross(float attitudeToPlayer);
 
 /// Whether a creature is away from its player's hand: the hand is further from it along the ground than an eighth of
-/// the camera's view width at the focus. The two positions are map positions first. A creature without a player, or a
-/// player without a hand, is never away from the hand.
+/// the camera's view width at the focus. The function makes the two positions map positions first.
 [[nodiscard]] bool AwayFromHand(glm::vec3 creature, glm::vec3 hand, glm::vec3 cameraOrigin, glm::vec3 cameraFocus);
 
 /// The speed of the player's hand: it follows the movement of each turn, made a speed, by a part each turn. Thus it
@@ -104,19 +131,19 @@ enum class FollowHandAction : uint8_t
 	Done,
 	/// The hand is off the map: the rest of the agenda is no use
 	Fail,
-	/// It goes on as it is
+	/// It continues as it is
 	Continue,
-	/// It sets off to the hand again
+	/// It walks to the hand again
 	WalkToHand,
 };
-/// One turn of following the hand. Each turn uses up one of the turns left. While the body plays an action it walks again
-/// only when the hand is not near its heading.
+/// One turn of the step that follows the hand. Each turn uses one of the turns that are left. While the body plays an action it
+/// walks again only when the hand is not near its heading.
 [[nodiscard]] FollowHandAction FollowHandTurn(const FollowHandView& view, uint32_t& turnsLeft);
 
 /// What a creature that watches the player sees on one turn
 struct WatchPlayerView
 {
-	/// It waits for orders after it was told to go somewhere, and it has a player
+	/// It waits for orders after the player told it to go to a place, and it has a player
 	bool waitingForOrders {false};
 	bool hasPlayer {false};
 	bool bodyPlaying {false};
@@ -140,8 +167,8 @@ struct WatchPlayerAction
 	/// A point to turn to
 	std::optional<glm::vec2> turnTo;
 };
-/// One turn of watching the player. It goes on while it waits for orders. It turns to the hand when the hand moved much
-/// lately, else to the camera, when that is far enough away and more than a quarter turn round.
+/// One turn of the step that watches the player. It continues while it waits for orders. It turns to the hand when the hand
+/// moved much lately, else to the camera, when that is far enough away and more than a quarter turn round.
 [[nodiscard]] WatchPlayerAction WatchPlayerTurn(const WatchPlayerView& view);
 
 } // namespace openblack::creature_player_attention

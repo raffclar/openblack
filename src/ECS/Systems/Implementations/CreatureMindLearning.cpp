@@ -37,7 +37,6 @@
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureAttention.h"
-#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
@@ -53,6 +52,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptPlay.h"
@@ -2934,12 +2934,20 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_actions::Situation& situation)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	// Only the local player's camera looks at creatures here
+	if (at != nullptr && body != nullptr && Locator::camera::has_value() && Locator::playerSystem::has_value() &&
+	    body->owner == Locator::playerSystem::value().GetLocalPlayer())
+	{
+		const auto& camera = Locator::camera::value();
+		situation.lookedAt = creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), at->position);
+	}
 	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
 	{
 		situation.attitudeToPlayer = mind->attitudeToPlayer;
 		situation.handMoving = situation.playerHand.has_value() && creature_player_attention::IsHandMoving(mind->handSpeed);
 	}
-	const auto* at = registry.TryGet<const Transform>(creature);
 	if (at != nullptr && situation.playerHand.has_value() && Locator::camera::has_value())
 	{
 		const auto& camera = Locator::camera::value();

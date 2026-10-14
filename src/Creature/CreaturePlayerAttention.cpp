@@ -36,10 +36,9 @@ bool creature_player_attention::IsCross(float attitudeToPlayer)
 	return attitudeToPlayer < k_CrossBelow;
 }
 
-bool creature_player_attention::AwayFromHand(glm::vec3 creature, glm::vec3 hand, glm::vec3 cameraOrigin,
-                                             glm::vec3 cameraFocus)
+bool creature_player_attention::AwayFromHand(glm::vec3 creature, glm::vec3 hand, glm::vec3 cameraOrigin, glm::vec3 cameraFocus)
 {
-	// The view width at the focus is taken in double, then made a float with the share
+	// The function calculates the view width at the focus in double, then makes a float with the share
 	const auto focusDistance = static_cast<double>(glm::length(cameraOrigin - cameraFocus));
 	const auto limit = static_cast<float>(std::tan(k_ViewHalfAngle) * focusDistance * static_cast<double>(k_AwayFromHandShare));
 	const auto distance = gutils::GetDistanceInMetres(MapPositionOf(creature), MapPositionOf(hand));
@@ -66,7 +65,7 @@ bool creature_player_attention::IsDirectionClose(const map_coords::MapCoords& cr
                                                  uint16_t heading)
 {
 	const auto toPoint = gutils::GetAngleFromXZ(creature, point);
-	// The difference is not taken round the circle: just either side of the zero angle the two are far apart
+	// The difference does not go round the circle. Thus two angles near the zero angle, one on each side, are far apart
 	const auto difference = toPoint > heading ? toPoint - heading : heading - toPoint;
 	if (static_cast<uint32_t>(difference) < k_HalfTurn / k_CloseDirectionParts)
 	{

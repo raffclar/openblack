@@ -224,14 +224,21 @@ enum class Build : uint8_t
 	CastOneShotInHand,
 	/// Picking up the one-shot miracle that it uses, unless its hand holds something, and casting it at the thing
 	PickUpAndCastOneShot,
-	/// The actions with its player: going to the hand, pointing at the hand, showing the player how nice it thinks the
-	/// player is, praying to the player, throwing a thing at the camera and watching the player
+	/// The actions with its player: go to the hand, point at the hand, show the player how nice the creature thinks the
+	/// player is, pray to the player, throw a thing at the camera and watch the player
 	GoToHand,
 	PointAtHand,
 	ShowHowNice,
 	PrayToPlayer,
 	ThrowAtCamera,
 	WatchPlayer,
+	/// The actions with its player that first follow the camera: go to the middle of the screen, follow the player, be
+	/// cross with the player and show the player a thing. Also the action to be silly with the player.
+	GoToMiddleOfScreen,
+	FollowPlayer,
+	BeCrossWithPlayer,
+	ShowPlayerAnObject,
+	BeSillyWithPlayer,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -351,6 +358,8 @@ struct Situation
 	float attitudeToPlayer {0.0f};
 	bool awayFromHand {false};
 	bool handMoving {false};
+	/// Whether the camera of its player looks at it
+	bool lookedAt {false};
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo
