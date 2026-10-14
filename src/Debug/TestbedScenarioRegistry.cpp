@@ -2196,6 +2196,21 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.eat_poor_food",
+	    .name = "Eating a handful of food, then one of wood",
+	    .facet = Facet::Objects,
+	    .description = "A hungry tiger picks up a handful of food and eats it, then picks up a handful of wood and eats it.",
+	    .expected = "It keeps the food down and its energy rises. The wood has no food in it: the tiger is sick after it "
+	                "eats the wood, is not hungry for twenty seconds, and does not eat a pot again.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungry},
+	    .objects = {{.type = PotInfo::HandFood, .offset = {0.0f, -k_Reach}, .amount = 300},
+	                {.type = PotInfo::HandWood, .offset = {-15.0f, -5.0f}, .amount = 300}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::EatHeld, 0, 0.5f, true), OnObject(Kind::PickUp, 0, 1, 1.0f),
+	                 Act(Kind::EatHeld, 0, 0.5f, true)},
+	});
+
+	all.push_back({
 	    .id = "objects.bring_back_up",
 	    .name = "Bringing up what can't be eaten",
 	    .facet = Facet::Objects,
