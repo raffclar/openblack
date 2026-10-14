@@ -1831,6 +1831,12 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	{
 		Acknowledge(creature);
 	}
+	// Told to go somewhere with empty hands, the creature counts it as the player dealing with it
+	const bool carrying = order.kind == Kind::PutDownAt || order.kind == Kind::ThrowAt;
+	if (!carrying && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().NoteLeashOrder(creature);
+	}
 	const auto markAt = glm::vec3(order.point.x, GroundAt(order.point), order.point.y);
 	if (order.kind == Kind::ActOnField)
 	{
@@ -1904,8 +1910,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		TellHelp(creature, {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire)});
 	}
 	// Carrying, the place itself is marked; otherwise where it goes
-	const bool carried = order.kind == Kind::PutDownAt || order.kind == Kind::ThrowAt;
-	MarkOrder(creature, std::nullopt, carried ? glm::vec3(at.x, GroundAt(at), at.y) : markAt, false);
+	MarkOrder(creature, std::nullopt, carrying ? glm::vec3(at.x, GroundAt(at), at.y) : markAt, false);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is told to go to ({:.1f}, {:.1f})", entt::to_integral(creature),
 	                   order.point.x, order.point.y);
 	return true;
@@ -1949,6 +1954,12 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	if (orders::Acknowledges(attempts))
 	{
 		Acknowledge(creature);
+		// Told to do something to a thing, the creature counts it as the player dealing with it. Sent to a forest, it
+		// counts the order to go there instead.
+		if (!attempts.empty() && attempts.front() != orders::Attempt::GoToForest && Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().NoteLeashOrder(creature);
+		}
 	}
 	const bool previously = OrderInForce(creature);
 	std::optional<Desire> desire;

@@ -3900,6 +3900,21 @@ void AddMind(std::vector<Scenario>& all)
 	                 {.kind = Kind::WideScreen, .delaySeconds = 25.0f, .value = 0}},
 	});
 
+	// The camera looks away from the creature, so the player does not watch it
+	all.push_back({
+	    .id = "mind.lonely_unwatched",
+	    .name = "Lonely when the player does not watch it",
+	    .facet = Facet::Mind,
+	    .description = "A player's cow stands in the middle of the map, its mind free. The camera stands to its north and "
+	                   "looks further north, away from it.",
+	    .expected = "The player does not watch it, so it gets lonely: its loneliness source goes up by a sixtieth each "
+	                "second and is full after one minute, and its desire to attract the player's attention grows. Turn "
+	                "the camera to it and its loneliness source goes to zero at once. Its desire to get high stays at "
+	                "zero, because it has not eaten a hundred magic mushrooms.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 150.0f}, .look = {0.0f, 0.0f, 400.0f}},
+	    .creatures = {Content(CreatureType::Cow, {0.0f, 0.0f}, 0.0f)},
+	});
+
 	all.push_back({
 	    .id = "mind.look_at_camera_still_hand",
 	    .name = "Looking at the camera stops when the hand stays still",

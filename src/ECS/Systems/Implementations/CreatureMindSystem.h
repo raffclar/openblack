@@ -61,6 +61,8 @@ public:
 	void ReceiveFeedback(entt::entity creature, float feedback) override;
 	void HandTookHold(entt::entity creature) override;
 	void UpdateAttitudeFromFeedback(entt::entity creature, float feedback) override;
+	[[nodiscard]] float GetAverageFeedback() const override { return _averageFeedback; }
+	void NoteLeashOrder(entt::entity creature) override;
 	void ChangeDesireSource(entt::entity creature, uint32_t type, float amount) override;
 	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
 	                 float interruptsAfter) override;
@@ -187,8 +189,11 @@ private:
 	/// The creature watches a skill being done, and learns from it
 	void WatchSkill(entt::entity creature, size_t skill);
 	/// The creature sees again a villager it believes in: grown up enough and free to, it learns from what the villager
-	/// does when that teaches a skill it does not know, and goes after the villager to watch it
+	/// does when that teaches a skill it does not know, and goes after the villager to watch it. A villager of another
+	/// player's village, or of a village of no player, also makes it want to impress more.
 	void WatchVillager(entt::entity creature, components::CreatureMindState& mind, entt::entity villager);
+	/// The skill a villager seen again shows the creature, if it does not know it yet
+	void WatchVillagerSkill(entt::entity creature, components::CreatureMindState& mind, entt::entity villager);
 	/// A sighting that moves the learning meter shows it over the creature's head, at most every so many turns
 	void ShowLearningMeter(entt::entity creature, components::CreatureMindState& mind, std::optional<float> share);
 	/// How useful the creature has learnt a thing is for a desire, when it may act on it at all: nothing when it is kept
@@ -352,6 +357,8 @@ private:
 	creature_mind::SubMove SubMoveOf(entt::entity creature);
 	/// The minds choose at random, apart from the game's own random numbers
 	RandomStreamSource _random {RandomStream::CreatureMind};
+	/// The average of the feedback given to all creatures
+	float _averageFeedback {0.0f};
 	/// The game's tables for the minds, taken once the game's data is loaded
 	std::optional<creature_mind_tables::Tables> _tables;
 };

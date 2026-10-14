@@ -322,7 +322,8 @@ struct GSpecialVillagerInfo
 struct CreatureDevelopmentPhaseEntry
 {
 	std::array<char, 0x30> name;
-	float field0x30;
+	/// At this distance from home, a creature at this stage wants to go home most
+	float goHomeDistance;
 	float field0x34;
 	float field0x38;
 	uint32_t field0x3c;
@@ -956,7 +957,10 @@ struct GCreatureInfo: GLivingInfo
 	MeshId totemIcon;
 	/// Each turn the change waiting for its alignment, held between -1 and 1, moves it by that share of this
 	float alignmentChangePerTurn;
-	std::array<uint8_t, 0x1c> field0x33c;
+	float field0x33c;
+	/// The personality the species is born with, each 0 to 1: kindness, aggression, lethargy, friendliness,
+	/// communicativeness, and a sixth trait that no desire reads
+	std::array<float, 6> innateTraits;
 	/// How much things on the land, mountains and water catch its eye as it looks about
 	float lookAtObjectsWeight;
 	float lookAtMountainsWeight;
@@ -987,6 +991,7 @@ static_assert(offsetof(GCreatureInfo, inspectCreatureSeconds) == 0x2cc);
 static_assert(offsetof(GCreatureInfo, lookSweepHalfAngle) == 0x2dc);
 static_assert(offsetof(GCreatureInfo, lookAtPlaceRange) == 0x2f8);
 static_assert(offsetof(GCreatureInfo, lookAtObjectsWeight) == 0x358);
+static_assert(offsetof(GCreatureInfo, innateTraits) == 0x340);
 static_assert(offsetof(GCreatureInfo, helpVeryThirsty) == 0x324);
 static_assert(offsetof(GCreatureInfo, startEnergy) == 0x1f4);
 static_assert(offsetof(GCreatureInfo, comfortTemperature) == 0x1fc);

@@ -16,6 +16,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 /// What a creature wants. Each desire grows while its sources (hunger from low energy, loneliness, and so on) are past
@@ -88,7 +89,7 @@ constexpr uint32_t k_AngerFromSadness = 10;
 constexpr uint32_t k_InnateAggression = 11;
 constexpr uint32_t k_PlayFromWatchingPlayer = 12;
 constexpr uint32_t k_HungerFromLowEnergy = 14;
-constexpr uint32_t k_PlayFromSadness = 16;
+constexpr uint32_t k_HungerFromSadness = 16;
 constexpr uint32_t k_FearFromDark = 17;
 constexpr uint32_t k_FearFromDamage = 18;
 /// Fear from seeing a nasty miracle
@@ -155,6 +156,9 @@ struct Desires
 	std::array<DesireState, k_DesireCount> desires {};
 	/// All the activated desires' values added up, as of the last update
 	float sum {0.0f};
+	/// The kinds of source set to a value since the mind last took them, in order. The mind changes what each kind
+	/// follows to agree, so that the value lasts.
+	std::vector<std::pair<uint32_t, float>> written;
 
 	[[nodiscard]] DesireState& operator[](Desire desire) { return desires.at(static_cast<size_t>(desire)); }
 	[[nodiscard]] const DesireState& operator[](Desire desire) const { return desires.at(static_cast<size_t>(desire)); }
@@ -169,9 +173,18 @@ struct DesireSetup
 	float increaseSeconds {1.0f};
 	float weight {1.0f};
 	std::vector<Source> sources;
+	/// How far each source's starting value and threshold are spread at random either way, by the sources' order
+	struct Spread
+	{
+		float value {0.0f};
+		float threshold {0.0f};
+	};
+	std::vector<Spread> spreads;
 };
 
-/// A creature's desires as it starts, its decays picked at random in their ranges by uniform(min, max)
+/// A creature's desires as it starts, by uniform(min, max): its decays picked in their ranges, the times its desires
+/// take to grow spread by up to a fifth either way, and its sources' starting values and thresholds spread by their
+/// spreads either way and kept from 0 to 1
 [[nodiscard]] Desires Create(const std::array<DesireSetup, k_DesireCount>& setup,
                              const std::function<float(float, float)>& uniform);
 

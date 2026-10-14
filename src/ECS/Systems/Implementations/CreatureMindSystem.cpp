@@ -36,6 +36,7 @@
 #include "Camera/Camera.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureAttention.h"
+#include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -79,6 +80,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreatureHome.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsEntry.h"
@@ -95,6 +97,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -135,6 +138,8 @@ namespace openblack::ecs::systems::mind_detail
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
+/// The whole game turns in a second, as the game counts them
+constexpr auto k_WholeTurnsPerSecond = static_cast<uint32_t>(1000 / TimeSystemInterface::k_TurnDuration.count());
 /// A creature just put in the world takes its first few turns to stand up before it can pass out
 constexpr uint32_t k_TurnsBeforePassingOut = 2;
 /// A face told to by hand is held this long
@@ -168,10 +173,6 @@ constexpr std::string_view k_TakeFromHandAction = "TakeObjectFromHand";
 constexpr std::string_view k_ExamineGivenAction = "ExamineObjectInHand";
 constexpr std::string_view k_EatGivenAction = "EatObjectInHand";
 constexpr std::string_view k_ThrowGivenAction = "ThrowObjectInHand";
-/// The creature wants the player's attention more the longer it is alone, fully after a minute, and from lack of
-/// anything to do with the player, fully after two
-constexpr float k_LonelySeconds = 60.0f;
-constexpr float k_UninterestedSeconds = 120.0f;
 /// The desire to show how it is grows with all its desires added up, fully at this much
 constexpr float k_ManifestSum = 3.0f;
 
@@ -223,16 +224,45 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 			{
 				continue;
 			}
+			const auto& table = info.desireSourceTable.at(type);
 			desire.sources.push_back({
 			    .type = type,
 			    .value = PerSpecies(info.creatureInitialSource1.at(type), row),
 			    .threshold = PerSpecies(info.creatureInitialSource2.at(type), row),
-			    .multiplier = info.desireSourceTable.at(type).field0x8,
-			    .clearedWhenSatisfied = info.desireSourceTable.at(type).field0x4 != 0,
+			    .multiplier = table.field0x8,
+			    .clearedWhenSatisfied = table.field0x4 != 0,
 			});
+			desire.spreads.push_back({.value = table.field0xc, .threshold = table.field0x10});
 		}
 	}
 	return setup;
+}
+
+creature_desire_sources::InnateTraits InnateTraitsOf(CreatureType species)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return {};
+	}
+	const auto& creatures = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(species);
+	if (row >= creatures.size())
+	{
+		return {};
+	}
+	const auto& info = creatures.at(row);
+	const auto& traits = info.innateTraits;
+	return {
+	    .kindness = traits.at(0),
+	    .aggression = traits.at(1),
+	    .lethargy = traits.at(2),
+	    .friendliness = traits.at(3),
+	    .communicativeness = traits.at(4),
+	    .sixth = traits.at(5),
+	    .objectsLookWeight = info.lookAtObjectsWeight,
+	    .mountainsLookWeight = info.lookAtMountainsWeight,
+	    .waterLookWeight = info.lookAtWaterWeight,
+	};
 }
 
 /// The desires each stage of growing up brings and takes away, from the game's tables
@@ -263,27 +293,111 @@ std::vector<creature_desires::PhaseDesires> Phases()
 	return phases;
 }
 
+/// How interesting the creature finds its player this turn. The local player's hand is the player's; a creature of
+/// another player, or of none, finds nothing of interest here.
+float PlayerInterestNow(const Creature& creature, CreatureMindState& mind)
+{
+	if (!Locator::handSystem::has_value() || !Locator::playerSystem::has_value() ||
+	    creature.owner != Locator::playerSystem::value().GetLocalPlayer())
+	{
+		return creature_desire_sources::InterestNow(mind.playerInterest, std::nullopt, std::nullopt);
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	constexpr auto k_Hand = static_cast<size_t>(HandSystemInterface::Side::Left);
+	const auto handEntity = Locator::handSystem::value().GetPlayerHands().at(k_Hand);
+	// Off the land the hand has no place: it counts as where it last was
+	auto hand = Locator::handSystem::value().GetPlayerHandPositions().at(k_Hand);
+	if (!hand.has_value())
+	{
+		hand = mind.playerInterest.lastHand;
+	}
+	std::optional<float> heldRadius;
+	if (const auto* grab = registry.Valid(handEntity) ? registry.TryGet<const HandGrab>(handEntity) : nullptr;
+	    grab != nullptr && registry.Valid(grab->object) &&
+	    (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow))
+	{
+		heldRadius = object_measures::TwoDRadius(registry, grab->object);
+	}
+	if (!hand.has_value())
+	{
+		return 0.0f;
+	}
+	return creature_desire_sources::InterestNow(mind.playerInterest, hand, heldRadius);
+}
+
+/// What scripts set the creature's sources to since its last turn: the trait or count behind each source follows
+void TakeWrittenSources(entt::entity entity, CreatureMindState& mind)
+{
+	if (!mind.desires.has_value() || mind.desires->written.empty())
+	{
+		return;
+	}
+	auto* body = Locator::entitiesRegistry::value().TryGet<Creature>(entity);
+	const creature_desire_sources::Written written {
+	    .innate = &mind.innate,
+	    .attention = &mind.attention,
+	    .interest = &mind.playerInterest,
+	    .mushroomsEaten = body != nullptr ? &body->magicMushroomsEaten : nullptr,
+	    .turnsPerSecond = k_WholeTurnsPerSecond,
+	};
+	for (const auto& [type, value] : std::exchange(mind.desires->written, {}))
+	{
+		creature_desire_sources::Write(type, value, written);
+	}
+}
+
+/// What the sources that follow the creature's personality, attention, home and meals read
+creature_desire_sources::State SourceStateOf(entt::entity entity, const Creature& creature, const CreatureMindState& mind,
+                                             uint32_t age)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	creature_desire_sources::State state {
+	    .innate = &mind.innate,
+	    .attention = &mind.attention,
+	    .interest = mind.playerInterest.value,
+	    .turnsPerSecond = k_WholeTurnsPerSecond,
+	    .computerPlayer = Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(creature.owner),
+	    .age = age,
+	    .mushroomsEaten = creature.magicMushroomsEaten,
+	    .impressFromSeeing = mind.impressFromSeeing,
+	};
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	// TODO(creature-hang-around): the game keeps the place where a creature without a temple was made as its home;
+	// without a home here, the sources of going home keep their own values
+	if (const auto home = ecs::creature_home::HomeOf(registry, entity); home.has_value() && transform != nullptr)
+	{
+		state.homeDistance = glm::distance(glm::xz(transform->position), glm::xz(*home));
+	}
+	if (Locator::infoConstants::has_value())
+	{
+		const auto& phases = Locator::infoConstants::value().creatureDevelopmentPhaseEntry;
+		state.goHomeDistance = phases.at(std::min<size_t>(mind.developmentPhase, phases.size() - 1)).goHomeDistance;
+	}
+	return state;
+}
+
 /// The sources that follow the creature's state: its body's, and its mind's own
 std::optional<float> ReadSource(uint32_t type, const creature_desires::Desires& desires, const CreatureMindState& mind,
-                                const creature_physiology::Needs& needs, bool night)
+                                const creature_physiology::Needs& needs, bool night,
+                                const creature_desire_sources::State& state)
 {
 	namespace sources = creature_desires::sources;
 	if (const auto value = creature_physiology::SourceValue(type, needs, night))
 	{
 		return value;
 	}
+	if (const auto value = creature_desire_sources::Read(type, state))
+	{
+		return value;
+	}
 	switch (type)
 	{
-	case sources::k_AttentionFromLoneliness:
-		return Clamp01(mind.secondsAlone / k_LonelySeconds);
-	case sources::k_AttentionFromLackOfInteraction:
-		return Clamp01(mind.secondsAlone / k_UninterestedSeconds);
 	case sources::k_ManifestState:
 		return Clamp01(desires.sum / k_ManifestSum);
 	case sources::k_RunAwayFromPlayer:
 		return Clamp01(-mind.attitudeToPlayer);
 	case sources::k_AngerFromSadness:
-	case sources::k_PlayFromSadness:
+	case sources::k_HungerFromSadness:
 	case sources::k_TirednessFromSadness:
 		return creature_desires::SourceValue(desires[Desire::Sadness], sources::k_Sadness).value_or(0.0f);
 	default:
@@ -1334,6 +1448,10 @@ void CreatureMindSystem::ProcessTurn()
 			    SetKnowsAction(entity, teaching.type, teaching.action, teaching.knows);
 		    }
 		    ++mind.turn;
+		    // What scripts set its sources to since the last turn lasts: what each source follows takes the value
+		    TakeWrittenSources(entity, mind);
+		    // How interesting it finds its player follows the hand, also while the hand holds it
+		    creature_desire_sources::UpdateInterest(mind.playerInterest, PlayerInterestNow(creature, mind));
 		    // What it thinks its player wants fades
 		    creature_perceived_desires::Fade(mind.perceivedDesires);
 		    if (mind.learnt.has_value())
@@ -1349,7 +1467,6 @@ void CreatureMindSystem::ProcessTurn()
 			    creature_desires::ActivateForPhase(*mind.desires, Phases(), mind.developmentPhase);
 			    mind.desiresPhase = mind.developmentPhase;
 		    }
-		    mind.secondsAlone += k_TurnSeconds;
 		    // What it believed about things now gone is forgotten, and going into another cell it notes the nearest temple
 		    ForgetGoneThings(entity, mind);
 		    NoteNearestTemple(entity, mind, transform);
@@ -1358,8 +1475,10 @@ void CreatureMindSystem::ProcessTurn()
 		    // it then
 		    if (!held)
 		    {
-			    if (creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
-			        creature_attention::IsLookingAt(view->origin, view->focus, transform.position))
+			    const bool lookedAt = creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
+			                          creature_attention::IsLookingAt(view->origin, view->focus, transform.position);
+			    creature_desire_sources::CountTurn(mind.attention, lookedAt);
+			    if (lookedAt)
 			    {
 				    ++mind.turnsLookedAt;
 			    }
@@ -1386,10 +1505,11 @@ void CreatureMindSystem::ProcessTurn()
 		    if (!scripted)
 		    {
 			    const auto body = needs != nullptr ? needs->needs : creature_physiology::Needs {};
-			    creature_desires::UpdateSources(*mind.desires,
-			                                    [&mind, &body, night](uint32_t type, const creature_desires::Desires& desires) {
-				                                    return ReadSource(type, desires, mind, body, night);
-			                                    });
+			    const auto state = SourceStateOf(entity, creature, mind, body.age);
+			    creature_desires::UpdateSources(
+			        *mind.desires, [&mind, &body, night, &state](uint32_t type, const creature_desires::Desires& desires) {
+				        return ReadSource(type, desires, mind, body, night, state);
+			        });
 			    creature_desires::UpdateDesires(*mind.desires, k_TurnsPerSecond);
 		    }
 
@@ -1811,7 +1931,16 @@ void CreatureMindSystem::UpdateAttitudeFromFeedback(entt::entity creature, float
 	// The scripts read how strongly it was last rewarded or punished
 	mind->interactionMagnitude = feedback;
 	mind->attitudeToPlayer = creature_feedback::AttitudeAfter(mind->attitudeToPlayer, feedback);
-	mind->averageFeedback = creature_feedback::AverageAfter(mind->averageFeedback, feedback);
+	// The average of the feedback is one for all creatures
+	_averageFeedback = creature_feedback::AverageAfter(_averageFeedback, feedback);
+}
+
+void CreatureMindSystem::NoteLeashOrder(entt::entity creature)
+{
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature))
+	{
+		mind->attention.turnsSinceInteraction = 0;
+	}
 }
 
 void CreatureMindSystem::ChangeDesireSource(entt::entity creature, uint32_t type, float amount)
@@ -1883,7 +2012,6 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	{
 		return;
 	}
-	mind->secondsAlone = 0.0f;
 	mind->lastFeedback = CreatureMindState::Feedback {.value = feedback, .activity = mind->idle.activity};
 	// Let go of, however slightly it was stroked or slapped, it stops whatever it was doing: it stops walking, puts down
 	// what it was doing with a thing, drops its agenda and gets up out of a sitting or lying pose. An action it is playing,
