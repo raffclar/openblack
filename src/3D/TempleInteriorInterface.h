@@ -22,6 +22,7 @@
 #include "3D/TempleFog.h"
 #include "3D/TempleLight.h"
 #include "3D/TempleMap.h"
+#include "3D/TempleMapSpells.h"
 #include "Enums.h"
 #include "Graphics/GraphicsHandle.h"
 
@@ -154,6 +155,12 @@ public:
 	[[nodiscard]] virtual uint32_t GetVisits() const = 0;
 	/// The markers on the map this frame, in the main room, of the kinds its buttons show
 	[[nodiscard]] virtual const std::vector<TempleMapMarker>& GetMapMarkers() const = 0;
+	/// The seeds of the miracles that the players cast, over the map this frame, while the button for miracles shows
+	/// them
+	[[nodiscard]] virtual const std::vector<TempleMapSpellSeed>& GetMapSpellSeeds() const = 0;
+	/// How the main room shows the influence of the players this frame. None when the player is not in the main room,
+	/// or when the influence button is off.
+	[[nodiscard]] virtual std::optional<TempleMapInfluence> GetMapInfluence() const = 0;
 	/// The temple's light this frame, which its rooms and what is in them are drawn in
 	[[nodiscard]] virtual const TempleLight& GetLight() const = 0;
 	/// The depth fog of the room the player is in this frame, in the temple's light

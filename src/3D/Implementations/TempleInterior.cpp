@@ -49,6 +49,7 @@
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -827,9 +828,26 @@ void TempleInterior::ClearCaveSeeds()
 void TempleInterior::UpdateMapMarkers(float seconds)
 {
 	_mapMarkers.clear();
+	_mapInfluence.reset();
 	if (_mapTriangles.empty())
 	{
+		ClearMapSpells();
 		return;
+	}
+	// The main room shows the influence of the players while the player is in it and the influence button is on
+	if (_toggles.IsShown(TempleToggles::Display::Influence) && _currentRoom == TempleRoom::Main)
+	{
+		auto placement = _map.GetInfluencePlacement();
+		placement.offset += GetPosition();
+		_mapInfluence = placement;
+	}
+	if (_toggles.IsShown(TempleToggles::Display::MiracleActivity))
+	{
+		UpdateMapSpells();
+	}
+	else
+	{
+		ClearMapSpells();
 	}
 	using namespace ecs::components;
 	auto& registry = Locator::entitiesRegistry::value();
@@ -866,9 +884,112 @@ void TempleInterior::UpdateMapMarkers(float seconds)
 			                       .glow = at + glm::vec3(0.0f, 0.1f, 0.0f)});
 		});
 	}
-	// TODO(raffclar): the map also marks the miracles being cast and the players' influence, as their buttons show them
 	// The markers turn a radian a second while the map is drawn
 	_mapMarkerTurn += seconds;
+}
+
+namespace
+{
+/// Starts and steps the effects above the seeds on the map, as effects of the temple
+class MapSpellEffects final: public TempleMapSpells::Effects
+{
+public:
+	explicit MapSpellEffects(ecs::systems::ParticleSystemInterface* particles)
+	    : _particles(particles)
+	{
+	}
+
+	std::optional<uint32_t> Start(ParticleType type, glm::vec3 point, float scale, PlayerNames player) override
+	{
+		if (_particles == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto effect = _particles->Start(type, point, scale);
+		if (effect == ecs::systems::ParticleSystemInterface::k_NoEffect)
+		{
+			return std::nullopt;
+		}
+		_particles->SetInTemple(effect);
+		_particles->SetPlayer(effect, static_cast<int>(player));
+		return effect;
+	}
+
+	void Step(uint32_t effect, glm::vec3 point, float seconds) override
+	{
+		if (_particles != nullptr)
+		{
+			_particles->SetOrigin(effect, point);
+			_particles->ProcessByFrame(effect, seconds);
+		}
+	}
+
+	void Stop(uint32_t effect) override
+	{
+		if (_particles != nullptr)
+		{
+			_particles->Delete(effect);
+		}
+	}
+
+private:
+	ecs::systems::ParticleSystemInterface* _particles;
+};
+
+MapSpellEffects GameMapSpellEffects()
+{
+	return MapSpellEffects(Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr);
+}
+} // namespace
+
+void TempleInterior::UpdateMapSpells()
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto origin = GetPosition();
+	const auto* alignment = Locator::alignmentSystem::has_value() ? &Locator::alignmentSystem::value() : nullptr;
+	// Each miracle with a seed shows that seed: the first seed of the game's table that casts the miracle
+	std::vector<TempleMapSpells::Cast> casts;
+	Locator::entitiesRegistry::value().Each<const ecs::components::Spell>(
+	    [&](entt::entity entity, const ecs::components::Spell& spell) {
+		    const auto seed = magic::FindFirstSpellSeedForMagicType(info, spell.magicType);
+		    if (!seed.has_value() || *seed == SpellSeedType::None)
+		    {
+			    return;
+		    }
+		    const auto& seedInfo = magic::GetSpellSeedInfo(info, *seed);
+		    std::optional<int> receiveType;
+		    if (magic::visuals::IsPhialSeed(*seed))
+		    {
+			    const auto* creatureSpell = magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, seedInfo.magicTypes[0]);
+			    receiveType = creatureSpell != nullptr ? static_cast<int>(creatureSpell->creatureReceiveSpellType) : 0;
+		    }
+		    const auto player = spell.caster.player;
+		    casts.push_back({
+		        .spell = entity,
+		        .seed = *seed,
+		        .mapPoint = origin + _map.MarkerPosition(glm::vec2(spell.position.x, spell.position.z)),
+		        .player = player,
+		        .ownerAlignment = alignment != nullptr ? alignment->GetPlayerAlignment(player) : 0.0f,
+		        .holderParticle = seedInfo.holderParticle,
+		        .holderHeight = seedInfo.holderHeight,
+		        .phialReceiveType = receiveType,
+		    });
+	    });
+	// The seeds turn by the game's time, which stops while the player is in the temple
+	const auto gameTime =
+	    Locator::time::has_value() ? std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count() : 0.0f;
+	auto effects = GameMapSpellEffects();
+	_mapSpells.Update(casts, gameTime, effects);
+}
+
+void TempleInterior::ClearMapSpells()
+{
+	auto effects = GameMapSpellEffects();
+	_mapSpells.Clear(effects);
 }
 
 TempleInterior::~TempleInterior() = default;
@@ -1430,6 +1551,9 @@ void TempleInterior::Close()
 	_caveTrophies.clear();
 	// The seeds by the plinths go as the player leaves, and the room works out the miracles afresh on the next visit
 	ClearCaveSeeds();
+	// The seeds of the miracles go from the map as the player leaves
+	ClearMapSpells();
+	_mapInfluence.reset();
 	_enteredRoom.reset();
 	if (Locator::cameraPathSystem::value().IsPathing())
 	{

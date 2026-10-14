@@ -1867,8 +1867,9 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 		    });
 		    return items;
 	    }));
-	provider->Add(Query("interior", "The temple's inside: whether the player is in it, the room, the visits, and the "
-	                                "worshippers walking about it (how many came in, and where those drawn are)"),
+	provider->Add(Query("interior", "The temple's inside: whether the player is in it, the room, the visits, the "
+	                                "worshippers walking about it (how many came in, and where those drawn are), the "
+	                                "seeds of the miracles over the map and how the map shows the influence"),
 	              Serve<Locator::temple>("the temple", [](const TempleInteriorInterface& temple, const QueryContext& /*c*/) {
 		              const auto transition = temple.GetTransitionRoom();
 		              Json drawn = Json::array();
@@ -1876,7 +1877,20 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 		              {
 			              drawn.push_back(Point(glm::vec3(person.model[3])));
 		              }
+		              Json seeds = Json::array();
+		              for (const auto& seed : temple.GetMapSpellSeeds())
+		              {
+			              seeds.push_back({{"seed", static_cast<int>(seed.seed)},
+			                               {"middle", Point(seed.middle)},
+			                               {"spin", seed.spin},
+			                               {"phial_frame", seed.phialFrame}});
+		              }
+		              const auto influence = temple.GetMapInfluence();
 		              return Json {
+		                  {"map_spell_seeds", std::move(seeds)},
+		                  {"map_influence", influence.has_value()
+		                                        ? Json {{"offset", Point(influence->offset)}, {"scale", influence->scale}}
+		                                        : Json(nullptr)},
 		                  {"people_inside", temple.GetPeopleInside()},
 		                  {"people_drawn", std::move(drawn)},
 		                  {"active", temple.Active()},

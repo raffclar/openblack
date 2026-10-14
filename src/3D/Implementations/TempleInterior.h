@@ -22,6 +22,7 @@
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
+#include "3D/TempleMapSpells.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
 #include "Temple/TempleHelp.h"
@@ -81,6 +82,8 @@ public:
 	[[nodiscard]] const TemplePeople* GetWalkingPeople() const override { return _people.get(); }
 	[[nodiscard]] glm::mat4 GetPlacement() const override;
 	[[nodiscard]] float GetMapMarkerTurn() const override { return _mapMarkerTurn; }
+	[[nodiscard]] const std::vector<TempleMapSpellSeed>& GetMapSpellSeeds() const override { return _mapSpells.GetSeeds(); }
+	[[nodiscard]] std::optional<TempleMapInfluence> GetMapInfluence() const override { return _mapInfluence; }
 	[[nodiscard]] float GetPoolTime() const override { return _poolTime; }
 	void Escape() override;
 	void RequestLeave() override { _leaveRequested = true; }
@@ -134,6 +137,14 @@ private:
 	std::vector<OrientedTextVertex> _mapTriangles;
 	/// The markers on the map this frame, and how far they have turned
 	std::vector<TempleMapMarker> _mapMarkers;
+	/// The seeds of the miracles that the players cast, over the map
+	TempleMapSpells _mapSpells;
+	/// How the main room shows the influence of the players this frame, if it does
+	std::optional<TempleMapInfluence> _mapInfluence;
+	/// The seeds of the miracles over the map, by the game's time of the frame
+	void UpdateMapSpells();
+	/// Removes the seeds of the miracles from the map, with their effects
+	void ClearMapSpells();
 	std::vector<TempleCaveTrophy> _caveTrophies;
 	TempleLight _light;
 	TempleFog _fog;

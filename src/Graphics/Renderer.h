@@ -208,6 +208,8 @@ private:
 	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
 	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
 	void DrawCaveSeeds(const DrawSceneDesc& desc) const;
+	/// The seeds of the miracles that the players cast, over the main room's map
+	void DrawMapSpellSeeds(const DrawSceneDesc& desc) const;
 	/// How the glow over a hand holding a miracle looks this frame: the flow's sheet, the cell of it shown and the
 	/// colour it is drawn in
 	struct HandGlowLook
