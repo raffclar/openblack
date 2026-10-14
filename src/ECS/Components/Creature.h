@@ -47,6 +47,8 @@ struct Creature
 	/// The share of the player's creature's size a script keeps it growing or shrinking towards, turn by turn; none
 	/// unless a script asks
 	std::optional<float> autoScale;
+	/// The magic mushrooms it has eaten. Each full hundred makes it want to get high, and makes it mentally ill.
+	uint32_t magicMushroomsEaten {0};
 	/// How many objects its miracles have destroyed
 	float objectsDestroyed {0.0f};
 	/// Whether a miracle that takes the last of its life knocks it out; a script can make it unable to die, when such a

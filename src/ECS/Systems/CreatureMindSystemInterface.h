@@ -100,6 +100,11 @@ public:
 	/// Feedback that only moves how the creature feels about its player (as being hit by what its player threw does):
 	/// it takes the player to want compassion or anger, and warms or cools to the player, from -1 to 1
 	virtual void UpdateAttitudeFromFeedback(entt::entity /*creature*/, float /*feedback*/) {}
+	/// The average of the feedback the player has given all creatures: each new feedback counts for more than the
+	/// average before it. It is one for all creatures.
+	[[nodiscard]] virtual float GetAverageFeedback() const { return 0.0f; }
+	/// The player told the creature what to do on the leash: the player has dealt with it now
+	virtual void NoteLeashOrder(entt::entity /*creature*/) {}
 	/// Every source of a type in the creature's desires goes up or down by an amount
 	virtual void ChangeDesireSource(entt::entity /*creature*/, uint32_t /*type*/, float /*amount*/) {}
 	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through

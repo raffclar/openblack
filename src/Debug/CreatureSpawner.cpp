@@ -727,7 +727,8 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	}
 
 	ImGui::SeparatorText("Desires");
-	ImGui::Text("Alone %.0f s", static_cast<double>(mind->secondsAlone));
+	ImGui::Text("Turns unwatched %u, turns since the player dealt with it %u", mind->attention.turnsIgnored,
+	            mind->attention.turnsSinceInteraction);
 	if (!mind->desires.has_value())
 	{
 		return;

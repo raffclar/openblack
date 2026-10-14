@@ -322,7 +322,9 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 	if (ImGui::TreeNode("Attitudes"))
 	{
 		ImGui::Text("To the player %+.2f, average feedback %+.2f", static_cast<double>(mind->attitudeToPlayer),
-		            static_cast<double>(mind->averageFeedback));
+		            static_cast<double>(Locator::creatureMindSystem::has_value()
+		                                    ? Locator::creatureMindSystem::value().GetAverageFeedback()
+		                                    : 0.0f));
 		for (const auto& attitude : learnt.creatures)
 		{
 			ImGui::Text("Creature %u: nice %+.2f, impressive %.2f, attention %.2f", attitude.creature,

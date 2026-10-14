@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Enums.h"
@@ -45,6 +46,8 @@ struct Tables;
 namespace openblack::ecs::systems::mind_detail
 {
 [[nodiscard]] std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> SetupFor(CreatureType species);
+/// The personality a species is born with, from the game's creature table, before it is spread for a creature
+[[nodiscard]] creature_desire_sources::InnateTraits InnateTraitsOf(CreatureType species);
 [[nodiscard]] std::optional<float> FoodValueOf(entt::entity entity);
 [[nodiscard]] std::optional<creature_mind::WaterSpot> NearestWater(glm::vec2 from);
 /// The sort of a thing, by the object type of its info (an animal's own info, or the info of any other thing); none for a

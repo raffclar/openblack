@@ -33,6 +33,7 @@
 #include "Creature/CaveCreature.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureFeedback.h"
@@ -584,6 +585,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Creature::made>("made")
 	    .Field<&components::Creature::penSize>("penSize")
 	    .Field<&components::Creature::autoScale>("autoScale")
+	    .Field<&components::Creature::magicMushroomsEaten>("magicMushroomsEaten")
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")
 	    .Field<&components::Creature::canDie>("canDie")
 	    .Field<&components::Creature::mayGoThroughVortex>("mayGoThroughVortex")
@@ -758,7 +760,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::noticedMover>("noticedMover")
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
-	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
+	    .Field<&components::CreatureMindState::innate>("innate")
+	    .Field<&components::CreatureMindState::attention>("attention")
+	    .Field<&components::CreatureMindState::playerInterest>("playerInterest")
+	    .Field<&components::CreatureMindState::impressFromSeeing>("impressFromSeeing")
 	    .Field<&components::CreatureMindState::turnsLookedAt>("turnsLookedAt")
 	    .Field<&components::CreatureMindState::beliefs>("beliefs")
 	    .Field<&components::CreatureMindState::sweep>("sweep")
@@ -767,7 +772,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::feedbackSeconds>("feedbackSeconds")
 	    .Field<&components::CreatureMindState::feedbackWasStroke>("feedbackWasStroke")
 	    .Field<&components::CreatureMindState::attitudeToPlayer>("attitudeToPlayer")
-	    .Field<&components::CreatureMindState::averageFeedback>("averageFeedback")
 	    .Field<&components::CreatureMindState::perceivedDesires>("perceivedDesires")
 	    .Field<&components::CreatureMindState::lastFeedback>("lastFeedback")
 	    .Field<&components::CreatureMindState::interactionMagnitude>("interactionMagnitude")
@@ -2116,6 +2120,24 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_audio::Played>(context, ValueOnly {})
 	    .Field<&openblack::creature_audio::Played::animation>("animation")
 	    .Field<&openblack::creature_audio::Played::timeMs>("timeMs");
+	Reflect<openblack::creature_desire_sources::Attention>(context, ValueOnly {})
+	    .Field<&openblack::creature_desire_sources::Attention::turnsWatched>("turnsWatched")
+	    .Field<&openblack::creature_desire_sources::Attention::turnsIgnored>("turnsIgnored")
+	    .Field<&openblack::creature_desire_sources::Attention::turnsSinceInteraction>("turnsSinceInteraction");
+	Reflect<openblack::creature_desire_sources::InnateTraits>(context, ValueOnly {})
+	    .Field<&openblack::creature_desire_sources::InnateTraits::kindness>("kindness")
+	    .Field<&openblack::creature_desire_sources::InnateTraits::aggression>("aggression")
+	    .Field<&openblack::creature_desire_sources::InnateTraits::lethargy>("lethargy")
+	    .Field<&openblack::creature_desire_sources::InnateTraits::friendliness>("friendliness")
+	    .Field<&openblack::creature_desire_sources::InnateTraits::communicativeness>("communicativeness")
+	    .Field<&openblack::creature_desire_sources::InnateTraits::sixth>("sixth")
+	    .Field<&openblack::creature_desire_sources::InnateTraits::objectsLookWeight>("objectsLookWeight")
+	    .Field<&openblack::creature_desire_sources::InnateTraits::mountainsLookWeight>("mountainsLookWeight")
+	    .Field<&openblack::creature_desire_sources::InnateTraits::waterLookWeight>("waterLookWeight");
+	Reflect<openblack::creature_desire_sources::PlayerInterest>(context, ValueOnly {})
+	    .Field<&openblack::creature_desire_sources::PlayerInterest::value>("value")
+	    .Field<&openblack::creature_desire_sources::PlayerInterest::handMovement>("handMovement")
+	    .Field<&openblack::creature_desire_sources::PlayerInterest::lastHand>("lastHand");
 	Reflect<openblack::creature_desires::DesireState>(context, ValueOnly {})
 	    .Field<&openblack::creature_desires::DesireState::activated>("activated")
 	    .Field<&openblack::creature_desires::DesireState::value>("value")
@@ -2128,7 +2150,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_desires::DesireState::sources>("sources");
 	Reflect<openblack::creature_desires::Desires>(context, ValueOnly {})
 	    .Field<&openblack::creature_desires::Desires::desires>("desires", {k_CreatureDesiresDesireNames})
-	    .Field<&openblack::creature_desires::Desires::sum>("sum");
+	    .Field<&openblack::creature_desires::Desires::sum>("sum")
+	    .Field<&openblack::creature_desires::Desires::written>("written");
 	Reflect<openblack::creature_desires::Source>(context, ValueOnly {})
 	    .Field<&openblack::creature_desires::Source::type>("type")
 	    .Field<&openblack::creature_desires::Source::value>("value")
