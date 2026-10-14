@@ -251,11 +251,13 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_reactions::Fleeing,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* LOOKING_AT_OBJECT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_reactions::Watching,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* FOLLOWING_OBJECT_REACTION */ k_TodoEntry,
     /* INSPECT_OBJECT_REACTION */ k_TodoEntry,
@@ -295,21 +297,25 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_food::GotoFoodReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* ARRIVES_AT_FOOD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_food::ArrivesAtFoodReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* GOTO_WOOD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_forester::GotoWoodReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* ARRIVES_AT_WOOD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_forester::ArrivesAtWoodReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* WAIT_FOR_ANIMATION */
     VillagerStateTableEntry {
@@ -339,6 +345,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_reactions::Watching,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* GOTO_STORAGE_PIT_FOR_DROP_OFF */
     VillagerStateTableEntry {
@@ -749,11 +756,13 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_fight_watch::InitialiseFightReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* PERFORM_FIGHT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_fight_watch::PerformFightReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* HOMELESS_EAT_DINNER */
     VillagerStateTableEntry {
@@ -763,16 +772,19 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_creature::InspectCreatureReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* PERFORM_INSPECT_CREATURE_REACTION */
     VillagerStateTableEntry {
         .state = &villager_creature::PerformInspectCreatureReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* APPROACH_CREATURE_REACTION */
     VillagerStateTableEntry {
         .state = &villager_creature::ApproachCreatureReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* INITIALISE_BEWILDERED_BY_MAGIC_TREE_REACTION */ k_TodoEntry,
     /* PERFORM_BEWILDERED_BY_MAGIC_TREE_REACTION */ k_TodoEntry,
@@ -787,33 +799,39 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_creature::InitialiseRespectCreatureReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* PERFORM_RESPECT_CREATURE_REACTION */
     VillagerStateTableEntry {
         .state = &villager_creature::PerformRespectCreatureReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* FINISH_RESPECT_CREATURE_REACTION */
     VillagerStateTableEntry {
         .state = &villager_creature::FinishRespectCreatureReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* APPROACH_HAND_REACTION */ k_TodoEntry,
     /* FLEEING_FROM_CREATURE_REACTION */
     VillagerStateTableEntry {
         .state = &villager_creature::FleeingFromCreatureReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* TURN_TO_FACE_CREATURE_REACTION */
     VillagerStateTableEntry {
         .state = &villager_creature::TurnToFaceCreatureReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* WATCH_FLYING_OBJECT_REACTION */ k_TodoEntry,
     /* POINT_AT_FLYING_OBJECT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_physics::PointAtFlyingObject,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* DECIDE_WHAT_TO_DO */
     VillagerStateTableEntry {
@@ -829,11 +847,13 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_creature::MoveTowardsCreatureReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* AMAZED_BY_MAGIC_SHIELD_REACTION */
     VillagerStateTableEntry {
         .state = &villager_shield::AmazedByMagicShield,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* VILLAGER_GOSSIPS */ k_TodoEntry,
     /* CHECK_INTERACT_WITH_ANIMAL */ k_TodoEntry,
@@ -881,6 +901,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_reactions::Fainting,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* START_CONFUSED_REACTION */ k_TodoEntry,
     /* CONFUSED_REACTION */ k_TodoEntry,
@@ -906,16 +927,19 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* TELEPORT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_teleport::TeleportReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* DANCE_WHILE_REACTING */
     VillagerStateTableEntry {
         .state = &villager_reactions::DanceWhileReacting,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* CONTROLLED_BY_CREATURE */ k_TodoEntry,
     /* POINT_AT_DEAD_PERSON */
@@ -1033,6 +1057,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_breeding::ReactToBreeder,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* SHEPHERD_CHECK_ANIMAL_FOR_SLAUGHTER */
     VillagerStateTableEntry {
@@ -1049,6 +1074,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_cover::FleeingFromPredatorReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* WAIT_FOR_WOOD */ k_TodoEntry,
     /* INSPECT_OBJECT */
@@ -1064,16 +1090,19 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_reactions::WaitForMate,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* GO_AND_HIDE_IN_NEARBY_BUILDING */
     VillagerStateTableEntry {
         .state = &villager_cover::GoAndHideInNearbyBuilding,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* LOOK_TO_SEE_IF_IT_IS_SAFE */
     VillagerStateTableEntry {
         .state = &villager_cover::LookToSeeIfItIsSafe,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* SLEEP_IN_TENT */
     VillagerStateTableEntry {
@@ -1132,6 +1161,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
         .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
     },
     /* GO_AND_CHILLOUT_IN_TOWN */
     VillagerStateTableEntry {

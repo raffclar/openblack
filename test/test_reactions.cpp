@@ -24,6 +24,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
@@ -1018,6 +1019,59 @@ TEST_F(Reactions, AVillagerRemembersTheStateItWasHeadingForAndTakesUpWhereThatRe
 	EXPECT_GT(registry.Get<const VillagerReactionMemory>(villager).memory.LastReacted(
 	              static_cast<uint32_t>(Reaction::LookAtNiceSpell)),
 	          80u);
+	Locator::reactionSystem::reset();
+}
+
+// A villager reacting to a thing goes back to what it was doing once the hand holds the thing, when its kind of
+// reaction ends then
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerStopsReactingToAThingTheHandHoldsWhenItsKindEndsThen)
+{
+	_info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell)).whetherReactionFinishesIfInitiatorInHand = 1;
+	MakeJob(*_info, k_JobAgain);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	WalkToJob(villager);
+	auto miracle = Miracle();
+	miracle.initiator = registry.Create();
+	reactions.Create(miracle);
+	ASSERT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	auto& action = registry.Get<LivingAction>(villager);
+	// Not yet in the hand: nothing changes
+	ecs::systems::villager_reactions::ReactionValidate(action);
+	EXPECT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	registry.Assign<InHand>(miracle.initiator);
+	ecs::systems::villager_reactions::ReactionValidate(action);
+	EXPECT_EQ(StateOf(villager), k_JobAgain);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::reactionSystem::reset();
+}
+
+// When its kind of reaction does not end then, the villager keeps reacting to the thing in the hand
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerKeepsReactingToAThingTheHandHoldsWhenItsKindDoesNotEndThen)
+{
+	_info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell)).whetherReactionFinishesIfInitiatorInHand = 0;
+	MakeJob(*_info, k_JobAgain);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	WalkToJob(villager);
+	auto miracle = Miracle();
+	miracle.initiator = registry.Create();
+	reactions.Create(miracle);
+	ASSERT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	auto& action = registry.Get<LivingAction>(villager);
+	// Not yet in the hand: nothing changes
+	ecs::systems::villager_reactions::ReactionValidate(action);
+	EXPECT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	registry.Assign<InHand>(miracle.initiator);
+	ecs::systems::villager_reactions::ReactionValidate(action);
+	EXPECT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	EXPECT_NE(registry.Get<const LivingReaction>(villager).reaction, 0u);
 	Locator::reactionSystem::reset();
 }
 

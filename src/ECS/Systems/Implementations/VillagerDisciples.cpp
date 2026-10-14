@@ -79,6 +79,7 @@
 #include "VillagerForester.h"
 #include "VillagerHome.h"
 #include "VillagerPhysics.h"
+#include "VillagerReactions.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -915,7 +916,8 @@ uint8_t villager_disciple::FollowPriority(entt::entity villager, entt::entity di
 	        .watcherDisciple = TypeOf(villager) != None,
 	        .sameTown = watcher->town == leader->town,
 	        .distance = gutils::GetDistanceInMetres(PositionOf(villager), PositionOf(disciple)),
-	        .watcherFree = !registry.AllOf<ScriptControlled>(villager) && (stateInfo.field0xa8 & 1) != 0,
+	        .watcherFree = !registry.AllOf<ScriptControlled>(villager) &&
+	                       systems::villager_reactions::AvailableForStateChange(villager) && (stateInfo.field0xa8 & 1) != 0,
 	        .watcherAvailable = IsAvailableVillager(villager),
 	        .watcherChild = watcher->lifeStage == Villager::LifeStage::Child,
 	        .watcherSkeleton = registry.AllOf<WalkingSkeleton>(villager),

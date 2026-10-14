@@ -456,6 +456,30 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {52.0f, 0.0f}, .yawDegrees = 0.0f}},
 	});
 
+	// Villagers watching a thing that the hand then takes up
+	all.push_back({
+	    .id = "villagers.look_until_taken",
+	    .name = "Villagers watching a thing until the hand takes it",
+	    .facet = Facet::Objects,
+	    .description = "A cart in the middle of open land makes a reaction to look at it, of the kind a thing that came "
+	                   "to rest makes. Six villagers stand in a line east of it, 4 to 24 metres away. Three seconds in, "
+	                   "the hand, held still above the cart, takes the cart up.",
+	    .expected = "Each villager takes the reaction up and turns to watch the cart. When the hand takes the cart up, "
+	                "the villagers stop watching it at once and go back to what they were doing, because the table "
+	                "says that this kind of reaction ends when the hand holds its thing.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-4.0f, -6.0f}, {28.0f, 6.0f}}, .distance = 0.6f},
+	    .objects = {{.type = MobileObjectInfo::Cart, .offset = {0.0f, 0.0f}, .reaction = Reaction::LookAtObject},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {4.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {8.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {12.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {16.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {20.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {24.0f, 0.0f}, .yawDegrees = 0.0f}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 3.0f, .object = 0}},
+	    .hand = HandHold {.offset = {0.0f, 0.0f}, .height = 6.0f},
+	});
+
 	// A creature seeing a thing crushed in front of it and another behind it
 	all.push_back({
 	    .id = "creatures.reaction_examine",

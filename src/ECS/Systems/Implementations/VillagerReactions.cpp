@@ -35,6 +35,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Mesh.h"
@@ -721,6 +722,28 @@ std::optional<entt::entity> villager_reactions::ReactingTo(entt::entity villager
 		return std::nullopt;
 	}
 	return reaction->source.initiator;
+}
+
+bool villager_reactions::AvailableForStateChange(entt::entity thing)
+{
+	return !EntityRegistry().AllOf<InHand>(thing);
+}
+
+bool villager_reactions::ReactionValidate(LivingAction& action)
+{
+	const auto villager = EntityRegistry().ToEntity(action);
+	const auto thing = ReactingTo(villager);
+	const auto reaction = ReactionOf(villager);
+	if (!thing.has_value() || !reaction.has_value() || !Locator::infoConstants::has_value())
+	{
+		return true;
+	}
+	const auto& row = Locator::infoConstants::value().reaction.at(static_cast<size_t>(reaction->source.type));
+	if (row.whetherReactionFinishesIfInitiatorInHand != 0 && !AvailableForStateChange(*thing))
+	{
+		GoBackToRemembered(action, false);
+	}
+	return true;
 }
 
 bool villager_reactions::LookAt(entt::entity villager, const glm::vec3& point, LookSpeed speed)

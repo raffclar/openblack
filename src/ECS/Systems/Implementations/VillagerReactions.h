@@ -75,6 +75,11 @@ uint32_t StopReacting(components::LivingAction& action);
 bool ExitReaction(components::LivingAction& action, VillagerStates next);
 /// What the villager reacts to: the reaction's thing, while it is there
 [[nodiscard]] std::optional<entt::entity> ReactingTo(entt::entity villager);
+/// Whether the states of the living can take up a thing or keep it: not while the player's hand holds it
+[[nodiscard]] bool AvailableForStateChange(entt::entity thing);
+/// Each turn in a reaction's state: when the hand holds the thing the villager reacts to, and the table says that this
+/// kind of reaction ends then, the villager goes back to what it was doing. It never holds the villager back.
+bool ReactionValidate(components::LivingAction& action);
 
 /// How fast a villager turns to look at something: an eighth of a half turn a turn, or twice that
 enum class LookSpeed : uint8_t

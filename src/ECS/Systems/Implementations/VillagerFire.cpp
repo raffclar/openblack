@@ -301,10 +301,10 @@ bool IsAvailable(entt::entity thing)
 	return action == nullptr || !registry.AllOf<Villager>(thing) || FinalState(*action) != VillagerStates::Dying;
 }
 
-/// Whether the hand holds a thing. The hand doesn't pick up objects yet, so it never does
-bool IsInHand(entt::entity /*thing*/)
+/// Whether the player's hand holds a thing
+bool IsInHand(entt::entity thing)
 {
-	return false;
+	return !ecs::systems::villager_reactions::AvailableForStateChange(thing);
 }
 
 /// Whether a reaction going on ends once what it reacts to is in the hand, from its kind's table
