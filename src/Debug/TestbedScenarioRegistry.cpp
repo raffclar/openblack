@@ -4680,13 +4680,15 @@ void AddRestAndHome(std::vector<Scenario>& all)
 	    .id = "needs.heal_itself",
 	    .name = "Creature heals itself with a miracle",
 	    .facet = Facet::Needs,
-	    .description = "A hurt tiger stands by a birch. After one second a script tells it to heal itself.",
+	    .description = "A hurt tiger that knows the heal miracle stands by a birch. A second later a script tells it to "
+	                   "heal itself.",
 	    .expected = "It casts the heal miracle at the place where it stands, with a grimace, and holds the miracle for "
 	                "three seconds. Then its life is full at once.",
 	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
 	    .creatures = {hurt({0.0f, 0.0f})},
 	    .objects = {birchBy({0.0f, 0.0f})},
-	    .commands = {told("HealHimself")},
+	    .commands = {{.kind = Kind::KnowMiracle, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Heal)},
+	                 told("HealHimself")},
 	});
 
 	all.push_back({
