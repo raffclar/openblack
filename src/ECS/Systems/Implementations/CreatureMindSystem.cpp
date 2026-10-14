@@ -2274,6 +2274,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	creature_plan_actions::Situation situation {
 	    .instrument = toNumber(forced.instrument),
 	    .handFull = registry.AllOf<CreatureHeldObject>(creature),
+	    .activity = toNumber(forced.activityObject),
 	};
 	Situate(creature, situation);
 	auto built = PlanAgenda(creature, *action, actionObject, situation);

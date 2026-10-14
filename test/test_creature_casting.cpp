@@ -297,6 +297,24 @@ TEST(CreatureCastAgenda, AShieldIsCastFromWhereItStands)
 	EXPECT_EQ(agenda[1].sequence, (std::array<size_t, 3> {40, 41, 42}));
 }
 
+TEST(CreatureCastAgenda, AShieldForAPlanAboutNothingIdlesInstead)
+{
+	const auto* executor = openblack::creature_plan_actions::For("CastShield");
+	ASSERT_NE(executor, nullptr);
+	const openblack::creature_plan_actions::CastInfo cast {.magicType = 19, .height = 15.0f};
+	openblack::creature_plan_actions::Situation situation;
+	const auto idle = openblack::creature_plan_actions::Agenda(*executor, 7u, {}, situation, Always(0), cast);
+	ASSERT_TRUE(idle.has_value());
+	EXPECT_EQ(idle->size(), BeIdle(Always(0)).size());
+	EXPECT_TRUE(std::ranges::none_of(*idle, [](const Step& step) { return step.kind == Step::Kind::Cast; }));
+	situation.activity = 3u;
+	const auto shield = openblack::creature_plan_actions::Agenda(*executor, 7u, {}, situation, Always(0), cast);
+	ASSERT_TRUE(shield.has_value());
+	ASSERT_EQ(shield->size(), 2u);
+	EXPECT_EQ(shield->back().kind, Step::Kind::Cast);
+	EXPECT_EQ(shield->back().cast.magicType, 19u);
+}
+
 TEST(CreatureCastAgenda, WaterIsScatteredFromTwiceItsHeight)
 {
 	const auto agenda = CastWaterAt(22, 7, 15.0f);

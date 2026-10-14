@@ -1192,6 +1192,9 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		                            tables->rules.at(static_cast<size_t>(plan.desire)).distanceWeight, plan.object);
 	}
 	situated.instrument = chosen.instrument;
+	situated.activity = chosen.activityObject.has_value()
+	                        ? chosen.activityObject
+	                        : mind_detail::LessonActivity(*tables, plan.desire, plan.object, plan.about);
 	auto built = PlanAgenda(creature, plan.action, plan.object, situated);
 	if (!built.has_value())
 	{
@@ -1846,6 +1849,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				situation.instrumentRadius = object_measures::TwoDRadius(registry, *plan.instrument);
 			}
 			situation.handFull = registry.AllOf<CreatureHeldObject>(creature);
+			if (plan.activityObject.has_value())
+			{
+				situation.activity = entt::to_integral(*plan.activityObject);
+			}
 			if (plan.object.has_value() && registry.Valid(*plan.object))
 			{
 				situation.thingHeight = object_measures::Height(registry, *plan.object);

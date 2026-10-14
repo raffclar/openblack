@@ -515,6 +515,11 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::CastFood:
 		return creature_mind::CastFoodAt(cast->magicType, cast->gesture, *object);
 	case Build::CastShield:
+		// When the plan is about nothing, the creature idles and does not cast the shield
+		if (!situation.activity.has_value())
+		{
+			return creature_mind::BeIdle(random);
+		}
 		return creature_mind::CastShieldAt(cast->magicType, *object);
 	case Build::CastWaterOnItself:
 		// With no clear area near it, the creature cannot stop its own fire

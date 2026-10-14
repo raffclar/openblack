@@ -168,9 +168,22 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .id = "miracles.creature_casts_shield",
 	    .name = "Creature casting: a shield at a villager",
 	    .facet = Facet::Miracles,
-	    .description = "A tiger that knows the shield is told to cast it at a villager forty metres away.",
+	    .description = "The debug tools tell a tiger that knows the shield to cast it at a villager forty metres away.",
 	    .expected = "It does not walk. It turns to face the villager and casts the shield from the casting pose, and "
 	                "holds it three seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 50.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {20.0f, 35.0f}}},
+	    .commands = {Know(MagicType::Shield), CastAtObject(MagicType::Shield, 0, 1.0f)},
+	});
+	all.push_back({
+	    .id = "miracles.creature_shield_idles",
+	    .name = "Creature casting: a shield about nothing idles",
+	    .facet = Facet::Miracles,
+	    .description = "A script tells a tiger that knows the shield to cast it at a villager. A plan from a script is "
+	                   "about nothing.",
+	    .expected = "It does not cast the shield. It idles: two times it waits about a second and yawns.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 50.0f}}},
 	    .creatures = {Caster({0.0f, 0.0f}, "caster")},

@@ -1065,7 +1065,7 @@ bool CreatureMindSystem::TellCast(entt::entity creature, MagicType type, entt::e
 		    *executor, entt::to_integral(target),
 		    object_measures::PositionOf(registry, target).has_value() ? Flat(*object_measures::PositionOf(registry, target))
 		                                                              : glm::vec2(0.0f),
-		    creature_plan_actions::Situation {.self = entt::to_integral(creature)},
+		    creature_plan_actions::Situation {.activity = entt::to_integral(target), .self = entt::to_integral(creature)},
 		    [this](uint32_t range) { return Random(range); }, cast);
 		return agenda.has_value() && Replan(creature, creature_mind::Activity::Told, std::move(*agenda));
 	}

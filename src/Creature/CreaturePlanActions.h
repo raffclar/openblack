@@ -249,6 +249,9 @@ struct Situation
 	/// its hand holds something already
 	std::optional<uint32_t> instrument;
 	bool handFull {false};
+	/// What the desire of the plan is about (the town that the creature helps, say), by its entity's number. None when
+	/// the plan is about nothing.
+	std::optional<uint32_t> activity;
 	/// Whether what its hand holds is a tree, or a magic mushroom
 	bool holdingTree {false};
 	bool holdingMushroom {false};
