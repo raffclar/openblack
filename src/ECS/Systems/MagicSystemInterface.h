@@ -109,6 +109,8 @@ public:
 		/// A storm or shield let go of with no circle drawn
 		NoCircle,
 		PoweredUp,
+		/// The miracle went into the player's own dispenser as a one-shot globe
+		Stored,
 	};
 
 	/// What the debug window shows of the hand's casting
@@ -188,9 +190,10 @@ public:
 	virtual entt::entity CreateDispenser(glm::vec3 position, MagicType type, float yAngleRadians) = 0;
 	/// A dispenser a script or a land's script makes: a building of its kind standing on the ground at a point, turned
 	/// and scaled, holding no miracle and turned off until a script gives it one and turns it on, with its building's
-	/// period. None for a building that doesn't exist.
+	/// period. It belongs to the town given. With no town, it belongs to the first town that the first player gained.
+	/// None for a building that does not exist.
 	virtual entt::entity CreateScriptDispenser(glm::vec3 /*position*/, AbodeInfo /*building*/, float /*yAngleRadians*/,
-	                                           float /*scale*/)
+	                                           float /*scale*/, entt::entity /*town*/)
 	{
 		return entt::null;
 	}

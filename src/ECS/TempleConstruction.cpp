@@ -37,6 +37,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -115,6 +116,11 @@ std::optional<int32_t> TownOf(entt::entity building)
 	if (const auto* abode = registry.TryGet<const Abode>(building))
 	{
 		return static_cast<int32_t>(abode->townId);
+	}
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(building))
+	{
+		const auto* town = registry.Valid(dispenser->town) ? registry.TryGet<const Town>(dispenser->town) : nullptr;
+		return town != nullptr ? std::optional(static_cast<int32_t>(town->id)) : std::nullopt;
 	}
 	return std::nullopt;
 }
@@ -338,6 +344,10 @@ void Repaired(entt::entity building)
 	if (auto* abode = registry.TryGet<Abode>(building))
 	{
 		abode->putUpForMending = false;
+	}
+	if (auto* dispenser = registry.TryGet<SpellDispenser>(building))
+	{
+		dispenser->putUpForMending = false;
 	}
 	registry.SetDirty();
 }
@@ -611,9 +621,9 @@ void construction::MakeSitePiles(entt::entity building, BuildingSite& site)
 	const auto* temple = registry.TryGet<const Temple>(building);
 	if (temple == nullptr)
 	{
-		// Any other building's one pile stands beyond it, away from its door
+		// Any other building's one pile stands beyond it, away from its door. A miracle dispenser is such a building.
 		auto& pile = site.piles.front();
-		if ((registry.Valid(pile) && registry.AllOf<Pot>(pile)) || !registry.AllOf<Abode>(building))
+		if ((registry.Valid(pile) && registry.AllOf<Pot>(pile)) || !registry.AnyOf<Abode, SpellDispenser>(building))
 		{
 			return;
 		}

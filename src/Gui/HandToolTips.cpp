@@ -61,6 +61,12 @@ std::optional<bool> OwnOrNoPlayer(const ecs::Registry& registry, entt::entity ob
 		const auto* data = town != entt::null && registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
 		return data == nullptr || data->owner == k_LocalPlayer;
 	}
+	// A miracle dispenser is a building of its town in the same way
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object))
+	{
+		const auto* data = registry.Valid(dispenser->town) ? registry.TryGet<const Town>(dispenser->town) : nullptr;
+		return data == nullptr || data->owner == k_LocalPlayer;
+	}
 	if (const auto* temple = registry.TryGet<const Temple>(object))
 	{
 		return temple->owner == k_LocalPlayer;

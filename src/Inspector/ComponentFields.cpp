@@ -1576,7 +1576,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellDispenser::orbPosition>("orbPosition")
 	    .Field<&components::SpellDispenser::effect>("effect")
 	    .Field<&components::SpellDispenser::building>("building")
-	    .Field<&components::SpellDispenser::town>("town");
+	    .Field<&components::SpellDispenser::town>("town")
+	    .Field<&components::SpellDispenser::putUpForMending>("putUpForMending");
 	Reflect<components::TestbedDispenser> {context};
 	Reflect<components::TownMagic>(context).Field<&components::TownMagic::held>("held");
 	Reflect<components::TownCentreIcon>(context)

@@ -30,6 +30,7 @@
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
@@ -77,6 +78,8 @@ TownSystem::TownSystem()
 	}
 	_registry = &Locator::entitiesRegistry::value();
 	_connections.push_back(_registry->OnDestroy<Abode>().connect<&TownSystem::OnAbodeGone>(*this));
+	// A miracle dispenser is one of its town's buildings too
+	_connections.push_back(_registry->OnDestroy<SpellDispenser>().connect<&TownSystem::OnAbodeGone>(*this));
 	_connections.push_back(_registry->OnDestroy<Villager>().connect<&TownSystem::OnVillagerGone>(*this));
 }
 

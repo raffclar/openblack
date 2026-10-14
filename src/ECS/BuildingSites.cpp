@@ -19,6 +19,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -58,6 +59,11 @@ std::optional<uint32_t> TownIdOf(entt::entity building)
 	{
 		return abode->townId;
 	}
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(building))
+	{
+		const auto* town = registry.Valid(dispenser->town) ? registry.TryGet<const Town>(dispenser->town) : nullptr;
+		return town != nullptr ? std::optional(town->id) : std::nullopt;
+	}
 	return std::nullopt;
 }
 
@@ -76,6 +82,10 @@ const GMultiMapFixedInfo* InfoOf(entt::entity building)
 	if (const auto* abode = registry.TryGet<const Abode>(building); abode != nullptr && abode->info != AbodeInfo::None)
 	{
 		return &info.abode.at(static_cast<size_t>(abode->info));
+	}
+	if (registry.AllOf<SpellDispenser>(building))
+	{
+		return world_objects::AbodeInfoOf(building);
 	}
 	return nullptr;
 }
@@ -178,7 +188,9 @@ float construction::DesireToBeRepaired(entt::entity building)
 	const auto& registry = Entities();
 	const auto* abode = registry.TryGet<const Abode>(building);
 	const auto* info = InfoOf(building);
-	if (abode == nullptr || info == nullptr || TownOfSite(building) == entt::null)
+	// The town wants to mend a miracle dispenser as one of its buildings with nobody in it
+	if ((abode == nullptr && !registry.AllOf<SpellDispenser>(building)) || info == nullptr ||
+	    TownOfSite(building) == entt::null)
 	{
 		return 0.0f;
 	}
@@ -188,7 +200,7 @@ float construction::DesireToBeRepaired(entt::entity building)
 	        .life = world_objects::LifeOf(building),
 	        .livingQuarters =
 	            (static_cast<uint32_t>(abodeInfo.abodeType) & static_cast<uint32_t>(AbodeType::LivingQuarters)) != 0,
-	        .inhabitants = static_cast<uint32_t>(abode->inhabitants.size()),
+	        .inhabitants = abode != nullptr ? static_cast<uint32_t>(abode->inhabitants.size()) : 0u,
 	        .desireToBeRepaired = abodeInfo.desireToBeRepaired,
 	    },
 	    Locator::infoConstants::value().town);

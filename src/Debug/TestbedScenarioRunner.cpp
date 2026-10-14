@@ -47,8 +47,8 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
-#include "Creature/CreatureActivity.h"
 #include "Common/MachineClock.h"
+#include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
@@ -98,6 +98,7 @@
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -394,6 +395,8 @@ std::string_view HandResultName(ecs::systems::MagicSystemInterface::HandResult r
 		return "no circle drawn";
 	case HandResult::PoweredUp:
 		return "powered up";
+	case HandResult::Stored:
+		return "stored";
 	}
 	return "";
 }
@@ -2703,6 +2706,10 @@ void Runner::PlaceDispensers(const Scenario& scenario)
 		{
 			_globes.push_back(magic.CreateOneOffSeedFor({point.x, ground + *dispenser.bubbleHeight, point.y}, dispenser.type));
 		}
+		else if (dispenser.reward)
+		{
+			PlaceRewardDispenser(dispenser, {point.x, ground, point.y});
+		}
 		else
 		{
 			const auto made = magic.CreateDispenser({point.x, ground, point.y}, dispenser.type, 0.0f);
@@ -2711,6 +2718,48 @@ void Runner::PlaceDispensers(const Scenario& scenario)
 				magic.ChargeDispenser(made);
 			}
 		}
+	}
+}
+
+void Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& magic = Locator::magicSystem::value();
+	entt::entity town = entt::null;
+	if (!setup.noTown)
+	{
+		const auto id = ScenarioTown(_middle);
+		town = registry.Context().towns.at(id);
+	}
+	// As the reward script does: the dispenser, its miracle with the building's own period, then turned on
+	const auto made = magic.CreateScriptDispenser(position, AbodeInfo::NorseSpellDispenser, 0.0f, 1.0f, town);
+	if (made == entt::null)
+	{
+		return;
+	}
+	if (setup.noTown)
+	{
+		// The script gives a dispenser the player's first town when it names none, so take it from its town
+		auto& dispenser = registry.Get<ecs::components::SpellDispenser>(made);
+		if (registry.Valid(dispenser.town))
+		{
+			std::erase(registry.Get<ecs::components::Town>(dispenser.town).abodes, made);
+		}
+		dispenser.town = entt::null;
+	}
+	const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(AbodeInfo::NorseSpellDispenser));
+	magic.SetDispenserMagic(made, setup.type, static_cast<uint32_t>(info.timeEachMobileObjectTakesToProduce));
+	Log(fmt::format("dispenser: period {} turns, wood value {}, builders {}, desire to be repaired {}",
+	                info.timeEachMobileObjectTakesToProduce, info.woodValue, info.maxVillagerNeededToBuild,
+	                info.desireToBeRepaired));
+	magic.SetDispenserActive(made, true);
+	if (setup.globeTaken)
+	{
+		magic.Remove(registry.Get<const ecs::components::SpellDispenser>(made).orb);
+	}
+	if (setup.life < 1.0f)
+	{
+		ecs::world_objects::ReduceLife(made, 1.0f - setup.life, std::nullopt);
 	}
 }
 

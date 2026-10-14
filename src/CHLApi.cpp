@@ -686,9 +686,10 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	case ObjectType::OneShotSpellInHand:
 		return CreateScriptSeedInHand(subtype);
 	case ObjectType::SpellDispenser:
-		// A dispenser building of the buildings' kinds, holding no miracle and turned off until a script sets it up
+		// A dispenser building of the buildings' kinds, with no miracle, off until a script gives it a miracle. The script
+		// gives it no town, so it belongs to the first town that the first player gained.
 		return Locator::magicSystem::value().CreateScriptDispenser(position, static_cast<AbodeInfo>(subtype), yAngleRadians,
-		                                                           scale);
+		                                                           scale, entt::null);
 	case ObjectType::Animal:
 	case ObjectType::Bird:
 		// Made on its own and held still for the script: the land's birds and grazers (not yet the hunters)
