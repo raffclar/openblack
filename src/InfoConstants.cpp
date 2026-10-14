@@ -148,7 +148,7 @@ void openblack::ApplyCreatureBalance(GCreatureInfo& creature, const DifferentCre
 	creature.slowSpeed = balance.slowSpeed;
 	creature.walkSpeed = balance.walkSpeed;
 	creature.runSpeed = balance.runSpeed;
-	std::memcpy(creature.field0x24c.data(), &balance.field0x30, sizeof(balance.field0x30));
+	creature.headTurnRate = balance.headTurnRate;
 	creature.exhaustionRate = balance.exhaustionRate;
 	creature.sleepRecover = balance.sleepRecover;
 	creature.defenceMultiplierBurn = balance.defenceMultiplierBurn;

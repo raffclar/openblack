@@ -345,22 +345,6 @@ TEST(CreatureLayers, TheHeadNeverTurnsPastItsLimit)
 	EXPECT_LE(axis.angle, k_PitchLimit);
 }
 
-TEST(CreatureLayers, AnglesTowardsATarget)
-{
-	const glm::vec3 head {0.0f, 15.0f, 0.0f};
-	const glm::vec3 ahead {0.0f, 0.0f, -1.0f};
-	const auto straight = AnglesTowards(head, ahead, {0.0f, 15.0f, -10.0f});
-	EXPECT_NEAR(straight.yaw, 0.0f, k_Tolerance);
-	EXPECT_NEAR(straight.pitch, 0.0f, k_Tolerance);
-	// Facing -z in the left-handed world, +x is on the creature's left
-	const auto left = AnglesTowards(head, ahead, {10.0f, 15.0f, -10.0f});
-	EXPECT_NEAR(left.yaw, k_Pi / 4.0f, k_Tolerance);
-	const auto right = AnglesTowards(head, ahead, {-10.0f, 15.0f, 0.0f});
-	EXPECT_NEAR(right.yaw, -k_Pi / 2.0f, k_Tolerance);
-	const auto up = AnglesTowards(head, ahead, {0.0f, 25.0f, -10.0f});
-	EXPECT_NEAR(up.pitch, k_Pi / 4.0f, k_Tolerance);
-}
-
 TEST(CreatureLayers, TheMiddleOfAHeadTurnLooksAhead)
 {
 	EXPECT_EQ(LookTime(0.0f, k_YawLimit, 1000), 500u);

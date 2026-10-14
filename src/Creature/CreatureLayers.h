@@ -197,13 +197,6 @@ constexpr float k_PitchLimit = std::numbers::pi_v<float> / 2.0f;
 /// never turns past the limit either way.
 [[nodiscard]] LookAxis TurnHead(LookAxis axis, float target, float acceleration, float seconds, float limit);
 
-/// Which way to turn the head to look at a point, in radians: yaw to the left of ahead, pitch up
-struct LookAngles
-{
-	float yaw;
-	float pitch;
-};
-[[nodiscard]] LookAngles AnglesTowards(const glm::vec3& head, const glm::vec3& ahead, const glm::vec3& target);
 /// The time in a head turning animation that shows an angle: the middle looks ahead, the ends as far as the limit
 [[nodiscard]] uint32_t LookTime(float angle, float limit, uint32_t duration);
 } // namespace openblack::creature_layers

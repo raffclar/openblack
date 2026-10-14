@@ -563,6 +563,26 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	return glm::vec3 {flat.x, at->y + ecs::systems::object_measures::Height(registry, thing), flat.y};
 }
 
+/// The point that the head of a creature in a fight or knocked out looks at, each turn. Before the duel, it looks at the
+/// top of its opponent. In the duel and after it, it looks at what it watches, or ahead. In the duel, the fight stance turns
+/// the head to the head of the opponent, and the moves keep the head straight.
+glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const Creature& creature, const Transform& transform,
+                    const CreatureMindState& mind)
+{
+	using Stage = CreatureFighting::Stage;
+	if (const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
+	    fighting != nullptr && registry.Valid(fighting->opponent) &&
+	    (fighting->stage == Stage::Approach || fighting->stage == Stage::Taunt || fighting->stage == Stage::Ready))
+	{
+		if (const auto top = GazePoint(registry, entity, {.object = entt::to_integral(fighting->opponent)}, /*moving=*/false);
+		    top.has_value())
+		{
+			return *top;
+		}
+	}
+	return LookAbout(creature, transform, mind);
+}
+
 /// Where a script has the creature keep its head turned: a thing where it stands, or a point. The focus is let go once
 /// the thing is gone or the script has let the creature go.
 std::optional<glm::vec3> ScriptFocusPoint(const ecs::Registry& registry, entt::entity creature, CreatureMindState& mind)
@@ -1394,9 +1414,18 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 
 		    auto* eyes = registry.TryGet<CreatureEyes>(entity);
-		    // Paused, fighting or knocked out, the mind leaves the body alone
+		    // Paused, fighting or knocked out, the mind leaves the body alone. In a fight, the steps of the fight
+		    // choose the point that the head looks at.
 		    if (mind.paused || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
 		    {
+			    if (!mind.paused)
+			    {
+				    animation.lookAt = FightLook(registry, entity, creature, transform, mind);
+				    if (eyes != nullptr)
+				    {
+					    eyes->lookAt = animation.lookAt;
+				    }
+			    }
 			    return;
 		    }
 		    // Exhausted, starved or out of life, it passes out as a fight's loser does: it lies where it fell, then a

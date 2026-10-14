@@ -912,7 +912,9 @@ struct GCreatureInfo: GLivingInfo
 	float slowSpeed;
 	float walkSpeed;
 	float runSpeed;
-	std::array<uint8_t, 0x18> field0x24c;
+	/// How fast its head speeds up as it turns to look, in radians a second each second, before its size slows it
+	float headTurnRate;
+	std::array<uint8_t, 0x14> field0x250;
 	/// The least any of its desires can be
 	float desireFloor;
 	std::array<uint8_t, 0x1c> field0x268;
@@ -1001,7 +1003,7 @@ static_assert(offsetof(GCreatureInfo, alignmentChangePerTurn) == 0x338);
 static_assert(offsetof(GCreatureInfo, strength) == 0x11c);
 static_assert(offsetof(GCreatureInfo, defenceMultiplierBurn) == 0x80);
 static_assert(offsetof(GCreatureInfo, secondsPerAgeTick) == 0x200);
-static_assert(offsetof(GCreatureInfo, field0x24c) == 0x24c);
+static_assert(offsetof(GCreatureInfo, headTurnRate) == 0x24c);
 static_assert(offsetof(GCreatureInfo, field0x36c) == 0x36c);
 static_assert(offsetof(GCreatureInfo, alignmentChangeScale) == 0x374);
 static_assert(offsetof(GCreatureInfo, impressiveSizeAddition) == 0x378);
@@ -1538,8 +1540,7 @@ struct DifferentCreatureInfo
 	float slowSpeed;
 	float walkSpeed;
 	float runSpeed;
-	/// Overrides the creature row's field0x24c (its first four bytes)
-	float field0x30;
+	float headTurnRate;
 	float exhaustionRate;
 	float sleepRecover;
 	float defenceMultiplierBurn;

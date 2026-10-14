@@ -517,7 +517,7 @@ TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
 	balance.energyDrain = 1.164e-4f;
 	balance.strength = 0.31f;
 	balance.walkSpeed = 0.7f;
-	balance.field0x30 = 28.0f;
+	balance.headTurnRate = 28.0f;
 	balance.defenceMultiplierHit = 0.11f;
 	balance.secondsPerAgeTick = 3600;
 	balance.pooPerEnergy = 0.6f;
@@ -533,9 +533,7 @@ TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
 	EXPECT_EQ(creature->secondsPerAgeTick, 3600u);
 	EXPECT_FLOAT_EQ(creature->pooPerEnergy, 0.6f);
 	EXPECT_FLOAT_EQ(creature->field0x36c, 1.03f);
-	float raw = 0.0f;
-	std::memcpy(&raw, creature->field0x24c.data(), sizeof(raw));
-	EXPECT_FLOAT_EQ(raw, 28.0f);
+	EXPECT_FLOAT_EQ(creature->headTurnRate, 28.0f);
 	EXPECT_FLOAT_EQ(creature->alignmentChangeScale, 0.2f);
 	// What the balance row doesn't hold stays as it was
 	EXPECT_FLOAT_EQ(creature->startEnergy, 0.75f);
