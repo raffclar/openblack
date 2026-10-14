@@ -210,6 +210,17 @@ constexpr std::array k_Executors {
     Executor {.action = "WaveAtObject", .target = Target::Anything, .build = Build::WaveAt},
     Executor {.action = "PutDown", .build = Build::PutDown, .activity = Activity::PutDown},
     Executor {.action = "CastHealSpellPU1", .target = Target::HurtVillager, .build = Build::CastHelpful},
+    // The helpful miracles cast the way the heal is: the food power-up, the shields at anything, and wood into a storage
+    // pit. The power-up of the shield casts the plain shield.
+    Executor {.action = "CastMagicFoodPU1", .target = Target::Anything, .build = Build::CastHelpful},
+    Executor {.action = "CastMagicWood", .target = Target::StoragePit, .build = Build::CastHelpful},
+    Executor {.action = "CastPhysicalShield", .target = Target::Anything, .build = Build::CastHelpful},
+    Executor {.action = "CastShieldPU1", .target = Target::Anything, .build = Build::CastHelpful},
+    // Food into a store, the shield at anything, water on itself while it burns, and a miracle to impress villagers
+    Executor {.action = "CastMagicFood", .target = Target::BuiltFoodStore, .build = Build::CastFood},
+    Executor {.action = "CastShield", .target = Target::Anything, .build = Build::CastShield},
+    Executor {.action = "CastMagicWater", .build = Build::CastWaterOnItself},
+    Executor {.action = "CastImpressiveSpell", .target = Target::Villager, .build = Build::CastToImpress},
     Executor {.action = "DeadForever", .build = Build::DeadForever},
     Executor {.action = "PointOutHighlight", .target = Target::Anything, .build = Build::PointOutHighlight},
     Executor {
@@ -258,6 +269,10 @@ bool creature_plan_actions::IsCast(const Executor& executor)
 	case Build::CastExplosion:
 	case Build::CastFireball:
 	case Build::CastWater:
+	case Build::CastFood:
+	case Build::CastShield:
+	case Build::CastWaterOnItself:
+	case Build::CastToImpress:
 		return true;
 	default:
 		return false;
@@ -495,6 +510,20 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                                     cast->height, random);
 	case Build::CastWater:
 		return creature_mind::PutOutFireWithWater(*object, cast->height);
+	case Build::CastFood:
+		return creature_mind::CastFoodAt(cast->magicType, cast->gesture, *object);
+	case Build::CastShield:
+		return creature_mind::CastShieldAt(cast->magicType, *object);
+	case Build::CastWaterOnItself:
+		// With no clear area near it, the creature cannot stop its own fire
+		if (!cast->clearArea.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::CastWaterOnItself(cast->magicType, situation.self, *cast->clearArea, cast->height);
+	case Build::CastToImpress:
+		return creature_mind::CastToImpress(cast->magicType != 0 ? std::optional(cast->magicType) : std::nullopt, *object,
+		                                    cast->height, random);
 	case Build::SetFire:
 		return creature_mind::SetFireTo(*object, situation.instrument, situation.handFull);
 	case Build::LookForever:

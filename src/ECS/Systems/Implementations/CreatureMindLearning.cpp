@@ -301,6 +301,12 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		       object_measures::Height(registry, entity) > creature_plan_actions::k_PooedOnTallerThan;
 	case Target::StoragePit:
 		return registry.AllOf<StoragePit>(entity);
+	case Target::BuiltFoodStore:
+	{
+		// A building stands fully built when it has no build progress left, or its progress is full
+		const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		return registry.AnyOf<StoragePit, WorshipSite>(entity) && (progress == nullptr || !(progress->built < 1.0f));
+	}
 	case Target::MagicFoodPile:
 	{
 		// The food miracle's piles, but not one by the storage pit of the town nearest it (within a tenth more than the

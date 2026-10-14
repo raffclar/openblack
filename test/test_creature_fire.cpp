@@ -83,19 +83,17 @@ TEST(CreatureFire, UsefulnessIsCappedAtAnEighth)
 TEST(CreatureFireAgenda, PutsOutWithTheWaterMiracleThenDouses)
 {
 	const auto agenda = PutOutFireWithWater(7, 15.0f);
-	ASSERT_EQ(agenda.size(), 5u);
+	ASSERT_EQ(agenda.size(), 4u);
 	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::GoNearObject);
-	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 0.0f);
-	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::GetAwayFromObject);
-	EXPECT_FLOAT_EQ(agenda[1].movement.maxDistance, 30.0f);
-	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::TurnToFaceObject);
-	EXPECT_FLOAT_EQ(agenda[2].seconds, 0.1f);
-	EXPECT_EQ(agenda[3].kind, Step::Kind::Cast);
-	EXPECT_EQ(agenda[3].cast.magicType, static_cast<uint32_t>(MagicType::Water));
-	EXPECT_EQ(agenda[3].sequence, k_CastPose);
-	EXPECT_FLOAT_EQ(agenda[3].seconds, 3.0f);
-	EXPECT_EQ(agenda[4].kind, Step::Kind::Douse);
-	EXPECT_EQ(agenda[4].object, 7u);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 30.0f);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda[1].seconds, 0.1f);
+	EXPECT_EQ(agenda[2].kind, Step::Kind::Cast);
+	EXPECT_EQ(agenda[2].cast.magicType, static_cast<uint32_t>(MagicType::Water));
+	EXPECT_EQ(agenda[2].sequence, k_ScatterPose);
+	EXPECT_FLOAT_EQ(agenda[2].seconds, 3.0f);
+	EXPECT_EQ(agenda[3].kind, Step::Kind::Douse);
+	EXPECT_EQ(agenda[3].object, 7u);
 	for (const auto& step : agenda)
 	{
 		if (step.kind == Step::Kind::Move)

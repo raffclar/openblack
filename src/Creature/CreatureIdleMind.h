@@ -347,6 +347,8 @@ struct Step
 		WaitInMap,
 		/// Dousing the step's object with water at once, as a creature does after casting the water miracle at a fire
 		Douse,
+		/// The creature's own fire stops at once: the creature cools to the temperature of the air
+		CoolDown,
 		/// Breaking the step's object, a rock, in two at once; when it isn't a rock, the rest of the agenda is given up
 		Shatter,
 		/// Mending the step's object, a building, by a fifth of its life at once
@@ -610,6 +612,8 @@ struct Commands
 	bool releaseCast {false};
 	/// An object to douse with water, by its entity's number
 	std::optional<uint32_t> douse;
+	/// The creature's own fire stops
+	bool coolDown {false};
 	/// A rock to break in two, by its entity's number
 	std::optional<uint32_t> shatter;
 	/// Sitting down this turn, it rests a little

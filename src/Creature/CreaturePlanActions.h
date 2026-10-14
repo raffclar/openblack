@@ -53,6 +53,8 @@ enum class Target : uint8_t
 	Unburnt,
 	/// A storage pit
 	StoragePit,
+	/// A store that food can be cast into: a storage pit or a worship site that stands fully built
+	BuiltFoodStore,
 	/// A pile of food the food miracle made, away from any storage pit
 	MagicFoodPile,
 	/// A toy it can pick up, or only a ball (the football or the toy ball)
@@ -126,6 +128,12 @@ enum class Build : uint8_t
 	CastAggressive,
 	CastExplosion,
 	CastFireball,
+	/// The creature casts food into a store from near it, and a shield from where it stands. It casts water on itself to
+	/// stop its own fire, and a miracle to impress the people of a villager.
+	CastFood,
+	CastShield,
+	CastWaterOnItself,
+	CastToImpress,
 	/// Going to a fish farm's shoal, bringing food out of the sea there and eating it
 	FishAndEat,
 	/// Bringing food out of the sea, unless it has some in its hand, and throwing it into a storage pit, or putting it
@@ -279,7 +287,8 @@ struct CastInfo
 	float height {0.0f};
 	/// Whether what it is cast at is living
 	bool targetLiving {false};
-	/// For a fireball: the middle of the clear area near the creature that it goes to first, none when there is none
+	/// For a fireball, and for water on itself: the middle of the clear area near the creature that it goes to first,
+	/// none when there is none
 	std::optional<glm::vec2> clearArea;
 };
 /// Whether an action casts a miracle

@@ -564,6 +564,9 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		case creature_mind::Step::Kind::Douse:
 			ImGui::Text("Dousing a fire");
 			break;
+		case creature_mind::Step::Kind::CoolDown:
+			ImGui::Text("Putting out its own fire");
+			break;
 		case creature_mind::Step::Kind::Shatter:
 			ImGui::Text("Breaking a rock in two");
 			break;
