@@ -121,6 +121,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "ECS/Systems/AbodeSoundSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -2985,6 +2986,12 @@ bool Game::Update() noexcept
 						Locator::snowSystem::value().StepObjects(Locator::entitiesRegistry::value(),
 						                                         Locator::objectDrawListSystem::value(),
 						                                         clock.GetFrameRealTime(), clock.GetFrameGameTime());
+					}
+					// The towns' buildings that the list draws can make their sounds
+					if (Locator::abodeSoundSystem::has_value())
+					{
+						Locator::abodeSoundSystem::value().Update(
+						    std::chrono::duration<float, std::milli>(clock.GetFrameGameTime()));
 					}
 				}
 				updateDrawnScenery();

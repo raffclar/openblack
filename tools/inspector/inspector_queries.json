@@ -955,6 +955,12 @@
   "query": "living.villages"
  },
  {
+  "description": "How many sounds the buildings of the towns made by themselves",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.abode_sounds"
+ },
+ {
   "description": "A field's crop as it is drawn: its tint, height and sway",
   "kind": "object",
   "parameters": [
