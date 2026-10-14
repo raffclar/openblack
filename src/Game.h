@@ -72,6 +72,10 @@ namespace ecs::systems
 {
 class HandGrabSystemInterface;
 }
+namespace help::profile
+{
+struct WorldCameraView;
+}
 
 enum class LoggingSubsystem : uint8_t
 {
@@ -526,6 +530,12 @@ private:
 	void ResolveScreenShapes();
 	/// Whether the hand hovers over a thing: a one-shot bubble, or anything with a model that the cursor picks
 	[[nodiscard]] bool HandOverThing() const;
+	/// Whether a front-end box shows over the game: the game's menu, the question at the start of a new game, or the
+	/// tattoo editor
+	[[nodiscard]] bool FrontEndBoxShows() const;
+	/// The view of the player's world camera for the help, none when the world camera does not show the world. The
+	/// camera that watches a creature fight is part of the world camera.
+	[[nodiscard]] static std::optional<help::profile::WorldCameraView> HelpWorldCameraView();
 	/// The near plane for the camera where it is now
 	void FitNearClip();
 	/// Shows the camera where the inspector wants the frame drawn from (an override, a picture's), or gives the camera

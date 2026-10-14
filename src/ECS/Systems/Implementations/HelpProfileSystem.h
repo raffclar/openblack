@@ -23,7 +23,7 @@ class HelpProfileSystem final: public HelpProfileSystemInterface
 {
 public:
 	void Trigger(uint32_t event) override;
-	void ProcessTurn() override;
+	void ProcessTurn(bool frontEndBoxShows, const std::optional<help::profile::WorldCameraView>& worldCamera) override;
 
 	[[nodiscard]] const help::profile::HelpProfile& Get() const override { return _profile; }
 	[[nodiscard]] help::profile::HelpProfile& Get() override { return _profile; }

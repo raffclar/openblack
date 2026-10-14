@@ -12,6 +12,8 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
+#include <vector>
 
 /// The help system's profile of the player: how often and how lately the player has done each of the things the help
 /// keeps count of (tapped a scroll, turned the camera, ...). The scripts read it to judge whether the player has
@@ -36,6 +38,16 @@ constexpr uint32_t k_CameraDrag = 33;
 /// The hand tapped a scroll or sign with a challenge or tip, or one without
 constexpr uint32_t k_TapWithText = 34;
 constexpr uint32_t k_TapWithoutText = 35;
+/// The world camera's view, which the help counts each turn: the land shows at the middle of the screen, the land
+/// shows near and the camera looks steeply down at it, and no land shows and the camera looks up at the sky
+constexpr uint32_t k_CameraSeesLand = 44;
+constexpr uint32_t k_CameraNearAndSteep = 45;
+constexpr uint32_t k_CameraSeesSky = 46;
+/// The camera is near the land when the land at the middle of the screen is nearer than this distance
+constexpr float k_NearDistance = 15.0f;
+/// The camera looks steeply down above this pitch, and up at the sky below the second pitch, in radians
+constexpr float k_SteepPitch = 0.55f;
+constexpr float k_SkyPitch = -0.3f;
 /// Events that also count as another: 14 to 23 count as 24, 9 to 11 as 11, 1 to 42 as 43, and every one as 48
 constexpr uint32_t k_AnyEvent = 48;
 
@@ -75,6 +87,21 @@ private:
 	bool _triggeredThisTurn {false};
 	std::array<uint32_t, k_TimesKept> _times {};
 };
+
+/// The player's world camera, as the help sees it each turn
+struct WorldCameraView
+{
+	/// The distance from the camera to the land at the middle of the screen, none when that line touches no land
+	std::optional<float> centreDistance;
+	/// How steeply the camera looks down, in radians: below zero, it looks up
+	float pitch {0.0f};
+};
+
+/// The events that the view of the world camera gives each turn, in the order that they count:
+/// - The land shows at the middle of the screen: k_CameraSeesLand. Then, if the land is near and the camera looks
+///   steeply down, also k_CameraNearAndSteep.
+/// - No land shows there and the camera looks up at the sky: k_CameraSeesSky.
+[[nodiscard]] std::vector<uint32_t> CameraViewEvents(const WorldCameraView& view);
 
 /// Every event's count and the profile's clock
 class HelpProfile

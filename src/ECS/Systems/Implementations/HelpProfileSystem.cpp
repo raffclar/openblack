@@ -38,10 +38,18 @@ void HelpProfileSystem::Trigger(uint32_t event)
 	}
 }
 
-void HelpProfileSystem::ProcessTurn()
+void HelpProfileSystem::ProcessTurn(bool frontEndBoxShows, const std::optional<help::profile::WorldCameraView>& worldCamera)
 {
-	if (!InScriptCutScene())
+	if (frontEndBoxShows || InScriptCutScene())
 	{
-		_profile.EndTurn();
+		return;
 	}
+	if (worldCamera.has_value())
+	{
+		for (const auto event : help::profile::CameraViewEvents(*worldCamera))
+		{
+			_profile.Trigger(event);
+		}
+	}
+	_profile.EndTurn();
 }
