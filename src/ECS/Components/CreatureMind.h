@@ -21,6 +21,7 @@
 
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureFollowUp.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMindModel.h"
@@ -193,8 +194,8 @@ struct CreatureMindState
 	glm::vec2 copiedAt {0.0f};
 	/// The kind for copying of that thing. A deed on no thing keeps the kind from before. None before the first deed.
 	std::optional<creature_watching::MimicKind> copiedKind;
-	/// It ate a magic mushroom, and becomes high once it is done with what it is doing
-	bool highPending {false};
+	/// The one thing that it does when it completes its current work, in place of the next decision
+	std::optional<creature_follow_up::FollowUp> followUp;
 	/// The trees it planted others by most recently, by entity number, oldest first: it never takes one of them to plant
 	std::vector<uint32_t> plantedBy;
 };

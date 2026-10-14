@@ -277,7 +277,12 @@ struct Executor
 	std::optional<uint32_t> castMagic;
 	/// The kind of one-shot miracle that the action casts, for the actions that cast one
 	OneShotKind oneShot {OneShotKind::Aggressive};
+	/// The action takes the creature away from its home: a young creature does not do it
+	bool leavesHome {false};
 };
+
+/// From this stage of growing up the creature is old enough to leave its home
+constexpr uint32_t k_LeaveHomeStage = 3;
 
 /// Every action that can be carried out
 [[nodiscard]] std::span<const Executor> All();
@@ -328,6 +333,8 @@ struct Situation
 	std::optional<OneShot> usedOneShot;
 	/// The creature itself, by its entity's number, and where it stands
 	uint32_t self {0};
+	/// The stage of growing up of the creature
+	uint32_t stage {k_LeaveHomeStage};
 	glm::vec2 position {0.0f};
 	/// Where the thing it uses is, and its radius on the ground
 	glm::vec2 instrumentPoint {0.0f};

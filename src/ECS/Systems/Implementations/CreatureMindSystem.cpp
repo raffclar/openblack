@@ -1771,6 +1771,7 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    if (const auto usedUpHeld = Locator::creatureObjectActionSystem::value().GetHeld(entity))
 			    {
+				    mind.idle.usedUpHeld = entt::to_integral(*usedUpHeld);
 				    ecs::world_objects::Remove(*usedUpHeld);
 			    }
 		    }

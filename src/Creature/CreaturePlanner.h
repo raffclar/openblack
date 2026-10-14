@@ -218,6 +218,8 @@ struct PlannerState
 	size_t nextGoal {0};
 	/// The plan carried out
 	std::optional<Plan> current;
+	/// The thing that the last plan acted on. It stays after the plan stops, until the creature starts a new plan.
+	std::optional<uint32_t> lastObject;
 };
 /// The next desires to plan this turn, going round those that may be planned
 [[nodiscard]] std::vector<creature_desires::Desire> NextGoals(PlannerState& state,
