@@ -71,6 +71,7 @@
 #include "VillagerCover.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDance.h"
+#include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
@@ -410,6 +411,16 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 		SetTop(*action, *first);
 		// The creature impresses it by its size, what it last did and how its town feels about it
 		return Taken::Impressed;
+	}
+	// A disciple near it starts its work: the villager can follow it to that work one time. The villager does not hold
+	// the reaction, and the disciple does not impress it.
+	if (type == Reaction::ReactToDroppedByHand)
+	{
+		if (const auto disciple = ReactingTo(villager); disciple.has_value())
+		{
+			ecs::villager_disciple::Follow(*action, *disciple);
+		}
+		return Taken::No;
 	}
 	// A hunter: one on its way to hide counts its time inside afresh and is neither taken up nor impressed; any other
 	// is frightened by it

@@ -26,6 +26,15 @@ struct Disciple
 	ResourceType tradeResource {ResourceType::Food};
 };
 
+/// A villager that follows a disciple near it to the work of the disciple, one time. It is not a disciple: it does not
+/// glow and its town does not count it.
+struct DiscipleFollower
+{
+	/// The work that it does at its next decision. After it starts the work, the value is None until the next decision
+	/// removes the follower.
+	VillagerDisciple type {VillagerDisciple::None};
+};
+
 /// A missionary preaching in a town: it follows the missionary about, and the villagers of the town near it come to
 /// believe in the player who sent it. It goes when the missionary stops preaching.
 struct MissionaryControl

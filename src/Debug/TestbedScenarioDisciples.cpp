@@ -7,8 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed scenarios for disciples in the player's hand. One shows the symbol of the work. One shows the work that
-// a villager keeps when the hand releases it.
+// The testbed scenarios for disciples. One shows the symbol of the work. One shows the work that a villager keeps when
+// the hand releases it. One shows the villagers that follow a disciple to its work.
 
 #include <vector>
 
@@ -66,6 +66,36 @@ void testbed_scenarios::AddDiscipleScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::HandTake, .delaySeconds = 6.0f, .object = 3},
 	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
 	    // The town belongs to the player at the start. Thus the field gives its work to the villagers of the player.
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	// A farming disciple starts its work. The villagers of its town near it follow it to the field one time.
+	all.push_back({
+	    .id = "villagers.disciple_followers",
+	    .name = "Villagers that follow a disciple to its work",
+	    .facet = Facet::Objects,
+	    .description = "A wheat field of the player's town lies in the middle of the screen. The town has a storage pit "
+	                   "full of food and wood to the west, thus it does not want more food. A farming disciple stands "
+	                   "south of the field. Four grown villagers of the town stand within 10 metres of the disciple, and "
+	                   "a fifth stands 20 metres from it. Best watched at game speed 4.",
+	    .expected = "The disciple glows and walks to the field to farm it. Each time the disciple starts its work, the "
+	                "villagers within 10 metres of it that are free to change what they do follow it. They decide again "
+	                "and walk to the field to farm it one time, without a glow. A villager that has not decided since "
+	                "it was made cannot follow. The fifth villager does not follow. When a follower has farmed, it "
+	                "decides for itself again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 26.0f, -40.0f}, .look = {0.0f, 0.0f, -8.0f}},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {0.0f, 0.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {-30.0f, -20.0f}, .storedFood = 5000, .storedWood = 5000},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {0.0f, -16.0f},
+	                 .joinTown = true,
+	                 .disciple = VillagerDisciple::Farmer},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, -18.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {4.0f, -18.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-3.0f, -22.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, -22.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {20.0f, -16.0f}, .joinTown = true}},
 	    .townBeliefInPlayer = 1000.0f,
 	});
 }

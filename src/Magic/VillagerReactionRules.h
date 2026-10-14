@@ -65,6 +65,35 @@ struct CelebrationWatch
 /// none of its people.
 [[nodiscard]] uint8_t TownCelebrationPriority(const CelebrationWatch& watch, uint32_t tablePriority);
 
+/// What a villager checks when a disciple near it starts its work
+struct DroppedByHandWatch
+{
+	/// The disciple is about and not dying
+	bool leaderAvailable {false};
+	/// The watcher is a disciple
+	bool watcherDisciple {false};
+	/// The two have the same town, or the two have no town
+	bool sameTown {false};
+	/// The distance in metres from the watcher to the disciple
+	float distance {0.0f};
+	/// The watcher can change what it does: no script controls it and its state lets it change
+	bool watcherFree {false};
+	/// The watcher is about and not dying
+	bool watcherAvailable {false};
+	bool watcherChild {false};
+	bool watcherSkeleton {false};
+	bool watcherDead {false};
+	/// The watcher plays in a football match
+	bool watcherPlaysFootball {false};
+};
+
+/// The distance in metres in which a villager can follow a disciple to its work
+constexpr float k_FollowDistance = 10.0f;
+
+/// The priority that a villager gives to a disciple that starts its work. Only an adult villager of the same town, nearer
+/// than 10 metres, that is free and is not a disciple, gives the priority of the table row. All other villagers give 0.
+[[nodiscard]] uint8_t DroppedByHandPriority(const DroppedByHandWatch& watch, uint32_t tablePriority);
+
 /// How urgently a villager heeds a burning thing in the hand: by the row's priority when it is no further than the row's
 /// least running distance from the thing, or the thing moves at 3 metres a second or more; not at all otherwise
 [[nodiscard]] uint8_t BurningInHandPriority(float distance, float leastRunDistance, float thingSpeed, uint32_t tablePriority);

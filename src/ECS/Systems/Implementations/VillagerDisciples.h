@@ -55,6 +55,15 @@ bool SetAboutWorkOnLanding(components::LivingAction& action);
 /// A disciple deciding what to do sets about its work, or waits by the town centre with none. 1 when it did either.
 uint32_t DecideAsDisciple(components::LivingAction& action);
 
+/// The priority that a villager gives to a disciple near it that starts its work: the table priority for an adult of
+/// the same town that is free, else 0
+[[nodiscard]] uint8_t FollowPriority(entt::entity villager, entt::entity disciple, uint32_t tablePriority);
+/// The villager follows the disciple: at its next decision it tries the work of the disciple one time. A villager that
+/// follows a disciple already does not change.
+void Follow(components::LivingAction& action, entt::entity disciple);
+/// The work that the villager does as a follower at this decision, None for no work
+[[nodiscard]] VillagerDisciple FollowerTypeOf(entt::entity villager);
+
 /// Walking up to the thing it was put by and looking at it, then a builder builds it and others decide
 uint32_t InspectObject(components::LivingAction& action);
 /// Waiting by the town centre, looking for work again now and then

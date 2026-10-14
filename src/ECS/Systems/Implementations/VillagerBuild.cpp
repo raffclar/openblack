@@ -127,8 +127,12 @@ glm::vec2 GroundOf(entt::entity entity)
 /// A builder disciple is offered sites even when no builder is wanted
 bool BuilderDisciple(const Villager& villager)
 {
-	const auto* disciple = Entities().TryGet<const Disciple>(Entities().ToEntity(villager));
-	return disciple != nullptr && disciple->type == VillagerDisciple::Builder;
+	// A villager that follows a builder disciple is a builder too while it decides
+	const auto entity = Entities().ToEntity(villager);
+	const auto* disciple = Entities().TryGet<const Disciple>(entity);
+	const auto* follower = Entities().TryGet<const DiscipleFollower>(entity);
+	return (disciple != nullptr && disciple->type == VillagerDisciple::Builder) ||
+	       (follower != nullptr && follower->type == VillagerDisciple::Builder);
 }
 
 /// Walks the villager to a point round what is in the way, then on into a state, as long as the states let it
