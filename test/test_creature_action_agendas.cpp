@@ -321,7 +321,7 @@ TEST(CreatureActionAgendas, WatchingTheHandDoesNotStartATurnAgainWhileTheBodyIsB
 
 	IdleMind mind;
 	Plan(mind, Activity::Planned, LookAtHand());
-	creature_mind::Senses senses {.seconds = 0.1f, .choosesNext = false};
+	creature_mind::Senses senses {.seconds = 0.1f};
 	senses.hand = behind;
 	// The first turn starts the body's turn
 	auto commands = Think(mind, senses, NeverFirst);
