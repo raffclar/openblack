@@ -579,6 +579,15 @@ constexpr float k_WatchCameraFurthest = 100.0f;
 constexpr float k_WatchCameraOverhead = 0.1f;
 constexpr float k_WatchCameraTurn = 1.5707963f;
 
+/// Whether a creature that watches the camera or the hand starts to turn to it this turn. It turns when the watched
+/// point is more than a quarter turn round from it and not right overhead. A body that does an action or moves does not
+/// start a new turn: it completes the turn that it does now.
+[[nodiscard]] constexpr bool StartsWatchTurn(const Senses::CameraView& view, bool bodyBusy)
+{
+	return !bodyBusy && view.groundDistance >= k_WatchCameraOverhead &&
+	       (view.turn > k_WatchCameraTurn || view.turn < -k_WatchCameraTurn);
+}
+
 /// What the mind tells the body
 struct Commands
 {
