@@ -328,6 +328,26 @@ TEST(TestbedScenarios, FightCommandsAreChecked)
 	EXPECT_EQ(Problems(scenario).size(), 5u);
 }
 
+TEST(TestbedScenarios, MakingFriendsNeedsAnotherCreature)
+{
+	using Kind = Command::Kind;
+	Scenario scenario {
+	    .id = "test.friends",
+	    .name = "Friends",
+	    .description = "Two creatures become friends",
+	    .expected = "Friends",
+	    .creatures = {{.species = CreatureType::Tiger}, {.species = CreatureType::Tiger, .offset = {40.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::MakeFriends, .value = 1}},
+	};
+	EXPECT_TRUE(Problems(scenario).empty());
+	scenario.commands = {{.kind = Kind::MakeFriends, .value = 0}, {.kind = Kind::MakeFriends, .value = 2}};
+	EXPECT_EQ(Problems(scenario).size(), 2u);
+	EXPECT_EQ(Name(Kind::MakeFriends), "make friends");
+	EXPECT_TRUE(Find("mind.friends_and_dead") != nullptr);
+	EXPECT_TRUE(Find("mind.hand_free_action") != nullptr);
+	EXPECT_TRUE(Find("mind.hand_free_pick_up") != nullptr);
+}
+
 TEST(TestbedScenarios, EveryCommandHasAName)
 {
 	for (size_t i = 0; i <= static_cast<size_t>(Command::Kind::TieLeashToCreature); ++i)

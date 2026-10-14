@@ -1047,12 +1047,6 @@ TEST(CreaturePlanActions, FishingWalksToTheShoalBringsFoodOutOfTheSeaAndEatsIt)
 	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
 	EXPECT_EQ(agenda->at(2).order.kind, creature_mind::ObjectOrder::Kind::Eat);
 	EXPECT_EQ(agenda->at(2).effect, creature_mind::Effect::Eat);
-	// Its hand emptied first when it holds something it can't eat
-	situation.fishing->putDownFirst = true;
-	const auto emptied = creature_plan_actions::Agenda(*fish, std::nullopt, {}, situation, random);
-	ASSERT_TRUE(emptied.has_value());
-	ASSERT_EQ(emptied->size(), 4u);
-	EXPECT_EQ(emptied->at(1).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
 }
 
 TEST(CreaturePlanActions, FishingForSomethingOtherThanEatingIsAllowedWithFoodInHand)
@@ -1074,25 +1068,25 @@ TEST(CreaturePlanActions, GivingFishToAStorePitFishesTurnsToThePitAndThrowsItIn)
 	creature_plan_actions::Situation situation;
 	EXPECT_FALSE(creature_plan_actions::Possible(*give, situation));
 	// It walks straight to the shoal, even where it couldn't stand to fish for itself
-	situation.fishing = creature_plan_actions::Situation::Fishing {
-	    .shoal = {10.0f, 20.0f}, .arriveWithin = 15.0f, .putDownFirst = true, .height = 12.0f};
+	situation.fishing =
+	    creature_plan_actions::Situation::Fishing {.shoal = {10.0f, 20.0f}, .arriveWithin = 15.0f, .height = 12.0f};
 	constexpr uint32_t k_Pit = 7;
 	const auto agenda = creature_plan_actions::Agenda(*give, k_Pit, {}, situation, random);
 	ASSERT_TRUE(agenda.has_value());
-	ASSERT_EQ(agenda->size(), 6u);
+	ASSERT_EQ(agenda->size(), 5u);
 	EXPECT_EQ(agenda->at(0).movement.point, glm::vec2(10.0f, 20.0f));
-	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
-	EXPECT_EQ(agenda->at(2).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
-	EXPECT_EQ(agenda->at(3).movement.kind, creature_mind::Movement::Kind::ToThrowPosition);
-	EXPECT_EQ(agenda->at(3).movement.object, std::optional<uint32_t>(k_Pit));
-	EXPECT_FLOAT_EQ(agenda->at(3).movement.maxDistance, 12.0f);
-	EXPECT_EQ(agenda->at(3).face, creature_face::Cue::Compassion);
-	EXPECT_EQ(agenda->at(4).movement.kind, creature_mind::Movement::Kind::TurnToFaceObject);
-	EXPECT_FLOAT_EQ(agenda->at(4).seconds, 0.1f);
+	// No step of its own empties the hand: the step that brings food out of the sea needs empty hands
+	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
+	EXPECT_EQ(agenda->at(2).movement.kind, creature_mind::Movement::Kind::ToThrowPosition);
+	EXPECT_EQ(agenda->at(2).movement.object, std::optional<uint32_t>(k_Pit));
+	EXPECT_FLOAT_EQ(agenda->at(2).movement.maxDistance, 12.0f);
+	EXPECT_EQ(agenda->at(2).face, creature_face::Cue::Compassion);
+	EXPECT_EQ(agenda->at(3).movement.kind, creature_mind::Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda->at(3).seconds, 0.1f);
 	// Counted as done as it turns, before it throws
-	EXPECT_EQ(agenda->at(4).effect, creature_mind::Effect::Completed);
-	EXPECT_EQ(agenda->at(5).order.kind, creature_mind::ObjectOrder::Kind::ThrowInStore);
-	EXPECT_EQ(agenda->at(5).order.object, std::optional<uint32_t>(k_Pit));
+	EXPECT_EQ(agenda->at(3).effect, creature_mind::Effect::Completed);
+	EXPECT_EQ(agenda->at(4).order.kind, creature_mind::ObjectOrder::Kind::ThrowInStore);
+	EXPECT_EQ(agenda->at(4).order.object, std::optional<uint32_t>(k_Pit));
 	// With food already in its hand it goes straight to the pit
 	situation.fishing->holdingFood = true;
 	const auto holding = creature_plan_actions::Agenda(*give, k_Pit, {}, situation, random);
