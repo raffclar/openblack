@@ -924,6 +924,13 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
 	});
 	SetKindAttributes(registry, entity, me, belief);
+	// The kind of thing and some attributes stay as the creature saw them first
+	const auto* mind = registry.TryGet<const CreatureMindState>(self);
+	const auto* known = mind != nullptr ? mind->beliefs.Find(entity) : nullptr;
+	if (known != nullptr && known->firstSight.has_value())
+	{
+		return creature_tree::WithFirstSight(*known->firstSight, belief);
+	}
 	return belief;
 }
 

@@ -180,6 +180,34 @@ TEST(CreatureDecisionTree, SlotsFollowTheKindOfThing)
 	EXPECT_EQ(creature_tree::ToSlots(belief), slots);
 }
 
+// A belief keeps the kind, origin and player number of the first sight, and takes the allegiance and life of now
+TEST(CreatureDecisionTree, ABeliefKeepsWhatDoesNotChangeFromTheFirstSight)
+{
+	creature_tree::Belief first {.type = creature_tree::belief_types::k_Villager};
+	first.Set(Attribute::PlayerNumber, 1);
+	first.Set(Attribute::Origin, 0);
+	first.Set(Attribute::Allegiance, 1);
+	first.Set(Attribute::Life, 1);
+	first.Set(Attribute::VillagerJob, 3);
+	creature_tree::Belief now {.type = creature_tree::belief_types::k_Abode};
+	now.Set(Attribute::PlayerNumber, 2);
+	now.Set(Attribute::Origin, 1);
+	now.Set(Attribute::Allegiance, 0);
+	now.Set(Attribute::Life, 0);
+	now.Set(Attribute::AbodeType, 4);
+	const auto kept = creature_tree::WithFirstSight(first, now);
+	EXPECT_EQ(kept.type, creature_tree::belief_types::k_Villager);
+	EXPECT_EQ(kept.Value(Attribute::PlayerNumber), 1u);
+	EXPECT_EQ(kept.Value(Attribute::Origin), 0u);
+	EXPECT_EQ(kept.Value(Attribute::VillagerJob), 3u);
+	EXPECT_EQ(kept.Value(Attribute::Allegiance), 0u);
+	EXPECT_EQ(kept.Value(Attribute::Life), 0u);
+	// Only the attributes of the first sight are in the belief
+	EXPECT_FALSE(kept.Value(Attribute::AbodeType).has_value());
+	EXPECT_TRUE(creature_tree::KeptFromFirstSight(Attribute::Type));
+	EXPECT_FALSE(creature_tree::KeptFromFirstSight(Attribute::HarderThanMe));
+}
+
 TEST(CreatureDecisionTree, EveryThingIsFriendlyOnlyWhenItHasTheCreaturesPlayer)
 {
 	namespace types = creature_tree::belief_types;
