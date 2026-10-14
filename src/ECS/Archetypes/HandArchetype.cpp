@@ -14,6 +14,7 @@
 
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandMorph.h"
+#include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -35,6 +36,7 @@ entt::entity HandArchetype::Create(const glm::vec3& position, float xAngleRadian
 	registry.Assign<Mesh>(entity, Hand::k_MeshId, static_cast<int8_t>(0), static_cast<int8_t>(0));
 	// It shows its player's alignment, starting neutral
 	registry.Assign<HandMorph>(entity);
+	registry.Assign<HandStillness>(entity);
 
 	return entity;
 }

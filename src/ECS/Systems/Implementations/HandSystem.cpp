@@ -18,11 +18,13 @@
 #include "3D/HandMorph.h"
 #include "ECS/Archetypes/HandArchetype.h"
 #include "ECS/Components/HandMorph.h"
+#include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "Hand/HandStillness.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -39,6 +41,30 @@ bool HandSystem::Initialize() noexcept
 	    HandArchetype::Create(glm::vec3(0.0f), glm::half_pi<float>(), 0.0f, glm::half_pi<float>(), 0.01f, true);
 
 	return false;
+}
+
+void HandSystem::ProcessTurn()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	const auto* transform = registry.TryGet<const Transform>(hand);
+	auto* stillness = registry.TryGet<HandStillness>(hand);
+	if (transform != nullptr && stillness != nullptr)
+	{
+		hand_stillness::Step(*stillness, transform->position);
+	}
+}
+
+uint32_t HandSystem::GetHandStillTurns() const noexcept
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto* stillness = registry.Valid(hand) ? registry.TryGet<const HandStillness>(hand) : nullptr;
+	return stillness != nullptr ? stillness->stillTurns : 0;
 }
 
 std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)> HandSystem::GetPlayerHands() const noexcept

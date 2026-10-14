@@ -553,6 +553,8 @@ struct Senses
 		float groundDistance {0.0f};
 		glm::vec2 point {0.0f};
 		float turn {0.0f};
+		/// For the camera only: the game turns that the player's hand has stayed in one place
+		uint32_t handStillTurns {0};
 	};
 	std::optional<CameraView> camera;
 	/// The player's hand nearest it, seen the same way, while a step watches it; none for a creature without a player

@@ -131,6 +131,35 @@ TEST(CreatureScriptAgendas, WatchingTheCameraEndsWhenItIsOutOfReach)
 	EXPECT_EQ(mind.step, 0u);
 }
 
+// The player's hand still for more turns than five seconds give ends the look, also on its first turn: 50 turns at ten
+// a second are not enough
+TEST(CreatureScriptAgendas, WatchingTheCameraEndsWhenTheHandStaysStill)
+{
+	auto still = Watching(20.0f, 0.0f);
+	still.camera->handStillTurns = 51;
+	IdleMind mind;
+	Plan(mind, Activity::Told, LookAtCamera(true));
+	static_cast<void>(Think(mind, still, NoRandom));
+	EXPECT_EQ(mind.step, 1u);
+
+	still.camera->handStillTurns = 50;
+	IdleMind longer;
+	Plan(longer, Activity::Told, LookAtCamera(true));
+	static_cast<void>(Think(longer, still, NoRandom));
+	EXPECT_EQ(longer.step, 0u);
+}
+
+// The cut scene's look watches for its turns whatever the hand does
+TEST(CreatureScriptAgendas, TheCutSceneWatchIgnoresAStillHand)
+{
+	auto still = Watching(20.0f, 0.0f);
+	still.camera->handStillTurns = 1000;
+	IdleMind mind;
+	Plan(mind, Activity::Told, {Step {.kind = Step::Kind::WatchCamera, .seconds = 5.0f, .turns = 21}});
+	static_cast<void>(Think(mind, still, NoRandom));
+	EXPECT_EQ(mind.step, 0u);
+}
+
 // Pointing at a thing lasts five seconds and follows it; at the camera, a second at the camera's height, turning first
 // only with a player
 TEST(CreatureScriptAgendas, PointingAtAThingOrTheCamera)

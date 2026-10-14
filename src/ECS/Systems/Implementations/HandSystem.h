@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <entt/entity/entity.hpp>
+
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Hand/HandTrace.h"
 
@@ -27,10 +29,12 @@ public:
 	[[nodiscard]] std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)>
 	GetPlayerHandPositions() const noexcept override;
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) override;
+	void ProcessTurn() override;
+	[[nodiscard]] uint32_t GetHandStillTurns() const noexcept override;
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
 
 private:
-	std::array<entt::entity, 2> _hands;
+	std::array<entt::entity, 2> _hands {entt::null, entt::null};
 	hand_trace::HandTrace _trace;
 };
 } // namespace openblack::ecs::systems

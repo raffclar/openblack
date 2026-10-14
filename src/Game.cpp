@@ -1457,6 +1457,8 @@ bool Game::GameLogicLoop() noexcept
 	Locator::livingActionSystem::value().StartTurnPlaces();
 	// The influence asked during the turn is measured from where the hands were at it
 	Locator::influenceSystem::value().SetInGameTurn(true);
+	// The player's input comes first in the turn: the game counts the turns that the hand stays in one place
+	Locator::handSystem::value().ProcessTurn();
 	ProcessHandToolTipTurn();
 	ProcessTurnCheering();
 

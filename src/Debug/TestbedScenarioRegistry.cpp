@@ -3349,6 +3349,22 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.look_at_camera_still_hand",
+	    .name = "Looking at the camera stops when the hand stays still",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands facing away from the camera, a birch beside it. A script tells it to look "
+	                   "at the camera after one second, and again after twelve seconds.",
+	    .expected = "Each time it turns round to the camera and watches it, curious. If the hand moves all the time, each "
+	                "look lasts six seconds. If the hand stays in one place, the first look stops five seconds after "
+	                "the hand last moved, and the second look stops at once.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "LookAtCamera"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 12.0f, .object = 0, .action = "LookAtCamera"}},
+	});
+
+	all.push_back({
 	    .id = "mind.reward_villagers",
 	    .name = "Learning: reward eating villagers, punish eating food",
 	    .facet = Facet::Mind,
