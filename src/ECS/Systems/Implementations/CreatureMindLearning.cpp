@@ -34,6 +34,7 @@
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureActionAgendas.h"
+#include "Creature/CreatureDance.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureKindAgendas.h"
@@ -279,6 +280,14 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanDestroy(entity);
 	case Target::Villager:
 		return registry.AllOf<Villager>(entity);
+	case Target::DanceVillager:
+	{
+		// Measured across the land between map positions, as the game measures it
+		const auto* at = registry.TryGet<const Transform>(entity);
+		const auto* from = registry.TryGet<const Transform>(self);
+		return registry.AllOf<Villager>(entity) && at != nullptr && from != nullptr &&
+		       gutils::GetDistanceInMetres(from->position, at->position) < creature_dance::k_FurthestVillager;
+	}
 	case Target::HurtVillager:
 	{
 		// Hurt to seven tenths of its life or less
@@ -1296,6 +1305,10 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	{
 		situated.chance = Chance();
 	}
+	if (executor->build == creature_plan_actions::Build::DanceWithVillagers)
+	{
+		SituateDance(creature, *executor, point, situated);
+	}
 	auto agenda = creature_plan_actions::Agenda(
 	    *executor, object, point, situated, [this](uint32_t range) { return Random(range); }, cast);
 	if (!agenda.has_value())
@@ -1637,10 +1650,12 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			        .opinion = learnt.opinions.at(action),
 			        .turnsSinceDone = learnt.turnsSinceDone.at(action),
 			        .servesFirstDesire = tables->actions.at(action).desire == 0,
-			        .disabled = !creature_plan_actions::Possible(*executor, situation) ||
-			                    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
-			                    (creature_plan_actions::IsCast(*executor) &&
-			                     !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))),
+			        .disabled =
+			            !creature_plan_actions::Possible(*executor, situation) ||
+			            (executor->build == creature_plan_actions::Build::DanceWithVillagers && !MayDanceToImpress(creature)) ||
+			            !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
+			            (creature_plan_actions::IsCast(*executor) &&
+			             !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))),
 			    });
 		}
 		for (size_t g = 0; g < groups.size(); ++g)
@@ -1855,6 +1870,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				situation.clearArea =
 				    ClearAreaFor(registry, creature, point, creature_mind::k_SleepByObjectHeights * situation.height,
 				                 !situation.controlledByScript);
+			}
+			if (executor->build == creature_plan_actions::Build::DanceWithVillagers)
+			{
+				SituateDance(creature, *executor, point, situation);
 			}
 			const auto actionIndex = creature_mind_tables::FindAction(*tables, plan.action);
 			const auto cast = creature_plan_actions::IsCast(*executor) && actionIndex.has_value()

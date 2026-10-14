@@ -86,11 +86,13 @@ enum class Target : uint8_t
 	/// What a creature can poo by: a thing that is not alive and is taller than k_PooedOnTallerThan, but not a field or a
 	/// fish farm
 	PooedOn,
+	/// A villager nearer to the creature than 200 metres, to dance with
+	DanceVillager,
 };
 /// A creature poos only by a thing taller than this, in metres
 constexpr float k_PooedOnTallerThan = 1.5f;
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::PooedOn) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::DanceVillager) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -184,6 +186,8 @@ enum class Build : uint8_t
 	ThrowToPlayer,
 	/// Bringing a tree to a house and mending the house with it
 	HelpRepairHouse,
+	/// Dancing with the villagers of a town, to impress them
+	DanceWithVillagers,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -200,6 +204,8 @@ struct Executor
 	Build build {Build::Emote};
 	/// The animation played, for the builds that play one
 	size_t animation {0};
+	/// The row of the dance table, for a dance
+	uint32_t danceType {0};
 	creature_mind::Activity activity {creature_mind::Activity::Planned};
 };
 
@@ -264,6 +270,11 @@ struct Situation
 	/// The places that the creature uses when it hangs around at home, and the length of a game turn in seconds
 	creature_mind::HangAroundPlaces hangAround;
 	float turnSeconds {0.0f};
+	/// A dance with villagers: the clear place for it (none when there is none or it wasn't looked for), the fewest
+	/// dancers its row of the dance table asks for, and the beats of its length
+	std::optional<glm::vec2> danceArea;
+	uint32_t fewestDancers {0};
+	uint32_t danceBeats {0};
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

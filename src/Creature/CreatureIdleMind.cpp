@@ -17,6 +17,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/GameRandom.h"
+#include "Creature/CreatureDance.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 
@@ -817,6 +818,130 @@ void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
 }
 } // namespace
 
+namespace
+{
+/// The rest of the agenda is no use
+void GiveUpAgenda(IdleMind& mind)
+{
+	mind.step = mind.agenda.size();
+	mind.stepStarted = false;
+	mind.gaveUp = true;
+}
+
+/// Waiting for the dancers to stand still: with no dance there is nothing to wait for
+void WaitForDancers(IdleMind& mind, const Senses& senses)
+{
+	if (!senses.dance.has_value() || !senses.dance->exists)
+	{
+		GiveUpAgenda(mind);
+	}
+	else if (!senses.dance->dancersMoving)
+	{
+		FinishStep(mind);
+	}
+}
+
+/// A dance step starts: the world carries out its order this turn
+void StartDanceStep(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
+{
+	switch (step.dance.kind)
+	{
+	case DanceOrder::Kind::WaitUntilStill:
+		WaitForDancers(mind, senses);
+		return;
+	case DanceOrder::Kind::StopLooking:
+		// Its head looks about this last turn, then stays still
+		commands.lookAbout = true;
+		break;
+	case DanceOrder::Kind::Set:
+		// The last dance goes first, and the new one comes the turn after
+		mind.danceSet = false;
+		commands.dance = DanceOrder {.kind = DanceOrder::Kind::Clear};
+		return;
+	case DanceOrder::Kind::Dance:
+		mind.danceTurns = step.dance.count;
+		mind.danceEnding = false;
+		break;
+	default:
+		break;
+	}
+	commands.dance = step.dance;
+}
+
+/// A turn of a dance step under way
+void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands, const Random& random)
+{
+	if (step.dance.kind == DanceOrder::Kind::WaitUntilStill)
+	{
+		WaitForDancers(mind, senses);
+		return;
+	}
+	if (step.dance.kind == DanceOrder::Kind::Set && !mind.danceSet)
+	{
+		commands.dance = step.dance;
+		mind.danceSet = true;
+		return;
+	}
+	if (step.dance.kind != DanceOrder::Kind::Dance)
+	{
+		// The world says when it has carried out the order
+		return;
+	}
+	if (mind.danceEnding)
+	{
+		commands.dance = DanceOrder {.kind = DanceOrder::Kind::Stop};
+		FinishStep(mind);
+		return;
+	}
+	if (!senses.dance.has_value() || !senses.dance->inGroup)
+	{
+		GiveUpAgenda(mind);
+		return;
+	}
+	const auto turn = creature_dance::Turn(*senses.dance, senses.position);
+	// A turn already under way is not started again
+	if (turn.facePoint.has_value() && !senses.moving)
+	{
+		commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = *turn.facePoint};
+	}
+	if (turn.playOnce.has_value() && !senses.bodyPlaying)
+	{
+		commands.playOnce = *turn.playOnce;
+		commands.mirrored = random(2) == 1;
+	}
+	if (turn.overlay.has_value() && !senses.overlayPlaying)
+	{
+		commands.playOverlay = *turn.overlay;
+	}
+	if (turn.walkTo.has_value())
+	{
+		commands.move =
+		    Movement {.kind = Movement::Kind::ToPoint, .point = *turn.walkTo, .maxDistance = creature_dance::k_NearPlace};
+	}
+	--mind.danceTurns;
+	if (mind.danceTurns == 0)
+	{
+		mind.danceEnding = true;
+	}
+}
+} // namespace
+
+void creature_mind::DanceOrderDone(IdleMind& mind, bool done)
+{
+	if (mind.step >= mind.agenda.size() || mind.agenda[mind.step].kind != Step::Kind::Dance)
+	{
+		return;
+	}
+	if (done)
+	{
+		FinishStep(mind);
+	}
+	else
+	{
+		GiveUpAgenda(mind);
+	}
+}
+
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	Commands commands;
@@ -857,8 +982,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.finishSpells = true;
 			return commands;
 		}
-		// Nothing starts while the body still plays an action
-		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && senses.bodyBusy)
+		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it.
+		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
+		    senses.bodyBusy)
 		{
 			return commands;
 		}
@@ -985,6 +1111,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			mind.inspectTurns = static_cast<uint32_t>((extra + step.seconds) * turnsPerSecond);
 			break;
 		}
+		case Step::Kind::StopMoving:
+			commands.stopMoving = true;
+			break;
+		case Step::Kind::Dance:
+			StartDanceStep(mind, step, senses, commands);
+			break;
 		case Step::Kind::Wait:
 		case Step::Kind::WaitInMap:
 			break;
@@ -1159,6 +1291,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		{
 			FinishStep(mind);
 		}
+		break;
+	case Step::Kind::StopMoving:
+		if (!senses.bodyPlaying)
+		{
+			FinishStep(mind);
+		}
+		break;
+	case Step::Kind::Dance:
+		DanceStepTurn(mind, step, senses, commands, random);
 		break;
 	case Step::Kind::Gesture:
 	case Step::Kind::Move:

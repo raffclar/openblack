@@ -22,12 +22,6 @@ using namespace openblack;
 using namespace openblack::ecs;
 using namespace openblack::ecs::components;
 
-namespace
-{
-/// Anything that isn't a villager dances as a dancer of no kind in particular
-constexpr uint32_t k_LivingDanceType = 0;
-} // namespace
-
 entt::entity dances::Create(Registry& registry, const DanceSetup& setup, std::shared_ptr<const dance::DanceFile> file)
 {
 	const auto entity = registry.Create();
@@ -74,14 +68,14 @@ uint32_t dances::Size(const Registry& registry, entt::entity dance)
 	return IsDance(registry, dance) ? registry.Get<const Dance>(dance).dancers : 0;
 }
 
-bool dances::AddDancer(Registry& registry, entt::entity dance, entt::entity living, uint32_t sex)
+bool dances::AddDancer(Registry& registry, entt::entity dance, entt::entity living, uint32_t sex, uint32_t danceType)
 {
 	if (!IsDance(registry, dance))
 	{
 		return false;
 	}
 	auto& data = registry.Get<Dance>(dance);
-	const auto group = dance_rules::AddDancer(data, living, k_LivingDanceType, sex);
+	const auto group = dance_rules::AddDancer(data, living, danceType, sex);
 	if (!group.has_value())
 	{
 		return false;

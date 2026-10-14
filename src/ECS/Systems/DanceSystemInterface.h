@@ -14,6 +14,7 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/DanceMoves.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -34,6 +35,11 @@ public:
 	virtual void Destroy(entt::entity dance) = 0;
 	/// Each turn, after the players and before the living: each dance's turn
 	virtual void ProcessTurn() = 0;
+	/// The shapes the dances' groups stand in, with those that the game reads from its data folder
+	[[nodiscard]] virtual const std::array<dance_shapes::Shape, dance_shapes::k_ShapeCount>& Shapes()
+	{
+		return dance_moves::Shapes();
+	}
 };
 
 } // namespace openblack::ecs::systems

@@ -943,3 +943,5 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_warm_up_views graphics/test_warm_up_views.cpp)
 openblack_setup_and_add_test(test_land_altitude test_land_altitude.cpp)
 target_link_libraries(test_land_altitude PRIVATE lnd)
+openblack_setup_and_add_test(test_creature_dance test_creature_dance.cpp)
+target_link_libraries(test_creature_dance PRIVATE dance)

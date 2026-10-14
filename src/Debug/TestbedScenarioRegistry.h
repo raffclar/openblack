@@ -270,6 +270,8 @@ struct ObjectSetup
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
 	/// A villager belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A villager of the town lives in the scenario's object of this index, a building of the town
+	std::optional<size_t> livesIn;
 	/// A villager goes to make love with the scenario's object of this index once the walk delay is up, as a breeder
 	/// sends one: both walk to meet and kiss there
 	std::optional<size_t> mateWith;
@@ -975,6 +977,8 @@ void AddTownGrowthScenarios(std::vector<Scenario>& all);
 /// The player's statistics counting as their town lives
 void AddStatisticsScenarios(std::vector<Scenario>& all);
 void AddTutorialScenarios(std::vector<Scenario>& all);
+/// A creature that dances with the villagers of a town (TestbedScenarioCreatureDance.cpp)
+void AddCreatureDanceScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

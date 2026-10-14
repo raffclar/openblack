@@ -1525,8 +1525,15 @@ void CreatureMindSystem::ProcessTurn()
 		        // The places to hang around at are only looked for when it is free to choose what to do next
 		        .hangAround =
 		            mind.idle.step >= mind.idle.agenda.size() ? HangAroundPlacesOf(entity) : creature_mind::HangAroundPlaces {},
+		        .bodyPlaying = creature_layers::IsPlaying(animation.body),
+		        .dance = DanceViewOf(entity, mind.idle),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
+		    if (commands.dance.has_value())
+		    {
+			    CarryOutDance(entity, mind.idle, *commands.dance);
+		    }
+		    KeepDanceWithAgenda(entity, mind.idle);
 		    Apply(commands, animation, eyes);
 		    if (Move(entity, commands))
 		    {

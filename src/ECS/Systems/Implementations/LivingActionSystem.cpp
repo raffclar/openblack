@@ -44,6 +44,7 @@
 #include "VillagerBuild.h"
 #include "VillagerChecks.h"
 #include "VillagerCover.h"
+#include "VillagerCreatureDance.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDance.h"
 #include "VillagerDiscipleWork.h"
@@ -73,6 +74,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace villager_home = openblack::ecs::villager_home;
+namespace villager_creature_dance = openblack::ecs::villager_creature_dance;
 namespace villager_cover = openblack::ecs::villager_cover;
 namespace villager_eaten = openblack::ecs::villager_eaten;
 namespace villager_teleport = openblack::ecs::villager_teleport;
@@ -515,7 +517,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_worship::RestartWorshippingAtWorshipSite,
         .exitState = &villager_worship::ExitGetFoodAtWorship,
     },
-    /* RESTART_WORSHIPPING_CREATURE */ k_TodoEntry,
+    /* RESTART_WORSHIPPING_CREATURE */
+    VillagerStateTableEntry {
+        .state = &villager_creature_dance::RestartWorshippingCreature,
+    },
     /* FARMER_ARRIVES_AT_FARM */
     VillagerStateTableEntry {
         .state = &villager_farmer::FarmerArrivesAtFarm,
@@ -558,7 +563,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* ARRIVES_IN_ABODE_TO_PICK_UP_EXCESS */ k_TodoEntry,
     /* MAKE_SCARED_STIFF */ k_TodoEntry,
     /* SCARED_STIFF */ k_TodoEntry,
-    /* WORSHIPPING_CREATURE */ k_TodoEntry,
+    /* WORSHIPPING_CREATURE */
+    VillagerStateTableEntry {
+        .state = &villager_creature_dance::WorshippingCreature,
+        .exitState = &villager_artefact_dance::ExitDance,
+    },
     /* SHEPHERD_LOOK_FOR_FLOCK */
     VillagerStateTableEntry {
         .state = &villager_shepherd::ShepherdLookForFlock,
@@ -941,7 +950,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .exitState = &villager_reactions::ExitReaction,
         .validate = &villager_reactions::ReactionValidate,
     },
-    /* CONTROLLED_BY_CREATURE */ k_TodoEntry,
+    /* CONTROLLED_BY_CREATURE */
+    VillagerStateTableEntry {
+        .state = &villager_creature_dance::ControlledByCreature,
+        .exitState = &villager_creature_dance::ExitControlledByCreature,
+    },
     /* POINT_AT_DEAD_PERSON */
     VillagerStateTableEntry {
         .state = &villager_mourning::PointAtDeadPerson,

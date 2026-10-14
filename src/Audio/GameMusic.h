@@ -123,11 +123,12 @@ enum class MusicType : int32_t
 /// The game's music: once a game turn, picks what music plays and hands it to the audio library's music player.
 ///
 /// In order, the first that wants to play wins: the citadel's music while inside the citadel, music a script has
-/// started, music a script has attached to an object while the camera is near it, and the music of the land under the
+/// started, the music of a creature's dance with villagers near the camera, music a script has attached to an object
+/// while the camera is near it, and the music of the land under the
 /// camera. Over land the music follows the player's alignment, and near a town that of its tribe too. Each music group
 /// remembers where it got to, so the land's music carries on in time when it changes and picks up where it left off when
 /// it comes back.
-// TODO(raffclar): the game also plays creature fight, chant and creature dance music before the attached music
+// TODO(raffclar): the game also plays creature fight and chant music before the creature dance music
 class GameMusic
 {
 public:
@@ -183,6 +184,13 @@ public:
 		std::vector<Town> towns;
 		/// Where an object with attached music is, none once it has gone
 		std::function<std::optional<glm::vec3>(uint32_t thing)> thingPosition;
+		/// The music of the creature's dance with villagers that the camera hears, and where the creature is
+		struct CreatureDance
+		{
+			MusicType type;
+			glm::vec3 position;
+		};
+		std::optional<CreatureDance> creatureDance;
 	};
 
 	GameMusic() = default;
@@ -263,6 +271,7 @@ private:
 	void ProcessMusic(const TurnInputs& inputs);
 	bool ProcessCitadel(const TurnInputs& inputs);
 	bool ProcessScript();
+	bool ProcessCreatureDance(const TurnInputs& inputs);
 	bool ProcessAttached(const TurnInputs& inputs);
 	bool ProcessLand(const TurnInputs& inputs);
 	/// Remembers where each playing music group has got to

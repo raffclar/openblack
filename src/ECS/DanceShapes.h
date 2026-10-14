@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <span>
 
 #include <glm/vec2.hpp>
 
@@ -35,5 +36,7 @@ using Shape = std::array<glm::ivec2, k_PointsPerShape>;
 
 /// The name of a shape read from a file, its file being data\<name>.dan; empty for one the game works out
 [[nodiscard]] const char* FileName(std::size_t index);
+/// A shape read from a file: its points in order, as many as the shape holds, and the rest at the centre
+[[nodiscard]] Shape FromPoints(std::span<const glm::ivec2> points);
 
 } // namespace openblack::ecs::dance_shapes

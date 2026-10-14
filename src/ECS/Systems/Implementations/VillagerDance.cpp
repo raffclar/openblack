@@ -30,12 +30,14 @@
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/VillagerClips.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerAnimate.h"
+#include "VillagerCreatureDance.h"
 #include "VillagerHome.h"
 
 using namespace openblack;
@@ -61,6 +63,12 @@ struct Placed
 	std::size_t group {0};
 	std::size_t slot {0};
 };
+
+/// The shapes the dances' groups stand in, with those read from the data folder
+const std::array<ecs::dance_shapes::Shape, ecs::dance_shapes::k_ShapeCount>& DanceShapes()
+{
+	return Locator::danceSystem::has_value() ? Locator::danceSystem::value().Shapes() : moves::Shapes();
+}
 
 std::optional<Placed> PlaceOf(entt::entity villager)
 {
@@ -131,7 +139,7 @@ std::optional<glm::vec2> villager_dance::SlotOf(entt::entity villager)
 	{
 		return std::nullopt;
 	}
-	const auto place = moves::SlotPosition(*placed->dance, placed->group, placed->slot, moves::Shapes());
+	const auto place = moves::SlotPosition(*placed->dance, placed->group, placed->slot, DanceShapes());
 	const auto whole = ecs::wall_hug::ToWhole(map_coords::ToMetres(place));
 	return map_coords::ToMetres(MapCoords {.x = whole.x, .z = whole.y});
 }
@@ -141,7 +149,7 @@ uint32_t villager_dance::InDance(LivingAction& action)
 	return PerformDance(action, VillagerStates::InDance);
 }
 
-uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates danceState)
+uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates danceState, std::optional<uint32_t> move)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto villager = registry.ToEntity(action);
@@ -153,7 +161,7 @@ uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates dance
 	}
 	const auto& dance = *placed->dance;
 	const auto& group = dance.groups.all[placed->group];
-	const auto place = moves::SlotPosition(dance, placed->group, placed->slot, moves::Shapes());
+	const auto place = moves::SlotPosition(dance, placed->group, placed->slot, DanceShapes());
 	// Walks keep their goals in metres here: the place is taken as the walk would reach it, so that a dancer that has
 	// walked there is there
 	const auto whole = ecs::wall_hug::ToWhole(map_coords::ToMetres(place));
@@ -161,8 +169,9 @@ uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates dance
 	const auto at = MapPositionOf(villager);
 	const float distance = gutils::GetDistanceInMetres(at, slot);
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
+	const auto moveAction = static_cast<moves::Action>(move.value_or(group.move.action));
 	const auto facing = moves::Facing({
-	    .action = static_cast<moves::Action>(group.move.action),
+	    .action = moveAction,
 	    .facing = wallHug != nullptr ? wallHug->gameAngle : uint16_t {0},
 	    .towardsCentre = gutils::GetAngleFromXZ(at, moves::GroupCentre(dance, placed->group)),
 	    .danceAngle = dance.angle,
@@ -174,8 +183,12 @@ uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates dance
 	{
 		SetGameAngle(villager, *facing);
 	}
-	// TODO(opening): looking at the first dancer of another group (2), and the belief a worshipping dancer gives its
-	// town's player (14)
+	// A villager that worships in a creature's dance gives its town belief in the creature's player
+	if (moveAction == moves::Action::Worship)
+	{
+		villager_creature_dance::WorshipCreature(villager, dance.owner, dance.type);
+	}
+	// TODO(opening): looking at the first dancer of another group (2)
 	if (distance > 0.0f)
 	{
 		// It walks to its place, and dances again there; a place more than 4 m off is walked to round what is in the way
@@ -204,7 +217,7 @@ uint32_t villager_dance::MoveToDancePos(LivingAction& action)
 	// A group that moved this turn moves its dancers' places with it
 	if (placed->dance->groups.all[placed->group].moved)
 	{
-		const auto slot = moves::SlotPosition(*placed->dance, placed->group, placed->slot, moves::Shapes());
+		const auto slot = moves::SlotPosition(*placed->dance, placed->group, placed->slot, DanceShapes());
 		if (auto* wallHug = registry.TryGet<WallHug>(villager); wallHug != nullptr)
 		{
 			wallHug->goal = map_coords::ToMetres(slot);

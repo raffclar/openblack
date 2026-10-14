@@ -63,6 +63,7 @@ class EXCFile;
 namespace openblack::dance
 {
 struct DanceFile;
+struct DanceShapeFile;
 } // namespace openblack::dance
 namespace openblack::hnd
 {
@@ -316,6 +317,12 @@ struct CameraZoneLoader final: BaseLoader<exc::EXCFile>
 
 /// A dance's choreography, from the files under the scripts' Dance folder
 struct DanceFileLoader final: BaseLoader<dance::DanceFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// A shape that dancers stand in, from the .dan files of the Data folder
+struct DanceShapeLoader final: BaseLoader<dance::DanceShapeFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };

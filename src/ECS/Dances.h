@@ -63,8 +63,8 @@ void Destroy(Registry& registry, entt::entity dance, const std::function<void(en
 [[nodiscard]] uint32_t Size(const Registry& registry, entt::entity dance);
 
 /// A living joins a dance, in the group whose turn it is that takes it; false when none does, and then it dances in
-/// no group
-bool AddDancer(Registry& registry, entt::entity dance, entt::entity living, uint32_t sex);
+/// no group. A creature dances as a dancer of its own kind; anything else dances as a dancer of no kind.
+bool AddDancer(Registry& registry, entt::entity dance, entt::entity living, uint32_t sex, uint32_t danceType = 0);
 /// A dancer leaves its dance
 void RemoveDancer(Registry& registry, entt::entity living);
 /// The first dancer of the first group with one other than `exclude`

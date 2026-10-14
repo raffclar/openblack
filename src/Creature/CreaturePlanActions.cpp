@@ -16,6 +16,7 @@
 
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureCastAgenda.h"
+#include "Creature/CreatureDance.h"
 #include "Creature/CreatureFireAgenda.h"
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
@@ -156,6 +157,10 @@ constexpr std::array k_Executors {
     Executor {.action = "ShowHotness", .build = Build::Emote, .animation = animations::k_Hot},
     Executor {.action = "RunAwayFromPlayer", .build = Build::RunFromPlayer},
     Executor {.action = "ShowImpressiveAnimation", .build = Build::Emote, .animation = animations::k_Impress},
+    Executor {.action = "DanceWithVillagers",
+              .target = Target::DanceVillager,
+              .build = Build::DanceWithVillagers,
+              .danceType = creature_dance::k_ImpressDanceType},
     Executor {
         .action = "Stroke", .target = Target::Villager, .build = Build::ApproachEmote, .animation = animations::k_FeelingNice},
     Executor {.action = "SmileAtFriend", .target = Target::Creature, .build = Build::SmileAt},
@@ -441,6 +446,18 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::FaceAndEmote(*situation.camera, executor.animation);
 	case Build::ApproachEmote:
 		return creature_mind::ApproachAndEmote(*object, executor.animation);
+	case Build::DanceWithVillagers:
+		// With no clear place about the villager the action fails
+		if (!situation.danceArea.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_dance::Agenda({.villager = *object,
+		                               .place = *situation.danceArea,
+		                               .type = executor.danceType,
+		                               .fewestDancers = situation.fewestDancers,
+		                               .beats = situation.danceBeats,
+		                               .height = situation.height});
 	case Build::RunFromObject:
 		return creature_mind::RunFrom(objectPoint);
 	case Build::RunFromPlayer:

@@ -165,10 +165,15 @@ uint32_t ecs::villager_artefact_dance::ArtefactDance(LivingAction& action)
 bool ecs::villager_artefact_dance::ExitDance(LivingAction& action, VillagerStates next)
 {
 	// Into another dance's state, or a script's dance, it stays in its dance
-	if (next != VillagerStates::InDance && std::ranges::find(k_DanceStates, next) == k_DanceStates.end())
+	if (next != VillagerStates::InDance && !IsDanceState(next))
 	{
 		auto& registry = Entities();
 		dances::RemoveDancer(registry, registry.ToEntity(action));
 	}
 	return false;
+}
+
+bool ecs::villager_artefact_dance::IsDanceState(VillagerStates state)
+{
+	return std::ranges::find(k_DanceStates, state) != k_DanceStates.end();
 }
