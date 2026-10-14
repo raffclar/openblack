@@ -332,6 +332,35 @@ void HelpTextSystem::CloseDialogue()
 	}
 }
 
+help::DialogueText::Held HelpTextSystem::HoldText() const
+{
+	return _dialogue ? _dialogue->Hold() : help::DialogueText::Held {};
+}
+
+void HelpTextSystem::CloseTextBox()
+{
+	if (_dialogue)
+	{
+		_dialogue->CloseBox();
+	}
+}
+
+void HelpTextSystem::RestoreText(const help::DialogueText::Held& held)
+{
+	if (_dialogue)
+	{
+		_dialogue->Restore(held);
+	}
+}
+
+void HelpTextSystem::ShowTextAgain()
+{
+	if (_dialogue)
+	{
+		_dialogue->ShowAgain();
+	}
+}
+
 const help::TextFrame* HelpTextSystem::Layout(glm::ivec2 screen, int barPixels, const help::WidthFn& widthFn) const
 {
 	return _dialogue ? &_dialogue->Layout(screen.x, screen.y, barPixels, widthFn) : nullptr;

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <ranges>
 #include <string>
 #include <utility>
 
@@ -192,6 +193,33 @@ void DialogueText::CloseDialogue()
 {
 	_display.Close();
 	ClearAllText();
+}
+
+void DialogueText::Restore(const Held& held)
+{
+	_texts = held.texts;
+	_waitClick = held.waitClick;
+	_noClick = held.noClick;
+}
+
+void DialogueText::ShowAgain()
+{
+	_display.Hide();
+	// Add the oldest first, so the newest is on top again. A text that showed a number now shows 0.
+	for (const auto number : _texts | std::views::reverse)
+	{
+		if (number == 0)
+		{
+			continue;
+		}
+		const auto text = _queries.text ? _queries.text(number) : Text {};
+		_display.Add(std::u16string(text.text), 0.0f, text.narrator, true);
+	}
+	if (_texts[0] != 0)
+	{
+		const auto newest = _queries.text ? _queries.text(_texts[0]) : Text {};
+		StartReadingTime(newest.text);
+	}
 }
 
 bool DialogueText::ShownLongEnough() const

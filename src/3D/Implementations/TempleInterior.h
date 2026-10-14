@@ -24,6 +24,7 @@
 #include "3D/TempleMap.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
+#include "Temple/TempleHelp.h"
 #include "Temple/TemplePeople.h"
 #include "Temple/TempleRoomLock.h"
 
@@ -56,6 +57,8 @@ public:
 	void GoToRoom(TempleRoom room) override;
 	void EnterRoom(TempleRoom room) override;
 	[[nodiscard]] bool IsRoomDrawn(TempleRoom room) const override;
+	[[nodiscard]] bool IsRoomAvailable(TempleRoom room) const override;
+	void TellRoomNotAvailable() override;
 	[[nodiscard]] TempleDoors& GetDoors() override { return _doors; }
 	[[nodiscard]] const TempleDoors& GetDoors() const override { return _doors; }
 	[[nodiscard]] std::optional<TempleCursorHit> GetCursorHit() const override;
@@ -99,6 +102,8 @@ private:
 	void Close();
 	/// Looks through the camera model's lens, or the configured one without
 	void ApplyLens() const;
+	/// The temple gives back the dialogue that it kept when the player entered
+	void BringBackDialogue();
 
 	bool _active {false};
 	/// The room the player last came into on this visit, whose help was asked for then
@@ -106,6 +111,11 @@ private:
 	bool _leaveRequested {false};
 	/// The room the player is kept in once the game is over
 	temple::RoomLock _lock;
+	/// True after the temple drew the main room as the player's room in this game. This opens the other rooms. The
+	/// game keeps this value in its saves.
+	bool _roomsOpened {false};
+	/// The world's dialogue, kept while the player is inside
+	std::optional<temple_help::HeldDialogue> _heldDialogue;
 	/// The temple starts in the main room unless told of another
 	TempleRoom _currentRoom {TempleRoom::Main};
 	std::optional<TempleRoom> _transitionRoom;

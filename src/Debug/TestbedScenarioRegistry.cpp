@@ -1536,7 +1536,7 @@ void AddAudio(std::vector<Scenario>& all)
 	    .facet = Facet::Story,
 	    .description = "Four challenges are recorded as their scripts record them, each with its picture of a different "
 	                   "view of the land: The Sea and The Ogre under way, The Lost Brother done, and The Riddles a quest "
-	                   "half done. Then the player is put in the temple's challenge room.",
+	                   "half done. Then the player is put in the temple's main room, and from there in its challenge room.",
 	    .expected = "The scroll lists the four titles (four discovered, one completed). The first four pictures on the "
 	                "walls show the four views in low detail, in silver frames but The Riddles' gold one; every picture "
 	                "but The Lost Brother's has its replay button. Clicking a picture looks at it closely in high detail, "
@@ -1546,7 +1546,9 @@ void AddAudio(std::vector<Scenario>& all)
 	    .commands =
 	        [&challengeRecords] {
 		        auto commands = challengeRecords;
-		        commands.push_back({.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 0});
+		        // The other rooms open after the temple draws the main room. Thus the player enters through it.
+		        commands.push_back({.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3});
+		        commands.push_back({.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 0});
 		        return commands;
 	        }(),
 	});
@@ -1568,6 +1570,19 @@ void AddAudio(std::vector<Scenario>& all)
 		        commands.push_back({.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3});
 		        return commands;
 	        }(),
+	});
+
+	all.push_back({
+	    .id = "temple.room_not_available",
+	    .name = "The temple's creature room is closed to a player with no creature",
+	    .facet = Facet::Story,
+	    .description = "The player has no creature and is put in the temple's main room. Click the door of the creature "
+	                   "room (the door marked Creature), then the door of the challenge room.",
+	    .expected = "At the creature room's door the camera stays where it is. The help running stops, and the help "
+	                "script CitadelWorldRoomNotAvailable starts and tells the player. The creature room's key does "
+	                "nothing. The challenge room's door takes the camera through to it as usual.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
 	});
 
 	// The camera looks out across the north edge of the player's influence: the bottom of the screen is inside it,

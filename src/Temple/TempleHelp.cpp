@@ -148,6 +148,41 @@ void Leave(Scripts& scripts)
 	scripts.StopHelp();
 }
 
+void RoomNotAvailable(Scripts& scripts)
+{
+	scripts.StopHelp();
+	scripts.Start("CitadelWorldRoomNotAvailable");
+}
+
+std::optional<HeldDialogue> PutAwayDialogue(Scripts& scripts, Dialogue& dialogue)
+{
+	scripts.StopHelp();
+	dialogue.SendAdvisorsHome();
+	if (!dialogue.IsControlled())
+	{
+		return std::nullopt;
+	}
+	const auto owner = dialogue.GetOwner();
+	if (dialogue.IsTempleScript(owner))
+	{
+		return std::nullopt;
+	}
+	HeldDialogue held {.owner = owner, .text = dialogue.HoldText()};
+	dialogue.TakeAway();
+	return held;
+}
+
+void BringBackDialogue(Dialogue& dialogue, std::optional<HeldDialogue>& held)
+{
+	if (held.has_value() && !dialogue.IsControlled())
+	{
+		dialogue.GiveTo(held->owner);
+		dialogue.RestoreText(held->text);
+	}
+	held.reset();
+	dialogue.ShowTextAgain();
+}
+
 bool TurnDue(std::optional<uint32_t>& last, uint32_t now)
 {
 	if (!last.has_value())

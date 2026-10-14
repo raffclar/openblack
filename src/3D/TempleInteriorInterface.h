@@ -123,6 +123,10 @@ public:
 	virtual void GoToRoom(TempleRoom room) = 0;
 	/// Walks through the main room's door to a room, or cuts to it from elsewhere
 	virtual void EnterRoom(TempleRoom room) = 0;
+	/// Whether the player can go into a room. The player cannot go to a closed room. Its door tells the player.
+	[[nodiscard]] virtual bool IsRoomAvailable(TempleRoom room) const = 0;
+	/// The player clicked the door of a room that is not open to them: the help that tells them so starts
+	virtual void TellRoomNotAvailable() = 0;
 	/// Whether a room is drawn whole: the room the player is in, the room the camera is on its way into, and the main
 	/// room from the others while one of its doors is open
 	[[nodiscard]] virtual bool IsRoomDrawn(TempleRoom room) const = 0;
