@@ -174,3 +174,127 @@ TEST(CreatureEmoteAgendas, SadWaitsWholeTurnsLookingDownThenCriesOrMopes)
 	EXPECT_EQ(agenda[1].animation, k_CryAnimation);
 	EXPECT_EQ(BeSad(9, 10.0f, Draws({0, 0}))[1].animation, creature_layers::animations::k_Sad);
 }
+
+TEST(CreatureEmoteAgendas, RunningAwayStartsFrightenedOneTimeInTwoAndLooksBack)
+{
+	const auto both = RunAway({.point = {10.0f, 0.0f}, .object = 5u}, Draws({0, 0}));
+	ASSERT_EQ(both.size(), 3u);
+	EXPECT_EQ(both[0].animation, k_FrightenedAnimation);
+	EXPECT_EQ(both[0].heldEyes, creature_mind::Eyes::Wide);
+	EXPECT_EQ(both[1].movement.kind, Movement::Kind::FleeFrom);
+	EXPECT_EQ(both[1].face, creature_face::Cue::Fear);
+	EXPECT_EQ(both[1].effect, Effect::Completed);
+	ASSERT_TRUE(both[1].gaze.has_value());
+	EXPECT_TRUE(both[1].gaze->runningAway);
+	EXPECT_EQ(both[1].gaze->object, 5u);
+	EXPECT_EQ(both[1].heldEyes, creature_mind::Eyes::Wide);
+	const auto fromHand = RunAway({.point = {10.0f, 0.0f}}, Draws({1, 1}));
+	ASSERT_EQ(fromHand.size(), 1u);
+	EXPECT_TRUE(fromHand[0].gaze->hand);
+	EXPECT_FALSE(fromHand[0].heldEyes.has_value());
+}
+
+TEST(CreatureEmoteAgendas, TheRunLooksAheadThenBackInTurns)
+{
+	RunLookBack state;
+	// Ahead for more than 1 s of turns (10), then back for more than 0.5 s (5)
+	int back = 0;
+	for (int turn = 0; turn < 11; ++turn)
+	{
+		back += RunLooksBack(state, 10.0f, 0.5f, 1.0f) ? 1 : 0;
+	}
+	EXPECT_EQ(back, 0);
+	EXPECT_TRUE(state.lookingBack);
+	for (int turn = 0; turn < 6; ++turn)
+	{
+		EXPECT_TRUE(RunLooksBack(state, 10.0f, 0.5f, 1.0f));
+	}
+	EXPECT_FALSE(state.lookingBack);
+}
+
+TEST(CreatureEmoteAgendas, StrokePicksUpStrokesHealsAndPutsDown)
+{
+	const auto agenda = StrokeAndHeal(8, false);
+	ASSERT_EQ(agenda.size(), 4u);
+	EXPECT_EQ(agenda[0].order.kind, creature_mind::ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[1].order.animation, k_StrokeAnimation);
+	EXPECT_EQ(agenda[1].effect, Effect::Completed);
+	EXPECT_EQ(agenda[2].kind, Step::Kind::Heal);
+	EXPECT_EQ(agenda[2].object, 8u);
+	EXPECT_EQ(agenda[3].order.animation, k_PutDownAnimation);
+	for (size_t i = 1; i < agenda.size(); ++i)
+	{
+		EXPECT_EQ(agenda[i].face, creature_face::Cue::Compassion);
+	}
+	EXPECT_EQ(StrokeAndHeal(8, true).size(), 3u);
+}
+
+TEST(CreatureEmoteAgendas, TheSkyLookTurnsPointsAndAnEvilOneGrowlsAtTheMoon)
+{
+	const auto sun = LookAtSky(k_SunPoint, false, Draws({0}));
+	ASSERT_EQ(sun.size(), 2u);
+	EXPECT_EQ(sun[0].movement.point, glm::vec2(-50000.0f, -50000.0f));
+	EXPECT_EQ(sun[1].order.kind, creature_mind::ObjectOrder::Kind::PointAt);
+	EXPECT_EQ(sun[1].order.seconds, k_PointAtSkySeconds);
+	EXPECT_EQ(LookAtSky(k_SunPoint, false, Draws({1})).size(), 1u);
+	const auto moon = LookAtSky({4000.0f, 900.0f, 0.0f}, true, Draws({0}));
+	ASSERT_EQ(moon.size(), 3u);
+	EXPECT_EQ(moon[1].effect, Effect::Completed);
+	EXPECT_EQ(moon[2].animation, k_AngryAnimation);
+	EXPECT_EQ(moon[2].face, creature_face::Cue::Amazed);
+	// Without the point, the growl is the last step, which completes the action
+	EXPECT_EQ(LookAtSky({4000.0f, 900.0f, 0.0f}, true, Draws({1}))[0].effect, Effect::None);
+}
+
+TEST(CreatureEmoteAgendas, SleepingOnTheSpotWalksToTheClearPlaceWithoutFacingDownTheSlope)
+{
+	const auto agenda = SleepAtClearPlace({3.0f, 4.0f}, 2.0f, Draws({0}));
+	ASSERT_EQ(agenda.size(), 4u);
+	EXPECT_EQ(agenda[0].animation, creature_layers::animations::k_Tired);
+	EXPECT_EQ(agenda[1].movement.point, glm::vec2(3.0f, 4.0f));
+	EXPECT_FLOAT_EQ(agenda[1].movement.maxDistance, 2.0f);
+	EXPECT_TRUE(agenda[2].untilRested);
+	EXPECT_EQ(agenda[3].animation, creature_layers::animations::k_Confused);
+	EXPECT_EQ(SleepAtClearPlace({3.0f, 4.0f}, 2.0f, Draws({1})).size(), 3u);
+}
+
+TEST(CreatureEmoteAgendas, SittingByAThingSitsTenToFifteenSeconds)
+{
+	const auto agenda = SitDownBy(3, {1.0f, 2.0f}, 4.0f, Draws({0xFFFE}));
+	ASSERT_EQ(agenda.size(), 4u);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::FaceDownSlope);
+	EXPECT_NEAR(agenda[3].seconds, 15.0f, 1e-3f);
+	EXPECT_EQ(agenda[3].sequence[1], creature_layers::animations::k_Sit);
+}
+
+TEST(CreatureEmoteAgendas, TheRulesOfDayNightHomeAndTheHand)
+{
+	EXPECT_TRUE(SunVisible(false));
+	EXPECT_FALSE(SunVisible(true));
+	EXPECT_TRUE(MoonVisible(true));
+	EXPECT_TRUE(NotTooFarFromHome(999.0f));
+	EXPECT_FALSE(NotTooFarFromHome(1000.0f));
+	EXPECT_FALSE(NotTooFarFromHome(std::nullopt));
+	EXPECT_TRUE(LeashedOrTooFarFromHome(true, 10.0f));
+	EXPECT_TRUE(LeashedOrTooFarFromHome(false, std::nullopt));
+	EXPECT_FALSE(LeashedOrTooFarFromHome(false, 140.0f));
+	EXPECT_TRUE(LeashedOrTooFarFromHome(false, 140.5f));
+	EXPECT_TRUE(PlayerNearbyAndFrightening(9.0f, -0.1f));
+	EXPECT_FALSE(PlayerNearbyAndFrightening(9.0f, 0.0f));
+	EXPECT_FALSE(PlayerNearbyAndFrightening(10.0f, -0.5f));
+	EXPECT_FALSE(PlayerNearbyAndFrightening(std::nullopt, -0.5f));
+}
+
+TEST(CreatureEmoteAgendas, RecentlyCountsWholeSecondsAndNeverForZero)
+{
+	EXPECT_FALSE(DoneWithin(0, 10, 2.0f));
+	EXPECT_TRUE(DoneWithin(1, 10, 2.0f));
+	// 19 turns are 1 whole second; 20 and 29 turns are 2 whole seconds, not fewer than 2
+	EXPECT_TRUE(DoneWithin(19, 10, 2.0f));
+	EXPECT_FALSE(DoneWithin(20, 10, 2.0f));
+	EXPECT_FALSE(DoneWithin(29, 10, 2.0f));
+	EXPECT_FALSE(ShowedOffRecently(0, 50));
+	EXPECT_TRUE(ShowedOffRecently(100, 300));
+	EXPECT_FALSE(ShowedOffRecently(100, 301));
+}

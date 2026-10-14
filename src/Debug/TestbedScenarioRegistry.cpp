@@ -3939,6 +3939,71 @@ void AddMind(std::vector<Scenario>& all)
 	    .repeatFrom = 1,
 	});
 
+	// The emotes: a script tells a player's lion to do one action again and again, with a villager beside it as the thing
+	// that the action is done to
+	const auto emote = [&all](std::string_view id, std::string_view name, std::string_view description,
+	                          std::string_view expected, std::string_view action, float every, Environment environment,
+	                          std::optional<float> villagerLife) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Mind,
+		    .description = description,
+		    .expected = expected,
+		    .environment = environment,
+		    .framing = {.shot = Shot::Testbed},
+		    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 90.0f)},
+		    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-40.0f, 10.0f}, .life = villagerLife}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = action},
+		                 {.kind = Kind::DoAction, .delaySeconds = every, .object = 0, .action = action}},
+		    .repeatFrom = 1,
+		});
+	};
+	emote("emote.howl", "The creature howls at the player",
+	      "A script tells a player's lion to howl at the player every eight seconds.",
+	      "It turns to face the camera, its head on the camera, then plays its howl with its sound. It pulls no face.",
+	      "HowlAtPlayer", 8.0f, {}, std::nullopt);
+	emote("emote.sad", "The creature is sad", "A script tells a player's lion to be sad every ten seconds.",
+	      "It looks down at its feet with a sad face for two to five seconds, then it plays its sad clip or it cries, in "
+	      "equal shares.",
+	      "BeSad", 10.0f, {}, std::nullopt);
+	emote("emote.silly_faces", "The creature pulls silly faces at a villager",
+	      "A script tells a player's lion to pull silly faces at a villager beside it every twelve seconds.",
+	      "It goes near the villager and turns to it. Two times in three it plays its playful clip. Then it pulls three "
+	      "random faces in a row, one each turn, and holds the last for five seconds, its head on the villager.",
+	      "PullSillyFaces", 12.0f, {}, std::nullopt);
+	emote("emote.pathetic", "The creature is pathetic to the player",
+	      "A script tells a player's lion to be pathetic to the player every fifteen seconds. Move the camera's focus "
+	      "away from it.",
+	      "It walks to the point that the camera looks at, for up to thirty seconds, its head on the camera. Then it "
+	      "turns to the camera and plays its pick-me clip.",
+	      "BePatheticToPlayer", 15.0f, {}, std::nullopt);
+	emote("emote.stroke_heal", "The creature strokes a hurt villager and heals it",
+	      "A villager at three tenths of its life stands near a player's lion. A script tells the lion to stroke it "
+	      "every twenty seconds.",
+	      "The lion picks the villager up, strokes it with a face of compassion, heals it to full life, then puts it "
+	      "down. The villager then goes home.",
+	      "Stroke", 20.0f, {}, 0.3f);
+	emote("emote.look_at_sun", "The creature looks at the sun",
+	      "At noon, a script tells a player's lion to look at the sun every six seconds.",
+	      "It turns to face the far south-west of the land, its head on that point. One time in two it points there for "
+	      "three seconds.",
+	      "LookAtSun", 6.0f, {}, std::nullopt);
+	emote("emote.look_at_moon", "The creature looks at the moon",
+	      "At midnight, a script tells a player's lion to look at the moon every six seconds.",
+	      "It turns to face the moon's place, its head on it. One time in two it points there for three seconds.", "LookAtMoon",
+	      6.0f, {.hour = 0.0f}, std::nullopt);
+	emote("emote.sit_down", "The creature sits down by a villager",
+	      "A script tells a player's lion to sit down by a villager every twenty-five seconds.",
+	      "It walks to the villager, turns to face it, faces down the slope, then sits for ten to fifteen seconds and "
+	      "looks about.",
+	      "SitDown", 25.0f, {}, std::nullopt);
+	emote("emote.sleep_on_the_spot", "The creature sleeps at a clear place near it",
+	      "A script tells a player's lion to sleep on the spot every forty seconds.",
+	      "One time in two it yawns. It walks to a clear place near it, sleeps until it is rested, then gets up dazed "
+	      "with a grimace.",
+	      "SleepOnTheSpot", 40.0f, {}, std::nullopt);
+
 	all.push_back({
 	    .id = "mind.look_at_hand_turn",
 	    .name = "Looking at the hand turns round once and then stops",

@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMindModel.h"
@@ -147,6 +148,17 @@ struct CreatureMindState
 	/// Turns its agenda's steps have run, counted on from step to step, which a walk up to something checks every fifty
 	/// for having got stuck
 	uint32_t stepTurns {0};
+	/// The turns that the agenda (by the idle mind's count of them) has run steps for
+	uint32_t agendaTurns {0};
+	uint32_t agendaTurnsSerial {0};
+	/// The actions of the desire of the plan that it carries out, in the order of the list that the plan came from; and
+	/// for each desire, the list that its last plan came from
+	std::vector<uint32_t> planActions;
+	std::array<std::vector<uint32_t>, creature_desires::k_DesireCount> plannedActions {};
+	/// The game turn that it last carried out each action to its end, 0 for never
+	std::vector<uint32_t> lastDoneTurn;
+	/// Running away, it looks back at what it runs from in turns
+	creature_emote::RunLookBack runLookBack {};
 	/// Game turns the mind has thought, and the turn it last planned
 	uint32_t turn {0};
 	uint32_t plannedTurn {0};

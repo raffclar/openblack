@@ -34,6 +34,7 @@
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
@@ -794,6 +795,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::planSerial>("planSerial")
 	    .Field<&components::CreatureMindState::agendaSeen>("agendaSeen")
 	    .Field<&components::CreatureMindState::stepTurns>("stepTurns")
+	    .Field<&components::CreatureMindState::agendaTurns>("agendaTurns")
+	    .Field<&components::CreatureMindState::agendaTurnsSerial>("agendaTurnsSerial")
+	    .Field<&components::CreatureMindState::planActions>("planActions")
+	    .Field<&components::CreatureMindState::plannedActions>("plannedActions", {k_CreatureDesiresDesireNames})
+	    .Field<&components::CreatureMindState::lastDoneTurn>("lastDoneTurn")
+	    .Field<&components::CreatureMindState::runLookBack>("runLookBack")
 	    .Field<&components::CreatureMindState::turn>("turn")
 	    .Field<&components::CreatureMindState::plannedTurn>("plannedTurn")
 	    .Field<&components::CreatureMindState::lastMeterTurn>("lastMeterTurn")
@@ -2136,6 +2143,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_desires::Source::multiplier>("multiplier")
 	    .Field<&openblack::creature_desires::Source::drive>("drive")
 	    .Field<&openblack::creature_desires::Source::clearedWhenSatisfied>("clearedWhenSatisfied");
+	Reflect<openblack::creature_emote::RunLookBack>(context, ValueOnly {})
+	    .Field<&openblack::creature_emote::RunLookBack::lookingBack>("lookingBack")
+	    .Field<&openblack::creature_emote::RunLookBack::turns>("turns");
 	Reflect<openblack::creature_eyes::Blink>(context, ValueOnly {})
 	    .Field<&openblack::creature_eyes::Blink::state>("state")
 	    .Field<&openblack::creature_eyes::Blink::timerMs>("timerMs")

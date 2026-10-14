@@ -75,8 +75,9 @@ constexpr uint32_t k_ShowHungerBeforeEatLots = 2;
 /// A poo and being sick each last this many seconds
 constexpr float k_PooSeconds = 4.0f;
 constexpr float k_PukeSeconds = 4.0f;
-/// Fainted, it lies out cold this long before it gets up. The game's time is not known; this stands in for it.
-constexpr float k_FaintSeconds = 10.0f;
+/// Fainted, it lies out cold four seconds for each unit of its size, and eight more
+constexpr float k_FaintSecondsPerSize = 4.0f;
+constexpr float k_FaintExtraSeconds = 8.0f;
 /// It drinks from anywhere this close to the water's edge
 constexpr float k_DrinkReach = 5.0f;
 /// Looking something over, it puts it down gently most times, out of this many, and tosses it away the rest
@@ -813,8 +814,9 @@ struct PooBy
 [[nodiscard]] std::vector<Step> Fart(const Random& random, std::optional<PooBy> by);
 /// Being sick on the spot
 [[nodiscard]] std::vector<Step> Puke();
-/// Fainting where it stands, lying out cold a while, then getting up
-[[nodiscard]] std::vector<Step> Faint();
+/// Fainting where it stands, lying out cold four seconds for each unit of its size and eight more, then getting up. A
+/// creature that faints in the world is carried home by the fights; this agenda is for a world without them.
+[[nodiscard]] std::vector<Step> Faint(float size);
 /// Eating what it holds
 [[nodiscard]] std::vector<Step> EatHeld();
 /// Taking a thing the player's hand gives it: turning to the player's camera, then reaching out to take it from the

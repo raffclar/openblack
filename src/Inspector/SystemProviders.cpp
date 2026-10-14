@@ -180,6 +180,12 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "dance";
 	case Kind::FollowWatching:
 		return "follow_watching";
+	case Kind::Face:
+		return "face";
+	case Kind::FollowCamera:
+		return "follow_camera";
+	case Kind::Heal:
+		return "heal";
 	case Kind::Communicate:
 		return "communicate";
 	}

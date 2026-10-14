@@ -101,11 +101,13 @@ enum class Target : uint8_t
 	OneShotPlayful,
 	/// A villager nearer to the creature than 200 metres, to dance with
 	DanceVillager,
+	/// A thing that the creature can pick up and that has lost some of its life, to stroke and heal
+	Strokeable,
 };
 /// A creature poos only by a thing taller than this, in metres
 constexpr float k_PooedOnTallerThan = 1.5f;
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::DanceVillager) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::Strokeable) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -224,8 +226,28 @@ enum class Build : uint8_t
 	CastOneShotInHand,
 	/// Picking up the one-shot miracle that it uses, unless its hand holds something, and casting it at the thing
 	PickUpAndCastOneShot,
+	/// The emotes: howling at the player, being sad, pulling silly faces at a villager, being pathetic to the player,
+	/// stroking a hurt thing to heal it, and looking at the sun or the moon
+	Howl,
+	BeSad,
+	PullSillyFaces,
+	BePathetic,
+	StrokeAndHeal,
+	LookAtSun,
+	LookAtMoon,
 	/// An action whose agenda can never be made
 	Never,
+};
+
+/// What tells the planner that the creature did an action too recently to choose it again
+enum class Recency : uint8_t
+{
+	/// Nothing
+	None,
+	/// Fewer whole seconds than two have gone by since it last did the action
+	TwoSeconds,
+	/// It last showed off to its end 200 game turns ago or less
+	ShowedOff,
 };
 
 /// The kinds of one-shot miracle that a creature casts for its desires
@@ -267,6 +289,8 @@ struct Executor
 	std::optional<uint32_t> castMagic;
 	/// The kind of one-shot miracle that the action casts, for the actions that cast one
 	OneShotKind oneShot {OneShotKind::Aggressive};
+	/// What stops the creature choosing the action again too soon
+	Recency recency {Recency::None};
 };
 
 /// Every action that can be carried out
@@ -339,6 +363,21 @@ struct Situation
 	std::optional<glm::vec2> danceArea;
 	uint32_t fewestDancers {0};
 	uint32_t danceBeats {0};
+	/// Whether the sky shows night, and the place where the creature looks for the moon
+	bool night {false};
+	glm::vec3 moon {0.0f};
+	/// Whether its alignment is evil (below 0)
+	bool evil {false};
+	/// Whether it wears a leash, and how far it is from home when its player has a temple (none otherwise)
+	bool leashed {false};
+	std::optional<float> homeDistance;
+	/// How far its player's hand nearest it is, none without a hand; and what it feels about its player, -1 to 1
+	std::optional<float> handDistance;
+	float attitudeToPlayer {0.0f};
+	/// Whether what its hand holds is a thing it can stroke
+	bool holdingStrokeable {false};
+	/// Game turns a second
+	float turnsPerSecond {10.0f};
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo
@@ -363,6 +402,14 @@ struct CastInfo
 
 /// Whether an action can be carried out now, in this situation, before any thing is chosen
 [[nodiscard]] bool Possible(const Executor& executor, const Situation& situation);
+/// Whether the creature may choose an action for itself in this situation: the conditions that the game's table puts on
+/// some actions (by day or by night, near or far from home, with the player's hand near). A script can make it do the
+/// action without them.
+[[nodiscard]] bool Allowed(const Executor& executor, const Situation& situation);
+/// Whether the creature did an action too recently to choose it again: the turns since it last did it, the game turn of
+/// the last time it showed off to its end (0 for never) and the game turn now
+[[nodiscard]] bool DoneTooRecently(const Executor& executor, uint32_t turnsSinceDone, uint32_t lastShowOffTurn, uint32_t turn,
+                                   uint32_t turnsPerSecond);
 /// The agenda for an action on a thing (by its entity number, and where it is), if it can be done
 [[nodiscard]] std::optional<std::vector<creature_mind::Step>> Agenda(const Executor& executor, std::optional<uint32_t> object,
                                                                      glm::vec2 objectPoint, const Situation& situation,

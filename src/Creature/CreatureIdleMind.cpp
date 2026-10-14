@@ -417,9 +417,10 @@ std::vector<Step> creature_mind::Puke()
 	return WithFace({puke}, creature_face::Cue::Grimace);
 }
 
-std::vector<Step> creature_mind::Faint()
+std::vector<Step> creature_mind::Faint(float size)
 {
-	auto faint = Static({animations::k_Faint, animations::k_Faint, animations::k_GetUp}, k_FaintSeconds);
+	auto faint = Static({animations::k_Faint, animations::k_Faint, animations::k_GetUp},
+	                    (k_FaintSecondsPerSize * size) + k_FaintExtraSeconds);
 	faint.holdLoop = true;
 	faint.closedEyes = true;
 	faint.effect = Effect::CameRound;
