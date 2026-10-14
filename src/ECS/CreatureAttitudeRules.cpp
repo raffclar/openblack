@@ -105,6 +105,15 @@ std::optional<Attitude> creature_attitude::AttitudeShown(uint32_t action, bool t
 	}
 }
 
+std::optional<Attitude> creature_attitude::PlanShows(uint32_t lastAction, bool thingIsVillager, bool hungryForPersonItHolds)
+{
+	if (hungryForPersonItHolds)
+	{
+		return Attitude::Fear;
+	}
+	return AttitudeShown(lastAction, thingIsVillager);
+}
+
 creature_attitude::Feeling creature_attitude::StartWatching(uint32_t turn)
 {
 	return {.attitude = Attitude::Curious, .shownTurn = turn, .lapsedTurn = turn};
