@@ -129,3 +129,74 @@ TEST(TownBelief, TakingATownHalvesTheMostBelievedAndGivesTheTakerMore)
 	EXPECT_FLOAT_EQ(town.belief.at(1), 0.0f);
 	EXPECT_FLOAT_EQ(town.belief.at(7), 0.0f);
 }
+
+namespace
+{
+std::array<DesireDecay, k_DesireCount> MadeUpDesireTable()
+{
+	std::array<DesireDecay, k_DesireCount> table {};
+	table.fill({.toBelief = 0.0f, .levelAfterGain = 0.5f, .levelFall = 0.0f});
+	table.at(0) = {.toBelief = 0.1f, .levelAfterGain = 0.5f, .levelFall = 0.25f};
+	return table;
+}
+} // namespace
+
+TEST(TownBelief, AnOwnedTownInWantLosesBeliefInItsOwnerFasterAsItsLevelFalls)
+{
+	Belief town;
+	town.belief.at(0) = 1.0f;
+	const auto table = MadeUpDesireTable();
+	std::array<float, k_DesireCount> desire {};
+	desire.at(0) = 0.75f;
+	// The levels start where the table puts them: 0.25 over the level, at 0.1 a unit
+	LoseBeliefToDesires(town, PlayerNames::PLAYER_ONE, desire, table, 0.0f);
+	EXPECT_FLOAT_EQ(town.belief.at(0), 1.0f - 0.025f);
+	ASSERT_TRUE(town.desireLevel.has_value());
+	EXPECT_FLOAT_EQ(town.desireLevel->at(0), 0.25f);
+	// The level fell, so the same want now costs more
+	LoseBeliefToDesires(town, PlayerNames::PLAYER_ONE, desire, table, 0.0f);
+	EXPECT_FLOAT_EQ(town.belief.at(0), 1.0f - 0.025f - 0.05f);
+	EXPECT_FLOAT_EQ(town.desireLevel->at(0), 0.0f);
+	// At the least level it falls no more
+	LoseBeliefToDesires(town, PlayerNames::PLAYER_ONE, desire, table, 0.0f);
+	EXPECT_FLOAT_EQ(town.desireLevel->at(0), 0.0f);
+	EXPECT_FLOAT_EQ(town.belief.at(0), 1.0f - 0.025f - 0.05f - 0.075f);
+}
+
+TEST(TownBelief, GainingBeliefPutsTheDesireLevelsBack)
+{
+	Belief town;
+	town.belief.at(0) = 1.0f;
+	const auto table = MadeUpDesireTable();
+	const std::array<float, k_DesireCount> desire {};
+	LoseBeliefToDesires(town, PlayerNames::PLAYER_ONE, desire, table, 0.0f);
+	LoseBeliefToDesires(town, PlayerNames::PLAYER_ONE, desire, table, 0.0f);
+	EXPECT_FLOAT_EQ(town.desireLevel->at(0), 0.0f);
+	// Wanting nothing more than its level costs nothing
+	EXPECT_FLOAT_EQ(town.belief.at(0), 1.0f);
+	ResetDesireLevels(town, table);
+	EXPECT_FLOAT_EQ(town.desireLevel->at(0), 0.5f);
+}
+
+TEST(TownBelief, ANeutralTownLosesNothingToItsWantsAndKeepsItsLevels)
+{
+	Belief town;
+	town.belief.at(7) = 0.3f;
+	const auto table = MadeUpDesireTable();
+	std::array<float, k_DesireCount> desire {};
+	desire.fill(1.0f);
+	LoseBeliefToDesires(town, PlayerNames::NEUTRAL, desire, table, 0.0f);
+	EXPECT_FLOAT_EQ(town.belief.at(7), 0.3f);
+	EXPECT_FALSE(town.desireLevel.has_value());
+}
+
+TEST(TownBelief, WantsCanTakeBeliefBelowNothing)
+{
+	Belief town;
+	auto table = MadeUpDesireTable();
+	table.at(0).toBelief = 2.0f;
+	std::array<float, k_DesireCount> desire {};
+	desire.at(0) = 1.0f;
+	LoseBeliefToDesires(town, PlayerNames::PLAYER_TWO, desire, table, 0.0f);
+	EXPECT_FLOAT_EQ(town.belief.at(1), -1.0f);
+}

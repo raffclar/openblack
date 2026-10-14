@@ -29,3 +29,14 @@ TEST(AnimalReactions, AnAnimalOutOfTheWorldOrBusyTakesUpNone)
 	EXPECT_FALSE(animals::AvailableForReaction({.outOfTheWorld = true}));
 	EXPECT_FALSE(animals::AvailableForReaction({.busyState = true}));
 }
+
+TEST(AnimalReactions, BusyStatesAreTheGamesDancingDyingDeadDrowningDownedEatenAndWaitingForAClip)
+{
+	for (uint8_t state = 0; state < 60; ++state)
+	{
+		const bool busy = state == 5 || (state >= 14 && state <= 18) || state == 23;
+		EXPECT_EQ(animals::IsBusyForReaction(state), busy) << "state " << static_cast<int>(state);
+	}
+	// Setting off to die is not yet dying
+	EXPECT_FALSE(animals::IsBusyForReaction(13));
+}
