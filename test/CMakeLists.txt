@@ -964,3 +964,4 @@ openblack_setup_and_add_test(test_fight_transcript test_fight_transcript.cpp)
 openblack_setup_and_add_test(
   test_fight_autopilot_rules test_fight_autopilot_rules.cpp
 )
+openblack_setup_and_add_test(test_town_miracle_tool test_town_miracle_tool.cpp)

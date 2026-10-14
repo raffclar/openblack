@@ -47,6 +47,7 @@
 #include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
+#include "Debug/TownMiracles.h"
 #include "ECS/ArtefactRules.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -82,6 +83,7 @@
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
@@ -215,6 +217,7 @@
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 #include "Particles/LightSheet.h"
 #include "Profiler.h"
 #include "RegistryProviders.h"
@@ -1726,6 +1729,94 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 std::unique_ptr<ProviderInterface> MagicProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("magic");
+	auto townMiracle =
+	    Query("town_miracle",
+	          "Debug only: gives a town a miracle or takes it away, through the same steps as the land's scripts. A town given "
+	          "one without a worship site can have its site, which goes up for its builders.",
+	          {IdParameter("The town (town.list)"),
+	           {.name = "magic",
+	            .type = "integer|string",
+	            .description = "The magic type, by number or by its info name",
+	            .required = true},
+	           {.name = "enable", .type = "boolean", .description = "Give it (default) or take it away", .required = false},
+	           {.name = "with_plain",
+	            .type = "boolean",
+	            .description = "Give a power-up level's plain miracle too, as a land file line does (default true)",
+	            .required = false},
+	           {.name = "all_levels",
+	            .type = "boolean",
+	            .description = "Take the plain miracle and every level, as a creature that steals it does (default false)",
+	            .required = false},
+	           {.name = "open_site",
+	            .type = "boolean",
+	            .description = "Let a town without a worship site have one, as the scripts do (default true)",
+	            .required = false},
+	           {.name = "any_land",
+	            .type = "boolean",
+	            .description = "Also on the first land, which never has worship sites (default true)",
+	            .required = false}});
+	townMiracle.writes = true;
+	provider->Add(std::move(townMiracle), [](const QueryContext& context) {
+		const auto* registry = Registry();
+		if (registry == nullptr)
+		{
+			return QueryResult::Error("there are no towns without a land");
+		}
+		const auto town = EntityParam(context.params);
+		if (!town.has_value() || !registry->AllOf<Town>(*town))
+		{
+			return QueryResult::Error("give a town's id (town.list)");
+		}
+		const auto& params = context.params;
+		std::optional<MagicType> type;
+		if (const auto magic = params.find("magic"); magic != params.end())
+		{
+			if (magic->is_number_integer())
+			{
+				type = static_cast<MagicType>(magic->get<int>());
+			}
+			else if (magic->is_string() && Locator::infoConstants::has_value())
+			{
+				type = magic::FindMagicTypeByName(Locator::infoConstants::value(), magic->get<std::string>());
+			}
+		}
+		if (!type.has_value())
+		{
+			return QueryResult::Error("give magic as a magic type number or an info name");
+		}
+		const auto flag = [&params](const char* name, bool fallback) {
+			const auto found = params.find(name);
+			return found != params.end() && found->is_boolean() ? found->get<bool>() : fallback;
+		};
+		const auto outcome = debug::town_miracles::Apply({.town = *town,
+		                                                  .type = *type,
+		                                                  .give = flag("enable", true),
+		                                                  .withPlain = flag("with_plain", true),
+		                                                  .allLevels = flag("all_levels", false),
+		                                                  .openSite = flag("open_site", true),
+		                                                  .anyLand = flag("any_land", true)});
+		if (!outcome.error.empty())
+		{
+			return QueryResult::Error(outcome.error);
+		}
+		Json changed = Json::array();
+		for (const auto changedType : outcome.changed)
+		{
+			changed.push_back(static_cast<int>(changedType));
+		}
+		Json held = Json::array();
+		for (const auto heldType : debug::town_miracles::HeldBy(*town))
+		{
+			held.push_back(static_cast<int>(heldType));
+		}
+		return QueryResult::Value(
+		    {{"changed", std::move(changed)},
+		     {"magic_held", std::move(held)},
+		     {"worship_site", Id(outcome.site)},
+		     {"site_is_new", outcome.siteIsNew},
+		     {"no_site",
+		      outcome.noSite.has_value() ? Json(std::string(town_miracle_tool::Describe(*outcome.noSite))) : Json(nullptr)}});
+	});
 	provider->Add(
 	    Query("state", "The hand's miracle, the spells and dispensers there are, and the other miracles' "
 	                   "systems: shields, tornadoes, explosions"),

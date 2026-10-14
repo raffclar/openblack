@@ -397,6 +397,34 @@ TEST(WorshipSiteSystem, ScriptsStopAndAllowSitesForATempleOrATown)
 	EXPECT_TRUE(f.registry.Get<const components::Town>(celtic).worshipSite != entt::null);
 }
 
+TEST(WorshipSiteSystem, TheDebugToolLetsATownHaveItsSiteGoingUpAsTheScriptsDo)
+{
+	Fixture f;
+	f.world->landNumber = 1;
+	const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	ASSERT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
+
+	// Kept to the land's rule, the first land gives no site
+	EXPECT_TRUE(f.system->DebugAllowSite(town, false) == entt::null);
+	// Let past it, the town's site goes up and the town is asked to build it
+	const auto site = f.system->DebugAllowSite(town, true);
+	ASSERT_TRUE(site != entt::null);
+	EXPECT_EQ(site, f.registry.Get<const components::Town>(town).worshipSite);
+	EXPECT_FALSE(f.system->IsBuilt(site));
+	EXPECT_EQ(f.registry.Get<const WorshipSite>(site).buildRequests.size(), 1u);
+	EXPECT_EQ(f.world->openedSites.back(), std::make_pair(site, town));
+
+	// The land's rule holds again for everything else
+	const auto other = f.Town(1, PlayerNames::PLAYER_ONE, Tribe::CELTIC, {50.0f, 0.0f, 0.0f});
+	f.system->LandLaidOut();
+	EXPECT_TRUE(f.registry.Get<const components::Town>(other).worshipSite == entt::null);
+	// A town with no people has none even then
+	const auto empty = f.Town(2, PlayerNames::PLAYER_ONE, Tribe::GREEK, {-50.0f, 0.0f, 0.0f}, 0);
+	EXPECT_TRUE(f.system->DebugAllowSite(empty, true) == entt::null);
+}
+
 TEST(WorshipSiteSystem, BuildingUpASiteFinishesItAtTheWhole)
 {
 	Fixture f;

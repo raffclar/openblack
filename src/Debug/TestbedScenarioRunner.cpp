@@ -58,6 +58,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Debug/FightAutopilotInterface.h"
+#include "Debug/TownMiracles.h"
 #include "DebugGuiInterface.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
@@ -602,6 +603,17 @@ void Runner::Start(const Scenario& scenario)
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
+	if (!scenario.townMiracles.empty())
+	{
+		const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end())
+		{
+			for (const auto type : scenario.townMiracles)
+			{
+				debug::town_miracles::Apply({.town = town->second, .type = type});
+			}
+		}
 	}
 	if (scenario.worshipShare.has_value())
 	{

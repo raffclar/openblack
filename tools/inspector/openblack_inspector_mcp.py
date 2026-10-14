@@ -563,6 +563,21 @@ TOOLS = [
         "params": ["id"],
     },
     {
+        "name": "town_miracle",
+        "description": "Debug only: gives a town a miracle or takes it away (magic type number or info name), "
+                       "as the land's scripts do. A town given one without a worship site gets its site going up "
+                       "(on the first land too unless any_land is false). Town ids from town.list.",
+        "inputSchema": schema({"id": {"type": "integer"},
+                               "magic": {"type": ["integer", "string"]},
+                               "enable": {"type": "boolean"},
+                               "with_plain": {"type": "boolean"},
+                               "all_levels": {"type": "boolean"},
+                               "open_site": {"type": "boolean"},
+                               "any_land": {"type": "boolean"}}, ["id", "magic"]),
+        "query": "magic.town_miracle",
+        "params": ["id", "magic", "enable", "with_plain", "all_levels", "open_site", "any_land"],
+    },
+    {
         "name": "influence_hand",
         "description": "The hand's share of its player's influence: the influence where the hand is, at its own "
                        "place and the player's own, and whether the hand is inside.",
