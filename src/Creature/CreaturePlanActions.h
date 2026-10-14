@@ -118,10 +118,14 @@ enum class Build : uint8_t
 	RunFromObject,
 	RunFromPlayer,
 	LookAbout,
-	/// Casting a miracle at what it is done to: a lightning bolt, a helpful miracle, a spell on another creature
+	/// Casting a miracle at what it is done to: a lightning bolt, a helpful miracle, a spell on another creature, a
+	/// miracle that attacks (a tornado, the lightning storm, the power-ups of the explosion), an explosion, a fireball
 	CastLightning,
 	CastHelpful,
 	CastPlayful,
+	CastAggressive,
+	CastExplosion,
+	CastFireball,
 	/// Going to a fish farm's shoal, bringing food out of the sea there and eating it
 	FishAndEat,
 	/// Bringing food out of the sea, unless it has some in its hand, and throwing it into a storage pit, or putting it
@@ -273,6 +277,10 @@ struct CastInfo
 	uint32_t gesture {0};
 	/// The creature's height
 	float height {0.0f};
+	/// Whether what it is cast at is living
+	bool targetLiving {false};
+	/// For a fireball: the middle of the clear area near the creature that it goes to first, none when there is none
+	std::optional<glm::vec2> clearArea;
 };
 /// Whether an action casts a miracle
 [[nodiscard]] bool IsCast(const Executor& executor);

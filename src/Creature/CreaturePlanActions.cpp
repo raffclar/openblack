@@ -186,6 +186,18 @@ constexpr std::array k_Executors {
     Executor {.action = "CastMakeCreatureIll", .target = Target::Creature, .build = Build::CastPlayful},
     Executor {.action = "CastMakeCreatureThirsty", .target = Target::Creature, .build = Build::CastPlayful},
     Executor {.action = "CastMakeCreatureItchy", .target = Target::Creature, .build = Build::CastPlayful},
+    // The miracles that attack: the power-ups of lightning, the fireball and its power-ups, the explosion and its
+    // power-ups, the tornado and the lightning storm
+    Executor {.action = "CastLightningBoltPU1", .target = Target::Anything, .build = Build::CastLightning},
+    Executor {.action = "CastLightningBoltPU2", .target = Target::Anything, .build = Build::CastLightning},
+    Executor {.action = "CastFireball", .target = Target::Anything, .build = Build::CastFireball},
+    Executor {.action = "CastFireballPU1", .target = Target::Anything, .build = Build::CastFireball},
+    Executor {.action = "CastFireballPU2", .target = Target::Anything, .build = Build::CastFireball},
+    Executor {.action = "CastExplosion", .target = Target::Anything, .build = Build::CastExplosion},
+    Executor {.action = "CastExplosionPU1", .target = Target::Anything, .build = Build::CastAggressive},
+    Executor {.action = "CastExplosionPU2", .target = Target::Anything, .build = Build::CastAggressive},
+    Executor {.action = "CastTornado", .target = Target::Anything, .build = Build::CastAggressive},
+    Executor {.action = "CastLightningStorm", .target = Target::Anything, .build = Build::CastAggressive},
     // Fire: putting it out with the water miracle, setting a thing alight with a burning thing, and the action of
     // starting a fire, which the game never carries out
     Executor {.action = "PutOutFireWithMagicWater", .target = Target::Burning, .build = Build::CastWater},
@@ -234,8 +246,19 @@ const Executor* creature_plan_actions::For(std::string_view action)
 
 bool creature_plan_actions::IsCast(const Executor& executor)
 {
-	return executor.build == Build::CastLightning || executor.build == Build::CastHelpful ||
-	       executor.build == Build::CastPlayful || executor.build == Build::CastWater;
+	switch (executor.build)
+	{
+	case Build::CastLightning:
+	case Build::CastHelpful:
+	case Build::CastPlayful:
+	case Build::CastAggressive:
+	case Build::CastExplosion:
+	case Build::CastFireball:
+	case Build::CastWater:
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool creature_plan_actions::Possible(const Executor& executor, const Situation& situation)
@@ -454,6 +477,20 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::CastPlayful:
 		return creature_mind::CastAt(creature_mind::CastStyle::Playful, cast->magicType, cast->gesture, *object, cast->height,
 		                             random);
+	case Build::CastAggressive:
+		return creature_mind::CastAt(creature_mind::CastStyle::Aggressive, cast->magicType, cast->gesture, *object,
+		                             cast->height, random);
+	case Build::CastExplosion:
+		return creature_mind::CastAt(creature_mind::CastStyle::Explosion, cast->magicType, cast->gesture, *object, cast->height,
+		                             random);
+	case Build::CastFireball:
+		// With no clear area near it, the creature can't cast a fireball
+		if (!cast->clearArea.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::CastFireballAt(cast->magicType, cast->gesture, *object, cast->targetLiving, *cast->clearArea,
+		                                     cast->height, random);
 	case Build::CastWater:
 		return creature_mind::PutOutFireWithWater(*object, cast->height);
 	case Build::SetFire:
