@@ -122,7 +122,7 @@ bool ScriptHoldsCamera(const Camera& camera)
 
 std::string_view PageName(gui::GameMenu::Page page)
 {
-	constexpr std::array<std::string_view, 5> k_Pages {"main", "options", "players", "advanced", "controls"};
+	constexpr std::array<std::string_view, 6> k_Pages {"main", "options", "players", "advanced", "controls", "statistics"};
 	const auto index = static_cast<size_t>(page);
 	return index < k_Pages.size() ? k_Pages.at(index) : "unknown";
 }

@@ -359,7 +359,11 @@ TEST(GameMenu, ButtonsActWhenLetGoOverTheOneTheyWentDownOn)
 	EXPECT_EQ(Click(f.menu, ButtonCentre(0)), Action::Continue);
 	EXPECT_EQ(Click(f.menu, ButtonCentre(1)), Action::StartSkirmish);
 	EXPECT_EQ(Click(f.menu, ButtonCentre(2)), Action::JoinOnline);
-	EXPECT_EQ(Click(f.menu, TabCentre(1)), Action::Statistics);
+	// The Statistics tab opens the Game Statistics box over the menu, and its first tab returns to the menu
+	EXPECT_EQ(Click(f.menu, TabCentre(1)), Action::None);
+	EXPECT_EQ(f.menu.GetPage(), Page::Statistics);
+	EXPECT_EQ(Click(f.menu, {75, 30}), Action::None);
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
 	// Tabs without a label take no clicks
 	EXPECT_EQ(Click(f.menu, TabCentre(3)), Action::None);
 	// Between the buttons

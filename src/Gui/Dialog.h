@@ -11,6 +11,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -42,6 +43,9 @@ public:
 	static constexpr size_t k_TabCount = 5;
 
 	Dialog(std::vector<Tab> tabs, size_t selectedTab);
+	/// A box of its own size with as many tabs as given along its top, each a share of its width. Every tab keeps
+	/// what it does, the selected one too.
+	Dialog(std::vector<Tab> tabs, size_t selectedTab, DialogRect box);
 	/// Controls on their own, without a box or tabs
 	Dialog() = default;
 
@@ -83,6 +87,8 @@ public:
 	[[nodiscard]] std::vector<NamedControl> GetNamedControls() const;
 
 	[[nodiscard]] static DialogRect GetTabRect(size_t index);
+	/// Opens another of the tabs
+	void SelectTab(size_t index);
 	/// Names one of the tabs again
 	void SetTabLabel(size_t index, std::u16string label);
 	[[nodiscard]] Control* GetFocus() const noexcept { return _focused; }
@@ -92,7 +98,15 @@ public:
 private:
 	[[nodiscard]] Control* HitTest(glm::ivec2 point) const;
 
-	bool _hasBox {false};
+	/// The box behind the controls, none for controls on their own, and its tabs
+	std::optional<DialogRect> _box;
+	size_t _tabCount {0};
+
+public:
+	/// Drawn before the box, under it
+	std::function<void(const DialogPainter&)> drawUnder;
+
+private:
 	std::vector<std::unique_ptr<Control>> _controls;
 	Control* _hovered {nullptr};
 	Control* _pressed {nullptr};

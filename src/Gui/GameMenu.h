@@ -10,6 +10,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -20,11 +21,13 @@
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
 #include "Dialog.h"
+#include "ECS/StatisticsRules.h"
 
 namespace openblack::gui
 {
 
 class GameFont;
+class StatisticsBox;
 class TextDatabase;
 
 /// What the player sets in the game's menu
@@ -77,7 +80,6 @@ public:
 		Continue,
 		StartSkirmish,
 		JoinOnline,
-		Statistics,
 		/// Create New Player: the new player's box is to be shown
 		CreatePlayer,
 		/// The player picked another profile from the list (GetPickedPlayer), to be played from now on
@@ -101,6 +103,8 @@ public:
 		Players,
 		Advanced,
 		Controls,
+		/// The Game Statistics box, from the main menu's Statistics tab
+		Statistics,
 		_Count
 	};
 
@@ -126,6 +130,12 @@ public:
 	void SetInsideTemple(bool inside);
 	[[nodiscard]] bool IsInsideTemple() const noexcept { return _insideTemple; }
 	void ShowPage(Page page);
+	/// What the Game Statistics box shows as it opens: the figures now and the player at this machine
+	using StatisticsSource = std::function<std::pair<statistics::BoxFigures, PlayerNames>()>;
+	void SetStatisticsSource(StatisticsSource source) { _statisticsSource = std::move(source); }
+	/// Opens the Game Statistics box with the figures as they are now
+	void OpenStatistics();
+	[[nodiscard]] const StatisticsBox& GetStatistics() const noexcept { return *_statistics; }
 
 	void Update(float deltaSeconds);
 
@@ -224,7 +234,7 @@ private:
 	/// Back or Restart, and Edit Tattoo shown or not, the square buttons spread out over the space
 	void UpdatePlayersPage();
 	void SettingsChanged() { _settingsChanged = true; }
-	[[nodiscard]] Dialog& CurrentDialog() const { return *_pages.at(static_cast<size_t>(_page)); }
+	[[nodiscard]] Dialog& CurrentDialog() const;
 
 	const TextDatabase& _texts;
 	const GameFont& _font;
@@ -252,6 +262,9 @@ private:
 	std::array<std::u16string, 4> _toolTipLabels;
 	MenuSettings _settings;
 	std::array<std::unique_ptr<Dialog>, static_cast<size_t>(Page::_Count)> _pages;
+	/// The Game Statistics box, its own page's dialog
+	std::unique_ptr<StatisticsBox> _statistics;
+	StatisticsSource _statisticsSource;
 	/// The options' first tab, outside the temple and inside it
 	std::u16string _mainMenuTab;
 	std::u16string _worldRoomTab;

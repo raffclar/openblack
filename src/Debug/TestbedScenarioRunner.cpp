@@ -47,8 +47,8 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
-#include "Creature/CreatureActivity.h"
 #include "Common/MachineClock.h"
+#include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
@@ -83,6 +83,7 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
@@ -94,6 +95,7 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/ScriptControl.h"
@@ -607,6 +609,7 @@ void Runner::Start(const Scenario& scenario)
 	{
 		Locator::debugGui::value().OpenWindow(scenario.debugWindow);
 	}
+	SetUpStatistics(scenario);
 	if (Locator::fireflySystem::has_value())
 	{
 		for (const auto& [name, weight] : scenario.fireflyRewards)
@@ -1092,6 +1095,29 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		if (home.has_value() && *home < _objects.size() && Locator::townSystem::has_value())
 		{
 			Locator::townSystem::value().MoveInAnyway(_objects.at(*home), _objects.at(i));
+		}
+	}
+}
+
+void Runner::SetUpStatistics(const Scenario& scenario)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (scenario.playerStatistics)
+	{
+		registry.Each<const ecs::components::Player, ecs::components::PlayerStatistics>(
+		    [&scenario](const ecs::components::Player& player, ecs::components::PlayerStatistics& statistics) {
+			    if (player.name == PlayerNames::PLAYER_ONE)
+			    {
+				    scenario.playerStatistics(statistics);
+			    }
+		    });
+	}
+	if (scenario.creatureTallies.has_value() && Locator::playerSystem::has_value())
+	{
+		const auto creature = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE);
+		if (creature.has_value() && registry.Valid(*creature))
+		{
+			registry.AssignOrReplace<ecs::components::CreatureTallies>(*creature, *scenario.creatureTallies);
 		}
 	}
 }

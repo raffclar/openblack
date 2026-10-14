@@ -59,6 +59,29 @@ void CountChantsUsed(ecs::Registry& registry, PlayerNames player, float amount);
 /// turns each town with a player samples how satisfied its people are
 void ProcessTurn(uint32_t turn);
 
+/// Every so many game turns the figures kept once for everyone change: the invented lines of code and the frame rate's
+/// highest and lowest. The towns on the land are counted the first time.
+void ProcessGlobalTurn(uint32_t turn, int32_t frameRate);
+
+/// Everything the Game Statistics box shows now, for the first four players. As in the game, when the box takes the figures, it
+/// increases the lines of code on once more.
+[[nodiscard]] statistics::BoxFigures Box();
+
+/// A creature ate or killed a thing, by what the thing is. A magic mushroom or a toadstool that it eats counts as a
+/// mushroom
+enum class CreatureVictim : uint8_t
+{
+	Person,
+	Animal,
+	Creature,
+};
+void CountCreatureKill(ecs::Registry& registry, entt::entity creature, CreatureVictim victim);
+void CountCreatureMushroom(ecs::Registry& registry, entt::entity creature);
+void CountCreaturePoo(ecs::Registry& registry, entt::entity creature);
+/// What the player's creature, the first they got, counts of its life; its fights and the fights it won are its
+/// fight record's. Nothing without a creature.
+[[nodiscard]] statistics::CreatureTallies CreatureTalliesOf(PlayerNames player);
+
 /// What the temple's world scroll tells the player now
 [[nodiscard]] statistics::WorldFigures World(PlayerNames player);
 

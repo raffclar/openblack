@@ -81,6 +81,7 @@
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -375,6 +376,29 @@ Meal MealOf(const ecs::Registry& registry, entt::entity food)
 		meal.poisoned = registry.AllOf<Poisoned>(food);
 	}
 	return meal;
+}
+
+/// What the creature eats counts for its statistics: a person, an animal or a creature among what it killed, and a
+/// magic mushroom or a toadstool among its mushrooms
+void CountEaten(ecs::Registry& registry, entt::entity creature, entt::entity food, const Meal& meal)
+{
+	using player_statistics::CreatureVictim;
+	if (registry.AllOf<Villager>(food))
+	{
+		player_statistics::CountCreatureKill(registry, creature, CreatureVictim::Person);
+	}
+	else if (registry.AllOf<Animal>(food))
+	{
+		player_statistics::CountCreatureKill(registry, creature, CreatureVictim::Animal);
+	}
+	else if (registry.AllOf<Creature>(food))
+	{
+		player_statistics::CountCreatureKill(registry, creature, CreatureVictim::Creature);
+	}
+	if (meal.magicMushroom)
+	{
+		player_statistics::CountCreatureMushroom(registry, creature);
+	}
 }
 
 /// The creature brings up a meal with too little food in it, or a poisoned meal. It is sick and is not hungry for a
@@ -2115,6 +2139,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 				Locator::creatureMindSystem::value().AteMagicMushroom(creature);
 			}
 			const auto meal = MealOf(registry, *held);
+			CountEaten(registry, creature, *held, meal);
 			registry.Remove<CreatureHeldObject>(creature);
 			Consume(registry, *held);
 			if (value.has_value() && Locator::creaturePhysiologySystem::has_value())

@@ -45,6 +45,7 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -493,6 +494,8 @@ void CreaturePhysiologySystem::DropPooLump(entt::entity creature)
 		return;
 	}
 	physiology::Poo(needs->needs);
+	// Every lump counts among the creature's poos
+	player_statistics::CountCreaturePoo(registry, creature);
 	// The desire to poo becomes zero and stops for a time
 	if (Locator::creatureMindSystem::has_value())
 	{

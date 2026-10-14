@@ -106,6 +106,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/CreatureSquat.h"
 #include "ECS/Components/CreatureSwap.h"
+#include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
