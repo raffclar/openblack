@@ -400,6 +400,11 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 		return;
 	}
 	const auto added = mind.beliefs.Add(thing, *kind, PlaceOf(registry, thing));
+	// Seen again, a villager may show the creature a skill
+	if (!added.isNew && *kind == kinds::k_Villager)
+	{
+		WatchVillager(creature, mind, thing);
+	}
 	if (added.isNew && added.belief != nullptr)
 	{
 		added.belief->firstSight = mind_detail::BeliefOf(registry, thing, creature);

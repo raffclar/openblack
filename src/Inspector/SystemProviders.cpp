@@ -178,6 +178,8 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "stop_moving";
 	case Kind::Dance:
 		return "dance";
+	case Kind::FollowWatching:
+		return "follow_watching";
 	case Kind::Communicate:
 		return "communicate";
 	}

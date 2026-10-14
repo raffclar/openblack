@@ -51,27 +51,91 @@ Progress creature_watching::SeeSkill(Knowledge& knowledge, size_t skill, std::sp
 	{
 		return {.ignored = true};
 	}
-	if (knowledge.skillsKnown[skill])
+	const auto& rule = rules[skill];
+	// Too young, it is told so even when it knows the skill
+	if (phase < rule.minPhase)
 	{
-		return {.learnt = true, .share = 1.0f, .ignored = true};
-	}
-	if (phase < rules[skill].minPhase)
-	{
-		return {.ignored = true};
+		return {.ignored = true, .event = LearningEvent::TooYoung};
 	}
 	auto& seen = knowledge.skillsSeen[skill];
-	++seen.count;
-	if (!seen.turn.has_value())
+	// A first sighting on turn 0 counts as none, so the next sighting starts the clock again
+	if (!seen.turn.has_value() || *seen.turn == 0)
 	{
 		seen.turn = turn;
 	}
-	const auto seconds = static_cast<float>(turn - *seen.turn) / std::max(turnsPerSecond, 1.0f);
-	if (seconds >= rules[skill].watchSeconds)
+	++seen.count;
+	const bool knew = knowledge.skillsKnown[skill];
+	// Whole seconds, from whole turns a second
+	const auto turnsASecond = std::max(static_cast<uint32_t>(turnsPerSecond), 1U);
+	const auto seconds = (turn - *seen.turn) / turnsASecond;
+	if (static_cast<float>(seconds) >= rule.watchSeconds)
 	{
 		knowledge.skillsKnown[skill] = true;
-		return {.learnt = true, .share = 1.0f};
+		if (knew)
+		{
+			return {.learnt = true, .share = 1.0f, .ignored = true};
+		}
+		return {.learnt = true, .share = 1.0f, .event = LearningEvent::Learnt, .meter = 1.0f};
 	}
-	return {.share = k_SkillMeterShare};
+	if (knew)
+	{
+		return {.learnt = true, .share = 1.0f, .ignored = true};
+	}
+	return {.share = k_SkillMeterShare, .event = LearningEvent::NearlyLearnt, .meter = k_SkillMeterShare};
+}
+
+bool creature_watching::MeterShows(uint32_t lastShown, uint32_t turn)
+{
+	return turn - lastShown > k_MeterTurns;
+}
+
+uint32_t creature_watching::StateToLearnFrom(const VillagerAtWork& villager)
+{
+	const auto state = villager.state == k_WaitForAnimationState ? villager.finalState : villager.state;
+	if (state == k_GoToStoragePitForFoodState && villager.distanceToGoal > k_FarFromPitMetres)
+	{
+		return k_DecideWhatToDoState;
+	}
+	return state;
+}
+
+bool creature_watching::WatchesVillagers(const Watcher& watcher)
+{
+	using creature_desires::Desire;
+	if (watcher.phase < k_MinWatchPhase || watcher.scriptControlled)
+	{
+		return false;
+	}
+	if (!watcher.planDesire.has_value())
+	{
+		return true;
+	}
+	switch (*watcher.planDesire)
+	{
+	case Desire::Impress:
+	case Desire::Compassion:
+	case Desire::Anger:
+	case Desire::Play:
+	case Desire::Hunger:
+	case Desire::Fear:
+	case Desire::Poo:
+	case Desire::Tiredness:
+	case Desire::Puke:
+	case Desire::Water:
+	case Desire::RestoreHealth:
+	case Desire::BeFriends:
+	case Desire::GetWarmer:
+	case Desire::GetColder:
+	case Desire::Scratch:
+	case Desire::RunAwayFromPlayer:
+	case Desire::Rest:
+	case Desire::Illness:
+	case Desire::ObeyCreature:
+	case Desire::Steal:
+		return false;
+	default:
+		return true;
+	}
 }
 
 float creature_watching::TimesNeeded(uint32_t timesToSee, float speciesMultiplier)

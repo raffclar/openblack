@@ -617,6 +617,51 @@ void draw::AddFightMarks(Frame& frame, std::span<const FightMark> marks)
 	}
 }
 
+void draw::AddLearningMarks(Frame& frame, std::span<const LearningMark> marks)
+{
+	if (marks.empty())
+	{
+		return;
+	}
+	// The bulb keeps its model's own materials and is lit by the scene, its light coloured by the mark
+	static const MeshCreator k_Bulb = [] {
+		MeshCreator bulb;
+		bulb.kind = Creator::Kind::Mesh;
+		bulb.className = "LearningBulb";
+		bulb.changeMaterial = false;
+		bulb.dynamicLighting = true;
+		return bulb;
+	}();
+	static constexpr auto k_Sheet = entt::hashed_string("raw/smoke");
+	static constexpr auto k_SheetAlpha = entt::hashed_string("raw/smokea");
+	// The glow is the smoke sheet's first cell, of eight a row, blended over what is behind and writing no depth
+	constexpr float k_Cell = 1.0f / 8.0f;
+	const auto material = frame.MaterialIndex(
+	    {.texture = k_Sheet.value(), .alphaTexture = k_SheetAlpha.value(), .mode = Mode::AlphaTexturedAlphaNz});
+	for (const auto& mark : marks)
+	{
+		const auto firstItem = static_cast<uint32_t>(frame.items.size());
+		frame.items.push_back(
+		    {.kind = ItemKind::Mesh, .index = static_cast<uint32_t>(frame.meshes.size()), .sortPoint = mark.bulb});
+		frame.meshes.push_back({.creator = &k_Bulb,
+		                        .mesh = mark.bulbMesh,
+		                        .axes = glm::mat3(mark.bulbScale),
+		                        .position = mark.bulb,
+		                        .colour = mark.bulbColour,
+		                        .uvOffset = glm::vec2(0.0f),
+		                        .cutBelow = std::nullopt});
+		frame.items.push_back(
+		    {.kind = ItemKind::Sprite, .index = static_cast<uint32_t>(frame.sprites.size()), .sortPoint = mark.glow});
+		frame.sprites.push_back({.positionHalfWidth = glm::vec4(mark.glow, mark.glowHalfSize),
+		                         .shape = glm::vec4(mark.glowHalfSize, 0.0f, 0.0f, 0.0f),
+		                         .uv = glm::vec4(0.0f, 0.0f, k_Cell, k_Cell),
+		                         .colour = mark.glowColour,
+		                         .flags = glm::vec4(0.0f)});
+		frame.spriteMaterials.push_back(material);
+		frame.groups.push_back({.path = DrawPath::Sorted, .origin = mark.glow, .firstItem = firstItem, .itemCount = 2});
+	}
+}
+
 void draw::AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> vertices, std::span<const uint32_t> triangles,
                          const glm::vec3& sortPoint, LightSheet::Look look)
 {

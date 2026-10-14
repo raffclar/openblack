@@ -275,6 +275,23 @@ struct FightMark
 /// Adds the fight sparkles to the frame, each taking its own place among what blends
 void AddFightMarks(Frame& frame, std::span<const FightMark> marks);
 
+/// The mark over a creature that learns: a light bulb model and a soft glow over it, facing the screen
+struct LearningMark
+{
+	/// The glow: its middle, half its width and height, and its colour and alpha, 0..1
+	glm::vec3 glow;
+	float glowHalfSize;
+	glm::vec4 glowColour;
+	/// The light bulb: where it stands, how much it is scaled, and the colour its light is multiplied by, 0..1
+	glm::vec3 bulb;
+	float bulbScale;
+	glm::vec4 bulbColour;
+	/// The light bulb's model
+	entt::id_type bulbMesh;
+};
+/// Adds the learning marks to the frame, each with its bulb and then its glow at the glow's place among what blends
+void AddLearningMarks(Frame& frame, std::span<const LearningMark> marks);
+
 /// The three sprites of a player's symbol, in the order drawn: a still glow, a turning glow, then the symbol. Their
 /// materials are the glow's for the first two and the symbol's for the third.
 struct SymbolSprites

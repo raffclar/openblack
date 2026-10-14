@@ -616,3 +616,89 @@ TEST(CreatureActionAgendas, TheFiveNoticeActionsCanBeCarriedOut)
 	}
 	EXPECT_FALSE(NoticeKindOf("PointAtObject").has_value());
 }
+
+// "ExamineByFollowing": following the villager amazed and looking at it, then scratching its head, amazed
+TEST(CreatureActionAgendas, WatchingAVillagerFollowsItThenScratchesItsHead)
+{
+	const auto agenda = ExamineByFollowing(9);
+	ASSERT_EQ(agenda.size(), 2);
+	EXPECT_EQ(agenda[0].kind, Step::Kind::FollowWatching);
+	EXPECT_EQ(agenda[0].object, 9u);
+	EXPECT_FLOAT_EQ(agenda[0].seconds, 30.0f);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 15.0f);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Amazed);
+	ASSERT_TRUE(agenda[0].gaze.has_value());
+	EXPECT_EQ(agenda[0].gaze->object, 9u);
+	EXPECT_EQ(agenda[1].kind, Step::Kind::Action);
+	EXPECT_EQ(agenda[1].animation, animations::k_Confused);
+	EXPECT_EQ(agenda[1].face, creature_face::Cue::Amazed);
+}
+
+// Far from the villager it walks up to it, stopping within 15 of it, when it stands still; near, it stays
+TEST(CreatureActionAgendas, WatchingAVillagerKeepsWithinFifteenOfIt)
+{
+	IdleMind mind;
+	Plan(mind, Activity::Planned, ExamineByFollowing(9));
+	creature_mind::Senses senses {.seconds = 0.1f};
+	senses.followed = Senses::FollowedView {.interesting = true, .distance = 20.0f};
+	auto commands = Think(mind, senses, AlwaysFirst);
+	ASSERT_TRUE(commands.move.has_value());
+	EXPECT_EQ(commands.move->kind, Movement::Kind::ToObject);
+	EXPECT_EQ(commands.move->object, 9u);
+	EXPECT_FLOAT_EQ(commands.move->maxDistance, 15.0f);
+	senses.moving = true;
+	EXPECT_FALSE(Think(mind, senses, AlwaysFirst).move.has_value());
+	senses.moving = false;
+	senses.followed->distance = 15.0f;
+	EXPECT_FALSE(Think(mind, senses, AlwaysFirst).move.has_value());
+	EXPECT_EQ(mind.step, 0u);
+}
+
+// It watches up to thirty whole seconds, then holds one to four seconds before it scratches its head
+TEST(CreatureActionAgendas, WatchingAVillagerLastsThirtySecondsThenHolds)
+{
+	for (const auto& [draw, hold] : {std::pair {0u, 10u}, std::pair {0xfffeu, 39u}})
+	{
+		SCOPED_TRACE(draw);
+		IdleMind mind;
+		Plan(mind, Activity::Planned, ExamineByFollowing(9));
+		creature_mind::Senses senses {.seconds = 0.1f};
+		senses.followed = Senses::FollowedView {.interesting = true, .distance = 1.0f};
+		const auto random = [draw](uint32_t range) { return range == game_random::k_FloatRandRange ? draw : 0u; };
+		uint32_t turns = 0;
+		while (!mind.followHolding && turns < 1000)
+		{
+			(void)Think(mind, senses, random);
+			++turns;
+		}
+		// Turn 310 is the first of 31 whole seconds
+		EXPECT_EQ(turns, 310u);
+		EXPECT_EQ(mind.followHoldTurns, hold);
+		uint32_t held = 0;
+		while (mind.step == 0 && held < 1000)
+		{
+			(void)Think(mind, senses, random);
+			++held;
+		}
+		EXPECT_EQ(held, hold);
+	}
+}
+
+// Once the villager stops doing what it learns from, or the creature knows it, the watch ends at once
+TEST(CreatureActionAgendas, WatchingAVillagerEndsWhenItIsNoLongerInteresting)
+{
+	IdleMind mind;
+	Plan(mind, Activity::Planned, ExamineByFollowing(9));
+	creature_mind::Senses senses {.seconds = 0.1f};
+	senses.followed = Senses::FollowedView {.interesting = true, .distance = 1.0f};
+	(void)Think(mind, senses, AlwaysFirst);
+	EXPECT_FALSE(mind.followHolding);
+	senses.followed->interesting = false;
+	(void)Think(mind, senses, AlwaysFirst);
+	EXPECT_TRUE(mind.followHolding);
+	// With the villager gone too
+	IdleMind gone;
+	Plan(gone, Activity::Planned, ExamineByFollowing(9));
+	(void)Think(gone, {.seconds = 0.1f}, AlwaysFirst);
+	EXPECT_TRUE(gone.followHolding);
+}

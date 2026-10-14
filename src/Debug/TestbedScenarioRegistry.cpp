@@ -4131,7 +4131,8 @@ void AddMind(std::vector<Scenario>& all)
 	    .facet = Facet::Mind,
 	    .description = "A grown-up lion watches villagers build: it sees the skill now, again 4 seconds later and again "
 	                   "4 seconds after that.",
-	    .expected = "Once it has watched for longer than the skill takes to learn (6 seconds by the game's table) it "
+	    .expected = "Once more than the skill takes to learn has gone by since it first saw it (7 seconds for building, by "
+	                "the game's table) it "
 	                "knows it: its thoughts say it has learnt to build, and the Mind panel marks the skill known.",
 	    .framing = {.shot = Shot::Follow},
 	    .creatures = {CreatureSetup {.species = CreatureType::Lion, .needs = Content()}},
@@ -4625,6 +4626,7 @@ std::vector<Scenario> Build()
 	AddStatisticsScenarios(all);
 	AddTutorialScenarios(all);
 	AddCreatureDanceScenarios(all);
+	AddCreatureLearningScenarios(all);
 	AddWorldSoundScenarios(all);
 	return all;
 }

@@ -35,6 +35,7 @@
 #include "Common/MachineClock.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/FloatingNumber.h"
+#include "ECS/LearningMarker.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -654,6 +655,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	{
 		DrawFloatingNumbers(resolution);
 	}
+	DrawLearningTexts(resolution);
 	if (_message.has_value())
 	{
 		_painter.DrawTextWrapped(DialogRect {{0, 0}, DialogPainter::k_Size}, true, _message->text, 60,
@@ -1534,6 +1536,23 @@ void GameInterface::DrawFloatingNumbers(glm::u16vec2 resolution)
 		                        static_cast<float>(number.colour & 0xFFu) / 255.0f, alpha};
 		_painter.DrawString({at.x - shadow, at.y + shadow}, number.text, textSize, glm::vec4(0.0f, 0.0f, 0.0f, alpha));
 		_painter.DrawString(at, number.text, textSize, colour);
+	}
+}
+
+void GameInterface::DrawLearningTexts(glm::u16vec2 resolution)
+{
+	// The sizes are pixels of the default screen
+	const float scale = ReferenceScale(resolution.x, resolution.y);
+	const float textSize = ecs::learning_marker::k_TextSize * scale;
+	const float halfHeight = ecs::learning_marker::k_TextHalfHeight * scale;
+	const float shadow = ecs::learning_marker::k_ShadowOffset * scale;
+	for (const auto& text : _learningTexts)
+	{
+		// Centred across on the point, and half a line above it; the shadow right of it and below it
+		const float width = _font.GetWidth(text.text, textSize);
+		const glm::vec2 at {text.screen.x - (width * 0.5f), text.screen.y - halfHeight};
+		_painter.DrawString(at + shadow, text.text, textSize, glm::vec4(0.0f, 0.0f, 0.0f, text.alpha));
+		_painter.DrawString(at, text.text, textSize, glm::vec4(1.0f, 1.0f, 0.0f, text.alpha));
 	}
 }
 

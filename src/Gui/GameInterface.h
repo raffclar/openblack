@@ -180,6 +180,14 @@ public:
 		uint32_t colour;
 		uint8_t alpha;
 	};
+	/// The words of a learning mark over a creature: the share it has learnt, centred on a point of the screen
+	struct LearningText
+	{
+		glm::vec2 screen;
+		std::u16string text;
+		/// 0..1; drawn yellow over a black shadow
+		float alpha;
+	};
 	/// The camera's helper icons by the hand this frame, from the world camera or a tutorial demonstration; none while
 	/// they aren't drawn, when their fades hold where they are
 	struct HandTricons
@@ -210,6 +218,7 @@ public:
 	void SetHandTricons(std::optional<HandTricons> tricons) { _handTricons = tricons; }
 	/// The numbers floating up this frame, drawn the furthest first, under the interface
 	void SetFloatingNumbers(std::vector<FloatingNumber> numbers) { _floatingNumbers = std::move(numbers); }
+	void SetLearningTexts(std::vector<LearningText> texts) { _learningTexts = std::move(texts); }
 	/// The villagers' name and details labels wanted this frame, in the order they are placed
 	void SetVillagerLabels(std::vector<villager_labels::Request> labels) { _villagerLabels = std::move(labels); }
 	[[nodiscard]] const std::vector<villager_labels::Request>& GetVillagerLabels() const noexcept { return _villagerLabels; }
@@ -235,6 +244,7 @@ private:
 	void UpdateTattooEditor(float deltaSeconds);
 	/// The floating numbers, each ending at its point over its shadow
 	void DrawFloatingNumbers(glm::u16vec2 resolution);
+	void DrawLearningTexts(glm::u16vec2 resolution);
 	/// The tooltip by the hand, its words and then its mouse
 	void DrawToolTip(glm::u16vec2 resolution);
 	/// The creature's status panel, at the left of the screen
@@ -334,6 +344,7 @@ private:
 	std::optional<creature_panel::Values> _creaturePanel;
 	std::optional<creature_fight_hud::Values> _fightPanel;
 	std::vector<FloatingNumber> _floatingNumbers;
+	std::vector<LearningText> _learningTexts;
 	std::optional<HandTricons> _handTricons;
 	/// The helper icons' strengths, and whether the demonstration's mouse is left of them
 	hand_tricons::Fades _tricons {};

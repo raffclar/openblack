@@ -1012,6 +1012,8 @@ void AddStatisticsScenarios(std::vector<Scenario>& all);
 void AddTutorialScenarios(std::vector<Scenario>& all);
 /// A creature that dances with the villagers of a town (TestbedScenarioCreatureDance.cpp)
 void AddCreatureDanceScenarios(std::vector<Scenario>& all);
+/// A creature learning to build and to dance by watching villagers
+void AddCreatureLearningScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

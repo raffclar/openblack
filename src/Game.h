@@ -576,6 +576,10 @@ private:
 	[[nodiscard]] std::optional<glm::vec2> OnScreen(glm::vec3 point) const;
 	/// The floating numbers move on by some seconds
 	void UpdateFloatingNumbers(float seconds);
+	/// The marks over creatures that learn move on, and their bulbs and glows go to the effects to be drawn
+	void UpdateLearningMarks(float milliseconds);
+	/// The words of the marks over creatures that learn, placed on the screen for the interface
+	void PlaceLearningTexts();
 	/// The names display grows in or out over a frame of so many milliseconds of game time
 	void UpdateVillagerLabels(float milliseconds);
 	/// The floating numbers and the villagers' labels are given to the interface where they show from the camera the
