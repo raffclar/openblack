@@ -253,8 +253,8 @@ private:
 	/// Find the desires of a creature and of the creature that it watches. The creature can stop the watch and act on
 	/// a desire. Return true if it did.
 	bool WeighWatchedCreature(entt::entity creature, components::CreatureMindState& mind, entt::entity other);
-	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
-	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
+	/// A creature puts the water of five buckets on a thing (CreatureMindFire.cpp). Return true if the thing is not on
+	/// fire after this. Only the plain "put out fire" action has this step. The water miracle at a fire does not have it.
 	bool Douse(entt::entity creature, entt::entity object);
 
 	// What it believes about the things about it (CreatureMindBeliefs.cpp)
@@ -292,6 +292,13 @@ private:
 	[[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(entt::entity creature, MagicType type);
 	/// A fizzled try, shown as it next chooses what to do
 	void ShowFizzle(entt::entity creature, components::CreatureMindState& mind);
+	/// The creature tries a miracle at a place, as its casting pose's loop begins. A try short of the sightings that it
+	/// needs fizzles. A miracle that it cannot cast there frustrates it. Return true if it cast the miracle.
+	bool TryMiracleAt(entt::entity creature, MagicType type, glm::vec3 place);
+	/// The part of a try that is the same for a thing and for a place. Return true if the creature can continue.
+	bool StartTry(entt::entity creature, MagicType type, std::optional<entt::entity> target);
+	/// The creature could not cast the miracle: it is frustrated and wants food above all
+	void FrustrateAfterCast(entt::entity creature, MagicType type);
 	/// It is made to be high, as after eating a magic mushroom
 	void BecomeHigh(entt::entity creature);
 	/// Going near, getting away from or turning to face an object begins, and each turn it goes on

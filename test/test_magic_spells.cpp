@@ -608,6 +608,21 @@ TEST(SpellBehaviours, TheCastRulesAskForLandAndInfluence)
 	EXPECT_FALSE(spells::CanCastAt(services, MagicType::CreatureSpellBig, PlayerNames::PLAYER_ONE, land, true));
 }
 
+TEST(SpellBehaviours, ACreatureCastsAForestOnlyOnLandInTheMapWhereTreesCanGrow)
+{
+	auto info = MakeTables();
+	FakeServices services(*info);
+	services.world.waterBelowZ = 50.0f;
+	const glm::vec3 land {100.0f, 0.0f, 100.0f};
+	EXPECT_TRUE(spells::CanCastAtPointItself(services, MagicType::Forest, land));
+	EXPECT_FALSE(spells::CanCastAtPointItself(services, MagicType::Forest, {100.0f, 0.0f, 10.0f}));
+	EXPECT_FALSE(spells::CanCastAtPointItself(services, MagicType::Forest, {-5.0f, 0.0f, 100.0f}));
+	services.forestGrows = false;
+	EXPECT_FALSE(spells::CanCastAtPointItself(services, MagicType::Forest, land));
+	// The other miracles that are not a heal go to any place
+	EXPECT_TRUE(spells::CanCastAtPointItself(services, MagicType::Fireball, {100.0f, 0.0f, 10.0f}));
+}
+
 TEST(SpellBehaviours, LandForACastRuleIsACellWithoutWaterWhateverItsHeight)
 {
 	auto info = MakeTables();

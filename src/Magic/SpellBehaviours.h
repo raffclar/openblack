@@ -150,8 +150,8 @@ namespace spells
 /// forest land)
 [[nodiscard]] bool CanCastAt(SpellServicesInterface& services, MagicType type, PlayerNames player, glm::vec3 point,
                              bool ignoreInfluence);
-/// Whether a miracle can be cast at a point by itself, as a creature casts it, with no influence to hold it back: a heal
-/// only where it finds someone to heal
+/// Whether a miracle can be cast at a point by itself, as a creature casts it, with no influence to hold it back. A heal
+/// needs someone to heal. A forest needs land in the map where trees can grow.
 [[nodiscard]] bool CanCastAtPointItself(SpellServicesInterface& services, MagicType type, glm::vec3 point);
 
 /// What its kind does before its effect starts: a shield takes its size within its limits, and what a kind keeps

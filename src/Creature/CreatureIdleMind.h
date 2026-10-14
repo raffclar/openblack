@@ -223,6 +223,8 @@ struct CastOrder
 	uint32_t magicType {0};
 	/// What it is cast at, by its entity's number
 	std::optional<uint32_t> object;
+	/// The place that it is cast at, when the miracle goes to a place and not to a thing
+	std::optional<glm::vec3> place;
 };
 
 /// What a step does to the creature's body
@@ -320,7 +322,7 @@ struct Step
 		/// Waiting for the step's object to be back on the map (out of any hand, flight or tornado); if the object is
 		/// gone, the rest of the agenda is given up
 		WaitInMap,
-		/// Dousing the step's object with water at once, as a creature does after casting the water miracle at a fire
+		/// The creature puts water on the step's object at once. Only the plain "put out fire" action has this step.
 		Douse,
 		/// The creature's own fire stops at once: the creature cools to the temperature of the air
 		CoolDown,

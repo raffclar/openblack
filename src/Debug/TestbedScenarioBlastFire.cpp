@@ -314,11 +314,12 @@ void AddFire(std::vector<Scenario>& all)
 	    .name = "Creature putting out a fire",
 	    .facet = Facet::Miracles,
 	    .description = "A fireball sets alight a hut beside a caring tiger that knows the water miracle.",
-	    .expected = "The fire spreads from the hut to the tiger. A creature heeds only a fire it touches, so a few "
-	                "seconds on it takes up its own: it leaves what it was doing, turns, holds still a moment and raises "
-	                "its arms into the casting pose; the water miracle falls on it and its fire goes out, and three "
-	                "seconds later it lowers its arms and douses itself. Nothing it would choose for itself takes over "
-	                "while it does so.",
+	    .expected =
+	        "The fire spreads from the hut to the tiger. A creature heeds only a fire it touches, so a few "
+	        "seconds on it takes up its own: it leaves what it was doing, turns, holds still a moment and raises "
+	        "its arms into the casting pose; the rain of the water miracle falls on it and cools its fire until it goes "
+	        "out. Three seconds later it lowers its arms. Nothing it would choose for itself takes over "
+	        "while it does so.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 25.0f}, {25.0f, 60.0f}}},
 	    .creatures = {{.label = "carer",

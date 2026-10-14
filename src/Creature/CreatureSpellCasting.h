@@ -56,6 +56,8 @@ inline constexpr float k_MagnitudeOverSize = 1.1f;
 inline constexpr float k_HeightOfSizeOne = 15.0f;
 /// A fire seed's miracle is cast at the caster's height over this, at most 1
 inline constexpr float k_FireMagnitudeHeight = 10.0f;
+/// A miracle that a creature casts at a place has this size
+inline constexpr float k_PlaceMagnitude = 10.0f;
 
 /// The energy a number of chants comes to for the creature
 [[nodiscard]] float ChantsToEnergy(float chants, const Body& body, const Rates& rates);
@@ -77,5 +79,7 @@ float MaintainSpell(Body& body, const Rates& rates, float amount, float energySh
 /// fire seed by the caster's height
 [[nodiscard]] float CastMagnitude(float targetSize, std::optional<float> targetCreatureScale, bool fireSeed,
                                   float casterHeight);
+/// How big the miracle is cast at a place: a fixed size, or for a fire seed by the caster's height
+[[nodiscard]] float CastMagnitudeAtPlace(bool fireSeed, float casterHeight);
 
 } // namespace openblack::creature_spell_casting

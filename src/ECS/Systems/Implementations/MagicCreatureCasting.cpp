@@ -140,9 +140,15 @@ constexpr float k_BeamSizePerSize = 0.3f;
 
 bool MagicSystem::CanCreatureCastAt(MagicType type, entt::entity target)
 {
-	if (magic::ClassOf(type) == magic::SpellClass::Creature)
+	switch (magic::ClassOf(type))
 	{
+	case magic::SpellClass::Creature:
 		return CanCastOn(type, target);
+	case magic::SpellClass::Forest:
+		// A forest goes only to a place, never to a thing
+		return false;
+	default:
+		break;
 	}
 	const auto position = object_measures::PositionOf(Entities(), target);
 	return position.has_value() && magic::spells::CanCastAtPointItself(*this, type, *position);
@@ -152,20 +158,42 @@ bool MagicSystem::CastByCreature(entt::entity creature, MagicType type, entt::en
 {
 	ReleaseCreatureCast(creature);
 	auto& registry = Entities();
-	const auto& info = Info();
-	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto at = object_measures::PositionOf(registry, target);
-	if (body == nullptr || !at.has_value() || static_cast<size_t>(type) >= magic::k_MagicTypeCount || type == MagicType::None)
+	if (!registry.AllOf<Creature>(creature) || !at.has_value() || static_cast<size_t>(type) >= magic::k_MagicTypeCount ||
+	    type == MagicType::None)
 	{
 		return false;
 	}
 	// As big as what it is cast at
 	const auto* targetCreature = registry.TryGet<const Creature>(target);
-	const auto seed = magic::FindFirstSpellSeedForMagicType(info, type);
+	const auto seed = magic::FindFirstSpellSeedForMagicType(Info(), type);
 	const float magnitude = creature_spell_casting::CastMagnitude(
 	    object_measures::TwoDRadius(registry, target),
 	    targetCreature != nullptr ? std::optional(ShownSize(*targetCreature)) : std::nullopt, seed == SpellSeedType::Fire,
 	    object_measures::Height(registry, creature));
+	return StartCreatureCast(creature, type, target, *at, magnitude);
+}
+
+bool MagicSystem::CastByCreatureAt(entt::entity creature, MagicType type, glm::vec3 place)
+{
+	ReleaseCreatureCast(creature);
+	auto& registry = Entities();
+	if (!registry.AllOf<Creature>(creature) || static_cast<size_t>(type) >= magic::k_MagicTypeCount || type == MagicType::None)
+	{
+		return false;
+	}
+	const auto seed = magic::FindFirstSpellSeedForMagicType(Info(), type);
+	const float magnitude =
+	    creature_spell_casting::CastMagnitudeAtPlace(seed == SpellSeedType::Fire, object_measures::Height(registry, creature));
+	return StartCreatureCast(creature, type, std::nullopt, place, magnitude);
+}
+
+bool MagicSystem::StartCreatureCast(entt::entity creature, MagicType type, std::optional<entt::entity> target, glm::vec3 at,
+                                    float magnitude)
+{
+	auto& registry = Entities();
+	const auto& info = Info();
+	const auto& body = registry.Get<const Creature>(creature);
 	const auto& effect = magic::GetMagicEffectInfo(info, type);
 	const magic::SpellCastData cast {
 	    .magnitude = magnitude,
@@ -174,27 +202,29 @@ bool MagicSystem::CastByCreature(entt::entity creature, MagicType type, entt::en
 	    .maxObjectsToCreate = -1,
 	};
 	const auto paying = CasterBodyOf(creature);
-	if (!paying.has_value() || !creature_spell_casting::CanCast(paying->first, paying->second, effect.costToCreate) ||
-	    !CanCreatureCastAt(type, target))
+	if (!paying.has_value() || !creature_spell_casting::CanCast(paying->first, paying->second, effect.costToCreate))
 	{
 		return false;
 	}
-	const SpellCaster caster {.kind = SpellCaster::Kind::Creature, .player = body->owner, .entity = creature};
-	// Its effect flows from between its hands towards what it is cast at; food, wood and water it casts from a point
-	// above what it is cast at, which stays there
-	const auto hands =
-	    magic::IsCreatureCastFromAbove(info, type)
-	        ? *at + glm::vec3(0.0f,
-	                          std::max(k_CastFromAboveLeast, k_CastFromAboveShare * object_measures::Height(registry, target)),
-	                          0.0f)
-	        : HandsOf(creature);
-	const auto towards = *at - hands;
+	if (target.has_value() ? !CanCreatureCastAt(type, *target) : !magic::spells::CanCastAtPointItself(*this, type, at))
+	{
+		return false;
+	}
+	const SpellCaster caster {.kind = SpellCaster::Kind::Creature, .player = body.owner, .entity = creature};
+	// Its effect flows from between its hands towards what it is cast at. It casts food, wood and water from a point
+	// above what it is cast at, which stays there. Above a place, this point has the least height.
+	const float aboveHeight = target.has_value() ? object_measures::Height(registry, *target) : 0.0f;
+	const auto hands = magic::IsCreatureCastFromAbove(info, type)
+	                       ? at + glm::vec3(0.0f, std::max(k_CastFromAboveLeast, k_CastFromAboveShare * aboveHeight), 0.0f)
+	                       : HandsOf(creature);
+	const auto towards = at - hands;
 	const particles::ProcessInfo process {
 	    .handPosition = hands,
 	    .cameraForward = glm::length(towards) > 0.0f ? glm::normalize(towards) : glm::vec3(0.0f),
 	};
-	const bool onObject = seed.has_value() && magic::GetSpellSeedInfo(info, *seed).castOnObject != 0;
-	const auto spell = onObject ? CastOn(type, caster, target, cast, process) : Cast(type, caster, *at, cast, process);
+	const auto seed = magic::FindFirstSpellSeedForMagicType(info, type);
+	const bool onObject = target.has_value() && seed.has_value() && magic::GetSpellSeedInfo(info, *seed).castOnObject != 0;
+	const auto spell = onObject ? CastOn(type, caster, *target, cast, process) : Cast(type, caster, at, cast, process);
 	// Past its body's and the miracle's checks, the cast counts as made even when no miracle comes of it
 	if (spell == entt::null)
 	{
@@ -207,7 +237,7 @@ bool MagicSystem::CastByCreature(entt::entity creature, MagicType type, entt::en
 		if (const auto bones = HandBonesOf(creature))
 		{
 			auto& particles = Locator::particleSystem::value();
-			const float size = k_BeamSizeLeast + (k_BeamSizePerSize * ShownSize(*body));
+			const float size = k_BeamSizeLeast + (k_BeamSizePerSize * ShownSize(body));
 			auto& beams = _creatureBeams[creature];
 			beams = {particles.StartSpotVisual(SpotVisualType::MagicBeam, bones->first, std::nullopt, creature, size),
 			         particles.StartSpotVisual(SpotVisualType::MagicBeam, bones->second, std::nullopt, creature, size)};

@@ -132,6 +132,7 @@ public:
 	entt::entity CastAtPoint(MagicType type, PlayerNames player, glm::vec3 point, const magic::SpellCastData& cast,
 	                         const particles::ProcessInfo& info) override;
 	bool CastByCreature(entt::entity creature, MagicType type, entt::entity target) override;
+	bool CastByCreatureAt(entt::entity creature, MagicType type, glm::vec3 place) override;
 	void ReleaseCreatureCast(entt::entity creature) override;
 	entt::entity CastOnObject(MagicType type, PlayerNames player, entt::entity target, const magic::SpellCastData& cast,
 	                          const particles::ProcessInfo& info) override;
@@ -263,6 +264,11 @@ private:
 	                    const magic::SpellCastData& cast, const particles::ProcessInfo& info);
 	/// Whether a miracle may be cast at an object by a creature, which no influence holds back
 	[[nodiscard]] bool CanCreatureCastAt(MagicType type, entt::entity target);
+	/// The part of a cast by a creature that is the same for a thing and for a place: the body of the creature pays,
+	/// and the miracle starts and flows from its hands. Return false if the creature cannot pay or the miracle cannot go
+	/// there.
+	bool StartCreatureCast(entt::entity creature, MagicType type, std::optional<entt::entity> target, glm::vec3 at,
+	                       float magnitude);
 	/// Where a creature casting a miracle holds its hands, and the way to what it casts at: each turn its miracle follows
 	/// them
 	void UpdateCreatureCast(components::Spell& spell);
