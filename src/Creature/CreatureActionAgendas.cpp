@@ -279,3 +279,12 @@ float creature_mind::CuriosityShare(bool observedKind, bool doingSomethingIntere
 {
 	return observedKind && !doingSomethingInteresting ? k_ObservedCuriosityShare : 1.0f;
 }
+
+bool creature_mind::DoingSomethingInteresting(uint32_t taughtSkill, const std::vector<bool>& skillsKnown)
+{
+	if (taughtSkill == k_NoSkillTaught)
+	{
+		return false;
+	}
+	return taughtSkill >= skillsKnown.size() || !skillsKnown[taughtSkill];
+}

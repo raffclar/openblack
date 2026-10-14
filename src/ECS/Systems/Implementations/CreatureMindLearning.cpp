@@ -78,6 +78,7 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LandForest.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
@@ -1402,19 +1403,36 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 
 namespace
 {
-/// Curious, a creature cares little for a kind of thing it has had a good look at. Towns aren't things it looks at that
-/// way.
-// TODO(creature-actions-3): a villager busy at something that would teach the creature an action it doesn't know yet
-// stays interesting; which of a villager state's values names that action isn't mapped yet, so villagers stay
-// interesting always
+/// Whether a villager does something that the creature finds interesting: its state teaches a skill that the creature
+/// does not know. Nothing else is interesting that way.
+bool DoingSomethingInteresting(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity object)
+{
+	const auto* action = registry.TryGet<const LivingAction>(object);
+	if (!registry.AllOf<Villager>(object) || action == nullptr || !mind.learnt.has_value() ||
+	    !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto state = action->states.at(static_cast<size_t>(LivingAction::Index::Top));
+	const auto& table = Locator::infoConstants::value().villagerStateTable;
+	if (state >= table.size())
+	{
+		return false;
+	}
+	return creature_mind::DoingSomethingInteresting(table.at(state).teachesSkill, mind.learnt->knowledge.skillsKnown);
+}
+
+/// Curious, a creature cares little for a kind of thing it has had a good look at, unless the thing does something it
+/// finds interesting. Towns aren't things it looks at that way.
 float ObservedShare(const ecs::Registry& registry, const CreatureMindState& mind, Desire desire, entt::entity object,
                     const std::optional<creature_tree::Belief>& belief)
 {
-	if (desire != Desire::Curiosity || !belief.has_value() || registry.AnyOf<Town, Villager>(object))
+	if (desire != Desire::Curiosity || !belief.has_value() || registry.AnyOf<Town>(object))
 	{
 		return 1.0f;
 	}
-	return creature_mind::CuriosityShare(mind.observedKinds.contains(belief->type), false);
+	return creature_mind::CuriosityShare(mind.observedKinds.contains(belief->type),
+	                                     DoingSomethingInteresting(registry, mind, object));
 }
 
 /// How useful a thing is to act on for a desire, by what the creature has learnt and what it has looked over
