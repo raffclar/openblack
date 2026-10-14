@@ -3517,14 +3517,18 @@ void AddCombat(std::vector<Scenario>& all)
 		    .id = "combat.head_look",
 		    .name = "Heads in a fight",
 		    .facet = Facet::Combat,
-		    .description = "The player's red lion and a blue tiger fight by themselves. The camera looks at the arena "
-		                   "from the side.",
+		    .description = "The player's red lion and a blue tiger start to look at the camera. A second later they fight "
+		                   "by themselves, so each head has a point to look at from before the fight. The camera looks at "
+		                   "the arena from the side.",
 		    .expected = "Before the duel each creature looks at the other as it walks to its place. In the fight stance "
 		                "each head follows the head of the other creature. During a blow, a block, a cast or a fall the "
 		                "head turns back to straight ahead. No head looks off to the left or the right of the opponent.",
 		    .framing = ringside,
 		    .creatures = {lion, blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
-		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 0.5f, .object = 0, .action = "LookAtCamera"},
+		                 {.kind = Kind::DoAction, .delaySeconds = 0.0f, .object = 1, .action = "LookAtCamera"},
+		                 Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 	}
 
