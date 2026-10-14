@@ -82,6 +82,7 @@
 #include "Creature/CreatureSkin.h"
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
+#include "Debug/FightAutopilotInterface.h"
 #include "Debug/FrameStatsLog.h"
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
@@ -156,6 +157,7 @@
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
+#include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
@@ -493,6 +495,8 @@ Game::Game(Arguments&& args) noexcept
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
+    , _fightAutopilot(args.fightAutopilot)
+    , _fightTranscriptFolder(args.fightTranscriptFolder)
     , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _inspectInputLock(args.inspectInputLock)
@@ -3152,6 +3156,7 @@ bool Game::Initialize() noexcept
 		{
 			loadingData.emplace("game data");
 			Locator::gameActionSystem::value().SetInputLockMode(_inspectInputLock);
+			StartFightTools();
 		}
 	}
 
@@ -3884,6 +3889,34 @@ bool Game::Initialize() noexcept
 	_prefetchTimer.emplace("of every resource");
 
 	return true;
+}
+
+void Game::StartFightTools()
+{
+	if (_fightTranscriptFolder.has_value() && Locator::fightTranscript::has_value())
+	{
+		Locator::fightTranscript::value().SetOutputFolder(_fightTranscriptFolder);
+	}
+	if (!_fightAutopilot.has_value())
+	{
+		return;
+	}
+	auto* autopilot = Locator::inspector::has_value() ? Locator::inspector::value().GetFightAutopilot() : nullptr;
+	const auto policy = fight_autopilot::PolicyFromName(_fightAutopilot->policy);
+	const auto stage = fight_autopilot::LessonStageFromName(_fightAutopilot->stage);
+	const auto sequence = fight_autopilot::ParseSequence(_fightAutopilot->sequence);
+	if (autopilot == nullptr || !policy.has_value() || (!_fightAutopilot->stage.empty() && !stage.has_value()) ||
+	    !sequence.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The fight autopilot cannot start: check its policy, stage and sequence");
+		return;
+	}
+	const auto error = autopilot->Start(
+	    {.policy = *policy, .seed = _fightAutopilot->seed, .stage = stage, .sequence = *sequence, .enterView = true});
+	if (!error.empty())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The fight autopilot cannot start: {}", error);
+	}
 }
 
 bool Game::Run() noexcept

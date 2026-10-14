@@ -13,6 +13,11 @@
 
 #include <string_view>
 
+namespace openblack::fight_autopilot
+{
+class AutopilotInterface;
+} // namespace openblack::fight_autopilot
+
 namespace openblack::ecs::systems
 {
 
@@ -44,6 +49,8 @@ public:
 	/// While the game goes by its pointer (the hand's ray, picking under the cursor): an override is the view that is
 	/// seen, so the pointer goes through it, until GiveCameraBack. A picture's camera is never shown here.
 	virtual void ShowOverrideToPointer() = 0;
+	/// The fight autopilot, which fights for the player with the inspector's input
+	[[nodiscard]] virtual fight_autopilot::AutopilotInterface* GetFightAutopilot() { return nullptr; }
 };
 
 } // namespace openblack::ecs::systems

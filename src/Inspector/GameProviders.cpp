@@ -198,6 +198,7 @@
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
+#include "FightProviders.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "GameControls.h"
@@ -294,6 +295,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"creaturePhysiologySystem", "creatures.systems"},
     LocatorCoverage {"leashSystem", "creatures.status"},
     LocatorCoverage {"creatureFightSystem", "creatures.status"},
+    LocatorCoverage {"fightTranscript", "fights.transcripts"},
     LocatorCoverage {"creatureModeSystem", "creatures.systems"},
     LocatorCoverage {"creatureCaveSystem", "creatures.systems"},
     LocatorCoverage {"cinematicDirectorSystem", "view.cinematic"},
@@ -3355,6 +3357,8 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	}));
 	inspector.Add(MakeCameraProvider(controls.camera));
 	inspector.Add(MakeGuiProvider(controls.gui));
+	inspector.Add(MakeFightTranscriptProvider());
+	inspector.Add(MakeFightAutopilotProvider());
 	inspector.Add(MakeLevelProvider(controls.levels));
 	inspector.Add(MakeAudioProvider({
 	    .world = World(),

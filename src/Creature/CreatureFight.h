@@ -591,4 +591,14 @@ constexpr float k_PickFightPerSize = 60.0f;
 /// It waits this long after a fight before picking another
 constexpr float k_SecondsBetweenFights = 120.0f;
 [[nodiscard]] bool WantsToFight(float anger, float life, float distance, float size, float secondsSinceFight);
+/// The names of the values, as the fight transcript writes them. They do not change between versions of the transcript.
+[[nodiscard]] std::string_view Name(Band band);
+[[nodiscard]] std::string_view Name(Step step);
+[[nodiscard]] std::string_view Name(Move::Kind kind);
+[[nodiscard]] std::string_view Name(FightAction action);
+[[nodiscard]] std::string_view Name(Control control);
+[[nodiscard]] std::string_view Name(Order::Kind kind);
+[[nodiscard]] std::string_view Name(Opponent opponent);
+[[nodiscard]] std::string_view Name(Choice::Kind kind);
+[[nodiscard]] std::string_view Name(RecoilDirection direction);
 } // namespace openblack::creature_fight

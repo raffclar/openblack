@@ -56,6 +56,7 @@
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureScriptPlay.h"
+#include "Debug/FightAutopilotInterface.h"
 #include "DebugGuiInterface.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
@@ -120,6 +121,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
@@ -137,6 +139,7 @@
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -1796,6 +1799,39 @@ std::string Runner::GiveFightCommand(entt::entity creature, const Command& comma
 	case Kind::FightView:
 		fights.FlewTo(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(creature).position);
 		return {};
+	case Kind::FightAutopilot:
+	{
+		auto* autopilot = Locator::inspector::has_value() ? Locator::inspector::value().GetFightAutopilot() : nullptr;
+		if (autopilot == nullptr)
+		{
+			return "no fight autopilot: start the game with the inspector (--inspect-port 0)";
+		}
+		return autopilot->Start({.policy = static_cast<fight_autopilot::Policy>(command.value),
+		                         .seed = 1,
+		                         .stage = std::nullopt,
+		                         .sequence = {},
+		                         .enterView = true});
+	}
+	case Kind::FightLessonCheck:
+	{
+		if (!Locator::fightTranscript::has_value())
+		{
+			return "no fight transcript: start the game with the inspector (--inspect-port 0)";
+		}
+		const auto& recorder = Locator::fightTranscript::value().GetRecorder();
+		const auto fight = recorder.FightOf(entt::to_integral(creature));
+		if (!fight.has_value())
+		{
+			return "failed: no fight is recorded for the creature";
+		}
+		const auto check = fight_autopilot::CheckLesson(*recorder.Find(*fight), entt::to_integral(creature));
+		const auto at = [](const std::optional<uint64_t>& index) {
+			return index.has_value() ? fmt::format("{}", *index) : std::string("none");
+		};
+		return fmt::format("{}: hit at record {}, hits at {}, block at {}, step at {} of fight {}",
+		                   check.InOrder() ? "passed" : "failed", at(check.hit), at(check.hits), at(check.block),
+		                   at(check.step), *fight);
+	}
 	case Kind::KnockOut:
 		fights.KnockOut(creature);
 		return {};
@@ -2144,6 +2180,8 @@ void Runner::Give(const Command& command)
 	case Kind::FightAuto:
 	case Kind::FightSpell:
 	case Kind::FightView:
+	case Kind::FightAutopilot:
+	case Kind::FightLessonCheck:
 	case Kind::KnockOut:
 	case Kind::BringRound:
 	case Kind::TieLeashToCreature:

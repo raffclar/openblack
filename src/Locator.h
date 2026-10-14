@@ -131,6 +131,7 @@ class CreaturePhysiologySystemInterface;
 class CreaturePenSystemInterface;
 class LeashSystemInterface;
 class CreatureFightSystemInterface;
+class FightTranscriptSystemInterface;
 class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
 class TattooEditorSystemInterface;
@@ -288,6 +289,8 @@ struct Locator
 	using creaturePenSystem = entt::locator<ecs::systems::CreaturePenSystemInterface>;
 	using leashSystem = entt::locator<ecs::systems::LeashSystemInterface>;
 	using creatureFightSystem = entt::locator<ecs::systems::CreatureFightSystemInterface>;
+	/// Only in builds with the inspector, and only once the inspector started
+	using fightTranscript = entt::locator<ecs::systems::FightTranscriptSystemInterface>;
 	using creatureModeSystem = entt::locator<ecs::systems::CreatureModeSystemInterface>;
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;
 	using tattooEditorSystem = entt::locator<ecs::systems::TattooEditorSystemInterface>;

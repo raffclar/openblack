@@ -331,6 +331,64 @@ TOOLS = [
         "query": "creatures.fight",
         "params": ["id", "opponent"],
     },
+    # The fight transcript and the fight autopilot
+    {
+        "name": "fights_transcripts",
+        "description": "The creature fights the transcript recorded (number, the two creatures, start, end, record "
+                       "count), the record version and the folder for files. Kept only while the inspector runs.",
+        "inputSchema": schema(),
+        "query": "fights.transcripts",
+    },
+    {
+        "name": "fights_transcript",
+        "description": "One fight's records in order from an index (default the last fight): every press, move, "
+                       "action, blow (part, damage and its inputs), level change with its cause, miracle, stage, "
+                       "view change, script read, the end and what follows. Poll it with from=next while it runs.",
+        "inputSchema": schema({"fight": {"type": "integer"}, "from": {"type": "integer"},
+                               "records": {"type": "integer"}, "kinds": {"type": "string"}}),
+        "query": "fights.transcript",
+    },
+    {
+        "name": "fights_clear_transcripts",
+        "description": "Removes every recorded fight from the transcript.",
+        "inputSchema": schema(),
+        "query": "fights.clear_transcripts",
+    },
+    {
+        "name": "fights_transcript_folder",
+        "description": "Writes each fight from now on to fight-<number>.jsonl in a folder; an empty folder stops it.",
+        "inputSchema": schema({"folder": {"type": "string"}}),
+        "query": "fights.transcript_folder",
+    },
+    {
+        "name": "autopilot_start",
+        "description": "Starts the fight autopilot, which fights for the player with the real mouse every frame "
+                       "inside the game: policy lesson (the guide's lesson stages), aggressive, random (seed) or "
+                       "sequence (\"1:high,2.5:block,4:step_back\"). It double clicks into the arena to show the fight.",
+        "inputSchema": schema({"policy": {"type": "string", "enum": ["lesson", "aggressive", "random", "sequence"]},
+                               "seed": {"type": "integer"}, "stage": {"type": "string"},
+                               "sequence": {"type": "string"}, "enter_view": {"type": "boolean"}}, ["policy"]),
+        "query": "autopilot.start",
+    },
+    {
+        "name": "autopilot_stop",
+        "description": "Stops the fight autopilot and gives the mouse back.",
+        "inputSchema": schema(),
+        "query": "autopilot.stop",
+    },
+    {
+        "name": "autopilot_state",
+        "description": "The fight autopilot's state: policy, lesson stage, phase, press and blow counts, its fight in "
+                       "the transcript and the lesson check.",
+        "inputSchema": schema(),
+        "query": "autopilot.state",
+    },
+    {
+        "name": "autopilot_log",
+        "description": "Each input the fight autopilot gave and each result it saw, from an index.",
+        "inputSchema": schema({"from": {"type": "integer"}, "entries": {"type": "integer"}}),
+        "query": "autopilot.log",
+    },
     # Input made at the game's action layer, exactly as the player's mouse and keyboard reach it
     {
         "name": "input_state",

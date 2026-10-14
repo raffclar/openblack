@@ -95,6 +95,16 @@ constexpr static std::array<std::string_view, static_cast<size_t>(LoggingSubsyst
     "ai",          //
 };
 
+/// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
+/// to start at and the moves of a sequence
+struct FightAutopilotRequest
+{
+	std::string policy;
+	uint32_t seed {1};
+	std::string stage;
+	std::string sequence;
+};
+
 /// A testbed scenario asked for on the command line: its id, and for a benchmark the frames to let settle, the frames to
 /// measure and where to write the results, after which the game quits
 struct ScenarioRequest
@@ -154,6 +164,9 @@ struct Arguments
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
 	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
 	std::optional<uint16_t> inspectPort;
+	/// The fight autopilot to start with the inspector, and the folder for the files of the fight transcript
+	std::optional<FightAutopilotRequest> fightAutopilot;
+	std::optional<std::filesystem::path> fightTranscriptFolder;
 	/// Where the inspector keeps pictures by feature, with their catalogue; OPENBLACK_SCREENSHOT_ROOT's or
 	/// E:/openblack/screenshots when not given
 	std::optional<std::filesystem::path> screenshotRoot;
@@ -291,6 +304,8 @@ private:
 	/// What the game shows as it starts, before it loads the rest: the logo pictures, the pre-intro film on a first run
 	/// and the tips screen fading in, which stays up while the game loads
 	void PlayStartupScreens();
+	/// Once the inspector has started: the folder of the fight transcript and the fight autopilot from the command line
+	void StartFightTools();
 	/// The logo film's two pictures, each fading in and out, any key or mouse button hurrying them on
 	void PlayLogoScreens();
 	/// The pre-intro film in its own loop with the trailer music, until its last frame or a key
@@ -368,6 +383,8 @@ private:
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
+	std::optional<FightAutopilotRequest> _fightAutopilot;
+	std::optional<std::filesystem::path> _fightTranscriptFolder;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box

@@ -163,6 +163,7 @@
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
+#include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
@@ -1629,8 +1630,16 @@ void GetProperty() // 021 GET_PROPERTY
 			Pushf(0.0f);
 			return;
 		}
-		Pushf(Locator::creatureFightSystem::has_value() ? Locator::creatureFightSystem::value().GetFightHealth(object) : 1.0f);
-		return;
+		{
+			const auto health =
+			    Locator::creatureFightSystem::has_value() ? Locator::creatureFightSystem::value().GetFightHealth(object) : 1.0f;
+			if (Locator::fightTranscript::has_value())
+			{
+				Locator::fightTranscript::value().ScriptRead(object, "FIGHTHEALTH", health);
+			}
+			Pushf(health);
+			return;
+		}
 	case script::ObjectPropertyType::Flying:
 		// In the physics, thrown, dropped or knocked and not yet at rest
 		Pushb(registry.AllOf<ecs::components::InPhysics>(object));
@@ -6257,6 +6266,15 @@ std::optional<entt::entity> FightCreature(const char* native, entt::entity thing
 	return thing;
 }
 
+/// The fight transcript keeps what a script read of the fight state of a creature, when there is a transcript
+static void NoteFightRead(std::optional<entt::entity> creature, std::string_view native, double answer)
+{
+	if (creature.has_value() && Locator::fightTranscript::has_value())
+	{
+		Locator::fightTranscript::value().ScriptRead(*creature, native, answer);
+	}
+}
+
 void IsFighting() // 229 IS_FIGHTING
 {
 	const auto object = PopObject();
@@ -6265,7 +6283,9 @@ void IsFighting() // 229 IS_FIGHTING
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "IS_FIGHTING: thing not found");
 	}
 	const auto creature = FightCreature("IS_FIGHTING", object);
-	Pushb(creature.has_value() && Locator::creatureFightSystem::value().IsFighting(*creature));
+	const bool fighting = creature.has_value() && Locator::creatureFightSystem::value().IsFighting(*creature);
+	NoteFightRead(creature, "IS_FIGHTING", fighting ? 1.0 : 0.0);
+	Pushb(fighting);
 }
 
 void SetMagicRadius() // 230 SET_MAGIC_RADIUS
@@ -8399,7 +8419,9 @@ void SetCreatureAutoFighting() // 390 SET_CREATURE_AUTO_FIGHTING
 void IsAutoFighting() // 391 IS_AUTO_FIGHTING
 {
 	const auto creature = FightCreature("IS_AUTO_FIGHTING", PopObject());
-	Pushb(creature.has_value() && Locator::creatureFightSystem::value().IsAutoFighting(*creature));
+	const bool autoFighting = creature.has_value() && Locator::creatureFightSystem::value().IsAutoFighting(*creature);
+	NoteFightRead(creature, "IS_AUTO_FIGHTING", autoFighting ? 1.0 : 0.0);
+	Pushb(autoFighting);
 }
 
 /// A move a script adds to the end of a creature's fight queue, numbered as the scripts number them
@@ -8434,13 +8456,19 @@ void SetCreatureQueueFightStep() // 394 SET_CREATURE_QUEUE_FIGHT_STEP
 void GetCreatureFightAction() // 395 GET_CREATURE_FIGHT_ACTION
 {
 	const auto creature = FightCreature("GET_CREATURE_FIGHT_ACTION", PopObject());
-	Pushi(creature.has_value() ? static_cast<int32_t>(Locator::creatureFightSystem::value().CurrentFightAction(*creature)) : 0);
+	const auto action =
+	    creature.has_value() ? static_cast<int32_t>(Locator::creatureFightSystem::value().CurrentFightAction(*creature)) : 0;
+	NoteFightRead(creature, "GET_CREATURE_FIGHT_ACTION", action);
+	Pushi(action);
 }
 
 void CreatureFightQueueHits() // 396 CREATURE_FIGHT_QUEUE_HITS
 {
 	const auto creature = FightCreature("CREATURE_FIGHT_QUEUE_HITS", PopObject());
-	Pushf(creature.has_value() ? static_cast<float>(Locator::creatureFightSystem::value().QueuedBlows(*creature)) : 0.0f);
+	const auto hits =
+	    creature.has_value() ? static_cast<float>(Locator::creatureFightSystem::value().QueuedBlows(*creature)) : 0.0f;
+	NoteFightRead(creature, "CREATURE_FIGHT_QUEUE_HITS", hits);
+	Pushf(hits);
 }
 
 void SquareRoot() // 397 SQUARE_ROOT

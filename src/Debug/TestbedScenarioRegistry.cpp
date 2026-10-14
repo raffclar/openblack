@@ -3331,6 +3331,28 @@ void AddCombat(std::vector<Scenario>& all)
 		                 Fight(Kind::PointerOnOpponent, 0, 0, 3.8f)},
 		    .repeatFrom = 5,
 		});
+		// The fight autopilot plays the stages of the lesson with the real mouse, then checks them in the transcript
+		constexpr size_t k_LessonPolicy = 0;
+		constexpr float k_LessonCheckAfterSeconds = 45.0f;
+		all.push_back({
+		    .id = "combat.autopilot_lesson",
+		    .name = "The fight autopilot plays the guide's fight lesson",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger fights a lion that belongs to no player, as the guide's fight lesson "
+		                   "starts it. No one chooses the moves of either creature. The fight autopilot fights for the "
+		                   "player with the real mouse. It double clicks into the arena, then does each stage of the "
+		                   "lesson: one blow, three quick blows, a block and a step. Then it hits until the lion falls. "
+		                   "After 45 seconds the fight transcript is checked for the four stages in their order. Start the "
+		                   "game with the inspector (--inspect-port 0).",
+		    .expected = "The camera shows the fight after the double click. The red tiger strikes, the lion reels, three "
+		                "sparkles queue three blows, the tiger blocks, then steps. The log line of the fight lesson check "
+		                "starts with \"passed\". The tiger wins.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), guide},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 0, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 0, 0.2f), Fight(Kind::FightAutopilot, 0, k_LessonPolicy, 0.5f),
+		                 Fight(Kind::FightLessonCheck, 0, 0, k_LessonCheckAfterSeconds)},
+		});
 	}
 
 	all.push_back({
@@ -4414,7 +4436,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 115> k_Names {
+	constexpr std::array<std::string_view, 117> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -4473,6 +4495,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fight miracle",
 	    "show the fight",
 	    "pointer on opponent",
+	    "fight autopilot",
+	    "fight lesson check",
 	    "knock out",
 	    "bring round",
 	    "tie leash to creature",

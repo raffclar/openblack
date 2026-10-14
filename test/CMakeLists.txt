@@ -949,3 +949,7 @@ openblack_setup_and_add_test(test_creature_activity test_creature_activity.cpp)
 openblack_setup_and_add_test(test_hand_stillness hand/test_hand_stillness.cpp)
 openblack_setup_and_add_test(test_village_voices test_village_voices.cpp)
 openblack_setup_and_add_test(test_animal_reactions test_animal_reactions.cpp)
+openblack_setup_and_add_test(test_fight_transcript test_fight_transcript.cpp)
+openblack_setup_and_add_test(
+  test_fight_autopilot_rules test_fight_autopilot_rules.cpp
+)
