@@ -1568,8 +1568,13 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const int handX = kept.x;
 	const int handY = kept.y;
 
-	// The words, then the mouse with its arrows either side
-	const int iconWidth = shown->action != ToolTipAction::None && _mice != nullptr ? size : 0;
+	// The words, then the mouse with its arrows either side. The mouse shows the buttons that the player bound to the
+	// tooltip's action. An action with no mouse button shows no mouse.
+	const auto bindable = BindableActionOf(shown->action);
+	const auto click = bindable.has_value() && Locator::gameActionSystem::has_value()
+	                       ? help::control_icons::ClickFor(*bindable, Locator::gameActionSystem::value().GetKeyBindings())
+	                       : std::nullopt;
+	const int iconWidth = click.has_value() && _mice != nullptr ? size : 0;
 	const bool left = (shown->arrows & ToolTipArrows::k_Left) != 0;
 	const bool right = (shown->arrows & ToolTipArrows::k_Right) != 0;
 	const int iconsWidth = iconWidth + (left ? size / 2 : 0) + (right ? size / 2 : 0);
@@ -1635,13 +1640,8 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	// The mouse, its button the action's, and the arrows over the glows
 	if (iconWidth != 0)
 	{
-		constexpr float k_Grid = 0.25f;
-		const bool selecting = shown->action == ToolTipAction::Select;
-		const auto uvMin = glm::vec2(1.0f, static_cast<float>(k_ToolTipMouseRow)) * k_Grid;
-		const auto uvMax = uvMin + k_Grid;
-		// The left button is the right one mirrored
-		_canvas.DrawQuad({iconX, y}, {iconX + sizeF, y + sizeF}, selecting ? glm::vec2(uvMax.x, uvMin.y) : uvMin,
-		                 selecting ? glm::vec2(uvMin.x, uvMax.y) : uvMax, white, _mice.get());
+		const auto cell = help::control_icons::CellFor(*click, k_ToolTipMouseRow, machine_clock::Ticks());
+		_canvas.DrawQuad({iconX, y}, {iconX + sizeF, y + sizeF}, cell.uvMin, cell.uvMax, white, _mice.get());
 	}
 	if (_atmos != nullptr)
 	{

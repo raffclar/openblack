@@ -96,6 +96,10 @@ public:
 
 	/// What the hand holds, none when it holds nothing of its own
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld() const = 0;
+	/// Whether the Action button is down to throw what the hand holds
+	[[nodiscard]] virtual bool IsAboutToThrow() const { return false; }
+	/// Whether the creature under the pointer can take what the hand holds as a gift
+	[[nodiscard]] virtual bool CreatureTakesHeld(entt::entity /*creature*/) const { return false; }
 	/// Whether the hand is taking, holding or about to throw a thing, so that other uses of the button leave it be
 	[[nodiscard]] virtual bool IsBusy() const = 0;
 	/// Whether the hand is pulling a thing out of the ground, from the press until it holds it
