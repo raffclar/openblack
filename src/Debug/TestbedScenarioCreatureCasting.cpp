@@ -364,6 +364,63 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	                  .globe = 0}},
 	});
 
+	// The player's hand takes a one-shot globe, holds it in front of the creature and gives it. It waits first, so that the
+	// creature comes across the things about it.
+	const std::vector<Command> giveGlobe {{.kind = Kind::HandTake, .delaySeconds = 10.0f, .globe = 0},
+	                                      {.kind = Kind::HandGive, .creature = 0, .delaySeconds = 1.5f}};
+	const HandHold offering {.offset = {0.0f, -10.0f}, .height = 12.0f};
+	all.push_back({
+	    .id = "miracles.creature_given_heal_globe",
+	    .name = "Creature casting: a one-shot heal given from the hand",
+	    .facet = Facet::Miracles,
+	    .description = "The player's hand takes a one-shot heal globe and gives it to a grown-up tiger that knows the heal. "
+	                   "A villager of its town, hurt to a third of its life, stands 30 metres ahead.",
+	    .expected = "The tiger turns to the camera, reaches out and takes the globe. The heal counts as one more sighting. "
+	                "With a face of compassion it walks to within 50 metres of the thing that it finds most useful for "
+	                "compassion, and looks at it. It turns to face the thing. The globe goes from its hand, it holds the "
+	                "casting pose for three seconds, and the heal lights over the thing.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f)},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -35.0f}, {30.0f, 20.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -30.0f}, .joinTown = true, .life = 0.33f}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {-15.0f, 15.0f}, .bubbleHeight = 0.0f}},
+	    .commands = {Know(MagicType::Heal), giveGlobe[0], giveGlobe[1]},
+	    .hand = offering,
+	});
+	all.push_back({
+	    .id = "miracles.creature_given_unknown_globe",
+	    .name = "Creature casting: a one-shot lightning bolt that it does not know",
+	    .facet = Facet::Miracles,
+	    .description = "The player's hand gives a one-shot lightning globe to a grown-up tiger that has never seen the "
+	                   "lightning bolt. A villager of its town stands 30 metres ahead.",
+	    .expected = "The tiger takes the globe, and the bolt counts as one sighting. It goes to the thing that it finds "
+	                "most useful for anger and turns to it. The globe goes from its hand. It raises its arms, but the "
+	                "bolt fizzles: it looks embarrassed, and one time in two sad. The fizzle counts as one more sighting.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f)},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -35.0f}, {30.0f, 20.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -30.0f}, .joinTown = true}},
+	    .dispensers = {{.type = MagicType::LightningBolt, .offset = {-15.0f, 15.0f}, .bubbleHeight = 0.0f}},
+	    .commands = giveGlobe,
+	    .hand = offering,
+	});
+	auto young = Caster({0.0f, 0.0f}, "young");
+	young.phase = 4;
+	all.push_back({
+	    .id = "miracles.creature_young_given_globe",
+	    .name = "Creature casting: a one-shot heal given to a young creature",
+	    .facet = Facet::Miracles,
+	    .description = "The player's hand gives a one-shot heal globe to a tiger that has not grown up to stage 8.",
+	    .expected = "The tiger takes the globe but does not cast it, and the heal counts as no sighting. It uses the globe "
+	                "as any other gift: the first time, with no strong desire, it looks the globe over.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {young},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {-15.0f, 15.0f}, .bubbleHeight = 0.0f}},
+	    .commands = giveGlobe,
+	    .hand = offering,
+	});
+
 	all.push_back({
 	    .id = "miracles.hand_itchy_seed",
 	    .name = "Creature spells: the itchy spell held in the hand",

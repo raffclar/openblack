@@ -45,6 +45,8 @@ struct MiracleRule
 	bool knownAtStart {false};
 	/// The creature action it lets the creature take
 	uint32_t action {0};
+	/// The desire that the miracle serves when a creature casts it from a one-shot globe that it was given
+	uint32_t desire {0};
 };
 
 /// How often it has seen something, and when (the first sighting of a skill, the last of a miracle), in game turns

@@ -747,6 +747,7 @@ struct Command
 	std::optional<size_t> with;
 	/// A globe that the scenario puts down, by its place among the scenario's globes. The creature picks up this globe
 	/// in place of the object, or does the action with this globe. With onGlobe set, it does the action to this globe.
+	/// The hand takes this globe in place of the object.
 	std::optional<size_t> globe;
 	bool onGlobe {false};
 	/// The leash put on

@@ -67,6 +67,7 @@
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
@@ -2171,6 +2172,11 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 	if (mind == nullptr || !mind->desires.has_value() || !registry.Valid(object) ||
 	    !Locator::creatureObjectActionSystem::has_value() ||
 	    Locator::creatureObjectActionSystem::value().GetHeld(creature) != object)
+	{
+		return;
+	}
+	// Grown up enough, it casts a one-shot globe that it was given
+	if (registry.AllOf<OneOffSpellSeed>(object) && CastGivenGlobe(creature, *mind, object))
 	{
 		return;
 	}

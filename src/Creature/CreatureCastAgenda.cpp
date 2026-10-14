@@ -278,22 +278,30 @@ creature_mind::FizzleReaction creature_mind::ReactToFizzle(const Random& random,
 
 std::vector<Step> creature_mind::CastOneShotAt(const OneShotCast& cast)
 {
+	const Gaze atTarget {.object = cast.target};
 	std::vector<Step> agenda;
 	if (cast.pickUp.has_value())
 	{
-		agenda.push_back({.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::PickUp, .object = *cast.pickUp}});
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::PickUp, .object = *cast.pickUp},
+		                  .gaze = GoingLook()});
 	}
 	agenda.push_back(
 	    {.kind = Step::Kind::Move,
-	     .movement = {.kind = Movement::Kind::GoNearObject, .object = cast.target, .maxDistance = k_OneShotCastDistance}});
+	     .movement = {.kind = Movement::Kind::GoNearObject, .object = cast.target, .maxDistance = k_OneShotCastDistance},
+	     .face = cast.face,
+	     .gaze = GoingLook()});
 	if (cast.getAway)
 	{
-		agenda.push_back({.kind = Step::Kind::Move,
-		                  .movement = {.kind = Movement::Kind::GetAwayFromObject,
-		                               .object = cast.target,
-		                               .maxDistance = 2.0f * cast.height}});
+		agenda.push_back(
+		    {.kind = Step::Kind::Move,
+		     .movement = {.kind = Movement::Kind::GetAwayFromObject, .object = cast.target, .maxDistance = 2.0f * cast.height},
+		     .gaze = atTarget});
 	}
-	agenda.push_back(TurnToFace(cast.target));
+	auto turn = TurnToFace(cast.target);
+	turn.face = cast.face;
+	turn.gaze = atTarget;
+	agenda.push_back(turn);
 	agenda.push_back({.kind = Step::Kind::UseUpHeld});
 	agenda.push_back(CastFromPose(cast.magicType, cast.target, k_CastPose, k_CastHoldSeconds));
 	if (cast.used.has_value())

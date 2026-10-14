@@ -16,6 +16,7 @@
 
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
+#include "Creature/CreatureGiving.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreaturePlanActions.h"
 
@@ -699,6 +700,75 @@ TEST(CreatureCastAgenda, ItPicksUpTheGlobeWithAnEmptyHandAndTheGlobeGoesAfterThe
 	EXPECT_EQ(full->at(0).movement.kind, Movement::Kind::GoNearObject);
 	EXPECT_EQ(full->at(3).kind, Step::Kind::UseUpHeld);
 	EXPECT_EQ(*full->back().object, 9u);
+}
+
+TEST(CreatureCastAgenda, TheOneShotInItsHandLooksAtTheThingAndPullsTheFaceOfCompassion)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	plan_actions::Situation situation;
+	situation.handFull = true;
+	situation.height = 15.0f;
+	situation.heldOneShot = plan_actions::OneShot {.magicType = 4, .aggressive = true};
+	const auto agenda =
+	    plan_actions::Agenda(*plan_actions::For("CastOneOffSpellInHandAggressive"), 7u, {}, situation, Always(0));
+	ASSERT_TRUE(agenda.has_value());
+	// It looks at the thing as it goes, then at the thing itself. The face is that of compassion, also for an aggressive
+	// globe.
+	ASSERT_TRUE(agenda->at(0).gaze.has_value());
+	EXPECT_TRUE(agenda->at(0).gaze->whileGoing);
+	EXPECT_EQ(agenda->at(0).face, creature_face::Cue::Compassion);
+	ASSERT_TRUE(agenda->at(1).gaze.has_value());
+	EXPECT_EQ(agenda->at(1).gaze->object, 7u);
+	EXPECT_EQ(agenda->at(1).face, creature_face::Cue::None);
+	ASSERT_TRUE(agenda->at(2).gaze.has_value());
+	EXPECT_EQ(agenda->at(2).gaze->object, 7u);
+	EXPECT_EQ(agenda->at(2).face, creature_face::Cue::Compassion);
+}
+
+TEST(CreatureCastAgenda, TheOneShotThatItPicksUpPullsTheFaceOfItsKind)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	plan_actions::Situation situation;
+	situation.height = 15.0f;
+	situation.instrument = 9u;
+	situation.usedOneShot = plan_actions::OneShot {.magicType = 4, .aggressive = true};
+	const auto agenda =
+	    plan_actions::Agenda(*plan_actions::For("PickUpAndCastOneOffSpellAggressi"), 7u, {}, situation, Always(0));
+	ASSERT_TRUE(agenda.has_value());
+	// It looks at the globe as it goes to pick it up, with no face
+	ASSERT_TRUE(agenda->at(0).gaze.has_value());
+	EXPECT_TRUE(agenda->at(0).gaze->whileGoing);
+	EXPECT_EQ(agenda->at(0).face, creature_face::Cue::None);
+	EXPECT_EQ(agenda->at(1).face, creature_face::Cue::Anger);
+	EXPECT_EQ(agenda->at(3).face, creature_face::Cue::Anger);
+
+	situation.usedOneShot = plan_actions::OneShot {.magicType = 10, .compassionate = true};
+	const auto kind =
+	    plan_actions::Agenda(*plan_actions::For("PickUpAndCastOneOffSpellCompassi"), 7u, {}, situation, Always(0));
+	ASSERT_TRUE(kind.has_value());
+	EXPECT_EQ(kind->at(1).face, creature_face::Cue::Compassion);
+}
+
+TEST(CreatureCastAgenda, AGrownUpCreatureCastsAGlobeThatItWasGiven)
+{
+	using creature_giving::CastGlobe;
+	using creature_giving::GlobeTarget;
+	// Too young before stage 8
+	EXPECT_FALSE(CastGlobe(7, MagicType::Heal, 1).has_value());
+	const auto heal = CastGlobe(8, MagicType::Heal, 1);
+	ASSERT_TRUE(heal.has_value());
+	EXPECT_EQ(heal->desire, 1u);
+	EXPECT_EQ(heal->action, "CastOneOffSpellInHandCompassiona");
+	EXPECT_EQ(heal->target, GlobeTarget::MostUseful);
+	// Every other desire casts with the aggressive action
+	const auto bolt = CastGlobe(12, MagicType::LightningBolt, 2);
+	ASSERT_TRUE(bolt.has_value());
+	EXPECT_EQ(bolt->desire, 2u);
+	EXPECT_EQ(bolt->action, "CastOneOffSpellInHandAggressive");
+	EXPECT_EQ(CastGlobe(12, MagicType::Teleport, 6)->action, "CastOneOffSpellInHandAggressive");
+	// A creature spell goes at the creature itself for compassion, else at the nearest creature
+	EXPECT_EQ(CastGlobe(13, MagicType::CreatureSpellCompassion, 1)->target, GlobeTarget::Itself);
+	EXPECT_EQ(CastGlobe(13, MagicType::CreatureSpellFreeze, 2)->target, GlobeTarget::NearestCreature);
 }
 
 TEST(CreatureCastAgenda, ATryThatFizzledIsForgottenWhenItsThingGoes)
