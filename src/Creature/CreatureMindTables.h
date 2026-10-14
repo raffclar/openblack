@@ -53,6 +53,9 @@ struct ActionInfo
 	bool learnable {false};
 	/// Stroked while holding something during it, the creature learns to eat what it holds
 	bool eatWhenStroked {false};
+	/// The action acts on a thing, and it never acts on the thing that the creature holds
+	bool actsOnThing {false};
+	bool notOnWhatItHolds {false};
 	/// What the creature must know to choose it
 	creature_watching::ActionNeeds needs;
 };

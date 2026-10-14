@@ -47,6 +47,9 @@ namespace openblack::ecs::systems::mind_detail
 [[nodiscard]] std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> SetupFor(CreatureType species);
 [[nodiscard]] std::optional<float> FoodValueOf(entt::entity entity);
 [[nodiscard]] std::optional<creature_mind::WaterSpot> NearestWater(glm::vec2 from);
+/// The sort of a thing, by the object type of its info (an animal's own info, or the info of any other thing); none for a
+/// thing without info. A creature remembers the sorts of things that it was given and that it cannot eat.
+[[nodiscard]] std::optional<uint32_t> ObjectSortOf(const ecs::Registry& registry, entt::entity thing);
 /// The kind of belief a creature keeps about a thing, by the game's belief types; none for the things it does not yet
 /// know the kind of here
 [[nodiscard]] std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing);

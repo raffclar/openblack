@@ -126,4 +126,35 @@ struct Choice
 /// eat. With no winner, or no desire at least a tenth strong, the first thing of a kind is examined and later ones are
 /// acted on as when led to them.
 [[nodiscard]] Choice ChooseUse(const GiftFacts& facts);
+
+/// The plan that the creature kept, as it was when it started its last reaction, or when the hand gave it a thing
+/// while it had no reaction
+struct KeptPlanFacts
+{
+	/// The plan has a desire, a thing to act on and an action
+	bool complete {false};
+	/// The desire of the plan is about a whole thing, and the plan has no such thing
+	bool missesWhole {false};
+	/// The action needs a thing to use, and the plan has no such thing
+	bool missesThingToUse {false};
+	/// The action acts on a thing, and it needs a thing to use
+	bool actsOnThing {false};
+	bool needsThingToUse {false};
+	/// The thing that the creature was given suits the action as the thing to act on, or as the thing to use
+	bool giftSuitsActOn {false};
+	bool giftSuitsUse {false};
+};
+/// How the creature uses the thing that it was given for the plan that it kept
+enum class KeptPlanUse : uint8_t
+{
+	/// The thing does not suit the plan: the creature chooses a use of its own
+	None,
+	/// The creature continues the plan with the thing as the thing that it acts on
+	ActOn,
+	/// The creature continues the plan with the thing as the thing that it uses
+	Use,
+};
+/// The creature continues a complete plan, when the action acts on a thing and the given thing suits it. The creature
+/// tries the thing to act on first, then the thing to use.
+[[nodiscard]] KeptPlanUse UseForKeptPlan(const KeptPlanFacts& facts);
 } // namespace openblack::creature_giving

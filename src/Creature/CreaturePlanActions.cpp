@@ -238,6 +238,12 @@ constexpr std::array k_Executors {
         .action = "WaterTreeForTown", .target = Target::Anything, .use = Target::AnyTree, .build = Build::WaterTreeForTown},
     Executor {.action = "DeadForever", .build = Build::DeadForever},
     Executor {.action = "PointOutHighlight", .target = Target::Anything, .build = Build::PointOutHighlight},
+    // The creature shows the player that it saw a deed of the player
+    Executor {.action = "NoticeHelpfulAction", .target = Target::Anything, .build = Build::Notice},
+    Executor {.action = "NoticeAggressiveAction", .target = Target::Anything, .build = Build::Notice},
+    Executor {.action = "NoticeAction", .target = Target::Anything, .build = Build::Notice},
+    Executor {.action = "NoticeStealingAction", .target = Target::Anything, .build = Build::Notice},
+    Executor {.action = "NoticePlayfulAction", .target = Target::Anything, .build = Build::Notice},
     Executor {
         .action = "SleepByObject", .target = Target::Anything, .build = Build::SleepByObject, .activity = Activity::Sleep},
     // What scripts force on creatures to stage their scenes
@@ -247,6 +253,47 @@ constexpr std::array k_Executors {
     Executor {.action = "PointAtObject", .target = Target::Anything, .build = Build::PointAtThing},
     // What a script's cut scene makes every creature free to think for itself do
     Executor {.action = "LookAtCameraInWideScreen", .build = Build::LookAtCameraInCutScene},
+};
+
+/// The actions of the game's table that need a thing to use, by their names there
+constexpr std::array<std::string_view, 37> k_NeedThingToUse {
+    "StoneAndEat",
+    "Hurl",
+    "ShowPlayerAnObject",
+    "GiveFoodFromFieldToStoragePit",
+    "GiveFruitFromTreeToStoragePit",
+    "GiveMagicFoodToStoragePit",
+    "GiveWoodFromTreeToStoragePit",
+    "GiveMagicWoodToStoragePit",
+    "HelpRepairHouse",
+    "BringToTown",
+    "GiveToCreature",
+    "ThrowAtCamera",
+    "StartFire",
+    "BuildHome",
+    "GiveFoodToCreature",
+    "PlayThrowingGameWithPlayer",
+    "PickUpAndCastOneOffSpellAggressi",
+    "PickUpAndCastOneOffSpellCompassi",
+    "PickUpAndCastOneOffSpellPlayful",
+    "PickUpAndCastOneOffSpellToRestor",
+    "PlayThrowingGameWithFriend",
+    "PutFoodFromFieldByWorshipSite",
+    "GiveWoodFromTreeToBuildingSite",
+    "PlantTree",
+    "ThrowToImpress",
+    "GiveWoodFromTreeToWorkshop",
+    "ExamineOtherCreatureWithFriend",
+    "GiveFriendToy",
+    "SetFireToObject",
+    "DropCowInStoragePit",
+    "ThrowBallAtObject",
+    "BringVillagersToWorshipSite",
+    "StealFoodFromFarm",
+    "StealFoodFromStoragePit",
+    "StealWoodFromStoragePit",
+    "WaterTreeForTown",
+    "WaterTreePU1ForTown",
 };
 
 /// The trip to the shoal to bring food out of the sea, none when it already has food in its hand; it walks straight to the
@@ -296,6 +343,11 @@ bool creature_plan_actions::IsCast(const Executor& executor)
 	}
 }
 
+bool creature_plan_actions::NeedsThingToUse(std::string_view action)
+{
+	return std::ranges::find(k_NeedThingToUse, action) != k_NeedThingToUse.end();
+}
+
 bool creature_plan_actions::Possible(const Executor& executor, const Situation& situation)
 {
 	switch (executor.build)
@@ -324,6 +376,9 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::PointAtCamera:
 	case Build::PointOutHighlight:
 		return situation.eye.has_value();
+	case Build::Notice:
+		// It turns to the camera only when it has a player
+		return !situation.hasPlayer || situation.eye.has_value();
 	default:
 		return true;
 	}
@@ -476,6 +531,16 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::DeadForever();
 	case Build::PointOutHighlight:
 		return creature_mind::PointOutHighlight(*object, situation.eyeDistance);
+	case Build::Notice:
+	{
+		const auto kind = creature_mind::NoticeKindOf(executor.action);
+		if (!kind.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::Notice(*kind, *object, situation.handFull, situation.hasPlayer,
+		                             situation.eye.value_or(glm::vec3(0.0f)), random);
+	}
 	case Build::Destroy:
 		return creature_mind::DestroyThing(*object);
 	case Build::SitDown:

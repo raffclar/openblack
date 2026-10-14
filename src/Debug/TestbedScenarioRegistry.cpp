@@ -3796,9 +3796,9 @@ void AddMind(std::vector<Scenario>& all)
 	    .facet = Facet::Mind,
 	    .description = "A grown-up tiger with two toy balls about it. Every 20 seconds the player plays with a toy near it, "
 	                   "the one deed creatures copy without the learning leash.",
-	    .expected = "Every time, unless it is still copying the action of the last time, it notices: it turns to look "
-	                "where the player played; a few seconds later it picks up a ball and throws it about, copying the "
-	                "player; then for a while it wants to play. The Mind panel shows the stage of copying.",
+	    .expected = "Every time, unless it is still copying the action of the last time, it picks up a ball and throws "
+	                "it about, copying the player; then for a while it wants to play. The deed is on no thing, so the "
+	                "creature does not show that it saw it. The Mind panel shows the stage of copying.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
 	    // A loose ball from the mobile object table is not a toy: the toys are statics
@@ -3826,6 +3826,33 @@ void AddMind(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PlayerDidOn, .creature = 0, .delaySeconds = 3.0f, .value = k_PlayWithToy, .object = 0},
 	                 Act(Kind::Stop, 0, 20.0f)},
 	    .repeatFrom = 0,
+	});
+
+	// The deeds of the player that the five notices follow, from the least likely to be copied to the most likely: a
+	// creature that copies a deed only starts to copy a deed that is as likely or more likely
+	constexpr size_t k_PlantTree = 11;
+	constexpr size_t k_PutFoodInWorshipSite = 0;
+	constexpr size_t k_DamageByThrowing = 15;
+	constexpr size_t k_StealObjectToTown = 35;
+	const auto deedOn = [](size_t deed, float delay) {
+		return Command {.kind = Kind::PlayerDidOn, .creature = 0, .delaySeconds = delay, .value = deed, .object = 0};
+	};
+	all.push_back({
+	    .id = "mind.notice_deed",
+	    .name = "Show that it saw a deed",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger on the learning leash, near a rock. Every 20 seconds the player does a deed on "
+	                   "the rock: plant a tree, put food in a worship site, damage by a throw, steal a thing, play with "
+	                   "a toy.",
+	    .expected = "After each deed the tiger points at the rock, amazed, turns to the camera and watches it. Then it "
+	                "plays an action: aha after the tree, happy or aha after the food, angry (and one time in three a "
+	                "laugh first) after the damage, a scratch after the theft, happy after the toy. The aggressive "
+	                "notice points for a shorter time and watches the camera one time, angry.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {25.0f, -25.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), deedOn(k_PlantTree, 2.0f), deedOn(k_PutFoodInWorshipSite, 20.0f),
+	                 deedOn(k_DamageByThrowing, 20.0f), deedOn(k_StealObjectToTown, 20.0f), deedOn(k_PlayWithToy, 20.0f)},
 	});
 
 	all.push_back({

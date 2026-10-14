@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureGiving.h"
+#include "Creature/CreaturePlanActions.h"
 
 using namespace openblack;
 using namespace openblack::creature_giving;
@@ -145,4 +146,44 @@ TEST(CreatureGiving, WithNoDesireATenthStrongTheFirstOfAKindIsExaminedAndLaterOn
 	// A strong desire for which the thing is of no use at all finds no winner either
 	const GiftFacts useless {.curiosity = {.desire = 0.9f, .usefulness = 0.0f}, .givenKindBefore = true};
 	EXPECT_EQ(ChooseUse(useless).use, Use::AsLed);
+}
+
+// A creature that hurls a rock at a tree is given another rock: it hurls the given rock at the tree
+TEST(CreatureGiving, AKeptPlanContinuesWithTheGiftAsTheThingToActOnFirst)
+{
+	KeptPlanFacts facts {.complete = true, .actsOnThing = true, .needsThingToUse = true, .giftSuitsUse = true};
+	EXPECT_EQ(UseForKeptPlan(facts), KeptPlanUse::Use);
+	facts.giftSuitsActOn = true;
+	EXPECT_EQ(UseForKeptPlan(facts), KeptPlanUse::ActOn);
+	// An action with no thing to use takes the gift only as the thing to act on
+	facts.giftSuitsActOn = false;
+	facts.needsThingToUse = false;
+	EXPECT_EQ(UseForKeptPlan(facts), KeptPlanUse::None);
+}
+
+TEST(CreatureGiving, AKeptPlanThatIsNotCompleteOrActsOnNothingIsNotContinued)
+{
+	const KeptPlanFacts whole {.complete = true, .actsOnThing = true, .giftSuitsActOn = true};
+	EXPECT_EQ(UseForKeptPlan(whole), KeptPlanUse::ActOn);
+	auto facts = whole;
+	facts.complete = false;
+	EXPECT_EQ(UseForKeptPlan(facts), KeptPlanUse::None);
+	facts = whole;
+	facts.missesWhole = true;
+	EXPECT_EQ(UseForKeptPlan(facts), KeptPlanUse::None);
+	facts = whole;
+	facts.missesThingToUse = true;
+	EXPECT_EQ(UseForKeptPlan(facts), KeptPlanUse::None);
+	facts = whole;
+	facts.actsOnThing = false;
+	EXPECT_EQ(UseForKeptPlan(facts), KeptPlanUse::None);
+}
+
+TEST(CreatureGiving, TheActionsThatNeedAThingToUse)
+{
+	EXPECT_TRUE(creature_plan_actions::NeedsThingToUse("Hurl"));
+	EXPECT_TRUE(creature_plan_actions::NeedsThingToUse("PlantTree"));
+	EXPECT_TRUE(creature_plan_actions::NeedsThingToUse("WaterTreePU1ForTown"));
+	EXPECT_FALSE(creature_plan_actions::NeedsThingToUse("EatAlive"));
+	EXPECT_FALSE(creature_plan_actions::NeedsThingToUse("TakeObjectFromHand"));
 }

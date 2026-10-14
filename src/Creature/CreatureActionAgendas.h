@@ -9,11 +9,15 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
+#include <optional>
+#include <string_view>
 #include <vector>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "Creature/CreatureIdleMind.h"
 
@@ -120,6 +124,36 @@ constexpr size_t k_LookAtMeAnimation = 69;
 constexpr float k_CallCameraSeconds = 1.0f;
 constexpr float k_PointOutSeconds = 1.0f;
 constexpr float k_AfterPointingOutSeconds = 2.0f;
+
+/// The five ways in which a creature shows that it saw a deed of its player
+enum class NoticeKind : uint8_t
+{
+	Helpful,
+	Aggressive,
+	Plain,
+	Stealing,
+	Playful,
+};
+/// The kind of notice that an action of the game's table gives, none for other actions
+[[nodiscard]] std::optional<NoticeKind> NoticeKindOf(std::string_view action);
+/// The creature shows the player that it saw a deed. The agenda has these steps:
+/// 1. With its hand empty, it points at the thing of the deed, amazed, and its head follows the thing.
+/// 2. With a player, it turns to face the camera.
+/// 3. It watches the camera for one or two seconds, with a face for the kind of deed.
+/// 4. It plays one or two actions for the kind of deed.
+[[nodiscard]] std::vector<Step> Notice(NoticeKind kind, uint32_t thing, bool handFull, bool hasPlayer, glm::vec3 camera,
+                                       const Random& random);
+/// The creature points for two seconds, or for 0.8 of a second at an aggressive deed
+constexpr float k_NoticePointSeconds = 2.0f;
+constexpr float k_NoticeAggressivePointSeconds = 0.8f;
+/// Each watch of the camera lasts one second
+constexpr float k_NoticeWatchSeconds = 1.0f;
+/// After a helpful deed, the creature is happy or plays its aha in equal shares. After an aggressive deed, one time in
+/// three it laughs before it is angry.
+constexpr uint32_t k_NoticeHelpfulLots = 2;
+constexpr uint32_t k_NoticeLaughLots = 3;
+constexpr size_t k_LaughAnimation = 218;
+constexpr size_t k_AhaAnimation = 220;
 
 /// Having had a good look at a kind of thing, a creature is only a hundredth as keen to satisfy its curiosity with a
 /// thing of that kind, unless the thing is doing something it finds interesting

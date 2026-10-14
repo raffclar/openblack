@@ -10,7 +10,9 @@
 #include "CreatureActionAgendas.h"
 
 #include <algorithm>
+#include <array>
 #include <iterator>
+#include <utility>
 
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureThrow.h"
@@ -272,6 +274,74 @@ std::vector<Step> creature_mind::PointOutHighlight(uint32_t highlight, float cam
 	                  .face = creature_face::Cue::Amazed,
 	                  .gaze = Gaze {.object = highlight}});
 	agenda.push_back(lookAtCamera(k_AfterPointingOutSeconds));
+	return agenda;
+}
+
+std::optional<NoticeKind> creature_mind::NoticeKindOf(std::string_view action)
+{
+	constexpr std::array<std::pair<std::string_view, NoticeKind>, 5> k_Notices {{
+	    {"NoticeHelpfulAction", NoticeKind::Helpful},
+	    {"NoticeAggressiveAction", NoticeKind::Aggressive},
+	    {"NoticeAction", NoticeKind::Plain},
+	    {"NoticeStealingAction", NoticeKind::Stealing},
+	    {"NoticePlayfulAction", NoticeKind::Playful},
+	}};
+	const auto found = std::ranges::find(k_Notices, action, &std::pair<std::string_view, NoticeKind>::first);
+	return found != k_Notices.end() ? std::optional(found->second) : std::nullopt;
+}
+
+std::vector<Step> creature_mind::Notice(NoticeKind kind, uint32_t thing, bool handFull, bool hasPlayer, glm::vec3 camera,
+                                        const Random& random)
+{
+	using creature_face::Cue;
+	const Gaze atCamera {.camera = true};
+	const auto watch = [&atCamera](Cue face) {
+		return Step {.kind = Step::Kind::WatchCamera, .seconds = k_NoticeWatchSeconds, .face = face, .gaze = atCamera};
+	};
+	std::vector<Step> agenda;
+	if (!handFull)
+	{
+		const auto seconds = kind == NoticeKind::Aggressive ? k_NoticeAggressivePointSeconds : k_NoticePointSeconds;
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = thing, .seconds = seconds},
+		                  .face = Cue::Amazed,
+		                  .gaze = Gaze {.object = thing, .itself = true}});
+	}
+	// A creature without a player has no camera of its own to turn to
+	if (hasPlayer)
+	{
+		agenda.push_back({.kind = Step::Kind::Move,
+		                  .movement = {.kind = Movement::Kind::TurnToFace, .point = {camera.x, camera.z}},
+		                  .gaze = atCamera});
+	}
+	switch (kind)
+	{
+	case NoticeKind::Helpful:
+		agenda.push_back(watch(Cue::Curiosity));
+		agenda.push_back(watch(Cue::Compassion));
+		agenda.push_back(PlayOnce(random(k_NoticeHelpfulLots) == 0 ? animations::k_Happy : k_AhaAnimation));
+		break;
+	case NoticeKind::Aggressive:
+		agenda.push_back(watch(Cue::Anger));
+		if (random(k_NoticeLaughLots) == 0)
+		{
+			agenda.push_back(PlayOnce(k_LaughAnimation));
+		}
+		agenda.push_back(PlayOnce(animations::k_Angry));
+		break;
+	case NoticeKind::Plain:
+	case NoticeKind::Stealing:
+	case NoticeKind::Playful:
+	{
+		agenda.push_back(watch(Cue::Curiosity));
+		agenda.push_back(watch(Cue::Curiosity));
+		const auto animation = kind == NoticeKind::Plain      ? k_AhaAnimation
+		                       : kind == NoticeKind::Stealing ? animations::k_Scratch
+		                                                      : animations::k_Happy;
+		agenda.push_back(PlayOnce(animation));
+		break;
+	}
+	}
 	return agenda;
 }
 

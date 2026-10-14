@@ -64,6 +64,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
@@ -2094,6 +2095,12 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	{
 		body->body = creature_layers::Hurry(body->body);
 	}
+	// Without a reaction, it keeps the plan that it does now. After it takes the thing, it can continue that
+	// plan. With a reaction, it keeps the plan from the start of the reaction.
+	if (const auto* reaction = registry.TryGet<const LivingReaction>(creature); reaction == nullptr || reaction->reaction == 0)
+	{
+		mind->keptPlan = mind->planner.current;
+	}
 	Abandon(*mind);
 	ReleaseCast(creature);
 	if (!Replan(creature, creature_mind::Activity::Planned,
@@ -2144,31 +2151,30 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 	{
 		return;
 	}
-	// TODO(creature-giving): the game first carries on the plan the creature had before it was given the thing, when that
-	// plan's action takes a thing of this sort (see bw1-decomp creature/creature_giving.md section 4); not done yet. While
-	// the creature holds a reaction, the plan it goes back to is the one it had when it took the reaction up (or the hand
-	// picked something up), not the reaction's own
 	// It comes across what it was given, then weighs it as a thing to act on for each desire it could serve; held, it
 	// counts as near as can be
 	ComeAcross(creature, *mind, object);
+	if (ContinueKeptPlanWith(creature, *mind, object))
+	{
+		return;
+	}
 	const auto& desires = *mind->desires;
 	const auto weigh = [&](Desire desire) {
 		return creature_giving::Weighed {.desire = desires[desire].value,
 		                                 .usefulness = ObjectToActOnUsefulness(creature, *mind, desire, object)};
 	};
-	const auto belief = BeliefOf(registry, object, creature);
-	const auto kind = belief.has_value() ? belief->type : creature_tree::belief_types::k_Other;
-	// TODO(creature-giving): the game also keeps which kinds it has learnt it can't eat; openblack has no such memory yet
+	// It remembers the sorts of object that it was given, and that it learnt it cannot eat, by the object type of their info
+	const auto sort = mind_detail::ObjectSortOf(registry, object);
 	const auto choice = creature_giving::ChooseUse({
 	    .curiosity = weigh(Desire::Curiosity),
 	    .hunger = weigh(Desire::Hunger),
 	    .playWithPlayer = weigh(Desire::PlayWithPlayer),
-	    .cantEatKind = false,
-	    .givenKindBefore = mind->givenKinds.contains(kind),
+	    .cantEatKind = sort.has_value() && mind->refusedFoodSorts.contains(*sort),
+	    .givenKindBefore = sort.has_value() && mind->givenKinds.contains(*sort),
 	});
-	if (choice.remembersKind)
+	if (choice.remembersKind && sort.has_value())
 	{
-		mind->givenKinds.insert(kind);
+		mind->givenKinds.insert(*sort);
 	}
 	const auto number = entt::to_integral(object);
 	// The plan is about what the thing belongs to, if anything

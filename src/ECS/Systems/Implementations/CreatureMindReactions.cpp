@@ -133,6 +133,8 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	{
 		return;
 	}
+	// It keeps the plan that it does now. After it takes a thing from the hand, it can continue that plan.
+	mind->keptPlan = mind->planner.current;
 	const bool there = thing != entt::null && registry.Valid(thing);
 	if (setup.comesAcross && there)
 	{
