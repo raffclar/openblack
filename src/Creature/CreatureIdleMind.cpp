@@ -624,6 +624,7 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.sitEnding = false;
 	mind.wakeWanted = false;
 	mind.gaveUp = false;
+	mind.usedUpHeld.reset();
 	// Taking up something else, its eyes look as usual again
 	mind.eyesToClear = mind.eyesHeld;
 }

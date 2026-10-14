@@ -2337,6 +2337,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::wakeWanted>("wakeWanted")
 	    .Field<&openblack::creature_mind::IdleMind::serial>("serial")
 	    .Field<&openblack::creature_mind::IdleMind::gaveUp>("gaveUp")
+	    .Field<&openblack::creature_mind::IdleMind::usedUpHeld>("usedUpHeld")
 	    .Field<&openblack::creature_mind::IdleMind::castDone>("castDone")
 	    .Field<&openblack::creature_mind::IdleMind::castTurns>("castTurns")
 	    .Field<&openblack::creature_mind::IdleMind::inspectTurns>("inspectTurns")

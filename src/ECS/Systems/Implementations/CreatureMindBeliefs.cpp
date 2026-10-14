@@ -21,6 +21,7 @@
 #include <optional>
 
 #include <glm/gtx/vec_swizzle.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
@@ -30,7 +31,10 @@
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureHelp.h"
+#include "Creature/CreatureLearning.h"
 #include "Creature/CreatureLook.h"
+#include "Creature/CreatureLostThing.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
@@ -43,6 +47,7 @@
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -64,11 +69,13 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -82,6 +89,7 @@ using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace beliefs = openblack::creature_object_beliefs;
 namespace kinds = openblack::creature_tree::belief_types;
+using openblack::creature_desires::Desire;
 
 namespace
 {
@@ -437,6 +445,54 @@ std::optional<glm::vec3> CreatureMindSystem::BelievedPlace(const components::Cre
 void CreatureMindSystem::ForgetGoneThings(entt::entity creature, components::CreatureMindState& mind)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	auto& idle = mind.idle;
+	// When a thing that the creature uses goes before the creature completes the work, the creature stops and decides again
+	creature_lost_thing::InUse inUse {.stepThings = creature_lost_thing::StepThings(idle.agenda, idle.step)};
+	if (mind.planActive && mind.planner.current.has_value() && idle.step < idle.agenda.size())
+	{
+		inUse.planThings = creature_lost_thing::PlanThings(*mind.planner.current);
+	}
+	auto* held = registry.TryGet<CreatureHeldObject>(creature);
+	if (held != nullptr)
+	{
+		inUse.held = entt::to_integral(held->object);
+	}
+	if (const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
+	    action != nullptr && action->kind == creature_object_actions::Kind::Eat && action->target.has_value())
+	{
+		inUse.usedByItself.push_back(entt::to_integral(*action->target));
+	}
+	if (idle.usedUpHeld.has_value())
+	{
+		inUse.usedByItself.push_back(*idle.usedUpHeld);
+	}
+	const auto gone = [&registry](uint32_t thing) { return !registry.Valid(static_cast<entt::entity>(thing)); };
+	const auto notThere = [&registry, &gone](uint32_t thing) {
+		return gone(thing) || registry.AllOf<VillagerDeath>(static_cast<entt::entity>(thing));
+	};
+	if (creature_lost_thing::Lost(inUse, gone, notThere))
+	{
+		if (held != nullptr && gone(entt::to_integral(held->object)))
+		{
+			registry.Remove<CreatureHeldObject>(creature);
+		}
+		// A frightened creature that loses what it fled from wants to flee least of all
+		if (mind.planActive && mind.planner.current.has_value() && mind.planner.current->desire == Desire::Fear &&
+		    mind.desires.has_value())
+		{
+			creature_learning::MakeLeastDominant(*mind.desires, Desire::Fear, creature_learning::k_LeastDominantFactor);
+		}
+		if (Locator::creatureHelpSystem::has_value())
+		{
+			Locator::creatureHelpSystem::value().Raise(
+			    creature, {.kind = creature_help::Kind::FailureExplanation, .parameter = creature_lost_thing::k_LostThing});
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} lost a thing that it used", entt::to_integral(creature));
+		Abandon(mind);
+		idle.step = idle.agenda.size();
+		idle.stepStarted = false;
+		idle.gaveUp = true;
+	}
 	mind.beliefs.ForgetIf([&registry](entt::entity thing) { return !registry.Valid(thing); });
 	// When the thing of its last try that fizzled goes, the creature forgets that try too
 	auto* casting = registry.TryGet<components::CreatureCasting>(creature);
