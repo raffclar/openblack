@@ -3029,7 +3029,7 @@ void CreatureMindSystem::LetGoOfHeld(entt::entity creature, CreatureMindState& m
 		}
 		gently = creature_mind::PutsDownGently(heldIsCreature, use);
 	}
-	const bool started = gently ? hands.PutDown(creature) : hands.Discard(creature);
+	[[maybe_unused]] const bool started = gently ? hands.PutDown(creature) : hands.Discard(creature);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} lets go of {} before a step that needs empty hands: {} ({}), {}",
 	                    entt::to_integral(creature), entt::to_integral(*held), gently ? "puts it down" : "tosses it away",
 	                    use.has_value() ? static_cast<int>(*use) : -1, started ? "started" : "can't");
