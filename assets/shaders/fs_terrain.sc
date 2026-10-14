@@ -32,30 +32,62 @@ SAMPLER2D(s13_vortexRing, 13);
 // The coarse texture pages the landscape file keeps, a layer each: the coarse land (detail level 0) draws from them
 SAMPLER2DARRAY(s15_coarsePages, 15);
 
-// The land under the snow lying on it: whiter the deeper the snow over each texel of the noise, from its own colour to
-// a grey that is blue-white where it lies thickest. Where no corner of its cell has more than a little snow, none shows.
-vec3 LandUnderSnow(vec3 colour, vec2 xz)
+// Texels along a side of a block's texture
+#define BLOCK_TEXELS 256.0f
+// Units along a side of a block
+#define BLOCK_UNITS 160.0f
+
+// The depth of the snow at a corner of the grid in 65536ths, cut towards zero; none off the grid. The snow lies at
+// most 255 deep, so each whole number of this sum is exact in a float.
+float SnowFixedDepth(vec2 cell)
 {
-	vec2 cell = floor(xz * 0.025f);
-	float most = max(max(SnowDepthCell(cell), SnowDepthCell(cell + vec2(1.0f, 0.0f))),
-	                 max(SnowDepthCell(cell + vec2(0.0f, 1.0f)), SnowDepthCell(cell + 1.0f)));
-	if (most <= 5.0f)
+	return floor(SnowDepthCell(cell) * 65536.0f);
+}
+
+// A whole number divided by 64, cut towards zero
+float CutBy64(float value)
+{
+	return SnowWhole(value / 64.0f);
+}
+
+// A texel's 4-bit colour levels with the snow painted over them. The game paints the snow into each texel of a block's
+// texture, and then the texture is filtered. blockOrigin is the lowest x and z of the block. blockTexel is the texel
+// along the texture's axes (z, then x).
+vec3 SnowOverTexel(vec3 levels, vec2 blockOrigin, vec2 blockTexel)
+{
+	// A side of a block covers four cells of the grid, 64 texels each. Along x first, then along z.
+	vec2 texel = blockTexel.yx;
+	vec2 inCell = floor(texel / 64.0f);
+	vec2 cell = floor(blockOrigin / 40.0f + 0.5f) + inCell;
+	vec2 step = texel - inCell * 64.0f;
+	float low = SnowFixedDepth(cell);
+	float high = SnowFixedDepth(cell + vec2(1.0f, 0.0f));
+	float lowFar = SnowFixedDepth(cell + vec2(0.0f, 1.0f));
+	float highFar = SnowFixedDepth(cell + 1.0f);
+	// The cell takes no snow when no corner has more than 5
+	if (max(max(low, high), max(lowFar, highFar)) <= 327680.0f)
 	{
-		return colour;
+		return levels;
 	}
-	vec2 texel = floor(fract(xz / 160.0f) * 256.0f);
-	float noise = floor(texture2DLod(s12_snowNoise, (texel + 0.5f) / 256.0f, 0.0f).r * 255.0f + 0.5f);
-	float level = clamp(floor((floor(SnowDepthAt(xz)) - noise) / 8.0f), 0.0f, 16.0f);
-	if (level <= 0.0f)
+	// Each step adds the same whole part of the difference, cut towards zero
+	float near = low + step.x * CutBy64(high - low);
+	float far = lowFar + step.x * CutBy64(highFar - lowFar);
+	float depth = near + step.y * CutBy64(far - near);
+	// The noise image lies over each block as its texture does
+	float noise = floor(texture2DLod(s12_snowNoise, (blockTexel + 0.5f) / BLOCK_TEXELS, 0.0f).r * 255.0f + 0.5f);
+	float above = floor(depth / 65536.0f) - noise;
+	if (above < 8.0f)
 	{
-		return colour;
+		return levels;
 	}
+	float level = floor(above / 8.0f);
 	float white = 14.0f + mod(floor(noise / 4.0f) + floor(noise / 2.0f), 2.0f);
 	if (level >= 16.0f)
 	{
-		return vec3(white, white, 15.0f) / 15.0f;
+		return vec3(white, white, 15.0f);
 	}
-	return colour * (16.0f - level) / 16.0f + vec3_splat(floor(white * level / 16.0f) / 15.0f);
+	// Each level is scaled down and rounded down, and the grey is added in the same way
+	return floor(levels * (16.0f - level) / 16.0f) + floor(white * level / 16.0f);
 }
 
 // x: the block's layer of s0_blockTextures, z: its texture (0 full, 1 the coarse one faded in over the full one, 2
@@ -79,22 +111,22 @@ uniform vec4 u_blockPositionAndSize;
 // xy: the island's lowest corner, zw: its highest, in units
 uniform vec4 u_islandExtent;
 
-// Texels along a side of a block's texture
-#define BLOCK_TEXELS 256.0f
-// Units along a side of a block
-#define BLOCK_UNITS 160.0f
-
-// A texel of the block's texture with the footprints painted into it, as the game paints them: the footprints' colour
-// mixed into the block's 4-bit colour by how much they cover it, each channel rounded down to 4 bits again. The block
-// keeps its coast alpha. blockTexel is the texel along the block texture's axes (z, then x); islandUv is where the
-// footprints have the same point.
-vec4 PaintedTexelOf(float layer, vec2 blockTexel, vec2 islandUv)
+// A texel of the block's texture with the footprints, the snow and the shadows painted into it, in that order, as the
+// game paints them. The footprints' colour mixes into the block's 4-bit colour by how much they cover it, and each
+// channel is rounded down to 4 bits again. The block keeps its coast alpha. blockOrigin is the lowest x and z of the
+// block. blockTexel is the texel along the block texture's axes (z, then x). islandUv is the same point on the
+// footprints.
+vec4 PaintedTexelOf(float layer, vec2 blockOrigin, vec2 blockTexel, vec2 islandUv)
 {
 	vec4 land = texture2DArrayLod(s0_blockTextures, vec3((blockTexel + 0.5f) / BLOCK_TEXELS, layer), 0.0f);
 	vec4 footprints = texture2DLod(s3_footprints, islandUv, 0.0f);
 	// The mix's exact result is a whole number of 255ths of a level: a thousandth of a level absorbs the rounding of
 	// what is stored without lifting any result to the next level
 	vec3 levels = floor((land.rgb * (1.0f - footprints.a) + footprints.rgb) * 15.0f + 0.001f);
+	if (u_snow.x > 0.5f)
+	{
+		levels = SnowOverTexel(levels, blockOrigin, blockTexel);
+	}
 	// The shadows are baked into each texel: its 4-bit colour scaled and rounded down. Where a tree's moving shadow
 	// drawn this frame covers the texel, that shadow (as dark as any baked one) stands for both.
 	bool moving = u_objectShadows.x > 0.0f && texture2DLod(s5_objectShadows, islandUv, 0.0f).r >= 0.5f;
@@ -108,7 +140,7 @@ vec4 PaintedTexelOf(float layer, vec2 blockTexel, vec2 islandUv)
 
 vec4 PaintedTexel(vec2 blockTexel, vec2 islandUv)
 {
-	return PaintedTexelOf(u_block.x, blockTexel, islandUv);
+	return PaintedTexelOf(u_block.x, u_blockPositionAndSize.xy, blockTexel, islandUv);
 }
 
 // The block's painted texture filtered across its texels: the four nearest texels, each painted, blended by distance
@@ -154,7 +186,7 @@ vec2 IslandUvAt(vec2 xz)
 vec4 PaintedLevels(float layer, vec2 blockOrigin, vec2 blockTexel)
 {
 	vec2 xz = blockOrigin + (blockTexel.yx + 0.5f) * (u_blockPositionAndSize.wz / BLOCK_TEXELS);
-	vec4 texel = PaintedTexelOf(layer, blockTexel, IslandUvAt(xz));
+	vec4 texel = PaintedTexelOf(layer, blockOrigin, blockTexel, IslandUvAt(xz));
 	return floor(texel * 15.0f + 0.5f);
 }
 
@@ -220,7 +252,15 @@ vec4 CoarseBlock(vec2 blockUv)
 vec4 PageLevels(vec2 texel)
 {
 	vec4 colour = texture2DArrayLod(s15_coarsePages, vec3((texel + 0.5f) / 256.0f, u_coarsePage.x), 0.0f);
-	return floor(floor(colour * 255.0f + 0.5f) / 16.0f);
+	vec4 levels = floor(floor(colour * 255.0f + 0.5f) / 16.0f);
+	// The snow shows as it does in the texel of the block's own texture that the coarse texel takes its colour from
+	if (u_snow.x > 0.5f)
+	{
+		vec2 coarse = texel - u_coarsePage.yz * 256.0f;
+		vec2 source = vec2(CoarseSource(coarse.x), CoarseSource(coarse.y));
+		levels.rgb = SnowOverTexel(levels.rgb, u_blockPositionAndSize.xy, source);
+	}
+	return levels;
 }
 
 // The block's coarse texture from its square of its page, filtered across the page's texels
@@ -271,11 +311,6 @@ void main()
 		col.rgb = col.rgb * (1.0f - objectShadow * u_objectShadows.x);
 	}
 
-	// The snow lies over all of it, under the light
-	if (u_snow.x > 0.5f)
-	{
-		col.rgb = LandUnderSnow(col.rgb, v_texcoord1.zw);
-	}
 
 	if (u_skyAndBump.w > 0.0f)
 	{

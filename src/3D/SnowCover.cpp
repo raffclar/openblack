@@ -10,6 +10,7 @@
 #include "SnowCover.h"
 
 #include <algorithm>
+#include <array>
 
 namespace openblack::snow_cover
 {
@@ -30,6 +31,16 @@ constexpr float k_ObjectLeast = 20.0f;
 size_t Index(int32_t x, int32_t z)
 {
 	return (static_cast<size_t>(z) * k_GridSize) + static_cast<size_t>(x);
+}
+
+/// The depth at a corner of the grid in 65536ths, cut towards zero; none off the grid
+int32_t FixedDepth(std::span<const float> grid, int32_t x, int32_t z)
+{
+	if (x < 0 || z < 0 || x >= k_GridSize || z >= k_GridSize)
+	{
+		return 0;
+	}
+	return static_cast<int32_t>(grid[Index(x, z)] * 65536.0f);
 }
 } // namespace
 
@@ -142,6 +153,42 @@ int32_t LandLevel(float depth, uint8_t noise)
 uint8_t LandWhite(uint8_t noise)
 {
 	return static_cast<uint8_t>((((noise >> 2) + (noise >> 1)) & 1) + 14);
+}
+
+int32_t TexelDepth(std::span<const float> grid, glm::ivec2 cell, glm::ivec2 step)
+{
+	const auto low = FixedDepth(grid, cell.x, cell.y);
+	const auto lowFar = FixedDepth(grid, cell.x, cell.y + 1);
+	const auto high = FixedDepth(grid, cell.x + 1, cell.y);
+	const auto highFar = FixedDepth(grid, cell.x + 1, cell.y + 1);
+	// Each step along x and then along z adds the same whole part of the difference, cut towards zero
+	const auto near = low + (step.x * ((high - low) / k_TexelsPerCell));
+	const auto far = lowFar + (step.x * ((highFar - lowFar) / k_TexelsPerCell));
+	return near + (step.y * ((far - near) / k_TexelsPerCell));
+}
+
+bool CellTakesSnow(std::span<const float> grid, glm::ivec2 cell)
+{
+	constexpr auto k_Least = static_cast<int32_t>(k_LandLeast * 65536.0f);
+	return std::ranges::any_of(
+	    std::array {glm::ivec2(0, 0), glm::ivec2(0, 1), glm::ivec2(1, 0), glm::ivec2(1, 1)},
+	    [&](glm::ivec2 corner) { return FixedDepth(grid, cell.x + corner.x, cell.y + corner.y) > k_Least; });
+}
+
+glm::u8vec3 PaintTexel(glm::u8vec3 colour, int32_t level, uint8_t white)
+{
+	if (level <= 0)
+	{
+		return colour;
+	}
+	if (level >= 16)
+	{
+		return {white, white, 15};
+	}
+	// Each 4-bit level is scaled down and rounded down, and the grey is added in the same way
+	const auto grey = (white * level) >> 4;
+	const auto mix = [&](uint8_t channel) { return static_cast<uint8_t>(((channel * (16 - level)) >> 4) + grey); };
+	return {mix(colour.r), mix(colour.g), mix(colour.b)};
 }
 
 } // namespace openblack::snow_cover
