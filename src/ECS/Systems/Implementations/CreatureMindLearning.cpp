@@ -50,6 +50,7 @@
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptPlay.h"
+#include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureTraining.h"
 #include "Creature/CreatureWatching.h"
@@ -109,6 +110,7 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
@@ -155,8 +157,12 @@ constexpr float k_RunAwayThresholdStep = 0.1f;
 constexpr float k_PooUseFeedback = 0.5f;
 /// A creature watches skills, miracles and the player's deeds this far away at most
 constexpr float k_ViewDistance = 150.0f;
-/// Copying the player moves on a step once a second
-constexpr uint32_t k_MimicStepTurns = 10;
+/// Copying the player's desire makes that desire dominant for this many seconds
+constexpr float k_MimicDesireSeconds = 120.0f;
+/// A creature that copies the player's desire stops when it thought this many times with no plan since its last plan
+constexpr uint32_t k_MostThinksWithoutPlanToCopyDesire = 40;
+/// After that, it does not follow the player for this many seconds
+constexpr float k_NoFollowAfterCopySeconds = 40.0f;
 
 /// The land's script that curses the player's creature, and how tall a creature of size 1 is
 constexpr std::string_view k_CurseScript = "CreatureCurse";
@@ -1089,6 +1095,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			creature_training::CountCarriedOut(mind.actionCounts, plan.action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
 			mind.lastActionDone = plan.action;
+			creature_watching::MimicActionDone(mind.learnt->mimicry);
 		}
 		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
 		{
@@ -1125,6 +1132,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			creature_training::CountCarriedOut(mind.actionCounts, mind.underway->action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
 			mind.lastActionDone = mind.underway->action;
+			creature_watching::MimicActionDone(mind.learnt->mimicry);
 		}
 		mind.underway.reset();
 	}
@@ -2175,6 +2183,21 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		return;
 	}
 	mind.plannedTurn = mind.turn;
+	// Copying the player comes first. With no agenda, it does the action of the copy stage. While it notices the deed or
+	// copies the action, it does not choose a new plan when it has one.
+	if (!only.has_value() && mind.learnt->mimicry.has_value())
+	{
+		const bool running = mind.idle.step < mind.idle.agenda.size();
+		if (!running)
+		{
+			ProcessMimicry(creature, mind);
+		}
+		if (running && mind.learnt->mimicry.has_value() &&
+		    mind.learnt->mimicry->stage != creature_watching::MimicStage::CopyDesire)
+		{
+			return;
+		}
+	}
 	// Having eaten a magic mushroom, once it is done with what it was doing it becomes high before it chooses anything
 	// else
 	if (mind.highPending && mind.idle.step >= mind.idle.agenda.size() && !registry.AllOf<ScriptControlled>(creature))
@@ -2929,7 +2952,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	{
 		if (learnt.mimicry.has_value() && tables != nullptr)
 		{
-			creature_watching::StrokedWhileMimicking(learnt.mimicry, tables->mimics);
+			creature_watching::StrokedWhileMimicking(learnt.mimicry, tables->mimics,
+			                                         [this](uint32_t range) { return Random(range); });
 			creature_desires::ChangeSource(desires, k_FollowPlayerSource, k_MimicStrokeBoost);
 		}
 		creature_desires::Suppress(desires, Desire::Sadness, k_StrokeSadnessSeconds, k_TurnsPerSecond);
@@ -3115,32 +3139,6 @@ void CreatureMindSystem::LearnTurn()
 			}
 		}
 		mind->leash.attitudes.clear();
-
-		// Copying the player moves on a stage at a time
-		if (!learnt.mimicry.has_value() || mind->turn % k_MimicStepTurns != 0)
-		{
-			continue;
-		}
-		const auto before = learnt.mimicry->stage;
-		creature_watching::StepMimicry(learnt.mimicry, tables->mimics, [this](uint32_t range) { return Random(range); });
-		if (!learnt.mimicry.has_value() || learnt.mimicry->stage == before)
-		{
-			continue;
-		}
-		const auto& rule = tables->mimics.at(learnt.mimicry->rule);
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player's {}: stage {}", entt::to_integral(creature),
-		                    rule.name, creature_watching::Name(learnt.mimicry->stage));
-		if (learnt.mimicry->stage == creature_watching::MimicStage::CopyAction)
-		{
-			CopyPlayersDeed(creature, *mind);
-		}
-		else if (learnt.mimicry->stage == creature_watching::MimicStage::CopyDesire &&
-		         rule.desire < creature_desires::k_DesireCount)
-		{
-			// It comes to want what the player seemed to want
-			creature_learning::MakeFullyDominant(*mind->desires, static_cast<Desire>(rule.desire));
-			creature_mind_model::Think(learnt, fmt::format("I want what you wanted: {}", tables->texts.at(rule.desire).desire));
-		}
 	}
 }
 
@@ -3329,6 +3327,85 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 	}
 }
 
+void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState& mind)
+{
+	const auto* tables = GetTables();
+	if (tables == nullptr || !mind.learnt.has_value() || !mind.learnt->mimicry.has_value() || !mind.desires.has_value())
+	{
+		return;
+	}
+	auto& mimicry = mind.learnt->mimicry;
+	if (!creature_watching::StageContinues(*mimicry, mind.turn, k_TurnsPerSecond))
+	{
+		creature_watching::NextMimicStage(mimicry, tables->mimics, mind.turn, [this](uint32_t range) { return Random(range); });
+		if (mimicry.has_value())
+		{
+			const auto& next = tables->mimics.at(mimicry->rule);
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player's {}: stage {}",
+			                    entt::to_integral(creature), next.name, creature_watching::Name(mimicry->stage));
+			if (mimicry->stage == creature_watching::MimicStage::CopyDesire && next.desire < tables->texts.size())
+			{
+				creature_mind_model::Think(mind.learnt.value(),
+				                           fmt::format("I want what you wanted: {}", tables->texts.at(next.desire).desire));
+			}
+		}
+		return;
+	}
+	const auto& rule = tables->mimics.at(mimicry->rule);
+	auto& registry = Locator::entitiesRegistry::value();
+	switch (mimicry->stage)
+	{
+	case creature_watching::MimicStage::Notice:
+	{
+		// It looks at the thing that the player did the deed to, if there is one.
+		// TODO(creature-desire-thing-tests): the five actions that notice a deed have no agenda here yet. The creature
+		// points at the thing, turns to the camera, looks at the camera two times with a face and plays an animation.
+		// Until then, the notice action cannot start and the creature makes its own plans.
+		const auto object = mimicry->object.has_value() ? static_cast<entt::entity>(*mimicry->object) : entt::null;
+		if (registry.Valid(object) && rule.noticeAction < tables->actions.size())
+		{
+			ComeAcross(creature, mind, object);
+			ForceActivity(
+			    creature,
+			    {.desire = Desire::Curiosity, .action = tables->actions.at(rule.noticeAction).name, .actionObject = object});
+		}
+		break;
+	}
+	case creature_watching::MimicStage::CopyAction:
+		CopyPlayersDeed(creature, mind);
+		break;
+	case creature_watching::MimicStage::CopyDesire:
+	{
+		if (rule.desire >= creature_desires::k_DesireCount)
+		{
+			break;
+		}
+		// It comes to want what the player seemed to want. Its hunger and tiredness stay as they were.
+		auto& desires = *mind.desires;
+		const auto hunger = desires[Desire::Hunger].value;
+		const auto tiredness = desires[Desire::Tiredness].value;
+		auto* spells = registry.TryGet<CreatureSpells>(creature);
+		if (spells == nullptr)
+		{
+			spells = &registry.Assign<CreatureSpells>(creature);
+		}
+		spells->cheat = creature_spell_mind::SetCheatDominant(
+		    desires, static_cast<Desire>(rule.desire),
+		    {.all = false, .seconds = k_MimicDesireSeconds, .floor = mind_detail::DesireFloorOf(creature)}, k_TurnsPerSecond);
+		desires[Desire::FollowPlayerDesire].suppressedTurns = 0;
+		// A creature that stood with nothing to do for too long stops copying, and does not follow the player for a time
+		if (mind.thinksWithoutPlan > k_MostThinksWithoutPlanToCopyDesire)
+		{
+			mimicry.reset();
+			creature_desires::Suppress(desires, Desire::FollowPlayerDesire, k_NoFollowAfterCopySeconds, k_TurnsPerSecond);
+		}
+		desires[Desire::Hunger].value = std::clamp(hunger, 0.0f, 1.0f);
+		desires[Desire::Tiredness].value = std::clamp(tiredness, 0.0f, 1.0f);
+		break;
+	}
+	}
+}
+
 void CreatureMindSystem::LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind)
 {
 	if (auto* state = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature))
@@ -3509,7 +3586,8 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 		        .canSee = glm::distance(at.position, point) <= k_ViewDistance,
 		    };
 		    const auto target = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt;
-		    if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target))
+		    if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target, mind.turn,
+		                                        [this](uint32_t range) { return Random(range); }))
 		    {
 			    // When the player is angry with a thing of the player, the creature that copies the player can be angry
 			    // with the things of its player from now on
@@ -3529,13 +3607,24 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 			    noticed.push_back(entity);
 		    }
 	    });
-	// It notices: it turns to where the player did it and looks at it
+	// What it was doing stops as a failure. With no plan, it then notices the deed (see ProcessMimicry).
 	for (const auto entity : noticed)
 	{
 		if (auto* mind = registry.TryGet<CreatureMindState>(entity))
 		{
 			creature_mind_model::Think(*mind->learnt, fmt::format("I saw you: {}", tables->mimics.at(deed).name));
-			Replan(entity, creature_mind::Activity::Planned, creature_mind::LookAt(glm::vec2(point.x, point.z), 2.0f));
+			if (Locator::creatureObjectActionSystem::has_value() &&
+			    Locator::creatureObjectActionSystem::value().GetState(entity) ==
+			        CreatureObjectActionSystemInterface::State::Busy)
+			{
+				Locator::creatureObjectActionSystem::value().Cancel(entity);
+			}
+			Abandon(*mind);
+			if (Locator::magicSystem::has_value())
+			{
+				Locator::magicSystem::value().ReleaseCreatureCast(entity);
+			}
+			creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 		}
 	}
 }

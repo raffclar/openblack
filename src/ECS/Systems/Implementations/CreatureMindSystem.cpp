@@ -1387,6 +1387,16 @@ void CreatureMindSystem::ProcessTurn()
 			    {
 				    PlanCreature(entity, mind, true);
 			    }
+			    // It counts the times it thinks and still has no plan, from the start of its last agenda
+			    if (mind.thinksWithoutPlanSerial != mind.idle.serial)
+			    {
+				    mind.thinksWithoutPlanSerial = mind.idle.serial;
+				    mind.thinksWithoutPlan = 0;
+			    }
+			    if (!mind.planActive && mind.idle.step >= mind.idle.agenda.size())
+			    {
+				    ++mind.thinksWithoutPlan;
+			    }
 		    }
 		    // A script's cut scene makes every creature free to think for itself look at the camera, again and again
 		    // until the cut scene is over; what it is doing then plays out to its end

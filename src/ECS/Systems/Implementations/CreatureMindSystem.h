@@ -136,6 +136,9 @@ private:
 	/// Copying the player, the creature does what the player did: to the player's thing, else to the nearest thing of the
 	/// same kind, else to the most useful thing (CreatureMindLearning.cpp)
 	void CopyPlayersDeed(entt::entity creature, components::CreatureMindState& mind);
+	/// Copying the player, with no plan to carry out, the creature does the action of the copy stage again, or goes on to
+	/// the next stage (CreatureMindLearning.cpp)
+	void ProcessMimicry(entt::entity creature, components::CreatureMindState& mind);
 	/// A script makes a creature pick a fight with another: it asks, and they fight if the other agrees; either way the
 	/// script's order is carried out
 	bool FightForScript(entt::entity creature, entt::entity opponent);

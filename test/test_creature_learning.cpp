@@ -904,20 +904,48 @@ TEST(CreatureWatching, MimicryStages)
 	std::optional<creature_watching::Mimicry> mimicry;
 	const auto noExtra = [](uint32_t) { return 0u; };
 	creature_watching::MimicConditions grown {.phase = 13};
-	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 1, rules, grown, std::nullopt));
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 1, rules, grown, std::nullopt, 0, noExtra));
 	creature_watching::MimicConditions young {.phase = 2};
-	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, young, std::nullopt));
-	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 0, rules, grown, 5u));
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, young, std::nullopt, 0, noExtra));
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 0, rules, grown, 5u, 100, noExtra));
 	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::Notice);
-	creature_watching::StepMimicry(mimicry, rules, noExtra);
-	creature_watching::StepMimicry(mimicry, rules, noExtra);
+	EXPECT_EQ(mimicry->limit, 1u);
+	EXPECT_EQ(mimicry->stageStart, 100u);
+	// The notice stage goes on until one action is done
+	EXPECT_TRUE(creature_watching::StageContinues(*mimicry, 150, 10.0f));
+	creature_watching::MimicActionDone(mimicry);
+	EXPECT_FALSE(creature_watching::StageContinues(*mimicry, 150, 10.0f));
+	creature_watching::NextMimicStage(mimicry, rules, 150, noExtra);
 	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::CopyAction);
-	creature_watching::StepMimicry(mimicry, rules, noExtra);
-	creature_watching::StepMimicry(mimicry, rules, noExtra);
+	EXPECT_EQ(mimicry->done, 0u);
+	// A stage ends after 180 seconds at the latest
+	EXPECT_TRUE(creature_watching::StageContinues(*mimicry, 150 + 1800, 10.0f));
+	EXPECT_FALSE(creature_watching::StageContinues(*mimicry, 150 + 1801, 10.0f));
+	creature_watching::NextMimicStage(mimicry, rules, 2000, noExtra);
 	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::CopyDesire);
-	creature_watching::StepMimicry(mimicry, rules, noExtra);
-	creature_watching::StepMimicry(mimicry, rules, noExtra);
+	creature_watching::NextMimicStage(mimicry, rules, 2100, noExtra);
 	EXPECT_FALSE(mimicry.has_value());
+	// A rule with no desire stage ends after it copies the action
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 1, rules, {.phase = 13, .learningLeashInHand = true}, 5u, 0, noExtra));
+	creature_watching::NextMimicStage(mimicry, rules, 10, noExtra);
+	creature_watching::NextMimicStage(mimicry, rules, 20, noExtra);
+	EXPECT_FALSE(mimicry.has_value());
+}
+
+// Stroked while it copies, it goes back to the copy of the action, in the time of the stage that it was in
+TEST(CreatureWatching, AStrokeWhileCopyingStartsTheActionCopyAgain)
+{
+	const std::vector<creature_watching::MimicRule> rules {
+	    {.name = "Play with toy", .chance = 0.9f, .needsLearningLeash = false, .stageSteps = 2, .copiesDesire = true},
+	};
+	const auto noExtra = [](uint32_t) { return 0u; };
+	std::optional<creature_watching::Mimicry> mimicry = creature_watching::Mimicry {
+	    .rule = 0, .stage = creature_watching::MimicStage::CopyDesire, .done = 1, .limit = 2, .stageStart = 30};
+	creature_watching::StrokedWhileMimicking(mimicry, rules, noExtra);
+	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::CopyAction);
+	EXPECT_EQ(mimicry->done, 0u);
+	EXPECT_EQ(mimicry->limit, 2u);
+	EXPECT_EQ(mimicry->stageStart, 30u);
 }
 
 TEST(CreatureWatching, MimicChanceIsARankNotARoll)
@@ -930,19 +958,20 @@ TEST(CreatureWatching, MimicChanceIsARankNotARoll)
 	};
 	const creature_watching::MimicConditions grown {.phase = 13};
 	std::optional<creature_watching::Mimicry> mimicry;
+	const auto noExtra = [](uint32_t) { return 0u; };
 	// Copying nothing, even the lowest rank above 0 is always copied, and nothing at 0
-	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 2, rules, grown, std::nullopt));
-	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt));
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 2, rules, grown, std::nullopt, 0, noExtra));
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt, 0, noExtra));
 	// The same deed again doesn't restart it; a deed of the same rank or higher replaces it, a lower one doesn't
-	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt));
-	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 3, rules, grown, std::nullopt));
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt, 0, noExtra));
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 3, rules, grown, std::nullopt, 0, noExtra));
 	EXPECT_EQ(mimicry->rule, 3u);
-	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 1, rules, grown, std::nullopt));
-	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt));
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 1, rules, grown, std::nullopt, 0, noExtra));
+	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, grown, std::nullopt, 0, noExtra));
 	EXPECT_EQ(mimicry->rule, 1u);
 	// Once it copies a desire, any deed starts it copying anew
 	mimicry = creature_watching::Mimicry {.rule = 0, .stage = creature_watching::MimicStage::CopyDesire};
-	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 2, rules, grown, std::nullopt));
+	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 2, rules, grown, std::nullopt, 0, noExtra));
 	EXPECT_EQ(mimicry->rule, 2u);
 	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::Notice);
 }

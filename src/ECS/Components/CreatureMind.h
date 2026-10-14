@@ -145,6 +145,9 @@ struct CreatureMindState
 	/// Game turns the mind has thought, and the turn it last planned
 	uint32_t turn {0};
 	uint32_t plannedTurn {0};
+	/// The times it thought and had no plan to carry out since its last agenda started, and that agenda's number
+	uint32_t thinksWithoutPlan {0};
+	uint32_t thinksWithoutPlanSerial {0};
 	/// The trainer of the debug tools: each thing it does to something, once done, it is stroked for if the thing is of
 	/// this kind (by the game's belief types) and slapped for otherwise
 	std::optional<uint32_t> trainer;
