@@ -1452,6 +1452,11 @@
     "name": "name",
     "required": true,
     "type": "string"
+   },
+   {
+    "description": "Its parameters in order, as script.call takes them (a number goes as a float unless it says its type, an object as {\"object\": id}); as many as script.scripts says it has",
+    "name": "args",
+    "type": "array"
    }
   ],
   "query": "script.run",

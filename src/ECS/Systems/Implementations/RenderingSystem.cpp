@@ -202,6 +202,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool unlit;
 		bool perEntity;
 		bool translucent;
+		bool alphaTexturedAdditive;
 		std::optional<float> additiveShare;
 		bool instanceAlpha;
 		/// Every instance is a posed villager
@@ -220,6 +221,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .unlit = false,
 		                                                                     .perEntity = false,
 		                                                                     .translucent = false,
+		                                                                     .alphaTexturedAdditive = false,
 		                                                                     .additiveShare = std::nullopt,
 		                                                                     .instanceAlpha = false,
 		                                                                     .villagers = true,
@@ -235,10 +237,11 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			count.first->second.translucent = true;
 			count.first->second.additiveShare = translucent->share;
 		}
-		// Its see-through parts blend as their materials say
+		// Its solid parts are drawn as their materials say, and its alpha-textured parts are added over what is behind
 		if (registry.AllOf<BlendedByMaterial>(entity))
 		{
 			count.first->second.translucent = true;
+			count.first->second.alphaTexturedAdditive = true;
 		}
 		if (const auto* mark = registry.TryGet<const GroundMark>(entity);
 		    (mark != nullptr && mark->alpha.has_value()) || registry.AllOf<SeeThrough>(entity))
@@ -336,6 +339,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		// Blended by its materials, over the opaque things
 		drawDesc->second.materialBlending = desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
+		drawDesc->second.alphaTexturedAdditive = desc.alphaTexturedAdditive;
 		drawDesc->second.additiveShare = desc.additiveShare;
 		drawDesc->second.instanceAlpha = desc.instanceAlpha;
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);

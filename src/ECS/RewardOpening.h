@@ -47,6 +47,10 @@ inline constexpr int k_BeliefSparkleTurns = 20;
 inline constexpr float k_GestureSize = 30.0f;
 /// The "next miracle" chest looks for a town whose village centre shows fewer miracles than this
 inline constexpr size_t k_CentreMostMiracles = 6;
+/// A town's new miracle spins this far above its opened chest
+inline constexpr float k_TownSeedAbove = 2.6f;
+/// A town's new miracle above its chest is drawn at this size, and picked by a ball of twice this radius
+inline constexpr float k_TownSeedSize = 0.8f;
 
 /// What a kind of chest holds: its row of the game's reward table
 struct Contents
@@ -139,5 +143,11 @@ struct ProgressEntry
 /// Where an opened chest's clip has got to after a frame of so many milliseconds: round and round when it loops,
 /// otherwise held at its last millisecond
 [[nodiscard]] uint32_t StepOpenedClip(uint32_t place, uint32_t milliseconds, uint32_t playTime, bool looping);
+
+/// The alpha, of 255, that a town's new miracle above an opened chest gets, by the game turns the chest has left. The
+/// game makes a fade from 255 down to 0 over the last 30 turns, multiplies it by 255 and keeps only the low byte. Thus
+/// the alpha is 1 for most of the chest's life and only goes up near the end. The original game has this error, and
+/// openblack keeps it. Only a creature spell's phial and the miracle's effect use this alpha.
+[[nodiscard]] uint8_t TownSeedAlpha(int32_t turnsLeft);
 
 } // namespace openblack::ecs::reward

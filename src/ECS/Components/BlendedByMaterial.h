@@ -12,8 +12,9 @@
 namespace openblack::ecs::components
 {
 
-/// Drawn among the things that blend, each part of its model as its material says: its solid parts solid and its
-/// see-through parts blended by their texture's alpha, as the light shining out of an opened reward chest
+/// Drawn among the things that blend: its solid parts as their materials say, and its alpha-textured parts added over
+/// what is behind them by their texture's alpha, without writing depth. The light that shines out of an opened reward
+/// chest is drawn so.
 struct BlendedByMaterial
 {
 };

@@ -80,7 +80,7 @@ class GameScripts final: public ScriptTargetInterface
 public:
 	[[nodiscard]] bool Loaded() const override;
 	[[nodiscard]] std::vector<ScriptInfo> Scripts() const override;
-	std::variant<uint32_t, std::string> Run(std::string_view name) override;
+	std::variant<uint32_t, std::string> Run(std::string_view name, const std::vector<ScriptValue>& args) override;
 	std::string StopTask(uint32_t task) override;
 	[[nodiscard]] std::vector<ScriptGlobal> Globals() const override;
 	std::string SetGlobal(std::string_view name, const ScriptValue& value) override;

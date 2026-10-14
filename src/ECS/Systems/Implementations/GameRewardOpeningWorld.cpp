@@ -251,10 +251,15 @@ bool GameRewardOpeningWorld::TownLearns(MagicType type)
 	return Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().TownHolds(Town(), type);
 }
 
-void GameRewardOpeningWorld::ShowTownSeed(SpellSeedType /*seed*/)
+void GameRewardOpeningWorld::ShowTownSeed(SpellSeedType seed)
 {
-	// TODO(reward-chest): the town's new miracle spinning above the chest (2.6 up, at 0.8 size) until the chest goes;
-	// how the game draws a seed at a size other than 1 is not researched yet
+	if (seed == SpellSeedType::None)
+	{
+		return;
+	}
+	// It goes with the chest
+	Locator::entitiesRegistry::value().AssignOrReplace<RewardSeed>(
+	    _chest, RewardSeed {.seed = seed, .middle = Position() + glm::vec3(0.0f, reward::k_TownSeedAbove, 0.0f)});
 }
 
 void GameRewardOpeningWorld::OneShotGlobe(SpellSeedType seed)

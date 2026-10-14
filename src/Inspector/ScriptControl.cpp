@@ -443,14 +443,27 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 	provider.Add(Description("run",
 	                         "Starts a script by its name, a challenge or any other function the land's scripts have, "
 	                         "as the game starts them; the task it runs in",
-	                         {Parameter("name", "string", "The script's name", true)}, true),
+	                         {Parameter("name", "string", "The script's name", true),
+	                          Parameter("args", "array",
+	                                    "Its parameters in order, as script.call takes them (a number goes as a float "
+	                                    "unless it says its type, an object as {\"object\": id}); as many as "
+	                                    "script.scripts says it has",
+	                                    false)},
+	                         true),
 	             [&scripts, notLoaded](const QueryContext& context) {
 		             if (!scripts.Loaded())
 		             {
 			             return notLoaded();
 		             }
 		             const auto name = StringMember(context.params, "name").value_or("");
-		             auto started = scripts.Run(name);
+		             std::string error;
+		             const auto args = context.params.find("args");
+		             const auto values = ArgumentsFromJson(args != context.params.end() ? *args : Json(nullptr), error);
+		             if (!values.has_value())
+		             {
+			             return QueryResult::Error(error);
+		             }
+		             auto started = scripts.Run(name, *values);
 		             if (const auto* why = std::get_if<std::string>(&started))
 		             {
 			             return QueryResult::Error(*why);

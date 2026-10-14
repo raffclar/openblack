@@ -68,6 +68,9 @@ struct RenderContext
 		bool materialBlending {false};
 		/// The instances are all blended by their materials, so they are drawn after the opaque ones
 		bool translucent {false};
+		/// The instances' alpha-textured parts are added over what is behind them by their texture's alpha, without
+		/// writing depth, whatever their materials say
+		bool alphaTexturedAdditive {false};
 		/// The instances are added over what is behind them by this share, whatever their materials say
 		std::optional<float> additiveShare;
 		/// The instances are blended over what is behind them by their own alpha, as one minus the share in their look's

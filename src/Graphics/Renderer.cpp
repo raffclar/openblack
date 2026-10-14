@@ -5882,6 +5882,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				auto mesh = meshManager.Handle(meshId);
 
 				submitDesc.useMaterialBlending = useMaterialBlending;
+				submitDesc.alphaTexturedAdditive = placers.alphaTexturedAdditive;
 				submitDesc.additiveShare = placers.additiveShare;
 				submitDesc.instanceAlpha = placers.instanceAlpha;
 				// The game gives the rooms the temple's light; the hand keeps its own
@@ -6625,6 +6626,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawVillagerEyes(desc);
 			DrawGlobes(desc);
 			DrawIconSeeds(desc);
+			DrawRewardSeeds(desc);
 			DrawHandMiracleBands(desc);
 			DrawTribalPower(desc);
 			DrawLightColumns(desc);
