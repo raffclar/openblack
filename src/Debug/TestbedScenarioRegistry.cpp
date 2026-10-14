@@ -3494,6 +3494,28 @@ void AddCombat(std::vector<Scenario>& all)
 		                 Fight(Kind::PointerOnOpponent, 0, 0, 3.8f)},
 		    .repeatFrom = 5,
 		});
+		// The fight autopilot plays the stages of the lesson with the real mouse, then checks them in the transcript
+		constexpr size_t k_LessonPolicy = 0;
+		constexpr float k_LessonCheckAfterSeconds = 45.0f;
+		all.push_back({
+		    .id = "combat.autopilot_lesson",
+		    .name = "The fight autopilot plays the guide's fight lesson",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger fights a lion that belongs to no player, as the guide's fight lesson "
+		                   "starts it. No one chooses the moves of either creature. The fight autopilot fights for the "
+		                   "player with the real mouse. It double clicks into the arena, then does each stage of the "
+		                   "lesson: one blow, three quick blows, a block and a step. Then it hits until the lion falls. "
+		                   "After 45 seconds the fight transcript is checked for the four stages in their order. Start the "
+		                   "game with the inspector (--inspect-port 0).",
+		    .expected = "The camera shows the fight after the double click. The red tiger strikes, the lion reels, three "
+		                "sparkles queue three blows, the tiger blocks, then steps. The log line of the fight lesson check "
+		                "starts with \"passed\". The tiger wins.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), guide},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 0, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 0, 0.2f), Fight(Kind::FightAutopilot, 0, k_LessonPolicy, 0.5f),
+		                 Fight(Kind::FightLessonCheck, 0, 0, k_LessonCheckAfterSeconds)},
+		});
 	}
 
 	all.push_back({
@@ -3551,6 +3573,39 @@ void AddCombat(std::vector<Scenario>& all)
 	worn.pauseMind = true;
 	worn.needs.life = 0.6f;
 	worn.needs.exhaustion = 0.7f;
+	// The winner of a knock-out is made to do something to the loser, by its mind
+	{
+		constexpr float k_DuelStartsSeconds = 12.0f;
+		constexpr float k_EvilAlignment = -0.8f;
+		constexpr float k_GoodAlignment = 0.8f;
+		all.push_back({
+		    .id = "combat.winner_poos",
+		    .name = "An evil winner has a poo on the loser",
+		    .facet = Facet::Combat,
+		    .description = "An evil red tiger (alignment -0.8) fights a blue tiger. When the duel has started, the blue tiger "
+		                   "is knocked out as a fight's loser is.",
+		    .expected = "The red tiger finishes its move and leaves the fight. Then it walks to the blue tiger and has a poo "
+		                "on it. The blue tiger lies out cold.",
+		    .framing = ringside,
+		    .creatures = {Fighter({-15.0f, 0.0f}, 90.0f, "red", PlayerNames::PLAYER_ONE, 0.5f, k_EvilAlignment),
+		                  Fighter({15.0f, 0.0f}, 270.0f, "blue", PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::KnockOut, 1, 0, k_DuelStartsSeconds)},
+		});
+		all.push_back({
+		    .id = "combat.winner_shows_off",
+		    .name = "A winner that is not evil shows off at the loser",
+		    .facet = Facet::Combat,
+		    .description = "A good red tiger (alignment 0.8) fights a blue tiger. When the duel has started, the blue tiger is "
+		                   "knocked out as a fight's loser is.",
+		    .expected = "The red tiger finishes its move and leaves the fight. Then it shows off at the blue tiger, which "
+		                "lies out cold.",
+		    .framing = ringside,
+		    .creatures = {Fighter({-15.0f, 0.0f}, 90.0f, "red", PlayerNames::PLAYER_ONE, 0.5f, k_GoodAlignment),
+		                  Fighter({15.0f, 0.0f}, 270.0f, "blue", PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::KnockOut, 1, 0, k_DuelStartsSeconds)},
+		});
+	}
+
 	all.push_back({
 	    .id = "combat.faint_recovery",
 	    .name = "Knocked out, taken home and back up",
@@ -4669,7 +4724,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 116> k_Names {
+	constexpr std::array<std::string_view, 118> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -4728,6 +4783,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fight miracle",
 	    "show the fight",
 	    "pointer on opponent",
+	    "fight autopilot",
+	    "fight lesson check",
 	    "knock out",
 	    "bring round",
 	    "tie leash to creature",

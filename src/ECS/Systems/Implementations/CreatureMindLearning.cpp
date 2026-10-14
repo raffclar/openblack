@@ -107,6 +107,7 @@
 #include "ECS/CreatureNaming.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -2808,7 +2809,16 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
-	if (mind == nullptr || !Replan(creature, creature_mind::Activity::Told, std::move(agenda)))
+	if (mind == nullptr)
+	{
+		return false;
+	}
+	// The script takes it from a fight or from lying knocked out first
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().TakeForScript(creature);
+	}
+	if (!Replan(creature, creature_mind::Activity::Told, std::move(agenda)))
 	{
 		return false;
 	}

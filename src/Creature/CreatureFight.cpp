@@ -91,7 +91,13 @@ glm::vec2 creature_fight::ClampToRange(const Arena& arena, glm::vec2 point)
 	const auto offset = point - arena.centre;
 	const auto distance = glm::length(offset);
 	const auto range = k_RangeShare * arena.radius;
-	return distance > range && distance > 0.0f ? arena.centre + (offset * (range / distance)) : point;
+	if (distance <= range || distance <= 0.0f)
+	{
+		return point;
+	}
+	// The point goes a little inside the edge. On the edge itself, the rounding of large land coordinates can put it
+	// out of range again, and then the creature can make no move.
+	return arena.centre + (offset * (std::max(range - k_RangeEdgeMargin, 0.0f) / distance));
 }
 
 float creature_fight::ClosestApart(float radius, float opponentRadius)
@@ -980,6 +986,11 @@ bool creature_fight::WinnerPoos(float alignment)
 	return alignment < k_AlignmentPooBelow;
 }
 
+bool creature_fight::FightWonIsSeen(bool byBlow, bool winnerHasPlayer)
+{
+	return byBlow && winnerHasPlayer;
+}
+
 size_t creature_fight::Response(float life, float otherLife)
 {
 	return life >= otherLife ? animations::k_Happy : animations::k_Sad;
@@ -989,4 +1000,74 @@ bool creature_fight::WantsToFight(float anger, float life, float distance, float
 {
 	return anger >= k_AngerToFight && HealthyEnoughToFight(life) && distance <= k_PickFightPerSize * size &&
 	       secondsSinceFight >= k_SecondsBetweenFights;
+}
+
+namespace
+{
+/// The name at the place of an enum value in a list, or "unknown" past its end
+template <typename E, size_t N>
+std::string_view NameIn(const std::array<std::string_view, N>& names, E value)
+{
+	const auto index = static_cast<size_t>(value);
+	return index < names.size() ? names.at(index) : std::string_view("unknown");
+}
+} // namespace
+
+std::string_view creature_fight::Name(Band band)
+{
+	static constexpr std::array<std::string_view, 3> k_Names {"high", "middle", "low"};
+	return NameIn(k_Names, band);
+}
+
+std::string_view creature_fight::Name(Step step)
+{
+	static constexpr std::array<std::string_view, 4> k_Names {"forward", "back", "right", "left"};
+	return NameIn(k_Names, step);
+}
+
+std::string_view creature_fight::Name(Move::Kind kind)
+{
+	static constexpr std::array<std::string_view, 7> k_Names {"high",    "middle",    "low",  "block",
+	                                                          "special", "animation", "spell"};
+	return NameIn(k_Names, kind);
+}
+
+std::string_view creature_fight::Name(FightAction action)
+{
+	static constexpr std::array<std::string_view, 11> k_Names {"stance",      "block",   "step",         "blow",
+	                                                           "casting",     "special", "reeling_high", "reeling_middle",
+	                                                           "reeling_low", "fainted", "other"};
+	return NameIn(k_Names, action);
+}
+
+std::string_view creature_fight::Name(Control control)
+{
+	static constexpr std::array<std::string_view, 3> k_Names {"none", "player", "computer"};
+	return NameIn(k_Names, control);
+}
+
+std::string_view creature_fight::Name(Order::Kind kind)
+{
+	static constexpr std::array<std::string_view, 6> k_Names {"end_block", "animation", "cast", "block", "blow", "special"};
+	return NameIn(k_Names, kind);
+}
+
+std::string_view creature_fight::Name(Opponent opponent)
+{
+	static constexpr std::array<std::string_view, 9> k_Names {"stance",       "ending_cast", "block_recoil",
+	                                                          "attacking",    "casting",     "stepping_forward",
+	                                                          "other_action", "blocking",    "other"};
+	return NameIn(k_Names, opponent);
+}
+
+std::string_view creature_fight::Name(Choice::Kind kind)
+{
+	static constexpr std::array<std::string_view, 4> k_Names {"none", "blow", "block", "step"};
+	return NameIn(k_Names, kind);
+}
+
+std::string_view creature_fight::Name(RecoilDirection direction)
+{
+	static constexpr std::array<std::string_view, 5> k_Names {"plain", "right", "left", "top", "bottom"};
+	return NameIn(k_Names, direction);
 }

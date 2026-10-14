@@ -10,8 +10,11 @@
 #pragma once
 
 #include <random>
+#include <string_view>
+#include <unordered_map>
 
 #include "Common/RandomNumberManager.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 
@@ -35,6 +38,8 @@ public:
 	void CallOff(entt::entity creature) override;
 	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
+	[[nodiscard]] bool IsDuelling(entt::entity creature) const override;
+	void TakeForScript(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity creature) const override;
 
 	bool QueueMove(entt::entity creature, const creature_fight::Move& move, bool replace) override;
@@ -93,8 +98,9 @@ private:
 	void AttemptBlow(entt::entity creature, creature_fight::Band band, float speed);
 	/// A fighter's action landing on its opponent this frame, if it does
 	void TestHit(entt::entity creature);
-	/// One creature beat the other: the loser faints and the winner shows off
-	void Win(entt::entity winner, entt::entity loser);
+	/// One creature beat the other, by a blow or otherwise: the loser faints, and the winner is made to have a poo on
+	/// the loser or to show off
+	void Win(entt::entity winner, entt::entity loser, bool byBlow);
 	/// The fight ends for a creature: its life pays for it and it learns from it
 	/// The creature's fight is over: won or lost, or called off with neither (when its mind isn't told it fought)
 	void EndFightFor(entt::entity creature, std::optional<bool> won);
@@ -105,14 +111,38 @@ private:
 	/// The camera's fight view: started by looking at an arena with a fight on, it follows the fight and lingers a little
 	/// after it, unless the player zooms out of it
 	void UpdateView(float seconds);
-	void TryStartView(entt::entity first, entt::entity second, const creature_fight::Arena& arena);
-	void EndView();
+	/// How names the way into the view for the transcript: "look" or "double_click". The camera's place and focus for
+	/// the test of distance are the ones given, or else the camera's now.
+	void TryStartView(entt::entity first, entt::entity second, const creature_fight::Arena& arena, std::string_view how,
+	                  std::optional<std::pair<glm::vec3, glm::vec3>> from = std::nullopt);
+	/// Why names the end of the view for the transcript
+	void EndView(std::string_view why);
 	/// Leaves the fight for good, its mind taking over again
 	void Leave(entt::entity creature);
 	/// Where the line from the player's fighter to its opponent meets the opponent's skin, as gestures need
 	[[nodiscard]] std::optional<ecs::posed_model::SkinHit> SeesOpponent(entt::entity creature) const;
 	/// A move called by a gesture, queued with its sparkle when the fighter sees its opponent
 	bool GestureMove(const creature_fight::Move& move);
+
+	/// The transcript of the fights, when the inspector keeps one. A record for each state that a fighter is in at the end
+	/// of a frame or a game turn, when it is new.
+	void NoteActions();
+	void NoteStage(entt::entity creature, components::CreatureFighting::Stage from, components::CreatureFighting::Stage to);
+	/// The fight of the creature is over, for a reason
+	void NoteFightOver(entt::entity creature, std::string_view reason);
+
+	/// For the transcript: why the next fight starts, and who adds the next moves to a queue
+	std::string_view _startReason {"request"};
+	std::string_view _queueSource {"script"};
+	/// For the transcript: the state and the animation that each fighter was last in, and the record that causes the next
+	/// change of each fighter
+	struct Seen
+	{
+		creature_fight::State state;
+		size_t animation;
+	};
+	std::unordered_map<entt::entity, Seen> _seen;
+	std::unordered_map<entt::entity, uint64_t> _actionCause;
 
 	bool _angerStartsFights {true};
 	bool _cameraWatches {true};
@@ -135,8 +165,15 @@ private:
 	std::optional<Watched> _view;
 	/// How long the camera has looked at an arena from within it
 	float _lookSeconds {0.0f};
-	/// The place on the land that a double click sent the world camera to, until the next update of the view
-	std::optional<glm::vec2> _flightPlace;
+	/// The place on the land that a double click sent the world camera to, until the next update of the view, with the
+	/// camera's place and focus before the flight
+	struct Flight
+	{
+		glm::vec2 place;
+		glm::vec3 eye;
+		glm::vec3 focus;
+	};
+	std::optional<Flight> _flightPlace;
 	/// Whether the player may leave the fight view, and it ends by itself (scripts may forbid it)
 	bool _fightExit {true};
 	/// A press on a body is held: the sparkle added last charges

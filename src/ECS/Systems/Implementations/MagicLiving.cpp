@@ -46,6 +46,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/FightTranscriptNote.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -364,6 +365,15 @@ bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::Effect
 	const bool ownPlayers = source.casterCreature == entt::null && source.player == registry.Get<const Creature>(entity).owner;
 	if (damage <= 0.0f && !self && inDuel && !ownPlayers)
 	{
+		fight_transcript::Note(entity, "miracle_hit", [&] {
+			return fight_transcript::Fields {
+			    {"creature", fight_transcript::Id(entity)},
+			    {"magic_type", source.magicType.has_value() ? static_cast<int64_t>(*source.magicType) : int64_t {-1}},
+			    {"caster_creature", fight_transcript::Id(source.casterCreature)},
+			    {"player", static_cast<int32_t>(source.player)},
+			    {"outcome", "kept_out"},
+			    {"why", "harmless_from_another"}};
+		});
 		return true;
 	}
 	if (!inDuel)
@@ -392,6 +402,19 @@ bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::Effect
 		Locator::creatureFightSystem::value().Recoil(entity);
 	}
 	const float heal = magic::HealFrom(taken, defence);
+	const auto healthBefore = fighting->fighter.health;
+	const auto hitIndex = fight_transcript::Note(entity, "miracle_hit", [&] {
+		return fight_transcript::Fields {
+		    {"creature", fight_transcript::Id(entity)},
+		    {"magic_type", source.magicType.has_value() ? static_cast<int64_t>(*source.magicType) : int64_t {-1}},
+		    {"caster_creature", fight_transcript::Id(source.casterCreature)},
+		    {"player", static_cast<int32_t>(source.player)},
+		    {"outcome", blocking ? "blocked" : "hit"},
+		    {"blocked_share", blocking ? k_BlockedEffectShare : 1.0f},
+		    {"damage", damage},
+		    {"heal", heal},
+		    {"raw_damage", magic::DamageFrom(values, magic::EffectDefence {})}};
+	});
 	if (heal > 0.0f)
 	{
 		HealMarks(entity, heal);
@@ -400,6 +423,23 @@ bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::Effect
 	if (damage > 0.0f)
 	{
 		fighting->fighter.health -= damage;
+	}
+	if (fighting->fighter.health != healthBefore)
+	{
+		fight_transcript::Note(
+		    entity, "level",
+		    [&] {
+			    return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},
+			                                     {"level", "health"},
+			                                     {"before", healthBefore},
+			                                     {"after", fighting->fighter.health},
+			                                     {"change", fighting->fighter.health - healthBefore},
+			                                     {"why", "miracle"}};
+		    },
+		    hitIndex);
+	}
+	if (damage > 0.0f)
+	{
 		if (fighting->fighter.health <= 0.0f && Locator::creatureFightSystem::has_value())
 		{
 			Locator::creatureFightSystem::value().KnockOut(entity);
