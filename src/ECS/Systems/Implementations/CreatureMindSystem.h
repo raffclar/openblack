@@ -280,6 +280,9 @@ private:
 	/// A creature puts the water of five buckets on a thing (CreatureMindFire.cpp). Return true if the thing is not on
 	/// fire after this. Only the plain "put out fire" action has this step. The water miracle at a fire does not have it.
 	bool Douse(entt::entity creature, entt::entity object);
+	/// A stomp that ends the agenda of a creature (CreatureMindStomp.cpp). When the thing has no life after it, the
+	/// creature counts the kill, and the action sees to its desire.
+	void StompedToDeath(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
 	// Its dances with the villagers of a town (CreatureMindDance.cpp)
 	/// The creature's dance as its mind sees it, while a dance step is next or under way. It notes where each dancer
 	/// stands, to tell next turn which dancers move.

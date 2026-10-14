@@ -132,6 +132,10 @@ public:
 	[[nodiscard]] virtual bool CanThrowToImpress(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
 	/// Whether a creature can knock something down: trees, homes and things, statics and rocks among them
 	[[nodiscard]] virtual bool CanDestroy(entt::entity target) const = 0;
+	/// Whether a creature can stomp on a thing, by the kind of the thing and how tall it is for the creature
+	[[nodiscard]] virtual bool CanStompOn(entt::entity /*creature*/, entt::entity /*target*/) const { return false; }
+	/// Whether a creature can kick a thing, by the kind of the thing and how heavy it is for the creature
+	[[nodiscard]] virtual bool CanKick(entt::entity /*creature*/, entt::entity /*target*/) const { return false; }
 	/// How far a creature's hand gets at its furthest stretch when picking up, measured straight, from where the hand
 	/// takes hold in its reaching animations; none when its species has nothing to reach with or isn't posed yet
 	[[nodiscard]] virtual std::optional<float> PickUpStraightReach(entt::entity /*creature*/) const { return std::nullopt; }

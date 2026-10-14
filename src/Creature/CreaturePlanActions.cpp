@@ -104,6 +104,14 @@ constexpr std::array k_Executors {
         .action = "BreakRock", .target = Target::PickableRock, .build = Build::BreakRock, .activity = Activity::PlayWithObject},
     // Stamping on a rock, which breaks in two
     Executor {.action = "SmashStoneInHalf", .target = Target::Rock, .build = Build::Destroy},
+    // Stomping on a thing and eating it, and knocking a living thing down with a rock and eating it
+    Executor {.action = "StompAndEat", .target = Target::Stompable, .build = Build::StompAndEat, .activity = Activity::Eat},
+    Executor {.action = "StoneAndEat",
+              .target = Target::StonableAndPickable,
+              .use = Target::ThrowingDamage,
+              .notWhatItHolds = true,
+              .build = Build::StoneAndEat,
+              .activity = Activity::Eat},
     // Toys: stroking a cuddly one, taking one home, throwing a die
     // The game's data names stroking a toy "StrokToy"
     Executor {.action = "StrokToy", .target = Target::CuddlyToy, .build = Build::StrokeToy},
@@ -134,7 +142,7 @@ constexpr std::array k_Executors {
               .notWhatItHolds = true,
               .build = Build::Hurl,
               .activity = Activity::Hurl},
-    Executor {.action = "KickTree", .target = Target::Tree, .build = Build::Destroy},
+    Executor {.action = "KickTree", .target = Target::Tree, .build = Build::Kick},
     Executor {.action = "PullSillyFaces", .build = Build::Emote, .animation = animations::k_FeelPlayful},
     Executor {.action = "Hurl",
               .target = Target::Stonable,
@@ -142,8 +150,8 @@ constexpr std::array k_Executors {
               .notWhatItHolds = true,
               .build = Build::Hurl,
               .activity = Activity::Hurl},
-    Executor {.action = "Stomp", .target = Target::Destroyable, .build = Build::Destroy},
-    Executor {.action = "Kick", .target = Target::Destroyable, .build = Build::Destroy},
+    Executor {.action = "Stomp", .target = Target::Stompable, .build = Build::Stomp},
+    Executor {.action = "Kick", .target = Target::Kickable, .build = Build::Kick},
     Executor {.action = "SitDown", .build = Build::SitDown, .activity = Activity::Sit},
     Executor {.action = "BeIdle", .build = Build::BeIdle, .activity = Activity::BeIdle},
     Executor {.action = "HangAroundAtHome", .build = Build::HangAround, .activity = Activity::HangAround},
@@ -622,6 +630,19 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	}
 	case Build::Destroy:
 		return creature_mind::DestroyThing(*object);
+	case Build::Stomp:
+		return creature_mind::Stomp(*object, random);
+	case Build::StompAndEat:
+		return creature_mind::StompAndEat(*object, situation.holdingEatable);
+	case Build::StoneAndEat:
+		// With nothing to throw, it can't
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::StoneAndEat(*situation.instrument, *object, objectPoint, situation.height, situation.holdingRock);
+	case Build::Kick:
+		return creature_mind::KickThing(*object);
 	case Build::SitDown:
 		// Told by a script where to sit, it goes there; otherwise it sits where it is
 		// TODO(creature-mind): left to itself the game first looks for a clear area about four times its radius around

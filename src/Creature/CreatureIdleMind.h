@@ -307,6 +307,9 @@ enum class Effect : uint8_t
 	TookFromHand,
 	/// Has looked another creature (the effect's object) over, and waits a while before it does again
 	Inspected,
+	/// Has stomped on a thing (the effect's object). When the stomp is the last step of the agenda and the thing is
+	/// dead, the creature counts the kill, and the action sees to its desire.
+	Stomped,
 };
 
 /// How the eyes should look
@@ -697,6 +700,8 @@ struct Commands
 	/// What happens to the body this turn, and the object it eats
 	Effect effect {Effect::None};
 	std::optional<uint32_t> effectObject;
+	/// The step that finished this turn is the last step of the agenda
+	bool lastStep {false};
 	/// What to do with a thing
 	std::optional<ObjectOrder> object;
 	/// The creature lets go of the thing that it holds, because the next step needs empty hands
@@ -830,7 +835,7 @@ struct PooBy
 [[nodiscard]] std::vector<Step> LookAt(glm::vec2 point, float seconds);
 /// Running away from a point
 [[nodiscard]] std::vector<Step> RunFrom(glm::vec2 point);
-/// Walking up to something and destroying it
+/// The creature walks up to a thing and stomps on it, with an angry face. Its head looks at the thing as it walks.
 [[nodiscard]] std::vector<Step> DestroyThing(uint32_t object);
 /// Waiting a while, looking about
 [[nodiscard]] std::vector<Step> LookAbout(float seconds);

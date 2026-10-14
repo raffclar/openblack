@@ -45,7 +45,16 @@ void creature_meals::CountMeal(Tallies& tallies, std::optional<uint32_t> sort, b
 	{
 		return;
 	}
-	switch (*sort)
+	CountKill(tallies, *sort);
+	if (keptDown)
+	{
+		++tallies.keptDown[*sort];
+	}
+}
+
+void creature_meals::CountKill(Tallies& tallies, uint32_t sort)
+{
+	switch (sort)
 	{
 	case k_CreatureSort:
 		++tallies.creaturesKilled;
@@ -58,9 +67,5 @@ void creature_meals::CountMeal(Tallies& tallies, std::optional<uint32_t> sort, b
 		break;
 	default:
 		break;
-	}
-	if (keptDown)
-	{
-		++tallies.keptDown[*sort];
 	}
 }

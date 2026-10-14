@@ -29,6 +29,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAnimation.h"
@@ -41,15 +42,18 @@
 #include "Creature/CreatureReach.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureStomp.h"
 #include "Creature/CreatureThrow.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureDestruction.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -58,6 +62,8 @@
 #include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
@@ -71,6 +77,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
@@ -82,7 +89,9 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Graveyards.h"
+#include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
+#include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -92,13 +101,18 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/Implementations/MagicLiving.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicWorldInterface.h"
+#include "Magic/SpellRules.h"
 #include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
@@ -435,20 +449,79 @@ void BringBackUp(entt::entity creature, entt::entity food)
 	}
 }
 
-/// The foot meets what the creature kicks: a thing that can fly flies off ahead of the creature, already flying or set
-/// flying from where it lies, credited to the creature's player and passing through the creature as it starts. What it
-/// does to buildings, fences, standing trees and creatures isn't here: only things that can fly are kicked.
-/// The kick of such a thing makes no sound: the game's sound for it is keyed so that it rarely matches anything (see
-/// docs/vanilla-bugs.md).
-void KickAway(entt::entity creature, const Creature& body, const Transform& transform, entt::entity target)
+/// One of the creaks of a tree that a creature pulls from the land, picked at random
+entt::id_type TreeCreak();
+
+/// The sounds of a kick play from the bank of the editor, at the foot
+constexpr std::string_view k_KickSoundBank = "editor.sad";
+constexpr int32_t k_BeenKicked = 150;
+constexpr int32_t k_KickedBuilding = 19;
+constexpr int32_t k_KickedTree = 20;
+constexpr int32_t k_KickedVillager = 22;
+constexpr int32_t k_KickedFence = 25;
+/// The row of the effect table that a kick of another creature hits with
+constexpr size_t k_KickHitEffect = 3;
+
+/// A fence is a static of a fence model
+bool IsFence(const ecs::Registry& registry, entt::entity object)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(target) || !Locator::dynamicsSystem::has_value() || registry.AllOf<Immovable>(target))
+	const auto* still = registry.TryGet<const MobileStatic>(object);
+	if (still == nullptr || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto kind = static_cast<size_t>(still->type);
+	const auto& rows = Locator::infoConstants::value().mobileStatic;
+	return kind < rows.size() && ecs::physics_classes::IsFenceModel(rows.at(kind).meshId);
+}
+
+/// The sound of a kick, by what the foot meets. A standing tree creaks. Other things have a sound with one key not
+/// given, which nearly never matches anything (see docs/vanilla-bugs.md), so they make no sound.
+void PlayKickSound(const ecs::Registry& registry, entt::entity target, glm::vec3 foot)
+{
+	std::optional<int32_t> object;
+	if (registry.AnyOf<Abode, Field, SpellDispenser, VillageTotem, Ball>(target))
+	{
+		object = k_KickedBuilding;
+	}
+	else if (registry.AllOf<Villager>(target))
+	{
+		object = k_KickedVillager;
+	}
+	else if (IsFence(registry, target))
+	{
+		object = k_KickedFence;
+	}
+	else if (registry.AllOf<Tree>(target))
+	{
+		if (!registry.AllOf<InPhysics>(target))
+		{
+			if (Locator::soundTagSystem::has_value())
+			{
+				Locator::soundTagSystem::value().CreatePointSound(TreeCreak(), foot, false);
+			}
+			return;
+		}
+		object = k_KickedTree;
+	}
+	if (!object.has_value() || !Locator::audio::has_value())
 	{
 		return;
 	}
-	auto& dynamics = Locator::dynamicsSystem::value();
-	if (!dynamics.CanBecomePhysicsObject(target))
+	const std::array<int32_t, 5> keys {0, 0, *object, 0, k_BeenKicked};
+	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot);
+}
+
+/// The foot meets what the creature kicks. The order of the rules is:
+/// 1. A building breaks with two blows when it is fully built and not on fire.
+/// 2. A thing that can fly flies off ahead of the creature. A thing in the air takes the new speed. A thing on the land
+///    goes into the air from where it lies, from the player of the creature.
+/// 3. Another creature takes a tenth of a hit, and more as the kicker is tall for it.
+void KickAway(entt::entity creature, const Creature& body, const Transform& transform, const CreatureAnimation& animation,
+              entt::entity target)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(target))
 	{
 		return;
 	}
@@ -463,20 +536,97 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 	                                    height(at + glm::vec2(0.0f, radius)), height(at - glm::vec2(0.0f, radius)), radius);
 	const auto ahead = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
 	const auto velocity = creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, ShownSize(body));
-	if (auto* entry = dynamics.Find(target); entry != nullptr && entry->body != nullptr)
+	const auto* points = PointsOf(body);
+	const auto foot = points != nullptr && points->rightFoot < animation.boneMatrices.size()
+	                      ? glm::vec3(creature::PosedBone(points->rightFoot, animation.boneMatrices, PlacementOf(transform))[3])
+	                      : transform.position;
+	PlayKickSound(registry, target, foot);
+
+	if (registry.AnyOf<Abode, Field, SpellDispenser, VillageTotem, Ball>(target))
 	{
-		entry->body->velocity = velocity;
+		if (!Locator::buildingDamageSystem::has_value() || !Locator::gameRandom::has_value() ||
+		    !Locator::creatureObjectActionSystem::value().CanKick(creature, target))
+		{
+			return;
+		}
+		auto& random = Locator::gameRandom::value();
+		const auto side = random.GameRand(creature_stomp::k_KickSideDraws);
+		const auto first = random.GameRand(creature_stomp::k_KickHeightDraws);
+		const auto second = random.GameRand(creature_stomp::k_KickHeightDraws);
+		const creature_stomp::BuildingKick kick {
+		    .creature = transform.position,
+		    .foot = foot,
+		    .direction = glm::length(velocity) > 0.0f ? glm::normalize(velocity) : glm::vec3(0.0f),
+		    // The angle whose sine is the way ahead along x and whose minus cosine is the way ahead along z
+		    .yaw = std::atan2(ahead.x, -ahead.z),
+		    .creatureSize = ShownSize(body),
+		    .buildingRadius = object_measures::TwoDRadius(registry, target),
+		    .sideDraw = side,
+		    .firstHeightDraw = first,
+		    .secondHeightDraw = second,
+		};
+		const auto middle = transform.position + ((foot - transform.position) * 0.5f);
+		const auto blows = creature_stomp::KickBlows(kick, height({middle.x, middle.z}));
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} kicks building {}", entt::to_integral(creature),
+		                    entt::to_integral(target));
+		Locator::buildingDamageSystem::value().CreatureBlows(target, creature, blows);
 		return;
 	}
-	auto* entry =
-	    dynamics.InitialisePhysics(target, {.velocity = velocity, .thrower = creature, .player = body.owner, .add = true})
-	        .entry;
-	if (entry == nullptr)
+	if (Locator::dynamicsSystem::has_value() && !registry.AllOf<Immovable>(target) &&
+	    Locator::dynamicsSystem::value().CanBecomePhysicsObject(target))
+	{
+		auto& dynamics = Locator::dynamicsSystem::value();
+		if (auto* entry = dynamics.Find(target); entry != nullptr && entry->body != nullptr)
+		{
+			entry->body->velocity = velocity;
+			return;
+		}
+		auto* entry =
+		    dynamics.InitialisePhysics(target, {.velocity = velocity, .thrower = creature, .player = body.owner, .add = true})
+		        .entry;
+		if (entry == nullptr)
+		{
+			return;
+		}
+		dynamics.SettleOnLand(*entry, false, true);
+		dynamics.RaiseClearOfWhatIsUnder(*entry);
+		return;
+	}
+	const auto* other = registry.TryGet<const Creature>(target);
+	if (other == nullptr || !Locator::magicSystem::has_value() || !Locator::infoConstants::has_value() ||
+	    k_KickHitEffect >= Locator::infoConstants::value().effect.size())
 	{
 		return;
 	}
-	dynamics.SettleOnLand(*entry, false, true);
-	dynamics.RaiseClearOfWhatIsUnder(*entry);
+	auto values = magic::EffectValues::From(Locator::infoConstants::value().effect.at(k_KickHitEffect));
+	values.Scale(creature_stomp::KickHitStrength(creature_stomp::k_HeightPerSize * ShownSize(body),
+	                                             creature_stomp::k_HeightPerSize * ShownSize(*other)));
+	Locator::magicSystem::value().ApplyEffectToObject(target, values,
+	                                                  magic::EffectSource {
+	                                                      .player = body.owner,
+	                                                      .casterCreature = creature,
+	                                                      .appliedBy = creature,
+	                                                  });
+}
+
+/// A stomp crushes a living thing under the foot of the creature. The crush comes from the creature, and counts as a
+/// deed of its player.
+void Crush(entt::entity creature, const Creature& body, entt::entity target)
+{
+	if (!Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} stomps on {}", entt::to_integral(creature),
+	                    entt::to_integral(target));
+	magic::EffectValues values;
+	values[magic::EffectKind::Crush] = creature_stomp::k_StompCrush;
+	Locator::magicSystem::value().ApplyEffectToObject(target, values,
+	                                                  magic::EffectSource {
+	                                                      .player = body.owner,
+	                                                      .casterCreature = creature,
+	                                                      .appliedBy = creature,
+	                                                  });
 }
 
 /// A villager picked up stops wherever it was walking
@@ -1125,9 +1275,12 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		{
 			Fail(action, "it can't be picked up");
 		}
-		else if (action.kind == Kind::Destroy && !CanDestroy(*action.target))
+		else if (action.kind == Kind::Destroy &&
+		         (!registry.AllOf<MapCellResident>(*action.target) ||
+		          registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(*action.target)))
 		{
-			Fail(action, "it can't be knocked down");
+			// A stomp needs the thing on the map
+			Fail(action, "it is not on the map");
 		}
 		else if (action.kind == Kind::Kick &&
 		         ((held != nullptr && held->object == *action.target) || registry.AllOf<InHand>(*action.target)))
@@ -1760,6 +1913,112 @@ bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const
 	       registry.AnyOf<Tree, Abode, MobileObject, MobileStatic, Ball>(target);
 }
 
+bool CreatureObjectActionSystem::CanStompOn(entt::entity creature, entt::entity target) const
+{
+	using creature_stomp::StompRule;
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.Valid(target) || !registry.AllOf<Transform>(target))
+	{
+		return false;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr)
+	{
+		return false;
+	}
+	const auto size = ShownSize(*body);
+	const auto thing = KindFactsOf(target).thing;
+	using creature_object_actions::Thing;
+	// A bird has a rule of its own, by its height over the land
+	if (thing == Thing::Bird)
+	{
+		return Locator::animalSystem::has_value() &&
+		       Locator::animalSystem::value().CanBeStompedOnByCreature(target, creature_stomp::k_HeightPerSize * size);
+	}
+	const auto rule = [&] {
+		switch (thing)
+		{
+		case Thing::Villager:
+		case Thing::Animal:
+			return StompRule::WhileAlive;
+		case Thing::MobileObject:
+		case Thing::Pot:
+		case Thing::Pile:
+		case Thing::Creed:
+		case Thing::Rock:
+		case Thing::Bonfire:
+		case Thing::DeadTree:
+		case Thing::Static:
+			return StompRule::Always;
+		case Thing::Vortex:
+		case Thing::TeleportStone:
+			return StompRule::Never;
+		case Thing::Ball:
+			return StompRule::LowBuilding;
+		default:
+			break;
+		}
+		if (registry.AnyOf<Field, FishFarm, Temple>(target))
+		{
+			return StompRule::Never;
+		}
+		if (registry.AnyOf<Abode, SpellDispenser, VillageTotem>(target))
+		{
+			return StompRule::LowBuilding;
+		}
+		// Creatures, trees, features, lanterns, shields and what else is set into the land
+		return StompRule::Short;
+	}();
+	const bool onMap =
+	    registry.AllOf<MapCellResident>(target) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(target);
+	return creature_stomp::CanBeStompedOn(
+	    {
+	        .rule = rule,
+	        .dead = registry.AllOf<VillagerDeath>(target) || magic_living::IsDead(target),
+	        .onMap = onMap,
+	        .height = object_measures::Height(registry, target),
+	    },
+	    size);
+}
+
+bool CreatureObjectActionSystem::CanKick(entt::entity creature, entt::entity target) const
+{
+	using creature_stomp::KickRule;
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.Valid(target) || !registry.AllOf<Transform>(target))
+	{
+		return false;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr)
+	{
+		return false;
+	}
+	const bool building = registry.AnyOf<Abode, Field, SpellDispenser, VillageTotem, Ball>(target);
+	const auto rule = registry.AllOf<Temple>(target) ? KickRule::Never : building ? KickRule::Building : KickRule::Thing;
+	const auto* progress = registry.TryGet<const BuildProgress>(target);
+	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
+	const auto* holder = registry.TryGet<const HeldByCreature>(target);
+	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
+	const auto weight = physics::living::CreatureMass(ShownSize(*body), morph != nullptr ? morph->drawn.thinFat : 0.0f,
+	                                                  morph != nullptr ? morph->drawn.weakStrong : 0.0f);
+	const bool hasDynamics = Locator::dynamicsSystem::has_value();
+	return creature_stomp::CanBeKicked(
+	    {
+	        .rule = rule,
+	        .creature = registry.AllOf<Creature>(target),
+	        .leashTied = leash != nullptr && leash->worn.has_value() && leash->worn->tiedTo == target,
+	        .canFly = hasDynamics && Locator::dynamicsSystem::value().CanBecomePhysicsObject(target),
+	        .immovable = registry.AllOf<Immovable>(target),
+	        .indestructible = registry.AllOf<Indestructible>(target),
+	        .heldByKicker = holder != nullptr && holder->creature == creature,
+	        .weight = hasDynamics ? Locator::dynamicsSystem::value().WeightOf(target) : 0.0f,
+	        .built = progress == nullptr || progress->built >= 1.0f,
+	        .onFire = Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(target),
+	    },
+	    weight);
+}
+
 std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entity creature) const
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1992,9 +2251,237 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 	StartPendingCatches();
 }
 
+namespace
+{
+/// The body action that plays now, as the spheres of the body know it
+creature_stomp::BodyStart BodyStartOf(const creature_layers::BodyAction& body)
+{
+	using creature_layers::BodyAction;
+	using StartPhase = creature_stomp::BodyStart::Phase;
+	if (body.kind == BodyAction::Kind::Stand)
+	{
+		return {.stands = true};
+	}
+	const auto phase = body.kind == BodyAction::Kind::Once      ? StartPhase::Once
+	                   : body.phase == BodyAction::Phase::Start ? StartPhase::Start
+	                   : body.phase == BodyAction::Phase::Loop  ? StartPhase::Loop
+	                                                            : StartPhase::End;
+	return {.animation = creature_layers::CurrentAnimation(body), .phase = phase};
+}
+
+/// The bones of the parts of the body, in the order of creature_stomp::Part
+std::array<uint32_t, creature_stomp::k_PartCount> PartBones(const CreatureRig::ActionPoints& points,
+                                                            const CreatureAnimation& animation)
+{
+	const auto mirror = [&](uint32_t bone) { return bone < animation.mirror.size() ? animation.mirror[bone] : bone; };
+	return {points.head,        points.groin,
+	        points.rightHand,   mirror(points.rightHand),
+	        points.rightFoot,   mirror(points.rightFoot),
+	        points.rightArmpit, mirror(points.rightArmpit)};
+}
+
+/// Whether a corner of the nearest model of a thing is in a sphere. A model that moves by bones is never in one.
+bool ModelTouches(const ecs::Registry& registry, entt::entity thing, glm::vec3 centre, float radius)
+{
+	const auto* mesh = registry.TryGet<const Mesh>(thing);
+	const auto* at = registry.TryGet<const Transform>(thing);
+	if (mesh == nullptr || at == nullptr || !Locator::resources::has_value())
+	{
+		return false;
+	}
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(mesh->id))
+	{
+		return false;
+	}
+	const auto& model = *meshes.Handle(mesh->id);
+	if (model.IsBoned())
+	{
+		return false;
+	}
+	const auto limit = radius * radius;
+	for (const auto& subMesh : model.GetSubMeshes())
+	{
+		if ((subMesh->GetFlags().lodMask & 1U) == 0)
+		{
+			continue;
+		}
+		for (const auto& corner : subMesh->GetSurface().positions)
+		{
+			const auto world = at->position + (at->rotation * (at->scale * corner));
+			const auto away = world - centre;
+			if (glm::dot(away, away) < limit)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/// What a sphere of the body does to a thing in its cell
+creature_stomp::Victim VictimOf(const ecs::Registry& registry, entt::entity thing)
+{
+	const bool bird = registry.AllOf<Animal>(thing) && Locator::animalSystem::has_value() &&
+	                  Locator::animalSystem::value().BirdCanBePickedUpByCreature(thing).has_value();
+	return creature_stomp::VictimOf({
+	    .hasModel = registry.AllOf<Mesh>(thing),
+	    .indestructible = registry.AllOf<Indestructible>(thing),
+	    .immovable = registry.AllOf<Immovable>(thing),
+	    .passedBy = registry.AnyOf<Creature, Temple, Tree, StoragePit, VillageTotem, BuildingPiece>(thing),
+	    .villager = registry.AllOf<Villager>(thing),
+	    .animal = registry.AllOf<Animal>(thing) && !bird,
+	    .living = registry.AnyOf<Villager, Animal, Creature>(thing),
+	    .building = registry.AnyOf<Abode, SpellDispenser, Ball>(thing),
+	    .canFly = Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().CanBecomePhysicsObject(thing),
+	});
+}
+
+/// A sphere of the body of a creature moved to a point: it knocks about what it reaches in the cell of the point
+void KnockAbout(ecs::Registry& registry, entt::entity creature, const Creature& body, glm::vec3 point, glm::vec3 move,
+                float sphereRadius)
+{
+	if (!Locator::entitiesMap::has_value())
+	{
+		return;
+	}
+	const auto cell = ecs::MapInterface::GetGridCell(point);
+	const auto things = Locator::entitiesMap::value().GetAllInCell(glm::ivec2(cell));
+	for (const auto thing : things)
+	{
+		if (!registry.Valid(thing) || !registry.AllOf<Transform>(thing))
+		{
+			continue;
+		}
+		using creature_stomp::Victim;
+		const auto victim = VictimOf(registry, thing);
+		const auto& at = registry.Get<const Transform>(thing);
+		const auto distance = glm::distance(glm::xz(at.position), glm::xz(point));
+		if (!creature_stomp::InReach(victim, distance, sphereRadius, object_measures::TwoDRadius(registry, thing)))
+		{
+			continue;
+		}
+		if (victim == Victim::Building)
+		{
+			if (ModelTouches(registry, thing, point, sphereRadius) && Locator::buildingDamageSystem::has_value() &&
+			    Locator::creatureObjectActionSystem::value().CanKick(creature, thing))
+			{
+				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} knocks building {}", entt::to_integral(creature),
+				                    entt::to_integral(thing));
+				const std::array blows {creature_stomp::TrampleBlow(point, move, sphereRadius)};
+				Locator::buildingDamageSystem::value().CreatureBlows(thing, creature, blows);
+			}
+			continue;
+		}
+		if (victim == Victim::Thing && !ModelTouches(registry, thing, point, sphereRadius))
+		{
+			continue;
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} knocks {} about", entt::to_integral(creature),
+		                    entt::to_integral(thing));
+		if (Locator::dynamicsSystem::has_value())
+		{
+			static_cast<void>(Locator::dynamicsSystem::value().InitialisePhysics(
+			    thing,
+			    {.velocity = creature_stomp::KnockVelocity(move), .thrower = creature, .player = body.owner, .add = true}));
+		}
+	}
+}
+
+/// The spheres round the body of each creature come on and go off as its body actions start. While they are on, each
+/// part that moved far enough since its last check knocks about what it reaches.
+void Trample(ecs::Registry& registry)
+{
+	struct Moved
+	{
+		entt::entity creature;
+		glm::vec3 point;
+		glm::vec3 move;
+		float radius;
+	};
+	std::vector<Moved> moves;
+	std::vector<entt::entity> starting;
+	registry.Each<const Creature, const Transform, const CreatureAnimation>(
+	    [&](entt::entity creature, const Creature& body, const Transform& transform, const CreatureAnimation& animation) {
+		    const auto* points = PointsOf(body);
+		    if (points == nullptr)
+		    {
+			    return;
+		    }
+		    auto* spheres = registry.TryGet<CreatureDestruction>(creature);
+		    const auto start = BodyStartOf(animation.body);
+		    if (spheres == nullptr)
+		    {
+			    // The first time that the spheres come on, the creature gets them after this pass
+			    if (creature_stomp::SwitchFor(start) == creature_stomp::Switch::On)
+			    {
+				    starting.push_back(creature);
+			    }
+			    return;
+		    }
+		    const auto placement = PlacementOf(transform);
+		    const auto bones = PartBones(*points, animation);
+		    const auto at = [&](size_t part) {
+			    const auto bone = bones.at(part);
+			    return bone < animation.boneMatrices.size()
+			               ? glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3])
+			               : transform.position;
+		    };
+		    const auto size = ShownSize(body);
+		    if (!(spheres->seen == start))
+		    {
+			    const auto change = creature_stomp::SwitchFor(start);
+			    spheres->seen = start;
+			    if (change == creature_stomp::Switch::On)
+			    {
+				    spheres->on = true;
+				    for (size_t part = 0; part < creature_stomp::k_PartCount; ++part)
+				    {
+					    spheres->last.at(part) = at(part);
+					    spheres->radius.at(part) = creature_stomp::SphereRadius(static_cast<creature_stomp::Part>(part), size);
+				    }
+				    return;
+			    }
+			    if (change == creature_stomp::Switch::Off)
+			    {
+				    spheres->on = false;
+			    }
+		    }
+		    if (!spheres->on)
+		    {
+			    return;
+		    }
+		    for (size_t part = 0; part < creature_stomp::k_PartCount; ++part)
+		    {
+			    const auto now = at(part);
+			    if (!creature_stomp::MovedEnough(spheres->last.at(part), now, size))
+			    {
+				    continue;
+			    }
+			    moves.push_back({creature, now, now - spheres->last.at(part), spheres->radius.at(part)});
+			    spheres->last.at(part) = now;
+		    }
+	    });
+	// A new set of spheres starts off; the next pass sees the action start and turns them on
+	for (const auto creature : starting)
+	{
+		registry.Assign<CreatureDestruction>(creature);
+	}
+	for (const auto& moved : moves)
+	{
+		if (registry.Valid(moved.creature))
+		{
+			KnockAbout(registry, moved.creature, registry.Get<const Creature>(moved.creature), moved.point, moved.move,
+			           moved.radius);
+		}
+	}
+}
+} // namespace
+
 void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::milli> /*gameTime*/)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	Trample(registry);
 
 	// The moments things are taken hold of and let go of, with the hand where the body was posed this frame
 	struct Moment
@@ -2078,9 +2565,14 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			{
 				break;
 			}
+			// A living thing under the foot takes the crush of the stomp, from the creature and its player
+			if (registry.AnyOf<Villager, Animal, Creature>(target))
+			{
+				Crush(creature, body, target);
+			}
 			// A building is broken about where it stands, and a rock is smashed in two; the blow does nothing to anything
 			// else
-			if (registry.AnyOf<Abode, SpellDispenser>(target))
+			else if (registry.AnyOf<Abode, SpellDispenser>(target))
 			{
 				if (Locator::buildingDamageSystem::has_value())
 				{
@@ -2172,7 +2664,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			break;
 		}
 		case Kind::Kick:
-			KickAway(creature, body, transform, *action.target);
+			KickAway(creature, body, transform, animation, *action.target);
 			action.status = Status::Contact;
 			break;
 		case Kind::Keep:

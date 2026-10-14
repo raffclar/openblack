@@ -507,7 +507,9 @@ std::vector<Step> creature_mind::RunFrom(glm::vec2 point)
 
 std::vector<Step> creature_mind::DestroyThing(uint32_t object)
 {
-	return WithFace({Object({.kind = ObjectOrder::Kind::Destroy, .object = object})}, creature_face::Cue::Anger);
+	auto stomp = Object({.kind = ObjectOrder::Kind::Destroy, .object = object}, Effect::Stomped);
+	stomp.gaze = Gaze {.object = object, .whileGoing = true};
+	return WithFace({stomp}, creature_face::Cue::Anger);
 }
 
 std::vector<Step> creature_mind::LookAbout(float seconds)
@@ -1212,10 +1214,11 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		if (senses.hands == HandsState::Done)
 		{
 			commands.effect = step.effect;
-			if (step.effect == Effect::TookFromHand)
+			if (step.effect == Effect::TookFromHand || step.effect == Effect::Stomped)
 			{
 				commands.effectObject = step.order.object;
 			}
+			commands.lastStep = mind.step + 1 == mind.agenda.size();
 			FinishStep(mind);
 		}
 		else if (senses.hands != HandsState::Busy)

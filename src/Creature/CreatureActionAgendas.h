@@ -142,6 +142,25 @@ constexpr float k_CallCameraSeconds = 1.0f;
 constexpr float k_PointOutSeconds = 1.0f;
 constexpr float k_AfterPointingOutSeconds = 2.0f;
 
+/// The creature stomps on a thing. One time in creature_stomp::k_AngryBeforeStompLots it first plays its angry
+/// animation with an angry face.
+[[nodiscard]] std::vector<Step> Stomp(uint32_t thing, const Random& random);
+/// The creature stomps on a thing and eats it. The agenda has these steps:
+/// 1. When its hand holds nothing that it can eat, it stomps on the thing, then picks the thing up.
+/// 2. It eats what it holds.
+[[nodiscard]] std::vector<Step> StompAndEat(uint32_t thing, bool holdingEatable);
+/// The creature throws a rock at a thing and eats the thing. The agenda has these steps:
+/// 1. When its hand holds no rock, it picks up the rock.
+/// 2. It walks to a place to throw from, as far as its height, with an angry face.
+/// 3. It throws the rock at the thing, with an angry face.
+/// 4. It picks up the thing, and eats what it holds.
+[[nodiscard]] std::vector<Step> StoneAndEat(uint32_t rock, uint32_t thing, glm::vec2 thingPoint, float height,
+                                            bool holdingRock);
+/// The creature kicks a thing: it goes near the thing, turns to face it, and kicks it
+[[nodiscard]] std::vector<Step> KickThing(uint32_t thing);
+/// The creature turns to face a thing to kick for this time before it kicks
+constexpr float k_FaceToKickSeconds = 0.1f;
+
 /// The five ways in which a creature shows that it saw a deed of its player
 enum class NoticeKind : uint8_t
 {

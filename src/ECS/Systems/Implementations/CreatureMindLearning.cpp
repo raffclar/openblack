@@ -332,7 +332,16 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	case Target::Destroyable:
 		return hands != nullptr && hands->CanDestroy(entity);
 	case Target::Tree:
-		return registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanDestroy(entity);
+		return registry.AllOf<Tree>(entity);
+	case Target::Stompable:
+		return hands != nullptr && hands->CanStompOn(self, entity);
+	case Target::Kickable:
+		return hands != nullptr && hands->CanKick(self, entity);
+	case Target::StonableAndPickable:
+		return !heldByOther && hands != nullptr &&
+		       creature_object_actions::CanBeStoned(hands->KindOf(entity).thing,
+		                                            registry.AllOf<VillagerDeath>(entity) || magic_living::IsDead(entity)) &&
+		       hands->CanPickUp(self, entity);
 	case Target::Villager:
 		return registry.AllOf<Villager>(entity);
 	case Target::DanceVillager:
@@ -556,7 +565,8 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	// Anything at all is whatever it may come to know of: the living, what lies about, statics, features, trees and
 	// buildings
 	// What a creature can poo by is looked for among the same things
-	const bool anything = target == Target::Anything || target == Target::PooedOn;
+	const bool anything = target == Target::Anything || target == Target::PooedOn || target == Target::Stompable ||
+	                      target == Target::Kickable || target == Target::StonableAndPickable;
 	const bool living = target == Target::AnyLiving || target == Target::Stonable || anything;
 	// The animals and miracles that frighten it are only ever run from
 	if (target == Target::Frightening || living)
@@ -2934,6 +2944,8 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 		const auto thing = Locator::creatureObjectActionSystem::value().KindOf(*held).thing;
 		const auto* mobile = registry.TryGet<const MobileObject>(*held);
 		situation.holdingTree = thing == creature_object_actions::Thing::Tree;
+		situation.holdingRock =
+		    thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
 		situation.holdingMushroom = thing == creature_object_actions::Thing::MagicMushroom ||
 		                            (mobile != nullptr && (mobile->type == MobileObjectInfo::MagicMushroom ||
 		                                                   mobile->type == MobileObjectInfo::Toadstool));
