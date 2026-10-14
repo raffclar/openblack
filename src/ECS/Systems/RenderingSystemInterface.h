@@ -71,6 +71,9 @@ struct RenderContext
 		/// The instances' alpha-textured parts are added over what is behind them by their texture's alpha, without
 		/// writing depth, whatever their materials say
 		bool alphaTexturedAdditive {false};
+		/// The colour, 0 to 255, that those added parts shine in, in place of the land's light (see
+		/// graphics::light_shine); none for the land's light
+		std::optional<glm::vec3> shineColour;
 		/// The instances are added over what is behind them by this share, whatever their materials say
 		std::optional<float> additiveShare;
 		/// The instances are blended over what is behind them by their own alpha, as one minus the share in their look's

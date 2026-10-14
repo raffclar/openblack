@@ -497,7 +497,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::bank>("bank")
 	    .Field<&components::AudioEmitter::group>("group");
 	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
-	Reflect<components::BlendedByMaterial> {context};
+	Reflect<components::BlendedByMaterial>(context).Field<&components::BlendedByMaterial::shineColour>("shineColour");
 	Reflect<components::BoatFilmPart>(context)
 	    .Field<&components::BoatFilmPart::role>("role")
 	    .Field<&components::BoatFilmPart::index>("index")

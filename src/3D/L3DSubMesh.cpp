@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <span>
 
 #include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -208,6 +209,13 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 
 	uint16_t startIndex = 0;
 	uint16_t startVertex = 0;
+	// The groups of vertices run on over the primitives, each primitive taking as many as it has
+	std::span<const l3d::L3DVertexGroup> primitiveGroups;
+	if (_flags.hasBones)
+	{
+		primitiveGroups = l3d.GetVertexGroupSpan(meshIndex);
+	}
+	size_t firstGroup = 0;
 	for (auto& primitive : primitiveSpan)
 	{
 		// Fix indices for merged vertex buffer
@@ -248,6 +256,11 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 		    static_cast<uint32_t>(primitive.material.type),
 		    primitive.material.cullMode,
 		});
+		if (primitive.numGroups >= 2 && firstGroup + 1 < primitiveGroups.size())
+		{
+			_primitives.back().secondGroupBone = primitiveGroups[firstGroup + 1].boneIndex;
+		}
+		firstGroup += primitive.numGroups;
 
 		// The temple's rooms, the meshes with lightmaps, keep their triangles for the hand to find where the cursor
 		// points at them

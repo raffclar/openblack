@@ -45,6 +45,10 @@ uniform vec4 u_fogAt;
 // x: 1 for the light the game gives the models it lights as it poses them (the hand, the glow over it), in place of
 // the usual model light (see PosedModelLightFactor)
 uniform vec4 u_lightRule;
+// A light that shines in a colour of its own (u_objectLook's), as the light out of an opened reward chest: x 1 for such a
+// light, y the bone of its solid vertices (all others are clear), zw the cosine and sine of its texture's turn. Its
+// colour is not shaded by the sun nor dimmed by the haze; the land's colour and the haze are still added.
+uniform vec4 u_shine;
 #ifdef USE_LIGHTMAP
 // The temple's light's colour added to its walls, or a control's glow, and how much darker the light makes them
 uniform vec4 u_glow;
@@ -379,6 +383,15 @@ void main()
 		v_texcoord0.y -= i_data4.x;
 	}
 #endif // USE_INSTANCING
+	if (u_shine.x > 0.5f)
+	{
+		v_color0 = vec4(u_objectLook.xyz / 255.0f, float(modelIndex) == u_shine.y ? 1.0f : 0.0f);
+		// The texture is mirrored top to bottom about its middle, then turned
+		vec2 fromMiddle = a_texcoord0 - 0.5f;
+		v_texcoord0.xy = vec2(fromMiddle.x * u_shine.z + fromMiddle.y * u_shine.w,
+		                      fromMiddle.x * u_shine.w - fromMiddle.y * u_shine.z) +
+		                 0.5f;
+	}
 	v_normal = normal;
 	gl_Position = mul(u_viewProj, v_position);
 	gl_Position.z *= 1.0f - u_depthBias.x;
