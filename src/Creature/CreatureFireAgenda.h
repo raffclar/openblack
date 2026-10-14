@@ -19,9 +19,9 @@
 
 // What a creature does with fire.
 //
-// Putting a fire out, it goes right up to the burning thing, backs off to twice its own height, turns to face it and
-// casts the water miracle at it from the casting pose, holding it three seconds. Then it douses the thing with five
-// times a bucket of water's worth.
+// To stop a fire, the creature goes near to twice its height from the burning thing and turns to face it. It casts
+// the water miracle at the thing in the scatter pose and holds it three seconds. Then it douses the thing with the water
+// of five buckets.
 //
 // Setting something alight, it first picks up the burning thing it uses, unless its hand is full already. It goes up
 // close to what it sets alight, turns to face it and tosses the burning thing at it. It waits for the tossed thing to
@@ -31,9 +31,6 @@
 
 namespace openblack::creature_mind
 {
-/// Putting a fire out, it goes this near the burning thing first, then backs off to this many times its height
-inline constexpr float k_WaterGoNearDistance = 0.0f;
-inline constexpr float k_WaterCastHeights = 2.0f;
 /// Setting something alight, it goes this near it, tosses with this animation, and waits this long once the tossed
 /// thing lands
 inline constexpr float k_SetFireDistance = 1.0f;

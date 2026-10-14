@@ -68,6 +68,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -339,9 +340,37 @@ std::optional<std::pair<float, float>> CreatureMindSystem::MiracleSightings(entt
 bool CreatureMindSystem::MayCast(entt::entity creature, const CreatureMindState& mind, uint32_t action, bool powerUp)
 {
 	const auto* tables = GetTables();
-	const auto magic = CastMagicOf(action);
 	const auto* body = Entities().TryGet<const Creature>(creature);
-	if (tables == nullptr || !magic.has_value() || body == nullptr || (powerUp && mind.developmentPhase <= k_PowerUpPhase))
+	const auto* executor = tables != nullptr && action < tables->actions.size()
+	                           ? creature_plan_actions::For(tables->actions[action].name)
+	                           : nullptr;
+	if (tables == nullptr || body == nullptr)
+	{
+		return false;
+	}
+	// To impress, it looks at all the miracles that impress, not at the action's own miracle
+	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastToImpress)
+	{
+		std::array<creature_mind::ImpressiveMiracleState, creature_mind::k_ImpressMiraclesItMayKnow.size()> states {};
+		std::ranges::transform(creature_mind::k_ImpressMiraclesItMayKnow, states.begin(), [&](uint32_t type) {
+			const auto sightings = SightingsOf(mind, *tables, body->species, type);
+			return creature_mind::ImpressiveMiracleState {
+			    .known = sightings.has_value() && sightings->known,
+			    .canPay = CanPayFor(creature, static_cast<MagicType>(type)),
+			    .seen = sightings.has_value() ? sightings->seen : 0.0f,
+			    .needed = sightings.has_value() ? sightings->needed : 0.0f,
+			};
+		});
+		return creature_mind::CanCastToImpress(states);
+	}
+	// It casts water on itself only while it burns
+	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastWaterOnItself &&
+	    !(Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(creature)))
+	{
+		return false;
+	}
+	const auto magic = CastMagicOf(action);
+	if (!magic.has_value() || (powerUp && mind.developmentPhase <= k_PowerUpPhase))
 	{
 		return false;
 	}
@@ -354,13 +383,53 @@ bool CreatureMindSystem::MayCast(entt::entity creature, const CreatureMindState&
 	return CanPayFor(creature, static_cast<MagicType>(*magic));
 }
 
+std::optional<uint32_t> CreatureMindSystem::PickImpressiveMiracle(entt::entity creature)
+{
+	auto& registry = Entities();
+	const auto* tables = GetTables();
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (tables == nullptr || mind == nullptr || body == nullptr)
+	{
+		return std::nullopt;
+	}
+	std::array<bool, creature_mind::k_ImpressiveMiracles.size()> known {};
+	std::ranges::transform(creature_mind::k_ImpressiveMiracles, known.begin(), [&](uint32_t type) {
+		const auto sightings = SightingsOf(*mind, *tables, body->species, type);
+		return sightings.has_value() && sightings->known;
+	});
+	auto& castTurn = registry.Context().impressiveMiracleCastTurn;
+	const auto picked = creature_mind::PickImpressiveMiracle(known, castTurn);
+	if (!picked.has_value())
+	{
+		return std::nullopt;
+	}
+	// Record the turn: the next creature that impresses picks a miracle that no creature cast for a longer time
+	castTurn.at(*picked) = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	return creature_mind::k_ImpressiveMiracles.at(*picked);
+}
+
 std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(entt::entity creature, uint32_t action,
                                                                                std::optional<entt::entity> target)
 {
-	const auto magic = CastMagicOf(action);
 	const auto& registry = Entities();
 	const auto* body = registry.TryGet<const Creature>(creature);
-	if (!magic.has_value() || body == nullptr)
+	const auto* tables = GetTables();
+	const auto* executor = tables != nullptr && action < tables->actions.size()
+	                           ? creature_plan_actions::For(tables->actions[action].name)
+	                           : nullptr;
+	if (body == nullptr)
+	{
+		return std::nullopt;
+	}
+	// To impress, it picks the miracle as it builds the agenda, and casts none when it knows none
+	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastToImpress)
+	{
+		return creature_plan_actions::CastInfo {.magicType = PickImpressiveMiracle(creature).value_or(0),
+		                                        .height = cast_moves::k_HeightOfSizeOne * ShownSize(*body)};
+	}
+	const auto magic = CastMagicOf(action);
+	if (!magic.has_value())
 	{
 		return std::nullopt;
 	}
@@ -374,12 +443,18 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 	    .height = cast_moves::k_HeightOfSizeOne * ShownSize(*body),
 	    .targetLiving = target.has_value() && registry.Valid(*target) && Locator::creatureObjectActionSystem::has_value() &&
 	                    creature_object_actions::IsLiving(Locator::creatureObjectActionSystem::value().KindOf(*target).thing)};
+	// The creature stops its own fire from a clear area near it. The area is 1.7 times as wide as the creature is
+	// tall. Living things in the area do not block it.
+	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastWaterOnItself)
+	{
+		if (const auto at = object_measures::PositionOf(registry, creature))
+		{
+			cast.clearArea = mind_detail::ClearAreaFor(registry, creature, Flat(*at),
+			                                           creature_mind::k_WaterOnItselfClearHeights * cast.height, false);
+		}
+	}
 	// The creature casts a fireball from a clear area near it, as wide as five times its radius. Living things in the
 	// area do not block it.
-	const auto* tables = GetTables();
-	const auto* executor = tables != nullptr && action < tables->actions.size()
-	                           ? creature_plan_actions::For(tables->actions[action].name)
-	                           : nullptr;
 	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastFireball)
 	{
 		if (const auto at = object_measures::PositionOf(registry, creature))
@@ -936,7 +1011,8 @@ bool CreatureMindSystem::TellCast(entt::entity creature, MagicType type, entt::e
 		    *executor, entt::to_integral(target),
 		    object_measures::PositionOf(registry, target).has_value() ? Flat(*object_measures::PositionOf(registry, target))
 		                                                              : glm::vec2(0.0f),
-		    {}, [this](uint32_t range) { return Random(range); }, cast);
+		    creature_plan_actions::Situation {.self = entt::to_integral(creature)},
+		    [this](uint32_t range) { return Random(range); }, cast);
 		return agenda.has_value() && Replan(creature, creature_mind::Activity::Told, std::move(*agenda));
 	}
 	return false;
