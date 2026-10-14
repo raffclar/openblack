@@ -66,7 +66,7 @@ void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Command
 			FinishStep(mind);
 			return;
 		}
-		if (senses.camera->groundDistance >= k_WatchCameraOverhead && std::abs(senses.camera->turn) > k_WatchCameraTurn)
+		if (StartsWatchTurn(*senses.camera, senses.bodyBusy))
 		{
 			commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = senses.camera->point};
 		}
@@ -82,7 +82,7 @@ void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Command
 		FinishStep(mind);
 		return;
 	}
-	if (std::abs(senses.camera->turn) > k_WatchCameraTurn)
+	if (StartsWatchTurn(*senses.camera, senses.bodyBusy))
 	{
 		commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = senses.camera->point};
 	}
@@ -658,7 +658,7 @@ void WatchHand(IdleMind& mind, const Step& step, const Senses& senses, Commands&
 		return;
 	}
 	bool turning = senses.moving;
-	if (senses.hand->groundDistance >= k_WatchCameraOverhead && std::abs(senses.hand->turn) > k_WatchCameraTurn)
+	if (StartsWatchTurn(*senses.hand, senses.bodyBusy))
 	{
 		commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = senses.hand->point};
 		turning = true;
