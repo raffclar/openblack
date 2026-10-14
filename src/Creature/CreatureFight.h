@@ -164,6 +164,13 @@ enum class Button : uint8_t
 [[nodiscard]] bool ReplacesQueue(Button button);
 /// A press on the ground only directs the fight within the arena
 [[nodiscard]] bool GroundPressCounts(const Arena& arena, glm::vec2 point);
+/// The hand directs the fight of the player's creature only when all of these are true:
+/// - the creature duels,
+/// - the camera shows a fight,
+/// - the hand holds no thing and no miracle.
+[[nodiscard]] bool DirectsFight(bool playersCreatureDuels, bool cameraShowsFight, bool handEmpty);
+/// Whether a point on the land is in the arena. A double click on such a point makes the camera show the fight.
+[[nodiscard]] bool InArena(const Arena& arena, glm::vec2 point);
 /// What the hand offers over a fight: blocking over the player's own creature, attacking over its opponent, and
 /// manoeuvring anywhere else
 enum class Tip : uint8_t

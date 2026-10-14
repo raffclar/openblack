@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <optional>
+#include <utility>
 #include <vector>
 
 #include <LNDFile.h>
@@ -59,6 +61,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/ScriptControl.h"
@@ -80,6 +83,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -329,6 +333,23 @@ std::optional<glm::vec3> MarkPosition(const ecs::Registry& registry, entt::entit
 	}
 	return posed_model::PointOnSkin(registry, body, *drawn->first, drawn->second,
 	                                {.subMesh = mark.subMesh, .firstIndex = mark.firstIndex, .s = mark.s, .t = mark.t});
+}
+
+/// Whether the hand of the player holds nothing: no thing and no miracle. A hand that only starts to take a thing holds
+/// nothing yet.
+bool HandHoldsNothing(const ecs::Registry& registry)
+{
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeed().has_value())
+	{
+		return false;
+	}
+	if (!Locator::handSystem::has_value())
+	{
+		return true;
+	}
+	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto* grab = registry.Valid(hand) ? registry.TryGet<const HandGrab>(hand) : nullptr;
+	return grab == nullptr || grab->state == HandGrab::State::Empty || grab->state == HandGrab::State::Grabbing;
 }
 
 /// The creature the hand is over, as the interface picked it when the last frame was drawn
@@ -730,6 +751,7 @@ void CreatureFightSystem::Reset()
 	_markHeld = false;
 	EndView();
 	_lookSeconds = 0.0f;
+	_flightPlace.reset();
 	_fightExit = true;
 	if (Locator::particleSystem::has_value())
 	{
@@ -774,6 +796,8 @@ void CreatureFightSystem::DrawMarks(float realMs, const glm::vec3& eye)
 
 void CreatureFightSystem::UpdateView(float seconds)
 {
+	// Only this update uses the double click
+	const auto flightPlace = std::exchange(_flightPlace, std::nullopt);
 	if (!Locator::camera::has_value())
 	{
 		return;
@@ -818,6 +842,28 @@ void CreatureFightSystem::UpdateView(float seconds)
 	if (!_cameraWatches)
 	{
 		return;
+	}
+	// A double click that sends the camera into the arena of a fight shows that fight at once. Only the first arena that
+	// holds the place counts.
+	if (flightPlace.has_value())
+	{
+		std::optional<std::pair<entt::entity, entt::entity>> into;
+		fight::Arena intoArena;
+		registry.Each<const CreatureFighting>([&](entt::entity entity, const CreatureFighting& fighting) {
+			if (!into.has_value() && fighting.madeArena && fight::InArena(fighting.arena, *flightPlace))
+			{
+				into = std::pair(entity, fighting.opponent);
+				intoArena = fighting.arena;
+			}
+		});
+		if (into.has_value())
+		{
+			if (ArenaOn(registry, into->first) && ArenaOn(registry, into->second))
+			{
+				TryStartView(into->first, into->second, intoArena);
+			}
+			return;
+		}
 	}
 	// Looking at an arena with a fight on from within it for a while starts the fight view
 	const auto eye = camera.GetOrigin(Camera::Interpolation::Target);
@@ -1158,12 +1204,23 @@ std::optional<entt::entity> CreatureFightSystem::PlayersFighter() const
 	return registry.Valid(opponent) ? creature : std::nullopt;
 }
 
+bool CreatureFightSystem::DirectsFight() const
+{
+	return fight::DirectsFight(PlayersFighter().has_value(), _view.has_value(),
+	                           HandHoldsNothing(Locator::entitiesRegistry::value()));
+}
+
+void CreatureFightSystem::FlewTo(const glm::vec3& place)
+{
+	_flightPlace = glm::vec2(place.x, place.z);
+}
+
 bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, fight::Button button,
                                 uint32_t milliseconds, uint32_t turn)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto self = PlayersFighter();
-	if (!self.has_value())
+	if (!self.has_value() || !DirectsFight())
 	{
 		return false;
 	}
@@ -1249,7 +1306,7 @@ void CreatureFightSystem::Release(uint32_t milliseconds, uint32_t turn)
 std::optional<fight::Tip> CreatureFightSystem::HandTip(std::optional<entt::entity> under) const
 {
 	const auto self = PlayersFighter();
-	if (!self.has_value())
+	if (!self.has_value() || !DirectsFight())
 	{
 		return std::nullopt;
 	}

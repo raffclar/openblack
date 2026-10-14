@@ -550,6 +550,11 @@ bool DefaultWorldCameraModel::FlyTo(camera_fly::Reason reason)
 	    .normal = [&terrain](glm::vec2 point) { return terrain.GetNormalAt(point); },
 	};
 	const auto flight = camera_fly::Plan(reason, ground, *destination, _targetOrigin, _targetFocus, _lastScreenCentreHit);
+	// A double click into the arena of a fight makes the camera show the fight
+	if (reason == camera_fly::Reason::DoubleClick && Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().FlewTo(*destination);
+	}
 	_targetOrigin = flight.origin;
 	_targetFocus = flight.focus;
 	_elapsedTime = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float>(flight.startSeconds));
