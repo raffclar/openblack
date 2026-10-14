@@ -20,6 +20,7 @@
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureScriptAgendas.h"
+#include "Enums.h"
 
 using namespace openblack;
 using namespace openblack::creature_plan_actions;
@@ -222,6 +223,22 @@ constexpr std::array k_Executors {
     Executor {.action = "CastMagicWater", .build = Build::CastWaterOnItself},
     Executor {.action = "CastImpressiveSpell", .target = Target::Villager, .build = Build::CastToImpress},
     Executor {.action = "CastMagicForest", .target = Target::Villager, .build = Build::CastForest},
+    // The miracles that a creature casts for a town: food by a worship site, wood by a building site or a workshop, the
+    // shield at a built storage pit, and water on crops, trees and fields. The power-up of the water on crops casts
+    // plain water, as all the water casts do.
+    Executor {.action = "CastMagicFoodByWorshipSite", .target = Target::WorshipSite, .build = Build::CastFood},
+    Executor {.action = "CastMagicWoodByBuildingSite", .target = Target::BuildingBeingBuilt, .build = Build::CastHelpful},
+    Executor {.action = "CastMagicWoodByWorkshop",
+              .target = Target::Workshop,
+              .build = Build::CastHelpful,
+              .castMagic = static_cast<uint32_t>(MagicType::Wood)},
+    Executor {.action = "CastShieldAroundTown", .target = Target::BuiltStoragePit, .build = Build::CastShield},
+    Executor {.action = "SprinkleMagicWaterOnCrops", .target = Target::Waterable, .build = Build::CastWater},
+    Executor {.action = "SprinkleMagicWaterPU1OnCrops", .target = Target::Waterable, .build = Build::CastWater},
+    Executor {.action = "WaterTree", .target = Target::AnyTree, .build = Build::CastWater},
+    Executor {.action = "WaterField", .target = Target::DryField, .build = Build::CastWater},
+    Executor {
+        .action = "WaterTreeForTown", .target = Target::Anything, .use = Target::AnyTree, .build = Build::WaterTreeForTown},
     Executor {.action = "DeadForever", .build = Build::DeadForever},
     Executor {.action = "PointOutHighlight", .target = Target::Anything, .build = Build::PointOutHighlight},
     Executor {
@@ -275,6 +292,7 @@ bool creature_plan_actions::IsCast(const Executor& executor)
 	case Build::CastWaterOnItself:
 	case Build::CastToImpress:
 	case Build::CastForest:
+	case Build::WaterTreeForTown:
 		return true;
 	default:
 		return false;
@@ -531,6 +549,13 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::CastToImpress:
 		return creature_mind::CastToImpress(cast->magicType != 0 ? std::optional(cast->magicType) : std::nullopt, *object,
 		                                    cast->height, random);
+	case Build::WaterTreeForTown:
+		// Without a tree to use, the creature cannot water a tree for the town
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::CastWaterAt(static_cast<uint32_t>(MagicType::Water), *situation.instrument, cast->height);
 	case Build::CastForest:
 		// The creature casts the forest at the place where the thing was when it made the agenda
 		if (!cast->place.has_value())

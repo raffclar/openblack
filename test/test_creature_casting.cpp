@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <optional>
+#include <string_view>
 
 #include <gtest/gtest.h>
 
@@ -313,6 +314,69 @@ TEST(CreatureCastAgenda, AShieldForAPlanAboutNothingIdlesInstead)
 	ASSERT_EQ(shield->size(), 2u);
 	EXPECT_EQ(shield->back().kind, Step::Kind::Cast);
 	EXPECT_EQ(shield->back().cast.magicType, 19u);
+}
+
+TEST(CreatureCastAgenda, ATownGetsFoodWoodShieldsAndWaterEachAtItsOwnThings)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	using plan_actions::Build;
+	using plan_actions::Target;
+	struct Expected
+	{
+		std::string_view action;
+		Target target;
+		Build build;
+	};
+	const std::array expected {
+	    Expected {"CastMagicFoodByWorshipSite", Target::WorshipSite, Build::CastFood},
+	    Expected {"CastMagicWoodByBuildingSite", Target::BuildingBeingBuilt, Build::CastHelpful},
+	    Expected {"CastMagicWoodByWorkshop", Target::Workshop, Build::CastHelpful},
+	    Expected {"CastShieldAroundTown", Target::BuiltStoragePit, Build::CastShield},
+	    Expected {"SprinkleMagicWaterOnCrops", Target::Waterable, Build::CastWater},
+	    Expected {"SprinkleMagicWaterPU1OnCrops", Target::Waterable, Build::CastWater},
+	    Expected {"WaterTree", Target::AnyTree, Build::CastWater},
+	    Expected {"WaterField", Target::DryField, Build::CastWater},
+	    Expected {"WaterTreeForTown", Target::Anything, Build::WaterTreeForTown},
+	};
+	for (const auto& row : expected)
+	{
+		const auto* executor = plan_actions::For(row.action);
+		ASSERT_NE(executor, nullptr) << row.action;
+		EXPECT_EQ(executor->target, row.target) << row.action;
+		EXPECT_EQ(executor->build, row.build) << row.action;
+		EXPECT_TRUE(plan_actions::IsCast(*executor)) << row.action;
+	}
+	EXPECT_EQ(plan_actions::For("WaterTreeForTown")->use, Target::AnyTree);
+	// The creature table gives wood by a workshop no miracle; the agenda casts wood
+	EXPECT_EQ(plan_actions::For("CastMagicWoodByWorkshop")->castMagic, std::optional<uint32_t>(21u));
+	// The power-up of the water on crops casts plain water
+	const plan_actions::CastInfo powerUp {.magicType = 23, .height = 15.0f};
+	const auto* crops = plan_actions::For("SprinkleMagicWaterPU1OnCrops");
+	const auto sprinkled = plan_actions::Agenda(*crops, 7u, {}, {}, Always(0), powerUp);
+	ASSERT_TRUE(sprinkled.has_value());
+	EXPECT_EQ(sprinkled->back().cast.magicType, 22u);
+	EXPECT_EQ(sprinkled->back().sequence, k_ScatterPose);
+}
+
+TEST(CreatureCastAgenda, ForATownItWatersTheTreeItUsesOrFailsWithoutOne)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	const auto* executor = plan_actions::For("WaterTreeForTown");
+	ASSERT_NE(executor, nullptr);
+	const plan_actions::CastInfo cast {.magicType = 22, .height = 15.0f};
+	plan_actions::Situation situation;
+	EXPECT_FALSE(plan_actions::Agenda(*executor, 5u, {}, situation, Always(0), cast).has_value());
+	situation.instrument = 9u;
+	const auto agenda = plan_actions::Agenda(*executor, 5u, {}, situation, Always(0), cast);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 3u);
+	EXPECT_EQ(agenda->at(0).movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_EQ(*agenda->at(0).movement.object, 9u);
+	EXPECT_FLOAT_EQ(agenda->at(0).movement.maxDistance, 30.0f);
+	EXPECT_EQ(*agenda->at(1).movement.object, 9u);
+	EXPECT_EQ(*agenda->at(2).cast.object, 9u);
+	EXPECT_EQ(agenda->at(2).cast.magicType, 22u);
+	EXPECT_FLOAT_EQ(agenda->at(2).seconds, 3.0f);
 }
 
 TEST(CreatureCastAgenda, WaterIsScatteredFromTwiceItsHeight)

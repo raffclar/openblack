@@ -428,7 +428,11 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 		return creature_plan_actions::CastInfo {.magicType = PickImpressiveMiracle(creature).value_or(0),
 		                                        .height = cast_moves::k_HeightOfSizeOne * ShownSize(*body)};
 	}
-	const auto magic = CastMagicOf(action);
+	auto magic = CastMagicOf(action);
+	if (!magic.has_value() && executor != nullptr)
+	{
+		magic = executor->castMagic;
+	}
 	if (!magic.has_value())
 	{
 		return std::nullopt;
