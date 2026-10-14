@@ -457,7 +457,7 @@ void AddNeeds(std::vector<Scenario>& all)
 	                "food, as in the game, so it brings the wheat back up and is not hungry for a while. The field's crop "
 	                "stays as it was.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 50.0f}}},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -50.0f}, {15.0f, 10.0f}}},
 	    .creatures = {CreatureSetup {
 	        .species = CreatureType::Tiger,
 	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
@@ -476,7 +476,7 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .expected = "It walks to the pit's food pile, faces it, takes a handful of wheat from it and eats it. The pit's "
 	                "food falls by the handful (1300, a thousand for each unit of the tiger's size), and its hunger falls.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 60.0f}}},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -65.0f}, {20.0f, 10.0f}}},
 	    .creatures = {CreatureSetup {
 	        .species = CreatureType::Tiger,
 	        .size = 1.3f,
@@ -495,7 +495,7 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .expected = "It walks to the oak, faces it, takes a handful of fruit from it and eats it. The handful holds no "
 	                "food, as in the game, so it brings the fruit back up. The tree stays as it was.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 40.0f}}},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -40.0f}, {15.0f, 10.0f}}},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "EatFromTree"}},
