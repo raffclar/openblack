@@ -72,8 +72,12 @@ namespace openblack::ecs::systems::mind_detail
                              const glm::vec3& place, float distanceWeight);
 /// The town nearest a point along the ground, of any player or none; none when there is no town
 [[nodiscard]] entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point);
-/// Whether a creature can be angry with a different creature. The other creature must not be dead. Its species must
-/// let creatures attack it.
+/// Whether a creature lies dead: knocked out, or with a plan that has the action of dying or of lying dead for good
+[[nodiscard]] bool IsDead(const ecs::Registry& registry, entt::entity creature, const creature_mind_tables::Tables& tables);
+/// Whether a script made two creatures friends
+[[nodiscard]] bool AreFriends(const ecs::Registry& registry, entt::entity first, entt::entity second);
+/// Whether a creature can be angry with a different creature. The other creature must not be dead or a friend. Its
+/// species must let creatures attack it.
 [[nodiscard]] bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
                                   const creature_mind_tables::Tables& tables);
 /// How often a creature has seen a miracle cast, and how often it must see it to learn it; none for a miracle it can't

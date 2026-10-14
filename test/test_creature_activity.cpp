@@ -9,6 +9,7 @@
 
 #include <array>
 #include <optional>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -216,4 +217,21 @@ TEST(CreatureActivity, OnlyAngerCountsThePartItActsOn)
 	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::Anger, 0.4f), 0.4f);
 	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::Impress, 0.4f), creature_planner::k_DefaultUsefulness);
 	EXPECT_FLOAT_EQ(ActedOnUsefulness(Desire::BeFriends, 0.4f), creature_planner::k_DefaultUsefulness);
+}
+
+// "CREATURE_FORCE_FRIENDS true Gremlin Ogre": each creature goes in the list of the other, once
+TEST(CreatureActivity, AScriptMakesTwoCreaturesFriendsBothWays)
+{
+	std::vector<uint32_t> ofGremlin;
+	std::vector<uint32_t> ofOgre;
+	EXPECT_FALSE(creature_activity::AreFriends(ofGremlin, 3, ofOgre, 7));
+	creature_activity::MakeFriends(ofGremlin, 3, ofOgre, 7);
+	creature_activity::MakeFriends(ofOgre, 7, ofGremlin, 3);
+	EXPECT_EQ(ofGremlin, std::vector<uint32_t> {7});
+	EXPECT_EQ(ofOgre, std::vector<uint32_t> {3});
+	EXPECT_TRUE(creature_activity::AreFriends(ofGremlin, 3, ofOgre, 7));
+	EXPECT_TRUE(creature_activity::AreFriends(ofOgre, 7, ofGremlin, 3));
+	// Either list is enough
+	EXPECT_TRUE(creature_activity::AreFriends({}, 3, ofOgre, 7));
+	EXPECT_FALSE(creature_activity::AreFriends(ofGremlin, 3, {}, 9));
 }

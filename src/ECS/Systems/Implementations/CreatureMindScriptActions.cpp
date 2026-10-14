@@ -16,6 +16,7 @@
 
 #include "Creature/CreatureMindTables.h"
 #include "CreatureMindSystem.h"
+#include "CreatureMindSystemDetail.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/ScriptControl.h"
@@ -33,26 +34,8 @@ using creature_desires::Desire;
 namespace
 {
 constexpr std::string_view k_FightAction = "Fight";
-/// Lying dead, for now or for good, a creature fights nobody
-constexpr std::string_view k_DieAction = "Die";
+/// The action of lying dead for good
 constexpr std::string_view k_DeadForeverAction = "DeadForever";
-
-/// Whether a creature is lying dead: knocked out, or doing one of the actions of lying dead
-bool LyingDead(const ecs::Registry& registry, entt::entity creature, const creature_mind_tables::Tables& tables)
-{
-	if (registry.AllOf<CreatureKnockedOut>(creature))
-	{
-		return true;
-	}
-	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-	if (mind == nullptr || !mind->planActive || !mind->planner.current.has_value() ||
-	    mind->planner.current->action >= tables.actions.size())
-	{
-		return false;
-	}
-	const auto& name = tables.actions[mind->planner.current->action].name;
-	return name == k_DieAction || name == k_DeadForeverAction;
-}
 } // namespace
 
 bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target,
@@ -99,7 +82,7 @@ bool CreatureMindSystem::IsLyingDead(entt::entity creature)
 {
 	const auto* tables = GetTables();
 	const auto& registry = Locator::entitiesRegistry::value();
-	return tables != nullptr && registry.Valid(creature) && LyingDead(registry, creature, *tables);
+	return tables != nullptr && registry.Valid(creature) && mind_detail::IsDead(registry, creature, *tables);
 }
 
 bool CreatureMindSystem::FightForScript(entt::entity creature, entt::entity opponent)

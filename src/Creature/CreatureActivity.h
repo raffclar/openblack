@@ -14,6 +14,7 @@
 
 #include <optional>
 #include <span>
+#include <vector>
 
 #include "Creature/CreatureDesires.h"
 
@@ -138,6 +139,14 @@ constexpr float k_TallestThingNotToPooOn = 1.5f;
 /// - Get high: a magic mushroom.
 /// - All other desires: any thing.
 [[nodiscard]] bool ThingSuits(creature_desires::Desire desire, const ThingFacts& thing);
+
+/// A script makes two creatures friends: each creature goes in the list of friends of the other, once. Creatures are
+/// given by their entity numbers.
+void MakeFriends(std::vector<uint32_t>& friendsOfFirst, uint32_t first, std::vector<uint32_t>& friendsOfSecond,
+                 uint32_t second);
+/// Two creatures are friends when either one is in the list of friends of the other
+[[nodiscard]] bool AreFriends(std::span<const uint32_t> friendsOfFirst, uint32_t first,
+                              std::span<const uint32_t> friendsOfSecond, uint32_t second);
 
 /// The first of the values that is the most and more than nothing, none when no value is more than nothing
 [[nodiscard]] std::optional<size_t> MostUseful(std::span<const float> usefulness);

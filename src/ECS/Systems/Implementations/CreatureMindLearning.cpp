@@ -1562,6 +1562,11 @@ float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const Creatu
 			return 0.0f;
 		}
 	}
+	// A creature is never angry with a friend
+	if (desire == Desire::Anger && registry.AllOf<Creature>(object) && mind_detail::AreFriends(registry, object, creature))
+	{
+		return 0.0f;
+	}
 	return ObjectUsefulness(registry, *mind.learnt, mind, desire, object, creature);
 }
 
@@ -1910,7 +1915,7 @@ creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity
 /// What a creature knows about a thing when it examines a desire for it. Only the facts that the desire uses cost time
 /// to find: the height for poo, and the pick-up rule for bringing stuff home.
 creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::entity creature, Desire desire,
-                                           entt::entity thing)
+                                           entt::entity thing, const creature_mind_tables::Tables* tables)
 {
 	using creature_activity::Thing;
 	const auto kind = KindOfThing(registry, thing);
@@ -1935,8 +1940,11 @@ creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::
 		facts.dead = animal->Dead();
 		facts.frightening = Frightens(animal->type);
 	}
-	// TODO(creature-desire-thing-tests): a creature also dies, and a script can make two creatures friends. A creature
-	// does not attack a dead creature or a friend. These states do not exist here yet.
+	else if (registry.AllOf<Creature>(thing))
+	{
+		facts.dead = tables != nullptr && mind_detail::IsDead(registry, thing, *tables);
+		facts.friendOfCreature = mind_detail::AreFriends(registry, thing, creature);
+	}
 	const auto* feature = registry.TryGet<const Feature>(thing);
 	const auto* mobile = registry.TryGet<const MobileObject>(thing);
 	facts.mushroom =
@@ -2044,7 +2052,7 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 		{
 			return;
 		}
-		if (creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing)))
+		if (creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing, GetTables())))
 		{
 			parts.push_back(GoalWorth(creature, mind, desire, thing, activity));
 		}
@@ -2079,7 +2087,7 @@ bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& m
 			}
 		}
 	}
-	return creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing));
+	return creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing, GetTables()));
 }
 
 std::vector<creature_planner::ObjectCandidate>

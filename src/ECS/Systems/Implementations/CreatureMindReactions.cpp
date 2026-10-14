@@ -22,6 +22,7 @@
 
 #include "3D/CreatureBody.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindModel.h"
@@ -33,6 +34,8 @@
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Transform.h"
@@ -201,9 +204,16 @@ namespace
 constexpr std::string_view k_DieAction = "Die";
 constexpr std::string_view k_DeadForeverAction = "DeadForever";
 
-/// Whether a creature is dead. A dead creature has a plan with one of these actions.
-bool IsDead(const ecs::Registry& registry, entt::entity creature, const creature_mind_tables::Tables& tables)
+} // namespace
+
+bool ecs::systems::mind_detail::IsDead(const ecs::Registry& registry, entt::entity creature,
+                                       const creature_mind_tables::Tables& tables)
 {
+	// A creature knocked out lies dead until it gets up at home
+	if (registry.AllOf<CreatureKnockedOut>(creature))
+	{
+		return true;
+	}
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
 	if (mind == nullptr || !mind->planActive || !mind->planner.current.has_value() ||
 	    mind->planner.current->action >= tables.actions.size())
@@ -214,15 +224,22 @@ bool IsDead(const ecs::Registry& registry, entt::entity creature, const creature
 	return name == k_DieAction || name == k_DeadForeverAction;
 }
 
-} // namespace
+bool ecs::systems::mind_detail::AreFriends(const ecs::Registry& registry, entt::entity first, entt::entity second)
+{
+	const auto friendsOf = [&registry](entt::entity creature) {
+		const auto* friends = registry.TryGet<const CreatureFriends>(creature);
+		return friends != nullptr ? std::span<const uint32_t>(friends->friends) : std::span<const uint32_t>();
+	};
+	return creature_activity::AreFriends(friendsOf(first), entt::to_integral(first), friendsOf(second),
+	                                     entt::to_integral(second));
+}
 
-// TODO(usefulness-use-tree): The game also refuses anger when one creature is in a list of the other creature.
-// It has two of these lists. One list contains the creatures that copy the action of the creature. These lists do not
-// exist in openblack.
 bool ecs::systems::mind_detail::MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
                                                const creature_mind_tables::Tables& tables)
 {
-	if (other == creature || IsDead(registry, other, tables) || !Locator::infoConstants::has_value())
+	// A creature is never angry with a friend
+	if (other == creature || AreFriends(registry, other, creature) || IsDead(registry, other, tables) ||
+	    !Locator::infoConstants::has_value())
 	{
 		return false;
 	}
