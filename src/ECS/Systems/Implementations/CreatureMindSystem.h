@@ -185,8 +185,8 @@ private:
 	/// Find the desires of a creature and of the creature that it watches. The creature can stop the watch and act on
 	/// a desire. Return true if it did.
 	bool WeighWatchedCreature(entt::entity creature, components::CreatureMindState& mind, entt::entity other);
-	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
-	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
+	/// A creature puts the water of five buckets on a thing (CreatureMindFire.cpp). Return true if the thing is not on
+	/// fire after this. Only the plain "put out fire" action has this step. The water miracle at a fire does not have it.
 	bool Douse(entt::entity creature, entt::entity object);
 	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
 	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else

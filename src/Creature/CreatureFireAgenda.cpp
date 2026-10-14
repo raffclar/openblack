@@ -17,11 +17,7 @@ using namespace openblack::creature_mind;
 
 std::vector<Step> creature_mind::PutOutFireWithWater(uint32_t object, float height)
 {
-	auto agenda = CastWaterAt(static_cast<uint32_t>(MagicType::Water), object, height);
-	Step douse {.kind = Step::Kind::Douse};
-	douse.object = object;
-	agenda.push_back(douse);
-	return agenda;
+	return CastWaterAt(static_cast<uint32_t>(MagicType::Water), object, height);
 }
 
 std::optional<std::vector<Step>> creature_mind::SetFireTo(uint32_t object, std::optional<uint32_t> instrument, bool handFull)
