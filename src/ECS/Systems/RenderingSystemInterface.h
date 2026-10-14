@@ -94,6 +94,8 @@ struct RenderContext
 		std::vector<std::pair<uint32_t, graphics::TextureHandle>> subMeshTextures;
 		/// Colours added to some of the submeshes, by submesh: the temple's controls glowing under the cursor
 		std::vector<std::pair<uint32_t, glm::vec3>> subMeshGlows;
+		/// Movements of some of the submeshes in the mesh, by submesh: the temple's held buttons
+		std::vector<std::pair<uint32_t, glm::vec3>> subMeshOffsets;
 		/// Submeshes left undrawn: the temple's buttons draw one of each of their pairs
 		std::vector<uint32_t> hiddenSubMeshes;
 	};

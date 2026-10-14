@@ -16,6 +16,8 @@
 #include <string>
 #include <string_view>
 
+#include <glm/vec3.hpp>
+
 /// The rules of the temple's challenge room: its wall of 21 framed pictures, one for each challenge the player has
 /// started in the order they started, each with a button to replay its reminder while the challenge isn't done
 namespace openblack::temple::challenge_room
@@ -51,6 +53,14 @@ struct Control
 
 /// The part a submesh of the room's mesh is, by its name ("LH_Picture_Challenge_01" is the first picture), if any
 [[nodiscard]] std::optional<Control> ParseControl(std::string_view subMeshName);
+
+/// When the player pushes a replay button, the button moves back by this distance along the z axis of its frame. The
+/// distance is in the units of the frame.
+inline constexpr float k_ButtonPushIn = 0.3f;
+
+/// The distance and direction that a part moves in the mesh while the player holds the mouse button on it. A replay
+/// button moves into the wall. Other parts do not move. frameZ is the z axis of the frame of the part, in the mesh.
+[[nodiscard]] glm::vec3 HeldOffset(Part part, glm::vec3 frameZ);
 
 /// What the room shows of a challenge
 struct Challenge

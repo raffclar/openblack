@@ -65,6 +65,7 @@ public:
 	[[nodiscard]] std::vector<uint32_t> GetHiddenSubMeshes(TempleRoom room) const override;
 	[[nodiscard]] const std::vector<OrientedTextVertex>& GetText() const override { return _text; }
 	[[nodiscard]] std::vector<TempleSubMeshGlow> GetControlGlows(TempleRoom room) const override;
+	[[nodiscard]] std::vector<TempleSubMeshOffset> GetControlOffsets(TempleRoom room) const override;
 	[[nodiscard]] const graphics::Texture2D* GetTextTexture() const override;
 	[[nodiscard]] const std::vector<OrientedTextVertex>& GetMap() const override { return _mapTriangles; }
 	[[nodiscard]] uint32_t GetVisits() const override { return _visits; }

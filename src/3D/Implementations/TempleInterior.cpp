@@ -455,6 +455,15 @@ std::vector<TempleSubMeshGlow> TempleInterior::GetControlGlows(TempleRoom room) 
 	return {{_hovered->second, glm::vec3(channel(12.0f), channel(12.0f), channel(20.0f))}};
 }
 
+std::vector<TempleSubMeshOffset> TempleInterior::GetControlOffsets(TempleRoom room) const
+{
+	if (room == TempleRoom::Challenge && _challengeRoom != nullptr)
+	{
+		return _challengeRoom->GetOffsets();
+	}
+	return {};
+}
+
 const graphics::Texture2D* TempleInterior::GetTextTexture() const
 {
 	return _interface != nullptr ? &_interface->GetFontTexture() : nullptr;

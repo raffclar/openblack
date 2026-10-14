@@ -124,3 +124,16 @@ TEST(ChallengeRoom, ToolTips)
 	openblack::UpdateTempleToolTip(toolTip, input);
 	EXPECT_EQ(toolTip.index, 0xE9F - 0xE73);
 }
+
+TEST(ChallengeRoom, AHeldReplayButtonMovesIntoTheWall)
+{
+	// The button moves 0.3 back along the z axis of its frame, in the units of the frame
+	const glm::vec3 frameZ {-0.005f, 0.352f, -0.503f};
+	const auto offset = rules::HeldOffset(Part::ReplayButton, frameZ);
+	EXPECT_FLOAT_EQ(offset.x, 0.0015f);
+	EXPECT_FLOAT_EQ(offset.y, -0.1056f);
+	EXPECT_FLOAT_EQ(offset.z, 0.1509f);
+	// The pictures and frames do not move
+	EXPECT_EQ(rules::HeldOffset(Part::Picture, frameZ), glm::vec3(0.0f));
+	EXPECT_EQ(rules::HeldOffset(Part::SilverFrame, frameZ), glm::vec3(0.0f));
+}
