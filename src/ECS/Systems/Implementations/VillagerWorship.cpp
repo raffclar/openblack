@@ -54,6 +54,7 @@
 #include "VillagerFood.h"
 #include "VillagerFootpath.h"
 #include "VillagerHome.h"
+#include "VillagerReactions.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -303,13 +304,14 @@ void LeaveTheWay(entt::entity villager)
 	TidyWorshipper(villager);
 }
 
-/// Whether a villager is free to be sent to worship: not held by a script, in a state it may be taken from, and not a
-/// disciple unless disciples may go, and not already worshipping or on its way
+/// Whether a villager is free to be sent to worship: not held by a script or by the hand, in a state it may be taken from, and
+/// not a disciple unless disciples may go, and not already worshipping or on its way
 bool IsAvailableForWorshipSite(entt::entity villager, bool disciplesToo)
 {
 	auto& registry = Entities();
 	auto* action = registry.TryGet<LivingAction>(villager);
-	if (action == nullptr || registry.AllOf<ScriptControlled>(villager))
+	if (action == nullptr || registry.AllOf<ScriptControlled>(villager) ||
+	    !systems::villager_reactions::AvailableForStateChange(villager))
 	{
 		return false;
 	}
