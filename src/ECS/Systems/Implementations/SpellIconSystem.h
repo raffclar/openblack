@@ -30,6 +30,7 @@ class SpellIconSystem final: public SpellIconSystemInterface
 {
 public:
 	bool TownHolds(entt::entity town, MagicType type) override;
+	bool TownReleases(entt::entity town, MagicType type) override;
 	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity town) const override;
 	void CentreWorking(entt::entity centre) override;
 	void TownChangedHands(entt::entity town, PlayerNames previous) override;
@@ -52,10 +53,18 @@ private:
 	[[nodiscard]] std::optional<magic::spell_icons::SeedLevel> SeedLevelOf(MagicType type) const;
 	/// The town's working village centre, none without one
 	[[nodiscard]] entt::entity WorkingCentreOf(entt::entity town) const;
-	/// A centre's hand shows a seed, if it has a free place and none shows it yet
+	/// A centre's hand shows a seed, if it has a free place and none shows it yet. The town's worship site then gets an
+	/// icon of the seed if it has none.
 	void AddHand(entt::entity centre, entt::entity town, SpellSeedType seed);
-	/// The hand showing a seed shows a power-up level of it too
-	void AddPowerUp(entt::entity centre, SpellSeedType seed, int powerUp);
+	/// The hand showing a seed shows a power-up level of it too, or stops
+	void SetPowerUp(entt::entity centre, SpellSeedType seed, int powerUp, bool shown);
+	/// Every hand of a centre that shows a seed goes. The site's icon of the seed goes too, unless another of the site's
+	/// towns offers the seed.
+	void RemoveHands(entt::entity centre, entt::entity town, SpellSeedType seed);
+	/// A site gets an icon of a seed, if it has none
+	void AddSiteIcon(entt::entity site, SpellSeedType seed);
+	/// The seed above a site's icon shows the highest power-up level of it that the site's player may cast
+	void ShowPlayersPowerUp(entt::entity icon) const;
 	/// The seeds a town's centre's hands show
 	[[nodiscard]] std::vector<SpellSeedType> SeedsOfTown(entt::entity town) const;
 	/// A site's icon of a seed, none if it has none

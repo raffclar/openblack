@@ -33,6 +33,10 @@ public:
 	/// A land's script, or a reward, gives a town a magic type: its player may cast it, and its centre shows it. Whether
 	/// the town didn't hold it before.
 	virtual bool TownHolds(entt::entity town, MagicType type) = 0;
+	/// A script takes a magic type from a town: its player may cast it once fewer, and its centre stops showing it. Taking
+	/// the plain miracle removes its hand, and the site's icon of it unless another of the site's towns offers it. Its
+	/// power-up levels stay held. Whether the town held it.
+	virtual bool TownReleases(entt::entity town, MagicType type) = 0;
 	/// How many miracles a town's village centre shows on its hands; none when the town has no working centre
 	[[nodiscard]] virtual std::optional<size_t> CentreMiraclesShown(entt::entity town) const = 0;
 	/// A town's village centre stands working: its hands show what the town offers
