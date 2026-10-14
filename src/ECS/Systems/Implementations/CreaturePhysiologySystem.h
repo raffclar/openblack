@@ -27,7 +27,7 @@ public:
 	void ProcessTurn() override;
 	void Update(float seconds) override;
 
-	void Eat(entt::entity creature, float foodValue) override;
+	[[nodiscard]] float Eat(entt::entity creature, float foodValue) override;
 	void Drink(entt::entity creature) override;
 	void EmptyBowels(entt::entity creature) override;
 	void SitTurn(entt::entity creature) override;

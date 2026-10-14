@@ -47,6 +47,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
+#include "Creature/CreatureMeals.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
@@ -1080,8 +1081,10 @@ void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::s
 	BodyPaysFor(creature, action);
 }
 
-/// What a step did to the body
-void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, creature_desires::Desires& desires)
+/// What a step did to the body. A meal of a plan decreases the desire of the plan only when the plan ends, as all
+/// actions of plans do.
+void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, creature_desires::Desires& desires,
+                bool planned)
 {
 	using creature_mind::Effect;
 	if (commands.effect == Effect::None || !Locator::creaturePhysiologySystem::has_value())
@@ -1092,8 +1095,12 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	switch (commands.effect)
 	{
 	case Effect::Eat:
-		// It took its nourishment as it ate what it held
-		Satisfied(creature, desires, k_EatAction);
+		// The meal decreases the hunger when the creature swallows it. A meal from no plan also decreases the desire by
+		// the value in the action table.
+		if (!planned)
+		{
+			Satisfied(creature, desires, k_EatAction);
+		}
 		break;
 	case Effect::Examined:
 		Satisfied(creature, desires, k_ExamineAction);
@@ -1205,14 +1212,22 @@ std::optional<entt::entity> FoodFromTheSea(ecs::Registry& registry, entt::entity
 	return food;
 }
 
-/// The food a creature takes from a pile: a handful at its feet of a thousand for each unit of its size, no more than the
-/// pile holds, drawn three and three quarter times the creature's size, belonging to the nearest town. None from a pile
-/// with no food.
-// TODO(creature-actions-3): the game puts the handful a little short of the creature's reach towards the pile, by a
-// measure of its body not ported yet; here it appears at its feet, as fished food does
-std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity creature, entt::entity pile)
+/// The resource a pot of a kind holds, by the game's pot table
+ResourceType ResourceTypeOf(PotInfo kind)
 {
-	constexpr float k_FoodPerSize = 1000.0f;
+	const auto row = static_cast<size_t>(kind);
+	return Locator::infoConstants::has_value() && row < Locator::infoConstants::value().pot.size()
+	           ? Locator::infoConstants::value().pot.at(row).resourceType
+	           : ResourceType::Food;
+}
+
+/// The food that a creature takes from a thing (a pile, the food pile of a storage pit, a field or a tree). It is a
+/// handful of wheat or fruit, of 1000 for each unit of the size of the creature, but not more than the store of food of
+/// the thing. Its scale is 3.75 times the size of the creature, and it belongs to the nearest town. A field and a tree
+/// have no store of food, thus their handful holds no food.
+std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity creature, entt::entity pile,
+                                         creature_mind::ObjectOrder::Handful handful)
+{
 	constexpr float k_ScalePerSize = 3.75f;
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	if (transform == nullptr || !registry.Valid(pile) || !Locator::resourceStoreSystem::has_value())
@@ -1221,8 +1236,9 @@ std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity c
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const float size = body != nullptr ? body->size : 1.0f;
-	const auto held = Locator::resourceStoreSystem::value().GetResource(pile, ResourceType::Food);
-	const auto amount = std::min(static_cast<uint32_t>(size * k_FoodPerSize), held);
+	const auto kind = handful == creature_mind::ObjectOrder::Handful::Fruit ? PotInfo::TreeFruitInHand : PotInfo::WheatInHand;
+	const auto held = Locator::resourceStoreSystem::value().GetResource(pile, ResourceTypeOf(kind));
+	const auto amount = creature_meals::HandfulAmount(size, held);
 	// The handful appears on the ground beside the creature, most of its reach towards the pile, at the creature's own
 	// height
 	glm::vec3 at = transform->position;
@@ -1236,12 +1252,15 @@ std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity c
 		                                                {pileTransform->position.x, pileTransform->position.z}, *reach);
 		at = {point.x, transform->position.y, point.y};
 	}
-	const auto food = ecs::archetypes::PotArchetype::Create(at, 0.0f, PotInfo::WheatInHand, static_cast<int32_t>(amount),
-	                                                        NearestTown(registry, transform->position));
+	// Make the handful also when it holds no food, as from a field or a tree
+	const auto food = ecs::archetypes::PotArchetype::CreateEmpty(at, 0.0f, kind);
 	if (food == entt::null)
 	{
 		return std::nullopt;
 	}
+	auto& pot = registry.Get<Pot>(food);
+	pot.amount = amount;
+	pot.town = NearestTown(registry, transform->position);
 	if (auto* foodTransform = registry.TryGet<Transform>(food))
 	{
 		foodTransform->scale = glm::vec3(size * k_ScalePerSize);
@@ -1362,7 +1381,8 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		break;
 	}
 	case Kind::TakeFromPile:
-		if (const auto food = object.has_value() ? FoodFromPile(registry, creature, *object) : std::nullopt; food.has_value())
+		if (const auto food = object.has_value() ? FoodFromPile(registry, creature, *object, order.handful) : std::nullopt;
+		    food.has_value())
 		{
 			if (auto* mind = registry.TryGet<CreatureMindState>(creature))
 			{
@@ -1389,13 +1409,14 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 	}
 }
 
-/// The pile a creature took food from gives up as much as the food it picked up holds
+/// Remove the food of the handful from the pile that the creature took it from. Only a pile loses food: a field or a
+/// tree loses nothing.
 void GiveUpTakenFood(ecs::Registry& registry, CreatureMindState& mind)
 {
 	const auto food = std::exchange(mind.takenFood, entt::null);
 	const auto pile = std::exchange(mind.takenFrom, entt::null);
 	const auto* pot = registry.Valid(food) ? registry.TryGet<const Pot>(food) : nullptr;
-	if (pot == nullptr || !registry.Valid(pile) || !Locator::resourceStoreSystem::has_value())
+	if (pot == nullptr || !registry.Valid(pile) || !registry.AllOf<Pot>(pile) || !Locator::resourceStoreSystem::has_value())
 	{
 		return;
 	}
@@ -1769,7 +1790,12 @@ void CreatureMindSystem::ProcessTurn()
 				    mind.desireSeenTo = true;
 			    }
 		    }
-		    TakeEffect(entity, commands, *mind.desires);
+		    TakeEffect(entity, commands, *mind.desires, mind.planActive);
+		    // After this step, the plan acts on the creature, not on the thing that it chose
+		    if (commands.actOnItself && mind.planner.current.has_value())
+		    {
+			    mind.planner.current->object = entt::to_integral(entity);
+		    }
 		    // Once it has picked up the food it took from a pile, the pile gives that much up
 		    if (commands.effect == creature_mind::Effect::TookFromPile)
 		    {
@@ -1799,9 +1825,10 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    CountCompleted(entity, mind, commands, GetTables());
 		    // Taking in what a thing is does nothing for the desire the plan serves
+		    const bool plannedMeal = commands.effect == creature_mind::Effect::Eat && mind.planActive;
 		    if (commands.effect != creature_mind::Effect::None && commands.effect != creature_mind::Effect::Observed &&
 		        commands.effect != creature_mind::Effect::Inspected && commands.effect != creature_mind::Effect::TookFromPile &&
-		        commands.effect != creature_mind::Effect::TookFromHand)
+		        commands.effect != creature_mind::Effect::TookFromHand && !plannedMeal)
 		    {
 			    mind.satisfiedByEffect = true;
 		    }

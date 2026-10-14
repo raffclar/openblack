@@ -141,6 +141,52 @@ std::vector<Step> creature_mind::EatFromPile(uint32_t pile, glm::vec2 pilePoint,
 	};
 }
 
+namespace
+{
+/// The two steps that take a handful from a thing and eat it
+std::array<Step, 2> TakeHandfulAndEat(uint32_t thing, ObjectOrder::Handful handful)
+{
+	return {
+	    Step {.kind = Step::Kind::Object,
+	          .effect = Effect::TookFromPile,
+	          .order = {.kind = ObjectOrder::Kind::TakeFromPile, .handful = handful, .object = thing}},
+	    Step {.kind = Step::Kind::Object, .effect = Effect::Eat, .order = {.kind = ObjectOrder::Kind::Eat}},
+	};
+}
+
+/// The two steps that walk to the point of a thing, then turn the creature to the thing for a tenth of a second
+std::vector<Step> GoToFace(uint32_t thing, glm::vec2 point, float within)
+{
+	return {
+	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::ToPoint, .point = point, .maxDistance = within}},
+	    FaceThing(thing, k_FacePileSeconds),
+	};
+}
+} // namespace
+
+std::vector<Step> creature_mind::EatFromStoragePit(uint32_t pile, glm::vec2 pilePoint, float height)
+{
+	auto agenda = GoToFace(pile, pilePoint, height * k_EatFromStoragePitHeights);
+	agenda.push_back({.kind = Step::Kind::ActOnItself});
+	std::ranges::copy(TakeHandfulAndEat(pile, ObjectOrder::Handful::Wheat), std::back_inserter(agenda));
+	return agenda;
+}
+
+std::vector<Step> creature_mind::EatFromField(uint32_t field, glm::vec2 fieldPoint, float height)
+{
+	auto agenda = GoToFace(field, fieldPoint, height);
+	agenda.push_back({.kind = Step::Kind::ActOnItself});
+	std::ranges::copy(TakeHandfulAndEat(field, ObjectOrder::Handful::Wheat), std::back_inserter(agenda));
+	return agenda;
+}
+
+std::vector<Step> creature_mind::EatFromTree(uint32_t tree, glm::vec2 treePoint, float treeRadius, float radius)
+{
+	auto agenda = GoToFace(tree, treePoint, (treeRadius + radius) * k_EatFromPileReach);
+	std::ranges::copy(TakeHandfulAndEat(tree, ObjectOrder::Handful::Fruit), std::back_inserter(agenda));
+	return agenda;
+}
+
 std::vector<Step> creature_mind::ExamineByLooking(uint32_t thing, float height, float thingHeight)
 {
 	return {

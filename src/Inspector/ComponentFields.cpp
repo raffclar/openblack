@@ -48,6 +48,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMarks.h"
+#include "Creature/CreatureMeals.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObjectBeliefs.h"
@@ -107,6 +108,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/CreatureSquat.h"
 #include "ECS/Components/CreatureSwap.h"
+#include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
@@ -897,6 +899,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSwap::other>("other")
 	    .Field<&components::CreatureSwap::target>("target")
 	    .Field<&components::CreatureSwap::beam>("beam");
+	Reflect<components::CreatureTallies>(context).Field<&components::CreatureTallies::meals>("meals");
 	Reflect<components::DanceMove>(context)
 	    .Field<&components::DanceMove::action>("action")
 	    .Field<&components::DanceMove::first>("first")
@@ -2327,6 +2330,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_marks::Marks::wounds>("wounds")
 	    .Field<&openblack::creature_marks::Marks::blood>("blood")
 	    .Field<&openblack::creature_marks::Marks::counts>("counts");
+	Reflect<openblack::creature_meals::Tallies>(context, ValueOnly {})
+	    .Field<&openblack::creature_meals::Tallies::peopleKilled>("peopleKilled")
+	    .Field<&openblack::creature_meals::Tallies::animalsKilled>("animalsKilled")
+	    .Field<&openblack::creature_meals::Tallies::creaturesKilled>("creaturesKilled")
+	    .Field<&openblack::creature_meals::Tallies::keptDown>("keptDown");
 	Reflect<openblack::creature_mind::CastOrder>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::CastOrder::magicType>("magicType")
 	    .Field<&openblack::creature_mind::CastOrder::object>("object")
@@ -2381,6 +2389,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Movement::giveUpIfUnreachable>("giveUpIfUnreachable");
 	Reflect<openblack::creature_mind::ObjectOrder>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::ObjectOrder::kind>("kind")
+	    .Field<&openblack::creature_mind::ObjectOrder::handful>("handful")
 	    .Field<&openblack::creature_mind::ObjectOrder::object>("object")
 	    .Field<&openblack::creature_mind::ObjectOrder::point>("point")
 	    .Field<&openblack::creature_mind::ObjectOrder::animation>("animation")

@@ -154,15 +154,23 @@ struct ObjectOrder
 		/// Throwing what it holds into a store at the store's own place, taking as long to fly there as it would take to
 		/// fall the distance along the ground
 		ThrowInStore,
-		/// Taking food from a pile: a handful sized to the creature, no more than the pile holds, appears at its feet and
-		/// it picks it up
+		/// The creature takes a handful of food from a thing: a pile of food, the food pile of a store, a field or a
+		/// tree. The size of the handful follows the size of the creature. The handful holds no more food than the store
+		/// of food of the thing. The handful appears near the creature, and the creature lifts it.
 		TakeFromPile,
 		/// Reaching out to take what the player's hand gives it, with its left hand when mirrored
 		TakeFromHand,
 		/// Kicking the object, which flies off ahead of it
 		Kick,
 	};
+	/// The look of a handful from a thing: wheat, or fruit from a tree
+	enum class Handful : uint8_t
+	{
+		Wheat,
+		Fruit,
+	};
 	Kind kind {Kind::PickUp};
+	Handful handful {Handful::Wheat};
 	/// What it acts on, by its entity's number. Pointing at an object, it points at wherever the object is, turn by
 	/// turn.
 	std::optional<uint32_t> object;
@@ -416,6 +424,8 @@ struct Step
 		/// within the step's movement distance, whenever it is further and still. Then it holds where it is for one to four
 		/// seconds, picked at random, and the step is done.
 		FollowWatching,
+		/// After this step, the plan acts on the creature, not on the thing that it chose. The step ends at once.
+		ActOnItself,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -713,6 +723,8 @@ struct Commands
 	std::optional<uint32_t> useUp;
 	/// What its hand holds goes from the world this turn
 	bool useUpHeld {false};
+	/// The plan acts on the creature from this turn
+	bool actOnItself {false};
 	/// What the head looks at this turn, for a step that gives it something to look at
 	std::optional<Gaze> gaze;
 	/// A swap of minds: bring every spell on it to its end, start the beam to the other creature, take on a turn more of
