@@ -269,3 +269,16 @@ TEST(CreatureTouch, HeldTheCreatureLooksAtTheHandOrAtTheCameraWithTheHandNearIts
 	EXPECT_NEAR(look.x, 10.0f, k_Tolerance);
 	EXPECT_NEAR(look.z, -2.0f - (0.3f * k_Height), k_Tolerance);
 }
+
+TEST(CreatureTouch, AStrokeDoesNotHoldBackTheNextSlap)
+{
+	creature_feedback::StrokeClocks clocks;
+	clocks.sinceHold = 900.0f;
+	EXPECT_FALSE(creature_feedback::SlapReady(clocks));
+	clocks.sinceHold = 1100.0f;
+	creature_feedback::Touched(clocks);
+	EXPECT_FLOAT_EQ(clocks.sinceTouch, 0.0f);
+	EXPECT_FLOAT_EQ(clocks.ready, creature_feedback::k_ReadyAfterTouchMs);
+	// The time since the hand took hold continues after a stroke or a slap
+	EXPECT_TRUE(creature_feedback::SlapReady(clocks));
+}

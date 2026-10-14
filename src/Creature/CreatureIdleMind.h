@@ -70,6 +70,8 @@ constexpr float k_HangAroundSameSpot = 0.001f;
 /// this many
 constexpr uint32_t k_YawnBeforeSleepLots = 2;
 constexpr uint32_t k_ShowPooLots = 3;
+/// A creature about to eat a thing at once shows that it is hungry first one time in this many
+constexpr uint32_t k_ShowHungerBeforeEatLots = 2;
 /// A poo and being sick each last this many seconds
 constexpr float k_PooSeconds = 4.0f;
 constexpr float k_PukeSeconds = 4.0f;
@@ -614,8 +616,11 @@ constexpr float k_WatchFlyingExtraSeconds = 2.0f;
 /// Sleeping on the spot: half the time a tired yawn first, then sleeping with its eyes closed until rested, then a dazed
 /// look about with sleepy eyes
 [[nodiscard]] std::vector<Step> Sleep(const Random& random);
-/// Picking food up, examining it and eating it
-[[nodiscard]] std::vector<Step> Eat(uint32_t food);
+/// Pick up the food, look at it and eat it. It eats what it holds when it can eat that, with no pick-up.
+[[nodiscard]] std::vector<Step> Eat(uint32_t food, bool holdingEatable);
+/// Eat a thing at once: it shows that it is hungry half the time, picks the thing up and eats it. It eats what it holds
+/// when it can eat that, with no pick-up.
+[[nodiscard]] std::vector<Step> EatAlive(uint32_t food, bool holdingEatable, const Random& random);
 /// Picking something up, stroking, shaking, smelling or examining it, then mostly putting it down and sometimes tossing it
 /// away
 [[nodiscard]] std::vector<Step> ExamineByPickingUp(uint32_t object, const Random& random);

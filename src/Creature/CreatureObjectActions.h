@@ -288,4 +288,34 @@ struct KindFacts
 
 /// How long a creature that brought its food back up isn't hungry for
 constexpr float k_NotHungryAfterBringingUpSeconds = 20.0f;
+
+/// What decides if a creature eats a thing, other than the kind of the thing
+struct EatFacts
+{
+	/// The creature may pick up the thing by the full rule
+	bool mayPickUp {false};
+	/// The creature brought up a meal of the same sort of object before
+	bool refusedSort {false};
+	/// The thing is a villager of the creature's player, and the creature is a computer player's that no script controls
+	bool computersOwnVillager {false};
+};
+/// Whether a kind of thing is a toy: the football, or a static toy
+[[nodiscard]] bool IsToy(const KindFacts& kind);
+/// Whether a kind of thing is a static, which a creature holds and eats by its own rule
+[[nodiscard]] bool IsStatic(Thing thing);
+/// Whether a creature may eat a thing: a thing that it may pick up and that is not a toy. The creature does not eat a
+/// sort of thing that it brought up before.
+[[nodiscard]] bool MayEat(const KindFacts& kind, const EatFacts& facts);
+/// Whether a creature may eat the thing that it holds, with no pick-up first. A static that is not a toy is food in the
+/// hand. Other things must agree with the full pick-up rule.
+[[nodiscard]] bool MayEatHeld(const KindFacts& kind, bool mayPickUp);
+/// A meal with less food than this comes back up, unless it is a magic mushroom or a pile of food
+constexpr float k_LeastFoodKeptDown = 5.0f;
+/// Whether a creature brings up a meal after it eats it. The creature then is sick and is not hungry for a time.
+[[nodiscard]] bool BringsMealBackUp(float food, bool magicMushroom, bool foodPile, bool poisoned);
+/// Whether a creature that brings up a meal also stops to eat that sort of thing. Poisoned food does not stop it.
+[[nodiscard]] constexpr bool RefusesSortAfter(bool poisoned)
+{
+	return !poisoned;
+}
 } // namespace openblack::creature_object_actions

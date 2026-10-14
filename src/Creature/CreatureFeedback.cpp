@@ -51,6 +51,17 @@ float creature_feedback::StrokeWaitMs(float sum)
 	return (1.0f - sum) * k_StrokeWaitMs;
 }
 
+void creature_feedback::Touched(StrokeClocks& clocks)
+{
+	clocks.sinceTouch = 0.0f;
+	clocks.ready = k_ReadyAfterTouchMs;
+}
+
+bool creature_feedback::SlapReady(const StrokeClocks& clocks)
+{
+	return clocks.sinceHold > k_SlapReadyMs;
+}
+
 bool creature_feedback::StrokeDue(const StrokeClocks& clocks, std::optional<BodyPart> last, BodyPart part, float sum)
 {
 	// The game compares the wait in whole milliseconds

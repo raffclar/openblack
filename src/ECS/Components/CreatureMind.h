@@ -134,6 +134,9 @@ struct CreatureMindState
 	std::set<uint32_t> observedKinds;
 	/// The kinds of thing it has been given from the hand with no desire for them, which it looked over the first time
 	std::set<uint32_t> givenKinds;
+	/// The sorts of object (by the object type of their info) that it brought up after it ate one. It does not eat
+	/// these again.
+	std::set<uint32_t> refusedFoodSorts;
 	/// The food it took from a pile and is picking up, and the pile, which gives the food up once it has picked it up
 	entt::entity takenFood {entt::null};
 	entt::entity takenFrom {entt::null};

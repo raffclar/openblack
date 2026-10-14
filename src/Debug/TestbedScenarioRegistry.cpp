@@ -433,6 +433,22 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.eats_animals",
+	    .name = "Hungry creature eats an animal",
+	    .facet = Facet::Needs,
+	    .description = "A hungry tiger with a pig and a cow on the land in front of it, and no other food.",
+	    .expected = "It walks up to an animal, picks it up and eats it; its energy fills up and the hunger desire falls.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = AnimalInfo::Pig, .offset = {0.0f, -40.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {30.0f, -60.0f}, .living = true}},
+	});
+
+	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",
 	    .facet = Facet::Needs,
@@ -2221,6 +2237,21 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.eat_poor_food",
+	    .name = "Eating a handful of food, then one of wood",
+	    .facet = Facet::Objects,
+	    .description = "A hungry tiger picks up a handful of food and eats it, then picks up a handful of wood and eats it.",
+	    .expected = "It keeps the food down and its energy rises. The wood has no food in it: the tiger is sick after it "
+	                "eats the wood, is not hungry for twenty seconds, and does not eat a pot again.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungry},
+	    .objects = {{.type = PotInfo::HandFood, .offset = {0.0f, -k_Reach}, .amount = 300},
+	                {.type = PotInfo::HandWood, .offset = {-15.0f, -5.0f}, .amount = 300}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::EatHeld, 0, 0.5f, true), OnObject(Kind::PickUp, 0, 1, 1.0f),
+	                 Act(Kind::EatHeld, 0, 0.5f, true)},
+	});
+
+	all.push_back({
 	    .id = "objects.bring_back_up",
 	    .name = "Bringing up what can't be eaten",
 	    .facet = Facet::Objects,
@@ -2385,6 +2416,18 @@ void AddHand(std::vector<Scenario>& all)
 	                 Slap(0, 0.85f, false, true, 1.0f), Slap(0, 0.55f, false, false, 1.0f), Slap(0, 0.2f, false, true, 1.0f),
 	                 Act(Kind::HandLetGo, 0, 1.0f, true)},
 	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "hand.slap_after_stroke",
+	    .name = "A slap soon after a stroke",
+	    .facet = Facet::Hand,
+	    .description = "A tiger faces the camera and the hand is free. Hold the action button on the tiger, stroke it once, "
+	                   "then sweep the hand fast across the middle of the screen.",
+	    .expected = "The stroke plays the pleased animation. The fast sweep plays a reeling animation and the reward falls, "
+	                "with no wait after the stroke, once the stroke animation is far enough through.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
 	});
 
 	auto worn = Posed(CreatureType::Tiger, {0.0f, 0.0f});

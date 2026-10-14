@@ -27,9 +27,8 @@ struct HandOnCreature
 	entt::entity creature {entt::null};
 	/// The running sum of strokes and slaps, from -1 to 1
 	float sum {0.0f};
-	/// The clocks strokes wait on, and the time since taking hold or the last stroke, which a slap waits on
+	/// The clocks that strokes and slaps wait on
 	creature_feedback::StrokeClocks clocks;
-	float slapReadyMs {0.0f};
 	/// The part last stroked, forgotten when the hand comes off the body
 	std::optional<creature_feedback::BodyPart> lastPart;
 	/// Strokes and slaps are weighed in steps (see creature_feedback::Pace): the time towards the next, and where the

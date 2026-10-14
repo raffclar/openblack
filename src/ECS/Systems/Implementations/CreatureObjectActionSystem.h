@@ -57,6 +57,8 @@ public:
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity creature) const override;
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;
 	[[nodiscard]] bool CanPickUp(entt::entity creature, entt::entity object) const override;
+	[[nodiscard]] bool CanEat(entt::entity creature, entt::entity object) const override;
+	[[nodiscard]] bool CanEatHeld(entt::entity creature) const override;
 	[[nodiscard]] bool CanTakeFromHand(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] bool CanBeCaught(entt::entity object) const override;
 	[[nodiscard]] bool CanThrowToImpress(entt::entity creature, entt::entity object) const override;
