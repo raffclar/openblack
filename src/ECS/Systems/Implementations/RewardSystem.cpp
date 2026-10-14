@@ -232,7 +232,11 @@ bool RewardSystem::Tap(entt::entity chest, PlayerNames player)
 	// The closed chest gives way to the opened one, where it stood, its lid lifting as its clip plays
 	registry.AssignOrReplace<Mesh>(chest, k_OpenedMesh.value(), static_cast<int8_t>(0), static_cast<int8_t>(0));
 	// The light shining out of it blends by its texture
-	registry.AssignOrReplace<BlendedByMaterial>(chest);
+	// Its light shines in a colour of its own, the same for every chest, whatever the land's light
+	const auto& [red, green, blue] = reward::k_OpenedLightColour;
+	registry.AssignOrReplace<BlendedByMaterial>(
+	    chest, BlendedByMaterial {.shineColour =
+	                                  glm::vec3(static_cast<float>(red), static_cast<float>(green), static_cast<float>(blue))});
 	auto& pose = registry.AssignOrReplace<AnimatedStaticPose>(chest);
 	PoseOpened(0, pose.bones);
 	registry.SetDirty();

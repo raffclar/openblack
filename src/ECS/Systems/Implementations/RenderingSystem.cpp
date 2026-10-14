@@ -203,6 +203,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool perEntity;
 		bool translucent;
 		bool alphaTexturedAdditive;
+		std::optional<glm::vec3> shineColour;
 		std::optional<float> additiveShare;
 		bool instanceAlpha;
 		/// Every instance is a posed villager
@@ -222,6 +223,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .perEntity = false,
 		                                                                     .translucent = false,
 		                                                                     .alphaTexturedAdditive = false,
+		                                                                     .shineColour = std::nullopt,
 		                                                                     .additiveShare = std::nullopt,
 		                                                                     .instanceAlpha = false,
 		                                                                     .villagers = true,
@@ -238,10 +240,11 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			count.first->second.additiveShare = translucent->share;
 		}
 		// Its solid parts are drawn as their materials say, and its alpha-textured parts are added over what is behind
-		if (registry.AllOf<BlendedByMaterial>(entity))
+		if (const auto* blended = registry.TryGet<const BlendedByMaterial>(entity))
 		{
 			count.first->second.translucent = true;
 			count.first->second.alphaTexturedAdditive = true;
+			count.first->second.shineColour = blended->shineColour;
 		}
 		if (const auto* mark = registry.TryGet<const GroundMark>(entity);
 		    (mark != nullptr && mark->alpha.has_value()) || registry.AllOf<SeeThrough>(entity))
@@ -340,6 +343,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.materialBlending = desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
 		drawDesc->second.alphaTexturedAdditive = desc.alphaTexturedAdditive;
+		drawDesc->second.shineColour = desc.shineColour;
 		drawDesc->second.additiveShare = desc.additiveShare;
 		drawDesc->second.instanceAlpha = desc.instanceAlpha;
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);

@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstring>
 
 #include <algorithm>
@@ -149,6 +150,7 @@
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/LandShadowBake.h"
 #include "Graphics/LightBeams.h"
+#include "Graphics/LightShine.h"
 #include "Graphics/MaterialStages.h"
 #include "Graphics/ModelLight.h"
 #include "Graphics/Moon.h"
@@ -1058,6 +1060,13 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	for (auto it = primitives.begin(); it != primitives.end(); ++it)
 	{
 		const auto& prim = *it;
+		// The alpha textured materials, which a desc may have added over what is behind them
+		constexpr uint32_t k_AlphaTextured = 4;
+		constexpr uint32_t k_AlphaTexturedAlpha = 5;
+		const bool addedAlphaTextured =
+		    desc.alphaTexturedAdditive && (prim.materialType == k_AlphaTextured || prim.materialType == k_AlphaTexturedAlpha);
+		// Those that shine in a colour of their own, solid on their second group of vertices
+		const bool shining = addedAlphaTextured && desc.shineColour.has_value() && prim.secondGroupBone != L3DSubMesh::k_NoBone;
 
 		const bool hasNext = std::next(it) != primitives.end();
 
@@ -1193,7 +1202,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				}
 				// z: 1 to blend by each instance's alpha rather than dissolve it
 				const glm::vec4 u_seaClip {reflection || desc.cutBelow.has_value() ? 1.0f : 0.0f, height,
-				                           desc.instanceAlpha ? 1.0f : 0.0f, 0.0f};
+				                           desc.instanceAlpha || shining ? 1.0f : 0.0f, 0.0f};
 				setUniform(MeshUniform::SeaClip, &u_seaClip);
 			}
 			if (has(MeshUniform::Snow))
@@ -1344,9 +1353,27 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (has(MeshUniform::ObjectLook))
 			{
 				// xyz: the object's own colour, w: its alpha; w 0 for none, which is lit by the land as usual
-				const glm::vec4 u_objectLook =
-				    desc.objectLook.has_value() ? glm::vec4(desc.objectLook->colour, desc.objectLook->alpha) : glm::vec4(0.0f);
+				// A shining light's colour is its own
+				const glm::vec4 u_objectLook = shining ? glm::vec4(*desc.shineColour, 1.0f)
+				                               : desc.objectLook.has_value()
+				                                   ? glm::vec4(desc.objectLook->colour, desc.objectLook->alpha)
+				                                   : glm::vec4(0.0f);
 				setUniform(MeshUniform::ObjectLook, &u_objectLook);
+			}
+			if (has(MeshUniform::Shine))
+			{
+				// x: 1 for a light that shines in a colour of its own, y: the bone its solid vertices are on, zw: the cosine
+				// and sine of its texture's turn
+				glm::vec4 u_shine {0.0f};
+				if (shining)
+				{
+					const auto realTime =
+					    Locator::time::has_value() ? Locator::time::value().GetElapsedTime() : std::chrono::milliseconds(0);
+					const auto turn = light_shine::TextureTurn(realTime);
+					u_shine = glm::vec4(1.0f, static_cast<float>(prim.secondGroupBone), static_cast<float>(std::cos(turn)),
+					                    static_cast<float>(std::sin(turn)));
+				}
+				setUniform(MeshUniform::Shine, &u_shine);
 			}
 			if (!desc.isSky && has(MeshUniform::SkyAlphaThreshold))
 			{
@@ -1419,10 +1446,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				if (materialBlending && !desc.fizz.has_value())
 				{
 					using BlendMode = decltype(prim.blend);
-					constexpr uint32_t k_AlphaTextured = 4;
-					constexpr uint32_t k_AlphaTexturedAlpha = 5;
-					const bool swapped = desc.alphaTexturedAdditive &&
-					                     (prim.materialType == k_AlphaTextured || prim.materialType == k_AlphaTexturedAlpha);
+					const bool swapped = addedAlphaTextured;
 					switch (swapped ? BlendMode::Additive : prim.blend)
 					{
 					case BlendMode::Standard:
@@ -5883,6 +5907,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 
 				submitDesc.useMaterialBlending = useMaterialBlending;
 				submitDesc.alphaTexturedAdditive = placers.alphaTexturedAdditive;
+				submitDesc.shineColour = placers.shineColour;
 				submitDesc.additiveShare = placers.additiveShare;
 				submitDesc.instanceAlpha = placers.instanceAlpha;
 				// The game gives the rooms the temple's light; the hand keeps its own

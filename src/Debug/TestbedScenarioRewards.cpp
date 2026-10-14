@@ -79,4 +79,22 @@ void testbed_scenarios::AddRewardScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -9.0f}, .look = {0.0f, 2.0f, 0.0f}},
 	    .rewards = {{.type = RewardObjectInfo::SpellSeedFood, .offset = {0.0f, 0.0f}, .fromSky = false, .inTown = true}},
 	});
+	all.push_back({
+	    .id = "story.reward_chest_lights",
+	    .name = "The lights of opened reward chests",
+	    .facet = Facet::Miracles,
+	    .description = "Four reward chests with what the chests of Land 1 hold (large food as the Lost Flock's, a toy ball "
+	                   "as Throwing Stones' and the Ogre's, the water seed as the Hermit's) stand on the land in a row in "
+	                   "front of the camera and open at once.",
+	    .expected = "Out of each opened chest a light shines up in the same blue, whatever the chest holds and whatever "
+	                "the land's light: solid at the chest, clear at its rim, added over what is behind it. Its cloudy "
+	                "texture turns slowly, once each 20 seconds. Only the land's colour and the distance haze added to it "
+	                "change from chest to chest. The wooden chests are lit by the land as before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, -16.0f}, .look = {0.0f, 2.0f, k_RowNorth}},
+	    .rewards = {{.type = RewardObjectInfo::LargeFood, .offset = RowSpot(1), .fromSky = false, .opened = true},
+	                {.type = RewardObjectInfo::RewardObjectToyBall, .offset = RowSpot(2), .fromSky = false, .opened = true},
+	                {.type = RewardObjectInfo::SpellSeedWater, .offset = RowSpot(3), .fromSky = false, .opened = true},
+	                {.type = RewardObjectInfo::RewardObjectToyBall, .offset = RowSpot(4), .fromSky = false, .opened = true}},
+	});
 }

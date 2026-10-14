@@ -149,6 +149,9 @@ public:
 		/// The primitives of the alpha textured materials (4 and 5) are drawn added over what is behind without writing
 		/// depth (13), as the physical shield's dome is made
 		bool alphaTexturedAdditive {false};
+		/// The colour, 0 to 255, that those added primitives shine in, in place of the land's light (see
+		/// graphics::light_shine); none for the land's light
+		std::optional<glm::vec3> shineColour;
 		/// A colour the mesh is drawn in, where its program takes one: lit when w is 0, otherwise unlit with its alpha by w
 		glm::vec4 tint {1.0f, 1.0f, 1.0f, 0.0f};
 		/// A piece drawn on another object, as a detailed villager's eyes are, where its program takes it: xyz the point

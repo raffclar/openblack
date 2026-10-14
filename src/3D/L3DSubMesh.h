@@ -66,6 +66,9 @@ class L3DSubMesh
 		/// The material's flags: whether it is culled, how it takes an environment map and whether its texture slides
 		/// with its model's skin (see Graphics/MaterialStages.h)
 		uint8_t materialFlags {0};
+		/// The bone of the primitive's second group of vertices, or none. A light that shines in a colour of its own
+		/// is solid on the vertices of that group and clear on all others.
+		uint16_t secondGroupBone {k_NoBone};
 	};
 
 public:

@@ -39,6 +39,9 @@ namespace openblack::ecs::reward
 
 /// How many game turns an opened chest stays before it goes
 inline constexpr int32_t k_OpenedTurns = 200;
+/// The colour of the light that shines out of every opened chest, red, green and blue of 255. The land's light does not
+/// change it.
+inline constexpr std::array<uint8_t, 3> k_OpenedLightColour {32, 61, 232};
 /// A one-shot globe from a chest floats this far above it
 inline constexpr float k_GlobeAbove = 2.0f;
 /// A belief chest's sparkle lasts this many game turns
