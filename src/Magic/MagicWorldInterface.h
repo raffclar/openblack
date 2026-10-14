@@ -44,6 +44,8 @@ struct EffectSource
 	/// Where the effect came from, which only a blow gives: the centre of the striking thing's body. Without it the
 	/// effect is taken as coming from the corner of the map
 	std::optional<glm::vec3> point;
+	/// The magic of the miracle that applies it, if a miracle does
+	std::optional<MagicType> magicType;
 };
 
 /// A drop of the water miracle's rain

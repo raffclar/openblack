@@ -1070,12 +1070,17 @@ void FireSystem::Process(entt::entity object)
 			// Who lit it, read before the burn: a pile on its own burnt to nothing goes with it
 			const auto& lit = registry.Get<const Fire>(object);
 			const auto litBy = lit.hasPlayer ? std::optional(lit.player) : std::nullopt;
+			// Its people cry out about the fire while it is hotter than nothing
+			const auto cry =
+			    fire.state.temperature > 0.0f
+			        ? std::optional(guidance::TownAttackVoice {.fire = true, .attacker = guidance::Attacker::Other})
+			        : std::nullopt;
 			const float life = world_objects::ReduceLife(object, outcome.damage, litBy);
 			// Burning a town's people, buildings or stores is an attack on the town by whoever lit the fire, by nobody's
 			// when no one did
 			if (!field && registry.Valid(object))
 			{
-				world_objects::AttackTown(object, outcome.damage, litBy.value_or(PlayerNames::NEUTRAL));
+				world_objects::AttackTown(object, outcome.damage, litBy.value_or(PlayerNames::NEUTRAL), false, cry);
 			}
 			// Only the burn that takes the last of its life burns it down: one burning on with none left is not burnt down
 			// again
