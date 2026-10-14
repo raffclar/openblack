@@ -1321,8 +1321,8 @@ void AddLight(std::vector<Scenario>& all)
 	    .expected = "The edges of the snow on the land are soft, as the texture of the land is. You see no square "
 	                "texels. The flakes are small white crystals that turn as they fall.",
 	    .environment =
-	        {.hour = 12.0f, .clockRuns = false, .weather = Weather::Blizzard, .dispenserGrid = false, .snowDepth = 110.0f},
-	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -20.0f}, .look = {0.0f, 1.0f, 10.0f}},
+	        {.hour = 12.0f, .clockRuns = false, .weather = Weather::Blizzard, .dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -25.0f}, .look = {0.0f, 0.0f, 5.0f}},
 	    .objects = {{.type = TreeInfo::Conifer, .offset = {8.0f, 14.0f}, .scale = 1.5f}},
 	});
 
