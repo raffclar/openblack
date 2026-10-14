@@ -886,6 +886,89 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	});
 }
 
+/// The Ogre quest of the first land. The game's script runs at the same map positions as on the first land. The
+/// player's Cow is in the valley below the lair, where the script sends it. The scenario sets the flag of the fight
+/// lesson, thus the script makes the Ogre at the lair immediately. The scenario clicks the scroll after ten seconds.
+void AddOgreLair(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// The positions on the first land, from the middle of the map: the lair, the scroll and the position where the
+	// script sends the player's creature
+	constexpr glm::vec2 k_Lair {-21.307f, 600.6f};
+	constexpr glm::vec2 k_Scroll {-6.428f, 624.607f};
+	constexpr glm::vec2 k_SentBackTo {-28.15f, 484.55f};
+	const Command runQuest {
+	    .kind = Kind::RunScript,
+	    .delaySeconds = 0.5f,
+	    .script = "CreatureGuardian",
+	    .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                      {"CreatureDevelopment_Fight", {.number = 1.0f}},
+	                      {"CreatureGuardianFinished", {.number = 0.0f}},
+	                      {"EndSendMyCreatureAwayFromGuardianFlag", {.number = 0.0f}}},
+	};
+	// The scroll appears when the script makes the Ogre. The pointer clicks the scroll at the middle of the screen with
+	// the Action button.
+	const std::vector<Command> introduction {
+	    runQuest,
+	    {.kind = Kind::PointerTo, .delaySeconds = 10.0f, .point = {0.5f, 0.5f}},
+	    {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	    {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	};
+	const Framing framing {
+	    .shot = Shot::Placed, .eye = {k_Scroll.x - 15.0f, 30.0f, k_Scroll.y - 45.0f}, .look = {k_Scroll.x, 0.0f, k_Scroll.y}};
+	// The player's creature. Its mind is free, thus the script can control it and release it.
+	auto cow = Content(CreatureType::Cow, k_SentBackTo, 0.0f, "player's cow");
+	cow.hold = false;
+	all.push_back({
+	    .id = "story.ogre_lair",
+	    .name = "The Ogre at his lair, and the film that brings him in",
+	    .facet = Facet::Story,
+	    .description = "The first land's Ogre quest: the player's Cow stands down the valley from the lair and the game's "
+	                   "own script runs as after the fight lesson. Ten seconds in, the Ogre's scroll is clicked.",
+	    .expected = "An ogre 1.2 times the Cow's size, named Sleg, sleeps at the lair beside a silver scroll. On the click "
+	                "a film plays: music, the Ogre scratches himself, the advisors and the Ogre talk, the Cow points at "
+	                "the Ogre, who looks it over, plays his angry animation and goes back to sleep. Then the Cow is the "
+	                "player's again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = framing,
+	    .creatures = {cow},
+	    .commands = introduction,
+	});
+	all.push_back({
+	    .id = "story.ogre_fed_twice",
+	    .name = "Feeding the Ogre twice",
+	    .facet = Facet::Story,
+	    .description = "As story.ogre_lair, with two piles of food such as the hand drops lying 22 metres from the lair, "
+	                   "far from the Cow.",
+	    .expected = "After the film the script finds the nearer pile. A film takes the camera to it: the Ogre walks to it, "
+	                "picks up a handful and eats it, and the rest of the pile goes. The good advisor asks whether he is "
+	                "getting drowsy and he walks back to the lair. Then the same for the other pile, after which he falls "
+	                "asleep, the evil advisor calls him thick, and the camera flies through the pass to the reward.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = framing,
+	    .creatures = {cow},
+	    .objects = {{.type = PotInfo::MagicFood, .offset = k_Lair + glm::vec2 {10.0f, -20.0f}, .amount = 1000},
+	                {.type = PotInfo::MagicFood, .offset = k_Lair + glm::vec2 {-12.0f, -20.0f}, .amount = 1000}},
+	    .commands = introduction,
+	});
+	auto fight = introduction;
+	fight.push_back(Go(Kind::WalkTo, 0, k_Lair + glm::vec2 {0.0f, -20.0f}, 70.0f, false));
+	all.push_back({
+	    .id = "story.ogre_fight",
+	    .name = "The player's creature fights the Ogre",
+	    .facet = Facet::Story,
+	    .description = "As story.ogre_lair; 70 seconds after the click the Cow walks to 20 metres from the lair.",
+	    .expected = "The evil advisor tells the player to prepare for battle, the Cow's leash comes off and the Ogre picks "
+	                "a fight with it in an arena. If the Cow wins, a film shows the Ogre fall dead and flies through the "
+	                "pass to the reward. If the Ogre wins, he says so and walks back to his lair, and another fight starts "
+	                "30 seconds later while the Cow stays near.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = framing,
+	    .creatures = {cow},
+	    .commands = fight,
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -967,6 +1050,7 @@ void AddStory(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
 	});
 	AddBreederOffers(all);
+	AddOgreLair(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)
