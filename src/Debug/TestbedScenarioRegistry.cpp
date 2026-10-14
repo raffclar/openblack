@@ -1312,6 +1312,21 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.snow_close",
+	    .name = "Heavy snow near the camera",
+	    .facet = Facet::Light,
+	    .description =
+	        "A blizzard falls over the whole island at noon. The snow on the land is not deep, so its edges "
+	        "are ragged. A tree stands in the snow. The camera is low and near the land, so the flakes fall close to it.",
+	    .expected = "The edges of the snow on the land are soft, as the texture of the land is. You see no square "
+	                "texels. The flakes are small white crystals that turn as they fall.",
+	    .environment =
+	        {.hour = 12.0f, .clockRuns = false, .weather = Weather::Blizzard, .dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -25.0f}, .look = {0.0f, 0.0f, 5.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {8.0f, 14.0f}, .scale = 1.5f}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_on_things",
 	    .name = "Snow settles on new things",
 	    .facet = Facet::Light,
@@ -4632,6 +4647,7 @@ std::vector<Scenario> Build()
 	AddKnockScenarios(all);
 	AddVillagerSpeedScenarios(all);
 	AddDiscipleScenarios(all);
+	AddVillagerLabelScenarios(all);
 	AddHighlightScenarios(all);
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);

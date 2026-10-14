@@ -195,6 +195,21 @@ TEST(WorldToolTips, WhatAHeldSeedMayBeCastOn)
 	EXPECT_FALSE(MayCastOn(SpellSeedType::Food, {.fireBall = true, .castOnByKind = true}));
 }
 
+TEST(WorldToolTips, TheOwnDispenserTakesAHeldMiracleThatDidNotCastBefore)
+{
+	// Any seed goes into the player's own dispenser, the land miracles too
+	for (const auto seed : {SpellSeedType::Heal, SpellSeedType::Food, SpellSeedType::Water, SpellSeedType::Fire})
+	{
+		EXPECT_TRUE(MayCastOn(seed, {.ownDispenser = true}));
+		// A seed that cast its miracle before does not go in, and no other rule applies to the dispenser
+		EXPECT_FALSE(MayCastOn(seed, {.castOnByKind = true, .ownDispenser = true, .heldSeedHasCast = true}));
+	}
+	// A highlighted dispenser takes nothing
+	EXPECT_FALSE(MayCastOn(SpellSeedType::Heal, {.scriptHighlight = true, .ownDispenser = true}));
+	// Another player's dispenser, or a dispenser of no town, is no different from any other thing
+	EXPECT_FALSE(MayCastOn(SpellSeedType::Heal, {}));
+}
+
 TEST(WorldToolTips, TheTemplesHealthAndTheVillageCentresTipsShowAnywhere)
 {
 	for (const auto subject : {Subject::Temple, Subject::VillageCentre, Subject::OwnCreature})

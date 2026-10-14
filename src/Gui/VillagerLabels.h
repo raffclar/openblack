@@ -25,9 +25,12 @@
 ///
 /// A details label tells what a villager is doing, its age, its life and how full it is (and whether it is pregnant
 /// or poisoned), under its name when it is a named villager. A name label shows only a named villager's name, and grows
-/// in and out with the names display. Each is a dark, see-through rounded box standing on a black pointer down to a
-/// point over the villager's head, its words in the colour of the player who owns the villager's town. Labels that
-/// would cover one another are stacked upwards; one that would go off the top of the screen is not shown.
+/// in and out with the names display. Each is a dark, see-through rounded box on a black pointer down to a point over
+/// the villager's head, its words in the colour of the player who owns the villager's town. Labels that would cover
+/// one another are stacked upwards; one that would go off the top of the screen is not shown.
+///
+/// When a name label grows, its box and its words become larger and their alpha increases. Its pointer keeps its size,
+/// but it has the alpha of the box. Thus the pointer fades in and out with the box.
 namespace openblack::gui::villager_labels
 {
 
@@ -48,7 +51,7 @@ constexpr float k_RaisedBy = 50.0f;
 /// A label holds this many lines at most, and this many characters
 constexpr size_t k_MaxLines = 8;
 constexpr size_t k_MaxCharacters = 255;
-/// The box's alpha at full size out of 255, and the words'
+/// The alpha of the box and of the pointer at full size out of 255, and the alpha of the words
 constexpr float k_BoxAlpha = 120.0f;
 constexpr float k_WordsAlpha = 255.0f;
 /// The pointer: a stalk this wide from the box down to this far above the point, then a head this wide down to it
@@ -75,6 +78,18 @@ enum class DetailsToggle : uint8_t
 
 /// The names display's size after a frame of so many milliseconds: towards 1 while shown, towards 0 while not
 [[nodiscard]] float StepNameFade(float fade, bool shown, float milliseconds);
+
+/// The names display in one frame
+struct NameFadeFrame
+{
+	/// The size that the labels of the frame use: the size before the step of the frame
+	float drawn {0.0f};
+	/// The size after the step of the frame
+	float next {0.0f};
+};
+/// The names display's frame. The size changes only on a frame that draws the land: not in the temple, and not while
+/// a video or the film of the falling spell hides the land. While the game is paused, the frame has no game time.
+[[nodiscard]] NameFadeFrame StepNameFadeFrame(float fade, bool shown, float milliseconds, bool landDrawn);
 
 /// What a villager shows
 enum class Kind : uint8_t
@@ -185,8 +200,9 @@ struct Label
 	float inset {0.0f};
 	std::vector<std::u16string> lines;
 	glm::u8vec3 colour {255, 255, 255};
-	/// The box's and the words' alpha, 0 to 255
+	/// The alpha of the box, of the pointer and of the words, 0 to 255
 	uint8_t boxAlpha {0};
+	uint8_t pointerAlpha {0};
 	uint8_t wordsAlpha {0};
 };
 /// The labels of a frame, placed as they come: each goes over its point, kept on the screen across, and moved up over

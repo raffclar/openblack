@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <numbers>
 #include <optional>
 
@@ -64,6 +65,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
@@ -100,6 +102,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Hand/HandGrabRules.h"
@@ -301,6 +304,39 @@ float AlignmentOf(const magic::EffectSource& source)
 		}
 	}
 	return Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(source.player) : 0.0f;
+}
+
+/// The town a new dispenser belongs to: the town asked for, or else the first town that the first player gained. None
+/// when that player has no town.
+entt::entity DispenserTown(entt::entity requested)
+{
+	const auto& registry = EntityRegistry();
+	if (requested != entt::null && registry.Valid(requested) && registry.AllOf<Town>(requested))
+	{
+		return requested;
+	}
+	entt::entity first = entt::null;
+	uint32_t earliest = std::numeric_limits<uint32_t>::max();
+	registry.Each<const Town>([&](entt::entity entity, const Town& town) {
+		if (town.owner == PlayerNames::PLAYER_ONE && town.gained < earliest)
+		{
+			earliest = town.gained;
+			first = entity;
+		}
+	});
+	return first;
+}
+
+/// A dispenser joins its town's buildings, as the newest
+void JoinTown(entt::entity dispenser, entt::entity town)
+{
+	auto& registry = EntityRegistry();
+	registry.Get<SpellDispenser>(dispenser).town = town;
+	if (town != entt::null)
+	{
+		auto& abodes = registry.Get<Town>(town).abodes;
+		abodes.insert(abodes.begin(), dispenser);
+	}
 }
 
 /// How tall a model stands at a scale
@@ -1620,11 +1656,13 @@ entt::entity MagicSystem::CreateDispenser(glm::vec3 position, MagicType type, fl
 	{
 		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f, true);
 	}
-	// Its first bubble comes once it has counted its period, as every later one does
+	// Its first bubble comes once it has counted its period, as every later one does. A debug tool makes it, so it has
+	// no town.
 	return entity;
 }
 
-entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale)
+entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale,
+                                                entt::entity town)
 {
 	if (!Locator::infoConstants::has_value() || building == AbodeInfo::None ||
 	    static_cast<size_t>(building) >= Locator::infoConstants::value().abode.size())
@@ -1636,6 +1674,7 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 	auto& dispenser = EntityRegistry().Get<SpellDispenser>(entity);
 	// Made off: it floats nothing until a script turns it on
 	dispenser.timer.active = false;
+	JoinTown(entity, DispenserTown(town));
 	if (Locator::particleSystem::has_value())
 	{
 		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f, true);
@@ -1685,9 +1724,9 @@ void MagicSystem::SetDispenserActive(entt::entity dispenser, bool active)
 		return;
 	}
 	component->timer.active = active;
-	if (active && MakeOrb(dispenser) != entt::null)
+	if (active)
 	{
-		EntityRegistry().Get<SpellDispenser>(dispenser).timer.tick = 0;
+		MakeOrb(dispenser);
 	}
 }
 
@@ -1720,13 +1759,39 @@ entt::entity MagicSystem::CreateOneOffSeedFor(glm::vec3 position, MagicType type
 	return orb;
 }
 
+glm::vec3 MagicSystem::DispenserOrbPosition(entt::entity dispenser) const
+{
+	const auto& registry = EntityRegistry();
+	const auto& transform = registry.Get<const Transform>(dispenser);
+	const auto& mesh = registry.Get<const Mesh>(dispenser);
+	return magic::OrbPosition(transform.position, HeightOfMesh(mesh.id, transform.scale.y));
+}
+
+void MagicSystem::StoreHeldSeedIn(entt::entity dispenser)
+{
+	auto& registry = EntityRegistry();
+	if (!_held.has_value() || !registry.Valid(*_held))
+	{
+		return;
+	}
+	// The held miracle becomes a one-shot globe above the dispenser, of the same seed and power-up. The globe is not the
+	// dispenser's own, so the dispenser continues to make its own globes as before.
+	const auto seed = registry.Get<const SpellSeed>(*_held);
+	const auto position = DispenserOrbPosition(dispenser);
+	if (CreateOneOffSeed(position, seed.seedType, seed.powerUp, 1.0f) != entt::null && Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::ObjectAppear, position, std::nullopt, entt::null);
+	}
+	// The seed goes, with the prayer power that charged it
+	LetGoOfSeed(true);
+	_lastHandResult = HandResult::Stored;
+}
+
 entt::entity MagicSystem::MakeOrb(entt::entity entity)
 {
 	auto& registry = EntityRegistry();
 	auto& dispenser = registry.Get<SpellDispenser>(entity);
-	const auto& transform = registry.Get<const Transform>(entity);
-	const auto& mesh = registry.Get<const Mesh>(entity);
-	const auto position = magic::OrbPosition(transform.position, HeightOfMesh(mesh.id, transform.scale.y));
+	const auto position = DispenserOrbPosition(entity);
 	const auto magicType = dispenser.magicType;
 	const auto orb = CreateOneOffSeedFor(position, magicType);
 	auto& after = registry.Get<SpellDispenser>(entity);
@@ -1734,6 +1799,8 @@ entt::entity MagicSystem::MakeOrb(entt::entity entity)
 	after.orbPosition = position;
 	if (orb != entt::null)
 	{
+		// A new bubble starts the count again
+		after.timer.tick = 0;
 		registry.Get<OneOffSpellSeed>(orb).dispenser = entity;
 		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::MagicObjectCreated, position, std::nullopt,
 		                                                 entt::null);
@@ -1745,17 +1812,26 @@ void MagicSystem::ProcessDispensers()
 {
 	auto& registry = EntityRegistry();
 	std::vector<entt::entity> making;
-	registry.Each<SpellDispenser>([&](entt::entity entity, SpellDispenser& dispenser) {
-		const bool hasOrb = dispenser.orb != entt::null;
+	registry.Each<SpellDispenser, const Transform>([&](entt::entity entity, SpellDispenser& dispenser,
+	                                                   const Transform& transform) {
+		// The bubble stays the dispenser's while it is in the world and touches the dispenser on the ground
 		bool stillThere = false;
-		if (hasOrb && registry.Valid(dispenser.orb))
+		if (dispenser.orb != entt::null && registry.Valid(dispenser.orb))
 		{
 			if (const auto* orb = registry.TryGet<const OneOffSpellSeed>(dispenser.orb))
 			{
-				stillThere = magic::OrbStillThere(orb->position, dispenser.orbPosition);
+				stillThere =
+				    magic::Touching(glm::vec2(transform.position.x, transform.position.z), world_objects::SizeOf(entity).radius,
+				                    glm::vec2(orb->position.x, orb->position.z), world_objects::SizeOf(dispenser.orb).radius);
 			}
 		}
-		switch (magic::StepDispenser(dispenser.timer, hasOrb, stillThere, dispenser.magicType != MagicType::None))
+		const magic::DispenserTurn turn {
+		    .hasOrb = dispenser.orb != entt::null,
+		    .orbStillThere = stillThere,
+		    .hasMagic = dispenser.magicType != MagicType::None,
+		    .whole = construction::IsBuilt(entity) && world_objects::LifeOf(entity) >= 1.0f,
+		};
+		switch (magic::StepDispenser(dispenser.timer, turn))
 		{
 		case magic::DispenserStep::OrbTaken:
 			dispenser.orb = entt::null;
@@ -2061,6 +2137,12 @@ MagicType MagicSystem::HeldMagicType() const
 	return magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Info(), seed.seedType), seed.powerUp);
 }
 
+bool MagicSystem::IsOwnDispenser(entt::entity object, PlayerNames player) const
+{
+	return EntityRegistry().Valid(object) && EntityRegistry().AllOf<SpellDispenser>(object) &&
+	       world_objects::PlayerOf(object) == player;
+}
+
 std::optional<entt::entity> MagicSystem::HeldSeedTarget() const
 {
 	if (!_held.has_value() || !EntityRegistry().Valid(*_held))
@@ -2068,6 +2150,15 @@ std::optional<entt::entity> MagicSystem::HeldSeedTarget() const
 		return std::nullopt;
 	}
 	const auto& seed = EntityRegistry().Get<const SpellSeed>(*_held);
+	// The player's own dispenser comes first: it takes a seed that did not cast before, and is no target for any other
+	if (const auto picked = PickedUnderHand(); picked.has_value() && IsOwnDispenser(*picked, seed.player))
+	{
+		if (seed.hasCast || EntityRegistry().AllOf<ScriptHighlight>(*picked))
+		{
+			return std::nullopt;
+		}
+		return picked;
+	}
 	if (magic::GetSpellSeedInfo(Info(), seed.seedType).castOnObject == 0 || !Locator::creatureHandSystem::has_value())
 	{
 		return std::nullopt;
@@ -2303,6 +2394,15 @@ void MagicSystem::Do(const magic::CastActions& actions)
 	}
 	if (actions.cast.has_value())
 	{
+		// A miracle put to the player's own dispenser goes into it as a one-shot globe. The hand does not cast it.
+		if (*actions.cast == magic::CastTarget::Object)
+		{
+			if (const auto target = HeldSeedTarget(); target.has_value() && EntityRegistry().AllOf<SpellDispenser>(*target))
+			{
+				StoreHeldSeedIn(*target);
+				return;
+			}
+		}
 		const bool locked = _input.state == magic::CastInput::State::Locked;
 		const auto spell = CastHeldSeed(*actions.cast);
 		if (spell == entt::null)

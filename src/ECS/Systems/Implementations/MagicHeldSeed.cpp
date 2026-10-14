@@ -170,6 +170,8 @@ std::optional<magic::HeldCastAtPointer> MagicSystem::HeldCastAt(std::optional<en
 		                                                     .scriptHighlight = registry.AllOf<ScriptHighlight>(*pointed),
 		                                                     .fireBall = registry.AllOf<MagicFireBall>(*pointed),
 		                                                     .castOnByKind = castOnByKind,
+		                                                     .ownDispenser = IsOwnDispenser(*pointed, seed.player),
+		                                                     .heldSeedHasCast = seed.hasCast,
 		                                                 });
 	}
 	else if (_hand.point.has_value())

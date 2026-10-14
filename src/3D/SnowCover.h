@@ -16,6 +16,7 @@
 
 #include <entt/core/hashed_string.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 /// Snow lying on the island: storms that snow pile it up on a grid of 40 unit cells, and it melts away slowly
 /// everywhere. The land turns white where it is deep enough, raggedly by a noise image, and objects standing in it
@@ -77,5 +78,16 @@ inline constexpr int32_t k_ObjectLevelShown = 5;
 inline constexpr float k_LandLeast = 5.0f;
 /// The grey the land turns to under snow, of 15, by the noise image's texel: 14 or 15
 [[nodiscard]] uint8_t LandWhite(uint8_t noise);
+
+/// A side of a land block's texture covers four cells of the grid, so each cell has this many texels along a side
+inline constexpr int32_t k_TexelsPerCell = 64;
+/// The game paints the snow into each texel of a land block's texture. Then the texture is filtered as it is drawn.
+/// A texel is in the cell `cell` (x, z) of the grid, `step` texels (along x, along z) from the lowest corner of the
+/// cell. The depth there is in 65536ths, blended in whole steps from the four corners of the cell.
+[[nodiscard]] int32_t TexelDepth(std::span<const float> grid, glm::ivec2 cell, glm::ivec2 step);
+/// The game paints snow into the texels of a cell only when a corner of the cell has more snow than k_LandLeast
+[[nodiscard]] bool CellTakesSnow(std::span<const float> grid, glm::ivec2 cell);
+/// A texel's colour, three 4-bit levels, with the snow painted over it at `level` (0 to 16) in the grey `white`
+[[nodiscard]] glm::u8vec3 PaintTexel(glm::u8vec3 colour, int32_t level, uint8_t white);
 
 } // namespace openblack::snow_cover

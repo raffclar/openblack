@@ -469,6 +469,8 @@ private:
 	bool _cursorOnObject {false};
 	/// How far the villagers' names display has grown in, 0 to 1
 	float _villagerNameFade {0.0f};
+	/// The size of the names display that the labels of this frame use: the size before the step of this frame
+	float _villagerNameFadeDrawn {0.0f};
 	/// The up of the face of a model the hand rests on, none over the land or what the hand doesn't feel
 	std::optional<glm::vec3> _handSurfaceUp;
 	/// The hand rests over a thing picked under the cursor

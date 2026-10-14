@@ -15,21 +15,23 @@
 #include <span>
 
 #include <glm/mat3x3.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
 
 // The miracle dispensers' timing. A dispenser makes a one-shot miracle, a bubble with the miracle's seed inside,
-// floating above itself. While the bubble is there it waits; once the bubble is taken it counts the turns, and after
-// its period it makes another. Pure functions of a dispenser's timer.
+// floating above itself. While the bubble is there, the dispenser waits. When the bubble goes, the dispenser counts
+// the turns. After its period, it makes another bubble. It counts only while it is fully built and at its full life.
+// Pure functions of a dispenser's timer.
 
 namespace openblack::magic
 {
 
 /// A dispenser's bubble floats above it at this share of its height
 inline constexpr float k_OrbHeightShare = 1.2f;
-/// A bubble that has moved no further than this from where its dispenser made it is still there
-inline constexpr float k_OrbStillThereDistance = 0.5f;
+/// A bubble stays on its dispenser while the gap between their ground circles is this size or less, in metres
+inline constexpr float k_OrbTouchGap = 0.001f;
 /// The seed inside a bubble is drawn at this share of its size, and spins this many radians a second
 inline constexpr float k_OrbSeedScale = 0.6f;
 inline constexpr float k_OrbSeedSpin = 2.0f;
@@ -56,13 +58,25 @@ enum class DispenserStep : uint8_t
 	Wait,
 	/// Its bubble has been taken: it starts counting
 	OrbTaken,
-	/// It makes a new bubble
+	/// It makes a new bubble. When it makes one, its count starts again.
 	MakeOrb,
 };
 
-/// One turn of a dispenser: whether it has a bubble, whether that bubble is still where it made it, and whether it has a
-/// miracle to give
-[[nodiscard]] DispenserStep StepDispenser(DispenserTimer& timer, bool hasOrb, bool orbStillThere, bool hasMagic);
+/// What a dispenser knows at the start of its turn
+struct DispenserTurn
+{
+	/// It has a bubble of its own
+	bool hasOrb {false};
+	/// Its bubble is still in the world and still touches it
+	bool orbStillThere {false};
+	/// It has a miracle to give
+	bool hasMagic {false};
+	/// It is fully built and has all its life. A damaged dispenser makes nothing until its town mends it.
+	bool whole {true};
+};
+
+/// One turn of a dispenser
+[[nodiscard]] DispenserStep StepDispenser(DispenserTimer& timer, const DispenserTurn& turn);
 
 /// A period in seconds as turns; none for none
 [[nodiscard]] uint32_t PeriodTurns(float seconds, std::chrono::milliseconds turn);
@@ -72,7 +86,8 @@ enum class DispenserStep : uint8_t
 
 /// Where a dispenser floats its bubble: above it by its height times the share
 [[nodiscard]] glm::vec3 OrbPosition(const glm::vec3& base, float height);
-/// Whether a bubble is still where its dispenser made it
-[[nodiscard]] bool OrbStillThere(const glm::vec3& orb, const glm::vec3& made);
+/// Whether two things touch: the distance between their positions on the ground, less the radii of their ground circles,
+/// is the touch gap or less
+[[nodiscard]] bool Touching(glm::vec2 first, float firstRadius, glm::vec2 second, float secondRadius);
 
 } // namespace openblack::magic
