@@ -187,6 +187,27 @@ TEST(CreatureFight, ButtonsAndTips)
 	EXPECT_EQ(ToolTipIndex(Tip::Manoeuvre), 46u);
 }
 
+TEST(CreatureFight, TheHandDirectsTheFightOnlyInTheFightViewWithAnEmptyHand)
+{
+	EXPECT_TRUE(DirectsFight(true, true, true));
+	// The creature does not duel
+	EXPECT_FALSE(DirectsFight(false, true, true));
+	// The world camera shows the duel, but not the fight view
+	EXPECT_FALSE(DirectsFight(true, false, true));
+	// The hand holds a thing or a miracle
+	EXPECT_FALSE(DirectsFight(true, true, false));
+}
+
+TEST(CreatureFight, APlaceIsInTheArenaOnlyWithinItsRadius)
+{
+	const Arena arena {.centre = {10.0f, 0.0f}, .radius = 20.0f};
+	EXPECT_TRUE(InArena(arena, {10.0f, 0.0f}));
+	EXPECT_TRUE(InArena(arena, {10.0f, 19.9f}));
+	// The edge is out
+	EXPECT_FALSE(InArena(arena, {30.0f, 0.0f}));
+	EXPECT_FALSE(InArena(arena, {-10.5f, 0.0f}));
+}
+
 TEST(CreatureFight, GettingHitTakesAWaitingBlowAway)
 {
 	MoveQueue queue;

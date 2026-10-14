@@ -7,10 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <chrono>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "Camera/Camera.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
@@ -59,7 +61,7 @@ public:
 	std::vector<Source> made;
 };
 
-/// Two creatures duelling in an arena on flat land, neither with a body to click on
+/// Two creatures in a duel in an arena on flat land, neither with a body to click on. The camera shows their fight.
 class CreatureFightSystemTest: public ::testing::Test
 {
 protected:
@@ -78,8 +80,27 @@ protected:
 			                                            .madeArena = self == first,
 			                                        });
 		}
+		ShowTheFight({0.0f, 0.0f, 0.0f});
 	}
-	void TearDown() override { Locator::entitiesRegistry::reset(); }
+	void TearDown() override
+	{
+		fights.Reset();
+		Locator::camera::reset();
+		Locator::entitiesRegistry::reset();
+	}
+
+	/// The world camera looks at the arena. A double click sends it to a place, and the update after it starts.
+	void ShowTheFight(const glm::vec3& place)
+	{
+		if (!Locator::camera::has_value())
+		{
+			auto& camera = Locator::camera::emplace<Camera>();
+			camera.SetOrigin({0.0f, 30.0f, 40.0f});
+			camera.SetFocus({0.0f, 0.0f, 0.0f});
+		}
+		fights.FlewTo(place);
+		fights.Update(std::chrono::duration<float, std::milli>(0.0f));
+	}
 
 	static entt::entity MakeCreature(Registry& registry, PlayerNames owner, glm::vec3 at)
 	{
@@ -134,6 +155,33 @@ TEST_F(CreatureFightSystemTest, TheMoveButtonReplacesAndTheActionButtonQueues)
 	// The ground beyond the arena isn't the fight's
 	EXPECT_FALSE(PressGround({45.0f, 0.0f}, fight::Button::Action));
 	EXPECT_EQ(QueueOf(first).Size(), 1u);
+}
+
+TEST_F(CreatureFightSystemTest, ADoubleClickIntoTheArenaShowsTheFightAtOnce)
+{
+	EXPECT_TRUE(fights.IsCameraOnFight());
+	EXPECT_TRUE(fights.DirectsFight());
+	fights.Reset();
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	// A place out of the arena does not show the fight
+	ShowTheFight({45.0f, 0.0f, 0.0f});
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	// A double click that a new land forgot does not show the fight
+	fights.FlewTo({0.0f, 0.0f, 0.0f});
+	fights.Reset();
+	fights.Update(std::chrono::duration<float, std::milli>(0.0f));
+	EXPECT_FALSE(fights.IsCameraOnFight());
+}
+
+TEST_F(CreatureFightSystemTest, WithoutTheFightViewTheHandDoesNotDirectTheFight)
+{
+	fights.Reset();
+	EXPECT_FALSE(fights.DirectsFight());
+	EXPECT_FALSE(PressGround({-15.0f, 10.0f}, fight::Button::Action));
+	EXPECT_TRUE(QueueOf(first).Empty());
+	EXPECT_EQ(fights.HandTip(second), std::nullopt);
+	// The duel still has the player's fighter, for the gestures
+	EXPECT_EQ(fights.PlayersFighter(), first);
 }
 
 TEST_F(CreatureFightSystemTest, ANewLandForgetsThePressAndTheView)

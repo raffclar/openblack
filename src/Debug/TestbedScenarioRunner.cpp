@@ -47,7 +47,9 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
+#include "Common/MachineClock.h"
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
@@ -1805,6 +1807,9 @@ std::string Runner::GiveFightCommand(entt::entity creature, const Command& comma
 		           creature, {.kind = creature_fight::Move::Kind::Spell, .value = static_cast<uint32_t>(command.value)}, false)
 		           ? ""
 		           : "not fighting";
+	case Kind::FightView:
+		fights.FlewTo(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(creature).position);
+		return {};
 	case Kind::KnockOut:
 		fights.KnockOut(creature);
 		return {};
@@ -2152,6 +2157,7 @@ void Runner::Give(const Command& command)
 	case Kind::FightSpecial:
 	case Kind::FightAuto:
 	case Kind::FightSpell:
+	case Kind::FightView:
 	case Kind::KnockOut:
 	case Kind::BringRound:
 	case Kind::TieLeashToCreature:
@@ -2203,6 +2209,7 @@ void Runner::Give(const Command& command)
 	case Kind::PointerRelease:
 	case Kind::PointerSweep:
 	case Kind::WheelTurn:
+	case Kind::PointerOnOpponent:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:
@@ -3182,6 +3189,32 @@ std::string HeldByHand()
 }
 } // namespace
 
+std::optional<glm::ivec2> Runner::OpponentOnScreen(size_t creature, glm::vec2 size) const
+{
+	const auto self = CreatureAt(creature);
+	if (!self.has_value() || !Locator::creatureFightSystem::has_value() || !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto opponent = Locator::creatureFightSystem::value().OpponentOf(*self);
+	if (!opponent.has_value())
+	{
+		return std::nullopt;
+	}
+	// The middle of the body is half the height of the creature above its feet
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& feet = registry.Get<const ecs::components::Transform>(*opponent).position;
+	const auto height = creature_feedback::k_HeightAtSizeOne *
+	                    ecs::components::ShownSize(registry.Get<const ecs::components::Creature>(*opponent));
+	glm::vec3 screen;
+	if (!Locator::camera::value().ProjectWorldToScreen(feet + glm::vec3(0.0f, height * 0.5f, 0.0f),
+	                                                   {0.0f, 0.0f, size.x, size.y}, screen))
+	{
+		return std::nullopt;
+	}
+	return glm::ivec2(glm::round(glm::vec2(screen)));
+}
+
 std::string Runner::GivePointerCommand(const Command& command)
 {
 	if (!Locator::gameActionSystem::has_value())
@@ -3197,6 +3230,19 @@ std::string Runner::GivePointerCommand(const Command& command)
 	_ownsPointer = true;
 	switch (command.kind)
 	{
+	case Kind::PointerOnOpponent:
+	{
+		const auto to = OpponentOnScreen(command.creature, size);
+		if (!to.has_value())
+		{
+			return "no opponent on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
 	case Kind::PointerTo:
 	{
 		const auto to = glm::ivec2(glm::round(command.point * size));

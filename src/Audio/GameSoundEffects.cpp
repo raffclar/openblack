@@ -15,14 +15,9 @@
 
 #include "3D/TempleInteriorInterface.h"
 #include "CHLApi.h"
-#include "Camera/Camera.h"
-#include "Camera/FightCameraModel.h"
-#include "ECS/Components/HandGrab.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
-#include "ECS/Systems/HandSystemInterface.h"
-#include "ECS/Systems/MagicSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -31,31 +26,6 @@ namespace openblack::audio
 
 namespace
 {
-/// The hand holds nothing: no thing and no miracle
-bool HandEmpty()
-{
-	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeed().has_value())
-	{
-		return false;
-	}
-	if (!Locator::handSystem::has_value() || !Locator::entitiesRegistry::has_value())
-	{
-		return true;
-	}
-	const auto hand =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* grab = registry.Valid(hand) ? registry.TryGet<const ecs::components::HandGrab>(hand) : nullptr;
-	using State = ecs::components::HandGrab::State;
-	return grab == nullptr || grab->state == State::Empty || grab->state == State::Grabbing;
-}
-
-bool CameraWatchesFight()
-{
-	return Locator::camera::has_value() &&
-	       dynamic_cast<const FightCameraModel*>(&Locator::camera::value().GetModel()) != nullptr;
-}
-
 /// The bank of the loaded sound group a sound is in, None when it is in none
 ScriptSoundBank BankOfSound(entt::id_type sound)
 {
@@ -85,9 +55,7 @@ SoundEffectConditions CurrentSoundEffectConditions()
 	conditions.insideTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	conditions.gameSoundOn = !Locator::chlapi::has_value() || Locator::chlapi::value().IsGameSoundOn();
 	conditions.creatureFightControl =
-	    Locator::creatureFightSystem::has_value() &&
-	    InCreatureFightControls(Locator::creatureFightSystem::value().PlayersFighter().has_value(), CameraWatchesFight(),
-	                            HandEmpty());
+	    Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().DirectsFight();
 	return conditions;
 }
 

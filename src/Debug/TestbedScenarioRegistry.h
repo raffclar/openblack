@@ -574,6 +574,11 @@ struct Command
 		FightAuto,
 		/// In the fight, a miracle (value, by its magic type) added to the end of the moves, as drawing its gesture does
 		FightSpell,
+		/// The player double clicks the place of the creature, which is in its arena: the camera shows the fight at once
+		FightView,
+		/// The pointer moves to the middle of the body of the opponent of the creature on the screen, as the mouse moves
+		/// it. A press of a button there goes to the fight only while the camera shows the fight.
+		PointerOnOpponent,
 		/// Being knocked out, as a fight's loser is, and brought round again
 		KnockOut,
 		BringRound,

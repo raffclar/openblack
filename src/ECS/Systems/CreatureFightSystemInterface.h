@@ -116,7 +116,13 @@ public:
 
 	/// The player's creature, the first they got, while it duels
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersFighter() const = 0;
-	/// One of the hand's buttons was pressed along a line of sight while the player's creature duels, at a time in
+	/// Whether the hand directs the fight of the player's creature now. The creature duels, the camera shows a fight and
+	/// the hand holds nothing. Only then do the presses of the hand go to the fight.
+	[[nodiscard]] virtual bool DirectsFight() const { return PlayersFighter().has_value(); }
+	/// A double click sent the world camera to a place. When the place is in the arena of a fight, the camera shows that
+	/// fight at once.
+	virtual void FlewTo(const glm::vec3& /*place*/) {}
+	/// The player pressed one of the hand's buttons along a line of sight while the hand directs the fight, at a time in
 	/// milliseconds and a game turn: whether the fight took the press. On the opponent it strikes high, in the middle or
 	/// low by where it lands, on the player's creature it blocks, and on the arena's ground it steps; the Move button
 	/// makes the move at once in place of those queued, the Action button adds it to the queue. A blow charges until the
@@ -127,7 +133,7 @@ public:
 	virtual void Release(uint32_t milliseconds, uint32_t turn) = 0;
 	/// Whether a press the fight took is held
 	[[nodiscard]] virtual bool IsPressed() const = 0;
-	/// What the hand offers over a thing, or nothing, while the player's creature duels
+	/// What the hand offers over a thing, or nothing, while the hand directs the fight
 	[[nodiscard]] virtual std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const = 0;
 	/// A gesture drawn while the player's creature duels: its special move, or a miracle it knows, cast in the fight.
 	/// Only taken while fewer than twelve moves are queued and the line from the creature to its opponent meets the
