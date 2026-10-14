@@ -33,6 +33,7 @@
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -466,14 +467,17 @@ void town_planning::MendBest(entt::entity town)
 	std::vector<planned_building::MendCandidate> candidates;
 	for (const auto building : data.abodes)
 	{
+		// The town's buildings include its miracle dispensers
 		const auto* abode = registry.TryGet<const Abode>(building);
-		if (abode == nullptr)
+		const auto* dispenser = registry.TryGet<const SpellDispenser>(building);
+		if (abode == nullptr && dispenser == nullptr)
 		{
 			continue;
 		}
+		const bool putUp = abode != nullptr ? abode->putUpForMending : dispenser->putUpForMending;
 		buildings.push_back(building);
 		candidates.push_back({
-		    .skipped = abode->putUpForMending || construction::BroughtWoodSite(building) != nullptr,
+		    .skipped = putUp || construction::BroughtWoodSite(building) != nullptr,
 		    .desireToBeRepaired = construction::DesireToBeRepaired(building),
 		});
 	}
@@ -485,7 +489,14 @@ void town_planning::MendBest(entt::entity town)
 	if (chosen->kind == planned_building::MendChoice::Kind::Building)
 	{
 		const auto building = buildings[chosen->index];
-		registry.Get<Abode>(building).putUpForMending = true;
+		if (auto* abode = registry.TryGet<Abode>(building))
+		{
+			abode->putUpForMending = true;
+		}
+		else
+		{
+			registry.Get<SpellDispenser>(building).putUpForMending = true;
+		}
 		construction::OpenSite(building, 0.0f);
 		return;
 	}

@@ -27,6 +27,7 @@
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
@@ -175,6 +176,20 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 			in.populationWhenNeeded.at(i) = info->populationWhenNeeded;
 		}
 	}
+	// Its miracle dispensers are among its buildings that want mending, each as worn as it is. Nobody lives in one.
+	registry.Each<const SpellDispenser>([&](entt::entity entity, const SpellDispenser& dispenser) {
+		if (dispenser.town != townEntity)
+		{
+			return;
+		}
+		const auto* info = ecs::world_objects::AbodeInfoOf(entity);
+		in.abodes.push_back({
+		    .life = ecs::world_objects::LifeOf(entity),
+		    .livingQuarters = false,
+		    .inhabitants = 0,
+		    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
+		});
+	});
 	// Its plans, those of finished buildings that went wanting repair
 	for (const auto plan : town.planned)
 	{

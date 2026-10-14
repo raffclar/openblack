@@ -1114,17 +1114,16 @@ void FeatureScriptCommands::CreateSpellDispenser(int32_t townId, glm::vec3 posit
 		return;
 	}
 	auto& magicSystem = Locator::magicSystem::value();
-	const auto dispenser = magicSystem.CreateScriptDispenser(position, type, rotation, scale);
-	if (dispenser == entt::null)
-	{
-		return;
-	}
 	auto town = TownWithId(townId);
 	if (town == entt::null)
 	{
 		town = NearestTownAnywhere(position);
 	}
-	Locator::entitiesRegistry::value().Get<SpellDispenser>(dispenser).town = town;
+	const auto dispenser = magicSystem.CreateScriptDispenser(position, type, rotation, scale, town);
+	if (dispenser == entt::null)
+	{
+		return;
+	}
 	const auto magicType = magic::FindMagicTypeByName(Locator::infoConstants::value(), magicName).value_or(MagicType::None);
 	magicSystem.SetDispenserMagic(dispenser, magicType, static_cast<uint32_t>(turns));
 	magicSystem.SetDispenserActive(dispenser, true);

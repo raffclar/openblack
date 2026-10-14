@@ -63,24 +63,24 @@ std::span<const openblack::MagicType> openblack::magic::DispensableMiracles()
 	return k_DispensableMiracles;
 }
 
-DispenserStep openblack::magic::StepDispenser(DispenserTimer& timer, bool hasOrb, bool orbStillThere, bool hasMagic)
+DispenserStep openblack::magic::StepDispenser(DispenserTimer& timer, const DispenserTurn& turn)
 {
-	if (hasOrb)
+	if (turn.hasOrb)
 	{
-		if (orbStillThere)
+		if (turn.orbStillThere)
 		{
 			return DispenserStep::Wait;
 		}
 		timer.tick = 0;
 		return DispenserStep::OrbTaken;
 	}
-	if (!timer.active || !hasMagic)
+	if (!timer.active || !turn.hasMagic || !turn.whole)
 	{
 		return DispenserStep::Wait;
 	}
+	// The count starts again only when the dispenser makes a bubble. Until then, it tries again each turn.
 	if (++timer.tick >= timer.period)
 	{
-		timer.tick = 0;
 		return DispenserStep::MakeOrb;
 	}
 	return DispenserStep::Wait;
@@ -115,7 +115,7 @@ glm::vec3 openblack::magic::OrbPosition(const glm::vec3& base, float height)
 	return base + glm::vec3(0.0f, height * k_OrbHeightShare, 0.0f);
 }
 
-bool openblack::magic::OrbStillThere(const glm::vec3& orb, const glm::vec3& made)
+bool openblack::magic::Touching(glm::vec2 first, float firstRadius, glm::vec2 second, float secondRadius)
 {
-	return glm::distance(glm::vec2(orb.x, orb.z), glm::vec2(made.x, made.z)) <= k_OrbStillThereDistance;
+	return glm::distance(first, second) - (firstRadius + secondRadius) <= k_OrbTouchGap;
 }

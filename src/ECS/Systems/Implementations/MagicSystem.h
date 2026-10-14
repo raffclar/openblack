@@ -154,7 +154,8 @@ public:
 	void PayForSpell(entt::entity spell, float cost) override;
 
 	entt::entity CreateDispenser(glm::vec3 position, MagicType type, float yAngleRadians) override;
-	entt::entity CreateScriptDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale) override;
+	entt::entity CreateScriptDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale,
+	                                   entt::entity town) override;
 	void SetDispenserMagic(entt::entity dispenser, MagicType type, uint32_t turns) override;
 	void SetDispenserPeriod(entt::entity dispenser, float seconds) override;
 	void ChargeDispenser(entt::entity dispenser) override;
@@ -300,6 +301,12 @@ private:
 	[[nodiscard]] MagicType HeldMagicType() const;
 	/// The object under the hand the held seed may be cast on: a creature for a creature spell
 	[[nodiscard]] std::optional<entt::entity> HeldSeedTarget() const;
+	/// Whether the object is a miracle dispenser of a town of the player
+	[[nodiscard]] bool IsOwnDispenser(entt::entity object, PlayerNames player) const;
+	/// Where a dispenser floats its globes: above it by its height times the share
+	[[nodiscard]] glm::vec3 DispenserOrbPosition(entt::entity dispenser) const;
+	/// The held miracle goes into the player's own dispenser as a one-shot globe above it
+	void StoreHeldSeedIn(entt::entity dispenser);
 	/// Whether the held seed may be cast at the hand's point: on the map, by its cast rule, in the player's influence
 	[[nodiscard]] bool HandPointValid() const;
 	/// A miracle held locked in the local hand that the hand moves outside its cast rule is let go, as the button would

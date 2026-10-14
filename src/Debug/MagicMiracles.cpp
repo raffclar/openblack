@@ -45,7 +45,7 @@ namespace
 constexpr std::array k_PhaseNames {"off", "waiting", "starting", "holding", "finishing"};
 constexpr std::array k_HandResults {"",           "took a miracle",  "readied",          "cast",
                                     "cast, held", "not ready",       "can't cast there", "let go",
-                                    "dropped",    "no circle drawn", "powered up"};
+                                    "dropped",    "no circle drawn", "powered up",       "stored"};
 constexpr std::array k_CreatureSpellNames {"Freeze", "Small", "Big",    "Weak",       "Strong", "Fat", "Thin",    "Invisible",
                                            "Nice",   "Nasty", "Hungry", "Frightened", "Tired",  "Ill", "Thirsty", "Itchy"};
 

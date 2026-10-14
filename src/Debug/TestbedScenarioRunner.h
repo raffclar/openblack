@@ -123,6 +123,8 @@ private:
 	[[nodiscard]] uint32_t StartParticle(size_t index) const;
 	/// The scenario's dispensers and lone bubbles, after the testbed's grid stays or goes as it asks
 	void PlaceDispensers(const Scenario& scenario);
+	/// A dispenser made as a challenge's reward makes one, at a point on the land
+	void PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position);
 	/// Casts the scenario's miracles as their times come, and lets go of held ones when theirs are up
 	void UpdateMiracles(float seconds);
 	/// The scenario's villagers set walking, and dropped on teleport stones, as their times come

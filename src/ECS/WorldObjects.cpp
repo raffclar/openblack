@@ -90,6 +90,11 @@ namespace
 /// A building that is built and whose town stands: one whose repair the town would see to
 bool IsAbodeOfATown(const Registry& registry, entt::entity object)
 {
+	// A miracle dispenser is a building of its town as a house is
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object))
+	{
+		return registry.Valid(dispenser->town) && registry.AllOf<Town>(dispenser->town);
+	}
 	const auto* abode = registry.TryGet<const Abode>(object);
 	if (abode == nullptr)
 	{
@@ -154,6 +159,14 @@ void BuildingHurt(entt::entity abode, float before, float after)
 const GAbodeInfo* world_objects::AbodeInfoOf(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	// A miracle dispenser is a building of the buildings' table, by its own row
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object);
+	    dispenser != nullptr && Locator::infoConstants::has_value())
+	{
+		const auto& rows = Locator::infoConstants::value().abode;
+		const auto row = static_cast<size_t>(dispenser->building);
+		return dispenser->building != AbodeInfo::None && row < rows.size() ? &rows[row] : nullptr;
+	}
 	const auto* abode = registry.TryGet<const Abode>(object);
 	if (abode == nullptr || !Locator::infoConstants::has_value())
 	{
@@ -211,7 +224,7 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	{
 		return Row(info.fieldType, field->type);
 	}
-	if (registry.AllOf<Abode>(object))
+	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
 		return AbodeInfoOf(object);
 	}
@@ -908,6 +921,12 @@ std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)
 	{
 		return townOwner([abode](entt::entity, const Town& town) { return town.id == abode->townId; })
 		    .value_or(PlayerNames::NEUTRAL);
+	}
+	// A miracle dispenser is its town's player's, and a dispenser of no town is the neutral player's
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object))
+	{
+		const auto* town = registry.Valid(dispenser->town) ? registry.TryGet<const Town>(dispenser->town) : nullptr;
+		return town != nullptr ? town->owner : PlayerNames::NEUTRAL;
 	}
 	// A temple is its player's
 	if (const auto* temple = registry.TryGet<const Temple>(object))

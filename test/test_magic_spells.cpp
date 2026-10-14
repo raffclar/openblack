@@ -388,17 +388,38 @@ TEST(DispenserRules, ADispenserWaitsForItsBubbleToBeTakenThenMakesAnotherAfterIt
 	// Its bubble is there: it waits
 	for (int turn = 0; turn < 1000; ++turn)
 	{
-		ASSERT_EQ(StepDispenser(timer, true, true, true), DispenserStep::Wait);
+		ASSERT_EQ(StepDispenser(timer, {.hasOrb = true, .orbStillThere = true, .hasMagic = true}), DispenserStep::Wait);
 	}
-	EXPECT_EQ(StepDispenser(timer, true, false, true), DispenserStep::OrbTaken);
+	EXPECT_EQ(StepDispenser(timer, {.hasOrb = true, .orbStillThere = false, .hasMagic = true}), DispenserStep::OrbTaken);
 	EXPECT_EQ(timer.tick, 0u);
 	// Then 300 turns, 30 seconds, to the next
 	for (int turn = 1; turn < 300; ++turn)
 	{
-		ASSERT_EQ(StepDispenser(timer, false, false, true), DispenserStep::Wait) << turn;
+		ASSERT_EQ(StepDispenser(timer, {.hasMagic = true}), DispenserStep::Wait) << turn;
 	}
-	EXPECT_EQ(StepDispenser(timer, false, false, true), DispenserStep::MakeOrb);
+	EXPECT_EQ(StepDispenser(timer, {.hasMagic = true}), DispenserStep::MakeOrb);
+	// The count starts again only when the dispenser makes a bubble. Until then, it tries each turn.
+	EXPECT_EQ(timer.tick, 300u);
+	EXPECT_EQ(StepDispenser(timer, {.hasMagic = true}), DispenserStep::MakeOrb);
+}
+
+TEST(DispenserRules, ADamagedOrUnbuiltDispenserCountsNothingUntilItIsWhole)
+{
+	DispenserTimer timer {.tick = 0, .period = 5, .active = true};
+	for (int turn = 0; turn < 100; ++turn)
+	{
+		ASSERT_EQ(StepDispenser(timer, {.hasMagic = true, .whole = false}), DispenserStep::Wait);
+	}
 	EXPECT_EQ(timer.tick, 0u);
+	// Repaired, it counts from where it stopped
+	for (int turn = 1; turn < 5; ++turn)
+	{
+		ASSERT_EQ(StepDispenser(timer, {.hasMagic = true, .whole = true}), DispenserStep::Wait);
+	}
+	EXPECT_EQ(StepDispenser(timer, {.hasMagic = true, .whole = true}), DispenserStep::MakeOrb);
+	// The dispenser keeps a bubble that is still there, whole or not
+	EXPECT_EQ(StepDispenser(timer, {.hasOrb = true, .orbStillThere = true, .hasMagic = true, .whole = false}),
+	          DispenserStep::Wait);
 }
 
 TEST(DispenserRules, AnInactiveDispenserOrOneWithoutAMiracleMakesNothing)
@@ -407,8 +428,8 @@ TEST(DispenserRules, AnInactiveDispenserOrOneWithoutAMiracleMakesNothing)
 	DispenserTimer active {.tick = 0, .period = 1, .active = true};
 	for (int turn = 0; turn < 10; ++turn)
 	{
-		EXPECT_EQ(StepDispenser(inactive, false, false, true), DispenserStep::Wait);
-		EXPECT_EQ(StepDispenser(active, false, false, false), DispenserStep::Wait);
+		EXPECT_EQ(StepDispenser(inactive, {.hasMagic = true}), DispenserStep::Wait);
+		EXPECT_EQ(StepDispenser(active, {.hasMagic = false}), DispenserStep::Wait);
 	}
 	EXPECT_EQ(PeriodTurns(30.0f, std::chrono::milliseconds(100)), 300u);
 	EXPECT_EQ(PeriodTurns(0.0f, std::chrono::milliseconds(100)), 0u);
@@ -418,8 +439,10 @@ TEST(DispenserRules, TheBubbleFloatsAboveItsDispenserAndFacesTheCamera)
 {
 	const auto orb = OrbPosition({10.0f, 2.0f, 20.0f}, 5.0f);
 	EXPECT_NEAR(orb.y, 2.0f + 6.0f, k_Epsilon);
-	EXPECT_TRUE(OrbStillThere({10.3f, 99.0f, 20.0f}, orb));
-	EXPECT_FALSE(OrbStillThere({11.0f, 8.0f, 20.0f}, orb));
+	// The bubble stays the dispenser's while their ground circles touch, the gap a thousandth of a metre at most
+	EXPECT_TRUE(Touching({10.0f, 20.0f}, 3.0f, {10.0f, 20.0f}, 1.0f));
+	EXPECT_TRUE(Touching({10.0f, 20.0f}, 3.0f, {14.0005f, 20.0f}, 1.0f));
+	EXPECT_FALSE(Touching({10.0f, 20.0f}, 3.0f, {14.01f, 20.0f}, 1.0f));
 	for (const auto direction : {glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 2.0f, -3.0f), glm::vec3(0.0f, -1.0f, 0.0f)})
 	{
 		const auto turn = FaceTowards(direction);
