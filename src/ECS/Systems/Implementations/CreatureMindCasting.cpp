@@ -17,6 +17,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <limits>
 #include <numbers>
 
 #include <glm/geometric.hpp>
@@ -28,6 +29,7 @@
 #include "3D/L3DMesh.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
+#include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMindTables.h"
@@ -57,6 +59,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -584,6 +587,100 @@ bool CreatureMindSystem::TryMiracleAt(entt::entity creature, MagicType type, glm
 	}
 	FrustrateAfterCast(creature, type);
 	return false;
+}
+
+bool CreatureMindSystem::CastGivenGlobe(entt::entity creature, CreatureMindState& mind, entt::entity globe)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* seed = registry.TryGet<const OneOffSpellSeed>(globe);
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (tables == nullptr || body == nullptr || seed == nullptr || at == nullptr || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	// The globe casts the first miracle of its seed, whatever its power-up
+	const auto miracle = magic::GetSpellSeedInfo(Locator::infoConstants::value(), seed->seedType).magicTypes[0];
+	const auto index = static_cast<size_t>(miracle);
+	if (index >= tables->miracles.size())
+	{
+		return false;
+	}
+	const auto cast = creature_giving::CastGlobe(mind.developmentPhase, miracle, tables->miracles[index].desire);
+	const auto action = cast.has_value() ? creature_mind_tables::FindAction(*tables, cast->action) : std::nullopt;
+	if (!action.has_value() || cast->desire >= creature_desires::k_DesireCount)
+	{
+		return false;
+	}
+	const auto desire = static_cast<Desire>(cast->desire);
+	std::optional<entt::entity> target;
+	std::optional<entt::entity> whole;
+	switch (cast->target)
+	{
+	case creature_giving::GlobeTarget::Itself:
+		target = creature;
+		whole = creature;
+		break;
+	case creature_giving::GlobeTarget::NearestCreature:
+	{
+		// The nearest other creature that it believes in, at any distance
+		auto nearest = std::numeric_limits<float>::max();
+		for (const auto& belief : mind.beliefs.InListOrder())
+		{
+			const auto* other = registry.Valid(belief.thing) && belief.thing != creature
+			                        ? registry.TryGet<const Transform>(belief.thing)
+			                        : nullptr;
+			if (other == nullptr || !registry.AllOf<Creature>(belief.thing))
+			{
+				continue;
+			}
+			const auto distance =
+			    glm::distance(glm::vec2(at->position.x, at->position.z), glm::vec2(other->position.x, other->position.z));
+			if (distance < nearest)
+			{
+				nearest = distance;
+				target = belief.thing;
+			}
+		}
+		whole = target;
+		break;
+	}
+	case creature_giving::GlobeTarget::MostUseful:
+	{
+		// Of the things that it believes in, the thing that is most useful for the desire. The action can exclude the
+		// thing that it holds, which is the globe.
+		const bool notHeld = tables->actions[*action].notOnWhatItHolds;
+		const auto found =
+		    BelievedThingsToActOn(creature, mind, desire, [&](entt::entity thing) { return !(notHeld && thing == globe); });
+		float best = 0.0f;
+		for (const auto& thing : found)
+		{
+			if (thing.usefulness > best)
+			{
+				best = thing.usefulness;
+				target = static_cast<entt::entity>(thing.id);
+			}
+		}
+		// A creature is its own whole thing
+		if (target.has_value())
+		{
+			whole = registry.AllOf<Creature>(*target) ? target : WholeOfShownThing(creature, mind, *target);
+		}
+		break;
+	}
+	}
+	// Without a target, or without the whole thing that the desire must be about, it uses the globe as any other gift
+	if (!target.has_value() || (tables->rules.at(cast->desire).aboutSomething && !whole.has_value()))
+	{
+		return false;
+	}
+	// The globe counts as a sighting of its miracle, then the creature casts it
+	CountMiracleSighting(creature, *body, mind, index);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} casts the globe {} that it was given at {}",
+	                    entt::to_integral(creature), entt::to_integral(globe), entt::to_integral(*target));
+	ForceActivity(creature, {.desire = desire, .activityObject = whole, .action = cast->action, .actionObject = *target});
+	return true;
 }
 
 void CreatureMindSystem::ShowFizzle(entt::entity creature, CreatureMindState& mind)

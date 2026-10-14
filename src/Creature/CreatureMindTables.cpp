@@ -146,6 +146,7 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .minPhase = entry.field0x50,
 		    .knownAtStart = entry.field0x54 != 0,
 		    .action = entry.field0x58,
+		    .desire = entry.field0x40,
 		});
 	}
 	for (const auto& entry : info.creatureMimic)

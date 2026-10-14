@@ -3799,37 +3799,41 @@ void CreatureMindSystem::WatchSkill(entt::entity creature, size_t skill)
 void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const Creature, CreatureMindState, const Transform>(
+	    [&](entt::entity entity, const Creature& creature, CreatureMindState& mind, const Transform& at) {
+		    if (glm::distance(at.position, point) <= k_ViewDistance)
+		    {
+			    CountMiracleSighting(entity, creature, mind, miracle);
+		    }
+	    });
+}
+
+void CreatureMindSystem::CountMiracleSighting(entt::entity entity, const Creature& creature, CreatureMindState& mind,
+                                              size_t miracle)
+{
 	const auto* tables = GetTables();
-	if (tables == nullptr)
+	// A mind stilled, as by the freeze spell, learns nothing
+	if (tables == nullptr || !mind.learnt.has_value() || mind.paused)
 	{
 		return;
 	}
-	registry.Each<const Creature, CreatureMindState, const Transform>(
-	    [&](entt::entity entity, const Creature& creature, CreatureMindState& mind, const Transform& at) {
-		    // A mind stilled, as by the freeze spell, learns nothing
-		    if (!mind.learnt.has_value() || mind.paused || glm::distance(at.position, point) > k_ViewDistance)
-		    {
-			    return;
-		    }
-		    const auto progress = creature_watching::SeeMiracle(
-		        mind.learnt->knowledge, miracle, tables->miracles, mind.developmentPhase, mind.turn,
-		        mind.leash.miracleSightingWeight, creature_mind_tables::MiracleMultiplier(creature::InfoRow(creature.species)));
-		    if (progress.learnt && !progress.ignored)
-		    {
-			    creature_mind_model::Think(*mind.learnt,
-			                               fmt::format("I've learnt the miracle {}", tables->miracles.at(miracle).name));
-		    }
-		    // The advisor tells of what the sighting showed
-		    if (progress.event.has_value())
-		    {
-			    using creature_help::Kind;
-			    using creature_watching::LearningEvent;
-			    const auto kind = *progress.event == LearningEvent::TooYoung       ? Kind::CantLearnMagicActionYet
-			                      : *progress.event == LearningEvent::NearlyLearnt ? Kind::NearlyLearntMagicAction
-			                                                                       : Kind::LessonMagicAction;
-			    TellHelp(entity, {.kind = kind, .parameter = static_cast<uint32_t>(miracle)});
-		    }
-	    });
+	const auto progress = creature_watching::SeeMiracle(
+	    mind.learnt->knowledge, miracle, tables->miracles, mind.developmentPhase, mind.turn, mind.leash.miracleSightingWeight,
+	    creature_mind_tables::MiracleMultiplier(creature::InfoRow(creature.species)));
+	if (progress.learnt && !progress.ignored)
+	{
+		creature_mind_model::Think(*mind.learnt, fmt::format("I've learnt the miracle {}", tables->miracles.at(miracle).name));
+	}
+	// The advisor tells of what the sighting showed
+	if (progress.event.has_value())
+	{
+		using creature_help::Kind;
+		using creature_watching::LearningEvent;
+		const auto kind = *progress.event == LearningEvent::TooYoung       ? Kind::CantLearnMagicActionYet
+		                  : *progress.event == LearningEvent::NearlyLearnt ? Kind::NearlyLearntMagicAction
+		                                                                   : Kind::LessonMagicAction;
+		TellHelp(entity, {.kind = kind, .parameter = static_cast<uint32_t>(miracle)});
+	}
 }
 
 void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,

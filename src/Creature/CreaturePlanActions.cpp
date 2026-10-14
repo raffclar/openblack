@@ -712,7 +712,9 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::CastOneShotAt({.magicType = situation.heldOneShot->magicType,
 		                                     .target = *object,
 		                                     .height = situation.height,
-		                                     .getAway = executor.oneShot != OneShotKind::Compassionate});
+		                                     .getAway = executor.oneShot != OneShotKind::Compassionate,
+		                                     // The game pulls the face of compassion for each kind of globe in the hand
+		                                     .face = creature_face::Cue::Compassion});
 	case Build::PickUpAndCastOneShot:
 		// Without a one-shot miracle to use, the action fails
 		if (!situation.instrument.has_value() || !situation.usedOneShot.has_value())
@@ -724,7 +726,11 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                                     .height = situation.height,
 		                                     .pickUp = situation.handFull ? std::nullopt : situation.instrument,
 		                                     .used = situation.instrument,
-		                                     .getAway = true});
+		                                     .getAway = true,
+		                                     .face = executor.oneShot == OneShotKind::Aggressive ? creature_face::Cue::Anger
+		                                             : executor.oneShot == OneShotKind::Compassionate
+		                                                 ? creature_face::Cue::Compassion
+		                                                 : creature_face::Cue::Playfulness});
 	case Build::Never:
 		return std::nullopt;
 	}

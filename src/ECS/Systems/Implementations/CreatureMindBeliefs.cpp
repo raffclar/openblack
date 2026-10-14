@@ -53,6 +53,7 @@
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Spell.h"
@@ -276,6 +277,11 @@ std::optional<uint32_t> mind_detail::ObjectSortOf(const ecs::Registry& registry,
 		const auto& animals = Locator::infoConstants::value().animal;
 		const auto row = static_cast<size_t>(animal->type);
 		info = row < animals.size() ? &animals.at(row) : nullptr;
+	}
+	else if (registry.AllOf<OneOffSpellSeed>(thing))
+	{
+		// A one-shot globe has the row of the mobile objects for globes
+		info = &Locator::infoConstants::value().mobileObject.at(static_cast<size_t>(MobileObjectInfo::OneOffSpellSeed));
 	}
 	else
 	{

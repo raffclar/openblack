@@ -15,6 +15,7 @@
 #include <array>
 #include <numbers>
 #include <optional>
+#include <string_view>
 
 #include <glm/vec3.hpp>
 
@@ -157,4 +158,35 @@ enum class KeptPlanUse : uint8_t
 /// The creature continues a complete plan, when the action acts on a thing and the given thing suits it. The creature
 /// tries the thing to act on first, then the thing to use.
 [[nodiscard]] KeptPlanUse UseForKeptPlan(const KeptPlanFacts& facts);
+/// A creature must have grown up to at least this stage to cast a one-shot globe that it was given
+constexpr uint32_t k_GlobeCastPhase = 8;
+/// The desire of compassion, the only desire for which the creature casts a globe with the action for compassion
+constexpr uint32_t k_CompassionDesire = 1;
+/// The two actions that cast the globe that the creature holds
+constexpr std::string_view k_CastGlobeAggressive = "CastOneOffSpellInHandAggressive";
+constexpr std::string_view k_CastGlobeCompassionate = "CastOneOffSpellInHandCompassiona";
+
+/// The thing at which the creature casts a one-shot globe that it was given
+enum class GlobeTarget : uint8_t
+{
+	/// The thing that is most useful for the desire, of the things that it believes in
+	MostUseful,
+	/// The creature itself
+	Itself,
+	/// The nearest other creature that it believes in
+	NearestCreature,
+};
+/// How the creature uses a one-shot globe that it was given
+struct GlobeCast
+{
+	/// The desire that the miracle serves
+	uint32_t desire {0};
+	std::string_view action;
+	GlobeTarget target {GlobeTarget::MostUseful};
+};
+/// When the creature is given a one-shot globe, it casts the miracle if it has grown up enough. The first miracle of the
+/// globe's seed gives the desire. The creature casts with the action for compassion only for the desire of compassion.
+/// It casts a creature spell at itself for compassion, or else at the nearest creature. It casts another miracle at the
+/// thing that is most useful for the desire. None when it is too young: it uses the globe as any other gift.
+[[nodiscard]] std::optional<GlobeCast> CastGlobe(uint32_t phase, MagicType firstMiracle, uint32_t desire);
 } // namespace openblack::creature_giving

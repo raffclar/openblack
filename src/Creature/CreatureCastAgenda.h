@@ -168,11 +168,14 @@ struct OneShotCast
 	std::optional<uint32_t> used;
 	/// Whether it gets away from the thing to twice its height before it turns
 	bool getAway {true};
+	/// The face that it pulls as it goes near the thing and as it turns to face the thing
+	creature_face::Cue face {creature_face::Cue::Compassion};
 };
 /// The creature casts a one-shot miracle at a thing. The steps are these:
-/// 1. It picks up the globe, when it must.
-/// 2. It goes near the thing, and gets away from the thing when it must.
-/// 3. It turns to face the thing.
+/// 1. It picks up the globe, when it must. It looks at the globe as it goes to the globe.
+/// 2. It goes near the thing, and looks at the thing as it goes. It gets away from the thing when it must, and looks at
+///    the thing.
+/// 3. It turns to face the thing, and looks at the thing.
 /// 4. What its hand holds goes from the world.
 /// 5. It casts the miracle from the casting pose.
 /// 6. The globe that it used goes from the world.
