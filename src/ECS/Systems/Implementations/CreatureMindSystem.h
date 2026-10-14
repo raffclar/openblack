@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <random>
 #include <span>
@@ -16,6 +17,7 @@
 #include <vector>
 
 #include "Common/RandomNumberManager.h"
+#include "Creature/CreatureActivity.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanActions.h"
@@ -107,6 +109,10 @@ public:
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
+	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
+	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
+	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
+
 private:
 	/// Gives a creature its desires and what it has learnt, if it has none yet: the first time its mind thinks, or
 	/// sooner when it is told to do something before then
@@ -127,6 +133,9 @@ private:
 	           const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
+	/// Copying the player, the creature does what the player did: to the player's thing, else to the nearest thing of the
+	/// same kind, else to the most useful thing (CreatureMindLearning.cpp)
+	void CopyPlayersDeed(entt::entity creature, components::CreatureMindState& mind);
 	/// A script makes a creature pick a fight with another: it asks, and they fight if the other agrees; either way the
 	/// script's order is carried out
 	bool FightForScript(entt::entity creature, entt::entity opponent);
@@ -168,11 +177,70 @@ private:
 	/// outside it, or it has no belief about the thing
 	[[nodiscard]] float ObjectToActOnUsefulness(entt::entity creature, const components::CreatureMindState& mind,
 	                                            creature_desires::Desire desire, entt::entity object);
+	/// The whole thing that a desire about something is about, and its usefulness with its distance included
+	struct ChosenActivity
+	{
+		entt::entity whole {entt::null};
+		creature_activity::Whole kind {creature_activity::Whole::Town};
+		float usefulness {0.0f};
+	};
+	/// Find the whole thing that a desire is about. Examine the whole things that the creature has beliefs about, the
+	/// newest belief first. The desire must be able to be about the thing. Take the first thing that is worth the most.
+	/// There is no result when no thing is worth more than nothing.
+	[[nodiscard]] std::optional<ChosenActivity> ChooseActivity(entt::entity creature, const components::CreatureMindState& mind,
+	                                                           creature_desires::Desire desire);
+	/// The parts of the whole thing that the creature can act on for the desire, the newest belief first, each with its
+	/// worth. The part of a creature is the creature.
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate> PartsToActOn(entt::entity creature,
+	                                                                          const components::CreatureMindState& mind,
+	                                                                          creature_desires::Desire desire,
+	                                                                          const ChosenActivity& activity);
+	/// Whether a thing that the creature has a belief about suits a desire that is not about a whole thing. The thing
+	/// must let a creature act on it. A hungry creature does not eat a thing of a town that it feels much compassion for.
+	/// The creature comes across that town when it examines the rule.
+	[[nodiscard]] bool SuitsDesire(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
+	                               entt::entity thing);
+	/// The things that the creature has beliefs about and that an action of a desire can act on, each with its worth.
+	/// The function examines the two lists of beliefs in their order: the whole things first, then the other things,
+	/// each list with the newest belief first.
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate>
+	BelievedThingsToActOn(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
+	                      const std::function<bool(entt::entity)>& suitsAction);
+	/// The whole thing that a thing shown to the creature is part of. The creature comes across the thing and the whole
+	/// thing. A creature is part of no whole thing.
+	[[nodiscard]] std::optional<entt::entity> WholeOfShownThing(entt::entity creature, components::CreatureMindState& mind,
+	                                                            entt::entity thing);
+	/// The whole thing that a plan that the creature must do is about: the whole thing that the plan's thing is part
+	/// of. With no such whole thing, a desire about something is about the nearest town.
+	[[nodiscard]] std::optional<entt::entity> WholeOfForcedPlan(entt::entity creature, components::CreatureMindState& mind,
+	                                                            creature_desires::Desire desire, entt::entity thing);
+	/// The whole thing that a desire is about when the leash shows the creature a thing: the whole thing that the shown
+	/// thing is part of, when the desire can be about it
+	[[nodiscard]] std::optional<ChosenActivity> ShownActivity(entt::entity creature, components::CreatureMindState& mind,
+	                                                          creature_desires::Desire desire, entt::entity thing);
+	/// The parts that a plan can act on when the leash shows a thing: the shown thing when it suits the desire and is of
+	/// use, else the parts of the whole thing that do, the newest belief first
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate> ShownParts(entt::entity creature,
+	                                                                        components::CreatureMindState& mind,
+	                                                                        creature_desires::Desire desire, entt::entity thing,
+	                                                                        const ChosenActivity& activity);
+	/// The things that a plan for a desire not about a whole thing can act on when the leash shows a thing: the shown
+	/// thing when it suits the desire and is of use, else the parts of its whole thing that do, the newest belief first
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate> ShownThingsWithoutWhole(entt::entity creature,
+	                                                                                     components::CreatureMindState& mind,
+	                                                                                     creature_desires::Desire desire,
+	                                                                                     entt::entity thing);
+	/// The desire that a creature most wants for a thing shown on the leash, of the desires not yet tried; none when no
+	/// desire is left
+	[[nodiscard]] std::optional<creature_desires::Desire> DesireForShownThing(entt::entity creature,
+	                                                                          components::CreatureMindState& mind,
+	                                                                          entt::entity thing,
+	                                                                          std::span<const creature_desires::Desire> tried);
 	/// What a thing is worth to a creature as the goal of a plan for a desire, and what that worth counts for in the
-	/// plan's priority; for compassion, how much the town it is about is worth
+	/// plan's priority. With a whole thing that the desire is about, the thing is a part of that whole thing.
 	[[nodiscard]] creature_planner::ObjectCandidate GoalWorth(entt::entity creature, const components::CreatureMindState& mind,
 	                                                          creature_desires::Desire desire, entt::entity thing,
-	                                                          std::optional<float> townUsefulness);
+	                                                          const std::optional<ChosenActivity>& activity);
 	/// Find the desire that a creature most wants to do about a different creature. The function does not examine the
 	/// desires in the list of excluded desires. There is no result when no desire has a value.
 	[[nodiscard]] std::optional<creature_desires::Desire>
@@ -188,9 +256,6 @@ private:
 	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
 	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
 	bool Douse(entt::entity creature, entt::entity object);
-	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
-	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
-	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
 
 	// What it believes about the things about it (CreatureMindBeliefs.cpp)
 	/// It comes across a thing: its belief about it is brought up to date, or made, and a new one leads it on to what the

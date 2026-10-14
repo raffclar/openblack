@@ -212,13 +212,13 @@ bool IsDead(const ecs::Registry& registry, entt::entity creature, const creature
 	return name == k_DieAction || name == k_DeadForeverAction;
 }
 
-/// Whether a creature can be angry with a different creature. The other creature must not be dead. Its species must
-/// let creatures attack it.
+} // namespace
+
 // TODO(usefulness-use-tree): The game also refuses anger when one creature is in a list of the other creature.
 // It has two of these lists. One list contains the creatures that copy the action of the creature. These lists do not
 // exist in openblack.
-bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
-                    const creature_mind_tables::Tables& tables)
+bool ecs::systems::mind_detail::MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
+                                               const creature_mind_tables::Tables& tables)
 {
 	if (other == creature || IsDead(registry, other, tables) || !Locator::infoConstants::has_value())
 	{
@@ -228,6 +228,9 @@ bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::ent
 	const auto row = creature::InfoRow(registry.Get<const Creature>(other).species);
 	return row < rows.size() && rows.at(row).canCreatureAttackMe != 0;
 }
+
+namespace
+{
 
 /// Whether a desire can be about a different creature:
 /// - Anger can, if the creature can be angry with the other creature.
@@ -241,7 +244,7 @@ bool AppliesToCreature(const ecs::Registry& registry, Desire desire, entt::entit
 	case Desire::Impress:
 		return false;
 	case Desire::Anger:
-		return MayBeAngryWith(registry, other, creature, tables);
+		return ecs::systems::mind_detail::MayBeAngryWith(registry, other, creature, tables);
 	default:
 		return true;
 	}
@@ -349,11 +352,10 @@ bool CreatureMindSystem::WeighWatchedCreature(entt::entity creature, CreatureMin
 		const auto dominant = [&]() {
 			const auto* ownNeeds = registry.TryGet<const CreatureNeeds>(creature);
 			const auto* otherNeeds = registry.TryGet<const CreatureNeeds>(other);
-			// TODO(usefulness-use-tree): When the ages have a difference of ten years or less, the game uses the order
-			// of the creatures in its object store. openblack does not have this order. It uses the entity index.
-			return creature_reaction::IsDominant(ownNeeds != nullptr ? ownNeeds->needs.age : 0,
-			                                     otherNeeds != nullptr ? otherNeeds->needs.age : 0,
-			                                     entt::to_entity(other) < entt::to_entity(creature));
+			// When the ages are near, the creature that the game made first is dominant
+			return creature_reaction::IsDominant(
+			    ownNeeds != nullptr ? ownNeeds->needs.age : 0, otherNeeds != nullptr ? otherNeeds->needs.age : 0,
+			    registry.Get<const Creature>(creature).made < registry.Get<const Creature>(other).made);
 		};
 		const auto verdict = creature_reaction::WeighWatch(mine, theirs, worths, dominant);
 		if (verdict.weighAgainWithoutFear)

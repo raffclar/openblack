@@ -23,31 +23,19 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 
-/// What a creature does with itself while it has nothing better to do, decided once a game turn. It works through an
-/// agenda of steps: waiting while it looks about, playing an action, sitting for a while, going somewhere. When the
-/// agenda runs out it picks the next: showing the player its strongest desire, at most once a minute; else sitting down
-/// for a while; else hanging around, which is walking somewhere nearby and sitting there; else being idle, which is
-/// waiting a second or two then a tired yawn, twice. Each step pulls a face for what it does or feels as it starts, and
-/// again every few seconds while it lasts: idling, a random face for three seconds.
+/// What a creature does, decided once a game turn. It works through an agenda of steps: it waits while it looks about,
+/// plays an action, sits for a while or goes to a place. Each step pulls a face for what it does or feels as it starts.
+/// It pulls the face again every few seconds while the step continues: when idle, a random face for three seconds.
 ///
-/// Before any of that, a creature in need sees to it: hungry with food at hand it picks it up, looks it over and eats
-/// it, tired it sleeps on the spot, needing a poo it has one, thirsty with water in reach it goes and drinks. The
-/// strongest such need is seen to first. Exhausted, starved or out of life, it faints wherever it is, and comes round a
-/// little later. With no need, a curious creature picks up something nearby and looks it over, a playful one throws it
-/// about, and an angry one hurls it at a home or a tree. Holding something it has no more use for, it puts it down.
-///
-/// Only this choice of the next agenda is the idle policy; a planner that weighs desires against the actions that
-/// satisfy them can choose agendas in its place, and the steps play out the same way.
+/// The planner and the forced plans give the agendas. When the agenda is done and no plan gives a new agenda, the
+/// creature does nothing. If the creature is exhausted, starved or has no life, it faints where it is and gets up a
+/// short time later.
 namespace openblack::creature_mind
 {
-/// The seconds between showing desires
-constexpr float k_ShowDesireSeconds = 60.0f;
 /// Each step pulls a face as it starts, and again this often for as long as it lasts: every four seconds and two turns
 constexpr float k_FaceRepeatSeconds = 4.2f;
 /// After each face it pulls, the creature's variety of faces moves on by up to this much less one
 constexpr uint32_t k_FaceVarietyStep = 7;
-/// Within this many seconds of being stroked or slapped, the creature shows its pleasure or sorrow at it
-constexpr float k_FeedbackSeconds = 10.0f;
 /// Idle waits are one second and up to one more
 constexpr float k_IdleWaitSeconds = 1.0f;
 /// Being idle is waiting then yawning, this many times
@@ -55,13 +43,6 @@ constexpr int k_IdleRepeats = 2;
 /// Sitting lasts ten seconds and up to four more
 constexpr uint32_t k_SitSeconds = 10;
 constexpr uint32_t k_SitExtraSeconds = 5;
-/// A desire weaker than this isn't worth showing. The game shows desires when its planner picks the desire to show how
-/// it is over all others; this stands in for that.
-constexpr float k_MinDesireShown = 0.2f;
-/// The idle activities are chosen at random among this many lots: the first is sitting down, the last hanging
-/// around, the rest being idle. The game chooses between its idle activities by the strength of the desire to rest and
-/// what the creature has learnt; this stands in for that.
-constexpr uint32_t k_ActivityLots = 4;
 /// Hanging around at home, the creature walks home and stops at its height from home, or at this distance when the
 /// creature is taller
 constexpr float k_HangAroundHomeReach = 5.0f;
@@ -85,9 +66,6 @@ constexpr float k_HangAroundSitSeconds = 10.0f;
 constexpr float k_HangAroundSitExtraSeconds = 5.0f;
 /// When home and the temple are this near along each ground axis, the creature goes out along the x axis
 constexpr float k_HangAroundSameSpot = 0.001f;
-/// A need this strong is seen to. The game weighs needs against everything else the creature might do through its
-/// planner; this stands in for that.
-constexpr float k_ActOnNeed = 0.3f;
 /// Off to sleep, the creature yawns first one time in this many; off for a poo, it shows it needs one first one time in
 /// this many
 constexpr uint32_t k_YawnBeforeSleepLots = 2;
@@ -99,9 +77,6 @@ constexpr float k_PukeSeconds = 4.0f;
 constexpr float k_FaintSeconds = 10.0f;
 /// It drinks from anywhere this close to the water's edge
 constexpr float k_DrinkReach = 5.0f;
-/// A curious, playful or angry creature this strongly so does something about it with what is nearby. The game weighs
-/// these desires against everything else through its planner; this stands in for that.
-constexpr float k_ActOnDesire = 0.3f;
 /// Looking something over, it puts it down gently most times, out of this many, and tosses it away the rest
 constexpr uint32_t k_PutDownLots = 10;
 constexpr uint32_t k_TossLots = 2;
@@ -380,6 +355,9 @@ struct Step
 		/// seconds it has watched come to more than those of the step's turns, at most five; a creature without a
 		/// player is done at once
 		WatchHand,
+		/// Communicating its state to the player: as it starts, it plays the animation of what it shows, once. With
+		/// nothing to show, the step is done at once.
+		Communicate,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -434,8 +412,6 @@ struct IdleMind
 	bool eyesHeld {false};
 	bool eyesToClear {false};
 	uint32_t faceVariety {0};
-	/// Seconds until it may show a desire again
-	float showDesireSeconds {0.0f};
 	/// The desire it showed last
 	std::optional<creature_desires::Desire> shown;
 	/// Told to wake up, or to end whatever static step it is in
@@ -453,35 +429,11 @@ struct IdleMind
 	uint32_t watchTurns {0};
 };
 
-/// The needs it might see to, and the means at hand
-struct Wants
+/// The nearest water, and where the creature can stand at its edge to drink
+struct WaterSpot
 {
-	/// How strong each need's desire is, 0 for desires it doesn't have yet
-	float hunger {0.0f};
-	float tiredness {0.0f};
-	float poo {0.0f};
-	float water {0.0f};
-	/// The food nearest to hand, by its entity's number, and where it is
-	std::optional<uint32_t> food;
-	glm::vec2 foodPoint {0.0f};
-	/// The nearest water, and where it can stand at its edge to drink
-	struct WaterSpot
-	{
-		glm::vec2 shore;
-		glm::vec2 water;
-	};
-	std::optional<WaterSpot> waterSpot;
-	/// How curious, playful and angry it is, 0 for desires it doesn't have yet
-	float curiosity {0.0f};
-	float play {0.0f};
-	float anger {0.0f};
-	/// Whether it holds something
-	bool holding {false};
-	/// The nearest thing it could pick up, by its entity's number, and where it is
-	std::optional<uint32_t> object;
-	glm::vec2 objectPoint {0.0f};
-	/// The nearest home or tree it might hurl something at
-	std::optional<glm::vec2> hurlTarget;
+	glm::vec2 shore;
+	glm::vec2 water;
 };
 
 /// How what its hands were told to do is going
@@ -527,12 +479,9 @@ struct Senses
 	/// creature's movement
 	SubMove subMove {SubMove::Running};
 	glm::vec2 position {0.0f};
-	std::optional<creature_desires::Desire> strongest;
-	/// Seconds since the player last stroked or slapped it, and which
-	std::optional<float> feedbackSeconds;
-	bool feedbackWasStroke {false};
-	/// Its needs, and whether it has slept enough to wake
-	Wants wants {};
+	/// What it shows when a step communicates its state
+	creature_desires::Communication communication {};
+	/// Whether it has slept enough to wake
 	bool rested {false};
 	HandsState hands {HandsState::Idle};
 	/// Whether the object a step waits for is on the map, none when the object is gone
@@ -541,9 +490,6 @@ struct Senses
 	bool objectInTheAir {false};
 	/// What picks the faces it pulls
 	creature_face::Feelings feelings {};
-	/// Whether it chooses what to do next by itself when its agenda runs out; under a script's control it only does
-	/// what it is given
-	bool choosesNext {true};
 	/// Its player's camera as the creature sees it, none for a creature without a player: how far it is, how far along
 	/// the ground, where it is on the ground, and how far round from the way the creature faces it is (radians, either
 	/// way)
@@ -567,8 +513,6 @@ struct Senses
 	SwapView swap {};
 	/// Whether something plays on top of the body, as talking or nodding
 	bool overlayPlaying {false};
-	/// The places that it uses when it chooses to hang around at home
-	HangAroundPlaces hangAround {};
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -626,6 +570,8 @@ struct Commands
 	bool finishSpells {false};
 	bool startSwapBeam {false};
 	bool easeSwap {false};
+	/// The creature communicated its state this turn, and what it showed
+	std::optional<creature_desires::Communication> communicated;
 };
 
 /// random(n) is a whole number from 0 to n - 1
@@ -708,6 +654,9 @@ struct PooBy
 [[nodiscard]] std::vector<Step> ThrowGiven(glm::vec3 camera);
 /// Playing an action once on the spot
 [[nodiscard]] std::vector<Step> Emote(size_t animation);
+/// Communicating its state to the player: turning to face the camera, then showing what it feels. Its head looks at
+/// the camera all the time.
+[[nodiscard]] std::vector<Step> Communicate(glm::vec2 camera);
 /// Turning to face a point, then playing an action
 [[nodiscard]] std::vector<Step> FaceAndEmote(glm::vec2 point, size_t animation);
 /// Walking up to something, then playing an action at it
@@ -722,24 +671,12 @@ struct PooBy
 [[nodiscard]] std::vector<Step> DestroyThing(uint32_t object);
 /// Waiting a while, looking about
 [[nodiscard]] std::vector<Step> LookAbout(float seconds);
-/// The need to see to first, if any is strong enough and the means are at hand, and the agenda for it
-struct NeedPlan
-{
-	Activity activity;
-	std::vector<Step> agenda;
-};
-[[nodiscard]] std::optional<NeedPlan> ChooseNeed(const Wants& wants, const Random& random);
-/// What to do about curiosity, play or anger, if any is strong enough and there is something at hand to do it with, or
-/// with something held and nothing more to do with it, putting it down
-[[nodiscard]] std::optional<NeedPlan> ChooseObjectActivity(const Wants& wants, const Random& random);
 /// Whether the creature is asleep, or out cold, in its current step
 [[nodiscard]] bool IsAsleep(const IdleMind& mind);
 [[nodiscard]] bool IsUnconscious(const IdleMind& mind);
 
 /// A new agenda in place of the current one
 void Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda);
-/// The next agenda when the current runs out
-void ChooseNext(IdleMind& mind, const Senses& senses, const Random& random);
 /// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on
 [[nodiscard]] std::optional<creature_face::Request> PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
                                                              const Random& random);

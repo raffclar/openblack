@@ -87,6 +87,13 @@ constexpr float k_SmileSeconds = 4.0f;
 constexpr float k_SmileExtraSeconds = 4.0f;
 constexpr uint32_t k_HappyAfterSmilingLots = 2;
 
+/// Showing off to the thing that the desire is about: going near it (three times its height away), turning to face it
+/// for a tenth of a second while it watches it, then playing its look-at-me and, as random(2) gives 0 or not, its
+/// impress or its summon. With no thing it plays the actions where it stands.
+[[nodiscard]] std::vector<Step> ShowImpressiveAnimation(std::optional<uint32_t> thing, float height, const Random& random);
+constexpr float k_ShowOffHeights = 3.0f;
+constexpr float k_ShowOffFaceSeconds = 0.1f;
+
 /// Waving at a thing: going near it (three and a half times its height away), smiling; turning to face it 1.4 seconds,
 /// watching it; then a friendly wave
 [[nodiscard]] std::vector<Step> WaveAt(uint32_t thing, float height);

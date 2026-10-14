@@ -40,17 +40,23 @@ namespace openblack::creature_mind_tables
 struct Tables;
 }
 
-/// What the creature mind system's files share: how a species' desires start, and finding food, water and things to
-/// hurl at about a creature
+/// What the files of the creature mind system share: how the desires of a species start, and how to find the food and
+/// the water near a creature
 namespace openblack::ecs::systems::mind_detail
 {
 [[nodiscard]] std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> SetupFor(CreatureType species);
 [[nodiscard]] std::optional<float> FoodValueOf(entt::entity entity);
-[[nodiscard]] std::optional<creature_mind::Wants::WaterSpot> NearestWater(glm::vec2 from);
-[[nodiscard]] std::optional<glm::vec2> NearestHurlTarget(ecs::Registry& registry, glm::vec2 from);
+[[nodiscard]] std::optional<creature_mind::WaterSpot> NearestWater(glm::vec2 from);
+/// The kind of belief a creature keeps about a thing, by the game's belief types; none for the things it does not yet
+/// know the kind of here
+[[nodiscard]] std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing);
 /// What a creature knows of a thing, as far as the world here tells it
 [[nodiscard]] std::optional<creature_tree::Belief> BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                             entt::entity self);
+/// What a creature knows of a thing that it acts on. The temple here is one thing, which stands for its heart when a
+/// creature acts on it.
+[[nodiscard]] std::optional<creature_tree::Belief> ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,
+                                                                   entt::entity self);
 /// What a plan's desire was about, for the lessons feedback teaches: what the plan says it was about, else for a desire
 /// about something in itself the thing it acted on, else nothing
 [[nodiscard]] std::optional<uint32_t> LessonActivity(const creature_mind_tables::Tables& tables,
@@ -61,9 +67,12 @@ namespace openblack::ecs::systems::mind_detail
 /// that the creature holds has the highest value.
 [[nodiscard]] float Nearness(const ecs::Registry& registry, entt::entity creature, const glm::vec3& at, entt::entity object,
                              const glm::vec3& place, float distanceWeight);
-/// How useful the creature has learnt a food is to eat, 0.1 when nothing is known
-[[nodiscard]] float FoodUsefulness(const ecs::Registry& registry, const components::CreatureMindState& mind, entt::entity self,
-                                   entt::entity food);
+/// The town nearest a point along the ground, of any player or none; none when there is no town
+[[nodiscard]] entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point);
+/// Whether a creature can be angry with a different creature. The other creature must not be dead. Its species must
+/// let creatures attack it.
+[[nodiscard]] bool MayBeAngryWith(const ecs::Registry& registry, entt::entity other, entt::entity creature,
+                                  const creature_mind_tables::Tables& tables);
 /// How often a creature has seen a miracle cast, and how often it must see it to learn it; none for a miracle it can't
 /// learn by watching
 [[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(const components::CreatureMindState& mind,

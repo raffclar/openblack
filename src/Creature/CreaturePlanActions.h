@@ -148,6 +148,8 @@ enum class Build : uint8_t
 	PooAtHome,
 	SmileAt,
 	WaveAt,
+	/// Showing off to a thing: going near it and playing two impressive actions
+	ShowOff,
 	BeFrightened,
 	PutDown,
 	DeadForever,
@@ -210,11 +212,9 @@ struct Executor
 /// What the agenda needs to know of where the creature is
 struct Situation
 {
-	/// Where the player looks from, the nearest water's edge and the water, and the action that shows its strongest
-	/// desire
+	/// Where the player looks from, the nearest water's edge and the water
 	std::optional<glm::vec2> camera;
-	std::optional<creature_mind::Wants::WaterSpot> water;
-	std::optional<size_t> showDesireAnimation;
+	std::optional<creature_mind::WaterSpot> water;
 	/// Fishing at the nearest fish farm: its shoal (the farm itself without one), where the creature would stand to fish
 	/// for itself (the shoal, or the nearest place it can stand near enough to it; none for none), how near it goes,
 	/// whether its hand must be emptied first, whether it already has food in its hand, and its height. None with no

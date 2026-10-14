@@ -144,7 +144,7 @@ TEST(CreatureActionAgendas, TakingInAThingIsDoneAtOnce)
 {
 	IdleMind mind;
 	Plan(mind, Activity::Planned, {{.kind = Step::Kind::Observe, .object = 3}});
-	const auto commands = Think(mind, {.seconds = 0.1f, .choosesNext = false}, NeverFirst);
+	const auto commands = Think(mind, {.seconds = 0.1f}, NeverFirst);
 	EXPECT_EQ(commands.effect, Effect::Observed);
 	EXPECT_EQ(commands.effectObject, 3u);
 	EXPECT_EQ(mind.step, 1u);
@@ -182,7 +182,7 @@ TEST(CreatureActionAgendas, LookingACreatureOverLastsFiveToFifteenSeconds)
 		mind.step = 2;
 		// The faces it pulls draw too; only the time's draw is fixed
 		const auto random = [draw](uint32_t range) { return range == game_random::k_FloatRandRange ? draw : 0u; };
-		const creature_mind::Senses senses {.seconds = 0.1f, .choosesNext = false};
+		const creature_mind::Senses senses {.seconds = 0.1f};
 		const auto faces = [](uint32_t /*range*/) { return 0u; };
 		auto commands = Think(mind, senses, random);
 		EXPECT_EQ(mind.inspectTurns, turns);
@@ -234,7 +234,7 @@ TEST(CreatureActionAgendas, WatchingAFlyingThingLastsWhileItFliesUpToFourSeconds
 	// The lowest draw every turn: it counts the turn it starts on, and stops on the twentieth
 	IdleMind mind;
 	Plan(mind, Activity::Planned, LookAtFlyingObject(4, [](uint32_t /*range*/) { return 1u; }));
-	creature_mind::Senses senses {.seconds = 0.1f, .objectInTheAir = true, .choosesNext = false};
+	creature_mind::Senses senses {.seconds = 0.1f, .objectInTheAir = true};
 	const auto lowest = [](uint32_t /*range*/) { return 0u; };
 	uint32_t turns = 0;
 	while (mind.step == 0 && turns < 100)
@@ -278,7 +278,7 @@ TEST(CreatureActionAgendas, WatchingTheHandLastsItsTurnsUpToFiveSeconds)
 
 	IdleMind mind;
 	Plan(mind, Activity::Planned, LookAtHand());
-	creature_mind::Senses senses {.seconds = 0.1f, .choosesNext = false};
+	creature_mind::Senses senses {.seconds = 0.1f};
 	senses.hand = creature_mind::Senses::CameraView {.distance = 30.0f, .groundDistance = 20.0f, .point = {0.0f, 20.0f}};
 	uint32_t turns = 0;
 	while (mind.step == 0 && turns < 100)
@@ -328,6 +328,22 @@ TEST(CreatureActionAgendas, SmilingAndWavingGoNearAndFaceTheOther)
 	EXPECT_FLOAT_EQ(wave[0].movement.maxDistance, 35.0f);
 	EXPECT_FLOAT_EQ(wave[1].seconds, 1.4f);
 	EXPECT_EQ(wave[2].animation, animations::k_FriendlyWave);
+}
+
+TEST(CreatureActionAgendas, ShowingOffGoesNearThePartFacesItAndPlaysTwoActions)
+{
+	const auto first = ShowImpressiveAnimation(5, 10.0f, [](uint32_t) { return 0u; });
+	ASSERT_EQ(first.size(), 4);
+	EXPECT_EQ(first[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(first[0].movement.maxDistance, 30.0f);
+	EXPECT_EQ(first[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(first[1].seconds, 0.1f);
+	EXPECT_EQ(first[2].animation, k_LookAtMeAnimation);
+	EXPECT_EQ(first[3].animation, animations::k_Impress);
+	const auto other = ShowImpressiveAnimation(std::nullopt, 10.0f, [](uint32_t) { return 1u; });
+	ASSERT_EQ(other.size(), 2);
+	EXPECT_EQ(other[0].animation, k_LookAtMeAnimation);
+	EXPECT_EQ(other[1].animation, animations::k_Summon);
 }
 
 TEST(CreatureActionAgendas, FrightenedPuttingDownAndLyingDead)
