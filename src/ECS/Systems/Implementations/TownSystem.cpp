@@ -482,7 +482,10 @@ void TownSystem::SetInStateOfEmergency(entt::entity townEntity)
 		for (const auto villager : data->inhabitants)
 		{
 			auto* action = registry.TryGet<LivingAction>(villager);
-			if (action != nullptr && villager_routine::AnswersTownEmergency(living.VillagerGetFinalState(*action)))
+			if (action != nullptr &&
+			    villager_routine::AnswersTownEmergency(
+			        living.VillagerGetFinalState(*action),
+			        static_cast<VillagerStates>(action->states.at(static_cast<size_t>(LivingAction::Index::Previous)))))
 			{
 				living.VillagerSetState(*action, LivingAction::Index::Top, VillagerStates::GotoCongregateInTownAfterEmergency,
 				                        false);

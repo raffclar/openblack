@@ -270,6 +270,9 @@ struct ObjectSetup
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
 	/// A villager belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A villager lives in the scenario's building of this index. The building must come before the villager in the
+	/// list.
+	std::optional<size_t> homeIn;
 	/// A villager goes to make love with the scenario's object of this index once the walk delay is up, as a breeder
 	/// sends one: both walk to meet and kiss there
 	std::optional<size_t> mateWith;

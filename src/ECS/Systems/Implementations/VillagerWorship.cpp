@@ -308,14 +308,7 @@ void LeaveTheWay(entt::entity villager)
 /// not a disciple unless disciples may go, and not already worshipping or on its way
 bool IsAvailableForWorshipSite(entt::entity villager, bool disciplesToo)
 {
-	auto& registry = Entities();
-	auto* action = registry.TryGet<LivingAction>(villager);
-	if (action == nullptr || registry.AllOf<ScriptControlled>(villager) ||
-	    !systems::villager_reactions::AvailableForStateChange(villager))
-	{
-		return false;
-	}
-	if ((StateInfo(FinalOf(*action)).field0xa8 & 1) == 0)
+	if (!systems::villager_reactions::FreeForNewTask(villager))
 	{
 		return false;
 	}
