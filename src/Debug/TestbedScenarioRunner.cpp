@@ -92,6 +92,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
@@ -403,6 +404,16 @@ entt::entity PlaceAnimal(AnimalInfo type, const ObjectSetup& object, glm::vec3 p
 	auto& animalSystem = Locator::animalSystem::value();
 	const glm::vec2 point {position.x, position.z};
 	entt::entity animal = entt::null;
+	// A script's animal: made and held still as a land's script makes one, and under the script's control from then on
+	if (object.inScript)
+	{
+		animal = animalSystem.CreateScriptAnimal(type, point);
+		if (animal != entt::null)
+		{
+			Locator::entitiesRegistry::value().AssignOrReplace<ecs::components::ScriptControlled>(animal);
+			return animal;
+		}
+	}
 	if (object.living && animals::grazers::IsGrazer(type))
 	{
 		animal = animalSystem.CreateGrazer(type, point, 0, entt::null, entt::null);

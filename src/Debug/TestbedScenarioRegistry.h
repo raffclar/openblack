@@ -295,7 +295,8 @@ struct ObjectSetup
 	/// Only the grazers and the land's birds can live. Other kinds, and all animals without this flag, stay at their
 	/// position. They show the clip of an animal that a script holds still.
 	bool living {false};
-	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes
+	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes. An animal
+	/// is made as a land's script makes one, and the script controls it.
 	bool inScript {false};
 	/// A villager is made a disciple of this work, as a land's script makes one
 	VillagerDisciple disciple {VillagerDisciple::None};

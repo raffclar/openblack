@@ -55,6 +55,23 @@ inline constexpr float k_FormationSpacing = 10.0f;
 /// leader to the follower, then the row's spacing along that angle's x and the column's along its z, from the leader
 [[nodiscard]] glm::vec2 FormationGoal(glm::vec2 leader, glm::vec2 follower, FormationSlot slot);
 
+/// What lets an animal take up a reaction to what it sees, or not
+struct ReactionFacts
+{
+	/// A script controls it: one the script made or took hold of
+	bool scriptControlled {false};
+	/// It is in the hand, in the physics or carried by a storm
+	bool outOfTheWorld {false};
+	/// It is dying, dead, downed, being eaten or waiting for a clip, or about to be
+	bool busyState {false};
+};
+/// An animal takes up no reaction while a script controls it: a script's animal stays where the script put it, even
+/// with a creature at its side
+[[nodiscard]] constexpr bool AvailableForReaction(const ReactionFacts& facts)
+{
+	return !facts.scriptControlled && !facts.outOfTheWorld && !facts.busyState;
+}
+
 /// A killed animal lies dead this many turns, and one more, before it goes
 inline constexpr int32_t k_TurnsToDieOver = 600;
 /// The clip a kind of animal falls dead with, and the one it then lies dead in, once killed; none where its kind keeps

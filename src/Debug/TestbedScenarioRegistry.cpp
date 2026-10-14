@@ -448,6 +448,28 @@ void AddNeeds(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Cow, .offset = {30.0f, -60.0f}, .living = true}},
 	});
 
+	// A tiger that stands still between two cows: the left one a script made and holds, as Land 1 holds the leash
+	// lesson's cow, and the right one free
+	all.push_back({
+	    .id = "animals.script_cow_beside_creature",
+	    .name = "A script's cow stays beside a creature",
+	    .facet = Facet::Animals,
+	    .description = "A tiger stands still between two cows, eight metres from each. The cow on the left was made by "
+	                   "a script that holds it: it can't be moved, picked up or killed, as the cow of Land 1's leash "
+	                   "lesson. The cow on the right is free.",
+	    .expected = "The free cow sees the tiger and runs from it. The script's cow stays where it was put, in the clip "
+	                "of an animal a script holds still, and takes no notice of the tiger.",
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -10.0f}, {20.0f, 10.0f}}, .distance = 0.6f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .pauseMind = true}},
+	    .objects = {{.type = AnimalInfo::Cow,
+	                 .offset = {-8.0f, 0.0f},
+	                 .indestructible = true,
+	                 .inScript = true,
+	                 .cannotBePickedUp = true,
+	                 .immovable = true},
+	                {.type = AnimalInfo::Cow, .offset = {8.0f, 0.0f}, .living = true}},
+	});
+
 	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",
