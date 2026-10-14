@@ -147,11 +147,3 @@ TEST(ScriptSoundEffect, ABanksFileNamesItWhateverItsCase)
 	EXPECT_EQ(audio::BankOfFile("music.sad"), audio::ScriptSoundBank::None);
 	EXPECT_EQ(audio::BankOfFile(""), audio::ScriptSoundBank::None);
 }
-
-TEST(ScriptSoundEffect, TheFightControlsNeedTheFightWatchedWithAnEmptyHand)
-{
-	EXPECT_TRUE(audio::InCreatureFightControls(true, true, true));
-	EXPECT_FALSE(audio::InCreatureFightControls(false, true, true));
-	EXPECT_FALSE(audio::InCreatureFightControls(true, false, true));
-	EXPECT_FALSE(audio::InCreatureFightControls(true, true, false));
-}

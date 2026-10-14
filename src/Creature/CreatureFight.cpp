@@ -160,6 +160,16 @@ bool creature_fight::ReplacesQueue(Button button)
 
 bool creature_fight::GroundPressCounts(const Arena& arena, glm::vec2 point)
 {
+	return InArena(arena, point);
+}
+
+bool creature_fight::DirectsFight(bool playersCreatureDuels, bool cameraShowsFight, bool handEmpty)
+{
+	return playersCreatureDuels && cameraShowsFight && handEmpty;
+}
+
+bool creature_fight::InArena(const Arena& arena, glm::vec2 point)
+{
 	return glm::distance(point, arena.centre) < arena.radius;
 }
 

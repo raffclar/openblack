@@ -49,6 +49,8 @@ public:
 	                                                        float within) override;
 
 	[[nodiscard]] std::optional<entt::entity> PlayersFighter() const override;
+	[[nodiscard]] bool DirectsFight() const override;
+	void FlewTo(const glm::vec3& place) override;
 	bool Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, creature_fight::Button button, uint32_t milliseconds,
 	           uint32_t turn) override;
 	void Release(uint32_t milliseconds, uint32_t turn) override;
@@ -133,6 +135,8 @@ private:
 	std::optional<Watched> _view;
 	/// How long the camera has looked at an arena from within it
 	float _lookSeconds {0.0f};
+	/// The place on the land that a double click sent the world camera to, until the next update of the view
+	std::optional<glm::vec2> _flightPlace;
 	/// Whether the player may leave the fight view, and it ends by itself (scripts may forbid it)
 	bool _fightExit {true};
 	/// A press on a body is held: the sparkle added last charges
