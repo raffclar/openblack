@@ -743,13 +743,29 @@ std::vector<ScriptInfo> GameScripts::Scripts() const
 	return scripts;
 }
 
-std::variant<uint32_t, std::string> GameScripts::Run(std::string_view name)
+std::variant<uint32_t, std::string> GameScripts::Run(std::string_view name, const std::vector<ScriptValue>& args)
 {
 	auto& vm = Locator::vm::value();
 	const auto& scripts = vm.GetScripts();
-	if (std::ranges::none_of(scripts, [name](const auto& script) { return script.name == name; }))
+	const auto script = std::ranges::find_if(scripts, [name](const auto& script) { return script.name == name; });
+	if (script == scripts.end())
 	{
 		return "no script " + std::string(name) + "; script.vm lists how many there are, script.tasks those running";
+	}
+	if (args.size() != script->parameterCount)
+	{
+		return std::string(name) + " takes " + std::to_string(script->parameterCount) + " parameters; " +
+		       std::to_string(args.size()) + " given";
+	}
+	if (std::ranges::any_of(args, [](const ScriptValue& value) { return value.type == ScriptValue::Type::String; }))
+	{
+		return "a script's parameter is not a text";
+	}
+	// The parameters go on the stack in order, as a script's call puts them, and the new task takes them from there
+	for (const auto& value : args)
+	{
+		const auto [vmValue, type] = ToVm(value);
+		vm.Push(vmValue, type);
 	}
 	const auto task = vm.StartScript(std::string(name), lhvm::ScriptType::All);
 	if (task == 0)

@@ -3075,7 +3075,9 @@ void Runner::UpdateRewards()
 		}
 		const auto point = MapPoint(_middle, setup.offset);
 		const glm::vec3 at {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y};
-		_rewards.at(i) = Locator::rewardSystem::value().Create(at, setup.type, player, entt::null, setup.fromSky);
+		const auto town =
+		    setup.inTown ? Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(_middle)) : entt::null;
+		_rewards.at(i) = Locator::rewardSystem::value().Create(at, setup.type, player, town, setup.fromSky);
 		Log(fmt::format("Reward chest {} (kind {}) given at {:.0f}, {:.0f}", i, static_cast<int>(setup.type), point.x,
 		                point.y));
 	}

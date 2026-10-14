@@ -409,14 +409,16 @@ public:
 	{
 		return {{.name = "Land1Intro", .file = "Land1.txt", .type = "script", .parameters = 0}};
 	}
-	std::variant<uint32_t, std::string> Run(std::string_view name) override
+	std::variant<uint32_t, std::string> Run(std::string_view name, const std::vector<ScriptValue>& args) override
 	{
 		if (name != "Land1Intro")
 		{
 			return std::string("no script");
 		}
+		runArgs = args;
 		return uint32_t {7};
 	}
+	std::vector<ScriptValue> runArgs;
 	std::string StopTask(uint32_t task) override { return task == 7 ? std::string {} : "no task"; }
 	[[nodiscard]] std::vector<ScriptGlobal> Globals() const override
 	{
@@ -471,6 +473,14 @@ TEST(InspectorScripts, RunGlobalsAndNatives)
 	EXPECT_EQ(Ask(inspector, R"({"query": "script.scripts", "params": {"name": "land1.TXT"}})")["total"], 1);
 	EXPECT_EQ(Ask(inspector, R"({"query": "script.run", "params": {"name": "Land1Intro"}})")["task"], 7);
 	EXPECT_FALSE(Refused(inspector, R"({"query": "script.run", "params": {"name": "Nope"}})").empty());
+	EXPECT_TRUE(scripts.runArgs.empty());
+	// The parameters reach the script in order
+	EXPECT_EQ(
+	    Ask(inspector, R"({"query": "script.run", "params": {"name": "Land1Intro", "args": [3, {"object": 12}]}})")["task"], 7);
+	ASSERT_EQ(scripts.runArgs.size(), 2u);
+	EXPECT_FLOAT_EQ(scripts.runArgs[0].number, 3.0f);
+	EXPECT_EQ(scripts.runArgs[1].type, ScriptValue::Type::Object);
+	EXPECT_EQ(scripts.runArgs[1].object, 12u);
 	EXPECT_EQ(Ask(inspector, R"({"query": "script.stop", "params": {"task": 7}})")["stopped"], 7);
 
 	const auto globals = Ask(inspector, R"({"query": "script.globals", "params": {"name": "land1"}})");

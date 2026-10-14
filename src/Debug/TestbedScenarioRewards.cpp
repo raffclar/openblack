@@ -66,4 +66,17 @@ void testbed_scenarios::AddRewardScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -7.0f}, .look = {0.0f, 0.5f, 0.0f}},
 	    .rewards = {{.type = RewardObjectInfo::RewardObjectToyBall, .offset = {0.0f, 0.0f}, .fromSky = false}},
 	});
+	all.push_back({
+	    .id = "story.reward_town_seed",
+	    .name = "A town learning a miracle from a reward chest",
+	    .facet = Facet::Miracles,
+	    .description = "A food seed reward chest stands close in front of the camera, given in the player's town, as "
+	                   "a challenge's script gives a reward in a town. Tap it with the Action button.",
+	    .expected = "The chest opens as usual. The town learns food, and the food seed spins 2.6 m above the "
+	                "opened chest at eight tenths of its usual size, lit by the land, until the chest goes 200 game turns "
+	                "later. A click on the spinning seed is a click on the chest.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -9.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .rewards = {{.type = RewardObjectInfo::SpellSeedFood, .offset = {0.0f, 0.0f}, .fromSky = false, .inTown = true}},
+	});
 }

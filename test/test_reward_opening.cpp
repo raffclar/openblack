@@ -265,6 +265,19 @@ TEST(RewardOpening, TheOpenedChestsClipHoldsAtItsEndUnlessItLoops)
 	EXPECT_EQ(reward::StepOpenedClip(5, 16, 0, false), 0u);
 }
 
+TEST(RewardOpening, TheTownSeedsAlphaKeepsOnlyTheLowByteOfItsFade)
+{
+	// Fully faded in, 255 times 255 keeps only 1
+	EXPECT_EQ(reward::TownSeedAlpha(reward::k_OpenedTurns), 1);
+	EXPECT_EQ(reward::TownSeedAlpha(30), 1);
+	// In the last 30 turns the fade goes down and the low byte goes up
+	EXPECT_EQ(reward::TownSeedAlpha(29), 14);
+	EXPECT_EQ(reward::TownSeedAlpha(20), 129);
+	EXPECT_EQ(reward::TownSeedAlpha(11), 244);
+	EXPECT_EQ(reward::TownSeedAlpha(10), 0);
+	EXPECT_EQ(reward::TownSeedAlpha(0), 0);
+}
+
 TEST(RewardOpening, AGestureShownOnTheLandIsLaidFromTheChestEastAndSouth)
 {
 	gesture::TrailSymbol symbol;

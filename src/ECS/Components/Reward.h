@@ -63,4 +63,16 @@ struct RewardOnLand
 {
 };
 
+/// The miracle that a chest's town has learnt from it, spinning above the opened chest until the chest goes
+struct RewardSeed
+{
+	SpellSeedType seed {SpellSeedType::None};
+	/// Where it spins
+	glm::vec3 middle {0.0f};
+	float spin {0.0f};
+	/// A creature spell's phial runs through its texture and pulses
+	float phialFrame {0.0f};
+	float phialPhase {0.0f};
+};
+
 } // namespace openblack::ecs::components
