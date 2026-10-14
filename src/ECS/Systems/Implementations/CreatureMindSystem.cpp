@@ -74,6 +74,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -996,6 +997,16 @@ entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point)
 	return nearest;
 }
 
+/// Put a new handful for a creature into the map at once, as the game does with each new pot. A creature cannot pick
+/// up a thing that is not in the map.
+void PutOnTheMap(entt::entity food)
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Refile(food);
+	}
+}
+
 /// The food a creature fishing brings out of the sea: a handful at its feet of a thousand for each unit of its size,
 /// drawn half as big again as the creature, belonging to the nearest town. Nothing comes out of a fish farm.
 std::optional<entt::entity> FoodFromTheSea(ecs::Registry& registry, entt::entity creature)
@@ -1020,6 +1031,7 @@ std::optional<entt::entity> FoodFromTheSea(ecs::Registry& registry, entt::entity
 	{
 		foodTransform->scale = glm::vec3(size * k_ScalePerSize);
 	}
+	PutOnTheMap(food);
 	return food;
 }
 
@@ -1064,6 +1076,7 @@ std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity c
 	{
 		foodTransform->scale = glm::vec3(size * k_ScalePerSize);
 	}
+	PutOnTheMap(food);
 	return food;
 }
 
