@@ -43,6 +43,8 @@ enum class Target : uint8_t
 	HurtVillager,
 	Creature,
 	Living,
+	/// A creature that is not dead or lying out cold, to fight
+	FightableCreature,
 	/// What frightens creatures: other creatures, bats, vultures and lions, and miracles
 	Frightening,
 	/// Anything at all it can see
@@ -193,6 +195,8 @@ enum class Build : uint8_t
 	EatFromPile,
 	/// Looking another creature over
 	InspectCreature,
+	/// Fighting another creature: it asks the other creature to fight, and the fight then has the two creatures
+	Fight,
 	/// Looking at a thing flying through the air
 	LookAtFlyingObject,
 	/// Looking at the player's hand
@@ -321,6 +325,8 @@ struct Situation
 	std::optional<glm::vec3> eye;
 	bool hasPlayer {false};
 	bool controlledByScript {false};
+	/// Whether it has enough life to start a fight
+	bool healthyEnoughToFight {false};
 	float radius {0.0f};
 	/// Its height, and the height and radius on the ground of the thing the action is done to
 	float height {0.0f};

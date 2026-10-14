@@ -759,9 +759,8 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		}
 		registry.Get<CreatureAnimation>(self).body = {};
 
-		auto& record = registry.AllOf<CreatureFightRecord>(self) ? registry.Get<CreatureFightRecord>(self)
-		                                                         : registry.Assign<CreatureFightRecord>(self);
-		++record.fights;
+		const auto& record = registry.AllOf<CreatureFightRecord>(self) ? registry.Get<CreatureFightRecord>(self)
+		                                                               : registry.Assign<CreatureFightRecord>(self);
 		const auto* needs = registry.TryGet<const CreatureNeeds>(self);
 		const auto bodyNeeds = needs != nullptr ? needs->needs : creature_physiology::Needs {};
 
@@ -782,6 +781,13 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		registry.AssignOrReplace<CreatureFighting>(self, std::move(fighting));
 	}
 	StartArenaFight(registry, *arenaEntity, creature, opponent);
+	const bool planned = _startReason == "plan" || _startReason == "anger";
+	registry.Get<CreatureFighting>(creature).planned = planned;
+	// The fight has the minds of both creatures
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().FightStarted(creature, opponent, planned);
+	}
 
 	if (fight_transcript::Recording())
 	{
@@ -842,6 +848,7 @@ void CreatureFightSystem::Reset()
 	_seen.clear();
 	_actionCause.clear();
 	_flightPlace.reset();
+	_screenCentre.reset();
 	_fightExit = true;
 	if (Locator::particleSystem::has_value())
 	{
@@ -991,9 +998,9 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 	const auto own = PrimaryCreatureOf(registry, k_LocalPlayer);
 	const bool involved = own == first || own == second;
 	const bool scripted = registry.AnyOf<ScriptControlled>(first) || registry.AnyOf<ScriptControlled>(second);
-	// A double click measures from where the camera was before its flight
-	const auto eye = from.has_value() ? from->first : camera.GetOrigin(Camera::Interpolation::Target);
-	const auto looking = from.has_value() ? from->second : camera.GetFocus(Camera::Interpolation::Target);
+	// The camera is too far when it is far from the arena now, and so is the land in the middle of the screen. A double
+	// click measures from where the camera was before its flight.
+	const auto [eye, looking] = from.has_value() ? *from : ViewNow();
 	// The player's creature's fight under a script's control is always watched; any other only from near enough
 	const bool tooFar =
 	    !(involved && scripted) && fight_view::TooFar({eye.x, eye.z}, {looking.x, looking.z}, arena.centre, arena.radius, 1.0f);
@@ -1401,13 +1408,25 @@ bool CreatureFightSystem::DirectsFight() const
 	                           HandHoldsNothing(Locator::entitiesRegistry::value()));
 }
 
+std::pair<glm::vec3, glm::vec3> CreatureFightSystem::ViewNow()
+{
+	if (!Locator::camera::has_value())
+	{
+		return {glm::vec3(0.0f), _screenCentre.value_or(glm::vec3(0.0f))};
+	}
+	const auto& camera = Locator::camera::value();
+	if (const auto hit = camera.RaycastScreenCoordToLand({0.5f, 0.5f}, true, Camera::Interpolation::Drawn); hit.has_value())
+	{
+		_screenCentre = hit->position;
+	}
+	return {camera.GetOrigin(Camera::Interpolation::Drawn),
+	        _screenCentre.value_or(camera.GetFocus(Camera::Interpolation::Drawn))};
+}
+
 void CreatureFightSystem::FlewTo(const glm::vec3& place)
 {
 	// The test of distance uses the camera as it is before the flight moves it
-	const auto eye =
-	    Locator::camera::has_value() ? Locator::camera::value().GetOrigin(Camera::Interpolation::Target) : glm::vec3(0.0f);
-	const auto focus =
-	    Locator::camera::has_value() ? Locator::camera::value().GetFocus(Camera::Interpolation::Target) : glm::vec3(0.0f);
+	const auto [eye, focus] = ViewNow();
 	_flightPlace = Flight {.place = glm::vec2(place.x, place.z), .eye = eye, .focus = focus};
 }
 
@@ -1837,8 +1856,6 @@ std::optional<creature_fight_hud::Values> CreatureFightSystem::GetPanel() const
 
 void CreatureFightSystem::ProcessTurn()
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<CreatureFightRecord>([](CreatureFightRecord& record) { record.secondsSinceFight += k_TurnSeconds; });
 	StartFightsFromMinds();
 	ProcessStages();
 	ProcessDuels();
@@ -1916,6 +1933,18 @@ void CreatureFightSystem::NoteFightOver(entt::entity creature, std::string_view 
 	transcript.End(creature);
 }
 
+CreatureFightSystemInterface::StartResult CreatureFightSystem::StartPlannedFight(entt::entity creature, entt::entity opponent)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
+	const bool angry = mind != nullptr && mind->planner.current.has_value() &&
+	                   mind->planner.current->desire == creature_desires::Desire::Anger;
+	_startReason = angry ? "anger" : "plan";
+	const auto result = StartFight(creature, opponent);
+	_startReason = "request";
+	return result;
+}
+
 void CreatureFightSystem::StartFightsFromMinds()
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1941,51 +1970,10 @@ void CreatureFightSystem::StartFightsFromMinds()
 		}
 	});
 
-	const auto leashWanted = wanted.size();
-
-	// A creature angry enough picks a fight with the nearest creature in reach
-	if (_angerStartsFights)
+	for (const auto& [creature, opponent] : wanted)
 	{
-		registry.Each<const CreatureMindState, const Creature, const Transform>(
-		    [&](entt::entity entity, const CreatureMindState& mind, const Creature& creature, const Transform& transform) {
-			    if (!mind.desires.has_value() || mind.paused || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
-			    {
-				    return;
-			    }
-			    const auto& anger = (*mind.desires)[creature_desires::Desire::Anger];
-			    if (!anger.activated || anger.value < fight::k_AngerToFight)
-			    {
-				    return;
-			    }
-			    std::optional<entt::entity> nearest;
-			    float best = std::numeric_limits<float>::max();
-			    registry.Each<const Creature, const Transform>(
-			        [&](entt::entity other, const Creature& /*body*/, const Transform& at) {
-				        if (other == entity || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(other))
-				        {
-					        return;
-				        }
-				        const auto distance = glm::distance(Flat(at.position), Flat(transform.position));
-				        if (distance < best)
-				        {
-					        best = distance;
-					        nearest = other;
-				        }
-			        });
-			    const auto* record = registry.TryGet<const CreatureFightRecord>(entity);
-			    const auto since = record != nullptr ? record->secondsSinceFight : fight::k_SecondsBetweenFights;
-			    if (nearest.has_value() &&
-			        fight::WantsToFight(anger.value, LifeOf(registry, entity), best, ShownSize(creature), since))
-			    {
-				    wanted.emplace_back(entity, *nearest);
-			    }
-		    });
-	}
-	for (size_t i = 0; i < wanted.size(); ++i)
-	{
-		// The leash asks first; anger asks after it
-		_startReason = i < leashWanted ? "leash" : "anger";
-		StartFight(wanted.at(i).first, wanted.at(i).second);
+		_startReason = "leash";
+		StartFight(creature, opponent);
 	}
 	_startReason = "request";
 }
@@ -2139,6 +2127,10 @@ void CreatureFightSystem::BeginDuel(entt::entity creature)
 	NoteStage(creature, fighting.stage, CreatureFighting::Stage::Duel);
 	fighting.stage = CreatureFighting::Stage::Duel;
 	fighting.stageSeconds = 0.0f;
+	// A fight counts once the duel starts. A fight left before it does not count.
+	auto& record = registry.AllOf<CreatureFightRecord>(creature) ? registry.Get<CreatureFightRecord>(creature)
+	                                                             : registry.Assign<CreatureFightRecord>(creature);
+	++record.fights;
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
@@ -2930,6 +2922,14 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 	}
 	Leave(loser);
 	Faint(loser);
+	// Both take up no reaction until what the knock-out made them do is over
+	for (const auto self : {winner, loser})
+	{
+		if (const auto* mind = registry.Valid(self) ? registry.TryGet<const CreatureMindState>(self) : nullptr)
+		{
+			registry.AssignOrReplace<CreatureAfterFight>(self, CreatureAfterFight {.agenda = mind->idle.serial});
+		}
+	}
 	if (auto* fighting = registry.TryGet<CreatureFighting>(winner))
 	{
 		NoteStage(winner, fighting->stage, CreatureFighting::Stage::Celebrate);
@@ -2992,7 +2992,6 @@ void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool>
 	record.tendency = fighting->fighter.tendency;
 	record.control = fighting->fighter.control;
 	record.foughtBefore = true;
-	record.secondsSinceFight = 0.0f;
 	if (won.has_value() && Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().FoughtFight(creature, *won);
@@ -3020,10 +3019,6 @@ void CreatureFightSystem::Leave(entt::entity creature)
 	}
 	auto& record = registry.AllOf<CreatureFightRecord>(creature) ? registry.Get<CreatureFightRecord>(creature)
 	                                                             : registry.Assign<CreatureFightRecord>(creature);
-	if (!fighting->ended)
-	{
-		record.secondsSinceFight = 0.0f;
-	}
 	// Its fight health stays as the fight left it
 	record.health = fighting->fighter.health;
 	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))

@@ -68,8 +68,6 @@ public:
 	void Resurrect(entt::entity creature) override { out.erase(creature); }
 	[[nodiscard]] bool IsKnockedOut(entt::entity creature) const override { return out.contains(creature); }
 	[[nodiscard]] std::optional<creature_fight_hud::Values> GetPanel() const override { return std::nullopt; }
-	void SetAngerStartsFights(bool /*enabled*/) override {}
-	[[nodiscard]] bool GetAngerStartsFights() const override { return false; }
 	void SetCameraWatches(bool /*enabled*/) override {}
 	[[nodiscard]] bool GetCameraWatches() const override { return false; }
 	[[nodiscard]] bool IsCameraOnFight() const override { return false; }

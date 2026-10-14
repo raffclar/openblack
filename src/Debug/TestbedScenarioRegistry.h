@@ -130,8 +130,6 @@ struct Environment
 	float bodyTimeScale {1.0f};
 	/// Whether creatures faint when exhausted, starved or out of life
 	bool fainting {true};
-	/// Whether angry creatures pick fights with others nearby by themselves
-	bool angerStartsFights {false};
 	/// Smiley faces for footprints as on the first of April, or by the date when not given
 	std::optional<bool> aprilFools;
 	/// The grid of every miracle's dispenser the testbed lays out in front of the camera stays, or is cleared away

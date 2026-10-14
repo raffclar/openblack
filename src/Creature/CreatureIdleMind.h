@@ -416,6 +416,9 @@ struct Step
 		/// within the step's movement distance, whenever it is further and still. Then it holds where it is for one to four
 		/// seconds, picked at random, and the step is done.
 		FollowWatching,
+		/// Fighting another creature (the step's object): as it starts, it asks that creature to fight. If the other
+		/// creature does not agree, the rest of the agenda is given up. Else the step lasts until the fight has ended.
+		Fight,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -648,6 +651,8 @@ struct Senses
 		float distance {0.0f};
 	};
 	std::optional<FollowedView> followed;
+	/// Whether it is in a fight now
+	bool fighting {false};
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -704,6 +709,8 @@ struct Commands
 	bool coolDown {false};
 	/// A rock to break in two, by its entity's number
 	std::optional<uint32_t> shatter;
+	/// A fight to start with another creature, by its entity's number
+	std::optional<uint32_t> startFight;
 	/// Sitting down this turn, it rests a little
 	bool restSitting {false};
 	/// How often its eyes now blink, when that changes

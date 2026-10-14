@@ -702,3 +702,31 @@ TEST(CreatureActionAgendas, WatchingAVillagerEndsWhenItIsNoLongerInteresting)
 	(void)Think(gone, {.seconds = 0.1f}, AlwaysFirst);
 	EXPECT_TRUE(gone.followHolding);
 }
+
+// An angry creature fights another creature only when it has enough life. The agenda asks the other creature and then
+// waits for the fight to end.
+TEST(CreatureActionAgendas, AFightAsksTheOtherCreatureAndWaitsUntilTheFightEnds)
+{
+	const auto* fight = plan_actions::For("Fight");
+	ASSERT_NE(fight, nullptr);
+	EXPECT_EQ(fight->target, plan_actions::Target::FightableCreature);
+	EXPECT_FALSE(plan_actions::Possible(*fight, {}));
+	const plan_actions::Situation healthy {.healthyEnoughToFight = true};
+	EXPECT_TRUE(plan_actions::Possible(*fight, healthy));
+	const auto agenda = plan_actions::Agenda(*fight, 7, {0.0f, 0.0f}, healthy, NeverFirst);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 1u);
+	EXPECT_EQ(agenda->front().kind, Step::Kind::Fight);
+	EXPECT_EQ(agenda->front().object, 7u);
+
+	IdleMind mind;
+	Plan(mind, Activity::Planned, *agenda);
+	// It asks for the fight as the step starts, once only
+	EXPECT_EQ(Think(mind, {.seconds = 0.1f}, AlwaysFirst).startFight, 7u);
+	EXPECT_FALSE(Think(mind, {.seconds = 0.1f, .fighting = true}, AlwaysFirst).startFight.has_value());
+	EXPECT_EQ(mind.step, 0u);
+	// The fight has ended
+	(void)Think(mind, {.seconds = 0.1f}, AlwaysFirst);
+	EXPECT_EQ(mind.step, 1u);
+	EXPECT_FALSE(mind.gaveUp);
+}

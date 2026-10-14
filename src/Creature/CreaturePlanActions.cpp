@@ -162,6 +162,7 @@ constexpr std::array k_Executors {
         .action = "Stroke", .target = Target::Villager, .build = Build::ApproachEmote, .animation = animations::k_FeelingNice},
     Executor {.action = "SmileAtFriend", .target = Target::Creature, .build = Build::SmileAt},
     Executor {.action = "InspectCreature", .target = Target::Creature, .build = Build::InspectCreature},
+    Executor {.action = "Fight", .target = Target::FightableCreature, .build = Build::Fight},
     Executor {.action = "LookAtFlyingObject", .target = Target::Anything, .build = Build::LookAtFlyingObject},
     Executor {.action = "WaveAtFriend",
               .target = Target::Creature,
@@ -430,6 +431,8 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::Notice:
 		// It turns to the camera only when it has a player
 		return !situation.hasPlayer || situation.eye.has_value();
+	case Build::Fight:
+		return situation.healthyEnoughToFight;
 	case Build::CastOneShotInHand:
 		// Only with a one-shot miracle of the action's kind in its hand
 		return situation.heldOneShot.has_value() && situation.heldOneShot->Is(executor.oneShot);
@@ -572,6 +575,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::WaveAt(*object, situation.height);
 	case Build::InspectCreature:
 		return creature_mind::InspectCreature(*object, situation.height);
+	case Build::Fight:
+		return std::vector {creature_mind::Step {.kind = creature_mind::Step::Kind::Fight, .object = *object}};
 	case Build::LookAtFlyingObject:
 		return creature_mind::LookAtFlyingObject(*object, random);
 	case Build::LookAtHand:

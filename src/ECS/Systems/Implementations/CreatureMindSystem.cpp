@@ -165,6 +165,8 @@ constexpr std::string_view k_ExamineAction = "ExamineByPickingUp";
 constexpr std::string_view k_ThrowAboutAction = "PracticeThrow";
 constexpr std::string_view k_HurlAction = "Hurl";
 constexpr std::string_view k_FightAction = "Fight";
+/// The action of a creature that obeys another creature, as the other creature in a fight does
+constexpr std::string_view k_ObeyCreatureAction = "ObeyCreature";
 /// The action a creature made to catch something carries out
 constexpr std::string_view k_CatchAction = "Catch";
 /// The action a creature given something from the hand carries out to take it
@@ -1402,6 +1404,13 @@ creature_mind::HandsState HandsOf(entt::entity creature)
 	}
 	return creature_mind::HandsState::Idle;
 }
+/// The creature's plan has it fight another creature: whether the other creature agreed and the fight started
+bool StartPlannedFight(entt::entity creature, entt::entity opponent)
+{
+	using Result = CreatureFightSystemInterface::StartResult;
+	return Locator::creatureFightSystem::has_value() &&
+	       Locator::creatureFightSystem::value().StartPlannedFight(creature, opponent) == Result::Started;
+}
 } // namespace openblack::ecs::systems::mind_detail
 
 using namespace openblack::ecs::systems::mind_detail;
@@ -1502,7 +1511,15 @@ void CreatureMindSystem::ProcessTurn()
 		    // Under a script's control its desires stand still and it chooses nothing for itself: it only carries out
 		    // what it is given, and stands about once that is done
 		    const bool scripted = registry.AllOf<ScriptControlled>(entity);
-		    if (!scripted)
+		    // The other creature in a fight obeys the creature that started it: its desires stand still until the fight
+		    // is over, or until it wins by a knock-out
+		    const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
+		    const bool obeysInFight = creature_fight::ObeysInFight({
+		        .fighting = fighting != nullptr,
+		        .startedIt = fighting != nullptr && fighting->madeArena,
+		        .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
+		    });
+		    if (!scripted && !obeysInFight)
 		    {
 			    const auto body = needs != nullptr ? needs->needs : creature_physiology::Needs {};
 			    const auto state = SourceStateOf(entity, creature, mind, body.age);
@@ -1513,6 +1530,14 @@ void CreatureMindSystem::ProcessTurn()
 			    creature_desires::UpdateDesires(*mind.desires, k_TurnsPerSecond);
 		    }
 
+		    // After a knock-out, it takes up reactions again once it lies out cold no more and the agenda it had at the
+		    // knock-out is over
+		    if (const auto* after = registry.TryGet<const CreatureAfterFight>(entity);
+		        after != nullptr && !registry.AllOf<CreatureKnockedOut>(entity) &&
+		        (mind.idle.serial != after->agenda || mind.idle.step >= mind.idle.agenda.size()))
+		    {
+			    registry.Remove<CreatureAfterFight>(entity);
+		    }
 		    auto* eyes = registry.TryGet<CreatureEyes>(entity);
 		    // Paused, fighting or knocked out, the mind leaves the body alone
 		    if (mind.paused || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
@@ -1646,6 +1671,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .bodyPlaying = creature_layers::IsPlaying(animation.body),
 		        .dance = DanceViewOf(entity, mind.idle),
 		        .followed = FollowedViewOf(registry, transform.position, mind),
+		        .fighting = registry.AllOf<CreatureFighting>(entity),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    if (commands.communicated.has_value())
@@ -1688,6 +1714,13 @@ void CreatureMindSystem::ProcessTurn()
 			    mind.idle.gaveUp = true;
 		    }
 		    Order(registry, entity, commands);
+		    // It asks the other creature to fight. If the other creature does not agree, the rest of the agenda is no use.
+		    if (commands.startFight.has_value() && !StartPlannedFight(entity, static_cast<entt::entity>(*commands.startFight)))
+		    {
+			    mind.idle.step = mind.idle.agenda.size();
+			    mind.idle.stepStarted = false;
+			    mind.idle.gaveUp = true;
+		    }
 		    if (commands.letGo.has_value())
 		    {
 			    LetGoOfHeld(entity, mind, *commands.letGo);
@@ -2215,6 +2248,39 @@ void CreatureMindSystem::FoughtFight(entt::entity creature, [[maybe_unused]] boo
 	{
 		Satisfied(creature, *mind->desires, k_FightAction);
 	}
+}
+
+void CreatureMindSystem::FightStarted(entt::entity creature, entt::entity opponent, bool planned)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// Each creature's agenda waits for the fight to end. The fight has started already, so the step that starts it is
+	// marked as started.
+	const auto fightWith = [&](entt::entity self, entt::entity other, const ForcedPlan& plan) {
+		if (registry.AllOf<ScriptControlled>(self) || !ForcePlan(self, plan))
+		{
+			return;
+		}
+		if (auto* mind = registry.TryGet<CreatureMindState>(self); mind != nullptr && !mind->idle.agenda.empty())
+		{
+			mind->idle.stepStarted = mind->idle.agenda.front().kind == creature_mind::Step::Kind::Fight &&
+			                         mind->idle.agenda.front().object == std::optional(entt::to_integral(other));
+		}
+	};
+	const auto steps = [](entt::entity other) {
+		return std::vector {creature_mind::Step {.kind = creature_mind::Step::Kind::Fight, .object = entt::to_integral(other)}};
+	};
+	// A creature told to fight, by the leash, a script or the debug tools, fights until the fight ends: nothing it wants
+	// stops the fight.
+	// TODO(creature-fight-mind): the leash makes the plan from the desires of the creature for the other creature. Until
+	// the leash does that for creatures, the plan is to obey the player.
+	if (!planned)
+	{
+		fightWith(creature, opponent,
+		          {.desire = Desire::ObeyPlayer, .action = k_FightAction, .object = opponent, .agenda = steps(opponent)});
+	}
+	// The other creature stops what it does and obeys the first creature until the fight ends
+	fightWith(opponent, creature,
+	          {.desire = Desire::ObeyCreature, .action = k_ObeyCreatureAction, .object = creature, .agenda = steps(creature)});
 }
 
 void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)

@@ -313,6 +313,29 @@ constexpr float k_LifeLostShare = 0.25f;
 /// A creature this healthy or less won't start a fight
 constexpr float k_MinLifeToFight = 0.1f;
 [[nodiscard]] bool HealthyEnoughToFight(float life);
+
+/// What a creature is to the fight that it is in, for its mind
+struct MindInFight
+{
+	/// It lies out cold, or it is in a fight
+	bool knockedOut {false};
+	bool fighting {false};
+	/// It started the fight, by a plan of its own
+	bool startedIt {false};
+	bool planned {false};
+	/// Its agenda waits for the fight now
+	bool waitsForFight {false};
+	/// It won by a knock-out, and is made to do something to the loser
+	bool won {false};
+};
+/// Whether the creature can choose a new plan. A creature that lies out cold cannot. In a fight, only the creature that
+/// started the fight by a plan of its own can, while its agenda waits for the fight. A plan that it chooses ends the
+/// fight. The other creature obeys, and a creature that the leash, a script or a knock-out makes do something cannot
+/// choose either.
+[[nodiscard]] bool LetsChoose(const MindInFight& mind);
+/// Whether the creature obeys the creature that started its fight: its desires stand still until the fight is over, or
+/// until it wins by a knock-out
+[[nodiscard]] bool ObeysInFight(const MindInFight& mind);
 /// A creature asked to fight agrees only to one between half and twice its own height, not while it lies dead, and only
 /// when both or neither of them are under a script's control
 constexpr float k_SmallestOpponentShare = 0.5f;
@@ -586,16 +609,6 @@ constexpr float k_DepthPerSize = 7.5f;
 /// After a fight that ended otherwise, the creature with more life is happy and the other sad
 [[nodiscard]] size_t Response(float life, float otherLife);
 
-// Starting fights
-
-/// An angry creature this angry picks a fight. The game weighs fighting against everything else through its planner;
-/// this stands in for that.
-constexpr float k_AngerToFight = 0.6f;
-/// It picks on another creature within this many units of its size
-constexpr float k_PickFightPerSize = 60.0f;
-/// It waits this long after a fight before picking another
-constexpr float k_SecondsBetweenFights = 120.0f;
-[[nodiscard]] bool WantsToFight(float anger, float life, float distance, float size, float secondsSinceFight);
 /// The names of the values, as the fight transcript writes them. They do not change between versions of the transcript.
 [[nodiscard]] std::string_view Name(Band band);
 [[nodiscard]] std::string_view Name(Step step);

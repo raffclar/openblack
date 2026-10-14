@@ -297,11 +297,6 @@ TEST(TestbedScenarios, CoversFights)
 		}
 	}
 	EXPECT_EQ(charges, (std::set<float> {0.0f, creature_fight::k_MaxChargeMs}));
-	// Only the scenario about it lets anger start fights, so other angry creatures keep to themselves
-	for (const auto& scenario : All())
-	{
-		EXPECT_EQ(scenario.environment.angerStartsFights, scenario.id == "combat.anger") << scenario.id;
-	}
 	// The worn creature is left to rest
 	EXPECT_FALSE(Find("combat.faint_recovery")->creatures.front().hold);
 }

@@ -131,15 +131,8 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 
 	if (const auto* record = registry.TryGet<const CreatureFightRecord>(entity))
 	{
-		ImGui::Text("%u fights, %u won, tendency %+.2f, %.0f s since the last", record->fights, record->wins,
-		            static_cast<double>(record->tendency), static_cast<double>(record->secondsSinceFight));
+		ImGui::Text("%u fights, %u won, tendency %+.2f", record->fights, record->wins, static_cast<double>(record->tendency));
 	}
-	auto angerStarts = fights.GetAngerStartsFights();
-	if (ImGui::Checkbox("Anger picks fights", &angerStarts))
-	{
-		fights.SetAngerStartsFights(angerStarts);
-	}
-	ImGui::SameLine();
 	auto cameraWatches = fights.GetCameraWatches();
 	if (ImGui::Checkbox("Camera watches", &cameraWatches))
 	{
