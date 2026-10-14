@@ -78,7 +78,7 @@ float creature_physiology::SigmoidThreshold(float threshold, float value)
 	return creature_desires::SigmoidStep(threshold, value);
 }
 
-float creature_physiology::Growth(const Needs& needs, const Species& species, bool asleep, float turnsPerSecond)
+float creature_physiology::Growth(const Needs& needs, const Species& species, bool fastGrowth, float turnsPerSecond)
 {
 	const auto minutes = species.growUpMinutes;
 	if (minutes <= 0.0f || turnsPerSecond <= 0.0f)
@@ -90,11 +90,23 @@ float creature_physiology::Growth(const Needs& needs, const Species& species, bo
 	const auto youth = std::clamp((1.0f - (age / grownAge)) * k_YouthGrowthSlope, 0.0f, k_MaxYouthGrowth);
 	const auto spare = Clamp01(needs.energy - needs.exhaustion);
 	auto growth = std::max(spare * youth / (minutes * k_SecondsPerMinute * turnsPerSecond), k_MinGrowth);
-	if (asleep)
+	if (fastGrowth)
 	{
 		growth *= k_SleepGrowthFactor;
 	}
 	return growth;
+}
+
+creature_physiology::PlanPace creature_physiology::PaceOfPlan(std::optional<std::string_view> action)
+{
+	if (!action.has_value())
+	{
+		return {};
+	}
+	return {
+	    .slowEnergyUse = *action == "SleepAtHome" || *action == "RestToGetBetter",
+	    .fastGrowth = *action == "SleepAtHome" || *action == "SleepByObject",
+	};
 }
 
 void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& species, const Turn& turn)
@@ -123,16 +135,16 @@ void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& sp
 	// full size the first turn it grows
 	if (!turn.moving && turn.phase >= k_GrowingPhase)
 	{
-		const auto growth = Growth(needs, species, turn.asleep, turn.turnsPerSecond);
+		const auto growth = Growth(needs, species, turn.fastGrowth, turn.turnsPerSecond);
 		shape.size = std::clamp(shape.size + growth, 0.0f, k_MaxGrownSize);
 	}
 
 	shape.strength = Clamp01(shape.strength * species.strengthDecay);
 
-	// It uses up its energy, more slowly the bigger it looks (shrunk in its pen, faster) and much more slowly asleep or
-	// resting
+	// It uses up its energy, more slowly the bigger it looks (shrunk in its pen, faster). It uses its energy much more
+	// slowly when the plan asks for it.
 	auto divisor = std::clamp(1.0f + (k_EnergySizeFactor * std::clamp(ShownSize(shape), 0.0f, 2.0f)), 1.0f, 2.0f);
-	if (turn.asleep || turn.resting)
+	if (turn.slowEnergyUse)
 	{
 		divisor += k_RestingEnergyDivisor;
 	}

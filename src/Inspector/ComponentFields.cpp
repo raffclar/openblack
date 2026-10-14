@@ -2376,6 +2376,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::followHolding>("followHolding")
 	    .Field<&openblack::creature_mind::IdleMind::followHoldTurns>("followHoldTurns")
 	    .Field<&openblack::creature_mind::IdleMind::followMoved>("followMoved")
+	    .Field<&openblack::creature_mind::IdleMind::restTurns>("restTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceTurns>("danceTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceEnding>("danceEnding")
 	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet");
@@ -2407,6 +2408,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::movement>("movement")
 	    .Field<&openblack::creature_mind::Step::sequence>("sequence")
 	    .Field<&openblack::creature_mind::Step::untilRested>("untilRested")
+	    .Field<&openblack::creature_mind::Step::untilBetter>("untilBetter")
 	    .Field<&openblack::creature_mind::Step::holdLoop>("holdLoop")
 	    .Field<&openblack::creature_mind::Step::mirrorAtRandom>("mirrorAtRandom")
 	    .Field<&openblack::creature_mind::Step::closedEyes>("closedEyes")

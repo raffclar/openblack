@@ -4745,6 +4745,179 @@ void AddBenchmark(std::vector<Scenario>& all)
 	AddCrowd(all, Crowd::Kind::Villagers, 1'000, "benchmark.villagers_1000", "1,000 active villagers");
 }
 
+/// A creature rests to get better, heals itself, goes or runs home, and goes into, prays at or looks at its temple
+void AddRestAndHome(std::vector<Scenario>& all)
+{
+	// The player's temple west of the middle, turned as Land 1's, and the place east of its pen where the tiger starts
+	constexpr glm::vec2 k_Temple {-300.0f, 100.0f};
+	constexpr float k_TempleTurn = 36.0f;
+	constexpr glm::vec2 k_EastOfHome {-100.0f, 40.0f};
+	// A hurt and tired tiger whose body is not held, so that the rest heals it
+	const auto hurt = [](glm::vec2 offset, float facing = 90.0f) {
+		auto tiger = Content(CreatureType::Tiger, offset, facing);
+		tiger.needs.life = 0.3f;
+		tiger.needs.exhaustion = 0.6f;
+		tiger.hold = false;
+		return tiger;
+	};
+	// A script tells the tiger to do the action, to the birch or to the temple
+	const auto told = [](std::string_view action, bool onTemple = false) {
+		return Command {.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = action, .onTemple = onTemple};
+	};
+	const auto birchBy = [](glm::vec2 offset) {
+		return ObjectSetup {.type = TreeInfo::Birch, .offset = offset + glm::vec2(0.0f, -25.0f)};
+	};
+
+	all.push_back({
+	    .id = "needs.rest_to_get_better",
+	    .name = "Hurt creature rests to get better",
+	    .facet = Facet::Needs,
+	    .description = "A hurt and tired tiger (life 0.3, tiredness 0.6) stands by a birch. After one second a script "
+	                   "tells it to rest to get better.",
+	    .expected = "It turns to face down the slope and lies down to sleep, with its eyes closed. Each turn its life and "
+	                "its tiredness get better by its sleep rates. It gets up only when its life is full and it is not "
+	                "tired at all, and never before three seconds. Then it looks about, dazed, with a grimace.",
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {hurt({0.0f, 0.0f})},
+	    .objects = {birchBy({0.0f, 0.0f})},
+	    .commands = {told("RestToGetBetter")},
+	});
+
+	all.push_back({
+	    .id = "needs.go_home_to_recover",
+	    .name = "Hurt creature goes home to recover",
+	    .facet = Facet::Needs,
+	    .description = "A hurt and tired tiger stands east of the pen of its player's temple. After one second a script "
+	                   "tells it to go home to recover.",
+	    .expected = "It walks home to the pen and stops within its height (no more than 5) of it. Then it faces down the "
+	                "slope, lies down and rests until its life is full and it is not tired at all, and gets up dazed.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {hurt(k_EastOfHome)},
+	    .objects = {birchBy(k_EastOfHome)},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {told("GoHomeToRecover")},
+	});
+
+	all.push_back({
+	    .id = "needs.restore_health",
+	    .name = "Hurt creature chooses how to get better",
+	    .facet = Facet::Needs,
+	    .description = "A badly hurt tiger (life 0.2) stands east of the pen of its player's temple. Its only desire is to "
+	                   "restore its health, as strong as it gets. Nothing frightening is near it.",
+	    .expected = "It chooses an action of its list to restore its health: it rests where it is, or goes home to "
+	                "recover, or heals itself with the heal miracle when it knows it. It does not stand idle.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {[&] {
+		    auto tiger = hurt(k_EastOfHome);
+		    tiger.needs.life = 0.2f;
+		    tiger.needs.exhaustion = 0.0f;
+		    tiger.desires = OnlyDesire(Desire::RestoreHealth);
+		    return tiger;
+	    }()},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	});
+
+	all.push_back({
+	    .id = "needs.heal_itself",
+	    .name = "Creature heals itself with a miracle",
+	    .facet = Facet::Needs,
+	    .description = "A hurt tiger that knows the heal miracle stands by a birch. A second later a script tells it to "
+	                   "heal itself.",
+	    .expected = "It casts the heal miracle at the place where it stands, with a grimace, and holds the miracle for "
+	                "three seconds. Then its life is full at once.",
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {hurt({0.0f, 0.0f})},
+	    .objects = {birchBy({0.0f, 0.0f})},
+	    .commands = {{.kind = Kind::KnowMiracle, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Heal)},
+	                 told("HealHimself")},
+	});
+
+	all.push_back({
+	    .id = "mind.go_home",
+	    .name = "Creature far from home goes home",
+	    .facet = Facet::Mind,
+	    .description = "A tiger stands east of the pen of its player's temple, more than 20 from it. Its only desire is to "
+	                   "stay near home, as strong as it gets.",
+	    .expected = "It walks home to the pen and stops within its height (no more than 5) of it. Nearer than 20 to its "
+	                "home it does not choose to go home.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {[&] {
+		    auto tiger = Content(CreatureType::Tiger, k_EastOfHome, 90.0f);
+		    tiger.desires = OnlyDesire(Desire::StayNearHome);
+		    return tiger;
+	    }()},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	});
+
+	all.push_back({
+	    .id = "mind.run_home",
+	    .name = "Frightened creature runs home",
+	    .facet = Facet::Mind,
+	    .description = "A tiger stands east of the pen of its player's temple. After one second a script tells it to run "
+	                   "home.",
+	    .expected = "Half the time it first shows that it is frightened, with its eyes wide open. Then it runs home and "
+	                "stops within two times its height of the pen.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {Content(CreatureType::Tiger, k_EastOfHome, 90.0f)},
+	    .objects = {birchBy(k_EastOfHome)},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {told("RunHome")},
+	});
+
+	all.push_back({
+	    .id = "mind.enter_temple",
+	    .name = "Creature goes into its temple",
+	    .facet = Facet::Mind,
+	    .description = "A tiger stands east of the pen of its player's temple. After one second a script tells it to go "
+	                   "into its temple.",
+	    .expected = "It walks home to the pen and stops within its height. It turns to face the temple with a smile. Then "
+	                "it walks towards the temple and stops short of it by 1.3 times a third of the temple's radius.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {Content(CreatureType::Tiger, k_EastOfHome, 90.0f)},
+	    .objects = {birchBy(k_EastOfHome)},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {told("EnterCitadel")},
+	});
+
+	all.push_back({
+	    .id = "mind.pray_at_temple",
+	    .name = "Creature prays at its temple",
+	    .facet = Facet::Mind,
+	    .description = "A tiger stands east of the pen of its player's temple. After one second a script tells it to pray "
+	                   "at its temple.",
+	    .expected = "It walks home to the pen and stops within its height. Then it prays (the pray animation, with its "
+	                "sounds).",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {Content(CreatureType::Tiger, k_EastOfHome, 90.0f)},
+	    .objects = {birchBy(k_EastOfHome)},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {told("PrayAtCitadel")},
+	});
+
+	all.push_back({
+	    .id = "mind.look_at_temple",
+	    .name = "Creature looks at its temple",
+	    .facet = Facet::Mind,
+	    .description = "A tiger stands east of the pen of its player's temple, facing away from it. After one second a "
+	                   "script tells it to look at the temple.",
+	    .expected = "It turns to face the temple (two seconds) and looks at its top for three seconds. One time in three "
+	                "it then points at the temple for two seconds, amazed. Then it looks at the foot of the temple for "
+	                "three seconds and at its top for two seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {Content(CreatureType::Tiger, k_EastOfHome, 90.0f)},
+	    .objects = {birchBy(k_EastOfHome)},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {told("LookAtCitadel", true)},
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -4752,6 +4925,7 @@ std::vector<Scenario> Build()
 	AddExpressions(all);
 	AddSenses(all);
 	AddNeeds(all);
+	AddRestAndHome(all);
 	AddGrowth(all);
 	AddAppearance(all);
 	AddLight(all);

@@ -52,6 +52,7 @@
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureReach.h"
+#include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureThrow.h"
@@ -94,6 +95,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -721,6 +723,19 @@ std::optional<glm::vec3> ScriptFocusPoint(const ecs::Registry& registry, entt::e
 		mind.scriptFocus.reset();
 	}
 	return at;
+}
+
+/// The creature heals itself: its life becomes full, and its wounds and blood age as if much time went by
+void HealItself(ecs::Registry& registry, entt::entity creature)
+{
+	if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
+	{
+		needs->needs.life = 1.0f;
+	}
+	if (Locator::creatureSkinSystem::has_value())
+	{
+		Locator::creatureSkinSystem::value().Heal(creature, creature_mind::k_HealItselfCounts);
+	}
 }
 
 /// The rest of the agenda is no use: it gives it up
@@ -1684,6 +1699,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .position = glm::vec2(transform.position.x, transform.position.z),
 		        .communication = communicates ? Communication(mind) : creature_desires::Communication {},
 		        .rested = needs != nullptr && needs->rested,
+		        .better = needs != nullptr && creature_mind::IsBetter(needs->needs.life, needs->needs.exhaustion),
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .held = inHand.has_value() ? std::optional(entt::to_integral(*inHand)) : std::nullopt,
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
@@ -1784,6 +1800,10 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    Locator::fireSystem::value().PutOut(entity);
 		    }
+		    if (commands.healItself)
+		    {
+			    HealItself(registry, entity);
+		    }
 		    if (commands.douse.has_value())
 		    {
 			    if (Douse(entity, static_cast<entt::entity>(*commands.douse)))
@@ -1843,6 +1863,7 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    needs->rest = creature_mind::IsUnconscious(mind.idle) ? CreatureNeeds::Rest::Unconscious
 			                  : creature_mind::IsAsleep(mind.idle)    ? CreatureNeeds::Rest::Asleep
+			                  : creature_mind::IsResting(mind.idle)   ? CreatureNeeds::Rest::Resting
 			                                                          : CreatureNeeds::Rest::Awake;
 		    }
 

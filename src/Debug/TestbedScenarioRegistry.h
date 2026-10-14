@@ -767,6 +767,8 @@ struct Command
 	/// The hand takes this globe in place of the object.
 	std::optional<size_t> globe;
 	bool onGlobe {false};
+	/// A script's action is done to the scenario's first temple in place of the object
+	bool onTemple {false};
 	/// The leash put on
 	LeashType leash {LeashType::Rope};
 	/// The part of the body stroked, by its place in the hand's parts (the head first)

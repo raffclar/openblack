@@ -529,6 +529,12 @@ bool creature_mind::IsAsleep(const IdleMind& mind)
 	return step != nullptr && step->kind == Step::Kind::Static && step->untilRested;
 }
 
+bool creature_mind::IsResting(const IdleMind& mind)
+{
+	const auto* step = CurrentStep(mind);
+	return step != nullptr && step->kind == Step::Kind::Static && step->untilBetter && !mind.sitEnding;
+}
+
 bool creature_mind::IsUnconscious(const IdleMind& mind)
 {
 	const auto* step = CurrentStep(mind);
@@ -744,6 +750,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::Douse:
 	case Step::Kind::SwapMind:
 	case Step::Kind::Communicate:
+	case Step::Kind::HealItself:
 		return HandsNeed::Free;
 	case Step::Kind::Object:
 		switch (step.order.kind)
@@ -1017,6 +1024,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::Static:
 			commands.startSequence = step.sequence;
 			commands.holdLoop = step.holdLoop;
+			// The turn that the rest starts is its first turn
+			mind.restTurns = 1;
 			if (step.mirrorAtRandom)
 			{
 				commands.mirrored = random(2) == 1;
@@ -1060,6 +1069,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::CoolDown:
 			commands.coolDown = true;
+			FinishStep(mind);
+			break;
+		case Step::Kind::HealItself:
+			commands.healItself = true;
 			FinishStep(mind);
 			break;
 		case Step::Kind::Shatter:
@@ -1186,15 +1199,25 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		commands.lookAbout = senses.bodyLooping && !step.closedEyes;
 		// Sitting rests it a little every turn until it is told to get up
 		commands.restSitting = !mind.sitEnding && step.sequence[1] == animations::k_Sit;
-		const bool done = mind.wakeWanted || (step.untilRested ? senses.rested : mind.stepSeconds >= step.seconds);
+		// Each turn of the rest its fire stops, until it starts to get up
+		if (step.untilBetter && !mind.sitEnding)
+		{
+			++mind.restTurns;
+			commands.coolDown = true;
+		}
+		const bool better = senses.better && mind.restTurns > k_FewestRestTurns;
+		const bool done = mind.wakeWanted || (step.untilBetter   ? better
+		                                      : step.untilRested ? senses.rested
+		                                                         : mind.stepSeconds >= step.seconds);
 		if (!senses.bodyBusy)
 		{
 			if (step.closedEyes)
 			{
 				commands.eyes = Eyes::Normal;
 			}
-			// The body played the whole sequence before its time was up: it still takes effect
-			if (!mind.sitEnding)
+			// The body played the whole sequence before its time was up: it still takes effect. The rest takes effect once
+			// the creature is up.
+			if (!mind.sitEnding || step.untilBetter)
 			{
 				commands.effect = step.effect;
 			}
@@ -1203,7 +1226,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		else if (!mind.sitEnding && done)
 		{
 			commands.endSit = true;
-			commands.effect = step.effect;
+			if (!step.untilBetter)
+			{
+				commands.effect = step.effect;
+			}
 			mind.sitEnding = true;
 			mind.wakeWanted = false;
 		}
@@ -1267,6 +1293,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::Douse:
 	case Step::Kind::CoolDown:
+	case Step::Kind::HealItself:
 	case Step::Kind::Shatter:
 	case Step::Kind::Repair:
 	case Step::Kind::UseUp:
