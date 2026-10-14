@@ -99,6 +99,10 @@ enum class Target : uint8_t
 	OneShotAggressive,
 	OneShotCompassionate,
 	OneShotPlayful,
+	/// A one-shot miracle that lies about, whose miracle restores health
+	OneShotRestoreHealth,
+	/// A part of a temple, of any player: a temple, or a worship site
+	TemplePart,
 	/// A villager nearer to the creature than 200 metres, to dance with
 	DanceVillager,
 };
@@ -224,6 +228,21 @@ enum class Build : uint8_t
 	CastOneShotInHand,
 	/// Picking up the one-shot miracle that it uses, unless its hand holds something, and casting it at the thing
 	PickUpAndCastOneShot,
+	/// Resting to get better where it is, or at home after it goes there; healing itself with the heal miracle; resting on
+	/// the spot a while
+	RestToGetBetter,
+	GoHomeToRecover,
+	HealItself,
+	RestOnTheSpot,
+	/// Casting at itself the one-shot miracle in its hand that restores health, or one that it picks up first
+	CastRestoreHealthInHand,
+	PickUpAndCastRestoreHealth,
+	/// Going home, running home, going into its temple, praying at its temple, and looking at a part of a temple
+	GoHome,
+	RunHome,
+	EnterTemple,
+	PrayAtTemple,
+	LookAtTemple,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -234,6 +253,7 @@ enum class OneShotKind : uint8_t
 	Aggressive,
 	Compassionate,
 	Playful,
+	RestoreHealth,
 };
 
 /// A one-shot miracle as the creature sees it: the first miracle of its seed, and the kinds of that miracle
@@ -243,6 +263,7 @@ struct OneShot
 	bool aggressive {false};
 	bool compassionate {false};
 	bool playful {false};
+	bool restoresHealth {false};
 
 	[[nodiscard]] bool Is(OneShotKind kind) const;
 };
@@ -339,6 +360,22 @@ struct Situation
 	std::optional<glm::vec2> danceArea;
 	uint32_t fewestDancers {0};
 	uint32_t danceBeats {0};
+	/// How far its home is, in metres, none without a home; and whether its player has a temple
+	std::optional<float> homeDistance;
+	bool hasTemple {false};
+	/// The heart of its player's temple, on the ground, and the heart's radius on the ground; none without a temple
+	struct TempleHeart
+	{
+		/// The temple, by its entity's number
+		uint32_t temple {0};
+		glm::vec3 point {0.0f};
+		float radius {0.0f};
+	};
+	std::optional<TempleHeart> templeHeart;
+	/// Where it stands, with its height
+	glm::vec3 standing {0.0f};
+	/// No other creature is near enough to frighten it (see creature_mind::NothingFrighteningNear)
+	bool nothingFrighteningNear {true};
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

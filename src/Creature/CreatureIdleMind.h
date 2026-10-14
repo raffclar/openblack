@@ -411,6 +411,8 @@ struct Step
 		StopMoving,
 		/// A stage of a dance with the villagers of a town (see DanceOrder)
 		Dance,
+		/// The creature heals itself at once: its life becomes full, and its wounds and blood age as if much time went by
+		HealItself,
 		/// Following a villager (the step's object) to watch it do a skill the creature does not know: each turn while
 		/// the villager does it, up to the step's seconds counted in whole seconds, it walks up to the villager, stopping
 		/// within the step's movement distance, whenever it is further and still. Then it holds where it is for one to four
@@ -431,6 +433,9 @@ struct Step
 	std::array<size_t, 3> sequence {};
 	/// A static step's loop lasts until the creature is rested, rather than for the step's seconds
 	bool untilRested {false};
+	/// A static step's loop lasts until the creature is better (see k_FewestRestTurns). The body heals and rests during
+	/// the loop, and its fire stops each turn.
+	bool untilBetter {false};
 	/// A static step's loop holds the last frame of its start, as lying out cold
 	bool holdLoop {false};
 	/// A static step plays left to right half the time, chosen as it starts
@@ -493,6 +498,8 @@ struct IdleMind
 	uint32_t followHoldTurns {0};
 	/// Whether it has set off back towards the villager, so that a walk that fails gives the agenda up
 	bool followMoved {false};
+	/// A step that rests to get better: the turns since it started, the first turn included
+	uint32_t restTurns {0};
 	/// A dance step: the turns it dances yet, and whether its dance stops next turn
 	uint32_t danceTurns {0};
 	bool danceEnding {false};
@@ -583,6 +590,8 @@ struct Senses
 	creature_desires::Communication communication {};
 	/// Whether it has slept enough to wake
 	bool rested {false};
+	/// Whether its life is full and it is not tired at all
+	bool better {false};
 	HandsState hands {HandsState::Idle};
 	/// The thing that the creature holds, by the number of its entity
 	std::optional<uint32_t> held;
@@ -702,6 +711,8 @@ struct Commands
 	std::optional<uint32_t> douse;
 	/// The creature's own fire stops
 	bool coolDown {false};
+	/// The creature heals itself (see Step::Kind::HealItself)
+	bool healItself {false};
 	/// A rock to break in two, by its entity's number
 	std::optional<uint32_t> shatter;
 	/// Sitting down this turn, it rests a little
@@ -822,8 +833,13 @@ struct PooBy
 [[nodiscard]] std::vector<Step> DestroyThing(uint32_t object);
 /// Waiting a while, looking about
 [[nodiscard]] std::vector<Step> LookAbout(float seconds);
+/// A creature that rests to get better gets up only when its life is full, it is not tired at all, and the step has
+/// lasted more than this many turns
+constexpr uint32_t k_FewestRestTurns = 30;
 /// Whether the creature is asleep, or out cold, in its current step
 [[nodiscard]] bool IsAsleep(const IdleMind& mind);
+/// Whether the creature rests to get better in its current step, until it starts to get up
+[[nodiscard]] bool IsResting(const IdleMind& mind);
 [[nodiscard]] bool IsUnconscious(const IdleMind& mind);
 
 /// A new agenda in place of the current one

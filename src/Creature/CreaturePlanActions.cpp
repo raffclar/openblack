@@ -20,6 +20,7 @@
 #include "Creature/CreatureFireAgenda.h"
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Enums.h"
 
@@ -291,6 +292,25 @@ constexpr std::array k_Executors {
     Executor {.action = "PointAtObject", .target = Target::Anything, .build = Build::PointAtThing},
     // What a script's cut scene makes every creature free to think for itself do
     Executor {.action = "LookAtCameraInWideScreen", .build = Build::LookAtCameraInCutScene},
+    // Getting better: resting, healing itself, and the one-shot miracles that restore health. The game's data cuts the
+    // names of the last two short.
+    Executor {.action = "RestToGetBetter", .build = Build::RestToGetBetter},
+    Executor {.action = "GoHomeToRecover", .build = Build::GoHomeToRecover},
+    Executor {.action = "HealHimself", .build = Build::HealItself},
+    Executor {.action = "RestOnTheSpot", .build = Build::RestOnTheSpot},
+    Executor {.action = "CastOneOffSpellInHandToRestoreHe",
+              .build = Build::CastRestoreHealthInHand,
+              .oneShot = OneShotKind::RestoreHealth},
+    Executor {.action = "PickUpAndCastOneOffSpellToRestor",
+              .use = Target::OneShotRestoreHealth,
+              .build = Build::PickUpAndCastRestoreHealth,
+              .oneShot = OneShotKind::RestoreHealth},
+    // Home and the temple
+    Executor {.action = "GoHome", .build = Build::GoHome},
+    Executor {.action = "RunHome", .build = Build::RunHome},
+    Executor {.action = "EnterCitadel", .build = Build::EnterTemple},
+    Executor {.action = "PrayAtCitadel", .build = Build::PrayAtTemple},
+    Executor {.action = "LookAtCitadel", .target = Target::TemplePart, .build = Build::LookAtTemple},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -356,6 +376,8 @@ bool creature_plan_actions::OneShot::Is(OneShotKind kind) const
 		return compassionate;
 	case OneShotKind::Playful:
 		return playful;
+	case OneShotKind::RestoreHealth:
+		return restoresHealth;
 	}
 	return false;
 }
@@ -388,6 +410,7 @@ bool creature_plan_actions::IsCast(const Executor& executor)
 	case Build::CastToImpress:
 	case Build::CastForest:
 	case Build::WaterTreeForTown:
+	case Build::HealItself:
 		return true;
 	default:
 		return false;
@@ -412,7 +435,24 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::TakeFishHome:
 		return situation.fishing.has_value() && situation.home.has_value();
 	case Build::SleepAtHome:
+		// Only with a temple, and not too far from home
+		return situation.home.has_value() && situation.homeDistance.has_value() &&
+		       creature_mind::NotTooFarFromHome(situation.hasTemple, *situation.homeDistance);
+	case Build::PrayAtTemple:
+		return situation.home.has_value() && situation.homeDistance.has_value() &&
+		       creature_mind::NotTooFarFromHome(situation.hasTemple, *situation.homeDistance);
+	case Build::GoHome:
+		return situation.home.has_value() && situation.homeDistance.has_value() &&
+		       creature_mind::FarFromHome(*situation.homeDistance);
+	case Build::GoHomeToRecover:
+	case Build::RunHome:
 		return situation.home.has_value();
+	case Build::RestToGetBetter:
+	case Build::RestOnTheSpot:
+		return situation.nothingFrighteningNear;
+	case Build::CastRestoreHealthInHand:
+		// Only with a one-shot miracle that restores health in its hand
+		return situation.heldOneShot.has_value() && situation.heldOneShot->Is(executor.oneShot);
 	case Build::PooAtHome:
 		return situation.home.has_value() &&
 		       !(glm::distance(situation.position, *situation.home) > creature_mind::k_NearHomeToPoo);
@@ -730,6 +770,49 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                                             : executor.oneShot == OneShotKind::Compassionate
 		                                                 ? creature_face::Cue::Compassion
 		                                                 : creature_face::Cue::Playfulness});
+	case Build::RestToGetBetter:
+		return creature_mind::RestToGetBetter();
+	case Build::GoHomeToRecover:
+		return creature_mind::GoHomeToRecover(*situation.home, situation.height);
+	case Build::HealItself:
+		return creature_mind::HealItself(static_cast<uint32_t>(MagicType::Heal), situation.standing);
+	case Build::RestOnTheSpot:
+		return creature_mind::RestOnTheSpot(situation.self,
+		                                    creature_mind::k_RestOnTheSpotSeconds +
+		                                        (creature_mind::k_RestOnTheSpotExtraSeconds * RandomFraction(random)));
+	case Build::CastRestoreHealthInHand:
+		return creature_mind::CastRestoreHealthInHand(situation.heldOneShot->magicType, situation.self);
+	case Build::PickUpAndCastRestoreHealth:
+		// Without a one-shot miracle that restores health to use, the action fails
+		if (!situation.instrument.has_value() || !situation.usedOneShot.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::PickUpAndCastRestoreHealth(
+		    situation.usedOneShot->magicType, situation.self, *situation.instrument, !situation.handFull,
+		    creature_mind::k_RestoreHealthWaitSeconds +
+		        (creature_mind::k_RestoreHealthWaitExtraSeconds * RandomFraction(random)));
+	case Build::GoHome:
+		return creature_mind::GoHome(*situation.home, situation.height);
+	case Build::RunHome:
+		return creature_mind::RunHome(*situation.home, situation.height,
+		                              random(creature_mind::k_FrightenedBeforeRunningHomeLots) == 0);
+	case Build::EnterTemple:
+	{
+		// Without a home and the heart of its player's temple, the action fails
+		if (!situation.home.has_value() || !situation.templeHeart.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& heart = *situation.templeHeart;
+		return creature_mind::EnterTemple(*situation.home, heart.point,
+		                                  creature_mind::TempleStop(situation.standing, heart.point, heart.radius),
+		                                  situation.height);
+	}
+	case Build::PrayAtTemple:
+		return creature_mind::PrayAtTemple(*situation.home, situation.height);
+	case Build::LookAtTemple:
+		return creature_mind::LookAtTemple(*object, random(creature_mind::k_PointAtTempleLots) == 0);
 	case Build::Never:
 		return std::nullopt;
 	}

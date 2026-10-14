@@ -172,6 +172,11 @@ private:
 	/// What an agenda needs to know of the creature itself: the camera's position, whether it has a player, whether a
 	/// script controls it, its radius, and a chance for what varies
 	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
+	/// Where its home and its player's temple are, and whether another creature is near enough to frighten it
+	void SituateHome(entt::entity creature, creature_plan_actions::Situation& situation);
+	/// The agenda to go into its temple makes the creature believe in the temple's heart
+	void BelieveInTempleToEnter(entt::entity creature, const creature_plan_actions::Executor& executor,
+	                            const creature_plan_actions::Situation& situation);
 	/// The places that the creature uses when it hangs around at home: its home and its player's temple, both on the
 	/// ground, the radius of the area that holds it, and its height
 	[[nodiscard]] static creature_mind::HangAroundPlaces HangAroundPlacesOf(entt::entity creature);

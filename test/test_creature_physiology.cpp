@@ -13,6 +13,7 @@
 #include <array>
 #include <memory>
 #include <optional>
+#include <string_view>
 
 #include <gtest/gtest.h>
 
@@ -53,8 +54,8 @@ Species Fake()
 Turn Standing(float temperature = 15.0f)
 {
 	return {.moving = false,
-	        .asleep = false,
-	        .resting = false,
+	        .slowEnergyUse = false,
+	        .fastGrowth = false,
 	        .phase = 13,
 	        .carriedWeight = std::nullopt,
 	        .temperature = temperature,
@@ -109,7 +110,7 @@ TEST(CreaturePhysiology, YoungCreaturesGrowFastThenSlowly)
 	needs.exhaustion = 0.0f;
 	// Twice as fast as one full growing up spread over its time, until 7/8 of it
 	EXPECT_NEAR(Growth(needs, species, false, 10.0f), 2.0f / (120.0f * 600.0f), k_Tolerance);
-	// Asleep, three times as fast
+	// With a plan to sleep at home or by a thing, three times as fast
 	EXPECT_NEAR(Growth(needs, species, true, 10.0f), 3.0f * 2.0f / (120.0f * 600.0f), k_Tolerance);
 	// Grown up, at the slowest
 	needs.age = 2;
@@ -193,7 +194,7 @@ TEST(CreaturePhysiology, EnergyRunsDownSlowerForBigOrSleepingCreatures)
 	auto asleep = Start(species);
 	Shape asleepShape {.fatness = 0.5f, .strength = 0.5f, .size = 0.0f};
 	auto turn = Standing();
-	turn.asleep = true;
+	turn.slowEnergyUse = true;
 	TickTurn(asleep, asleepShape, species, turn);
 	EXPECT_NEAR(asleep.energy, 1.0f - (0.01f / 4.025f), k_Tolerance);
 }
@@ -540,4 +541,36 @@ TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
 	// What the balance row doesn't hold stays as it was
 	EXPECT_FLOAT_EQ(creature->startEnergy, 0.75f);
 	EXPECT_FLOAT_EQ(creature->comfortTemperature, 0.5f);
+}
+
+TEST(CreaturePhysiology, ThePlanNotTheBodySetsThePaceOfEnergyAndGrowth)
+{
+	// Sleep at home: slow energy use and fast growth, for the walk home too
+	const auto home = PaceOfPlan("SleepAtHome");
+	EXPECT_TRUE(home.slowEnergyUse);
+	EXPECT_TRUE(home.fastGrowth);
+	// Rest to get better: slow energy use only
+	const auto rest = PaceOfPlan("RestToGetBetter");
+	EXPECT_TRUE(rest.slowEnergyUse);
+	EXPECT_FALSE(rest.fastGrowth);
+	// Sleep by a thing: fast growth only
+	const auto byObject = PaceOfPlan("SleepByObject");
+	EXPECT_FALSE(byObject.slowEnergyUse);
+	EXPECT_TRUE(byObject.fastGrowth);
+	// A sleep on the spot, the walk home to recover and no plan change nothing
+	for (const auto action : {std::optional<std::string_view>("SleepOnTheSpot"),
+	                          std::optional<std::string_view>("GoHomeToRecover"), std::optional<std::string_view>()})
+	{
+		const auto pace = PaceOfPlan(action);
+		EXPECT_FALSE(pace.slowEnergyUse);
+		EXPECT_FALSE(pace.fastGrowth);
+	}
+}
+
+TEST(CreaturePhysiology, AFastGrowthTripleIsAppliedAfterTheSlowestGrowth)
+{
+	const auto species = Fake();
+	Needs needs;
+	needs.age = 2;
+	EXPECT_FLOAT_EQ(Growth(needs, species, true, 10.0f), k_SleepGrowthFactor * k_MinGrowth);
 }
