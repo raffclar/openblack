@@ -460,7 +460,7 @@ void CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 	auto& clocks = contact.clocks;
 	clocks.sinceTouch += input.stepMs;
 	clocks.ready += input.stepMs;
-	contact.slapReadyMs += input.stepMs;
+	clocks.sinceHold += input.stepMs;
 	// How fast the hand moves across the land, up and down not counting
 	const auto moved = contact.lastPoint.has_value() ? glm::xz(input.point) - glm::xz(*contact.lastPoint) : glm::vec2(0.0f);
 	contact.speed = glm::length(moved) / (input.stepMs / 1000.0f);
@@ -472,7 +472,7 @@ void CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 	                                                        : transform.position.y;
 	std::optional<feedback::Slap> slap;
 	if (feedback::SlapConsidered(onBody, contact.wasOnBody, input.cursor.x, contact.lastCursor.x, input.screenWidth * 0.5f) &&
-	    contact.slapReadyMs > feedback::k_SlapReadyMs)
+	    feedback::SlapReady(clocks))
 	{
 		slap = feedback::ClassifySlap(input.point.y - ground, contact.speed, height, input.cursor.x < contact.lastCursor.x);
 	}
@@ -485,8 +485,7 @@ void CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 		// The slap only counts when the creature can reel from it
 		if (minds.ForceAction(creatureEntity, slap->animation, slap->mirrored, std::nullopt, feedback::k_SlapInterruptsAfter))
 		{
-			clocks.sinceTouch = 0.0f;
-			clocks.ready = feedback::k_ReadyAfterTouchMs;
+			feedback::Touched(clocks);
 			contact.sum = feedback::AfterSlap(contact.sum, slap->gentle);
 			contact.strokedOrSlapped = true;
 		}
@@ -512,9 +511,7 @@ void CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 			                      feedback::RewardFace(part), feedback::k_StrokeInterruptsAfter))
 			{
 				contact.lastPart = part;
-				clocks.sinceTouch = 0.0f;
-				clocks.ready = feedback::k_ReadyAfterTouchMs;
-				contact.slapReadyMs = 0.0f;
+				feedback::Touched(clocks);
 				contact.sum = feedback::AfterStroke(contact.sum);
 				contact.strokedOrSlapped = true;
 			}
@@ -606,9 +603,7 @@ bool CreatureHandSystem::Stroke(entt::entity creature, feedback::BodyPart part)
 		return false;
 	}
 	contact->sum = feedback::AfterStroke(contact->sum);
-	contact->clocks.sinceTouch = 0.0f;
-	contact->clocks.ready = feedback::k_ReadyAfterTouchMs;
-	contact->slapReadyMs = 0.0f;
+	feedback::Touched(contact->clocks);
 	return true;
 }
 
@@ -638,8 +633,7 @@ bool CreatureHandSystem::Slap(entt::entity creature, float heightShare, bool gen
 		return false;
 	}
 	contact->sum = feedback::AfterSlap(contact->sum, slap->gentle);
-	contact->clocks.sinceTouch = 0.0f;
-	contact->clocks.ready = feedback::k_ReadyAfterTouchMs;
+	feedback::Touched(contact->clocks);
 	return true;
 }
 

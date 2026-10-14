@@ -2362,6 +2362,18 @@ void AddHand(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "hand.slap_after_stroke",
+	    .name = "A slap soon after a stroke",
+	    .facet = Facet::Hand,
+	    .description = "A tiger faces the camera and the hand is free. Hold the action button on the tiger, stroke it once, "
+	                   "then sweep the hand fast across the middle of the screen.",
+	    .expected = "The stroke plays the pleased animation. The fast sweep plays a reeling animation and the reward falls, "
+	                "with no wait after the stroke, once the stroke animation is far enough through.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	});
+
 	auto worn = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	worn.needs = {.energy = 0.595f, .exhaustion = 0.325f, .life = 0.745f};
 	all.push_back({
