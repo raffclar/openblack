@@ -251,3 +251,67 @@ TEST(VillagerLabels, BoxIsNineRoundedPiecesAndThePointerReachesThePoint)
 	EXPECT_FLOAT_EQ(pointer[1][0].position.x, 394.0f);
 	EXPECT_FLOAT_EQ(pointer[1][2].position.x, 406.0f);
 }
+
+TEST(VillagerLabels, NameDisplayTakesAThirdOfASecondOfGameTimeToGrowIn)
+{
+	// 0.003 a millisecond: 333 milliseconds are not quite enough, 334 are
+	float fade = 0.0f;
+	for (int frame = 0; frame < 111; ++frame)
+	{
+		fade = StepNameFadeFrame(fade, true, 3.0f, true).next;
+	}
+	EXPECT_LT(fade, 1.0f);
+	EXPECT_NEAR(fade, 0.999f, 1e-4f);
+	fade = StepNameFadeFrame(fade, true, 1.0f, true).next;
+	EXPECT_FLOAT_EQ(fade, 1.0f);
+	// The step is linear, the same in each direction
+	EXPECT_FLOAT_EQ(StepNameFadeFrame(0.5f, true, 16.0f, true).next, 0.548f);
+	EXPECT_FLOAT_EQ(StepNameFadeFrame(0.5f, false, 16.0f, true).next, 0.452f);
+}
+
+TEST(VillagerLabels, FrameLabelsUseTheNameDisplayFromBeforeTheStep)
+{
+	const auto frame = StepNameFadeFrame(0.0f, true, 16.0f, true);
+	EXPECT_FLOAT_EQ(frame.drawn, 0.0f);
+	EXPECT_FLOAT_EQ(frame.next, 0.048f);
+	// Thus the first frame after the key shows no name, and the next shows it small
+	EXPECT_EQ(Choose({.named = true, .nameFade = frame.drawn}).kind, Kind::None);
+	const auto next = StepNameFadeFrame(frame.next, true, 16.0f, true);
+	EXPECT_FLOAT_EQ(next.drawn, 0.048f);
+	EXPECT_EQ(Choose({.named = true, .nameFade = next.drawn}).kind, Kind::Name);
+}
+
+TEST(VillagerLabels, NameDisplayStandsStillWhenTheLandIsNotDrawnOrTheGameIsPaused)
+{
+	// In the temple, under a video or behind the falling spell's film
+	auto frame = StepNameFadeFrame(0.4f, true, 16.0f, false);
+	EXPECT_FLOAT_EQ(frame.drawn, 0.4f);
+	EXPECT_FLOAT_EQ(frame.next, 0.4f);
+	frame = StepNameFadeFrame(0.4f, false, 16.0f, false);
+	EXPECT_FLOAT_EQ(frame.next, 0.4f);
+	// A paused frame has no game time
+	frame = StepNameFadeFrame(0.4f, true, 0.0f, true);
+	EXPECT_FLOAT_EQ(frame.next, 0.4f);
+}
+
+TEST(VillagerLabels, PointerFadesWithTheBoxButKeepsItsSize)
+{
+	Board board;
+	auto small = At(200, 300, u"abc");
+	small.size = 0.25f;
+	ASSERT_TRUE(board.Add(small, 800.0f, TenPixelsEach, 1.0f));
+	ASSERT_TRUE(board.Add(At(600, 300, u"abc"), 800.0f, TenPixelsEach, 1.0f));
+	const auto& labels = board.GetLabels();
+	ASSERT_EQ(labels.size(), 2u);
+	// The alpha is cut to a whole number: 120 at full size, 30 at a quarter
+	EXPECT_EQ(labels[0].pointerAlpha, 30);
+	EXPECT_EQ(labels[0].pointerAlpha, labels[0].boxAlpha);
+	EXPECT_EQ(labels[1].pointerAlpha, 120);
+	EXPECT_EQ(labels[1].wordsAlpha, 255);
+	// The head of the pointer is 12 pixels wide and 16 tall at every size
+	const auto smallHead = PointerShape(labels[0])[1];
+	const auto fullHead = PointerShape(labels[1])[1];
+	EXPECT_FLOAT_EQ(smallHead[2].position.x - smallHead[0].position.x, 12.0f);
+	EXPECT_FLOAT_EQ(fullHead[2].position.x - fullHead[0].position.x, 12.0f);
+	EXPECT_FLOAT_EQ(smallHead[2].position.y - smallHead[0].position.y, 16.0f);
+}

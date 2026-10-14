@@ -1153,15 +1153,16 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 	};
 	for (const auto* label : board.DrawOrder())
 	{
-		// The see-through black box, then the black pointer down to the head, then the words
+		// The see-through black box, then the see-through black pointer down to the head, then the words
 		const auto boxColour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(label->boxAlpha) / 255.0f);
 		for (const auto& quad : labels::BoxShape(*label))
 		{
 			draw(quad, boxColour);
 		}
+		const auto pointerColour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(label->pointerAlpha) / 255.0f);
 		for (const auto& quad : labels::PointerShape(*label))
 		{
-			draw(quad, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+			draw(quad, pointerColour);
 		}
 		const float alpha = static_cast<float>(label->wordsAlpha) / 255.0f;
 		const auto colour = glm::vec3(label->colour) / 255.0f;
