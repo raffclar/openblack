@@ -31,6 +31,7 @@
 
 namespace openblack::inspector
 {
+class FightAutopilot;
 class GameInput;
 class GameProvider;
 struct GameControlSet;
@@ -61,6 +62,7 @@ public:
 	void PlaceCamera() override;
 	void GiveCameraBack() override;
 	void ShowOverrideToPointer() override;
+	[[nodiscard]] fight_autopilot::AutopilotInterface* GetFightAutopilot() override;
 
 private:
 	/// The helper answering while the game loads: until told to stop
@@ -98,6 +100,8 @@ private:
 	std::mutex _loadingMutex;
 	std::atomic<bool> _stopLoadingHelper {false};
 	std::thread _loadingHelper;
+	/// The fight autopilot, which gives its input through the inspector's input
+	std::unique_ptr<inspector::FightAutopilot> _autopilot;
 };
 
 } // namespace openblack::ecs::systems

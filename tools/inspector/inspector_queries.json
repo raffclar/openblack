@@ -713,6 +713,123 @@
   "writes": true
  },
  {
+  "description": "The creature fights that the transcript recorded: for each, its number, the two creatures, when it started and ended, and its number of records; with the version of the records and the folder that the files go to",
+  "kind": "object",
+  "parameters": [],
+  "query": "fights.transcripts"
+ },
+ {
+  "description": "The records of one fight in order, from an index onward. Each record has the version (v), the fight, its index (i), the frame, the game turn, the game time, its kind, the index of the record that caused it, and its fields. Poll it while a fight runs: ask again from \"next\".",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The number of the fight; the last fight when not given",
+    "name": "fight",
+    "type": "integer"
+   },
+   {
+    "description": "The first index to give, 0 when not given",
+    "name": "from",
+    "type": "integer"
+   },
+   {
+    "description": "The most records to give, 30 when not given; raise max_bytes for more",
+    "name": "records",
+    "type": "integer"
+   },
+   {
+    "description": "Only these kinds of record, divided by commas (for example \"blow,level,press\")",
+    "name": "kinds",
+    "type": "string"
+   }
+  ],
+  "query": "fights.transcript"
+ },
+ {
+  "description": "Removes every fight from the transcript. New fights continue the numbers.",
+  "kind": "object",
+  "parameters": [],
+  "query": "fights.clear_transcripts",
+  "writes": true
+ },
+ {
+  "description": "Writes each fight from now on to a file of JSON lines, fight-<number>.jsonl, in a folder; an empty folder stops the files",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The folder, for example E:/openblack/fights",
+    "name": "folder",
+    "type": "string"
+   }
+  ],
+  "query": "fights.transcript_folder",
+  "writes": true
+ },
+ {
+  "description": "Starts the fight autopilot, which fights for the player with the real mouse each frame: hits on the opponent's body, a block on the player's creature, steps on the arena's ground, and a double click into the arena to show the fight",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "lesson (the guide's fight lesson, stage by stage), aggressive (hits only), random (a seeded mix) or sequence (the moves given)",
+    "name": "policy",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The seed of the random choices, 1 when not given",
+    "name": "seed",
+    "type": "integer"
+   },
+   {
+    "description": "The lesson stage to start at: hit, hits, block, step or bout",
+    "name": "stage",
+    "type": "string"
+   },
+   {
+    "description": "For the sequence policy: seconds:move pairs divided by commas, for example \"1:high,2.5:block,4:step_back\"; moves high, middle, low, block, step_forward, step_back, step_left, step_right",
+    "name": "sequence",
+    "type": "string"
+   },
+   {
+    "description": "Whether it shows the fight with a double click when the camera does not; true when not given",
+    "name": "enter_view",
+    "type": "boolean"
+   }
+  ],
+  "query": "autopilot.start",
+  "writes": true
+ },
+ {
+  "description": "Stops the fight autopilot and gives the mouse back",
+  "kind": "object",
+  "parameters": [],
+  "query": "autopilot.stop",
+  "writes": true
+ },
+ {
+  "description": "The fight autopilot: whether it runs, its policy, the lesson stage, what the hand does, its counts of presses and blows, the fight it plays and the check of the lesson",
+  "kind": "object",
+  "parameters": [],
+  "query": "autopilot.state"
+ },
+ {
+  "description": "Each input that the fight autopilot gave and each result that it saw, from an index onward: the frame, the game turn, the game time since it started, the event, the detail and the pointer's pixel",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The first index to give, 0 when not given",
+    "name": "from",
+    "type": "integer"
+   },
+   {
+    "description": "The most entries to give, 60 when not given; raise max_bytes for more",
+    "name": "entries",
+    "type": "integer"
+   }
+  ],
+  "query": "autopilot.log"
+ },
+ {
   "description": "The lands the game can load: the story's and the playgrounds, by name",
   "kind": "list",
   "parameters": [],

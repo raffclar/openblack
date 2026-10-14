@@ -8,8 +8,14 @@
  *******************************************************************************/
 
 #include <chrono>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
+#include <MindFile.h>
 #include <gtest/gtest.h>
 
 #include "Camera/Camera.h"
@@ -20,6 +26,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "Locator.h"
 
@@ -59,6 +66,69 @@ public:
 	[[nodiscard]] std::vector<Active> ReactionsAt(const glm::vec3&) const override { return {}; }
 
 	std::vector<Source> made;
+};
+
+/// A mind that keeps the plans that it is made to carry out, and does nothing else
+class ForcedMinds final: public ecs::systems::CreatureMindSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void PlanTurn() override {}
+	void LearnTurn() override {}
+	void LoadMind(entt::entity, std::shared_ptr<const creaturemind::MindFileData>) override {}
+	[[nodiscard]] std::optional<creaturemind::MindFileData> SaveMind(entt::entity) const override { return std::nullopt; }
+	void ClearLearning(entt::entity) override {}
+	void SeeSkill(const glm::vec3&, size_t) override {}
+	void SeeMiracle(const glm::vec3&, size_t) override {}
+	void PlayerDid(size_t, const glm::vec3&, std::optional<entt::entity>, std::optional<PlayerNames>) override {}
+	[[nodiscard]] const creature_mind_tables::Tables* GetTables() override { return nullptr; }
+	bool PlayAction(entt::entity, size_t) override { return false; }
+	bool PlayGesture(entt::entity, size_t) override { return false; }
+	void PullFace(entt::entity, size_t) override {}
+	std::optional<creature_face::Request> ShowFeeling(entt::entity, creature_face::Cue) override { return std::nullopt; }
+	bool SitDown(entt::entity) override { return false; }
+	void StandUp(entt::entity) override {}
+	void ReceiveFeedback(entt::entity, float) override {}
+	bool ForceAction(entt::entity, size_t, bool, std::optional<creature_face::Request>, float) override { return false; }
+	bool Sleep(entt::entity) override { return false; }
+	bool Eat(entt::entity, std::optional<entt::entity>) override { return false; }
+	bool Drink(entt::entity) override { return false; }
+	bool Poo(entt::entity creature) override
+	{
+		pooedDirectly = creature;
+		return true;
+	}
+	bool Puke(entt::entity) override { return false; }
+	bool Faint(entt::entity) override { return false; }
+	void Wake(entt::entity) override {}
+	void FoughtFight(entt::entity, bool) override {}
+	void ChangeDesires(entt::entity, const std::function<void(creature_desires::Desires&)>&) override {}
+	void SetAgendaPriority(entt::entity, float) override {}
+	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override
+	{
+		forced.emplace_back(creature, plan.desire, std::string(plan.action), plan.actionObject, plan.activityObject);
+		return true;
+	}
+
+	struct Forced
+	{
+		Forced(entt::entity who, creature_desires::Desire wanted, std::string done, entt::entity on,
+		       std::optional<entt::entity> about)
+		    : creature(who)
+		    , desire(wanted)
+		    , action(std::move(done))
+		    , object(on)
+		    , activityObject(about)
+		{
+		}
+		entt::entity creature;
+		creature_desires::Desire desire;
+		std::string action;
+		entt::entity object;
+		std::optional<entt::entity> activityObject;
+	};
+	std::vector<Forced> forced;
+	std::optional<entt::entity> pooedDirectly;
 };
 
 /// Two creatures in a duel in an arena on flat land, neither with a body to click on. The camera shows their fight.
@@ -173,6 +243,27 @@ TEST_F(CreatureFightSystemTest, ADoubleClickIntoTheArenaShowsTheFightAtOnce)
 	EXPECT_FALSE(fights.IsCameraOnFight());
 }
 
+TEST_F(CreatureFightSystemTest, ADoubleClickMeasuresFromWhereTheCameraWasBeforeItsFlight)
+{
+	fights.Reset();
+	auto& camera = Locator::camera::value();
+	// The camera is far from the arena when the player double clicks into it
+	camera.SetOrigin({0.0f, 30.0f, 2000.0f});
+	camera.SetFocus({0.0f, 0.0f, 1900.0f});
+	fights.FlewTo({0.0f, 0.0f, 0.0f});
+	// The flight brings the camera near before the next update, but the fight is not shown
+	camera.SetOrigin({0.0f, 30.0f, 40.0f});
+	camera.SetFocus({0.0f, 0.0f, 0.0f});
+	fights.Update(std::chrono::duration<float, std::milli>(0.0f));
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	// A fight of the player's creature under a script's control is shown from any distance
+	Locator::entitiesRegistry::value().Assign<ScriptControlled>(second);
+	camera.SetOrigin({0.0f, 30.0f, 2000.0f});
+	camera.SetFocus({0.0f, 0.0f, 1900.0f});
+	ShowTheFight({0.0f, 0.0f, 0.0f});
+	EXPECT_TRUE(fights.IsCameraOnFight());
+}
+
 TEST_F(CreatureFightSystemTest, WithoutTheFightViewTheHandDoesNotDirectTheFight)
 {
 	fights.Reset();
@@ -232,27 +323,98 @@ TEST_F(CreatureFightSystemTest, ScriptsAskWhatAFighterIsDoing)
 	EXPECT_EQ(fights.CurrentFightAction(newcomer), fight::FightAction::Fainted);
 }
 
-TEST_F(CreatureFightSystemTest, AFightWonIsSeenByThoseAroundUnlessAScriptControlsTheWinner)
+TEST_F(CreatureFightSystemTest, AKnockOutThatNoBlowMadeGivesNoSightOfAFightWon)
 {
 	Locator::reactionSystem::emplace<RecordedReactions>();
 	auto& reactions = static_cast<RecordedReactions&>(Locator::reactionSystem::value());
-	fights.KnockOut(second);
-	ASSERT_EQ(reactions.made.size(), 1u);
-	EXPECT_EQ(reactions.made[0].type, Reaction::ReactToFightWon);
-	EXPECT_EQ(reactions.made[0].initiator, first);
-	EXPECT_EQ(reactions.made[0].player, PlayerNames::PLAYER_ONE);
-	EXPECT_TRUE(reactions.made[0].onCast);
-	Locator::reactionSystem::reset();
-}
-
-TEST_F(CreatureFightSystemTest, AScriptControlledWinnerMakesNoReaction)
-{
-	Locator::reactionSystem::emplace<RecordedReactions>();
-	auto& reactions = static_cast<RecordedReactions&>(Locator::reactionSystem::value());
-	Locator::entitiesRegistry::value().Assign<ScriptControlled>(first);
+	// A miracle or a loss of life knocks the loser out, not a blow
 	fights.KnockOut(second);
 	EXPECT_TRUE(reactions.made.empty());
 	Locator::reactionSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, TheWinnerIsMadeToShowOffAtTheLoser)
+{
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	Locator::entitiesRegistry::value().Get<Creature>(first).alignment = -0.5f;
+	fights.KnockOut(second);
+	ASSERT_EQ(minds.forced.size(), 1u);
+	EXPECT_EQ(minds.forced[0].creature, first);
+	EXPECT_EQ(minds.forced[0].desire, creature_desires::Desire::ObeyPlayer);
+	EXPECT_EQ(minds.forced[0].action, "ShowImpressiveAnimation");
+	EXPECT_EQ(minds.forced[0].object, second);
+	EXPECT_EQ(minds.forced[0].activityObject, second);
+	EXPECT_FALSE(minds.pooedDirectly.has_value());
+	Locator::creatureMindSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, AnEvilWinnerIsMadeToPooOnTheLoser)
+{
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	Locator::entitiesRegistry::value().Get<Creature>(first).alignment = -0.51f;
+	fights.KnockOut(second);
+	ASSERT_EQ(minds.forced.size(), 1u);
+	EXPECT_EQ(minds.forced[0].action, "Poo");
+	EXPECT_EQ(minds.forced[0].object, second);
+	// The mind carries out the plan's own agenda: the fight never makes the creature poo by itself
+	auto& registry = Locator::entitiesRegistry::value();
+	for (int turn = 0; turn < 600 && registry.AllOf<CreatureFighting>(first); ++turn)
+	{
+		fights.Update(std::chrono::duration<float, std::milli>(100.0f));
+		fights.ProcessTurn();
+	}
+	EXPECT_FALSE(registry.AllOf<CreatureFighting>(first));
+	EXPECT_FALSE(minds.pooedDirectly.has_value());
+	Locator::creatureMindSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, ScriptsSeeAFightOnlyWhileItsDuelLasts)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_TRUE(fights.IsDuelling(first));
+	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Taunt;
+	EXPECT_FALSE(fights.IsDuelling(first));
+	EXPECT_TRUE(fights.IsFighting(first));
+	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Duel;
+	fights.KnockOut(second);
+	// The winner finishes its move in the fight, but its duel is over
+	EXPECT_FALSE(fights.IsDuelling(first));
+	EXPECT_FALSE(fights.IsDuelling(second));
+}
+
+TEST_F(CreatureFightSystemTest, AScriptTakesACreatureFromItsDuelForBoth)
+{
+	fights.TakeForScript(first);
+	EXPECT_FALSE(fights.IsDuelling(first));
+	EXPECT_FALSE(fights.IsDuelling(second));
+	// Neither won: neither is knocked out
+	EXPECT_FALSE(fights.IsKnockedOut(first));
+	EXPECT_FALSE(fights.IsKnockedOut(second));
+}
+
+TEST_F(CreatureFightSystemTest, AScriptTakesAKnockedOutCreatureBeforeItIsTakenHome)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	fights.KnockOut(second);
+	ASSERT_TRUE(fights.IsKnockedOut(second));
+	const auto where = registry.Get<const Transform>(second).position;
+	fights.TakeForScript(second);
+	EXPECT_FALSE(fights.IsKnockedOut(second));
+	// It is not taken home later
+	for (int turn = 0; turn < 600; ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	EXPECT_EQ(registry.Get<const Transform>(second).position, where);
+}
+
+TEST_F(CreatureFightSystemTest, AScriptDoesNotRaiseACreatureKilledForGood)
+{
+	fights.Withdraw(second);
+	fights.KillPermanently(second);
+	ASSERT_TRUE(fights.IsKnockedOut(second));
+	fights.TakeForScript(second);
+	EXPECT_TRUE(fights.IsKnockedOut(second));
 }
 
 TEST_F(CreatureFightSystemTest, AScriptReadsAndSetsTheFightHealthInAndOutOfAFight)

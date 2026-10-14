@@ -89,7 +89,12 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("inspect-port", "Start the debug inspector on this port of 127.0.0.1 (0 for any free port), for agents and tools to query and control the game. The player's mouse and keyboard are kept out while a client is connected; Ctrl+Alt+Shift+F12 takes the game back.", cxxopts::value<uint16_t>())
 		("inspect-lock-input", "With --inspect-port, keep the player's mouse and keyboard out from the start, as for a headless scenario run.")
 		("inspect-allow-player-input", "With --inspect-port, never keep the player's mouse and keyboard out.")
-		("screenshot-root", "Where the inspector keeps pictures by feature, with their catalogue (default OPENBLACK_SCREENSHOT_ROOT, or E:/openblack/screenshots when E: is there).", cxxopts::value<std::string>());
+		("screenshot-root", "Where the inspector keeps pictures by feature, with their catalogue (default OPENBLACK_SCREENSHOT_ROOT, or E:/openblack/screenshots when E: is there).", cxxopts::value<std::string>())
+		("fight-autopilot", "Start the fight autopilot, which fights for the player with the real mouse: lesson, aggressive, random or sequence. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
+		("fight-autopilot-seed", "The seed of the fight autopilot's random choices.", cxxopts::value<uint32_t>()->default_value("1"))
+		("fight-autopilot-stage", "The stage of the fight lesson that the autopilot starts at: hit, hits, block, step or bout.", cxxopts::value<std::string>())
+		("fight-autopilot-sequence", "The moves of the sequence policy, as seconds:move pairs divided by commas (\"1:high,2.5:block,4:step_back\").", cxxopts::value<std::string>())
+		("fight-transcript-dir", "Write the transcript of each creature fight to this folder, as one file of JSON lines a fight. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>());
 #endif
 	// clang-format on
 
@@ -261,6 +266,25 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		if (result.count("screenshot-root") != 0)
 		{
 			args.screenshotRoot = std::filesystem::path(result["screenshot-root"].as<std::string>());
+		}
+		if (result.count("fight-autopilot") != 0)
+		{
+			args.fightAutopilot = openblack::FightAutopilotRequest {
+			    .policy = result["fight-autopilot"].as<std::string>(),
+			    .seed = result["fight-autopilot-seed"].as<uint32_t>(),
+			    .stage = result.count("fight-autopilot-stage") != 0 ? result["fight-autopilot-stage"].as<std::string>() : "",
+			    .sequence =
+			        result.count("fight-autopilot-sequence") != 0 ? result["fight-autopilot-sequence"].as<std::string>() : "",
+			};
+		}
+		if (result.count("fight-transcript-dir") != 0)
+		{
+			args.fightTranscriptFolder = std::filesystem::path(result["fight-transcript-dir"].as<std::string>());
+		}
+		// The fight autopilot and the transcript's files need the inspector
+		if (!args.inspectPort.has_value() && (args.fightAutopilot.has_value() || args.fightTranscriptFolder.has_value()))
+		{
+			args.inspectPort = 0;
 		}
 		if (result.count("inspect-lock-input") != 0)
 		{

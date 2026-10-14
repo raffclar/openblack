@@ -25,10 +25,12 @@
 
 #include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
+#include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Game.h"
 #include "Input/GameActionMapInterface.h"
 #include "Inspector/ComponentReflection.h"
+#include "Inspector/FightAutopilot.h"
 #include "Inspector/GameControls.h"
 #include "Inspector/GameInput.h"
 #include "Inspector/GameProviders.h"
@@ -178,6 +180,8 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	auto input = std::make_unique<inspector::InputProvider>(*_inputTarget);
 	_input = input.get();
 	_inspector.Add(std::move(input));
+	// The fight autopilot fights for the player through the same input
+	_autopilot = std::make_unique<inspector::FightAutopilot>(*_inputTarget);
 	// The game's dialogs are clicked through the input's queue, behind any input asked for before
 	_controls->gui.SetInputSender(
 	    [input = _input](std::span<const inspector::InputEvent> events) { return input->Send(events); });
@@ -362,6 +366,15 @@ void InspectorSystem::Service()
 		_inspector.SetIdentity(std::move(identity));
 	}
 	_game->Frame();
+	// The fight transcript stamps its records with this frame and the game time so far
+	if (Locator::fightTranscript::has_value())
+	{
+		const auto gameMs =
+		    Locator::time::has_value() ? static_cast<float>(Locator::time::value().GetFrameGameTime().count()) : 0.0f;
+		Locator::fightTranscript::value().Frame(_game->FrameNumber(), gameMs);
+	}
+	// The fight autopilot gives its input for this frame before the game reads its input
+	_autopilot->Frame(_game->FrameNumber());
 	// The input due this frame is made before the game reads its input
 	_input->Frame(_game->FrameNumber());
 	// The pictures due this frame are asked for before it is drawn
@@ -382,6 +395,11 @@ void InspectorSystem::ShowOverrideToPointer()
 {
 	// Given back by GiveCameraBack
 	static_cast<void>(inspector::ShowOverrideToPointer(_controls->camera));
+}
+
+fight_autopilot::AutopilotInterface* InspectorSystem::GetFightAutopilot()
+{
+	return _autopilot.get();
 }
 
 uint16_t InspectorSystem::GetPort() const

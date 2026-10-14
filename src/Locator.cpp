@@ -66,6 +66,7 @@
 #include "ECS/Systems/Implementations/EditorSystem.h"
 #include "ECS/Systems/Implementations/ExplosionSystem.h"
 #include "ECS/Systems/Implementations/FieldSystem.h"
+#include "ECS/Systems/Implementations/FightTranscriptSystem.h"
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/FireflySystem.h"
 #include "ECS/Systems/Implementations/FishFarmSystem.h"
@@ -498,6 +499,7 @@ void openblack::ShutDownServices()
 
 	// The inspector goes first: its providers read the services below
 	Locator::inspector::reset();
+	Locator::fightTranscript::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
@@ -619,6 +621,8 @@ bool openblack::StartInspector([[maybe_unused]] uint16_t port)
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The inspector couldn't start: {}", error);
 		return false;
 	}
+	// The fights keep a transcript for the inspector's tools
+	Locator::fightTranscript::emplace<ecs::systems::FightTranscriptSystem>();
 	Locator::inspector::emplace<ecs::systems::InspectorSystem>(std::move(server));
 	return true;
 #else

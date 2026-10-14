@@ -48,8 +48,13 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	{
 		return false;
 	}
-	// The script takes control of it first, so the action's agenda is made for a creature under a script's control
+	// The script takes control of it first, so the action's agenda is made for a creature under a script's control. It
+	// takes it from a fight or from lying knocked out too.
 	registry.AssignOrReplace<ScriptControlled>(creature);
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().TakeForScript(creature);
+	}
 	// It comes across the thing to act on, and the thing to use
 	auto& mind = registry.Get<CreatureMindState>(creature);
 	ComeAcross(creature, mind, target);
