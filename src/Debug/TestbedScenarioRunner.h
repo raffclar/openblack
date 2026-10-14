@@ -171,6 +171,8 @@ private:
 	void GiveSceneryCommand(const Command& command);
 	/// The player's mouse: presses, moves and the wheel, made as the mouse's own events
 	std::string GivePointerCommand(const Command& command);
+	/// Where the middle of the body of the opponent of a creature (by its place in the scenario) is on a screen of a size
+	[[nodiscard]] std::optional<glm::ivec2> OpponentOnScreen(size_t creature, glm::vec2 size) const;
 	/// Moves the mouse on along a sweep, and lets go of it once the scenario's commands are done
 	void UpdatePointer(float seconds);
 	/// Where the cursor and the hand are on the screen, for the log

@@ -3302,6 +3302,37 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	{
+		// The fight lesson of the guide: no one chooses the moves of either creature, and the guide belongs to no player
+		// The Action button is the right button of the mouse
+		constexpr size_t k_RightButton = 3;
+		auto guide = Fighter(right, 270.0f, "guide", PlayerNames::NEUTRAL, 0.5f, 0.0f);
+		guide.species = CreatureType::Lion;
+		all.push_back({
+		    .id = "combat.lesson_press",
+		    .name = "The guide's fight lesson: a press on the guide",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger fights a lion that belongs to no player, as the guide's fight lesson "
+		                   "starts it. No one chooses the moves of either creature. A double click into the arena makes "
+		                   "the camera show the fight. Then every four seconds the hand presses the Action button on the "
+		                   "middle of the lion's body.",
+		    .expected = "The camera shows the fight side on at once. Each press puts a sparkle on the lion's body, and the "
+		                "red tiger strikes at the middle. The lion reels from each blow that lands. Neither creature makes "
+		                "a move by itself.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), guide},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 0, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 0, 0.2f),
+		                 Fight(Kind::FightView, 0, 0, 0.5f),
+		                 Fight(Kind::PointerOnOpponent, 0, 0, 9.0f),
+		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_RightButton},
+		                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = k_RightButton},
+		                 Fight(Kind::PointerOnOpponent, 0, 0, 3.8f)},
+		    .repeatFrom = 5,
+		});
+	}
+
 	all.push_back({
 	    .id = "combat.player",
 	    .name = "Directing the player's creature",
@@ -4383,7 +4414,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 113> k_Names {
+	constexpr std::array<std::string_view, 115> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -4440,6 +4471,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fight special",
 	    "fight by itself",
 	    "fight miracle",
+	    "show the fight",
+	    "pointer on opponent",
 	    "knock out",
 	    "bring round",
 	    "tie leash to creature",
@@ -4504,7 +4537,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 bool testbed_scenarios::IsPointerCommand(Command::Kind kind)
 {
 	return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
-	       kind == Kind::PointerSweep || kind == Kind::WheelTurn;
+	       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent;
 }
 
 bool NeedOverrides::Empty() const
