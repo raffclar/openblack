@@ -296,6 +296,35 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		       object_measures::Height(registry, entity) > creature_plan_actions::k_PooedOnTallerThan;
 	case Target::StoragePit:
 		return registry.AllOf<StoragePit>(entity);
+	case Target::WorshipSite:
+		return registry.AllOf<WorshipSite>(entity);
+	case Target::Workshop:
+	{
+		const auto* abode = registry.TryGet<const Abode>(entity);
+		const auto& abodes = Locator::infoConstants::value().abode;
+		return abode != nullptr && static_cast<size_t>(abode->info) < abodes.size() &&
+		       abodes.at(static_cast<size_t>(abode->info)).abodeType == AbodeType::Workshop;
+	}
+	case Target::BuiltStoragePit:
+	{
+		const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		return registry.AllOf<StoragePit>(entity) && (progress == nullptr || !(progress->built < 1.0f));
+	}
+	case Target::AnyTree:
+		return registry.AllOf<Tree>(entity);
+	case Target::DryField:
+	case Target::Waterable:
+	{
+		// A field has no food to give until it is ripe
+		if (const auto* field = registry.TryGet<const Field>(entity))
+		{
+			const auto& types = Locator::infoConstants::value().fieldType;
+			const auto row = static_cast<size_t>(field->type);
+			const bool ripe = row < types.size() && !(field->crop.age < types.at(row).ageRecolt);
+			return !ripe || field->crop.food == 0.0f;
+		}
+		return target == Target::Waterable && registry.AllOf<Tree>(entity);
+	}
 	case Target::BuiltFoodStore:
 	{
 		// A building stands fully built when it has no build progress left, or its progress is full
@@ -518,10 +547,30 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const Flowers, const Transform>(
 		    [&](entt::entity entity, const Flowers&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::StoragePit)
+	if (target == Target::StoragePit || target == Target::BuiltStoragePit || target == Target::BuiltFoodStore)
 	{
 		registry.Each<const StoragePit, const Transform>(
 		    [&](entt::entity entity, const StoragePit&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::WorshipSite || target == Target::BuiltFoodStore)
+	{
+		registry.Each<const WorshipSite, const Transform>(
+		    [&](entt::entity entity, const WorshipSite&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::Workshop)
+	{
+		registry.Each<const Abode, const Transform>(
+		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::AnyTree || target == Target::Waterable)
+	{
+		registry.Each<const Tree, const Transform>(
+		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::DryField || target == Target::Waterable)
+	{
+		registry.Each<const Field, const Transform>(
+		    [&](entt::entity entity, const Field&, const Transform& at) { consider(entity, at); });
 	}
 	// A thing found in two of the lists counts once
 	std::ranges::sort(found, {}, &Found::entity);
@@ -1269,6 +1318,9 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		                        .transform([](const creature_planner::UsedChoice& used) { return used.id; });
 	}
 	situated.instrument = chosen.instrument;
+	situated.activity = chosen.activityObject.has_value()
+	                        ? chosen.activityObject
+	                        : mind_detail::LessonActivity(*tables, plan.desire, plan.object, plan.about);
 	auto built = PlanAgenda(creature, plan.action, plan.object, situated);
 	if (!built.has_value())
 	{
@@ -2508,6 +2560,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				situation.instrumentRadius = object_measures::TwoDRadius(registry, *plan.instrument);
 			}
 			situation.handFull = registry.AllOf<CreatureHeldObject>(creature);
+			if (plan.activityObject.has_value())
+			{
+				situation.activity = entt::to_integral(*plan.activityObject);
+			}
 			if (plan.object.has_value() && registry.Valid(*plan.object))
 			{
 				situation.thingHeight = object_measures::Height(registry, *plan.object);

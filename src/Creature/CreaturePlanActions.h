@@ -88,11 +88,19 @@ enum class Target : uint8_t
 	/// What a creature can poo by: a thing that is not alive and is taller than k_PooedOnTallerThan, but not a field or a
 	/// fish farm
 	PooedOn,
+	/// A worship site, a workshop, or a storage pit that stands fully built
+	WorshipSite,
+	Workshop,
+	BuiltStoragePit,
+	/// A tree. A field that has no food to give: not ripe, or ripe and empty. A tree or such a field.
+	AnyTree,
+	DryField,
+	Waterable,
 };
 /// A creature poos only by a thing taller than this, in metres
 constexpr float k_PooedOnTallerThan = 1.5f;
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::PooedOn) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::Waterable) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -134,6 +142,10 @@ enum class Build : uint8_t
 	CastShield,
 	CastWaterOnItself,
 	CastToImpress,
+	/// The creature casts a forest at the place where a villager is when it makes the agenda
+	CastForest,
+	/// The creature casts water at the tree that it uses, for a town
+	WaterTreeForTown,
 	/// Going to a fish farm's shoal, bringing food out of the sea there and eating it
 	FishAndEat,
 	/// Bringing food out of the sea, unless it has some in its hand, and throwing it into a storage pit, or putting it
@@ -215,6 +227,9 @@ struct Executor
 	/// The animation played, for the builds that play one
 	size_t animation {0};
 	creature_mind::Activity activity {creature_mind::Activity::Planned};
+	/// The miracle that the agenda casts, when the creature table gives the action no miracle. The creature then never
+	/// chooses the action itself, but a script can make it do the action.
+	std::optional<uint32_t> castMagic;
 };
 
 /// Every action that can be carried out
@@ -247,6 +262,9 @@ struct Situation
 	/// its hand holds something already
 	std::optional<uint32_t> instrument;
 	bool handFull {false};
+	/// What the desire of the plan is about (the town that the creature helps, say), by its entity's number. None when
+	/// the plan is about nothing.
+	std::optional<uint32_t> activity;
 	/// Whether what its hand holds is a tree, or a magic mushroom
 	bool holdingTree {false};
 	bool holdingMushroom {false};
@@ -290,6 +308,8 @@ struct CastInfo
 	/// For a fireball, and for water on itself: the middle of the clear area near the creature that it goes to first,
 	/// none when there is none
 	std::optional<glm::vec2> clearArea;
+	/// Where the thing is at the time the creature makes the agenda, for a miracle that goes to a place
+	std::optional<glm::vec3> place;
 };
 /// Whether an action casts a miracle
 [[nodiscard]] bool IsCast(const Executor& executor);

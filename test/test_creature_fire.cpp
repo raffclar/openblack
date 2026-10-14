@@ -80,10 +80,10 @@ TEST(CreatureFire, UsefulnessIsCappedAtAnEighth)
 	EXPECT_TRUE(0.125f * 0.41f > creature_fire::k_LeastCompassionateUse);
 }
 
-TEST(CreatureFireAgenda, PutsOutWithTheWaterMiracleThenDouses)
+TEST(CreatureFireAgenda, PutsOutWithTheWaterMiracleAlone)
 {
 	const auto agenda = PutOutFireWithWater(7, 15.0f);
-	ASSERT_EQ(agenda.size(), 4u);
+	ASSERT_EQ(agenda.size(), 3u);
 	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::GoNearObject);
 	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 30.0f);
 	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceObject);
@@ -92,8 +92,6 @@ TEST(CreatureFireAgenda, PutsOutWithTheWaterMiracleThenDouses)
 	EXPECT_EQ(agenda[2].cast.magicType, static_cast<uint32_t>(MagicType::Water));
 	EXPECT_EQ(agenda[2].sequence, k_ScatterPose);
 	EXPECT_FLOAT_EQ(agenda[2].seconds, 3.0f);
-	EXPECT_EQ(agenda[3].kind, Step::Kind::Douse);
-	EXPECT_EQ(agenda[3].object, 7u);
 	for (const auto& step : agenda)
 	{
 		if (step.kind == Step::Kind::Move)

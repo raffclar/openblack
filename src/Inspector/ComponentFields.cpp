@@ -640,7 +640,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureCasting::holdTurns>("holdTurns")
 	    .Field<&components::CreatureCasting::stuckCheck>("stuckCheck")
 	    .Field<&components::CreatureCasting::destination>("destination")
-	    .Field<&components::CreatureCasting::fizzle>("fizzle");
+	    .Field<&components::CreatureCasting::fizzle>("fizzle")
+	    .Field<&components::CreatureCasting::lastFizzleTarget>("lastFizzleTarget");
 	Reflect<components::CreatureCopy>(context)
 	    .Field<&components::CreatureCopy::creature>("creature")
 	    .Field<&components::CreatureCopy::size>("size");
@@ -2282,7 +2283,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_marks::Marks::counts>("counts");
 	Reflect<openblack::creature_mind::CastOrder>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::CastOrder::magicType>("magicType")
-	    .Field<&openblack::creature_mind::CastOrder::object>("object");
+	    .Field<&openblack::creature_mind::CastOrder::object>("object")
+	    .Field<&openblack::creature_mind::CastOrder::place>("place");
 	Reflect<openblack::creature_mind::Gaze>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Gaze::object>("object")
 	    .Field<&openblack::creature_mind::Gaze::bottom>("bottom")

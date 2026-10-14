@@ -153,6 +153,10 @@ public:
 	/// as the miracle's seed is. Whether it could: not when the creature is too tired to pay for it, nor when the
 	/// miracle can't be cast at the object. Past those it counts as cast even if no miracle comes of it.
 	virtual bool CastByCreature(entt::entity /*creature*/, MagicType /*type*/, entt::entity /*target*/) { return false; }
+	/// A creature casts a miracle at a place, as its casting pose's loop begins. The miracle has a fixed size, or for a
+	/// fire seed a size from the height of the creature. The other rules are the same as for a cast at an object.
+	/// Return true if the creature cast it.
+	virtual bool CastByCreatureAt(entt::entity /*creature*/, MagicType /*type*/, glm::vec3 /*place*/) { return false; }
 	/// The creature lets go of the miracle it cast: one that lasts only while it is held stops
 	virtual void ReleaseCreatureCast(entt::entity /*creature*/) {}
 	/// An effect at a point that no miracle is behind, such as a lightning strike a script calls down: everything it

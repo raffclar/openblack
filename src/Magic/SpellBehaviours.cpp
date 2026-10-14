@@ -227,12 +227,20 @@ bool spells::CanCastAt(SpellServicesInterface& services, MagicType type, PlayerN
 
 bool spells::CanCastAtPointItself(SpellServicesInterface& services, MagicType type, glm::vec3 point)
 {
-	if (ClassOf(type) != SpellClass::Heal)
+	auto& world = services.World();
+	switch (ClassOf(type))
 	{
+	case SpellClass::Heal:
+	{
+		const auto reach = HealReachOf(services.Info(), type, 1.0f);
+		return reach.has_value() && !world.HealTargets(point, reach->radius, reach->maximum).empty();
+	}
+	case SpellClass::Forest:
+		// A forest goes only on land in the map, where trees can grow
+		return world.InBounds(point) && world.IsLand(point) && services.ForestCanGrowAt(point);
+	default:
 		return true;
 	}
-	const auto reach = HealReachOf(services.Info(), type, 1.0f);
-	return reach.has_value() && !services.World().HealTargets(point, reach->radius, reach->maximum).empty();
 }
 
 void spells::Prepare(SpellServicesInterface& services, Spell& spell)
