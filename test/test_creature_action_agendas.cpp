@@ -304,6 +304,46 @@ TEST(CreatureActionAgendas, WatchingTheHandLastsItsTurnsUpToFiveSeconds)
 	EXPECT_EQ(mind.step, 1u);
 }
 
+// A body that turns or does an action does not start a new turn to the hand, so the turn that it does now comes to its
+// end. The watch continues while the body moves.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, WatchingTheHandDoesNotStartATurnAgainWhileTheBodyIsBusy)
+{
+	const creature_mind::Senses::CameraView behind {.distance = 30.0f, .groundDistance = 20.0f, .turn = 2.7f};
+	EXPECT_TRUE(StartsWatchTurn(behind, false));
+	EXPECT_FALSE(StartsWatchTurn(behind, true));
+	auto overhead = behind;
+	overhead.groundDistance = 0.05f;
+	EXPECT_FALSE(StartsWatchTurn(overhead, false));
+	auto ahead = behind;
+	ahead.turn = -1.0f;
+	EXPECT_FALSE(StartsWatchTurn(ahead, false));
+
+	IdleMind mind;
+	Plan(mind, Activity::Planned, LookAtHand());
+	creature_mind::Senses senses {.seconds = 0.1f};
+	senses.hand = behind;
+	// The first turn starts the body's turn
+	auto commands = Think(mind, senses, NeverFirst);
+	ASSERT_TRUE(commands.move.has_value());
+	EXPECT_EQ(commands.move->kind, Movement::Kind::TurnToFace);
+	// While the body turns, no new turn is started and the watch does not end
+	senses.bodyBusy = true;
+	senses.moving = true;
+	for (int i = 0; i < 100; ++i)
+	{
+		commands = Think(mind, senses, NeverFirst);
+		EXPECT_FALSE(commands.move.has_value());
+	}
+	EXPECT_EQ(mind.step, 0u);
+	// Turned to face the hand and still, the watch ends because it has watched long enough
+	senses.bodyBusy = false;
+	senses.moving = false;
+	senses.hand->turn = 0.0f;
+	(void)Think(mind, senses, NeverFirst);
+	EXPECT_EQ(mind.step, 1u);
+}
+
 // A kind of thing it has looked over is a hundredth as interesting, unless the thing is up to something interesting
 TEST(CreatureActionAgendas, LookedOverKindsAreFarLessInteresting)
 {

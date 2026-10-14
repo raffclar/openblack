@@ -48,6 +48,21 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	                   {.kind = 3, .offset = k_Hut}},
 	});
 
+	// A lesson's gold scroll, as the creature lessons put it up at the pen, near the camera
+	all.push_back({
+	    .id = "scripts.highlight_click",
+	    .name = "Clicking a lesson scroll",
+	    .facet = Facet::Hand,
+	    .description = "A gold scroll 6 above bare land near the camera, as a creature lesson puts one up. Move the hand "
+	                   "over the scroll and click the Action button on it.",
+	    .expected = "The hand finds the scroll anywhere in a circle round it. A click records the scroll as the thing the "
+	                "player clicked: the inspector shows it in the hand's HandClicked, so a script that waits for the "
+	                "scroll to be clicked continues. Let go with the hand off the scroll, the click is forgotten.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -20.0f}, .look = {0.0f, 6.0f, 0.0f}},
+	    .highlights = {{.kind = 3, .offset = {0.0f, 0.0f}, .height = 6.0f}},
+	});
+
 	// One sign near the camera and one at a usual playing distance, both with tips not read yet, so that they spin
 	all.push_back({
 	    .id = "hand.help_sign",
