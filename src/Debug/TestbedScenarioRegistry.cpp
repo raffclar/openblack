@@ -3410,6 +3410,39 @@ void AddCombat(std::vector<Scenario>& all)
 	worn.pauseMind = true;
 	worn.needs.life = 0.6f;
 	worn.needs.exhaustion = 0.7f;
+	// The winner of a knock-out is made to do something to the loser, by its mind
+	{
+		constexpr float k_DuelStartsSeconds = 12.0f;
+		constexpr float k_EvilAlignment = -0.8f;
+		constexpr float k_GoodAlignment = 0.8f;
+		all.push_back({
+		    .id = "combat.winner_poos",
+		    .name = "An evil winner has a poo on the loser",
+		    .facet = Facet::Combat,
+		    .description = "An evil red tiger (alignment -0.8) fights a blue tiger. When the duel has started, the blue tiger "
+		                   "is knocked out as a fight's loser is.",
+		    .expected = "The red tiger finishes its move and leaves the fight. Then it walks to the blue tiger and has a poo "
+		                "on it. The blue tiger lies out cold.",
+		    .framing = ringside,
+		    .creatures = {Fighter({-15.0f, 0.0f}, 90.0f, "red", PlayerNames::PLAYER_ONE, 0.5f, k_EvilAlignment),
+		                  Fighter({15.0f, 0.0f}, 270.0f, "blue", PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::KnockOut, 1, 0, k_DuelStartsSeconds)},
+		});
+		all.push_back({
+		    .id = "combat.winner_shows_off",
+		    .name = "A winner that is not evil shows off at the loser",
+		    .facet = Facet::Combat,
+		    .description = "A good red tiger (alignment 0.8) fights a blue tiger. When the duel has started, the blue tiger is "
+		                   "knocked out as a fight's loser is.",
+		    .expected = "The red tiger finishes its move and leaves the fight. Then it shows off at the blue tiger, which "
+		                "lies out cold.",
+		    .framing = ringside,
+		    .creatures = {Fighter({-15.0f, 0.0f}, 90.0f, "red", PlayerNames::PLAYER_ONE, 0.5f, k_GoodAlignment),
+		                  Fighter({15.0f, 0.0f}, 270.0f, "blue", PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::KnockOut, 1, 0, k_DuelStartsSeconds)},
+		});
+	}
+
 	all.push_back({
 	    .id = "combat.faint_recovery",
 	    .name = "Knocked out, taken home and back up",

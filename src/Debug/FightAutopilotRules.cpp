@@ -238,6 +238,48 @@ std::optional<size_t> fight_autopilot::DueMove(std::span<const SequenceMove> seq
 	return std::nullopt;
 }
 
+std::optional<LessonStage> fight_autopilot::ScriptStage(const fight_transcript::Fight& fight, uint32_t playersCreature)
+{
+	const auto own = static_cast<int64_t>(playersCreature);
+	const auto opponent = static_cast<int64_t>(fight.first == playersCreature ? fight.second : fight.first);
+	std::optional<LessonStage> stage;
+	const auto atLeast = [&stage](LessonStage next) {
+		if (!stage.has_value() || *stage < next)
+		{
+			stage = next;
+		}
+	};
+	for (const auto& entry : fight.entries)
+	{
+		const auto creature = NumberOf(entry, "creature");
+		if (entry.kind == "script_read")
+		{
+			const auto native = TextOf(entry, "native");
+			if (native == "GET_CREATURE_FIGHT_ACTION" && creature == opponent)
+			{
+				atLeast(LessonStage::Hit);
+			}
+			else if (native == "CREATURE_FIGHT_QUEUE_HITS" && creature == own)
+			{
+				atLeast(LessonStage::Hits);
+			}
+			else if (native == "GET_CREATURE_FIGHT_ACTION" && creature == own)
+			{
+				const auto* answer = FieldOf(entry, "answer");
+				const auto* value = answer != nullptr ? std::get_if<double>(&answer->value) : nullptr;
+				const bool block = value != nullptr && *value == static_cast<double>(fight::FightAction::Block);
+				atLeast(block ? LessonStage::Step : LessonStage::Block);
+			}
+		}
+		else if (entry.kind == "control" && creature == own && TextOf(entry, "why") == "script" &&
+		         TextOf(entry, "to") == "computer")
+		{
+			atLeast(LessonStage::Bout);
+		}
+	}
+	return stage;
+}
+
 bool LessonCheck::InOrder() const
 {
 	return hit.has_value() && hits.has_value() && block.has_value() && step.has_value() && *hit < *hits && *hits < *block &&

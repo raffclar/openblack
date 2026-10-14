@@ -44,7 +44,16 @@ public:
 	{
 		_recorder.Add(k_Own, "move_queued", {}, {{"creature", int64_t {k_Own}}, {"blows_queued", blows}});
 	}
+	void Read(uint32_t creature, std::string_view native, double answer)
+	{
+		_recorder.Add(creature, "script_read", {}, {{"creature", int64_t {creature}}, {"native", native}, {"answer", answer}});
+	}
+	void Control(uint32_t creature, std::string_view to, std::string_view why)
+	{
+		_recorder.Add(creature, "control", {}, {{"creature", int64_t {creature}}, {"to", to}, {"why", why}});
+	}
 	[[nodiscard]] LessonCheck Check() const { return CheckLesson(*_recorder.Find(_fight), k_Own); }
+	[[nodiscard]] std::optional<LessonStage> Stage() const { return ScriptStage(*_recorder.Find(_fight), k_Own); }
 
 private:
 	fight_transcript::Recorder _recorder;
@@ -156,6 +165,28 @@ TEST(FightAutopilotRules, ASequenceReadsAndComesDueInTimeOrder)
 	EXPECT_FALSE(ParseSequence("-1:high").has_value());
 	EXPECT_FALSE(ParseSequence("high").has_value());
 	EXPECT_TRUE(ParseSequence("")->empty());
+}
+
+TEST(FightAutopilotRules, TheScriptsReadsTellTheStageItWaitsFor)
+{
+	FakeFight fight;
+	EXPECT_FALSE(fight.Stage().has_value());
+	fight.Read(k_Guide, "GET_CREATURE_FIGHT_ACTION", 0.0);
+	EXPECT_EQ(fight.Stage(), LessonStage::Hit);
+	fight.Read(k_Own, "CREATURE_FIGHT_QUEUE_HITS", 1.0);
+	EXPECT_EQ(fight.Stage(), LessonStage::Hits);
+	fight.Read(k_Own, "GET_CREATURE_FIGHT_ACTION", 0.0);
+	EXPECT_EQ(fight.Stage(), LessonStage::Block);
+	// The script sees the block: it waits for the step next
+	fight.Read(k_Own, "GET_CREATURE_FIGHT_ACTION", 1.0);
+	EXPECT_EQ(fight.Stage(), LessonStage::Step);
+	fight.Read(k_Own, "GET_CREATURE_FIGHT_ACTION", 0.0);
+	EXPECT_EQ(fight.Stage(), LessonStage::Step);
+	// The player giving a move does not start the bout; the script giving the creature to the computer does
+	fight.Control(k_Own, "player", "move_given");
+	EXPECT_EQ(fight.Stage(), LessonStage::Step);
+	fight.Control(k_Own, "computer", "script");
+	EXPECT_EQ(fight.Stage(), LessonStage::Bout);
 }
 
 TEST(FightAutopilotRules, TheLessonCheckFindsTheStagesInOrder)

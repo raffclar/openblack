@@ -92,6 +92,11 @@ struct Observation
 
 /// The stage of the lesson after what the autopilot sees now. Each stage ends when its goal shows.
 [[nodiscard]] LessonStage Advance(LessonStage stage, const Observation& seen);
+/// The stage that the lesson's script waits for, from its reads of the fight in the transcript, or none when the script
+/// has read nothing yet. The script reads what the opponent does in the first stage and the blows in the queue in the
+/// second. It reads what the player's creature does in the third and the fourth: a block seen moves it to the fourth.
+/// The script gives both creatures to the computer for the bout.
+[[nodiscard]] std::optional<LessonStage> ScriptStage(const fight_transcript::Fight& fight, uint32_t playersCreature);
 
 /// A move of a sequence and the game time in milliseconds after the start of the autopilot when it is due
 struct SequenceMove

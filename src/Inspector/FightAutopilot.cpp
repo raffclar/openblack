@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 #include <format>
 #include <variant>
@@ -310,7 +311,16 @@ void FightAutopilot::Frame(uint64_t frame)
 		    .queuedBlows = fights.QueuedBlows(*own),
 		    .queued = static_cast<uint32_t>(fighting->fighter.queue.Size()),
 		};
-		const auto next = Advance(_stage, seen);
+		// The stage that the script waits for comes first; without the script's reads, what the autopilot sees moves it on
+		std::optional<LessonStage> scripted;
+		if (_fight.has_value() && Locator::fightTranscript::has_value())
+		{
+			if (const auto* fight = Locator::fightTranscript::value().GetRecorder().Find(*_fight); fight != nullptr)
+			{
+				scripted = ScriptStage(*fight, entt::to_integral(*own));
+			}
+		}
+		const auto next = scripted.has_value() ? std::max(*scripted, _stage) : Advance(_stage, seen);
 		if (next != _stage)
 		{
 			Log("stage", std::format("{} -> {}", fight_autopilot::Name(_stage), fight_autopilot::Name(next)));
