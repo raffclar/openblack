@@ -340,29 +340,6 @@ LookAxis creature_layers::TurnHead(LookAxis axis, float target, float accelerati
 	return axis;
 }
 
-LookAngles creature_layers::AnglesTowards(const glm::vec3& head, const glm::vec3& ahead, const glm::vec3& target)
-{
-	const auto offset = target - head;
-	const auto length = glm::length(offset);
-	if (length <= 0.0f)
-	{
-		return {.yaw = 0.0f, .pitch = 0.0f};
-	}
-	const auto direction = offset / length;
-	const auto pitch = std::asin(std::clamp(direction.y, -1.0f, 1.0f));
-	const glm::vec2 flat {direction.x, direction.z};
-	const glm::vec2 forward {ahead.x, ahead.z};
-	if (glm::length(flat) <= k_Settled || glm::length(forward) <= 0.0f)
-	{
-		return {.yaw = 0.0f, .pitch = pitch};
-	}
-	// The world is left-handed: seen from above with y up, x to the right, z points away, so a target clockwise from
-	// ahead is on the creature's right and one anticlockwise on its left
-	const auto cross = (forward.x * flat.y) - (forward.y * flat.x);
-	const auto dot = glm::dot(forward, flat);
-	return {.yaw = std::atan2(cross, dot), .pitch = pitch};
-}
-
 uint32_t creature_layers::LookTime(float angle, float limit, uint32_t duration)
 {
 	if (limit <= 0.0f)

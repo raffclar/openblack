@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <numbers>
 #include <tuple>
 
 #include <glm/gtx/transform.hpp>
@@ -24,7 +25,10 @@
 #include "3D/LandIslandInterface.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureEyes.h"
+#include "Creature/CreatureFight.h"
+#include "Creature/CreatureHeadLook.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
@@ -33,10 +37,13 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
+#include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
@@ -52,11 +59,8 @@ namespace
 /// The meshes look back along their z axis, so the eyes look ahead along -z when the creature looks nowhere in
 /// particular
 constexpr glm::vec3 k_MeshBack {0.0f, 0.0f, 1.0f};
-/// How fast the head speeds up turning to look, in radians a second each second. The game reads its rate from the
-/// species' tables; this stands in until that field is known.
-constexpr float k_HeadAcceleration = 4.0f;
-/// The head is turned when more than this far round, in radians
-constexpr float k_LookSettled = 1e-4f;
+/// The rate at which a head speeds up as it turns when no species table gives one, in radians a second each second
+constexpr float k_DefaultHeadTurnRate = 15.0f * std::numbers::pi_v<float>;
 
 /// How heavy a creature is, by its size and how fat and strong its body is drawn
 float MassOf(const Creature& creature, const CreatureMorph* morph)
@@ -268,11 +272,12 @@ std::optional<uint32_t> DurationOf(const Animation* animation)
 	return animation != nullptr ? std::optional(animation->duration) : std::nullopt;
 }
 
-/// Plays a head turning animation on top of the pose for how far the head is turned, unless it looks straight on
+/// Plays a head turning animation on top of the pose for how far the head is turned. When the head is straight, the
+/// animation plays only if the creature has a point to look at.
 void AddLook(std::vector<skeletal_animation::Pose>& poses, const Animation* look, float angle, float limit,
              const CreatureAnimation& animation, std::span<const uint32_t> mirror)
 {
-	if (look == nullptr || std::abs(angle) <= k_LookSettled)
+	if (look == nullptr || !creature_head_look::PlaysHeadClip(angle, animation.lookAt.has_value()))
 	{
 		return;
 	}
@@ -312,10 +317,22 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 	}
 }
 
+/// What the head turns towards this frame, and how
+struct HeadLook
+{
+	creature_head_look::Pose pose {creature_head_look::Pose::Standing};
+	/// The point that the head turns to, or none to turn back to straight ahead
+	std::optional<glm::vec3> target;
+	/// The heading that the body shows
+	float facing {0.0f};
+	/// How fast the head speeds up as it turns, in radians a second each second
+	float acceleration {k_DefaultHeadTurnRate};
+};
+
 /// The body posed for this frame: its action or breathing, or its slots blended, then the head turned, the face and
 /// any gesture on top
 void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creature_morph::Morph& morph,
-              const Transform& transform, float size, float milliseconds, float seconds)
+              const Transform& transform, float size, float milliseconds, float seconds, const HeadLook& look)
 {
 	const auto* stand = AnimationOf(animation, rig, morph, creature_layers::animations::k_Stand);
 	if (stand == nullptr)
@@ -337,15 +354,14 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 	    animation.wobble, playbackMs,
 	    DurationOf(animation.wobble.animation.has_value() ? animationOf(*animation.wobble.animation) : nullptr));
 
-	// The head turns towards where the creature looks, from its eyes' height
-	const auto ahead = -(transform.rotation * k_MeshBack);
-	const auto head = transform.position + glm::vec3(0.0f, creature_look::k_HeadHeight * size, 0.0f);
-	const auto angles = animation.lookAt.has_value() ? creature_layers::AnglesTowards(head, ahead, *animation.lookAt)
-	                                                 : creature_layers::LookAngles {.yaw = 0.0f, .pitch = 0.0f};
+	// The head turns towards its target from the height of the eyes, or back to straight ahead
+	const auto eyes = transform.position + glm::vec3(0.0f, creature_look::k_HeadHeight * size, 0.0f);
+	const auto angles = look.target.has_value() ? creature_head_look::AnglesTowards(eyes, look.facing, *look.target)
+	                                            : creature_head_look::Angles {};
 	animation.yaw =
-	    creature_layers::TurnHead(animation.yaw, angles.yaw, k_HeadAcceleration, seconds, creature_layers::k_YawLimit);
+	    creature_layers::TurnHead(animation.yaw, angles.yaw, look.acceleration, seconds, creature_layers::k_YawLimit);
 	animation.pitch =
-	    creature_layers::TurnHead(animation.pitch, angles.pitch, k_HeadAcceleration, seconds, creature_layers::k_PitchLimit);
+	    creature_layers::TurnHead(animation.pitch, angles.pitch, look.acceleration, seconds, creature_layers::k_PitchLimit);
 
 	const std::span<const uint32_t> mirror = animation.body.mirrored ? animation.mirror : std::span<const uint32_t> {};
 	std::vector<skeletal_animation::Pose> poses;
@@ -379,8 +395,9 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 		poses = skeletal_animation::SampleCycle(*stand, *stand, time, animation.skeleton);
 	}
 
-	// Sitting, the head turns by the sitting versions. The head turns the other way when the body plays mirrored.
-	const bool sitting = creature_layers::CurrentAnimation(animation.body) == creature_layers::animations::k_Sit;
+	// During the start, the loop and the end of the sit, the head turns by the sitting versions. The head turns the other way
+	// when the body plays mirrored.
+	const bool sitting = creature_head_look::UsesSittingClips(look.pose);
 	AddLook(poses,
 	        animationOf(sitting ? creature_layers::animations::k_SitLookDownUp : creature_layers::animations::k_LookDownUp),
 	        animation.pitch.angle, creature_layers::k_PitchLimit, animation, mirror);
@@ -417,6 +434,181 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 		}
 	}
 	animation.boneMatrices = skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents);
+}
+/// The pose of a body that plays an action, a start, loop and end, or nothing
+creature_head_look::Pose PoseOfBody(const creature_layers::BodyAction& body)
+{
+	using creature_head_look::Pose;
+	if (!creature_layers::IsPlaying(body))
+	{
+		return Pose::Standing;
+	}
+	if (body.kind != creature_layers::BodyAction::Kind::Sequence || body.animations[1] != creature_layers::animations::k_Sit)
+	{
+		return Pose::Other;
+	}
+	switch (body.phase)
+	{
+	case creature_layers::BodyAction::Phase::Start:
+		return Pose::SittingDown;
+	case creature_layers::BodyAction::Phase::Loop:
+		return Pose::Sitting;
+	case creature_layers::BodyAction::Phase::End:
+		return Pose::GettingUp;
+	}
+	return Pose::Other;
+}
+
+/// Where the head of a creature is as posed in its last frame: its head bone, else the height of its eyes over its feet
+glm::vec3 PosedHead(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto& transform = registry.Get<const Transform>(creature);
+	const auto& body = registry.Get<const Creature>(creature);
+	const auto eyes = transform.position + glm::vec3(0.0f, creature_look::k_HeadHeight * ShownSize(body), 0.0f);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(body.species);
+	if (animation == nullptr || animation->boneMatrices.empty() || !rigs.Contains(rigId))
+	{
+		return eyes;
+	}
+	const auto& points = rigs.Handle(rigId)->actionPoints;
+	if (!points.has_value() || points->head >= animation->boneMatrices.size())
+	{
+		return eyes;
+	}
+	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, placement)[3]);
+}
+
+/// How fast the head of a species speeds up as it turns, at a size
+float HeadAcceleration(CreatureType species, float size)
+{
+	auto rate = k_DefaultHeadTurnRate;
+	if (Locator::infoConstants::has_value())
+	{
+		const auto& creatures = Locator::infoConstants::value().creature;
+		if (const auto row = creature::InfoRow(species); row < creatures.size())
+		{
+			rate = creatures.at(row).headTurnRate;
+		}
+	}
+	return creature_head_look::Acceleration(size, rate);
+}
+
+/// What the head of a creature in the world turns towards this frame. A fight, a catch or a point, the walk and then
+/// the body decide the pose, in that order.
+HeadLook HeadLookOf(const ecs::Registry& registry, entt::entity entity, CreatureAnimation& animation, const CreatureRig* rig,
+                    const creature_morph::Morph& morph, const Transform& transform, const Creature& creature)
+{
+	using creature_head_look::Pose;
+	using Motion = CreatureLocomotion::Motion;
+	creature_head_look::AimFacts facts {.hasLookPoint = animation.lookAt.has_value()};
+	std::optional<entt::entity> opponent;
+	std::optional<glm::vec3> thing;
+	std::optional<Pose> pose;
+
+	const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
+	if (fighting != nullptr && fighting->fighter.state != creature_fight::State::Idle)
+	{
+		pose = fighting->fighter.state == creature_fight::State::Stance ? Pose::FightStance : Pose::Other;
+		if (registry.Valid(fighting->opponent) && registry.AllOf<Creature, Transform>(fighting->opponent))
+		{
+			opponent = fighting->opponent;
+		}
+	}
+	const auto* action = registry.TryGet<const CreatureObjectAction>(entity);
+	if (!pose.has_value() && action != nullptr)
+	{
+		using Catching = CreatureObjectAction::Catching;
+		if (action->kind == creature_object_actions::Kind::Catch)
+		{
+			const bool waiting = action->catching == Catching::Ready || action->catching == Catching::Stepping;
+			pose = waiting ? Pose::WaitingToCatch : Pose::Other;
+			const auto* at = action->target.has_value() ? registry.TryGet<const Transform>(*action->target) : nullptr;
+			if (waiting && at != nullptr)
+			{
+				thing = at->position;
+			}
+		}
+		else if (action->phase == CreatureObjectAction::Phase::Playing)
+		{
+			const bool pointing = action->kind == creature_object_actions::Kind::Point;
+			pose = pointing ? Pose::Pointing : Pose::Other;
+			const auto* clip = pointing && rig != nullptr
+			                       ? AnimationOf(animation, *rig, morph, creature_head_look::k_PointTimingClip)
+			                       : nullptr;
+			if (clip != nullptr)
+			{
+				facts.pointTimeMs = static_cast<int32_t>(action->timeMs);
+				facts.pointDurationMs = static_cast<int32_t>(clip->duration);
+			}
+		}
+	}
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
+	// A fidget while it waits for its route is part of the walk, not an action of the body
+	if (!pose.has_value() && walk != nullptr && walk->motion == Motion::Confused)
+	{
+		pose = Pose::Moving;
+	}
+	if (!pose.has_value() && creature_layers::IsPlaying(animation.body))
+	{
+		pose = PoseOfBody(animation.body);
+	}
+	if (!pose.has_value() && walk != nullptr && walk->motion != Motion::Standing)
+	{
+		pose = walk->motion != Motion::Turning ? Pose::Moving : walk->facingOnly ? Pose::TurningToFace : Pose::TurningToWalk;
+	}
+	facts.pose = pose.value_or(Pose::Standing);
+	facts.hasOpponent = opponent.has_value();
+	facts.hasThing = thing.has_value();
+
+	const auto ahead = -(transform.rotation * k_MeshBack);
+	HeadLook look {
+	    .pose = facts.pose,
+	    .facing = creature_locomotion::HeadingOf(glm::vec2(ahead.x, ahead.z)),
+	    .acceleration = HeadAcceleration(creature.species, ShownSize(creature)),
+	};
+	// Part way through a turn to face a point, the body shows a heading between its start and its end
+	if (facts.pose == Pose::TurningToFace && walk != nullptr && walk->move.has_value())
+	{
+		look.facing = creature_locomotion::LerpHeading(walk->move->startHeading, walk->targetHeading, walk->move->timeMs,
+		                                               walk->move->durationMs);
+	}
+	switch (creature_head_look::AimOf(facts))
+	{
+	case creature_head_look::Aim::Ahead:
+		break;
+	case creature_head_look::Aim::LookPoint:
+		look.target = animation.lookAt;
+		break;
+	case creature_head_look::Aim::OpponentHead:
+		look.target = PosedHead(registry, *opponent);
+		break;
+	case creature_head_look::Aim::Thing:
+		// The thing that it waits to catch becomes the point that it looks at
+		animation.lookAt = thing;
+		look.target = thing;
+		break;
+	}
+	return look;
+}
+
+/// What the head of a copy of a creature turns towards: a copy only stands or plays its body
+HeadLook HeadLookOfCopy(const CreatureAnimation& animation, const Transform& transform, CreatureType species, float size)
+{
+	const auto ahead = -(transform.rotation * k_MeshBack);
+	HeadLook look {
+	    .pose = PoseOfBody(animation.body),
+	    .facing = creature_locomotion::HeadingOf(glm::vec2(ahead.x, ahead.z)),
+	    .acceleration = HeadAcceleration(species, size),
+	};
+	if (creature_head_look::AimOf({.pose = look.pose, .hasLookPoint = animation.lookAt.has_value()}) ==
+	    creature_head_look::Aim::LookPoint)
+	{
+		look.target = animation.lookAt;
+	}
+	return look;
 }
 } // namespace
 
@@ -499,8 +691,9 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 
 		    if (rig != nullptr)
 		    {
+			    const auto look = HeadLookOf(registry, entity, animation, rig, morph.drawn, transform, creature);
 			    PoseBody(animation, *rig, morph.drawn, transform, ShownSize(creature), gameTime.count() * scale,
-			             seconds * scale);
+			             seconds * scale, look);
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {
@@ -575,7 +768,8 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	animation->breathPhase = creature_animation::AdvanceBreath(animation->breathPhase, seconds, animation->breathPeriod);
 	if (rig != nullptr)
 	{
-		PoseBody(*animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds);
+		PoseBody(*animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
+		         HeadLookOfCopy(*animation, *transform, creature->species, self->size));
 	}
 	if (animation->boneMatrices.size() != base->GetBoneMatrices().size())
 	{
