@@ -1748,6 +1748,36 @@ void AddAudio(std::vector<Scenario>& all)
 	                  .byHand = true}},
 	    .commands = {{.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 12.0f}},
 	});
+
+	// A tiger throws a rock at a hut of a town with people, again and again
+	constexpr glm::vec2 k_CryHut {40.0f, 0.0f};
+	all.push_back({
+	    .id = "audio.town_attack_cry",
+	    .name = "A town cries out when a thrown rock harms it",
+	    .facet = Facet::Audio,
+	    .description = "A grown tiger picks up a rock and throws it at a hut of a town with three people, every few "
+	                   "seconds. The guidance waits end first. The audio log gives each cry of the town and its sample.",
+	    .expected = "When the rock harms the hut or a villager, the town sometimes cries out from the town centre: a "
+	                "villager voice of the guidance bank, about an attack or about rocks. The cries come at least four "
+	                "seconds apart.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, k_CryHut + glm::vec2(10.0f, 10.0f)}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}, 90.0f)},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {4.0f, -6.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = k_CryHut},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(-6.0f, 6.0f), .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = k_CryHut + glm::vec2(-6.0f, -6.0f),
+	                 .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(6.0f, 8.0f), .joinTown = true}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+	                 OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 Go(Kind::ThrowAt, 0, k_CryHut, 0.5f),
+	                 Go(Kind::WalkTo, 0, k_CryHut - glm::vec2(25.0f, 0.0f), 2.0f),
+	                 OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 Go(Kind::ThrowAt, 0, k_CryHut, 0.5f)},
+	    .repeatFrom = 3,
+	});
 }
 
 void AddObjects(std::vector<Scenario>& all)

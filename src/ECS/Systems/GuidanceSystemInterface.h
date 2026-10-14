@@ -18,6 +18,7 @@
 
 #include "Enums.h"
 #include "Help/GuidanceRules.h"
+#include "Help/VillageVoices.h"
 
 namespace openblack::ecs::systems
 {
@@ -53,6 +54,9 @@ public:
 
 	/// Harm done to a town by a player, applied by a creature or by anything else
 	virtual void TownAttacked(entt::entity town, PlayerNames attacker, bool byCreature) = 0;
+	/// Harm done to a town: sometimes its people cry out at the town, in a voice that tells what harmed it. The town must
+	/// have people, and the guidance kind of the cry must wait no longer.
+	virtual void TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice) = 0;
 	/// A building broken by a blow of a player's (none for a blow of nobody's), with this share of its model left
 	virtual void BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining) = 0;
 	/// Each turn, before the player's alignment moves: this turn's change to it, times how fast it moves

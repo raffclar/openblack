@@ -13,14 +13,19 @@
 
 #include <ctime>
 
+#include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
@@ -31,6 +36,7 @@
 #include "Graphics/Moon.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourceManager.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -230,6 +236,59 @@ void GuidanceSystem::TownAttacked(entt::entity town, PlayerNames attacker, bool 
 		return;
 	}
 	SayRemark(guidance::Kind::AttackingTown);
+}
+
+void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice)
+{
+	if (!Locator::entitiesRegistry::has_value() || !Locator::gameRandom::has_value() ||
+	    !PlayNow(guidance::Kind::TownAttackedSound))
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(town))
+	{
+		return;
+	}
+	// Only a town with people in it cries out
+	const auto* stats = registry.TryGet<const TownStats>(town);
+	const auto* at = registry.TryGet<const Transform>(town);
+	if (stats == nullptr || stats->adults + stats->children == 0 || at == nullptr)
+	{
+		return;
+	}
+	auto& random = Locator::gameRandom::value();
+	constexpr int32_t k_AttackerCries = 10;
+	const uint32_t attackerCry =
+	    voice.attacker == guidance::Attacker::Other
+	        ? 0
+	        : guidance::AttackerCry(voice.attacker, static_cast<uint32_t>(random.LocalRand(k_AttackerCries)));
+	const auto cries = guidance::AttackCries(voice.fire, attackerCry);
+	const auto* aggression = registry.TryGet<const TownAggression>(town);
+	const float reach = guidance::AttackCryReach(aggression != nullptr ? aggression->record.protection : 0.0f);
+	const auto sample = guidance::PickCry(cries, static_cast<uint32_t>(random.LocalRand(static_cast<int32_t>(cries.size()))));
+	glm::vec3 position = at->position;
+	if (Locator::terrainSystem::has_value())
+	{
+		position.y = Locator::terrainSystem::value().GetHeightAt(glm::xz(position));
+	}
+	// The guidance counts the cry as heard even when the bank has no sound for it
+	if (auto* heard = Heard(); heard != nullptr)
+	{
+		heard->lastTurn.at(static_cast<size_t>(guidance::Kind::TownAttackedSound)) = Turn();
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Town {} cries out: guidance sample {}, heard to {:.0f} m",
+	                    entt::to_integral(town), sample, reach);
+	if (sample == 0)
+	{
+		return;
+	}
+	audio::StartGameSoundEffect(resources::HashIdentifier(fmt::format("Guidance.sad/{}", sample)),
+	                            {.position = position,
+	                             .pitchPercent = guidance::k_VoicePitch,
+	                             .volume = guidance::k_VoiceVolume,
+	                             .minDistance = reach * guidance::k_VoiceNearShare,
+	                             .maxDistance = reach});
 }
 
 void GuidanceSystem::BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining)

@@ -496,7 +496,8 @@ EffectSource spells::SourceOf(const Spell& spell)
 {
 	return {.player = spell.caster.player,
 	        .casterCreature =
-	            spell.caster.kind == ecs::components::SpellCaster::Kind::Creature ? spell.caster.entity : entt::null};
+	            spell.caster.kind == ecs::components::SpellCaster::Kind::Creature ? spell.caster.entity : entt::null,
+	        .magicType = spell.magicType};
 }
 
 bool spells::HasEnoughForRecast(const InfoConstants& info, const Spell& spell)

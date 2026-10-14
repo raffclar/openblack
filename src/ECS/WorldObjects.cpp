@@ -733,7 +733,8 @@ void world_objects::Remove(entt::entity object)
 	registry.SetDirty();
 }
 
-void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature)
+void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature,
+                               std::optional<guidance::TownAttackVoice> cry)
 {
 	if (!Locator::infoConstants::has_value())
 	{
@@ -773,6 +774,11 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	if (!ecs::town_aggression::CountsAsAttack(damage))
 	{
 		return;
+	}
+	// The people cry out before the town counts the attack
+	if (cry.has_value() && Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().TownAttackCry(town, *cry);
 	}
 	const float amount = ecs::town_aggression::AggressionFromDamage(damage, kind->aggressorValue);
 	auto* aggression = registry.TryGet<TownAggression>(town);

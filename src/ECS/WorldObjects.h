@@ -18,6 +18,7 @@
 
 #include "3D/ModelSurface.h"
 #include "Enums.h"
+#include "Help/VillageVoices.h"
 
 namespace openblack
 {
@@ -112,8 +113,10 @@ void DestroyedByEffect(entt::entity object, const EffectDeath& death);
 /// seven tenths, one fewer when it rises back over
 void CountInjury(entt::entity villager, float before, float after);
 /// Harm done to a town's villager or building is an attack on its town by whoever did it; the player at this machine's
-/// advisors may remark on it. A creature doing the harm is told apart.
-void AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature = false);
+/// advisors may remark on it. A creature doing the harm is told apart. The people of the town may cry out in the voice
+/// that the harm gives, if it gives one.
+void AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature = false,
+                std::optional<guidance::TownAttackVoice> cry = std::nullopt);
 
 /// Life given back to an object other than a living thing, as a miracle's heal gives it: never above 1. Its life after.
 float IncreaseLife(entt::entity object, float amount);
