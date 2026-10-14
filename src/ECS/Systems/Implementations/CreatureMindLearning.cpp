@@ -2716,6 +2716,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				situation.instrument = entt::to_integral(*plan.instrument);
 				situation.instrumentPoint = PointOf(registry, *plan.instrument).value_or(position);
 				situation.instrumentRadius = object_measures::TwoDRadius(registry, *plan.instrument);
+				situation.usedOneShot = OneShotOf(registry, *plan.instrument);
 			}
 			situation.handFull = registry.AllOf<CreatureHeldObject>(creature);
 			if (plan.activityObject.has_value())
