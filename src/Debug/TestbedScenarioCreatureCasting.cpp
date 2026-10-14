@@ -9,7 +9,7 @@
 
 // The testbed's scenarios of creatures casting miracles: a spell at another creature, a lightning bolt, a fireball, an
 // explosion, a heal, food, wood, a shield, water, a forest, the casts for a town, a miracle to impress, a try that fizzles
-// and one the creature is too tired for
+// and one the creature is too tired for, and the one-shot miracles that it picks up or holds
 
 #include <string_view>
 #include <vector>
@@ -299,6 +299,69 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 60.0f}}},
 	    .creatures = {Caster({0.0f, 0.0f}, "caster", 0.84f), Other({0.0f, 50.0f}, "target")},
 	    .commands = {Know(MagicType::CreatureSpellFreeze), CastAtCreature(MagicType::CreatureSpellFreeze, 1, 0.5f)},
+	});
+
+	all.push_back({
+	    .id = "miracles.creature_picks_up_one_shot",
+	    .name = "Creature casting: a one-shot heal that it picks up",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the heal is told to pick up a one-shot heal globe 25 metres ahead, and cast "
+	                   "it at a villager hurt to a third of its life, 90 metres ahead.",
+	    .expected = "It walks to the globe and picks it up. It walks to within 50 metres of the villager, then backs off "
+	                "to twice its height, and turns to the villager. The globe goes from its hand. It holds the casting "
+	                "pose for three seconds and the heal lights over the villager.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 95.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 90.0f}, .life = 0.33f}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 25.0f}, .bubbleHeight = 0.0f}},
+	    .commands = {Know(MagicType::Heal),
+	                 {.kind = Kind::DoAction,
+	                  .delaySeconds = 1.0f,
+	                  .object = 0,
+	                  .action = "PickUpAndCastOneOffSpellCompassi",
+	                  .globe = 0}},
+	});
+	all.push_back({
+	    .id = "miracles.creature_casts_one_shot_in_hand",
+	    .name = "Creature casting: a one-shot lightning bolt in its hand",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the lightning bolt is told to hold a one-shot lightning globe at its feet. Then "
+	                   "it is told to cast the globe in its hand at a tree 90 metres ahead.",
+	    .expected = "It walks to within 50 metres of the tree, then backs off to twice its height, and turns to the "
+	                "tree. The globe goes from its hand. It holds the casting pose for three seconds and the bolt hits "
+	                "the tree.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 95.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {0.0f, 90.0f}}},
+	    .dispensers = {{.type = MagicType::LightningBolt, .offset = {0.0f, 12.0f}, .bubbleHeight = 0.0f}},
+	    .commands = {Know(MagicType::LightningBolt),
+	                 {.kind = Kind::DoAction, .delaySeconds = 1.0f, .action = "HoldObject", .globe = 0, .onGlobe = true},
+	                 {.kind = Kind::DoAction, .delaySeconds = 10.0f, .object = 0, .action = "CastOneOffSpellInHandAggressive"}},
+	});
+	all.push_back({
+	    .id = "miracles.creature_one_shot_full_hand",
+	    .name = "Creature casting: a one-shot heal with a rock in its hand",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "A tiger that knows the heal is told to hold a rock. Then it is told to pick up a one-shot heal globe and "
+	        "cast it at a hurt villager, as in the game.",
+	    .expected = "With its hand full it does not pick up the globe. It walks to the villager, backs off and turns. The "
+	                "rock goes from its hand, it casts the heal, and the globe on the land goes after the cast.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 95.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 90.0f}, .life = 0.33f},
+	                {.type = MobileStaticInfo::Rock, .offset = {0.0f, 12.0f}}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {20.0f, 25.0f}, .bubbleHeight = 0.0f}},
+	    .commands = {Know(MagicType::Heal),
+	                 {.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "HoldObject"},
+	                 {.kind = Kind::DoAction,
+	                  .delaySeconds = 10.0f,
+	                  .object = 0,
+	                  .action = "PickUpAndCastOneOffSpellCompassi",
+	                  .globe = 0}},
 	});
 
 	all.push_back({

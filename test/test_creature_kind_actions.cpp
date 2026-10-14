@@ -138,7 +138,7 @@ TEST(CreatureKindActions, GivingWoodWithNoTreeIdles)
 {
 	const auto* give = plan_actions::For("GiveWoodFromTreeToStoragePit");
 	ASSERT_NE(give, nullptr);
-	EXPECT_EQ(give->target, plan_actions::Target::StoragePit);
+	EXPECT_EQ(give->target, plan_actions::Target::BuiltStoragePit);
 	EXPECT_EQ(give->use, plan_actions::Target::PickableTree);
 	const auto idle = plan_actions::Agenda(*give, 9u, {0.0f, 0.0f}, {}, KindActionsFirst);
 	ASSERT_TRUE(idle.has_value());

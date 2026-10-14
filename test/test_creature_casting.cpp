@@ -337,6 +337,7 @@ TEST(CreatureCastAgenda, ATownGetsFoodWoodShieldsAndWaterEachAtItsOwnThings)
 	    Expected {"WaterTree", Target::AnyTree, Build::CastWater},
 	    Expected {"WaterField", Target::DryField, Build::CastWater},
 	    Expected {"WaterTreeForTown", Target::Anything, Build::WaterTreeForTown},
+	    Expected {"WaterTreePU1ForTown", Target::Anything, Build::WaterTreeForTown},
 	};
 	for (const auto& row : expected)
 	{
@@ -347,6 +348,7 @@ TEST(CreatureCastAgenda, ATownGetsFoodWoodShieldsAndWaterEachAtItsOwnThings)
 		EXPECT_TRUE(plan_actions::IsCast(*executor)) << row.action;
 	}
 	EXPECT_EQ(plan_actions::For("WaterTreeForTown")->use, Target::AnyTree);
+	EXPECT_EQ(plan_actions::For("WaterTreePU1ForTown")->use, Target::AnyTree);
 	// The creature table gives wood by a workshop no miracle; the agenda casts wood
 	EXPECT_EQ(plan_actions::For("CastMagicWoodByWorkshop")->castMagic, std::optional<uint32_t>(21u));
 	// The power-up of the water on crops casts plain water
@@ -356,6 +358,12 @@ TEST(CreatureCastAgenda, ATownGetsFoodWoodShieldsAndWaterEachAtItsOwnThings)
 	ASSERT_TRUE(sprinkled.has_value());
 	EXPECT_EQ(sprinkled->back().cast.magicType, 22u);
 	EXPECT_EQ(sprinkled->back().sequence, k_ScatterPose);
+	// The power-up of the water for a tree casts plain water too
+	plan_actions::Situation withTree;
+	withTree.instrument = 9u;
+	const auto watered = plan_actions::Agenda(*plan_actions::For("WaterTreePU1ForTown"), 5u, {}, withTree, Always(0), powerUp);
+	ASSERT_TRUE(watered.has_value());
+	EXPECT_EQ(watered->back().cast.magicType, 22u);
 }
 
 TEST(CreatureCastAgenda, ForATownItWatersTheTreeItUsesOrFailsWithoutOne)
@@ -559,4 +567,144 @@ TEST(CreatureCastMoves, AThingKeepsCirclesClear)
 	// A cell is blocked by a circle coming within 5 of its middle
 	EXPECT_TRUE(cast_moves::BlocksCell({.centre = {19.5f, 5.0f}, .radius = 1.0f}, 1, 0));
 	EXPECT_FALSE(cast_moves::BlocksCell({.centre = {5.0f, 5.0f}, .radius = 0.3f}, 1, 0));
+}
+
+TEST(CreatureCastAgenda, TheGiftsToAStoreGoOnlyToABuiltStoragePit)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	using plan_actions::Target;
+	EXPECT_EQ(plan_actions::For("GiveFishToStoragePit")->target, Target::BuiltStoragePit);
+	EXPECT_EQ(plan_actions::For("GiveWoodFromTreeToStoragePit")->target, Target::BuiltStoragePit);
+	// The creature casts wood into a storage pit that is built or not
+	EXPECT_EQ(plan_actions::For("CastMagicWood")->target, Target::StoragePit);
+}
+
+TEST(CreatureCastAgenda, TheOneShotActionsCastByTheKindOfTheirMiracle)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	using plan_actions::Build;
+	using plan_actions::OneShotKind;
+	using plan_actions::Target;
+	struct Expected
+	{
+		std::string_view action;
+		Target target;
+		Target use;
+		Build build;
+		OneShotKind kind;
+	};
+	constexpr std::array expected {
+	    Expected {"CastOneOffSpellInHandAggressive", Target::Anything, Target::None, Build::CastOneShotInHand,
+	              OneShotKind::Aggressive},
+	    Expected {"CastOneOffSpellInHandCompassiona", Target::Anything, Target::None, Build::CastOneShotInHand,
+	              OneShotKind::Compassionate},
+	    Expected {"CastOneOffSpellInHandPlayful", Target::Creature, Target::None, Build::CastOneShotInHand,
+	              OneShotKind::Playful},
+	    Expected {"PickUpAndCastOneOffSpellAggressi", Target::Anything, Target::OneShotAggressive, Build::PickUpAndCastOneShot,
+	              OneShotKind::Aggressive},
+	    Expected {"PickUpAndCastOneOffSpellCompassi", Target::Anything, Target::OneShotCompassionate,
+	              Build::PickUpAndCastOneShot, OneShotKind::Compassionate},
+	    Expected {"PickUpAndCastOneOffSpellPlayful", Target::Creature, Target::OneShotPlayful, Build::PickUpAndCastOneShot,
+	              OneShotKind::Playful},
+	};
+	for (const auto& row : expected)
+	{
+		const auto* executor = plan_actions::For(row.action);
+		ASSERT_NE(executor, nullptr) << row.action;
+		EXPECT_EQ(executor->target, row.target) << row.action;
+		EXPECT_EQ(executor->use, row.use) << row.action;
+		EXPECT_EQ(executor->build, row.build) << row.action;
+		EXPECT_EQ(executor->oneShot, row.kind) << row.action;
+		// The miracle comes from the globe, not from the creature table
+		EXPECT_FALSE(plan_actions::IsCast(*executor)) << row.action;
+	}
+}
+
+TEST(CreatureCastAgenda, ItCastsTheOneShotInItsHandOnlyWhenTheKindIsRight)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	const auto* aggressive = plan_actions::For("CastOneOffSpellInHandAggressive");
+	plan_actions::Situation situation;
+	EXPECT_FALSE(plan_actions::Possible(*aggressive, situation));
+	situation.handFull = true;
+	situation.heldOneShot = plan_actions::OneShot {.magicType = 10, .compassionate = true};
+	EXPECT_FALSE(plan_actions::Possible(*aggressive, situation));
+	EXPECT_TRUE(plan_actions::Possible(*plan_actions::For("CastOneOffSpellInHandCompassiona"), situation));
+	situation.heldOneShot = plan_actions::OneShot {.magicType = 1, .aggressive = true};
+	EXPECT_TRUE(plan_actions::Possible(*aggressive, situation));
+	// The actions that pick up a globe need no globe in the hand
+	EXPECT_TRUE(plan_actions::Possible(*plan_actions::For("PickUpAndCastOneOffSpellCompassi"), {}));
+}
+
+TEST(CreatureCastAgenda, ItGoesNearTurnsLetsTheGlobeGoAndCastsTheOneShotInItsHand)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	plan_actions::Situation situation;
+	situation.handFull = true;
+	situation.height = 15.0f;
+	situation.heldOneShot = plan_actions::OneShot {.magicType = 4, .aggressive = true};
+	const auto agenda =
+	    plan_actions::Agenda(*plan_actions::For("CastOneOffSpellInHandAggressive"), 7u, {}, situation, Always(0));
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 5u);
+	EXPECT_EQ(agenda->at(0).movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(agenda->at(0).movement.maxDistance, 50.0f);
+	EXPECT_EQ(agenda->at(1).movement.kind, Movement::Kind::GetAwayFromObject);
+	EXPECT_FLOAT_EQ(agenda->at(1).movement.maxDistance, 30.0f);
+	EXPECT_EQ(agenda->at(2).movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda->at(2).seconds, 0.1f);
+	EXPECT_EQ(agenda->at(3).kind, Step::Kind::UseUpHeld);
+	EXPECT_EQ(agenda->at(4).kind, Step::Kind::Cast);
+	EXPECT_EQ(agenda->at(4).cast.magicType, 4u);
+	EXPECT_EQ(*agenda->at(4).cast.object, 7u);
+	EXPECT_EQ(agenda->at(4).sequence, (std::array<size_t, 3> {40, 41, 42}));
+	EXPECT_FLOAT_EQ(agenda->at(4).seconds, 3.0f);
+
+	// With a kind miracle in its hand, it does not get away first
+	situation.heldOneShot = plan_actions::OneShot {.magicType = 10, .compassionate = true};
+	const auto kind =
+	    plan_actions::Agenda(*plan_actions::For("CastOneOffSpellInHandCompassiona"), 7u, {}, situation, Always(0));
+	ASSERT_TRUE(kind.has_value());
+	ASSERT_EQ(kind->size(), 4u);
+	EXPECT_EQ(kind->at(1).movement.kind, Movement::Kind::TurnToFaceObject);
+}
+
+TEST(CreatureCastAgenda, ItPicksUpTheGlobeWithAnEmptyHandAndTheGlobeGoesAfterTheCast)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	const auto* executor = plan_actions::For("PickUpAndCastOneOffSpellCompassi");
+	plan_actions::Situation situation;
+	situation.height = 15.0f;
+	// Without a globe to use, the action fails
+	EXPECT_FALSE(plan_actions::Agenda(*executor, 7u, {}, situation, Always(0)).has_value());
+	situation.instrument = 9u;
+	situation.usedOneShot = plan_actions::OneShot {.magicType = 10, .compassionate = true};
+	const auto agenda = plan_actions::Agenda(*executor, 7u, {}, situation, Always(0));
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 7u);
+	EXPECT_EQ(agenda->at(0).order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(*agenda->at(0).order.object, 9u);
+	EXPECT_FLOAT_EQ(agenda->at(1).movement.maxDistance, 50.0f);
+	EXPECT_EQ(agenda->at(2).movement.kind, Movement::Kind::GetAwayFromObject);
+	EXPECT_EQ(agenda->at(4).kind, Step::Kind::UseUpHeld);
+	EXPECT_EQ(agenda->at(5).cast.magicType, 10u);
+	EXPECT_EQ(agenda->at(6).kind, Step::Kind::UseUp);
+	EXPECT_EQ(*agenda->at(6).object, 9u);
+
+	// With a full hand it picks nothing up: what it holds goes, and the globe goes after the cast
+	situation.handFull = true;
+	const auto full = plan_actions::Agenda(*executor, 7u, {}, situation, Always(0));
+	ASSERT_TRUE(full.has_value());
+	ASSERT_EQ(full->size(), 6u);
+	EXPECT_EQ(full->at(0).movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_EQ(full->at(3).kind, Step::Kind::UseUpHeld);
+	EXPECT_EQ(*full->back().object, 9u);
+}
+
+TEST(CreatureCastAgenda, ATryThatFizzledIsForgottenWhenItsThingGoes)
+{
+	const FizzleRecord record {.lastThing = 5u, .pending = true};
+	EXPECT_EQ(ForgetGoneThing(record, 6u), record);
+	EXPECT_EQ(ForgetGoneThing(record, 5u), FizzleRecord {});
+	EXPECT_EQ(ForgetGoneThing({}, 5u), FizzleRecord {});
 }

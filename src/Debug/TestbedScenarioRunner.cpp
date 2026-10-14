@@ -523,6 +523,7 @@ void Runner::Start(const Scenario& scenario)
 	_timeline = {};
 	_creatures.clear();
 	_objects.clear();
+	_globes.clear();
 	_temples.clear();
 	_throwsDue.clear();
 	for (const auto& setup : scenario.throws)
@@ -1274,6 +1275,16 @@ void Runner::ApplyStates()
 	}
 }
 
+std::optional<entt::entity> Runner::GlobeAt(size_t index) const
+{
+	if (index >= _globes.size() || !Locator::entitiesRegistry::has_value() ||
+	    !Locator::entitiesRegistry::value().Valid(_globes[index]))
+	{
+		return std::nullopt;
+	}
+	return _globes[index];
+}
+
 std::optional<entt::entity> Runner::ObjectAt(size_t index) const
 {
 	if (index >= _objects.size() || !Locator::entitiesRegistry::has_value() ||
@@ -1294,7 +1305,7 @@ std::string Runner::GiveObjectCommand(entt::entity creature, const Command& comm
 	const auto& land = Locator::terrainSystem::value();
 	const auto point = MapPoint(_middle, command.point);
 	const glm::vec3 onLand {point.x, land.GetHeightAt(point), point.y};
-	const auto object = ObjectAt(command.object);
+	const auto object = command.globe.has_value() ? GlobeAt(*command.globe) : ObjectAt(command.object);
 	switch (command.kind)
 	{
 	case Kind::PickUp:
@@ -2021,8 +2032,10 @@ void Runner::Give(const Command& command)
 	{
 		const auto* tables = minds.GetTables();
 		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
-		const auto target = ObjectAt(command.object);
-		const auto with = command.with.has_value() ? ObjectAt(*command.with) : std::nullopt;
+		const auto target = command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe) : ObjectAt(command.object);
+		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
+		                  : command.with.has_value()                    ? ObjectAt(*command.with)
+		                                                                : std::nullopt;
 		result = !action.has_value()                                     ? "no such action"
 		         : !target.has_value()                                   ? "no such object"
 		         : minds.ScriptDoAction(*entity, *action, *target, with) ? fmt::format("doing {}", command.action)
@@ -2688,7 +2701,7 @@ void Runner::PlaceDispensers(const Scenario& scenario)
 		const float ground = Locator::terrainSystem::value().GetHeightAt(point);
 		if (dispenser.bubbleHeight.has_value())
 		{
-			magic.CreateOneOffSeedFor({point.x, ground + *dispenser.bubbleHeight, point.y}, dispenser.type);
+			_globes.push_back(magic.CreateOneOffSeedFor({point.x, ground + *dispenser.bubbleHeight, point.y}, dispenser.type));
 		}
 		else
 		{

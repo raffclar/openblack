@@ -50,7 +50,7 @@ enum class Target : uint8_t
 	/// Anything on fire, or anything not on fire
 	Burning,
 	Unburnt,
-	/// A storage pit
+	/// A storage pit, built or not
 	StoragePit,
 	/// A store that food can be cast into: a storage pit or a worship site that stands fully built
 	BuiltFoodStore,
@@ -80,8 +80,8 @@ enum class Target : uint8_t
 	CuddlyToy,
 	Die,
 	ToyAwayFromHome,
-	/// A building still going up, or one damaged and wanting repair that has lost some of its life; or a house (any of a
-	/// town's buildings) below its full life
+	/// A thing still going up (a building, a worship site or the temple), or a building that its town repairs and that
+	/// is below its full life; or a house (any of a town's buildings) below its full life
 	BuildingBeingBuilt,
 	NeedsRepair,
 	/// What a creature can poo by: a thing that is not alive and is taller than k_PooedOnTallerThan, but not a field or a
@@ -95,6 +95,10 @@ enum class Target : uint8_t
 	AnyTree,
 	DryField,
 	Waterable,
+	/// A one-shot miracle that lies about, or that the creature holds, whose miracle attacks, is kind, or is playful
+	OneShotAggressive,
+	OneShotCompassionate,
+	OneShotPlayful,
 	/// A villager nearer to the creature than 200 metres, to dance with
 	DanceVillager,
 };
@@ -216,8 +220,31 @@ enum class Build : uint8_t
 	HelpRepairHouse,
 	/// Dancing with the villagers of a town, to impress them
 	DanceWithVillagers,
+	/// Casting the one-shot miracle that it holds at the thing
+	CastOneShotInHand,
+	/// Picking up the one-shot miracle that it uses, unless its hand holds something, and casting it at the thing
+	PickUpAndCastOneShot,
 	/// An action whose agenda can never be made
 	Never,
+};
+
+/// The kinds of one-shot miracle that a creature casts for its desires
+enum class OneShotKind : uint8_t
+{
+	Aggressive,
+	Compassionate,
+	Playful,
+};
+
+/// A one-shot miracle as the creature sees it: the first miracle of its seed, and the kinds of that miracle
+struct OneShot
+{
+	uint32_t magicType {0};
+	bool aggressive {false};
+	bool compassionate {false};
+	bool playful {false};
+
+	[[nodiscard]] bool Is(OneShotKind kind) const;
 };
 
 struct Executor
@@ -238,6 +265,8 @@ struct Executor
 	/// The miracle that the agenda casts, when the creature table gives the action no miracle. The creature then never
 	/// chooses the action itself, but a script can make it do the action.
 	std::optional<uint32_t> castMagic;
+	/// The kind of one-shot miracle that the action casts, for the actions that cast one
+	OneShotKind oneShot {OneShotKind::Aggressive};
 };
 
 /// Every action that can be carried out
@@ -276,6 +305,9 @@ struct Situation
 	bool holdingMushroom {false};
 	/// Whether it can eat what its hand holds as it is, with no pick-up first
 	bool holdingEatable {false};
+	/// The one-shot miracle that its hand holds, and the one-shot miracle that the action uses; none when it is not one
+	std::optional<OneShot> heldOneShot;
+	std::optional<OneShot> usedOneShot;
 	/// The creature itself, by its entity's number, and where it stands
 	uint32_t self {0};
 	glm::vec2 position {0.0f};
