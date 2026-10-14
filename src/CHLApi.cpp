@@ -57,6 +57,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureScriptAgendas.h"
@@ -83,6 +84,7 @@
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -7411,11 +7413,42 @@ void SetIntroBuilding() // 308 SET_INTRO_BUILDING
 
 void CreatureForceFriends() // 309 CREATURE_FORCE_FRIENDS
 {
-	// const auto targetCreature = Pop().uintVal;
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto target = PopObject();
+	const auto creature = PopObject();
+	const auto enable = static_cast<bool>(Pop().intVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool targetFound = target != entt::null && registry.Valid(target);
+	const bool creatureFound = creature != entt::null && registry.Valid(creature);
+	if (!targetFound || !creatureFound)
+	{
+		ScriptMessage("Thing not found!");
+		return;
+	}
+	const bool targetIsCreature = registry.AllOf<ecs::components::Creature>(target);
+	const bool creatureIsCreature = registry.AllOf<ecs::components::Creature>(creature);
+	if (!targetIsCreature)
+	{
+		ScriptMessage("Thing not creature!");
+	}
+	if (!creatureIsCreature)
+	{
+		ScriptMessage("Thing not creature!");
+	}
+	// The two creatures become friends. A script that tells them to stop being friends does nothing.
+	if (!targetIsCreature || !creatureIsCreature || !enable)
+	{
+		return;
+	}
+	for (const auto each : {target, creature})
+	{
+		if (!registry.AllOf<ecs::components::CreatureFriends>(each))
+		{
+			registry.Assign<ecs::components::CreatureFriends>(each);
+		}
+	}
+	auto& friendsOfTarget = registry.Get<ecs::components::CreatureFriends>(target).friends;
+	auto& friendsOfCreature = registry.Get<ecs::components::CreatureFriends>(creature).friends;
+	creature_activity::MakeFriends(friendsOfTarget, entt::to_integral(target), friendsOfCreature, entt::to_integral(creature));
 }
 
 void MoveComputerPlayerPosition() // 310 MOVE_COMPUTER_PLAYER_POSITION

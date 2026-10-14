@@ -116,3 +116,20 @@ Choice creature_giving::ChooseUse(const GiftFacts& facts)
 	}
 	return {.use = Use::AsLed};
 }
+
+KeptPlanUse creature_giving::UseForKeptPlan(const KeptPlanFacts& facts)
+{
+	if (!facts.complete || facts.missesWhole || facts.missesThingToUse || !facts.actsOnThing)
+	{
+		return KeptPlanUse::None;
+	}
+	if (facts.giftSuitsActOn)
+	{
+		return KeptPlanUse::ActOn;
+	}
+	if (facts.needsThingToUse && facts.giftSuitsUse)
+	{
+		return KeptPlanUse::Use;
+	}
+	return KeptPlanUse::None;
+}

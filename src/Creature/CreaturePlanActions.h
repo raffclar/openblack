@@ -181,6 +181,8 @@ enum class Build : uint8_t
 	DeadForever,
 	/// Pointing out a lesson's highlight to the player
 	PointOutHighlight,
+	/// The creature shows the player that it saw a deed of the player, done to the thing
+	Notice,
 	/// Sleeping in a clear place by a thing, or at home when there is no such place
 	SleepByObject,
 	/// Taking food from a pile and eating it
@@ -326,6 +328,8 @@ struct CastInfo
 };
 /// Whether an action casts a miracle
 [[nodiscard]] bool IsCast(const Executor& executor);
+/// Whether an action of the game's table, by its name there, needs a thing to use as well as the thing it acts on
+[[nodiscard]] bool NeedsThingToUse(std::string_view action);
 
 /// Whether an action can be carried out now, in this situation, before any thing is chosen
 [[nodiscard]] bool Possible(const Executor& executor, const Situation& situation);

@@ -132,8 +132,12 @@ struct CreatureMindState
 	bool desireSeenTo {false};
 	/// The kinds of thing (as its beliefs sort them) it has had a good look at, which it is far less curious about since
 	std::set<uint32_t> observedKinds;
-	/// The kinds of thing it has been given from the hand with no desire for them, which it looked over the first time
+	/// The sorts of object (by the object type of their info) that it was given from the hand with no desire for them. It
+	/// looked over the first one of each sort.
 	std::set<uint32_t> givenKinds;
+	/// The plan that it did when it last started a reaction, or when the hand last gave it a thing while it had no
+	/// reaction. When it takes a thing from the hand, it continues this plan with the thing if the thing suits the plan.
+	std::optional<creature_planner::Plan> keptPlan;
 	/// The sorts of object (by the object type of their info) that it brought up after it ate one. It does not eat
 	/// these again.
 	std::set<uint32_t> refusedFoodSorts;

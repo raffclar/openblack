@@ -9,6 +9,8 @@
 
 #include "CreatureActivity.h"
 
+#include <algorithm>
+
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreaturePlanner.h"
 
@@ -174,4 +176,24 @@ std::optional<size_t> creature_activity::MostUseful(std::span<const float> usefu
 float creature_activity::ActedOnUsefulness(Desire desire, float partUsefulness)
 {
 	return desire == Desire::Anger ? partUsefulness : creature_planner::k_DefaultUsefulness;
+}
+
+void creature_activity::MakeFriends(std::vector<uint32_t>& friendsOfFirst, uint32_t first,
+                                    std::vector<uint32_t>& friendsOfSecond, uint32_t second)
+{
+	if (std::ranges::find(friendsOfFirst, second) == friendsOfFirst.end())
+	{
+		friendsOfFirst.push_back(second);
+	}
+	if (std::ranges::find(friendsOfSecond, first) == friendsOfSecond.end())
+	{
+		friendsOfSecond.push_back(first);
+	}
+}
+
+bool creature_activity::AreFriends(std::span<const uint32_t> friendsOfFirst, uint32_t first,
+                                   std::span<const uint32_t> friendsOfSecond, uint32_t second)
+{
+	return std::ranges::find(friendsOfFirst, second) != friendsOfFirst.end() ||
+	       std::ranges::find(friendsOfSecond, first) != friendsOfSecond.end();
 }
