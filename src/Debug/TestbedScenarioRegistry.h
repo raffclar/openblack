@@ -369,6 +369,8 @@ struct RewardSetup
 	bool inTown {false};
 	/// Seconds into the scenario it is given
 	float delaySeconds {0.0f};
+	/// A testbed set-up step: its player opens it as soon as it is given, as a tap does. Only for a chest put on the land.
+	bool opened {false};
 };
 
 /// A miracle dispenser, or a one-shot bubble on its own, put down for the scenario

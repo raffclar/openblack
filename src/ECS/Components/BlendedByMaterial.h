@@ -9,6 +9,10 @@
 
 #pragma once
 
+#include <optional>
+
+#include <glm/vec3.hpp>
+
 namespace openblack::ecs::components
 {
 
@@ -17,6 +21,9 @@ namespace openblack::ecs::components
 /// chest is drawn so.
 struct BlendedByMaterial
 {
+	/// The colour, 0 to 255, that its alpha-textured parts shine in, in place of the land's light (see
+	/// graphics::light_shine). None to take the land's light.
+	std::optional<glm::vec3> shineColour;
 };
 
 } // namespace openblack::ecs::components
