@@ -1563,9 +1563,9 @@ void CreatureMindSystem::ProcessTurn()
 		    // What its hand holds goes, and its hand is empty
 		    if (commands.useUpHeld && Locator::creatureObjectActionSystem::has_value())
 		    {
-			    if (const auto inHand = Locator::creatureObjectActionSystem::value().GetHeld(entity))
+			    if (const auto usedUpHeld = Locator::creatureObjectActionSystem::value().GetHeld(entity))
 			    {
-				    ecs::world_objects::Remove(*inHand);
+				    ecs::world_objects::Remove(*usedUpHeld);
 			    }
 		    }
 		    if (commands.restSitting && Locator::creaturePhysiologySystem::has_value())
