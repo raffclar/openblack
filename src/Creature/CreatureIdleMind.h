@@ -327,8 +327,12 @@ struct Gaze
 	std::optional<glm::vec3> point;
 	bool camera {false};
 	/// The look of a creature that walks to the point: at the point, at what it watches, and a sweep from side to side
-	/// (see creature_look::LookWhileGoing). Without a point, the look uses the place that the creature walks to.
+	/// (see creature_look::LookWhileGoing). Without a point, the look uses the top of the object, or else the place that
+	/// the creature walks to.
 	bool whileGoing {false};
+	/// The look of a creature that runs away from the object or the hand: it looks back at it for a time, then looks
+	/// about for a time, and so on
+	bool runningAway {false};
 };
 /// The look while the creature walks to the place of its walk
 [[nodiscard]] inline Gaze GoingLook()
@@ -411,6 +415,14 @@ struct Step
 		StopMoving,
 		/// A stage of a dance with the villagers of a town (see DanceOrder)
 		Dance,
+		/// Pulling a face, by the face's animation, held for the step's seconds. It is done at once, and the next step
+		/// starts on the next turn.
+		Face,
+		/// Following the point of focus of its player's camera, for the step's seconds counted in whole turns, until it
+		/// is within the movement's distance of the point (see creature_emote::FollowCameraTurn)
+		FollowCamera,
+		/// Healing the step's object at once: it gets all its life back, and a villager goes home or an animal wanders
+		Heal,
 		/// Following a villager (the step's object) to watch it do a skill the creature does not know: each turn while
 		/// the villager does it, up to the step's seconds counted in whole seconds, it walks up to the villager, stopping
 		/// within the step's movement distance, whenever it is further and still. Then it holds where it is for one to four
@@ -498,6 +510,8 @@ struct IdleMind
 	bool danceEnding {false};
 	/// A step that makes a dance: whether it ordered the new dance yet
 	bool danceSet {false};
+	/// A step that follows the camera: the turns it follows for yet
+	uint32_t followCameraTurns {0};
 };
 
 /// The nearest water, and where the creature can stand at its edge to drink
@@ -648,6 +662,10 @@ struct Senses
 		float distance {0.0f};
 	};
 	std::optional<FollowedView> followed;
+	/// The point of focus of its player's camera on the land, while a step follows the camera; none without a player
+	std::optional<glm::vec3> cameraFocus;
+	/// Whether that point is less than a sixth of a turn from the way its body faces, or in its own map cell
+	bool cameraFocusAhead {false};
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -724,6 +742,8 @@ struct Commands
 	std::optional<creature_desires::Communication> communicated;
 	/// A stage of a dance with villagers to carry out this turn
 	std::optional<DanceOrder> dance;
+	/// A thing to heal at once, by its entity's number
+	std::optional<uint32_t> heal;
 };
 
 /// random(n) is a whole number from 0 to n - 1
