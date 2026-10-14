@@ -1472,6 +1472,11 @@ void CreatureMindSystem::ProcessTurn()
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    if (commands.communicated.has_value())
 		    {
+			    SPDLOG_LOGGER_DEBUG(
+			        spdlog::get("game"), "Creature {} shows its state: desire {}, animation {}", entt::to_integral(entity),
+			        commands.communicated->desire.has_value() ? static_cast<int>(*commands.communicated->desire) : -1,
+			        commands.communicated->animation.has_value() ? static_cast<int64_t>(*commands.communicated->animation)
+			                                                     : -1);
 			    Communicated(mind);
 		    }
 		    Apply(commands, animation, eyes);
