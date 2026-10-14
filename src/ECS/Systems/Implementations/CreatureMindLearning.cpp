@@ -2904,6 +2904,10 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	situation.self = entt::to_integral(creature);
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
+	{
+		situation.stage = mind->developmentPhase;
+	}
 	if (Locator::camera::has_value())
 	{
 		situation.eye = Locator::camera::value().GetOrigin();

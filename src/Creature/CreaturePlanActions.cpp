@@ -168,7 +168,7 @@ constexpr std::array k_Executors {
               .build = Build::ApproachEmote,
               .animation = animations::k_FriendlyWave},
     Executor {.action = "LookAtMountains", .build = Build::LookAbout},
-    Executor {.action = "LookOutToSea", .build = Build::LookAbout},
+    Executor {.action = "LookOutToSea", .build = Build::LookAbout, .leavesHome = true},
     Executor {.action = "LookAtSun", .build = Build::LookAbout},
     Executor {.action = "LookAtMoon", .build = Build::LookAbout},
     // The miracles it casts at things: lightning at anything, a heal at a villager hurt enough, a spell at another
@@ -401,6 +401,10 @@ bool creature_plan_actions::NeedsThingToUse(std::string_view action)
 
 bool creature_plan_actions::Possible(const Executor& executor, const Situation& situation)
 {
+	if (executor.leavesHome && situation.stage < k_LeaveHomeStage)
+	{
+		return false;
+	}
 	switch (executor.build)
 	{
 	case Build::Drink:

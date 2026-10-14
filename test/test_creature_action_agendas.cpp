@@ -702,3 +702,15 @@ TEST(CreatureActionAgendas, WatchingAVillagerEndsWhenItIsNoLongerInteresting)
 	(void)Think(gone, {.seconds = 0.1f}, AlwaysFirst);
 	EXPECT_TRUE(gone.followHolding);
 }
+
+TEST(CreatureActionAgendas, AYoungCreatureDoesNotLookOutToSea)
+{
+	const auto* sea = plan_actions::For("LookOutToSea");
+	ASSERT_NE(sea, nullptr);
+	EXPECT_FALSE(plan_actions::Possible(*sea, {.stage = 2}));
+	EXPECT_TRUE(plan_actions::Possible(*sea, {.stage = 3}));
+	// The other ways of looking about have no stage
+	const auto* mountains = plan_actions::For("LookAtMountains");
+	ASSERT_NE(mountains, nullptr);
+	EXPECT_TRUE(plan_actions::Possible(*mountains, {.stage = 0}));
+}
