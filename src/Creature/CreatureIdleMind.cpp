@@ -498,13 +498,6 @@ std::vector<Step> creature_mind::LookAt(glm::vec2 point, float seconds)
 	return WithFace({turn, {.kind = Step::Kind::Wait, .seconds = seconds}}, creature_face::Cue::Amazed);
 }
 
-std::vector<Step> creature_mind::FollowFor(uint32_t object, float seconds)
-{
-	Step follow {.kind = Step::Kind::Move, .seconds = seconds};
-	follow.movement = {.kind = Movement::Kind::Follow, .object = object, .maxDistance = k_FollowDistance};
-	return WithFace({follow}, creature_face::Cue::Amazed);
-}
-
 std::vector<Step> creature_mind::RunFrom(glm::vec2 point)
 {
 	Step flee {.kind = Step::Kind::Move};
@@ -686,6 +679,41 @@ void WatchHand(IdleMind& mind, const Step& step, const Senses& senses, Commands&
 }
 
 /// A turn of watching a flying thing: the limit is picked afresh each turn, before anything else is looked at
+/// A turn of following a villager to watch it, from the turn the step starts: it goes on while the villager does what
+/// the creature wants to learn, up to the step's whole seconds, then it holds for one to four seconds
+void FollowWatching(IdleMind& mind, const Step& step, const Senses& senses, const Random& random, Commands& commands)
+{
+	const auto turnsPerSecond = std::max(static_cast<uint32_t>(std::lround(1.0f / std::max(senses.seconds, 1e-3f))), 1U);
+	if (mind.followHolding)
+	{
+		if (mind.followHoldTurns > 0)
+		{
+			--mind.followHoldTurns;
+		}
+		if (mind.followHoldTurns == 0)
+		{
+			FinishStep(mind);
+		}
+		return;
+	}
+	++mind.watchTurns;
+	const auto& followed = senses.followed;
+	if (followed.has_value() && followed->interesting && static_cast<float>(mind.watchTurns / turnsPerSecond) <= step.seconds)
+	{
+		// Too far, it walks up to the villager
+		if (followed->distance > step.movement.maxDistance && !senses.moving)
+		{
+			commands.move = step.movement;
+			mind.followMoved = true;
+		}
+		return;
+	}
+	const auto pick = static_cast<float>(random(game_random::k_FloatRandRange)) * k_FollowWatchingExtraHoldSeconds *
+	                  game_random::k_FloatRandScale;
+	mind.followHolding = true;
+	mind.followHoldTurns = static_cast<uint32_t>((pick + k_FollowWatchingHoldSeconds) * static_cast<float>(turnsPerSecond));
+}
+
 void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	const auto limit =
@@ -744,6 +772,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 		return step.dance.kind == DanceOrder::Kind::Start || step.dance.kind == DanceOrder::Kind::Dance ? HandsNeed::Free
 		                                                                                                : HandsNeed::Any;
 	case Step::Kind::StopMoving:
+	case Step::Kind::FollowWatching:
 	case Step::Kind::Wait:
 	case Step::Kind::Move:
 	case Step::Kind::Gesture:
@@ -1088,6 +1117,13 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::Dance:
 			StartDanceStep(mind, step, senses, commands);
 			break;
+		case Step::Kind::FollowWatching:
+			mind.watchTurns = 0;
+			mind.followHolding = false;
+			mind.followHoldTurns = 0;
+			mind.followMoved = false;
+			FollowWatching(mind, step, senses, random, commands);
+			break;
 		case Step::Kind::Communicate:
 			// It shows what it feels now, and it does not want to show its state again for a time
 			commands.communicated = senses.communication;
@@ -1293,6 +1329,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::Dance:
 		DanceStepTurn(mind, step, senses, commands, random);
+		break;
+	case Step::Kind::FollowWatching:
+		FollowWatching(mind, step, senses, random, commands);
 		break;
 	case Step::Kind::Gesture:
 	case Step::Kind::Move:

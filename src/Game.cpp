@@ -103,6 +103,7 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/LearningMarker.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -118,6 +119,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/CreatureDanceMusic.h"
 #include "ECS/FloatingNumber.h"
+#include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
@@ -1260,6 +1262,53 @@ void Game::UpdateFloatingNumbers(float seconds)
 	ecs::floating_number::StepAll(Locator::entitiesRegistry::value(), seconds);
 }
 
+void Game::UpdateLearningMarks(float milliseconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ecs::learning_marker::StepAll(registry, milliseconds);
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	// The bulbs and glows are drawn with the world's effects
+	std::vector<particles::draw::LearningMark> marks;
+	const auto bulb = resources::HashIdentifier(MeshId::ObjectLightBulb);
+	registry.Each<const ecs::components::LearningMarker>(
+	    [&marks, bulb](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
+		    const auto look = ecs::learning_marker::LookOf(marker);
+		    marks.push_back({.glow = look.glow,
+		                     .glowHalfSize = look.glowHalfSize,
+		                     .glowColour = look.glowColour,
+		                     .bulb = look.bulb,
+		                     .bulbScale = look.bulbScale,
+		                     .bulbColour = look.bulbColour,
+		                     .bulbMesh = bulb});
+	    });
+	Locator::particleSystem::value().SetLearningMarks(std::move(marks));
+}
+
+void Game::PlaceLearningTexts()
+{
+	if (!_interface)
+	{
+		return;
+	}
+	std::vector<gui::GameInterface::LearningText> texts;
+	Locator::entitiesRegistry::value().Each<const ecs::components::LearningMarker>(
+	    [this, &texts](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
+		    const auto look = ecs::learning_marker::LookOf(marker);
+		    if (marker.text.empty())
+		    {
+			    return;
+		    }
+		    if (const auto screen = OnScreen(look.textPoint); screen.has_value())
+		    {
+			    texts.push_back({.screen = *screen, .text = gui::ToUtf16(marker.text), .alpha = look.textAlpha});
+		    }
+	    });
+	_interface->SetLearningTexts(std::move(texts));
+}
+
 void Game::PlaceScreenLabels()
 {
 	if (!_interface)
@@ -2120,6 +2169,8 @@ bool Game::Update() noexcept
 	Locator::cameraPathSystem::value().Update(deltaTime);
 	// The numbers floating up from things rise and fade
 	UpdateFloatingNumbers(std::chrono::duration<float>(deltaTime).count());
+	// The marks over creatures that learn rise, blink and fade
+	UpdateLearningMarks(std::chrono::duration<float, std::milli>(deltaTime).count());
 
 	if (!config.running || _quitRequested)
 	{
@@ -4242,6 +4293,7 @@ bool Game::Run() noexcept
 
 		// The game's interface over the scene, its labels over things placed from the camera the scene was drawn from
 		PlaceScreenLabels();
+		PlaceLearningTexts();
 		if (_interface && Locator::windowing::has_value())
 		{
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();

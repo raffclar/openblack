@@ -150,6 +150,8 @@ struct CreatureMindState
 	/// Game turns the mind has thought, and the turn it last planned
 	uint32_t turn {0};
 	uint32_t plannedTurn {0};
+	/// The turn the learning meter last showed over it
+	uint32_t lastMeterTurn {0};
 	/// The action that gets the feedback for an agenda that no plan gave, when it is not the action of the agenda's
 	/// activity, and the number of that agenda
 	std::optional<uint32_t> creditedAction;

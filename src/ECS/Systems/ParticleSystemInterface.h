@@ -114,6 +114,8 @@ public:
 	virtual void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> /*symbols*/) {}
 	/// The sparkles marking the player's queued fight moves, drawn every frame until replaced
 	virtual void SetFightMarks(std::vector<particles::draw::FightMark> /*marks*/) {}
+	/// The marks over the creatures that learn, drawn with the world's effects until set again
+	virtual void SetLearningMarks(std::vector<particles::draw::LearningMark> /*marks*/) {}
 	/// How the effect is drawn: sorted with everything else that blends unless told otherwise
 	virtual void SetDrawPath(EffectId id, particles::draw::DrawPath path) = 0;
 	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows

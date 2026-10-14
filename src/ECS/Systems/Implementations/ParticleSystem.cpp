@@ -1453,6 +1453,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 			particles::draw::AddPlayerSymbol(frame, symbol, sources);
 		}
 		particles::draw::AddFightMarks(frame, _fightMarks);
+		particles::draw::AddLearningMarks(frame, _learningMarks);
 	}
 	_drawStats = {
 	    .sprites = frame.sprites.size(),

@@ -145,6 +145,7 @@
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/IntroHand.h"
 #include "ECS/Components/LandForest.h"
+#include "ECS/Components/LearningMarker.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingPhysics.h"
@@ -795,6 +796,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::stepTurns>("stepTurns")
 	    .Field<&components::CreatureMindState::turn>("turn")
 	    .Field<&components::CreatureMindState::plannedTurn>("plannedTurn")
+	    .Field<&components::CreatureMindState::lastMeterTurn>("lastMeterTurn")
 	    .Field<&components::CreatureMindState::creditedAction>("creditedAction")
 	    .Field<&components::CreatureMindState::creditedSerial>("creditedSerial")
 	    .Field<&components::CreatureMindState::thinksWithoutPlan>("thinksWithoutPlan")
@@ -1248,6 +1250,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ForestTurns::emptyCountdown>("emptyCountdown")
 	    .Field<&components::ForestTurns::spreadCounter>("spreadCounter");
 	Reflect<components::TownForests>(context).Field<&components::TownForests::forests>("forests");
+	Reflect<components::LearningMarker>(context)
+	    .Field<&components::LearningMarker::text>("text")
+	    .Field<&components::LearningMarker::position>("position")
+	    .Field<&components::LearningMarker::size>("size")
+	    .Field<&components::LearningMarker::milliseconds>("milliseconds");
 	Reflect<components::LightBeam>(context).Field<&components::LightBeam::cone>("cone");
 	Reflect<components::LivingAction>(context)
 	    .Field<&components::LivingAction::states>("states", {k_EcsComponentsLivingActionIndexNames})
@@ -2333,6 +2340,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::castTurns>("castTurns")
 	    .Field<&openblack::creature_mind::IdleMind::inspectTurns>("inspectTurns")
 	    .Field<&openblack::creature_mind::IdleMind::watchTurns>("watchTurns")
+	    .Field<&openblack::creature_mind::IdleMind::followHolding>("followHolding")
+	    .Field<&openblack::creature_mind::IdleMind::followHoldTurns>("followHoldTurns")
+	    .Field<&openblack::creature_mind::IdleMind::followMoved>("followMoved")
 	    .Field<&openblack::creature_mind::IdleMind::danceTurns>("danceTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceEnding>("danceEnding")
 	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet");

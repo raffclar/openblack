@@ -186,6 +186,11 @@ private:
 	bool CastGivenGlobe(entt::entity creature, components::CreatureMindState& mind, entt::entity globe);
 	/// The creature watches a skill being done, and learns from it
 	void WatchSkill(entt::entity creature, size_t skill);
+	/// The creature sees again a villager it believes in: grown up enough and free to, it learns from what the villager
+	/// does when that teaches a skill it does not know, and goes after the villager to watch it
+	void WatchVillager(entt::entity creature, components::CreatureMindState& mind, entt::entity villager);
+	/// A sighting that moves the learning meter shows it over the creature's head, at most every so many turns
+	void ShowLearningMeter(entt::entity creature, components::CreatureMindState& mind, std::optional<float> share);
 	/// How useful the creature has learnt a thing is for a desire, when it may act on it at all: nothing when it is kept
 	/// within an area and the thing lies outside it
 	[[nodiscard]] float ActivityUsefulness(entt::entity creature, const components::CreatureMindState& mind,

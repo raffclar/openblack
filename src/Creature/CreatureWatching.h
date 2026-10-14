@@ -19,6 +19,8 @@
 #include <string>
 #include <vector>
 
+#include "Creature/CreatureDesires.h"
+
 /// How a creature learns by watching. Grown up enough, it learns the ordinary skills it sees villagers practise (building,
 /// fishing, dancing and the like) once it has watched one for a few seconds, and the miracles it sees cast once it has
 /// seen each enough times: some species need to see a miracle more often than others, and the learning leash makes each
@@ -107,9 +109,52 @@ struct Prerequisite
 /// the first), the storm with lightning needs the storm and the tornado that; the thirst and itch spells need the skill
 /// of building. Every other miracle has none.
 [[nodiscard]] std::optional<Prerequisite> MiraclePrerequisite(size_t miracle);
-/// Watching a skill being practised
+/// Seeing a skill being practised. Too young for the skill, the creature is told so, whether it knows the skill or not.
+/// Else the first sighting ever starts a clock that is never reset, and each sighting counts. A sighting when the whole
+/// seconds since the first come to the skill's seconds or more teaches the skill; a sighting before that tells that it is
+/// still learning, unless it knows the skill already.
 [[nodiscard]] Progress SeeSkill(Knowledge& knowledge, size_t skill, std::span<const SkillRule> rules, uint32_t phase,
                                 uint32_t turn, float turnsPerSecond);
+
+/// The learning meter shows over the creature at most once in this many game turns: a sighting shows it only when more
+/// turns than this have gone by since it last showed
+constexpr uint32_t k_MeterTurns = 100;
+/// Whether a sighting's meter shows now, given the turn it last showed
+[[nodiscard]] bool MeterShows(uint32_t lastShown, uint32_t turn);
+
+/// What a villager does, as a creature watching it sees it
+struct VillagerAtWork
+{
+	/// The villager's state now, and the state it goes back to after an animation it waits for
+	uint32_t state {0};
+	uint32_t finalState {0};
+	/// How far it is from where it walks to, in metres
+	float distanceToGoal {0.0f};
+};
+/// The villager states that need care, by their number in the game's table
+constexpr uint32_t k_WaitForAnimationState = 23;
+constexpr uint32_t k_GoToStoragePitForFoodState = 33;
+constexpr uint32_t k_DecideWhatToDoState = 163;
+/// A villager on its way to the storage pit for food shows nothing to learn while it is farther than this from the pit
+constexpr float k_FarFromPitMetres = 40.0f;
+/// The state whose skill a creature can learn from a villager: the state it goes back to while it waits for an
+/// animation, and none to learn while it is still far on its way to the storage pit for food
+[[nodiscard]] uint32_t StateToLearnFrom(const VillagerAtWork& villager);
+
+/// What the creature is like when it sees a villager at work
+struct Watcher
+{
+	uint32_t phase {0};
+	bool scriptControlled {false};
+	/// The desire of the plan it carries out, none without a plan
+	std::optional<creature_desires::Desire> planDesire;
+};
+/// The stage of growing up a creature must reach to learn from villagers
+constexpr uint32_t k_MinWatchPhase = 3;
+/// Whether a creature learns from the villagers it sees: grown up enough, not controlled by a script, and not busy with
+/// a plan for a bodily need, fear, anger, a show of strength or another such desire. With no plan, or with a plan to
+/// find out about things, wander, follow the player and the like, it watches.
+[[nodiscard]] bool WatchesVillagers(const Watcher& watcher);
 /// The times a miracle must be seen by a species, by its multiplier, not rounded
 [[nodiscard]] float TimesNeeded(uint32_t timesToSee, float speciesMultiplier);
 /// Seeing a miracle cast; a sighting more than 50 turns after the last counts the weight given (three times on the

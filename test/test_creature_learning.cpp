@@ -834,6 +834,91 @@ TEST(CreatureWatching, LearnsASkillOnceWatchedLongEnough)
 	EXPECT_TRUE(knowledge.skillsKnown[0]);
 }
 
+TEST(CreatureWatching, TooYoungForASkillIsToldSoEvenWhenItKnowsIt)
+{
+	const std::vector<creature_watching::SkillRule> skills {{.name = "Dance", .watchSeconds = 6.0f, .minPhase = 4}};
+	auto knowledge = creature_watching::StartKnowledge(skills, {});
+	knowledge.skillsKnown[0] = true;
+	const auto young = creature_watching::SeeSkill(knowledge, 0, skills, 3, 50, 10.0f);
+	EXPECT_EQ(young.event, creature_watching::LearningEvent::TooYoung);
+	// Too young, nothing is counted
+	EXPECT_EQ(knowledge.skillsSeen[0].count, 0u);
+}
+
+TEST(CreatureWatching, ASkillIsLearntByWholeSecondsFromTheFirstSightingEver)
+{
+	const std::vector<creature_watching::SkillRule> skills {{.name = "Dance", .watchSeconds = 6.0f, .minPhase = 4}};
+	auto knowledge = creature_watching::StartKnowledge(skills, {});
+	// The first sighting starts the clock: still learning, the meter at a half
+	const auto first = creature_watching::SeeSkill(knowledge, 0, skills, 4, 1000, 10.0f);
+	EXPECT_EQ(first.event, creature_watching::LearningEvent::NearlyLearnt);
+	EXPECT_EQ(first.meter, 0.5f);
+	// 59 turns are five whole seconds: not yet
+	EXPECT_FALSE(creature_watching::SeeSkill(knowledge, 0, skills, 4, 1059, 10.0f).learnt);
+	// The clock is never reset: a sighting much later teaches it at once
+	const auto later = creature_watching::SeeSkill(knowledge, 0, skills, 4, 5000, 10.0f);
+	EXPECT_TRUE(later.learnt);
+	EXPECT_EQ(later.event, creature_watching::LearningEvent::Learnt);
+	EXPECT_EQ(later.meter, 1.0f);
+	EXPECT_EQ(knowledge.skillsSeen[0].count, 3u);
+	// Known, a sighting tells nothing and moves no meter
+	const auto again = creature_watching::SeeSkill(knowledge, 0, skills, 4, 5001, 10.0f);
+	EXPECT_FALSE(again.event.has_value());
+	EXPECT_FALSE(again.meter.has_value());
+}
+
+TEST(CreatureWatching, AFirstSightingOnTurnZeroStartsTheClockAgain)
+{
+	const std::vector<creature_watching::SkillRule> skills {{.name = "Build", .watchSeconds = 7.0f, .minPhase = 0}};
+	auto knowledge = creature_watching::StartKnowledge(skills, {});
+	EXPECT_FALSE(creature_watching::SeeSkill(knowledge, 0, skills, 13, 0, 10.0f).learnt);
+	EXPECT_FALSE(creature_watching::SeeSkill(knowledge, 0, skills, 13, 100, 10.0f).learnt);
+	EXPECT_TRUE(creature_watching::SeeSkill(knowledge, 0, skills, 13, 170, 10.0f).learnt);
+}
+
+TEST(CreatureWatching, TheMeterShowsAtMostEveryHundredTurns)
+{
+	EXPECT_FALSE(creature_watching::MeterShows(0, 100));
+	EXPECT_TRUE(creature_watching::MeterShows(0, 101));
+	EXPECT_FALSE(creature_watching::MeterShows(500, 600));
+	EXPECT_TRUE(creature_watching::MeterShows(500, 601));
+}
+
+TEST(CreatureWatching, AVillagerShowsTheStateItGoesBackTo)
+{
+	using creature_watching::StateToLearnFrom;
+	// Building teaches building
+	EXPECT_EQ(StateToLearnFrom({.state = 41, .finalState = 7}), 41u);
+	// Waiting for an animation, the state it goes back to
+	EXPECT_EQ(StateToLearnFrom({.state = creature_watching::k_WaitForAnimationState, .finalState = 60}), 60u);
+	// On its way to the pit for food, only near the pit
+	EXPECT_EQ(StateToLearnFrom({.state = 33, .distanceToGoal = 40.0f}), 33u);
+	EXPECT_EQ(StateToLearnFrom({.state = 33, .distanceToGoal = 40.5f}), creature_watching::k_DecideWhatToDoState);
+}
+
+TEST(CreatureWatching, ACreatureWatchesVillagersWhenFreeToAndGrownUpEnough)
+{
+	using creature_watching::WatchesVillagers;
+	EXPECT_FALSE(WatchesVillagers({.phase = 2}));
+	EXPECT_TRUE(WatchesVillagers({.phase = 3}));
+	EXPECT_FALSE(WatchesVillagers({.phase = 13, .scriptControlled = true}));
+	// Plans for its needs and feelings keep it busy
+	for (const auto desire : {Desire::Impress,   Desire::Compassion, Desire::Anger,         Desire::Play,
+	                          Desire::Hunger,    Desire::Fear,       Desire::Poo,           Desire::Tiredness,
+	                          Desire::Puke,      Desire::Water,      Desire::RestoreHealth, Desire::BeFriends,
+	                          Desire::GetWarmer, Desire::GetColder,  Desire::Scratch,       Desire::RunAwayFromPlayer,
+	                          Desire::Rest,      Desire::Illness,    Desire::ObeyCreature,  Desire::Steal})
+	{
+		EXPECT_FALSE(WatchesVillagers({.phase = 13, .planDesire = desire})) << creature_desires::Name(desire);
+	}
+	for (const auto desire :
+	     {Desire::Curiosity, Desire::IdleWithPlayer, Desire::Wanderlust, Desire::BuildHome, Desire::BringStuffHome,
+	      Desire::AttractAttention, Desire::ManifestState, Desire::ObeyPlayer, Desire::Sadness, Desire::LookAround})
+	{
+		EXPECT_TRUE(WatchesVillagers({.phase = 13, .planDesire = desire})) << creature_desires::Name(desire);
+	}
+}
+
 TEST(CreatureWatching, LearnsAMiracleBySightingsAndSpecies)
 {
 	const std::vector<creature_watching::MiracleRule> miracles {{.name = "Heal", .timesToSee = 10, .minPhase = 8},

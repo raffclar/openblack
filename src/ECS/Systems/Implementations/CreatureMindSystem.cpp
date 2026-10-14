@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
@@ -33,6 +34,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
+#include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
@@ -64,6 +66,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
@@ -612,6 +615,35 @@ std::optional<bool> WaitedForInMap(const ecs::Registry& registry, const creature
 }
 
 /// Whether the thing a step watches fly is still really in the air: in the physics, and moving fast or clear of the land
+/// The villager a step follows to watch, as the creature sees it, while that step is next or under way
+std::optional<creature_mind::Senses::FollowedView> FollowedViewOf(const ecs::Registry& registry, const glm::vec3& from,
+                                                                  const CreatureMindState& mind)
+{
+	const auto& idle = mind.idle;
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::FollowWatching ||
+	    !idle.agenda[idle.step].object.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto villager = static_cast<entt::entity>(*idle.agenda[idle.step].object);
+	if (!registry.Valid(villager) || !registry.AllOf<Transform>(villager))
+	{
+		return std::nullopt;
+	}
+	const auto at = glm::xz(registry.Get<const Transform>(villager).position);
+	creature_mind::Senses::FollowedView view {.distance = glm::distance(at, glm::xz(from))};
+	// Interesting while its state now teaches a skill the creature does not know
+	const auto* action = registry.TryGet<const LivingAction>(villager);
+	if (action != nullptr && mind.learnt.has_value() && Locator::infoConstants::has_value())
+	{
+		const auto state = action->states.at(static_cast<size_t>(LivingAction::Index::Top));
+		const auto& table = Locator::infoConstants::value().villagerStateTable;
+		view.interesting = state < table.size() && creature_mind::DoingSomethingInteresting(table.at(state).teachesSkill,
+		                                                                                    mind.learnt->knowledge.skillsKnown);
+	}
+	return view;
+}
+
 bool WatchedIsInTheAir(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
 {
 	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WatchFlying ||
@@ -1442,7 +1474,9 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    const auto& step = mind.idle.agenda[mind.idle.step];
 			    const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
-			    if (walk != nullptr && walk->failed && mind.idle.stepStarted && step.kind == creature_mind::Step::Kind::Move &&
+			    if (walk != nullptr && walk->failed && mind.idle.stepStarted &&
+			        (step.kind == creature_mind::Step::Kind::Move ||
+			         (step.kind == creature_mind::Step::Kind::FollowWatching && mind.idle.followMoved)) &&
 			        step.movement.object.has_value())
 			    {
 				    mind.beliefs.MarkBlocked(static_cast<entt::entity>(*step.movement.object), mind.turn);
@@ -1491,6 +1525,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .overlayPlaying = animation.gesture.animation.has_value(),
 		        .bodyPlaying = creature_layers::IsPlaying(animation.body),
 		        .dance = DanceViewOf(entity, mind.idle),
+		        .followed = FollowedViewOf(registry, transform.position, mind),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    if (commands.communicated.has_value())
