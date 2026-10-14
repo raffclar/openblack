@@ -70,6 +70,7 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/FightCameraModel.h"
 #include "Camera/NearClipping.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/EventManager.h"
@@ -247,6 +248,7 @@
 #include "Hand/HandReach.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
+#include "Help/HelpProfile.h"
 #include "Help/Spirits.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
@@ -974,6 +976,27 @@ bool Game::IsHandDrawn() const
 	return hand_visibility::IsShown(_interface && _interface->IsDialogOpen(),
 	                                Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
 	                                Locator::temple::has_value() && Locator::temple::value().Active());
+}
+
+bool Game::FrontEndBoxShows() const
+{
+	return _interface && (_interface->IsDialogOpen() || _interface->GetTattooEditor().IsOpen());
+}
+
+std::optional<help::profile::WorldCameraView> Game::HelpWorldCameraView()
+{
+	if (!Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& model = Locator::camera::value().GetModel();
+	if (dynamic_cast<const DefaultWorldCameraModel*>(&model) == nullptr &&
+	    dynamic_cast<const FightCameraModel*>(&model) == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto camera = gui::hand_tooltip::CameraNow();
+	return help::profile::WorldCameraView {.centreDistance = camera.centreDistance, .pitch = camera.pitch};
 }
 
 void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
@@ -1773,7 +1796,7 @@ bool Game::GameLogicLoop() noexcept
 	// The help's count of what the player has done moves on a turn, and its tip bubble stays while its sign shows
 	if (Locator::helpProfileSystem::has_value())
 	{
-		Locator::helpProfileSystem::value().ProcessTurn();
+		Locator::helpProfileSystem::value().ProcessTurn(FrontEndBoxShows(), HelpWorldCameraView());
 	}
 	if (Locator::tipBubbleSystem::has_value())
 	{

@@ -82,6 +82,23 @@ float EventCount::PerSecond(uint32_t clock)
 	return static_cast<float>((_kept - 1) * 1000) / static_cast<float>(since);
 }
 
+std::vector<uint32_t> CameraViewEvents(const WorldCameraView& view)
+{
+	if (!view.centreDistance.has_value())
+	{
+		if (view.pitch < k_SkyPitch)
+		{
+			return {k_CameraSeesSky};
+		}
+		return {};
+	}
+	if (*view.centreDistance < k_NearDistance && view.pitch > k_SteepPitch)
+	{
+		return {k_CameraSeesLand, k_CameraNearAndSteep};
+	}
+	return {k_CameraSeesLand};
+}
+
 void HelpProfile::Trigger(uint32_t event)
 {
 	if (event >= k_EventCount)

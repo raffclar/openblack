@@ -4343,12 +4343,29 @@ void SetCreatureHelp() // 096 SET_CREATURE_HELP
 	}
 }
 
+/// The text that GET_ACTION_TEXT_FOR_OBJECT gives: "Warning: this text shouldn't come up"
+constexpr int32_t k_ActionTextForObject = 828;
+
 void GetTargetObject() // 097 GET_TARGET_OBJECT
 {
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The thing that the creature's plan acts on, 0 when it has no such plan. When the script gives no object, the
+	// native puts nothing on the stack, as the game does.
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("no object");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		ScriptMessage("Only for creatures");
+		PushObject(entt::null);
+		return;
+	}
+	const auto* mind = registry.TryGet<const CreatureMindState>(object);
+	const auto target = mind != nullptr && mind->planner.current.has_value() ? mind->planner.current->object : std::nullopt;
+	PushObject(target.has_value() ? static_cast<entt::entity>(*target) : entt::null);
 }
 
 void CreatureDesireIs() // 098 CREATURE_DESIRE_IS
@@ -4408,10 +4425,9 @@ void HideCountdownTimer() // 103 HIDE_COUNTDOWN_TIMER
 
 void GetActionTextForObject() // 104 GET_ACTION_TEXT_FOR_OBJECT
 {
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// The game always gives the same text, which says that the text must not show. It does not remove the object from
+	// the stack.
+	Pushi(k_ActionTextForObject);
 }
 
 void CreateDualCameraWithPoint() // 105 CREATE_DUAL_CAMERA_WITH_POINT

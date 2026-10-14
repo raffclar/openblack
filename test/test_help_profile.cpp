@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "Help/HelpProfile.h"
@@ -141,4 +144,47 @@ TEST(HelpProfile, ScriptsAskAboutOneToFortyEight)
 	EXPECT_TRUE(HelpProfile::ScriptMayAsk(48));
 	EXPECT_FALSE(HelpProfile::ScriptMayAsk(49));
 	EXPECT_FALSE(HelpProfile::ScriptMayAsk(-3));
+}
+
+TEST(HelpProfileCameraView, LandAtTheMiddleCountsOnce)
+{
+	const WorldCameraView view {.centreDistance = 40.0f, .pitch = 0.8f};
+	EXPECT_EQ(CameraViewEvents(view), (std::vector<uint32_t> {k_CameraSeesLand}));
+}
+
+TEST(HelpProfileCameraView, NearLandSeenSteeplyAlsoCounts)
+{
+	const WorldCameraView view {.centreDistance = 14.9f, .pitch = 0.56f};
+	EXPECT_EQ(CameraViewEvents(view), (std::vector<uint32_t> {k_CameraSeesLand, k_CameraNearAndSteep}));
+}
+
+TEST(HelpProfileCameraView, TheLimitsAreStrict)
+{
+	// The land exactly at the near distance, or the camera exactly at the steep pitch, does not count as near and steep
+	EXPECT_EQ(CameraViewEvents({.centreDistance = k_NearDistance, .pitch = 1.0f}), (std::vector<uint32_t> {k_CameraSeesLand}));
+	EXPECT_EQ(CameraViewEvents({.centreDistance = 5.0f, .pitch = k_SteepPitch}), (std::vector<uint32_t> {k_CameraSeesLand}));
+	EXPECT_TRUE(CameraViewEvents({.centreDistance = std::nullopt, .pitch = k_SkyPitch}).empty());
+}
+
+TEST(HelpProfileCameraView, NoLandAndLookingUpSeesTheSky)
+{
+	EXPECT_EQ(CameraViewEvents({.centreDistance = std::nullopt, .pitch = -0.5f}), (std::vector<uint32_t> {k_CameraSeesSky}));
+	// No land shows, but the camera does not look up enough
+	EXPECT_TRUE(CameraViewEvents({.centreDistance = std::nullopt, .pitch = 0.2f}).empty());
+	// A steep, near view of nothing gives nothing
+	EXPECT_TRUE(CameraViewEvents({.centreDistance = std::nullopt, .pitch = 1.2f}).empty());
+}
+
+TEST(HelpProfileCameraView, CameraEventsCountOnlyAsAnyEvent)
+{
+	HelpProfile profile;
+	for (const auto event : CameraViewEvents({.centreDistance = 10.0f, .pitch = 1.0f}))
+	{
+		profile.Trigger(event);
+	}
+	EXPECT_EQ(profile.Count(k_CameraSeesLand).Total(), 1u);
+	EXPECT_EQ(profile.Count(k_CameraNearAndSteep).Total(), 1u);
+	EXPECT_EQ(profile.Count(k_AnyEvent).Total(), 1u);
+	// Only the events 1 to 42 count as the event that the banter waits for
+	EXPECT_EQ(profile.Count(43).Total(), 0u);
 }
