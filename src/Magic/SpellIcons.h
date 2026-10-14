@@ -70,6 +70,11 @@ template <typename SeedOf>
 /// The power-up level the seed above a hand shows: the highest enabled, k_BasePowerUpLevel for none
 [[nodiscard]] int ShownPowerUp(const std::array<bool, k_PowerUpLevels>& powerUps);
 
+/// The power-up level the seed above a worship site's icon shows: the highest level whose magic type the site's player
+/// may cast, k_BasePowerUpLevel for none. levels holds the magic type of each power-up level of the icon's seed.
+template <typename Enabled>
+[[nodiscard]] int SiteShownPowerUp(const std::array<MagicType, k_PowerUpLevels>& levels, Enabled&& enabled);
+
 /// The miracles a worship site keeps icons for: every seed any of its towns' hands show, each once, in the order the
 /// towns came and their hands stand
 [[nodiscard]] std::vector<SpellSeedType> SiteSeeds(std::span<const std::vector<SpellSeedType>> townSeeds);
@@ -121,6 +126,17 @@ enum class TapResult : uint8_t
 
 /// The announcer's sample naming the miracle that has just been charged full at an icon
 [[nodiscard]] int FullyChargedVoice(SpellSeedType seed);
+
+template <typename Enabled>
+int SiteShownPowerUp(const std::array<MagicType, k_PowerUpLevels>& levels, Enabled&& enabled)
+{
+	std::array<bool, k_PowerUpLevels> shown {};
+	for (size_t level = 0; level < levels.size(); ++level)
+	{
+		shown.at(level) = enabled(levels.at(level));
+	}
+	return ShownPowerUp(shown);
+}
 
 template <typename SeedOf>
 std::vector<SpellSeedType> HandsFor(const HeldMagic& held, SeedOf&& seedOf, size_t places)

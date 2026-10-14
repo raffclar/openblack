@@ -1293,6 +1293,51 @@
   "query": "players.gestures"
  },
  {
+  "description": "Debug only: gives a town a miracle or takes it away, through the same steps as the land's scripts. A town given one without a worship site can have its site, which goes up for its builders.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The town (town.list)",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The magic type, by number or by its info name",
+    "name": "magic",
+    "required": true,
+    "type": "integer|string"
+   },
+   {
+    "description": "Give it (default) or take it away",
+    "name": "enable",
+    "type": "boolean"
+   },
+   {
+    "description": "Give a power-up level's plain miracle too, as a land file line does (default true)",
+    "name": "with_plain",
+    "type": "boolean"
+   },
+   {
+    "description": "Take the plain miracle and every level, as a creature that steals it does (default false)",
+    "name": "all_levels",
+    "type": "boolean"
+   },
+   {
+    "description": "Let a town without a worship site have one, as the scripts do (default true)",
+    "name": "open_site",
+    "type": "boolean"
+   },
+   {
+    "description": "Also on the first land, which never has worship sites (default true)",
+    "name": "any_land",
+    "type": "boolean"
+   }
+  ],
+  "query": "magic.town_miracle",
+  "writes": true
+ },
+ {
   "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions",
   "kind": "object",
   "parameters": [],

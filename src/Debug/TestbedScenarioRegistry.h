@@ -920,6 +920,9 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town believes this much in the player from the start, so that it stays the
 	/// player's rather than going back to the neutral player at its first turn
 	std::optional<float> townBeliefInPlayer;
+	/// A testbed set-up step: the debug tool gives the scenario's town these miracles, as a land file line gives them. A
+	/// town without a worship site then gets its site, on the first land too.
+	std::vector<MagicType> townMiracles;
 	/// A testbed set-up step: the scenario's town feels so about each of the scenario's creatures from the start, as if
 	/// the creature had just shown it, rather than first seeing them as it plays
 	std::optional<ecs::creature_attitude::Attitude> townFeelingAboutCreatures;
@@ -944,6 +947,8 @@ struct Scenario
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
 /// The sounds of a village by day and by night: its buildings, its foresters and its animals
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
+/// A town given miracles by the debug tool, and its worship site going up
+void AddTownMiracleScenarios(std::vector<Scenario>& all);
 /// The villagers around the player's temple, with their debug window open
 void AddTempleVillagerScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry

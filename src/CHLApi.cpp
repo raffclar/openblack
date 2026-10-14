@@ -196,6 +196,7 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -8423,11 +8424,34 @@ void IsAffectedBySpell() // 385 IS_AFFECTED_BY_SPELL
 
 void SetMagicInObject() // 386 SET_MAGIC_IN_OBJECT
 {
-	// const auto object = Pop().uintVal;
-	// const auto MAGIC_TYPE = Pop().intVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A town gets a magic type or loses it. A power-up level does not give its plain miracle with it.
+	const auto object = PopObject();
+	const auto type = static_cast<MagicType>(Pop().intVal);
+	const auto enable = Pop().intVal != 0;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Town>(object))
+	{
+		ScriptMessage("Object should be town");
+		return;
+	}
+	if (!Locator::spellIconSystem::has_value())
+	{
+		return;
+	}
+	auto& icons = Locator::spellIconSystem::value();
+	if (enable)
+	{
+		icons.TownHolds(object, type);
+	}
+	else
+	{
+		icons.TownReleases(object, type);
+	}
 }
 
 void IdAdultSize() // 387 ID_ADULT_SIZE

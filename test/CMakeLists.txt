@@ -965,3 +965,4 @@ openblack_setup_and_add_test(
   test_fight_autopilot_rules test_fight_autopilot_rules.cpp
 )
 openblack_setup_and_add_test(test_learning_marker test_learning_marker.cpp)
+openblack_setup_and_add_test(test_town_miracle_tool test_town_miracle_tool.cpp)

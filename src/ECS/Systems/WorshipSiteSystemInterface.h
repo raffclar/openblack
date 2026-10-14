@@ -47,6 +47,10 @@ public:
 	virtual entt::entity MakeBuiltSite(PlayerNames player, Tribe tribe) = 0;
 	/// A script lets a town or a temple have worship sites made, or stops it
 	virtual void SetCanHaveSites(entt::entity townOrTemple, bool can) = 0;
+	/// For the debug tools only. A town is let have its worship site as a land's script lets it: first the town, then its
+	/// player's temple. A new site goes up, and the town is asked to build it. With anyLand, the land without worship
+	/// sites lets the town have one too. The town's site, none when it can have none.
+	virtual entt::entity DebugAllowSite(entt::entity town, bool anyLand) = 0;
 	/// A temple loses all its worship sites at once, the newest first, as when it starts to be destroyed. Each goes
 	/// with its altar, its dance (whose dancers decide afresh what to do), its food pot and food, its prayer power and
 	/// its building site; its towns are left without a site, keeping their share of people at worship.

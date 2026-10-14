@@ -14,6 +14,8 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
+#include <vector>
 
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
@@ -134,7 +136,35 @@ bool SpellIconSystem::TownHolds(entt::entity town, MagicType type)
 	}
 	else
 	{
-		AddPowerUp(centre, level->seed, level->powerUp);
+		SetPowerUp(centre, level->seed, level->powerUp, true);
+	}
+	return true;
+}
+
+bool SpellIconSystem::TownReleases(entt::entity town, MagicType type)
+{
+	auto& registry = Entities();
+	auto* magicHeld = registry.Valid(town) ? registry.TryGet<TownMagic>(town) : nullptr;
+	if (magicHeld == nullptr || !icons::Release(magicHeld->held, type))
+	{
+		return false;
+	}
+	// Its player may cast it once fewer
+	SetEnabled(registry.Get<const Town>(town).owner, type, false);
+	// A working centre does not show it any more. The plain miracle loses its hand, and a power-up level loses its mark.
+	const auto level = SeedLevelOf(type);
+	const auto centre = WorkingCentreOf(town);
+	if (!level.has_value() || centre == entt::null)
+	{
+		return true;
+	}
+	if (level->powerUp == magic::k_BasePowerUpLevel)
+	{
+		RemoveHands(centre, town, level->seed);
+	}
+	else
+	{
+		SetPowerUp(centre, level->seed, level->powerUp, false);
 	}
 	return true;
 }
@@ -171,9 +201,49 @@ void SpellIconSystem::AddHand(entt::entity centre, entt::entity town, SpellSeedT
 		return;
 	}
 	hands.hands.at(*free) = SpellIconArchetype::CreateCentreHand(centre, town, *free, seed);
+	// The town's worship site gets an icon of the new hand's miracle at once
+	if (const auto site = registry.Get<const Town>(town).worshipSite; registry.Valid(site))
+	{
+		AddSiteIcon(site, seed);
+	}
 }
 
-void SpellIconSystem::AddPowerUp(entt::entity centre, SpellSeedType seed, int powerUp)
+void SpellIconSystem::RemoveHands(entt::entity centre, entt::entity town, SpellSeedType seed)
+{
+	auto& registry = Entities();
+	for (auto& hand : registry.Get<CentreHands>(centre).hands)
+	{
+		const auto* icon = registry.Valid(hand) ? registry.TryGet<const TownCentreIcon>(hand) : nullptr;
+		if (icon != nullptr && icon->seed == seed)
+		{
+			registry.Destroy(hand);
+			hand = entt::null;
+		}
+	}
+	// The site keeps its icon of the seed while another of its towns still has a hand of it
+	const auto site = registry.Get<const Town>(town).worshipSite;
+	const auto* component = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
+	if (component == nullptr)
+	{
+		return;
+	}
+	std::vector<std::vector<SpellSeedType>> offered;
+	for (const auto other : component->towns)
+	{
+		offered.push_back(SeedsOfTown(other));
+	}
+	const auto kept = icons::SiteSeeds(offered);
+	if (std::ranges::find(kept, seed) != kept.end())
+	{
+		return;
+	}
+	if (const auto icon = SiteIconOf(site, seed); icon != entt::null)
+	{
+		Destroy(icon);
+	}
+}
+
+void SpellIconSystem::SetPowerUp(entt::entity centre, SpellSeedType seed, int powerUp, bool shown)
 {
 	auto& registry = Entities();
 	if (powerUp < 0 || static_cast<size_t>(powerUp) >= icons::k_PowerUpLevels)
@@ -185,11 +255,11 @@ void SpellIconSystem::AddPowerUp(entt::entity centre, SpellSeedType seed, int po
 		auto* icon = registry.Valid(hand) ? registry.TryGet<TownCentreIcon>(hand) : nullptr;
 		if (icon != nullptr && icon->seed == seed)
 		{
-			icon->powerUps.at(static_cast<size_t>(powerUp)) = true;
+			icon->powerUps.at(static_cast<size_t>(powerUp)) = shown;
 			// The seed above it shows the highest level with a ring for each
-			if (auto* shown = registry.TryGet<IconSeed>(hand))
+			if (auto* graphic = registry.TryGet<IconSeed>(hand))
 			{
-				shown->powerUp = icons::ShownPowerUp(icon->powerUps);
+				graphic->powerUp = icons::ShownPowerUp(icon->powerUps);
 			}
 		}
 	}
@@ -229,7 +299,7 @@ void SpellIconSystem::CentreWorking(entt::entity centre)
 			AddHand(centre, town, level->seed);
 			if (level->powerUp != magic::k_BasePowerUpLevel)
 			{
-				AddPowerUp(centre, level->seed, level->powerUp);
+				SetPowerUp(centre, level->seed, level->powerUp, true);
 			}
 		}
 	}
@@ -307,16 +377,48 @@ void SpellIconSystem::TownJoinedSite(entt::entity site, entt::entity town)
 	}
 	for (const auto seed : SeedsOfTown(town))
 	{
-		if (SiteIconOf(site, seed) != entt::null)
-		{
-			continue;
-		}
-		if (const auto icon = SpellIconArchetype::CreateSiteIcon(site, seed); icon != entt::null)
-		{
-			auto& list = registry.AnyOf<SiteIcons>(site) ? registry.Get<SiteIcons>(site) : registry.Assign<SiteIcons>(site);
-			list.icons.push_back(icon);
-		}
+		AddSiteIcon(site, seed);
 	}
+}
+
+void SpellIconSystem::AddSiteIcon(entt::entity site, SpellSeedType seed)
+{
+	auto& registry = Entities();
+	if (SiteIconOf(site, seed) != entt::null)
+	{
+		return;
+	}
+	if (const auto icon = SpellIconArchetype::CreateSiteIcon(site, seed); icon != entt::null)
+	{
+		auto& list = registry.AnyOf<SiteIcons>(site) ? registry.Get<SiteIcons>(site) : registry.Assign<SiteIcons>(site);
+		list.icons.push_back(icon);
+		ShowPlayersPowerUp(icon);
+	}
+}
+
+void SpellIconSystem::ShowPlayersPowerUp(entt::entity icon) const
+{
+	auto& registry = Entities();
+	const auto* component = registry.TryGet<const WorshipIcon>(icon);
+	auto* graphic = registry.TryGet<IconSeed>(icon);
+	if (component == nullptr || graphic == nullptr || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto* site = registry.Valid(component->site) ? registry.TryGet<const WorshipSite>(component->site) : nullptr;
+	if (site == nullptr)
+	{
+		return;
+	}
+	// Unlike a village centre's hand, which shows what its town offers, a site's icon shows what its player may cast
+	const auto& seedInfo = magic::GetSpellSeedInfo(Locator::infoConstants::value(), component->seed);
+	std::array<MagicType, icons::k_PowerUpLevels> levels {};
+	for (size_t level = 0; level < levels.size(); ++level)
+	{
+		levels.at(level) = magic::GetMagicTypeFromPowerUpLevel(seedInfo, static_cast<int>(level));
+	}
+	const auto player = site->player;
+	graphic->powerUp = icons::SiteShownPowerUp(levels, [this, player](MagicType type) { return IsEnabled(player, type); });
 }
 
 void SpellIconSystem::TownLeftSite(entt::entity site, entt::entity town)
@@ -389,9 +491,25 @@ void SpellIconSystem::Destroy(entt::entity icon)
 
 void SpellIconSystem::SetEnabled(PlayerNames player, MagicType type, bool enable) const
 {
-	if (auto* component = PlayerNamed(player))
+	auto* component = PlayerNamed(player);
+	if (component == nullptr)
 	{
-		player_miracles::SetMagicTypeEnabled(component->miracles, type, enable);
+		return;
+	}
+	player_miracles::SetMagicTypeEnabled(component->miracles, type, enable);
+	// The icons of the player's worship sites show the power-up levels the player may cast now
+	auto& registry = Entities();
+	std::vector<entt::entity> siteIcons;
+	registry.Each<const WorshipIcon>([&](entt::entity icon, const WorshipIcon& worship) {
+		const auto* site = registry.Valid(worship.site) ? registry.TryGet<const WorshipSite>(worship.site) : nullptr;
+		if (site != nullptr && site->player == player)
+		{
+			siteIcons.push_back(icon);
+		}
+	});
+	for (const auto icon : siteIcons)
+	{
+		ShowPlayersPowerUp(icon);
 	}
 }
 

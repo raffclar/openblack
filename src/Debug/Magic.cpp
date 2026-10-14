@@ -125,6 +125,11 @@ void Magic::Draw() noexcept
 			DrawTable();
 			ImGui::EndTabItem();
 		}
+		if (ImGui::BeginTabItem("Town miracles"))
+		{
+			DrawTownMiracles();
+			ImGui::EndTabItem();
+		}
 		if (ImGui::BeginTabItem("Prayer power"))
 		{
 			DrawSandbox();
