@@ -103,6 +103,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
@@ -487,6 +488,17 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	if (object.cannotBePickedUp)
 	{
 		registry.AssignOrReplace<ecs::components::CannotBePickedUp>(entity);
+	}
+	// A villager given a row of the table of named people takes that name in place of any name that it got when made
+	if (object.nameRow.has_value() && registry.AllOf<ecs::components::Villager>(entity))
+	{
+		auto& used = registry.Context().namedVillagersUsed;
+		if (const auto* named = registry.TryGet<ecs::components::NamedVillager>(entity))
+		{
+			used.at(named->row) = false;
+		}
+		used.at(*object.nameRow) = true;
+		registry.AssignOrReplace<ecs::components::NamedVillager>(entity, *object.nameRow);
 	}
 	if (object.immovable)
 	{
