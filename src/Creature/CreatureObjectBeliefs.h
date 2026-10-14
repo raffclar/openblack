@@ -21,6 +21,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureDecisionTree.h"
+
 /// What a creature believes about the things it has come across. Each thing it sees, carries, is shown or acts on is
 /// remembered as a belief of the thing's kind (by the game's belief types: a forest, a temple, a flock and so on), with
 /// where the thing was when it last came across it, until the thing is gone from the world. A creature keeps only so
@@ -56,6 +58,9 @@ struct Belief
 	uint64_t order {0};
 	/// The game turn on which the creature last found no way to the thing, none if it never did
 	std::optional<uint32_t> blockedTurn;
+	/// What the creature knew of the thing when the belief was new. Some attributes keep these values (see
+	/// creature_tree::KeptFromFirstSight).
+	std::optional<creature_tree::Belief> firstSight;
 };
 
 /// After the creature finds no way to a thing, it does not choose the thing for a time: 10 seconds for a thing that

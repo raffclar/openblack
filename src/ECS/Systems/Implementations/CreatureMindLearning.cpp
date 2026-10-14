@@ -50,6 +50,7 @@
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptPlay.h"
+#include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureTraining.h"
 #include "Creature/CreatureWatching.h"
@@ -76,6 +77,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/LivingAction.h"
@@ -109,6 +111,7 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
@@ -155,8 +158,12 @@ constexpr float k_RunAwayThresholdStep = 0.1f;
 constexpr float k_PooUseFeedback = 0.5f;
 /// A creature watches skills, miracles and the player's deeds this far away at most
 constexpr float k_ViewDistance = 150.0f;
-/// Copying the player moves on a step once a second
-constexpr uint32_t k_MimicStepTurns = 10;
+/// Copying the player's desire makes that desire dominant for this many seconds
+constexpr float k_MimicDesireSeconds = 120.0f;
+/// A creature that copies the player's desire stops when it thought this many times with no plan since its last plan
+constexpr uint32_t k_MostThinksWithoutPlanToCopyDesire = 40;
+/// After that, it does not follow the player for this many seconds
+constexpr float k_NoFollowAfterCopySeconds = 40.0f;
 
 /// The land's script that curses the player's creature, and how tall a creature of size 1 is
 constexpr std::string_view k_CurseScript = "CreatureCurse";
@@ -180,6 +187,9 @@ bool Interruptible(creature_mind::Activity activity)
 	using enum creature_mind::Activity;
 	return activity == None || activity == BeIdle || activity == Sit || activity == HangAround;
 }
+
+/// A creature stroked for what it holds eats it as the action that eats a thing alive
+constexpr std::string_view k_EatHeldAction = "EatAlive";
 
 /// The action in the table of actions that gets the feedback for an agenda that no plan gave.
 /// Only the forced agendas to eat, sleep, poo, be sick or drink are such agendas.
@@ -979,6 +989,13 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
 	});
 	SetKindAttributes(registry, entity, me, belief);
+	// The kind of thing and some attributes stay as the creature saw them first
+	const auto* mind = registry.TryGet<const CreatureMindState>(self);
+	const auto* known = mind != nullptr ? mind->beliefs.Find(entity) : nullptr;
+	if (known != nullptr && known->firstSight.has_value())
+	{
+		return creature_tree::WithFirstSight(*known->firstSight, belief);
+	}
 	return belief;
 }
 
@@ -1137,6 +1154,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			creature_training::CountCarriedOut(mind.actionCounts, plan.action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
 			mind.lastActionDone = plan.action;
+			creature_watching::MimicActionDone(mind.learnt->mimicry);
 		}
 		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
 		{
@@ -1173,6 +1191,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			creature_training::CountCarriedOut(mind.actionCounts, mind.underway->action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
 			mind.lastActionDone = mind.underway->action;
+			creature_watching::MimicActionDone(mind.learnt->mimicry);
 		}
 		mind.underway.reset();
 	}
@@ -1205,7 +1224,10 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		return;
 	}
 	// Something the idle mind started counts as its action, for feedback
-	const auto action = creature_mind_tables::FindAction(*tables, ActionForActivity(idle.activity));
+	const auto action = mind.creditedAction.has_value() && mind.creditedSerial == idle.serial
+	                        ? mind.creditedAction
+	                        : creature_mind_tables::FindAction(*tables, ActionForActivity(idle.activity));
+	mind.creditedAction.reset();
 	if (!action.has_value() || tables->actions[*action].desire >= creature_desires::k_DesireCount)
 	{
 		return;
@@ -1742,87 +1764,6 @@ bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, e
 	return belief != nullptr && creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
 }
 
-/// What a creature knows about a part of a whole thing; none for a thing that is not a part it can act on
-std::optional<creature_activity::PartFacts> PartFactsOf(const ecs::Registry& registry, entt::entity part)
-{
-	using creature_activity::Part;
-	if (!Locator::infoConstants::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& info = Locator::infoConstants::value();
-	// The temple stands for its heart
-	if (registry.AllOf<Temple>(part))
-	{
-		return creature_activity::PartFacts {
-		    .kind = Part::Building,
-		    .canActOn = info.citadelHeart.canCreatureInteractWithMe != 0,
-		    .attackable = info.citadelHeart.canCreatureAttackMe != 0,
-		};
-	}
-	if (const auto* villager = registry.TryGet<const Villager>(part))
-	{
-		const auto row = static_cast<size_t>(GVillagerInfo::Find(villager->tribe, villager->number));
-		// A villager in its home, or one that may not be picked up, cannot have help
-		return creature_activity::PartFacts {
-		    .kind = Part::Villager,
-		    .attackable = row < info.villager.size() && info.villager.at(row).canCreatureAttackMe != 0,
-		    .dead = registry.AllOf<VillagerDeath>(part) || !(villager->life > 0.0f),
-		    .dancing = registry.AllOf<Dancer>(part),
-		    .pickable = !registry.AnyOf<AtHome, CannotBePickedUp>(part),
-		};
-	}
-	if (const auto* animal = registry.TryGet<const Animal>(part))
-	{
-		const auto row = static_cast<size_t>(animal->type);
-		return creature_activity::PartFacts {
-		    .kind = Part::Animal,
-		    .attackable = row < info.animal.size() && info.animal.at(row).canCreatureAttackMe != 0,
-		    .dead = animal->Dead(),
-		};
-	}
-	if (const auto* tree = registry.TryGet<const Tree>(part))
-	{
-		const auto row = static_cast<size_t>(tree->type);
-		return creature_activity::PartFacts {
-		    .kind = Part::Tree,
-		    .canActOn = row < info.tree.size() && info.tree.at(row).canCreatureInteractWithMe != 0,
-		    .attackable = true,
-		};
-	}
-	if (const auto* abode = registry.TryGet<const Abode>(part))
-	{
-		const auto row = static_cast<size_t>(abode->info);
-		const bool known = row < info.abode.size();
-		// A worship site never lets a creature act on it
-		return creature_activity::PartFacts {
-		    .kind = Part::Building,
-		    .canActOn = known && info.abode.at(row).canCreatureInteractWithMe != 0 && !registry.AllOf<WorshipSite>(part),
-		    .attackable = known && info.abode.at(row).canCreatureAttackMe != 0,
-		};
-	}
-	// A field has the data of its town's field building
-	if (registry.AllOf<Field>(part))
-	{
-		const auto* data = FieldBuildingInfo(registry, part);
-		return creature_activity::PartFacts {
-		    .kind = Part::Building,
-		    .canActOn = data != nullptr && data->canCreatureInteractWithMe != 0,
-		    .attackable = data != nullptr && data->canCreatureAttackMe != 0,
-		};
-	}
-	if (registry.AllOf<VillageTotem>(part))
-	{
-		const auto* data = TotemStatueInfo(registry, part);
-		return creature_activity::PartFacts {
-		    .kind = Part::TotemStatue,
-		    .canActOn = data != nullptr && data->canCreatureInteractWithMe != 0,
-		    .attackable = data != nullptr && data->canCreatureAttackMe != 0,
-		};
-	}
-	return std::nullopt;
-}
-
 /// A hungry creature does not eat a thing of a town for which it learnt a compassion worth more than this
 constexpr float k_MostCompassionToEatFrom = 0.1f;
 
@@ -1861,6 +1802,156 @@ bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 		info = ecs::world_objects::InfoOf(thing);
 	}
 	return info != nullptr && info->canCreatureInteractWithMe != 0;
+}
+
+/// Whether an animal of this kind frightens a creature: the lions, tigers, wolves and leopards, the bats and the vultures
+bool Frightens(AnimalInfo type)
+{
+	switch (type)
+	{
+	case AnimalInfo::Lion:
+	case AnimalInfo::Tiger:
+	case AnimalInfo::Wolf:
+	case AnimalInfo::Leopard:
+	case AnimalInfo::SpellWolf:
+	case AnimalInfo::Bat:
+	case AnimalInfo::SpellBat:
+	case AnimalInfo::Vulture:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/// The data that tells if a creature can act on a thing. A field has the data of its town's field building, a village
+/// totem the data of its statue, and the temple the data of its heart.
+const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& info = Locator::infoConstants::value();
+	if (registry.AllOf<Temple>(thing))
+	{
+		return &info.citadelHeart;
+	}
+	if (registry.AllOf<Field>(thing))
+	{
+		return FieldBuildingInfo(registry, thing);
+	}
+	if (registry.AllOf<VillageTotem>(thing))
+	{
+		return TotemStatueInfo(registry, thing);
+	}
+	if (const auto* animal = registry.TryGet<const Animal>(thing))
+	{
+		const auto row = static_cast<size_t>(animal->type);
+		return row < info.animal.size() ? &info.animal.at(row) : nullptr;
+	}
+	return ecs::world_objects::InfoOf(thing);
+}
+
+/// The kind of a thing, by how the desires examine it
+creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity thing)
+{
+	using creature_activity::Thing;
+	if (registry.AllOf<Villager>(thing))
+	{
+		return Thing::Villager;
+	}
+	if (registry.AllOf<Animal>(thing))
+	{
+		return Thing::Animal;
+	}
+	if (registry.AllOf<Creature>(thing))
+	{
+		return Thing::Creature;
+	}
+	if (registry.AllOf<ecs::components::Spell>(thing))
+	{
+		return Thing::Spell;
+	}
+	if (registry.AllOf<Tree>(thing))
+	{
+		return Thing::Tree;
+	}
+	const auto* still = registry.TryGet<const MobileStatic>(thing);
+	if (registry.AnyOf<Rock, DeadTree>(thing) || (still != nullptr && still->type == MobileStaticInfo::Bonfire))
+	{
+		return Thing::Rock;
+	}
+	if (registry.AnyOf<MobileObject, Pot, Ball>(thing))
+	{
+		return Thing::MobileObject;
+	}
+	if (still != nullptr)
+	{
+		return Thing::MobileStatic;
+	}
+	if (registry.AllOf<Field>(thing))
+	{
+		return Thing::Field;
+	}
+	if (registry.AllOf<FishFarm>(thing))
+	{
+		return Thing::FishFarm;
+	}
+	if (registry.AllOf<VillageTotem>(thing))
+	{
+		return Thing::TotemStatue;
+	}
+	if (registry.AnyOf<Abode, Temple, WorshipSite, Feature, AnimatedStatic, Flowers, BigForest>(thing))
+	{
+		return Thing::Building;
+	}
+	return Thing::Other;
+}
+
+/// What a creature knows about a thing when it examines a desire for it. Only the facts that the desire uses cost time
+/// to find: the height for poo, and the pick-up rule for bringing stuff home.
+creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::entity creature, Desire desire,
+                                           entt::entity thing)
+{
+	using creature_activity::Thing;
+	const auto kind = KindOfThing(registry, thing);
+	const auto* info = ActingInfoOf(registry, thing);
+	creature_activity::ThingFacts facts {
+	    .kind = kind,
+	    .canActOn = LetsCreatureAct(registry, thing),
+	    .attackable = info != nullptr && info->canCreatureAttackMe != 0,
+	    .playable = info != nullptr && info->canCreaturePlayWithMe != 0,
+	    .inspectable = info != nullptr && info->canCreatureInspectMe != 0,
+	    .itself = thing == creature,
+	};
+	if (const auto* villager = registry.TryGet<const Villager>(thing))
+	{
+		// A villager in its home, or one that may not be picked up, cannot have help
+		facts.dead = registry.AllOf<VillagerDeath>(thing) || !(villager->life > 0.0f);
+		facts.dancing = registry.AllOf<Dancer>(thing);
+		facts.pickable = !registry.AnyOf<AtHome, CannotBePickedUp>(thing);
+	}
+	else if (const auto* animal = registry.TryGet<const Animal>(thing))
+	{
+		facts.dead = animal->Dead();
+		facts.frightening = Frightens(animal->type);
+	}
+	// TODO(creature-desire-thing-tests): a creature also dies, and a script can make two creatures friends. A creature
+	// does not attack a dead creature or a friend. These states do not exist here yet.
+	const auto* feature = registry.TryGet<const Feature>(thing);
+	const auto* mobile = registry.TryGet<const MobileObject>(thing);
+	facts.mushroom =
+	    (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
+	    (mobile != nullptr && (mobile->type == MobileObjectInfo::MagicMushroom || mobile->type == MobileObjectInfo::Toadstool));
+	if (desire == Desire::Poo && kind != Thing::Spell && kind != Thing::Other)
+	{
+		facts.height = object_measures::Height(registry, thing);
+	}
+	if (desire == Desire::BringStuffHome && Locator::creatureObjectActionSystem::has_value())
+	{
+		facts.creatureCanPickUp = Locator::creatureObjectActionSystem::value().CanPickUp(creature, thing);
+	}
+	return facts;
 }
 
 /// The town of a thing: the town of a villager, a building, a field or a fish farm, of a pile in a storage pit, or of
@@ -1954,8 +2045,7 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 		{
 			return;
 		}
-		const auto facts = PartFactsOf(registry, thing);
-		if (facts.has_value() && creature_activity::PartSuits(desire, *facts))
+		if (creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing)))
 		{
 			parts.push_back(GoalWorth(creature, mind, desire, thing, activity));
 		}
@@ -1990,7 +2080,7 @@ bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& m
 			}
 		}
 	}
-	return LetsCreatureAct(registry, thing);
+	return creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing));
 }
 
 std::vector<creature_planner::ObjectCandidate>
@@ -2091,9 +2181,7 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::ShownParts(en
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto suits = [&](entt::entity part) {
-		const auto facts = PartFactsOf(registry, part);
-		return !NoWayLately(registry, mind, part) && facts.has_value() && creature_activity::PartSuits(desire, *facts) &&
-		       ObjectToActOnUsefulness(creature, mind, desire, part) > 0.0f;
+		return SuitsDesire(creature, mind, desire, part) && ObjectToActOnUsefulness(creature, mind, desire, part) > 0.0f;
 	};
 	if (suits(thing))
 	{
@@ -2180,6 +2268,21 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		return;
 	}
 	mind.plannedTurn = mind.turn;
+	// Copying the player comes first. With no agenda, it does the action of the copy stage. While it notices the deed or
+	// copies the action, it does not choose a new plan when it has one.
+	if (!only.has_value() && mind.learnt->mimicry.has_value())
+	{
+		const bool running = mind.idle.step < mind.idle.agenda.size();
+		if (!running)
+		{
+			ProcessMimicry(creature, mind);
+		}
+		if (running && mind.learnt->mimicry.has_value() &&
+		    mind.learnt->mimicry->stage != creature_watching::MimicStage::CopyDesire)
+		{
+			return;
+		}
+	}
 	// Having eaten a magic mushroom, once it is done with what it was doing it becomes high before it chooses anything
 	// else
 	if (mind.highPending && mind.idle.step >= mind.idle.agenda.size() && !registry.AllOf<ScriptControlled>(creature))
@@ -2907,7 +3010,12 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 				                           tables->attributes.at(static_cast<size_t>(Desire::Hunger)));
 			}
 			creature_mind_model::Think(learnt, "I've learnt to eat what I'm given");
-			Replan(creature, creature_mind::Activity::Eat, creature_mind::EatHeld());
+			if (Replan(creature, creature_mind::Activity::Eat, creature_mind::EatHeld()) && tables != nullptr)
+			{
+				// The feedback for this meal goes to eating a thing alive
+				mind.creditedAction = creature_mind_tables::FindAction(*tables, k_EatHeldAction);
+				mind.creditedSerial = mind.idle.serial;
+			}
 			return;
 		}
 	}
@@ -2938,7 +3046,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	{
 		if (learnt.mimicry.has_value() && tables != nullptr)
 		{
-			creature_watching::StrokedWhileMimicking(learnt.mimicry, tables->mimics);
+			creature_watching::StrokedWhileMimicking(learnt.mimicry, tables->mimics,
+			                                         [this](uint32_t range) { return Random(range); });
 			creature_desires::ChangeSource(desires, k_FollowPlayerSource, k_MimicStrokeBoost);
 		}
 		creature_desires::Suppress(desires, Desire::Sadness, k_StrokeSadnessSeconds, k_TurnsPerSecond);
@@ -3124,32 +3233,6 @@ void CreatureMindSystem::LearnTurn()
 			}
 		}
 		mind->leash.attitudes.clear();
-
-		// Copying the player moves on a stage at a time
-		if (!learnt.mimicry.has_value() || mind->turn % k_MimicStepTurns != 0)
-		{
-			continue;
-		}
-		const auto before = learnt.mimicry->stage;
-		creature_watching::StepMimicry(learnt.mimicry, tables->mimics, [this](uint32_t range) { return Random(range); });
-		if (!learnt.mimicry.has_value() || learnt.mimicry->stage == before)
-		{
-			continue;
-		}
-		const auto& rule = tables->mimics.at(learnt.mimicry->rule);
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player's {}: stage {}", entt::to_integral(creature),
-		                    rule.name, creature_watching::Name(learnt.mimicry->stage));
-		if (learnt.mimicry->stage == creature_watching::MimicStage::CopyAction)
-		{
-			CopyPlayersDeed(creature, *mind);
-		}
-		else if (learnt.mimicry->stage == creature_watching::MimicStage::CopyDesire &&
-		         rule.desire < creature_desires::k_DesireCount)
-		{
-			// It comes to want what the player seemed to want
-			creature_learning::MakeFullyDominant(*mind->desires, static_cast<Desire>(rule.desire));
-			creature_mind_model::Think(learnt, fmt::format("I want what you wanted: {}", tables->texts.at(rule.desire).desire));
-		}
 	}
 }
 
@@ -3338,6 +3421,85 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 	}
 }
 
+void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState& mind)
+{
+	const auto* tables = GetTables();
+	if (tables == nullptr || !mind.learnt.has_value() || !mind.learnt->mimicry.has_value() || !mind.desires.has_value())
+	{
+		return;
+	}
+	auto& mimicry = mind.learnt->mimicry;
+	if (!creature_watching::StageContinues(*mimicry, mind.turn, k_TurnsPerSecond))
+	{
+		creature_watching::NextMimicStage(mimicry, tables->mimics, mind.turn, [this](uint32_t range) { return Random(range); });
+		if (mimicry.has_value())
+		{
+			const auto& next = tables->mimics.at(mimicry->rule);
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player's {}: stage {}",
+			                    entt::to_integral(creature), next.name, creature_watching::Name(mimicry->stage));
+			if (mimicry->stage == creature_watching::MimicStage::CopyDesire && next.desire < tables->texts.size())
+			{
+				creature_mind_model::Think(mind.learnt.value(),
+				                           fmt::format("I want what you wanted: {}", tables->texts.at(next.desire).desire));
+			}
+		}
+		return;
+	}
+	const auto& rule = tables->mimics.at(mimicry->rule);
+	auto& registry = Locator::entitiesRegistry::value();
+	switch (mimicry->stage)
+	{
+	case creature_watching::MimicStage::Notice:
+	{
+		// It looks at the thing that the player did the deed to, if there is one.
+		// TODO(creature-desire-thing-tests): the five actions that notice a deed have no agenda here yet. The creature
+		// points at the thing, turns to the camera, looks at the camera two times with a face and plays an animation.
+		// Until then, the notice action cannot start and the creature makes its own plans.
+		const auto object = mimicry->object.has_value() ? static_cast<entt::entity>(*mimicry->object) : entt::null;
+		if (registry.Valid(object) && rule.noticeAction < tables->actions.size())
+		{
+			ComeAcross(creature, mind, object);
+			ForceActivity(
+			    creature,
+			    {.desire = Desire::Curiosity, .action = tables->actions.at(rule.noticeAction).name, .actionObject = object});
+		}
+		break;
+	}
+	case creature_watching::MimicStage::CopyAction:
+		CopyPlayersDeed(creature, mind);
+		break;
+	case creature_watching::MimicStage::CopyDesire:
+	{
+		if (rule.desire >= creature_desires::k_DesireCount)
+		{
+			break;
+		}
+		// It comes to want what the player seemed to want. Its hunger and tiredness stay as they were.
+		auto& desires = *mind.desires;
+		const auto hunger = desires[Desire::Hunger].value;
+		const auto tiredness = desires[Desire::Tiredness].value;
+		auto* spells = registry.TryGet<CreatureSpells>(creature);
+		if (spells == nullptr)
+		{
+			spells = &registry.Assign<CreatureSpells>(creature);
+		}
+		spells->cheat = creature_spell_mind::SetCheatDominant(
+		    desires, static_cast<Desire>(rule.desire),
+		    {.all = false, .seconds = k_MimicDesireSeconds, .floor = mind_detail::DesireFloorOf(creature)}, k_TurnsPerSecond);
+		desires[Desire::FollowPlayerDesire].suppressedTurns = 0;
+		// A creature that stood with nothing to do for too long stops copying, and does not follow the player for a time
+		if (mind.thinksWithoutPlan > k_MostThinksWithoutPlanToCopyDesire)
+		{
+			mimicry.reset();
+			creature_desires::Suppress(desires, Desire::FollowPlayerDesire, k_NoFollowAfterCopySeconds, k_TurnsPerSecond);
+		}
+		desires[Desire::Hunger].value = std::clamp(hunger, 0.0f, 1.0f);
+		desires[Desire::Tiredness].value = std::clamp(tiredness, 0.0f, 1.0f);
+		break;
+	}
+	}
+}
+
 void CreatureMindSystem::LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind)
 {
 	if (auto* state = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature))
@@ -3518,7 +3680,8 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 		        .canSee = glm::distance(at.position, point) <= k_ViewDistance,
 		    };
 		    const auto target = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt;
-		    if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target))
+		    if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target, mind.turn,
+		                                        [this](uint32_t range) { return Random(range); }))
 		    {
 			    // When the player is angry with a thing of the player, the creature that copies the player can be angry
 			    // with the things of its player from now on
@@ -3538,13 +3701,24 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 			    noticed.push_back(entity);
 		    }
 	    });
-	// It notices: it turns to where the player did it and looks at it
+	// What it was doing stops as a failure. With no plan, it then notices the deed (see ProcessMimicry).
 	for (const auto entity : noticed)
 	{
 		if (auto* mind = registry.TryGet<CreatureMindState>(entity))
 		{
 			creature_mind_model::Think(*mind->learnt, fmt::format("I saw you: {}", tables->mimics.at(deed).name));
-			Replan(entity, creature_mind::Activity::Planned, creature_mind::LookAt(glm::vec2(point.x, point.z), 2.0f));
+			if (Locator::creatureObjectActionSystem::has_value() &&
+			    Locator::creatureObjectActionSystem::value().GetState(entity) ==
+			        CreatureObjectActionSystemInterface::State::Busy)
+			{
+				Locator::creatureObjectActionSystem::value().Cancel(entity);
+			}
+			Abandon(*mind);
+			if (Locator::magicSystem::has_value())
+			{
+				Locator::magicSystem::value().ReleaseCreatureCast(entity);
+			}
+			creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 		}
 	}
 }

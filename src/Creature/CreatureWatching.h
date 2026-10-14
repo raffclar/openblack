@@ -169,10 +169,18 @@ struct Mimicry
 {
 	size_t rule {0};
 	MimicStage stage {MimicStage::Notice};
-	uint32_t stepsLeft {0};
+	/// The actions that the creature did to their end in this stage
+	uint32_t done {0};
+	/// The stage ends when the creature did this many actions to their end
+	uint32_t limit {0};
+	/// The game turn on which the stage started
+	uint32_t stageStart {0};
 	/// What the player did it to, by entity number
 	std::optional<uint32_t> object;
 };
+
+/// A stage of copying ends after this many seconds at the latest
+constexpr float k_MimicStageSeconds = 180.0f;
 
 /// What the creature's state allows when the player does something it might copy
 struct MimicConditions
@@ -185,14 +193,22 @@ struct MimicConditions
 };
 /// Starts copying a player's action, if the creature can. Copying nothing, it copies anything that ranks above 0; copying
 /// another deed's action, only a different deed that ranks at least as high; already copying a desire, any deed at all.
+/// The first stage starts on the turn given. random(n) is from 0 to n - 1.
 [[nodiscard]] bool StartMimicry(std::optional<Mimicry>& mimicry, size_t rule, std::span<const MimicRule> rules,
-                                const MimicConditions& conditions, std::optional<uint32_t> object);
-/// One step of copying: when a stage's steps run out it moves to the next, the desire stage only for rules that have
-/// it, then ends; random(n) is from 0 to n - 1
-void StepMimicry(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules,
-                 const std::function<uint32_t(uint32_t)>& random);
-/// Stroked while copying, it goes straight to doing the thing itself
-void StrokedWhileMimicking(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules);
+                                const MimicConditions& conditions, std::optional<uint32_t> object, uint32_t turn,
+                                const std::function<uint32_t(uint32_t)>& random);
+/// Whether the creature does the action of the stage again, when it has no plan to carry out. It does so until it did the
+/// stage's number of actions to their end, or until k_MimicStageSeconds go by. It notices the player's deed only once.
+[[nodiscard]] bool StageContinues(const Mimicry& mimicry, uint32_t turn, float turnsPerSecond);
+/// The next stage starts on the turn given: the desire stage only for rules that have it. After the last stage, the
+/// copying ends.
+void NextMimicStage(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules, uint32_t turn,
+                    const std::function<uint32_t(uint32_t)>& random);
+/// The creature did an action to its end while it copies
+void MimicActionDone(std::optional<Mimicry>& mimicry);
+/// Stroked while copying, it goes straight to doing the thing itself, with the time of the stage that it was in
+void StrokedWhileMimicking(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules,
+                           const std::function<uint32_t(uint32_t)>& random);
 
 /// The most pressing reaction that still leaves the creature free to copy, and the stage of growing up it needs
 constexpr float k_MaxReactionPriorityToMimic = 150.0f;

@@ -77,25 +77,80 @@ bool creature_activity::CanBeAbout(Desire desire, const WholeFacts& whole, bool 
 	}
 }
 
-bool creature_activity::PartSuits(Desire desire, const PartFacts& part)
+bool creature_activity::ThingSuits(Desire desire, const ThingFacts& thing)
 {
-	if (!part.canActOn)
+	if (!thing.canActOn)
 	{
 		return false;
 	}
-	const bool lives = part.kind == Part::Villager || part.kind == Part::Animal;
+	const bool lives = thing.kind == Thing::Villager || thing.kind == Thing::Animal || thing.kind == Thing::Creature;
+	const bool object = thing.kind != Thing::Spell && thing.kind != Thing::Other;
 	switch (desire)
 	{
 	case Desire::Impress:
-		return (part.kind == Part::Villager && !part.dancing) || part.kind == Part::TotemStatue;
+		return (thing.kind == Thing::Villager && !thing.dancing) || thing.kind == Thing::TotemStatue;
 	case Desire::Compassion:
-		return part.kind != Part::Villager || part.pickable;
+		return thing.kind == Thing::Villager ? thing.pickable : object;
 	case Desire::Anger:
-		if (part.kind == Part::Tree)
+		if (thing.kind == Thing::Tree || thing.kind == Thing::Rock)
 		{
 			return true;
 		}
-		return part.attackable && !(lives && part.dead);
+		if (!object || (lives && thing.dead) || thing.friendOfCreature)
+		{
+			return false;
+		}
+		return thing.attackable && !thing.itself;
+	case Desire::Play:
+		switch (thing.kind)
+		{
+		case Thing::MobileObject:
+		case Thing::MobileStatic:
+		case Thing::Rock:
+		case Thing::Tree:
+		case Thing::Creature:
+		case Thing::TotemStatue:
+			return true;
+		case Thing::Villager:
+		case Thing::Animal:
+			return !thing.dead && thing.playable;
+		case Thing::Building:
+		case Thing::Field:
+		case Thing::FishFarm:
+			return thing.playable;
+		default:
+			return false;
+		}
+	case Desire::Fear:
+		return thing.kind == Thing::Creature || thing.kind == Thing::Spell ||
+		       (thing.kind == Thing::Animal && thing.frightening);
+	case Desire::Curiosity:
+		return object && !(lives && thing.dead) && thing.inspectable;
+	case Desire::Poo:
+		return object && !lives && thing.height > k_TallestThingNotToPooOn;
+	case Desire::Tiredness:
+	case Desire::Rest:
+		switch (thing.kind)
+		{
+		case Thing::Creature:
+		case Thing::Tree:
+		case Thing::Rock:
+		case Thing::MobileStatic:
+		case Thing::Building:
+		case Thing::TotemStatue:
+			return true;
+		default:
+			return false;
+		}
+	case Desire::BringStuffHome:
+		return thing.creatureCanPickUp;
+	case Desire::BeFriends:
+	case Desire::TellCreature:
+	case Desire::EducateFriend:
+	case Desire::MissFriend:
+		return thing.kind == Thing::Creature;
+	case Desire::GetHigh:
+		return thing.mushroom;
 	default:
 		return true;
 	}

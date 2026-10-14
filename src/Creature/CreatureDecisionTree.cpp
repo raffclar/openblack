@@ -378,3 +378,37 @@ std::vector<std::string> creature_tree::Describe(const Tree& tree)
 	}
 	return lines;
 }
+
+bool creature_tree::KeptFromFirstSight(Attribute attribute)
+{
+	switch (attribute)
+	{
+	case Attribute::Origin:
+	case Attribute::Animate:
+	case Attribute::PlayerNumber:
+	case Attribute::Type:
+	case Attribute::Tribe:
+	case Attribute::TownSize:
+	case Attribute::VillagerJob:
+	case Attribute::Sex:
+	case Attribute::MobileObjectType:
+	case Attribute::AbodeType:
+		return true;
+	default:
+		return false;
+	}
+}
+
+creature_tree::Belief creature_tree::WithFirstSight(const Belief& firstSight, const Belief& now)
+{
+	auto belief = firstSight;
+	for (size_t i = 0; i < k_AttributeCount; ++i)
+	{
+		const auto attribute = static_cast<Attribute>(i);
+		if (belief.values.at(i).has_value() && !KeptFromFirstSight(attribute) && now.values.at(i).has_value())
+		{
+			belief.values.at(i) = now.values.at(i);
+		}
+	}
+	return belief;
+}
