@@ -16,9 +16,12 @@
 #include <span>
 
 #include "3D/CreatureBody.h"
+#include "Creature/CreatureDeedAlignment.h"
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -26,6 +29,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
+#include "MagicLiving.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -36,6 +40,42 @@ namespace
 /// The game moves the sky by a hundredth of a tenth of each millisecond of game time, from 0,
 /// good, to 2, evil: a whole of -1 to 1 a second
 constexpr float k_SkyTurnPerMillisecond = 0.001f;
+
+/// The number of the kinds of thing in the alignment table
+constexpr uint32_t k_AlignmentKinds = 14;
+
+/// What the creature does on this turn, as the plan that it does tells
+creature_deed_alignment::Deed DeedOf(const ecs::Registry& registry, entt::entity creature, const InfoConstants& info)
+{
+	creature_deed_alignment::Deed deed;
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->planActive || !mind->planner.current.has_value())
+	{
+		return deed;
+	}
+	const auto& plan = *mind->planner.current;
+	const auto desire = static_cast<size_t>(plan.desire);
+	if (desire < info.creatureInitialDesire.size())
+	{
+		deed.desireChange = info.creatureInitialDesire.at(desire).alignmentChange;
+	}
+	// A plan to eat a villager uses the weight of the kind of the villager in the first row of the alignment table
+	if (plan.desire != creature_desires::Desire::Hunger || !plan.object.has_value())
+	{
+		return deed;
+	}
+	const auto food = static_cast<entt::entity>(*plan.object);
+	if (!registry.Valid(food) || !registry.AllOf<Villager>(food))
+	{
+		return deed;
+	}
+	const auto* row = magic_living::InfoOf(food);
+	if (row != nullptr && static_cast<uint32_t>(row->alignmentType) < k_AlignmentKinds && !info.alignment.empty())
+	{
+		deed.eatenVillagerWeight = magic::AlignmentWeight(info.alignment.front(), row->alignmentType);
+	}
+	return deed;
+}
 } // namespace
 
 std::optional<entt::entity> AlignmentSystem::FindPlayer(PlayerNames player)
@@ -124,10 +164,14 @@ void AlignmentSystem::UpdateTurn(const glm::vec3& eye)
 		registry.Each<Alignment>([change](entt::entity, Alignment& alignment) {
 			alignment.value = magic::StepPendingAlignment(alignment.value, alignment.pending, change);
 		});
-		registry.Each<Creature>([&info](entt::entity, Creature& creature) {
+		registry.Each<Creature>([&info, &registry](entt::entity entity, Creature& creature) {
 			const auto row = creature::InfoRow(creature.species);
 			if (row < info.creature.size())
 			{
+				// The plan that the creature does adds its change before the turn moves the alignment
+				const auto& species = info.creature.at(row);
+				creature.pendingAlignment += creature_deed_alignment::TurnChange(
+				    DeedOf(registry, entity, info), species.alignmentChangeScale, creature.alignment);
 				creature.alignment = magic::StepPendingAlignment(creature.alignment, creature.pendingAlignment,
 				                                                 info.creature.at(row).alignmentChangePerTurn);
 			}

@@ -1083,6 +1083,47 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .commands = passing,
 	    .repeatFrom = 1,
 	});
+
+	// A good tiger that only wants to eat, with villagers near it. An evil tiger that only wants to be nice, by a hut of
+	// its town that a fireball sets alight. The minds run, and the desires stay as given.
+	auto eater = Content(CreatureType::Tiger, {-60.0f, 0.0f}, 0.0f, "good, hungry");
+	eater.alignment = 0.6f;
+	eater.needs.energy = 0.2f;
+	eater.desires = OnlyDesire(Desire::Hunger);
+	auto helper = Content(CreatureType::Tiger, {73.0f, 49.0f}, 270.0f, "evil, compassionate");
+	helper.alignment = -0.6f;
+	helper.desires = OnlyDesire(Desire::Compassion);
+	all.push_back({
+	    .id = "appearance.deed_alignment",
+	    .name = "Deeds move the alignment",
+	    .facet = Facet::Appearance,
+	    .description = "On the left, a good tiger that only wants to eat stands by six villagers. On the right, an evil "
+	                   "tiger that only wants to be nice knows the water miracle and stands by a hut of its town. A "
+	                   "fireball sets the hut alight.",
+	    .expected = "Each turn that the left tiger eats a villager, its alignment moves to evil. Each turn that the right "
+	                "tiger puts out the fire, its alignment moves to good. The change is slow: run the game fast "
+	                "and watch the alignment in the spawner. The bodies and skins follow it.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {eater, helper},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-48.0f, -12.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-72.0f, -12.0f}},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-60.0f, -25.0f}},
+	                {.type = VillagerInfo::CelticShepherdMale, .offset = {-90.0f, 10.0f}},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-30.0f, 10.0f}},
+	                {.type = VillagerInfo::CelticTraderMale, .offset = {-60.0f, 30.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {66.0f, 44.0f}},
+	                {.type = TreeInfo::Birch, .offset = {53.0f, 43.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {63.0f, 37.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {56.0f, 42.0f}, .joinTown = true}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {66.0f, 44.0f},
+	                  .handOffset = {66.0f, 34.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 4.0f}},
+	    .commands =
+	        {{.kind = Kind::KnowMiracle, .creature = 1, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)}},
+	});
 }
 
 void AddLight(std::vector<Scenario>& all)

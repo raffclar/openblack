@@ -522,7 +522,7 @@ TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
 	balance.secondsPerAgeTick = 3600;
 	balance.pooPerEnergy = 0.6f;
 	balance.field0x54 = 1.03f;
-	balance.field0x58 = 0.2f;
+	balance.alignmentChangeScale = 0.2f;
 	ApplyCreatureBalance(*creature, balance);
 	EXPECT_FLOAT_EQ(creature->startScale, 0.22f);
 	EXPECT_FLOAT_EQ(creature->growUpMinutes, 1044.0f);
@@ -536,7 +536,7 @@ TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
 	float raw = 0.0f;
 	std::memcpy(&raw, creature->field0x24c.data(), sizeof(raw));
 	EXPECT_FLOAT_EQ(raw, 28.0f);
-	EXPECT_FLOAT_EQ(creature->field0x374, 0.2f);
+	EXPECT_FLOAT_EQ(creature->alignmentChangeScale, 0.2f);
 	// What the balance row doesn't hold stays as it was
 	EXPECT_FLOAT_EQ(creature->startEnergy, 0.75f);
 	EXPECT_FLOAT_EQ(creature->comfortTemperature, 0.5f);
