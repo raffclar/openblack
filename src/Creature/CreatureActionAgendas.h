@@ -56,6 +56,19 @@ constexpr float k_SleepByObjectHeights = 4.0f;
 constexpr float k_EatFromPileReach = 1.2f;
 constexpr float k_FacePileSeconds = 0.1f;
 
+/// The agenda to eat from the storage pit of a town. The creature walks to the food pile of the pit until it is in 1.4
+/// times its height. It turns to the pile for a tenth of a second. Then the plan acts on the creature, not on the pit.
+/// The creature takes a handful of wheat from the pile and eats it.
+[[nodiscard]] std::vector<Step> EatFromStoragePit(uint32_t pile, glm::vec2 pilePoint, float height);
+constexpr float k_EatFromStoragePitHeights = 1.4f;
+/// The agenda to eat from a field. The creature walks to the field until it is in its height. It turns to the field for
+/// a tenth of a second. Then the plan acts on the creature, not on the field. The creature takes a handful of wheat from
+/// the field and eats it.
+[[nodiscard]] std::vector<Step> EatFromField(uint32_t field, glm::vec2 fieldPoint, float height);
+/// The agenda to eat from a tree. The creature walks to the tree until it is in 1.2 times the sum of the two radii. It
+/// turns to the tree for a tenth of a second. Then it takes a handful of fruit from the tree and eats it.
+[[nodiscard]] std::vector<Step> EatFromTree(uint32_t tree, glm::vec2 treePoint, float treeRadius, float radius);
+
 /// Looking something over: going near it (two and a half times its height away, or the thing's height when that is
 /// more), turning to face it for two seconds, watching its foot for 1.1 more, then taking in what kind of thing it is
 [[nodiscard]] std::vector<Step> ExamineByLooking(uint32_t thing, float height, float thingHeight);

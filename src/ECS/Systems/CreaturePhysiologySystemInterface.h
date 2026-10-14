@@ -30,8 +30,8 @@ public:
 	/// Once a frame: drops of sick fly and fall
 	virtual void Update(float seconds) = 0;
 
-	/// The creature ate something of a food value
-	virtual void Eat(entt::entity creature, float foodValue) = 0;
+	/// The creature ate something of a food value. Returns the energy the meal gave it, by its size and species.
+	[[nodiscard]] virtual float Eat(entt::entity creature, float foodValue) = 0;
 	/// Drank its fill
 	virtual void Drink(entt::entity creature) = 0;
 	/// Finished the squat of a poo or of a fart: the bowels are empty. The lumps of a poo drop during the squat

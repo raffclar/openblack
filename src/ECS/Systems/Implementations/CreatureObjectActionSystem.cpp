@@ -36,6 +36,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureMeals.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureReach.h"
 #include "Creature/CreatureRig.h"
@@ -54,6 +55,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Flowers.h"
@@ -376,6 +378,18 @@ Meal MealOf(const ecs::Registry& registry, entt::entity food)
 		meal.poisoned = registry.AllOf<Poisoned>(food);
 	}
 	return meal;
+}
+
+/// Decrease the hunger of the creature by the energy of a meal that it did not bring up
+void KeepMealDown(entt::entity creature, float energy)
+{
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ChangeDesires(creature, [energy](creature_desires::Desires& desires) {
+			auto& hunger = desires[creature_desires::Desire::Hunger];
+			hunger.value = creature_meals::HungerAfterMeal(hunger.value, energy);
+		});
+	}
 }
 
 /// The creature brings up a meal with too little food in it, or a poisoned meal. It is sick and is not hungry for a
@@ -2123,17 +2137,23 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			const auto meal = MealOf(registry, *held);
 			registry.Remove<CreatureHeldObject>(creature);
 			Consume(registry, *held);
-			if (value.has_value() && Locator::creaturePhysiologySystem::has_value())
-			{
-				Locator::creaturePhysiologySystem::value().Eat(creature, *value);
-			}
+			const auto energy = value.has_value() && Locator::creaturePhysiologySystem::has_value()
+			                        ? Locator::creaturePhysiologySystem::value().Eat(creature, *value)
+			                        : 0.0f;
 			const bool bringsUp = creature_object_actions::BringsMealBackUp(value.value_or(0.0f), meal.magicMushroom,
 			                                                                meal.foodPile, meal.poisoned);
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} eats a thing of sort {}: food {}, brought up {}",
 			                    entt::to_integral(creature), meal.sort.value_or(0), value.value_or(0.0f), bringsUp);
+			auto* tallies = registry.TryGet<CreatureTallies>(creature);
+			creature_meals::CountMeal(tallies != nullptr ? tallies->meals : registry.Assign<CreatureTallies>(creature).meals,
+			                          meal.sort, !bringsUp);
 			if (bringsUp)
 			{
 				RefuseMeal(creature, meal);
+			}
+			else
+			{
+				KeepMealDown(creature, energy);
 			}
 			break;
 		}

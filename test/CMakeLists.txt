@@ -972,3 +972,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_head_look test_creature_head_look.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_eat_from_stores test_creature_eat_from_stores.cpp
+)

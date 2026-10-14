@@ -783,6 +783,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::UseUp:
 	case Step::Kind::WatchCamera:
 	case Step::Kind::Observe:
+	case Step::Kind::ActOnItself:
 	case Step::Kind::Overlay:
 	case Step::Kind::Inspect:
 	case Step::Kind::WatchFlying:
@@ -1076,6 +1077,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.useUpHeld = true;
 			FinishStep(mind);
 			break;
+		case Step::Kind::ActOnItself:
+			commands.actOnItself = true;
+			FinishStep(mind);
+			break;
 		case Step::Kind::Observe:
 			// Taken in at once
 			commands.effect = Effect::Observed;
@@ -1266,6 +1271,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::UseUp:
 	case Step::Kind::UseUpHeld:
 	case Step::Kind::Observe:
+	case Step::Kind::ActOnItself:
 		// Done as it starts
 		FinishStep(mind);
 		break;
