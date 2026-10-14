@@ -433,6 +433,22 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.eats_animals",
+	    .name = "Hungry creature eats an animal",
+	    .facet = Facet::Needs,
+	    .description = "A hungry tiger with a pig and a cow on the land in front of it, and no other food.",
+	    .expected = "It walks up to an animal, picks it up and eats it; its energy fills up and the hunger desire falls.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = AnimalInfo::Pig, .offset = {0.0f, -40.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {30.0f, -60.0f}, .living = true}},
+	});
+
+	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",
 	    .facet = Facet::Needs,

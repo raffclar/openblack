@@ -269,9 +269,7 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	case Target::None:
 		return false;
 	case Target::Food:
-		return !heldByOther && FoodValueOf(entity).has_value();
-	case Target::LiveFood:
-		return !heldByOther && registry.AllOf<Villager>(entity) && FoodValueOf(entity).has_value();
+		return !heldByOther && hands != nullptr && hands->CanEat(self, entity);
 	case Target::Pickable:
 		return !heldByOther && hands != nullptr && hands->CanPickUp(self, entity);
 	case Target::Toy:
@@ -2745,6 +2743,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	situation.handFull = held.has_value();
 	if (held.has_value())
 	{
+		situation.holdingEatable = Locator::creatureObjectActionSystem::value().CanEatHeld(creature);
 		const auto thing = Locator::creatureObjectActionSystem::value().KindOf(*held).thing;
 		const auto* mobile = registry.TryGet<const MobileObject>(*held);
 		situation.holdingTree = thing == creature_object_actions::Thing::Tree;

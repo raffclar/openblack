@@ -51,6 +51,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
@@ -63,6 +64,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -298,6 +300,11 @@ void Consume(ecs::Registry& registry, entt::entity food)
 			std::erase(town->homelessVillagers, food);
 		}
 	}
+	// An animal eaten leaves its flock, which goes once it has no one left
+	if (registry.AllOf<Animal>(food) && Locator::animalSystem::has_value())
+	{
+		Locator::animalSystem::value().LeaveFlock(food);
+	}
 	registry.Destroy(food);
 }
 
@@ -312,6 +319,83 @@ bool BringsBackUp(const ecs::Registry& registry, entt::entity food)
 		heldDuringCutscene = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
 	}
 	return creature_object_actions::BringsBackUp(registry.AllOf<Indestructible>(food), heldDuringCutscene);
+}
+
+/// The info of a thing that a creature may eat: an animal's own, or that of any other thing
+const GObjectInfo* FoodInfoOf(const ecs::Registry& registry, entt::entity object)
+{
+	if (const auto* animal = registry.TryGet<const Animal>(object))
+	{
+		const auto kind = static_cast<size_t>(animal->type);
+		if (!Locator::infoConstants::has_value() || kind >= Locator::infoConstants::value().animal.size())
+		{
+			return nullptr;
+		}
+		return &Locator::infoConstants::value().animal.at(kind);
+	}
+	return ecs::world_objects::InfoOf(object);
+}
+
+/// A magic mushroom growing on the land, or one of the mushrooms lying about
+bool IsMagicMushroom(const ecs::Registry& registry, entt::entity object)
+{
+	const auto* feature = registry.TryGet<const Feature>(object);
+	const auto* mobile = registry.TryGet<const MobileObject>(object);
+	return (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
+	       (mobile != nullptr &&
+	        (mobile->type == MobileObjectInfo::MagicMushroom || mobile->type == MobileObjectInfo::Toadstool));
+}
+
+/// What the creature notes about a thing that it eats, before the thing goes
+struct Meal
+{
+	std::optional<uint32_t> sort;
+	bool magicMushroom {false};
+	bool foodPile {false};
+	bool poisoned {false};
+};
+
+Meal MealOf(const ecs::Registry& registry, entt::entity food)
+{
+	Meal meal;
+	if (const auto* info = FoodInfoOf(registry, food))
+	{
+		meal.sort = static_cast<uint32_t>(info->type);
+	}
+	meal.magicMushroom = IsMagicMushroom(registry, food);
+	if (const auto* pot = registry.TryGet<const Pot>(food))
+	{
+		const auto kind = static_cast<size_t>(pot->type);
+		meal.foodPile = Locator::infoConstants::has_value() && kind < Locator::infoConstants::value().pot.size() &&
+		                Locator::infoConstants::value().pot.at(kind).potType == PotType::PileFood;
+		meal.poisoned = pot->poisoned;
+	}
+	else
+	{
+		meal.poisoned = registry.AllOf<Poisoned>(food);
+	}
+	return meal;
+}
+
+/// The creature brings up a meal with too little food in it, or a poisoned meal. It is sick and is not hungry for a
+/// time. Unless the meal was poisoned, it does not eat that sort of thing again.
+void RefuseMeal(entt::entity creature, const Meal& meal)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* mind = registry.TryGet<CreatureMindState>(creature);
+	    mind != nullptr && meal.sort.has_value() && creature_object_actions::RefusesSortAfter(meal.poisoned))
+	{
+		mind->refusedFoodSorts.insert(*meal.sort);
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		auto& minds = Locator::creatureMindSystem::value();
+		minds.ChangeDesires(creature, [](creature_desires::Desires& desires) {
+			creature_desires::Suppress(desires, creature_desires::Desire::Hunger,
+			                           creature_object_actions::k_NotHungryAfterBringingUpSeconds, 1.0f / k_TurnSeconds);
+		});
+		minds.Puke(creature);
+	}
 }
 
 /// The creature brings up what it was about to swallow: it falls from where it is, uneaten, the creature isn't hungry
@@ -1224,27 +1308,14 @@ bool CreatureObjectActionSystem::Lob(entt::entity creature)
 	return Start(creature, {.kind = Kind::Lob});
 }
 
-namespace
-{
-/// A magic mushroom growing on the land, or one of the mushrooms lying about
-bool IsMagicMushroom(const ecs::Registry& registry, entt::entity object)
-{
-	const auto* feature = registry.TryGet<const Feature>(object);
-	const auto* mobile = registry.TryGet<const MobileObject>(object);
-	return (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
-	       (mobile != nullptr &&
-	        (mobile->type == MobileObjectInfo::MagicMushroom || mobile->type == MobileObjectInfo::Toadstool));
-}
-} // namespace
-
 bool CreatureObjectActionSystem::EatHeld(entt::entity creature)
 {
 	const auto held = GetHeld(creature);
-	// A magic mushroom is eaten whatever it is worth as food
-	if (held.has_value() && !FoodValueOf(*held).has_value() && !IsMagicMushroom(Locator::entitiesRegistry::value(), *held))
+	// It eats whatever it holds. A meal with no food in it comes back up after.
+	if (!held.has_value())
 	{
 		auto action = CreatureObjectAction {.kind = Kind::Eat};
-		Fail(action, "what it holds can't be eaten");
+		Fail(action, "it holds nothing to eat");
 		Locator::entitiesRegistry::value().AssignOrReplace<CreatureObjectAction>(creature, std::move(action));
 		return false;
 	}
@@ -1423,17 +1494,7 @@ std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object
 	}
 	const auto& info = Locator::infoConstants::value();
 	float value = 0.0f;
-	if (const auto* villager = registry.TryGet<const Villager>(object))
-	{
-		const auto kind = static_cast<size_t>(GVillagerInfo::Find(villager->tribe, villager->number));
-		value = kind < info.villager.size() ? info.villager.at(kind).foodValue : 0.0f;
-	}
-	else if (const auto* mobile = registry.TryGet<const MobileObject>(object))
-	{
-		const auto kind = static_cast<size_t>(mobile->type);
-		value = kind < info.mobileObject.size() ? info.mobileObject.at(kind).foodValue : 0.0f;
-	}
-	else if (const auto* pot = registry.TryGet<const Pot>(object))
+	if (const auto* pot = registry.TryGet<const Pot>(object))
 	{
 		// A pot or pile of food is worth as much as the food in it. A storage pit's pile is eaten from where it lies,
 		// which isn't done here.
@@ -1441,6 +1502,12 @@ std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object
 		const bool food = kind < info.pot.size() && info.pot.at(kind).resourceType == ResourceType::Food &&
 		                  pot->type != PotInfo::StoragePitFoodPile;
 		value = food ? static_cast<float>(pot->amount) : 0.0f;
+	}
+	else if (const auto* objectInfo = FoodInfoOf(registry, object))
+	{
+		// Anything else has the food value of its kind, when its kind is meat or vegetable
+		const auto eaten = static_cast<uint32_t>(FoodType::Meat) | static_cast<uint32_t>(FoodType::Vegetable);
+		value = (static_cast<uint32_t>(objectInfo->foodType) & eaten) != 0 ? objectInfo->foodValue : 0.0f;
 	}
 	return value > 0.0f ? std::optional(value) : std::nullopt;
 }
@@ -1608,6 +1675,33 @@ bool CreatureObjectActionSystem::CanPickUp(entt::entity creature, entt::entity o
 	const auto kind = KindFactsOf(object);
 	return kind.rule != creature_object_actions::KindRule::Never &&
 	       creature_object_actions::MayPickUpKind(kind, PickUpFactsOf(creature, object));
+}
+
+bool CreatureObjectActionSystem::CanEat(entt::entity creature, entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.Valid(object))
+	{
+		return false;
+	}
+	const auto pickUp = PickUpFactsOf(creature, object);
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* info = FoodInfoOf(registry, object);
+	const bool refused =
+	    mind != nullptr && info != nullptr && mind->refusedFoodSorts.contains(static_cast<uint32_t>(info->type));
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const bool ownVillager = registry.AllOf<Villager>(object) && body != nullptr &&
+	                         ecs::world_objects::PlayerOf(object) == std::optional(body->owner);
+	return creature_object_actions::MayEat(KindFactsOf(object),
+	                                       {.mayPickUp = CanPickUp(creature, object),
+	                                        .refusedSort = refused,
+	                                        .computersOwnVillager = pickUp.computerCreatureNotScripted && ownVillager});
+}
+
+bool CreatureObjectActionSystem::CanEatHeld(entt::entity creature) const
+{
+	const auto held = GetHeld(creature);
+	return held.has_value() && creature_object_actions::MayEatHeld(KindFactsOf(*held), CanPickUp(creature, *held));
 }
 
 bool CreatureObjectActionSystem::CanTakeFromHand(entt::entity creature, entt::entity object) const
@@ -2020,11 +2114,20 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			{
 				Locator::creatureMindSystem::value().AteMagicMushroom(creature);
 			}
+			const auto meal = MealOf(registry, *held);
 			registry.Remove<CreatureHeldObject>(creature);
 			Consume(registry, *held);
 			if (value.has_value() && Locator::creaturePhysiologySystem::has_value())
 			{
 				Locator::creaturePhysiologySystem::value().Eat(creature, *value);
+			}
+			const bool bringsUp = creature_object_actions::BringsMealBackUp(value.value_or(0.0f), meal.magicMushroom,
+			                                                                meal.foodPile, meal.poisoned);
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} eats a thing of sort {}: food {}, brought up {}",
+			                    entt::to_integral(creature), meal.sort.value_or(0), value.value_or(0.0f), bringsUp);
+			if (bringsUp)
+			{
+				RefuseMeal(creature, meal);
 			}
 			break;
 		}

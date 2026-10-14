@@ -1951,7 +1951,9 @@ bool CreatureMindSystem::Eat(entt::entity creature, std::optional<entt::entity> 
 	{
 		return false;
 	}
-	return Replan(creature, creature_mind::Activity::Eat, creature_mind::Eat(entt::to_integral(*food)));
+	const bool holdingEatable =
+	    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().CanEatHeld(creature);
+	return Replan(creature, creature_mind::Activity::Eat, creature_mind::Eat(entt::to_integral(*food), holdingEatable));
 }
 
 bool CreatureMindSystem::Drink(entt::entity creature)

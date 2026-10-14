@@ -116,6 +116,11 @@ public:
 	/// creatures, nor what a script or the thing's state keeps from it, nor what is too big or heavy for it, a town's
 	/// artefact, what its leash is tied to, or a thing out of the map it isn't holding already
 	[[nodiscard]] virtual bool CanPickUp(entt::entity creature, entt::entity object) const = 0;
+	/// Whether a creature can eat a thing: a thing that it can pick up and that is not a toy. It does not eat a sort of
+	/// thing that it brought up before, and a computer player's creature does not eat its own villagers.
+	[[nodiscard]] virtual bool CanEat(entt::entity creature, entt::entity object) const = 0;
+	/// Whether a creature can eat the thing that it holds, with no pick-up first
+	[[nodiscard]] virtual bool CanEatHeld(entt::entity creature) const = 0;
 	/// Whether a creature can take something from a hand that gives it: as picking up, but wherever the thing is, and
 	/// without the rules about artefacts, worshippers and what scripts hold
 	[[nodiscard]] virtual bool CanTakeFromHand(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }

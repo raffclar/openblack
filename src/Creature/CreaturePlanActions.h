@@ -33,7 +33,6 @@ enum class Target : uint8_t
 	None,
 	/// Anything it can eat, or only living things it can eat
 	Food,
-	LiveFood,
 	/// Anything it can pick up
 	Pickable,
 	/// Anything it can knock down, or only trees
@@ -98,6 +97,7 @@ constexpr size_t k_TargetCount = static_cast<size_t>(Target::PooedOn) + 1;
 enum class Build : uint8_t
 {
 	Eat,
+	EatAlive,
 	Sleep,
 	Poo,
 	Fart,
@@ -250,6 +250,8 @@ struct Situation
 	/// Whether what its hand holds is a tree, or a magic mushroom
 	bool holdingTree {false};
 	bool holdingMushroom {false};
+	/// Whether it can eat what its hand holds as it is, with no pick-up first
+	bool holdingEatable {false};
 	/// The creature itself, by its entity's number, and where it stands
 	uint32_t self {0};
 	glm::vec2 position {0.0f};

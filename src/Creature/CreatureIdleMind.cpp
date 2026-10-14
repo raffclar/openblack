@@ -220,12 +220,31 @@ std::vector<Step> creature_mind::Sleep(const Random& random)
 	return WithFace(std::move(agenda), creature_face::Cue::Grimace);
 }
 
-std::vector<Step> creature_mind::Eat(uint32_t food)
+std::vector<Step> creature_mind::Eat(uint32_t food, bool holdingEatable)
 {
-	return WithFace({PickUp(food),
-	                 Object({.kind = ObjectOrder::Kind::Keep, .animation = creature_object_actions::k_ExamineObject}),
-	                 Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat)},
-	                creature_face::Cue::Curiosity);
+	std::vector<Step> agenda;
+	if (!holdingEatable)
+	{
+		agenda.push_back(PickUp(food));
+	}
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::Keep, .animation = creature_object_actions::k_ExamineObject}));
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat));
+	return WithFace(std::move(agenda), creature_face::Cue::Curiosity);
+}
+
+std::vector<Step> creature_mind::EatAlive(uint32_t food, bool holdingEatable, const Random& random)
+{
+	std::vector<Step> agenda;
+	if (!holdingEatable)
+	{
+		if (random(k_ShowHungerBeforeEatLots) == 0)
+		{
+			agenda.push_back(Action(animations::k_Hungry, false));
+		}
+		agenda.push_back(PickUp(food));
+	}
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat));
+	return agenda;
 }
 
 std::vector<Step> creature_mind::ExamineByPickingUp(uint32_t object, const Random& random)
