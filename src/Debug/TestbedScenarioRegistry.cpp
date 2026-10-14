@@ -459,6 +459,7 @@ void AddNeeds(std::vector<Scenario>& all)
 	                   "lesson. The cow on the right is free.",
 	    .expected = "The free cow sees the tiger and runs from it. The script's cow stays where it was put, in the clip "
 	                "of an animal a script holds still, and takes no notice of the tiger.",
+	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -10.0f}, {20.0f, 10.0f}}, .distance = 0.6f},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .pauseMind = true}},
 	    .objects = {{.type = AnimalInfo::Cow,
