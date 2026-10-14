@@ -22,6 +22,13 @@
 namespace openblack::gui
 {
 
+/// The background of a box with tabs along its top: as wide as the box, from half its height above the middle of the
+/// dialog space to 40 more than half its height below it
+[[nodiscard]] constexpr DialogRect TabbedBox(glm::ivec2 size)
+{
+	return {.min = {400 - (size.x / 2), 300 - (size.y / 2)}, .max = {400 + (size.x / 2), 340 + (size.y / 2)}};
+}
+
 /// A page of the game's menu (a DialogBoxBase and its SetupBox): a see-through box with tabs along its top, of which
 /// one is open, and the controls in it.
 ///
@@ -35,10 +42,12 @@ public:
 	{
 		std::u16string label;
 		std::function<void()> onSelect;
+		/// The size of the label's text
+		int textSize {DialogPainter::k_MidTextSize};
 	};
 
 	/// MainMenu and the options' box: 780 by 500 in the middle of the dialog space, 40 deeper for its tabs
-	static constexpr DialogRect k_Box {.min = {10, 50}, .max = {790, 590}};
+	static constexpr DialogRect k_Box = TabbedBox({780, 500});
 	/// AddMainMenuTabs and AddOptionsTabs: five tabs, a fifth of the box's width each
 	static constexpr size_t k_TabCount = 5;
 

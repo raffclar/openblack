@@ -45,7 +45,7 @@ class StatisticsBox
 {
 public:
 	/// The box, 780 by 500 in the middle of the dialog space
-	static constexpr DialogRect k_Box {.min = {10, 50}, .max = {790, 550}};
+	static constexpr DialogRect k_Box = TabbedBox({780, 500});
 
 	StatisticsBox(const TextDatabase& texts, const GameFont& font, std::function<void()> back);
 	~StatisticsBox();

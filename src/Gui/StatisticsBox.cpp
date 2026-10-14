@@ -414,6 +414,11 @@ StatisticsBox::StatisticsBox(const TextDatabase& texts, const GameFont& font, st
 	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_87")), .onSelect = [this] { SetTab(Tab::Miracle); }},
 	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_124")), .onSelect = [this] { SetTab(Tab::Tech); }},
 	};
+	// The box's tabs are labelled in small text
+	for (auto& tab : tabs)
+	{
+		tab.textSize = k_Small;
+	}
 	_dialog = std::make_unique<Dialog>(std::move(tabs), static_cast<size_t>(Tab::Player), k_Box);
 	auto& dialog = *_dialog;
 
