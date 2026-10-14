@@ -44,6 +44,42 @@ std::vector<Gained> magic::town_belief::Turn(Belief& town, float recentDecay)
 	return gained;
 }
 
+void magic::town_belief::ResetDesireLevels(Belief& town, std::span<const DesireDecay, k_DesireCount> table)
+{
+	auto& levels = town.desireLevel.emplace();
+	std::ranges::transform(table, levels.begin(), &DesireDecay::levelAfterGain);
+}
+
+void magic::town_belief::LoseBeliefToDesires(Belief& town, PlayerNames owner, std::span<const float, k_DesireCount> desire,
+                                             std::span<const DesireDecay, k_DesireCount> table, float leastLevel)
+{
+	const auto o = static_cast<size_t>(owner);
+	if (owner == PlayerNames::NEUTRAL || o >= k_PlayerCount)
+	{
+		return;
+	}
+	if (!town.desireLevel.has_value())
+	{
+		ResetDesireLevels(town, table);
+	}
+	auto& levels = *town.desireLevel;
+	for (size_t d = 0; d < k_DesireCount; ++d)
+	{
+		const auto& row = table[d];
+		if (desire[d] > levels.at(d))
+		{
+			// The difference and its product are rounded to a float once, at the end
+			const auto loss =
+			    static_cast<float>((static_cast<double>(desire[d]) - levels.at(d)) * static_cast<double>(row.toBelief));
+			town.belief.at(o) -= loss;
+		}
+		if (levels.at(d) > leastLevel)
+		{
+			levels.at(d) -= row.levelFall;
+		}
+	}
+}
+
 void magic::town_belief::Set(Belief& town, PlayerNames player, float value)
 {
 	const auto p = static_cast<size_t>(player);

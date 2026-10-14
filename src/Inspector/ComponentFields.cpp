@@ -2861,7 +2861,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::magic::town_belief::Belief::recent>("recent", {k_PlayerNamesNames})
 	    .Field<&openblack::magic::town_belief::Belief::cap>("cap", {k_PlayerNamesNames})
 	    .Field<&openblack::magic::town_belief::Belief::scale>("scale")
-	    .Field<&openblack::magic::town_belief::Belief::neutral>("neutral");
+	    .Field<&openblack::magic::town_belief::Belief::neutral>("neutral")
+	    .Field<&openblack::magic::town_belief::Belief::desireLevel>("desireLevel");
 	Reflect<openblack::magic::visuals::HandBand>(context, ValueOnly {})
 	    .Field<&openblack::magic::visuals::HandBand::kind>("kind")
 	    .Field<&openblack::magic::visuals::HandBand::index>("index")
