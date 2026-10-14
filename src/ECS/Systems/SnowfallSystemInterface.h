@@ -30,9 +30,9 @@ public:
 	virtual void Reset() = 0;
 	/// Once a frame: the flakes fall as the rain does, from as high and as fast, if they were drawn
 	virtual void Update(float seconds, const rain::Fall& fall) = 0;
-	/// The snow to draw this frame over the quarters of the land blocks about the camera; taking some counts the flakes
-	/// as drawn
-	[[nodiscard]] virtual std::vector<snowfall::Tile> TakeTiles(const glm::vec3& camera) = 0;
+	/// The snow to draw this frame over the quarters of the land blocks in view near the eye, from the far quarters to
+	/// the near quarters. When you take some, the flakes count as drawn.
+	[[nodiscard]] virtual std::vector<snowfall::Tile> TakeTiles(const rain::View& view) = 0;
 	[[nodiscard]] virtual std::span<const snowfall::Flake> GetFlakes() const = 0;
 };
 

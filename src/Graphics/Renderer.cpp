@@ -3324,7 +3324,8 @@ void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 	}
 	auto& snowfallSystem = Locator::snowfallSystem::value();
 	const auto origin = desc.camera->GetOrigin();
-	const auto tiles = snowfallSystem.TakeTiles(origin);
+	const auto tiles = snowfallSystem.TakeTiles(
+	    {.eye = origin, .viewProjection = desc.camera->GetViewProjectionMatrix(), .nearPlane = desc.camera->GetNearClip()});
 	if (tiles.empty())
 	{
 		return;
