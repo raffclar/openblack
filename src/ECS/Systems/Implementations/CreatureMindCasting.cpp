@@ -516,7 +516,7 @@ bool CreatureMindSystem::StartTry(entt::entity creature, MagicType type, std::op
 	return true;
 }
 
-void CreatureMindSystem::FrustrateAfterCast(entt::entity creature, MagicType type)
+void CreatureMindSystem::FrustrateAfterCast(entt::entity creature, [[maybe_unused]] MagicType type)
 {
 	auto& registry = Entities();
 	auto* mind = registry.TryGet<CreatureMindState>(creature);
