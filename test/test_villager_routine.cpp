@@ -196,10 +196,28 @@ TEST(VillagerRoutine, AfterAnEmergencyWorshipComesBackUnlessAShareWasSetMeanwhil
 
 TEST(VillagerRoutine, ThoseInsideOrAsleepDontAnswerAnEmergency)
 {
-	EXPECT_FALSE(AnswersTownEmergency(VillagerStates::AtHome));
-	EXPECT_FALSE(AnswersTownEmergency(VillagerStates::SleepingAtHome));
-	EXPECT_FALSE(AnswersTownEmergency(VillagerStates::SitAndChillout));
-	EXPECT_TRUE(AnswersTownEmergency(VillagerStates::MoveToPos));
+	constexpr auto k_None = VillagerStates::InvalidState;
+	EXPECT_FALSE(AnswersTownEmergency(VillagerStates::AtHome, k_None));
+	EXPECT_FALSE(AnswersTownEmergency(VillagerStates::SleepingAtHome, k_None));
+	EXPECT_FALSE(AnswersTownEmergency(VillagerStates::SitAndChillout, k_None));
+	EXPECT_TRUE(AnswersTownEmergency(VillagerStates::MoveToPos, k_None));
+}
+
+TEST(VillagerRoutine, AVillagerWalkingRoundAFireAnswersAnEmergencyOnlyWithAStateToGoBackTo)
+{
+	EXPECT_FALSE(AnswersTownEmergency(VillagerStates::MoveAroundFire, VillagerStates::InvalidState));
+	EXPECT_TRUE(AnswersTownEmergency(VillagerStates::MoveAroundFire, VillagerStates::GotoWorshipSiteForWorship));
+	// The other fire states do not answer, whatever comes before them
+	EXPECT_FALSE(AnswersTownEmergency(VillagerStates::ReactToFire, VillagerStates::MoveToPos));
+}
+
+TEST(VillagerRoutine, ABiggerTownGathersInAWiderRingUpToItsFullSpread)
+{
+	EXPECT_FLOAT_EQ(EmergencyRingDistance(0), 10.0f);
+	// Twenty people are half of the spread
+	EXPECT_FLOAT_EQ(EmergencyRingDistance(20), 20.0f);
+	EXPECT_FLOAT_EQ(EmergencyRingDistance(40), 30.0f);
+	EXPECT_FLOAT_EQ(EmergencyRingDistance(400), 30.0f);
 }
 
 TEST(VillagerRoutine, ARoamingSpotIsDrawnDistanceFirst)

@@ -581,8 +581,8 @@ void villager_breeding::OrphanChildrenOf(entt::entity villager, entt::entity tow
 {
 	for (const auto child : Locator::townSystem::value().ChildrenOf(town, villager))
 	{
-		// One that is about mourns her first, then goes home
-		if (IsAvailable(child))
+		// A child that is free mourns her first, then goes home
+		if (ecs::systems::villager_reactions::FreeForNewTask(child))
 		{
 			SetTopState(Entities().Get<LivingAction>(child), VillagerStates::MornDeath);
 		}

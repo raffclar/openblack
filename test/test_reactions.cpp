@@ -30,6 +30,7 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
@@ -1073,6 +1074,57 @@ TEST_F(Reactions, AVillagerKeepsReactingToAThingTheHandHoldsWhenItsKindDoesNotEn
 	EXPECT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
 	EXPECT_NE(registry.Get<const LivingReaction>(villager).reaction, 0u);
 	Locator::reactionSystem::reset();
+}
+
+// A villager that reacts to a thing goes back to what it did before once the thing is gone
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerStopsReactingWhenTheThingItReactsToIsGone)
+{
+	MakeJob(*_info, k_JobAgain);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	WalkToJob(villager);
+	auto miracle = Miracle();
+	miracle.initiator = registry.Create();
+	reactions.Create(miracle);
+	ASSERT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	auto& action = registry.Get<LivingAction>(villager);
+	// The thing is there: nothing changes
+	ecs::systems::villager_reactions::ReactionValidate(action);
+	EXPECT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	registry.Destroy(miracle.initiator);
+	ecs::systems::villager_reactions::ReactionValidate(action);
+	EXPECT_EQ(StateOf(villager), k_JobAgain);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	Locator::reactionSystem::reset();
+}
+
+// A villager is free for a new task only when no script and no hand holds it, and its state lets it go
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerIsFreeForANewTaskOnlyWhenNothingHoldsItAndItsStateLetsItGo)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	const auto state = Locator::livingActionSystem::value().VillagerGetFinalState(registry.Get<const LivingAction>(villager));
+	// The locator holds its own copy of the tables: give it the changed tables each time
+	const auto stateLetsGo = [this, state](int lets) {
+		_info->villagerStateTable.at(static_cast<size_t>(state)).field0xa8 = lets;
+		Locator::infoConstants::emplace(*_info);
+	};
+	stateLetsGo(1);
+	EXPECT_TRUE(ecs::systems::villager_reactions::FreeForNewTask(villager));
+	stateLetsGo(0);
+	EXPECT_FALSE(ecs::systems::villager_reactions::FreeForNewTask(villager));
+	stateLetsGo(1);
+	registry.Assign<InHand>(villager);
+	EXPECT_FALSE(ecs::systems::villager_reactions::FreeForNewTask(villager));
+	registry.Remove<InHand>(villager);
+	registry.Assign<ScriptControlled>(villager);
+	EXPECT_FALSE(ecs::systems::villager_reactions::FreeForNewTask(villager));
+	registry.Remove<ScriptControlled>(villager);
+	EXPECT_TRUE(ecs::systems::villager_reactions::FreeForNewTask(villager));
 }
 
 TEST_F(Reactions, AReactionsEndGoesBackTheSameWayWhenTheReactionIsShutDown)

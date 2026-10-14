@@ -77,8 +77,15 @@ bool ExitReaction(components::LivingAction& action, VillagerStates next);
 [[nodiscard]] std::optional<entt::entity> ReactingTo(entt::entity villager);
 /// Whether the states of the living can take up a thing or keep it: not while the player's hand holds it
 [[nodiscard]] bool AvailableForStateChange(entt::entity thing);
-/// Each turn in a reaction's state: when the hand holds the thing the villager reacts to, and the table says that this
-/// kind of reaction ends then, the villager goes back to what it was doing. It never holds the villager back.
+/// Whether the villager is free for a new task. These conditions must be true:
+/// - no script controls the villager;
+/// - the hand does not hold the villager;
+/// - the state that the villager works towards lets other tasks take the villager.
+[[nodiscard]] bool FreeForNewTask(entt::entity villager);
+/// Each turn in the state of a reaction, the villager goes back to what it did before in these conditions:
+/// - the thing that the villager reacts to is gone;
+/// - the hand holds the thing, and the table tells that this kind of reaction stops then.
+/// It never holds the villager back.
 bool ReactionValidate(components::LivingAction& action);
 
 /// How fast a villager turns to look at something: an eighth of a half turn a turn, or twice that

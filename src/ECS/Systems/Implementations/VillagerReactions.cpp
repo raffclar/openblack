@@ -54,6 +54,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
@@ -729,13 +730,31 @@ bool villager_reactions::AvailableForStateChange(entt::entity thing)
 	return !EntityRegistry().AllOf<InHand>(thing);
 }
 
+bool villager_reactions::FreeForNewTask(entt::entity villager)
+{
+	auto& registry = EntityRegistry();
+	const auto* action = registry.TryGet<const LivingAction>(villager);
+	if (action == nullptr || registry.AllOf<ScriptControlled>(villager) || !AvailableForStateChange(villager) ||
+	    !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	return (StateInfo(FinalStateOf(*action)).field0xa8 & 1) != 0;
+}
+
 bool villager_reactions::ReactionValidate(LivingAction& action)
 {
 	const auto villager = EntityRegistry().ToEntity(action);
-	const auto thing = ReactingTo(villager);
 	const auto reaction = ReactionOf(villager);
-	if (!thing.has_value() || !reaction.has_value() || !Locator::infoConstants::has_value())
+	if (!reaction.has_value() || !Locator::infoConstants::has_value())
 	{
+		return true;
+	}
+	// When the thing that the villager reacts to is gone, the villager stops at once
+	const auto thing = ReactingTo(villager);
+	if (!thing.has_value())
+	{
+		GoBackToRemembered(action, false);
 		return true;
 	}
 	const auto& row = Locator::infoConstants::value().reaction.at(static_cast<size_t>(reaction->source.type));
@@ -954,6 +973,9 @@ void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates sta
 		{
 			inputs.townNeeds = town_desire::TownNeedsSum(*wants);
 		}
+		// In an emergency of its town the villager runs
+		inputs.townInEmergency =
+		    Locator::townSystem::has_value() && Locator::townSystem::value().IsInStateOfEmergency(component->town);
 		// A player's villager goes by the player's Indian tribal power, 1 with no wonder raising it
 		if (town->owner != PlayerNames::NEUTRAL)
 		{

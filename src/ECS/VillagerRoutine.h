@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <functional>
 #include <optional>
 
@@ -154,6 +155,19 @@ constexpr float k_TentTreeCrowd = 4.0f;
 	return emergencyTurn != 0 && turn - emergencyTurn < lasts;
 }
 
+/// In an emergency the people of a town gather in a ring round its gathering place. The ring is wider for a town with
+/// more people: each person adds a share of the spread, up to the full spread.
+constexpr float k_EmergencyRingPerPerson = 0.025f;
+constexpr float k_EmergencyRingSpread = 20.0f;
+constexpr float k_EmergencyRingLeast = 10.0f;
+/// The distance from the gathering place at which a villager stands in an emergency, from the adults and the children
+/// of its town
+[[nodiscard]] constexpr float EmergencyRingDistance(uint32_t people)
+{
+	const float share = std::min(static_cast<float>(people) * k_EmergencyRingPerPerson, 1.0f);
+	return share * k_EmergencyRingSpread + k_EmergencyRingLeast;
+}
+
 /// What a town's game turn does about emergencies
 struct EmergencyTurnFacts
 {
@@ -208,9 +222,10 @@ struct EmergencyTurnOutcome
 	return outcome;
 }
 
-/// Whether a villager working towards a state leaves it to gather when its town calls an emergency: most states, but
-/// not being inside its home, in bed, eating at home, sitting about or held by a script
-[[nodiscard]] bool AnswersTownEmergency(VillagerStates state);
+/// Whether a villager leaves the state that it works towards to gather when its town calls an emergency. Most states
+/// answer. These states do not answer: inside the home, in bed, eating at home, sitting about, held by a script. A
+/// villager that walks round a fire answers only when it has a state to go back to.
+[[nodiscard]] bool AnswersTownEmergency(VillagerStates state, VillagerStates previous);
 
 /// A villager sat about goes on sitting once its time is up, one time in ten it thinks of something else to do
 constexpr uint32_t k_ChillOutRethinkChance = 10;

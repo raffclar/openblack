@@ -711,7 +711,7 @@ uint32_t villager_forester::ReactToWoodPriority(entt::entity villager, entt::ent
 	const float reach =
 	    Locator::infoConstants::value().reaction.at(static_cast<size_t>(Reaction::ReactToWood)).maxReactionDistance;
 	const auto& townInfo = Locator::infoConstants::value().townDesire.at(static_cast<size_t>(TownDesireInfo::ForWood));
-	const bool free = systems::villager_reactions::Available(villager, Reaction::ReactToWood);
+	const bool free = systems::villager_reactions::FreeForNewTask(villager);
 	const bool interested = work::IsInterestedInWood({
 	    .available = true,
 	    .room = WoodRoom(person),
