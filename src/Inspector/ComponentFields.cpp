@@ -809,7 +809,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::heldSortCounts>("heldSortCounts")
 	    .Field<&components::CreatureMindState::copiedAt>("copiedAt")
 	    .Field<&components::CreatureMindState::copiedKind>("copiedKind")
-	    .Field<&components::CreatureMindState::highPending>("highPending")
+	    .Field<&components::CreatureMindState::followUp>("followUp")
 	    .Field<&components::CreatureMindState::plantedBy>("plantedBy");
 	Reflect<components::CreatureNeeds>(context)
 	    .Field<&components::CreatureNeeds::started>("started")

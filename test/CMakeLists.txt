@@ -967,3 +967,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_learning_marker test_learning_marker.cpp)
 openblack_setup_and_add_test(test_town_miracle_tool test_town_miracle_tool.cpp)
 openblack_setup_and_add_test(test_creature_lost_thing test_creature_lost_thing.cpp)
+openblack_setup_and_add_test(test_creature_follow_up test_creature_follow_up.cpp)
