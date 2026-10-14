@@ -14,7 +14,10 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "InfoConstants.h"
@@ -186,5 +189,52 @@ TEST_F(Alignment, WhatTheirDeedsChangeScalesOneTurnsChange)
 	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::PLAYER_ONE), 0.0f);
 	_alignment.UpdateTurn({});
 	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.5f - (0.025f * 0.01f));
+	Locator::infoConstants::reset();
+}
+
+TEST_F(Alignment, ThePlanOfACreatureMovesItsAlignmentEachTurn)
+{
+	// The tables are large: made on the heap
+	auto info = std::make_unique<InfoConstants>();
+	auto& species = info->creature.at(static_cast<size_t>(CreatureType::Cow));
+	species.alignmentChangePerTurn = 0.01f;
+	species.alignmentChangeScale = 0.2f;
+	info->creatureInitialDesire.at(static_cast<size_t>(creature_desires::Desire::Compassion)).alignmentChange = 1.0f;
+	// The first row of the alignment table gives the weight of an eaten villager
+	info->alignment.at(0).villager = -1.0f;
+	for (auto& row : info->villager)
+	{
+		row.alignmentType = AlignmentType::Villager;
+	}
+	Locator::infoConstants::emplace(*info);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = registry.Create();
+	registry.Assign<components::Villager>(villager);
+	const auto creature = registry.Create();
+	registry.Assign<components::Creature>(creature).species = CreatureType::Cow;
+	auto& mind = registry.Assign<components::CreatureMindState>(creature);
+
+	// Without a plan the alignment stays
+	_alignment.UpdateTurn({});
+	EXPECT_FLOAT_EQ(registry.Get<components::Creature>(creature).alignment, 0.0f);
+
+	// A plan to be nice moves it to good
+	mind.planActive = true;
+	mind.planner.current = creature_planner::Plan {.desire = creature_desires::Desire::Compassion};
+	_alignment.UpdateTurn({});
+	EXPECT_FLOAT_EQ(registry.Get<components::Creature>(creature).alignment, 0.2f * 0.01f);
+
+	// A plan to eat a villager moves it to evil, more strongly against the good alignment
+	mind.planner.current =
+	    creature_planner::Plan {.desire = creature_desires::Desire::Hunger, .object = entt::to_integral(villager)};
+	const float before = registry.Get<components::Creature>(creature).alignment;
+	_alignment.UpdateTurn({});
+	EXPECT_FLOAT_EQ(registry.Get<components::Creature>(creature).alignment, before - (0.2f * (1.0f + (before * 0.5f)) * 0.01f));
+
+	// A plan that is not active does not count
+	mind.planActive = false;
+	const float after = registry.Get<components::Creature>(creature).alignment;
+	_alignment.UpdateTurn({});
+	EXPECT_FLOAT_EQ(registry.Get<components::Creature>(creature).alignment, after);
 	Locator::infoConstants::reset();
 }
