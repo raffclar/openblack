@@ -271,17 +271,17 @@ bool CreatureHandSystem::MayHold(entt::entity creature) const
 	return true;
 }
 
-bool CreatureHandSystem::ShowsInteractTip(entt::entity creature, bool handInInfluence) const
+creature_hand::InteractTip CreatureHandSystem::InteractTipOver(entt::entity creature, bool handInInfluence) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto holdable = HoldableOf(registry, creature);
 	if (!holdable.has_value())
 	{
-		return false;
+		return creature_hand::InteractTip::None;
 	}
 	const auto* contact = Locator::handSystem::has_value() ? registry.TryGet<const HandOnCreature>(PlayerHand()) : nullptr;
 	const bool held = contact != nullptr && contact->creature == creature;
-	return creature_hand::ShowsInteractTip(k_LocalPlayer, *holdable, held, handInInfluence);
+	return creature_hand::InteractTipOf(k_LocalPlayer, *holdable, held, handInInfluence);
 }
 
 bool CreatureHandSystem::IsClick() const

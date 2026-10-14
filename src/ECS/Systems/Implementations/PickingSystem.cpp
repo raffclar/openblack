@@ -40,7 +40,6 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Mesh.h"
-#include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Reward.h"
@@ -531,15 +530,16 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			return std::nullopt;
 		}
-		// A building following the land that is only partly built is hit only below what of it stands
-		if (const auto* progress = registry.TryGet<const BuildProgress>(entity);
-		    progress != nullptr && registry.AllOf<MorphWithTerrain>(entity) && progress->built < 1.0f)
+		// A temple that is only partly built takes the hit only on its built part. Other buildings take it on their whole
+		// model.
+		if (const auto* progress = registry.TryGet<const BuildProgress>(entity); progress != nullptr)
 		{
 			const auto* transform = registry.TryGet<const Transform>(entity);
 			const float scale = transform != nullptr ? transform->scale.x : 1.0f;
 			const auto hit = view.camera + (frame.nearPoint - view.camera) * (*distance / view.near);
 			const float halfHeight = mesh->GetBoundingBox().Size().y * 0.5f;
-			if (hit.y > _candidates[i].origin.y + halfHeight * 2.0f * scale * progress->built)
+			if (!ecs::pick_shapes::HitsBuiltPart(registry.AllOf<Temple>(entity), progress->built, hit.y,
+			                                     _candidates[i].origin.y, halfHeight, scale))
 			{
 				return std::nullopt;
 			}

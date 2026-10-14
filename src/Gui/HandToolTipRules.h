@@ -53,6 +53,8 @@ constexpr uint32_t k_WoodRequired = 136;
 /// "Tap To Break" over a big rock, and "Tap To Open" over a reward chest
 constexpr uint32_t k_TapToBreak = 132;
 constexpr uint32_t k_TapToOpen = 133;
+/// "Zoom", while the hand grips the land and the Action button is held too
+constexpr uint32_t k_Zoom = 135;
 
 /// A tooltip that the hand submits: its words, the button of its mouse and its arrows
 struct Offer
@@ -95,6 +97,17 @@ constexpr float k_ZoomOutPitch = 0.55f;
 /// - "Move" in all other places.
 /// The scripts can stop each camera control, and then the hand does not offer it.
 [[nodiscard]] Offer OverNothing(const CameraFacts& camera);
+
+/// The help event that the hand sets off as it shows its tooltip over the land. When the line from the middle of the
+/// screen touches the land, the hand sets off the camera's land event. It does not do this when it offers "Pitch" or
+/// "Rotate".
+constexpr uint32_t k_CameraOnLandEvent = 44;
+[[nodiscard]] std::optional<uint32_t> OverNothingHelpEvent(const CameraFacts& camera);
+
+/// What the hand offers while it grips the land. With the Action button held too, and with zoom permitted by the
+/// scripts, the hand offers "Zoom" with the up and down arrows. In other conditions it offers what it offers over the
+/// land.
+[[nodiscard]] Offer GrippingLand(bool actionHeld, const CameraFacts& camera);
 
 /// What the empty hand offers over a thing that it can take: "Catch" while the thing flies, rolls or slides; else "Pick
 /// Up", and after it the thing's tap tooltip, if a tap works on the thing. The two take turns.

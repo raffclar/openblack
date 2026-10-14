@@ -42,6 +42,8 @@ enum class ToolTipAction : uint8_t
 	Apply,
 	/// The zoom in control: the mouse wheel, or both buttons on a mouse with no wheel
 	ZoomIn,
+	/// The zoom control: by default both buttons, or its key when a key has it
+	ZoomOn,
 };
 
 /// The bindable action of a tooltip's mouse, as numbered by the bits of input::BindableActionMap. None for a tooltip
@@ -56,6 +58,8 @@ enum class ToolTipAction : uint8_t
 		return 2;
 	case ToolTipAction::ZoomIn:
 		return 4;
+	case ToolTipAction::ZoomOn:
+		return 6;
 	case ToolTipAction::None:
 		break;
 	}

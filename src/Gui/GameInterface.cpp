@@ -1569,21 +1569,35 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const int handY = kept.y;
 
 	// The words, then the mouse with its arrows either side. The mouse shows the buttons that the player bound to the
-	// tooltip's action. An action with no mouse button shows no mouse.
+	// tooltip's action. An action with no mouse button shows the key cap of its key. An action with neither shows no
+	// picture.
+	namespace icons = help::control_icons;
 	const auto bindable = BindableActionOf(shown->action);
-	const auto click = bindable.has_value() && Locator::gameActionSystem::has_value()
-	                       ? help::control_icons::ClickFor(*bindable, Locator::gameActionSystem::value().GetKeyBindings())
-	                       : std::nullopt;
-	const int iconWidth = click.has_value() && _mice != nullptr ? size : 0;
+	const auto picture =
+	    bindable.has_value() && Locator::gameActionSystem::has_value()
+	        ? icons::PictureFor(*bindable, Locator::gameActionSystem::value().GetKeyBindings(), ControlKeyName())
+	        : std::nullopt;
+	const auto* click = picture.has_value() ? std::get_if<icons::MouseClick>(&*picture) : nullptr;
+	const auto* keyText = picture.has_value() ? std::get_if<std::u16string>(&*picture) : nullptr;
+	float iconWidth = 0.0f;
+	if (click != nullptr && _mice != nullptr)
+	{
+		iconWidth = static_cast<float>(size);
+	}
+	else if (keyText != nullptr)
+	{
+		// The key cap is as wide as its words need, and never narrower than square
+		iconWidth = icons::KeyCapWidth(size, _font.GetWidth(*keyText, icons::KeyTextSize(size)));
+	}
 	const bool left = (shown->arrows & ToolTipArrows::k_Left) != 0;
 	const bool right = (shown->arrows & ToolTipArrows::k_Right) != 0;
-	const int iconsWidth = iconWidth + (left ? size / 2 : 0) + (right ? size / 2 : 0);
+	const float iconsWidth = iconWidth + static_cast<float>((left ? size / 2 : 0) + (right ? size / 2 : 0));
 	const int textSize = size * 2 / 3;
 	const float textWidth = _font.GetWidth(text, static_cast<float>(textSize));
 	// The gap after the words and the shadows' offset are pixels of the default screen
 	const float pixel = ReferenceScale(width, height);
 	const float gap = 2.0f * pixel;
-	const float total = textWidth + static_cast<float>(iconsWidth) + gap;
+	const float total = textWidth + iconsWidth + gap;
 
 	// Right of the hand, or left of it in the right third of the screen, until it reaches the left third
 	if (handX > width * 2 / 3)
@@ -1604,9 +1618,9 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	// The glows behind: white behind the mouse, and faint yellow behind the words and arrows
 	const float glowAlpha = std::trunc(128.0f * shown->alpha) / 255.0f;
 	const float faintAlpha = std::trunc(128.0f * shown->alpha / 3.0f) / 255.0f;
-	if (iconWidth != 0)
+	if (iconWidth != 0.0f)
 	{
-		DrawGlow({iconX, y}, {iconX + static_cast<float>(iconWidth), y + sizeF}, glm::vec4(1.0f, 1.0f, 1.0f, glowAlpha));
+		DrawGlow({iconX, y}, {iconX + iconWidth, y + sizeF}, glm::vec4(1.0f, 1.0f, 1.0f, glowAlpha));
 	}
 	if (!text.empty())
 	{
@@ -1615,7 +1629,7 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const float half = sizeF * 0.5f;
 	const float quarter = sizeF * 0.25f;
 	const auto arrowRect = [&](uint32_t bit) -> std::pair<glm::vec2, glm::vec2> {
-		const float iconRight = iconX + static_cast<float>(iconWidth);
+		const float iconRight = iconX + iconWidth;
 		switch (bit)
 		{
 		case ToolTipArrows::k_Left:
@@ -1637,11 +1651,28 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 		}
 	}
 
-	// The mouse, its button the action's, and the arrows over the glows
-	if (iconWidth != 0)
+	// The mouse, its button the action's, or the key cap, and the arrows over the glows
+	if (click != nullptr && iconWidth != 0.0f)
 	{
-		const auto cell = help::control_icons::CellFor(*click, k_ToolTipMouseRow, machine_clock::Ticks());
+		const auto cell = icons::CellFor(*click, k_ToolTipMouseRow, machine_clock::Ticks());
 		_canvas.DrawQuad({iconX, y}, {iconX + sizeF, y + sizeF}, cell.uvMin, cell.uvMax, white, _mice.get());
+	}
+	else if (keyText != nullptr)
+	{
+		const icons::Placed placed {.icon = {.min = {iconX, y}, .max = {std::trunc(iconX + iconWidth), y + sizeF}},
+		                            .glowColour = {},
+		                            .alpha = alpha,
+		                            .size = size};
+		const auto cap = icons::LayoutKeyCap(placed);
+		if (_atmos != nullptr)
+		{
+			for (size_t i = 0; i < cap.slices.size(); ++i)
+			{
+				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max, white,
+				                 _atmos.get());
+			}
+		}
+		_painter.DrawString(cap.textAt, *keyText, cap.textSize, cap.textColour);
 	}
 	if (_atmos != nullptr)
 	{

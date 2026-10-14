@@ -39,6 +39,16 @@ bool creature_hand::ShowsInteractTip(PlayerNames player, const Holdable& creatur
 	return creature.owner == player || handInInfluence;
 }
 
+creature_hand::InteractTip creature_hand::InteractTipOf(PlayerNames player, const Holdable& creature, bool held,
+                                                        bool handInInfluence)
+{
+	if (!ShowsInteractTip(player, creature, held, handInInfluence))
+	{
+		return InteractTip::None;
+	}
+	return handInInfluence && TakesHold(creature) ? InteractTip::WithAction : InteractTip::WordsOnly;
+}
+
 bool creature_hand::IsClick(float heldMs, bool strokedOrSlapped)
 {
 	return heldMs < k_ClickMaxMs && !strokedOrSlapped;

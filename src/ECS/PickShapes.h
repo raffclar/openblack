@@ -68,4 +68,9 @@ constexpr float k_LeashPostBallRadius = 1.0f;
 /// the land, so that its near side wins over what stands just in front of it
 [[nodiscard]] glm::vec3 BubblePickOffset(glm::vec3 modelMiddle, glm::vec3 camera, glm::vec3 halfExtents, float scale);
 
+/// Whether the cursor hits a building at a point of its whole model, when the building is only partly built. A temple
+/// takes the hit only at or below the top of its built part: the base, plus its model's height (scaled) times the built
+/// share. Other buildings take the hit on all of their model, also above their built part.
+[[nodiscard]] bool HitsBuiltPart(bool temple, float built, float hitHeight, float baseHeight, float halfHeight, float scale);
+
 } // namespace openblack::ecs::pick_shapes

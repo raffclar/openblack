@@ -2833,6 +2833,66 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::HandRelease, .delaySeconds = 12.0f},
 	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 4},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 0.1f, .point = {0.5f, 0.85f}}},
+	    // The huts' town stays the player's: the hand shows the wood that a building wants only for the player's own
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	// The camera looks down on a row of huts that are not whole, and the pointer goes from one to the next
+	all.push_back({
+	    .id = "hand.pick_unbuilt",
+	    .name = "The hand over buildings that are not built or not mended",
+	    .facet = Facet::Hand,
+	    .description =
+	        "Four huts of the player's town stand in a row: one four tenths built, one a tenth built, one hurt to half its "
+	        "life and one with nothing built. The pointer rests on each, six seconds each, a little above the ground where "
+	        "the whole hut would stand. Then the hand taps the hut that is four tenths built. Last, the hand takes a pot "
+	        "of wood, the pointer goes back on that hut and the hand gives the wood to it.",
+	    .expected = "Over the first three huts the hand finds the hut: \"Wood Required\" and \"Building Completed\" take "
+	                "turns. The hut a tenth built is found also where only its scaffold shows. Over the hut with nothing "
+	                "built the hand finds nothing and shows \"Move\". The tap knocks on the hut. While the hand holds the "
+	                "wood over the hut it shows \"Supply\". The wood goes onto the hut's building site and \"Wood "
+	                "Required\" goes down by the wood given.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -30.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-20.0f, 40.0f}, .built = 0.4f},
+	                {.type = AbodeInfo::CelticHut, .offset = {0.0f, 40.0f}, .built = 0.1f},
+	                {.type = AbodeInfo::CelticHut, .offset = {20.0f, 40.0f}, .life = 0.5f},
+	                {.type = AbodeInfo::CelticHut, .offset = {40.0f, 40.0f}, .built = 0.0f},
+	                {.type = PotInfo::WoodPot, .offset = {0.0f, 25.0f}, .amount = 100}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.342f, 0.488f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.5f, 0.488f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.656f, 0.488f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.813f, 0.488f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.342f, 0.488f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::HandTake, .delaySeconds = 3.0f, .object = 4},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.1f, .point = {0.342f, 0.488f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 6.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	// The camera looks down at the player's creature, and the pointer grips the land and then rests on the creature
+	all.push_back({
+	    .id = "hand.grip_and_creature_tips",
+	    .name = "What the hand offers as it grips the land, and over the player's creature",
+	    .facet = Facet::Hand,
+	    .description = "The pointer goes on the land in front of the player's tiger and holds the Move button. A second "
+	                   "later it also holds the Action button, for six seconds. Then it lets go of both buttons and rests "
+	                   "on the tiger for six seconds.",
+	    .expected = "While both buttons are held the hand shows \"Zoom\" with the mouse of both buttons and the up and "
+	                "down arrows. Over the tiger, in the player's influence, the hand shows \"Interact\" with the mouse "
+	                "of the Action button.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -40.0f}, .look = {0.0f, 0.0f, 15.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 15.0f})},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.85f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 6.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 1},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.45f}}},
 	});
 
 	// The camera looks along the land just ahead, so the hand is seen up close in the sun
