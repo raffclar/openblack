@@ -1188,7 +1188,9 @@ struct GVillagerStateTableInfo
 	uint32_t woundedStays;
 	/// What a villager in the state carries whatever else it holds, 0 for no change
 	int carriedObject;
-	uint32_t field0xe0;
+	/// The skill (CreatureActionKnownAbout) that a creature can learn by looking at a villager in the state; None for
+	/// none. A curious creature finds a villager that does a skill the creature does not know interesting.
+	uint32_t teachesSkill;
 	/// A villager in the state has its needs looked at: hunger, old age, wounds and growing up
 	uint32_t doesChecks;
 	/// A wounded villager in the state goes home

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <array>
 #include <optional>
 
@@ -41,6 +43,10 @@ public:
 	/// again as they go into or out of the player's influence, tested at the point picked under the cursor (see
 	/// hand_morph::Pick and NextPoint)
 	virtual void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) = 0;
+	/// Once a game turn, before the creatures think: counts the turns that the player's hand stays in one place
+	virtual void ProcessTurn() {}
+	/// The game turns that the player's hand has stayed in one place (see hand_stillness::Step)
+	[[nodiscard]] virtual uint32_t GetHandStillTurns() const noexcept { return 0; }
 	/// The debugging trace of the player's hand frame by frame (see hand_trace::HandTrace), off unless asked for; none
 	/// where the hands keep no trace
 	[[nodiscard]] virtual hand_trace::HandTrace* GetTrace() noexcept { return nullptr; }

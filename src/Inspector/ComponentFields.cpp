@@ -135,6 +135,7 @@
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandOnCreature.h"
+#include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Heartbeat.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
@@ -1187,6 +1188,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandOnCreature::upStarted>("upStarted")
 	    .Field<&components::HandOnCreature::frameCursorX>("frameCursorX");
 	Reflect<components::HandLastFeedback>(context).Field<&components::HandLastFeedback::sum>("sum");
+	Reflect<components::HandStillness>(context)
+	    .Field<&components::HandStillness::stillTurns>("stillTurns")
+	    .Field<&components::HandStillness::drift>("drift")
+	    .Field<&components::HandStillness::last>("last");
 	Reflect<components::Heartbeat>(context).Field<&components::Heartbeat::state>("state");
 	Reflect<components::HiddenByState> {context};
 	Reflect<components::HighDetail>(context)

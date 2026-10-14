@@ -54,7 +54,8 @@ void FinishStep(IdleMind& mind)
 
 /// One turn of watching the camera, the turn it starts on counting as the first: it turns to the camera when it is more
 /// than a quarter turn away, and is done once whole seconds of turns more than the step's seconds have gone by, or the
-/// camera is right overhead or out of sight
+/// camera is right overhead or out of sight, or the player's hand has stayed in one place for more turns than the step's
+/// seconds give
 void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
 {
 	if (step.turns.has_value())
@@ -87,7 +88,9 @@ void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Command
 	}
 	const auto turnsPerSecond = std::lround(1.0f / senses.seconds);
 	const auto turns = std::lround(mind.stepSeconds / senses.seconds) + 1;
-	if (turns / turnsPerSecond > static_cast<long>(step.seconds) || senses.camera->distance > k_WatchCameraFurthest)
+	const auto stillLimit = turnsPerSecond * static_cast<long>(step.seconds);
+	if (turns / turnsPerSecond > static_cast<long>(step.seconds) || senses.camera->distance > k_WatchCameraFurthest ||
+	    static_cast<long>(senses.camera->handStillTurns) > stillLimit)
 	{
 		FinishStep(mind);
 	}

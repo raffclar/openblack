@@ -657,6 +657,7 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 	    .groundDistance = glm::length(offset),
 	    .point = point,
 	    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
+	    .handStillTurns = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandStillTurns() : 0,
 	};
 }
 

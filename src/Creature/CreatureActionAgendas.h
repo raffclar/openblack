@@ -125,4 +125,8 @@ constexpr float k_AfterPointingOutSeconds = 2.0f;
 /// thing of that kind, unless the thing is doing something it finds interesting
 constexpr float k_ObservedCuriosityShare = 0.01f;
 [[nodiscard]] float CuriosityShare(bool observedKind, bool doingSomethingInteresting);
+/// A villager does something interesting to a creature when its state teaches a skill (an index in the creature's list
+/// of skills, the last index plus one for none) that the creature does not know
+constexpr uint32_t k_NoSkillTaught = 6;
+[[nodiscard]] bool DoingSomethingInteresting(uint32_t taughtSkill, const std::vector<bool>& skillsKnown);
 } // namespace openblack::creature_mind
