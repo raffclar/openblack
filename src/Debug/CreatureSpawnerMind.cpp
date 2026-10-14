@@ -391,8 +391,8 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 		}
 		if (learnt.mimicry.has_value())
 		{
-			ImGui::Text("Copying \"%s\": %s, %u steps left", tables->mimics.at(learnt.mimicry->rule).name.c_str(),
-			            creature_watching::Name(learnt.mimicry->stage), learnt.mimicry->stepsLeft);
+			ImGui::Text("Copying \"%s\": %s, %u of %u actions done", tables->mimics.at(learnt.mimicry->rule).name.c_str(),
+			            creature_watching::Name(learnt.mimicry->stage), learnt.mimicry->done, learnt.mimicry->limit);
 		}
 		ImGui::TreePop();
 	}

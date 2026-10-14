@@ -1389,6 +1389,16 @@ void CreatureMindSystem::ProcessTurn()
 			    {
 				    PlanCreature(entity, mind, true);
 			    }
+			    // It counts the times it thinks and still has no plan, from the start of its last agenda
+			    if (mind.thinksWithoutPlanSerial != mind.idle.serial)
+			    {
+				    mind.thinksWithoutPlanSerial = mind.idle.serial;
+				    mind.thinksWithoutPlan = 0;
+			    }
+			    if (!mind.planActive && mind.idle.step >= mind.idle.agenda.size())
+			    {
+				    ++mind.thinksWithoutPlan;
+			    }
 		    }
 		    // A script's cut scene makes every creature free to think for itself look at the camera, again and again
 		    // until the cut scene is over; what it is doing then plays out to its end
@@ -1464,6 +1474,11 @@ void CreatureMindSystem::ProcessTurn()
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    if (commands.communicated.has_value())
 		    {
+			    SPDLOG_LOGGER_DEBUG(
+			        spdlog::get("game"), "Creature {} shows its state: desire {}, animation {}", entt::to_integral(entity),
+			        commands.communicated->desire.has_value() ? static_cast<int>(*commands.communicated->desire) : -1,
+			        commands.communicated->animation.has_value() ? static_cast<int64_t>(*commands.communicated->animation)
+			                                                     : -1);
 			    Communicated(mind);
 		    }
 		    Apply(commands, animation, eyes);

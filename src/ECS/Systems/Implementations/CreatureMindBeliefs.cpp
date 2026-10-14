@@ -371,6 +371,10 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 		return;
 	}
 	const auto added = mind.beliefs.Add(thing, *kind, PlaceOf(registry, thing));
+	if (added.isNew && added.belief != nullptr)
+	{
+		added.belief->firstSight = mind_detail::BeliefOf(registry, thing, creature);
+	}
 	// A new belief leads it on to what the thing belongs to, but for another creature, which is its own
 	if (!added.isNew || *kind == kinds::k_Creature)
 	{

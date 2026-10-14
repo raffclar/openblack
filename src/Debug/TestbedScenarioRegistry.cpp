@@ -3626,15 +3626,16 @@ void AddMind(std::vector<Scenario>& all)
 	    .id = "mind.mimic",
 	    .name = "Mimic the player",
 	    .facet = Facet::Mind,
-	    .description = "A grown-up tiger with balls about it. Every 20 seconds the player plays with a toy near it, the "
-	                   "one deed creatures copy without the learning leash.",
+	    .description = "A grown-up tiger with two toy balls about it. Every 20 seconds the player plays with a toy near it, "
+	                   "the one deed creatures copy without the learning leash.",
 	    .expected = "Every time, unless it is still copying the action of the last time, it notices: it turns to look "
 	                "where the player played; a few seconds later it picks up a ball and throws it about, copying the "
 	                "player; then for a while it wants to play. The Mind panel shows the stage of copying.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
-	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {25.0f, -25.0f}},
-	                {.type = MobileObjectInfo::Ball, .offset = {-30.0f, -20.0f}}},
+	    // A loose ball from the mobile object table is not a toy: the toys are statics
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {25.0f, -25.0f}},
+	                {.type = MobileStaticInfo::ToyBall, .offset = {-30.0f, -20.0f}}},
 	    .commands =
 	        {{.kind = Kind::PlayerDid, .creature = 0, .delaySeconds = 3.0f, .point = {30.0f, -30.0f}, .value = k_PlayWithToy},
 	         Act(Kind::Stop, 0, 20.0f)},
@@ -3768,7 +3769,7 @@ void AddMind(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -34.0f}}},
 	    .commands = {setDesire(Desire::Hunger, 1.0f, 2.0f)},
 	});
-	// A tiger with its mind on, alone, that wants to show its state and is a little hungry
+	// A tiger with its mind on, alone, that wants to show its state and is very hungry
 	auto communicative = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 90.0f, "yours");
 	communicative.hold = false;
 	communicative.pauseMind = false;
@@ -3776,13 +3777,16 @@ void AddMind(std::vector<Scenario>& all)
 	    .id = "mind.communicate_state",
 	    .name = "Showing its state to the player",
 	    .facet = Facet::Mind,
-	    .description = "A tiger stands alone with its mind on, side on to the camera. After two seconds it wants to show "
-	                   "its state as much as possible, and it is a little hungry.",
-	    .expected = "It turns to face the camera, with its head on the camera, then plays its hungry animation once. Then "
-	                "it does not want to show its state for a minute. When no plan is ready, it stands and does nothing.",
+	    .description = "A tiger stands alone with its mind on, side on to the camera. At once it wants to show its "
+	                   "state as much as possible, and it is very hungry.",
+	    .expected = "It turns to face the camera, with its head on the camera, then plays its happy animation once: its mind "
+	                "is less than ten seconds old, which counts as feedback from the player. Then it does not want to show "
+	                "its state for a minute. After that minute it shows its state again with its hungry animation. When no "
+	                "plan is ready, it stands and does nothing.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {communicative},
-	    .commands = {setDesire(Desire::ManifestState, 1.0f, 2.0f), setDesire(Desire::Hunger, 0.3f, 2.0f)},
+	    // The desires are set as soon as it has them, so that its first communication shows them
+	    .commands = {setDesire(Desire::ManifestState, 1.0f, 0.1f), setDesire(Desire::Hunger, 1.0f, 0.1f)},
 	});
 	// A tiger of another player looks north at a village of the player: a hut and three of its villagers
 	auto stranger = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "another player's");

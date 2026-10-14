@@ -62,38 +62,82 @@ struct WholeFacts
 /// - The desires about other creatures are about a creature.
 [[nodiscard]] bool CanBeAbout(creature_desires::Desire desire, const WholeFacts& whole, bool mayAttackOwnPlayer);
 
-/// The kinds of part of a whole thing
-enum class Part : uint8_t
+/// The kinds of thing that a creature can act on, by how the desires examine them
+enum class Thing : uint8_t
 {
 	Villager,
+	/// An animal or a bird
 	Animal,
+	Creature,
+	/// A standing tree
 	Tree,
-	/// A building, a field or another object that does not live
+	/// A rock, a bonfire or a dead tree
+	Rock,
+	/// A thing that lies about and moves: a pot, a pile, a ball, a creed or any other mobile object
+	MobileObject,
+	/// A static that is not a rock: the toys, the lanterns and the like
+	MobileStatic,
+	/// A thing that is set into the land: a building, the temple, a worship site, a feature or flowers
 	Building,
-	/// The totem statue of a town, which a creature can impress
+	/// A field has the data of its town's field building
+	Field,
+	FishFarm,
+	/// The totem statue of a town
 	TotemStatue,
+	/// A miracle
+	Spell,
+	/// Anything else, such as a whole thing
+	Other,
 };
 
-/// What the creature knows about a part when it examines a desire about the whole thing
-struct PartFacts
+/// What the creature knows about a thing when it examines a desire for it
+struct ThingFacts
 {
-	Part kind {Part::Villager};
-	/// The data of the object lets a creature act on it. A thing that lives always lets a creature act on it.
+	Thing kind {Thing::Villager};
+	/// The data of the thing lets a creature act on it. A thing that lives always lets a creature act on it.
 	bool canActOn {true};
-	/// The data of the object lets a creature attack it
+	/// The data of the thing lets a creature attack it, play with it or look it over
 	bool attackable {false};
+	bool playable {false};
+	bool inspectable {false};
 	bool dead {false};
 	bool dancing {false};
 	/// A villager that a hand can pick up
 	bool pickable {true};
+	/// The thing is the creature that examines the desire
+	bool itself {false};
+	/// A creature that a script made a friend of the creature
+	bool friendOfCreature {false};
+	/// An animal that frightens a creature: a lion, a tiger, a wolf, a leopard, a bat or a vulture
+	bool frightening {false};
+	/// A magic mushroom or a toadstool
+	bool mushroom {false};
+	/// How tall the thing is
+	float height {0.0f};
+	/// The creature can pick the thing up from where it is
+	bool creatureCanPickUp {false};
 };
 
-/// Whether a creature can act on a part for a desire.
-/// - To impress, it acts on a villager that does not dance, or on a totem statue.
-/// - For compassion, it acts on a villager that a hand can pick up, or on any other part.
-/// - For anger, it acts on a tree, on a thing that lives and is not dead, or on a building, if the data of the part lets
-///   a creature attack it. All trees let a creature attack them.
-[[nodiscard]] bool PartSuits(creature_desires::Desire desire, const PartFacts& part);
+/// A creature poos only on a thing that is taller than this
+constexpr float k_TallestThingNotToPooOn = 1.5f;
+
+/// Whether a creature can act on a thing for a desire. A thing must let a creature act on it. Then each desire has its
+/// own rule:
+/// - Impress: a villager that does not dance, or a totem statue.
+/// - Compassion: a villager that a hand can pick up, or any other object.
+/// - Anger: a tree or a rock. Any other object only when its data lets a creature attack it, it is not the creature
+///   itself and it is not dead. A creature does not attack a creature that is its friend.
+/// - Play: a thing that lies about, a static, a rock, a tree, a creature or a totem statue. A villager or an animal that
+///   is not dead, or a building, only when its data lets a creature play with it.
+/// - Fear: a creature, a miracle or an animal that frightens.
+/// - Curiosity: an object whose data lets a creature look it over, and that is not dead.
+/// - Poo: an object that does not live and is taller than k_TallestThingNotToPooOn.
+/// - Tiredness and rest: a creature, or a thing that is set into the land, but not a field or a fish farm.
+/// - Bring stuff home: a thing that the creature can pick up.
+/// - The desires about other creatures: a creature.
+/// - Get high: a magic mushroom.
+/// - All other desires: any thing.
+[[nodiscard]] bool ThingSuits(creature_desires::Desire desire, const ThingFacts& thing);
 
 /// The first of the values that is the most and more than nothing, none when no value is more than nothing
 [[nodiscard]] std::optional<size_t> MostUseful(std::span<const float> usefulness);

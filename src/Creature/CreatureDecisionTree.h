@@ -160,6 +160,15 @@ struct CommonFacts
 /// The height of a creature by the size it shows: under 0.25, under 0.75, under 1.25, or bigger
 [[nodiscard]] uint32_t CreatureHeight(float shownSize);
 
+/// Whether a belief keeps the value of an attribute from the first time the creature saw the thing. The kind of thing,
+/// its origin, whether it lives, its player number, the job, sex and tribe of a villager, the size of a town and the
+/// kind of a building or a mobile object do not change after the first sight. All other attributes change with the
+/// thing.
+[[nodiscard]] bool KeptFromFirstSight(Attribute attribute);
+/// A belief about a thing as the creature knows it now. The kind of thing and the attributes that do not change come from
+/// the first sight. The other attributes of the first sight take their values now, when the thing has them now.
+[[nodiscard]] Belief WithFirstSight(const Belief& firstSight, const Belief& now);
+
 /// One example: a thing and the feedback for acting on it, from -1 to 1
 struct Episode
 {
