@@ -28,6 +28,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureObjectBeliefs.h"
@@ -39,6 +40,7 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/DeadTree.h"
@@ -421,10 +423,27 @@ std::optional<glm::vec3> CreatureMindSystem::BelievedPlace(const components::Cre
 	return std::nullopt;
 }
 
-void CreatureMindSystem::ForgetGoneThings(components::CreatureMindState& mind)
+void CreatureMindSystem::ForgetGoneThings(entt::entity creature, components::CreatureMindState& mind)
 {
-	const auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = Locator::entitiesRegistry::value();
 	mind.beliefs.ForgetIf([&registry](entt::entity thing) { return !registry.Valid(thing); });
+	// When the thing of its last try that fizzled goes, the creature forgets that try too
+	auto* casting = registry.TryGet<components::CreatureCasting>(creature);
+	if (casting == nullptr || casting->lastFizzleTarget == entt::null || registry.Valid(casting->lastFizzleTarget))
+	{
+		return;
+	}
+	const auto kept = creature_mind::ForgetGoneThing(
+	    {.lastThing = entt::to_integral(casting->lastFizzleTarget), .pending = casting->fizzle.has_value()},
+	    entt::to_integral(casting->lastFizzleTarget));
+	if (!kept.lastThing.has_value())
+	{
+		casting->lastFizzleTarget = entt::null;
+	}
+	if (!kept.pending)
+	{
+		casting->fizzle.reset();
+	}
 }
 
 void CreatureMindSystem::NoteNearestTemple(entt::entity creature, components::CreatureMindState& mind,

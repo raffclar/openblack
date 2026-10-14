@@ -739,6 +739,10 @@ struct Command
 	/// The action a script tells it to do, by its name in the game's table, and the object it does it with
 	std::string_view action;
 	std::optional<size_t> with;
+	/// A globe that the scenario puts down, by its place among the scenario's globes. The creature picks up this globe
+	/// in place of the object, or does the action with this globe. With onGlobe set, it does the action to this globe.
+	std::optional<size_t> globe;
+	bool onGlobe {false};
 	/// The leash put on
 	LeashType leash {LeashType::Rope};
 	/// The part of the body stroked, by its place in the hand's parts (the head first)

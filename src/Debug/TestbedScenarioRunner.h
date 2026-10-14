@@ -186,6 +186,7 @@ private:
 	[[nodiscard]] std::optional<entt::entity> CreatureAt(size_t index) const;
 	/// The scenario's objects by their place in it, while they are still about
 	[[nodiscard]] std::optional<entt::entity> ObjectAt(size_t index) const;
+	[[nodiscard]] std::optional<entt::entity> GlobeAt(size_t index) const;
 	void Log(std::string line);
 	/// Every miracle's position and the land's height under it, for a scenario that logs them
 	void LogMiracles();
@@ -206,6 +207,8 @@ private:
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
 	std::vector<entt::entity> _objects;
+	/// The globes that the scenario puts down on their own, in the order of its list
+	std::vector<entt::entity> _globes;
 	/// The scenario's temples, in its order
 	std::vector<entt::entity> _temples;
 	/// When each of the scenario's throws is next due, in seconds; none once done

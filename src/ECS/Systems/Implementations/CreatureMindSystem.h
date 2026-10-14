@@ -297,8 +297,9 @@ private:
 	void ComeAcross(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
 	/// Where it believes a thing is: where it last came across it; nothing when it has never come across it
 	[[nodiscard]] static std::optional<glm::vec3> BelievedPlace(const components::CreatureMindState& mind, entt::entity thing);
-	/// It forgets what it believed about things gone from the world
-	void ForgetGoneThings(components::CreatureMindState& mind);
+	/// It forgets what it believed about things gone from the world, and its last try that fizzled when the thing of
+	/// that try goes
+	void ForgetGoneThings(entt::entity creature, components::CreatureMindState& mind);
 	/// Gone into another map cell, it comes across the temple nearest it if that is another than the last
 	void NoteNearestTemple(entt::entity creature, components::CreatureMindState& mind, const components::Transform& transform);
 	/// Its eyes sweep this turn's cells about it, and it comes across everything in those it can see

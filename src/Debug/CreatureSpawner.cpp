@@ -576,6 +576,9 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		case creature_mind::Step::Kind::UseUp:
 			ImGui::Text("Using a thing up");
 			break;
+		case creature_mind::Step::Kind::UseUpHeld:
+			ImGui::Text("Using up what it holds");
+			break;
 		case creature_mind::Step::Kind::WatchFlying:
 			ImGui::Text("Watching a thing fly for %.1f s", static_cast<double>(idle.stepSeconds));
 			break;

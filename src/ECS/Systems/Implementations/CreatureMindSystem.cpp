@@ -1318,7 +1318,7 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    mind.secondsAlone += k_TurnSeconds;
 		    // What it believed about things now gone is forgotten, and going into another cell it notes the nearest temple
-		    ForgetGoneThings(mind);
+		    ForgetGoneThings(entity, mind);
 		    NoteNearestTemple(entity, mind, transform);
 		    const bool held = HeldByHand(entity);
 		    // Only a creature's own player pays it attention, and not while the hand holds it; nor do its eyes sweep about
@@ -1559,6 +1559,14 @@ void CreatureMindSystem::ProcessTurn()
 		    if (commands.useUp.has_value() && registry.Valid(static_cast<entt::entity>(*commands.useUp)))
 		    {
 			    ecs::world_objects::Remove(static_cast<entt::entity>(*commands.useUp));
+		    }
+		    // What its hand holds goes, and its hand is empty
+		    if (commands.useUpHeld && Locator::creatureObjectActionSystem::has_value())
+		    {
+			    if (const auto usedUpHeld = Locator::creatureObjectActionSystem::value().GetHeld(entity))
+			    {
+				    ecs::world_objects::Remove(*usedUpHeld);
+			    }
 		    }
 		    if (commands.restSitting && Locator::creaturePhysiologySystem::has_value())
 		    {
