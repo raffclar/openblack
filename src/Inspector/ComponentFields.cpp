@@ -951,6 +951,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Disciple::type>("type")
 	    .Field<&components::Disciple::tradeTown>("tradeTown")
 	    .Field<&components::Disciple::tradeResource>("tradeResource");
+	Reflect<components::DiscipleFollower>(context).Field<&components::DiscipleFollower::type>("type");
 	Reflect<components::MissionaryControl>(context)
 	    .Field<&components::MissionaryControl::villager>("villager")
 	    .Field<&components::MissionaryControl::town>("town")

@@ -33,6 +33,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/Graveyard.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/LivingAction.h"
@@ -66,6 +67,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MapSpiral.h"
+#include "Magic/VillagerReactionRules.h"
 #include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
@@ -583,6 +585,44 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 	}
 }
 
+/// A disciple decides by its work: it starts its work, or with no work it waits by the town centre. 1 when it did one.
+uint32_t DecideByWork(LivingAction& action)
+{
+	const auto villager = EntityOf(action);
+	const auto type = villager_disciple::TypeOf(villager);
+	if (type == None)
+	{
+		return 0;
+	}
+	if (SetAboutWork(action, type))
+	{
+		return 1;
+	}
+	if (type == Missionary)
+	{
+		return 0;
+	}
+	const auto final = Locator::livingActionSystem::value().VillagerGetFinalState(action);
+	if (final != VillagerStates::DiscipleNothingToDo && villager_disciple::TypeOf(villager) != None &&
+	    disciple::KindOf(type).waitsWhenIdle && villager_disciple::SetDiscipleNothingToDo(action, TownOfVillager(villager)))
+	{
+		return 1;
+	}
+	return 0;
+}
+
+/// A villager that is about: one that is not dying. A villager in the hand is about too.
+bool IsAvailableVillager(entt::entity villager)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(villager) || !registry.AllOf<Villager, LivingAction>(villager))
+	{
+		return false;
+	}
+	return Locator::livingActionSystem::value().VillagerGetFinalState(registry.Get<const LivingAction>(villager)) !=
+	       VillagerStates::Dying;
+}
+
 /// Whether the living action system has a state's work: the states a disciple lands into that aren't yet there are
 /// left for deciding afresh
 bool LandingStateIsThere(VillagerStates state)
@@ -657,6 +697,8 @@ VillagerDisciple villager_disciple::TypeOf(entt::entity villager)
 void villager_disciple::SetType(entt::entity villager, VillagerDisciple type, entt::entity tradeTown)
 {
 	auto& registry = Entities();
+	// A new work or the end of the work also ends a follower
+	registry.Remove<DiscipleFollower>(villager);
 	if (type == None)
 	{
 		registry.Remove<Disciple>(villager);
@@ -827,28 +869,77 @@ bool villager_disciple::SetAboutWorkOnLanding(LivingAction& action)
 uint32_t villager_disciple::DecideAsDisciple(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
-	const auto type = TypeOf(villager);
-	if (type == None)
+	// A follower tries the work of the disciple one time. At the decision after that, it is an ordinary villager again.
+	if (const auto follows = FollowerTypeOf(villager); Entities().AllOf<DiscipleFollower>(villager))
+	{
+		if (SetAboutWork(action, follows))
+		{
+			Entities().Get<DiscipleFollower>(villager).type = None;
+			return 1;
+		}
+		Entities().Remove<DiscipleFollower>(villager);
+		return 0;
+	}
+	if (DecideByWork(action) != 1)
 	{
 		return 0;
 	}
-	if (SetAboutWork(action, type))
+	// The villagers of its town near it can follow it to its work
+	if (disciple::KindOf(TypeOf(villager)).leadsFollowers && Locator::reactionSystem::has_value())
 	{
-		// TODO(disciples): others of its town about it may follow it to the same work once (the dropped-by-hand
-		// reaction), not yet in openblack
-		return 1;
+		Locator::reactionSystem::value().Create({.initiator = villager,
+		                                         .type = Reaction::ReactToDroppedByHand,
+		                                         .player = world_objects::PlayerOf(villager).value_or(PlayerNames::NEUTRAL),
+		                                         .position = Entities().Get<const Transform>(villager).position,
+		                                         .onCast = true});
 	}
-	if (type == Missionary)
+	return 1;
+}
+
+uint8_t villager_disciple::FollowPriority(entt::entity villager, entt::entity disciple, uint32_t tablePriority)
+{
+	auto& registry = Entities();
+	auto* action = registry.TryGet<LivingAction>(villager);
+	const auto* watcher = registry.TryGet<const Villager>(villager);
+	const auto* leader = registry.Valid(disciple) ? registry.TryGet<const Villager>(disciple) : nullptr;
+	if (action == nullptr || watcher == nullptr || leader == nullptr || !registry.AllOf<Transform>(disciple))
 	{
 		return 0;
 	}
-	const auto final = Locator::livingActionSystem::value().VillagerGetFinalState(action);
-	if (final != VillagerStates::DiscipleNothingToDo && TypeOf(villager) != None && disciple::KindOf(type).waitsWhenIdle &&
-	    SetDiscipleNothingToDo(action, TownOfVillager(villager)))
+	const auto final = Locator::livingActionSystem::value().VillagerGetFinalState(*action);
+	const auto& stateInfo = Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(final));
+	const auto* death = registry.TryGet<const VillagerDeath>(villager);
+	return magic::villager_reaction::DroppedByHandPriority(
+	    {
+	        .leaderAvailable = IsAvailableVillager(disciple),
+	        .watcherDisciple = TypeOf(villager) != None,
+	        .sameTown = watcher->town == leader->town,
+	        .distance = gutils::GetDistanceInMetres(PositionOf(villager), PositionOf(disciple)),
+	        .watcherFree = !registry.AllOf<ScriptControlled>(villager) && (stateInfo.field0xa8 & 1) != 0,
+	        .watcherAvailable = IsAvailableVillager(villager),
+	        .watcherChild = watcher->lifeStage == Villager::LifeStage::Child,
+	        .watcherSkeleton = registry.AllOf<WalkingSkeleton>(villager),
+	        .watcherDead = death != nullptr,
+	    },
+	    tablePriority);
+}
+
+void villager_disciple::Follow(LivingAction& action, entt::entity disciple)
+{
+	auto& registry = Entities();
+	const auto villager = EntityOf(action);
+	if (!IsAvailableVillager(disciple) || registry.AllOf<DiscipleFollower>(villager))
 	{
-		return 1;
+		return;
 	}
-	return 0;
+	registry.Assign<DiscipleFollower>(villager, DiscipleFollower {.type = TypeOf(disciple)});
+	SetTopState(action, VillagerStates::DecideWhatToDo);
+}
+
+VillagerDisciple villager_disciple::FollowerTypeOf(entt::entity villager)
+{
+	const auto* follower = Entities().TryGet<const DiscipleFollower>(villager);
+	return follower != nullptr ? follower->type : None;
 }
 
 uint32_t villager_disciple::InspectObject(LivingAction& action)
