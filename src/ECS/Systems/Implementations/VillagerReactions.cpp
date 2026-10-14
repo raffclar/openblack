@@ -71,6 +71,7 @@
 #include "VillagerCover.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDance.h"
+#include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
@@ -411,6 +412,16 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 		// The creature impresses it by its size, what it last did and how its town feels about it
 		return Taken::Impressed;
 	}
+	// A disciple near it starts its work: the villager can follow it to that work one time. The villager does not hold
+	// the reaction, and the disciple does not impress it.
+	if (type == Reaction::ReactToDroppedByHand)
+	{
+		if (const auto disciple = ReactingTo(villager); disciple.has_value())
+		{
+			ecs::villager_disciple::Follow(*action, *disciple);
+		}
+		return Taken::No;
+	}
 	// A hunter: one on its way to hide counts its time inside afresh and is neither taken up nor impressed; any other
 	// is frightened by it
 	if (type == Reaction::FleeFromPredator)
@@ -495,8 +506,8 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 		break;
 	case Reaction::ReactToTownCelebration:
 		// Its own town celebrating with no town centre, it looks at the town
-		// TODO(villager-social): the game also makes a dance about the town (the dance about a person) that no one is
-		// put in; whether a town's dances draw dancers of their own is not known yet
+		// TODO(villager-social): the game also makes an empty dance about the town (the dance about a person). A dance
+		// does not get dancers by itself: only a script or a villager that joins it puts dancers in it.
 		SetTop(*action, VillagerStates::LookingAtObjectReaction);
 		break;
 	case Reaction::ReactToDeath:

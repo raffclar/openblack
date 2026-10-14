@@ -82,6 +82,17 @@ uint8_t villager_reaction::TownCelebrationPriority(const CelebrationWatch& watch
 	return static_cast<uint8_t>(tablePriority & 0xFFu);
 }
 
+uint8_t villager_reaction::DroppedByHandPriority(const DroppedByHandWatch& watch, uint32_t tablePriority)
+{
+	if (!watch.leaderAvailable || watch.watcherDisciple || !watch.sameTown || !(watch.distance < k_FollowDistance) ||
+	    !watch.watcherFree || !watch.watcherAvailable || watch.watcherChild || watch.watcherSkeleton || watch.watcherDead ||
+	    watch.watcherPlaysFootball)
+	{
+		return 0;
+	}
+	return static_cast<uint8_t>(tablePriority & 0xFFu);
+}
+
 float villager_reaction::SpreadDistance(glm::vec2 villager, glm::vec2 reaction)
 {
 	return 0.5f * (std::abs(villager.x - reaction.x) + std::abs(villager.y - reaction.y));

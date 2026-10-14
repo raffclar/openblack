@@ -49,6 +49,7 @@
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/Implementations/VillagerReactions.h"
@@ -215,6 +216,7 @@ protected:
 	}
 	void TearDown() override
 	{
+		Locator::reactionSystem::reset();
 		Locator::infoConstants::reset();
 		Locator::livingActionSystem::reset();
 		Locator::entitiesMap::reset();
@@ -1338,4 +1340,84 @@ TEST_F(Reactions, VillagersFaintWhereTheyStandUntilTheStinkIsOver)
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
 	EXPECT_EQ(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
 	registry.Destroy(creature);
+}
+
+// Only an adult villager of the same town near a disciple, free to change what it does and not a disciple, follows it
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionRules, OnlyAFreeAdultOfTheTownNearADiscipleFollowsIt)
+{
+	using magic::villager_reaction::DroppedByHandPriority;
+	using magic::villager_reaction::DroppedByHandWatch;
+	const DroppedByHandWatch follows {
+	    .leaderAvailable = true, .sameTown = true, .distance = 9.9f, .watcherFree = true, .watcherAvailable = true};
+	EXPECT_EQ(DroppedByHandPriority(follows, 70), 70u);
+	auto far = follows;
+	far.distance = 10.0f;
+	EXPECT_EQ(DroppedByHandPriority(far, 70), 0u);
+	auto otherTown = follows;
+	otherTown.sameTown = false;
+	EXPECT_EQ(DroppedByHandPriority(otherTown, 70), 0u);
+	auto disciple = follows;
+	disciple.watcherDisciple = true;
+	EXPECT_EQ(DroppedByHandPriority(disciple, 70), 0u);
+	auto child = follows;
+	child.watcherChild = true;
+	EXPECT_EQ(DroppedByHandPriority(child, 70), 0u);
+	auto held = follows;
+	held.watcherFree = false;
+	EXPECT_EQ(DroppedByHandPriority(held, 70), 0u);
+	auto skeleton = follows;
+	skeleton.watcherSkeleton = true;
+	EXPECT_EQ(DroppedByHandPriority(skeleton, 70), 0u);
+	auto leaderGone = follows;
+	leaderGone.leaderAvailable = false;
+	EXPECT_EQ(DroppedByHandPriority(leaderGone, 70), 0u);
+}
+
+// A disciple that starts its work makes a reaction. A villager of its town near it becomes a follower of the same
+// work and decides again. It does not hold the reaction and the disciple does not impress it.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerNearADiscipleFollowsItToItsWorkOneTime)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& row = _info->reaction.at(static_cast<size_t>(Reaction::ReactToDroppedByHand));
+	row.priority = 70;
+	row.maxReactionDistance = 60.0f;
+	row.numGameTurnsForNormalThingsToReact = 80;
+	row.numGameTurnsForNormalThingsBeforeReactingAgain = 15;
+	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::DecideWhatToDo)).field0xa8 = 1;
+	Locator::infoConstants::reset();
+	Locator::infoConstants::emplace(*_info);
+	for (const auto villager : _villagers)
+	{
+		registry.Get<Villager>(villager).lifeStage = Villager::LifeStage::Adult;
+	}
+	const auto disciple = _villagers[0];
+	registry.Assign<Disciple>(disciple, Disciple {.type = VillagerDisciple::Farmer});
+	// The villagers find the reaction that they take up through the locator
+	auto& reactions = Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	reactions.Create({.initiator = disciple,
+	                  .type = Reaction::ReactToDroppedByHand,
+	                  .player = PlayerNames::PLAYER_ONE,
+	                  .position = k_Here,
+	                  .onCast = true});
+	// The villager 5 metres away follows the farmer; the one 200 metres away does not
+	const auto* follower = registry.TryGet<const DiscipleFollower>(_villagers[1]);
+	ASSERT_NE(follower, nullptr);
+	EXPECT_EQ(follower->type, VillagerDisciple::Farmer);
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::DecideWhatToDo);
+	EXPECT_FALSE(registry.AllOf<DiscipleFollower>(_villagers[2]));
+	EXPECT_FALSE(registry.AllOf<DiscipleFollower>(disciple));
+	// It holds no reaction and gives its town no belief
+	const auto* state = registry.TryGet<const LivingReaction>(_villagers[1]);
+	EXPECT_TRUE(state == nullptr || state->reaction == 0);
+	EXPECT_EQ(registry.TryGet<const TownImpression>(_town), nullptr);
+	// A follower already does not take a new work
+	registry.Get<Disciple>(disciple).type = VillagerDisciple::Forester;
+	ecs::villager_disciple::Follow(registry.Get<LivingAction>(_villagers[1]), disciple);
+	EXPECT_EQ(registry.Get<const DiscipleFollower>(_villagers[1]).type, VillagerDisciple::Farmer);
+	// A new work from the hand ends the follower
+	ecs::villager_disciple::SetType(_villagers[1], VillagerDisciple::Builder);
+	EXPECT_FALSE(registry.AllOf<DiscipleFollower>(_villagers[1]));
+	Locator::reactionSystem::reset();
 }

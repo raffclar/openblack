@@ -87,6 +87,7 @@
 #include "Physics/LivingRules.h"
 #include "VillagerBreeding.h"
 #include "VillagerCreatureReactions.h"
+#include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
 #include "VillagerForester.h"
@@ -867,6 +868,16 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		     .hasTown = villager.town != entt::null,
 		     .madeByOwnTown = villager.town != entt::null && villager.town == reaction.source.initiator},
 		    info->priority);
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
+	// A villager heeds a disciple that starts its work only when it can follow the disciple. Other living things do not.
+	if (reaction.source.type == Reaction::ReactToDroppedByHand)
+	{
+		if (!registry.AllOf<Villager>(living))
+		{
+			return 0;
+		}
+		const auto kind = ecs::villager_disciple::FollowPriority(living, reaction.source.initiator, info->priority);
 		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
 	// A villager heeds food lying about only when it catches its eye
