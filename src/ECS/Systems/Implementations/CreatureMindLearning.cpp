@@ -76,6 +76,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/MagicPile.h"
@@ -1663,87 +1664,6 @@ bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, e
 	return belief != nullptr && creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
 }
 
-/// What a creature knows about a part of a whole thing; none for a thing that is not a part it can act on
-std::optional<creature_activity::PartFacts> PartFactsOf(const ecs::Registry& registry, entt::entity part)
-{
-	using creature_activity::Part;
-	if (!Locator::infoConstants::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& info = Locator::infoConstants::value();
-	// The temple stands for its heart
-	if (registry.AllOf<Temple>(part))
-	{
-		return creature_activity::PartFacts {
-		    .kind = Part::Building,
-		    .canActOn = info.citadelHeart.canCreatureInteractWithMe != 0,
-		    .attackable = info.citadelHeart.canCreatureAttackMe != 0,
-		};
-	}
-	if (const auto* villager = registry.TryGet<const Villager>(part))
-	{
-		const auto row = static_cast<size_t>(GVillagerInfo::Find(villager->tribe, villager->number));
-		// A villager in its home, or one that may not be picked up, cannot have help
-		return creature_activity::PartFacts {
-		    .kind = Part::Villager,
-		    .attackable = row < info.villager.size() && info.villager.at(row).canCreatureAttackMe != 0,
-		    .dead = registry.AllOf<VillagerDeath>(part) || !(villager->life > 0.0f),
-		    .dancing = registry.AllOf<Dancer>(part),
-		    .pickable = !registry.AnyOf<AtHome, CannotBePickedUp>(part),
-		};
-	}
-	if (const auto* animal = registry.TryGet<const Animal>(part))
-	{
-		const auto row = static_cast<size_t>(animal->type);
-		return creature_activity::PartFacts {
-		    .kind = Part::Animal,
-		    .attackable = row < info.animal.size() && info.animal.at(row).canCreatureAttackMe != 0,
-		    .dead = animal->Dead(),
-		};
-	}
-	if (const auto* tree = registry.TryGet<const Tree>(part))
-	{
-		const auto row = static_cast<size_t>(tree->type);
-		return creature_activity::PartFacts {
-		    .kind = Part::Tree,
-		    .canActOn = row < info.tree.size() && info.tree.at(row).canCreatureInteractWithMe != 0,
-		    .attackable = true,
-		};
-	}
-	if (const auto* abode = registry.TryGet<const Abode>(part))
-	{
-		const auto row = static_cast<size_t>(abode->info);
-		const bool known = row < info.abode.size();
-		// A worship site never lets a creature act on it
-		return creature_activity::PartFacts {
-		    .kind = Part::Building,
-		    .canActOn = known && info.abode.at(row).canCreatureInteractWithMe != 0 && !registry.AllOf<WorshipSite>(part),
-		    .attackable = known && info.abode.at(row).canCreatureAttackMe != 0,
-		};
-	}
-	// A field has the data of its town's field building
-	if (registry.AllOf<Field>(part))
-	{
-		const auto* data = FieldBuildingInfo(registry, part);
-		return creature_activity::PartFacts {
-		    .kind = Part::Building,
-		    .canActOn = data != nullptr && data->canCreatureInteractWithMe != 0,
-		    .attackable = data != nullptr && data->canCreatureAttackMe != 0,
-		};
-	}
-	if (registry.AllOf<VillageTotem>(part))
-	{
-		const auto* data = TotemStatueInfo(registry, part);
-		return creature_activity::PartFacts {
-		    .kind = Part::TotemStatue,
-		    .canActOn = data != nullptr && data->canCreatureInteractWithMe != 0,
-		    .attackable = data != nullptr && data->canCreatureAttackMe != 0,
-		};
-	}
-	return std::nullopt;
-}
-
 /// A hungry creature does not eat a thing of a town for which it learnt a compassion worth more than this
 constexpr float k_MostCompassionToEatFrom = 0.1f;
 
@@ -1782,6 +1702,156 @@ bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 		info = ecs::world_objects::InfoOf(thing);
 	}
 	return info != nullptr && info->canCreatureInteractWithMe != 0;
+}
+
+/// Whether an animal of this kind frightens a creature: the lions, tigers, wolves and leopards, the bats and the vultures
+bool Frightens(AnimalInfo type)
+{
+	switch (type)
+	{
+	case AnimalInfo::Lion:
+	case AnimalInfo::Tiger:
+	case AnimalInfo::Wolf:
+	case AnimalInfo::Leopard:
+	case AnimalInfo::SpellWolf:
+	case AnimalInfo::Bat:
+	case AnimalInfo::SpellBat:
+	case AnimalInfo::Vulture:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/// The data that tells if a creature can act on a thing. A field has the data of its town's field building, a village
+/// totem the data of its statue, and the temple the data of its heart.
+const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& info = Locator::infoConstants::value();
+	if (registry.AllOf<Temple>(thing))
+	{
+		return &info.citadelHeart;
+	}
+	if (registry.AllOf<Field>(thing))
+	{
+		return FieldBuildingInfo(registry, thing);
+	}
+	if (registry.AllOf<VillageTotem>(thing))
+	{
+		return TotemStatueInfo(registry, thing);
+	}
+	if (const auto* animal = registry.TryGet<const Animal>(thing))
+	{
+		const auto row = static_cast<size_t>(animal->type);
+		return row < info.animal.size() ? &info.animal.at(row) : nullptr;
+	}
+	return ecs::world_objects::InfoOf(thing);
+}
+
+/// The kind of a thing, by how the desires examine it
+creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity thing)
+{
+	using creature_activity::Thing;
+	if (registry.AllOf<Villager>(thing))
+	{
+		return Thing::Villager;
+	}
+	if (registry.AllOf<Animal>(thing))
+	{
+		return Thing::Animal;
+	}
+	if (registry.AllOf<Creature>(thing))
+	{
+		return Thing::Creature;
+	}
+	if (registry.AllOf<ecs::components::Spell>(thing))
+	{
+		return Thing::Spell;
+	}
+	if (registry.AllOf<Tree>(thing))
+	{
+		return Thing::Tree;
+	}
+	const auto* still = registry.TryGet<const MobileStatic>(thing);
+	if (registry.AnyOf<Rock, DeadTree>(thing) || (still != nullptr && still->type == MobileStaticInfo::Bonfire))
+	{
+		return Thing::Rock;
+	}
+	if (registry.AnyOf<MobileObject, Pot, Ball>(thing))
+	{
+		return Thing::MobileObject;
+	}
+	if (still != nullptr)
+	{
+		return Thing::MobileStatic;
+	}
+	if (registry.AllOf<Field>(thing))
+	{
+		return Thing::Field;
+	}
+	if (registry.AllOf<FishFarm>(thing))
+	{
+		return Thing::FishFarm;
+	}
+	if (registry.AllOf<VillageTotem>(thing))
+	{
+		return Thing::TotemStatue;
+	}
+	if (registry.AnyOf<Abode, Temple, WorshipSite, Feature, AnimatedStatic, Flowers, BigForest>(thing))
+	{
+		return Thing::Building;
+	}
+	return Thing::Other;
+}
+
+/// What a creature knows about a thing when it examines a desire for it. Only the facts that the desire uses cost time
+/// to find: the height for poo, and the pick-up rule for bringing stuff home.
+creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::entity creature, Desire desire,
+                                           entt::entity thing)
+{
+	using creature_activity::Thing;
+	const auto kind = KindOfThing(registry, thing);
+	const auto* info = ActingInfoOf(registry, thing);
+	creature_activity::ThingFacts facts {
+	    .kind = kind,
+	    .canActOn = LetsCreatureAct(registry, thing),
+	    .attackable = info != nullptr && info->canCreatureAttackMe != 0,
+	    .playable = info != nullptr && info->canCreaturePlayWithMe != 0,
+	    .inspectable = info != nullptr && info->canCreatureInspectMe != 0,
+	    .itself = thing == creature,
+	};
+	if (const auto* villager = registry.TryGet<const Villager>(thing))
+	{
+		// A villager in its home, or one that may not be picked up, cannot have help
+		facts.dead = registry.AllOf<VillagerDeath>(thing) || !(villager->life > 0.0f);
+		facts.dancing = registry.AllOf<Dancer>(thing);
+		facts.pickable = !registry.AnyOf<AtHome, CannotBePickedUp>(thing);
+	}
+	else if (const auto* animal = registry.TryGet<const Animal>(thing))
+	{
+		facts.dead = animal->Dead();
+		facts.frightening = Frightens(animal->type);
+	}
+	// TODO(creature-desire-thing-tests): a creature also dies, and a script can make two creatures friends. A creature
+	// does not attack a dead creature or a friend. These states do not exist here yet.
+	const auto* feature = registry.TryGet<const Feature>(thing);
+	const auto* mobile = registry.TryGet<const MobileObject>(thing);
+	facts.mushroom =
+	    (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
+	    (mobile != nullptr && (mobile->type == MobileObjectInfo::MagicMushroom || mobile->type == MobileObjectInfo::Toadstool));
+	if (desire == Desire::Poo && kind != Thing::Spell && kind != Thing::Other)
+	{
+		facts.height = object_measures::Height(registry, thing);
+	}
+	if (desire == Desire::BringStuffHome && Locator::creatureObjectActionSystem::has_value())
+	{
+		facts.creatureCanPickUp = Locator::creatureObjectActionSystem::value().CanPickUp(creature, thing);
+	}
+	return facts;
 }
 
 /// The town of a thing: the town of a villager, a building, a field or a fish farm, of a pile in a storage pit, or of
@@ -1875,8 +1945,7 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 		{
 			return;
 		}
-		const auto facts = PartFactsOf(registry, thing);
-		if (facts.has_value() && creature_activity::PartSuits(desire, *facts))
+		if (creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing)))
 		{
 			parts.push_back(GoalWorth(creature, mind, desire, thing, activity));
 		}
@@ -1911,7 +1980,7 @@ bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& m
 			}
 		}
 	}
-	return LetsCreatureAct(registry, thing);
+	return creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing));
 }
 
 std::vector<creature_planner::ObjectCandidate>
@@ -2012,9 +2081,7 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::ShownParts(en
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto suits = [&](entt::entity part) {
-		const auto facts = PartFactsOf(registry, part);
-		return !NoWayLately(registry, mind, part) && facts.has_value() && creature_activity::PartSuits(desire, *facts) &&
-		       ObjectToActOnUsefulness(creature, mind, desire, part) > 0.0f;
+		return SuitsDesire(creature, mind, desire, part) && ObjectToActOnUsefulness(creature, mind, desire, part) > 0.0f;
 	};
 	if (suits(thing))
 	{
