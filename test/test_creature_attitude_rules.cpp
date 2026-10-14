@@ -48,6 +48,18 @@ TEST(CreatureAttitudeRules, ActionsShowFearRespectOrNothing)
 	EXPECT_EQ(attitude::AttitudeShown(0, true), std::nullopt);
 }
 
+// A hungry creature that means to act on a person it holds frightens the town, even when what it last did shows
+// nothing or earns respect; otherwise its plan shows what its last action shows
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureAttitudeRules, AHungryCreatureHoldingAPersonItMeansToActOnIsFrightening)
+{
+	EXPECT_EQ(attitude::PlanShows(1, true, true), Attitude::Fear);  // walking somewhere
+	EXPECT_EQ(attitude::PlanShows(38, true, true), Attitude::Fear); // stroke
+	EXPECT_EQ(attitude::PlanShows(1, true, false), std::nullopt);
+	EXPECT_EQ(attitude::PlanShows(38, false, false), Attitude::Respect);
+	EXPECT_EQ(attitude::PlanShows(11, true, false), Attitude::Fear);
+}
+
 // A town is curious about a creature for 15 whole seconds, then indifferent
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(CreatureAttitudeRules, CuriosityLapsesAfterFifteenSeconds)

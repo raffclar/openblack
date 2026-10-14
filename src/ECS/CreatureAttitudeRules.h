@@ -55,6 +55,9 @@ enum class Shown : uint8_t
 /// The attitude a creature's finished action shows a town, about the thing it means to act on next: none when it shows
 /// nothing (the town's feeling is left to lapse)
 [[nodiscard]] std::optional<Attitude> AttitudeShown(uint32_t action, bool thingIsVillager);
+/// What a creature's plan shows a town. A hungry creature that means to act on a person it holds in its hand frightens
+/// the town, whatever it last did. Otherwise the plan shows what its last finished action shows about that thing
+[[nodiscard]] std::optional<Attitude> PlanShows(uint32_t lastAction, bool thingIsVillager, bool hungryForPersonItHolds);
 
 /// A town's feeling about one creature, and when it last changed and last lapsed, in game turns
 struct Feeling

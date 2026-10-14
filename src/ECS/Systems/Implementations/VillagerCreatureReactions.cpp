@@ -19,10 +19,12 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureDesires.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
@@ -304,16 +306,18 @@ void villager_creature::TownTurn(entt::entity town, uint32_t turn)
 	});
 	for (auto& watched : watching->creatures)
 	{
-		// What it last finished doing tells the town how to feel about it, as long as it means to act on something.
-		// TODO(villager-social): the game also takes a hungry creature meaning to act on something it keeps (whose meaning
-		// isn't known yet) as frightening
+		// What it last finished doing tells the town how to feel about it, as long as it means to act on something. A
+		// hungry creature that means to act on a person it holds frightens the town
 		std::optional<Attitude> shown;
 		if (const auto* plan = PlanOf(watched.creature))
 		{
 			const auto thing = static_cast<entt::entity>(*plan->object);
 			const auto* mind = registry.TryGet<const CreatureMindState>(watched.creature);
-			shown = creature_attitude::AttitudeShown(mind->lastActionDone.value_or(0),
-			                                         registry.Valid(thing) && registry.AllOf<Villager>(thing));
+			const bool thingIsVillager = registry.Valid(thing) && registry.AllOf<Villager>(thing);
+			const auto* holder = thingIsVillager ? registry.TryGet<const HeldByCreature>(thing) : nullptr;
+			const bool hungryForPersonItHolds =
+			    plan->desire == creature_desires::Desire::Hunger && holder != nullptr && holder->creature == watched.creature;
+			shown = creature_attitude::PlanShows(mind->lastActionDone.value_or(0), thingIsVillager, hungryForPersonItHolds);
 		}
 		const bool changed = creature_attitude::Turn(watched.feeling, shown, turn, k_TurnsPerSecond);
 		if (changed && Locator::creatureHelpSystem::has_value())
