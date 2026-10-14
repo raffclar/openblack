@@ -95,6 +95,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "ECS/Systems/AbodeSoundSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -276,6 +277,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"mistSystem", "land.atmosphere"},
     LocatorCoverage {"cloudSystem", "land.atmosphere"},
     LocatorCoverage {"villageLightSystem", "living.villages"},
+    LocatorCoverage {"abodeSoundSystem", "living.abode_sounds"},
     LocatorCoverage {"fieldSystem", "living.field"},
     LocatorCoverage {"animalSystem", "living.animal"},
     LocatorCoverage {"snowSystem", "land.snow"},
@@ -1012,6 +1014,12 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		        const auto* registry = Registry();
 		        return Json {{"dark", lights.IsDark()}, {"lights", registry != nullptr ? CountOf<VillageLight>(*registry) : 0}};
 	        }));
+	provider->Add(
+	    Query("abode_sounds", "How many sounds the buildings of the towns made by themselves"),
+	    Serve<Locator::abodeSoundSystem>("the sounds of the buildings",
+	                                     [](const ecs::systems::AbodeSoundSystemInterface& sounds, const QueryContext& /*c*/) {
+		                                     return Json {{"sounds", sounds.GetSoundCount()}};
+	                                     }));
 	provider->Add(
 	    Query("field", "A field's crop as it is drawn: its tint, height and sway", {IdParameter("The field's entity id")}),
 	    Serve<Locator::fieldSystem>(

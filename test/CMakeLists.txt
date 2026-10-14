@@ -957,3 +957,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_light_shine graphics/test_light_shine.cpp)
 openblack_setup_and_add_test(test_animal_reactions test_animal_reactions.cpp)
+openblack_setup_and_add_test(test_world_sounds test_world_sounds.cpp)

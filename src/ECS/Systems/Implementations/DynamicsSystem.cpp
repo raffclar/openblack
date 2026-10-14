@@ -1233,9 +1233,9 @@ void DynamicsSystem::EndTurn()
 		// parts are skipped
 		const bool available = IsAvailable(entry.entity);
 		// A felled tree makes one sound as it topples, if it is tall
-		if (available && entry.kind == PhysicsEntry::Kind::FelledTree && body.Axes()[1].y < turn::k_FelledUpright)
+		if (available && entry.kind == PhysicsEntry::Kind::FelledTree && turn::FelledTreeToppled(body.Axes()[1].y))
 		{
-			if (_world->HeightOf(entry.entity) > turn::k_FelledSoundHeight)
+			if (turn::FelledTreeFallSounds(_world->HeightOf(entry.entity)))
 			{
 				Hooks().FelledTreeToppled(entry.entity);
 			}

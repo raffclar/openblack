@@ -7,15 +7,21 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <spdlog/spdlog.h>
+
 #include "3D/AllMeshes.h"
+#include "Audio/Sound.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -82,7 +88,27 @@ SoundCollisionType PhysicsClassHooks::CollideSoundType(entt::entity object) cons
 	return info != nullptr ? info->collideSound : SoundCollisionType::Default;
 }
 
-void PhysicsClassHooks::FelledTreeToppled([[maybe_unused]] entt::entity tree) {}
+void PhysicsClassHooks::FelledTreeToppled(entt::entity tree)
+{
+	if (!Locator::soundTagSystem::has_value())
+	{
+		return;
+	}
+	const auto* transform = Locator::entitiesRegistry::value().TryGet<const components::Transform>(tree);
+	if (transform == nullptr)
+	{
+		return;
+	}
+	// The game picks the sound from a list of one. The pick still uses a local random number.
+	if (Locator::gameRandom::has_value())
+	{
+		Locator::gameRandom::value().LocalRand(1);
+	}
+	Locator::soundTagSystem::value().CreatePointSound(static_cast<entt::id_type>(audio::SoundId::G_TreeFall_01),
+	                                                  transform->position, false);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Felled tree {} topples: the sound of a tree that falls at ({}, {}, {})",
+	                    entt::to_integral(tree), transform->position.x, transform->position.y, transform->position.z);
+}
 
 void PhysicsClassHooks::OfferToCatchingCreatures([[maybe_unused]] entt::entity object, [[maybe_unused]] PhysicsEntry& entry) {}
 

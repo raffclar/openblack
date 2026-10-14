@@ -931,6 +931,8 @@ struct Scenario
 
 /// A town centre's totem
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
+/// The sounds of a village by day and by night: its buildings, its foresters and its animals
+void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// The villagers around the player's temple, with their debug window open
 void AddTempleVillagerScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry

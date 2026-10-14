@@ -89,6 +89,7 @@
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
+#include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
@@ -159,6 +160,7 @@ using openblack::debug::gui::DebugGuiInterface;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
+using openblack::ecs::systems::AbodeSoundSystem;
 using openblack::ecs::systems::AdvisorSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
@@ -327,6 +329,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
+	Locator::abodeSoundSystem::emplace<AbodeSoundSystem>();
 	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
 	Locator::artefactSystem::emplace<ArtefactSystem>();
@@ -508,6 +511,7 @@ void openblack::ShutDownServices()
 	Locator::resourceStoreSystem::reset();
 	Locator::animatedStaticSystem::reset();
 	Locator::objectDrawListSystem::reset();
+	Locator::abodeSoundSystem::reset();
 	Locator::appleBarrelSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
