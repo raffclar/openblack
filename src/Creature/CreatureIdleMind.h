@@ -87,9 +87,14 @@ constexpr float k_ThrowAroundDistance = 30.0f;
 constexpr uint32_t k_ThrowAroundExtra = 21;
 /// Turning to face a store before throwing into it, it holds still this long
 constexpr float k_FaceStoreSeconds = 0.1f;
-/// Going up to something to act at it, it stops this close; following something, it keeps this close
+/// Going up to something to act at it, it stops this close
 constexpr float k_ApproachDistance = 12.0f;
-constexpr float k_FollowDistance = 25.0f;
+/// Following a villager to watch it: for up to 30 whole seconds, keeping within 15 of it; then holding for one second
+/// and up to three more
+constexpr float k_FollowWatchingSeconds = 30.0f;
+constexpr float k_FollowWatchingDistance = 15.0f;
+constexpr float k_FollowWatchingHoldSeconds = 1.0f;
+constexpr float k_FollowWatchingExtraHoldSeconds = 3.0f;
 /// Off to hurl something, it shows its anger first one time in this many
 constexpr uint32_t k_AngryBeforeHurlLots = 6;
 
@@ -406,6 +411,11 @@ struct Step
 		StopMoving,
 		/// A stage of a dance with the villagers of a town (see DanceOrder)
 		Dance,
+		/// Following a villager (the step's object) to watch it do a skill the creature does not know: each turn while
+		/// the villager does it, up to the step's seconds counted in whole seconds, it walks up to the villager, stopping
+		/// within the step's movement distance, whenever it is further and still. Then it holds where it is for one to four
+		/// seconds, picked at random, and the step is done.
+		FollowWatching,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -477,6 +487,12 @@ struct IdleMind
 	uint32_t inspectTurns {0};
 	/// A step watching a flying thing: the turns it has watched it
 	uint32_t watchTurns {0};
+	/// A step that follows to watch: whether it has stopped watching and holds, and the turns it holds for yet (it
+	/// counts its watching turns with the flying watch's)
+	bool followHolding {false};
+	uint32_t followHoldTurns {0};
+	/// Whether it has set off back towards the villager, so that a walk that fails gives the agenda up
+	bool followMoved {false};
 	/// A dance step: the turns it dances yet, and whether its dance stops next turn
 	uint32_t danceTurns {0};
 	bool danceEnding {false};
@@ -624,6 +640,14 @@ struct Senses
 		float heading {0.0f};
 	};
 	std::optional<DanceView> dance;
+	/// The villager a step follows to watch, while that step is next or under way: whether it still does a skill the
+	/// creature does not know, and how far it is along the ground, none once it has gone
+	struct FollowedView
+	{
+		bool interesting {false};
+		float distance {0.0f};
+	};
+	std::optional<FollowedView> followed;
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -792,8 +816,6 @@ struct PooBy
 [[nodiscard]] std::vector<Step> ApproachAndEmote(uint32_t object, size_t animation);
 /// Turning to face something and watching it for some seconds
 [[nodiscard]] std::vector<Step> LookAt(glm::vec2 point, float seconds);
-/// Following something about for some seconds
-[[nodiscard]] std::vector<Step> FollowFor(uint32_t object, float seconds);
 /// Running away from a point
 [[nodiscard]] std::vector<Step> RunFrom(glm::vec2 point);
 /// Walking up to something and destroying it

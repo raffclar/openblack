@@ -63,6 +63,10 @@ constexpr float k_ExamineHeights = 2.5f;
 constexpr float k_ExamineFaceSeconds = 2.0f;
 constexpr float k_ExamineWatchSeconds = 1.1f;
 
+/// Watching a villager do something the creature wants to learn: following it, amazed and looking at it (see
+/// Step::Kind::FollowWatching), then scratching its head, amazed
+[[nodiscard]] std::vector<Step> ExamineByFollowing(uint32_t villager);
+
 /// Looking another creature over: going near it (four times its own height away), turning to face it a tenth of a
 /// second, curious, then watching it, curious, for five seconds and up to ten more, after which it has looked it over
 [[nodiscard]] std::vector<Step> InspectCreature(uint32_t other, float height);

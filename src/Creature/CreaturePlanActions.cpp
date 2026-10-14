@@ -33,8 +33,7 @@ namespace
 /// Actions of the creature's animation set that have no name elsewhere
 constexpr size_t k_Sneeze = 62;
 constexpr size_t k_PickMe = 74;
-/// Following something about and gazing at the view last this long
-constexpr float k_FollowSeconds = 8.0f;
+/// Gazing at the view lasts this long
 constexpr float k_GazeSeconds = 6.0f;
 
 /// A chance from 0 to 1 in fine steps, from the whole-number random
@@ -544,7 +543,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::ExamineByLooking:
 		return creature_mind::ExamineByLooking(*object, situation.height, situation.thingHeight);
 	case Build::ExamineByFollowing:
-		return creature_mind::FollowFor(*object, k_FollowSeconds);
+		return creature_mind::ExamineByFollowing(*object);
 	case Build::ThrowAbout:
 		return creature_mind::ThrowAbout(*object, random);
 	case Build::Hurl:

@@ -27,6 +27,7 @@
 #include <LHVM.h>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
+#include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
@@ -50,6 +51,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSpellMind.h"
@@ -82,6 +84,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LandForest.h"
+#include "ECS/Components/LearningMarker.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
@@ -101,10 +104,12 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
+#include "ECS/LearningMarker.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -195,6 +200,8 @@ bool Interruptible(creature_mind::Activity activity)
 
 /// A creature stroked for what it holds eats it as the action that eats a thing alive
 constexpr std::string_view k_EatHeldAction = "EatAlive";
+/// A creature that sees a villager do a skill it does not know follows the villager to watch it
+constexpr std::string_view k_FollowToWatchAction = "ExamineByFollowing";
 
 /// The action in the table of actions that gets the feedback for an agenda that no plan gave.
 /// Only the forced agendas to eat, sleep, poo, be sick or drink are such agendas.
@@ -3776,34 +3783,135 @@ void CreatureMindSystem::SeeSkill(const glm::vec3& point, size_t skill)
 	}
 }
 
+namespace
+{
+/// The game's turn now
+uint32_t GameTurn()
+{
+	return Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
+}
+
+/// Where a creature's head is as posed this frame: its head bone, else its height over its feet
+glm::vec3 HeadPoint(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto& transform = registry.Get<const Transform>(creature);
+	const auto& body = registry.Get<const Creature>(creature);
+	const auto fallback = transform.position + glm::vec3(0.0f, ShownSize(body) * creature_mode::k_HeightPerSize, 0.0f);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(body.species);
+	if (animation == nullptr || animation->boneMatrices.empty() || !rigs.Contains(rigId))
+	{
+		return fallback;
+	}
+	const auto& points = rigs.Handle(rigId)->actionPoints;
+	if (!points.has_value() || points->head >= animation->boneMatrices.size())
+	{
+		return fallback;
+	}
+	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, placement)[3]);
+}
+} // namespace
+
 void CreatureMindSystem::WatchSkill(entt::entity creature, size_t skill)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* tables = GetTables();
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
-	if (tables == nullptr || mind == nullptr || !mind->learnt.has_value())
+	// A mind stilled, as by the freeze spell, learns nothing
+	if (tables == nullptr || mind == nullptr || !mind->learnt.has_value() || mind->paused)
 	{
 		return;
 	}
+	// The clock of a skill runs on the game's turns
+	const auto turn = GameTurn();
 	const auto progress = creature_watching::SeeSkill(mind->learnt->knowledge, skill, tables->skills, mind->developmentPhase,
-	                                                  mind->turn, k_TurnsPerSecond);
-	if (progress.learnt && !progress.ignored)
+	                                                  turn, k_TurnsPerSecond);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} sees skill {} (turn {}): event {}, meter {}",
+	                    entt::to_integral(creature), skill, turn,
+	                    progress.event.has_value() ? static_cast<int>(*progress.event) : -1, progress.meter.value_or(-1.0f));
+	if (progress.event == creature_watching::LearningEvent::Learnt)
 	{
 		creature_mind_model::Think(*mind->learnt, fmt::format("I've learnt to {}", tables->skills.at(skill).name));
 	}
-	// The advisor tells of it: too young to learn it, learnt it now, or still learning it (a skill it knows already says
-	// nothing)
-	using creature_help::Kind;
-	const auto parameter = static_cast<uint32_t>(skill);
-	if (progress.ignored && !progress.learnt)
+	ShowLearningMeter(creature, *mind, progress.meter);
+	// The advisor tells of it: too young to learn it, learnt it now, or still learning it
+	if (progress.event.has_value())
 	{
-		TellHelp(creature, {.kind = Kind::CantLearnNormalActionYet, .parameter = parameter});
+		using creature_help::Kind;
+		using creature_watching::LearningEvent;
+		const auto kind = *progress.event == LearningEvent::TooYoung       ? Kind::CantLearnNormalActionYet
+		                  : *progress.event == LearningEvent::NearlyLearnt ? Kind::NearlyLearntNormalAction
+		                                                                   : Kind::LessonNormalAction;
+		TellHelp(creature, {.kind = kind, .parameter = static_cast<uint32_t>(skill)});
 	}
-	else if (!progress.ignored)
+}
+
+void CreatureMindSystem::WatchVillager(entt::entity creature, CreatureMindState& mind, entt::entity villager)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!mind.learnt.has_value() || !Locator::infoConstants::has_value() || !registry.AllOf<Villager>(villager))
 	{
-		TellHelp(creature,
-		         {.kind = progress.learnt ? Kind::LessonNormalAction : Kind::NearlyLearntNormalAction, .parameter = parameter});
+		return;
 	}
+	const creature_watching::Watcher watcher {
+	    .phase = mind.developmentPhase,
+	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
+	    .planDesire = mind.planner.current.has_value() ? std::optional(mind.planner.current->desire) : std::nullopt,
+	};
+	const auto* action = registry.TryGet<const LivingAction>(villager);
+	if (!creature_watching::WatchesVillagers(watcher) || action == nullptr)
+	{
+		return;
+	}
+	// How far a walking villager still has to go
+	float toGoal = 0.0f;
+	if (const auto* walk = registry.TryGet<const WallHug>(villager); walk != nullptr)
+	{
+		toGoal = glm::distance(glm::xz(registry.Get<const Transform>(villager).position), walk->goal);
+	}
+	const auto state = creature_watching::StateToLearnFrom({
+	    .state = action->states.at(static_cast<size_t>(LivingAction::Index::Top)),
+	    .finalState = action->states.at(static_cast<size_t>(LivingAction::Index::Final)),
+	    .distanceToGoal = toGoal,
+	});
+	const auto& table = Locator::infoConstants::value().villagerStateTable;
+	if (state >= table.size())
+	{
+		return;
+	}
+	const auto skill = table.at(state).teachesSkill;
+	const auto& known = mind.learnt->knowledge.skillsKnown;
+	if (skill >= known.size() || known.at(skill))
+	{
+		return;
+	}
+	// It takes in what the villager does, and goes after it to see more
+	WatchSkill(creature, skill);
+	ForceActivity(creature,
+	              {.desire = creature_desires::Desire::Curiosity, .action = k_FollowToWatchAction, .actionObject = villager});
+}
+
+void CreatureMindSystem::ShowLearningMeter(entt::entity creature, CreatureMindState& mind, std::optional<float> share)
+{
+	const auto turn = GameTurn();
+	if (!share.has_value() || !creature_watching::MeterShows(mind.lastMeterTurn, turn))
+	{
+		return;
+	}
+	mind.lastMeterTurn = turn;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (body == nullptr || transform == nullptr || !Locator::resources::has_value())
+	{
+		return;
+	}
+	const auto marker = registry.Create();
+	registry.Assign<LearningMarker>(
+	    marker,
+	    ecs::learning_marker::Start(HeadPoint(registry, creature), ShownSize(*body) * creature_mode::k_HeightPerSize, *share));
 }
 
 void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)
@@ -3834,6 +3942,7 @@ void CreatureMindSystem::CountMiracleSighting(entt::entity entity, const Creatur
 	{
 		creature_mind_model::Think(*mind.learnt, fmt::format("I've learnt the miracle {}", tables->miracles.at(miracle).name));
 	}
+	ShowLearningMeter(entity, mind, progress.meter);
 	// The advisor tells of what the sighting showed
 	if (progress.event.has_value())
 	{

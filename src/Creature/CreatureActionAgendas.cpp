@@ -151,6 +151,17 @@ std::vector<Step> creature_mind::ExamineByLooking(uint32_t thing, float height, 
 	};
 }
 
+std::vector<Step> creature_mind::ExamineByFollowing(uint32_t villager)
+{
+	Step follow {.kind = Step::Kind::FollowWatching,
+	             .seconds = k_FollowWatchingSeconds,
+	             .object = villager,
+	             .face = creature_face::Cue::Amazed,
+	             .gaze = Gaze {.object = villager}};
+	follow.movement = {.kind = Movement::Kind::ToObject, .object = villager, .maxDistance = k_FollowWatchingDistance};
+	return {follow, {.kind = Step::Kind::Action, .animation = animations::k_Confused, .face = creature_face::Cue::Amazed}};
+}
+
 std::vector<Step> creature_mind::InspectCreature(uint32_t other, float height)
 {
 	// TODO(creature-reactions-2): each turn of the watch the game also weighs which of its desires it would act on with
