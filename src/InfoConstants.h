@@ -361,7 +361,8 @@ struct CreatureInitialDesireInfo
 	float field0x3c;
 	float field0x40;
 	float field0x44;
-	float field0x48;
+	/// The change that a plan for this desire adds to the alignment of the creature on each game turn
+	float alignmentChange;
 	float field0x4c;
 	float field0x50;
 	float field0x54;
@@ -967,7 +968,8 @@ struct GCreatureInfo: GLivingInfo
 	float field0x36c;
 	/// The poo a meal builds up for each unit of energy it gains
 	float pooPerEnergy;
-	float field0x374;
+	/// Multiplies the alignment change that the plans of the creature make on each game turn
+	float alignmentChangeScale;
 	/// How a creature's size turns into how much it impresses villagers: added to its size, which is then held between 1
 	/// and 4, and multiplied by this
 	float impressiveSizeAddition;
@@ -1001,7 +1003,7 @@ static_assert(offsetof(GCreatureInfo, defenceMultiplierBurn) == 0x80);
 static_assert(offsetof(GCreatureInfo, secondsPerAgeTick) == 0x200);
 static_assert(offsetof(GCreatureInfo, field0x24c) == 0x24c);
 static_assert(offsetof(GCreatureInfo, field0x36c) == 0x36c);
-static_assert(offsetof(GCreatureInfo, field0x374) == 0x374);
+static_assert(offsetof(GCreatureInfo, alignmentChangeScale) == 0x374);
 static_assert(offsetof(GCreatureInfo, impressiveSizeAddition) == 0x378);
 static_assert(offsetof(GCreatureInfo, impressiveSizeMultiplier) == 0x37c);
 
@@ -1548,8 +1550,8 @@ struct DifferentCreatureInfo
 	float pooPerEnergy;
 	/// Overrides the creature row's field0x36c
 	float field0x54;
-	/// Overrides the creature row's field0x374
-	float field0x58;
+	/// Overrides the alignment change scale of the creature row
+	float alignmentChangeScale;
 };
 static_assert(sizeof(DifferentCreatureInfo) == 0x5c);
 
