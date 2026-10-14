@@ -103,8 +103,9 @@ public:
 	/// Whether a land's scripts are loaded
 	[[nodiscard]] virtual bool Loaded() const = 0;
 	[[nodiscard]] virtual std::vector<ScriptInfo> Scripts() const = 0;
-	/// Starts a script (a function or a challenge) by its name; the task's number, or why not
-	virtual std::variant<uint32_t, std::string> Run(std::string_view name) = 0;
+	/// Starts a script (a function or a challenge) by its name, with its parameters in order as a script's call gives
+	/// them; the task's number, or why not
+	virtual std::variant<uint32_t, std::string> Run(std::string_view name, const std::vector<ScriptValue>& args) = 0;
 	virtual std::string StopTask(uint32_t task) = 0;
 	[[nodiscard]] virtual std::vector<ScriptGlobal> Globals() const = 0;
 	virtual std::string SetGlobal(std::string_view name, const ScriptValue& value) = 0;
@@ -116,7 +117,7 @@ public:
 
 /// Adds the scripts' writes to the script provider:
 ///   script.scripts {name?}                the land's scripts by name
-///   script.run    {name}                  starts a script or challenge by name; its task
+///   script.run    {name, args?}           starts a script or challenge by name, with its parameters; its task
 ///   script.stop   {task}                  stops a task
 ///   script.global {name}                  one global's value; script.globals {name?} lists them
 ///   script.set_global {name, value}       sets a global, keeping its type
