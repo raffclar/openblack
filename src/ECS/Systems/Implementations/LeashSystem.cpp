@@ -1960,6 +1960,8 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 		case orders::Attempt::GoToForest:
 			return TakeGroundOrder(creature, objectAt);
 		case orders::Attempt::FishAndEat:
+			// The game counts this order as a sign that the player knows how to make the creature drink
+			PromptKnown(creature, creature_help::Prompt::Drink);
 			if (Force(creature, {.desire = Desire::Hunger, .action = orders::k_FishAction, .object = object}))
 			{
 				desire = Desire::Hunger;
