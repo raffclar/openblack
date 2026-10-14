@@ -114,6 +114,12 @@ struct KindInfo
 {
 	return kind >= Kind::StageInitial && kind <= Kind::StageFullyMature;
 }
+/// The stage message of a stage of growing up, from the first stage to fully grown up
+[[nodiscard]] constexpr Kind StageMessage(uint32_t stage)
+{
+	constexpr auto k_Last = static_cast<uint32_t>(Kind::StageFullyMature) - static_cast<uint32_t>(Kind::StageInitial);
+	return static_cast<Kind>(static_cast<uint32_t>(Kind::StageInitial) + (stage < k_Last ? stage : k_Last));
+}
 /// The lesson script a stage message starts, none for the first. The last starts its script only on the first land.
 [[nodiscard]] std::optional<std::string_view> StageScript(Kind kind, uint32_t land);
 

@@ -55,6 +55,15 @@ TEST(CreatureHelp, StageMessagesStartTheirLessons)
 	EXPECT_FALSE(StageScript(Kind::CurrentDesire, 1).has_value());
 }
 
+TEST(CreatureHelp, EachStageHasItsMessage)
+{
+	EXPECT_EQ(StageMessage(0), Kind::StageInitial);
+	EXPECT_EQ(StageMessage(1), Kind::StageLearnToEat);
+	EXPECT_EQ(StageMessage(12), Kind::StageLeashGoodAndEvil);
+	EXPECT_EQ(StageMessage(13), Kind::StageFullyMature);
+	EXPECT_EQ(StageMessage(20), Kind::StageFullyMature);
+}
+
 TEST(CreatureHelp, OnlyAGrownUpCreatureOfThePlayersGivesHelp)
 {
 	Situation situation;
