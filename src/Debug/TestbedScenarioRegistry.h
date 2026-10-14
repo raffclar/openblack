@@ -303,6 +303,9 @@ struct ObjectSetup
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes. An animal
 	/// is made as a land's script makes one, and the script controls it.
 	bool inScript {false};
+	/// A villager is the named person of this row in the game's table of named people, whose name the Show Villager
+	/// Names key shows
+	std::optional<uint8_t> nameRow;
 	/// A villager is made a disciple of this work, as a land's script makes one
 	VillagerDisciple disciple {VillagerDisciple::None};
 	/// A script has said it can't be picked up, and can't be moved, as Land 1's script says of the fisherman's wife
@@ -1013,6 +1016,8 @@ void AddKnockScenarios(std::vector<Scenario>& all);
 /// Villagers walking side by side, each at the speed its life, load, town and state give
 void AddVillagerSpeedScenarios(std::vector<Scenario>& all);
 void AddDiscipleScenarios(std::vector<Scenario>& all);
+/// The labels over the villagers' heads: the names display as it grows in and out
+void AddVillagerLabelScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);
 /// The moon at night, seen to the east, for trying its phases and its path with the moon debug window

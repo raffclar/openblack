@@ -1357,15 +1357,22 @@ void Game::PlaceScreenLabels()
 	}
 	_interface->SetVillagerLabels(ecs::villager_label_source::Gather({
 	    .screen = Locator::windowing::value().GetSize(),
-	    .nameFade = _villagerNameFade,
+	    .nameFade = _villagerNameFadeDrawn,
 	    .texts = &_interface->GetTexts(),
 	}));
 }
 
 void Game::UpdateVillagerLabels(float milliseconds)
 {
-	_villagerNameFade = gui::villager_labels::StepNameFade(
-	    _villagerNameFade, Locator::entitiesRegistry::value().Context().villagerNamesShown, milliseconds);
+	// The names display changes size only on a frame that draws the land
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool landHidden = Locator::videoSystem::has_value() &&
+	                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+	const auto frame = gui::villager_labels::StepNameFadeFrame(_villagerNameFade,
+	                                                           Locator::entitiesRegistry::value().Context().villagerNamesShown,
+	                                                           milliseconds, !inTemple && !landHidden);
+	_villagerNameFadeDrawn = frame.drawn;
+	_villagerNameFade = frame.next;
 }
 
 void Game::ProcessHandToolTipTurn()
