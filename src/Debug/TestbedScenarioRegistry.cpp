@@ -4119,6 +4119,58 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.slap_reaction",
+	    .name = "What a slap makes it show",
+	    .facet = Facet::Mind,
+	    .description = "The hand slaps a grown-up tiger facing the camera hard on the head and lets go. The scenario "
+	                   "repeats, so each run can show another reaction.",
+	    .expected = "After the slap's reeling animation, the tiger shows one of four reactions, each one time in four: "
+	                "frightened when it feels no more anger than kindness, else angry or a rude gesture; sad; it cries; "
+	                "or it looks at the player for one to two seconds with darting eyes and a sad face.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Slap(0, 0.85f, false, false, 1.0f), Act(Kind::HandLetGo, 0, 1.0f, true), Act(Kind::Stop, 0, 6.0f)},
+	    .repeatFrom = 0,
+	});
+
+	auto young = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	young.phase = 1;
+	all.push_back({
+	    .id = "mind.young_feedback",
+	    .name = "A young creature stroked and slapped",
+	    .facet = Facet::Mind,
+	    .description = "A tiger at the second stage of growing up, too young to learn from the hand, is stroked and let "
+	                   "go, then slapped hard and let go. The scenario repeats.",
+	    .expected = "One stroke in two, it then plays its happy animation. One slap in two, it is then frightened of the "
+	                "player: it runs away one time in three, else it cowers where it stands. Each other slap shows one of "
+	                "the four reactions of a grown-up creature. The advisor says nothing: the help needs a grown-up "
+	                "creature.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {young},
+	    .commands = {Stroke(0, creature_feedback::BodyPart::Head, 1.0f), Act(Kind::HandLetGo, 0, 1.0f, true),
+	                 Act(Kind::Stop, 0, 6.0f), Slap(0, 0.85f, false, false, 1.0f), Act(Kind::HandLetGo, 0, 1.0f, true),
+	                 Act(Kind::Stop, 0, 8.0f)},
+	    .repeatFrom = 0,
+	});
+
+	auto grown = Content(CreatureType::Tiger, {0.0f, 20.0f});
+	grown.phase = 13;
+	all.push_back({
+	    .id = "mind.lost_thing",
+	    .name = "The creature loses what it goes to",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger on the learning leash is told to act on a cow. When the advisor has said what "
+	                   "the tiger wants, and before the tiger is done with the cow, the cow is removed from the world.",
+	    .expected = "The tiger stops what it does and decides again. The good advisor says: \"Your Creature lost the "
+	                "object he was looking for.\"",
+	    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+	    .creatures = {grown},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {30.0f, 60.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false),
+	                 OnObject(Kind::RemoveObject, 0, 0, 9.0f, false), Act(Kind::TakeOffLeash, 0, 8.0f)},
+	});
+
+	all.push_back({
 	    .id = "mind.mimic",
 	    .name = "Mimic the player",
 	    .facet = Facet::Mind,
@@ -4882,7 +4934,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
-	       kind == Kind::HandPour || kind == Kind::HandRelease || IsPointerCommand(kind);
+	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -4909,7 +4961,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 118> k_Names {
+	constexpr std::array<std::string_view, 119> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -5028,6 +5080,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand pour",
 	    "do action",
 	    "make friends",
+	    "remove object",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

@@ -1227,6 +1227,10 @@ void CreatureMindSystem::Abandon(CreatureMindState& mind)
 		mind.learnt->contexts.back().running = false;
 	}
 	mind.planActive = false;
+	if (mind.planner.current.has_value())
+	{
+		mind.planner.lastObject = mind.planner.current->object;
+	}
 	mind.planner.current.reset();
 }
 
@@ -2398,12 +2402,14 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			return;
 		}
 	}
-	// Having eaten a magic mushroom, once it is done with what it was doing it becomes high before it chooses anything
-	// else
-	if (adopt && mind.highPending && mind.idle.step >= mind.idle.agenda.size() && !registry.AllOf<ScriptControlled>(creature))
+	// When it completes its work, the thing that waits replaces its next decision: it becomes high after a magic
+	// mushroom, or it reacts to a stroke or a slap
+	if (adopt && mind.followUp.has_value() && mind.idle.step >= mind.idle.agenda.size() &&
+	    !registry.AllOf<ScriptControlled>(creature))
 	{
-		mind.highPending = false;
-		BecomeHigh(creature);
+		const auto followUp = *mind.followUp;
+		mind.followUp.reset();
+		DoFollowUp(creature, mind, followUp);
 		return;
 	}
 	const glm::vec2 position {transform->position.x, transform->position.z};
@@ -2692,7 +2698,44 @@ void CreatureMindSystem::AteMagicMushroom(entt::entity creature)
 	}
 	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr)
 	{
-		mind->highPending = true;
+		mind->followUp = creature_follow_up::AfterMushroom(mind->followUp);
+	}
+}
+
+void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mind, creature_follow_up::FollowUp followUp)
+{
+	using creature_follow_up::FollowUp;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} does what waited: {}", entt::to_integral(creature),
+	                    static_cast<int>(followUp));
+	switch (followUp)
+	{
+	case FollowUp::BecomeHigh:
+		BecomeHigh(creature);
+		return;
+	case FollowUp::ShowHappy:
+		static_cast<void>(ForcePlan(creature, {.desire = Desire::ManifestState,
+		                                       .action = "CommunicateState",
+		                                       .object = creature,
+		                                       .agenda = creature_follow_up::ShowHappy()}));
+		return;
+	case FollowUp::FrightenedOfPlayer:
+		static_cast<void>(ForcePlan(
+		    creature, {.desire = Desire::Fear, .action = creature_follow_up::FrightenedAction(Random(3)), .object = creature}));
+		return;
+	case FollowUp::ShowSlapFeeling:
+	{
+		const creature_follow_up::Feelings feelings {
+		    .compassion = mind.desires.has_value() ? (*mind.desires)[Desire::Compassion].value : 0.0f,
+		    .anger = mind.desires.has_value() ? (*mind.desires)[Desire::Anger].value : 0.0f,
+		};
+		auto agenda = creature_follow_up::ShowSlapFeeling(
+		    feelings, [this](uint32_t range) { return Random(range); }, Chance(),
+		    static_cast<uint32_t>(std::lround(k_TurnsPerSecond)));
+		static_cast<void>(ForcePlan(
+		    creature,
+		    {.desire = Desire::ManifestState, .action = "CommunicateState", .object = creature, .agenda = std::move(agenda)}));
+		return;
+	}
 	}
 }
 
@@ -2929,6 +2972,10 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	situation.self = entt::to_integral(creature);
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
+	{
+		situation.stage = mind->developmentPhase;
+	}
 	if (Locator::camera::has_value())
 	{
 		situation.eye = Locator::camera::value().GetOrigin();
@@ -3244,6 +3291,11 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		return;
 	}
 
+	// A slap makes it show how it feels when it completes its current work
+	if (feedback < 0.0f)
+	{
+		mind.followUp = creature_follow_up::FollowUp::ShowSlapFeeling;
+	}
 	// With nothing it did lately to credit the feedback to, it learns nothing from it
 	if (context == nullptr)
 	{
@@ -3274,6 +3326,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 			creature_desires::ChangeSource(desires, type, amount);
 		}
 		TellHelp(creature, creature_help::TooYoungToLearn(feedback));
+		mind.followUp = creature_follow_up::AfterYoungFeedback(mind.followUp, feedback, Random(2));
 		return;
 	}
 

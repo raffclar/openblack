@@ -21,6 +21,7 @@
 
 #include "3D/CreatureBody.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureHelp.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureRig.h"
@@ -38,6 +39,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -190,6 +192,11 @@ bool CreatureMindSystem::SwapMinds(entt::entity from, entt::entity to)
 		auto& mind = registry.Get<CreatureMindState>(creature);
 		mind.pendingFile = shared;
 		TakeUpFile(creature, mind);
+		// With the other mind comes its stage of growing up, and the help gives the message of that stage
+		if (Locator::creatureHelpSystem::has_value())
+		{
+			Locator::creatureHelpSystem::value().Raise(creature, {.kind = creature_help::StageMessage(mind.developmentPhase)});
+		}
 		if (auto body = creature_mind_body::FromMindFile(*shared); body.has_value())
 		{
 			body->size = kept.size;

@@ -734,6 +734,9 @@ struct Command
 		DoAction,
 		/// The creature and the other creature (value) become friends, as a script's "force friends" command does
 		MakeFriends,
+		/// The scenario's object goes from the world at once, as when something other than the creature removes it.
+		/// Needs no creature
+		RemoveObject,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

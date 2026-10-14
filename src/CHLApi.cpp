@@ -4359,8 +4359,9 @@ constexpr int32_t k_ActionTextForObject = 828;
 
 void GetTargetObject() // 097 GET_TARGET_OBJECT
 {
-	// The thing that the creature's plan acts on, 0 when it has no such plan. When the script gives no object, the
-	// native puts nothing on the stack, as the game does.
+	// The thing that the creature's plan acts on. After the plan stops, the native gives the thing of the last plan
+	// until the creature starts a new plan. The native gives 0 when there is no such thing, or when the thing is gone.
+	// When the script gives no object, the native puts nothing on the stack, as the game does.
 	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
@@ -4375,8 +4376,13 @@ void GetTargetObject() // 097 GET_TARGET_OBJECT
 		return;
 	}
 	const auto* mind = registry.TryGet<const CreatureMindState>(object);
-	const auto target = mind != nullptr && mind->planner.current.has_value() ? mind->planner.current->object : std::nullopt;
-	PushObject(target.has_value() ? static_cast<entt::entity>(*target) : entt::null);
+	std::optional<uint32_t> target;
+	if (mind != nullptr)
+	{
+		target = mind->planner.current.has_value() ? mind->planner.current->object : mind->planner.lastObject;
+	}
+	const auto thing = target.has_value() ? static_cast<entt::entity>(*target) : entt::null;
+	PushObject(registry.Valid(thing) ? thing : entt::null);
 }
 
 void CreatureDesireIs() // 098 CREATURE_DESIRE_IS

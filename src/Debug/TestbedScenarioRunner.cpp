@@ -1545,6 +1545,16 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return HandTakeFireBall();
 	case Kind::HandTapObject:
 		return HandTapObject(command.object);
+	case Kind::RemoveObject:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value())
+		{
+			return "nothing to remove";
+		}
+		ecs::world_objects::Remove(*object);
+		return "removed";
+	}
 	case Kind::HandTake:
 	{
 		const auto object = command.globe.has_value() ? GlobeAt(*command.globe) : ObjectAt(command.object);
@@ -1942,7 +1952,8 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease)
+	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
+	    command.kind == Kind::RemoveObject)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2309,6 +2320,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTake:
 	case Kind::HandPour:
 	case Kind::HandRelease:
+	case Kind::RemoveObject:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:

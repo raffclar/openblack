@@ -975,3 +975,5 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_eat_from_stores test_creature_eat_from_stores.cpp
 )
+openblack_setup_and_add_test(test_creature_lost_thing test_creature_lost_thing.cpp)
+openblack_setup_and_add_test(test_creature_follow_up test_creature_follow_up.cpp)
