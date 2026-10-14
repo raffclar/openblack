@@ -69,3 +69,12 @@ glm::vec3 pick_shapes::BubblePickOffset(glm::vec3 modelMiddle, glm::vec3 camera,
 	}
 	return towards / length * FlatRadius(halfExtents, scale);
 }
+
+bool pick_shapes::HitsBuiltPart(bool temple, float built, float hitHeight, float baseHeight, float halfHeight, float scale)
+{
+	if (!temple || built >= 1.0f)
+	{
+		return true;
+	}
+	return hitHeight <= baseHeight + (halfHeight * 2.0f * scale * built);
+}

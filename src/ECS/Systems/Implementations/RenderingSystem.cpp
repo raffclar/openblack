@@ -679,6 +679,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				                                                                                               glm::mat4(0.0f)};
 			    }
 			    ++slots->second.filled;
+			    // When a part of it shows, the cursor can point at it. The pick tests its whole model, where it stands.
+			    if (Locator::buildingDamageSystem::value().PartialShare(entity).has_value())
+			    {
+				    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
+			    }
 			    return;
 		    }
 		    // A home with someone in lights its windows at night
