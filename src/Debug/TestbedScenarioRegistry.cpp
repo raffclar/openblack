@@ -4027,7 +4027,8 @@ void AddMind(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
 	    .creatures = {young},
 	    .commands = {Stroke(0, creature_feedback::BodyPart::Head, 1.0f), Act(Kind::HandLetGo, 0, 1.0f, true),
-	                 Slap(0, 0.85f, false, false, 6.0f), Act(Kind::HandLetGo, 0, 1.0f, true), Act(Kind::Stop, 0, 8.0f)},
+	                 Act(Kind::Stop, 0, 6.0f), Slap(0, 0.85f, false, false, 1.0f), Act(Kind::HandLetGo, 0, 1.0f, true),
+	                 Act(Kind::Stop, 0, 8.0f)},
 	    .repeatFrom = 0,
 	});
 

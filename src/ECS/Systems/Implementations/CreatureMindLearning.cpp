@@ -2643,6 +2643,8 @@ void CreatureMindSystem::AteMagicMushroom(entt::entity creature)
 void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mind, creature_follow_up::FollowUp followUp)
 {
 	using creature_follow_up::FollowUp;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} does what waited: {}", entt::to_integral(creature),
+	                    static_cast<int>(followUp));
 	switch (followUp)
 	{
 	case FollowUp::BecomeHigh:
