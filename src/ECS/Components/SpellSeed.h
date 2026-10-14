@@ -42,6 +42,9 @@ struct SpellSeed
 	float power {1.0f};
 	/// Summoned from the player's worship, or taken from a bubble
 	magic::SeedOrigin origin {magic::SeedOrigin::Bubble};
+	/// Came out of a one-shot globe: tapped from one, or put in the hand by a script as one. Scripts see such a seed as a
+	/// one-shot miracle, and any other seed as a plain seed.
+	bool fromGlobe {false};
 	/// Made at an icon of the player's worship: summoned from it, or taken from a globe or a dispenser while the player has
 	/// an icon for the seed. Only such a seed can be powered up; its worship tops up what it casts, and it gives back
 	/// what it holds when dropped.

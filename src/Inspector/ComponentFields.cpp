@@ -1606,6 +1606,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellSeed::castMultiplier>("castMultiplier")
 	    .Field<&components::SpellSeed::power>("power")
 	    .Field<&components::SpellSeed::origin>("origin")
+	    .Field<&components::SpellSeed::fromGlobe>("fromGlobe")
 	    .Field<&components::SpellSeed::hasIcon>("hasIcon")
 	    .Field<&components::SpellSeed::worshipSite>("worshipSite")
 	    .Field<&components::SpellSeed::ready>("ready")
