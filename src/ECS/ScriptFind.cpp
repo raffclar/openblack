@@ -29,6 +29,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -198,6 +199,12 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	if (registry.AllOf<OneOffSpellSeed>(entity))
 	{
 		return Kind {.type = ScriptType::MobileObject};
+	}
+	// A miracle in the hand, by its seed: a one-shot miracle when it came out of a globe, else a plain seed
+	if (const auto* seed = registry.TryGet<const SpellSeed>(entity))
+	{
+		return Kind {.type = seed->fromGlobe ? ScriptType::OneShotSpell : ScriptType::SpellSeed,
+		             .subtype = Row(seed->seedType)};
 	}
 	if (registry.AllOf<Ball>(entity))
 	{
