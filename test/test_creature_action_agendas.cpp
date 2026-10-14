@@ -312,6 +312,18 @@ TEST(CreatureActionAgendas, LookedOverKindsAreFarLessInteresting)
 	EXPECT_FLOAT_EQ(CuriosityShare(true, true), 1.0f);
 }
 
+// A villager is up to something interesting when its state teaches a skill the creature does not know yet: building,
+// farming, the totem, the storage pit, fishing or dancing
+TEST(CreatureActionAgendas, AVillagerIsInterestingAtASkillTheCreatureDoesNotKnow)
+{
+	const std::vector<bool> knowsFishing {false, false, false, false, true, false};
+	EXPECT_FALSE(DoingSomethingInteresting(k_NoSkillTaught, knowsFishing));
+	EXPECT_FALSE(DoingSomethingInteresting(4, knowsFishing));
+	EXPECT_TRUE(DoingSomethingInteresting(0, knowsFishing));
+	EXPECT_TRUE(DoingSomethingInteresting(5, knowsFishing));
+	EXPECT_TRUE(DoingSomethingInteresting(3, {}));
+}
+
 // "force Guide CREATURE_SMILE_AT_FRIEND MyCreature" and "force MyCreature CREATURE_WAVE_AT_OBJECT Guide"
 TEST(CreatureActionAgendas, SmilingAndWavingGoNearAndFaceTheOther)
 {
