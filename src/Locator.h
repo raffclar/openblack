@@ -107,6 +107,7 @@ class LivingActionSystemInterface;
 class MistSystemInterface;
 class CloudSystemInterface;
 class VillageLightSystemInterface;
+class AbodeSoundSystemInterface;
 class VillageTotemSystemInterface;
 class SpellIconSystemInterface;
 class ArtefactSystemInterface;
@@ -264,6 +265,7 @@ struct Locator
 	using mistSystem = entt::locator<ecs::systems::MistSystemInterface>;
 	using cloudSystem = entt::locator<ecs::systems::CloudSystemInterface>;
 	using villageLightSystem = entt::locator<ecs::systems::VillageLightSystemInterface>;
+	using abodeSoundSystem = entt::locator<ecs::systems::AbodeSoundSystemInterface>;
 	using villageTotemSystem = entt::locator<ecs::systems::VillageTotemSystemInterface>;
 	using spellIconSystem = entt::locator<ecs::systems::SpellIconSystemInterface>;
 	using artefactSystem = entt::locator<ecs::systems::ArtefactSystemInterface>;

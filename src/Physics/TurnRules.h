@@ -177,6 +177,16 @@ inline constexpr float k_DeadLife = 0.01f;
 /// A felled tree has fallen once its up axis has tipped this far from upright; taller than this it makes a sound
 inline constexpr float k_FelledUpright = 0.98f;
 inline constexpr float k_FelledSoundHeight = 10.0f;
+/// Whether a felled tree has toppled: its up axis has tipped past k_FelledUpright
+[[nodiscard]] constexpr bool FelledTreeToppled(float upAxisHeight)
+{
+	return upAxisHeight < k_FelledUpright;
+}
+/// Whether a felled tree that topples makes the sound of a tree that falls: only a tree taller than k_FelledSoundHeight
+[[nodiscard]] constexpr bool FelledTreeFallSounds(float treeHeight)
+{
+	return treeHeight > k_FelledSoundHeight;
+}
 
 /// The force a living thing pushes an object out of its way with: the object's weight
 [[nodiscard]] float PushForce(float weight);

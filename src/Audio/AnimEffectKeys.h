@@ -103,6 +103,11 @@ enum class SoundAction : int32_t
 	Refusal = 56,
 	Whistle = 61,
 	Tree = 70,
+	/// The sounds of a building by day, at dusk, at dawn and by night
+	AbodeDay = 71,
+	AbodeDusk = 72,
+	AbodeDawn = 73,
+	AbodeNight = 74,
 	Collide = 75,
 	TauntGrunt = 79,
 	HappyGrunt = 80,
