@@ -25,9 +25,11 @@ constexpr float k_LearntMeterSightings = 3.0f;
 /// Seen this share of the times it needs, a miracle is nearly learnt
 constexpr float k_NearlyLearntShare = 0.75f;
 
+/// The number of actions of a stage. The game draws a number from 0 to 0 for it, so the draw changes nothing, but it
+/// uses the random numbers.
 uint32_t StageLength(const MimicRule& rule, const std::function<uint32_t(uint32_t)>& random)
 {
-	return rule.stageSteps + random(2);
+	return rule.stageSteps + random(1);
 }
 } // namespace
 
@@ -201,7 +203,8 @@ const char* creature_watching::Name(MimicStage stage)
 }
 
 bool creature_watching::StartMimicry(std::optional<Mimicry>& mimicry, size_t rule, std::span<const MimicRule> rules,
-                                     const MimicConditions& conditions, std::optional<uint32_t> object)
+                                     const MimicConditions& conditions, std::optional<uint32_t> object, uint32_t turn,
+                                     const std::function<uint32_t(uint32_t)>& random)
 {
 	if (rule >= rules.size())
 	{
@@ -225,55 +228,63 @@ bool creature_watching::StartMimicry(std::optional<Mimicry>& mimicry, size_t rul
 	{
 		return false;
 	}
-	mimicry = Mimicry {.rule = rule, .stage = MimicStage::Notice, .stepsLeft = wanted.stageSteps, .object = object};
+	mimicry = Mimicry {
+	    .rule = rule, .stage = MimicStage::Notice, .limit = StageLength(wanted, random), .stageStart = turn, .object = object};
 	return true;
 }
 
-void creature_watching::StepMimicry(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules,
-                                    const std::function<uint32_t(uint32_t)>& random)
+bool creature_watching::StageContinues(const Mimicry& mimicry, uint32_t turn, float turnsPerSecond)
+{
+	const auto stageTurns = static_cast<uint32_t>(turnsPerSecond * k_MimicStageSeconds);
+	return mimicry.done < mimicry.limit && (mimicry.stage != MimicStage::Notice || mimicry.done < 1) &&
+	       turn - mimicry.stageStart <= stageTurns;
+}
+
+void creature_watching::NextMimicStage(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules, uint32_t turn,
+                                       const std::function<uint32_t(uint32_t)>& random)
 {
 	if (!mimicry.has_value() || mimicry->rule >= rules.size())
 	{
 		mimicry.reset();
 		return;
 	}
-	if (mimicry->stepsLeft > 0)
+	const auto& rule = rules[mimicry->rule];
+	if (mimicry->stage == MimicStage::Notice)
 	{
-		--mimicry->stepsLeft;
+		mimicry->stage = MimicStage::CopyAction;
+	}
+	else if (mimicry->stage == MimicStage::CopyAction && rule.copiesDesire)
+	{
+		mimicry->stage = MimicStage::CopyDesire;
+	}
+	else
+	{
+		mimicry.reset();
 		return;
 	}
-	const auto& rule = rules[mimicry->rule];
-	switch (mimicry->stage)
+	mimicry->done = 0;
+	mimicry->limit = StageLength(rule, random);
+	mimicry->stageStart = turn;
+}
+
+void creature_watching::MimicActionDone(std::optional<Mimicry>& mimicry)
+{
+	if (mimicry.has_value())
 	{
-	case MimicStage::Notice:
-		mimicry->stage = MimicStage::CopyAction;
-		mimicry->stepsLeft = StageLength(rule, random);
-		break;
-	case MimicStage::CopyAction:
-		if (rule.copiesDesire)
-		{
-			mimicry->stage = MimicStage::CopyDesire;
-			mimicry->stepsLeft = StageLength(rule, random);
-		}
-		else
-		{
-			mimicry.reset();
-		}
-		break;
-	case MimicStage::CopyDesire:
-		mimicry.reset();
-		break;
+		++mimicry->done;
 	}
 }
 
-void creature_watching::StrokedWhileMimicking(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules)
+void creature_watching::StrokedWhileMimicking(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules,
+                                              const std::function<uint32_t(uint32_t)>& random)
 {
 	if (!mimicry.has_value() || mimicry->rule >= rules.size())
 	{
 		return;
 	}
 	mimicry->stage = MimicStage::CopyAction;
-	mimicry->stepsLeft = rules[mimicry->rule].stageSteps;
+	mimicry->done = 0;
+	mimicry->limit = StageLength(rules[mimicry->rule], random);
 }
 
 creature_watching::MimicKind creature_watching::KindToCopy(const MimicFacts& facts)

@@ -77,37 +77,129 @@ TEST(CreatureActivity, CompassionAndTheDesiresAboutCreatures)
 // To impress, it acts on a villager that does not dance
 TEST(CreatureActivity, ToImpressItActsOnAVillagerThatDoesNotDance)
 {
-	EXPECT_TRUE(PartSuits(Desire::Impress, {.kind = Part::Villager}));
-	EXPECT_FALSE(PartSuits(Desire::Impress, {.kind = Part::Villager, .dancing = true}));
-	EXPECT_FALSE(PartSuits(Desire::Impress, {.kind = Part::Building}));
-	EXPECT_FALSE(PartSuits(Desire::Impress, {.kind = Part::Villager, .canActOn = false}));
+	EXPECT_TRUE(ThingSuits(Desire::Impress, {.kind = Thing::Villager}));
+	EXPECT_FALSE(ThingSuits(Desire::Impress, {.kind = Thing::Villager, .dancing = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Impress, {.kind = Thing::Building}));
+	EXPECT_FALSE(ThingSuits(Desire::Impress, {.kind = Thing::Villager, .canActOn = false}));
 	// A totem statue can be impressed, while its data lets a creature act on it
-	EXPECT_TRUE(PartSuits(Desire::Impress, {.kind = Part::TotemStatue}));
-	EXPECT_FALSE(PartSuits(Desire::Impress, {.kind = Part::TotemStatue, .canActOn = false}));
-	EXPECT_TRUE(PartSuits(Desire::Compassion, {.kind = Part::TotemStatue}));
-	EXPECT_TRUE(PartSuits(Desire::Anger, {.kind = Part::TotemStatue, .attackable = true}));
-	EXPECT_FALSE(PartSuits(Desire::Anger, {.kind = Part::TotemStatue}));
+	EXPECT_TRUE(ThingSuits(Desire::Impress, {.kind = Thing::TotemStatue}));
+	EXPECT_FALSE(ThingSuits(Desire::Impress, {.kind = Thing::TotemStatue, .canActOn = false}));
+	EXPECT_TRUE(ThingSuits(Desire::Compassion, {.kind = Thing::TotemStatue}));
+	EXPECT_TRUE(ThingSuits(Desire::Anger, {.kind = Thing::TotemStatue, .attackable = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::TotemStatue}));
 }
 
 // For anger, it acts on what its data lets a creature attack, and on every tree
 TEST(CreatureActivity, ForAngerItActsOnWhatItCanAttack)
 {
-	EXPECT_TRUE(PartSuits(Desire::Anger, {.kind = Part::Villager, .attackable = true}));
-	EXPECT_FALSE(PartSuits(Desire::Anger, {.kind = Part::Villager}));
-	EXPECT_FALSE(PartSuits(Desire::Anger, {.kind = Part::Villager, .attackable = true, .dead = true}));
-	EXPECT_FALSE(PartSuits(Desire::Anger, {.kind = Part::Animal, .attackable = true, .dead = true}));
-	EXPECT_TRUE(PartSuits(Desire::Anger, {.kind = Part::Tree}));
-	EXPECT_TRUE(PartSuits(Desire::Anger, {.kind = Part::Building, .attackable = true}));
-	EXPECT_FALSE(PartSuits(Desire::Anger, {.kind = Part::Building}));
-	EXPECT_FALSE(PartSuits(Desire::Anger, {.kind = Part::Tree, .canActOn = false}));
+	EXPECT_TRUE(ThingSuits(Desire::Anger, {.kind = Thing::Villager, .attackable = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::Villager}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::Villager, .attackable = true, .dead = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::Animal, .attackable = true, .dead = true}));
+	EXPECT_TRUE(ThingSuits(Desire::Anger, {.kind = Thing::Tree}));
+	EXPECT_TRUE(ThingSuits(Desire::Anger, {.kind = Thing::Building, .attackable = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::Building}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::Tree, .canActOn = false}));
 }
 
-// For compassion, it acts on a villager that a hand can pick up, or on any other part
+// For compassion, it acts on a villager that a hand can pick up, or on any other object
 TEST(CreatureActivity, ForCompassionItActsOnVillagersAndBuildings)
 {
-	EXPECT_TRUE(PartSuits(Desire::Compassion, {.kind = Part::Villager}));
-	EXPECT_FALSE(PartSuits(Desire::Compassion, {.kind = Part::Villager, .pickable = false}));
-	EXPECT_TRUE(PartSuits(Desire::Compassion, {.kind = Part::Building}));
+	EXPECT_TRUE(ThingSuits(Desire::Compassion, {.kind = Thing::Villager}));
+	EXPECT_FALSE(ThingSuits(Desire::Compassion, {.kind = Thing::Villager, .pickable = false}));
+	EXPECT_TRUE(ThingSuits(Desire::Compassion, {.kind = Thing::Building}));
+	EXPECT_TRUE(ThingSuits(Desire::Compassion, {.kind = Thing::Animal}));
+	EXPECT_FALSE(ThingSuits(Desire::Compassion, {.kind = Thing::Spell}));
+}
+
+// To get high, it acts only on a magic mushroom
+TEST(CreatureActivity, ToGetHighItActsOnlyOnAMagicMushroom)
+{
+	EXPECT_TRUE(ThingSuits(Desire::GetHigh, {.kind = Thing::Building, .mushroom = true}));
+	EXPECT_TRUE(ThingSuits(Desire::GetHigh, {.kind = Thing::MobileObject, .mushroom = true}));
+	EXPECT_FALSE(ThingSuits(Desire::GetHigh, {.kind = Thing::Villager}));
+	EXPECT_FALSE(ThingSuits(Desire::GetHigh, {.kind = Thing::Animal}));
+	EXPECT_FALSE(ThingSuits(Desire::GetHigh, {.kind = Thing::Rock}));
+	EXPECT_FALSE(ThingSuits(Desire::GetHigh, {.kind = Thing::MobileObject}));
+	EXPECT_FALSE(ThingSuits(Desire::GetHigh, {.kind = Thing::Building, .canActOn = false, .mushroom = true}));
+}
+
+// For anger, a rock always suits, a creature that is itself or a friend does not
+TEST(CreatureActivity, ForAngerARockSuitsAndAFriendDoesNot)
+{
+	EXPECT_TRUE(ThingSuits(Desire::Anger, {.kind = Thing::Rock}));
+	EXPECT_TRUE(ThingSuits(Desire::Anger, {.kind = Thing::Creature, .attackable = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::Creature, .attackable = true, .itself = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::Creature, .attackable = true, .friendOfCreature = true}));
+	EXPECT_TRUE(ThingSuits(Desire::Anger, {.kind = Thing::MobileObject, .attackable = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::Spell, .attackable = true}));
+}
+
+// It plays with what lies about, statics, rocks, trees and creatures, and with living things whose data allows it
+TEST(CreatureActivity, ItPlaysWithThingsThatLieAboutAndWithLivingThingsWhoseDataAllowsIt)
+{
+	EXPECT_TRUE(ThingSuits(Desire::Play, {.kind = Thing::MobileObject}));
+	EXPECT_TRUE(ThingSuits(Desire::Play, {.kind = Thing::MobileStatic}));
+	EXPECT_TRUE(ThingSuits(Desire::Play, {.kind = Thing::Creature}));
+	EXPECT_TRUE(ThingSuits(Desire::Play, {.kind = Thing::Villager, .playable = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Play, {.kind = Thing::Villager}));
+	EXPECT_FALSE(ThingSuits(Desire::Play, {.kind = Thing::Animal, .playable = true, .dead = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Play, {.kind = Thing::Building}));
+	EXPECT_FALSE(ThingSuits(Desire::Play, {.kind = Thing::Other}));
+}
+
+// Fear is of creatures, miracles and the animals that frighten
+TEST(CreatureActivity, FearIsOfCreaturesMiraclesAndAnimalsThatFrighten)
+{
+	EXPECT_TRUE(ThingSuits(Desire::Fear, {.kind = Thing::Creature}));
+	EXPECT_TRUE(ThingSuits(Desire::Fear, {.kind = Thing::Spell}));
+	EXPECT_TRUE(ThingSuits(Desire::Fear, {.kind = Thing::Animal, .frightening = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Fear, {.kind = Thing::Animal}));
+	EXPECT_FALSE(ThingSuits(Desire::Fear, {.kind = Thing::Villager}));
+}
+
+// It looks over what its data allows and is not dead
+TEST(CreatureActivity, ItLooksOverWhatItsDataAllows)
+{
+	EXPECT_TRUE(ThingSuits(Desire::Curiosity, {.kind = Thing::Building, .inspectable = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Curiosity, {.kind = Thing::Building}));
+	EXPECT_FALSE(ThingSuits(Desire::Curiosity, {.kind = Thing::Villager, .inspectable = true, .dead = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Curiosity, {.kind = Thing::Spell, .inspectable = true}));
+}
+
+// It poos only on a tall thing that does not live
+TEST(CreatureActivity, ItPoosOnlyOnATallThingThatDoesNotLive)
+{
+	EXPECT_TRUE(ThingSuits(Desire::Poo, {.kind = Thing::Building, .height = 1.6f}));
+	EXPECT_FALSE(ThingSuits(Desire::Poo, {.kind = Thing::Building, .height = k_TallestThingNotToPooOn}));
+	EXPECT_FALSE(ThingSuits(Desire::Poo, {.kind = Thing::Villager, .height = 2.0f}));
+}
+
+// It rests by a creature or by a thing set into the land, but not by a field or a fish farm
+TEST(CreatureActivity, ItRestsByACreatureOrAThingSetIntoTheLand)
+{
+	for (const auto desire : {Desire::Tiredness, Desire::Rest})
+	{
+		EXPECT_TRUE(ThingSuits(desire, {.kind = Thing::Creature}));
+		EXPECT_TRUE(ThingSuits(desire, {.kind = Thing::Building}));
+		EXPECT_TRUE(ThingSuits(desire, {.kind = Thing::Tree}));
+		EXPECT_FALSE(ThingSuits(desire, {.kind = Thing::Field}));
+		EXPECT_FALSE(ThingSuits(desire, {.kind = Thing::FishFarm}));
+		EXPECT_FALSE(ThingSuits(desire, {.kind = Thing::MobileObject}));
+		EXPECT_FALSE(ThingSuits(desire, {.kind = Thing::Villager}));
+	}
+}
+
+// It brings home what it can pick up, and the desires about other creatures act only on creatures
+TEST(CreatureActivity, ItBringsHomeWhatItCanPickUpAndBefriendsOnlyCreatures)
+{
+	EXPECT_TRUE(ThingSuits(Desire::BringStuffHome, {.kind = Thing::MobileObject, .creatureCanPickUp = true}));
+	EXPECT_FALSE(ThingSuits(Desire::BringStuffHome, {.kind = Thing::MobileObject}));
+	EXPECT_TRUE(ThingSuits(Desire::BeFriends, {.kind = Thing::Creature}));
+	EXPECT_FALSE(ThingSuits(Desire::MissFriend, {.kind = Thing::Villager}));
+	// A desire without a rule of its own acts on any thing that lets a creature act on it
+	EXPECT_TRUE(ThingSuits(Desire::Hunger, {.kind = Thing::Villager}));
+	EXPECT_FALSE(ThingSuits(Desire::Hunger, {.kind = Thing::Villager, .canActOn = false}));
 }
 
 // The first of the most useful wins, and nothing that is worth nothing
