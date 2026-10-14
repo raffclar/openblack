@@ -92,6 +92,13 @@ struct TempleSubMeshTexture
 	graphics::TextureHandle texture;
 };
 
+/// A distance and direction that one of a room's submeshes moves in its mesh, as a held button moves into the wall
+struct TempleSubMeshOffset
+{
+	uint32_t subMesh;
+	glm::vec3 offset;
+};
+
 /// A colour added to one of a room's submeshes, from 0 to 1, as a control glows under the cursor
 struct TempleSubMeshGlow
 {
@@ -138,6 +145,8 @@ public:
 	[[nodiscard]] virtual std::vector<uint32_t> GetHiddenSubMeshes(TempleRoom room) const = 0;
 	/// The glow of the control the cursor is over in a room's mesh, if it glows
 	[[nodiscard]] virtual std::vector<TempleSubMeshGlow> GetControlGlows(TempleRoom room) const = 0;
+	/// The submeshes of a room's mesh that its held controls move, with the movement in the mesh
+	[[nodiscard]] virtual std::vector<TempleSubMeshOffset> GetControlOffsets(TempleRoom room) const = 0;
 	/// The text written in the rooms this frame, the signs' labels and the text of the scroll the camera is close to, in
 	/// triangles of the font's texture, in the temple
 	[[nodiscard]] virtual const std::vector<OrientedTextVertex>& GetText() const = 0;
