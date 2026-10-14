@@ -108,8 +108,7 @@ bool TempleToggles::Hold(bool pressed, std::optional<uint32_t> hoveredSubMesh)
 			_playSound(static_cast<entt::id_type>(_shown.at(button) ? audio::SoundId::G_CitadelButtonUp_01
 			                                                        : audio::SoundId::G_CitadelButtonDown_01));
 		}
-		// TODO(raffclar): turning influence on also resets the colours of the map's land, once the map is
-		// drawn
+		// The land of the map keeps its colours: the influence button shows the influence circles in the main room
 	}
 	return true;
 }

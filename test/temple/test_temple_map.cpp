@@ -131,3 +131,23 @@ TEST(TempleMap, StandsMarkersOnTheCellOfTheirThings)
 	map.Build(land.Finder(), triangles);
 	EXPECT_EQ(map.MarkerPosition(glm::vec2(705.0f, 909.9f)), map.ToMap(glm::vec2(700.0f, 900.0f)));
 }
+
+TEST(TempleMap, PutsTheInfluenceOnTheMapAtItsScale)
+{
+	FakeLand land;
+	TempleMap map;
+	map.Frame(land.Finder());
+	std::vector<OrientedTextVertex> triangles;
+	map.Build(land.Finder(), triangles);
+	const auto placement = map.GetInfluencePlacement();
+	// The world's origin goes to the map's point above it, which is off the land at sea level
+	EXPECT_EQ(placement.offset, map.ToMap(glm::vec2(0.0f)));
+	EXPECT_FLOAT_EQ(placement.scale, map.GetWorldScale());
+	// A point of the land goes across the map as the map's own points do, and its height takes the same scale
+	const glm::vec3 world(700.0f, 40.0f, 900.0f);
+	const auto inRoom = placement.ToRoom(world);
+	const auto onMap = map.ToMap(glm::vec2(world.x, world.z));
+	EXPECT_NEAR(inRoom.x, onMap.x, 1e-4f);
+	EXPECT_NEAR(inRoom.z, onMap.z, 1e-4f);
+	EXPECT_NEAR(inRoom.y, placement.offset.y + (40.0f * map.GetWorldScale()), 1e-5f);
+}

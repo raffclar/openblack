@@ -3115,13 +3115,23 @@ void Renderer::DrawInfluenceRipples(const DrawSceneDesc& desc) const
 
 void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value() ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value())
 	{
 		return;
 	}
-	// The border only shows from high enough over the land
-	const auto alpha = influence::CurtainAlpha(desc.camera->GetOrigin().y);
+	// In the temple, the main room shows the border at full strength over its map, while the influence button is on.
+	// Outside, the border only shows from high enough over the land.
+	std::optional<TempleMapInfluence> onMap;
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		onMap = Locator::temple::value().GetMapInfluence();
+		if (!onMap.has_value())
+		{
+			return;
+		}
+	}
+	const auto alpha = onMap.has_value() ? std::optional<uint8_t>(std::numeric_limits<uint8_t>::max())
+	                                     : influence::CurtainAlpha(desc.camera->GetOrigin().y);
 	static constexpr auto k_TextureId = entt::hashed_string("raw/burn");
 	static constexpr auto k_AlphaTextureId = entt::hashed_string("raw/burna");
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -3175,7 +3185,8 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 			const bool hidden = circle.hidden.at(column);
 			const auto colour = hidden && column == lastColumn ? 0xFFFFFFu : abgr;
 			const uint32_t a = i % 3 == 1 && !hidden ? *alpha : 0u;
-			vertices[i] = {curtain.positions[i], curtain.uvs[i] + offset, (a << 24u) | colour};
+			const auto position = onMap.has_value() ? onMap->ToRoom(curtain.positions[i]) : curtain.positions[i];
+			vertices[i] = {position, curtain.uvs[i] + offset, (a << 24u) | colour};
 		}
 		for (size_t i = 0; i < indices.size(); ++i)
 		{
@@ -6608,6 +6619,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawTempleMapMarkers(desc);
 			DrawCaveTrophies(desc);
 			DrawCaveSeeds(desc);
+			DrawMapSpellSeeds(desc);
 			DrawGroundBlobs(desc);
 			DrawFarVillagerSmudges(desc);
 			DrawVillagerEyes(desc);

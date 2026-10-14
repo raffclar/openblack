@@ -1625,6 +1625,53 @@ void AddAudio(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
 	});
 
+	all.push_back({
+	    .id = "temple.map_markers",
+	    .name = "The temple's map showing the miracles cast and the influence",
+	    .facet = Facet::Story,
+	    .description = "The player has a temple west of the middle. A script casts a shield, a storm and a forest there, "
+	                   "each to last ten minutes. Then the player is put in the temple's main room.",
+	    .expected = "Over the map in the pool, each miracle shows its seed at a tenth of its size, half a unit above the "
+	                "map. The seeds do not turn, because the world stops in the temple. The player's influence circle "
+	                "stands round the temple on the map, at full strength, and its texture does not move. The miracles' "
+	                "button hides the seeds. The influence button hides the circle.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .miracles = {{.type = MagicType::Shield,
+	                  .point = {-260.0f, 60.0f},
+	                  .handOffset = {-260.0f, 60.0f},
+	                  .delaySeconds = 0.5f,
+	                  .script = ScriptSpell {.radius = 15.0f, .seconds = 600.0f, .curl = 0.0f}},
+	                 {.type = MagicType::StormWindRain,
+	                  .point = {-340.0f, 160.0f},
+	                  .handOffset = {-340.0f, 160.0f},
+	                  .delaySeconds = 0.5f,
+	                  .script = ScriptSpell {.radius = 20.0f, .seconds = 600.0f, .curl = 0.0f}},
+	                 {.type = MagicType::Forest,
+	                  .point = {-220.0f, 160.0f},
+	                  .handOffset = {-220.0f, 160.0f},
+	                  .delaySeconds = 0.5f,
+	                  .script = ScriptSpell {.radius = 15.0f, .seconds = 600.0f, .curl = 0.0f}}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 3.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "temple.held_dialogue",
+	    .name = "The world's dialogue kept while the player is in the temple",
+	    .facet = Facet::Story,
+	    .description = "A script holds the dialogue with the cinema bars and shows two texts of the first lesson. Then the "
+	                   "player is put in the temple's main room. Push Escape to leave the temple.",
+	    .expected = "Going in, the help stops, the advisors fly home and the dialogue box closes. The bars stay, so the "
+	                "dialogue is still held when the player leaves. Thus the game gives back no kept texts: the box "
+	                "shows its last texts again, the temple's help texts among them.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 5128},
+	                 {.kind = Kind::RunText, .delaySeconds = 1.0f, .value = 5129},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
 	// The camera looks out across the north edge of the player's influence: the bottom of the screen is inside it,
 	// the middle and the top beyond it
 	all.push_back({

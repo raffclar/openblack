@@ -223,6 +223,27 @@ void Renderer::DrawCaveSeeds(const DrawSceneDesc& desc) const
 	}
 }
 
+void Renderer::DrawMapSpellSeeds(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !Locator::temple::has_value() || !Locator::temple::value().Active() ||
+	    !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	// The map draws each seed at a tenth of its size, as the creature's room draws its seeds
+	for (const auto& seed : Locator::temple::value().GetMapSpellSeeds())
+	{
+		DrawSeedModel(desc, {.seed = seed.seed,
+		                     .middle = seed.middle,
+		                     .scale = TempleMapSpells::k_Scale,
+		                     .spin = seed.spin,
+		                     .phialPhase = seed.phialPhase,
+		                     .phialFrame = seed.phialFrame,
+		                     .phialAlpha = std::numeric_limits<uint8_t>::max(),
+		                     .ownerAlignment = seed.ownerAlignment});
+	}
+}
+
 void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
