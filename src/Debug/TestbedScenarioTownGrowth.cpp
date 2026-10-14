@@ -39,6 +39,9 @@ constexpr size_t k_Couples = 6;
 constexpr float k_VillagerSpacing = 3.0f;
 /// Four couples, room enough in three huts
 constexpr size_t k_MendingCouples = 4;
+/// The emergency town: one couple in each of its three huts, the first of which is the third object
+constexpr size_t k_EmergencyCouples = 3;
+constexpr size_t k_FirstEmergencyHut = 2;
 /// Two fields east of the town
 constexpr std::array<glm::vec2, 2> k_Fields {{{55.0f, 40.0f}, {55.0f, 15.0f}}};
 } // namespace
@@ -478,6 +481,44 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {24.0f, 0.0f}, .yawDegrees = 0.0f}},
 	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 3.0f, .object = 0}},
 	    .hand = HandHold {.offset = {0.0f, 0.0f}, .height = 6.0f},
+	});
+
+	// A town called to gather when its storage pit burns
+	std::vector<ObjectSetup> emergency {
+	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = k_PitStock, .storedWood = k_PitStock},
+	    {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[0], .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[2], .yawDegrees = 180.0f},
+	};
+	for (size_t i = 0; i < k_EmergencyCouples; ++i)
+	{
+		const float x = (static_cast<float>(i) - (static_cast<float>(k_EmergencyCouples) * 0.5f)) * k_VillagerSpacing;
+		const size_t hut = k_FirstEmergencyHut + i;
+		emergency.push_back({.type = VillagerInfo::CelticForesterMale, .offset = {x, 20.0f}, .joinTown = true, .homeIn = hut});
+		emergency.push_back(
+		    {.type = VillagerInfo::CelticHousewifeFemale, .offset = {x, 17.0f}, .joinTown = true, .homeIn = hut});
+	}
+	all.push_back({
+	    .id = "town.emergency",
+	    .name = "A town called to gather when its storage pit burns",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre, a full storage pit and three huts, one "
+	                   "couple in each hut. Four seconds in, a fireball hits the storage pit.",
+	    .expected = "As the pit catches fire, the town is in an emergency. Each villager that is about runs to a ring "
+	                "round the gathering place of the town and stands there with the clip of the emergency. One time in "
+	                "twelve a villager goes home, and the others go to a new place on the ring. The worship share of "
+	                "the town is 0 while the emergency lasts (the inspector's Town worshipShare). The emergency lasts "
+	                "for the table's number of turns after the fire stops, then the villagers go back to what they did.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Centre, k_Hut, k_PlannedHuts[0]}, .distance = 0.6f},
+	    .objects = std::move(emergency),
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = k_Pit,
+	                  .handOffset = k_Pit - glm::vec2(0.0f, 10.0f),
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 4.0f}},
 	});
 
 	// A creature seeing a thing crushed in front of it and another behind it

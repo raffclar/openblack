@@ -907,8 +907,6 @@ uint8_t villager_disciple::FollowPriority(entt::entity villager, entt::entity di
 	{
 		return 0;
 	}
-	const auto final = Locator::livingActionSystem::value().VillagerGetFinalState(*action);
-	const auto& stateInfo = Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(final));
 	const auto* death = registry.TryGet<const VillagerDeath>(villager);
 	return magic::villager_reaction::DroppedByHandPriority(
 	    {
@@ -916,8 +914,7 @@ uint8_t villager_disciple::FollowPriority(entt::entity villager, entt::entity di
 	        .watcherDisciple = TypeOf(villager) != None,
 	        .sameTown = watcher->town == leader->town,
 	        .distance = gutils::GetDistanceInMetres(PositionOf(villager), PositionOf(disciple)),
-	        .watcherFree = !registry.AllOf<ScriptControlled>(villager) &&
-	                       systems::villager_reactions::AvailableForStateChange(villager) && (stateInfo.field0xa8 & 1) != 0,
+	        .watcherFree = systems::villager_reactions::FreeForNewTask(villager),
 	        .watcherAvailable = IsAvailableVillager(villager),
 	        .watcherChild = watcher->lifeStage == Villager::LifeStage::Child,
 	        .watcherSkeleton = registry.AllOf<WalkingSkeleton>(villager),

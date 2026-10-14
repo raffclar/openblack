@@ -37,6 +37,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -70,6 +71,7 @@
 #include "VillagerFood.h"
 #include "VillagerFootpath.h"
 #include "VillagerForester.h"
+#include "VillagerReactions.h"
 #include "VillagerWorship.h"
 
 using namespace openblack;
@@ -117,11 +119,6 @@ constexpr int32_t k_SitDownTurn = 0x100;
 /// afresh one time in this many
 constexpr uint32_t k_EmergencyGoHomeChance = 12;
 constexpr uint32_t k_AfterEmergencyDecideChance = 5;
-/// The share of a turn's work per thing at most a crowd of them gathering takes to spread round the gathering place
-constexpr float k_CongregateMost = 1.99999f;
-constexpr float k_CongregatePerVillager = 0.01f;
-constexpr float k_CongregateSpread = 10.0f;
-constexpr float k_CongregateLeast = 10.0f;
 
 auto& WorldRegistry()
 {
@@ -1350,19 +1347,9 @@ uint32_t villager_home::GotoCongregateInTownAfterEmergency(LivingAction& action)
 		return 0;
 	}
 	auto centre = Locator::townSystem::value().GetCongregationPos(town);
-	// The more people the town has, the wider they spread about the gathering place
-	const auto& data = WorldRegistry().Get<const Town>(town);
-	uint32_t people = static_cast<uint32_t>(data.homelessVillagers.size());
-	for (const auto abode : data.abodes)
-	{
-		if (const auto* building = WorldRegistry().TryGet<const Abode>(abode); building != nullptr)
-		{
-			people += static_cast<uint32_t>(building->inhabitants.size());
-		}
-	}
-	// TODO(villagers): the game counts its adults and children as its town keeps them
-	const float share = std::min(static_cast<float>(people) * k_CongregatePerVillager, k_CongregateMost);
-	const float distance = share * k_CongregateSpread + k_CongregateLeast;
+	// The more people the town has, the wider they stand round the gathering place
+	const auto* stats = WorldRegistry().TryGet<const TownStats>(town);
+	const float distance = routine::EmergencyRingDistance(stats != nullptr ? stats->adults + stats->children : 0);
 	const float angle = Locator::gameRandom::value().GameFloatRand(routine::k_TwoPi);
 	SetupMoveTo(action, routine::Polar(centre, angle, distance), VillagerStates::CongregateInTownAfterEmergency);
 	return 1;
@@ -1404,7 +1391,7 @@ uint32_t villager_home::LookForBetterHome(LivingAction& action)
 	case town_homes::NewHome::Stays:
 		return 0;
 	case town_homes::NewHome::Moved:
-		if (IsAvailable(villager))
+		if (ecs::systems::villager_reactions::FreeForNewTask(villager))
 		{
 			SetTopState(action, VillagerStates::GoHome);
 		}

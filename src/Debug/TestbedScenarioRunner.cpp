@@ -1058,6 +1058,11 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		    },
 		    object.type));
 		SetLifeAndPoison(_objects.back(), object);
+		if (object.homeIn.has_value() && *object.homeIn + 1 < _objects.size() && Locator::townSystem::has_value())
+		{
+			// The villager lives in the building as one of its people
+			Locator::townSystem::value().AddVillagerToAbode(_objects.at(*object.homeIn), _objects.back());
+		}
 		if (object.firefly && Locator::fireflySystem::has_value())
 		{
 			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());

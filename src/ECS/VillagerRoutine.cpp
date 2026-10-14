@@ -128,8 +128,13 @@ glm::vec2 villager_routine::TentRetry(glm::vec2 spot, const FloatRandom& random)
 	return RoundAbout(spot, k_TentRetryLeast, k_TentRetryRange, random);
 }
 
-bool villager_routine::AnswersTownEmergency(VillagerStates state)
+bool villager_routine::AnswersTownEmergency(VillagerStates state, VillagerStates previous)
 {
+	// A villager that walks round a fire answers when it has a state to go back to
+	if (state == VillagerStates::MoveAroundFire)
+	{
+		return previous != VillagerStates::InvalidState;
+	}
 	// The states of the game's table that answer its emergencies
 	static constexpr auto k_Answers = [] {
 		constexpr std::array<uint16_t, 206> k_States {
