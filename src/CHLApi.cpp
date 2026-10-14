@@ -568,8 +568,9 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	{
 		return entt::null;
 	}
-	// The player has now had the miracle it casts
+	// It counts as a one-shot miracle, and the player has now had the miracle it casts
 	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<ecs::components::SpellSeed>(seed).fromGlobe = true;
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType),
 	                                                      magic::k_BasePowerUpLevel);
 	if (const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
@@ -5775,8 +5776,12 @@ void GetSlowestSpeed() // 198 GET_SLOWEST_SPEED
 
 void GetObjectHeld199() // 199 GET_OBJECT_HELD
 {
-	// What the player's hand holds, if anything
-	const auto held = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetHeld() : std::nullopt;
+	// What the player's hand holds, if anything: a thing it took hold of, else the miracle in it
+	auto held = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetHeld() : std::nullopt;
+	if (!held.has_value() && Locator::magicSystem::has_value())
+	{
+		held = Locator::magicSystem::value().GetHeldSeed();
+	}
 	if (!held.has_value() || !Locator::entitiesRegistry::value().Valid(*held))
 	{
 		PushObject(entt::null);

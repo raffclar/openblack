@@ -1731,23 +1731,19 @@ bool AnimalSystem::IsAvailableForReaction(entt::entity entity) const
 {
 	const auto& registry = EntityRegistry();
 	const auto* animal = registry.TryGet<const Animal>(entity);
-	if (animal == nullptr || registry.AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
+	if (animal == nullptr)
 	{
 		return false;
 	}
-	// Judged by the state it is to end up in
+	// The state is judged by the state it is to end up in
 	const auto state = animal->state == AnimalState::MoveToPos ? animal->finalState : animal->state;
-	switch (state)
-	{
-	case AnimalState::Dying:
-	case AnimalState::Dead:
-	case AnimalState::Downed:
-	case AnimalState::BeingEaten:
-	case AnimalState::WaitForClip:
-		return false;
-	default:
-		return true;
-	}
+	const bool busyState = state == AnimalState::Dying || state == AnimalState::Dead || state == AnimalState::Downed ||
+	                       state == AnimalState::BeingEaten || state == AnimalState::WaitForClip;
+	return animals::AvailableForReaction({
+	    .scriptControlled = registry.AllOf<ScriptControlled>(entity),
+	    .outOfTheWorld = registry.AnyOf<CarriedByTornado, InHand, InPhysics>(entity),
+	    .busyState = busyState,
+	});
 }
 
 bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object, Reaction reaction)

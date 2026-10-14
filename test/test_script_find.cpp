@@ -19,8 +19,10 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
@@ -190,6 +192,34 @@ TEST(ScriptFind, KindsOfThings)
 	EXPECT_EQ(static_cast<int>(ScriptType::Highlight), 37);
 	expect(sign, ScriptType::Highlight, 1u);
 	EXPECT_FALSE(script_find::KindOf(registry, nothing).has_value());
+}
+
+TEST(ScriptFind, AMiracleInTheHandFromAGlobeIsAOneShotMiracle)
+{
+	Registry registry;
+	const auto globe = registry.Create();
+	registry.Assign<components::OneOffSpellSeed>(globe).seedType = SpellSeedType::Food;
+	const auto tapped = registry.Create();
+	registry.Assign<components::SpellSeed>(tapped, components::SpellSeed {.seedType = SpellSeedType::Food, .fromGlobe = true});
+	const auto summoned = registry.Create();
+	registry.Assign<components::SpellSeed>(summoned, components::SpellSeed {.seedType = SpellSeedType::Food});
+
+	// The globe itself is a mobile object (script type 20) of no subtype
+	const auto globeKind = script_find::KindOf(registry, globe);
+	ASSERT_TRUE(globeKind.has_value());
+	EXPECT_EQ(globeKind->type, ScriptType::MobileObject);
+	// The miracle tapped from it is a one-shot miracle (script type 30), and any other is a seed (script type 24)
+	EXPECT_EQ(static_cast<int>(ScriptType::OneShotSpell), 30);
+	EXPECT_EQ(static_cast<int>(ScriptType::SpellSeed), 24);
+	const auto tappedKind = script_find::KindOf(registry, tapped);
+	ASSERT_TRUE(tappedKind.has_value());
+	EXPECT_EQ(tappedKind->type, ScriptType::OneShotSpell);
+	EXPECT_EQ(tappedKind->subtype, static_cast<uint32_t>(SpellSeedType::Food));
+	EXPECT_TRUE(script_find::Matches(*tappedKind, ScriptType::OneShotSpell, script_find::k_AnySubtype));
+	const auto summonedKind = script_find::KindOf(registry, summoned);
+	ASSERT_TRUE(summonedKind.has_value());
+	EXPECT_EQ(summonedKind->type, ScriptType::SpellSeed);
+	EXPECT_FALSE(script_find::Matches(*summonedKind, ScriptType::OneShotSpell, script_find::k_AnySubtype));
 }
 
 TEST(ScriptFind, ATownNumberIsCutTowardsNought)

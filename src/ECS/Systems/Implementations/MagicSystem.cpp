@@ -1917,10 +1917,12 @@ bool MagicSystem::TapGlobe(entt::entity orb)
 		return false;
 	}
 	const auto component = registry.Get<const OneOffSpellSeed>(orb);
-	if (GiveSeedToHand(PlayerNames::PLAYER_ONE, component.seedType, component.powerUp, component.multiplier) == entt::null)
+	const auto seed = GiveSeedToHand(PlayerNames::PLAYER_ONE, component.seedType, component.powerUp, component.multiplier);
+	if (seed == entt::null)
 	{
 		return false;
 	}
+	registry.Get<SpellSeed>(seed).fromGlobe = true;
 	// The pop is heard where the hand took it
 	if (Locator::audio::has_value())
 	{
