@@ -36,10 +36,8 @@ struct CreatureFighting
 		/// Waiting for the opponent to be ready
 		Ready,
 		Duel,
-		/// Having won: finishing, then showing off
+		/// Having won: it finishes its move, then leaves the fight. Its mind then does what the win made it do to the loser.
 		Celebrate,
-		/// Having won and being evil: walking up to the loser, then having a poo on it
-		PooOnLoser,
 		/// After a fight that ended otherwise: finishing, then happy or sad
 		Respond,
 	};

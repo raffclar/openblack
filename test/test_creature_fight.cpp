@@ -77,7 +77,11 @@ TEST(CreatureFight, StepsBackOrSidewaysOnlyWithinRange)
 	EXPECT_FALSE(CanStep(arena, {45.0f, 0.0f}, Step::Left));
 	EXPECT_TRUE(CanStep(arena, {10.0f, 0.0f}, Step::Right));
 	const auto clamped = ClampToRange(arena, {0.0f, 100.0f});
-	EXPECT_NEAR(clamped.y, 40.0f, 1e-4f);
+	EXPECT_NEAR(clamped.y, 40.0f, 2.0f * k_RangeEdgeMargin);
+	EXPECT_TRUE(WithinRange(arena, clamped));
+	// Far from the middle of the land, the rounding of the coordinates must not put a clamped point out of range
+	const Arena far {.centre = {2559.0005f, 2599.0005f}, .radius = 39.000446f};
+	EXPECT_TRUE(WithinRange(far, ClampToRange(far, {2527.6f, 2599.0498f})));
 }
 
 TEST(CreatureFight, ClickHeightPicksTheBand)
@@ -474,6 +478,12 @@ TEST(CreatureFight, OutcomesAndStarting)
 {
 	EXPECT_TRUE(WinnerPoos(-0.6f));
 	EXPECT_FALSE(WinnerPoos(-0.4f));
+	// The limit itself is not evil enough
+	EXPECT_FALSE(WinnerPoos(-0.5f));
+	// Only a blow that knocks the loser out, won by a creature with a player, is seen
+	EXPECT_TRUE(FightWonIsSeen(true, true));
+	EXPECT_FALSE(FightWonIsSeen(false, true));
+	EXPECT_FALSE(FightWonIsSeen(true, false));
 	EXPECT_EQ(Response(0.8f, 0.5f), animations::k_Happy);
 	EXPECT_EQ(Response(0.4f, 0.5f), animations::k_Sad);
 	EXPECT_TRUE(WantsToFight(0.7f, 1.0f, 50.0f, 1.0f, 200.0f));

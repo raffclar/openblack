@@ -99,6 +99,8 @@ constexpr float k_SpotPerSize = 15.0f;
 constexpr float k_ArrivalPerSize = 1.5f * 15.0f;
 /// Moves are only made, and creatures only step back or sideways, within this share of the radius
 constexpr float k_RangeShare = 0.8f;
+/// A creature kept within the range goes this far inside its edge, in metres
+constexpr float k_RangeEdgeMargin = 0.001f;
 
 struct Arena
 {
@@ -578,6 +580,9 @@ constexpr float k_DepthPerSize = 7.5f;
 
 /// The winner of a knock out shows off, unless evil, when it has a poo on the loser
 [[nodiscard]] bool WinnerPoos(float alignment);
+/// Whether the living around the winner see a fight won: only when a blow knocked the loser out and the winner has a
+/// player. A loser that a miracle or a loss of life knocked out gives no such sight.
+[[nodiscard]] bool FightWonIsSeen(bool byBlow, bool winnerHasPlayer);
 /// After a fight that ended otherwise, the creature with more life is happy and the other sad
 [[nodiscard]] size_t Response(float life, float otherLife);
 

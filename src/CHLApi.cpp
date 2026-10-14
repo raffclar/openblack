@@ -6283,7 +6283,8 @@ void IsFighting() // 229 IS_FIGHTING
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "IS_FIGHTING: thing not found");
 	}
 	const auto creature = FightCreature("IS_FIGHTING", object);
-	const bool fighting = creature.has_value() && Locator::creatureFightSystem::value().IsFighting(*creature);
+	// A creature fights, for the scripts, only while it duels
+	const bool fighting = creature.has_value() && Locator::creatureFightSystem::value().IsDuelling(*creature);
 	NoteFightRead(creature, "IS_FIGHTING", fighting ? 1.0 : 0.0);
 	Pushb(fighting);
 }

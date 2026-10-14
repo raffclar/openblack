@@ -91,7 +91,13 @@ glm::vec2 creature_fight::ClampToRange(const Arena& arena, glm::vec2 point)
 	const auto offset = point - arena.centre;
 	const auto distance = glm::length(offset);
 	const auto range = k_RangeShare * arena.radius;
-	return distance > range && distance > 0.0f ? arena.centre + (offset * (range / distance)) : point;
+	if (distance <= range || distance <= 0.0f)
+	{
+		return point;
+	}
+	// The point goes a little inside the edge. On the edge itself, the rounding of large land coordinates can put it
+	// out of range again, and then the creature can make no move.
+	return arena.centre + (offset * (std::max(range - k_RangeEdgeMargin, 0.0f) / distance));
 }
 
 float creature_fight::ClosestApart(float radius, float opponentRadius)
@@ -978,6 +984,11 @@ AttackChoice creature_fight::ChooseAttack(std::span<const Reach> reaches, Band b
 bool creature_fight::WinnerPoos(float alignment)
 {
 	return alignment < k_AlignmentPooBelow;
+}
+
+bool creature_fight::FightWonIsSeen(bool byBlow, bool winnerHasPlayer)
+{
+	return byBlow && winnerHasPlayer;
 }
 
 size_t creature_fight::Response(float life, float otherLife)

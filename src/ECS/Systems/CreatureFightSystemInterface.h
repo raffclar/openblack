@@ -74,6 +74,13 @@ public:
 	/// Whether the creature is in a fight's setup, going to the arena before the duel: it takes no leash orders then
 	[[nodiscard]] virtual bool IsSettingUpFight(entt::entity /*creature*/) const { return false; }
 	[[nodiscard]] virtual bool IsFighting(entt::entity creature) const = 0;
+	/// Scripts: whether the creature duels now, from the start of its duel until its fight ends. The walk to the arena,
+	/// the taunt and what it does after the fight do not count.
+	[[nodiscard]] virtual bool IsDuelling(entt::entity creature) const { return IsFighting(creature); }
+	/// A script takes the creature for an action of its own. A fight that it is in ends for both with no winner, as a fight
+	/// called off does. A creature that is knocked out gets up at once, and is not taken home. A creature that a script
+	/// killed for good stays dead.
+	virtual void TakeForScript(entt::entity /*creature*/) {}
 	[[nodiscard]] virtual std::optional<entt::entity> OpponentOf(entt::entity creature) const = 0;
 
 	/// A move added to a fighter's queue as the player makes it, in place of the rest or after them; a blow waits for its

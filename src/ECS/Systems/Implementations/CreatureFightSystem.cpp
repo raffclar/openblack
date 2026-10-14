@@ -129,7 +129,6 @@ constexpr int k_MeasureSamples = 24;
 constexpr float k_FaceDue = 1e-3f;
 /// The stages before the duel give up waiting after this long
 constexpr float k_ApproachSeconds = 30.0f;
-constexpr float k_PooApproachSeconds = 20.0f;
 /// A press on the ground counts as a step within this many of the arena's radii of its middle
 constexpr float k_GroundClickRadii = 1.5f;
 /// A blow leaves a trail of this many drops of blood down the skin
@@ -160,8 +159,7 @@ float LifeOf(const ecs::Registry& registry, entt::entity creature)
 
 std::string_view Name(CreatureFighting::Stage stage)
 {
-	static constexpr std::array<std::string_view, 7> k_Names {"approach",  "taunt",        "ready",  "duel",
-	                                                          "celebrate", "poo_on_loser", "respond"};
+	static constexpr std::array<std::string_view, 6> k_Names {"approach", "taunt", "ready", "duel", "celebrate", "respond"};
 	const auto index = static_cast<size_t>(stage);
 	return index < k_Names.size() ? k_Names.at(index) : std::string_view("unknown");
 }
@@ -942,7 +940,7 @@ void CreatureFightSystem::UpdateView(float seconds)
 		std::optional<std::pair<entt::entity, entt::entity>> into;
 		fight::Arena intoArena;
 		registry.Each<const CreatureFighting>([&](entt::entity entity, const CreatureFighting& fighting) {
-			if (!into.has_value() && fighting.madeArena && fight::InArena(fighting.arena, *flightPlace))
+			if (!into.has_value() && fighting.madeArena && fight::InArena(fighting.arena, flightPlace->place))
 			{
 				into = std::pair(entity, fighting.opponent);
 				intoArena = fighting.arena;
@@ -952,7 +950,8 @@ void CreatureFightSystem::UpdateView(float seconds)
 		{
 			if (ArenaOn(registry, into->first) && ArenaOn(registry, into->second))
 			{
-				TryStartView(into->first, into->second, intoArena, "double_click");
+				TryStartView(into->first, into->second, intoArena, "double_click",
+				             std::pair(flightPlace->eye, flightPlace->focus));
 			}
 			return;
 		}
@@ -984,15 +983,17 @@ void CreatureFightSystem::UpdateView(float seconds)
 	}
 }
 
-void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, const fight::Arena& arena, std::string_view how)
+void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, const fight::Arena& arena, std::string_view how,
+                                       std::optional<std::pair<glm::vec3, glm::vec3>> from)
 {
 	auto& camera = Locator::camera::value();
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto own = PrimaryCreatureOf(registry, k_LocalPlayer);
 	const bool involved = own == first || own == second;
 	const bool scripted = registry.AnyOf<ScriptControlled>(first) || registry.AnyOf<ScriptControlled>(second);
-	const auto eye = camera.GetOrigin(Camera::Interpolation::Target);
-	const auto looking = camera.GetFocus(Camera::Interpolation::Target);
+	// A double click measures from where the camera was before its flight
+	const auto eye = from.has_value() ? from->first : camera.GetOrigin(Camera::Interpolation::Target);
+	const auto looking = from.has_value() ? from->second : camera.GetFocus(Camera::Interpolation::Target);
 	// The player's creature's fight under a script's control is always watched; any other only from near enough
 	const bool tooFar =
 	    !(involved && scripted) && fight_view::TooFar({eye.x, eye.z}, {looking.x, looking.z}, arena.centre, arena.radius, 1.0f);
@@ -1158,6 +1159,50 @@ bool CreatureFightSystem::IsFighting(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	return registry.Valid(creature) && registry.AllOf<CreatureFighting>(creature);
+}
+
+bool CreatureFightSystem::IsDuelling(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(creature) && InDuel(registry, creature);
+}
+
+void CreatureFightSystem::TakeForScript(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return;
+	}
+	const bool fought = registry.AllOf<CreatureFighting>(creature);
+	if (fought)
+	{
+		CallOff(creature);
+	}
+	auto* knockedOut = registry.TryGet<CreatureKnockedOut>(creature);
+	const bool roused = knockedOut != nullptr && !knockedOut->permanent;
+	if (roused)
+	{
+		// It gets up where it is. If it was on its way home, it is back in full sight at once.
+		StopCarryingHome(creature, *knockedOut);
+		if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+		{
+			animation->body = creature_layers::EndLoop(animation->body);
+		}
+		SetEyes(registry, creature, creature_eyes::Mode::Calm);
+		if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
+		{
+			needs->rest = CreatureNeeds::Rest::Awake;
+		}
+		registry.Remove<CreatureKnockedOut>(creature);
+	}
+	if (fought || roused)
+	{
+		fight_transcript::Note(creature, "taken_by_script", [&] {
+			return fight_transcript::Fields {
+			    {"creature", fight_transcript::Id(creature)}, {"called_off", fought}, {"got_up", roused}};
+		});
+	}
 }
 
 std::optional<entt::entity> CreatureFightSystem::OpponentOf(entt::entity creature) const
@@ -1358,7 +1403,12 @@ bool CreatureFightSystem::DirectsFight() const
 
 void CreatureFightSystem::FlewTo(const glm::vec3& place)
 {
-	_flightPlace = glm::vec2(place.x, place.z);
+	// The test of distance uses the camera as it is before the flight moves it
+	const auto eye =
+	    Locator::camera::has_value() ? Locator::camera::value().GetOrigin(Camera::Interpolation::Target) : glm::vec3(0.0f);
+	const auto focus =
+	    Locator::camera::has_value() ? Locator::camera::value().GetFocus(Camera::Interpolation::Target) : glm::vec3(0.0f);
+	_flightPlace = Flight {.place = glm::vec2(place.x, place.z), .eye = eye, .focus = focus};
 }
 
 bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, fight::Button button,
@@ -1623,7 +1673,7 @@ void CreatureFightSystem::KnockOut(entt::entity creature)
 	{
 		if (fighting->stage == CreatureFighting::Stage::Duel && InDuel(registry, fighting->opponent))
 		{
-			Win(fighting->opponent, creature);
+			Win(fighting->opponent, creature, false);
 			return;
 		}
 		Leave(creature);
@@ -2055,44 +2105,10 @@ void CreatureFightSystem::ProcessStages()
 		case CreatureFighting::Stage::Duel:
 			break;
 		case CreatureFighting::Stage::Celebrate:
-			if (fighting->fighter.state != fight::State::Idle)
-			{
-				break;
-			}
-			if (!fighting->played)
-			{
-				fighting->played = true;
-				// Evil winners have a poo on the loser; the rest show off
-				if (fight::WinnerPoos(body.alignment) && opponentHere)
-				{
-					next(CreatureFighting::Stage::PooOnLoser);
-				}
-				else
-				{
-					PlayOnce(animation, fight::animations::k_Impress);
-				}
-			}
-			else if (!creature_layers::IsPlaying(animation.body))
+			// Its move finished, it leaves the fight. Its mind then does what the win made it do to the loser.
+			if (fighting->fighter.state == fight::State::Idle)
 			{
 				Leave(entity);
-			}
-			break;
-		case CreatureFighting::Stage::PooOnLoser:
-			if (!fighting->played)
-			{
-				fighting->played = true;
-				if (locomotion != nullptr && opponentHere)
-				{
-					locomotion->MoveToObject(entity, opponent, Pace::Walk, 0.0f);
-				}
-			}
-			else if (!moving(entity) || fighting->stageSeconds > k_PooApproachSeconds)
-			{
-				Leave(entity);
-				if (Locator::creatureMindSystem::has_value())
-				{
-					Locator::creatureMindSystem::value().Poo(entity);
-				}
 			}
 			break;
 		case CreatureFighting::Stage::Respond:
@@ -2857,7 +2873,7 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 
 	if (victim.health <= 0.0f)
 	{
-		Win(creature, opponent);
+		Win(creature, opponent, true);
 		return;
 	}
 	if (blocked)
@@ -2874,15 +2890,37 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	}
 }
 
-void CreatureFightSystem::Win(entt::entity winner, entt::entity loser)
+void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBlow)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	fight_transcript::Note(winner, "win", [&] {
+	const auto winRecord = fight_transcript::Note(winner, "win", [&] {
 		return fight_transcript::Fields {{"winner", fight_transcript::Id(winner)},
 		                                 {"loser", fight_transcript::Id(loser)},
+		                                 {"by_blow", byBlow},
 		                                 {"winner_health", GetFightHealth(winner)},
 		                                 {"loser_health", GetFightHealth(loser)}};
 	});
+	// The winner is made to do something to the loser at once: an evil winner has a poo on it, any other shows off. Its
+	// mind does it when the winner has left the fight. This plan counts for the feedback of the player.
+	if (Locator::creatureMindSystem::has_value() && registry.Valid(loser))
+	{
+		const auto alignment = registry.Get<const Creature>(winner).alignment;
+		const std::string_view action = fight::WinnerPoos(alignment) ? "Poo" : "ShowImpressiveAnimation";
+		const bool planned =
+		    Locator::creatureMindSystem::value().ForceActivity(winner, {.desire = creature_desires::Desire::ObeyPlayer,
+		                                                                .activityObject = loser,
+		                                                                .action = action,
+		                                                                .actionObject = loser,
+		                                                                .instrument = std::nullopt});
+		fight_transcript::Note(
+		    winner, "forced_plan",
+		    [&] {
+			    return fight_transcript::Fields {
+			        {"creature", fight_transcript::Id(winner)}, {"desire", "obey_player"}, {"action", action},
+			        {"object", fight_transcript::Id(loser)},    {"alignment", alignment},  {"planned", planned}};
+		    },
+		    winRecord);
+	}
 	NoteFightOver(winner, "knockout");
 	EndFightFor(winner, true);
 	EndFightFor(loser, false);
@@ -2902,15 +2940,24 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser)
 		auto& won = registry.Get<CreatureAnimation>(winner);
 		won.face = creature_layers::RelaxFace(won.face);
 	}
-	// A fight won outright by a creature no script controls is seen by the living around it, its time running at once:
-	// the villagers' towns move its player's alignment by what the reaction table says of a fight won
-	if (!registry.AnyOf<ScriptControlled>(winner) && Locator::reactionSystem::has_value())
+	// A fight won by a blow is seen by the living around the winner, if the winner has a player. The reaction runs at
+	// once: the villagers' towns move the player's alignment by what the reaction table says of a fight won.
+	const auto owner = registry.Get<const Creature>(winner).owner;
+	if (fight::FightWonIsSeen(byBlow, owner != PlayerNames::NEUTRAL) && Locator::reactionSystem::has_value())
 	{
+		fight_transcript::Note(
+		    winner, "reaction",
+		    [&] {
+			    return fight_transcript::Fields {{"creature", fight_transcript::Id(winner)},
+			                                     {"reaction", "react_to_fight_won"},
+			                                     {"player", static_cast<int32_t>(owner)}};
+		    },
+		    winRecord);
 		// TODO(creature-fights): how impressive the winner is to those watching (the creature's own impressiveness by
 		// what it does and the town's attitude to it) is not modelled, so the fight won gives no belief yet
 		Locator::reactionSystem::value().Create({.initiator = winner,
 		                                         .type = Reaction::ReactToFightWon,
-		                                         .player = registry.Get<const Creature>(winner).owner,
+		                                         .player = owner,
 		                                         .position = registry.Get<const Transform>(winner).position,
 		                                         .onCast = true});
 	}
