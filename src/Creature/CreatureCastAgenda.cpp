@@ -199,6 +199,19 @@ std::vector<Step> creature_mind::CastWaterOnItself(uint32_t magicType, uint32_t 
 	};
 }
 
+std::vector<Step> creature_mind::CastForestAt(uint32_t magicType, uint32_t object, glm::vec3 place, float height)
+{
+	auto cast = CastFromPose(magicType, object, k_ScatterPose, k_ForestHoldSeconds);
+	cast.cast = {.magicType = magicType, .place = place};
+	return {
+	    {.kind = Step::Kind::Move,
+	     .movement = {.kind = Movement::Kind::GoNearObject, .object = object, .maxDistance = k_ForestCastHeights * height},
+	     .gaze = GoingLook()},
+	    TurnToFace(object),
+	    cast,
+	};
+}
+
 std::vector<Step> creature_mind::CastToImpress(std::optional<uint32_t> magicType, uint32_t object, float height,
                                                const Random& random)
 {

@@ -1542,9 +1542,12 @@ void CreatureMindSystem::ProcessTurn()
 			    ReleaseCast(entity);
 		    }
 		    // The miracle is tried as the casting pose's loop begins; the rest of the agenda is no use without it
-		    if (commands.cast.has_value() && commands.cast->object.has_value() &&
-		        !TryMiracle(entity, static_cast<MagicType>(commands.cast->magicType),
-		                    static_cast<entt::entity>(*commands.cast->object)))
+		    if (commands.cast.has_value() &&
+		        ((commands.cast->place.has_value() &&
+		          !TryMiracleAt(entity, static_cast<MagicType>(commands.cast->magicType), *commands.cast->place)) ||
+		         (!commands.cast->place.has_value() && commands.cast->object.has_value() &&
+		          !TryMiracle(entity, static_cast<MagicType>(commands.cast->magicType),
+		                      static_cast<entt::entity>(*commands.cast->object)))))
 		    {
 			    mind.idle.step = mind.idle.agenda.size();
 			    mind.idle.stepStarted = false;

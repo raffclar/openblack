@@ -134,6 +134,8 @@ enum class Build : uint8_t
 	CastShield,
 	CastWaterOnItself,
 	CastToImpress,
+	/// The creature casts a forest at the place where a villager is when it makes the agenda
+	CastForest,
 	/// Going to a fish farm's shoal, bringing food out of the sea there and eating it
 	FishAndEat,
 	/// Bringing food out of the sea, unless it has some in its hand, and throwing it into a storage pit, or putting it
@@ -290,6 +292,8 @@ struct CastInfo
 	/// For a fireball, and for water on itself: the middle of the clear area near the creature that it goes to first,
 	/// none when there is none
 	std::optional<glm::vec2> clearArea;
+	/// Where the thing is at the time the creature makes the agenda, for a miracle that goes to a place
+	std::optional<glm::vec3> place;
 };
 /// Whether an action casts a miracle
 [[nodiscard]] bool IsCast(const Executor& executor);

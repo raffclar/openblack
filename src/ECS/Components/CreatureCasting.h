@@ -63,6 +63,9 @@ struct CreatureCasting
 		MagicType magicType;
 	};
 	std::optional<Fizzle> fizzle;
+	/// The thing of the last try at a thing that fizzled. When a try at a place fizzles, the creature shows its feelings
+	/// about this thing.
+	entt::entity lastFizzleTarget {entt::null};
 };
 
 } // namespace openblack::ecs::components

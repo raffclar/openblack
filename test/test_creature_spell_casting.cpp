@@ -70,3 +70,10 @@ TEST(CreatureSpellCasting, FightStaminaAndMagnitude)
 	EXPECT_FLOAT_EQ(CastMagnitude(4.0f, 2.0f, true, 5.0f), 0.5f);
 	EXPECT_FLOAT_EQ(CastMagnitude(4.0f, 2.0f, true, 30.0f), 1.0f);
 }
+
+TEST(CreatureSpellCasting, AMiracleAtAPlaceHasSizeTenOrForFireByItsHeight)
+{
+	EXPECT_FLOAT_EQ(CastMagnitudeAtPlace(false, 15.0f), 10.0f);
+	EXPECT_FLOAT_EQ(CastMagnitudeAtPlace(true, 5.0f), 0.5f);
+	EXPECT_FLOAT_EQ(CastMagnitudeAtPlace(true, 30.0f), 1.0f);
+}

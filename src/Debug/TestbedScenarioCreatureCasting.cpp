@@ -8,8 +8,8 @@
  *******************************************************************************/
 
 // The testbed's scenarios of creatures casting miracles: a spell at another creature, a lightning bolt, a fireball, an
-// explosion, a heal, food, wood, a shield, water, a miracle to impress, a try that fizzles and one the creature is too
-// tired for
+// explosion, a heal, food, wood, a shield, water, a forest, a miracle to impress, a try that fizzles and one the creature is
+// too tired for
 
 #include <string_view>
 #include <vector>
@@ -204,6 +204,20 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 60.0f}}},
 	    .commands = {Know(MagicType::Heal), Do("CastImpressiveSpell", 0, 1.0f)},
+	});
+	all.push_back({
+	    .id = "miracles.creature_casts_forest",
+	    .name = "Creature casting: a forest by a villager",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the forest miracle is told to cast a forest by a villager sixty metres away.",
+	    .expected = "It walks up to within two and a half times its height of the villager and turns to it. It does not "
+	                "draw a gesture. It holds its arms out in the scatter pose for four seconds, and a forest grows "
+	                "at the place where the villager stood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, -10.0f}, {40.0f, 80.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 60.0f}}},
+	    .commands = {Know(MagicType::Forest), Do("CastMagicForest", 0, 1.0f)},
 	});
 	all.push_back({
 	    .id = "miracles.creature_cast_fizzles",

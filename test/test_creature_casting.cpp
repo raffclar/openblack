@@ -328,6 +328,39 @@ TEST(CreatureCastAgenda, OnFireItGoesToAClearAreaCastsWaterOnItselfAndCools)
 	EXPECT_FALSE(openblack::creature_plan_actions::Agenda(*executor, std::nullopt, {}, {}, Always(1), noRoom).has_value());
 }
 
+TEST(CreatureCastAgenda, AForestIsScatteredAtThePlaceOfTheVillagerForFourSeconds)
+{
+	const glm::vec3 place {40.0f, 3.0f, 50.0f};
+	const auto agenda = CastForestAt(13, 7, place, 15.0f);
+	ASSERT_EQ(agenda.size(), 3u);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_EQ(*agenda[0].movement.object, 7u);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 37.5f);
+	ASSERT_TRUE(agenda[0].gaze.has_value());
+	EXPECT_TRUE(agenda[0].gaze->whileGoing);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda[1].seconds, 0.1f);
+	EXPECT_EQ(agenda[2].kind, Step::Kind::Cast);
+	EXPECT_EQ(agenda[2].cast.magicType, 13u);
+	EXPECT_FALSE(agenda[2].cast.object.has_value());
+	ASSERT_TRUE(agenda[2].cast.place.has_value());
+	EXPECT_EQ(*agenda[2].cast.place, place);
+	EXPECT_EQ(agenda[2].sequence, k_ScatterPose);
+	EXPECT_FLOAT_EQ(agenda[2].seconds, 4.0f);
+	// The creature draws no gesture
+	EXPECT_TRUE(std::ranges::none_of(agenda, [](const Step& step) { return step.kind == Step::Kind::Gesture; }));
+	// It casts at the place of the villager. Without a place, it cannot cast.
+	const auto* executor = openblack::creature_plan_actions::For("CastMagicForest");
+	ASSERT_NE(executor, nullptr);
+	EXPECT_TRUE(openblack::creature_plan_actions::IsCast(*executor));
+	openblack::creature_plan_actions::CastInfo cast {.magicType = 13, .height = 15.0f};
+	EXPECT_FALSE(openblack::creature_plan_actions::Agenda(*executor, 7u, {}, {}, Always(1), cast).has_value());
+	cast.place = place;
+	const auto built = openblack::creature_plan_actions::Agenda(*executor, 7u, {}, {}, Always(1), cast);
+	ASSERT_TRUE(built.has_value());
+	EXPECT_EQ(*built->back().cast.place, place);
+}
+
 TEST(CreatureCastAgenda, ToImpressItPointsBeforeOrAfterAndBeckonsTwoTimesInThree)
 {
 	// Draws of 0: it points first and does not beckon

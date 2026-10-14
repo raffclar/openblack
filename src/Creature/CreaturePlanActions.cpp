@@ -221,6 +221,7 @@ constexpr std::array k_Executors {
     Executor {.action = "CastShield", .target = Target::Anything, .build = Build::CastShield},
     Executor {.action = "CastMagicWater", .build = Build::CastWaterOnItself},
     Executor {.action = "CastImpressiveSpell", .target = Target::Villager, .build = Build::CastToImpress},
+    Executor {.action = "CastMagicForest", .target = Target::Villager, .build = Build::CastForest},
     Executor {.action = "DeadForever", .build = Build::DeadForever},
     Executor {.action = "PointOutHighlight", .target = Target::Anything, .build = Build::PointOutHighlight},
     Executor {
@@ -273,6 +274,7 @@ bool creature_plan_actions::IsCast(const Executor& executor)
 	case Build::CastShield:
 	case Build::CastWaterOnItself:
 	case Build::CastToImpress:
+	case Build::CastForest:
 		return true;
 	default:
 		return false;
@@ -524,6 +526,13 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::CastToImpress:
 		return creature_mind::CastToImpress(cast->magicType != 0 ? std::optional(cast->magicType) : std::nullopt, *object,
 		                                    cast->height, random);
+	case Build::CastForest:
+		// The creature casts the forest at the place where the thing was when it made the agenda
+		if (!cast->place.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::CastForestAt(cast->magicType, *object, *cast->place, cast->height);
 	case Build::SetFire:
 		return creature_mind::SetFireTo(*object, situation.instrument, situation.handFull);
 	case Build::LookForever:

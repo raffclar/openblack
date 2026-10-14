@@ -227,6 +227,13 @@ private:
 	[[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(entt::entity creature, MagicType type);
 	/// A fizzled try, shown as it next chooses what to do
 	void ShowFizzle(entt::entity creature, components::CreatureMindState& mind);
+	/// The creature tries a miracle at a place, as its casting pose's loop begins. A try short of the sightings that it
+	/// needs fizzles. A miracle that it cannot cast there frustrates it. Return true if it cast the miracle.
+	bool TryMiracleAt(entt::entity creature, MagicType type, glm::vec3 place);
+	/// The part of a try that is the same for a thing and for a place. Return true if the creature can continue.
+	bool StartTry(entt::entity creature, MagicType type, std::optional<entt::entity> target);
+	/// The creature could not cast the miracle: it is frustrated and wants food above all
+	void FrustrateAfterCast(entt::entity creature, MagicType type);
 	/// It is made to be high, as after eating a magic mushroom
 	void BecomeHigh(entt::entity creature);
 	/// Going near, getting away from or turning to face an object begins, and each turn it goes on

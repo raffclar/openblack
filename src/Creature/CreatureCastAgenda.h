@@ -119,6 +119,15 @@ inline constexpr std::array<uint32_t, 5> k_ImpressMiraclesItMayKnow {14, 10, 16,
 /// It casts the water at itself in the scatter pose. Then its fire stops.
 [[nodiscard]] std::vector<Step> CastWaterOnItself(uint32_t magicType, uint32_t self, glm::vec2 clearArea, float height);
 
+/// The creature casts a forest from this many times its height, and holds the miracle this long
+inline constexpr float k_ForestCastHeights = 2.5f;
+inline constexpr float k_ForestHoldSeconds = 4.0f;
+
+/// The creature casts a forest at a place. It goes near to two and a half times its height from the thing (a villager),
+/// and turns to face it. Then it casts the forest at the place in the scatter pose and holds it four seconds. It does
+/// not draw a gesture.
+[[nodiscard]] std::vector<Step> CastForestAt(uint32_t magicType, uint32_t object, glm::vec3 place, float height);
+
 /// The creature casts a miracle to impress the people of a thing (a villager). It goes near to one and a half times its
 /// height and gets away to twice its height. One time in two it points at the thing first. Two times in three it
 /// beckons. It turns and casts the miracle, if it has one. If it did not point first, it points now.

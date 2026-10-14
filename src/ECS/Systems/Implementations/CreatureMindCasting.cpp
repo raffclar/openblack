@@ -464,10 +464,15 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 			    creature_mind::k_FireballClearRadii * object_measures::TwoDRadius(registry, creature), false);
 		}
 	}
+	// The creature casts a forest at the place where the thing is now
+	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastForest && target.has_value())
+	{
+		cast.place = object_measures::PositionOf(registry, *target);
+	}
 	return cast;
 }
 
-bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt::entity target)
+bool CreatureMindSystem::StartTry(entt::entity creature, MagicType type, std::optional<entt::entity> target)
 {
 	auto& registry = Entities();
 	auto* mind = registry.TryGet<CreatureMindState>(creature);
@@ -477,33 +482,25 @@ bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt:
 	{
 		return false;
 	}
-	auto& magic = Locator::magicSystem::value();
-	magic.ReleaseCreatureCast(creature);
-	const auto& info = Locator::infoConstants::value();
-	// In a fight every miracle costs stamina, and it can't cast one it hasn't the stamina for
-	if (auto* fighting = registry.TryGet<CreatureFighting>(creature))
-	{
-		const float cost = creature_spell_casting::StaminaCost(magic::GetMagicEffectInfo(info, type).costToCreate);
-		auto& stamina = fighting->fighter.stamina;
-		if (stamina < cost)
-		{
-			return false;
-		}
-		stamina = std::clamp(stamina - cost, 0.0f, 1.0f);
-	}
+	Locator::magicSystem::value().ReleaseCreatureCast(creature);
 	// A try short of all but one of the sightings it needs fizzles, and counts as one more
 	const auto magicType = static_cast<uint32_t>(type);
-	if (const auto seen = SightingsOf(*mind, *tables, body->species, magicType))
+	const auto sightings = SightingsOf(*mind, *tables, body->species, magicType);
+	if (sightings.has_value())
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} tries miracle {}: seen {} of {}{}", entt::to_integral(creature),
-		                    magicType, seen->seen, seen->needed, seen->known ? ", known" : "");
+		                    magicType, sightings->seen, sightings->needed, sightings->known ? ", known" : "");
 	}
-	if (const auto sightings = SightingsOf(*mind, *tables, body->species, magicType);
-	    sightings.has_value() && !creature_spell_casting::TrySucceeds(sightings->seen, sightings->needed))
+	if (sightings.has_value() && !creature_spell_casting::TrySucceeds(sightings->seen, sightings->needed))
 	{
 		auto* casting = registry.TryGet<CreatureCasting>(creature);
-		(casting != nullptr ? *casting : registry.Assign<CreatureCasting>(creature)).fizzle =
-		    CreatureCasting::Fizzle {.target = target, .magicType = type};
+		auto& state = casting != nullptr ? *casting : registry.Assign<CreatureCasting>(creature);
+		// A try at a place keeps the thing of the last try at a thing that fizzled
+		if (target.has_value())
+		{
+			state.lastFizzleTarget = *target;
+		}
+		state.fizzle = CreatureCasting::Fizzle {.target = state.lastFizzleTarget, .magicType = type};
 		if (Locator::creatureHelpSystem::has_value())
 		{
 			Locator::creatureHelpSystem::value().Raise(
@@ -512,19 +509,76 @@ bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt:
 		++mind->learnt->knowledge.miraclesSeen[magicType].count;
 		return false;
 	}
-	// It is frustrated only when it hadn't the energy for the miracle or the miracle couldn't be cast at the target
-	if (magic.CastByCreature(creature, type, target))
-	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cast miracle {}", entt::to_integral(creature), magicType);
-		return true;
-	}
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} couldn't cast miracle {}", entt::to_integral(creature), magicType);
+	return true;
+}
+
+void CreatureMindSystem::FrustrateAfterCast(entt::entity creature, MagicType type)
+{
+	auto& registry = Entities();
+	auto* mind = registry.TryGet<CreatureMindState>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} couldn't cast miracle {}", entt::to_integral(creature),
+	                    static_cast<uint32_t>(type));
+	const auto& info = Locator::infoConstants::value();
 	// Frustrated, it wants food above all
-	if (mind->desires.has_value() && creature::InfoRow(body->species) < info.creature.size())
+	if (mind != nullptr && body != nullptr && mind->desires.has_value() &&
+	    creature::InfoRow(body->species) < info.creature.size())
 	{
 		creature_spell_mind::MakeFullyDominantOverOthers(*mind->desires, Desire::Hunger,
 		                                                 info.creature.at(creature::InfoRow(body->species)).desireFloor);
 	}
+}
+
+bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt::entity target)
+{
+	auto& registry = Entities();
+	if (!registry.AllOf<CreatureMindState, Creature>(creature) || GetTables() == nullptr || !Locator::magicSystem::has_value())
+	{
+		return false;
+	}
+	auto& magic = Locator::magicSystem::value();
+	magic.ReleaseCreatureCast(creature);
+	// In a fight every miracle costs stamina, and it can't cast one it hasn't the stamina for
+	if (auto* fighting = registry.TryGet<CreatureFighting>(creature))
+	{
+		const float cost =
+		    creature_spell_casting::StaminaCost(magic::GetMagicEffectInfo(Locator::infoConstants::value(), type).costToCreate);
+		auto& stamina = fighting->fighter.stamina;
+		if (stamina < cost)
+		{
+			return false;
+		}
+		stamina = std::clamp(stamina - cost, 0.0f, 1.0f);
+	}
+	if (!StartTry(creature, type, target))
+	{
+		return false;
+	}
+	// It is frustrated only when it hadn't the energy for the miracle or the miracle couldn't be cast at the target
+	if (magic.CastByCreature(creature, type, target))
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cast miracle {}", entt::to_integral(creature),
+		                    static_cast<uint32_t>(type));
+		return true;
+	}
+	FrustrateAfterCast(creature, type);
+	return false;
+}
+
+bool CreatureMindSystem::TryMiracleAt(entt::entity creature, MagicType type, glm::vec3 place)
+{
+	if (!StartTry(creature, type, std::nullopt))
+	{
+		return false;
+	}
+	// It is frustrated only when it does not have the energy for the miracle, or the miracle cannot go to the place
+	if (Locator::magicSystem::value().CastByCreatureAt(creature, type, place))
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cast miracle {} at ({:.1f}, {:.1f})", entt::to_integral(creature),
+		                    static_cast<uint32_t>(type), place.x, place.z);
+		return true;
+	}
+	FrustrateAfterCast(creature, type);
 	return false;
 }
 

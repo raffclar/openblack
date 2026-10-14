@@ -76,3 +76,8 @@ float openblack::creature_spell_casting::CastMagnitude(float targetSize, std::op
 	}
 	return targetSize * k_MagnitudeOverSize;
 }
+
+float openblack::creature_spell_casting::CastMagnitudeAtPlace(bool fireSeed, float casterHeight)
+{
+	return fireSeed ? std::min(casterHeight / k_FireMagnitudeHeight, 1.0f) : k_PlaceMagnitude;
+}
