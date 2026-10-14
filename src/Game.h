@@ -61,6 +61,7 @@ class HandAnimation;
 namespace gui
 {
 class GameInterface;
+class ToolTips;
 class LoadingScreen;
 } // namespace gui
 namespace ecs::components
@@ -536,6 +537,8 @@ private:
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();
+	/// The tooltips that the hand submits this turn for what it holds and what is under the pointer
+	void SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entity> pointed);
 	void ProcessTurnCheering();
 	/// Where a point of the world is on the screen, in whole pixels, when it is on it
 	/// Hangs the hand's tooltip by the hand as drawn this frame

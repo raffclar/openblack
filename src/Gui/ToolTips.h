@@ -40,7 +40,27 @@ enum class ToolTipAction : uint8_t
 	Select,
 	/// The apply action, the right button
 	Apply,
+	/// The zoom in control: the mouse wheel, or both buttons on a mouse with no wheel
+	ZoomIn,
 };
+
+/// The bindable action of a tooltip's mouse, as numbered by the bits of input::BindableActionMap. None for a tooltip
+/// of words only.
+[[nodiscard]] constexpr std::optional<int> BindableActionOf(ToolTipAction action)
+{
+	switch (action)
+	{
+	case ToolTipAction::Select:
+		return 1;
+	case ToolTipAction::Apply:
+		return 2;
+	case ToolTipAction::ZoomIn:
+		return 4;
+	case ToolTipAction::None:
+		break;
+	}
+	return std::nullopt;
+}
 
 /// How many tooltips the player has asked to see (a setting of the player's profile)
 enum class ToolTipLevel : uint8_t
