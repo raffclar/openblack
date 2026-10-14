@@ -51,6 +51,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourceLastTaken.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -861,10 +862,10 @@ BuildingSite* PiledSite(entt::entity object)
 }
 
 /// Any other building with a site, going up or being mended, keeps its wood in the site's one pile: its site taking
-/// brought wood
+/// brought wood. A miracle dispenser is such a building.
 BuildingSite* StandardSite(entt::entity object)
 {
-	return Entities().AllOf<Abode>(object) ? ecs::construction::BroughtWoodSite(object) : nullptr;
+	return Entities().AnyOf<Abode, SpellDispenser>(object) ? ecs::construction::BroughtWoodSite(object) : nullptr;
 }
 
 TownResourceTally* TallyOf(entt::entity town)

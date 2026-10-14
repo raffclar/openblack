@@ -33,10 +33,17 @@ struct PointedThing
 	/// stands where the miracle's table lets it be cast, and the miracle's kind takes it (a creature with room for
 	/// another spell)
 	bool castOnByKind {false};
+	/// A miracle dispenser of a town of the hand's player
+	bool ownDispenser {false};
+	/// The held seed cast its miracle before. Such a seed does not go into a dispenser.
+	bool heldSeedHasCast {false};
 };
 
-/// Whether a held seed may be cast on the thing under the pointer: never on a highlighted thing; a fireball takes only
-/// the fire seed (which grows stronger from it); anything else by the miracle's own rules
+/// Whether a held seed may be cast on the thing under the pointer:
+/// - never on a highlighted thing;
+/// - the player's own dispenser takes a seed that did not cast before, as a one-shot globe, and nothing else;
+/// - a fireball takes only the fire seed (which grows stronger from it);
+/// - anything else by the miracle's own rules.
 [[nodiscard]] bool MayCastOn(SpellSeedType seed, const PointedThing& thing);
 
 /// The miracle held in the hand, and where the pointer is

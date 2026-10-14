@@ -38,6 +38,104 @@ void AddDispensers(std::vector<Scenario>& all)
 	});
 }
 
+/// The miracles that the challenges of the first land give as dispensers, a row of them this far apart
+constexpr float k_RewardSpacing = 10.0f;
+/// The belief of the scenario's town in the player, enough to keep the town the player's
+constexpr float k_TownBelief = 1000.0f;
+
+void AddRewardDispensers(std::vector<Scenario>& all)
+{
+	std::vector<DispenserSetup> rewards;
+	float east = -3.0f * k_RewardSpacing;
+	for (const auto type : {MagicType::Heal, MagicType::HealPowerUpOne, MagicType::LightningBolt, MagicType::Food,
+	                        MagicType::Water, MagicType::CreatureSpellStrong, MagicType::CreatureSpellCompassion})
+	{
+		rewards.push_back({.type = type, .offset = {east, 25.0f}, .charged = false, .reward = true});
+		east += k_RewardSpacing;
+	}
+	all.push_back({
+	    .id = "miracles.dispenser_rewards",
+	    .name = "The first land's reward dispensers",
+	    .facet = Facet::Miracles,
+	    .description = "The seven dispensers that the first land's challenges give, made as the reward script makes them, "
+	                   "from the left: heal, heal powered up (the Ogre after a heal), lightning (the Pied Piper's evil "
+	                   "way), food (the Singing Stones), water (the Missionaries and the Hermit), the creature spell "
+	                   "strong and the creature spell nice. Each belongs to the player's town.",
+	    .expected = "Each dispenser floats its globe at once, with a puff of sparkles, a little above itself. Each globe "
+	                "holds its miracle's seed or phial, and the powered-up heal globe has a ring round it. "
+	                "A tap on a globe with the action button puts its miracle in the hand, and the globe pops. The "
+	                "dispenser makes a new globe when its period has passed after the tap.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-32.0f, 20.0f}, {32.0f, 30.0f}}, .distance = 0.5f},
+	    .dispensers = std::move(rewards),
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+
+	// A town with builders, its dispenser damaged, and a damaged dispenser of no town
+	std::vector<ObjectSetup> town {
+	    {.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 60.0f}},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = {-30.0f, 40.0f}, .storedFood = 5000, .storedWood = 5000},
+	    {.type = AbodeInfo::CelticHut, .offset = {25.0f, 45.0f}, .yawDegrees = 180.0f},
+	};
+	for (int i = 0; i < 3; ++i)
+	{
+		const float x = static_cast<float>(i - 1) * 3.0f;
+		town.push_back({.type = VillagerInfo::CelticForesterMale, .offset = {x, 30.0f}, .joinTown = true});
+		town.push_back({.type = VillagerInfo::CelticHousewifeFemale, .offset = {x, 27.0f}, .joinTown = true});
+	}
+	all.push_back({
+	    .id = "miracles.dispenser_mending",
+	    .name = "Damaged dispensers, of a town and of none",
+	    .facet = Facet::Miracles,
+	    .description = "Two heal dispensers, their first globes taken, each damaged to half its life by a blow: on the "
+	                   "left a dispenser of the player's town, a Celtic town with a full storage pit and six villagers; "
+	                   "on the right a dispenser of no town. Best watched at game speed 4.",
+	    .expected = "Neither dispenser makes a globe while it is damaged. The town opens a site at its dispenser, and "
+	                "builders fetch wood from the pit and mend it. Once it is whole again, it counts its period from "
+	                "the start and then floats a new globe with a puff of sparkles. The dispenser of no town is never "
+	                "mended and never makes a globe again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 0.0f}, {40.0f, 60.0f}}, .distance = 0.6f},
+	    .objects = std::move(town),
+	    .dispensers = {{.type = MagicType::Heal,
+	                    .offset = {-12.0f, 5.0f},
+	                    .charged = false,
+	                    .reward = true,
+	                    .life = 0.5f,
+	                    .globeTaken = true},
+	                   {.type = MagicType::Heal,
+	                    .offset = {30.0f, 5.0f},
+	                    .charged = false,
+	                    .reward = true,
+	                    .noTown = true,
+	                    .life = 0.5f,
+	                    .globeTaken = true}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+
+	// The player puts a held miracle into the player's own dispenser
+	using Kind = Command::Kind;
+	all.push_back({
+	    .id = "miracles.dispenser_store",
+	    .name = "A held miracle put into a dispenser",
+	    .facet = Facet::Miracles,
+	    .description = "A heal dispenser of the player's town, its first globe taken. A lightning seed is put in the "
+	                   "hand, the pointer goes to the dispenser, and the action button is pressed and let go there.",
+	    .expected = "Over the dispenser the hand offers \"Cast\". When the button is let go, the seed leaves the hand and "
+	                "a lightning globe appears above the dispenser with a puff of sparkles; no lightning strikes. The "
+	                "dispenser continues to make its own heal globes as before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, 8.0f}, .look = {0.0f, 3.0f, 25.0f}},
+	    .dispensers =
+	        {{.type = MagicType::Heal, .offset = {0.0f, 25.0f}, .charged = false, .reward = true, .globeTaken = true}},
+	    .commands = {{.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::LightningBolt)},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+}
+
 /// The sixteen creature spells' dispensers in four rows of four, this far apart, the first row nearest
 std::vector<DispenserSetup> CreatureSpellDispensers()
 {
@@ -294,6 +392,7 @@ void AddPiles(std::vector<Scenario>& all)
 void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
 {
 	AddDispensers(all);
+	AddRewardDispensers(all);
 	AddCreatureSpellDispensers(all);
 	AddGlobes(all);
 	AddHand(all);

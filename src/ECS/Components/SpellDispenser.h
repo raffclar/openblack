@@ -33,8 +33,11 @@ struct SpellDispenser
 	uint32_t effect {0};
 	/// Its row in the buildings' table
 	AbodeInfo building {AbodeInfo::None};
-	/// The town it belongs to, none for none: a knock on it brings up that town's read-out
+	/// The town it belongs to, none for none: a knock on it brings up that town's read-out. Its town mends it when it
+	/// is damaged, and the player of its town can put a held miracle into it.
 	entt::entity town {entt::null};
+	/// Its town chose it for mending, and it is not whole yet: its town does not choose it again
+	bool putUpForMending {false};
 };
 
 /// One of the dispensers the testbed lays out in a grid, cleared away when a scenario asks for none

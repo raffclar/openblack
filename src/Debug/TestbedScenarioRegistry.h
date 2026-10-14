@@ -389,6 +389,15 @@ struct DispenserSetup
 	/// A testbed set-up step: the dispenser starts with its period already counted and floats its globe at once, rather
 	/// than after its period as a dispenser put down in the game does
 	bool charged {true};
+	/// The dispenser comes as a challenge's reward comes: the script makes it, gives it its miracle and turns it on, so
+	/// it floats its first globe at once. It belongs to the scenario's town, the player's. Not with charged.
+	bool reward {false};
+	/// With reward: the dispenser belongs to no town
+	bool noTown {false};
+	/// The life it is left with by a blow when it is made, 1 for none
+	float life {1.0f};
+	/// With reward: its first globe goes at once, as if the hand took it, so the dispenser starts to count
+	bool globeTaken {false};
 };
 
 /// How a script casts a miracle at a point or a thing: by the neutral player, from the hand's place, as big as the radius,
