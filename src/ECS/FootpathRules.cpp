@@ -9,6 +9,8 @@
 
 #include "FootpathRules.h"
 
+#include <algorithm>
+#include <array>
 #include <bit>
 
 #include "Common/GUtilsDistance.h"
@@ -205,4 +207,32 @@ glm::ivec2 footpath_rules::Jittered(glm::ivec2 place, uint32_t drawX, uint32_t d
 	const auto offset = [](uint32_t draw) { return static_cast<int32_t>(draw) - k_Jitter; };
 	return {static_cast<int32_t>(static_cast<uint32_t>(place.x) + static_cast<uint32_t>(offset(drawX))),
 	        static_cast<int32_t>(static_cast<uint32_t>(place.y) + static_cast<uint32_t>(offset(drawZ)))};
+}
+
+namespace
+{
+/// The commands of a land's script that make a thing which a footpath link command after them goes to
+constexpr std::array<std::string_view, 32> k_CommandsThatMakeThings {
+    "CREATE_TOWN",           "CREATE_MIST",         "CREATE_ABODE",           "CREATE_PLANNED_ABODE", "CREATE_PLANNED_CITADEL",
+    "CREATE_CREATURE_PEN",   "CREATE_WORSHIP_SITE", "CREATE_FOREST",          "CREATE_TREE",          "CREATE_NEW_TREE",
+    "CREATE_ANIMAL",         "CREATE_FIELD",        "CREATE_DRINK_WAYPOINT",  "CREATE_FISH_FARM",     "CREATE_FEATURE",
+    "CREATE_FLOWERS",        "CREATE_NEW_FEATURE",  "CREATE_ANIMATED_STATIC", "CREATE_POT",           "CREATE_MOBILEOBJECT",
+    "CREATE_SCAFFOLD",       "CREATE_MOBILESTATIC", "CREATE_MOBILE_STATIC",   "CREATE_DEAD_TREE",     "CREATE_CREATURE",
+    "CREATE_INFLUENCE_RING", "CREATE_WATERFALL",    "CREATE_ARENA",           "CREATE_BONFIRE",       "CREATE_BASE",
+    "CREATE_STREET_LANTERN", "CREATE_STREET_LIGHT",
+};
+} // namespace
+
+bool footpath_rules::ScriptCommandMakesThing(std::string_view command)
+{
+	return std::ranges::find(k_CommandsThatMakeThings, command) != k_CommandsThatMakeThings.end();
+}
+
+std::optional<size_t> footpath_rules::ScriptFootpathIndex(size_t count, int32_t number)
+{
+	if (number < 0 || static_cast<size_t>(number) >= count)
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(number);
 }
