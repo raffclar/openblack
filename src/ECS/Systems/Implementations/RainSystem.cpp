@@ -17,12 +17,12 @@
 #include <optional>
 #include <utility>
 
-#include <LNDFile.h>
 #include <glm/geometric.hpp>
 
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLightFrame.h"
+#include "3D/WeatherBlocks.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
@@ -31,7 +31,6 @@
 #include "EngineConfig.h"
 #include "Graphics/DetailLevel.h"
 #include "Locator.h"
-#include "Scenery/ObjectDrawList.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -45,11 +44,6 @@ constexpr float k_MiddleCells = 40.0f;
 rain::Random GameRandom()
 {
 	return [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); };
-}
-/// The highest altitude of a block's cells, as the land had them when it was loaded
-uint8_t HighestAltitude(const lnd::LNDBlock& block)
-{
-	return std::ranges::max(block.cells, {}, &lnd::LNDCell::altitude).altitude;
 }
 } // namespace
 
@@ -120,23 +114,9 @@ std::vector<rain::Tile> RainSystem::TakeTiles(const rain::View& view)
 		float key;
 	};
 	std::vector<Rained> rained;
-	for (const auto& block : island.GetBlocks())
+	for (const auto& corner : weather_blocks::InView(island, view, settings.landReflection))
 	{
-		const auto corner = block.GetMapPosition();
 		const auto centre = corner + glm::vec2(k_BlockSize * 0.5f);
-		// A block further than the reach across the ground is also further than the reach from the eye
-		const auto& lnd = block.GetLndBlock();
-		if (lnd == nullptr || !(glm::distance(centre, eye) < rain::k_BlockReach))
-		{
-			continue;
-		}
-		const object_draw_list::Block box {
-		    .corner = corner, .highestAltitude = HighestAltitude(*lnd), .reflected = settings.landReflection};
-		if (!object_draw_list::BlockInView(view.viewProjection, view.nearPlane, box) ||
-		    !(object_draw_list::BlockDistance(view.eye, box) < rain::k_BlockReach))
-		{
-			continue;
-		}
 		// The most rain over the block's four middle cells
 		int32_t wettest = 0;
 		for (const auto& offset :

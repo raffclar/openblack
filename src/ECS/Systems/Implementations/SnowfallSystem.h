@@ -27,7 +27,7 @@ public:
 
 	void Reset() override;
 	void Update(float seconds, const rain::Fall& fall) override;
-	[[nodiscard]] std::vector<snowfall::Tile> TakeTiles(const glm::vec3& camera) override;
+	[[nodiscard]] std::vector<snowfall::Tile> TakeTiles(const rain::View& view) override;
 	[[nodiscard]] std::span<const snowfall::Flake> GetFlakes() const override { return _flakes; }
 
 private:
