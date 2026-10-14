@@ -887,6 +887,17 @@ void TempleCameraModel::UpdateOrbit(float dt, const Input& input)
 	// Clicking a door goes through it
 	if (input.button != 0 && !_wasPressed && input.door.has_value() && *input.door != k_ScrollWall)
 	{
+		// The door of a room that is not open leaves the camera where it is, and the help tells the player so. The
+		// way out is always open.
+		if (const auto room = RoomBehindDoor(*input.door); room.has_value())
+		{
+			auto& temple = Locator::temple::value();
+			if (!temple.IsRoomAvailable(*room))
+			{
+				temple.TellRoomNotAvailable();
+				return;
+			}
+		}
 		_doorStart = TurnToDoor(k_DoorApproach, *input.door);
 		_doorEnd = TurnToDoor(k_DoorEntry, *input.door);
 		_doorRoom = RoomBehindDoor(*input.door);

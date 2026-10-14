@@ -41,6 +41,10 @@ public:
 	[[nodiscard]] bool IsTextRead() const override;
 	void ClearAllText() override;
 	void CloseDialogue() override;
+	[[nodiscard]] help::DialogueText::Held HoldText() const override;
+	void CloseTextBox() override;
+	void RestoreText(const help::DialogueText::Held& held) override;
+	void ShowTextAgain() override;
 	void InterruptAdvisors() override;
 	void InterruptAdvisorsByEscape() override;
 	[[nodiscard]] int32_t GetNarrator(uint32_t text) const override;

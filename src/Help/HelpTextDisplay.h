@@ -104,6 +104,8 @@ public:
 	void Reset(bool all);
 	/// Box hidden, then the texts hidden (not drawn)
 	void Close();
+	/// The box does not draw its texts until the next text comes. The ring keeps them.
+	void Hide() { _hidden = true; }
 
 	/// Set by RUN_TEXT / TEMP_TEXT
 	void SetSingleLine(bool on);
