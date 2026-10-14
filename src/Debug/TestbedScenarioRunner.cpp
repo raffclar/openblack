@@ -47,8 +47,8 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
-#include "Creature/CreatureActivity.h"
 #include "Common/MachineClock.h"
+#include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
@@ -1501,7 +1501,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return HandTapObject(command.object);
 	case Kind::HandTake:
 	{
-		const auto object = ObjectAt(command.object);
+		const auto object = command.globe.has_value() ? GlobeAt(*command.globe) : ObjectAt(command.object);
 		if (!object.has_value() || !Locator::handGrabSystem::has_value())
 		{
 			return "nothing to take";

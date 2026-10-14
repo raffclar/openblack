@@ -179,6 +179,11 @@ private:
 	bool Replan(entt::entity creature, creature_mind::Activity activity, std::vector<creature_mind::Step> agenda);
 	/// The creature sees a miracle it reacted to, and learns from it
 	void WatchMiracle(entt::entity creature, size_t miracle);
+	/// The creature counts one sighting of the miracle, and the advisor tells what the sighting showed
+	void CountMiracleSighting(entt::entity entity, const components::Creature& creature, components::CreatureMindState& mind,
+	                          size_t miracle);
+	/// A creature grown up enough casts the one-shot globe that it was given. Whether it does.
+	bool CastGivenGlobe(entt::entity creature, components::CreatureMindState& mind, entt::entity globe);
 	/// The creature watches a skill being done, and learns from it
 	void WatchSkill(entt::entity creature, size_t skill);
 	/// How useful the creature has learnt a thing is for a desire, when it may act on it at all: nothing when it is kept

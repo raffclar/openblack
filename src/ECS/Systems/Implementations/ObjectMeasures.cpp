@@ -23,6 +23,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
@@ -68,16 +69,20 @@ std::optional<glm::vec3> HalfExtentsOf(const ecs::Registry& registry, entt::enti
 {
 	const auto* mesh = registry.TryGet<const Mesh>(entity);
 	const auto* transform = registry.TryGet<const Transform>(entity);
-	if (mesh == nullptr || transform == nullptr || !Locator::resources::has_value())
+	// A one-shot globe has no mesh of its own to draw, but it measures as the model of its dome
+	const auto id = mesh != nullptr                           ? std::optional(mesh->id)
+	                : registry.AllOf<OneOffSpellSeed>(entity) ? std::optional(OneOffSpellSeed::k_MeshId.value())
+	                                                          : std::nullopt;
+	if (!id.has_value() || transform == nullptr || !Locator::resources::has_value())
 	{
 		return std::nullopt;
 	}
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(mesh->id))
+	if (!meshes.Contains(*id))
 	{
 		return std::nullopt;
 	}
-	const auto& box = meshes.Handle(mesh->id)->GetBoundingBox();
+	const auto& box = meshes.Handle(*id)->GetBoundingBox();
 	return (box.maxima - box.minima) * 0.5f * transform->scale.x;
 }
 } // namespace

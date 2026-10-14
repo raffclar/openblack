@@ -133,3 +133,18 @@ KeptPlanUse creature_giving::UseForKeptPlan(const KeptPlanFacts& facts)
 	}
 	return KeptPlanUse::None;
 }
+
+std::optional<GlobeCast> creature_giving::CastGlobe(uint32_t phase, MagicType firstMiracle, uint32_t desire)
+{
+	if (phase < k_GlobeCastPhase)
+	{
+		return std::nullopt;
+	}
+	const bool compassion = desire == k_CompassionDesire;
+	GlobeCast cast {.desire = desire, .action = compassion ? k_CastGlobeCompassionate : k_CastGlobeAggressive};
+	if (firstMiracle >= MagicType::CreatureSpellFreeze)
+	{
+		cast.target = compassion ? GlobeTarget::Itself : GlobeTarget::NearestCreature;
+	}
+	return cast;
+}
