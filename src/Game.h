@@ -408,6 +408,9 @@ private:
 	glm::vec3 _handPosition {0.0f, 0.0f, 0.0f};
 	/// Dragging the land, and the pose the camera's hints give the hand
 	bool _handCameraState {false};
+	/// The hand grips the land for its tooltips: from the start of a drag of the land until the Move button is let go,
+	/// also while the Action button is held too
+	bool _tipsLandGrip {false};
 	hand_navigation_pose::Pose _handPose {hand_navigation_pose::Pose::Idle};
 	/// The rotate arrow's turn, kept from frame to frame, which a demonstration's recording sets too
 	float _triconAngle {0.0f};

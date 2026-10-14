@@ -43,6 +43,20 @@ struct Holdable
 /// wouldn't take hold (asleep, say) still shows it.
 [[nodiscard]] bool ShowsInteractTip(PlayerNames player, const Holdable& creature, bool held, bool handInInfluence);
 
+/// How the hand shows its tooltip for interacting with a creature
+enum class InteractTip : uint8_t
+{
+	/// No tooltip
+	None,
+	/// The words with no mouse
+	WordsOnly,
+	/// The words with the mouse of the Action button
+	WithAction,
+};
+/// The tooltip for interacting with a creature (see ShowsInteractTip). Within the influence, over a creature that would
+/// take hold, the mouse shows the Action button. In all other conditions the tooltip has no mouse.
+[[nodiscard]] InteractTip InteractTipOf(PlayerNames player, const Holdable& creature, bool held, bool handInInfluence);
+
 /// A press of the right button let go sooner than this is a click rather than a hold. The hand can't stroke or slap
 /// that soon.
 constexpr float k_ClickMaxMs = 450.0f;

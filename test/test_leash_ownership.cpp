@@ -249,6 +249,26 @@ TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureAnywhereAndOthersInTheInflue
 	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, Holdable {.species = CreatureType::Tiger}, false, true));
 }
 
+TEST(CreatureHand, TheInteractTipShowsTheActionButtonOnlyWhereTheHandCanTakeHold)
+{
+	using creature_hand::Holdable;
+	using creature_hand::InteractTip;
+	using creature_hand::InteractTipOf;
+	const Holdable own {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger};
+	const Holdable other {.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tiger};
+	const Holdable asleep {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true};
+	// Within the influence, over a creature that takes hold: the Action button
+	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, own, false, true), InteractTip::WithAction);
+	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, other, false, true), InteractTip::WithAction);
+	// Out of the influence, the player's own creature: the words with no mouse
+	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, own, false, false), InteractTip::WordsOnly);
+	// A creature that does not take hold: the words with no mouse
+	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, asleep, false, true), InteractTip::WordsOnly);
+	// No tooltip
+	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, other, false, false), InteractTip::None);
+	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, own, true, true), InteractTip::None);
+}
+
 TEST(CreatureHand, TheInteractTipIsNeverForACreatureUnderAScriptsControl)
 {
 	using creature_hand::Holdable;

@@ -1342,8 +1342,48 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 			toolTips.Submit(offer.index, offer.action, offer.arrows);
 		}
 	};
-	// Over the land, or over a thing that the hand can do nothing with, the hand shows how a drag moves the camera
-	const auto overNothing = [&submitAll]() { submitAll({tips::OverNothing(tips::CameraNow())}); };
+	// Over the land, or over a thing that the hand can do nothing with, the hand shows how a drag moves the camera. When
+	// the middle of the screen shows the land, the help counts it.
+	const auto overNothing = [&submitAll]() {
+		const auto camera = tips::CameraNow();
+		if (const auto event = tips::OverNothingHelpEvent(camera); event.has_value() && Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().Trigger(*event);
+		}
+		submitAll({tips::OverNothing(camera)});
+	};
+	// While the hand grips the land, it shows "Zoom" when the Action button is held too. In other conditions it shows
+	// what a tap does with the leash, or how the drag moves the camera. The grip starts with a drag of the land and
+	// continues until the Move button is let go. Both buttons together stop the drag but not the grip.
+	const bool bothButtons = Locator::gameActionSystem::has_value() &&
+	                         Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
+	const bool moveHeld = bothButtons || (Locator::gameActionSystem::has_value() &&
+	                                      Locator::gameActionSystem::value().Get(input::BindableActionMap::MOVE));
+	if (Locator::camera::has_value() && Locator::camera::value().GetModel().GetHandCues().dragging)
+	{
+		_tipsLandGrip = true;
+	}
+	else if (!moveHeld)
+	{
+		_tipsLandGrip = false;
+	}
+	if (_tipsLandGrip)
+	{
+		const bool actionHeld = bothButtons;
+		const auto camera = tips::CameraNow();
+		if (const auto zoom = tips::GrippingLand(actionHeld, camera); zoom.index == tips::k_Zoom)
+		{
+			submitAll({zoom});
+			return;
+		}
+		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed))
+		{
+			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+			return;
+		}
+		overNothing();
+		return;
+	}
 	// With a miracle in the hand, poured or not, the hand offers to cast it where it may be cast: on the thing under the
 	// pointer, or on the land where there is none. In other places it shows what it shows over the land.
 	const auto held = Locator::magicSystem::has_value() ? Locator::magicSystem::value().HeldCastAt(pointed) : std::nullopt;
@@ -1399,10 +1439,17 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
 	if (over.has_value())
 	{
-		if (Locator::creatureHandSystem::has_value() &&
-		    Locator::creatureHandSystem::value().ShowsInteractTip(*over, HandInInfluence()))
+		// Within the influence, over a creature that takes hold, the mouse shows the Action button; in other places the
+		// tooltip has no mouse
+		const auto tip = Locator::creatureHandSystem::has_value()
+		                     ? Locator::creatureHandSystem::value().InteractTipOver(*over, HandInInfluence())
+		                     : creature_hand::InteractTip::None;
+		if (tip != creature_hand::InteractTip::None)
 		{
-			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
+			toolTips.Submit(creature_panel::k_InteractToolTip,
+			                tip == creature_hand::InteractTip::WithAction ? gui::ToolTipAction::Apply
+			                                                              : gui::ToolTipAction::None,
+			                gui::ToolTipArrows::k_None);
 			return;
 		}
 		overNothing();
