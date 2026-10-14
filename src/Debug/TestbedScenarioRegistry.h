@@ -323,6 +323,8 @@ struct ObjectSetup
 	bool wasBuilt {false};
 	/// A building stands only this much built, a site open for its town's builders to finish it
 	std::optional<float> built;
+	/// The crop of a field is fully sown and ripe, with all the food of its type. If false, the field is not sown.
+	bool ripeCrop {false};
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 	/// The thing is set alight as it is made, burning as at the start of a fire

@@ -441,23 +441,24 @@ void CreaturePhysiologySystem::LetOutWind(entt::entity creature)
 	}
 }
 
-void CreaturePhysiologySystem::Eat(entt::entity creature, float foodValue)
+float CreaturePhysiologySystem::Eat(entt::entity creature, float foodValue)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* self = registry.TryGet<Creature>(creature);
 	auto* needs = registry.TryGet<CreatureNeeds>(creature);
 	if (self == nullptr || needs == nullptr)
 	{
-		return;
+		return 0.0f;
 	}
 	const auto species = SpeciesOf(self->species);
 	StartNeeds(*needs, species);
 	auto shape = ShapeOf(*self);
-	physiology::Eat(needs->needs, shape, species, foodValue);
+	const auto energy = physiology::Eat(needs->needs, shape, species, foodValue);
 	if (TakeShape(*self, registry.TryGet<Transform>(creature), shape))
 	{
 		registry.SetDirty();
 	}
+	return energy;
 }
 
 void CreaturePhysiologySystem::Drink(entt::entity creature)

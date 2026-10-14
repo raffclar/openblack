@@ -101,11 +101,17 @@ enum class Target : uint8_t
 	OneShotPlayful,
 	/// A villager nearer to the creature than 200 metres, to dance with
 	DanceVillager,
+	/// The things that a creature eats from: a sown field with food in its crop; a storage pit with food in its food pile,
+	/// if the pit is not wider than 15 times the size of the creature; a tree that is as tall as 15 times that size, or
+	/// taller
+	FieldWithFood,
+	StoragePitWithFood,
+	TreeBigEnough,
 };
 /// A creature poos only by a thing taller than this, in metres
 constexpr float k_PooedOnTallerThan = 1.5f;
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::DanceVillager) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::TreeBigEnough) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -191,6 +197,10 @@ enum class Build : uint8_t
 	SleepByObject,
 	/// Taking food from a pile and eating it
 	EatFromPile,
+	/// The creature takes a handful from the food pile of a storage pit, from a field or from a tree, and eats it
+	EatFromStoragePit,
+	EatFromField,
+	EatFromTree,
 	/// Looking another creature over
 	InspectCreature,
 	/// Looking at a thing flying through the air
@@ -293,6 +303,14 @@ struct Situation
 	std::optional<Fishing> fishing;
 	/// Where its home is, none for a creature without one
 	std::optional<glm::vec2> home;
+	/// The food pile of the storage pit that the action is done to, by its entity's number, and where it is. None when
+	/// the pit has no food pile, or the action is not done to a storage pit.
+	struct FoodPile
+	{
+		uint32_t pile {0};
+		glm::vec2 point {0.0f};
+	};
+	std::optional<FoodPile> storeFood;
 	/// The thing the action uses, by its entity's number, as a burning thing to set something alight with; and whether
 	/// its hand holds something already
 	std::optional<uint32_t> instrument;

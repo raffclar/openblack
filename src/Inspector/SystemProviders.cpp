@@ -162,6 +162,8 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "use_up";
 	case Kind::UseUpHeld:
 		return "use_up_held";
+	case Kind::ActOnItself:
+		return "act_on_itself";
 	case Kind::WatchCamera:
 		return "watch_camera";
 	case Kind::Observe:

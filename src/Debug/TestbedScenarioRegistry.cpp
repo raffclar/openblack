@@ -448,6 +448,59 @@ void AddNeeds(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Cow, .offset = {30.0f, -60.0f}, .living = true}},
 	});
 
+	all.push_back({
+	    .id = "needs.eats_from_field",
+	    .name = "Hungry creature eats from a field",
+	    .facet = Facet::Needs,
+	    .description = "A hungry tiger with a ripe wheat field of its town in front of it, and no other food.",
+	    .expected = "It walks to the field, faces it, pulls a handful of wheat from it and eats it. The handful holds no "
+	                "food, as in the game, so it brings the wheat back up and is not hungry for a while. The field's crop "
+	                "stays as it was.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 50.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {0.0f, -40.0f}, .ripeCrop = true}},
+	});
+
+	all.push_back({
+	    .id = "needs.eats_from_store",
+	    .name = "Hungry creature eats from a storage pit",
+	    .facet = Facet::Needs,
+	    .description = "A hungry tiger of size 1.3 with its town's storage pit in front of it, full of food, and no other "
+	                   "food. A creature eats from a pit only when the pit is no wider than fifteen times its size: a "
+	                   "Celtic pit needs a size of about 1.16.",
+	    .expected = "It walks to the pit's food pile, faces it, takes a handful of wheat from it and eats it. The pit's "
+	                "food falls by the handful (1300, a thousand for each unit of the tiger's size), and its hunger falls.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 60.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .size = 1.3f,
+	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -50.0f}, .storedFood = 5000, .storedWood = 0}},
+	});
+
+	all.push_back({
+	    .id = "needs.eats_from_tree",
+	    .name = "Creature eats from a tree",
+	    .facet = Facet::Needs,
+	    .description = "A tiger with an oak in front of it. A script tells it to eat from the tree, as a script or a "
+	                   "copied deed makes it.",
+	    .expected = "It walks to the oak, faces it, takes a handful of fruit from it and eats it. The handful holds no "
+	                "food, as in the game, so it brings the fruit back up. The tree stays as it was.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 40.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "EatFromTree"}},
+	});
+
 	// A tiger that stands still between two cows: the left one a script made and holds, as Land 1 holds the leash
 	// lesson's cow, and the right one free
 	all.push_back({

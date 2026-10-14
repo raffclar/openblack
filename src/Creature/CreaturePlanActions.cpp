@@ -48,6 +48,14 @@ constexpr std::array k_Executors {
     Executor {.action = "EatAlive", .target = Target::Food, .build = Build::EatAlive, .activity = Activity::Eat},
     Executor {
         .action = "EatFromFoodPile", .target = Target::MagicFoodPile, .build = Build::EatFromPile, .activity = Activity::Eat},
+    Executor {.action = "EatFromStoragePit",
+              .target = Target::StoragePitWithFood,
+              .build = Build::EatFromStoragePit,
+              .activity = Activity::Eat},
+    // The data of the game gives the action to eat from a field the name "EatFromContainer"
+    Executor {
+        .action = "EatFromContainer", .target = Target::FieldWithFood, .build = Build::EatFromField, .activity = Activity::Eat},
+    Executor {.action = "EatFromTree", .target = Target::TreeBigEnough, .build = Build::EatFromTree, .activity = Activity::Eat},
     Executor {.action = "SleepOnTheSpot", .build = Build::Sleep, .activity = Activity::Sleep},
     Executor {.action = "Poo", .target = Target::PooedOn, .build = Build::Poo, .activity = Activity::Poo},
     Executor {.action = "Fart", .build = Build::Fart, .activity = Activity::Poo},
@@ -520,6 +528,24 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		// TODO(creature-actions-3): with something it can eat in its hand already, the game does something else; what
 		// isn't known yet, so it goes to the pile all the same
 		return creature_mind::EatFromPile(*object, objectPoint, situation.thingRadius, situation.radius);
+	case Build::EatFromStoragePit:
+		// The creature eats from the food pile of the pit. A pit with no food pile gives no agenda.
+		if (!situation.storeFood.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::EatFromStoragePit(situation.storeFood->pile, situation.storeFood->point, situation.height);
+	case Build::EatFromField:
+	case Build::EatFromTree:
+		// TODO(creature-eat-from-stores): When the hand holds food, the game makes no steps for these two actions. The
+		// result of that empty agenda is not known, thus the creature does not do the action.
+		if (situation.holdingEatable)
+		{
+			return std::nullopt;
+		}
+		return executor.build == Build::EatFromField
+		           ? creature_mind::EatFromField(*object, objectPoint, situation.height)
+		           : creature_mind::EatFromTree(*object, objectPoint, situation.thingRadius, situation.radius);
 	case Build::Sleep:
 		return creature_mind::Sleep(random);
 	case Build::Poo:

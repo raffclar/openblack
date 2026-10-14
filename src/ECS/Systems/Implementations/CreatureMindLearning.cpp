@@ -44,6 +44,7 @@
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
+#include "Creature/CreatureMeals.h"
 #include "Creature/CreatureMind.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
@@ -282,6 +283,28 @@ std::optional<creature_plan_actions::OneShot> OneShotOf(const ecs::Registry& reg
 	                                       .playful = miracle.oneOffSpellIsPlayful != 0};
 }
 
+/// The food pile of a storage pit, while the pile is there
+std::optional<entt::entity> StoreFoodPileOf(const ecs::Registry& registry, entt::entity pit)
+{
+	const auto* store = registry.TryGet<const StoragePit>(pit);
+	if (store == nullptr || store->foodPile == entt::null || !registry.Valid(store->foodPile))
+	{
+		return std::nullopt;
+	}
+	return store->foodPile;
+}
+
+/// Put the food pile of a storage pit, and the point of the pile, in the situation of an action on the pit
+void SituateStoreFood(const ecs::Registry& registry, entt::entity pit, creature_plan_actions::Situation& situation)
+{
+	const auto pile = StoreFoodPileOf(registry, pit);
+	const auto at = pile.has_value() ? PointOf(registry, *pile) : std::nullopt;
+	if (at.has_value())
+	{
+		situation.storeFood = creature_plan_actions::Situation::FoodPile {.pile = entt::to_integral(*pile), .point = *at};
+	}
+}
+
 bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, entt::entity self)
 {
 	if (entity == self || !registry.Valid(entity))
@@ -465,6 +488,25 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	}
 	case Target::PickableTree:
 		return !heldByOther && registry.AllOf<Tree>(entity) && hands != nullptr && hands->CanPickUp(self, entity);
+	case Target::FieldWithFood:
+	{
+		const auto* field = registry.TryGet<const Field>(entity);
+		return field != nullptr && creature_meals::FieldHasFood(field->crop.age, field->crop.food);
+	}
+	case Target::StoragePitWithFood:
+	{
+		const auto* body = registry.TryGet<const Creature>(self);
+		const auto pile = StoreFoodPileOf(registry, entity);
+		const auto* pot = pile.has_value() ? registry.TryGet<const Pot>(*pile) : nullptr;
+		return body != nullptr && pot != nullptr &&
+		       creature_meals::StoragePitServes(object_measures::TwoDRadius(registry, entity), body->size, pot->amount);
+	}
+	case Target::TreeBigEnough:
+	{
+		const auto* body = registry.TryGet<const Creature>(self);
+		return body != nullptr && registry.AllOf<Tree>(entity) &&
+		       creature_meals::TreeBigEnough(object_measures::Height(registry, entity), body->size);
+	}
 	case Target::PlantableTree:
 	{
 		// Not one it planted another by lately, nor one near where the player did what it last set about copying
@@ -600,7 +642,8 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const Flowers, const Transform>(
 		    [&](entt::entity entity, const Flowers&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::StoragePit || target == Target::BuiltStoragePit || target == Target::BuiltFoodStore)
+	if (target == Target::StoragePit || target == Target::BuiltStoragePit || target == Target::BuiltFoodStore ||
+	    target == Target::StoragePitWithFood)
 	{
 		registry.Each<const StoragePit, const Transform>(
 		    [&](entt::entity entity, const StoragePit&, const Transform& at) { consider(entity, at); });
@@ -615,7 +658,7 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const Abode, const Transform>(
 		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::AnyTree || target == Target::Waterable)
+	if (target == Target::AnyTree || target == Target::Waterable || target == Target::TreeBigEnough)
 	{
 		registry.Each<const Tree, const Transform>(
 		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
@@ -625,7 +668,7 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const OneOffSpellSeed, const Transform>(
 		    [&](entt::entity entity, const OneOffSpellSeed&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::DryField || target == Target::Waterable)
+	if (target == Target::DryField || target == Target::Waterable || target == Target::FieldWithFood)
 	{
 		registry.Each<const Field, const Transform>(
 		    [&](entt::entity entity, const Field&, const Transform& at) { consider(entity, at); });
@@ -1484,6 +1527,10 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		situated.thingHeight = object_measures::Height(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
 		situated.thingRadius =
 		    object_measures::TwoDRadius(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
+		if (executor->build == creature_plan_actions::Build::EatFromStoragePit)
+		{
+			SituateStoreFood(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object), situated);
+		}
 		// Sleeping by a thing, it looks for a clear place four times as wide as it is tall about it; one not under a
 		// script's control also wants nothing living there
 		if (executor->build == creature_plan_actions::Build::SleepByObject)
@@ -2735,6 +2782,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.thingHeight = object_measures::Height(registry, *plan.object);
 				situation.thingRadius = object_measures::TwoDRadius(registry, *plan.object);
+				if (executor->build == creature_plan_actions::Build::EatFromStoragePit)
+				{
+					SituateStoreFood(registry, *plan.object, situation);
+				}
 			}
 			if (const auto home = ecs::creature_home::HomeOf(registry, creature))
 			{

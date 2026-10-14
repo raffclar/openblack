@@ -966,3 +966,6 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_learning_marker test_learning_marker.cpp)
 openblack_setup_and_add_test(test_town_miracle_tool test_town_miracle_tool.cpp)
+openblack_setup_and_add_test(
+  test_creature_eat_from_stores test_creature_eat_from_stores.cpp
+)
