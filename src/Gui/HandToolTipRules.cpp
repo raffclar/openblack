@@ -34,6 +34,25 @@ Offer OverNothing(const CameraFacts& camera)
 	return {.index = k_Move, .action = ToolTipAction::Select, .arrows = ToolTipArrows::k_All};
 }
 
+std::optional<uint32_t> OverNothingHelpEvent(const CameraFacts& camera)
+{
+	const auto offer = OverNothing(camera);
+	if (offer.index == k_Pitch || offer.index == k_Rotate || !camera.centreDistance.has_value())
+	{
+		return std::nullopt;
+	}
+	return k_CameraOnLandEvent;
+}
+
+Offer GrippingLand(bool actionHeld, const CameraFacts& camera)
+{
+	if (actionHeld && (camera.features & k_ZoomFeature) != 0)
+	{
+		return {.index = k_Zoom, .action = ToolTipAction::ZoomOn, .arrows = ToolTipArrows::k_UpDown};
+	}
+	return OverNothing(camera);
+}
+
 std::vector<Offer> OverTakeable(bool moving, std::optional<uint32_t> tapToolTip)
 {
 	if (moving)

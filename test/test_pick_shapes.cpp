@@ -69,3 +69,21 @@ TEST(PickShapes, ABubbleIsPickedMovedTowardsTheCameraByItsWidth)
 	// A camera at its middle doesn't move it
 	EXPECT_EQ(pick_shapes::BubblePickOffset({}, {}, {2.0f, 1.0f, 3.0f}, 1.0f), glm::vec3(0.0f));
 }
+
+TEST(PickShapes, ABuildingNotWhollyBuiltTakesTheHitOnItsWholeModel)
+{
+	// A hut four tenths built, 10 m tall (half height 5), standing at 20 m: a hit 9 m above its base, above its built part
+	EXPECT_TRUE(pick_shapes::HitsBuiltPart(false, 0.4f, 29.0f, 20.0f, 5.0f, 1.0f));
+	// A hut a tenth built takes the hit on its whole model too
+	EXPECT_TRUE(pick_shapes::HitsBuiltPart(false, 0.1f, 29.0f, 20.0f, 5.0f, 1.0f));
+}
+
+TEST(PickShapes, ATempleNotWhollyBuiltTakesTheHitOnlyOnItsBuiltPart)
+{
+	// A temple four tenths built, 10 m tall at twice its size: its built part reaches 8 m above its base at 20 m
+	EXPECT_TRUE(pick_shapes::HitsBuiltPart(true, 0.4f, 27.0f, 20.0f, 5.0f, 2.0f));
+	EXPECT_TRUE(pick_shapes::HitsBuiltPart(true, 0.4f, 28.0f, 20.0f, 5.0f, 2.0f));
+	EXPECT_FALSE(pick_shapes::HitsBuiltPart(true, 0.4f, 28.5f, 20.0f, 5.0f, 2.0f));
+	// A whole temple takes the hit anywhere on its model
+	EXPECT_TRUE(pick_shapes::HitsBuiltPart(true, 1.0f, 40.0f, 20.0f, 5.0f, 2.0f));
+}

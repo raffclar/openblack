@@ -159,3 +159,30 @@ TEST(HandToolTips, WoodRequiredShowsTheSitesWantOrHowFarItIsBuilt)
 	EXPECT_DOUBLE_EQ(BuildingCompleted(false, 0.25f, 1.0f), 25.0);
 	EXPECT_DOUBLE_EQ(BuildingCompleted(true, 1.0f, 0.5f), 50.0);
 }
+
+TEST(HandToolTips, GrippingTheLandWithBothButtonsOffersToZoom)
+{
+	const CameraFacts camera {.features = k_AllFeatures, .centreDistance = 100.0f, .pitch = 0.3f};
+	EXPECT_EQ(GrippingLand(true, camera),
+	          (Offer {.index = k_Zoom, .action = ToolTipAction::ZoomOn, .arrows = ToolTipArrows::k_UpDown}));
+	EXPECT_EQ(BindableActionOf(ToolTipAction::ZoomOn), 6);
+	// With the Move button alone the hand shows what it shows over the land
+	EXPECT_EQ(GrippingLand(false, camera), OverNothing(camera));
+	// When the scripts stop the zoom, both buttons also show what the hand shows over the land
+	const CameraFacts noZoom {.features = k_PitchFeature | k_RotateFeature, .centreDistance = 100.0f, .pitch = 0.3f};
+	EXPECT_EQ(GrippingLand(true, noZoom), OverNothing(noZoom));
+}
+
+TEST(HandToolTips, OverTheLandTheHandCountsTheCameraOnTheLand)
+{
+	// The middle of the screen shows the land: "Move" and "Zoom Out" count it
+	EXPECT_EQ(OverNothingHelpEvent({.features = k_AllFeatures, .centreDistance = 100.0f, .pitch = 0.3f}), k_CameraOnLandEvent);
+	EXPECT_EQ(OverNothingHelpEvent({.features = k_AllFeatures, .centreDistance = 10.0f, .pitch = 1.0f}), k_CameraOnLandEvent);
+	// No land at the middle of the screen
+	EXPECT_FALSE(OverNothingHelpEvent({.features = k_AllFeatures, .centreDistance = std::nullopt}).has_value());
+	// The camera hints come first and count nothing
+	EXPECT_FALSE(
+	    OverNothingHelpEvent({.tricons = k_PitchHint, .features = k_AllFeatures, .centreDistance = 100.0f}).has_value());
+	EXPECT_FALSE(
+	    OverNothingHelpEvent({.tricons = k_RotateHint, .features = k_AllFeatures, .centreDistance = 100.0f}).has_value());
+}
