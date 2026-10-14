@@ -472,6 +472,35 @@ struct HangAroundPlaces
 	/// Its height
 	float height {0.0f};
 };
+/// What a step needs in the hands of the creature when the step starts
+enum class HandsNeed : uint8_t
+{
+	/// Nothing: the step starts with the hands as they are
+	Any,
+	/// Empty hands: the creature lets go of the thing that it holds first
+	Free,
+	/// Empty hands, or the thing that the step picks up. When the creature holds that thing already, it does not do the
+	/// step. When it holds a different thing, it puts that thing down first.
+	FreeOrTarget,
+};
+/// What a step needs in the hands of the creature. Actions, static actions, casts, the water on a fire, swaps of minds,
+/// messages to the player, catches and the steps that take food or a thing from the hand need empty hands. A pick-up
+/// needs empty hands or the thing that it picks up.
+[[nodiscard]] HandsNeed HandsNeededFor(const Step& step);
+
+/// How the creature lets go of the thing that it holds before a step that needs empty hands
+enum class LetGo : uint8_t
+{
+	/// It puts the thing down or it tosses the thing away, as PutsDownGently tells
+	AsItChooses,
+	/// It puts the thing down
+	PutDown,
+};
+/// Whether a creature puts down the thing that it holds before a step, and does not toss the thing away. It puts down a
+/// creature. It puts down a different thing when the first desire with a plan for the thing is Impress, Compassion or
+/// Curiosity. With no such plan, it tosses the thing away.
+[[nodiscard]] bool PutsDownGently(bool heldIsCreature, std::optional<creature_desires::Desire> use);
+
 /// What the mind knows this turn
 struct Senses
 {
@@ -490,6 +519,8 @@ struct Senses
 	/// Whether it has slept enough to wake
 	bool rested {false};
 	HandsState hands {HandsState::Idle};
+	/// The thing that the creature holds, by the number of its entity
+	std::optional<uint32_t> held;
 	/// Whether the object a step waits for is on the map, none when the object is gone
 	std::optional<bool> objectInMap;
 	/// Whether the object a step watches fly is still really in the air
@@ -562,6 +593,8 @@ struct Commands
 	std::optional<uint32_t> effectObject;
 	/// What to do with a thing
 	std::optional<ObjectOrder> object;
+	/// The creature lets go of the thing that it holds, because the next step needs empty hands
+	std::optional<LetGo> letGo;
 	/// A gesture to draw, by its number
 	std::optional<uint32_t> gesture;
 	/// An animation to play on top of the body
@@ -632,16 +665,14 @@ constexpr float k_WatchFlyingExtraSeconds = 2.0f;
 [[nodiscard]] std::vector<Step> PutDownHeld();
 /// Walking to the water's edge, turning to the water and drinking
 [[nodiscard]] std::vector<Step> Drink(glm::vec2 shore, glm::vec2 water);
-/// Walking to a fish farm's shoal until within a distance of it, putting down what it holds first when it holds
-/// anything, bringing food out of the sea, and eating it
-[[nodiscard]] std::vector<Step> FishAndEat(glm::vec2 shoal, float arriveWithin, bool putDownFirst);
-/// Going to a fish farm's shoal to bring food out of the sea: until within a distance of it, putting down what it holds
-/// first when it holds anything
+/// The creature walks to the shoal of a fish farm until it is in a distance of the shoal. Then it brings food out of
+/// the sea and eats the food. The step that brings the food needs empty hands.
+[[nodiscard]] std::vector<Step> FishAndEat(glm::vec2 shoal, float arriveWithin);
+/// A walk to the shoal of a fish farm, to bring food out of the sea: the creature stops in a distance of the shoal
 struct FishingTrip
 {
 	glm::vec2 shoal {0.0f};
 	float arriveWithin {0.0f};
-	bool putDownFirst {false};
 };
 /// Fishing when it has no food in its hand, then going to where it can throw into a storage pit, turning to it and
 /// throwing the food in; the action counts as done as it turns

@@ -132,9 +132,6 @@ struct CreatureMindState
 	bool desireSeenTo {false};
 	/// The kinds of thing (as its beliefs sort them) it has had a good look at, which it is far less curious about since
 	std::set<uint32_t> observedKinds;
-	/// The sorts of object (by the object type of their info) that it was given from the hand with no desire for them. It
-	/// looked over the first one of each sort.
-	std::set<uint32_t> givenKinds;
 	/// The plan that it did when it last started a reaction, or when the hand last gave it a thing while it had no
 	/// reaction. When it takes a thing from the hand, it continues this plan with the thing if the thing suits the plan.
 	std::optional<creature_planner::Plan> keptPlan;
@@ -180,9 +177,10 @@ struct CreatureMindState
 	/// What the leash tells the mind: the desire it forces, whether the creature is following it to the hand, and what
 	/// the player has shown it on the leash
 	creature_leash::MindHooks leash {};
-	/// How often it has been told to hold things of each kind (by the game's belief types): it plays with what it holds
-	/// only the first times
-	std::map<uint32_t, uint32_t> heldKinds;
+	/// A count for each sort of object (by the object type of its info). The count goes up by one each time that the
+	/// creature plays with a thing that it holds. The creature plays only while the count is less than two. A gift from
+	/// the hand with no desire for it sets a count of zero to one, and the creature looks over that first gift.
+	std::map<uint32_t, uint32_t> heldSortCounts;
 	/// Where the thing stood that the player did something to which the creature last set about copying (the land's
 	/// corner until then): it takes no tree from near there to plant
 	glm::vec2 copiedAt {0.0f};

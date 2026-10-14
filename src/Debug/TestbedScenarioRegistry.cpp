@@ -3855,6 +3855,69 @@ void AddMind(std::vector<Scenario>& all)
 	                 deedOn(k_DamageByThrowing, 20.0f), deedOn(k_StealObjectToTown, 20.0f), deedOn(k_PlayWithToy, 20.0f)},
 	});
 
+	// The creature's happy action, played once as a script asks
+	constexpr uint32_t k_HappyAction = 55;
+	all.push_back({
+	    .id = "mind.hand_free_action",
+	    .name = "Let go of a thing before an action",
+	    .facet = Facet::Mind,
+	    .description = "A content tiger. A script tells it to hold a rock. 8 seconds later, while it holds the rock, a "
+	                   "script tells it to play its happy action two times. This repeats every 20 seconds.",
+	    .expected = "Before the first happy action, the tiger lets go of the rock. It puts the rock down when it finds a "
+	                "plan for the rock with Impress, Compassion or Curiosity. Else it tosses the rock away. Then it plays "
+	                "the action two times. The log shows how it let go.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {15.0f, -15.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 {.kind = Kind::ScriptPlay, .delaySeconds = 8.0f, .value = k_HappyAction, .amount = 2.0f},
+	                 Act(Kind::Stop, 0, 11.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "mind.hand_free_pick_up",
+	    .name = "Put down a thing before a pick-up",
+	    .facet = Facet::Mind,
+	    .description = "A content tiger. A script tells it to hold the first rock. 8 seconds later a script tells it to "
+	                   "examine the second rock. 20 seconds later a script tells it to hold the second rock, and 8 "
+	                   "seconds after that to examine the second rock again.",
+	    .expected = "For the first order to examine, the tiger puts the first rock down (it does not toss it). Then it "
+	                "picks up the second rock and examines it. For the second order to examine, it does not pick the "
+	                "rock up again: it examines the rock that it holds at once.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {15.0f, -15.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {-15.0f, -15.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 8.0f, .object = 1, .action = "ExamineByPickingUp"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 20.0f, .object = 1, .action = "HoldObject"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 8.0f, .object = 1, .action = "ExamineByPickingUp"}},
+	});
+
+	// An angry tiger with two tigers of another player about it: its friend, and one that a fight knocked out
+	auto furious = Content(CreatureType::Tiger, {0.0f, 0.0f}, 0.0f, "angry tiger");
+	furious.desires = OnlyDesire(Desire::Anger);
+	const auto otherTiger = [](glm::vec2 offset, float facing, std::string_view label) {
+		auto tiger = Content(CreatureType::Tiger, offset, facing, label);
+		tiger.owner = PlayerNames::PLAYER_TWO;
+		return tiger;
+	};
+	all.push_back({
+	    .id = "mind.friends_and_dead",
+	    .name = "Not angry with friends or dead creatures",
+	    .facet = Facet::Mind,
+	    .description = "An angry tiger stands between two tigers of another player. The tiger to its left becomes its "
+	                   "friend, as a script makes friends. A fight knocks out the tiger to its right.",
+	    .expected = "The angry tiger makes no plan of anger about its friend, and none about the tiger that lies "
+	                "knocked out. Both tigers have no worth for its anger. The inspector shows the friends of each "
+	                "tiger and the knock-out.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {furious, otherTiger({-40.0f, 0.0f}, 90.0f, "friend"), otherTiger({40.0f, 0.0f}, 270.0f, "knocked out")},
+	    .commands = {{.kind = Kind::MakeFriends, .creature = 0, .delaySeconds = 0.5f, .value = 1},
+	                 Fight(Kind::KnockOut, 2, 0, 0.5f)},
+	});
+
 	all.push_back({
 	    .id = "mind.watch_skill",
 	    .name = "Learn a skill by watching",
@@ -4512,7 +4575,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 113> k_Names {
+	constexpr std::array<std::string_view, 114> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -4626,6 +4689,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand release",
 	    "hand pour",
 	    "do action",
+	    "make friends",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -4863,7 +4927,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		{
 			problems.push_back(fmt::format("{}: no such object", what));
 		}
-		if ((command.kind == Kind::Follow || command.kind == Kind::StartFight || command.kind == Kind::TieLeashToCreature) &&
+		if ((command.kind == Kind::Follow || command.kind == Kind::StartFight || command.kind == Kind::TieLeashToCreature ||
+		     command.kind == Kind::MakeFriends) &&
 		    (command.value >= creatures || command.value == command.creature))
 		{
 			problems.push_back(fmt::format("{}: acts on no other creature", what));

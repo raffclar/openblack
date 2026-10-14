@@ -296,19 +296,14 @@ void Fish(std::vector<Step>& agenda, const creature_mind::FishingTrip& trip)
 	    .kind = Movement::Kind::ToPoint, .point = trip.shoal, .maxDistance = trip.arriveWithin, .giveUpIfUnreachable = true};
 	walk.gaze = GoingLook();
 	agenda.push_back(walk);
-	// Its hand must be free to take the food
-	if (trip.putDownFirst)
-	{
-		agenda.push_back(Object({.kind = ObjectOrder::Kind::PutDown}));
-	}
 	agenda.push_back(Object({.kind = ObjectOrder::Kind::FishFromSea}));
 }
 } // namespace
 
-std::vector<Step> creature_mind::FishAndEat(glm::vec2 shoal, float arriveWithin, bool putDownFirst)
+std::vector<Step> creature_mind::FishAndEat(glm::vec2 shoal, float arriveWithin)
 {
 	std::vector<Step> agenda;
-	Fish(agenda, {.shoal = shoal, .arriveWithin = arriveWithin, .putDownFirst = putDownFirst});
+	Fish(agenda, {.shoal = shoal, .arriveWithin = arriveWithin});
 	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat));
 	return agenda;
 }
@@ -709,6 +704,66 @@ void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
 }
 } // namespace
 
+HandsNeed creature_mind::HandsNeededFor(const Step& step)
+{
+	switch (step.kind)
+	{
+	case Step::Kind::Action:
+	case Step::Kind::Static:
+	case Step::Kind::Cast:
+	case Step::Kind::Douse:
+	case Step::Kind::SwapMind:
+	case Step::Kind::Communicate:
+		return HandsNeed::Free;
+	case Step::Kind::Object:
+		switch (step.order.kind)
+		{
+		case ObjectOrder::Kind::PickUp:
+			return HandsNeed::FreeOrTarget;
+		case ObjectOrder::Kind::Catch:
+		case ObjectOrder::Kind::FishFromSea:
+		case ObjectOrder::Kind::TakeFromPile:
+		case ObjectOrder::Kind::TakeFromHand:
+			return HandsNeed::Free;
+		case ObjectOrder::Kind::PutDown:
+		case ObjectOrder::Kind::Discard:
+		case ObjectOrder::Kind::Eat:
+		case ObjectOrder::Kind::Keep:
+		case ObjectOrder::Kind::Throw:
+		case ObjectOrder::Kind::ThrowNearby:
+		case ObjectOrder::Kind::Destroy:
+		case ObjectOrder::Kind::PointAt:
+		case ObjectOrder::Kind::ThrowInStore:
+		case ObjectOrder::Kind::Kick:
+			break;
+		}
+		return HandsNeed::Any;
+	case Step::Kind::Wait:
+	case Step::Kind::Move:
+	case Step::Kind::Gesture:
+	case Step::Kind::WaitInMap:
+	case Step::Kind::CoolDown:
+	case Step::Kind::Shatter:
+	case Step::Kind::Repair:
+	case Step::Kind::UseUp:
+	case Step::Kind::WatchCamera:
+	case Step::Kind::Observe:
+	case Step::Kind::Overlay:
+	case Step::Kind::Inspect:
+	case Step::Kind::WatchFlying:
+	case Step::Kind::WatchHand:
+		break;
+	}
+	return HandsNeed::Any;
+}
+
+bool creature_mind::PutsDownGently(bool heldIsCreature, std::optional<creature_desires::Desire> use)
+{
+	using creature_desires::Desire;
+	return heldIsCreature ||
+	       (use.has_value() && (*use == Desire::Impress || *use == Desire::Compassion || *use == Desire::Curiosity));
+}
+
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	Commands commands;
@@ -738,6 +793,22 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	if (!mind.stepStarted)
 	{
 		commands.lookAbout = step.kind == Step::Kind::Wait && !step.gaze.has_value();
+		// A step that needs empty hands waits while the creature lets go of the thing that it holds
+		if (const auto need = HandsNeededFor(step); need != HandsNeed::Any && senses.held.has_value())
+		{
+			if (need == HandsNeed::FreeOrTarget && step.order.object == senses.held)
+			{
+				// It holds the thing that the step picks up already, so it does not do the step
+				FinishStep(mind);
+				return commands;
+			}
+			// It starts to let go only when its body and hands are free. If it cannot start, it tries again next turn.
+			if (!senses.bodyBusy && senses.hands != HandsState::Busy)
+			{
+				commands.letGo = need == HandsNeed::Free ? LetGo::AsItChooses : LetGo::PutDown;
+			}
+			return commands;
+		}
 		// A swap of minds waits until no spell is on either creature, bringing those on itself to their end meanwhile
 		if (step.kind == Step::Kind::SwapMind && !senses.swap.spellsGone)
 		{

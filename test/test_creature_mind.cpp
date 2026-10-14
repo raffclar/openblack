@@ -429,6 +429,114 @@ TEST(CreatureIdleMind, NothingStartsWhileTheBodyIsBusy)
 	EXPECT_EQ(creature_mind::Think(mind, senses, Always(0)).playOnce, 60u);
 }
 
+TEST(CreatureIdleMind, StepsThatNeedEmptyHands)
+{
+	using creature_mind::HandsNeed;
+	using creature_mind::HandsNeededFor;
+	using creature_mind::ObjectOrder;
+	using creature_mind::Step;
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Action}), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Static}), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Cast}), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Douse}), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::SwapMind}), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Communicate}), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Move}), HandsNeed::Any);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Wait}), HandsNeed::Any);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Overlay}), HandsNeed::Any);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::WatchHand}), HandsNeed::Any);
+	const auto object = [](ObjectOrder::Kind kind) { return Step {.kind = Step::Kind::Object, .order = {.kind = kind}}; };
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::PickUp)), HandsNeed::FreeOrTarget);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Catch)), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::FishFromSea)), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::TakeFromPile)), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::TakeFromHand)), HandsNeed::Free);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Throw)), HandsNeed::Any);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Destroy)), HandsNeed::Any);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::PointAt)), HandsNeed::Any);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Kick)), HandsNeed::Any);
+}
+
+TEST(CreatureIdleMind, AnActionWaitsWhileTheCreatureLetsGoOfWhatItHolds)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told,
+	                    {{.kind = creature_mind::Step::Kind::Action, .seconds = 0.0f, .animation = 60, .sleepyEyes = false}});
+	auto senses = FakeBody {}.Senses();
+	senses.held = 7u;
+	// It lets go first, as it chooses, and the action does not start
+	auto commands = creature_mind::Think(mind, senses, Always(0));
+	EXPECT_EQ(commands.letGo, creature_mind::LetGo::AsItChooses);
+	EXPECT_FALSE(commands.playOnce.has_value());
+	EXPECT_FALSE(mind.stepStarted);
+	// While its hands let go, it waits and does not tell them again
+	senses.hands = creature_mind::HandsState::Busy;
+	commands = creature_mind::Think(mind, senses, Always(0));
+	EXPECT_FALSE(commands.letGo.has_value());
+	EXPECT_FALSE(commands.playOnce.has_value());
+	// It tries again when its body is free but it still holds the thing
+	senses.hands = creature_mind::HandsState::Failed;
+	EXPECT_EQ(creature_mind::Think(mind, senses, Always(0)).letGo, creature_mind::LetGo::AsItChooses);
+	// With empty hands the action starts
+	senses.held.reset();
+	senses.hands = creature_mind::HandsState::Done;
+	commands = creature_mind::Think(mind, senses, Always(0));
+	EXPECT_FALSE(commands.letGo.has_value());
+	EXPECT_EQ(commands.playOnce, 60u);
+}
+
+TEST(CreatureIdleMind, APickUpPutsDownADifferentThingAndSkipsTheThingItHolds)
+{
+	using creature_mind::ObjectOrder;
+	using creature_mind::Step;
+	creature_mind::IdleMind mind;
+	const Step pickUp {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::PickUp, .object = 3u}};
+	const Step examine {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Keep, .animation = 103}};
+	creature_mind::Plan(mind, creature_mind::Activity::Examine, {pickUp, examine});
+	auto senses = FakeBody {}.Senses();
+	// It holds a different thing: it puts that thing down, never tosses it
+	senses.held = 9u;
+	auto commands = creature_mind::Think(mind, senses, Always(0));
+	EXPECT_EQ(commands.letGo, creature_mind::LetGo::PutDown);
+	EXPECT_FALSE(commands.object.has_value());
+	// It holds the thing that it was to pick up: it does not do the pick-up
+	senses.held = 3u;
+	commands = creature_mind::Think(mind, senses, Always(0));
+	EXPECT_FALSE(commands.letGo.has_value());
+	EXPECT_FALSE(commands.object.has_value());
+	EXPECT_EQ(mind.step, 1u);
+	// The step after it acts on what it holds at once
+	commands = creature_mind::Think(mind, senses, Always(0));
+	ASSERT_TRUE(commands.object.has_value());
+	EXPECT_EQ(commands.object->kind, ObjectOrder::Kind::Keep);
+}
+
+TEST(CreatureIdleMind, AStepThatNeedsNothingKeepsWhatItHolds)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Step walk {.kind = creature_mind::Step::Kind::Move};
+	walk.movement = {.kind = creature_mind::Movement::Kind::ToPoint, .point = {10.0f, 0.0f}};
+	creature_mind::Plan(mind, creature_mind::Activity::Told, {walk});
+	auto senses = FakeBody {}.Senses();
+	senses.held = 7u;
+	const auto commands = creature_mind::Think(mind, senses, Always(0));
+	EXPECT_FALSE(commands.letGo.has_value());
+	EXPECT_TRUE(commands.move.has_value());
+}
+
+TEST(CreatureIdleMind, ItPutsDownACreatureOrAThingForImpressCompassionOrCuriosity)
+{
+	EXPECT_TRUE(creature_mind::PutsDownGently(true, std::nullopt));
+	EXPECT_TRUE(creature_mind::PutsDownGently(false, Desire::Impress));
+	EXPECT_TRUE(creature_mind::PutsDownGently(false, Desire::Compassion));
+	EXPECT_TRUE(creature_mind::PutsDownGently(false, Desire::Curiosity));
+	// Any other desire, or no plan, and it tosses the thing away
+	EXPECT_FALSE(creature_mind::PutsDownGently(false, Desire::Anger));
+	EXPECT_FALSE(creature_mind::PutsDownGently(false, Desire::Hunger));
+	EXPECT_FALSE(creature_mind::PutsDownGently(false, Desire::Play));
+	EXPECT_FALSE(creature_mind::PutsDownGently(false, std::nullopt));
+}
+
 TEST(CreatureIdleMind, SometimesItSitsForAWhile)
 {
 	creature_mind::IdleMind mind;

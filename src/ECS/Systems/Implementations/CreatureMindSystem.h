@@ -153,9 +153,17 @@ private:
 	void ShowDesireOnHold(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& animation);
 	/// Plan the desires of one creature for this turn, a maximum of one time each turn. The planner examines the
 	/// desires for this turn, or all the desires, or only one desire. For only one desire, the creature starts the plan
-	/// immediately, if there is a plan.
+	/// immediately, if there is a plan. When adopt is false, the planner only finds the plans and the creature does not
+	/// start a plan.
 	void PlanCreature(entt::entity creature, components::CreatureMindState& mind, bool everyDesire = false,
-	                  std::optional<creature_desires::Desire> only = std::nullopt);
+	                  std::optional<creature_desires::Desire> only = std::nullopt, bool adopt = true);
+	/// The first desire that has a plan for a thing that the creature holds, found as for a thing on the leash. The
+	/// search uses a copy of the mind, so that the current plan does not change (CreatureMindLearning.cpp)
+	[[nodiscard]] std::optional<creature_desires::Desire>
+	DesireForThingInHand(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
+	/// The creature lets go of the thing that it holds because the next step needs empty hands: it puts the thing down,
+	/// or it tosses the thing away (CreatureMindLearning.cpp)
+	void LetGoOfHeld(entt::entity creature, components::CreatureMindState& mind, creature_mind::LetGo how);
 	/// Uniform random numbers from 0 to n - 1, and from 0 to 1
 	uint32_t Random(uint32_t range);
 	float Chance();

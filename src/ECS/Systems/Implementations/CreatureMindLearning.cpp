@@ -622,7 +622,6 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 	{
 		return std::nullopt;
 	}
-	bool putDownFirst = false;
 	bool holdingFood = false;
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
@@ -630,7 +629,6 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 		if (const auto held = hands.GetHeld(creature))
 		{
 			holdingFood = hands.FoodValueOf(*held).has_value();
-			putDownFirst = !holdingFood;
 		}
 	}
 	const auto& data = registry.Get<const FishFarm>(*farm);
@@ -657,7 +655,6 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 	return creature_plan_actions::Situation::Fishing {.shoal = point,
 	                                                  .standAt = standAt,
 	                                                  .arriveWithin = std::max(height, k_FishingArrival),
-	                                                  .putDownFirst = putDownFirst,
 	                                                  .holdingFood = holdingFood,
 	                                                  .height = height};
 }
@@ -2260,7 +2257,7 @@ creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity cre
 }
 
 void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, bool everyDesire,
-                                      std::optional<Desire> only)
+                                      std::optional<Desire> only, bool adopt)
 {
 	const auto* tables = GetTables();
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2292,7 +2289,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	}
 	// Having eaten a magic mushroom, once it is done with what it was doing it becomes high before it chooses anything
 	// else
-	if (mind.highPending && mind.idle.step >= mind.idle.agenda.size() && !registry.AllOf<ScriptControlled>(creature))
+	if (adopt && mind.highPending && mind.idle.step >= mind.idle.agenda.size() && !registry.AllOf<ScriptControlled>(creature))
 	{
 		mind.highPending = false;
 		BecomeHigh(creature);
@@ -2554,7 +2551,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	// When the planner examines only one desire, the creature starts the plan immediately, if there is a plan
 	if (only.has_value())
 	{
-		if (const auto plan = mind.planner.best.at(static_cast<size_t>(*only)); plan.has_value())
+		if (const auto plan = mind.planner.best.at(static_cast<size_t>(*only)); adopt && plan.has_value())
 		{
 			Adopt(creature, mind, *plan, situation);
 		}
@@ -2623,14 +2620,17 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	{
 		if (plan.action == creature_leash_orders::k_HoldAction && plan.object.has_value())
 		{
-			// It plays with what it is told to hold only the first times it holds such a thing
+			// It plays with what it is told to hold only the first times that it holds a thing of that sort. A thing
+			// with no sort gets no play.
 			std::optional<uint32_t> playWith;
-			const auto belief = BeliefOf(registry, *plan.object, creature);
-			auto& held = mind->heldKinds[belief.has_value() ? belief->type : creature_tree::belief_types::k_Other];
-			if (held < creature_leash_orders::k_HoldPlayLimit)
+			if (const auto sort = mind_detail::ObjectSortOf(registry, *plan.object); sort.has_value())
 			{
-				playWith = Random(static_cast<uint32_t>(creature_object_actions::k_KeepAnimationCount));
-				++held;
+				auto& held = mind->heldSortCounts[*sort];
+				if (held < creature_leash_orders::k_HoldPlayLimit)
+				{
+					playWith = Random(static_cast<uint32_t>(creature_object_actions::k_KeepAnimationCount));
+					++held;
+				}
 			}
 			const bool alreadyHeld = Locator::creatureObjectActionSystem::has_value() &&
 			                         Locator::creatureObjectActionSystem::value().GetHeld(creature) == plan.object;
@@ -2970,6 +2970,69 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 		tried.push_back(*desire);
 	}
 	return std::nullopt;
+}
+
+std::optional<Desire> CreatureMindSystem::DesireForThingInHand(entt::entity creature, CreatureMindState& mind,
+                                                               entt::entity thing)
+{
+	if (!mind.desires.has_value() || !mind.learnt.has_value())
+	{
+		return std::nullopt;
+	}
+	// The creature comes across the thing, as when the leash shows it the thing
+	ComeAcross(creature, mind, thing);
+	// It looks for a plan in a copy of its mind. Thus the plan that it does now does not change.
+	auto trial = mind;
+	std::vector<Desire> tried;
+	for (size_t attempt = 0; attempt < creature_planner::k_ShownThingTries; ++attempt)
+	{
+		const auto desire = DesireForShownThing(creature, trial, thing, tried);
+		if (!desire.has_value())
+		{
+			break;
+		}
+		trial.leash.actOn = {entt::to_integral(thing)};
+		trial.plannedTurn = trial.turn + 1;
+		PlanCreature(creature, trial, false, desire, false);
+		trial.leash.actOn.clear();
+		if (trial.planner.best.at(static_cast<size_t>(*desire)).has_value())
+		{
+			return desire;
+		}
+		tried.push_back(*desire);
+	}
+	return std::nullopt;
+}
+
+void CreatureMindSystem::LetGoOfHeld(entt::entity creature, CreatureMindState& mind, creature_mind::LetGo how)
+{
+	if (!Locator::creatureObjectActionSystem::has_value())
+	{
+		return;
+	}
+	auto& hands = Locator::creatureObjectActionSystem::value();
+	const auto held = hands.GetHeld(creature);
+	if (!held.has_value())
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	bool gently = how == creature_mind::LetGo::PutDown;
+	std::optional<Desire> use;
+	if (!gently)
+	{
+		// It does not look for a plan for a creature that it holds
+		const bool heldIsCreature = registry.AllOf<Creature>(*held);
+		if (!heldIsCreature)
+		{
+			use = DesireForThingInHand(creature, mind, *held);
+		}
+		gently = creature_mind::PutsDownGently(heldIsCreature, use);
+	}
+	const bool started = gently ? hands.PutDown(creature) : hands.Discard(creature);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} lets go of {} before a step that needs empty hands: {} ({}), {}",
+	                    entt::to_integral(creature), entt::to_integral(*held), gently ? "puts it down" : "tosses it away",
+	                    use.has_value() ? static_cast<int>(*use) : -1, started ? "started" : "can't");
 }
 
 void CreatureMindSystem::PlanTurn()

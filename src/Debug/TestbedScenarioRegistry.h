@@ -701,6 +701,8 @@ struct Command
 		/// A script tells the creature to do an action of the game's table (action, by its name) to the scenario's object,
 		/// with another of the scenario's objects (with) when given, as a script's creature action command does
 		DoAction,
+		/// The creature and the other creature (value) become friends, as a script's "force friends" command does
+		MakeFriends,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

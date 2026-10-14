@@ -304,8 +304,7 @@ std::optional<creature_mind::FishingTrip> TripFor(const Situation::Fishing& fish
 	{
 		return std::nullopt;
 	}
-	return creature_mind::FishingTrip {
-	    .shoal = fishing.shoal, .arriveWithin = fishing.arriveWithin, .putDownFirst = fishing.putDownFirst};
+	return creature_mind::FishingTrip {.shoal = fishing.shoal, .arriveWithin = fishing.arriveWithin};
 }
 } // namespace
 
@@ -479,8 +478,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::Drink:
 		return creature_mind::Drink(situation.water->shore, situation.water->water);
 	case Build::FishAndEat:
-		return creature_mind::FishAndEat(*situation.fishing->standAt, situation.fishing->arriveWithin,
-		                                 situation.fishing->putDownFirst);
+		return creature_mind::FishAndEat(*situation.fishing->standAt, situation.fishing->arriveWithin);
 	case Build::GiveFishToStore:
 		return creature_mind::GiveFishToStore(TripFor(*situation.fishing), *object, situation.fishing->height);
 	case Build::TakeFishHome:

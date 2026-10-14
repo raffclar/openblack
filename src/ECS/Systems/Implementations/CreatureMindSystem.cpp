@@ -1467,6 +1467,9 @@ void CreatureMindSystem::ProcessTurn()
 		    // As a step that communicates its state starts, the creature finds what it feels at that time
 		    const bool communicates = !mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
 		                              mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Communicate;
+		    const auto inHand = Locator::creatureObjectActionSystem::has_value()
+		                            ? Locator::creatureObjectActionSystem::value().GetHeld(entity)
+		                            : std::nullopt;
 		    const creature_mind::Senses senses {
 		        .seconds = k_TurnSeconds,
 		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
@@ -1477,6 +1480,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .communication = communicates ? Communication(mind) : creature_desires::Communication {},
 		        .rested = needs != nullptr && needs->rested,
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
+		        .held = inHand.has_value() ? std::optional(entt::to_integral(*inHand)) : std::nullopt,
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .objectInTheAir = WatchedIsInTheAir(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
@@ -1521,6 +1525,10 @@ void CreatureMindSystem::ProcessTurn()
 			    mind.idle.gaveUp = true;
 		    }
 		    Order(registry, entity, commands);
+		    if (commands.letGo.has_value())
+		    {
+			    LetGoOfHeld(entity, mind, *commands.letGo);
+		    }
 		    StepSwap(entity, commands);
 		    // A rock broken in two at once; anything else can't be, and the rest of the agenda is no use
 		    if (commands.shatter.has_value())
@@ -2163,18 +2171,19 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		return creature_giving::Weighed {.desire = desires[desire].value,
 		                                 .usefulness = ObjectToActOnUsefulness(creature, *mind, desire, object)};
 	};
-	// It remembers the sorts of object that it was given, and that it learnt it cannot eat, by the object type of their info
+	// It remembers the sorts of object that it was given or played with, and that it learnt it cannot eat, by the object
+	// type of their info
 	const auto sort = mind_detail::ObjectSortOf(registry, object);
 	const auto choice = creature_giving::ChooseUse({
 	    .curiosity = weigh(Desire::Curiosity),
 	    .hunger = weigh(Desire::Hunger),
 	    .playWithPlayer = weigh(Desire::PlayWithPlayer),
 	    .cantEatKind = sort.has_value() && mind->refusedFoodSorts.contains(*sort),
-	    .givenKindBefore = sort.has_value() && mind->givenKinds.contains(*sort),
+	    .givenKindBefore = sort.has_value() && mind->heldSortCounts.contains(*sort),
 	});
 	if (choice.remembersKind && sort.has_value())
 	{
-		mind->givenKinds.insert(*sort);
+		mind->heldSortCounts[*sort] = 1;
 	}
 	const auto number = entt::to_integral(object);
 	// The plan is about what the thing belongs to, if anything

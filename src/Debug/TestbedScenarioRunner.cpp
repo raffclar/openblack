@@ -47,6 +47,7 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
+#include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
@@ -76,6 +77,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -1997,6 +1999,27 @@ void Runner::Give(const Command& command)
 		                                                                 : "can't";
 		break;
 	}
+	case Kind::MakeFriends:
+		if (const auto other = CreatureAt(command.value))
+		{
+			auto& registry = Locator::entitiesRegistry::value();
+			for (const auto each : {*entity, *other})
+			{
+				if (!registry.AllOf<ecs::components::CreatureFriends>(each))
+				{
+					registry.Assign<ecs::components::CreatureFriends>(each);
+				}
+			}
+			creature_activity::MakeFriends(
+			    registry.Get<ecs::components::CreatureFriends>(*entity).friends, entt::to_integral(*entity),
+			    registry.Get<ecs::components::CreatureFriends>(*other).friends, entt::to_integral(*other));
+			result = "friends";
+		}
+		else
+		{
+			result = "no such creature";
+		}
+		break;
 	case Kind::SwapMinds:
 		if (const auto other = CreatureAt(command.value))
 		{
