@@ -48,6 +48,15 @@ struct TempleMapMarker
 	std::optional<glm::vec3> glow;
 };
 
+/// How the map shows the influence of the players in the main room. The map moves a point of the world to the offset
+/// plus the point times the scale. The map does not turn the point.
+struct TempleMapInfluence
+{
+	glm::vec3 offset;
+	float scale;
+	[[nodiscard]] glm::vec3 ToRoom(glm::vec3 world) const { return offset + (world * scale); }
+};
+
 /// The island in relief over the main room's pool.
 ///
 /// The map has a vertex at every eighth cell of the land, two a block, 65 by 65 over the 32 by 32 blocks there can be.
@@ -81,6 +90,12 @@ public:
 	[[nodiscard]] glm::vec2 ToWorld(glm::vec3 map) const;
 	/// The room's units to a world unit across the map
 	[[nodiscard]] float GetWorldScale() const { return _scale / k_WorldPerVertex; }
+	/// How the map shows the influence of the players: the world's origin goes to the map's point above it, and all
+	/// the axes take the map's scale
+	[[nodiscard]] TempleMapInfluence GetInfluencePlacement() const
+	{
+		return {.offset = ToMap(glm::vec2(0.0f)), .scale = GetWorldScale()};
+	}
 
 	/// The colour the map marks a player's things in: the player's colour, black as white, lightened a quarter of the
 	/// way to white. Without a player, white.

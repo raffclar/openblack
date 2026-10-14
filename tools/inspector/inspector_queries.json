@@ -1224,7 +1224,7 @@
   "query": "temple.state"
  },
  {
-  "description": "The temple's inside: whether the player is in it, the room, the visits, and the worshippers walking about it (how many came in, and where those drawn are)",
+  "description": "The temple's inside: whether the player is in it, the room, the visits, the worshippers walking about it (how many came in, and where those drawn are), the seeds of the miracles over the map and how the map shows the influence",
   "kind": "object",
   "parameters": [],
   "query": "temple.interior"
