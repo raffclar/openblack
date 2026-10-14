@@ -2797,6 +2797,44 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.83f, 0.45f}}},
 	});
 
+	// The camera looks down on a row of things, and the pointer goes from one to the next
+	all.push_back({
+	    .id = "hand.tooltips_rest",
+	    .name = "What the hand offers over the land, over things and with a thing in it",
+	    .facet = Facet::Hand,
+	    .description =
+	        "The pointer rests on the bare land, then on the right edge of the screen and on its bottom edge. "
+	        "Then it goes over a toy ball, a big rock, a hut that stands four tenths built and a whole hut. The hand then "
+	        "takes the ball and the pointer rests on the land. Last, the hand puts the ball down, takes the "
+	        "birch and the pointer rests on the land. Six seconds each.",
+	    .expected =
+	        "Over the land: \"Move\" with the left button and four arrows. At the right edge: \"Rotate\". At the "
+	        "bottom edge: \"Pitch\" with the up and down arrows. Over the ball: \"Pick Up\" with the right "
+	        "button. Over the big rock: \"Pick Up\" and \"Tap To Break\" in turns, or \"Tap To Break\" alone "
+	        "when the hand cannot take it. Over the hut that is not built: \"Wood Required\" and \"Building Completed: 40%\" "
+	        "in turns. Over the whole hut: \"Tap\". With the ball: \"Drop\" and \"Throw\" in turns, \"Throw\" "
+	        "with four arrows. With the birch: \"Plant\" and \"Throw\" in turns.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -30.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {-20.0f, 40.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {0.0f, 40.0f}, .scale = 2.0f},
+	                {.type = AbodeInfo::CelticHut, .offset = {20.0f, 40.0f}, .built = 0.4f},
+	                {.type = AbodeInfo::CelticHut, .offset = {40.0f, 40.0f}},
+	                {.type = TreeInfo::Birch, .offset = {-40.0f, 40.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.85f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.995f, 0.5f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.5f, 0.995f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.342f, 0.488f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.5f, 0.483f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.656f, 0.485f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.813f, 0.488f}},
+	                 {.kind = Kind::HandTake, .delaySeconds = 6.0f, .object = 0},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.1f, .point = {0.5f, 0.85f}},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 12.0f},
+	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 4},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.1f, .point = {0.5f, 0.85f}}},
+	});
+
 	// The camera looks along the land just ahead, so the hand is seen up close in the sun
 	all.push_back({
 	    .id = "hand.lighting",

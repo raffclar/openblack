@@ -1477,6 +1477,23 @@ bool HandGrabSystem::IsPulling() const
 	return grab != nullptr && grab->state == HandGrab::State::Grabbing && grab->pulling;
 }
 
+bool HandGrabSystem::IsAboutToThrow() const
+{
+	const auto* grab = Grab();
+	return grab != nullptr && grab->state == HandGrab::State::ReadyToThrow;
+}
+
+bool HandGrabSystem::CreatureTakesHeld(entt::entity creature) const
+{
+	const auto held = GetHeld();
+	if (!held.has_value() || !Exists(*held) || !Exists(creature))
+	{
+		return false;
+	}
+	const auto verdict = _world->GiveVerdict(creature, *held);
+	return verdict.has_value() && *verdict == creature_giving::Verdict::Give;
+}
+
 std::optional<HandGrabSystemInterface::HeldPose> HandGrabSystem::GetHeldPose() const
 {
 	const auto held = GetHeld();

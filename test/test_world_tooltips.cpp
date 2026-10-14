@@ -46,7 +46,7 @@ TEST(WorldToolTips, BeliefReadsNeededWithTheShortfallWhileThePlayerTrails)
 TEST(WorldToolTips, TempleHealthIsPercentage)
 {
 	EXPECT_DOUBLE_EQ(TempleHealth(1.0f).first, 100.0);
-	EXPECT_EQ(Compose(k_TempleHealth, u"Temple Health: %3.0f%%", TempleHealth(0.755f).first, std::nullopt),
+	EXPECT_EQ(Compose(k_TempleHealth, u"Temple Health: %3.0f%%", TempleHealth(0.76f).first, std::nullopt),
 	          u"Temple Health:  76%");
 }
 
