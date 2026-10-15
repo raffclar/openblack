@@ -778,3 +778,30 @@ TEST(CreatureCastAgenda, ATryThatFizzledIsForgottenWhenItsThingGoes)
 	EXPECT_EQ(ForgetGoneThing(record, 5u), FizzleRecord {});
 	EXPECT_EQ(ForgetGoneThing({}, 5u), FizzleRecord {});
 }
+
+TEST(CreatureCastAgenda, EachStepOfACastLooksAndPullsItsFace)
+{
+	using creature_face::Cue;
+	const auto agenda = CastAt(CastStyle::Helpful, 10, 0, 7, 10.0f, Always(0));
+	ASSERT_EQ(agenda.size(), 5u);
+	EXPECT_EQ(agenda[0].face, Cue::Compassion);
+	EXPECT_FALSE(agenda[0].gaze.has_value());
+	EXPECT_EQ(agenda[1].face, Cue::Compassion);
+	EXPECT_EQ(agenda[1].gaze->object, 7u);
+	EXPECT_TRUE(agenda[1].gaze->whileGoing);
+	EXPECT_EQ(agenda[2].face, Cue::None);
+	EXPECT_EQ(agenda[2].gaze->object, 7u);
+	EXPECT_FALSE(agenda[2].gaze->whileGoing);
+	EXPECT_EQ(agenda[3].face, Cue::Compassion);
+	EXPECT_EQ(agenda[3].gaze->object, 7u);
+	EXPECT_EQ(agenda[4].face, Cue::Grimace);
+	EXPECT_FALSE(agenda[4].gaze.has_value());
+
+	// Before an explosion it shows its anger with an amazed face
+	EXPECT_EQ(CastAt(CastStyle::Explosion, 7, 0, 7, 10.0f, Always(0))[0].face, Cue::Amazed);
+	// Water is cast with a smile
+	const auto water = CastWaterAt(1, 7, 10.0f);
+	EXPECT_EQ(water[0].face, Cue::None);
+	EXPECT_EQ(water[1].face, Cue::Smile);
+	EXPECT_EQ(water[2].face, Cue::Smile);
+}

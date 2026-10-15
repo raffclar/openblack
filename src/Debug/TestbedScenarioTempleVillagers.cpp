@@ -37,13 +37,18 @@ constexpr size_t k_Handful = 300;
 /// The main room of the temple, by the temple's rooms
 constexpr size_t k_MainRoom = 3;
 
+/// Where the town centre stands for the sacrifice, far enough north of the temple for a long walk to its altar
+constexpr glm::vec2 k_FarCentre {0.0f, 90.0f};
+/// The first of the town's people, by its place in the scenario's objects
+constexpr size_t k_FirstVillager = 3;
+
 /// A Celtic town centre of the player's, two huts and eight of its people about it
-std::vector<ObjectSetup> Town()
+std::vector<ObjectSetup> Town(glm::vec2 centre = k_Centre)
 {
 	std::vector<ObjectSetup> objects {
-	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
-	    {.type = AbodeInfo::CelticHut, .offset = k_Centre + glm::vec2(-16.0f, 6.0f), .yawDegrees = 160.0f},
-	    {.type = AbodeInfo::CelticHut, .offset = k_Centre + glm::vec2(16.0f, 6.0f), .yawDegrees = 200.0f},
+	    {.type = AbodeInfo::CelticTownCentre, .offset = centre},
+	    {.type = AbodeInfo::CelticHut, .offset = centre + glm::vec2(-16.0f, 6.0f), .yawDegrees = 160.0f},
+	    {.type = AbodeInfo::CelticHut, .offset = centre + glm::vec2(16.0f, 6.0f), .yawDegrees = 200.0f},
 	};
 	constexpr std::array<VillagerInfo, 4> k_People {VillagerInfo::CelticHousewifeFemale, VillagerInfo::CelticFarmerMale,
 	                                                VillagerInfo::CelticForesterMale, VillagerInfo::CelticShepherdMale};
@@ -52,7 +57,7 @@ std::vector<ObjectSetup> Town()
 		const auto across = static_cast<float>(i % 4) * 5.0f - 7.5f;
 		const auto down = i < 4 ? -10.0f : -15.0f;
 		objects.push_back(
-		    {.type = k_People.at(i % k_People.size()), .offset = k_Centre + glm::vec2(across, down), .joinTown = true});
+		    {.type = k_People.at(i % k_People.size()), .offset = centre + glm::vec2(across, down), .joinTown = true});
 	}
 	return objects;
 }
@@ -118,5 +123,25 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .commands = {{.kind = Command::Kind::HandPour, .delaySeconds = 3.0f, .point = k_SiteEdge, .value = k_Handful},
 	                 {.kind = Command::Kind::HandPour, .delaySeconds = 4.0f, .point = k_BeyondTheSite, .value = k_Handful}},
 	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "objects.creature_sacrifice",
+	    .name = "The creature takes a villager to the altar",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger of the player's stands by a Celtic town of the player's, far north of the player's "
+	                   "temple. The town's worship site stands built by the temple, with no one sent to worship. A script "
+	                   "tells the tiger to sacrifice the first of the town's people.",
+	    .expected = "The tiger picks the villager up with an angry face, and looks at the villager as it goes to it. It "
+	                "walks south with the villager in its hand and looks ahead. It stops three of its heights from the "
+	                "altar of the worship site, turns to face the altar and looks at it. Then it puts the villager down "
+	                "still. The villager lands alive and walks away: as in the original game, the altar does not take it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 14.0f, 18.0f}, .look = {0.0f, 8.0f, 8.0f}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_FarCentre + glm::vec2(0.0f, -30.0f)}},
+	    .objects = Town(k_FarCentre),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::DoAction, .delaySeconds = 3.0f, .object = k_FirstVillager, .action = "Sacrifice"}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
 	});
 }

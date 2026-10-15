@@ -1022,5 +1022,14 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_creature_drink test_creature_drink.cpp)
 openblack_setup_and_add_test(
+  test_creature_proportions test_creature_proportions.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_bring_home test_creature_bring_home.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_sacrifice test_creature_sacrifice.cpp
+)
+openblack_setup_and_add_test(
   test_creature_emergencies test_creature_emergencies.cpp
 )

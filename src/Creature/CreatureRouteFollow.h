@@ -88,6 +88,8 @@ public:
 	[[nodiscard]] const Destination& GetDestination() const { return _destination; }
 	[[nodiscard]] glm::vec2 GetPosition() const { return _position; }
 	[[nodiscard]] size_t GetSearchCount() const { return _searches.size(); }
+	/// Where the best route of the search that it took on last has got to, while it searches
+	[[nodiscard]] std::optional<glm::vec2> GetSearchHead() const;
 	/// The things met by a first search that gave up
 	[[nodiscard]] const std::vector<uint32_t>& GetMet() const { return _met; }
 
@@ -113,6 +115,8 @@ private:
 	/// A new destination came while searching: searched for once the search ends
 	bool _pending {false};
 	std::vector<Ahead> _searches;
+	/// The search that it took on last
+	size_t _chosen {0};
 	std::vector<uint32_t> _met;
 };
 } // namespace openblack::creature_route

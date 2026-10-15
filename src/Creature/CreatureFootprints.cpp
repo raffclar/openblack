@@ -88,6 +88,10 @@ bool Add(Trail& trail, const Footprint& print)
 
 void Fade(Trail& trail, float elapsedMs)
 {
+	if (trail.prints.empty())
+	{
+		return;
+	}
 	trail.sinceFadeMs += elapsedMs;
 	if (trail.sinceFadeMs < k_FadeIntervalMs)
 	{

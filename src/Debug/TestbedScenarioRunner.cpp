@@ -885,6 +885,8 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	}
 	if (Locator::footprintSystem::has_value())
 	{
+		// A scenario starts with no prints from the one before
+		Locator::footprintSystem::value().Reset();
 		Locator::footprintSystem::value().SetAprilFoolsOverride(environment.aprilFools);
 	}
 	if (Locator::alignmentSystem::has_value())

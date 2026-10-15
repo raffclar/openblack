@@ -143,6 +143,14 @@ Step PickUp(uint32_t object)
 {
 	return Object({.kind = ObjectOrder::Kind::PickUp, .object = object});
 }
+
+/// Picking a thing up. Its head looks at the thing as it walks to it.
+Step PickUpLooking(uint32_t object)
+{
+	auto pickUp = PickUp(object);
+	pickUp.gaze = Gaze {.object = object, .whileGoing = true};
+	return pickUp;
+}
 } // namespace
 
 std::string_view creature_mind::Name(Activity activity)
@@ -222,8 +230,11 @@ std::vector<Step> creature_mind::Sleep(const Random& random)
 	sleep.closedEyes = true;
 	sleep.effect = Effect::Slept;
 	agenda.push_back(sleep);
-	agenda.push_back(Action(animations::k_Confused, true));
-	return WithFace(std::move(agenda), creature_face::Cue::Grimace);
+	// Only the dazed look as it wakes pulls a face
+	auto dazed = Action(animations::k_Confused, true);
+	dazed.face = creature_face::Cue::Grimace;
+	agenda.push_back(dazed);
+	return agenda;
 }
 
 std::vector<Step> creature_mind::Eat(uint32_t food, bool holdingEatable)
@@ -231,11 +242,15 @@ std::vector<Step> creature_mind::Eat(uint32_t food, bool holdingEatable)
 	std::vector<Step> agenda;
 	if (!holdingEatable)
 	{
-		agenda.push_back(PickUp(food));
+		agenda.push_back(PickUpLooking(food));
 	}
-	agenda.push_back(Object({.kind = ObjectOrder::Kind::Keep, .animation = creature_object_actions::k_ExamineObject}));
+	// It looks the food over with a curious face, then eats it
+	auto examine = Object({.kind = ObjectOrder::Kind::Keep, .animation = creature_object_actions::k_ExamineObject});
+	examine.face = creature_face::Cue::Curiosity;
+	examine.gaze = Gaze {.object = food};
+	agenda.push_back(examine);
 	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat));
-	return WithFace(std::move(agenda), creature_face::Cue::Curiosity);
+	return agenda;
 }
 
 std::vector<Step> creature_mind::EatAlive(uint32_t food, bool holdingEatable, const Random& random)
@@ -247,7 +262,7 @@ std::vector<Step> creature_mind::EatAlive(uint32_t food, bool holdingEatable, co
 		{
 			agenda.push_back(Action(animations::k_Hungry, false));
 		}
-		agenda.push_back(PickUp(food));
+		agenda.push_back(PickUpLooking(food));
 	}
 	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat));
 	return agenda;
@@ -258,9 +273,11 @@ std::vector<Step> creature_mind::ExamineByPickingUp(uint32_t object, const Rando
 	const auto keep = creature_object_actions::k_FirstKeepAnimation +
 	                  random(static_cast<uint32_t>(creature_object_actions::k_KeepAnimationCount));
 	const auto letGo = random(k_PutDownLots) >= k_TossLots ? ObjectOrder::Kind::PutDown : ObjectOrder::Kind::Discard;
-	return WithFace({PickUp(object), Object({.kind = ObjectOrder::Kind::Keep, .animation = keep}, Effect::Examined),
-	                 Object({.kind = letGo})},
-	                creature_face::Cue::Curiosity);
+	// Only the look at the thing has a curious face
+	auto examine = Object({.kind = ObjectOrder::Kind::Keep, .animation = keep}, Effect::Examined);
+	examine.face = creature_face::Cue::Curiosity;
+	examine.gaze = Gaze {.object = object};
+	return {PickUpLooking(object), examine, Object({.kind = letGo})};
 }
 
 std::vector<Step> creature_mind::ThrowAbout(uint32_t object, const Random& random)
@@ -321,10 +338,12 @@ std::vector<Step> creature_mind::GiveFishToStore(const std::optional<FishingTrip
 	{
 		Fish(agenda, *trip);
 	}
-	Step goTo {.kind = Step::Kind::Move, .face = creature_face::Cue::Compassion};
+	// Its head looks at the store as it goes to throw and as it turns to it
+	Step goTo {.kind = Step::Kind::Move, .face = creature_face::Cue::Compassion, .gaze = Gaze {.object = store}};
 	goTo.movement = {.kind = Movement::Kind::ToThrowPosition, .object = store, .maxDistance = height};
 	agenda.push_back(goTo);
-	Step turn {.kind = Step::Kind::Move, .seconds = k_FaceStoreSeconds, .effect = Effect::Completed};
+	Step turn {
+	    .kind = Step::Kind::Move, .seconds = k_FaceStoreSeconds, .effect = Effect::Completed, .gaze = Gaze {.object = store}};
 	turn.movement = {.kind = Movement::Kind::TurnToFaceObject, .object = store};
 	agenda.push_back(turn);
 	agenda.push_back(Object({.kind = ObjectOrder::Kind::ThrowInStore, .object = store}));
@@ -357,9 +376,10 @@ std::vector<Step> creature_mind::Poo(const Random& random, std::optional<PooBy> 
 	{
 		Step goNear {.kind = Step::Kind::Move};
 		goNear.movement = {.kind = Movement::Kind::GoNearObject, .object = by->object, .maxDistance = 0.0f};
+		// Going up to itself, the look comes to nothing and it looks about
 		if (!by->itself)
 		{
-			goNear.gaze = Gaze {.object = by->object};
+			goNear.gaze = Gaze {.object = by->object, .whileGoing = true};
 		}
 		agenda.push_back(goNear);
 		Step turnAway {.kind = Step::Kind::Move};
@@ -368,8 +388,10 @@ std::vector<Step> creature_mind::Poo(const Random& random, std::optional<PooBy> 
 	}
 	auto poo = Static({animations::k_StartPoo, animations::k_Poo, animations::k_EndPoo}, k_PooSeconds);
 	poo.effect = Effect::Poo;
+	// Only the squat pulls a face
+	poo.face = creature_face::Cue::Smile;
 	agenda.push_back(poo);
-	return WithFace(std::move(agenda), creature_face::Cue::Smile);
+	return agenda;
 }
 
 std::vector<Step> creature_mind::Fart(const Random& random, std::optional<PooBy> by)
@@ -414,9 +436,10 @@ std::vector<Step> creature_mind::TakeFromHand(uint32_t object, glm::vec2 camera,
 	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = camera};
 	auto take = Object({.kind = ObjectOrder::Kind::TakeFromHand, .object = object, .mirrored = leftHand}, Effect::TookFromHand);
 	std::vector<Step> agenda {turn, take};
+	// Its head looks at the player's hand as it turns and as it takes the thing
 	for (auto& step : agenda)
 	{
-		step.gaze = Gaze {.object = object};
+		step.gaze = Gaze {.hand = true};
 	}
 	return WithFace(std::move(agenda), creature_face::Cue::Curiosity);
 }
@@ -444,7 +467,7 @@ std::vector<Step> creature_mind::ThrowGiven(glm::vec3 camera)
 
 std::vector<Step> creature_mind::Emote(size_t animation)
 {
-	return WithFace({Action(animation, false)}, creature_face::Cue::AttitudeToPlayer);
+	return {Action(animation, false)};
 }
 
 std::vector<Step> creature_mind::Communicate(glm::vec2 camera)
@@ -457,16 +480,24 @@ std::vector<Step> creature_mind::Communicate(glm::vec2 camera)
 
 std::vector<Step> creature_mind::FaceAndEmote(glm::vec2 point, size_t animation)
 {
-	Step turn {.kind = Step::Kind::Move};
+	// Its head looks at the camera as it turns and as it plays the action
+	const Gaze atCamera {.camera = true};
+	Step turn {.kind = Step::Kind::Move, .gaze = atCamera};
 	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = point};
-	return WithFace({turn, Action(animation, false)}, creature_face::Cue::AttitudeToPlayer);
+	auto emote = Action(animation, false);
+	emote.gaze = atCamera;
+	return {turn, emote};
 }
 
 std::vector<Step> creature_mind::ApproachAndEmote(uint32_t object, size_t animation)
 {
-	Step approach {.kind = Step::Kind::Move};
+	// It goes up to the other with a playful face and its head on it, turns to it with a smile, then plays the action
+	const Gaze look {.object = object};
+	Step approach {.kind = Step::Kind::Move, .face = creature_face::Cue::Playfulness, .gaze = look};
 	approach.movement = {.kind = Movement::Kind::ToObject, .object = object, .maxDistance = k_ApproachDistance};
-	return WithFace({approach, Action(animation, false)}, creature_face::Cue::AttitudeToPlayer);
+	Step turn {.kind = Step::Kind::Move, .seconds = k_ApproachFaceSeconds, .face = creature_face::Cue::Smile, .gaze = look};
+	turn.movement = {.kind = Movement::Kind::TurnToFaceObject, .object = object};
+	return {approach, turn, Action(animation, false)};
 }
 
 std::vector<Step> creature_mind::LookAt(glm::vec2 point, float seconds)
@@ -1020,6 +1051,23 @@ void FollowCamera(IdleMind& mind, const Step& step, const Senses& senses, Comman
 }
 } // namespace
 
+std::optional<Gaze> creature_mind::LookOf(const Step& step)
+{
+	if (step.gaze.has_value())
+	{
+		return step.gaze;
+	}
+	if (step.kind == Step::Kind::Object && step.order.kind == ObjectOrder::Kind::PickUp && step.order.object.has_value())
+	{
+		return Gaze {.object = step.order.object, .whileGoing = true};
+	}
+	if (step.kind == Step::Kind::Move && step.movement.kind == Movement::Kind::GoNearObject && step.movement.object.has_value())
+	{
+		return Gaze {.object = step.movement.object, .whileGoing = true};
+	}
+	return std::nullopt;
+}
+
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	Commands commands;
@@ -1029,7 +1077,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	}
 	const auto& step = mind.agenda[mind.step];
 	// A step with something to look at has the head on it for as long as it lasts
-	commands.gaze = step.gaze;
+	commands.gaze = LookOf(step);
 	// The creature's moves in a dance with villagers start and stop its poses and its dance themselves
 	const bool villageDance = step.kind == Step::Kind::Dance && step.dance.kind == DanceOrder::Kind::Dance;
 	const bool sitting = (step.kind == Step::Kind::Static && mind.stepStarted) || villageDance;

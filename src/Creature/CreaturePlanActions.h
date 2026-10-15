@@ -87,6 +87,8 @@ enum class Target : uint8_t
 	CuddlyToy,
 	Die,
 	ToyAwayFromHome,
+	/// A thing that the creature can bring home: more than 50 m from its home, not alive, and a thing that it can pick up
+	BringableHome,
 	/// A thing still going up (a building, a worship site or the temple), or a building that its town repairs and that
 	/// is below its full life; or a house (any of a town's buildings) below its full life
 	BuildingBeingBuilt,
@@ -196,6 +198,10 @@ enum class Build : uint8_t
 	/// down at its home
 	GiveFishToStore,
 	TakeFishHome,
+	/// Bringing a thing home, bringing food home, and taking wheat from a field home, where the creature puts it down
+	BringHome,
+	BringFoodHome,
+	TakeFieldFoodHome,
 	/// Casting the water miracle at a burning thing
 	CastWater,
 	/// Setting a thing alight by tossing a burning thing at it
@@ -348,6 +354,8 @@ enum class Build : uint8_t
 	BehaveStrangely,
 	/// An action whose agenda can never be made
 	Never,
+	/// Taking a living thing to the altar of the first worship site of its temple, and putting it down there
+	Sacrifice,
 };
 
 /// What tells the planner that the creature did an action too recently to choose it again
@@ -541,6 +549,10 @@ struct Situation
 	/// the sea that it looks at or throws into. None when the map gives no such place.
 	std::optional<glm::vec2> explorePlace;
 	std::optional<glm::vec2> exploreSea;
+	/// For the sacrifice: whether what its hand holds is alive, and where the altar of the first worship site of its
+	/// temple stands, on the ground. The altar is none when the temple has no worship site.
+	bool holdingLiving {false};
+	std::optional<glm::vec3> sacrificeAltar;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

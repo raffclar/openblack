@@ -35,6 +35,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/CreatureProportions.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSway.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -334,6 +335,18 @@ struct HeadLook
 	float acceleration {k_DefaultHeadTurnRate};
 };
 
+/// The bones of a species that change with its size, as its file names them
+creature_proportions::Bones ProportionBonesOf(const CreatureRig& rig)
+{
+	creature_proportions::Bones bones {.head = rig.leashBone, .rightEye = rig.rightEye};
+	if (rig.actionPoints.has_value())
+	{
+		bones.rightHand = rig.actionPoints->rightHand;
+		bones.rightFoot = rig.actionPoints->rightFoot;
+	}
+	return bones;
+}
+
 /// The body posed for this frame: its action or breathing, or its slots blended, then the head turned, the face and
 /// any gesture on top
 void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creature_morph::Morph& morph,
@@ -456,6 +469,8 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 			                             animation.skeleton, mirror);
 		}
 	}
+	// A small creature has a large head, large hands and feet and large eyes for its size
+	creature_proportions::Apply(poses, creature_proportions::ScaledBones(ProportionBonesOf(rig), animation.mirror, size));
 	animation.boneMatrices = skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents);
 }
 /// The pose of a body that plays an action, a start, loop and end, or nothing
@@ -521,8 +536,9 @@ float HeadAcceleration(CreatureType species, float size)
 
 /// What the head of a creature in the world turns towards this frame. A fight, a catch or a point, the walk and then
 /// the body decide the pose, in that order.
-HeadLook HeadLookOf(const ecs::Registry& registry, entt::entity entity, CreatureAnimation& animation, const CreatureRig* rig,
-                    const creature_morph::Morph& morph, const Transform& transform, const Creature& creature)
+HeadLook HeadLookOf(ecs::Registry& registry, entt::entity entity, CreatureAnimation& animation, const CreatureRig* rig,
+                    const creature_morph::Morph& morph, const Transform& transform, const Creature& creature,
+                    int32_t milliseconds)
 {
 	using creature_head_look::Pose;
 	using Motion = CreatureLocomotion::Motion;
@@ -568,7 +584,7 @@ HeadLook HeadLookOf(const ecs::Registry& registry, entt::entity entity, Creature
 			}
 		}
 	}
-	const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
+	auto* walk = registry.TryGet<CreatureLocomotion>(entity);
 	// A fidget while it waits for its route is part of the walk, not an action of the body
 	if (!pose.has_value() && walk != nullptr && walk->motion == Motion::Confused)
 	{
@@ -604,6 +620,22 @@ HeadLook HeadLookOf(const ecs::Registry& registry, entt::entity entity, Creature
 		break;
 	case creature_head_look::Aim::LookPoint:
 		look.target = animation.lookAt;
+		// While it waits for its route, the head looks ahead along the search
+		if (facts.pose == Pose::Moving && walk != nullptr && walk->destination.has_value() &&
+		    (walk->motion == Motion::Planning || walk->motion == Motion::Confused))
+		{
+			const auto ground = [](glm::vec2 at) {
+				return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
+			};
+			const auto rate = animation.body.hurried ? 2 : 1;
+			const auto stepMs =
+			    static_cast<int32_t>(static_cast<float>(milliseconds) * creature_layers::PlaybackRate(ShownSize(creature))) *
+			    rate;
+			walk->routeLook = creature_head_look::StepRouteLook(
+			    walk->routeLook, stepMs, {.searchHead = walk->follower.GetSearchHead(), .destination = *walk->destination},
+			    ground);
+			look.target = walk->routeLook.point;
+		}
 		break;
 	case creature_head_look::Aim::OpponentHead:
 		look.target = PosedHead(registry, *opponent);
@@ -746,7 +778,7 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 
 		    if (rig != nullptr)
 		    {
-			    const auto look = HeadLookOf(registry, entity, animation, rig, morph.drawn, transform, creature);
+			    const auto look = HeadLookOf(registry, entity, animation, rig, morph.drawn, transform, creature, milliseconds);
 			    PoseBody(animation, *rig, morph.drawn, transform, ShownSize(creature), gameTime.count() * scale,
 			             seconds * scale, look, [this](uint32_t range) {
 				             return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);

@@ -2048,6 +2048,7 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 	const bool landLit = !inTemple && _landLightTexture.has_value();
 	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, CreatureLandLightScale(desc.viewId), 0.0f, 0.0f};
 	const glm::vec4 u_hairOrigin {origin, 0.0f};
+	const glm::vec4 u_hairAlphaCutOff {creature_hair::k_AlphaCutOff, 0.0f, 0.0f, 0.0f};
 	const auto u_haze = inTemple ? glm::vec4(0.0f) : _haze[0];
 	std::vector<creature_hair::RibbonVertex> ribbon;
 	for (const auto& group : hair.groups)
@@ -2125,12 +2126,14 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 		program->SetUniformValue("u_islandExtent", &islandExtent);
 		program->SetUniformValue("u_landLight", &u_landLight);
 		program->SetUniformValue("u_hairOrigin", &u_hairOrigin);
+		program->SetUniformValue("u_hairAlphaCutOff", &u_hairAlphaCutOff);
 		program->SetUniformValue("u_haze", &u_haze);
 		program->SetUniformValue("u_hazeColour", &_haze[1]);
 		bgfx::setVertexBuffer(0, &vertexBuffer);
 		bgfx::setIndexBuffer(&indexBuffer);
-		// Blended over what is behind by the texture's alpha, both sides, tested against depth but leaving none
-		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
+		// The texels that the cut-off keeps blend over the scene by the texture's alpha and write their depth. Both sides
+		// of a strand show.
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
 		               BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		program->Submit(viewId, zsort::Depth(middle, eye));
 	}
@@ -2830,8 +2833,8 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 {
 	namespace prints = creature_footprints;
-	const bool reflection = desc.viewId == RenderPass::Reflection;
-	if ((desc.viewId != RenderPass::Main && !reflection) || !Locator::footprintSystem::has_value() ||
+	// Drawn once, after the land: the land mirrored in the sea has none
+	if (desc.viewId != RenderPass::Main || !Locator::footprintSystem::has_value() ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
@@ -2859,12 +2862,6 @@ void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 	vertices.reserve(footprints.GetPrints().size() * prints::k_Indices.size());
 	for (const auto& print : footprints.GetPrints())
 	{
-		// The sea's reflection shows only the prints on the land above it
-		if (reflection &&
-		    std::ranges::any_of(print.corners, [](const glm::vec3& corner) { return corner.y <= prints::k_Lift; }))
-		{
-			continue;
-		}
 		// Black, as opaque as the print still is
 		const auto colour = static_cast<uint32_t>(print.alpha) << 24u;
 		for (const auto corner : prints::k_Indices)
