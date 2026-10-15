@@ -53,8 +53,13 @@ std::pair<int, int> Today()
 }
 } // namespace
 
-void FootprintSystem::Update(std::chrono::duration<float, std::milli> gameTime)
+void FootprintSystem::Update(std::chrono::duration<float, std::milli> gameTime, bool landDrawn)
 {
+	// The prints fade as they are drawn, so not in the temple or under a film that covers the screen
+	if (!landDrawn)
+	{
+		return;
+	}
 	creature_footprints::Fade(_trail, gameTime.count());
 }
 

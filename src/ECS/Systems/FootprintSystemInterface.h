@@ -21,17 +21,18 @@ namespace openblack::ecs::systems
 {
 
 /// The prints the creatures leave on the land as they walk, laid as their footsteps fall and fading away over about
-/// five seconds (see creature_footprints). They are kept for the land they are on and are not saved.
+/// five seconds (see creature_footprints). They show and fade only on frames that draw the land. A change of land
+/// keeps them, as the game does. A save does not keep them.
 class FootprintSystemInterface
 {
 public:
 	virtual ~FootprintSystemInterface() = default;
 
-	/// Fades the prints as the game time passes
-	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// Fades the prints as the game time passes, only on a frame that draws the land
+	virtual void Update(std::chrono::duration<float, std::milli> gameTime, bool landDrawn) = 0;
 	/// Lays a print under a creature's lower foot, as one of its footsteps falls, if there is room for it
 	virtual void Step(entt::entity creature) = 0;
-	/// Takes every print away, for a new land
+	/// Takes every print away, for a new testbed scenario. The game never takes them away all at once.
 	virtual void Reset() = 0;
 
 	/// The prints showing, the oldest first

@@ -325,3 +325,34 @@ TEST(GameClock, TheFrameGameTimeFollowsAFixedFrameTime)
 	clock.Frame();
 	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 0);
 }
+
+// The temple holds the clock while the player is in it. The hold stops the world at once, and the player's pause stays.
+TEST(GameClock, TheTempleHoldStopsTheClockAtOnceAndKeepsThePause)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	clock.now += 30;
+	clock.Frame();
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 30);
+	// The frame that enters the temple gives no game time to the things that it steps after the entry
+	clock.time.SetHeld(true);
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 0);
+	EXPECT_FALSE(clock.time.IsPaused());
+	clock.now += 5000;
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 0);
+	EXPECT_EQ(clock.time.GetTurn(), 1);
+	// The player's pause in the temple does not start the clock when the hold ends
+	clock.time.SetPaused(true);
+	clock.time.SetHeld(false);
+	EXPECT_FALSE(clock.Frame());
+	clock.time.SetPaused(false);
+	// The time in the temple does not count: the next turn is 70 ms on
+	clock.now += 69;
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 69);
+	clock.now += 1;
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 2);
+}
