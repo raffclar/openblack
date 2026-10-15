@@ -68,6 +68,7 @@
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Archetypes/DrinkWaypointArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
@@ -1060,6 +1061,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, TreeInfo>)
 			    {
+				    if (object.dead)
+				    {
+					    return ecs::archetypes::DeadTreeArchetype::Create(position, type, yaw, object.scale);
+				    }
 				    return ecs::archetypes::TreeArchetype::Create(object.forest, position, type, true, yaw,
 				                                                  object.fullSize.value_or(object.scale), object.scale);
 			    }
