@@ -45,4 +45,9 @@ struct Request
 /// any agenda, its own or a script's, hasn't.
 [[nodiscard]] bool Played(const creature_mind::IdleMind& mind);
 
+/// When a script asks and the creature has played, the creature stops the remaining steps of its agenda. An idle
+/// creature thus stops its idle steps. The creature does not complete these steps, so they do not count as done. An
+/// agenda that is already at its end does not change.
+void ClearAfterPlayed(creature_mind::IdleMind& mind);
+
 } // namespace openblack::creature_script_play

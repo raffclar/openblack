@@ -3426,6 +3426,15 @@ bool CreatureMindSystem::HasPlayed(entt::entity creature) const
 	return mind == nullptr || creature_script_play::Played(mind->idle);
 }
 
+void CreatureMindSystem::ClearAfterPlayed(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr; mind != nullptr)
+	{
+		creature_script_play::ClearAfterPlayed(mind->idle);
+	}
+}
+
 std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creature, CreatureMindState& mind,
                                                               entt::entity thing, std::span<const Desire> tried)
 {

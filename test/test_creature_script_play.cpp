@@ -120,3 +120,31 @@ TEST(CreatureScriptPlay, PlayedOnceTheAgendaIsOver)
 	mind.activity = creature_mind::Activity::BeIdle;
 	EXPECT_TRUE(Played(mind));
 }
+
+// A yes to the script's question stops the steps that remain, and those steps do not count as done
+TEST(CreatureScriptPlay, AYesStopsTheStepsThatRemain)
+{
+	creature_mind::IdleMind mind;
+	mind.activity = creature_mind::Activity::BeIdle;
+	mind.agenda = Agenda({.animation = 63, .plays = 2});
+	mind.step = 1;
+	mind.stepStarted = true;
+	ASSERT_TRUE(Played(mind));
+	ClearAfterPlayed(mind);
+	EXPECT_EQ(mind.step, mind.agenda.size());
+	EXPECT_FALSE(mind.stepStarted);
+	EXPECT_TRUE(mind.gaveUp);
+	EXPECT_TRUE(Played(mind));
+}
+
+// An agenda at its end does not change, so that the creature completes it as usual
+TEST(CreatureScriptPlay, AYesDoesNotChangeAnAgendaAtItsEnd)
+{
+	creature_mind::IdleMind mind;
+	mind.activity = creature_mind::Activity::Told;
+	mind.agenda = Agenda({.animation = 63, .plays = 2});
+	mind.step = mind.agenda.size();
+	ClearAfterPlayed(mind);
+	EXPECT_EQ(mind.step, mind.agenda.size());
+	EXPECT_FALSE(mind.gaveUp);
+}
