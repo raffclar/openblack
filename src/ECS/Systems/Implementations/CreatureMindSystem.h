@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
 #include <optional>
 #include <random>
@@ -19,6 +21,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePlanActions.h"
@@ -125,8 +128,18 @@ private:
 	void SetUpMind(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind);
 	/// Sets up what a creature has learnt the first time its mind thinks, from its mind file when it has one
 	void SetUpLearning(entt::entity creature, components::CreatureMindState& mind);
+	/// The mind that a mind file loads over: a fresh mind of the species with its starting lesson, or the creature's own
+	/// mind, which a swap of minds keeps
+	enum class FileBase : uint8_t
+	{
+		Fresh,
+		Own,
+	};
 	/// Takes up a mind file waiting to be loaded
-	void TakeUpFile(entt::entity creature, components::CreatureMindState& mind);
+	void TakeUpFile(entt::entity creature, components::CreatureMindState& mind, FileBase base = FileBase::Fresh);
+	/// Gives the creature the mind that a file loaded
+	void ApplyLoaded(entt::entity creature, components::CreatureMindState& mind, creature_mind_model::LoadedMind loaded,
+	                 const creaturemind::MindFileData& file);
 	/// How a creature's swap of minds stands this turn: whether the spells on both creatures have gone and whether its
 	/// body has taken on its new shape
 	[[nodiscard]] static creature_mind::Senses::SwapView SwapViewOf(entt::entity creature);
