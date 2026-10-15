@@ -2331,8 +2331,11 @@ void AddObjects(std::vector<Scenario>& all)
 	    .expected = "It walks to the hand, looking at it, and stops four metres past its own radius from the hand. It "
 	                "follows the hand when the hand moves, for thirty seconds at most. One time in two it then jumps for "
 	                "joy. With the hand near it the action can not start.",
-	    .framing = {.shot = Shot::Testbed},
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
 	    .creatures = {Content(CreatureType::Tiger, {-60.0f, 0.0f}, 90.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "GoToHand"}},
 	});
 	all.push_back({
@@ -2343,10 +2346,13 @@ void AddObjects(std::vector<Scenario>& all)
 	                   "it to point at the hand after two seconds and again after eight seconds.",
 	    .expected = "Each time it turns to the camera, looking at it, then points for a second at where the hand was as it "
 	                "began, looking at that place, amazed.",
-	    .framing = {.shot = Shot::Testbed},
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 90.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "PointAtHand"},
-	                 {.kind = Kind::DoAction, .delaySeconds = 8.0f, .action = "PointAtHand"}},
+	                 {.kind = Kind::DoAction, .delaySeconds = 6.0f, .action = "PointAtHand"}},
 	});
 	all.push_back({
 	    .id = "mind.follow_player",
@@ -2356,8 +2362,11 @@ void AddObjects(std::vector<Scenario>& all)
 	                   "north, away from it. A script tells it to follow the player after two seconds.",
 	    .expected = "It walks to where the camera looks, looking at the camera, until it is near that place or thirty "
 	                "seconds go by. It turns to the camera and plays the clip that asks the player to look at it.",
+	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 150.0f}, .look = {0.0f, 0.0f, 400.0f}},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 0.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "FollowPlayer"}},
 	});
 	all.push_back({
@@ -2367,8 +2376,11 @@ void AddObjects(std::vector<Scenario>& all)
 	    .description = "A player's tiger stands near the edge of the view, the camera looking at the land beside it. A "
 	                   "script tells it to go to the middle of the screen after two seconds.",
 	    .expected = "It walks to where the camera looks, looking at the camera, then turns to the camera.",
+	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -120.0f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .creatures = {Content(CreatureType::Tiger, {35.0f, 10.0f}, 0.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "GoToMiddleOfScreen"}},
 	});
 	all.push_back({
@@ -2379,13 +2391,16 @@ void AddObjects(std::vector<Scenario>& all)
 	                   "tenth. A script then tells it to be cross with the player.",
 	    .expected = "It walks to where the camera looks, looking at the camera, turns to the camera, then one time in two "
 	                "makes a rude sign, else taunts the player.",
-	    .framing = {.shot = Shot::Testbed},
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
 	    .commands = {{.kind = Kind::Slap, .delaySeconds = 0.5f},
-	                 {.kind = Kind::Slap, .delaySeconds = 0.6f},
-	                 {.kind = Kind::Slap, .delaySeconds = 0.7f},
-	                 {.kind = Kind::Slap, .delaySeconds = 0.8f},
-	                 {.kind = Kind::DoAction, .delaySeconds = 3.0f, .action = "BeCrossWithPlayer"}},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "BeCrossWithPlayer"}},
 	});
 	all.push_back({
 	    .id = "mind.show_how_nice",
@@ -2395,15 +2410,18 @@ void AddObjects(std::vector<Scenario>& all)
 	                   "is. Then it is slapped four times and told again.",
 	    .expected = "The first time it turns to the camera and waves. The second time it turns to the camera and plays the "
 	                "sad clip. It looks at the camera all the time.",
-	    .framing = {.shot = Shot::Testbed},
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
 	    .commands = {{.kind = Kind::Stroke, .delaySeconds = 0.5f},
-	                 {.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "ShowPlayerHowNiceYouThinkHeIs"},
-	                 {.kind = Kind::Slap, .delaySeconds = 9.0f},
-	                 {.kind = Kind::Slap, .delaySeconds = 9.1f},
-	                 {.kind = Kind::Slap, .delaySeconds = 9.2f},
-	                 {.kind = Kind::Slap, .delaySeconds = 9.3f},
-	                 {.kind = Kind::DoAction, .delaySeconds = 11.0f, .action = "ShowPlayerHowNiceYouThinkHeIs"}},
+	                 {.kind = Kind::DoAction, .delaySeconds = 1.5f, .action = "ShowPlayerHowNiceYouThinkHeIs"},
+	                 {.kind = Kind::Slap, .delaySeconds = 8.0f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "ShowPlayerHowNiceYouThinkHeIs"}},
 	});
 	all.push_back({
 	    .id = "mind.pray_to_player",
@@ -2412,8 +2430,11 @@ void AddObjects(std::vector<Scenario>& all)
 	    .description = "A player's tiger stands facing away from the camera. A script tells it to pray to the player after "
 	                   "two seconds.",
 	    .expected = "It turns to the camera, looking at it, then kneels and prays.",
-	    .framing = {.shot = Shot::Testbed},
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "PrayToPlayer"}},
 	});
 	all.push_back({
@@ -2425,8 +2446,11 @@ void AddObjects(std::vector<Scenario>& all)
 	    .expected = "Four times: it turns to the camera and talks, fluttering its eyelids; three times in four it shows that "
 	                "it feels playful; one time in two it laughs and talks again; then it pulls a silly face for five "
 	                "seconds.",
-	    .framing = {.shot = Shot::Testbed},
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "BeSillyWithPlayer"}},
 	});
 	all.push_back({
