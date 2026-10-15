@@ -83,7 +83,8 @@ Step creature_mind::RestStep()
 	        .untilBetter = true,
 	        .mirrorAtRandom = true,
 	        .closedEyes = true,
-	        .effect = Effect::Completed};
+	        .effect = Effect::Completed,
+	        .main = true};
 }
 
 std::vector<Step> creature_mind::RestToGetBetter()
@@ -187,6 +188,7 @@ std::vector<Step> creature_mind::PrayAtTemple(glm::vec2 home, float height)
 {
 	auto walk = WalkTo(home, height);
 	walk.effect = Effect::Completed;
+	walk.main = true;
 	return {walk, {.kind = Step::Kind::Action, .animation = k_PrayAnimation}};
 }
 

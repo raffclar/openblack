@@ -185,4 +185,8 @@ inline constexpr float k_SadnessAtDeath = 1.0f;
 /// teleport stones, miracles, magic trees). A flying thing makes it look only while the thing is still in the air.
 [[nodiscard]] std::optional<Setup> SetupFor(Reaction type, bool thingInTheAir);
 
+/// Whether a nice miracle comes from a god other than the god of the creature. The creature does not look at the miracle
+/// and does not learn it. Gods are never allies in openblack, so every other god counts. A miracle of no god does not.
+[[nodiscard]] bool OfAnotherGod(PlayerNames caster, PlayerNames creatureOwner);
+
 } // namespace openblack::creature_reaction

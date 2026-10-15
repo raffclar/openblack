@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <iterator>
 #include <numbers>
 
 #include <glm/geometric.hpp>
@@ -52,6 +53,7 @@ bool IsSubMove(Movement::Kind kind)
 
 void FinishStep(IdleMind& mind)
 {
+	mind.movedOn = mind.step;
 	++mind.step;
 	mind.stepStarted = false;
 	mind.stepSeconds = 0.0f;
@@ -229,6 +231,7 @@ std::vector<Step> creature_mind::Sleep(const Random& random)
 	sleep.untilRested = true;
 	sleep.closedEyes = true;
 	sleep.effect = Effect::Slept;
+	sleep.main = true;
 	agenda.push_back(sleep);
 	// Only the dazed look as it wakes pulls a face
 	auto dazed = Action(animations::k_Confused, true);
@@ -283,6 +286,7 @@ std::vector<Step> creature_mind::ExamineByPickingUp(uint32_t object, bool handFu
 	auto examine = Object({.kind = ObjectOrder::Kind::Keep, .animation = keep}, Effect::Examined);
 	examine.face = creature_face::Cue::Curiosity;
 	examine.gaze = Gaze {.object = object};
+	examine.main = true;
 	agenda.push_back(std::move(examine));
 	agenda.push_back(Object({.kind = letGo}));
 	return agenda;
@@ -1081,6 +1085,7 @@ std::optional<Gaze> creature_mind::LookOf(const Step& step)
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	Commands commands;
+	mind.movedOn.reset();
 	if (mind.step >= mind.agenda.size())
 	{
 		return commands;
@@ -1159,6 +1164,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			return commands;
 		}
 		mind.stepStarted = true;
+		mind.movedOn = mind.step;
 		mind.stepSeconds = 0.0f;
 		// Each step pulls the face it is meant to as it starts, held for as long as the face goes with
 		commands.face = PullFace(mind, step.face, senses, random);
@@ -1455,6 +1461,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 				commands.effect = step.effect;
 			}
 			mind.sitEnding = true;
+			mind.movedOn = mind.step;
 			mind.wakeWanted = false;
 		}
 		break;
@@ -1509,6 +1516,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 				commands.releaseCast = true;
 				commands.endSit = true;
 				mind.sitEnding = true;
+				mind.movedOn = mind.step;
 			}
 			if (!senses.bodyBusy)
 			{
@@ -1684,4 +1692,24 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	}
 	return commands;
+}
+
+size_t creature_mind::MainStep(std::span<const Step> agenda)
+{
+	if (agenda.empty())
+	{
+		return 0;
+	}
+	const auto main = std::ranges::find_if(agenda.rbegin(), agenda.rend(),
+	                                       [](const Step& step) { return step.main || step.kind == Step::Kind::Cast; });
+	return main == agenda.rend() ? agenda.size() - 1 : static_cast<size_t>(std::distance(main, agenda.rend()) - 1);
+}
+
+bool creature_mind::AtOrPastMainStep(std::span<const Step> agenda, size_t step, bool showingDesire)
+{
+	if (agenda.empty())
+	{
+		return false;
+	}
+	return showingDesire || step >= MainStep(agenda);
 }

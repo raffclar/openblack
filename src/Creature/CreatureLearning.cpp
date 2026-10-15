@@ -108,9 +108,13 @@ float creature_learning::LearningPriority(const Context& context)
 	{
 		return 0.0f;
 	}
-	if (context.running)
+	if (!context.done)
 	{
 		return 1.0f;
+	}
+	if (!context.seen)
+	{
+		return 0.0f;
 	}
 	if (context.windowSeconds > 0.0f && context.secondsSince < context.windowSeconds)
 	{
@@ -191,11 +195,30 @@ void creature_learning::Age(std::vector<Context>& contexts, float seconds)
 {
 	for (auto& context : contexts)
 	{
-		if (!context.running)
-		{
-			context.secondsSince += seconds;
-		}
+		context.secondsSince += seconds;
 	}
+}
+
+void creature_learning::MarkNewestDone(std::vector<Context>& contexts, bool lookedAt)
+{
+	if (contexts.empty())
+	{
+		return;
+	}
+	auto& newest = contexts.back();
+	newest.done = true;
+	newest.secondsSince = 0.0f;
+	newest.seen = newest.seen || lookedAt;
+}
+
+void creature_learning::MarkNewestSeen(std::vector<Context>& contexts)
+{
+	if (contexts.empty())
+	{
+		return;
+	}
+	contexts.back().seen = true;
+	contexts.back().secondsSince = 0.0f;
 }
 
 void creature_learning::SuppressOpposed(creature_desires::Desires& desires, Desire desire, const Dependencies& dependencies,

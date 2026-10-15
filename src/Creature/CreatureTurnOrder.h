@@ -25,6 +25,18 @@ constexpr uint32_t k_FirstStageWithBody = 1;
 void HoldBodyDesires(creature_desires::Desires& desires, const std::array<bool, creature_desires::k_DesireCount>& body,
                      uint32_t phase);
 
+/// What the mind of the creature does in a turn while the player's hand holds it
+enum class HeldTurn : uint8_t
+{
+	/// The hand does not hold it: the mind thinks as usual
+	Think,
+	/// The mind stands still: the desires do not change and the creature decides nothing, so its plan stays
+	StandStill,
+	/// The mind stands still, but the creature shows what it wants once it has turned to the player
+	ShowDesire,
+};
+[[nodiscard]] HeldTurn WhileHeld(bool held, bool showDesireOnHold);
+
 /// After the hand let go of it, the first turn that finds a plan with steps to do starts the agenda of that plan again
 /// from its first step. The mark that the hand held it stays until then.
 [[nodiscard]] bool RestartsAfterHold(bool heldSinceRestart, bool planHasSteps);

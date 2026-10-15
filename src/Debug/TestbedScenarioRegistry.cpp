@@ -5273,6 +5273,24 @@ void AddMind(std::vector<Scenario>& all)
 	                 OnObject(Kind::LeashOrderOn, 0, 5, 90.0f, false), Act(Kind::TakeOffLeash, 0, 90.0f)},
 	});
 
+	auto watched = Content(CreatureType::Tiger, {0.0f, 20.0f});
+	watched.phase = 13;
+	all.push_back({
+	    .id = "learning.seen_action",
+	    .name = "The player sees the action that it orders",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger on the learning leash is told with the Action button to act on a cow. The camera "
+	                   "follows the tiger the whole time.",
+	    .expected = "The tiger picks up and holds the cow. The inspector shows the newest remembered action marked as "
+	                "seen once the main step of its agenda moves on, and as done when the hold ends. Feedback then goes "
+	                "to it, less and less until its learning window closes.",
+	    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+	    .creatures = {watched},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {20.0f, 40.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false),
+	                 Act(Kind::TakeOffLeash, 0, 60.0f)},
+	});
+
 	{
 		// A ring of huts shuts the tiger in, with a cow outside it
 		auto shutIn = Content(CreatureType::Tiger, {0.0f, 0.0f});

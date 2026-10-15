@@ -110,7 +110,7 @@ struct Context
 	/// what it knew of that
 	std::optional<uint32_t> activity;
 	std::optional<creature_tree::Belief> activityBelief;
-	/// Still doing it, or how long ago it finished
+	/// Still doing it. The seconds since it ended well or since the player last saw it, whichever is later.
 	bool running {true};
 	float secondsSince {0.0f};
 	/// Whether the action can be learnt from, and for how many seconds after it finishes
@@ -125,6 +125,9 @@ struct Context
 	bool ordered {false};
 	/// It carried the action out to its end
 	bool done {false};
+	/// The player's camera looked at the creature when the action ended well, or when a step at or after the main step
+	/// of its agenda moved on
+	bool seen {false};
 };
 /// What a plan's desire was about, for the lessons feedback teaches: what the plan says it was about, else for a desire
 /// about something in itself the thing it acted on, else nothing
@@ -138,8 +141,12 @@ struct ThingLessons
 	bool actedOn {false};
 };
 [[nodiscard]] ThingLessons ThingLessonsFor(const Context& context, uint32_t self);
-/// How much feedback now counts for a context: fully while running, then less until its window closes; nothing for an
-/// action that can't be learnt from
+/// How much feedback now counts for a context:
+/// - nothing for an action that the creature cannot learn from;
+/// - fully for an action that did not end well, while the creature remembers it;
+/// - nothing for an action that ended well where the player did not see it;
+/// - for an action that ended well where the player saw it, less and less until its window closes. The window starts
+///   when the action ended or when the player last saw it, whichever is later.
 [[nodiscard]] float LearningPriority(const Context& context);
 /// The context feedback is credited to, if any counts; of two that count the same, the newer
 [[nodiscard]] std::optional<size_t> BestContext(std::span<const Context> contexts);
@@ -151,8 +158,12 @@ std::optional<Context> Remember(std::vector<Context>& contexts, Context context)
 /// thing it acted on and the whole thing, when its desire learns from orders. Feedback from the player does not stop
 /// this.
 [[nodiscard]] std::optional<float> ForgottenOrderApproval(const Context& forgotten, const DesireRules& rules, float approval);
-/// Time passes for the contexts that have finished
+/// Time passes for the contexts
 void Age(std::vector<Context>& contexts, float seconds);
+/// The newest action ended well now. It is seen when the player's camera looks at the creature now.
+void MarkNewestDone(std::vector<Context>& contexts, bool lookedAt);
+/// The player's camera saw the newest action now
+void MarkNewestSeen(std::vector<Context>& contexts);
 
 /// Deciding on a desire holds back the desires it opposes for a while
 void SuppressOpposed(creature_desires::Desires& desires, Desire desire, const Dependencies& dependencies, float turnsPerSecond);

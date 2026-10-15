@@ -76,6 +76,7 @@ std::vector<Step> creature_exploration::GoToHillAndWalkAlongRidge(glm::vec2 hill
 {
 	std::vector<Step> agenda {GoTo(hill, k_ExploreHeights * height)};
 	agenda.back().effect = Effect::Completed;
+	agenda.back().main = true;
 	for (const auto point : RidgePoints(hill))
 	{
 		agenda.push_back(GoTo(point, k_LookFromHeights * height));
@@ -111,6 +112,7 @@ std::vector<Step> creature_exploration::LookAtMountains(glm::vec2 hill, const Ra
 		// The action is complete once the creature has pointed, before it turns to the mountains again
 		agenda.push_back(PointAt(hill));
 		agenda.back().effect = Effect::Completed;
+		agenda.back().main = true;
 	}
 	agenda.push_back(TurnTo(hill));
 	return agenda;

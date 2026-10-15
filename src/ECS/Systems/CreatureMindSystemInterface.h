@@ -165,6 +165,8 @@ public:
 		std::string_view action;
 		entt::entity actionObject {entt::null};
 		std::optional<entt::entity> instrument;
+		/// The plan counts as an order: when the creature forgets the plan, the plan can teach approval
+		bool ordered {false};
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
@@ -230,8 +232,8 @@ public:
 		std::optional<entt::entity> activityObject;
 		/// What the creature does, for a plan that gives its agenda; told when not given
 		std::optional<creature_mind::Activity> activity;
-		/// The player made it do this: by an order on the leash, by a script, or by a stroke that makes it do its
-		/// action again
+		/// The plan counts as an order: by an order on the leash, by a script, by a thing that the player gives, by what
+		/// the creature does after a stroke or a slap
 		bool ordered {false};
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is

@@ -84,7 +84,8 @@ std::vector<Step> creature_mind::ThrowToyAt(uint32_t toy, uint32_t target, glm::
 	agenda.push_back({.kind = Step::Kind::Object,
 	                  .order = {.kind = ObjectOrder::Kind::Throw, .object = target, .point = targetPoint},
 	                  .face = creature_face::Cue::Anger,
-	                  .gaze = watch});
+	                  .gaze = watch,
+	                  .main = true});
 	if (happyAfter)
 	{
 		agenda.push_back({.kind = Step::Kind::Action, .animation = creature_layers::animations::k_Happy});
@@ -144,8 +145,11 @@ std::vector<Step> creature_mind::ThrowDie(std::optional<uint32_t> pickUp, uint32
 	const auto at = from + glm::vec2(k_DieThrowHeights * height);
 	agenda.push_back(
 	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Throw, .point = at}, .gaze = GoingLook(at)});
-	agenda.push_back(
-	    {.kind = Step::Kind::WatchFlying, .object = die, .face = creature_face::Cue::Amazed, .gaze = Gaze {.object = die}});
+	agenda.push_back({.kind = Step::Kind::WatchFlying,
+	                  .object = die,
+	                  .face = creature_face::Cue::Amazed,
+	                  .gaze = Gaze {.object = die},
+	                  .main = true});
 	const bool happy = random(k_DieOutcomeLots) > 0;
 	agenda.push_back({.kind = Step::Kind::Action,
 	                  .animation = happy ? creature_layers::animations::k_Happy : creature_layers::animations::k_Sad});
@@ -159,7 +163,8 @@ std::vector<Step> creature_mind::ThrowToPlayer(uint32_t toy, glm::vec3 hand, boo
 	{
 		agenda.push_back({.kind = Step::Kind::Object,
 		                  .order = {.kind = ObjectOrder::Kind::Throw, .point = {hand.x, hand.z}, .pointHeight = hand.y},
-		                  .gaze = Gaze {.point = hand}});
+		                  .gaze = Gaze {.point = hand},
+		                  .main = true});
 	}
 	agenda.push_back({.kind = Step::Kind::Action, .animation = creature_layers::animations::k_Happy});
 	return agenda;
@@ -180,7 +185,7 @@ std::vector<Step> creature_mind::HelpRepairHouse(std::optional<uint32_t> pickUp,
 	                  .gaze = Gaze {.object = house}});
 	agenda.push_back(
 	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Discard, .animation = creature_throw::k_PutDown}});
-	agenda.push_back({.kind = Step::Kind::Repair, .object = house, .gaze = Gaze {.object = house}});
+	agenda.push_back({.kind = Step::Kind::Repair, .object = house, .gaze = Gaze {.object = house}, .main = true});
 	agenda.push_back({.kind = Step::Kind::UseUp, .object = tree});
 	return agenda;
 }
@@ -209,7 +214,8 @@ std::vector<Step> creature_mind::KickBallAround(uint32_t ball, const Random& ran
 			agenda.push_back({.kind = Step::Kind::Object,
 			                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = ball, .seconds = k_PointAtBallSeconds},
 			                  .face = creature_face::Cue::Smile,
-			                  .gaze = watch});
+			                  .gaze = watch,
+			                  .main = true});
 		}
 		else
 		{
