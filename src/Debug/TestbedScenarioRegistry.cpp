@@ -3544,6 +3544,37 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.step_looks_reflection",
+	    .name = "Looks at its reflection with the faces of each step",
+	    .facet = Facet::Mind,
+	    .description = "A tiger that is not thirsty, on the learning leash, is told with the Action button to go to the "
+	                   "lake.",
+	    .expected = "It walks to the water, its head on the place. Then it looks down at the water four metres in front "
+	                "of its feet, puzzled, plays its dazed clip with an amazed face, and looks down again, puzzled. It "
+	                "walks to the shore with an amazed face, looks down with a curious face, plays its dazed clip, walks "
+	                "back to the water amazed, and looks down, first curious and then amazed.",
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 20.0f}, {0.0f, k_NearShallows}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {0.0f, k_NearShallows + 10.0f}, 2.0f, false),
+	                 Act(Kind::TakeOffLeash, 0, 30.0f)},
+	});
+
+	all.push_back({
+	    .id = "mind.step_looks_set_fire",
+	    .name = "Sets fire to a tree with the looks and faces of each step",
+	    .facet = Facet::Mind,
+	    .description = "A script tells a player's lion to set fire to an oak with a burning villager beside it.",
+	    .expected = "It walks to the villager, its head on the villager, and picks him up. It walks to the oak, its head "
+	                "on the oak. It turns to the oak with an angry face and flutters its eyelids at it, throws the villager "
+	                "at it with a smile, watches him until he lands, then holds still a second with an angry face.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 90.0f)},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-60.0f, 40.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-20.0f, 10.0f}, .alight = true}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "SetFireToObject", .with = 1}},
+	});
+
+	all.push_back({
 	    .id = "senses.look_at_mover",
 	    .name = "Looks at a thing that moves as it walks",
 	    .facet = Facet::Senses,
