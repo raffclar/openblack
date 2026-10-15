@@ -1381,6 +1381,28 @@ void AddAppearance(std::vector<Scenario>& all)
 	          "The whiskers are thin white lines with sharp edges and no pale blur. A neutral tiger's whiskers do not "
 	          "swing: they only follow the head. The face does not show through them.",
 	          0.6f);
+	hairClose("appearance.ape_hair", "Giant ape hair close up", CreatureType::GiantApe,
+	          "A neutral giant ape with a paused mind faces the camera. It nods, shakes its head and does its other "
+	          "gestures.",
+	          "The ten strands of hair have sharp edges and no pale blur. They swing when the ape moves.", 1.5f);
+	hairClose("appearance.chimp_hair", "Chimp hair close up", CreatureType::Chimp,
+	          "A neutral chimp with a paused mind faces the camera. It nods, shakes its head and does its other "
+	          "gestures.",
+	          "The two tufts of hair (ten strands and two strands) have sharp edges and no pale blur. They swing when "
+	          "the chimp moves.",
+	          1.5f);
+	hairClose("appearance.horse_hair", "Horse hair close up", CreatureType::Horse,
+	          "A neutral horse with a paused mind faces the camera. It nods, shakes its head and does its other "
+	          "gestures.",
+	          "The two tufts of hair (four strands and thirteen strands) have sharp edges and no pale blur. They "
+	          "swing when the horse moves.",
+	          1.5f);
+	hairClose("appearance.mandrill_hair", "Mandrill hair close up", CreatureType::Mandrill,
+	          "A neutral mandrill with a paused mind faces the camera. It nods, shakes its head and does its other "
+	          "gestures.",
+	          "The three tufts of hair (eight, four and six strands) have sharp edges and no pale blur. They swing "
+	          "when the mandrill moves.",
+	          1.5f);
 	hairClose("appearance.wolf_hair", "Wolf hair close up", CreatureType::Wolf,
 	          "A neutral wolf with a paused mind faces the camera. It nods, shakes its head and does its other gestures.",
 	          "The tufts of hair at the hips have sharp edges and no pale blur. They swing when the wolf moves.", 1.5f);
