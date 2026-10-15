@@ -584,7 +584,7 @@ size_t creature_fight::WobbleAnimation(Band band, bool sideways)
 	return sideways ? animations::k_WobbleLowSide : animations::k_WobbleLowFrontBack;
 }
 
-uint8_t creature_fight::WoundKind(uint8_t blowWoundType, const Random& random)
+uint8_t creature_fight::WoundKind(int32_t blowWoundType, const Random& random)
 {
 	if (random(2) == 0)
 	{
@@ -596,30 +596,20 @@ uint8_t creature_fight::WoundKind(uint8_t blowWoundType, const Random& random)
 		return 1;
 	case 1:
 		return static_cast<uint8_t>(3 + random(3));
-	default:
+	case 2:
 		return 2;
+	default:
+		return 0;
 	}
 }
 
-uint8_t creature_fight::BlowWoundType(size_t animation)
+int32_t creature_fight::BlowWoundType(size_t animation, const BlowWoundTypes& types)
 {
 	if (!IsAttack(animation))
 	{
-		return 0;
+		return -1;
 	}
-	// The second blows follow the first in the same order
-	const auto blow = animations::k_FirstAttack + ((animation - animations::k_FirstAttack) % 6);
-	switch (blow)
-	{
-	case animations::k_AttackHigh:
-	case animations::k_AttackEye:
-		return 1;
-	case animations::k_AttackPelvis:
-	case animations::k_AttackKnee:
-		return 2;
-	default:
-		return 0;
-	}
+	return types.at(animation - animations::k_FirstAttack);
 }
 
 bool creature_fight::Bleeds(uint8_t woundKind)
@@ -1153,4 +1143,16 @@ uint32_t creature_fight::HelpEventOf(Move::Kind kind)
 bool creature_fight::CountsHelpEvent(State state, bool inRange, bool queued)
 {
 	return state == State::Stance && inRange && queued;
+}
+
+bool creature_fight::FightMusicHeard(bool directsFight, std::span<const glm::vec3> arenasOfItsFights, const glm::vec3& camera)
+{
+	return directsFight || std::ranges::any_of(arenasOfItsFights, [&camera](const glm::vec3& middle) {
+		       return glm::distance(middle, camera) < k_FightMusicDistance;
+	       });
+}
+
+float creature_fight::HealthAfterLifeLost(float health, float damage)
+{
+	return std::max(health - damage, 0.0f);
 }

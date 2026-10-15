@@ -191,6 +191,9 @@ public:
 			glm::vec3 position;
 		};
 		std::optional<CreatureDance> creatureDance;
+		/// The music of the local player's creature's fight, heard while the player directs the fight or while the camera
+		/// is near the arena of the fight (see SelectFightType)
+		std::optional<MusicType> creatureFight;
 	};
 
 	GameMusic() = default;
@@ -261,6 +264,9 @@ public:
 	[[nodiscard]] static int32_t GetAlignmentIndex(float alignment);
 	/// The land's music at the camera
 	[[nodiscard]] MusicType SelectLandType(const TurnInputs& inputs);
+	/// The music of a fight of the player's creature: the creature fight music on the first three lands of the story,
+	/// the big fight music on later lands and in a skirmish
+	[[nodiscard]] static MusicType SelectFightType(int32_t landNumber, bool skirmish);
 	/// The temple's music, in the version of the local player's own alignment
 	[[nodiscard]] static MusicType SelectCitadelType(const TurnInputs& inputs);
 	/// Whether the land's music may play this turn: it is turned on, the game is past its first turns, and no script
@@ -271,6 +277,7 @@ private:
 	void ProcessMusic(const TurnInputs& inputs);
 	bool ProcessCitadel(const TurnInputs& inputs);
 	bool ProcessScript();
+	bool ProcessCreatureFight(const TurnInputs& inputs);
 	bool ProcessCreatureDance(const TurnInputs& inputs);
 	bool ProcessAttached(const TurnInputs& inputs);
 	bool ProcessLand(const TurnInputs& inputs);

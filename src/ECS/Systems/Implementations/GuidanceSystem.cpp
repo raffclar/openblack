@@ -174,6 +174,14 @@ bool GuidanceSystem::RemarkNow(guidance::Kind kind)
 	return PlayNow(guidance::Kind::AnyRemark) && PlayNow(kind);
 }
 
+void GuidanceSystem::RemarkIfNow(guidance::Kind kind)
+{
+	if (RemarkNow(kind))
+	{
+		SayRemark(kind);
+	}
+}
+
 void GuidanceSystem::Say(uint32_t text, guidance::Kind kind)
 {
 	bool started = false;
