@@ -240,23 +240,15 @@ bool StartLoving(entt::entity villager, entt::entity mate, VillagerStates state)
 	return true;
 }
 
-/// Two villagers meet: touching already, they face each other and the first goes on into the state; else both walk to
-/// stand a gap apart and go into it there. Whether they were touching.
-bool MeetUp(entt::entity villager, entt::entity other, VillagerStates state, float gap)
+/// Both villagers walk to stand a gap apart and go into the state there. They walk also when they stand near enough to
+/// touch already, so that they always stand at the gap. The game started the state where they stood (deviations list).
+void WalkToMeet(entt::entity villager, entt::entity other, VillagerStates state, float gap)
 {
-	auto& action = Entities().Get<LivingAction>(villager);
-	if (AreTouching(villager, other, gap))
-	{
-		Face(villager, other);
-		Face(other, villager);
-		SetTopState(action, state);
-		return true;
-	}
 	const auto here = PositionOf(villager);
 	const auto there = PositionOf(other);
-	villager_home::SetupMoveTo(action, villager_breeding::MeetingPoint(here, there, gap), state);
+	villager_home::SetupMoveTo(Entities().Get<LivingAction>(villager), villager_breeding::MeetingPoint(here, there, gap),
+	                           state);
 	villager_home::SetupMoveTo(Entities().Get<LivingAction>(other), villager_breeding::MeetingPoint(there, here, gap), state);
-	return false;
 }
 
 /// Whether a child's mother is about: alive and able, a woman of its own tribe
@@ -477,7 +469,7 @@ bool villager_breeding::IsPregnant(entt::entity villager)
 
 void villager_breeding::GoAndHaveSexWith(entt::entity villager, entt::entity mate)
 {
-	MeetUp(villager, mate, VillagerStates::StartHavingSex, k_MeetingGap);
+	WalkToMeet(villager, mate, VillagerStates::StartHavingSex, k_MeetingGap);
 	SetLover(villager, mate);
 	SetLover(mate, villager);
 }
