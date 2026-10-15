@@ -136,6 +136,7 @@ private:
 
 public:
 	void AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb) override;
+	void AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb, physics::turn::PuffKind kind) override;
 
 private:
 	[[nodiscard]] PhysicsClassHooks& Hooks();
@@ -166,6 +167,8 @@ private:
 	std::function<uint64_t()> _ticks {[]() { return static_cast<uint64_t>(machine_clock::Ticks()); }};
 	/// What the dust's puffs are drawn as
 	particles::Creator _dustCreator;
+	/// What the motes are drawn as: the same sheet, added to what is behind them
+	particles::Creator _moteCreator;
 	entt::entity _hitObject {entt::null};
 	entt::entity _objectWhichHit {entt::null};
 };

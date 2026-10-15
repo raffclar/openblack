@@ -107,7 +107,20 @@ struct CellRange
 /// the ground
 [[nodiscard]] CellRange WakeCells(glm::vec3 centre, glm::vec3 velocity, float radius);
 
-/// One of the puffs of dust a landing throws up
+/// The kinds of puff the shared pool of puffs holds. Each kind has its own life, growth and frames.
+enum class PuffKind : uint8_t
+{
+	/// Dust that a landing, a footstep or a fart throws up. It lives one second.
+	Dust,
+	/// Dark smoke that rises off an evil creature. It lives two seconds.
+	Smoke,
+	/// A light mote that shows on a good creature. It lives two seconds and is added to what is behind it.
+	Mote,
+	/// The same mote, but its frames play in the opposite order
+	MoteReversed,
+};
+
+/// One of the puffs in the shared pool: dust, smoke or a mote
 struct DustPuff
 {
 	glm::vec3 position {0.0f};
@@ -120,13 +133,30 @@ struct DustPuff
 	int32_t variant {0};
 	/// 0xAARRGGBB
 	uint32_t argb {0};
+	PuffKind kind {PuffKind::Dust};
 };
 /// How many puffs a landing makes, the most there can be at once, and how long one lives
 inline constexpr int32_t k_PuffsPerLanding = 6;
 inline constexpr size_t k_MostPuffs = 1024;
 inline constexpr float k_PuffLife = 1.0f;
-/// Puffs grow to their size over the first eighth of their life, then shrink away
+/// Smoke and motes live this long
+inline constexpr float k_LongPuffLife = 2.0f;
+/// Dust and smoke grow to their size over the first eighth of their life, then shrink away
 inline constexpr float k_PuffGrowth = 0.125f;
+/// A mote grows over its first quarter second, shrinks away over its life, and pulses once a second about a third of
+/// its size
+inline constexpr float k_MoteGrowth = 0.25f;
+inline constexpr float k_MotePulse = 0.33f;
+/// How long a puff of a kind lives, in seconds of game time
+[[nodiscard]] constexpr float PuffLife(PuffKind kind)
+{
+	return kind == PuffKind::Dust ? k_PuffLife : k_LongPuffLife;
+}
+/// Whether a puff of a kind is added to what is behind it, rather than blended over it
+[[nodiscard]] constexpr bool IsAdditive(PuffKind kind)
+{
+	return kind == PuffKind::Mote || kind == PuffKind::MoteReversed;
+}
 /// The biggest a landing's puffs are, and their colours over land and over the sea
 inline constexpr float k_LargestPuff = 5.0f;
 inline constexpr uint32_t k_LandDust = 0x50806040u;
@@ -135,7 +165,8 @@ inline constexpr uint32_t k_SeaFoam = 0x28C8F0F4u;
 inline constexpr float k_PuffSpeed = 0.02f;
 /// A puff's size now
 [[nodiscard]] float DustPuffSize(const DustPuff& puff);
-/// The frame of the puffs' sheet a puff shows: one of the sixteen after the first sixteen, changing twice a second
+/// The frame of the puffs' sheet a puff shows. Dust and smoke show one of the sixteen after the first sixteen, changing
+/// twice a second. Motes show one of the first sixteen, changing eight times a second.
 [[nodiscard]] int32_t DustPuffFrame(const DustPuff& puff);
 /// A puff after more seconds of game time: it flies straight on with its speed; false once it has gone
 bool AdvanceDustPuff(DustPuff& puff, float seconds);
