@@ -2559,6 +2559,22 @@ std::unique_ptr<ProviderInterface> AdvisorsProvider()
 
 // The creatures' other systems
 
+/// The tattoo places on the cave's creature as the tattoo editor shows them, and the place under the pointer
+void AddTattooSites(Json& cave, const ecs::systems::CreatureCaveSystemInterface& system)
+{
+	Json sites = Json::array();
+	for (const auto& site : system.GetTattooSitesOnScreen())
+	{
+		sites.push_back(
+		    {{"site", site.site}, {"screen", {site.screen.x, site.screen.y}}, {"facing_camera", site.facingCamera}});
+	}
+	cave["tattoo_sites"] = std::move(sites);
+	if (Locator::tattooEditorSystem::has_value())
+	{
+		cave["tattoo_hovered"] = Optional(Locator::tattooEditorSystem::value().GetHoveredSite());
+	}
+}
+
 std::unique_ptr<ProviderInterface> CreaturesProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("creatures");
@@ -2608,7 +2624,9 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 					                  {"looks_at", animation->lookAt.has_value() ? Point(*animation->lookAt) : Json(nullptr)},
 					                  {"light", Point(state->light)},
 					                  {"fidgets", s.fidgets},
+					                  {"face", Optional(animation->face.current)},
 					              };
+					              AddTattooSites(result["cave"], cave);
 				              }
 			              }
 		              }

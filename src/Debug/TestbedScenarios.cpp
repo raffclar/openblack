@@ -18,6 +18,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/TempleInteriorInterface.h"
 #include "Creature/CreatureIdleMind.h"
 #include "CreatureSpawner.h"
 #include "DebugGuiInterface.h"
@@ -125,10 +126,16 @@ void TestbedScenarios::UpdateAlways() noexcept
 {
 	// Scenarios run in the game's time: not while it is paused, faster as the game is, and a fixed step a frame when the
 	// game is stepped, so that their timers keep in line with the game's turns
+	// The game's time stops while the player is in the temple. Scenarios that go into the temple continue on the frame's
+	// real time there.
 	float seconds = 0.0f;
 	if (Locator::time::has_value())
 	{
-		seconds = std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count();
+		const auto& time = Locator::time::value();
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		seconds = std::chrono::duration<float>(inTemple ? time.GetFixedFrameTime().value_or(time.GetFrameRealTime())
+		                                                : time.GetFrameGameTime())
+		              .count();
 	}
 	RunRequested();
 	_runner.Update(seconds);

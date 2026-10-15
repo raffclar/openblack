@@ -85,6 +85,11 @@ struct SkinPoint
 [[nodiscard]] std::optional<glm::vec3> PointOnSkin(const ecs::Registry& registry, entt::entity entity,
                                                    const graphics::L3DMesh& mesh, const glm::mat4& model,
                                                    const SkinPoint& point);
+/// The three corners of the triangle of a point on the skin, posed by other bones than the model's own. None when the
+/// model does not have that triangle.
+[[nodiscard]] std::optional<std::array<glm::vec3, 3>> CornersOnSkin(const ecs::Registry& registry, entt::entity entity,
+                                                                    const graphics::L3DMesh& mesh, const glm::mat4& model,
+                                                                    std::span<const glm::mat4> bones, const SkinPoint& point);
 /// A triangle's first corner, moved s of the way along its first side and t along its third
 [[nodiscard]] glm::vec3 SkinPointPosition(const std::array<glm::vec3, 3>& corners, float s, float t);
 } // namespace openblack::ecs::posed_model

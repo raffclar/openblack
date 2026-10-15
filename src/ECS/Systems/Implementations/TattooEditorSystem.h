@@ -10,6 +10,7 @@
 #pragma once
 
 #include <memory>
+#include <utility>
 
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 
@@ -49,6 +50,7 @@ public:
 	[[nodiscard]] std::optional<glm::ivec2> GetHoveredPoint() const override { return _hoveredPoint; }
 	bool Drop(uint8_t design, const glm::u8vec3& colour) override;
 	std::optional<creature_tattoo::Slot> Lift() override;
+	[[nodiscard]] std::optional<creature_face::Face> TakeFace() override { return std::exchange(_face, std::nullopt); }
 	creature_tattoo_editor::Accept Ok(bool networkGame) override;
 	void Answered() override { _session.changed = false; }
 	void Cancel() override;
@@ -63,6 +65,8 @@ private:
 	creature_tattoo_editor::Orbit _view;
 	std::optional<uint8_t> _hovered;
 	std::optional<glm::ivec2> _hoveredPoint;
+	/// The face to pull after the last tattoo went on or came off
+	std::optional<creature_face::Face> _face;
 };
 
 } // namespace openblack::ecs::systems

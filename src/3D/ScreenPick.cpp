@@ -207,20 +207,22 @@ float Depth(const View& view, glm::vec3 point)
 	return (view.worldToClip * glm::vec4(point, 1.0f)).w;
 }
 
-std::optional<float> BallHit(const View& view, glm::vec3 centre, float radius)
+std::optional<glm::ivec2> PixelOf(const View& view, glm::vec3 point)
 {
 	const glm::vec2 half = view.resolution * 0.5f;
-	// A point's whole pixel, none when it is nearer than the near plane
-	const auto pixelOf = [&view, &half](glm::vec3 point) -> std::optional<glm::ivec2> {
-		const auto clip = view.worldToClip * glm::vec4(point, 1.0f);
-		if (clip.w < view.near)
-		{
-			return std::nullopt;
-		}
-		const float overDepth = 1.0f / clip.w;
-		return glm::ivec2(static_cast<int>((clip.x * overDepth + 1.0f) * half.x),
-		                  static_cast<int>((1.0f - clip.y * overDepth) * half.y));
-	};
+	const auto clip = view.worldToClip * glm::vec4(point, 1.0f);
+	if (clip.w < view.near)
+	{
+		return std::nullopt;
+	}
+	const float overDepth = 1.0f / clip.w;
+	return glm::ivec2(static_cast<int>((clip.x * overDepth + 1.0f) * half.x),
+	                  static_cast<int>((1.0f - clip.y * overDepth) * half.y));
+}
+
+std::optional<float> BallHit(const View& view, glm::vec3 centre, float radius)
+{
+	const auto pixelOf = [&view](glm::vec3 point) { return PixelOf(view, point); };
 	const auto middle = pixelOf(centre);
 	if (!middle.has_value())
 	{

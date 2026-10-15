@@ -71,6 +71,7 @@ void TattooEditorSystem::Close()
 	_creature.reset();
 	_hovered.reset();
 	_hoveredPoint.reset();
+	_face.reset();
 }
 
 void TattooEditorSystem::Update(float milliseconds)
@@ -105,6 +106,10 @@ bool TattooEditorSystem::Drop(uint8_t design, const glm::u8vec3& colour)
 	}
 	const auto putOn = creature_tattoo_editor::Drop(_session, design, colour, _hovered);
 	Write(_session.slots);
+	if (putOn)
+	{
+		_face = creature_tattoo_editor::k_PutOnFace;
+	}
 	return putOn;
 }
 
@@ -118,6 +123,7 @@ std::optional<creature_tattoo::Slot> TattooEditorSystem::Lift()
 	if (lifted.has_value())
 	{
 		Write(_session.slots);
+		_face = creature_tattoo_editor::k_LiftFace;
 	}
 	return lifted;
 }

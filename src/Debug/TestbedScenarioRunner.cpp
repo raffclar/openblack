@@ -39,8 +39,10 @@
 
 #include "3D/DayNightClock.h"
 #include "3D/FlatLand.h"
+#include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
@@ -56,6 +58,7 @@
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureRig.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/TownMiracles.h"
@@ -80,6 +83,7 @@
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -95,6 +99,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicPile.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
@@ -188,6 +193,7 @@
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Magic/SpellRules.h"
+#include "Resources/ResourcesInterface.h"
 #include "TestbedDispenserGrid.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -2369,6 +2375,7 @@ void Runner::Give(const Command& command)
 	case Kind::PointerSweep:
 	case Kind::WheelTurn:
 	case Kind::PointerOnOpponent:
+	case Kind::PointerOnCaveCreature:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:
@@ -3420,6 +3427,62 @@ std::optional<glm::ivec2> Runner::OpponentOnScreen(size_t creature, glm::vec2 si
 	return glm::ivec2(glm::round(glm::vec2(screen)));
 }
 
+std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
+{
+	if (!Locator::creatureCaveSystem::has_value() || !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& cave = Locator::creatureCaveSystem::value();
+	const auto copy = cave.GetCaveCreature();
+	if (!copy.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
+	const auto* original = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
+	const auto* mesh = original != nullptr && registry.Valid(original->creature)
+	                       ? registry.TryGet<const ecs::components::Mesh>(original->creature)
+	                       : nullptr;
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
+	{
+		return std::nullopt;
+	}
+	// From the creature's feet up to the middle of its body's bounding box, the first pixel where the cave finds the
+	// creature under the pointer, as it is posed now
+	const auto& camera = Locator::camera::value();
+	const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto middle = glm::vec3(model * glm::vec4(meshes.Handle(mesh->id)->GetBoundingBox().Center(), 1.0f));
+	glm::vec3 feet;
+	glm::vec3 top;
+	const glm::vec4 viewport {0.0f, 0.0f, size.x, size.y};
+	if (!camera.ProjectWorldToScreen(transform->position, viewport, feet) ||
+	    !camera.ProjectWorldToScreen(middle, viewport, top))
+	{
+		return std::nullopt;
+	}
+	constexpr int k_Steps = 64;
+	for (int step = 0; step <= k_Steps; ++step)
+	{
+		const auto pixel = glm::round(glm::mix(glm::vec2(feet), glm::vec2(top), static_cast<float>(step) / k_Steps));
+		const auto [eye, near] = camera.OnNearPlane(pixel / size);
+		if (cave.CursorOverCaveCreature({
+		        .worldToClip = camera.GetViewProjectionMatrix(),
+		        .resolution = size,
+		        .near = camera.GetNearClip(),
+		        .xScale = camera.GetProjectionMatrix()[0][0],
+		        .camera = eye,
+		        .cursor = pixel,
+		    }))
+		{
+			return glm::ivec2(pixel);
+		}
+	}
+	return std::nullopt;
+}
+
 std::string Runner::GivePointerCommand(const Command& command)
 {
 	if (!Locator::gameActionSystem::has_value())
@@ -3441,6 +3504,19 @@ std::string Runner::GivePointerCommand(const Command& command)
 		if (!to.has_value())
 		{
 			return "no opponent on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnCaveCreature:
+	{
+		const auto to = CaveCreatureOnScreen(size);
+		if (!to.has_value())
+		{
+			return "no creature in the cave on the screen";
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;

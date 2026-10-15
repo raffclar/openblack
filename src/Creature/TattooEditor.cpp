@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <ranges>
 
+#include <glm/geometric.hpp>
+
 using namespace openblack;
 using namespace openblack::creature_tattoo_editor;
 
@@ -124,6 +126,40 @@ std::optional<uint8_t> creature_tattoo_editor::SiteUnderPointer(std::span<const 
 		return std::nullopt;
 	}
 	return nearest;
+}
+
+glm::vec2 creature_tattoo_editor::TexturePoint(const creature_tattoo::Site& site)
+{
+	constexpr float k_SkinTexels = 256.0f;
+	return glm::vec2(static_cast<float>(site.u), static_cast<float>(site.v)) * (1.0f / k_SkinTexels);
+}
+
+std::optional<glm::vec2> creature_tattoo_editor::InTriangle(glm::vec2 point, const std::array<glm::vec2, 3>& corners)
+{
+	constexpr float k_SmallestArea = 0.0001f;
+	const auto first = corners[1] - corners[0];
+	const auto third = corners[2] - corners[0];
+	const float area = (third.x * first.y) - (third.y * first.x);
+	if (std::abs(area) <= k_SmallestArea)
+	{
+		return std::nullopt;
+	}
+	const auto offset = point - corners[0];
+	const float alongThird = ((offset.x * first.y) - (offset.y * first.x)) / area;
+	const float alongFirst = ((offset.y * third.x) - (offset.x * third.y)) / area;
+	if (alongThird < 0.0f || alongThird > 1.0f || alongFirst < 0.0f || alongFirst > 1.0f || alongFirst + alongThird > 1.0f)
+	{
+		return std::nullopt;
+	}
+	return glm::vec2(alongFirst, alongThird);
+}
+
+float creature_tattoo_editor::FacingCamera(const std::array<glm::vec3, 3>& corners, glm::vec3 place, glm::vec3 camera)
+{
+	// A direction of no length stays as it is
+	const auto unit = [](glm::vec3 v) { return v == glm::vec3(0.0f) ? v : v * (1.0f / std::sqrt(glm::dot(v, v))); };
+	const auto normal = glm::cross(corners[2] - corners[0], corners[1] - corners[0]);
+	return glm::dot(unit(normal), unit(place - camera));
 }
 
 Orbit creature_tattoo_editor::CaveView(const glm::vec3& creature, float scale)

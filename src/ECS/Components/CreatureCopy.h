@@ -9,10 +9,15 @@
 
 #pragma once
 
+#include <array>
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
 #include "Creature/CaveCreature.h"
+#include "Creature/CreatureTattoo.h"
+#include "ECS/PosedModel.h"
 
 namespace openblack::ecs::components
 {
@@ -34,6 +39,9 @@ struct CaveCreature
 	cave_creature::State state;
 	/// Where the creature is lit from: the cave's fire
 	glm::vec3 light {0.0f};
+	/// Where each tattoo place of the creature is on the skin of its body. The tattoo editor finds the places when it
+	/// first shows the copy. A place that the species does not have, or that no triangle holds, has none.
+	std::optional<std::array<std::optional<posed_model::SkinPoint>, creature_tattoo::k_SlotCount>> tattooSites;
 };
 
 } // namespace openblack::ecs::components

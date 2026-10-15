@@ -22,6 +22,8 @@
 #include "3D/CreatureBody.h"
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/L3DMesh.h"
+#include "3D/L3DSubMesh.h"
+#include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CaveCreature.h"
@@ -31,6 +33,7 @@
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureWatching.h"
+#include "Creature/TattooEditor.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -75,6 +78,48 @@ uint32_t LearntText(size_t miracle)
 	return miracle < info.magicEffect.size()
 	           ? static_cast<uint32_t>(magic::GetMagicEffectInfo(info, static_cast<MagicType>(miracle)).creatureLearntEnum)
 	           : 0;
+}
+
+/// The first triangle of the body's skin that holds a tattoo place. The search goes through the submeshes and their
+/// primitives in the order of the model, and through the triangles of each primitive that uses the skin of the place.
+std::optional<posed_model::SkinPoint> FindTattooSite(const graphics::L3DMesh& mesh, const creature_tattoo::Site& site)
+{
+	const auto& skins = mesh.GetSkinOrder();
+	if (!site.enabled || site.skin >= skins.size())
+	{
+		return std::nullopt;
+	}
+	const auto skin = static_cast<uint32_t>(skins[site.skin]);
+	const auto point = creature_tattoo_editor::TexturePoint(site);
+	const auto& subMeshes = mesh.GetSubMeshes();
+	for (size_t s = 0; s < subMeshes.size(); ++s)
+	{
+		const auto& geometry = subMeshes[s]->GetBodyGeometry();
+		const auto uvOf = [&geometry](uint16_t vertex) {
+			return vertex < geometry.uvs.size() ? geometry.uvs[vertex] : glm::vec2(0.0f);
+		};
+		for (const auto& primitive : subMeshes[s]->GetPrimitives())
+		{
+			if (primitive.skinID != skin)
+			{
+				continue;
+			}
+			const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, geometry.indices.size());
+			for (size_t first = primitive.indicesOffset; first + 2 < end; first += 3)
+			{
+				const std::array corners {uvOf(geometry.indices[first]), uvOf(geometry.indices[first + 1]),
+				                          uvOf(geometry.indices[first + 2])};
+				if (const auto at = creature_tattoo_editor::InTriangle(point, corners); at.has_value())
+				{
+					return posed_model::SkinPoint {.subMesh = static_cast<uint32_t>(s),
+					                               .firstIndex = static_cast<uint32_t>(first),
+					                               .s = at->x,
+					                               .t = at->y};
+				}
+			}
+		}
+	}
+	return std::nullopt;
 }
 
 /// Another creature's own name, as its scroll shows it; nothing for one without a name or that is gone
@@ -438,6 +483,7 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 
 	// The camera is zoomed onto it while the tattoo editor is open on its creature, looking where the editor turns it
 	cave_creature::Frame frame {.fire = cave->light, .position = transform->position, .milliseconds = frameMs};
+	std::optional<glm::ivec2> mouse;
 	if (Locator::tattooEditorSystem::has_value())
 	{
 		const auto& editor = Locator::tattooEditorSystem::value();
@@ -451,6 +497,7 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 		const auto& actions = Locator::gameActionSystem::value();
 		frame.buttonHeld = actions.GetAny(BindableActionMap::MOVE, BindableActionMap::ACTION);
 		frame.leftHeld = actions.Get(BindableActionMap::MOVE);
+		mouse = glm::ivec2(actions.GetMousePosition());
 		if (Locator::camera::has_value() && Locator::windowing::has_value())
 		{
 			// The point under the pointer a little way into the screen
@@ -461,6 +508,17 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 				const auto [eye, near] = camera.OnNearPlane(glm::vec2(actions.GetMousePosition()) / size);
 				frame.pointer = eye + ((near - eye) * (cave_creature::k_PointerDepth / camera.GetNearClip()));
 			}
+		}
+	}
+
+	// In the editor the creature smiles when a tattoo goes on and is sad when a tattoo comes off
+	if (frame.zoomed)
+	{
+		if (const auto face = Locator::tattooEditorSystem::value().TakeFace(); face.has_value())
+		{
+			animation->face =
+			    creature_layers::PullFace(animation->face, creature_face::AnimationOf(*face),
+			                              creature_tattoo_editor::k_FaceMilliseconds, creature_face::Cue::Tattooed);
 		}
 	}
 
@@ -491,6 +549,85 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 	{
 		Locator::creatureAnimationSystem::value().PoseCopy(*_caveCreature, frameMs);
 	}
+	if (frame.zoomed && mouse.has_value())
+	{
+		HoverTattooSites(*_caveCreature, *mouse);
+	}
+}
+
+void CreatureCaveSystem::HoverTattooSites(entt::entity copyEntity, glm::ivec2 pointer)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& editor = Locator::tattooEditorSystem::value();
+	const auto* copy = registry.TryGet<const CreatureCopy>(copyEntity);
+	auto* cave = registry.TryGet<CaveCreature>(copyEntity);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(copyEntity);
+	const auto* transform = registry.TryGet<const Transform>(copyEntity);
+	const bool hasCreature = copy != nullptr && registry.Valid(copy->creature);
+	const auto* meshComponent = hasCreature ? registry.TryGet<const Mesh>(copy->creature) : nullptr;
+	const auto* body = hasCreature ? registry.TryGet<const Creature>(copy->creature) : nullptr;
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto size = Locator::windowing::has_value() ? glm::vec2(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
+	if (cave == nullptr || animation == nullptr || transform == nullptr || meshComponent == nullptr || body == nullptr ||
+	    !meshes.Contains(meshComponent->id) || !Locator::camera::has_value() || size.x <= 0.0f || size.y <= 0.0f)
+	{
+		_tattooSitesOnScreen.clear();
+		editor.Hover({}, pointer);
+		return;
+	}
+	const auto mesh = meshes.Handle(meshComponent->id);
+	// The editor finds the places on the skin one time, when it first shows the creature
+	if (!cave->tattooSites.has_value())
+	{
+		auto& found = cave->tattooSites.emplace();
+		const auto& rigs = Locator::resources::value().GetCreatureRigs();
+		const auto rigId = creature::GetRigId(body->species);
+		if (rigs.Contains(rigId) && rigs.Handle(rigId)->tattooSites.has_value())
+		{
+			const auto& sites = *rigs.Handle(rigId)->tattooSites;
+			for (size_t i = 0; i < sites.size(); ++i)
+			{
+				found.at(i) = FindTattooSite(*mesh, sites.at(i));
+			}
+		}
+	}
+
+	const auto& camera = Locator::camera::value();
+	const screen_pick::View view {
+	    .worldToClip = camera.GetViewProjectionMatrix(),
+	    .resolution = size,
+	    .near = camera.GetNearClip(),
+	    .xScale = camera.GetProjectionMatrix()[0][0],
+	    .camera = glm::vec3(glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current))[3]),
+	};
+	const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto& rest = mesh->GetBoneMatrices();
+	const auto bones = animation->boneMatrices.size() == rest.size() ? std::span<const glm::mat4>(animation->boneMatrices)
+	                                                                 : std::span<const glm::mat4>(rest);
+	// Each place as the posed copy shows it. Only a place in front of the camera has a pixel.
+	auto& onScreen = _tattooSitesOnScreen;
+	onScreen.clear();
+	for (size_t i = 0; i < cave->tattooSites->size(); ++i)
+	{
+		const auto& point = cave->tattooSites->at(i);
+		if (!point.has_value())
+		{
+			continue;
+		}
+		const auto corners = posed_model::CornersOnSkin(registry, copy->creature, *mesh, model, bones, *point);
+		if (!corners.has_value())
+		{
+			continue;
+		}
+		const auto place = posed_model::SkinPointPosition(*corners, point->s, point->t);
+		if (const auto pixel = screen_pick::PixelOf(view, place); pixel.has_value())
+		{
+			onScreen.push_back({.site = static_cast<uint8_t>(i),
+			                    .screen = *pixel,
+			                    .facingCamera = creature_tattoo_editor::FacingCamera(*corners, place, view.camera)});
+		}
+	}
+	editor.Hover(onScreen, pointer);
 }
 
 void CreatureCaveSystem::StartCaveTurn(const CreatureCopy& copy, cave_creature::State& state, float heading)
