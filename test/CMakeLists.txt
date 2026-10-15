@@ -973,6 +973,12 @@ openblack_setup_and_add_test(
   test_creature_head_look test_creature_head_look.cpp
 )
 openblack_setup_and_add_test(
+  test_creature_emote_agendas test_creature_emote_agendas.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_action_history test_creature_action_history.cpp
+)
+openblack_setup_and_add_test(
   test_creature_eat_from_stores test_creature_eat_from_stores.cpp
 )
 openblack_setup_and_add_test(test_creature_lost_thing test_creature_lost_thing.cpp)

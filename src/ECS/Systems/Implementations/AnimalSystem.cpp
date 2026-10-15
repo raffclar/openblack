@@ -285,6 +285,14 @@ void AnimalSystem::JoinFlock(entt::entity entity, entt::entity flockEntity)
 	JoinLine(registry.Get<Flock>(flockEntity), entity);
 }
 
+void AnimalSystem::StartWandering(entt::entity animal)
+{
+	if (auto* living = Locator::entitiesRegistry::value().TryGet<Animal>(animal))
+	{
+		SetTopState(*living, AnimalState::StartWander);
+	}
+}
+
 bool AnimalSystem::SetScriptState(entt::entity entity, LivingStates state)
 {
 	auto* animal = EntityRegistry().TryGet<Animal>(entity);

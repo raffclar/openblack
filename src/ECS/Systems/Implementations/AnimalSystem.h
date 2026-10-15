@@ -43,6 +43,7 @@ public:
 	void JoinFlock(entt::entity animal, entt::entity flock) override;
 	void LeaveFlock(entt::entity animal) override;
 	bool SetScriptState(entt::entity animal, LivingStates state) override;
+	void StartWandering(entt::entity animal) override;
 	void ScriptMoveTo(entt::entity animal, glm::vec2 point) override;
 	[[nodiscard]] std::optional<uint8_t> FinalGameStateOf(entt::entity animal) const override;
 	void SetScale(entt::entity animal, float scale) override;

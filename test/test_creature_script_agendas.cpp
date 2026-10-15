@@ -198,12 +198,19 @@ TEST(CreatureScriptAgendas, SittingWhereAScriptSays)
 }
 
 // The sit goes to the place only for a creature a script controls and given a place
-TEST(CreatureScriptAgendas, TheSitActionGoesToThePlaceOnlyUnderAScript)
+TEST(CreatureScriptAgendas, TheSitActionNeedsAClearPlaceUnlessAScriptSaysWhere)
 {
 	const auto* sit = creature_plan_actions::For("SitDown");
 	ASSERT_NE(sit, nullptr);
 	creature_plan_actions::Situation situation {.radius = 2.0f};
-	EXPECT_EQ(creature_plan_actions::Agenda(*sit, 4u, {1.0f, 1.0f}, situation, NoRandom)->size(), 1);
+	// Left to itself it sits at a clear place about the thing, and gives up without one
+	EXPECT_FALSE(creature_plan_actions::Agenda(*sit, 4u, {1.0f, 1.0f}, situation, NoRandom).has_value());
+	situation.clearArea = glm::vec2(5.0f, 5.0f);
+	const auto clear = creature_plan_actions::Agenda(*sit, 4u, {1.0f, 1.0f}, situation, NoRandom);
+	ASSERT_TRUE(clear.has_value());
+	ASSERT_EQ(clear->size(), 4);
+	EXPECT_EQ(clear->front().movement.point, glm::vec2(5.0f, 5.0f));
+	situation.clearArea.reset();
 	situation.controlledByScript = true;
 	EXPECT_EQ(creature_plan_actions::Agenda(*sit, 4u, {1.0f, 1.0f}, situation, NoRandom)->size(), 4);
 
