@@ -14,6 +14,7 @@
 
 #include <chrono>
 #include <optional>
+#include <span>
 
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
@@ -43,6 +44,10 @@ public:
 	/// posed yet
 	[[nodiscard]] virtual std::optional<glm::vec3> BoneInAnimation(entt::entity creature, size_t animation, float timeMs,
 	                                                               uint32_t bone, bool mirrored) = 0;
+	/// The middle of some bones of a creature in one of its animations at a time, in its mesh's space, the animation
+	/// blended as the body is drawn; nothing when the creature has no such animation or bones, or hasn't been posed yet
+	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfBonesInAnimation(entt::entity creature, size_t animation,
+	                                                                        float timeMs, std::span<const uint32_t> bones) = 0;
 	/// How long one of a creature's animations lasts, in milliseconds, if it has it
 	[[nodiscard]] virtual std::optional<float> AnimationDuration(entt::entity creature, size_t animation) = 0;
 	/// How far one of a creature's animations carries it, in its model's units and axes, if it has it

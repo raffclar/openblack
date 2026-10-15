@@ -56,6 +56,47 @@ glm::vec3 creature_throw::HandVelocity(const glm::vec3& atRelease, const glm::ve
 	return spanMs > 0.0f ? (atRelease - before) * (1000.0f / spanMs) : glm::vec3(0.0f);
 }
 
+std::vector<uint32_t> creature_throw::TossPointBones(std::span<const uint32_t> parents, uint32_t hand)
+{
+	if (hand >= parents.size())
+	{
+		return {};
+	}
+	const auto count = static_cast<uint32_t>(parents.size());
+	const auto hasChild = [&parents, count](uint32_t bone) {
+		return std::ranges::any_of(parents, [bone](uint32_t parent) { return parent == bone; });
+	};
+	// The bones that start the branches: the hand, and those after it under its parent
+	std::vector<uint32_t> open {hand};
+	for (uint32_t bone = hand + 1; bone < count; ++bone)
+	{
+		if (parents[bone] == parents[hand])
+		{
+			open.push_back(bone);
+		}
+	}
+	std::vector<uint32_t> ends;
+	while (!open.empty())
+	{
+		const auto bone = open.back();
+		open.pop_back();
+		if (!hasChild(bone))
+		{
+			ends.push_back(bone);
+			continue;
+		}
+		for (uint32_t child = 0; child < count; ++child)
+		{
+			if (parents[child] == bone)
+			{
+				open.push_back(child);
+			}
+		}
+	}
+	std::ranges::sort(ends);
+	return ends;
+}
+
 glm::vec3 creature_throw::TossVelocity(const glm::vec3& handVelocity, bool mirrored, const glm::mat3& rotation, float share)
 {
 	auto local = handVelocity * share;

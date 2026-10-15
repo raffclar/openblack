@@ -13,6 +13,8 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
+#include <vector>
 
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
@@ -64,6 +66,11 @@ constexpr float k_HeightAtSizeOne = 15.0f;
 /// The hand's velocity in units a second, from where it is when it lets go and where it was a span of milliseconds
 /// before
 [[nodiscard]] glm::vec3 HandVelocity(const glm::vec3& atRelease, const glm::vec3& before, float spanMs);
+
+/// The bones whose middle is the point the hand tosses from: the bones at the ends of the skeleton's branches that
+/// start at the hand and at each bone after it under the same parent. In the creatures' skeletons the bones under one
+/// parent follow each other in the order of their numbers.
+[[nodiscard]] std::vector<uint32_t> TossPointBones(std::span<const uint32_t> parents, uint32_t hand);
 
 /// The velocity something tossed away leaves with: a share of the hand's own, measured in the creature's space, flipped
 /// to the other side when tossed by the other hand and turned with the creature
