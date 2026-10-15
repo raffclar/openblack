@@ -4288,6 +4288,16 @@ bool Game::Run() noexcept
 		// The frame is drawn from where the inspector shows the camera (an override, a picture's), while everything the
 		// game did this frame went by its own camera, which it gets back once the frame is drawn
 		ShowInspectorCamera(true);
+		// The game's interface over the scene, its labels over things placed from the camera the scene is drawn from. It
+		// is laid out before the scene, so that the creatures it shows over itself are drawn in the same frame as it.
+		PlaceScreenLabels();
+		PlaceLearningTexts();
+		if (_interface && Locator::windowing::has_value())
+		{
+			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
+			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, machine_clock::Ticks(),
+			                 Locator::debugGui::value().IsMouseOverWindow());
+		}
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
 			// TODO(#481): get actual time
@@ -4299,6 +4309,8 @@ bool Game::Run() noexcept
 			if (videos.CoversScreen() || videos.HidesWorld())
 			{
 				bgfx::touch(static_cast<bgfx::ViewId>(graphics::RenderPass::Main));
+				// The interface's creatures of this frame are not shown, and are not kept for the next
+				Locator::rendererInterface::value().ShowInterfaceCreatures({});
 			}
 			else
 			{
@@ -4306,15 +4318,6 @@ bool Game::Run() noexcept
 			}
 		}
 
-		// The game's interface over the scene, its labels over things placed from the camera the scene was drawn from
-		PlaceScreenLabels();
-		PlaceLearningTexts();
-		if (_interface && Locator::windowing::has_value())
-		{
-			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
-			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, machine_clock::Ticks(),
-			                 Locator::debugGui::value().IsMouseOverWindow());
-		}
 		ResolveScreenShapes();
 
 		{

@@ -2274,6 +2274,22 @@ void AddObjects(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "objects.toss_close_up",
+	    .name = "Tossing a ball away, close up",
+	    .facet = Facet::Objects,
+	    .description = "A tiger picks up a ball in front of it and tosses it away, again and again, seen close up.",
+	    .expected = "The toss lets go of the ball as the hand swings out; the ball leaves at six tenths of the speed of "
+	                "the middle of the hand's finger ends at that moment, sideways and a little up, and drops beside the "
+	                "tiger. Every toss of the tiger leaves at the same speed in the tiger's own frame.",
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {0.0f, -k_Reach}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::Discard, 0, 0.5f, true),
+	                 Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
 	// A tiger a tenth of the size beside it, for whom a villager is too heavy
 	auto small = Posed(CreatureType::Tiger, {30.0f, 0.0f});
 	small.size = 0.1f;

@@ -237,6 +237,51 @@ std::optional<glm::vec3> HandAt(entt::entity creature, const Transform& transfor
 	return BoneAt(creature, transform, points.rightHand, animation, timeMs);
 }
 
+/// How fast the right hand moves in an animation over the span before a time, in the model's units a second at its own
+/// size. The span starts no earlier than the animation.
+std::optional<glm::vec3> MeasuredHand(entt::entity creature, const CreatureRig::ActionPoints& points, size_t animation,
+                                      float timeMs)
+{
+	auto& animations = Locator::creatureAnimationSystem::value();
+	const auto now = animations.BoneInAnimation(creature, animation, timeMs, points.rightHand, false);
+	const auto before = animations.BoneInAnimation(
+	    creature, animation, std::max(timeMs - creature_throw::k_HandSpeedSpanMs, 0.0f), points.rightHand, false);
+	if (!now.has_value() || !before.has_value())
+	{
+		return std::nullopt;
+	}
+	return creature_throw::HandVelocity(*now, *before, creature_throw::k_HandSpeedSpanMs);
+}
+
+/// How fast the hand moves as it tosses something away, in the model's units a second at its own size: the middle of
+/// the ends of the hand's bones over the span before the toss lets go. It is measured at the creature's first toss and
+/// kept, whatever its shape becomes.
+std::optional<glm::vec3> TossHand(entt::entity creature, const CreatureRig::ActionPoints& points)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* kept = registry.TryGet<const TossHandVelocity>(creature))
+	{
+		return kept->velocity;
+	}
+	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
+	if (body == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto bones = creature_throw::TossPointBones(body->skeleton.parents, points.rightHand);
+	auto& animations = Locator::creatureAnimationSystem::value();
+	const auto now = animations.MiddleOfBonesInAnimation(creature, creature_throw::k_Discard, points.discardMs, bones);
+	const auto before = animations.MiddleOfBonesInAnimation(
+	    creature, creature_throw::k_Discard, std::max(points.discardMs - creature_throw::k_HandSpeedSpanMs, 0.0f), bones);
+	if (!now.has_value() || !before.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto velocity = creature_throw::HandVelocity(*now, *before, creature_throw::k_HandSpeedSpanMs);
+	registry.AssignOrReplace<TossHandVelocity>(creature, TossHandVelocity {.velocity = velocity});
+	return velocity;
+}
+
 /// Where the bone it acts with gets to in each of four reaching animations: the right hand reaching to pick something
 /// up, the right foot striking a blow
 std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const Transform& transform, uint32_t bone,
@@ -1322,6 +1367,12 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 			action.mirrored = held != nullptr && held->mirrored;
 			action.eventMs = eventMs;
 		};
+		// The creature measures the speed of its hand for a toss when it first starts to let go of a thing, and keeps
+		// that speed
+		if (action.kind == Kind::PutDown || action.kind == Kind::Discard || action.kind == Kind::Lob)
+		{
+			TossHand(creature, *points);
+		}
 		bool now = true;
 		switch (action.kind)
 		{
@@ -2612,13 +2663,14 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 				Release(creature, handPosition, glm::vec3(0.0f));
 				break;
 			}
-			const auto now = HandAt(creature, transform, *points, animationIndex, action.eventMs);
-			const auto before =
-			    HandAt(creature, transform, *points, animationIndex, action.eventMs - creature_throw::k_HandSpeedSpanMs);
-			const auto velocity = now.has_value() && before.has_value()
-			                          ? creature_throw::TossVelocity(
-			                                creature_throw::HandVelocity(*now, *before, creature_throw::k_HandSpeedSpanMs),
-			                                action.mirrored, transform.rotation, creature_throw::k_DiscardSpeedShare)
+			// The toss away takes the hand's speed the creature has kept since its first toss; other animations measure
+			// their own
+			const auto hand = animationIndex == creature_throw::k_Discard
+			                      ? TossHand(creature, *points)
+			                      : MeasuredHand(creature, *points, animationIndex, action.eventMs);
+			const auto velocity = hand.has_value()
+			                          ? creature_throw::TossVelocity(*hand * transform.scale, action.mirrored,
+			                                                         transform.rotation, creature_throw::k_DiscardSpeedShare)
 			                          : glm::vec3(0.0f);
 			Release(creature, handPosition, velocity);
 			break;

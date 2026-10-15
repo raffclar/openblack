@@ -129,6 +129,14 @@ struct PickUpReach
 	float straightReach {0.0f};
 };
 
+/// How fast the creature's hand moves as it tosses something away, in the model's units a second at the model's own
+/// size, before it is mirrored for the other hand: measured at its first toss and never again, whatever its shape
+/// becomes
+struct TossHandVelocity
+{
+	glm::vec3 velocity {0.0f};
+};
+
 /// On something a creature holds: which creature
 struct HeldByCreature
 {

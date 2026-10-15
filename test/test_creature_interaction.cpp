@@ -244,6 +244,21 @@ TEST(CreatureThrow, TossingKeepsSomeOfTheHandsSpeed)
 	EXPECT_NEAR(turned.z, 0.0f, k_Tolerance);
 }
 
+TEST(CreatureThrow, TheTossPointIsTheMiddleOfTheEndsOfTheHandsBranches)
+{
+	constexpr auto k_None = skeletal_animation::k_NoParent;
+	// 0 root; 1 arm; 2 hand and 3 a bone after it on the arm; 4, 5 fingers of the hand, 6 a tip on finger 5; 7 a tip on
+	// bone 3; 8 one more bone on the arm
+	const std::vector<uint32_t> parents {k_None, 0, 1, 1, 2, 2, 5, 3, 1};
+	// Bone 8 has a number after the hand, so its branch counts as well
+	EXPECT_EQ(creature_throw::TossPointBones(parents, 2), (std::vector<uint32_t> {4, 6, 7, 8}));
+	// From the last bone under the arm, only its own branch
+	EXPECT_EQ(creature_throw::TossPointBones(parents, 8), (std::vector<uint32_t> {8}));
+	// From bone 3, its tip and bone 8
+	EXPECT_EQ(creature_throw::TossPointBones(parents, 3), (std::vector<uint32_t> {7, 8}));
+	EXPECT_TRUE(creature_throw::TossPointBones(parents, 20).empty());
+}
+
 TEST(CreatureObjectActions, AThrowIntoAStoreIsOverOnlyOnceTheThingHasComeDown)
 {
 	EXPECT_FALSE(creature_object_actions::ThrowOver(false, false, false));
