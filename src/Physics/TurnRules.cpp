@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 
 #include "Body.h"
 
@@ -148,16 +149,31 @@ turn::CellRange turn::WakeCells(glm::vec3 centre, glm::vec3 velocity, float radi
 
 float turn::DustPuffSize(const DustPuff& puff)
 {
-	float size = puff.size * (k_PuffLife - puff.age) / k_PuffLife;
-	if (puff.age < k_PuffLife * k_PuffGrowth)
+	const float life = PuffLife(puff.kind);
+	if (IsAdditive(puff.kind))
 	{
-		size *= puff.age / (k_PuffLife * k_PuffGrowth);
+		float fade = (life - puff.age) * 0.5f;
+		if (puff.age < k_MoteGrowth)
+		{
+			fade *= puff.age / k_MoteGrowth;
+		}
+		return (std::sin(puff.age * glm::two_pi<float>()) + 2.0f) * k_MotePulse * puff.size * fade;
+	}
+	float size = puff.size * (life - puff.age) / life;
+	if (puff.age < life * k_PuffGrowth)
+	{
+		size *= puff.age / (life * k_PuffGrowth);
 	}
 	return size;
 }
 
 int32_t turn::DustPuffFrame(const DustPuff& puff)
 {
+	if (IsAdditive(puff.kind))
+	{
+		const auto frame = (puff.variant + static_cast<int32_t>(puff.age * 8.0f)) & 15;
+		return puff.kind == PuffKind::MoteReversed ? 15 - frame : frame;
+	}
 	const auto turns = static_cast<int32_t>(puff.age * 2.0f);
 	return 16 + ((puff.variant + turns) & 15);
 }
@@ -165,7 +181,7 @@ int32_t turn::DustPuffFrame(const DustPuff& puff)
 bool turn::AdvanceDustPuff(DustPuff& puff, float seconds)
 {
 	puff.age += seconds;
-	if (puff.age >= k_PuffLife)
+	if (puff.age >= PuffLife(puff.kind))
 	{
 		return false;
 	}

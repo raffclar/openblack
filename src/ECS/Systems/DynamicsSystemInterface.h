@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -36,7 +38,11 @@ struct Frame;
 namespace physics
 {
 class Ground;
+namespace turn
+{
+enum class PuffKind : uint8_t;
 }
+} // namespace physics
 
 } // namespace openblack
 
@@ -237,6 +243,12 @@ public:
 	/// time with the landings' dust
 	virtual void AddPuff([[maybe_unused]] glm::vec3 position, [[maybe_unused]] glm::vec3 velocity, [[maybe_unused]] float size,
 	                     [[maybe_unused]] uint32_t argb)
+	{
+	}
+	/// A puff of a kind (dust, smoke or a mote) in the same pool as the dust, which lives, grows and shows its frames as
+	/// its kind does
+	virtual void AddPuff([[maybe_unused]] glm::vec3 position, [[maybe_unused]] glm::vec3 velocity, [[maybe_unused]] float size,
+	                     [[maybe_unused]] uint32_t argb, [[maybe_unused]] physics::turn::PuffKind kind)
 	{
 	}
 	/// The land as the physics feels it, none without a land

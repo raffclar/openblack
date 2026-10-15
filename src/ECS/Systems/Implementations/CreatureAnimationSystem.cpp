@@ -23,6 +23,8 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Common/GameRandom.h"
+#include "Creature/CreatureAlignmentMotes.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureFight.h"
@@ -42,6 +44,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -624,6 +627,38 @@ void CreatureAnimationSystem::ProcessTurn()
 		const auto resting = creature_animation::BreathPeriod(ShownSize(creature));
 		animation.breathPeriod = creature_animation::EaseBreathPeriod(animation.breathPeriod, resting, resting, k_TurnSeconds);
 	});
+	AddAlignmentMotes();
+}
+
+void CreatureAnimationSystem::AddAlignmentMotes()
+{
+	if (!Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& dynamics = Locator::dynamicsSystem::value();
+	auto& random = Locator::gameRandom::value();
+	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
+	// Each game turn, a creature whose body looks good or evil makes motes or smoke near the bones of its last pose
+	registry.Each<const Creature, const CreatureMorph, const CreatureAnimation, const Transform>(
+	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureAnimation& animation,
+	        const Transform& transform) {
+		    if (!creature_alignment_motes::MakesAny(morph.drawn.evilGood))
+		    {
+			    return;
+		    }
+		    const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+		    const creature_alignment_motes::BonePoint bonePoint = [&animation, &placement](uint32_t bone) {
+			    return glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
+		    };
+		    const auto bones = static_cast<uint32_t>(animation.boneMatrices.size());
+		    for (const auto& puff :
+		         creature_alignment_motes::PuffsOf(morph.drawn.evilGood, ShownSize(creature), bones, bonePoint, localRandom))
+		    {
+			    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+		    }
+	    });
 }
 
 void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
