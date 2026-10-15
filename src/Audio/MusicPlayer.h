@@ -71,9 +71,9 @@ struct MusicBank
 	}
 };
 
-/// Where a positional piece is heard from in the world, and how it fades with its distance from the listener, as QSound
-/// maps it: every distance is first stretched by distanceScale; the piece is heard fully up to minDistance, beyond it at
-/// minDistance over the distance, and no quieter past maxDistance
+/// Where a positional piece is heard from in the world, and how it fades with its distance from the listener: the piece
+/// is heard fully up to minDistance, beyond it at minDistance / (minDistance + distanceScale * (distance - minDistance)),
+/// and no quieter past maxDistance
 struct MusicPlacement
 {
 	glm::vec3 position;

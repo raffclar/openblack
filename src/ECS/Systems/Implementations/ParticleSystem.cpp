@@ -115,8 +115,6 @@ constexpr int k_ShallowWaterSurface = 7;
 /// A ground of no sound of its own sounds hard
 constexpr int k_HardSurface = 3;
 constexpr int k_LastSurface = 8;
-/// A looping sound is only kept going this close to the camera
-constexpr float k_LoopCullDistance = 1200.0f;
 /// Points along a way tested for the land rising across it
 constexpr int k_LandBlockSamples = 16;
 /// Any rain or snow makes a fireball steam
@@ -363,13 +361,8 @@ void GameParticleWorld::ProcessSounds()
 					emitter->position = link.position;
 				}
 			}
-			// A loop plays on while its particle keeps it, near enough to be heard
-			const bool nearby = Locator::camera::has_value() &&
-			                    glm::distance(Locator::camera::value().GetOrigin(), link.position) < k_LoopCullDistance;
-			if (link.sound.action.looping && nearby && !playing(sound))
-			{
-				Play(sound);
-			}
+			// The sound stays with its particle. It does not start again when the audio stops it, for example when
+			// the camera goes past its maximum distance or when it could not start.
 			return false;
 		}
 		if (!sound.letGo)
