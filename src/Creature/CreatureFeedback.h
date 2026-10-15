@@ -188,6 +188,26 @@ constexpr float k_EnjoyingSum = 0.25f;
 /// Feedback this slight only makes the creature look at the player
 constexpr float k_SlightFeedback = 0.01f;
 
+/// The body of the creature at the time that the hand lets go of it
+struct ReleaseBody
+{
+	/// The head looks straight ahead: it turned back fully on the two axes
+	bool headStraight {false};
+	/// The body plays an action or moves
+	bool bodyBusy {false};
+	/// The body lies dead and holds the last frame of its fall
+	bool lyingDead {false};
+	/// The face shows an expression, or it is not yet back from one
+	bool faceShown {false};
+};
+/// The hand tells the mind how it treated the creature only when the creature is not still at the release. The
+/// creature is still when its head looks straight ahead, its face shows nothing, and its body is idle or lies dead.
+[[nodiscard]] bool ReleaseGivesFeedback(const ReleaseBody& body);
+/// The feedback of a release reaches the mind after this number of turns. In the first turn after the release, the
+/// creature is free, and the plan that it had during the hold starts again. The feedback comes at the start of the
+/// next turn.
+constexpr uint32_t k_ReleaseFeedbackTurns = 1;
+
 /// How the creature's attitude to the player follows feedback: mostly what it was, nudged by what it got
 [[nodiscard]] float AttitudeAfter(float attitude, float feedback);
 /// The average of the feedback it has had, the newest counting most

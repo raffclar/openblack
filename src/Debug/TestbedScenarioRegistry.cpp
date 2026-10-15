@@ -3061,9 +3061,10 @@ void AddObjects(std::vector<Scenario>& all)
 	    .id = "mind.restart_after_hold",
 	    .name = "A plan starts again after a hold",
 	    .facet = Facet::Mind,
-	    .description = "The hand holds a player's tiger, strokes its head and lets go. The tiger then chooses a new plan.",
-	    .expected = "On the turn after it starts the new plan, it stops the plan and starts the agenda of the same plan "
-	                "again from the first step. The log shows this one time only.",
+	    .description = "The hand holds a player's tiger, strokes its head and lets go.",
+	    .expected = "On the first turn after the release, the tiger starts the plan that it had during the hold again "
+	                "from the first step. On the next turn, the feedback of the stroke arrives and stops that plan. The "
+	                "log shows the restart one time only.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},

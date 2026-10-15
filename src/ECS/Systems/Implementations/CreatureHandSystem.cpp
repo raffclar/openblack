@@ -46,6 +46,7 @@
 #include "ECS/CreatureScars.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -67,6 +68,25 @@ constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
 entt::entity PlayerHand()
 {
 	return Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+}
+
+/// Whether the hand tells the mind how it treated the creature as it lets go, from how still the creature is now
+bool ReleaseGivesFeedback(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	if (animation == nullptr)
+	{
+		return true;
+	}
+	const bool moving =
+	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
+	return feedback::ReleaseGivesFeedback({
+	    .headStraight = animation->yaw.angle == 0.0f && animation->pitch.angle == 0.0f,
+	    .bodyBusy = creature_layers::IsPlaying(animation->body) || moving,
+	    .lyingDead = creature_layers::IsLooping(animation->body) && animation->body.holdLoop,
+	    .faceShown = animation->face.current.has_value(),
+	});
 }
 
 const CreatureRig::ActionPoints* PointsOf(const Creature& creature)
@@ -622,9 +642,9 @@ void CreatureHandSystem::Release()
 	registry.Remove<HandOnCreature>(hand);
 	registry.AssignOrReplace<HandLastFeedback>(hand, HandLastFeedback {.sum = sum});
 	GiveCameraBack();
-	if (registry.Valid(creature) && Locator::creatureMindSystem::has_value())
+	if (registry.Valid(creature) && Locator::creatureMindSystem::has_value() && ReleaseGivesFeedback(creature))
 	{
-		Locator::creatureMindSystem::value().ReceiveFeedback(creature, delivered);
+		Locator::creatureMindSystem::value().SendReleaseFeedback(creature, delivered);
 		// Too slight to count, as a click is, the hand offers to focus on the creature
 		_focusTip = std::abs(delivered) <= feedback::k_SlightFeedback;
 	}
