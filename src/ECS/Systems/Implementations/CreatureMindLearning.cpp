@@ -1304,7 +1304,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			// The newest action it remembers for feedback is done, unless a script controls it
 			if (!Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature))
 			{
-				MarkNewestActionDone(mind);
+				MarkNewestActionDone(creature, mind);
 			}
 			NoteDone(mind, plan.action);
 			creature_training::CountCarriedOut(mind.actionCounts, plan.action,
@@ -1377,7 +1377,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		{
 			if (!Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature))
 			{
-				MarkNewestActionDone(mind);
+				MarkNewestActionDone(creature, mind);
 			}
 			NoteDone(mind, mind.underway->action);
 			creature_training::CountCarriedOut(mind.actionCounts, mind.underway->action,
@@ -4925,10 +4925,35 @@ void CreatureMindSystem::RememberAction(entt::entity creature, CreatureMindState
 	                    entt::to_integral(creature), forgotten->action, *approval);
 }
 
-void CreatureMindSystem::MarkNewestActionDone(CreatureMindState& mind)
+void CreatureMindSystem::MarkNewestActionDone(entt::entity creature, CreatureMindState& mind)
 {
-	if (mind.learnt.has_value() && !mind.learnt->contexts.empty())
+	if (mind.learnt.has_value())
 	{
-		mind.learnt->contexts.back().done = true;
+		creature_learning::MarkNewestDone(mind.learnt->contexts, LookedAtByItsPlayer(creature));
 	}
+}
+
+void CreatureMindSystem::NoteStepSeen(entt::entity creature, CreatureMindState& mind)
+{
+	// The creature does not show the player what it wants yet, so only the steps at or after the main step count
+	const auto& idle = mind.idle;
+	if (!mind.learnt.has_value() || !idle.movedOn.has_value() ||
+	    !creature_mind::AtOrPastMainStep(idle.agenda, *idle.movedOn, false) || !LookedAtByItsPlayer(creature))
+	{
+		return;
+	}
+	creature_learning::MarkNewestSeen(mind.learnt->contexts);
+}
+
+bool CreatureMindSystem::LookedAtByItsPlayer(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (body == nullptr || transform == nullptr || body->owner != PlayerNames::PLAYER_ONE || !Locator::camera::has_value())
+	{
+		return false;
+	}
+	const auto& camera = Locator::camera::value();
+	return creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), transform->position);
 }

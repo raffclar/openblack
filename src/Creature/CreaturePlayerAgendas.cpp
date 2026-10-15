@@ -73,6 +73,7 @@ std::vector<Step> creature_player_attention::ShowPlayerAnObject(std::optional<ui
 	agenda.push_back(FollowCamera(height));
 	auto turn = FaceCamera(camera);
 	turn.face = creature_face::Cue::AttitudeToPlayer;
+	turn.main = true;
 	agenda.push_back(turn);
 	agenda.push_back({.kind = Step::Kind::Object,
 	                  .order = {.kind = ObjectOrder::Kind::Discard, .animation = k_PutDownAnimation},
@@ -89,7 +90,7 @@ std::vector<Step> creature_player_attention::BeSillyWithPlayer(glm::vec2 camera,
 		agenda.push_back(Talk());
 		if (random(k_SillyPlayfulLots) != 0)
 		{
-			agenda.push_back({.kind = Step::Kind::Action, .animation = k_FeelPlayfulAnimation});
+			agenda.push_back({.kind = Step::Kind::Action, .animation = k_FeelPlayfulAnimation, .main = true});
 		}
 		if (random(k_SillyLaughLots) == 0)
 		{
@@ -106,7 +107,7 @@ std::vector<Step> creature_player_attention::BeSillyWithPlayer(glm::vec2 camera,
 std::vector<Step> creature_player_attention::GoToHand(const creature_mind::Random& random)
 {
 	const Gaze atHand {.hand = true};
-	std::vector<Step> agenda {{.kind = Step::Kind::FollowHand, .seconds = k_FollowHandSeconds, .gaze = atHand}};
+	std::vector<Step> agenda {{.kind = Step::Kind::FollowHand, .seconds = k_FollowHandSeconds, .gaze = atHand, .main = true}};
 	if (random(k_HappyAtHandLots) == 0)
 	{
 		agenda.push_back({.kind = Step::Kind::Action, .animation = k_HappyAnimation, .gaze = atHand});

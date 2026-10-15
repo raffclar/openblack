@@ -1970,6 +1970,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .totemShare = mind_town_help::TotemShareOf(registry, mind.idle),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
+		    NoteStepSeen(entity, mind);
 		    if (commands.communicated.has_value())
 		    {
 			    SPDLOG_LOGGER_DEBUG(

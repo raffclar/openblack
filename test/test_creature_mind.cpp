@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 #include <numbers>
 #include <optional>
@@ -1235,4 +1236,60 @@ TEST(CreatureIdleMind, LookingAtItsReflectionLooksAtTheWaterAtItsFeet)
 			EXPECT_TRUE(agenda[i].gaze->feet) << i;
 		}
 	}
+}
+
+TEST(CreatureMind, TheMainStepIsTheLastMarkedElseTheLastStep)
+{
+	using creature_mind::Step;
+	std::vector<Step> agenda {{.kind = Step::Kind::Wait}, {.kind = Step::Kind::Action}, {.kind = Step::Kind::Wait}};
+	EXPECT_EQ(creature_mind::MainStep(agenda), 2u);
+	EXPECT_FALSE(creature_mind::AtOrPastMainStep(agenda, 1, false));
+	EXPECT_TRUE(creature_mind::AtOrPastMainStep(agenda, 2, false));
+	agenda[1].main = true;
+	EXPECT_EQ(creature_mind::MainStep(agenda), 1u);
+	EXPECT_FALSE(creature_mind::AtOrPastMainStep(agenda, 0, false));
+	EXPECT_TRUE(creature_mind::AtOrPastMainStep(agenda, 1, false));
+	EXPECT_TRUE(creature_mind::AtOrPastMainStep(agenda, 2, false));
+	// While it shows the player what it wants, every step counts
+	EXPECT_TRUE(creature_mind::AtOrPastMainStep(agenda, 0, true));
+	EXPECT_FALSE(creature_mind::AtOrPastMainStep({}, 0, true));
+	EXPECT_EQ(creature_mind::MainStep({}), 0u);
+	// A step that casts a miracle is a main step
+	agenda.push_back({.kind = Step::Kind::Cast});
+	agenda.push_back({.kind = Step::Kind::Wait});
+	EXPECT_EQ(creature_mind::MainStep(agenda), 3u);
+}
+
+TEST(CreatureMind, AStepMovesOnAsItStartsAndAsItEnds)
+{
+	using creature_mind::Step;
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::None,
+	                    {{.kind = Step::Kind::Action, .animation = 60}, {.kind = Step::Kind::Action, .animation = 61}});
+	FakeBody body;
+	std::vector<std::optional<size_t>> movedOn;
+	for (int turn = 0; turn < 12 && mind.step < mind.agenda.size(); ++turn)
+	{
+		const auto commands = creature_mind::Think(mind, body.Senses(), Always(0));
+		movedOn.push_back(mind.movedOn);
+		body.Obey(commands, 3);
+	}
+	// Each step moves on once as it starts and once as it ends; a turn in which nothing moves on clears the mark
+	const auto count = [&](size_t step) { return std::ranges::count(movedOn, std::optional<size_t>(step)); };
+	EXPECT_EQ(count(0), 2);
+	EXPECT_EQ(count(1), 2);
+	EXPECT_TRUE(std::ranges::find(movedOn, std::optional<size_t> {}) != movedOn.end());
+	EXPECT_EQ(mind.step, mind.agenda.size());
+}
+
+TEST(CreatureMind, AgendasMarkTheStepThatDoesWhatTheActionIsFor)
+{
+	// It examines the thing in its hand before it lets go of it
+	EXPECT_EQ(creature_mind::MainStep(creature_mind::ExamineByPickingUp(7, false, Always(0))), 1u);
+	// The sleep is the main step, not the dazed look after it; with the first draw, it yawns first
+	EXPECT_EQ(creature_mind::MainStep(creature_mind::Sleep(Always(0))), 1u);
+	// Of the ten steps of the look at its reflection, the second dazed look is the main step
+	const auto reflection = creature_leash_orders::LookAtReflection({0.0f, 0.0f}, {5.0f, 0.0f}, 2.0f, k_TurnsPerSecond);
+	ASSERT_EQ(reflection.size(), 10u);
+	EXPECT_EQ(creature_mind::MainStep(reflection), 6u);
 }
