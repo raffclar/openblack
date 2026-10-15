@@ -35,6 +35,8 @@ constexpr uint32_t k_CameraDoubleClickLand = 30;
 constexpr uint32_t k_CameraDoubleClickObject = 31;
 constexpr uint32_t k_CameraFlyToTemple = 32;
 constexpr uint32_t k_CameraDrag = 33;
+/// The hand of this computer's player tapped a thing that takes a tap
+constexpr uint32_t k_TapThing = 8;
 /// The hand tapped a scroll or sign with a challenge or tip, or one without
 constexpr uint32_t k_TapWithText = 34;
 constexpr uint32_t k_TapWithoutText = 35;
