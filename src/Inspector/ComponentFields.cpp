@@ -42,6 +42,7 @@
 #include "Creature/CreatureFizz.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHair.h"
+#include "Creature/CreatureHeadLook.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
@@ -763,6 +764,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLocomotion::distance>("distance")
 	    .Field<&components::CreatureLocomotion::fidgetMs>("fidgetMs")
 	    .Field<&components::CreatureLocomotion::fidgeted>("fidgeted")
+	    .Field<&components::CreatureLocomotion::routeLook>("routeLook")
 	    .Field<&components::CreatureLocomotion::fromPosition>("fromPosition")
 	    .Field<&components::CreatureLocomotion::toPosition>("toPosition")
 	    .Field<&components::CreatureLocomotion::fromHeading>("fromHeading")
@@ -2263,6 +2265,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_hair::Strand>(context, ValueOnly {})
 	    .Field<&openblack::creature_hair::Strand::positions>("positions")
 	    .Field<&openblack::creature_hair::Strand::velocities>("velocities");
+	Reflect<openblack::creature_head_look::RouteLook>(context, ValueOnly {})
+	    .Field<&openblack::creature_head_look::RouteLook::countdownMs>("countdownMs")
+	    .Field<&openblack::creature_head_look::RouteLook::point>("point");
 	Reflect<openblack::creature_help::Entry>(context, ValueOnly {})
 	    .Field<&openblack::creature_help::Entry::parameter>("parameter")
 	    .Field<&openblack::creature_help::Entry::thing>("thing")
@@ -2397,7 +2402,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Gaze::point>("point")
 	    .Field<&openblack::creature_mind::Gaze::camera>("camera")
 	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing")
-	    .Field<&openblack::creature_mind::Gaze::runningAway>("runningAway");
+	    .Field<&openblack::creature_mind::Gaze::runningAway>("runningAway")
+	    .Field<&openblack::creature_mind::Gaze::feet>("feet");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::activity>("activity")
 	    .Field<&openblack::creature_mind::IdleMind::agenda>("agenda")

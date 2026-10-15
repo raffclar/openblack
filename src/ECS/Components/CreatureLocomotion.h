@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureHeadLook.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureRouteFollow.h"
@@ -100,6 +101,8 @@ struct CreatureLocomotion
 	/// Fidgets while waiting for a route: milliseconds to the next, and whether it has had its first
 	float fidgetMs {0.0f};
 	bool fidgeted {false};
+	/// Where its head looks while it waits for its route
+	creature_head_look::RouteLook routeLook {};
 
 	/// Where it was at the start of this turn and where it is at its end, drawn between them
 	glm::vec3 fromPosition {0.0f};

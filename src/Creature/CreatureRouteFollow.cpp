@@ -121,6 +121,15 @@ void Follower::SetDestination(const Destination& destination)
 	}
 }
 
+std::optional<glm::vec2> Follower::GetSearchHead() const
+{
+	if (_chosen >= _searches.size())
+	{
+		return std::nullopt;
+	}
+	return _searches[_chosen].search.GetBestHead();
+}
+
 Follower::Outcome Follower::Update(int32_t steps, bool recordMet, float joinAhead)
 {
 	if (_searches.empty())
@@ -138,6 +147,7 @@ Follower::Outcome Follower::Update(int32_t steps, bool recordMet, float joinAhea
 				chosen = i;
 			}
 		}
+		_chosen = chosen;
 		auto& search = _searches[chosen].search;
 		if (search.GetStatus() == Search::Status::Found)
 		{

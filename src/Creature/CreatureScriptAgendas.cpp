@@ -124,7 +124,8 @@ bool openblack::creature_mind::StartsLookAtCameraInCutScene(bool barsIn, uint32_
 
 std::vector<Step> openblack::creature_mind::PointAtThing(uint32_t thing)
 {
-	return {Point({.object = thing}, k_PointAtThingSeconds, {.object = thing})};
+	// Its head follows the thing itself, as when it flies
+	return {Point({.object = thing}, k_PointAtThingSeconds, {.object = thing, .itself = true})};
 }
 
 std::vector<Step> openblack::creature_mind::PointAtCamera(bool hasPlayer, glm::vec3 camera)
@@ -132,8 +133,9 @@ std::vector<Step> openblack::creature_mind::PointAtCamera(bool hasPlayer, glm::v
 	std::vector<Step> agenda;
 	if (hasPlayer)
 	{
-		agenda.push_back(
-		    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::TurnToFace, .point = {camera.x, camera.z}}});
+		agenda.push_back({.kind = Step::Kind::Move,
+		                  .movement = {.kind = Movement::Kind::TurnToFace, .point = {camera.x, camera.z}},
+		                  .gaze = Gaze {.camera = true}});
 	}
 	agenda.push_back(
 	    Point({.point = {camera.x, camera.z}, .pointHeight = camera.y}, k_PointAtCameraSeconds, {.point = camera}));

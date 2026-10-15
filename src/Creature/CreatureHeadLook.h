@@ -11,8 +11,10 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 /// The rule that turns a creature's head. Each frame the head turns towards a target or back to straight ahead. What the
@@ -98,4 +100,26 @@ struct Angles
 [[nodiscard]] bool UsesSittingClips(Pose pose);
 /// The head clips play when the head is turned, or when the creature has a point to look at
 [[nodiscard]] bool PlaysHeadClip(float angle, bool hasLookPoint);
+
+/// While a creature waits for the search for its route, its head looks ahead along the search, not at its look point.
+/// The point changes at most this often, in milliseconds of the body's animation time.
+constexpr int32_t k_RouteLookMs = 2000;
+/// The point that the head looks at while the creature waits for its route, and the time until it changes
+struct RouteLook
+{
+	int32_t countdownMs {0};
+	glm::vec3 point {0.0f};
+};
+/// What the route look is made from: where the best route of the search has got to, if there is one, and the
+/// destination of the walk
+struct RouteLookFacts
+{
+	std::optional<glm::vec2> searchHead;
+	glm::vec2 destination {0.0f};
+};
+/// One frame of the route look, the body's animation time moving on by a step. When the time is up, the point becomes
+/// where the search has got to, on the ground. Without a search route, the point is on the ground at the destination's
+/// first map coordinate along both map axes, a quirk of the game.
+[[nodiscard]] RouteLook StepRouteLook(RouteLook look, int32_t stepMs, const RouteLookFacts& facts,
+                                      const std::function<float(glm::vec2)>& groundAt);
 } // namespace openblack::creature_head_look

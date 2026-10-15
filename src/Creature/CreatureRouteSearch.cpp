@@ -633,6 +633,15 @@ const std::vector<Leg>& Search::GetBest() const
 	return _routes[_best.value_or(_routes.size() - 1)].legs;
 }
 
+std::optional<glm::vec2> Search::GetBestHead() const
+{
+	if (!_best.has_value() || *_best >= _routes.size() || _routes[*_best].legs.empty())
+	{
+		return std::nullopt;
+	}
+	return _routes[*_best].legs.back().to;
+}
+
 std::vector<Leg> Search::TakeBest()
 {
 	return std::move(_routes[_best.value_or(_routes.size() - 1)].legs);

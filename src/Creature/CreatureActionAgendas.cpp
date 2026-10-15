@@ -161,10 +161,10 @@ std::vector<Step> creature_mind::KickThing(uint32_t thing)
 
 std::vector<Step> creature_mind::PooAtHome(glm::vec2 home, float height, uint32_t self, const Random& random)
 {
-	// TODO(creature-poo-steps): the game looks at the point as it walks. The gaze here needs the height of the point
 	std::vector<Step> agenda {
 	    {.kind = Step::Kind::Move,
-	     .movement = {.kind = Movement::Kind::ToPoint, .point = home, .maxDistance = k_PooAtHomeHeights * height}}};
+	     .movement = {.kind = Movement::Kind::ToPoint, .point = home, .maxDistance = k_PooAtHomeHeights * height},
+	     .gaze = GoingLook(home)}};
 	std::ranges::move(Poo(random, PooBy {.object = self, .itself = true}), std::back_inserter(agenda));
 	return agenda;
 }
@@ -337,10 +337,15 @@ std::vector<Step> creature_mind::LookAtHand()
 std::vector<Step> creature_mind::SmileAt(uint32_t friendly, float height, float chance, const Random& random)
 {
 	const Gaze look {.object = friendly};
+	// It flutters its eyelids at the friend as it goes near and as it faces it
 	std::vector<Step> agenda {
 	    GoNear(friendly, k_SmileHeights * height, creature_face::Cue::Smile, look),
 	    FaceThing(friendly, k_SmileSeconds + (chance * k_SmileExtraSeconds), creature_face::Cue::Smile, look),
 	};
+	for (auto& step : agenda)
+	{
+		step.flutterEyelids = true;
+	}
 	if (random(k_HappyAfterSmilingLots) == 0)
 	{
 		agenda.push_back(PlayOnce(animations::k_Happy));
@@ -376,10 +381,13 @@ std::vector<Step> creature_mind::ShowImpressiveAnimation(std::optional<uint32_t>
 
 std::vector<Step> creature_mind::BeFrightenedOnTheSpot()
 {
+	// Its eyes go wide as it shows its fright
+	auto fright = PlayOnce(animations::k_Frightened);
+	fright.heldEyes = Eyes::Wide;
 	return {
-	    PlayOnce(animations::k_Frightened),
+	    fright,
 	    {.kind = Step::Kind::Wait, .seconds = k_FrightenedSeconds, .face = creature_face::Cue::Frightened},
-	    PlayOnce(animations::k_Frightened),
+	    fright,
 	};
 }
 
