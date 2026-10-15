@@ -46,6 +46,7 @@ public:
 	void Place(entt::entity creature, glm::vec3 position) override;
 	[[nodiscard]] bool IsMoving(entt::entity creature) const override;
 	[[nodiscard]] const creature_route::WalkableLand& GetWalkableLand() override;
+	[[nodiscard]] std::vector<creature_route::Circle> ThingCirclesIn(entt::entity creature, glm::ivec2 cell) override;
 
 private:
 	/// Starts a move for a fraction of top speed, the creature's state already gathered, to a point or up to a thing

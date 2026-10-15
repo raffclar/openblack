@@ -65,12 +65,20 @@ struct DeathCause
 	float weight {0.0f};
 	/// A fatal fall left it on its back
 	bool onBack {false};
+	/// The wood it shows falls where it dies as a log
+	bool dropsLog {true};
 };
 /// How a death by an effect is remembered: killed by a spell, whatever the effect, put down to the effect's player and
 /// weighing with the town the life the effect took
 [[nodiscard]] constexpr DeathCause SpellDeath(std::optional<PlayerNames> killer, float weight)
 {
 	return {.reason = DeathReason::Spell, .killer = killer, .weight = weight};
+}
+/// How a death in a creature's mouth is remembered: of no cause, put down to the creature's player and weighing with the
+/// town the life it had. The wood it shows goes with it.
+[[nodiscard]] constexpr DeathCause EatenDeath(std::optional<PlayerNames> creaturesPlayer, float life)
+{
+	return {.reason = DeathReason::None, .killer = creaturesPlayer, .weight = life, .dropsLog = false};
 }
 /// A villager killed by an effect such as fire dies: it falls, lies dead as a skeleton for a while and goes. A death
 /// with its cause is remembered: on the body, in its town's deaths by killer and cause, and in the players' counts of

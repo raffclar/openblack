@@ -261,3 +261,15 @@ TEST(PhysicsLiving, AnEffectsDeathIsASpellsPutDownToItsPlayer)
 	EXPECT_FALSE(fire.killer.has_value());
 	EXPECT_FLOAT_EQ(fire.weight, 0.0f);
 }
+
+TEST(PhysicsLiving, ADeathInACreaturesMouthIsPutDownToItsPlayer)
+{
+	using openblack::ecs::villager_fire::EatenDeath;
+	const auto eaten = EatenDeath(openblack::PlayerNames::PLAYER_ONE, 0.7f);
+	EXPECT_EQ(eaten.reason, openblack::DeathReason::None);
+	EXPECT_EQ(eaten.killer, openblack::PlayerNames::PLAYER_ONE);
+	EXPECT_FLOAT_EQ(eaten.weight, 0.7f);
+	// The wood the villager shows goes with it, where other deaths drop it as a log
+	EXPECT_FALSE(eaten.dropsLog);
+	EXPECT_TRUE(openblack::ecs::villager_fire::SpellDeath(std::nullopt, 0.0f).dropsLog);
+}

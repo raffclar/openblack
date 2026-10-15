@@ -76,6 +76,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Magic/ResourcePiles.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptingBindingUtils.h"
 
@@ -701,7 +702,19 @@ void FeatureScriptCommands::CreatePot(glm::vec3 position, PotInfo type, int32_t 
 	{
 		return;
 	}
-	LastObject() = PotArchetype::Create(position, 0.0f, type, amount);
+	const auto pot = PotArchetype::Create(position, 0.0f, type, amount);
+	LastObject() = pot;
+	// A pile that the land's script makes calls those about to come for it, as a pile of nobody's
+	if (pot == entt::null || !Locator::infoConstants::has_value() || !Locator::reactionSystem::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value().pot.at(static_cast<size_t>(type));
+	if (magic::piles::ReactsWhenMade(info.potType, info.associatedReaction, true))
+	{
+		Locator::reactionSystem::value().Create(
+		    {.initiator = pot, .type = info.associatedReaction, .player = PlayerNames::NEUTRAL, .position = position});
+	}
 }
 
 void FeatureScriptCommands::CreateTownTemporaryPots(int32_t, int32_t, int32_t)

@@ -396,6 +396,12 @@ glm::ivec2 creature_route::StepBlock(glm::vec3 end)
 std::vector<creature_route::Circle> creature_route::StepBlockCircles(const WalkableLand& land, glm::ivec2 block,
                                                                      glm::vec2 standing)
 {
+	return StepBlockCircles(land, block, standing, ThingCircles());
+}
+
+std::vector<creature_route::Circle> creature_route::StepBlockCircles(const WalkableLand& land, glm::ivec2 block,
+                                                                     glm::vec2 standing, const ThingCircles& things)
+{
 	// The follower is never closer to a circle's centre than this
 	constexpr float k_LeastRange = 0.1f;
 	// Circles are kept in 80-unit squares, the land's 64 a side: one reaching past them is left out
@@ -438,6 +444,14 @@ std::vector<creature_route::Circle> creature_route::StepBlockCircles(const Walka
 					add({(static_cast<float>(nx) * k_CellSize) + (0.5f * k_CellSize),
 					     (static_cast<float>(nz) * k_CellSize) + (0.5f * k_CellSize)},
 					    k_DestinationClearance);
+				}
+			}
+			// Then the things that stand in the cell and that the creature walks round
+			if (things)
+			{
+				for (const auto& circle : things({x, z}))
+				{
+					add(circle.centre, circle.radius);
 				}
 			}
 		}

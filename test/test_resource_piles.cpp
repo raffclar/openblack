@@ -208,3 +208,15 @@ TEST(ResourcePiles, SettingLifeAddsOrRemovesItsShare)
 	// None to all
 	EXPECT_EQ(ChangeForLife(500, 1000, 0.0f).removed, 500u);
 }
+
+TEST(ResourcePiles, OnlyAPileWithAReactionSetsItUpWhenItsMakerAsks)
+{
+	using openblack::magic::piles::ReactsWhenMade;
+	EXPECT_TRUE(ReactsWhenMade(openblack::PotType::PileFood, openblack::Reaction::ReactToFood, true));
+	EXPECT_TRUE(ReactsWhenMade(openblack::PotType::PileWood, openblack::Reaction::ReactToWood, true));
+	// A store's pile, a handful or a pile a creature takes from: its maker doesn't ask
+	EXPECT_FALSE(ReactsWhenMade(openblack::PotType::PileFood, openblack::Reaction::ReactToFood, false));
+	// A plain pot never does, nor a kind with no reaction
+	EXPECT_FALSE(ReactsWhenMade(openblack::PotType::Pot, openblack::Reaction::ReactToFood, true));
+	EXPECT_FALSE(ReactsWhenMade(openblack::PotType::PileFood, openblack::Reaction::None, true));
+}

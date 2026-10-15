@@ -95,6 +95,25 @@ TEST(CreatureGiving, OnlyItsOwnOrAnAlliedPlayerMayGiveAndNeverASeed)
 	EXPECT_EQ(MayGive(facts), Verdict::No);
 }
 
+// An ogre takes nothing; a creature that a script controls or that a hand holds takes nothing either, though its help
+// still says what it can't pick up
+TEST(CreatureGiving, NoGiftToAnOgreNorToACreatureAScriptOrAHandHolds)
+{
+	auto facts = Friendly();
+	facts.ogre = true;
+	EXPECT_EQ(MayGive(facts), Verdict::No);
+	facts.creatureCanPickUp = false;
+	EXPECT_EQ(MayGive(facts), Verdict::No);
+	facts = Friendly();
+	facts.scriptControlled = true;
+	EXPECT_EQ(MayGive(facts), Verdict::No);
+	facts.creatureCanPickUp = false;
+	EXPECT_EQ(MayGive(facts), Verdict::CantPickUp);
+	facts = Friendly();
+	facts.heldByHand = true;
+	EXPECT_EQ(MayGive(facts), Verdict::No);
+}
+
 TEST(CreatureGiving, TheHandMeetsTheCreaturesHandAtTheMomentOfTaking)
 {
 	const glm::vec3 creatureHand {0.0f, 10.0f, 0.0f};

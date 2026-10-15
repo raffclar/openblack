@@ -1004,8 +1004,9 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	{
 		villager_after_death::Hear(villager, cause->reason, cause->killer);
 	}
-	// The wood it shows falls where it dies as a log; the rest of what it carries, food and wood, is lost
-	if (Locator::dynamicsSystem::has_value())
+	// The wood it shows falls where it dies as a log, unless it goes with the villager; the rest of what it carries, food
+	// and wood, is lost
+	if (Locator::dynamicsSystem::has_value() && (!cause.has_value() || cause->dropsLog))
 	{
 		villager_dropped_log::Drop(Locator::dynamicsSystem::value(), villager, {});
 	}

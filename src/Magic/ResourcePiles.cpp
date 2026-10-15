@@ -220,3 +220,8 @@ magic::piles::HeldChange magic::piles::ChangeForDamage(uint32_t amount, uint32_t
 	const float now = Life(amount, fullAmount);
 	return ChangeForLife(amount, fullAmount, now < damage ? 0.0f : now - damage);
 }
+
+bool magic::piles::ReactsWhenMade(PotType type, Reaction reaction, bool makerAsks)
+{
+	return makerAsks && type != PotType::Pot && reaction != Reaction::None;
+}
