@@ -33,6 +33,7 @@ public:
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
+	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent) override;
 	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
 	void CallOff(entt::entity creature) override;
@@ -75,8 +76,6 @@ public:
 
 	[[nodiscard]] std::optional<creature_fight_hud::Values> GetPanel() const override;
 
-	void SetAngerStartsFights(bool enabled) override { _angerStartsFights = enabled; }
-	[[nodiscard]] bool GetAngerStartsFights() const override { return _angerStartsFights; }
 	void SetCameraWatches(bool enabled) override { _cameraWatches = enabled; }
 	[[nodiscard]] bool GetCameraWatches() const override { return _cameraWatches; }
 	[[nodiscard]] bool IsCameraOnFight() const final { return _view.has_value(); }
@@ -84,7 +83,7 @@ public:
 	[[nodiscard]] bool GetFightExit() const override { return _fightExit; }
 
 private:
-	/// The turn's parts: fights picked by angry creatures and started by the leash, the stages before and after the
+	/// The turn's parts: fights started by the leash, the stages before and after the
 	/// duel, the duel's moves, and the creatures knocked out
 	void StartFightsFromMinds();
 	void ProcessStages();
@@ -144,7 +143,6 @@ private:
 	std::unordered_map<entt::entity, Seen> _seen;
 	std::unordered_map<entt::entity, uint64_t> _actionCause;
 
-	bool _angerStartsFights {true};
 	bool _cameraWatches {true};
 	/// The player's creature a press is charging a blow for, and when it was pressed
 	struct Pressed
@@ -165,8 +163,12 @@ private:
 	std::optional<Watched> _view;
 	/// How long the camera has looked at an arena from within it
 	float _lookSeconds {0.0f};
+	/// Where the camera is now, as the screen shows it, and the land in the middle of the screen. When the middle of the
+	/// screen shows no land, the land it last showed, or the point that the camera looks at before it showed any land.
+	[[nodiscard]] std::pair<glm::vec3, glm::vec3> ViewNow();
+	std::optional<glm::vec3> _screenCentre;
 	/// The place on the land that a double click sent the world camera to, until the next update of the view, with the
-	/// camera's place and focus before the flight
+	/// camera's place and the land in the middle of the screen before the flight
 	struct Flight
 	{
 		glm::vec2 place;

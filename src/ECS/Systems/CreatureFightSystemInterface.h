@@ -25,7 +25,7 @@ namespace openblack::ecs::systems
 {
 
 /// Creature fights, and creatures knocked out (see components::CreatureFighting, CreatureFightRecord and
-/// CreatureKnockedOut). A fight starts when an angry creature picks one, when the player leashes their creature to
+/// CreatureKnockedOut). A fight starts when an angry creature plans one, when the player leashes their creature to
 /// another, or when told to by a script or the debug tools. The two walk to their places in an arena, taunt each other
 /// and duel until one is knocked out; the player directs their own creature with the hand, or the creature fights by
 /// itself. The loser lies out cold, is taken home, rests and gets up again; only a script kills a creature for good.
@@ -60,8 +60,16 @@ public:
 	/// fighters move as their animations carry them
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
 
-	/// A fight between two creatures, the first making the arena, as scripts and the leash start them
+	/// A fight between two creatures, the first making the arena, as scripts and the leash start them. The first
+	/// creature is made to fight: nothing it wants stops the fight. The second creature obeys the first until the fight
+	/// is over.
 	virtual StartResult StartFight(entt::entity creature, entt::entity opponent) = 0;
+	/// A fight that the first creature's own plan starts. That creature can give up the fight for a plan it wants much
+	/// more.
+	virtual StartResult StartPlannedFight(entt::entity creature, entt::entity opponent)
+	{
+		return StartFight(creature, opponent);
+	}
 	/// Ends a creature's fight with no winner: both finish and stand
 	virtual void AbortFight(entt::entity creature) = 0;
 	/// A creature taken out of the game leaves its fight at once, letting go of the arena it made; its opponent's fight
@@ -170,9 +178,7 @@ public:
 	/// The panel of the fight the player's creature is in, or else of any fight, if there is one
 	[[nodiscard]] virtual std::optional<creature_fight_hud::Values> GetPanel() const = 0;
 
-	/// Whether angry creatures pick fights by themselves, and whether the camera may watch fights
-	virtual void SetAngerStartsFights(bool enabled) = 0;
-	[[nodiscard]] virtual bool GetAngerStartsFights() const = 0;
+	/// Whether the camera may watch fights
 	virtual void SetCameraWatches(bool enabled) = 0;
 	[[nodiscard]] virtual bool GetCameraWatches() const = 0;
 	/// Whether the camera's fight view is watching a fight now

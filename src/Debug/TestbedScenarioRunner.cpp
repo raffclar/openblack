@@ -827,10 +827,6 @@ void Runner::Stop()
 	{
 		Locator::footprintSystem::value().SetAprilFoolsOverride(std::nullopt);
 	}
-	if (Locator::creatureFightSystem::has_value())
-	{
-		Locator::creatureFightSystem::value().SetAngerStartsFights(true);
-	}
 	if (Locator::skySystem::has_value())
 	{
 		Locator::skySystem::value().GetClock().SetRunning(true);
@@ -872,10 +868,6 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	if (Locator::footprintSystem::has_value())
 	{
 		Locator::footprintSystem::value().SetAprilFoolsOverride(environment.aprilFools);
-	}
-	if (Locator::creatureFightSystem::has_value())
-	{
-		Locator::creatureFightSystem::value().SetAngerStartsFights(environment.angerStartsFights);
 	}
 	if (Locator::alignmentSystem::has_value())
 	{

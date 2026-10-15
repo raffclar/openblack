@@ -24,7 +24,8 @@ namespace openblack::ecs::components
 {
 
 /// A creature in a fight, from walking to its place in the arena until it has finished showing off or walked off. Its
-/// mind leaves it alone meanwhile.
+/// mind leaves its body alone meanwhile. The creature that started the fight by its own plan can still choose a plan
+/// that it wants much more. The other creature obeys it and does not think for itself until the fight is over.
 struct CreatureFighting
 {
 	enum class Stage : uint8_t
@@ -47,6 +48,8 @@ struct CreatureFighting
 	/// Whether this creature took the arena, taking its place to the east of the middle; the arena it took
 	bool madeArena {false};
 	entt::entity arenaEntity {entt::null};
+	/// Whether this creature started the fight by a plan of its own, and not by the leash, a script or the debug tools
+	bool planned {false};
 	creature_fight::Fighter fighter {};
 	/// How far each of its blows reaches and where it lands, measured as the fight starts, and when in each blow it
 	/// lands, by the blow's place from the first
@@ -73,8 +76,6 @@ struct CreatureFightRecord
 	bool foughtBefore {false};
 	uint32_t fights {0};
 	uint32_t wins {0};
-	/// Seconds since its last fight ended
-	float secondsSinceFight {creature_fight::k_SecondsBetweenFights};
 	/// Who chose its moves when its last fight ended, or as a script last set it; nobody before its first fight. Each
 	/// fight starts it afresh.
 	creature_fight::Control control {creature_fight::Control::None};
@@ -84,6 +85,15 @@ struct CreatureFightRecord
 	/// Its fight health, from 0 to 1, as its last fight left it or a script last set it outside a fight; full before its
 	/// first fight. Each fight starts it afresh from the creature's life.
 	float health {1.0f};
+};
+
+/// A creature that won or lost a fight by a knock-out. It takes up no reaction until what the knock-out made it do is
+/// over: the winner's plan for the loser, or the loser's time out cold. The mark goes when the creature lies out cold no
+/// more and it has finished the agenda that it had at the knock-out.
+struct CreatureAfterFight
+{
+	/// The number of the creature's agenda at the knock-out
+	uint32_t agenda {0};
 };
 
 /// A creature knocked out: lying where it fell, then taken home, resting there until better, and getting up again

@@ -829,6 +829,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 		                                                                                                : HandsNeed::Any;
 	case Step::Kind::StopMoving:
 	case Step::Kind::FollowWatching:
+	case Step::Kind::Fight:
 	case Step::Kind::Wait:
 	case Step::Kind::Move:
 	case Step::Kind::Gesture:
@@ -1252,6 +1253,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::WatchPlayer:
 			WatchPlayer(mind, senses, commands);
 			break;
+		case Step::Kind::Fight:
+			commands.startFight = step.object;
+			break;
 		case Step::Kind::Communicate:
 			// It shows what it feels now, and it does not want to show its state again for a time
 			commands.communicated = senses.communication;
@@ -1487,6 +1491,13 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::WatchPlayer:
 		WatchPlayer(mind, senses, commands);
+		break;
+	case Step::Kind::Fight:
+		// The fight has ended
+		if (!senses.fighting)
+		{
+			FinishStep(mind);
+		}
 		break;
 	case Step::Kind::Gesture:
 	case Step::Kind::Move:

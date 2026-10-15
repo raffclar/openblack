@@ -676,6 +676,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFighting::arena>("arena")
 	    .Field<&components::CreatureFighting::madeArena>("madeArena")
 	    .Field<&components::CreatureFighting::arenaEntity>("arenaEntity")
+	    .Field<&components::CreatureFighting::planned>("planned")
 	    .Field<&components::CreatureFighting::fighter>("fighter")
 	    .Field<&components::CreatureFighting::reaches>("reaches")
 	    .Field<&components::CreatureFighting::hitTimesMs>("hitTimesMs")
@@ -691,10 +692,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFightRecord::foughtBefore>("foughtBefore")
 	    .Field<&components::CreatureFightRecord::fights>("fights")
 	    .Field<&components::CreatureFightRecord::wins>("wins")
-	    .Field<&components::CreatureFightRecord::secondsSinceFight>("secondsSinceFight")
 	    .Field<&components::CreatureFightRecord::control>("control")
 	    .Field<&components::CreatureFightRecord::struckTurn>("struckTurn")
 	    .Field<&components::CreatureFightRecord::health>("health");
+	Reflect<components::CreatureAfterFight>(context).Field<&components::CreatureAfterFight::agenda>("agenda");
 	Reflect<components::CreatureKnockedOut>(context)
 	    .Field<&components::CreatureKnockedOut::stage>("stage")
 	    .Field<&components::CreatureKnockedOut::seconds>("seconds")

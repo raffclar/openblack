@@ -42,6 +42,7 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureFight.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
@@ -75,8 +76,10 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Dance.h"
@@ -383,6 +386,10 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return !heldByOther && Strokeable(registry, entity, self);
 	case Target::Creature:
 		return registry.AllOf<Creature>(entity);
+	case Target::FightableCreature:
+		// A dead creature, or one that lies out cold, is not fought
+		return registry.AllOf<Creature>(entity) && Locator::creatureMindSystem::has_value() &&
+		       !Locator::creatureMindSystem::value().IsLyingDead(entity);
 	case Target::Living:
 		return registry.AllOf<Villager>(entity) || registry.AllOf<Creature>(entity);
 	case Target::Frightening:
@@ -1505,6 +1512,11 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	}
 	auto& [executor, agenda] = *built;
 	auto& registry = Locator::entitiesRegistry::value();
+	// A new plan ends the fight that the creature started by its own plan, for both creatures
+	if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().CallOff(creature);
+	}
 	// Whatever its hands were doing is given up for the plan, but for a catch, which its body carries on with by itself
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
@@ -2401,6 +2413,27 @@ CreatureMindSystem::ShownThingsWithoutWhole(entt::entity creature, CreatureMindS
 	return parts;
 }
 
+namespace
+{
+/// Whether a fight lets the creature choose a new plan. Only the creature that started the fight by its own plan
+/// chooses, and only while that plan is the fight: a plan that it wants much more ends the fight. The other creature
+/// obeys, a creature made to fight or made to do something after a knock-out does not choose, and a creature that lies
+/// out cold does not choose.
+bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const CreatureMindState& mind)
+{
+	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	return creature_fight::LetsChoose({
+	    .knockedOut = registry.AllOf<CreatureKnockedOut>(creature),
+	    .fighting = fighting != nullptr,
+	    .startedIt = fighting != nullptr && fighting->madeArena,
+	    .planned = fighting != nullptr && fighting->planned,
+	    .waitsForFight = mind.planActive && mind.idle.step < mind.idle.agenda.size() &&
+	                     mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Fight,
+	    .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
+	});
+}
+} // namespace
+
 creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity creature, const CreatureMindState& mind,
                                                                 Desire desire, entt::entity thing,
                                                                 const std::optional<ChosenActivity>& activity)
@@ -2436,7 +2469,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	if (tables == nullptr || transform == nullptr || !mind.desires.has_value() || !mind.learnt.has_value() || mind.paused ||
-	    creature_mind::IsUnconscious(mind.idle))
+	    creature_mind::IsUnconscious(mind.idle) || !FightLetsChoose(registry, creature, mind))
 	{
 		return;
 	}
@@ -3054,6 +3087,8 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	const auto* body = registry.TryGet<const Creature>(creature);
 	situation.hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL;
 	situation.controlledByScript = registry.AllOf<ScriptControlled>(creature);
+	const auto* needs = registry.TryGet<const CreatureNeeds>(creature);
+	situation.healthyEnoughToFight = creature_fight::HealthyEnoughToFight(needs != nullptr ? needs->needs.life : 1.0f);
 	situation.radius = object_measures::TwoDRadius(registry, creature);
 	situation.height = body != nullptr ? k_HeightOfSizeOne * ShownSize(*body) : 0.0f;
 	const auto held = Locator::creatureObjectActionSystem::has_value()

@@ -40,6 +40,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -477,6 +478,11 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	// TODO(creature-reactions-2): the game also keeps out a creature in the dance editor, one standing on a building,
 	// one being teleported, one dying, and one in two more states not mapped yet
 	if (registry.AnyOf<CreatureReactionsOff, ScriptControlled>(entity))
+	{
+		return false;
+	}
+	// Nor does one that won or lost a fight by a knock-out, until what the knock-out made it do is over
+	if (registry.AllOf<CreatureAfterFight>(entity))
 	{
 		return false;
 	}
