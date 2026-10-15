@@ -189,3 +189,49 @@ TEST(TattooEditor, TheCaveLooksAtItsCreatureFromBesideAndAbove)
 	EXPECT_EQ(CaveView({}, 0.01f).focus, glm::vec3(0.0f, 0.5f, 0.0f));
 	EXPECT_EQ(CaveView({}, 5.0f).focus, glm::vec3(0.0f, 10.0f, 0.0f));
 }
+
+TEST(TattooEditor, APlaceIsFoundOverTheWidthOfASkinOf256Texels)
+{
+	const creature_tattoo::Site site {.enabled = true, .u = 64, .v = 192};
+	EXPECT_EQ(TexturePoint(site), glm::vec2(0.25f, 0.75f));
+}
+
+TEST(TattooEditor, ATriangleHoldsAPointInsideOrOnItsEdges)
+{
+	const std::array<glm::vec2, 3> corners {glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(0.0f, 1.0f)};
+	const auto inside = InTriangle({0.25f, 0.5f}, corners);
+	ASSERT_TRUE(inside.has_value());
+	// Along the first side, then along the third side
+	EXPECT_FLOAT_EQ(inside->x, 0.25f);
+	EXPECT_FLOAT_EQ(inside->y, 0.5f);
+	EXPECT_TRUE(InTriangle({0.0f, 0.0f}, corners).has_value());
+	EXPECT_TRUE(InTriangle({0.5f, 0.5f}, corners).has_value());
+	EXPECT_FALSE(InTriangle({0.6f, 0.6f}, corners).has_value());
+	EXPECT_FALSE(InTriangle({-0.1f, 0.5f}, corners).has_value());
+}
+
+TEST(TattooEditor, ATriangleWithAlmostNoAreaHoldsNoPoint)
+{
+	const std::array<glm::vec2, 3> thin {glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(0.0f, 0.0001f)};
+	EXPECT_FALSE(InTriangle({0.0f, 0.0f}, thin).has_value());
+	const std::array<glm::vec2, 3> wider {glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(0.0f, 0.001f)};
+	EXPECT_TRUE(InTriangle({0.0f, 0.0f}, wider).has_value());
+}
+
+TEST(TattooEditor, AFrontFaceTurnsAwayFromTheCamera)
+{
+	// Seen from the camera, the corners go up and then to the right: the front of the triangle
+	const std::array<glm::vec3, 3> corners {glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f),
+	                                        glm::vec3(1.0f, 0.0f, 0.0f)};
+	EXPECT_FLOAT_EQ(FacingCamera(corners, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -10.0f)), 1.0f);
+	EXPECT_FLOAT_EQ(FacingCamera(corners, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 10.0f)), -1.0f);
+	// A place exactly at the camera keeps a direction of no length
+	EXPECT_FLOAT_EQ(FacingCamera(corners, glm::vec3(0.0f), glm::vec3(0.0f)), 0.0f);
+}
+
+TEST(TattooEditor, ThePlaceCountsOnlyWhenItFacesTheCameraEnough)
+{
+	const std::array sites {SiteOnScreen {.site = 2, .screen = {100, 100}, .facingCamera = -0.2f},
+	                        SiteOnScreen {.site = 5, .screen = {130, 100}, .facingCamera = -0.19f}};
+	EXPECT_EQ(SiteUnderPointer(sites, {100, 100}), 5);
+}

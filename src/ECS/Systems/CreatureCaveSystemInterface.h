@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <optional>
+#include <span>
 
 #include <entt/entity/fwd.hpp>
 #include <glm/gtc/type_precision.hpp>
@@ -74,6 +75,8 @@ public:
 	[[nodiscard]] virtual std::optional<creature_tattoo_editor::Orbit> GetCaveCreatureView() const = 0;
 	/// Whether the cursor is over the copy's body as it is drawn
 	[[nodiscard]] virtual bool CursorOverCaveCreature(const screen_pick::View& view) const = 0;
+	/// The tattoo places of the copy on the screen in the last frame that the tattoo editor showed it
+	[[nodiscard]] virtual std::span<const creature_tattoo_editor::SiteOnScreen> GetTattooSitesOnScreen() const = 0;
 };
 
 } // namespace openblack::ecs::systems

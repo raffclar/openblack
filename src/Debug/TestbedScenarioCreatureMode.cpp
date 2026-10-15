@@ -10,6 +10,7 @@
 // The testbed's scenarios of Creature Mode, the camera locked onto a creature with its status panel, and of the
 // Creature Cave
 
+#include "3D/TempleInteriorInterface.h"
 #include "Creature/CreatureCave.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -162,9 +163,10 @@ void AddCave(std::vector<Scenario>& all)
 	                "tiger's head and chest, and the head's goes again (seen on the tiger once out of the temple).",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Player({0.0f, 40.0f}, "yours")},
-	    .commands = {{.kind = Kind::OpenCreatureCave,
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave,
 	                  .creature = 0,
-	                  .delaySeconds = 1.0f,
+	                  .delaySeconds = 0.5f,
 	                  .value = static_cast<size_t>(creature_cave::Page::Tattoos)},
 	                 tattoo(Kind::ApplyTattoo, 4, 1, 3.0f),
 	                 tattoo(Kind::ApplyTattoo, 9, 2, 2.0f),
@@ -192,6 +194,51 @@ void AddCave(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 1}},
 	});
 }
+/// The player puts a tattoo on the creature in the Creature Cave and takes it off again, as the player does with the
+/// pointer: the points after the click on the creature are for a screen of 1600 by 900
+void AddCaveTattooOnBody(std::vector<Scenario>& all)
+{
+	const auto at = [](float x, float y, float delay) {
+		return Command {.kind = Kind::PointerTo, .delaySeconds = delay, .point = {x / 1600.0f, y / 900.0f}};
+	};
+	const auto press = [](float delay) { return Command {.kind = Kind::PointerPress, .delaySeconds = delay, .value = 1}; };
+	const auto release = [](float delay) { return Command {.kind = Kind::PointerRelease, .delaySeconds = delay, .value = 1}; };
+	all.push_back({
+	    .id = "creature_mode.cave_tattoo_on_body",
+	    .name = "A tattoo dragged onto the creature in the cave",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player goes into the temple and its Creature Cave and clicks the tiger by the fire. The "
+	                   "player picks a blue, drags the heart onto the tiger's chest, then lifts it off and drops it away.",
+	    .expected = "The camera zooms onto the tiger and the tattoo editor opens; the tiger gets up and turns to the "
+	                "camera. While the heart is over the chest it flashes, and a small black square marks the chest "
+	                "while the button is down. Let go there, the blue heart goes into the skin of the chest and the "
+	                "tiger smiles for 1.8 seconds. Pressed on the chest, the heart comes off with the tiger sad for 1.8 "
+	                "seconds, and dropped away from the body it stays off.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::PointerOnCaveCreature, .delaySeconds = 10.0f},
+	                 press(0.5f),
+	                 release(0.2f),
+	                 // The palette's blue, then the heart to the chest
+	                 at(246.0f, 330.0f, 5.0f),
+	                 press(0.2f),
+	                 release(0.2f),
+	                 at(368.0f, 780.0f, 0.5f),
+	                 press(0.2f),
+	                 at(600.0f, 600.0f, 0.2f),
+	                 at(799.0f, 404.0f, 0.2f),
+	                 release(1.0f),
+	                 // The heart off the chest and away from the body
+	                 at(799.0f, 404.0f, 3.0f),
+	                 press(0.2f),
+	                 at(700.0f, 350.0f, 0.2f),
+	                 at(560.0f, 300.0f, 0.2f),
+	                 release(1.0f)},
+	});
+}
+
 /// The Creature Cave's trophies for creatures of different histories: the belts on the attack dummies for how each leans
 /// in its fights, the medals on the magic plinths and the seeds hovering by them for the miracles it has learnt
 void AddCaveTrophies(std::vector<Scenario>& all)
@@ -202,6 +249,10 @@ void AddCaveTrophies(std::vector<Scenario>& all)
 	const auto seen = [](MagicType miracle, float times) {
 		return Command {
 		    .kind = Kind::SetMiracleSightings, .creature = 0, .value = static_cast<size_t>(miracle), .amount = times};
+	};
+	// The temple opens its rooms once the player was in its main room
+	const auto main = [](float delay) {
+		return Command {.kind = Kind::EnterTemple, .delaySeconds = delay, .value = static_cast<size_t>(TempleRoom::Main)};
 	};
 	const auto cave = [](float delay) {
 		return Command {.kind = Kind::OpenCreatureCave,
@@ -219,7 +270,7 @@ void AddCaveTrophies(std::vector<Scenario>& all)
 	                "hovers by them.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Player({0.0f, 40.0f}, "yours")},
-	    .commands = {cave(1.0f)},
+	    .commands = {main(1.0f), cave(0.5f)},
 	});
 	all.push_back({
 	    .id = "creature_mode.cave_trophies_aggressive",
@@ -234,7 +285,8 @@ void AddCaveTrophies(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Player({0.0f, 40.0f}, "yours")},
 	    .commands = {lean(1.0f, 1.0f), seen(MagicType::Fireball, 1000.0f), seen(MagicType::Heal, 1000.0f),
-	                 seen(MagicType::Water, 1000.0f), seen(MagicType::Food, 3.0f), seen(MagicType::Forest, 1.0f), cave(0.5f)},
+	                 seen(MagicType::Water, 1000.0f), seen(MagicType::Food, 3.0f), seen(MagicType::Forest, 1.0f), main(0.5f),
+	                 cave(0.5f)},
 	});
 	all.push_back({
 	    .id = "creature_mode.cave_trophies_defensive",
@@ -248,7 +300,7 @@ void AddCaveTrophies(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Player({0.0f, 40.0f}, "yours")},
 	    .commands = {lean(-0.6f, 1.0f), seen(MagicType::FlockFlying, 1000.0f), seen(MagicType::CreatureSpellFreeze, 1000.0f),
-	                 seen(MagicType::LightningBolt, 5.0f), cave(0.5f)},
+	                 seen(MagicType::LightningBolt, 5.0f), main(0.5f), cave(0.5f)},
 	});
 }
 } // namespace
@@ -257,5 +309,6 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 {
 	AddCreatureMode(all);
 	AddCave(all);
+	AddCaveTattooOnBody(all);
 	AddCaveTrophies(all);
 }

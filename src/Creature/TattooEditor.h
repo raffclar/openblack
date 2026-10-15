@@ -11,12 +11,14 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <span>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureFace.h"
 #include "Creature/CreatureTattoo.h"
 
 /// The rules of the tattoo editor, where the player drags the sixteen symbols onto the places on their creature's body
@@ -91,6 +93,24 @@ constexpr int k_PickDistanceSquared = 64 * 64;
 
 /// The place nearest the pointer, in screen pixels, of those that count
 [[nodiscard]] std::optional<uint8_t> SiteUnderPointer(std::span<const SiteOnScreen> sites, glm::ivec2 pointer);
+
+/// A place is a point on one of the skins of the creature's body. Its texture point is its centre over the width of a
+/// skin of 256 texels, so 1 is the full width.
+[[nodiscard]] glm::vec2 TexturePoint(const creature_tattoo::Site& site);
+
+/// Where a texture point is in a triangle of the skin: how far along the first side (x) and along the third side (y)
+/// from the first corner. The point can be on an edge. A triangle with a texture area of 0.0001 or less holds no point.
+[[nodiscard]] std::optional<glm::vec2> InTriangle(glm::vec2 point, const std::array<glm::vec2, 3>& corners);
+
+/// The cosine between the way the surface at a place faces and the way from the camera to the place. The corners are
+/// the triangle of the place on the posed body. The surface faces away from a camera that sees the front of the
+/// triangle, so a cosine near 1 shows the place well.
+[[nodiscard]] float FacingCamera(const std::array<glm::vec3, 3>& corners, glm::vec3 place, glm::vec3 camera);
+
+/// The creature smiles when a tattoo goes on and is sad when a tattoo comes off, for 1.8 seconds each time
+constexpr creature_face::Face k_PutOnFace = creature_face::Face::Smile;
+constexpr creature_face::Face k_LiftFace = creature_face::Face::Sad;
+constexpr float k_FaceMilliseconds = 1800.0f;
 
 /// The view of the creature: the camera's eye and the point it looks at, and how fast it is turning round that point
 /// and tipping up and down

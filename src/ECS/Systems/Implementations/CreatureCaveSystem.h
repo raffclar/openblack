@@ -10,6 +10,9 @@
 #pragma once
 
 #include <optional>
+#include <vector>
+
+#include <glm/vec2.hpp>
 
 #include "Common/RandomNumberManager.h"
 #include "Creature/CaveCreature.h"
@@ -46,6 +49,10 @@ public:
 	void SetCreatureShown(bool shown) override { _creatureShown = shown; }
 	[[nodiscard]] bool IsCreatureShown() const override { return _creatureShown; }
 	[[nodiscard]] std::optional<entt::entity> GetCaveCreature() const override { return _caveCreature; }
+	[[nodiscard]] std::span<const creature_tattoo_editor::SiteOnScreen> GetTattooSitesOnScreen() const override
+	{
+		return _tattooSitesOnScreen;
+	}
 	[[nodiscard]] std::optional<creature_tattoo_editor::Orbit> GetCaveCreatureView() const override;
 	[[nodiscard]] bool CursorOverCaveCreature(const screen_pick::View& view) const override;
 
@@ -57,6 +64,8 @@ private:
 	void DropCaveCreature();
 	/// The copy's frame: what it does, its turn, and its pose
 	void UpdateCaveCreature(float milliseconds);
+	/// While the tattoo editor shows the copy: which tattoo place is under the pointer, as the copy is posed now
+	void HoverTattooSites(entt::entity copy, glm::ivec2 pointer);
 	/// Starts the copy turning on the spot to face a heading
 	static void StartCaveTurn(const components::CreatureCopy& copy, cave_creature::State& state, float heading);
 
@@ -66,6 +75,7 @@ private:
 	/// The creature room has been made on this visit to the temple
 	bool _caveMade {false};
 	std::optional<entt::entity> _caveCreature;
+	std::vector<creature_tattoo_editor::SiteOnScreen> _tattooSitesOnScreen;
 	/// The copy's coin tosses and fidgets are its own, apart from the game's random numbers
 	RandomStreamSource _random {RandomStream::CreatureAnimation};
 };

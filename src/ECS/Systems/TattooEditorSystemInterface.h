@@ -58,6 +58,8 @@ public:
 	virtual bool Drop(uint8_t design, const glm::u8vec3& colour) = 0;
 	/// Lifts the tattoo off the place under the pointer, if it has one
 	virtual std::optional<creature_tattoo::Slot> Lift() = 0;
+	/// The face that the creature in the editor pulls after a tattoo goes on or comes off. Each face comes back one time.
+	[[nodiscard]] virtual std::optional<creature_face::Face> TakeFace() = 0;
 
 	/// OK: closes the editor, or asks the player to note something first
 	virtual creature_tattoo_editor::Accept Ok(bool networkGame) = 0;

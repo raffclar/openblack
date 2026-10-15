@@ -327,6 +327,8 @@ struct ObjectSetup
 	bool wasBuilt {false};
 	/// A building stands only this much built, a site open for its town's builders to finish it
 	std::optional<float> built;
+	/// A building starts with this part of the time to its next loss of life from neglect already gone
+	float neglect {0.0f};
 	/// The crop of a field is fully sown and ripe, with all the food of its type. If false, the field is not sown.
 	bool ripeCrop {false};
 	/// A firefly hides exactly where the thing stands, as a land's script places one
@@ -597,6 +599,8 @@ struct Command
 		/// The pointer moves to the middle of the body of the opponent of the creature on the screen, as the mouse moves
 		/// it. A press of a button there goes to the fight only while the camera shows the fight.
 		PointerOnOpponent,
+		/// The pointer moves onto the body of the creature in the Creature Cave on the screen, as the mouse moves it
+		PointerOnCaveCreature,
 		/// The fight autopilot starts to fight for the player with the real mouse, with a policy (value: 0 the lesson, 1
 		/// aggressive, 2 random, 3 a sequence). It needs the inspector.
 		FightAutopilot,
