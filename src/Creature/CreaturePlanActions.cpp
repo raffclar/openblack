@@ -25,6 +25,7 @@
 #include "Creature/CreatureOddAgendas.h"
 #include "Creature/CreaturePlayerAgendas.h"
 #include "Creature/CreatureRestAndHome.h"
+#include "Creature/CreatureSacrifice.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureTownHelp.h"
 #include "Enums.h"
@@ -427,6 +428,8 @@ constexpr std::array k_Executors {
     Executor {.action = "ShowLearntLesson", .build = Build::ShowLearntLesson},
     Executor {.action = "LookConfused", .build = Build::LookConfused},
     Executor {.action = "BehaveStrangely", .build = Build::BehaveStrangely},
+    // The sacrifice: no desire chooses it, but a script or a copy of the player can make the creature do it
+    Executor {.action = "Sacrifice", .target = Target::AnyLiving, .build = Build::Sacrifice},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -687,6 +690,9 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	}
 	switch (executor.build)
 	{
+	case Build::Sacrifice:
+		// Only a creature whose player has a temple
+		return situation.hasTemple;
 	case Build::Drink:
 		// The creature can always try to drink. When it finds no place to drink, the action fails as it starts.
 		return true;
@@ -1302,6 +1308,14 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_odd::LookConfused(situation.camera);
 	case Build::BehaveStrangely:
 		return creature_odd::BehaveStrangely(situation.turnsPerSecond, random);
+	case Build::Sacrifice:
+		// Without a worship site at its temple, the creature has nowhere to take the thing
+		if (!situation.sacrificeAltar.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_sacrifice::Sacrifice(situation.holdingLiving ? std::nullopt : object, *situation.sacrificeAltar,
+		                                     situation.height);
 	case Build::Never:
 		return std::nullopt;
 	}

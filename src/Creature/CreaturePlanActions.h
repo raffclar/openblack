@@ -346,6 +346,8 @@ enum class Build : uint8_t
 	BehaveStrangely,
 	/// An action whose agenda can never be made
 	Never,
+	/// Taking a living thing to the altar of the first worship site of its temple, and putting it down there
+	Sacrifice,
 };
 
 /// What tells the planner that the creature did an action too recently to choose it again
@@ -539,6 +541,10 @@ struct Situation
 	/// the sea that it looks at or throws into. None when the map gives no such place.
 	std::optional<glm::vec2> explorePlace;
 	std::optional<glm::vec2> exploreSea;
+	/// For the sacrifice: whether what its hand holds is alive, and where the altar of the first worship site of its
+	/// temple stands, on the ground. The altar is none when the temple has no worship site.
+	bool holdingLiving {false};
+	std::optional<glm::vec3> sacrificeAltar;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

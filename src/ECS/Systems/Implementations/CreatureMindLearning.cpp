@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <functional>
 #include <iterator>
@@ -63,6 +64,7 @@
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureSacrifice.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureTownCompassion.h"
@@ -3056,6 +3058,38 @@ void CreatureMindSystem::SetScriptFocus(entt::entity creature, std::optional<cre
 	}
 }
 
+namespace
+{
+/// Where the altar stands of the worship site that a creature of the player takes a sacrifice to: the site in the first
+/// place around the player's temple that has a site. None when the player has no temple, or the temple has no site.
+std::optional<glm::vec3> SacrificeAltarOf(const ecs::Registry& registry, PlayerNames player)
+{
+	std::optional<glm::vec3> altar;
+	registry.Each<const Temple, const CitadelWorship>([&](const Temple& temple, const CitadelWorship& worship) {
+		if (temple.owner != player || altar.has_value())
+		{
+			return;
+		}
+		std::array<bool, CitadelWorship::k_Places> placeHasSite {};
+		std::ranges::transform(worship.sites, placeHasSite.begin(),
+		                       [&registry](entt::entity site) { return site != entt::null && registry.Valid(site); });
+		const auto place = creature_sacrifice::SitePlace(placeHasSite);
+		if (!place.has_value())
+		{
+			return;
+		}
+		const auto* site = registry.TryGet<const WorshipSite>(worship.sites.at(*place));
+		const auto* at =
+		    site != nullptr && registry.Valid(site->altar) ? registry.TryGet<const Transform>(site->altar) : nullptr;
+		if (at != nullptr)
+		{
+			altar = at->position;
+		}
+	});
+	return altar;
+}
+} // namespace
+
 void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::Situation& situation)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -3086,6 +3120,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 		const auto thing = Locator::creatureObjectActionSystem::value().KindOf(*held).thing;
 		const auto* mobile = registry.TryGet<const MobileObject>(*held);
 		situation.holdingTree = thing == creature_object_actions::Thing::Tree;
+		situation.holdingLiving = creature_object_actions::IsLiving(thing);
 		situation.holdingRock =
 		    thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
 		situation.holdingMushroom = thing == creature_object_actions::Thing::MagicMushroom ||
@@ -3121,6 +3156,10 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	SituatePlayer(creature, situation);
 	SituateHome(creature, situation);
 	SituateEmotes(creature, situation);
+	if (body != nullptr)
+	{
+		situation.sacrificeAltar = SacrificeAltarOf(registry, body->owner);
+	}
 }
 
 void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_actions::Situation& situation)
