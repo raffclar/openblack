@@ -174,6 +174,19 @@ TEST(VillagerBreeding, MeetingStopsAGapShortOfHalfway)
 	EXPECT_EQ(MeetingPoint(from, from, k_MeetingGap), from);
 }
 
+TEST(VillagerBreeding, ACoupleNearOrTooNearMeetsAtTheGap)
+{
+	// A couple that touches already steps nearer, and a couple that stands too near steps back
+	for (const float distance : {1.0f, 0.3f})
+	{
+		const glm::vec2 from {100.0f, 100.0f};
+		const glm::vec2 to {100.0f + distance, 100.0f};
+		const auto point = MeetingPoint(from, to, k_MeetingGap);
+		EXPECT_NEAR(glm::distance(point, MeetingPoint(to, from, k_MeetingGap)), k_MeetingGap, 0.02f);
+		EXPECT_EQ(point.x < from.x, distance < k_MeetingGap);
+	}
+}
+
 TEST(VillagerBreeding, TouchingIsEdgeToEdgeWithinAGap)
 {
 	EXPECT_TRUE(Touching(1.0f, 0.3f, 0.3f, k_KissingGap));
