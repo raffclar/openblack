@@ -285,7 +285,7 @@ void creature_feedback::RestHandOnBody(Zoomer& distance, float cameraToTouch, fl
 
 float creature_feedback::HandDistanceFromCamera(const Zoomer& distance)
 {
-	return std::max(distance.GetValue(), k_HandNearestToCamera);
+	return std::clamp(distance.GetValue(), k_HandNearestToCamera, k_HandReach);
 }
 
 glm::ivec2 creature_feedback::SecondTryCursor(glm::ivec2 cursor, glm::ivec2 lastCursor)
