@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include <algorithm>
+
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/matrix.hpp>
 #include <glm/vec4.hpp>
@@ -54,7 +56,10 @@ float Depth(float creatureSize, int boxSize, float interfaceShare)
 
 glm::mat4 SpaceProjection(const glm::mat4& worldProjection)
 {
+	// The world's camera sees across a 4:3 screen what its lens gives. On a wider screen it sees up and down what a 4:3
+	// screen sees, and so more across: the width of view of a 4:3 screen comes from its height of view then.
 	auto projection = worldProjection;
+	projection[0][0] = std::max(worldProjection[0][0], worldProjection[1][1] * (k_Space.y / k_Space.x));
 	projection[1][1] = projection[0][0] * (k_Space.x / k_Space.y);
 	return projection;
 }

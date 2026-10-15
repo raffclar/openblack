@@ -417,8 +417,19 @@ private:
 	/// after its body's passes, from that sort depth on
 	void DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components::CreatureEyes& eyes,
 	                      const L3DMeshSubmitDesc& bodyDesc, float fizz, float freeze, uint32_t fizzSortDepth) const;
+	/// Where a creature's hair is drawn: the view, the eye the ribbons face, how far the strands move from where they
+	/// hang in the world, and the point that lights them
+	struct HairPlace
+	{
+		RenderPass view;
+		glm::vec3 eye;
+		glm::vec3 offset;
+		glm::vec3 origin;
+	};
 	/// A creature's strands of hair, as ribbons facing the camera blended over the scene, lit from where the creature is
 	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin) const;
+	/// A creature's strands of hair, as ribbons facing an eye, moved and lit as the place says
+	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, const HairPlace& place) const;
 	/// Draws the body of a creature that the interface shows: its mesh, its instance among those of the interface's
 	/// creatures, its pose, its shape and its eyes
 	using InterfaceCreatureBody =

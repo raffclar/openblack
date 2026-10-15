@@ -204,12 +204,21 @@ TEST(InterfaceCreatures, TheBonesMiddleAndTheFeetGoToThePoint)
 	EXPECT_NEAR(alone.z, -20.0f, k_Near);
 }
 
-TEST(InterfaceCreatures, TheSpaceKeepsTheWidthOfTheWorldView)
+TEST(InterfaceCreatures, TheSpaceSeesWhatTheWorldCameraSeesOnA43Screen)
 {
-	const auto world = glm::perspective(glm::radians(50.0f), 16.0f / 9.0f, 1.0f, 1000.0f);
-	const auto space = views::SpaceProjection(world);
-	EXPECT_FLOAT_EQ(space[0][0], world[0][0]);
-	EXPECT_FLOAT_EQ(space[1][1], world[0][0] * 4.0f / 3.0f);
-	EXPECT_FLOAT_EQ(space[2][2], world[2][2]);
-	EXPECT_FLOAT_EQ(space[3][2], world[3][2]);
+	// The world's camera keeps its height of view on a screen wider than 4:3 and its width of view on a narrower one
+	const auto fourThree = glm::perspective(glm::radians(50.0f), 4.0f / 3.0f, 1.0f, 1000.0f);
+	const auto wide = glm::perspective(glm::radians(50.0f), 32.0f / 9.0f, 1.0f, 1000.0f);
+	const auto narrow = glm::perspective(glm::radians(50.0f) * 1.25f * 0.75f, 5.0f / 4.0f, 1.0f, 1000.0f);
+	for (const auto& world : {fourThree, wide})
+	{
+		const auto space = views::SpaceProjection(world);
+		EXPECT_NEAR(space[0][0], fourThree[0][0], 1e-5f);
+		EXPECT_NEAR(space[1][1], fourThree[1][1], 1e-5f);
+		EXPECT_FLOAT_EQ(space[2][2], world[2][2]);
+		EXPECT_FLOAT_EQ(space[3][2], world[3][2]);
+	}
+	const auto space = views::SpaceProjection(narrow);
+	EXPECT_FLOAT_EQ(space[0][0], narrow[0][0]);
+	EXPECT_FLOAT_EQ(space[1][1], narrow[0][0] * 4.0f / 3.0f);
 }
