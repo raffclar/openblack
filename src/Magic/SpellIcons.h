@@ -116,6 +116,9 @@ enum class TapResult : uint8_t
 /// either on a worship site or with something stored
 [[nodiscard]] bool MayStartCharge(const IconCharge& icon, bool magicEnabled, bool onSite);
 
+/// Whether a tap on an icon or a stone hand is a valid tap of the hand: only the hand of the player that owns it
+[[nodiscard]] bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper);
+
 /// A tap on it: its charged miracle into the hand if it can go; else its charging called off if the tapping hand charges
 /// it; else, with the hand ready, its charging started
 [[nodiscard]] TapResult Tap(const IconCharge& icon, bool handReady, bool magicEnabled, bool onSite);

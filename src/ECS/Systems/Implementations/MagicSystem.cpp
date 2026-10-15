@@ -91,6 +91,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -107,6 +108,7 @@
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Hand/HandGrabRules.h"
+#include "Help/HelpProfile.h"
 #include "Help/VillageVoices.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -2502,9 +2504,13 @@ void MagicSystem::ReleaseFireBall(uint32_t nowMs, uint32_t turn)
 	{
 		return;
 	}
-	// Another player's fireball is caught; the player's own slips through
+	// Another player's fireball is caught; the player's own slips through. The help counts the tap either way.
 	if (EntityRegistry().AllOf<MagicFireBall>(press.ball))
 	{
+		if (Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+		}
 		TapFireBall(press.ball);
 	}
 }

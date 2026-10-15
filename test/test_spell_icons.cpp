@@ -174,3 +174,10 @@ TEST(SpellIcons, TheAnnouncerNamesTheChargedMiracle)
 	EXPECT_EQ(FullyChargedVoice(SpellSeedType::BeamExplosion), 1);
 	EXPECT_EQ(FullyChargedVoice(SpellSeedType::CreatureSpellHungry), 8);
 }
+
+TEST(SpellIcons, OnlyTheOwnersHandTapsAnIcon)
+{
+	EXPECT_TRUE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE));
+}
