@@ -394,7 +394,7 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::HangAround({}, k_Turn, Always(0))[1].face, Cue::Idle);
 	EXPECT_EQ(creature_mind::LookAt({}, 1.0f).back().face, Cue::Amazed);
 	EXPECT_EQ(creature_mind::PutDownHeld().back().face, Cue::None);
-	EXPECT_EQ(creature_mind::Faint().back().face, Cue::None);
+	EXPECT_EQ(creature_mind::Faint(1.0f).back().face, Cue::None);
 }
 
 TEST(CreatureIdleMind, EachFacePulledMovesTheVarietyOn)
@@ -1077,10 +1077,10 @@ TEST(CreatureNeedsMind, ItDrinksAtTheWatersEdge)
 	EXPECT_EQ(agenda[2].effect, creature_mind::Effect::Drink);
 }
 
-TEST(CreatureNeedsMind, FaintedItLiesStillThenComesRound)
+TEST(CreatureNeedsMind, FaintedItLiesFourSecondsASizeAndEightMoreThenComesRound)
 {
 	creature_mind::IdleMind mind;
-	creature_mind::Plan(mind, creature_mind::Activity::Faint, creature_mind::Faint());
+	creature_mind::Plan(mind, creature_mind::Activity::Faint, creature_mind::Faint(1.0f));
 	FakeBody body;
 	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
 	ASSERT_TRUE(commands.startSequence.has_value());
@@ -1100,5 +1100,6 @@ TEST(CreatureNeedsMind, FaintedItLiesStillThenComesRound)
 		body.Obey(commands, 1);
 	}
 	ASSERT_TRUE(cameRound.has_value());
-	EXPECT_EQ(*cameRound, static_cast<int>(creature_mind::k_FaintSeconds * k_TurnsPerSecond));
+	EXPECT_EQ(*cameRound,
+	          static_cast<int>((creature_mind::k_FaintSecondsPerSize + creature_mind::k_FaintExtraSeconds) * k_TurnsPerSecond));
 }

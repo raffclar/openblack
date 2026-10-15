@@ -34,6 +34,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsAngle.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
@@ -87,6 +88,7 @@
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -99,6 +101,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -108,6 +111,8 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicWorldInterface.h"
+#include "MagicLiving.h"
 #include "ObjectMeasures.h"
 #include "Physics/Body.h"
 #include "Physics/LivingRules.h"
@@ -641,6 +646,29 @@ std::optional<glm::vec3> NearestHand(const ecs::Registry& registry, entt::entity
 	return nearest;
 }
 
+/// Running away, the seconds that a creature of a species looks back at what it runs from, and the seconds that it then
+/// looks about
+float RunLookBackSeconds(CreatureType species)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& creatures = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(species);
+	return row < creatures.size() ? creatures.at(row).runLookBackSeconds : 0.0f;
+}
+float RunLookAheadSeconds(CreatureType species)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& creatures = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(species);
+	return row < creatures.size() ? creatures.at(row).runLookAheadSeconds : 0.0f;
+}
+
 std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity creature, const creature_mind::Gaze& gaze,
                                    bool moving)
 {
@@ -844,6 +872,37 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 	    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
 	    .handStillTurns = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandStillTurns() : 0,
 	};
+}
+
+/// The point of focus of the camera of a creature's player, on the land, while its step follows the camera; and whether
+/// the point is less than a sixth of a turn from the way its body faces, or in its own map cell. None for a creature
+/// without a player.
+std::pair<std::optional<glm::vec3>, bool> CameraFocusOf(const ecs::Registry& registry, entt::entity creature,
+                                                        const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::FollowCamera ||
+	    !Locator::camera::has_value())
+	{
+		return {std::nullopt, false};
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (body == nullptr || body->owner == PlayerNames::NEUTRAL || transform == nullptr)
+	{
+		return {std::nullopt, false};
+	}
+	const auto focus = Locator::camera::value().GetFocus();
+	const auto from = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
+	const auto to = map_coords::FromMetres(glm::vec2(focus.x, focus.z));
+	// The way the body faces, as the game turns it: a quarter turn on from the map's
+	const auto ahead = -(transform->rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+	const auto facing = static_cast<int32_t>(gutils::ConvertScawenAngleToGameAngle(
+	    static_cast<float>(std::atan2(static_cast<double>(ahead.x), -static_cast<double>(ahead.z)))));
+	// The game takes the difference of the two angles with no wrap at a full turn
+	const auto apart = std::abs(facing - static_cast<int32_t>(gutils::GetAngleFromXZ(from, to)));
+	const bool inView =
+	    apart < gutils::k_GameAngleCircle / creature_look::k_BodyViewParts || map_coords::Cell(from) == map_coords::Cell(to);
+	return {focus, inView};
 }
 
 /// The player's hand as a creature watching it sees it, only while its step watches the hand; none for a creature
@@ -1513,10 +1572,6 @@ void CreatureMindSystem::ProcessTurn()
 		    if (mind.learnt.has_value())
 		    {
 			    creature_learning::Age(mind.learnt->contexts, k_TurnSeconds);
-			    for (auto& turns : mind.learnt->turnsSinceDone)
-			    {
-				    turns = std::min(turns + 1, creature_planner::k_NoveltyTurns);
-			    }
 		    }
 		    if (mind.desiresPhase != mind.developmentPhase)
 		    {
@@ -1607,7 +1662,7 @@ void CreatureMindSystem::ProcessTurn()
 			    // As with any change of plan, a pose ends and an action plays out before it drops
 			    animation.body = creature_layers::EndLoop(animation.body);
 			    TellFainting(entity);
-			    creature_mind::Plan(mind.idle, creature_mind::Activity::Faint, creature_mind::Faint());
+			    creature_mind::Plan(mind.idle, creature_mind::Activity::Faint, creature_mind::Faint(ShownSize(creature)));
 			    needs->faint.reset();
 		    }
 		    // When the creature is free to choose, it weighs the plans of every desire. When no plan is ready, it does
@@ -1690,6 +1745,7 @@ void CreatureMindSystem::ProcessTurn()
 		    const auto inHand = Locator::creatureObjectActionSystem::has_value()
 		                            ? Locator::creatureObjectActionSystem::value().GetHeld(entity)
 		                            : std::nullopt;
+		    const auto [cameraFocus, cameraFocusAhead] = CameraFocusOf(registry, entity, mind.idle);
 		    const creature_mind::Senses senses {
 		        .seconds = k_TurnSeconds,
 		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
@@ -1712,6 +1768,8 @@ void CreatureMindSystem::ProcessTurn()
 		        .bodyPlaying = creature_layers::IsPlaying(animation.body),
 		        .dance = DanceViewOf(entity, mind.idle),
 		        .followed = FollowedViewOf(registry, transform.position, mind),
+		        .cameraFocus = cameraFocus,
+		        .cameraFocusAhead = cameraFocusAhead,
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    if (commands.communicated.has_value())
@@ -1777,6 +1835,10 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    static_cast<void>(
 			        ecs::world_objects::IncreaseLife(static_cast<entt::entity>(*commands.repair), creature_mind::k_RepairLife));
+		    }
+		    if (commands.heal.has_value())
+		    {
+			    Heal(entity, static_cast<entt::entity>(*commands.heal));
 		    }
 		    if (commands.useUp.has_value() && registry.Valid(static_cast<entt::entity>(*commands.useUp)))
 		    {
@@ -1854,6 +1916,16 @@ void CreatureMindSystem::ProcessTurn()
 			    mind.satisfiedByEffect = true;
 		    }
 		    FollowAgenda(entity, mind);
+		    // The turns that the agenda runs steps for
+		    if (mind.agendaTurnsSerial != mind.idle.serial)
+		    {
+			    mind.agendaTurnsSerial = mind.idle.serial;
+			    mind.agendaTurns = 0;
+		    }
+		    if (mind.idle.step < mind.idle.agenda.size())
+		    {
+			    ++mind.agendaTurns;
+		    }
 		    // Once it has taken what the hand gave it, its desires choose what to do with it
 		    if (commands.effect == creature_mind::Effect::TookFromHand && commands.effectObject.has_value())
 		    {
@@ -1875,12 +1947,28 @@ void CreatureMindSystem::ProcessTurn()
 			    // A script's focus holds the head whatever the creature is doing
 			    animation.lookAt = focus;
 		    }
+		    else if (commands.gaze.has_value() && commands.gaze->runningAway)
+		    {
+			    // Running away, it looks back at what it runs from for a time, then looks about for a time
+			    const bool back =
+			        creature_emote::RunLooksBack(mind.runLookBack, k_TurnsPerSecond, RunLookBackSeconds(creature.species),
+			                                     RunLookAheadSeconds(creature.species));
+			    auto from = *commands.gaze;
+			    from.runningAway = false;
+			    const auto point = back ? GazePoint(registry, entity, from, moving) : std::nullopt;
+			    animation.lookAt = point.has_value() ? point : LookAbout(creature, transform, mind);
+		    }
 		    else if (commands.gaze.has_value() && commands.gaze->whileGoing)
 		    {
 			    // On the way to a place: the head looks at the place, at what it watches, or from side to side. Without
-			    // a point of its own, the look uses the place that the creature walks to.
+			    // a point of its own, the look uses the top of the thing that it goes to, or else the place that the
+			    // creature walks to.
 			    const auto about = LookAbout(creature, transform, mind);
 			    auto place = commands.gaze->point;
+			    if (!place.has_value() && commands.gaze->object.has_value())
+			    {
+				    place = GazePoint(registry, entity, {.object = commands.gaze->object}, false);
+			    }
 			    if (const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
 			        !place.has_value() && walk != nullptr && walk->destination.has_value())
 			    {
@@ -2266,7 +2354,55 @@ bool CreatureMindSystem::Puke(entt::entity creature)
 
 bool CreatureMindSystem::Faint(entt::entity creature)
 {
-	return Replan(creature, creature_mind::Activity::Faint, creature_mind::Faint());
+	// It faints as a fight's loser does: it lies where it fell, then a player's creature is carried to its pen to come
+	// round
+	auto& registry = Locator::entitiesRegistry::value();
+	if (Locator::creatureFightSystem::has_value() && registry.Valid(creature))
+	{
+		TellFainting(creature);
+		Locator::creatureFightSystem::value().ForceFaint(creature);
+		return registry.AllOf<CreatureKnockedOut>(creature);
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	return Replan(creature, creature_mind::Activity::Faint, creature_mind::Faint(body != nullptr ? ShownSize(*body) : 1.0f));
+}
+
+void CreatureMindSystem::Heal(entt::entity creature, entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing))
+	{
+		return;
+	}
+	// The thing takes a full heal from the creature, which moves the creature's alignment as a heal does
+	if (Locator::magicSystem::has_value())
+	{
+		magic::EffectValues values;
+		values[magic::EffectKind::Heal] = 1.0f;
+		const auto* body = registry.TryGet<const Creature>(creature);
+		Locator::magicSystem::value().ApplyEffectToObject(
+		    thing, values,
+		    magic::EffectSource {.player = body != nullptr ? body->owner : PlayerNames::NEUTRAL,
+		                         .casterCreature = creature,
+		                         .appliedBy = creature});
+	}
+	if (!registry.Valid(thing) || !magic_living::LifeOf(thing).has_value())
+	{
+		return;
+	}
+	// A living thing gets all its life back. A villager then goes home, and an animal wanders off.
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} heals {} from life {}", entt::to_integral(creature),
+	                    entt::to_integral(thing), magic_living::LifeOf(thing).value_or(0.0f));
+	magic_living::SetLife(thing, 1.0f);
+	if (auto* action = registry.TryGet<LivingAction>(thing);
+	    action != nullptr && registry.AllOf<Villager>(thing) && Locator::livingActionSystem::has_value())
+	{
+		static_cast<void>(Locator::livingActionSystem::value().VillagerChangeTopState(*action, VillagerStates::GoHome));
+	}
+	else if (registry.AllOf<Animal>(thing) && Locator::animalSystem::has_value())
+	{
+		Locator::animalSystem::value().StartWandering(thing);
+	}
 }
 
 void CreatureMindSystem::Wake(entt::entity creature)

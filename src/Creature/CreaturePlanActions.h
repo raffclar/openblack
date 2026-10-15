@@ -111,11 +111,13 @@ enum class Target : uint8_t
 	FieldWithFood,
 	StoragePitWithFood,
 	TreeBigEnough,
+	/// A thing that the creature can pick up and that has lost some of its life, to stroke and heal
+	Strokeable,
 };
 /// A creature poos only by a thing taller than this, in metres
 constexpr float k_PooedOnTallerThan = 1.5f;
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::TreeBigEnough) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::Strokeable) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -253,8 +255,28 @@ enum class Build : uint8_t
 	EnterTemple,
 	PrayAtTemple,
 	LookAtTemple,
+	/// The emotes: howling at the player, being sad, pulling silly faces at a villager, being pathetic to the player,
+	/// stroking a hurt thing to heal it, and looking at the sun or the moon
+	Howl,
+	BeSad,
+	PullSillyFaces,
+	BePathetic,
+	StrokeAndHeal,
+	LookAtSun,
+	LookAtMoon,
 	/// An action whose agenda can never be made
 	Never,
+};
+
+/// What tells the planner that the creature did an action too recently to choose it again
+enum class Recency : uint8_t
+{
+	/// Nothing
+	None,
+	/// Fewer whole seconds than two have gone by since it last did the action
+	TwoSeconds,
+	/// It last showed off to its end 200 game turns ago or less
+	ShowedOff,
 };
 
 /// The kinds of one-shot miracle that a creature casts for its desires
@@ -300,6 +322,8 @@ struct Executor
 	OneShotKind oneShot {OneShotKind::Aggressive};
 	/// The action takes the creature away from its home: a young creature does not do it
 	bool leavesHome {false};
+	/// What stops the creature choosing the action again too soon
+	Recency recency {Recency::None};
 };
 
 /// From this stage of growing up the creature is old enough to leave its home
@@ -401,6 +425,20 @@ struct Situation
 	glm::vec3 standing {0.0f};
 	/// No other creature is near enough to frighten it (see creature_mind::NothingFrighteningNear)
 	bool nothingFrighteningNear {true};
+	/// Whether the sky shows night, and the place where the creature looks for the moon
+	bool night {false};
+	glm::vec3 moon {0.0f};
+	/// Whether its alignment is evil (below 0)
+	bool evil {false};
+	/// Whether it wears a leash
+	bool leashed {false};
+	/// How far its player's hand nearest it is, none without a hand; and what it feels about its player, -1 to 1
+	std::optional<float> handDistance;
+	float attitudeToPlayer {0.0f};
+	/// Whether what its hand holds is a thing it can stroke
+	bool holdingStrokeable {false};
+	/// Game turns a second
+	float turnsPerSecond {10.0f};
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo
@@ -425,6 +463,14 @@ struct CastInfo
 
 /// Whether an action can be carried out now, in this situation, before any thing is chosen
 [[nodiscard]] bool Possible(const Executor& executor, const Situation& situation);
+/// Whether the creature may choose an action for itself in this situation: the conditions that the game's table puts on
+/// some actions (by day or by night, near or far from home, with the player's hand near). A script can make it do the
+/// action without them.
+[[nodiscard]] bool Allowed(const Executor& executor, const Situation& situation);
+/// Whether the creature did an action too recently to choose it again: the turns since it last did it, the game turn of
+/// the last time it showed off to its end (0 for never) and the game turn now
+[[nodiscard]] bool DoneTooRecently(const Executor& executor, uint32_t turnsSinceDone, uint32_t lastShowOffTurn, uint32_t turn,
+                                   uint32_t turnsPerSecond);
 /// The agenda for an action on a thing (by its entity number, and where it is), if it can be done
 [[nodiscard]] std::optional<std::vector<creature_mind::Step>> Agenda(const Executor& executor, std::optional<uint32_t> object,
                                                                      glm::vec2 objectPoint, const Situation& situation,

@@ -84,6 +84,8 @@ public:
 	[[nodiscard]] virtual std::optional<uint8_t> FinalGameStateOf(entt::entity animal) const = 0;
 	/// A new size for an animal
 	virtual void SetScale(entt::entity animal, float scale) = 0;
+	/// An animal starts to wander, as one that a creature has healed does
+	virtual void StartWandering([[maybe_unused]] entt::entity animal) {}
 	/// An animal's radius across the ground: the larger half of its model's width and depth, scaled
 	[[nodiscard]] virtual float RadiusOf(entt::entity animal) const = 0;
 	/// The step an animal makes each turn, in metres across the land

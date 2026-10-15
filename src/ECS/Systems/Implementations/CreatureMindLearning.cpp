@@ -35,6 +35,7 @@
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureActionAgendas.h"
+#include "Creature/CreatureActionHistory.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDance.h"
@@ -125,9 +126,11 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
+#include "Graphics/Moon.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -308,6 +311,20 @@ void SituateStoreFood(const ecs::Registry& registry, entt::entity pit, creature_
 	}
 }
 
+/// The game's turn now
+uint32_t TurnNow()
+{
+	return Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
+}
+
+/// Whether the creature can stroke a thing to heal it: a thing that it can pick up and that has lost some of its life
+bool Strokeable(const ecs::Registry& registry, entt::entity entity, entt::entity self)
+{
+	const auto life = registry.Valid(entity) ? magic_living::LifeOf(entity) : std::nullopt;
+	return life.has_value() && *life < 1.0f && Locator::creatureObjectActionSystem::has_value() &&
+	       Locator::creatureObjectActionSystem::value().CanPickUp(self, entity);
+}
+
 bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, entt::entity self)
 {
 	if (entity == self || !registry.Valid(entity))
@@ -352,6 +369,8 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		const auto life = registry.AllOf<Villager>(entity) ? magic_living::LifeOf(entity) : std::nullopt;
 		return life.has_value() && *life <= k_HurtEnoughToHeal;
 	}
+	case Target::Strokeable:
+		return !heldByOther && Strokeable(registry, entity, self);
 	case Target::Creature:
 		return registry.AllOf<Creature>(entity);
 	case Target::Living:
@@ -1165,6 +1184,7 @@ void CreatureMindSystem::SetUpLearning(entt::entity creature, CreatureMindState&
 	auto knowledge = tables != nullptr ? creature_watching::StartKnowledge(tables->skills, tables->miracles)
 	                                   : creature_watching::Knowledge {};
 	mind.learnt = creature_mind_model::Fresh(*mind.desires, actionCount, std::move(knowledge));
+	mind.learnt->turnsSinceDone = creature_action_history::Fresh(actionCount, [this](uint32_t range) { return Random(range); });
 	// A new mind did each action a short time ago, picked at random for each
 	for (auto& turns : mind.learnt->turnsSinceDone)
 	{
@@ -1212,7 +1232,9 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 	const auto* tables = GetTables();
 	auto knowledge = tables != nullptr ? creature_watching::StartKnowledge(tables->skills, tables->miracles)
 	                                   : creature_watching::Knowledge {};
-	const auto freshLearnt = creature_mind_model::Fresh(fresh, mind.learnt->opinions.size(), std::move(knowledge));
+	auto freshLearnt = creature_mind_model::Fresh(fresh, mind.learnt->opinions.size(), std::move(knowledge));
+	freshLearnt.turnsSinceDone =
+	    creature_action_history::Fresh(freshLearnt.opinions.size(), [this](uint32_t range) { return Random(range); });
 	auto loaded = creature_mind_model::FromFile(*file, fresh, freshLearnt);
 	if (tables != nullptr)
 	{
@@ -1236,6 +1258,12 @@ void CreatureMindSystem::Abandon(CreatureMindState& mind)
 	if (mind.planActive && mind.learnt.has_value() && !mind.learnt->contexts.empty())
 	{
 		mind.learnt->contexts.back().running = false;
+	}
+	// Whether carried out or not, the plan's action was done just now, and the other actions of its desire get older
+	if (mind.planActive && mind.learnt.has_value() && mind.planner.current.has_value())
+	{
+		creature_action_history::PlanEnded(mind.learnt->turnsSinceDone, mind.planner.current->action, mind.planActions,
+		                                   mind.agendaTurns);
 	}
 	mind.planActive = false;
 	if (mind.planner.current.has_value())
@@ -1264,6 +1292,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		const bool carriedOut = idle.serial == mind.planSerial && !idle.gaveUp;
 		if (carriedOut)
 		{
+			NoteDone(mind, plan.action);
 			creature_training::CountCarriedOut(mind.actionCounts, plan.action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
 			mind.lastActionDone = plan.action;
@@ -1295,12 +1324,15 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	// What the idle mind started is over once its agenda runs out: carried out to its end, its action counts
 	if (mind.underway.has_value() && (mind.planActive || mind.underway->serial != idle.serial))
 	{
+		EndUnderway(mind);
 		mind.underway.reset();
 	}
 	if (mind.underway.has_value() && idle.step >= idle.agenda.size())
 	{
+		EndUnderway(mind);
 		if (!idle.gaveUp)
 		{
+			NoteDone(mind, mind.underway->action);
 			creature_training::CountCarriedOut(mind.actionCounts, mind.underway->action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
 			mind.lastActionDone = mind.underway->action;
@@ -1380,7 +1412,6 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	                            .value_or(creature_learning::k_NoTellingSource)
 	                      : creature_learning::k_NoTellingSource,
 	    });
-	mind.learnt->turnsSinceDone.at(*action) = 0;
 	mind.underway = CreatureMindState::ActionUnderway {.serial = idle.serial, .action = *action};
 }
 
@@ -1483,7 +1514,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	mind.agendaSeen = mind.idle.serial;
 	mind.satisfiedByEffect = false;
 	mind.desireSeenTo = false;
-	learnt.turnsSinceDone.at(plan.action) = 0;
+	mind.planActions = mind.plannedActions.at(static_cast<size_t>(plan.desire));
 	// It is remembered for the player's feedback unless nothing says why it wants what the plan serves, as a forced plan
 	// is, and the desires the plan's desire opposes are held back
 	if (const auto source = creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]); source.has_value())
@@ -1564,6 +1595,10 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 			    ClearAreaFor(Locator::entitiesRegistry::value(), creature, point,
 			                 creature_mind::k_SleepByObjectHeights * situation.height, !situation.controlledByScript);
 		}
+	}
+	if (const auto clear = EmoteClearArea(creature, *executor, point, situated))
+	{
+		situated.clearArea = *clear;
 	}
 	if (executor->build == creature_plan_actions::Build::LookButDontApproach ||
 	    executor->build == creature_plan_actions::Build::SmileAt)
@@ -2585,6 +2620,10 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			    .servesFirstDesire = tables->actions.at(action).desire == 0,
 			    .disabled =
 			        !creature_plan_actions::Possible(*executor, situation) ||
+			        !creature_plan_actions::Allowed(*executor, situation) ||
+			        creature_plan_actions::DoneTooRecently(*executor, learnt.turnsSinceDone.at(action),
+			                                               action < mind.lastDoneTurn.size() ? mind.lastDoneTurn.at(action) : 0,
+			                                               TurnNow(), static_cast<uint32_t>(k_TurnsPerSecond)) ||
 			        (executor->build == creature_plan_actions::Build::DanceWithVillagers && !MayDanceToImpress(creature)) ||
 			        !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
 			        (creature_plan_actions::IsCast(*executor) &&
@@ -2677,6 +2716,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			best->about = entt::to_integral(activity->whole);
 		}
 		mind.planner.best.at(d) = best;
+		mind.plannedActions.at(d).assign(actions.begin(), actions.end());
 	}
 
 	// When the planner examines only one desire, the creature starts the plan immediately, if there is a plan
@@ -2871,6 +2911,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				    ClearAreaFor(registry, creature, point, creature_mind::k_SleepByObjectHeights * situation.height,
 				                 !situation.controlledByScript);
 			}
+			if (const auto clear = EmoteClearArea(creature, *executor, point, situation))
+			{
+				situation.clearArea = *clear;
+			}
 			if (executor->build == creature_plan_actions::Build::DanceWithVillagers)
 			{
 				SituateDance(creature, *executor, point, situation);
@@ -2909,8 +2953,8 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	mind->agendaSeen = mind->idle.serial;
 	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
+	mind->planActions = tables->desireActions.at(static_cast<size_t>(plan.desire));
 	auto& learnt = *mind->learnt;
-	learnt.turnsSinceDone.at(*action) = 0;
 	const auto& info = tables->actions[*action];
 	// TODO(usefulness-use-tree): the game's forced plans each name what their desire is about; only the give passes it
 	// here yet, and the rest count as the planner's own plans do
@@ -3041,7 +3085,87 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	}
 	situation.hangAround = HangAroundPlacesOf(creature);
 	situation.turnSeconds = k_TurnSeconds;
+	situation.turnsPerSecond = k_TurnsPerSecond;
 	SituateHome(creature, situation);
+	SituateEmotes(creature, situation);
+}
+
+void CreatureMindSystem::SituateEmotes(entt::entity creature, creature_plan_actions::Situation& situation)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (Locator::skySystem::has_value())
+	{
+		const auto& clock = Locator::skySystem::value().GetClock();
+		situation.night = clock.IsVisualNight();
+		// The creature looks for the moon at the place that the sky draws it at from the camera, taken as a place on
+		// the land
+		situation.moon = graphics::moon::Offset(clock.GetScriptTime());
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	situation.evil = body != nullptr && body->alignment < 0.0f;
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	situation.leashed = leashes != nullptr && leashes->worn.has_value();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (situation.playerHand.has_value() && at != nullptr)
+	{
+		situation.handDistance = glm::distance(*situation.playerHand, at->position);
+	}
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature))
+	{
+		situation.attitudeToPlayer = mind->attitudeToPlayer;
+	}
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		if (const auto held = Locator::creatureObjectActionSystem::value().GetHeld(creature))
+		{
+			const auto life = magic_living::LifeOf(*held);
+			situation.holdingStrokeable =
+			    life.has_value() && *life < 1.0f && Locator::creatureObjectActionSystem::value().CanPickUp(creature, *held);
+		}
+	}
+}
+
+std::optional<glm::vec2> CreatureMindSystem::EmoteClearArea(entt::entity creature,
+                                                            const creature_plan_actions::Executor& executor, glm::vec2 point,
+                                                            const creature_plan_actions::Situation& situation)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	switch (executor.build)
+	{
+	case creature_plan_actions::Build::Sleep:
+		// Sleeping on the spot, it looks for a clear place about itself four times as wide as it is tall; one not under a
+		// script's control also wants nothing living there
+		return ClearAreaFor(registry, creature, situation.position, creature_emote::k_SleepOnTheSpotHeights * situation.height,
+		                    !situation.controlledByScript);
+	case creature_plan_actions::Build::SitDown:
+		// Sitting down, it looks for a clear place about the thing four times as wide as its own radius
+		return ClearAreaFor(registry, creature, point, creature_emote::k_SitDownRadii * situation.radius, false);
+	default:
+		return std::nullopt;
+	}
+}
+
+void CreatureMindSystem::NoteDone(CreatureMindState& mind, uint32_t action)
+{
+	if (mind.lastDoneTurn.size() <= action)
+	{
+		mind.lastDoneTurn.resize(static_cast<size_t>(action) + 1, 0);
+	}
+	mind.lastDoneTurn.at(action) = TurnNow();
+}
+
+void CreatureMindSystem::EndUnderway(CreatureMindState& mind)
+{
+	const auto* tables = GetTables();
+	if (!mind.underway.has_value() || !mind.learnt.has_value() || tables == nullptr ||
+	    mind.underway->action >= tables->actions.size())
+	{
+		return;
+	}
+	const auto desire = tables->actions.at(mind.underway->action).desire;
+	const auto list = desire < tables->desireActions.size() ? std::span<const uint32_t>(tables->desireActions.at(desire))
+	                                                        : std::span<const uint32_t> {};
+	creature_action_history::PlanEnded(mind.learnt->turnsSinceDone, mind.underway->action, list, mind.agendaTurns);
 }
 
 void CreatureMindSystem::BelieveInTempleToEnter(entt::entity creature, const creature_plan_actions::Executor& executor,

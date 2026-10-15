@@ -35,6 +35,7 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
@@ -800,6 +801,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::planSerial>("planSerial")
 	    .Field<&components::CreatureMindState::agendaSeen>("agendaSeen")
 	    .Field<&components::CreatureMindState::stepTurns>("stepTurns")
+	    .Field<&components::CreatureMindState::agendaTurns>("agendaTurns")
+	    .Field<&components::CreatureMindState::agendaTurnsSerial>("agendaTurnsSerial")
+	    .Field<&components::CreatureMindState::planActions>("planActions")
+	    .Field<&components::CreatureMindState::plannedActions>("plannedActions", {k_CreatureDesiresDesireNames})
+	    .Field<&components::CreatureMindState::lastDoneTurn>("lastDoneTurn")
+	    .Field<&components::CreatureMindState::runLookBack>("runLookBack")
 	    .Field<&components::CreatureMindState::turn>("turn")
 	    .Field<&components::CreatureMindState::plannedTurn>("plannedTurn")
 	    .Field<&components::CreatureMindState::lastMeterTurn>("lastMeterTurn")
@@ -2162,6 +2169,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_desires::Source::multiplier>("multiplier")
 	    .Field<&openblack::creature_desires::Source::drive>("drive")
 	    .Field<&openblack::creature_desires::Source::clearedWhenSatisfied>("clearedWhenSatisfied");
+	Reflect<openblack::creature_emote::RunLookBack>(context, ValueOnly {})
+	    .Field<&openblack::creature_emote::RunLookBack::lookingBack>("lookingBack")
+	    .Field<&openblack::creature_emote::RunLookBack::turns>("turns");
 	Reflect<openblack::creature_eyes::Blink>(context, ValueOnly {})
 	    .Field<&openblack::creature_eyes::Blink::state>("state")
 	    .Field<&openblack::creature_eyes::Blink::timerMs>("timerMs")
@@ -2352,7 +2362,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Gaze::hand>("hand")
 	    .Field<&openblack::creature_mind::Gaze::point>("point")
 	    .Field<&openblack::creature_mind::Gaze::camera>("camera")
-	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing");
+	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing")
+	    .Field<&openblack::creature_mind::Gaze::runningAway>("runningAway");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::activity>("activity")
 	    .Field<&openblack::creature_mind::IdleMind::agenda>("agenda")
@@ -2379,7 +2390,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::restTurns>("restTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceTurns>("danceTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceEnding>("danceEnding")
-	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet");
+	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet")
+	    .Field<&openblack::creature_mind::IdleMind::followCameraTurns>("followCameraTurns");
 	Reflect<openblack::creature_mind::Movement>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Movement::kind>("kind")
 	    .Field<&openblack::creature_mind::Movement::point>("point")

@@ -937,8 +937,9 @@ struct GCreatureInfo: GLivingInfo
 	float lookSweepNearest;
 	float lookSweepFurthest;
 	float lookSweepDistanceStep;
-	float field0x2f0;
-	float field0x2f4;
+	/// Running away, it looks back at what it runs from for this many seconds, then looks about for this many
+	float runLookBackSeconds;
+	float runLookAheadSeconds;
 	float lookAtPlaceRange;
 	/// The help tells of a problem with its body at most once in this many seconds
 	float helpBodyProblemSeconds;

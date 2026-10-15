@@ -135,6 +135,8 @@ private:
 	           const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
+	/// The creature heals a thing at once, as a stroke heals it
+	void Heal(entt::entity creature, entt::entity thing);
 	/// Copying the player, the creature does what the player did: to the player's thing, else to the nearest thing of the
 	/// same kind, else to the most useful thing (CreatureMindLearning.cpp)
 	void CopyPlayersDeed(entt::entity creature, components::CreatureMindState& mind);
@@ -172,6 +174,17 @@ private:
 	/// What an agenda needs to know of the creature itself: the camera's position, whether it has a player, whether a
 	/// script controls it, its radius, and a chance for what varies
 	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
+	/// What the emotes and the sleep and sit places need to know of where the creature is
+	void SituateEmotes(entt::entity creature, creature_plan_actions::Situation& situation);
+	/// The clear place where the creature sleeps on the spot or sits down by a thing; none for other actions, or when
+	/// there is no clear place
+	[[nodiscard]] std::optional<glm::vec2> EmoteClearArea(entt::entity creature,
+	                                                      const creature_plan_actions::Executor& executor, glm::vec2 point,
+	                                                      const creature_plan_actions::Situation& situation);
+	/// The creature carried out an action to its end on this game turn
+	static void NoteDone(components::CreatureMindState& mind, uint32_t action);
+	/// An agenda that no plan gave ends: its action was done just now, and the other actions of its desire get older
+	void EndUnderway(components::CreatureMindState& mind);
 	/// Where its home and its player's temple are, and whether another creature is near enough to frighten it
 	void SituateHome(entt::entity creature, creature_plan_actions::Situation& situation);
 	/// The agenda to go into its temple makes the creature believe in the temple's heart
