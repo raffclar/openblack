@@ -178,7 +178,7 @@ void openblack::testbed_scenarios::AddCreatureDanceScenarios(std::vector<Scenari
 	                "temple's heart (never more than fifty metres), turns to face the heart and holds still for two "
 	                "seconds. No dance starts: the tiger gives up the action there, as in the original game.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Placed, .eye = {55.0f, 22.0f, 100.0f}, .look = {0.0f, 8.0f, 40.0f}},
+	    .framing = {.shot = Shot::Placed, .eye = {14.0f, 12.0f, 48.0f}, .look = {0.0f, 8.0f, 72.0f}},
 	    .creatures = {{.species = CreatureType::Tiger, .offset = {0.0f, 110.0f}, .facingDegrees = 180.0f}},
 	    .temples = {{.offset = {0.0f, -30.0f}}},
 	    .commands =

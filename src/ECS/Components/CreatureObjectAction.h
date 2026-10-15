@@ -139,12 +139,4 @@ struct HeldByCreature
 	entt::entity creature {entt::null};
 };
 
-/// How the creature's town sees what it is doing, which its villagers react to, and for how long more it will once
-/// the creature stops
-struct CreatureTownAttitude
-{
-	creature_object_actions::TownAttitude attitude {creature_object_actions::TownAttitude::None};
-	float secondsLeft {0.0f};
-};
-
 } // namespace openblack::ecs::components
