@@ -4751,6 +4751,23 @@ void AddMind(std::vector<Scenario>& all)
 	                  .delaySeconds = 6.0f,
 	                  .value = static_cast<size_t>(creature_cave::Page::Mind)}},
 	});
+	// The player's tiger looks north at another god's ogre, a hut and a villager, to read its beliefs in the inspector
+	auto rival = Posed(CreatureType::Ogre, {0.0f, 25.0f}, 0.0f, "rival");
+	rival.owner = PlayerNames::PLAYER_TWO;
+	all.push_back({
+	    .id = "mind.beliefs_rest",
+	    .name = "What it believes about another creature, a building and a villager",
+	    .facet = Facet::Mind,
+	    .description = "The player's tiger, its mind paused, looks north at another player's ogre, a hut and a villager. "
+	                   "Read its beliefs with the inspector query creature.beliefs.",
+	    .expected = "After its eyes sweep about it, it has a belief about each of them. The ogre's belief shows the desire "
+	                "of the ogre's last action, how many miracles the ogre knows, and that the ogre carries nothing (29). "
+	                "The hut shows high life and that it is not being built (1). The villager shows high life.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "yours"), rival},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-20.0f, 20.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {15.0f, 15.0f}}},
+	});
 	// A hungry tiger, its mind running, looks north at a villager some way off; a nearer one stands behind it, out of sight
 	auto peckish = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "yours");
 	peckish.needs = {.energy = 0.3f};

@@ -68,6 +68,8 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .eatWhenStroked = row.field0xe0 != 0,
 		    .actsOnThing = row.field0x94 != 0,
 		    .notOnWhatItHolds = row.field0xa8 != 0,
+		    .shownDesire = row.shownDesire,
+		    .creatureNicenessChange = row.creatureNicenessChange,
 		    .needs = {.skills = {SkillNeeded(row.skillsNeeded[0]), SkillNeeded(row.skillsNeeded[1])},
 		              .miracle = row.magicType != k_NoMiracle ? std::optional<size_t>(row.magicType) : std::nullopt},
 		});

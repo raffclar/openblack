@@ -383,6 +383,23 @@
   "query": "creature.known"
  },
  {
+  "description": "A creature's beliefs about things: kind, last place, the whole thing, the attributes its decision trees test; and how nice it finds other creatures",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "Only beliefs of this kind (the game's belief type, 0 to 23)",
+    "name": "kind",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.beliefs"
+ },
+ {
   "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps",
   "kind": "object",
   "parameters": [

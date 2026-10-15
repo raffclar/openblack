@@ -132,6 +132,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Moon.h"
@@ -572,164 +573,6 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	return false;
 }
 
-struct Found
-{
-	entt::entity entity;
-	glm::vec2 point;
-	float distance;
-};
-
-/// The things of a kind about a point, nearest first
-std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity self, glm::vec2 from)
-{
-	std::vector<Found> found;
-	if (target == Target::None)
-	{
-		return found;
-	}
-	const auto consider = [&](entt::entity entity, const Transform& at) {
-		const glm::vec2 point {at.position.x, at.position.z};
-		const auto distance = glm::distance(point, from);
-		if (distance <= creature_planner::k_MaxGoalDistance && Accepts(registry, target, entity, self))
-		{
-			found.push_back({entity, point, distance});
-		}
-	};
-	registry.Each<const Villager, const Transform>(
-	    [&](entt::entity entity, const Villager&, const Transform& at) { consider(entity, at); });
-	registry.Each<const Creature, const Transform>(
-	    [&](entt::entity entity, const Creature&, const Transform& at) { consider(entity, at); });
-	registry.Each<const MobileObject, const Transform>(
-	    [&](entt::entity entity, const MobileObject&, const Transform& at) { consider(entity, at); });
-	// Anything at all is whatever it may come to know of: the living, what lies about, statics, features, trees and
-	// buildings
-	// What a creature can poo by is looked for among the same things
-	const bool anything = target == Target::Anything || target == Target::PooedOn || target == Target::Stompable ||
-	                      target == Target::Kickable || target == Target::StonableAndPickable;
-	const bool living = target == Target::AnyLiving || target == Target::Stonable || anything;
-	// The animals and miracles that frighten it are only ever run from
-	if (target == Target::Frightening || living)
-	{
-		registry.Each<const Animal, const Transform>(
-		    [&](entt::entity entity, const Animal&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::Frightening)
-	{
-		registry.Each<const ecs::components::Spell>([&](entt::entity entity, const ecs::components::Spell& spell) {
-			consider(entity, Transform {.position = spell.position, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
-		});
-	}
-	const bool sea = target == Target::SeaThrowable;
-	// Of pots and piles, food is eaten, and any may be picked up or thrown into the sea
-	const bool pickable = target == Target::Pickable || target == Target::ThrowableToImpress;
-	if (target == Target::Food || target == Target::MagicFoodPile || pickable || sea || anything)
-	{
-		registry.Each<const Pot, const Transform>(
-		    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
-	}
-	// Whatever else it may pick up: animals, the football, statics and rocks, dead trees, trees and mushrooms
-	if (pickable || target == Target::Toy || target == Target::ToyBall || sea || anything)
-	{
-		registry.Each<const Ball, const Transform>(
-		    [&](entt::entity entity, const Ball&, const Transform& at) { consider(entity, at); });
-	}
-	const bool statics = pickable || target == Target::Toy || target == Target::ToyBall || sea || target == Target::Stonable ||
-	                     target == Target::ThrowingDamage || target == Target::PickableRock || target == Target::Rock ||
-	                     target == Target::CuddlyToy || target == Target::Die || target == Target::ToyAwayFromHome || anything;
-	if (statics)
-	{
-		registry.Each<const MobileStatic, const Transform>(
-		    [&](entt::entity entity, const MobileStatic&, const Transform& at) { consider(entity, at); });
-		registry.Each<const DeadTree, const Transform>(
-		    [&](entt::entity entity, const DeadTree&, const Transform& at) { consider(entity, at); });
-	}
-	if (pickable)
-	{
-		registry.Each<const Animal, const Transform>(
-		    [&](entt::entity entity, const Animal&, const Transform& at) { consider(entity, at); });
-	}
-	if (pickable || target == Target::Stonable || anything)
-	{
-		registry.Each<const Feature, const Transform>(
-		    [&](entt::entity entity, const Feature&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::NeedsRepair)
-	{
-		registry.Each<const Abode, const Transform>(
-		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::BuildingBeingBuilt)
-	{
-		registry.Each<const BuildProgress, const Transform>(
-		    [&](entt::entity entity, const BuildProgress&, const Transform& at) { consider(entity, at); });
-		registry.Each<const RepairSite, const Transform>(
-		    [&](entt::entity entity, const RepairSite&, const Transform& at) { consider(entity, at); });
-	}
-	const bool fire = target == Target::Burning || target == Target::Unburnt;
-	if (target == Target::Destroyable || target == Target::Tree || anything || fire || pickable || sea ||
-	    target == Target::PickableTree || target == Target::PlantableTree)
-	{
-		registry.Each<const Tree, const Transform>(
-		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::Destroyable || anything || fire || target == Target::Stonable)
-	{
-		registry.Each<const Abode, const Transform>(
-		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
-	}
-	// What else is built or set into the land, which thrown things can knock about
-	if (target == Target::Stonable || anything)
-	{
-		registry.Each<const Temple, const Transform>(
-		    [&](entt::entity entity, const Temple&, const Transform& at) { consider(entity, at); });
-		registry.Each<const WorshipSite, const Transform>(
-		    [&](entt::entity entity, const WorshipSite&, const Transform& at) { consider(entity, at); });
-		registry.Each<const VillageTotem, const Transform>(
-		    [&](entt::entity entity, const VillageTotem&, const Transform& at) { consider(entity, at); });
-		registry.Each<const AnimatedStatic, const Transform>(
-		    [&](entt::entity entity, const AnimatedStatic&, const Transform& at) { consider(entity, at); });
-		registry.Each<const Flowers, const Transform>(
-		    [&](entt::entity entity, const Flowers&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::StoragePit || target == Target::BuiltStoragePit || target == Target::BuiltFoodStore ||
-	    target == Target::StoragePitWithFood)
-	{
-		registry.Each<const StoragePit, const Transform>(
-		    [&](entt::entity entity, const StoragePit&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::WorshipSite || target == Target::BuiltFoodStore)
-	{
-		registry.Each<const WorshipSite, const Transform>(
-		    [&](entt::entity entity, const WorshipSite&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::Workshop)
-	{
-		registry.Each<const Abode, const Transform>(
-		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::AnyTree || target == Target::Waterable || target == Target::TreeBigEnough)
-	{
-		registry.Each<const Tree, const Transform>(
-		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::OneShotAggressive || target == Target::OneShotCompassionate || target == Target::OneShotPlayful)
-	{
-		registry.Each<const OneOffSpellSeed, const Transform>(
-		    [&](entt::entity entity, const OneOffSpellSeed&, const Transform& at) { consider(entity, at); });
-	}
-	if (target == Target::DryField || target == Target::Waterable || target == Target::FieldWithFood)
-	{
-		registry.Each<const Field, const Transform>(
-		    [&](entt::entity entity, const Field&, const Transform& at) { consider(entity, at); });
-	}
-	// A thing found in two of the lists counts once
-	std::ranges::sort(found, {}, &Found::entity);
-	const auto [first, last] = std::ranges::unique(found, {}, &Found::entity);
-	found.erase(first, last);
-	std::ranges::sort(found, {}, &Found::distance);
-	return found;
-}
-
 float Usefulness(const creature_mind_model::Learnt& learnt, Desire desire, const std::optional<creature_tree::Belief>& belief)
 {
 	if (!belief.has_value())
@@ -1011,26 +854,39 @@ size_t TreesInForest(entt::entity forest)
 	return forests.TreesOf(forest, false).size() + forests.TreesOf(forest, true).size();
 }
 
-/// The desire that another creature feels most
-uint32_t StrongestDesireOf(const ecs::Registry& registry, entt::entity creature)
+/// The desire that another creature shows: the desire that the action of its plan shows, or of its last plan
+uint32_t ShownDesireOf(const ecs::Registry& registry, entt::entity creature)
 {
-	uint32_t dominant = 0;
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-	if (mind == nullptr || !mind->desires.has_value())
+	const auto* tables = Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
+	if (mind == nullptr || tables == nullptr)
 	{
-		return dominant;
+		return 0;
 	}
-	float strongest = 0.0f;
-	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+	const auto action = mind->planner.current.has_value() ? mind->planner.current->action : mind->planner.lastAction;
+	return action < tables->actions.size() ? tables->actions[action].shownDesire : 0;
+}
+
+/// How many miracles another creature knows
+size_t MiraclesKnownBy(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->learnt.has_value())
 	{
-		const auto& state = mind->desires->desires.at(d);
-		if (state.activated && state.value > strongest)
-		{
-			strongest = state.value;
-			dominant = static_cast<uint32_t>(d);
-		}
+		return 0;
 	}
-	return dominant;
+	return static_cast<size_t>(std::ranges::count(mind->learnt->knowledge.miraclesKnown, true));
+}
+
+/// The object type of the thing that another creature carries, none when it carries no thing
+std::optional<uint32_t> CarriedObjectTypeOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
+	if (held == nullptr || !registry.Valid(held->object))
+	{
+		return std::nullopt;
+	}
+	return mind_detail::ObjectSortOf(registry, held->object);
 }
 
 /// The attributes only the beliefs about villagers, creatures, buildings, towns and forests have
@@ -1048,7 +904,7 @@ void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const
 		{
 			belief.Set(Attribute::Sex, static_cast<uint32_t>(villager->sex));
 			belief.Set(Attribute::VillagerJob, static_cast<uint32_t>(villager->number));
-			belief.Set(Attribute::Life, villager->life > 0.0f ? 1 : 0);
+			belief.Set(Attribute::Life, creature_tree::LifeValue(villager->life));
 			belief.Set(Attribute::OnFire, onFire());
 			belief.Set(Attribute::Tribe, static_cast<uint32_t>(villager->tribe));
 		}
@@ -1057,20 +913,18 @@ void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const
 		if (const auto* creature = registry.TryGet<const Creature>(entity))
 		{
 			belief.Set(Attribute::Height, creature_tree::CreatureHeight(ShownSize(*creature)));
-			// TODO(creature-belief-types-in-trees): the game knows which miracles the other creature knows, what kind
-			// of thing it carries, and takes the desire of the action it does as its strongest desire
-			belief.Set(Attribute::SpellKnowledge, 0);
-			belief.Set(Attribute::Carrying, registry.AllOf<CreatureHeldObject>(entity) ? 1 : 0);
-			belief.Set(Attribute::DominantDesire, StrongestDesireOf(registry, entity));
+			belief.Set(Attribute::SpellKnowledge, creature_tree::SpellKnowledgeValue(MiraclesKnownBy(registry, entity)));
+			belief.Set(Attribute::Carrying, creature_tree::CarryingValue(CarriedObjectTypeOf(registry, entity)));
+			belief.Set(Attribute::DominantDesire, creature_tree::DominantDesireValue(ShownDesireOf(registry, entity)));
 		}
 		break;
 	case types::k_Abode:
 		if (const auto* abode = registry.TryGet<const Abode>(entity))
 		{
 			belief.Set(Attribute::AbodeType, static_cast<uint32_t>(abode->type));
-			belief.Set(Attribute::Life, 1);
+			belief.Set(Attribute::Life, creature_tree::LifeValue(ecs::world_objects::LifeOf(entity)));
 			belief.Set(Attribute::OnFire, onFire());
-			belief.Set(Attribute::AbodeBeingBuilt, 0);
+			belief.Set(Attribute::AbodeBeingBuilt, creature_tree::BeingBuiltValue(ecs::construction::IsBuilt(entity)));
 		}
 		break;
 	case types::k_Town:
@@ -1134,6 +988,11 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 		return creature_tree::WithFirstSight(*known->firstSight, belief);
 	}
 	return belief;
+}
+
+std::optional<creature_tree::Belief> CreatureMindSystem::BeliefAbout(entt::entity creature, entt::entity thing) const
+{
+	return mind_detail::BeliefOf(Locator::entitiesRegistry::value(), thing, creature);
 }
 
 std::optional<creature_tree::Belief> mind_detail::ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,
@@ -1287,6 +1146,7 @@ void CreatureMindSystem::Abandon(CreatureMindState& mind)
 	if (mind.planner.current.has_value())
 	{
 		mind.planner.lastObject = mind.planner.current->object;
+		mind.planner.lastAction = mind.planner.current->action;
 	}
 	mind.planner.current.reset();
 }
@@ -1328,6 +1188,19 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 				{
 					Lessen(creature, *mind.desires, action.name);
 				}
+			}
+		}
+		// An action that ends well on a creature makes the creature find that creature nicer or nastier, as the game's
+		// table says for the action. An action on no thing acts on the creature itself, so it also changes how nice the
+		// creature finds itself (a quirk of the game).
+		if (carriedOut && plan.object.has_value() && tables != nullptr && plan.action < tables->actions.size())
+		{
+			const auto change = tables->actions[plan.action].creatureNicenessChange;
+			const auto& registry = Locator::entitiesRegistry::value();
+			const auto other = static_cast<entt::entity>(*plan.object);
+			if (change != 0.0f && registry.Valid(other) && registry.AllOf<Creature>(other))
+			{
+				mind.leash.attitudes.push_back({.creature = *plan.object, .change = change});
 			}
 		}
 		if (carriedOut && plan.desire == Desire::Compassion && plan.about.has_value() && tables != nullptr)
@@ -1451,22 +1324,62 @@ bool OutsideConfinement(const ecs::Registry& registry, entt::entity creature, en
 	       gutils::GetDistanceInMetres(at->position, objectAt->position) > leashes->confinementRadius;
 }
 
-/// The thing a creature at a point uses for an action, of a kind, other than the goal
+/// Whether a creature kept within an area by its leash has a place farther from the area's centre than the area's radius
+bool OutsideConfinedArea(const ecs::Registry& registry, entt::entity creature, glm::vec3 place)
+{
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	if (leashes == nullptr)
+	{
+		return false;
+	}
+	const bool leashed = leashes->worn.has_value();
+	const bool works = !leashed || leashes->worn->works;
+	return creature_leash::IsConfined(leashes->confinementRadius, leashed, works) &&
+	       gutils::GetDistanceInMetres(place, leashes->confinementCentre) > leashes->confinementRadius;
+}
+
+/// Where the creature believes that a thing is: where it last came across the thing, else where the thing is now
+std::optional<glm::vec3> BelievedPlaceOf(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
+{
+	if (const auto* belief = mind.beliefs.Find(thing))
+	{
+		return belief->place;
+	}
+	if (const auto* at = registry.TryGet<const Transform>(thing))
+	{
+		return at->position;
+	}
+	return std::nullopt;
+}
+
+bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing);
+bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing);
+
+/// The thing a creature at a point uses for an action, of a kind, other than the goal. It looks only through its
+/// beliefs about things that are not whole things, the newest first: what it has not come across, it does not use.
 std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
                                                     std::optional<uint32_t> goal)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<creature_planner::UsedCandidate> candidates;
-	for (const auto& found : Gather(registry, use, creature, position))
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || use == Target::None)
 	{
-		// Nothing farther than the area its leash keeps it within, nor another creature
-		if (registry.AllOf<Creature>(found.entity) || OutsideConfinement(registry, creature, found.entity))
+		return std::nullopt;
+	}
+	std::vector<creature_planner::UsedCandidate> candidates;
+	for (const auto& belief : mind->beliefs.InListOrder())
+	{
+		const auto thing = belief.thing;
+		// Not a whole thing, nor a thing it found no way to lately, nor one outside the area its leash keeps it within
+		if (creature_object_beliefs::InListOfWholeThings(belief.kind) || !registry.Valid(thing) ||
+		    NoWayLately(registry, *mind, thing) || OutsideConfinedArea(registry, creature, belief.place) ||
+		    !LetsCreatureAct(registry, thing) || !Accepts(registry, use, thing, creature))
 		{
 			continue;
 		}
-		const auto* held = registry.TryGet<const HeldByCreature>(found.entity);
-		candidates.push_back({.id = entt::to_integral(found.entity),
-		                      .distance = found.distance,
+		const auto* held = registry.TryGet<const HeldByCreature>(thing);
+		candidates.push_back({.id = entt::to_integral(thing),
+		                      .distance = glm::distance(glm::vec2 {belief.place.x, belief.place.z}, position),
 		                      .held = held != nullptr && held->creature == creature});
 	}
 	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
@@ -2255,6 +2168,12 @@ bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& m
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(thing) || NoWayLately(registry, mind, thing))
+	{
+		return false;
+	}
+	// Kept within an area, it does not choose a thing that it believes is outside the area
+	if (const auto place = BelievedPlaceOf(registry, mind, thing);
+	    place.has_value() && OutsideConfinedArea(registry, creature, *place))
 	{
 		return false;
 	}
@@ -3982,7 +3901,10 @@ bool CreatureMindSystem::ContinueKeptPlanWith(entt::entity creature, CreatureMin
 	    .needsThingToUse = needsThingToUse,
 	    .giftSuitsActOn = !(action.notOnWhatItHolds && holdsGift) &&
 	                      (executor->target == Target::None || Accepts(registry, executor->target, gift, creature)),
-	    .giftSuitsUse = !NoWayLately(registry, mind, gift) && !OutsideConfinement(registry, creature, gift) &&
+	    .giftSuitsUse = !NoWayLately(registry, mind, gift) &&
+	                    !BelievedPlaceOf(registry, mind, gift)
+	                         .transform([&](glm::vec3 place) { return OutsideConfinedArea(registry, creature, place); })
+	                         .value_or(false) &&
 	                    LetsCreatureAct(registry, gift) && Accepts(registry, use, gift, creature),
 	};
 	const auto chosen = creature_giving::UseForKeptPlan(facts);

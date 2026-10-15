@@ -1958,7 +1958,9 @@ struct CreatureActionInfo
 	uint32_t field0xa8;
 	uint32_t field0xac;
 	uint32_t field0xb0;
-	uint32_t field0xb4;
+	/// The desire that the action shows to another creature that sees it: the other creature takes it as the strongest
+	/// desire of the creature that does it
+	uint32_t shownDesire;
 	uint32_t field0xb8;
 	uint32_t field0xbc;
 	/// The desire it satisfies is multiplied by this once it is done
@@ -1973,7 +1975,8 @@ struct CreatureActionInfo
 	uint32_t field0xe0;
 	uint32_t field0xe4;
 	float field0xe8;
-	float field0xec;
+	/// When the action ends well on another creature, how much nicer the creature finds the other creature, from -1 to 1
+	float creatureNicenessChange;
 	uint32_t field0xf0;
 	uint32_t field0xf4;
 	uint32_t field0xf8;
@@ -1982,6 +1985,8 @@ static_assert(offsetof(CreatureActionInfo, desire) == 0x98);
 static_assert(offsetof(CreatureActionInfo, skillsNeeded) == 0x9c);
 static_assert(offsetof(CreatureActionInfo, desireMultiplier) == 0xc0);
 static_assert(offsetof(CreatureActionInfo, magicType) == 0xa4);
+static_assert(offsetof(CreatureActionInfo, shownDesire) == 0xb4);
+static_assert(offsetof(CreatureActionInfo, creatureNicenessChange) == 0xec);
 
 struct InfoConstants
 {

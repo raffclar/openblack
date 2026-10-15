@@ -256,6 +256,29 @@ TEST(CreatureDecisionTree, ForestsAndCreaturesAreSortedBySize)
 	EXPECT_EQ(creature_tree::CreatureHeight(2.0f), 3u);
 }
 
+TEST(CreatureDecisionTree, BuildingsAndVillagersShowTheirLifeAndWhetherTheyAreBuilt)
+{
+	EXPECT_EQ(creature_tree::LifeValue(0.0f), 0u);
+	EXPECT_EQ(creature_tree::LifeValue(0.2f), 0u);
+	EXPECT_EQ(creature_tree::LifeValue(0.21f), 1u);
+	EXPECT_EQ(creature_tree::LifeValue(1.0f), 1u);
+	EXPECT_EQ(creature_tree::BeingBuiltValue(false), 0u);
+	EXPECT_EQ(creature_tree::BeingBuiltValue(true), 1u);
+}
+
+TEST(CreatureDecisionTree, AnotherCreatureShowsItsDesireItsMiraclesAndWhatItCarries)
+{
+	EXPECT_EQ(creature_tree::DominantDesireValue(16), 16u);
+	EXPECT_EQ(creature_tree::DominantDesireValue(40), 40u);
+	EXPECT_EQ(creature_tree::DominantDesireValue(41), 40u);
+	EXPECT_EQ(creature_tree::SpellKnowledgeValue(0), 0u);
+	EXPECT_EQ(creature_tree::SpellKnowledgeValue(5), 5u);
+	EXPECT_EQ(creature_tree::SpellKnowledgeValue(50), 42u);
+	EXPECT_EQ(creature_tree::CarryingValue(std::nullopt), creature_tree::k_CarriesNothing);
+	EXPECT_EQ(creature_tree::CarryingValue(2), 2u);
+	EXPECT_EQ(creature_tree::CarryingValue(45), 44u);
+}
+
 // The planner
 
 TEST(CreaturePlanner, DistancePriority)

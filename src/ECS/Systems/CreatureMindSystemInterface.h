@@ -22,6 +22,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureIdleMind.h"
@@ -77,6 +78,13 @@ public:
 	                       std::optional<PlayerNames> player) = 0;
 	/// The game's tables the minds use, once the game's data is loaded
 	[[nodiscard]] virtual const creature_mind_tables::Tables* GetTables() = 0;
+	/// What a creature believes about a thing now, with the attributes that its decision trees test. None for a thing
+	/// that is of no kind that a creature keeps beliefs about.
+	[[nodiscard]] virtual std::optional<creature_tree::Belief> BeliefAbout(entt::entity /*creature*/,
+	                                                                       entt::entity /*thing*/) const
+	{
+		return std::nullopt;
+	}
 
 	/// Plays an action once, unless the creature's body already plays one
 	virtual bool PlayAction(entt::entity creature, size_t animation) = 0;
