@@ -64,6 +64,9 @@ struct RegistryContext
 	uint32_t nextTownGained {0};
 	/// Where creatures may go on the land, worked out once the land is there and first asked for
 	std::optional<land_avoid::Map> landAvoid;
+	/// How far the bones of each species reach from its middle. The first request measures it from the model, and later
+	/// requests use the stored value. The value changes nothing in the game, thus it can change through a const context.
+	mutable std::array<std::optional<float>, static_cast<size_t>(CreatureType::_COUNT)> creatureBoneReach {};
 	/// The names of the game's table of named people already given to a villager on this land
 	std::array<bool, 0x30> namedVillagersUsed {};
 	/// How many things have been made so far, the next one's place in the order they were made
