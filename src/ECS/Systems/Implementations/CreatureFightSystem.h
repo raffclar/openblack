@@ -81,6 +81,7 @@ public:
 	[[nodiscard]] bool IsCameraOnFight() const final { return _view.has_value(); }
 	void SetFightExit(bool allowed) override { _fightExit = allowed; }
 	[[nodiscard]] bool GetFightExit() const override { return _fightExit; }
+	[[nodiscard]] bool FightMusicHeard(const glm::vec3& camera) const override;
 
 private:
 	/// The turn's parts: fights started by the leash, the stages before and after the

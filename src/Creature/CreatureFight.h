@@ -427,11 +427,13 @@ constexpr float k_PlainRecoilWithin = 0.25f;
 [[nodiscard]] size_t WobbleAnimation(Band band, bool sideways);
 /// Which step an animation is, if it is one
 [[nodiscard]] std::optional<Step> StepOf(size_t animation);
-/// The kind of wound a blow leaves: half the time the first kind, else by the blow's own wound type (0, 1 or 2)
-[[nodiscard]] uint8_t WoundKind(uint8_t blowWoundType, const Random& random);
-/// The wound type each blow leaves; the game keeps one for each, which isn't found, so this guesses it by where the
-/// blow lands: blows at the head cut, those to the body bruise, low blows graze
-[[nodiscard]] uint8_t BlowWoundType(size_t animation);
+/// The kind of wound a blow leaves: half the time the first kind, else by the blow's own wound type. Type 0 gives kind
+/// 1, type 1 one of kinds 3, 4 and 5, and type 2 kind 2. Any other type gives the first kind.
+[[nodiscard]] uint8_t WoundKind(int32_t blowWoundType, const Random& random);
+/// The wound type of each of the twelve blows, in the order of the blow animations, as the species' file gives them
+using BlowWoundTypes = std::array<int32_t, animations::k_AttackCount>;
+/// The wound type a blow leaves, from its species' wound types; -1 for an animation that isn't a blow
+[[nodiscard]] int32_t BlowWoundType(size_t animation, const BlowWoundTypes& types);
 /// Wounds of these kinds also bleed
 [[nodiscard]] bool Bleeds(uint8_t woundKind);
 
@@ -657,4 +659,10 @@ constexpr uint32_t k_PointAtArenaTurns = 20;
 /// The player's creature counts its moves in the help record only from its stance, with a move in its queue and its
 /// opponent in range. A creature that blocks ends its block with the next move, and that counts nothing.
 [[nodiscard]] bool CountsHelpEvent(State state, bool inRange, bool queued);
+
+/// The fight music of the player's creature is heard from this distance to the middle of its arena, in metres
+constexpr float k_FightMusicDistance = 100.0f;
+/// Whether the fight music of the player's creature plays. It plays while the hand directs the fight. It also plays
+/// while the camera is less than the music distance from the middle of an arena where a fight of the creature is on.
+[[nodiscard]] bool FightMusicHeard(bool directsFight, std::span<const glm::vec3> arenasOfItsFights, const glm::vec3& camera);
 } // namespace openblack::creature_fight

@@ -88,6 +88,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -1130,7 +1131,11 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 	});
 	if (tooFar)
 	{
-		// TODO(advisors): for the player's creature, the advisors say one of their lines about its fight instead
+		// For a fight of the player's creature, the advisors can say one of their lines about the fight instead
+		if (involved && Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().RemarkIfNow(guidance::Kind::CreatureFight);
+		}
 		return;
 	}
 	const auto ground = GroundAt(arena.centre);
@@ -3049,13 +3054,21 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 		};
 		auto& skins = Locator::creatureSkinSystem::value();
 		std::uniform_int_distribution<int> texel(k_WoundEdge, static_cast<int>(creature_marks::k_AtlasSize) - k_WoundEdge - 1);
+		const auto u = static_cast<uint8_t>(texel(_random));
+		const auto v = static_cast<uint8_t>(texel(_random));
+		// The column is drawn first, then the kind by the wound type the attacker's species gives the blow
+		const auto column = static_cast<uint8_t>(random(creature_marks::k_CellsPerRow));
+		const auto* attackerRig = RigOf(body.species);
+		const auto woundType = attackerRig != nullptr && attackerRig->blowWoundTypes.has_value()
+		                           ? fight::BlowWoundType(attacker.animation, *attackerRig->blowWoundTypes)
+		                           : -1;
 		creature_marks::Mark wound {
-		    .u = static_cast<uint8_t>(texel(_random)),
-		    .v = static_cast<uint8_t>(texel(_random)),
+		    .u = u,
+		    .v = v,
 		    .skin = 0,
 		    .age = 0,
-		    .type = fight::WoundKind(fight::BlowWoundType(attacker.animation), random),
-		    .column = static_cast<uint8_t>(random(creature_marks::k_CellsPerRow)),
+		    .type = fight::WoundKind(woundType, random),
+		    .column = column,
 		};
 		skins.AddWound(opponent, wound);
 		if (fight::Bleeds(wound.type))
@@ -3183,8 +3196,8 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 			                                     {"player", static_cast<int32_t>(owner)}};
 		    },
 		    winRecord);
-		// TODO(creature-fights): how impressive the winner is to those watching (the creature's own impressiveness by
-		// what it does and the town's attitude to it) is not modelled, so the fight won gives no belief yet
+		// Those who take it up believe by how impressive the winner is: what it last did, its size, and how their town
+		// feels about it
 		Locator::reactionSystem::value().Create({.initiator = winner,
 		                                         .type = Reaction::ReactToFightWon,
 		                                         .player = owner,
@@ -3413,4 +3426,23 @@ void CreatureFightSystem::ProcessKnockedOut()
 			                                                                         : CreatureNeeds::Rest::Unconscious;
 		}
 	}
+}
+
+bool CreatureFightSystem::FightMusicHeard(const glm::vec3& camera) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = PrimaryCreatureOf(registry, k_LocalPlayer);
+	if (!creature.has_value())
+	{
+		return false;
+	}
+	std::vector<glm::vec3> arenas;
+	registry.Each<const CreatureArena, const Transform>(
+	    [&arenas, own = *creature](const CreatureArena& arena, const Transform& transform) {
+		    if (arena.fightOn && (arena.first == own || arena.second == own))
+		    {
+			    arenas.push_back(transform.position);
+		    }
+	    });
+	return fight::FightMusicHeard(DirectsFight(), arenas, camera);
 }

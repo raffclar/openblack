@@ -20,6 +20,7 @@
 
 #include "Camera/Camera.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLocomotion.h"
@@ -28,6 +29,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "Locator.h"
 
@@ -541,4 +543,107 @@ TEST_F(CreatureFightSystemTest, AFightFacesOffAndTauntsBeforeItLooksForAnArena)
 	}
 	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(first));
 	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(second));
+}
+
+namespace
+{
+/// Keeps the kinds of the remarks asked for, and does nothing else
+class RecordedGuidance final: public ecs::systems::GuidanceSystemInterface
+{
+public:
+	void Reset() override {}
+	void ProcessTurn() override {}
+	bool PlayNow(guidance::Kind) override { return false; }
+	bool RemarkNow(guidance::Kind) override { return false; }
+	void RemarkIfNow(guidance::Kind kind) override { asked.push_back(kind); }
+	void TownAttacked(entt::entity, PlayerNames, bool) override {}
+	void TownAttackCry(entt::entity, const guidance::TownAttackVoice&) override {}
+	void BuildingBroken(entt::entity, std::optional<PlayerNames>, float) override {}
+	void AlignmentTurn(float) override {}
+	void SayOneOff(guidance::OneOff) override {}
+	void EndWaits() override {}
+	[[nodiscard]] const std::vector<Remark>& GetRemarks() const override { return remarks; }
+	[[nodiscard]] int32_t GetMoonWait() const override { return 0; }
+
+	std::vector<guidance::Kind> asked;
+	std::vector<Remark> remarks;
+};
+} // namespace
+
+TEST_F(CreatureFightSystemTest, TheAdvisorsSpeakOfAFightOfThePlayersCreatureTooFarToShow)
+{
+	auto& guidance = static_cast<RecordedGuidance&>(Locator::guidanceSystem::emplace<RecordedGuidance>());
+	fights.Reset();
+	auto& camera = Locator::camera::value();
+	camera.SetOrigin({0.0f, 30.0f, 2000.0f});
+	camera.SetFocus({0.0f, 0.0f, 1900.0f});
+	ShowTheFight({0.0f, 0.0f, 0.0f});
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	EXPECT_EQ(guidance.asked, std::vector {guidance::Kind::CreatureFight});
+	// A fight near enough is shown, and the advisors say nothing
+	guidance.asked.clear();
+	camera.SetOrigin({0.0f, 30.0f, 40.0f});
+	camera.SetFocus({0.0f, 0.0f, 0.0f});
+	ShowTheFight({0.0f, 0.0f, 0.0f});
+	EXPECT_TRUE(fights.IsCameraOnFight());
+	EXPECT_TRUE(guidance.asked.empty());
+	// A fight far away between creatures of other players is not spoken of
+	fights.Reset();
+	Locator::entitiesRegistry::value().Get<Creature>(first).owner = PlayerNames::PLAYER_THREE;
+	camera.SetOrigin({0.0f, 30.0f, 2000.0f});
+	camera.SetFocus({0.0f, 0.0f, 1900.0f});
+	ShowTheFight({0.0f, 0.0f, 0.0f});
+	EXPECT_TRUE(guidance.asked.empty());
+	Locator::guidanceSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, TheFightMusicPlaysWhileTheHandDirectsTheFightOrNearItsArena)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_TRUE(fights.DirectsFight());
+	EXPECT_TRUE(fights.FightMusicHeard({0.0f, 30.0f, 2000.0f}));
+	fights.Reset();
+	// The arena of the fight, seen from near and from far
+	const auto arena = registry.Get<const CreatureFighting>(first).arenaEntity;
+	registry.Assign<Transform>(arena, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<CreatureArena>(arena, CreatureArena {.place = {0, 0},
+	                                                     .radius = 40.0f,
+	                                                     .temporary = true,
+	                                                     .fightOn = true,
+	                                                     .first = first,
+	                                                     .second = second,
+	                                                     .ring = nullptr});
+	EXPECT_TRUE(fights.FightMusicHeard({0.0f, 30.0f, 90.0f}));
+	EXPECT_FALSE(fights.FightMusicHeard({0.0f, 30.0f, 2000.0f}));
+	// No fight is on in the arena, or the player's creature is not in it
+	registry.Get<CreatureArena>(arena).fightOn = false;
+	EXPECT_FALSE(fights.FightMusicHeard({0.0f, 30.0f, 90.0f}));
+	registry.Get<CreatureArena>(arena).fightOn = true;
+	registry.Get<Creature>(first).owner = PlayerNames::PLAYER_THREE;
+	EXPECT_FALSE(fights.FightMusicHeard({0.0f, 30.0f, 90.0f}));
+}
+
+TEST_F(CreatureFightSystemTest, AFightGestureIsTakenOnlyWhenTheLineToTheOpponentMeetsItsBody)
+{
+	// Neither creature has a body, so the line from the player's creature meets nothing
+	EXPECT_FALSE(fights.GestureSpecialMove());
+	EXPECT_FALSE(fights.GestureSpell(MagicType::Fireball));
+	EXPECT_TRUE(QueueOf(first).Empty());
+	// Without a duel of the player's creature, no gesture is taken
+	Locator::entitiesRegistry::value().Get<Creature>(first).owner = PlayerNames::PLAYER_THREE;
+	EXPECT_EQ(fights.PlayersFighter(), std::nullopt);
+	EXPECT_FALSE(fights.GestureSpecialMove());
+}
+
+TEST_F(CreatureFightSystemTest, ThePlayerDirectsTheirOwnCreatureAndTheComputerAnyOther)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	// The other creature starts the fight: who starts it does not matter
+	ASSERT_EQ(fights.StartFight(second, first), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).fighter.control, fight::Control::Player);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).fighter.control, fight::Control::Computer);
+	EXPECT_TRUE(fights.IsAutoFighting(first));
+	EXPECT_TRUE(fights.IsAutoFighting(second));
 }

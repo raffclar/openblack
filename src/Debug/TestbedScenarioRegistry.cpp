@@ -4934,6 +4934,39 @@ void AddCombat(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-12.0f, -8.0f}, .joinTown = true}},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
+
+	// The fight music of the player's creature, heard near its arena
+	all.push_back({
+	    .id = "combat.fight_music",
+	    .name = "The fight music",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger and a blue tiger fight by themselves. The camera looks at the arena from "
+	                   "nearer than 100 metres to its middle.",
+	    .expected = "When the arena appears, the land's music fades out and the creature fight music fades in, centred "
+	                "on the listener. It plays until the fight is over, then the land's music comes back. Moving the "
+	                "camera more than 100 metres from the middle of the arena stops it, unless the hand directs the "
+	                "fight in the fight view.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 50.0f, -10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	// A double click into the arena from far away: the fight view does not start, the advisors speak instead
+	all.push_back({
+	    .id = "combat.far_fight_advisors",
+	    .name = "The advisors speak of a fight too far to show",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger and a blue tiger fight by themselves. The camera is far away from the "
+	                   "arena. When the duel is on, a double click goes into the arena.",
+	    .expected = "The camera does not show the fight, because it was too far away. An advisor says one of the lines "
+	                "about a creature fight, such as \"There's a humdinger of a fight going on.\"",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 120.0f, -900.0f}, .look = {0.0f, 0.0f, -800.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+	                 Fight(Kind::StartFight, 0, 1, 0.5f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 Fight(Kind::FightView, 0, 0, 14.0f)},
+	});
 }
 
 void AddMind(std::vector<Scenario>& all)

@@ -366,9 +366,16 @@ TEST(CreatureFight, WoundsByTheBlow)
 	EXPECT_EQ(WoundKind(0, Sequence({1})), 1);
 	EXPECT_EQ(WoundKind(2, Sequence({1})), 2);
 	EXPECT_EQ(WoundKind(1, Sequence({1, 2})), 5);
-	EXPECT_EQ(BlowWoundType(animations::k_AttackEye), 1);
-	EXPECT_EQ(BlowWoundType(animations::k_AttackKnee + 6), 2);
-	EXPECT_EQ(BlowWoundType(animations::k_AttackBelly), 0);
+	// A type other than 0, 1 or 2, as from a file that lacks the types, gives the first kind
+	EXPECT_EQ(WoundKind(-1, Sequence({1})), 0);
+	EXPECT_EQ(WoundKind(3, Sequence({1})), 0);
+	// The species gives each blow its type, in the order of the blow animations
+	const BlowWoundTypes types {0, 1, 2, 0, 1, 2, 2, 1, 0, 2, 1, 0};
+	EXPECT_EQ(BlowWoundType(animations::k_AttackEye, types), 1);
+	EXPECT_EQ(BlowWoundType(animations::k_FirstAttack + 11, types), 0);
+	EXPECT_EQ(BlowWoundType(animations::k_FirstAttack + 9, types), 2);
+	EXPECT_EQ(BlowWoundType(animations::k_FirstAttack - 1, types), -1);
+	EXPECT_EQ(BlowWoundType(animations::k_FirstAttack + 12, types), -1);
 	EXPECT_TRUE(Bleeds(3));
 	EXPECT_FALSE(Bleeds(4));
 }
@@ -761,4 +768,19 @@ TEST(CreatureFight, AFighterKeepsItsLastActionAfterItEnds)
 	EXPECT_EQ(fighter.lastAction, animations::k_AttackHigh);
 	Enter(fighter, State::BlockRecoil);
 	EXPECT_EQ(fighter.lastAction, animations::k_RecoilBlock);
+}
+
+TEST(CreatureFight, FightMusicIsHeardWhileTheHandDirectsTheFightOrNearItsArena)
+{
+	const glm::vec3 camera {0.0f, 50.0f, 0.0f};
+	EXPECT_TRUE(FightMusicHeard(true, {}, camera));
+	EXPECT_FALSE(FightMusicHeard(false, {}, camera));
+	// The distance is measured in all three directions, from the middle of the arena on the land
+	const std::array near {glm::vec3 {80.0f, 0.0f, 0.0f}};
+	EXPECT_TRUE(FightMusicHeard(false, near, camera));
+	const std::array edge {glm::vec3 {0.0f, -50.0f, 0.0f}};
+	EXPECT_FALSE(FightMusicHeard(false, edge, camera));
+	const std::array several {glm::vec3 {500.0f, 0.0f, 0.0f}, glm::vec3 {0.0f, 0.0f, 99.0f}};
+	EXPECT_FALSE(FightMusicHeard(false, std::span(several).first(1), camera));
+	EXPECT_TRUE(FightMusicHeard(false, several, glm::vec3 {0.0f}));
 }
