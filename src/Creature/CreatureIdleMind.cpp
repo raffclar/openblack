@@ -1614,9 +1614,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		break;
 	case Step::Kind::Fight:
-		// The fight has ended
+		// The fight has ended. A fight that is the last step of the agenda lets the end of the plan decrease its desire.
 		if (!senses.fighting)
 		{
+			commands.seesToDesire = mind.step + 1 == mind.agenda.size();
 			FinishStep(mind);
 		}
 		break;
