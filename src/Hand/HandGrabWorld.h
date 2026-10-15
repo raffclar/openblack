@@ -19,6 +19,7 @@
 
 #include "Animals/FishFarmRules.h"
 #include "Creature/CreatureGiving.h"
+#include "ECS/AltarOffering.h"
 #include "Enums.h"
 #include "HandGrabRules.h"
 
@@ -260,6 +261,13 @@ public:
 	virtual void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) = 0;
 	/// A thing is used up: a ghost of it flickers out where it was, and it goes
 	virtual void UseUp(entt::entity object) = 0;
+	/// The held thing is given to a worship site's altar: sacrificed there and gone, or refused and kept in the hand
+	virtual ecs::altar_offering::Answer OfferAtAltar(entt::entity /*altar*/, entt::entity /*held*/)
+	{
+		return ecs::altar_offering::Answer::NotAnAltar;
+	}
+	/// The player at this machine does one of the things the help system counts
+	virtual void HelpEvent(uint32_t /*event*/) {}
 	/// It goes into the physics from the hand, put down or thrown
 	virtual ecs::systems::FromHandResult LetGoFromHand(entt::entity object, const ecs::systems::FromHand& release) = 0;
 	/// Whether the player's hand throws things without the air's drag, as a script can set

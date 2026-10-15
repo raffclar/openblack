@@ -15,6 +15,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "ECS/AltarSacrifice.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
@@ -730,6 +731,20 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	{
 		return false;
 	}
+	// A villager, an animal, a tree or a dead tree given to a worship site's altar is sacrificed there. The altar can
+	// refuse it: then the hand keeps it, and the press does nothing more.
+	switch (_world->OfferAtAltar(target, held))
+	{
+	case altar_offering::Answer::Sacrificed:
+		_world->HelpEvent(altar_sacrifice::k_AltarHelpEvent);
+		Empty(grab);
+		return true;
+	case altar_offering::Answer::Refused:
+		_world->HelpEvent(altar_sacrifice::k_AltarHelpEvent);
+		return true;
+	case altar_offering::Answer::NotAnAltar:
+		break;
+	}
 	// A pot is given to a store of what it holds, or poured into a pile or pot of the same
 	const auto pot = _world->PotFactsOf(held);
 	if (!pot.has_value())
@@ -739,15 +754,17 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 		{
 			_world->Entities().Remove<InHand>(held);
 			_world->UseUp(held);
+			_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
 			Empty(grab);
 			return true;
 		}
 		// A tree, a dead tree, a fence, a mushroom or an animal goes whole into a store of what it is worth
-		// TODO(stores): onto a worship totem, a teleport or a scaffold; openblack has none of those yet
+		// TODO(stores): onto a teleport or a scaffold; openblack has none of those yet
 		if (!_world->TakeIntoStore(target, held))
 		{
 			return false;
 		}
+		_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
 		Empty(grab);
 		return true;
 	}
@@ -765,6 +782,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	}
 	_world->Entities().Remove<InHand>(held);
 	_world->UseUp(held);
+	_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
 	Empty(grab);
 	return true;
 }

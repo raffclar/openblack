@@ -2068,7 +2068,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WorshipChants::danceIntensity>("danceIntensity")
 	    .Field<&components::WorshipChants::strain>("strain")
 	    .Field<&components::WorshipChants::infinite>("infinite")
-	    .Field<&components::WorshipChants::freeMaintenance>("freeMaintenance");
+	    .Field<&components::WorshipChants::freeMaintenance>("freeMaintenance")
+	    .Field<&components::WorshipChants::sacrificed>("sacrificed");
 	Reflect<components::CitadelWorship>(context)
 	    .Field<&components::CitadelWorship::sites>("sites")
 	    .Field<&components::CitadelWorship::facing>("facing")

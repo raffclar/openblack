@@ -110,6 +110,8 @@ public:
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
 	void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) override;
 	void UseUp(entt::entity object) override;
+	altar_offering::Answer OfferAtAltar(entt::entity altar, entt::entity held) override;
+	void HelpEvent(uint32_t event) override;
 	FromHandResult LetGoFromHand(entt::entity object, const FromHand& release) override;
 	[[nodiscard]] bool PlayerHasNoWindResistance(PlayerNames player) const override;
 	[[nodiscard]] std::optional<BodyFacts> BodyOf(entt::entity object) const override;

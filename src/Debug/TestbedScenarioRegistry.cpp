@@ -5826,7 +5826,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 122> k_Names {
+	constexpr std::array<std::string_view, 123> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -5949,6 +5949,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "remove object",
 	    "read tip",
 	    "look at temple scroll",
+	    "pointer on altar",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -5957,7 +5958,7 @@ bool testbed_scenarios::IsPointerCommand(Command::Kind kind)
 {
 	return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
 	       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent ||
-	       kind == Kind::PointerOnCaveCreature;
+	       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnAltar;
 }
 
 bool NeedOverrides::Empty() const

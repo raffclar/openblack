@@ -32,6 +32,7 @@
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureHelp.h"
+#include "ECS/AltarOffering.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -79,6 +80,7 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -1106,6 +1108,25 @@ void GameHandGrabWorld::UseUp(entt::entity object)
 {
 	world_objects::LeaveGhost(object);
 	world_objects::Remove(object);
+}
+
+altar_offering::Answer GameHandGrabWorld::OfferAtAltar(entt::entity altar, entt::entity held)
+{
+	return altar_offering::Offer(altar, held,
+	                             {
+	                                 .player = HandPlayer(),
+	                                 .hand = PoseOf(Hand()).origin,
+	                                 .pointed = PickedPoint(),
+	                                 .local = true,
+	                             });
+}
+
+void GameHandGrabWorld::HelpEvent(uint32_t event)
+{
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(event);
+	}
 }
 
 FromHandResult GameHandGrabWorld::LetGoFromHand(entt::entity object, const FromHand& release)

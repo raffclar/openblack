@@ -751,6 +751,9 @@ struct Command
 		/// The temple's camera looks at a scroll of the room the player is in (value: its place among the room's
 		/// scrolls), as when the player presses the scroll. Needs no creature
 		LookAtTempleScroll,
+		/// The pointer moves onto the middle of the foot of the scenario's town's worship site altar on the screen, as the
+		/// mouse moves it. Needs no creature
+		PointerOnAltar,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
