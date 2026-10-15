@@ -236,11 +236,6 @@ void CreatureSpawner::DrawHands(entt::entity entity) noexcept
 		told("Toss away", hands.Discard(entity));
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Lob"))
-	{
-		told("Lob", hands.Lob(entity));
-	}
-	ImGui::SameLine();
 	if (ImGui::Button("Eat it"))
 	{
 		told("Eat", hands.EatHeld(entity));

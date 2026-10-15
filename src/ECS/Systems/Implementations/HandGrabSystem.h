@@ -52,6 +52,7 @@ public:
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
 	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
 	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
+	[[nodiscard]] float HangOf(entt::entity object) const override;
 	[[nodiscard]] std::optional<uint32_t> TakeAmountToolTip() override { return std::exchange(_amountToolTip, std::nullopt); }
 	void Reset() override;
 

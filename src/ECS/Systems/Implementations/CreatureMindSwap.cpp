@@ -191,7 +191,7 @@ bool CreatureMindSystem::SwapMinds(entt::entity from, entt::entity to)
 		auto shared = std::make_shared<const creaturemind::MindFileData>(std::move(file));
 		auto& mind = registry.Get<CreatureMindState>(creature);
 		mind.pendingFile = shared;
-		TakeUpFile(creature, mind);
+		TakeUpFile(creature, mind, FileBase::Own);
 		// With the other mind comes its stage of growing up, and the help gives the message of that stage
 		if (Locator::creatureHelpSystem::has_value())
 		{

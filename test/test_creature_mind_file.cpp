@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -256,6 +257,37 @@ TEST(CreatureMindFile, FileExamplesComeAfterTheStartingLesson)
 	EXPECT_FLOAT_EQ(episodes[0].feedback, 0.8f);
 	EXPECT_EQ(episodes[1].belief.type, 7u);
 	EXPECT_FLOAT_EQ(episodes.back().feedback, -0.5f);
+}
+
+TEST(CreatureMindFile, ASwappedMindKeepsItsOwnExamplesAndAddsTheFileExamples)
+{
+	// The other creature's mind file has 10 examples for the same tree
+	MindFileData other;
+	other.trees.push_back({.type = 1, .desire = 2, .desireAgain = 2});
+	for (int32_t i = 0; i < 10; ++i)
+	{
+		other.trees[0].episodes.push_back(
+		    {.desire = 2, .belief = {.type = 7, .attributes = {0, 0, 1, 0, 0, 0, 7}}, .feedback = -0.5f});
+	}
+	// The creature's own mind has 9 examples of its own, and one of them knows a skill
+	creature_desires::Desires own;
+	auto ownLearnt = creature_mind_model::Fresh(own, std::vector<float>(3, 0.0f), {});
+	ownLearnt.knowledge.skillsKnown.assign(2, false);
+	ownLearnt.knowledge.skillsKnown[1] = true;
+	for (int32_t i = 0; i < 9; ++i)
+	{
+		ownLearnt.episodes[1][2].push_back({.belief = {.type = 3}, .feedback = 0.25f});
+	}
+	const auto loaded = creature_mind_model::FromFile(other, own, ownLearnt);
+	const auto& episodes = loaded.learnt.episodes[1][2];
+	// Its own 9 examples come first, then the file's examples until the tree holds 16
+	ASSERT_EQ(episodes.size(), creature_tree::k_MaxEpisodes);
+	EXPECT_TRUE(std::ranges::all_of(episodes.begin(), episodes.begin() + 9,
+	                                [](const auto& episode) { return episode.belief.type == 3u; }));
+	EXPECT_TRUE(std::ranges::all_of(episodes.begin() + 9, episodes.end(),
+	                                [](const auto& episode) { return episode.belief.type == 7u; }));
+	// The skills that it knew stay known
+	EXPECT_TRUE(loaded.learnt.knowledge.skillsKnown[1]);
 }
 
 TEST(CreatureMindFile, FreshMindWritesACurrentFile)

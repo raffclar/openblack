@@ -253,6 +253,11 @@ std::string HandGrabSystem::WhyNotTake(entt::entity object) const
 	return std::string(hand_grab::GateRefusal(GateOf(object)));
 }
 
+float HandGrabSystem::HangOf(entt::entity object) const
+{
+	return HoldOfObject(object).loweringMultiplier * _world->SizeOf(object).height;
+}
+
 hand_grab::HoldFacts HandGrabSystem::HoldOfObject(entt::entity object) const
 {
 	const auto& registry = _world->Entities();

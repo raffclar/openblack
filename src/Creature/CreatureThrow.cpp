@@ -56,6 +56,21 @@ glm::vec3 creature_throw::HandVelocity(const glm::vec3& atRelease, const glm::ve
 	return spanMs > 0.0f ? (atRelease - before) * (1000.0f / spanMs) : glm::vec3(0.0f);
 }
 
+HeldPose creature_throw::HeldPlacement(const glm::mat3& hand, const glm::vec3& fingerEnds, bool mirrored, float hang)
+{
+	const auto side = glm::normalize(hand[0]);
+	const auto ahead = glm::normalize(hand[1]);
+	const auto up = glm::normalize(hand[2]);
+	const auto heldUp = mirrored ? -up : up;
+	const auto heldAhead = mirrored ? ahead : -ahead;
+	return {.rotation = glm::mat3(-side, heldUp, heldAhead), .position = fingerEnds - heldUp * hang};
+}
+
+HeldPose creature_throw::ReleaseStart(const HeldPose& held, const glm::vec3& fingerEnds, bool thrown)
+{
+	return {.rotation = held.rotation, .position = thrown ? fingerEnds : held.position};
+}
+
 std::vector<uint32_t> creature_throw::TossPointBones(std::span<const uint32_t> parents, uint32_t hand)
 {
 	if (hand >= parents.size())

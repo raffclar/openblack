@@ -192,34 +192,31 @@ uint32_t HandBone(const CreatureRig::ActionPoints& points, const CreatureAnimati
 	return mirrored && points.rightHand < animation.mirror.size() ? animation.mirror[points.rightHand] : points.rightHand;
 }
 
-/// Where the palm is: among the hand bone and the fingers that hang from it, as the body is posed this frame
-glm::vec3 PalmOf(uint32_t hand, const CreatureAnimation& animation, const glm::mat4& placement)
+/// Where the middle of the finger ends of a hand is, as the body is posed this frame. A held thing sits there, and the
+/// hand lets go of it there.
+glm::vec3 FingerEndsOf(uint32_t hand, const CreatureAnimation& animation, const glm::mat4& placement)
 {
-	auto sum = glm::vec3(creature::PosedBone(hand, animation.boneMatrices, placement)[3]);
-	float count = 1.0f;
-	const auto& parents = animation.skeleton.parents;
-	for (uint32_t bone = 0; bone < parents.size(); ++bone)
+	const auto bones = creature_throw::TossPointBones(animation.skeleton.parents, hand);
+	if (bones.empty())
 	{
-		if (parents[bone] == hand)
-		{
-			sum += glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
-			count += 1.0f;
-		}
+		return glm::vec3(creature::PosedBone(hand, animation.boneMatrices, placement)[3]);
 	}
-	return sum / count;
+	glm::vec3 sum(0.0f);
+	for (const auto bone : bones)
+	{
+		sum += glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
+	}
+	return sum / static_cast<float>(bones.size());
 }
 
-/// Where the middle of something is from where it stands, by its mesh's bounds, in its own space at the world's scale
-glm::vec3 MiddleOf(const ecs::Registry& registry, entt::entity entity)
+/// Where a held thing is and how it turns, from the hand that holds it as the body is posed this frame
+creature_throw::HeldPose HeldPoseOf(const CreatureHeldObject& held, const Transform& transform,
+                                    const CreatureAnimation& animation)
 {
-	const auto* mesh = registry.TryGet<const Mesh>(entity);
-	const auto* transform = registry.TryGet<const Transform>(entity);
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (mesh == nullptr || transform == nullptr || !meshes.Contains(mesh->id))
-	{
-		return glm::vec3(0.0f);
-	}
-	return meshes.Handle(mesh->id)->GetBoundingBox().Center() * transform->scale;
+	const auto placement = PlacementOf(transform);
+	const auto hand = creature::PosedBone(held.bone, animation.boneMatrices, placement);
+	const auto hang = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().HangOf(held.object) : 0.0f;
+	return creature_throw::HeldPlacement(glm::mat3(hand), FingerEndsOf(held.bone, animation, placement), held.mirrored, hang);
 }
 
 /// Where a bone is in an animation at a time, in the creature's own space at the world's scale
@@ -230,27 +227,27 @@ std::optional<glm::vec3> BoneAt(entt::entity creature, const Transform& transfor
 	return at.has_value() ? std::optional(*at * transform.scale) : std::nullopt;
 }
 
-/// Where the right hand is in an animation at a time, in the creature's own space at the world's scale
-std::optional<glm::vec3> HandAt(entt::entity creature, const Transform& transform, const CreatureRig::ActionPoints& points,
-                                size_t animation, float timeMs)
+/// Where the middle of the finger ends of a hand is in an animation at a time, in the creature's own space at its own
+/// size
+std::optional<glm::vec3> FingerEndsInAnimation(entt::entity creature, uint32_t hand, size_t animation, float timeMs)
 {
-	return BoneAt(creature, transform, points.rightHand, animation, timeMs);
-}
-
-/// How fast the right hand moves in an animation over the span before a time, in the model's units a second at its own
-/// size. The span starts no earlier than the animation.
-std::optional<glm::vec3> MeasuredHand(entt::entity creature, const CreatureRig::ActionPoints& points, size_t animation,
-                                      float timeMs)
-{
-	auto& animations = Locator::creatureAnimationSystem::value();
-	const auto now = animations.BoneInAnimation(creature, animation, timeMs, points.rightHand, false);
-	const auto before = animations.BoneInAnimation(
-	    creature, animation, std::max(timeMs - creature_throw::k_HandSpeedSpanMs, 0.0f), points.rightHand, false);
-	if (!now.has_value() || !before.has_value())
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
+	if (body == nullptr)
 	{
 		return std::nullopt;
 	}
-	return creature_throw::HandVelocity(*now, *before, creature_throw::k_HandSpeedSpanMs);
+	const auto bones = creature_throw::TossPointBones(body->skeleton.parents, hand);
+	return Locator::creatureAnimationSystem::value().MiddleOfBonesInAnimation(creature, animation, timeMs, bones);
+}
+
+/// Where the middle of the finger ends of the right hand is in an animation at a time, in the creature's own space at
+/// the world's scale
+std::optional<glm::vec3> HandAt(entt::entity creature, const Transform& transform, const CreatureRig::ActionPoints& points,
+                                size_t animation, float timeMs)
+{
+	const auto at = FingerEndsInAnimation(creature, points.rightHand, animation, timeMs);
+	return at.has_value() ? std::optional(*at * transform.scale) : std::nullopt;
 }
 
 /// How fast the hand moves as it tosses something away, in the model's units a second at its own size: the middle of
@@ -282,16 +279,26 @@ std::optional<glm::vec3> TossHand(entt::entity creature, const CreatureRig::Acti
 	return velocity;
 }
 
-/// Where the bone it acts with gets to in each of four reaching animations: the right hand reaching to pick something
-/// up, the right foot striking a blow
-std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const Transform& transform, uint32_t bone,
+/// What a creature reaches with in its reaching animations
+enum class ReachWith : uint8_t
+{
+	/// The middle of the finger ends of the right hand, to pick something up
+	FingerEnds,
+	/// The right foot bone, to strike a blow
+	Foot,
+};
+/// Where the part it reaches with gets to in each of four reaching animations
+std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const Transform& transform,
+                                                   const CreatureRig::ActionPoints& points, ReachWith with,
                                                    const std::array<size_t, creature_reach::k_CornerCount>& animations,
                                                    float timeMs)
 {
 	creature_reach::Points reach {};
 	for (size_t i = 0; i < animations.size(); ++i)
 	{
-		const auto hand = BoneAt(creature, transform, bone, animations.at(i), timeMs);
+		const auto hand = with == ReachWith::FingerEnds
+		                      ? HandAt(creature, transform, points, animations.at(i), timeMs)
+		                      : BoneAt(creature, transform, points.rightFoot, animations.at(i), timeMs);
 		if (!hand.has_value())
 		{
 			return std::nullopt;
@@ -748,15 +755,11 @@ void Fail(CreatureObjectAction& action, std::string reason)
 /// The thing a creature catches is taken into its hand out of the air: it leaves the physics without going back on the
 /// map, and a person or animal is held
 void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity object, const CreatureObjectAction& action,
-                const CreatureRig::ActionPoints& points, const CreatureAnimation& animation, const Transform& transform)
+                const CreatureRig::ActionPoints& points, const CreatureAnimation& animation)
 {
-	const auto& at = registry.Get<const Transform>(object);
 	registry.AssignOrReplace<CreatureHeldObject>(
-	    creature, CreatureHeldObject {.object = object,
-	                                  .mirrored = action.mirrored,
-	                                  .bone = HandBone(points, animation, action.mirrored),
-	                                  .rotation = glm::transpose(transform.rotation) * at.rotation,
-	                                  .middle = MiddleOf(registry, object)});
+	    creature, CreatureHeldObject {
+	                  .object = object, .mirrored = action.mirrored, .bone = HandBone(points, animation, action.mirrored)});
 	registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
 	// It leaves the physics with its end, not going back on the map
 	if (Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().Find(object) != nullptr)
@@ -921,7 +924,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		const bool pickingUp = action.kind == Kind::PickUp;
 		action.eventMs = pickingUp ? points->pickUpMs : points->destroyMs;
 		action.reach =
-		    MeasureReach(creature, transform, pickingUp ? points->rightHand : points->rightFoot,
+		    MeasureReach(creature, transform, *points, pickingUp ? ReachWith::FingerEnds : ReachWith::Foot,
 		                 pickingUp ? creature_reach::k_PickUpAnimations : creature_reach::k_DestroyAnimations, action.eventMs);
 		if (!action.reach.has_value())
 		{
@@ -999,16 +1002,14 @@ bool StartCatch(entt::entity creature, CreatureObjectAction& action, const Creat
 		Fail(action, "it can't catch that");
 		return false;
 	}
-	// Where the hand closes is measured at the creature's first catch and kept
+	// Where the finger ends of the hand close is measured at the creature's first catch and kept
 	if (!registry.AllOf<CatchHands>(creature))
 	{
-		auto& animations = Locator::creatureAnimationSystem::value();
 		CatchHands measured;
 		for (size_t i = 0; i < creature_catch::k_CatchAnimations.size(); ++i)
 		{
 			measured.hands.at(i) =
-			    animations
-			        .BoneInAnimation(creature, creature_catch::k_CatchAnimations.at(i), points.catchMs, points.rightHand, false)
+			    FingerEndsInAnimation(creature, points.rightHand, creature_catch::k_CatchAnimations.at(i), points.catchMs)
 			        .value_or(glm::vec3(0.0f));
 		}
 		registry.Assign<CatchHands>(creature, measured);
@@ -1266,7 +1267,7 @@ void UpdateCatch(ecs::Registry& registry, entt::entity creature, const Creature&
 			else
 			{
 				action.catching = Catching::Caught;
-				TakeInHand(registry, creature, *action.target, action, *points, animation, transform);
+				TakeInHand(registry, creature, *action.target, action, *points, animation);
 				action.status = Status::Contact;
 			}
 		}
@@ -1369,7 +1370,7 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		};
 		// The creature measures the speed of its hand for a toss when it first starts to let go of a thing, and keeps
 		// that speed
-		if (action.kind == Kind::PutDown || action.kind == Kind::Discard || action.kind == Kind::Lob)
+		if (action.kind == Kind::PutDown || action.kind == Kind::Discard)
 		{
 			TossHand(creature, *points);
 		}
@@ -1381,18 +1382,11 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 			break;
 		case Kind::Discard:
 		{
-			// Each animation that lets go has its own moment: the animation that puts the thing down lets go at its own
-			// moment, and any other at the moment of the toss
+			// The animation that puts the thing down lets go at the moment of the put-down. Any other animation lets go at
+			// the moment of the toss, if it lets go.
 			const auto animation = action.animations.front() != 0 ? action.animations.front() : creature_throw::k_Discard;
-			single(animation, creature_throw::PutsDownStill(animation) ? points->putDownMs : points->discardMs);
-			break;
-		}
-		case Kind::Lob:
-		{
-			// The game times the gentle lob by nothing of its own: it lets go as far through as tossing away does
-			const auto discard = DurationOf(creature, creature_throw::k_Discard);
-			const auto lob = DurationOf(creature, creature_throw::k_GentleLob);
-			single(creature_throw::k_GentleLob, discard > 0.0f ? points->discardMs * lob / discard : points->discardMs);
+			single(animation, creature_throw::LetGoOf(animation) == creature_throw::LetGo::PutDownStill ? points->putDownMs
+			                                                                                            : points->discardMs);
 			break;
 		}
 		case Kind::Eat:
@@ -1503,7 +1497,7 @@ std::optional<glm::vec3> CreatureObjectActionSystem::TakePoint(entt::entity crea
 	{
 		return std::nullopt;
 	}
-	// The right hand at the moment of taking, with the creature turned to face the point
+	// The finger ends of the right hand at the moment of taking, with the creature turned to face the point
 	const auto hand = HandAt(creature, transform, *points, creature_giving::k_TakeAnimation, points->takeFromHandMs);
 	if (!hand.has_value())
 	{
@@ -1534,11 +1528,6 @@ bool CreatureObjectActionSystem::DiscardWith(entt::entity creature, size_t anima
 	CreatureObjectAction action {.kind = Kind::Discard};
 	action.animations.front() = animation;
 	return Start(creature, std::move(action));
-}
-
-bool CreatureObjectActionSystem::Lob(entt::entity creature)
-{
-	return Start(creature, {.kind = Kind::Lob});
 }
 
 bool CreatureObjectActionSystem::EatHeld(entt::entity creature)
@@ -1611,17 +1600,10 @@ void CreatureObjectActionSystem::Cancel(entt::entity creature)
 
 void CreatureObjectActionSystem::Drop(entt::entity creature)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto held = GetHeld(creature);
-	if (!held.has_value())
-	{
-		return;
-	}
-	const auto* at = registry.TryGet<const Transform>(*held);
-	Release(creature, at != nullptr ? at->position : registry.Get<const Transform>(creature).position, glm::vec3(0.0f));
+	Release(creature, glm::vec3(0.0f));
 }
 
-void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3& position, const glm::vec3& velocity)
+void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
@@ -1630,15 +1612,27 @@ void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3&
 		return;
 	}
 	const auto object = held->object;
+	// The thing keeps the turn that it has in the hand as the body is posed now. Let go, it starts where it hangs, as
+	// it is drawn. Thrown, it starts with its origin at the finger ends.
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	auto pose =
+	    transform != nullptr && animation != nullptr ? std::optional(HeldPoseOf(*held, *transform, *animation)) : std::nullopt;
+	if (pose.has_value())
+	{
+		pose = creature_throw::ReleaseStart(*pose, FingerEndsOf(held->bone, *animation, PlacementOf(*transform)),
+		                                    from == ReleaseFrom::FingerEnds);
+	}
 	registry.Remove<CreatureHeldObject>(creature);
 	if (!registry.Valid(object))
 	{
 		return;
 	}
 	registry.Remove<HeldByCreature>(object);
-	if (auto* transform = registry.TryGet<Transform>(object))
+	if (auto* at = registry.TryGet<Transform>(object); at != nullptr && pose.has_value())
 	{
-		transform->position = position;
+		at->position = pose->position;
+		at->rotation = pose->rotation;
 	}
 	LetGo(creature, object, velocity);
 }
@@ -2110,7 +2104,7 @@ std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entit
 	auto unscaled = *transform;
 	unscaled.scale = glm::vec3(1.0f);
 	const auto reach =
-	    MeasureReach(creature, unscaled, points->rightHand, creature_reach::k_PickUpAnimations, points->pickUpMs);
+	    MeasureReach(creature, unscaled, *points, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations, points->pickUpMs);
 	if (!reach.has_value())
 	{
 		return std::nullopt;
@@ -2574,7 +2568,8 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 		{
 			continue;
 		}
-		const auto handPosition = PalmOf(HandBone(*points, animation, action.mirrored), animation, PlacementOf(transform));
+		const auto handPosition =
+		    FingerEndsOf(HandBone(*points, animation, action.mirrored), animation, PlacementOf(transform));
 		switch (action.kind)
 		{
 		case Kind::PickUp:
@@ -2585,13 +2580,10 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 				Fail(action, "it has gone");
 				break;
 			}
-			const auto& at = registry.Get<const Transform>(object);
 			registry.AssignOrReplace<CreatureHeldObject>(
 			    creature, CreatureHeldObject {.object = object,
 			                                  .mirrored = action.mirrored,
-			                                  .bone = HandBone(*points, animation, action.mirrored),
-			                                  .rotation = glm::transpose(transform.rotation) * at.rotation,
-			                                  .middle = MiddleOf(registry, object)});
+			                                  .bone = HandBone(*points, animation, action.mirrored)});
 			registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
 			const bool flying = Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().IsFlying(object);
 			// Whatever it is, it leaves the map's cells while the creature holds it
@@ -2651,34 +2643,36 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			break;
 		}
 		case Kind::PutDown:
-			Release(creature, handPosition, glm::vec3(0.0f));
+			Release(creature, glm::vec3(0.0f));
 			break;
 		case Kind::Discard:
-		case Kind::Lob:
 		{
-			const auto animationIndex = action.animations.front();
-			// The animation that puts the thing down lets go of it at rest
-			if (action.kind == Kind::Discard && creature_throw::PutsDownStill(animationIndex))
+			const auto letGo = creature_throw::LetGoOf(action.animations.front());
+			// The animation that puts the thing down lets go of it at rest. An animation that does not toss or put down
+			// keeps the thing in the hand.
+			if (letGo == creature_throw::LetGo::PutDownStill)
 			{
-				Release(creature, handPosition, glm::vec3(0.0f));
+				Release(creature, glm::vec3(0.0f));
 				break;
 			}
-			// The toss away takes the hand's speed the creature has kept since its first toss; other animations measure
-			// their own
-			const auto hand = animationIndex == creature_throw::k_Discard
-			                      ? TossHand(creature, *points)
-			                      : MeasuredHand(creature, *points, animationIndex, action.eventMs);
+			if (letGo == creature_throw::LetGo::Keep)
+			{
+				break;
+			}
+			// The toss away takes the speed of the hand that the creature kept since its first toss
+			const auto hand = TossHand(creature, *points);
 			const auto velocity = hand.has_value()
 			                          ? creature_throw::TossVelocity(*hand * transform.scale, action.mirrored,
 			                                                         transform.rotation, creature_throw::k_DiscardSpeedShare)
 			                          : glm::vec3(0.0f);
-			Release(creature, handPosition, velocity);
+			Release(creature, velocity);
 			break;
 		}
 		case Kind::Throw:
 			action.thrown = GetHeld(creature);
-			Release(creature, handPosition,
-			        creature_throw::ReleaseVelocity(action.point, handPosition, std::max(action.flightSeconds, k_Tiny)));
+			Release(creature,
+			        creature_throw::ReleaseVelocity(action.point, handPosition, std::max(action.flightSeconds, k_Tiny)),
+			        ReleaseFrom::FingerEnds);
 			break;
 		case Kind::Eat:
 		{
@@ -2732,7 +2726,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 				Fail(action, "the hand no longer gives it");
 				break;
 			}
-			TakeInHand(registry, creature, object, action, *points, animation, transform);
+			TakeInHand(registry, creature, object, action, *points, animation);
 			action.status = Status::Contact;
 			break;
 		}
@@ -2756,10 +2750,10 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 		    {
 			    return;
 		    }
-		    // Held by its middle in the palm, turned with the creature
-		    const auto placement = PlacementOf(transform);
-		    at->rotation = transform.rotation * held.rotation;
-		    at->position = PalmOf(held.bone, animation, placement) - (at->rotation * held.middle);
+		    // It turns with the hand bone and hangs below the finger ends by its own distance
+		    const auto pose = HeldPoseOf(held, transform, animation);
+		    at->rotation = pose.rotation;
+		    at->position = pose.position;
 		    moved = true;
 	    });
 
