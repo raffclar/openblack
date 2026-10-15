@@ -38,6 +38,11 @@ Numbered TempleHealth(float life)
 	return {.index = k_TempleHealth, .first = static_cast<double>(life) * k_PercentScale, .second = std::nullopt};
 }
 
+Numbered PrayerEnergy(float stored)
+{
+	return {.index = k_PrayerEnergy, .first = static_cast<double>(stored), .second = std::nullopt};
+}
+
 Numbered Population(uint32_t people, uint32_t places)
 {
 	return {.index = k_Population, .first = static_cast<double>(people), .second = static_cast<double>(places)};

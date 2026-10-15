@@ -50,6 +50,15 @@ TEST(WorldToolTips, TempleHealthIsPercentage)
 	          u"Temple Health:  76%");
 }
 
+TEST(WorldToolTips, PrayerEnergyIsWhatTheSiteStores)
+{
+	const auto energy = PrayerEnergy(23200.4f);
+	EXPECT_EQ(energy.index, k_PrayerEnergy);
+	EXPECT_FALSE(energy.second.has_value());
+	EXPECT_EQ(Compose(energy.index, u"Prayer Energy: %3.0f", energy.first, energy.second), u"Prayer Energy: 23200");
+	EXPECT_EQ(Compose(energy.index, u"Prayer Energy: %3.0f", PrayerEnergy(0.0f).first, std::nullopt), u"Prayer Energy:   0");
+}
+
 TEST(WorldToolTips, PopulationAsPeopleOverPlaces)
 {
 	const auto population = Population(12, 34);
@@ -223,7 +232,7 @@ TEST(WorldToolTips, TheTemplesHealthAndTheVillageCentresTipsShowAnywhere)
 TEST(WorldToolTips, WhatTheHandCouldTakeOrTapShowsOnlyInTheInfluence)
 {
 	for (const auto subject :
-	     {Subject::TempleEntrance, Subject::Store, Subject::Pile, Subject::DesireFlag, Subject::OthersCreature})
+	     {Subject::TempleEntrance, Subject::Store, Subject::Pile, Subject::DesireFlag, Subject::OthersCreature, Subject::Altar})
 	{
 		EXPECT_TRUE(NeedsInfluence(subject));
 		EXPECT_TRUE(Shows(subject, true));

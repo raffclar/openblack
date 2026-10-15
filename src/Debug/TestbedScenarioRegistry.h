@@ -338,6 +338,8 @@ struct ObjectSetup
 	/// The thing makes a reaction of this kind as it is made, as the game makes one about a thing (a thing coming to rest
 	/// makes one to look at it), by the scenario's player
 	std::optional<Reaction> reaction;
+	/// A tree lies dead, as a land's script makes a dead tree, rather than standing and growing
+	bool dead {false};
 };
 
 /// A particle effect played on the land

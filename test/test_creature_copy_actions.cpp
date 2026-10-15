@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureWatching.h"
 
 using namespace openblack;
@@ -115,4 +116,34 @@ TEST(CreatureCopyActions, CopyingAgainStartsHalfWayIntoCopyingTheAction)
 	EXPECT_FALSE(even->object.has_value());
 	// A deed with no row gives nothing to copy
 	EXPECT_FALSE(CopyObservedDeedAgain({.rule = 46}, rules, 0, NoExtra).has_value());
+}
+
+TEST(CreatureCopyActions, TheHandsSacrificeIsCopiedOnlyFromTheLearningLeash)
+{
+	// The table's row for the hand's sacrifice at the altar: the creature copies it with its own Sacrifice action, for
+	// the desire of anger, and only while it is on the learning leash
+	constexpr uint32_t k_CreatureSacrifice = 282;
+	constexpr uint32_t k_Anger = 2;
+	auto rules = Rules();
+	rules.resize(creature_deeds::k_Sacrifice + 1);
+	rules[creature_deeds::k_Sacrifice] = {.name = "Sacrifice",
+	                                      .chance = 0.9f,
+	                                      .needsLearningLeash = true,
+	                                      .noticeAction = 243,
+	                                      .copyActions = {k_CreatureSacrifice},
+	                                      .desire = k_Anger,
+	                                      .stageSteps = 5};
+	std::optional<Mimicry> mimicry;
+	EXPECT_FALSE(MayStartMimicry(mimicry, creature_deeds::k_Sacrifice, rules, {.phase = 13}));
+	EXPECT_FALSE(MayStartMimicry(mimicry, creature_deeds::k_Sacrifice, rules,
+	                             {.phase = 13, .learningLeashInHand = true, .canSee = false}));
+	const MimicConditions leashed {.phase = 13, .learningLeashInHand = true};
+	// It starts over the copy of a deed that ranks lower
+	ASSERT_TRUE(StartMimicry(mimicry, 1, rules, leashed, 7u, 10, NoExtra));
+	ASSERT_TRUE(StartMimicry(mimicry, creature_deeds::k_Sacrifice, rules, leashed, 9u, 20, NoExtra));
+	EXPECT_EQ(mimicry->rule, creature_deeds::k_Sacrifice);
+	EXPECT_EQ(mimicry->stage, MimicStage::Notice);
+	EXPECT_EQ(mimicry->limit, 5u);
+	EXPECT_EQ(CopyActionsOf(rules[creature_deeds::k_Sacrifice], creature_deeds::k_Sacrifice, 0, {}),
+	          std::vector<uint32_t> {k_CreatureSacrifice});
 }
