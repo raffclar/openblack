@@ -1798,6 +1798,20 @@ void AddFootprints(std::vector<Scenario>& all)
 	    .commands = circling,
 	    .repeatFrom = 0,
 	});
+
+	all.push_back({
+	    .id = "footprints.walk_and_run_close",
+	    .name = "Footprints close up, walking and running",
+	    .facet = Facet::Footprints,
+	    .description = "The camera keeps close behind a tiger. It walks across the testbed, then runs back.",
+	    .expected = "Each footstep, walking or running, lays one dark paw print under the lower foot, turned the way "
+	                "the foot points, the left foot's print a mirror of the right. The prints fade in small steps and "
+	                "go after about five seconds. The sea does not show them.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.4f},
+	    .creatures = {Posed(CreatureType::Tiger, {110.0f, 0.0f}, 90.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {-110.0f, 0.0f}, 0.5f, true), Go(Kind::RunTo, 0, {110.0f, 0.0f}, 0.0f, true)},
+	    .repeatFrom = 0,
+	});
 }
 
 void AddAudio(std::vector<Scenario>& all)
