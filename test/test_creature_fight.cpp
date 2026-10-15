@@ -683,3 +683,68 @@ TEST(CreatureFight, OnlyTheCreatureThatPlannedAFightStillChoosesInIt)
 	EXPECT_FALSE(ObeysInFight({.fighting = true, .startedIt = true}));
 	EXPECT_FALSE(ObeysInFight({}));
 }
+
+TEST(CreatureFight, TheFaceOffIsTheTauntOrTheRudeGesture)
+{
+	EXPECT_EQ(FaceOffAnimation(false), animations::k_Taunt);
+	EXPECT_EQ(FaceOffAnimation(true), animations::k_Rude);
+	EXPECT_EQ(animations::k_Rude, 222u);
+	EXPECT_EQ(k_PointAtArenaTurns, 20u);
+}
+
+TEST(CreatureFight, ATieAfterAFightIsSadAndTheWeakerFearsTheOther)
+{
+	EXPECT_EQ(Response(0.5f, 0.5f), animations::k_Sad);
+	EXPECT_FALSE(FearsAfterFight(0.8f, 0.5f));
+	EXPECT_TRUE(FearsAfterFight(0.5f, 0.5f));
+	EXPECT_TRUE(FearsAfterFight(0.4f, 0.5f));
+}
+
+TEST(CreatureFight, AFighterOnTheEdgeOfTheRangeIsOutsideIt)
+{
+	const Arena arena {.centre = {0.0f, 0.0f}, .radius = 10.0f};
+	EXPECT_FALSE(OutsideRange(arena, {7.9f, 0.0f}));
+	EXPECT_TRUE(OutsideRange(arena, {8.0f, 0.0f}));
+	EXPECT_TRUE(OutsideRange(arena, {0.0f, -9.0f}));
+}
+
+TEST(CreatureFight, AFighterStepsBackToTheMiddle)
+{
+	// Within its body radius of the middle it takes no step
+	EXPECT_FALSE(StepToMiddle({0.0f, 2.0f}, 2.0f, 2.0f).has_value());
+	// Ahead or behind when the middle is 1.5 times farther that way than to the side
+	EXPECT_EQ(StepToMiddle({2.0f, 3.0f}, 4.0f, 1.0f), Step::Forward);
+	EXPECT_EQ(StepToMiddle({-2.0f, -3.0f}, 4.0f, 1.0f), Step::Back);
+	EXPECT_EQ(StepToMiddle({0.0f, 0.0f}, 4.0f, 1.0f), Step::Back);
+	// Else to the side
+	EXPECT_EQ(StepToMiddle({2.1f, 3.0f}, 4.0f, 1.0f), Step::Left);
+	EXPECT_EQ(StepToMiddle({-2.1f, 3.0f}, 4.0f, 1.0f), Step::Right);
+}
+
+TEST(CreatureFight, TheForwardExtentIsTheFarthestBoneAhead)
+{
+	const std::array<glm::vec2, 3> bones {glm::vec2 {0.0f, 1.0f}, glm::vec2 {0.0f, 3.0f}, glm::vec2 {5.0f, -2.0f}};
+	EXPECT_FLOAT_EQ(ForwardExtent(bones, {0.0f, 1.0f}), 3.0f);
+	EXPECT_FLOAT_EQ(ForwardExtent(bones, {0.0f, -1.0f}), 2.0f);
+	EXPECT_FLOAT_EQ(ForwardExtent({}, {0.0f, 1.0f}), 0.0f);
+}
+
+TEST(CreatureFight, OverlappingFightersMoveApartInsideTheRange)
+{
+	const Arena arena {.centre = {0.0f, 0.0f}, .radius = 10.0f};
+	// Two units apart and reaching four: each moves one unit along the first one's facing
+	const auto pulled = PullApartOf(arena, {0.0f, 0.0f}, {0.0f, 2.0f}, {0.0f, 1.0f}, 4.0f);
+	ASSERT_TRUE(pulled.first.has_value());
+	ASSERT_TRUE(pulled.second.has_value());
+	EXPECT_FLOAT_EQ(pulled.first->y, -1.0f);
+	EXPECT_FLOAT_EQ(pulled.second->y, 3.0f);
+	// Far enough apart, nothing moves
+	const auto apart = PullApartOf(arena, {0.0f, 0.0f}, {0.0f, 4.0f}, {0.0f, 1.0f}, 4.0f);
+	EXPECT_FALSE(apart.first.has_value());
+	EXPECT_FALSE(apart.second.has_value());
+	// A fighter does not move to a point outside the range
+	const auto edge = PullApartOf(arena, {0.0f, -7.5f}, {0.0f, -6.0f}, {0.0f, 1.0f}, 3.0f);
+	EXPECT_FALSE(edge.first.has_value());
+	ASSERT_TRUE(edge.second.has_value());
+	EXPECT_FLOAT_EQ(edge.second->y, -5.25f);
+}

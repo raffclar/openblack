@@ -137,6 +137,12 @@ public:
 	/// A fight started between the two creatures. The fight has the minds of both until it ends. When the first creature
 	/// did not plan the fight itself, it is made to fight. The second creature stops what it does and obeys the first.
 	virtual void FightStarted(entt::entity /*creature*/, entt::entity /*opponent*/, bool /*planned*/) {}
+	/// What the creature does stops as a failure. The desire becomes fully dominant, and the creature plans to satisfy it
+	/// through the thing. Returns whether the creature has a plan for that desire.
+	virtual bool ForceDesireOn(entt::entity /*creature*/, creature_desires::Desire /*desire*/, entt::entity /*thing*/)
+	{
+		return false;
+	}
 	/// Something stops what the creature is doing, which it gives up as a failure, as a spell freezing it does
 	virtual void AbandonAction(entt::entity /*creature*/) {}
 	/// The creature is made to catch a thing flying at it: what it was doing fails, and it plays with the thing by catching

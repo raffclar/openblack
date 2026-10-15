@@ -142,6 +142,8 @@ protected:
 		auto& registry = Locator::entitiesRegistry::value();
 		first = MakeCreature(registry, PlayerNames::PLAYER_ONE, {-15.0f, 0.0f, 0.0f});
 		second = MakeCreature(registry, PlayerNames::PLAYER_TWO, {15.0f, 0.0f, 0.0f});
+		// The arena has appeared
+		const auto arena = registry.Create();
 		for (const auto& [self, other] : {std::pair(first, second), std::pair(second, first)})
 		{
 			registry.Assign<CreatureFighting>(self, CreatureFighting {
@@ -149,6 +151,7 @@ protected:
 			                                            .opponent = other,
 			                                            .arena = {.centre = {0.0f, 0.0f}, .radius = 40.0f},
 			                                            .madeArena = self == first,
+			                                            .arenaEntity = arena,
 			                                        });
 		}
 		ShowTheFight({0.0f, 0.0f, 0.0f});
@@ -328,9 +331,12 @@ TEST_F(CreatureFightSystemTest, AKnockOutThatNoBlowMadeGivesNoSightOfAFightWon)
 {
 	Locator::reactionSystem::emplace<RecordedReactions>();
 	auto& reactions = static_cast<RecordedReactions&>(Locator::reactionSystem::value());
-	// A miracle or a loss of life knocks the loser out, not a blow
+	// A miracle or a loss of life knocks the loser out, not a blow. The faint alone makes a reaction, as to a death.
 	fights.KnockOut(second);
-	EXPECT_TRUE(reactions.made.empty());
+	ASSERT_EQ(reactions.made.size(), 1u);
+	EXPECT_EQ(reactions.made.front().type, Reaction::ReactToDeath);
+	EXPECT_EQ(reactions.made.front().initiator, second);
+	EXPECT_TRUE(reactions.made.front().playerless);
 	Locator::reactionSystem::reset();
 }
 
@@ -509,4 +515,30 @@ TEST_F(CreatureFightSystemTest, AKnockOutKeepsTheWinnerAndTheLoserFromReactions)
 	EXPECT_EQ(registry.Get<const CreatureAfterFight>(first).agenda, 4u);
 	EXPECT_EQ(registry.Get<const CreatureAfterFight>(second).agenda, 9u);
 	Locator::creatureMindSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, AFightFacesOffAndTauntsBeforeItLooksForAnArena)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	EXPECT_EQ(registry.Get<CreatureFighting>(first).stage, CreatureFighting::Stage::FaceOff);
+	EXPECT_EQ(registry.Get<CreatureFighting>(second).stage, CreatureFighting::Stage::FaceOff);
+	EXPECT_TRUE(registry.Get<CreatureFighting>(first).arenaEntity == entt::null);
+	EXPECT_TRUE(fights.IsSettingUpFight(second));
+
+	// The first creature turns, then tells the other creature to taunt with it
+	fights.ProcessTurn();
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<CreatureFighting>(first).stage, CreatureFighting::Stage::Taunt);
+	EXPECT_EQ(registry.Get<CreatureFighting>(second).stage, CreatureFighting::Stage::Taunt);
+
+	// This land has no room for an arena, so after the taunts the fight stops for both
+	for (int turn = 0; turn < 4 && registry.AnyOf<CreatureFighting>(first); ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(first));
+	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(second));
 }

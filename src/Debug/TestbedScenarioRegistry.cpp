@@ -4090,6 +4090,28 @@ void AddCombat(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// The two tigers start back to back, so that each one must turn to face the other
+		auto away = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
+		away.facingDegrees = 270.0f;
+		auto otherAway = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		otherAway.facingDegrees = 90.0f;
+		all.push_back({
+		    .id = "combat.lead_in",
+		    .name = "The steps before a duel",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger and the blue tiger stand back to back. The red tiger starts a fight with the blue "
+		                   "tiger, and both fight by themselves.",
+		    .expected = "Both tigers stop and turn to face each other. Each one taunts or makes the rude gesture. Then "
+		                "the ring of the arena appears with its sound, and the red tiger points at the arena. Both walk to "
+		                "their places and look at each other with angry faces. They turn to face each other again, and "
+		                "the duel starts.",
+		    .framing = ringside,
+		    .creatures = {away, otherAway},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "combat.fight_view",
 	    .name = "Watching a fight",

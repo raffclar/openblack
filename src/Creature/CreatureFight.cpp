@@ -102,6 +102,36 @@ glm::vec2 creature_fight::ClampToRange(const Arena& arena, glm::vec2 point)
 	return arena.centre + (offset * (std::max(range - k_RangeEdgeMargin, 0.0f) / distance));
 }
 
+bool creature_fight::OutsideRange(const Arena& arena, glm::vec2 point)
+{
+	return !(glm::distance(point, arena.centre) < k_RangeShare * arena.radius);
+}
+
+float creature_fight::ForwardExtent(std::span<const glm::vec2> bones, glm::vec2 forward)
+{
+	float extent = 0.0f;
+	for (const auto& bone : bones)
+	{
+		extent = std::max(extent, glm::dot(bone, forward));
+	}
+	return extent;
+}
+
+creature_fight::PullApart creature_fight::PullApartOf(const Arena& arena, glm::vec2 first, glm::vec2 second, glm::vec2 forward,
+                                                      float extents)
+{
+	const auto apart = glm::distance(first, second);
+	if (!(apart < extents))
+	{
+		return {};
+	}
+	const auto push = forward * ((extents - apart) * 0.5f);
+	const auto inside = [&arena](glm::vec2 point) {
+		return glm::distance(point, arena.centre) < k_RangeShare * arena.radius ? std::optional(point) : std::nullopt;
+	};
+	return {.first = inside(first - push), .second = inside(second + push)};
+}
+
 float creature_fight::ClosestApart(float radius, float opponentRadius)
 {
 	return (radius * 0.5f) + opponentRadius;
@@ -154,6 +184,20 @@ Step creature_fight::StepTowards(glm::vec2 local)
 		return local.y >= 0.0f ? Step::Forward : Step::Back;
 	}
 	return local.x >= 0.0f ? Step::Right : Step::Left;
+}
+
+std::optional<Step> creature_fight::StepToMiddle(glm::vec2 local, float distance, float bodyRadius)
+{
+	if (!(bodyRadius < distance))
+	{
+		return std::nullopt;
+	}
+	if (std::abs(local.x) * k_StepToMiddleAheadShare <= std::abs(local.y))
+	{
+		return local.y > 0.0f ? Step::Forward : Step::Back;
+	}
+	// A middle on the negative side of the x axis of the model takes the step to the right
+	return local.x < 0.0f ? Step::Right : Step::Left;
 }
 
 bool creature_fight::CanStep(const Arena& arena, glm::vec2 position, Step step)
@@ -1009,7 +1053,17 @@ bool creature_fight::FightWonIsSeen(bool byBlow, bool winnerHasPlayer)
 
 size_t creature_fight::Response(float life, float otherLife)
 {
-	return life >= otherLife ? animations::k_Happy : animations::k_Sad;
+	return otherLife < life ? animations::k_Happy : animations::k_Sad;
+}
+
+bool creature_fight::FearsAfterFight(float life, float otherLife)
+{
+	return !(otherLife < life);
+}
+
+size_t creature_fight::FaceOffAnimation(bool rude)
+{
+	return rude ? animations::k_Rude : animations::k_Taunt;
 }
 
 namespace
