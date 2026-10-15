@@ -1510,6 +1510,32 @@ void AddAppearance(std::vector<Scenario>& all)
 	          "A neutral wolf with a paused mind faces the camera. It nods, shakes its head and does its other gestures.",
 	          "The tufts of hair at the hips have sharp edges and no pale blur. They swing when the wolf moves.", 1.5f);
 
+	// A young lion close up: the long dark strands of its mane are part of the body mesh, not hair. The leopard has
+	// no such strands.
+	const auto maneClose = [&all, &headMoves](std::string_view id, std::string_view name, CreatureType species,
+	                                          std::string_view expected) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Appearance,
+		    .description = "Close up, a young neutral creature (size 0.4) with a paused mind faces the camera. It nods, "
+		                   "shakes its head and does its other gestures.",
+		    .expected = expected,
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Head, .distance = 2.5f},
+		    .creatures = {CreatureSetup {
+		        .species = species, .size = 0.4f, .needs = Content(), .hold = true, .pauseMind = true}},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	};
+	maneClose("appearance.lion_mane", "Young lion mane close up", CreatureType::Lion,
+	          "Long dark strands of the mane hang down at the two sides of the face and neck. The land shows between "
+	          "the strands, and a little through their edges. They do not swing: they move only with the head and "
+	          "the body.");
+	maneClose("appearance.leopard_mane", "Young leopard head close up", CreatureType::Leopard,
+	          "The leopard has no mane strands, no whiskers and no tufts of hair.");
+
 	auto tattooed = Posed(CreatureType::Tiger, {0.0f, 0.0f}, 30.0f, "tattooed");
 	constexpr std::array<glm::u8vec3, 8> k_Colours {{
 	    {220, 40, 40},
