@@ -43,7 +43,11 @@ std::vector<Step> creature_odd::LookConfused(std::optional<glm::vec2> camera)
 std::vector<Step> creature_odd::BehaveStrangely(float turnsPerSecond, const Random& random)
 {
 	std::vector<Step> agenda {
-	    {.kind = Step::Kind::WatchCamera, .seconds = k_StrangeStareSeconds, .face = Cue::Curiosity, .heldEyes = Eyes::Stoned},
+	    {.kind = Step::Kind::WatchCamera,
+	     .seconds = k_StrangeStareSeconds,
+	     .face = Cue::Curiosity,
+	     .heldEyes = Eyes::Stoned,
+	     .main = true},
 	    {.kind = Step::Kind::Action, .animation = animations::k_Happy, .heldEyes = Eyes::Stoned},
 	};
 	// One time in two it faints and lies still for five to ten seconds, in whole turns
@@ -56,7 +60,8 @@ std::vector<Step> creature_odd::BehaveStrangely(float turnsPerSecond, const Rand
 		                  .holdLoop = true,
 		                  .closedEyes = true,
 		                  .effect = Effect::Revived,
-		                  .faint = true});
+		                  .faint = true,
+		                  .main = true});
 	}
 	agenda.push_back(
 	    {.kind = Step::Kind::Action, .animation = animations::k_Confused, .sleepyEyes = true, .face = Cue::Grimace});

@@ -97,7 +97,8 @@ std::vector<Step> creature_emote::PullSillyFaces(uint32_t villager, float height
 		                  .seconds = k_SillyFaceSeconds,
 		                  .animation = animations::k_FirstFace + random(k_SillyFaceCount),
 		                  .effect = i == 1 ? Effect::Completed : Effect::None,
-		                  .gaze = look});
+		                  .gaze = look,
+		                  .main = i == 1});
 	}
 	return agenda;
 }
@@ -158,6 +159,7 @@ std::vector<Step> creature_emote::RunAway(const RunFrom& from, const Random& ran
 	{
 		run.heldEyes = Eyes::Wide;
 	}
+	run.main = true;
 	agenda.push_back(run);
 	if (random(k_FrightenedStartLots) == 0)
 	{
@@ -204,7 +206,8 @@ std::vector<Step> creature_emote::StrokeAndHeal(uint32_t thing, bool holdingStro
 	                  .effect = Effect::Completed,
 	                  .order = {.kind = ObjectOrder::Kind::Keep, .animation = k_StrokeAnimation},
 	                  .face = Cue::Compassion,
-	                  .gaze = Gaze {.object = thing}});
+	                  .gaze = Gaze {.object = thing},
+	                  .main = true});
 	agenda.push_back({.kind = Step::Kind::Heal, .object = thing, .face = Cue::Compassion});
 	agenda.push_back({.kind = Step::Kind::Object,
 	                  .order = {.kind = ObjectOrder::Kind::Discard, .animation = k_PutDownAnimation},
@@ -226,7 +229,8 @@ std::vector<Step> creature_emote::LookAtSky(glm::vec3 point, bool evilAtTheMoon,
 		                            .point = {point.x, point.z},
 		                            .pointHeight = point.y,
 		                            .seconds = k_PointAtSkySeconds},
-		                  .gaze = look});
+		                  .gaze = look,
+		                  .main = true});
 	}
 	if (evilAtTheMoon)
 	{
@@ -256,7 +260,8 @@ std::vector<Step> creature_emote::SleepAtClearPlace(glm::vec2 place, float radiu
 	                  .sequence = {animations::k_StartSleep, animations::k_Sleep, animations::k_EndSleep},
 	                  .untilRested = true,
 	                  .closedEyes = true,
-	                  .effect = Effect::Slept});
+	                  .effect = Effect::Slept,
+	                  .main = true});
 	agenda.push_back(
 	    {.kind = Step::Kind::Action, .animation = animations::k_Confused, .sleepyEyes = true, .face = Cue::Grimace});
 	return agenda;

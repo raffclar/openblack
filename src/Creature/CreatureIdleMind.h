@@ -14,6 +14,7 @@
 #include <array>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -534,6 +535,9 @@ struct Step
 	/// A static step in which the creature faints. As it starts, those near it react as to a death. The step's seconds
 	/// count from the turn that it lies still.
 	bool faint {false};
+	/// The main step of the agenda: the step that does what the action is for. The player sees the action only at or
+	/// after this step (see MainStep).
+	bool main {false};
 };
 
 struct IdleMind
@@ -589,6 +593,9 @@ struct IdleMind
 	bool danceSet {false};
 	/// A step that follows the camera: the turns it follows for yet
 	uint32_t followCameraTurns {0};
+	/// The step that moved on to its next part this turn: it started, its loop ended, or it ended. Each turn of thought
+	/// clears it first.
+	std::optional<size_t> movedOn;
 };
 
 /// How what its hands were told to do is going
@@ -976,6 +983,12 @@ void DanceOrderDone(IdleMind& mind, bool done);
 [[nodiscard]] std::optional<Gaze> LookOf(const Step& step);
 /// One game turn of the mind
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random);
+/// The main step of an agenda: the last step marked as main. A step that casts a miracle is always a main step. When no
+/// step is a main step, the last step is the main step. An empty agenda gives 0.
+[[nodiscard]] size_t MainStep(std::span<const Step> agenda);
+/// Whether a step of an agenda is at or after the main step. When the creature shows the player what it wants, every
+/// step counts. An empty agenda has no such step.
+[[nodiscard]] bool AtOrPastMainStep(std::span<const Step> agenda, size_t step, bool showingDesire);
 /// Whether a creature goes on watching a flying thing: while the thing is still flying and the whole seconds of the
 /// turns it has watched come under the limit
 [[nodiscard]] bool KeepsWatchingFlying(uint32_t turns, uint32_t turnsPerSecond, float limit, bool flying);

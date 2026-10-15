@@ -71,6 +71,14 @@ TEST(CreatureTurnOrder, PlanStartsAgainOnlyAfterAHoldAndWithStepsToDo)
 	EXPECT_FALSE(turn::RestartsAfterHold(false, true));
 }
 
+TEST(CreatureTurnOrder, HeldByTheHandTheMindStandsStill)
+{
+	EXPECT_EQ(turn::WhileHeld(false, false), turn::HeldTurn::Think);
+	EXPECT_EQ(turn::WhileHeld(false, true), turn::HeldTurn::Think);
+	EXPECT_EQ(turn::WhileHeld(true, false), turn::HeldTurn::StandStill);
+	EXPECT_EQ(turn::WhileHeld(true, true), turn::HeldTurn::ShowDesire);
+}
+
 TEST(CreatureTurnOrder, FollowingThePlayerIsNotAPlanOfItsOwn)
 {
 	EXPECT_TRUE(turn::OwnPlanRuns(true, Desire::Hunger));

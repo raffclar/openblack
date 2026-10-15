@@ -439,8 +439,14 @@ private:
 	/// The creature remembers an action for feedback. An action that it forgets to make room can teach approval
 	/// (CreatureMindLearning.cpp).
 	void RememberAction(entt::entity creature, components::CreatureMindState& mind, creature_learning::Context context);
-	/// The creature carried out its newest action to its end, which it remembers for feedback
-	static void MarkNewestActionDone(components::CreatureMindState& mind);
+	/// The creature carried out its newest action to its end, which it remembers for feedback. The player sees the action
+	/// when the player's camera looks at the creature now (CreatureMindLearning.cpp).
+	static void MarkNewestActionDone(entt::entity creature, components::CreatureMindState& mind);
+	/// A step of the agenda moved on to its next part. When the step is at or after the main step and the player's camera
+	/// looks at the creature, the player sees the newest action (CreatureMindLearning.cpp).
+	static void NoteStepSeen(entt::entity creature, components::CreatureMindState& mind);
+	/// Whether the camera of the creature's player looks at the creature now (CreatureMindLearning.cpp)
+	[[nodiscard]] static bool LookedAtByItsPlayer(entt::entity creature);
 	/// It is made to be high, as after eating a magic mushroom
 	void BecomeHigh(entt::entity creature);
 	/// Going near, getting away from or turning to face an object begins, and each turn it goes on

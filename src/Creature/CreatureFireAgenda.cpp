@@ -45,6 +45,7 @@ std::optional<std::vector<Step>> creature_mind::SetFireTo(uint32_t object, std::
 	                  .flutterEyelids = true});
 	Step toss {.kind = Step::Kind::Object, .face = creature_face::Cue::Smile};
 	toss.order = {.kind = ObjectOrder::Kind::Discard, .animation = k_SetFireToss};
+	toss.main = true;
 	agenda.push_back(toss);
 	// It watches the burning thing until it lands, then waits a moment with an angry face
 	Step land {.kind = Step::Kind::WaitInMap, .gaze = Gaze {.object = instrument}};

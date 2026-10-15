@@ -1286,7 +1286,8 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 			seed->learnedFrom = true;
 		}
 	}
-	else if ((nice || shield) && magic.has_value() && (byCreature || !computer) && !seedSpent)
+	else if ((nice || shield) && magic.has_value() && (byCreature || !computer) && !seedSpent &&
+	         !(nice && creature_reaction::OfAnotherGod(source.player, registry.Get<const Creature>(living).owner)))
 	{
 		// A seed's miracle a creature has already learnt from isn't looked at again
 		minds.ReactToNiceMagic(living, source.position, magic);

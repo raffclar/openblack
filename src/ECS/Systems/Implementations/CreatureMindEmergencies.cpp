@@ -144,7 +144,8 @@ void CreatureMindSystem::StepEmergencies(entt::entity creature, const Creature& 
 		                    drinks ? "goes to drink from the sea" : "casts water on itself");
 		const bool planned = ForceActivity(creature, {.desire = Desire::RestoreHealth,
 		                                              .action = drinks ? k_DrinkFromTheSeaAction : k_CastWaterOnItselfAction,
-		                                              .actionObject = creature});
+		                                              .actionObject = creature,
+		                                              .ordered = true});
 		if (planned && mind.idle.step < mind.idle.agenda.size())
 		{
 			// A creature of no player or of the computer keeps the run speed for each walk of the plan
@@ -197,7 +198,8 @@ void CreatureMindSystem::StepEmergencies(entt::entity creature, const Creature& 
 	ForceActivity(creature, {.desire = Desire::Compassion,
 	                         .activityObject = BelongsTo(*burning),
 	                         .action = k_PutOutFireAction,
-	                         .actionObject = *burning});
+	                         .actionObject = *burning,
+	                         .ordered = true});
 	// The emergency starts and the plan counts as forced, also when the creature could not make the plan
 	mind.planForced = true;
 	mind.emergencyRunning = true;

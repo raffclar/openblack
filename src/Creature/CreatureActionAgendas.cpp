@@ -186,7 +186,8 @@ std::vector<Step> creature_mind::SleepAtHome(glm::vec2 home, float height, const
 	                  .sequence = {animations::k_StartSleep, animations::k_Sleep, animations::k_EndSleep},
 	                  .untilRested = true,
 	                  .closedEyes = true,
-	                  .effect = Effect::Slept});
+	                  .effect = Effect::Slept,
+	                  .main = true});
 	agenda.push_back(PlayOnce(animations::k_Confused, true, creature_face::Cue::Grimace));
 	return agenda;
 }
@@ -206,7 +207,8 @@ std::vector<Step> creature_mind::SleepByObject(glm::vec2 place, float radius, co
 	                  .sequence = {animations::k_StartSleep, animations::k_Sleep, animations::k_EndSleep},
 	                  .untilRested = true,
 	                  .closedEyes = true,
-	                  .effect = Effect::Slept});
+	                  .effect = Effect::Slept,
+	                  .main = true});
 	agenda.push_back(PlayOnce(animations::k_Confused, true, creature_face::Cue::Grimace));
 	return agenda;
 }
@@ -344,6 +346,8 @@ std::vector<Step> creature_mind::SmileAt(uint32_t friendly, float height, float 
 	{
 		step.flutterEyelids = true;
 	}
+	// The smile as it faces the friend is the main step
+	agenda.back().main = true;
 	if (random(k_HappyAfterSmilingLots) == 0)
 	{
 		agenda.push_back(PlayOnce(animations::k_Happy));
@@ -444,7 +448,8 @@ std::vector<Step> creature_mind::Notice(NoticeKind kind, uint32_t thing, bool ha
 	using creature_face::Cue;
 	const Gaze atCamera {.camera = true};
 	const auto watch = [&atCamera](Cue face) {
-		return Step {.kind = Step::Kind::WatchCamera, .seconds = k_NoticeWatchSeconds, .face = face, .gaze = atCamera};
+		return Step {
+		    .kind = Step::Kind::WatchCamera, .seconds = k_NoticeWatchSeconds, .face = face, .gaze = atCamera, .main = true};
 	};
 	std::vector<Step> agenda;
 	if (!handFull)
