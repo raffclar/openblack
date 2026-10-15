@@ -409,7 +409,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Abode::presentAtHome>("presentAtHome")
 	    .Field<&components::Abode::info>("info")
 	    .Field<&components::Abode::putUpForMending>("putUpForMending")
-	    .Field<&components::Abode::age>("age");
+	    .Field<&components::Abode::age>("age")
+	    .Field<&components::Abode::neglect>("neglect");
 	Reflect<components::Alignment>(context)
 	    .Field<&components::Alignment::value>("value")
 	    .Field<&components::Alignment::pending>("pending");
