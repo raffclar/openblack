@@ -708,11 +708,11 @@ void StatisticsBox::DrawRow(const DialogPainter& painter, const List::ItemPlace&
 		painter.DrawText({ColumnCentre(place.right, values, values), y}, width * 5, Justify::Centre, Widen(Format(row, *total)),
 		                 k_Small, k_TotalColour);
 	}
-	// "Total" over the first row of one value shown
+	// The first row of one value that shows writes "Total" over the column of the total, one small line above the list
 	if (values == 1 && !_totalHeadingDrawn)
 	{
 		_totalHeadingDrawn = true;
-		painter.DrawText({ColumnCentre(place.right, values, values), place.top - k_Small}, width * 5, Justify::Centre,
+		painter.DrawText({ColumnCentre(place.right, values, values), _list->rect.min.y - k_Small}, width * 5, Justify::Centre,
 		                 _totalLabel, k_Small, k_TotalColour);
 	}
 }
