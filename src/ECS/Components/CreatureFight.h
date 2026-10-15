@@ -23,29 +23,43 @@
 namespace openblack::ecs::components
 {
 
-/// A creature in a fight, from walking to its place in the arena until it has finished showing off or walked off. Its
-/// mind leaves its body alone meanwhile. The creature that started the fight by its own plan can still choose a plan
-/// that it wants much more. The other creature obeys it and does not think for itself until the fight is over.
+/// A creature in a fight, from the face-off with its opponent until it has finished showing off or walked off. Its mind
+/// leaves its body alone meanwhile. The creature that started the fight by its own plan can still choose a plan that it
+/// wants much more. The other creature obeys it and does not think for itself until the fight is over.
+///
+/// The creature that starts the fight leads the steps before the duel, and tells the other creature when to do each one:
+/// 1. Both stop and turn to face each other.
+/// 2. Both taunt or make the rude gesture.
+/// 3. The arena appears and the first creature points at it.
+/// 4. Both walk to their places, and the first creature waits for the other.
+/// 5. Both turn to face each other again, then the duel starts.
 struct CreatureFighting
 {
 	enum class Stage : uint8_t
 	{
+		/// Turning to face the opponent
+		FaceOff,
+		/// Taunting the opponent or making the rude gesture at it
+		Taunt,
+		/// The creature that started the fight points at the arena that appeared
+		Point,
 		/// Walking to its place in the arena
 		Approach,
-		/// Turning to face the opponent and taunting it
-		Taunt,
-		/// Waiting for the opponent to be ready
+		/// Waiting for the other creature
 		Ready,
+		/// Turning to face the opponent again in the arena
+		Square,
 		Duel,
 		/// Having won: it finishes its move, then leaves the fight. Its mind then does what the win made it do to the loser.
 		Celebrate,
 		/// After a fight that ended otherwise: finishing, then happy or sad
 		Respond,
 	};
-	Stage stage {Stage::Approach};
+	Stage stage {Stage::FaceOff};
 	entt::entity opponent {entt::null};
 	creature_fight::Arena arena {};
-	/// Whether this creature took the arena, taking its place to the east of the middle; the arena it took
+	/// Whether this creature started the fight, takes the arena and takes its place to the east of the middle; the arena
+	/// that it took, from the moment the arena appears
 	bool madeArena {false};
 	entt::entity arenaEntity {entt::null};
 	/// Whether this creature started the fight by a plan of its own, and not by the leash, a script or the debug tools
@@ -67,6 +81,11 @@ struct CreatureFighting
 	/// Whether its life has paid for the fight and its mind learnt from it
 	bool ended {false};
 };
+/// Whether a fighter is in one of the steps before the duel
+[[nodiscard]] constexpr bool IsLeadIn(CreatureFighting::Stage stage)
+{
+	return stage < CreatureFighting::Stage::Duel;
+}
 
 /// What a creature has learnt of fighting, kept between fights
 struct CreatureFightRecord

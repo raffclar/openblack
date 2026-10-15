@@ -41,8 +41,9 @@ constexpr float k_BarWidth = 160.0f;
 
 std::string_view StageName(CreatureFighting::Stage stage)
 {
-	constexpr std::array<std::string_view, 7> k_Names {
-	    "walking to its place", "taunting", "ready", "duelling", "celebrating", "off to poo on the loser", "responding",
+	constexpr std::array<std::string_view, 9> k_Names {
+	    "turning to face", "taunting", "pointing at the arena", "walking to its place", "waiting",
+	    "squaring up",     "duelling", "celebrating",           "responding",
 	};
 	return k_Names.at(static_cast<size_t>(stage));
 }

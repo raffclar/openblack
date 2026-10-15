@@ -73,8 +73,10 @@ constexpr size_t k_WobbleLowSide = 196;
 constexpr size_t k_WobbleLowFrontBack = 197;
 /// Reeling back while blocking
 constexpr size_t k_RecoilBlock = 198;
-/// The actions played around a fight: the taunt before it, and being happy, sad or showing off after it
+/// The actions played around a fight: the taunt or the rude gesture before it, and being happy, sad or showing off after
+/// it
 constexpr size_t k_Taunt = 70;
+constexpr size_t k_Rude = 222;
 constexpr size_t k_Happy = 55;
 constexpr size_t k_Sad = 56;
 constexpr size_t k_Impress = 65;
@@ -99,8 +101,6 @@ constexpr float k_SpotPerSize = 15.0f;
 constexpr float k_ArrivalPerSize = 1.5f * 15.0f;
 /// Moves are only made, and creatures only step back or sideways, within this share of the radius
 constexpr float k_RangeShare = 0.8f;
-/// A creature kept within the range goes this far inside its edge, in metres
-constexpr float k_RangeEdgeMargin = 0.001f;
 
 struct Arena
 {
@@ -120,8 +120,24 @@ struct Arena
 [[nodiscard]] glm::vec2 KeepApart(glm::vec2 from, glm::vec2 to, glm::vec2 opponent, float closest);
 /// Fighters only make moves facing their opponents to within this many radians, turning to them first
 constexpr float k_FacingTolerance = 0.35f;
-/// A point pulled back within the range, as a block's recoil never pushes a creature past it
-[[nodiscard]] glm::vec2 ClampToRange(const Arena& arena, glm::vec2 point);
+/// Where a creature that reels back in its block goes in one frame: to the new point only when that point is inside the
+/// range, else it stays. Blows, steps and the reel from a blow move it with no limit.
+[[nodiscard]] glm::vec2 BlockRecoilTo(const Arena& arena, glm::vec2 from, glm::vec2 to);
+/// Whether a point is not inside the range. When either fighter is not inside it, the fighters stop their moves and
+/// step back to the middle.
+[[nodiscard]] bool OutsideRange(const Arena& arena, glm::vec2 point);
+/// How far the body of a fighter reaches in front of its feet, from the points of its posed bones relative to its feet
+/// and the direction that it faces. It is never less than zero.
+[[nodiscard]] float ForwardExtent(std::span<const glm::vec2> bones, glm::vec2 forward);
+/// Where two fighters go when their bodies overlap. Each one moves by half the overlap, along the direction that the
+/// first one faces: the first one moves back, the other one moves away. A fighter only moves to a point inside the range.
+struct PullApart
+{
+	std::optional<glm::vec2> first;
+	std::optional<glm::vec2> second;
+};
+/// The two fighters stand at two points. The extents are the sum of how far their two bodies reach in front of them.
+[[nodiscard]] PullApart PullApartOf(const Arena& arena, glm::vec2 first, glm::vec2 second, glm::vec2 forward, float extents);
 
 // Bands of the body
 
@@ -150,6 +166,11 @@ enum class Step : uint8_t
 /// The step towards a point, given in the creature's frame (x to its right, y ahead): whichever axis is longer picks
 /// stepping forward or back, or right or left
 [[nodiscard]] Step StepTowards(glm::vec2 local);
+/// The step that a fighter in its stance takes back to the middle of the arena, when it is farther from the middle than
+/// its body radius. The middle is given in the frame of the creature's model (x to the side of its model, y ahead), and
+/// the distance is in three dimensions. A step forward or back needs the middle 1.5 times farther ahead than to the side.
+[[nodiscard]] std::optional<Step> StepToMiddle(glm::vec2 local, float distance, float bodyRadius);
+constexpr float k_StepToMiddleAheadShare = 1.5f;
 /// Whether a creature at a point may take a step: forward always, back or sideways only within range
 [[nodiscard]] bool CanStep(const Arena& arena, glm::vec2 position, Step step);
 
@@ -492,6 +513,8 @@ struct Fighter
 	float stateMs {0.0f};
 	float speed {1.0f};
 	bool mirrored {false};
+	/// The last action that it started: a blow, a step, a reel, or the reel in a block. It stays after the action ends.
+	size_t lastAction {0};
 	/// A blow that is the special move, and whether it has landed yet
 	bool special {false};
 	bool landed {false};
@@ -606,8 +629,15 @@ constexpr float k_DepthPerSize = 7.5f;
 /// Whether the living around the winner see a fight won: only when a blow knocked the loser out and the winner has a
 /// player. A loser that a miracle or a loss of life knocked out gives no such sight.
 [[nodiscard]] bool FightWonIsSeen(bool byBlow, bool winnerHasPlayer);
-/// After a fight that ended otherwise, the creature with more life is happy and the other sad
+/// After a fight that ended otherwise, the creature with more life is happy and the other sad. When the two have the
+/// same life, both are sad.
 [[nodiscard]] size_t Response(float life, float otherLife);
+/// After a fight that ended otherwise, the creature that has no more life than the other is made to fear the other
+[[nodiscard]] bool FearsAfterFight(float life, float otherLife);
+/// Before a fight, each creature plays the taunt or the rude gesture, by a random choice
+[[nodiscard]] size_t FaceOffAnimation(bool rude);
+/// The creature that starts the fight points at the arena for this many game turns
+constexpr uint32_t k_PointAtArenaTurns = 20;
 
 /// The names of the values, as the fight transcript writes them. They do not change between versions of the transcript.
 [[nodiscard]] std::string_view Name(Band band);

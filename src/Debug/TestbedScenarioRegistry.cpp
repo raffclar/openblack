@@ -17,6 +17,7 @@
 
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 
 #include "3D/FlatLand.h"
 #include "3D/TempleInteriorInterface.h"
@@ -4426,6 +4427,28 @@ void AddCombat(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// The two tigers start back to back, so that each one must turn to face the other
+		auto away = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
+		away.facingDegrees = 90.0f;
+		auto otherAway = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		otherAway.facingDegrees = 90.0f;
+		all.push_back({
+		    .id = "combat.lead_in",
+		    .name = "The steps before a duel",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger and the blue tiger stand back to back. The red tiger starts a fight with the blue "
+		                   "tiger, and both fight by themselves.",
+		    .expected = "Both tigers stop and turn to face each other. Each one taunts or makes the rude gesture. Then "
+		                "the ring of the arena appears with its sound, and the red tiger points at the arena. Both walk to "
+		                "their places and look at each other with angry faces. They turn to face each other again, and "
+		                "the duel starts.",
+		    .framing = ringside,
+		    .creatures = {away, otherAway},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "combat.fight_view",
 	    .name = "Watching a fight",
@@ -4624,6 +4647,96 @@ void AddCombat(std::vector<Scenario>& all)
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
 	    .commands = {Leash(0, LeashType::Evil, 1.0f), Fight(Kind::TieLeashToCreature, 0, 1, 2.0f)},
 	});
+
+	{
+		// A ring of villagers of the player's town round the place of the arena, which see the knock-out. The fight
+		// autopilot fights for the player with the aggressive policy.
+		constexpr size_t k_AggressivePolicy = 1;
+		std::vector<ObjectSetup> crowd;
+		constexpr int k_Villagers = 8;
+		constexpr float k_RingRadius = 44.0f;
+		for (int i = 0; i < k_Villagers; ++i)
+		{
+			const auto angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Villagers);
+			crowd.push_back({.type = i % 2 == 0 ? VillagerInfo::CelticFarmerMale : VillagerInfo::CelticHousewifeFemale,
+			                 .offset = glm::vec2 {20.0f, 35.0f} + (k_RingRadius * glm::vec2 {std::cos(angle), std::sin(angle)}),
+			                 .joinTown = true});
+		}
+		auto strong = red(PlayerNames::PLAYER_ONE, 0.9f, -0.6f);
+		strong.facingDegrees = 90.0f;
+		// The weak tiger has little life, thus little fight health, and soon faints
+		auto weak = blue(PlayerNames::PLAYER_TWO, 0.2f, 0.0f);
+		weak.needs.life = 0.15f;
+		all.push_back({
+		    .id = "combat.leash_lead_in",
+		    .name = "A fight on the leash, from the face-off to the faint",
+		    .facet = Facet::Combat,
+		    .description = "The player's strong red tiger stands with its back to a weak blue tiger. The aggression leash "
+		                   "on the red tiger is tied to the blue tiger. Eight villagers stand round the place of the arena.",
+		    .expected = "Both tigers stop and turn to face each other, and each one taunts or makes the rude gesture. The "
+		                "arena appears with its sound, the red tiger points at it, and both walk to their places. They "
+		                "turn to face each other again and duel. A fighter near the edge steps back to the middle. The "
+		                "blue tiger faints, and the villagers near it react as to a death.",
+		    .framing = {.shot = Shot::Placed, .eye = {20.0f, 45.0f, -25.0f}, .look = {20.0f, 0.0f, 35.0f}},
+		    .creatures = {strong, weak},
+		    .objects = crowd,
+		    .commands = {Leash(0, LeashType::Evil, 1.0f), Fight(Kind::TieLeashToCreature, 0, 1, 2.0f),
+		                 Fight(Kind::FightAutopilot, 0, k_AggressivePolicy, 0.5f)},
+		});
+	}
+
+	{
+		// Two tigers with the same life start a fight. The debug tools stop the duel, so that no one is knocked out.
+		auto even = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
+		auto other = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		other.needs.life = 0.5f;
+		even.needs.life = 0.5f;
+		auto stronger = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
+		stronger.needs.life = 0.9f;
+		constexpr float k_StopAfterSeconds = 25.0f;
+		const std::vector<Command> stopped {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                                    Fight(Kind::FightAbort, 0, 0, k_StopAfterSeconds)};
+		all.push_back({
+		    .id = "combat.stopped_tie",
+		    .name = "A fight stopped with no knock-out, the two tigers with the same life",
+		    .facet = Facet::Combat,
+		    .description = "Two tigers fight by themselves. The scenario keeps the life of both at 0.5, thus they have the "
+		                   "same life after the duel. After 25 seconds the debug tools stop the duel.",
+		    .expected = "Each tiger finishes its move. Both tigers are sad. The first tiger to finish fears the other "
+		                "and runs from it, and the other tiger stops its response and is free again.",
+		    .framing = ringside,
+		    .creatures = {even, other},
+		    .commands = stopped,
+		});
+		auto weaker = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
+		weaker.needs.life = 0.3f;
+		auto healthier = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		healthier.needs.life = 0.9f;
+		all.push_back({
+		    .id = "combat.stopped_starter_weaker",
+		    .name = "A fight stopped with no knock-out, the starter with less life",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger starts the fight but has less life than the blue tiger. Both fight by themselves. "
+		                   "After 25 seconds the debug tools stop the duel.",
+		    .expected = "Each tiger finishes its move. The red tiger is sad and the blue tiger is happy. The red tiger then "
+		                "fears the blue tiger and runs from it. The blue tiger is free again: it does not stay stopped.",
+		    .framing = ringside,
+		    .creatures = {weaker, healthier},
+		    .commands = stopped,
+		});
+		all.push_back({
+		    .id = "combat.stopped_happy_sad",
+		    .name = "A fight stopped with no knock-out, one tiger with more life",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger has much more life than the blue tiger. Both fight by themselves. After 25 seconds "
+		                   "the debug tools stop the duel.",
+		    .expected = "Each tiger finishes its move. The red tiger is happy. The blue tiger is sad and then runs from the "
+		                "red tiger in fear.",
+		    .framing = ringside,
+		    .creatures = {stronger, other},
+		    .commands = stopped,
+		});
+	}
 
 	auto angry = red(PlayerNames::PLAYER_ONE, 0.6f, -0.3f);
 	angry.desires = OnlyDesire(Desire::Anger);
@@ -6148,7 +6261,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 124> k_Names {
+	constexpr std::array<std::string_view, 125> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -6212,6 +6325,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fight lesson check",
 	    "knock out",
 	    "bring round",
+	    "abort fight",
 	    "tie leash to creature",
 	    "set desire",
 	    "set stage",
