@@ -741,6 +741,9 @@ struct Command
 		/// The scenario's object goes from the world at once, as when something other than the creature removes it.
 		/// Needs no creature
 		RemoveObject,
+		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
+		/// fire in place of the creature.
+		SetAlight,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

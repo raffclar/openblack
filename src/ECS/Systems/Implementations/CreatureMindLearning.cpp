@@ -1185,6 +1185,7 @@ void CreatureMindSystem::Abandon(CreatureMindState& mind)
 	mind.ownPlanSinceStop = false;
 	mind.planForced = false;
 	mind.forcedPlanCounts = false;
+	mind.emergencyRunning = false;
 }
 
 namespace

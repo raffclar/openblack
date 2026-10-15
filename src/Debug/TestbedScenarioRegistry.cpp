@@ -416,6 +416,72 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.on_fire_drinks",
+	    .name = "A creature on fire goes to the sea",
+	    .facet = Facet::Needs,
+	    .description = "A player's tiger stands north of the middle, short of the testbed's lake, and catches fire. It "
+	                   "does not know the water miracle.",
+	    .expected = "At once it stops what it does and walks to the water point at the lake, then bends down and drinks. "
+	                "A player's creature walks, because it goes back to its walk speed as it stops what it did.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
+	    .commands = {{.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 1.0f}},
+	});
+	all.push_back({
+	    .id = "needs.on_fire_drinks_neutral",
+	    .name = "A creature of no player on fire runs to the sea",
+	    .facet = Facet::Needs,
+	    .description = "A tiger of no player stands north of the middle, short of the testbed's lake, and catches fire.",
+	    .expected = "At once it stops what it does and runs to the water point at the lake, then bends down and drinks.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}, .owner = PlayerNames::NEUTRAL}},
+	    .commands = {{.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 1.0f}},
+	});
+	all.push_back({
+	    .id = "needs.on_fire_casts_water",
+	    .name = "A creature on fire casts water on itself",
+	    .facet = Facet::Needs,
+	    .description = "A player's tiger that knows the water miracle well stands north of the middle, and catches fire.",
+	    .expected = "At once it stops what it does, finds a clear place near it and casts the water miracle on itself. "
+	                "The fire on it goes out.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
+	    .commands =
+	        {{.kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "needs.badly_hurt",
+	    .name = "A badly hurt creature wants to restore its health",
+	    .facet = Facet::Needs,
+	    .description = "A player's tiger with three tenths of its life stands north of the middle.",
+	    .expected = "Its desire to restore its health becomes the strongest for ten seconds, and most other desires stay "
+	                "down. Each time that it stops what it does with low life, the log shows that it is badly hurt "
+	                "again.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}, .needs = {.life = 0.3f}}},
+	});
+	all.push_back({
+	    .id = "needs.town_fire_water",
+	    .name = "A creature puts out a fire in the nearest town",
+	    .facet = Facet::Needs,
+	    .description = "A kind player's tiger that knows the water miracle well stands near a hut of the town. The hut "
+	                   "catches fire.",
+	    .expected = "At once it stops what it does, walks near the hut and casts the water miracle on it. The fire goes "
+	                "out.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {40.0f, 44.0f},
+	        .desires = {{.desire = Desire::Compassion, .fraction = 1.0f}, {.desire = Desire::Anger, .fraction = 0.0f}}}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {66.0f, 44.0f}}},
+	    .commands =
+	        {{.kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "needs.hunger",
 	    .name = "Hungry creature finds food",
 	    .facet = Facet::Needs,
@@ -5686,7 +5752,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 119> k_Names {
+	constexpr std::array<std::string_view, 120> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -5806,6 +5872,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "do action",
 	    "make friends",
 	    "remove object",
+	    "set alight",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
