@@ -175,6 +175,9 @@ TEST_F(ScriptedMouse, ButtonsAreTakenAsTheyArePumpedAfterTheMovesBeforeThem)
 	Frame();
 	Ask(R"({"query": "input.pointer", "params": {"screen": [400, 300]}})");
 	Ask(R"({"query": "input.button", "params": {"button": "left", "action": "press"}})");
+	// The press waits two frames after the move, until the game knows what the pointer is over
+	EXPECT_TRUE(Frame().pressesAt.empty());
+	EXPECT_TRUE(Frame().pressesAt.empty());
 	const auto pressed = Frame();
 	EXPECT_EQ(pressed.buttonsAtFrameStart, 0u);
 	ASSERT_EQ(pressed.pressesAt.size(), 1);

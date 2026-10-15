@@ -221,6 +221,8 @@ private:
 	uint64_t _frame {0};
 	/// The pointer as the inspector last put it, for drags that start from it
 	std::optional<glm::ivec2> _pointer;
+	/// The frame the pointer was last moved at (or will be, for a drag or a path), for the press that follows it
+	std::optional<uint64_t> _pointerMovedAt;
 };
 
 } // namespace openblack::inspector

@@ -16,6 +16,7 @@
 #include <variant>
 #include <vector>
 
+#include <Input/PointerSettle.h>
 #include <Inspector.h>
 #include <Inspector/InputControl.h>
 #include <gtest/gtest.h>
@@ -233,8 +234,8 @@ TEST(InspectorInput, AClickThenAMoveReachTheGameInTheOrderAskedFor)
 			rig.Frame();
 		}
 		const auto moved = rig.Ask(R"({"query": "input.pointer", "params": {"screen": [300, 200]}})");
-		EXPECT_EQ(moved["starts_frame"], 3) << frameBetween;
-		for (int frame = 0; frame < 4; ++frame)
+		EXPECT_EQ(moved["starts_frame"], 5) << frameBetween;
+		for (int frame = 0; frame < 6; ++frame)
 		{
 			rig.Frame();
 		}
@@ -245,13 +246,57 @@ TEST(InspectorInput, AClickThenAMoveReachTheGameInTheOrderAskedFor)
 		{
 			EXPECT_EQ(rig.target.made[i].event.kind, expected[i]) << frameBetween << " " << i;
 		}
-		// Pressed, let go of and moved away a frame apart, as a hand on a mouse would
-		EXPECT_EQ(rig.target.made[1].frame, 1u) << frameBetween;
-		EXPECT_EQ(rig.target.made[2].frame, 2u) << frameBetween;
-		EXPECT_EQ(rig.target.made[3].frame, 3u) << frameBetween;
+		// Pressed once the game knows what the pointer is over, then let go of and moved away a frame apart
+		EXPECT_EQ(rig.target.made[1].frame, 3u) << frameBetween;
+		EXPECT_EQ(rig.target.made[2].frame, 4u) << frameBetween;
+		EXPECT_EQ(rig.target.made[3].frame, 5u) << frameBetween;
 		EXPECT_EQ(rig.target.made[3].event.position, glm::ivec2(300, 200)) << frameBetween;
 		EXPECT_EQ(rig.target.buttons, 0u) << frameBetween;
 	}
+}
+
+// A press made at once after the pointer moved would act on what the pointer was over before, as the game reads the
+// pointer a frame after it moves and knows what it is over a frame after that. So a press waits for two frames.
+TEST(InspectorInput, APressWaitsForTheGameToKnowWhatThePointerIsOver)
+{
+	Rig rig;
+	rig.Ask(R"({"query": "input.pointer", "params": {"screen": [10, 10]}})");
+	const auto press = rig.Ask(R"({"query": "input.button", "params": {"action": "press"}})");
+	EXPECT_EQ(press["starts_frame"], 3);
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		rig.Frame();
+	}
+	ASSERT_EQ(rig.target.made.size(), 2u);
+	EXPECT_EQ(rig.target.made[1].event.kind, InputEvent::Kind::ButtonDown);
+	EXPECT_EQ(rig.target.made[1].frame, 3u);
+}
+
+TEST(InspectorInput, ThePressRuleKeepsTwoFramesFromThePointersMove)
+{
+	using namespace openblack::input::pointer_settle;
+	EXPECT_EQ(EarliestPressFrame(5, std::nullopt), 5u);
+	EXPECT_EQ(EarliestPressFrame(5, 5), 7u);
+	EXPECT_EQ(EarliestPressFrame(5, 4), 6u);
+	EXPECT_EQ(EarliestPressFrame(9, 5), 9u);
+	EXPECT_FALSE(PressMayStart(0));
+	EXPECT_FALSE(PressMayStart(1));
+	EXPECT_TRUE(PressMayStart(2));
+}
+
+// A press with the pointer at rest, as the player's, is made at the next frame, and a letting go never waits
+TEST(InspectorInput, APressWithThePointerAtRestIsMadeAtOnce)
+{
+	Rig rig;
+	rig.Ask(R"({"query": "input.pointer", "params": {"screen": [10, 10]}})");
+	for (int frame = 0; frame < 5; ++frame)
+	{
+		rig.Frame();
+	}
+	const auto press = rig.Ask(R"({"query": "input.button", "params": {"action": "press"}})");
+	EXPECT_EQ(press["starts_frame"], 6);
+	const auto release = rig.Ask(R"({"query": "input.button", "params": {"action": "release"}})");
+	EXPECT_EQ(release["starts_frame"], 6);
 }
 
 // Requests queue up behind each other: a drag, then a click, then a key, each starting once the one before is done
