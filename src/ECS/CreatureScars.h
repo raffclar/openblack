@@ -22,6 +22,8 @@ namespace openblack::ecs::creature_scars
 
 /// Where the creature's groin bone is, as its body is posed now; none for a creature without a posed rig
 [[nodiscard]] std::optional<glm::vec3> GroinOf(entt::entity creature);
+/// Where the creature's belly bone is, as its body is posed now; none for a creature without a posed rig
+[[nodiscard]] std::optional<glm::vec3> BellyOf(entt::entity creature);
 
 /// A wound of a kind and column where the line from a point to the groin first meets the creature's skin; nothing
 /// where it misses

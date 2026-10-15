@@ -2453,7 +2453,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::gaze>("gaze")
 	    .Field<&openblack::creature_mind::Step::heldEyes>("heldEyes")
 	    .Field<&openblack::creature_mind::Step::flutterEyelids>("flutterEyelids")
-	    .Field<&openblack::creature_mind::Step::dance>("dance");
+	    .Field<&openblack::creature_mind::Step::dance>("dance")
+	    .Field<&openblack::creature_mind::Step::faint>("faint");
 	Reflect<openblack::creature_mind_model::Learnt>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::Learnt::opinions>("opinions")
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")

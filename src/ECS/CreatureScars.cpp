@@ -32,7 +32,10 @@ using namespace openblack;
 using namespace openblack::ecs;
 using namespace openblack::ecs::components;
 
-std::optional<glm::vec3> creature_scars::GroinOf(entt::entity creature)
+namespace
+{
+/// Where a bone of the creature's action points is in the world, as its body is posed this frame
+std::optional<glm::vec3> PosedPointOf(entt::entity creature, uint32_t creature::CreatureRig::ActionPoints::* point)
 {
 	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
 	{
@@ -52,13 +55,24 @@ std::optional<glm::vec3> creature_scars::GroinOf(entt::entity creature)
 	{
 		return std::nullopt;
 	}
-	const auto bone = rigs.Handle(rigId)->actionPoints->groin;
+	const auto bone = (*rigs.Handle(rigId)->actionPoints).*point;
 	if (bone >= animation->boneMatrices.size())
 	{
 		return std::nullopt;
 	}
 	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
 	return glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
+}
+} // namespace
+
+std::optional<glm::vec3> creature_scars::GroinOf(entt::entity creature)
+{
+	return PosedPointOf(creature, &creature::CreatureRig::ActionPoints::groin);
+}
+
+std::optional<glm::vec3> creature_scars::BellyOf(entt::entity creature)
+{
+	return PosedPointOf(creature, &creature::CreatureRig::ActionPoints::belly);
 }
 
 void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 groin, uint8_t kind, uint8_t column)

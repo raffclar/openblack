@@ -5394,6 +5394,37 @@ void AddRestAndHome(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	    .commands = {told("LookAtCitadel", true)},
 	});
+
+	all.push_back({
+	    .id = "mind.odd_lesson_and_confused",
+	    .name = "Creature shows a lesson and looks confused",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands facing away from the camera, a birch beside it. After one second a script "
+	                   "tells it to show a lesson that it learnt. After eight seconds a script tells it to look confused.",
+	    .expected = "First it scratches its head once and smiles. Then it turns round to the camera, scratches its head "
+	                "and looks confused. It looks puzzled and keeps its eyes on the camera.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "ShowLearntLesson"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 8.0f, .object = 0, .action = "LookConfused"}},
+	});
+
+	all.push_back({
+	    .id = "mind.odd_behave_strangely",
+	    .name = "Creature behaves strangely",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands facing the camera, a birch beside it. After one second a script tells it "
+	                   "to behave strangely, and after twenty seconds a script tells it again.",
+	    .expected = "Each time it stares at the camera for five seconds with wide eyes that move about, then it is happy. "
+	                "One time in two it then faints, lies still for five to ten seconds and gets up. Villagers near it "
+	                "react as to a death. At the end it looks confused two times with a grimace, first with sleepy eyes.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 0.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BehaveStrangely"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 20.0f, .object = 0, .action = "BehaveStrangely"}},
+	});
 }
 
 std::vector<Scenario> Build()
