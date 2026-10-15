@@ -1451,11 +1451,37 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		return false;
 	}
 	const auto& info = tables->actions[plan.action];
-	// Copying the player makes no plan: the creature copies its last deed again and decides again on its next turn
+	// Copying the player makes no steps: what the creature did before stops, it copies its last deed again, and it
+	// decides again on its next turn. The choice is remembered for feedback, and the desires it opposes are held back.
 	if (const auto* executor = creature_plan_actions::For(info.name);
 	    executor != nullptr && executor->build == creature_plan_actions::Build::MimicPlayer)
 	{
+		auto& registry = Locator::entitiesRegistry::value();
+		if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
+		{
+			Locator::creatureFightSystem::value().CallOff(creature);
+		}
+		if (Locator::creatureObjectActionSystem::has_value() &&
+		    Locator::creatureObjectActionSystem::value().GetState(creature) ==
+		        CreatureObjectActionSystemInterface::State::Busy &&
+		    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+		{
+			Locator::creatureObjectActionSystem::value().Cancel(creature);
+		}
+		Abandon(mind);
+		creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
 		CopyObservedDeedAgain(creature, mind);
+		if (const auto source = creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]); source.has_value())
+		{
+			creature_learning::Remember(mind.learnt->contexts, {
+			                                                       .action = plan.action,
+			                                                       .desire = plan.desire,
+			                                                       .learnable = info.learnable,
+			                                                       .windowSeconds = info.learningWindowSeconds,
+			                                                       .source = *source,
+			                                                   });
+		}
+		creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 		return false;
 	}
 	auto situated = situation;
