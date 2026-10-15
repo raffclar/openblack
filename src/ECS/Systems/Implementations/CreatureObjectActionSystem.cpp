@@ -1039,7 +1039,10 @@ void TurnToCatch(entt::entity creature, const CreatureObjectAction& action)
 	}
 	const auto& transform = Locator::entitiesRegistry::value().Get<const Transform>(creature);
 	const auto towards = transform.position - glm::vec3(flight->second.x, 0.0f, flight->second.z);
-	if (BearingTo(transform, towards) > creature_catch::k_TurnAngle)
+	const float bearing = BearingTo(transform, towards);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} starts its catch at ({:.1f}, {:.1f}), {:.2f} rad off the thing",
+	                    entt::to_integral(creature), transform.position.x, transform.position.z, bearing);
+	if (bearing > creature_catch::k_TurnAngle)
 	{
 		Locator::creatureLocomotionSystem::value().TurnToFace(creature, glm::xz(towards));
 	}
@@ -1212,7 +1215,13 @@ void UpdateReady(ecs::Registry& registry, entt::entity creature, const Creature&
 		action.timeMs = 0.0f;
 		break;
 	case creature_catch::Readiness::GiveUp:
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} gives up its catch", entt::to_integral(creature));
+	{
+		[[maybe_unused]] const auto local = ToLocal(transform, flight->first);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"),
+		                    "Creature {} gives up its catch: the thing is {:.1f} ahead, {:.1f} across, closing at {:.1f}, "
+		                    "the catch takes {:.2f} s",
+		                    entt::to_integral(creature), -local.z, -local.x, velocity.z, lead);
+	}
 		action.status = Status::Done;
 		animation.slots.clear();
 		break;

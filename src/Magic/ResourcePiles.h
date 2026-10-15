@@ -145,4 +145,9 @@ struct HeldChange
 inline constexpr float k_MagicFoodScale = 0.3f;
 inline constexpr float k_MagicWoodScale = 0.7f;
 
+/// Whether a pot sets up the reaction of its kind when it is made: only a pile of food or wood whose kind has a reaction,
+/// and only when its maker asks for it. A free pile that a spill, a miracle or a land's script makes asks for it. A
+/// store's piles, a handful and a pile a creature takes from do not.
+[[nodiscard]] bool ReactsWhenMade(PotType type, Reaction reaction, bool makerAsks);
+
 } // namespace openblack::magic::piles

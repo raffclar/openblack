@@ -4658,7 +4658,8 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 			creature_mind_model::Think(*mind->learnt, fmt::format("I saw you: {}", tables->mimics.at(deed).name));
 			if (Locator::creatureObjectActionSystem::has_value() &&
 			    Locator::creatureObjectActionSystem::value().GetState(entity) ==
-			        CreatureObjectActionSystemInterface::State::Busy)
+			        CreatureObjectActionSystemInterface::State::Busy &&
+			    !Locator::creatureObjectActionSystem::value().IsCatching(entity))
 			{
 				Locator::creatureObjectActionSystem::value().Cancel(entity);
 			}

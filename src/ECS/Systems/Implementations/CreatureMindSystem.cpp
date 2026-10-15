@@ -2320,8 +2320,10 @@ void CreatureMindSystem::StartPlanAgain(entt::entity creature, CreatureMindState
 	// The context of the plan stays as it was for the player's feedback
 	const bool contextRunning =
 	    mind.learnt.has_value() && !mind.learnt->contexts.empty() && mind.learnt->contexts.back().running;
+	// A catch is the body's own and carries on
 	if (Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
+	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
@@ -2731,6 +2733,8 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	{
 		return;
 	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} is made to catch {}", entt::to_integral(creature),
+	                    entt::to_integral(object));
 	// It comes across the thing that it catches, and what it was doing stops as a failure
 	ComeAcross(creature, *mind, object);
 	Abandon(*mind);
@@ -2926,8 +2930,10 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	}
 	// The current action stops as a failure. This occurs also when the creature finds no new plan.; a reaction it was in has
 	// been ended by whatever forces the plan
+	// A catch is the body's own and carries on
 	if (Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
+	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
