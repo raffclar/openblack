@@ -369,6 +369,17 @@ TEST(SpellSeedRules, TheCastTypeDecidesHowTheHandCasts)
 	EXPECT_EQ(CastStyleOf(SpellCastType::SpellCastHandPosition), CastStyle::OnPress);
 }
 
+// A scribble stops a power-up and keeps the seed; a second scribble, or one on any other seed, drops it
+TEST(SpellSeedRules, AScribbleStopsAPowerUpBeforeItDropsTheSeed)
+{
+	EXPECT_EQ(ScribbleOn(true, true, false, 0), ScribbleResult::StopPowerUp);
+	EXPECT_EQ(ScribbleOn(true, true, false, 1), ScribbleResult::StopPowerUp);
+	EXPECT_EQ(ScribbleOn(true, true, false, -1), ScribbleResult::Drop);
+	EXPECT_EQ(ScribbleOn(false, true, false, 0), ScribbleResult::Drop);
+	EXPECT_EQ(ScribbleOn(true, false, false, 0), ScribbleResult::Drop);
+	EXPECT_EQ(ScribbleOn(true, true, true, 0), ScribbleResult::Drop);
+}
+
 TEST(SpellSeedRules, ASeedsChargeAndReadiness)
 {
 	EXPECT_FLOAT_EQ(ChantNeeded(3500.0f, 1000.0f), 2500.0f);

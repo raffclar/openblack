@@ -2699,9 +2699,10 @@ void MagicSystem::PowerUpHeldSeed(int level)
 	}
 	auto& seed = registry.Get<SpellSeed>(*_held);
 	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
-	// Only a seed made at an icon, not yet cast, can be powered up, and only to a level it has
+	// Only a seed made at an icon, not yet cast, can be powered up, and only to a level it has. Level -1 takes the seed
+	// back to its plain miracle.
 	const auto slot = static_cast<size_t>(level + 1);
-	if (!seed.hasIcon || seed.hasCast || level < 0 || slot >= seedInfo.magicTypes.size() ||
+	if (!seed.hasIcon || seed.hasCast || level < -1 || slot >= seedInfo.magicTypes.size() ||
 	    seedInfo.magicTypes.at(slot) == MagicType::None)
 	{
 		return;
@@ -2754,6 +2755,22 @@ void MagicSystem::TakeGestures()
 			PowerUpHeldSeed(event.powerUpLevel);
 			break;
 		case GestureEvent::Kind::Scribble:
+		{
+			// A scribble first stops the power-up and keeps the seed in the hand; a second scribble drops it
+			const auto* seed = _held.has_value() && EntityRegistry().Valid(*_held)
+			                       ? EntityRegistry().TryGet<const SpellSeed>(*_held)
+			                       : nullptr;
+			if (seed != nullptr && magic::ScribbleOn(seed->hasIcon, seed->ready, seed->hasCast, seed->powerUp) ==
+			                           magic::ScribbleResult::StopPowerUp)
+			{
+				PowerUpHeldSeed(-1);
+			}
+			else
+			{
+				DiscardHeldSeed();
+			}
+			break;
+		}
 		case GestureEvent::Kind::Shake:
 			DiscardHeldSeed();
 			break;
