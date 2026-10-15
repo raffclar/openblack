@@ -62,6 +62,8 @@ struct ActionInfo
 	float creatureNicenessChange {0.0f};
 	/// The opinion of the action that a new creature starts with
 	float startingOpinion {0.0f};
+	/// Done to its end, the action gives the creature full life and the temperature of the climate where it is
+	bool fullRecovery {false};
 	/// What the creature must know to choose it
 	creature_watching::ActionNeeds needs;
 };

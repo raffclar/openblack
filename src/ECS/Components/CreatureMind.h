@@ -127,6 +127,14 @@ struct CreatureMindState
 	bool mayAttackOwnPlayer {false};
 	/// The player's hand took hold of it: once it has turned to the player it shows what it wants, and the help says it
 	bool showDesireOnHold {false};
+	/// The hand held it since the last time a plan started again after a hold
+	bool heldSinceRestart {false};
+	/// A plan of its own ran since it last stopped what it did, and the turns of the copy timeout with no such plan
+	bool ownPlanSinceStop {false};
+	uint32_t turnsWithoutOwnPlan {0};
+	/// An order forced the plan. A forced plan counts at its end only when the order said so.
+	bool planForced {false};
+	bool forcedPlanCounts {false};
 
 	/// What it has learnt and remembers, set up with the desires (from its mind file when it has one)
 	std::optional<creature_mind_model::Learnt> learnt;
