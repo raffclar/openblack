@@ -11,6 +11,7 @@
 
 #include <array>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "TestbedScenarioRegistry.h"
@@ -133,4 +134,54 @@ void openblack::testbed_scenarios::AddCreatureDanceScenarios(std::vector<Scenari
 	                        "is told to practise its dance.",
 	                        "The tiger dances where it stands with a smile: the start of its dance, then dance moves chosen "
 	                        "at random, each one second long, for 20 seconds. Then it plays the finish of the dance."));
+
+	// The dance around a thing and the dance outside the temple make no dance of their own: they start the creature's
+	// last dance, if it has one
+	{
+		auto around =
+		    TownDance("creatures.dance_around_thing", "A creature that has never danced, told to dance around a hut",
+		              "DanceAroundArtefact",
+		              "Two huts of the player's town, with ten grown people of the town who live in them, standing in "
+		              "two rows on open ground. The player's tiger stands ninety metres to the east and has never "
+		              "danced. One second in, it is told to dance around the first hut.",
+		              "The tiger walks towards the hut and looks at it as it goes. It stops four of its heights from the "
+		              "hut. No dance starts and nobody comes: the tiger gives up the action there, as in the original "
+		              "game, and goes back to what it wants to do.");
+		// It dances around the first hut, not the villager
+		around.commands.front().object = 0;
+		around.framing = {.shot = Shot::Placed, .eye = {50.0f, 16.0f, -15.0f}, .look = {25.0f, 6.0f, 28.0f}};
+		// It starts far enough from the hut to walk a good way first
+		around.creatures.front().offset = {90.0f, 30.0f};
+		all.push_back(std::move(around));
+	}
+	{
+		auto again = TownDance("creatures.dance_around_thing_again", "A creature that told a story, told to dance around a hut",
+		                       "TellVillagersAStory",
+		                       "The town of the story scene: two huts, ten grown people in two rows, the player's tiger forty "
+		                       "metres to the east. One second in, the tiger is told to tell the villagers a story. Ninety "
+		                       "seconds later, after the story, it is told to dance around the first hut.",
+		                       "First the story, as in the story scene. Then the tiger walks towards the hut and stops four of "
+		                       "its heights from it. As in the original game, the old story starts again where it was told, "
+		                       "and the tiger goes back to its place in it and dances there for sixty seconds. The people have "
+		                       "gone home and do not come back.");
+		again.commands.push_back(
+		    {.kind = Command::Kind::DoAction, .delaySeconds = 90.0f, .object = 0, .action = "DanceAroundArtefact"});
+		all.push_back(std::move(again));
+	}
+	all.push_back({
+	    .id = "creatures.dance_outside_temple",
+	    .name = "A creature that has never danced, told to dance outside its temple",
+	    .facet = Facet::Objects,
+	    .description = "The player's temple, and the player's tiger standing 140 metres north of it. The tiger has never "
+	                   "danced. One second in, it is told to dance outside the temple's worship site.",
+	    .expected = "The tiger walks south to the temple and looks at it as it goes. It stops six of its heights from the "
+	                "temple's heart (never more than fifty metres), turns to face the heart and holds still for two "
+	                "seconds. No dance starts: the tiger gives up the action there, as in the original game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {55.0f, 22.0f, 100.0f}, .look = {0.0f, 8.0f, 40.0f}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = {0.0f, 110.0f}, .facingDegrees = 180.0f}},
+	    .temples = {{.offset = {0.0f, -30.0f}}},
+	    .commands =
+	        {{.kind = Command::Kind::DoAction, .delaySeconds = 1.0f, .action = "DanceOutsideWorshipSite", .onTemple = true}},
+	});
 }
