@@ -22,6 +22,7 @@
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
+#include "Creature/CreaturePlayerAttention.h"
 
 /// What a creature does, decided once a game turn. It works through an agenda of steps: it waits while it looks about,
 /// plays an action, sits for a while or goes to a place. Each step pulls a face for what it does or feels as it starts.
@@ -336,6 +337,8 @@ struct Gaze
 	bool itself {false};
 	/// The player's hand nearest the creature
 	bool hand {false};
+	/// The player: the hand when it moved much lately, else the camera
+	bool player {false};
 	std::optional<glm::vec3> point;
 	bool camera {false};
 	/// The look of a creature that walks to the point: at the point, at what it watches, and a sweep from side to side
@@ -442,6 +445,15 @@ struct Step
 		/// within the step's movement distance, whenever it is further and still. Then it holds where it is for one to four
 		/// seconds, picked at random, and the step is done.
 		FollowWatching,
+		/// The step that follows the player's hand. From the next turn, for the step's seconds in whole turns, the creature
+		/// walks to the hand when the hand is further than its radius and a little more (see
+		/// creature_player_attention::FollowHandTurn). The step is done when the creature is near the hand or the time is
+		/// up. If the hand is off the map, the creature stops the rest of the agenda.
+		FollowHand,
+		/// The step that watches the player while the creature waits for orders after a leash order to a place. The
+		/// creature turns to the hand or to the camera (see creature_player_attention::WatchPlayerTurn). The step is done
+		/// when the creature does not wait for orders.
+		WatchPlayer,
 		/// After this step, the plan acts on the creature, not on the thing that it chose. The step ends at once.
 		ActOnItself,
 	};
@@ -526,6 +538,8 @@ struct IdleMind
 	uint32_t followHoldTurns {0};
 	/// Whether it has set off back towards the villager, so that a walk that fails gives the agenda up
 	bool followMoved {false};
+	/// For a step that follows the hand: the number of turns that are left
+	uint32_t followHandTurns {0};
 	/// A step that rests to get better: the turns since it started, the first turn included
 	uint32_t restTurns {0};
 	/// A dance step: the turns it dances yet, and whether its dance stops next turn
@@ -691,6 +705,9 @@ struct Senses
 	std::optional<glm::vec3> cameraFocus;
 	/// Whether that point is less than a sixth of a turn from the way its body faces, or in its own map cell
 	bool cameraFocusAhead {false};
+	/// The player's hand while a step follows the hand, and the player while a step watches the player
+	std::optional<creature_player_attention::FollowHandView> followHand;
+	std::optional<creature_player_attention::WatchPlayerView> watchPlayer;
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is

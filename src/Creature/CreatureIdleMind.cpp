@@ -725,6 +725,50 @@ void FollowWatching(IdleMind& mind, const Step& step, const Senses& senses, cons
 	mind.followHoldTurns = static_cast<uint32_t>((pick + k_FollowWatchingHoldSeconds) * static_cast<float>(turnsPerSecond));
 }
 
+/// A turn of following the player's hand
+void FollowHand(IdleMind& mind, const Senses& senses, Commands& commands)
+{
+	if (!senses.followHand.has_value())
+	{
+		FinishStep(mind);
+		return;
+	}
+	switch (creature_player_attention::FollowHandTurn(*senses.followHand, mind.followHandTurns))
+	{
+	case creature_player_attention::FollowHandAction::Done:
+		FinishStep(mind);
+		break;
+	case creature_player_attention::FollowHandAction::Fail:
+		mind.step = mind.agenda.size();
+		mind.stepStarted = false;
+		mind.gaveUp = true;
+		break;
+	case creature_player_attention::FollowHandAction::WalkToHand:
+		commands.move = Movement {
+		    .kind = Movement::Kind::ToPoint, .point = senses.followHand->hand, .maxDistance = senses.followHand->reach};
+		break;
+	case creature_player_attention::FollowHandAction::Continue:
+		break;
+	}
+}
+
+/// A turn of watching the player while it waits for orders
+void WatchPlayer(IdleMind& mind, const Senses& senses, Commands& commands)
+{
+	const auto action =
+	    creature_player_attention::WatchPlayerTurn(senses.watchPlayer.value_or(creature_player_attention::WatchPlayerView {}));
+	if (action.done)
+	{
+		FinishStep(mind);
+		return;
+	}
+	if (action.turnTo.has_value())
+	{
+		commands.stopMoving = true;
+		commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = *action.turnTo};
+	}
+}
+
 void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	const auto limit =
@@ -803,6 +847,8 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::Face:
 	case Step::Kind::FollowCamera:
 	case Step::Kind::Heal:
+	case Step::Kind::FollowHand:
+	case Step::Kind::WatchPlayer:
 		break;
 	}
 	return HandsNeed::Any;
@@ -1198,6 +1244,14 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			mind.followMoved = false;
 			FollowWatching(mind, step, senses, random, commands);
 			break;
+		case Step::Kind::FollowHand:
+			// The time is set as the step starts, and the hand is followed from the next turn
+			mind.followHandTurns = creature_player_attention::FollowHandTurns(
+			    static_cast<uint32_t>(std::lround(1.0f / std::max(senses.seconds, 1e-3f))));
+			break;
+		case Step::Kind::WatchPlayer:
+			WatchPlayer(mind, senses, commands);
+			break;
 		case Step::Kind::Communicate:
 			// It shows what it feels now, and it does not want to show its state again for a time
 			commands.communicated = senses.communication;
@@ -1427,6 +1481,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::FollowWatching:
 		FollowWatching(mind, step, senses, random, commands);
+		break;
+	case Step::Kind::FollowHand:
+		FollowHand(mind, senses, commands);
+		break;
+	case Step::Kind::WatchPlayer:
+		WatchPlayer(mind, senses, commands);
 		break;
 	case Step::Kind::Gesture:
 	case Step::Kind::Move:

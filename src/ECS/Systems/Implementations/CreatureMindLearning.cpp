@@ -54,6 +54,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
@@ -3098,8 +3099,33 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	situation.hangAround = HangAroundPlacesOf(creature);
 	situation.turnSeconds = k_TurnSeconds;
 	situation.turnsPerSecond = k_TurnsPerSecond;
+	SituatePlayer(creature, situation);
 	SituateHome(creature, situation);
 	SituateEmotes(creature, situation);
+}
+
+void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_actions::Situation& situation)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* at = registry.TryGet<const Transform>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	// Only the local player's camera looks at creatures here
+	if (at != nullptr && body != nullptr && Locator::camera::has_value() && Locator::playerSystem::has_value() &&
+	    body->owner == Locator::playerSystem::value().GetLocalPlayer())
+	{
+		const auto& camera = Locator::camera::value();
+		situation.lookedAt = creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), at->position);
+	}
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
+	{
+		situation.handMoving = situation.playerHand.has_value() && creature_player_attention::IsHandMoving(mind->handSpeed);
+	}
+	if (at != nullptr && situation.playerHand.has_value() && Locator::camera::has_value())
+	{
+		const auto& camera = Locator::camera::value();
+		situation.awayFromHand =
+		    creature_player_attention::AwayFromHand(at->position, *situation.playerHand, camera.GetOrigin(), camera.GetFocus());
+	}
 }
 
 void CreatureMindSystem::SituateEmotes(entt::entity creature, creature_plan_actions::Situation& situation)

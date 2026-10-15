@@ -174,6 +174,8 @@ private:
 	/// What an agenda needs to know of the creature itself: the camera's position, whether it has a player, whether a
 	/// script controls it, its radius, and a chance for what varies
 	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
+	/// What the plan actions with its player need: its attitude to the player, and the player's hand
+	void SituatePlayer(entt::entity creature, creature_plan_actions::Situation& situation);
 	/// What the emotes and the sleep and sit places need to know of where the creature is
 	void SituateEmotes(entt::entity creature, creature_plan_actions::Situation& situation);
 	/// The clear place where the creature sleeps on the spot or sits down by a thing; none for other actions, or when

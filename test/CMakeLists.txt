@@ -976,6 +976,9 @@ openblack_setup_and_add_test(
   test_creature_emote_agendas test_creature_emote_agendas.cpp
 )
 openblack_setup_and_add_test(
+  test_creature_player_attention test_creature_player_attention.cpp
+)
+openblack_setup_and_add_test(
   test_creature_action_history test_creature_action_history.cpp
 )
 openblack_setup_and_add_test(
