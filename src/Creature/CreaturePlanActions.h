@@ -35,7 +35,7 @@ enum class Target : uint8_t
 	Food,
 	/// Anything it can pick up
 	Pickable,
-	/// Anything it can knock down, or only trees
+	/// Anything it can knock down, or any tree
 	Destroyable,
 	Tree,
 	/// Villagers, villagers hurt enough to be healed, other creatures, or either
@@ -76,6 +76,10 @@ enum class Target : uint8_t
 	/// A rock (bonfires too) it can pick up, or any rock
 	PickableRock,
 	Rock,
+	/// What it can stomp on, what it can kick, and a living thing that it can knock down with a rock and pick up to eat
+	Stompable,
+	Kickable,
+	StonableAndPickable,
 	/// A cuddly toy, a die, or a toy (but not the football) more than 50 from the creature's home
 	CuddlyToy,
 	Die,
@@ -135,6 +139,11 @@ enum class Build : uint8_t
 	ThrowAbout,
 	Hurl,
 	Destroy,
+	Stomp,
+	StompAndEat,
+	StoneAndEat,
+	Kick,
+	ShowHate,
 	SitDown,
 	BeIdle,
 	HangAround,
@@ -371,6 +380,8 @@ struct Situation
 	/// Whether what its hand holds is a tree, or a magic mushroom
 	bool holdingTree {false};
 	bool holdingMushroom {false};
+	/// Whether what its hand holds is a rock
+	bool holdingRock {false};
 	/// Whether it can eat what its hand holds as it is, with no pick-up first
 	bool holdingEatable {false};
 	/// The one-shot miracle that its hand holds, and the one-shot miracle that the action uses; none when it is not one

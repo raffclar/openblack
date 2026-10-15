@@ -64,6 +64,8 @@ public:
 	[[nodiscard]] bool CanThrowToImpress(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] creature_object_actions::KindFacts KindOf(entt::entity object) const override { return KindFactsOf(object); }
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
+	[[nodiscard]] bool CanStompOn(entt::entity creature, entt::entity target) const override;
+	[[nodiscard]] bool CanKick(entt::entity creature, entt::entity target) const override;
 	[[nodiscard]] std::optional<float> PickUpStraightReach(entt::entity creature) const override;
 
 private:

@@ -1897,6 +1897,11 @@ void CreatureMindSystem::ProcessTurn()
 				    mind.observedKinds.insert(creature_tree::belief_types::k_Animal);
 			    }
 		    }
+		    // A stomp that ends the agenda and kills the thing counts the kill and sees to the desire of the action
+		    if (commands.effect == creature_mind::Effect::Stomped && commands.lastStep && commands.effectObject.has_value())
+		    {
+			    StompedToDeath(entity, mind, static_cast<entt::entity>(*commands.effectObject));
+		    }
 		    // Having looked another creature over, it notes when, and waits a while before it does again
 		    if (commands.effect == creature_mind::Effect::Inspected && commands.effectObject.has_value())
 		    {
@@ -1911,7 +1916,8 @@ void CreatureMindSystem::ProcessTurn()
 		    const bool plannedMeal = commands.effect == creature_mind::Effect::Eat && mind.planActive;
 		    if (commands.effect != creature_mind::Effect::None && commands.effect != creature_mind::Effect::Observed &&
 		        commands.effect != creature_mind::Effect::Inspected && commands.effect != creature_mind::Effect::TookFromPile &&
-		        commands.effect != creature_mind::Effect::TookFromHand && !plannedMeal)
+		        commands.effect != creature_mind::Effect::TookFromHand && commands.effect != creature_mind::Effect::Stomped &&
+		        !plannedMeal)
 		    {
 			    mind.satisfiedByEffect = true;
 		    }

@@ -43,7 +43,7 @@ constexpr float k_HandfulPerSize = 1000.0f;
 /// The counts of what a creature ate
 struct Tallies
 {
-	/// The people, animals and creatures that it killed when it ate them
+	/// The people, animals and creatures that it killed when it ate them, or when it stomped on them
 	uint32_t peopleKilled {0};
 	uint32_t animalsKilled {0};
 	uint32_t creaturesKilled {0};
@@ -57,4 +57,6 @@ constexpr uint32_t k_AnimalSort = 4;
 /// Count a meal. A living thing that the creature ate counts as killed. A meal that it did not bring up counts by its
 /// sort.
 void CountMeal(Tallies& tallies, std::optional<uint32_t> sort, bool keptDown);
+/// Count a kill of a thing of a sort: a person, an animal or a creature. Other sorts do not count.
+void CountKill(Tallies& tallies, uint32_t sort);
 } // namespace openblack::creature_meals

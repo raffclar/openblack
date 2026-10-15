@@ -2312,6 +2312,113 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.stomp_villager",
+	    .name = "Stomping on a villager",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a villager in front of it. A script tells it to stomp on the villager.",
+	    .expected = "Sometimes angry first, it reaches for the villager with a blow of its foot and an angry face. The "
+	                "villager dies under the foot.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Stomp"}},
+	});
+
+	all.push_back({
+	    .id = "objects.stomp_and_eat",
+	    .name = "Stomping on a sheep and eating it",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a sheep in front of it. A script tells it to stomp on the sheep and eat it.",
+	    .expected = "With an angry face it stomps on the sheep, which dies. Then it picks the dead sheep up and eats it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AnimalInfo::Sheep, .offset = {0.0f, -k_Reach}, .living = true}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StompAndEat"}},
+	});
+
+	all.push_back({
+	    .id = "objects.stone_and_eat",
+	    .name = "Stoning a sheep and eating it",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a rock in front of it and a sheep further away. A script tells it to stone the "
+	                   "sheep with the rock and eat it.",
+	    .expected = "It picks up the rock and, with an angry face, throws it at the sheep. Then it walks to the sheep, "
+	                "picks it up and eats it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}, {0.0f, -80.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AnimalInfo::Sheep, .offset = {0.0f, -60.0f}, .living = true},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {6.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StoneAndEat", .with = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.kick_hut",
+	    .name = "Kicking a hut",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger near a hut. A script tells it to kick the hut.",
+	    .expected = "It walks up to the hut, faces it and kicks it: the kick makes a sound and breaks two pieces off the "
+	                "hut, which fly off.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 10.0f})},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, -25.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Kick"}},
+	});
+
+	all.push_back({
+	    .id = "objects.kick_tree",
+	    .name = "Kicking a tree",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger near a birch. A script tells it to kick the tree.",
+	    .expected = "It walks up to the tree, faces it and kicks it: the tree creaks and flies off ahead of the tiger.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 10.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {0.0f, -20.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "KickTree"}},
+	});
+
+	{
+		// Villagers, sheep and carts close round a tiger that lies down to sleep
+		std::vector<ObjectSetup> round;
+		for (int i = 0; i < 8; ++i)
+		{
+			const auto angle = static_cast<float>(i) * std::numbers::pi_v<float> / 4.0f;
+			const glm::vec2 at {std::sin(angle) * 6.0f, std::cos(angle) * 6.0f};
+			if (i % 3 == 0)
+			{
+				round.push_back({.type = MobileObjectInfo::Cart, .offset = at});
+			}
+			else if (i % 3 == 1)
+			{
+				round.push_back({.type = VillagerInfo::CelticFarmerMale, .offset = at});
+			}
+			else
+			{
+				round.push_back({.type = AnimalInfo::Sheep, .offset = at, .living = true});
+			}
+		}
+		all.push_back({
+		    .id = "objects.trample_lying_down",
+		    .name = "Knocking things about as it lies down",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger with villagers, sheep and carts close round it. A script tells it to sleep "
+		                   "where it stands.",
+		    .expected = "As it lies down, its hands, feet, head and body knock the villagers, sheep and carts that they "
+		                "pass near through the air. Nothing is knocked while it sleeps. As it gets up, it knocks things "
+		                "again.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = round,
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "SleepOnTheSpot"}},
+		});
+	}
+
+	all.push_back({
 	    .id = "objects.stroke_toy",
 	    .name = "Stroking a cuddly toy",
 	    .facet = Facet::Objects,

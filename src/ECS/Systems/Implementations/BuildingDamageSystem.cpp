@@ -619,6 +619,30 @@ void BuildingDamageSystem::Smash(entt::entity building, entt::entity creature, f
 	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true);
 }
 
+void BuildingDamageSystem::CreatureBlows(entt::entity building, entt::entity creature,
+                                         std::span<const creature_stomp::Blow> blows)
+{
+	auto& world = *_world;
+	auto& registry = world.Entities();
+	if (blows.empty() || !registry.Valid(building) || !registry.AllOf<Mesh, Transform>(building))
+	{
+		return;
+	}
+	if (!registry.AllOf<BuildingDamage>(building))
+	{
+		registry.Assign<BuildingDamage>(building).mesh = MakeDamageMesh(world, building);
+	}
+	for (const auto& blow : blows)
+	{
+		Strike(world, building, registry.Get<BuildingDamage>(building), blow.point, blow.velocity, blow.reach);
+	}
+	if (!Settle(world, building, registry.Get<BuildingDamage>(building)))
+	{
+		return;
+	}
+	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true);
+}
+
 entt::entity BuildingDamageSystem::PieceAtRest(DynamicsSystemInterface& dynamics, PhysicsEntry* entry, entt::entity piece,
                                                bool insert)
 {

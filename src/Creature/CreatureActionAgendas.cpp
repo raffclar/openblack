@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureStomp.h"
 #include "Creature/CreatureThrow.h"
 
 using namespace openblack;
@@ -72,6 +73,90 @@ std::vector<Step> creature_mind::HurlAt(uint32_t thrown, uint32_t target, glm::v
 	                  .face = creature_face::Cue::Anger,
 	                  .gaze = watch});
 	return agenda;
+}
+
+std::vector<Step> creature_mind::Stomp(uint32_t thing, const Random& random)
+{
+	std::vector<Step> agenda;
+	if (random(creature_stomp::k_AngryBeforeStompLots) == 0)
+	{
+		agenda.push_back(PlayOnce(animations::k_Angry, false, creature_face::Cue::Anger));
+	}
+	std::ranges::move(DestroyThing(thing), std::back_inserter(agenda));
+	return agenda;
+}
+
+std::vector<Step> creature_mind::StompAndEat(uint32_t thing, bool holdingEatable)
+{
+	std::vector<Step> agenda;
+	if (!holdingEatable)
+	{
+		std::ranges::move(DestroyThing(thing), std::back_inserter(agenda));
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::PickUp, .object = thing},
+		                  .gaze = Gaze {.object = thing, .whileGoing = true}});
+	}
+	agenda.push_back({.kind = Step::Kind::Object, .effect = Effect::Eat, .order = {.kind = ObjectOrder::Kind::Eat}});
+	return agenda;
+}
+
+std::vector<Step> creature_mind::StoneAndEat(uint32_t rock, uint32_t thing, glm::vec2 thingPoint, float height,
+                                             bool holdingRock)
+{
+	std::vector<Step> agenda;
+	if (!holdingRock)
+	{
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::PickUp, .object = rock},
+		                  .gaze = Gaze {.object = rock, .whileGoing = true}});
+	}
+	const Gaze watch {.object = thing};
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .movement = {.kind = Movement::Kind::ToThrowPosition, .object = thing, .maxDistance = height},
+	                  .face = creature_face::Cue::Anger,
+	                  .gaze = watch});
+	agenda.push_back({.kind = Step::Kind::Object,
+	                  .order = {.kind = ObjectOrder::Kind::Throw, .object = thing, .point = thingPoint},
+	                  .face = creature_face::Cue::Anger,
+	                  .gaze = watch});
+	agenda.push_back({.kind = Step::Kind::Object,
+	                  .order = {.kind = ObjectOrder::Kind::PickUp, .object = thing},
+	                  .gaze = Gaze {.object = thing, .whileGoing = true}});
+	agenda.push_back({.kind = Step::Kind::Object, .effect = Effect::Eat, .order = {.kind = ObjectOrder::Kind::Eat}});
+	return agenda;
+}
+
+std::vector<Step> creature_mind::ShowCreatureYouHateHim(uint32_t other, float height, float otherHeight, const Random& random)
+{
+	const Gaze watch {.object = other};
+	std::vector<Step> agenda {
+	    GoNear(other, std::max(height * k_HateDistanceHeights, otherHeight * k_HateDistanceHeights), creature_face::Cue::Anger,
+	           Gaze {.object = other, .whileGoing = true}),
+	    FaceThing(other, k_HateFaceSeconds, creature_face::Cue::Anger, watch),
+	};
+	if (random(k_HateLots) == 0)
+	{
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = other, .seconds = k_HatePointSeconds},
+		                  .face = creature_face::Cue::Grimace,
+		                  .gaze = watch});
+	}
+	agenda.push_back(PlayOnce(random(k_HateLots) != 0 ? k_HateTaunt : animations::k_Taunt));
+	if (random(k_HateLots) == 0)
+	{
+		agenda.push_back(PlayOnce(animations::k_Angry));
+	}
+	return agenda;
+}
+
+std::vector<Step> creature_mind::KickThing(uint32_t thing)
+{
+	const Gaze watch {.object = thing};
+	return {
+	    GoNear(thing, 0.0f, creature_face::Cue::None, Gaze {.object = thing, .whileGoing = true}),
+	    FaceThing(thing, k_FaceToKickSeconds, creature_face::Cue::None, watch),
+	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Kick, .object = thing}, .gaze = watch},
+	};
 }
 
 std::vector<Step> creature_mind::PooAtHome(glm::vec2 home, float height, uint32_t self, const Random& random)
