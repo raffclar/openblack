@@ -4622,7 +4622,7 @@ void CreatureMindSystem::LearnFromDeedSeen(entt::entity creature, CreatureMindSt
 	                                                                       tables->texts.at(rule.desire).trying));
 }
 
-void CreatureMindSystem::CopyObservedDeedAgain(entt::entity creature, CreatureMindState& mind)
+void CreatureMindSystem::CopyObservedDeedAgain([[maybe_unused]] entt::entity creature, CreatureMindState& mind)
 {
 	const auto* tables = GetTables();
 	if (tables == nullptr || !mind.learnt.has_value())
