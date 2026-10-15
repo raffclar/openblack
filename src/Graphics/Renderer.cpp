@@ -2830,8 +2830,8 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 {
 	namespace prints = creature_footprints;
-	const bool reflection = desc.viewId == RenderPass::Reflection;
-	if ((desc.viewId != RenderPass::Main && !reflection) || !Locator::footprintSystem::has_value() ||
+	// Drawn once, after the land: the land mirrored in the sea has none
+	if (desc.viewId != RenderPass::Main || !Locator::footprintSystem::has_value() ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
@@ -2859,12 +2859,6 @@ void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 	vertices.reserve(footprints.GetPrints().size() * prints::k_Indices.size());
 	for (const auto& print : footprints.GetPrints())
 	{
-		// The sea's reflection shows only the prints on the land above it
-		if (reflection &&
-		    std::ranges::any_of(print.corners, [](const glm::vec3& corner) { return corner.y <= prints::k_Lift; }))
-		{
-			continue;
-		}
 		// Black, as opaque as the print still is
 		const auto colour = static_cast<uint32_t>(print.alpha) << 24u;
 		for (const auto corner : prints::k_Indices)

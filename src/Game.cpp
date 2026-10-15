@@ -2415,9 +2415,12 @@ bool Game::Update() noexcept
 		Locator::creatureAudioSystem::value().Update(gameTime);
 	}
 	{
-		// Their footprints fade away
+		// Their footprints fade away, only on a frame that draws the land
 		auto creatureFootprints = profiler.BeginScoped(Profiler::Stage::CreatureFootprintsUpdate);
-		Locator::footprintSystem::value().Update(gameTime);
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const bool landHidden = Locator::videoSystem::has_value() &&
+		                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+		Locator::footprintSystem::value().Update(gameTime, !inTemple && !landHidden);
 	}
 	{
 		// Their skins are painted again where their alignment, tattoos or marks have changed
@@ -4697,8 +4700,7 @@ void Game::PrepareNewLand(land_change::Kind change)
 	Locator::guidanceSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
-	// Nor its creatures' footprints, nor a scare of its fish
-	Locator::footprintSystem::value().Reset();
+	// Nor a scare of its fish. The creatures' footprints stay and fade on the new land, as in the game.
 	Locator::fishFarmSystem::value().Reset();
 	// Nor its miracles, nor their particle effects, nor its fires
 	Locator::magicSystem::value().Reset();

@@ -223,3 +223,23 @@ TEST(CreatureFootprints, FadedPrintsAreTakenAwayInOrder)
 	Fade(full, 200.0f);
 	EXPECT_TRUE(Add(full, PrintWithAlpha(k_StartAlpha)));
 }
+
+TEST(CreatureFootprints, NoTimeCountsWithoutPrints)
+{
+	Trail trail;
+	Fade(trail, 150.0f);
+	EXPECT_EQ(trail.sinceFadeMs, 0.0f);
+	// The first print laid fades only after a full 200 ms of its own
+	Add(trail, PrintWithAlpha(k_StartAlpha));
+	Fade(trail, 100.0f);
+	EXPECT_EQ(trail.prints[0].alpha, k_StartAlpha);
+	Fade(trail, 100.0f);
+	EXPECT_EQ(trail.prints[0].alpha, k_StartAlpha - 5);
+	// The last print gone, the time stops at the fade that took it away
+	Trail fading;
+	Add(fading, PrintWithAlpha(1));
+	Fade(fading, 200.0f);
+	EXPECT_TRUE(fading.prints.empty());
+	Fade(fading, 150.0f);
+	EXPECT_EQ(fading.sinceFadeMs, 0.0f);
+}
