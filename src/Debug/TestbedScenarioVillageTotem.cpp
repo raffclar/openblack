@@ -108,9 +108,10 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
 	                 .joinTown = true}},
 	    .temples = {{.offset = k_Temple}},
-	    .commands = {{.kind = Command::Kind::HandGripTotem, .delaySeconds = 3.0f, .object = 0},
+	    .commands = {{.kind = Command::Kind::HandGripTotem, .delaySeconds = 10.0f, .object = 0},
 	                 {.kind = Command::Kind::HandGripTotem, .delaySeconds = 2.0f, .object = 0}},
 	    .hand = HandHold {.offset = watcher, .height = 12.0f},
+	    .townBeliefInPlayer = 1.0f,
 	});
 
 	for (const auto& carving : k_Carvings)

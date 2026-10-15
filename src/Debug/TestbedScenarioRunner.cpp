@@ -103,6 +103,7 @@
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
@@ -245,6 +246,8 @@ uint32_t ScenarioTown(glm::vec2 middle)
 	return k_ScenarioTownId;
 }
 constexpr uint32_t k_CrowdWood = 2000;
+/// Enough building to finish a worship site at once
+constexpr float k_BuildWholeSite = 1.0e6f;
 /// The prayer power the testbed's player has when a scenario doesn't say, as the testbed starts with
 constexpr float k_PlentyOfPrayer = 1.0e6f;
 
@@ -1567,10 +1570,40 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		{
 			return "no totem";
 		}
+		// The scenario does not wait for the villagers to build the worship site: it stands built at once
+		{
+			auto& registry = Locator::entitiesRegistry::value();
+			const auto* abode = registry.TryGet<const ecs::components::Abode>(*centre);
+			const auto& towns = registry.Context().towns;
+			const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
+			const auto* town = found != towns.end() && registry.Valid(found->second)
+			                       ? registry.TryGet<const ecs::components::Town>(found->second)
+			                       : nullptr;
+			if (town != nullptr && registry.Valid(town->worshipSite))
+			{
+				ecs::construction::BuildBy(town->worshipSite, k_BuildWholeSite);
+			}
+		}
 		auto& totems = Locator::villageTotemSystem::value();
 		if (!totems.Grip(*totem, command.player))
 		{
-			return "the hand can't take hold of the totem";
+			// Say what the town lacks
+			const auto& registry = Locator::entitiesRegistry::value();
+			const auto* abode = registry.TryGet<const ecs::components::Abode>(*centre);
+			const auto& towns = registry.Context().towns;
+			const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
+			const auto townEntity = found != towns.end() ? found->second : entt::null;
+			const auto* townComponent =
+			    registry.Valid(townEntity) ? registry.TryGet<const ecs::components::Town>(townEntity) : nullptr;
+			const auto built = [&registry](entt::entity building) {
+				return registry.Valid(building) && !registry.AllOf<ecs::components::BuildProgress>(building);
+			};
+			return fmt::format("the hand can't take hold of the totem (town {}, owner {}, centre built {}, worship site built "
+			                   "{}, temples {})",
+			                   entt::to_integral(townEntity),
+			                   townComponent != nullptr ? static_cast<int>(townComponent->owner) : -1, built(*centre),
+			                   townComponent != nullptr && built(townComponent->worshipSite),
+			                   registry.Size<ecs::components::Temple>());
 		}
 		totems.LetGo();
 		return "gripped and let go";
