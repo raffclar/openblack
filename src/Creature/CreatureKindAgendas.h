@@ -90,6 +90,11 @@ constexpr uint32_t k_DieOutcomeLots = 3;
 constexpr float k_FaceHouseSeconds = 0.1f;
 /// What a creature's mending gives a building, of its life
 constexpr float k_RepairLife = 0.2f;
+/// After the mending, a building with all of its life (1 or more) lets the end of the plan decrease its desire
+[[nodiscard]] constexpr bool RepairedToFullLife(float life)
+{
+	return life >= 1.0f;
+}
 
 /// Kicking a ball about: going up to it, turning to face it a tenth of a second, going right up to it again and kicking
 /// it, watching it; then a quarter of the time pointing at it a second, else waiting 0.4 to 1 second (in whole turns).
