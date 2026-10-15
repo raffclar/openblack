@@ -22,6 +22,7 @@
 #include "Gestures/GesturePaths.h"
 #include "Gestures/GestureRecorder.h"
 #include "Gestures/GestureRequests.h"
+#include "Help/HelpProfile.h"
 
 using namespace openblack;
 using namespace openblack::gesture;
@@ -257,6 +258,49 @@ TEST(GestureRequests, ASeedThatCantPowerUpIsStillDroppedByAScribble)
 	const auto requests = Requests(context);
 	ASSERT_EQ(requests.size(), 1u);
 	EXPECT_EQ(requests[0].purpose, Purpose::DropSeed);
+}
+
+// The help counts a power-up, the special move and a scribble about a miracle that the hand can power up
+TEST(GestureRequests, TheHelpCountsSomeGestures)
+{
+	HandContext context;
+	context.seed = HandContext::Seed {.powerUpGestures = {GestureType::Spiral}};
+	const Request scribble {.gesture = GestureType::Scribble, .purpose = Purpose::DropSeed};
+	EXPECT_EQ(HelpEventOf(scribble, context), help::profile::k_GestureDropMiracle);
+	context.seed->powerUp = 0;
+	EXPECT_EQ(HelpEventOf(scribble, context), help::profile::k_GestureStopPowerUp);
+	EXPECT_EQ(HelpEventOf({.gesture = GestureType::Spiral, .purpose = Purpose::PowerUp, .powerUpLevel = 0}, context),
+	          help::profile::k_GesturePowerUp);
+	EXPECT_EQ(HelpEventOf({.gesture = GestureType::Star, .purpose = Purpose::FightSpecialMove}, context),
+	          help::profile::k_GestureSpecialMove);
+	// A miracle that is not ready, or not from an icon, falls out of the hand without a count
+	context.seed->ready = false;
+	EXPECT_FALSE(HelpEventOf(scribble, context).has_value());
+	context.seed->ready = true;
+	context.seed->canPowerUp = false;
+	EXPECT_FALSE(HelpEventOf(scribble, context).has_value());
+	// The circle, the leash and a fight miracle do not count
+	EXPECT_FALSE(HelpEventOf({.gesture = GestureType::Circle, .purpose = Purpose::SizeCircle}, context).has_value());
+	EXPECT_FALSE(HelpEventOf({.gesture = GestureType::SquareSpirial, .purpose = Purpose::LeashGesture}, context).has_value());
+	EXPECT_FALSE(HelpEventOf({.gesture = GestureType::Spiral, .purpose = Purpose::FightMiracle}, context).has_value());
+}
+
+// The help counts a cast with a power-up. A miracle that a circle sizes counts only when the circle was the last gesture.
+TEST(GestureRequests, TheHelpCountsACastWithAPowerUp)
+{
+	HandContext::Seed seed {.powerUpGestures = {GestureType::Spiral}};
+	EXPECT_FALSE(CountsPoweredUpCast(seed, GestureType::None));
+	seed.powerUp = 0;
+	EXPECT_TRUE(CountsPoweredUpCast(seed, GestureType::None));
+	seed.cast = true;
+	EXPECT_FALSE(CountsPoweredUpCast(seed, GestureType::None));
+	seed.cast = false;
+	seed.canPowerUp = false;
+	EXPECT_FALSE(CountsPoweredUpCast(seed, GestureType::None));
+	seed.canPowerUp = true;
+	seed.sizingGesture = GestureType::Circle;
+	EXPECT_FALSE(CountsPoweredUpCast(seed, GestureType::Spiral));
+	EXPECT_TRUE(CountsPoweredUpCast(seed, GestureType::Circle));
 }
 
 TEST(GestureRequests, OutOfInfluenceOnlyASeedBeingPoweredUpIsScribbledAway)

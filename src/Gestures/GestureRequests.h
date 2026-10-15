@@ -158,6 +158,12 @@ struct HandContext
 inline constexpr std::string_view k_HiddenScript = "HiddenScript";
 /// The gestures waited for, in the order they are tried
 [[nodiscard]] std::vector<Request> Requests(const HandContext& context);
+/// The event that the help counts when the hand draws the gesture of a request, none for most gestures. A scribble
+/// counts only when it is about a miracle that the hand can power up.
+[[nodiscard]] std::optional<uint32_t> HelpEventOf(const Request& request, const HandContext& context);
+/// Whether the help counts a cast of the miracle in the hand as a cast with a power-up. The miracle must be ready, not
+/// cast, from an icon and powered up. A miracle that a gesture sizes must have that gesture as the last gesture drawn.
+[[nodiscard]] bool CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture);
 
 /// The leash picker: open after the leash gesture while the creature knows more than one leash, offering each other
 /// leash it knows as a gesture to draw. It closes when a leash is picked, on a scribble, when the leash comes off, or

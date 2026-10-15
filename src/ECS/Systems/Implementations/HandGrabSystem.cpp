@@ -41,6 +41,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "GameHandGrabWorld.h"
 #include "Hand/HandClickRules.h"
+#include "Help/HelpProfile.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -911,6 +912,8 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	_world->FireStartedMoving(object, !registry.AllOf<Villager>(object));
 	// A firefly hiding exactly where the thing stood is caught, for a miracle there
 	_world->CatchFirefly(object);
+	// The help counts each thing that the hand takes. A thing that the hand catches as it flies counts the same.
+	_world->CountHelpEvent(help::profile::k_PickUp);
 
 	// The thing's own part of going into the hand
 	if (registry.AllOf<Villager>(object))
@@ -976,6 +979,8 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, bool forced)
 		return;
 	}
 	registry.Remove<InHand>(object);
+	// The help counts each thing that the hand lets go of, also a pour or a drop that the hand must do
+	_world->CountHelpEvent(help::profile::k_Throw);
 	if (!forced)
 	{
 		// It starts from where it is drawn in the hand, lifted out of the land, and laid along the slope when let go

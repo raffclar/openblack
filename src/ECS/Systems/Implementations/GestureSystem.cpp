@@ -30,6 +30,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -355,6 +356,12 @@ void GestureSystem::Update(const Frame& frame)
 	{
 		if (const auto match = gesture::Recognise(templates, request.gesture, keys, _screenAspect))
 		{
+			// The help counts some gestures, from what the hand held as the player drew them
+			if (const auto event = gesture::HelpEventOf(request, context);
+			    event.has_value() && Locator::helpProfileSystem::has_value())
+			{
+				Locator::helpProfileSystem::value().Trigger(*event);
+			}
 			Act(request, *match, frame);
 			break;
 		}

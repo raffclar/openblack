@@ -420,6 +420,14 @@ void GameHandGrabWorld::CatchFirefly(entt::entity object)
 	Locator::fireflySystem::value().Catch(map_coords::FromWorld(Locator::terrainSystem::value(), transform->position));
 }
 
+void GameHandGrabWorld::CountHelpEvent(uint32_t event)
+{
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(event);
+	}
+}
+
 void GameHandGrabWorld::HeatHeld(entt::entity object)
 {
 	if (Locator::fireSystem::has_value())

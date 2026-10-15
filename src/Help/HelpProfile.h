@@ -23,6 +23,19 @@ namespace openblack::help::profile
 
 /// The things counted, numbered as the scripts number them; 0 is never asked for by a script
 constexpr uint32_t k_EventCount = 49;
+/// The hand takes a thing into it. The hand lets go of a thing that it holds: a throw, a drop or a pour.
+constexpr uint32_t k_PickUp = 2;
+constexpr uint32_t k_Throw = 4;
+/// The gestures that the help counts. All of them also count as the event for any gesture.
+/// - The hand powers up the miracle that it holds.
+/// - The player calls the special move of the creature in a fight.
+/// - A scribble stops the power-up of the miracle in the hand, or drops the miracle when it has no power-up.
+/// - The hand casts a miracle that has a power-up.
+constexpr uint32_t k_GesturePowerUp = 18;
+constexpr uint32_t k_GestureSpecialMove = 19;
+constexpr uint32_t k_GestureStopPowerUp = 20;
+constexpr uint32_t k_GestureDropMiracle = 22;
+constexpr uint32_t k_GestureCastPoweredUp = 23;
 /// The world camera's controls: turning it (and which way: positive is the way the turn-right key turns it), tilting,
 /// zooming, a double click on the land or on an object, flying to the temple or over the realm, and dragging it across
 /// the land

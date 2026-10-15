@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Help/HelpProfile.h"
+
 using namespace openblack;
 using namespace openblack::gesture;
 
@@ -206,6 +208,45 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 		}
 	}
 	return requests;
+}
+
+namespace
+{
+/// Whether the hand holds a miracle that its gestures can power up
+bool PowersUp(const HandContext& context)
+{
+	const auto& seed = context.seed;
+	return seed.has_value() && seed->ready && !seed->cast && seed->canPowerUp;
+}
+} // namespace
+
+std::optional<uint32_t> gesture::HelpEventOf(const Request& request, const HandContext& context)
+{
+	switch (request.purpose)
+	{
+	case Purpose::PowerUp:
+		return help::profile::k_GesturePowerUp;
+	case Purpose::FightSpecialMove:
+		return help::profile::k_GestureSpecialMove;
+	case Purpose::DropSeed:
+		// A scribble shakes a miracle that the hand cannot power up out of the hand, and the help does not count it
+		if (!PowersUp(context))
+		{
+			return std::nullopt;
+		}
+		return context.seed->powerUp >= 0 ? help::profile::k_GestureStopPowerUp : help::profile::k_GestureDropMiracle;
+	default:
+		return std::nullopt;
+	}
+}
+
+bool gesture::CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture)
+{
+	if (!seed.ready || seed.cast || !seed.canPowerUp || seed.powerUp < 0)
+	{
+		return false;
+	}
+	return seed.sizingGesture == GestureType::None || lastGesture == seed.sizingGesture;
 }
 
 void LeashPicker::Open()

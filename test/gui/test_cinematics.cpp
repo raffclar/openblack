@@ -65,16 +65,19 @@ TEST(ScriptFade, FadesBackToClear)
 	EXPECT_EQ(fade.GetColour() >> 24u, 0u);
 }
 
-TEST(CinemaBars, ANewGameStartsWithThemSlidingOut)
+// A new game resets the bars to off at once: no bars show, and none slide out
+TEST(CinemaBars, ANewGameStartsWithoutThem)
 {
 	CinemaBars bars;
 	bars.Update(0.0f, 2.0f);
-	EXPECT_FLOAT_EQ(bars.GetFraction(), 1.0f);
-	bars.Update(1000.0f, 2.0f);
-	EXPECT_FLOAT_EQ(bars.GetFraction(), 0.5f);
-	bars.Update(1000.0f, 2.0f);
 	EXPECT_FLOAT_EQ(bars.GetFraction(), 0.0f);
 	EXPECT_TRUE(bars.IsTransitionFinished());
+	bars.Update(1000.0f, 2.0f);
+	EXPECT_FLOAT_EQ(bars.GetFraction(), 0.0f);
+	// Turned on, they slide in from nothing
+	bars.Set(true, 2.0f);
+	bars.Update(1000.0f, 2.0f);
+	EXPECT_FLOAT_EQ(bars.GetFraction(), 0.5f);
 }
 
 TEST(CinemaBars, SlideInAndTurnBackFromWhereTheyAre)
