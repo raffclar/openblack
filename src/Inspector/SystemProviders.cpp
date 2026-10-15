@@ -507,6 +507,75 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		                               {"pending_teaching", mind.pendingTeaching.size()}});
 	    });
 	provider->Add(
+	    Query("learnt",
+	          "What a creature has learnt: each action's opinion that is not 0, and for each desire's tree of what to act on "
+	          "and what to use that has examples, the examples (kind of thing, attributes, feedback) and the tree as text",
+	          {id}),
+	    [sources](const QueryContext& context) {
+		    const auto* registry = Registry(sources.world);
+		    if (registry == nullptr)
+		    {
+			    return QueryResult::Error(std::string(k_NoRegistry));
+		    }
+		    const auto creature = CreatureParam(*registry, context.params);
+		    if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		    {
+			    return QueryResult::Error(*problem);
+		    }
+		    const auto entity = std::get<entt::entity>(creature);
+		    const auto& mind = registry->Get<const CreatureMindState>(entity);
+		    if (!mind.learnt.has_value())
+		    {
+			    return QueryResult::Error("its learning isn't set up yet: its mind hasn't thought");
+		    }
+		    const auto* tables = sources.tables ? sources.tables() : nullptr;
+		    const auto& learnt = *mind.learnt;
+		    auto opinions = Json::array();
+		    for (size_t a = 0; a < learnt.opinions.size(); ++a)
+		    {
+			    if (learnt.opinions[a] != 0.0f)
+			    {
+				    opinions.push_back(
+				        {{"action", a},
+				         {"name", tables != nullptr && a < tables->actions.size() ? tables->actions[a].name : std::string()},
+				         {"opinion", learnt.opinions[a]}});
+			    }
+		    }
+		    auto trees = Json::array();
+		    for (size_t k = 0; k < learnt.episodes.size(); ++k)
+		    {
+			    for (size_t d = 0; d < learnt.episodes[k].size(); ++d)
+			    {
+				    const auto& episodes = learnt.episodes[k][d];
+				    if (episodes.empty())
+				    {
+					    continue;
+				    }
+				    auto examples = Json::array();
+				    for (const auto& episode : episodes)
+				    {
+					    auto attributes = Json::object();
+					    for (const auto attribute : creature_tree::SlotsFor(episode.belief.type))
+					    {
+						    const auto value = episode.belief.Value(attribute);
+						    attributes[creature_tree::Name(attribute)] = value.has_value() ? Json(*value) : Json(nullptr);
+					    }
+					    examples.push_back({{"kind", creature_tree::BeliefName(episode.belief.type)},
+					                        {"attributes", std::move(attributes)},
+					                        {"feedback", episode.feedback}});
+				    }
+				    trees.push_back({{"tree", k == 0 ? "act on" : "use"},
+				                     {"desire", creature_desires::Name(static_cast<creature_desires::Desire>(d))},
+				                     {"examples", std::move(examples)},
+				                     {"lines", creature_tree::Describe(learnt.trees[k][d])}});
+			    }
+		    }
+		    return QueryResult::Value({{"id", ToId(entity)},
+		                               {"opinions", std::move(opinions)},
+		                               {"opinions_size", learnt.opinions.size()},
+		                               {"trees", std::move(trees)}});
+	    });
+	provider->Add(
 	    Query("beliefs",
 	          "A creature's beliefs about things: kind, last place, the whole thing, the attributes its decision trees test; "
 	          "and how nice it finds other creatures",
