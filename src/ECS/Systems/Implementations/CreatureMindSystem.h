@@ -382,8 +382,8 @@ private:
 	void FrustrateAfterCast(entt::entity creature, MagicType type);
 	/// Does the thing that waited for the creature to complete its work
 	void DoFollowUp(entt::entity creature, components::CreatureMindState& mind, creature_follow_up::FollowUp followUp);
-	/// After the meal of the lesson to eat what it holds, it does again the action that feedback goes to now. It does the
-	/// action to the most useful different thing of the same kind, and it must do it.
+	/// A stroke, or the end of the meal of the lesson to eat what it holds: the creature must do again the action that
+	/// feedback goes to now, to the most useful thing of the same kind. This can be the same thing again.
 	void DoLessonAgain(entt::entity creature, components::CreatureMindState& mind);
 	/// It is made to be high, as after eating a magic mushroom
 	void BecomeHigh(entt::entity creature);

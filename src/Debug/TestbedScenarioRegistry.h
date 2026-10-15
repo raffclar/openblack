@@ -735,6 +735,9 @@ struct Command
 		/// The scenario's object goes from the world at once, as when something other than the creature removes it.
 		/// Needs no creature
 		RemoveObject,
+		/// The player's hand takes hold of the totem of the scenario's object, a town centre, and then lets go. Needs no
+		/// creature
+		HandGripTotem,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

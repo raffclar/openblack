@@ -105,6 +105,7 @@
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/WallHug.h"
@@ -1547,6 +1548,33 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		ecs::world_objects::Remove(*object);
 		return "removed";
 	}
+	case Kind::HandGripTotem:
+	{
+		const auto centre = ObjectAt(command.object);
+		if (!centre.has_value() || !Locator::villageTotemSystem::has_value())
+		{
+			return "no totem";
+		}
+		std::optional<entt::entity> totem;
+		Locator::entitiesRegistry::value().Each<const ecs::components::VillageTotem>(
+		    [&totem, &centre](entt::entity entity, const ecs::components::VillageTotem& component) {
+			    if (component.townCentre == *centre)
+			    {
+				    totem = entity;
+			    }
+		    });
+		if (!totem.has_value())
+		{
+			return "no totem";
+		}
+		auto& totems = Locator::villageTotemSystem::value();
+		if (!totems.Grip(*totem, command.player))
+		{
+			return "the hand can't take hold of the totem";
+		}
+		totems.LetGo();
+		return "gripped and let go";
+	}
 	case Kind::HandTake:
 	{
 		const auto object = command.globe.has_value() ? GlobeAt(*command.globe) : ObjectAt(command.object);
@@ -1945,7 +1973,7 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
-	    command.kind == Kind::RemoveObject)
+	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2315,6 +2343,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandPour:
 	case Kind::HandRelease:
 	case Kind::RemoveObject:
+	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
 	case Kind::DestroyTemple:

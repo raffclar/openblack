@@ -115,3 +115,28 @@ TEST(CreatureFollowUp, AfterTheMealItEatsAliveWhatItAteFromItsHand)
 	EXPECT_EQ(creature_follow_up::ActionToDoAgain("EatAlive"), "EatAlive");
 	EXPECT_EQ(creature_follow_up::ActionToDoAgain("PickUpThing"), "PickUpThing");
 }
+
+TEST(CreatureFollowUp, ItDoesAnActionAgainOnlyWhenTheActionHadAThingOtherThanItself)
+{
+	constexpr uint32_t k_Self = 7;
+	EXPECT_TRUE(creature_follow_up::MayDoAgain(3u, k_Self, false));
+	// The thing can be gone, as a thing that it ate is: only the remembered number counts
+	EXPECT_FALSE(creature_follow_up::MayDoAgain(std::nullopt, k_Self, false));
+	EXPECT_FALSE(creature_follow_up::MayDoAgain(k_Self, k_Self, false));
+	// Not while it copies the player
+	EXPECT_FALSE(creature_follow_up::MayDoAgain(3u, k_Self, true));
+}
+
+TEST(CreatureFollowUp, ItDoesTheActionAgainToTheMostUsefulThingOfTheSameKind)
+{
+	constexpr uint32_t k_Self = 7;
+	const std::vector<creature_planner::ObjectCandidate> things {
+	    {.id = 1, .usefulness = 0.2f}, {.id = 2, .usefulness = 0.5f}, {.id = 3, .usefulness = 0.5f}};
+	// The first of equals
+	EXPECT_EQ(creature_follow_up::ThingToDoAgainTo(true, k_Self, things), std::optional<uint32_t>(2u));
+	// Only a thing worth more than nothing
+	const std::vector<creature_planner::ObjectCandidate> worthless {{.id = 1, .usefulness = 0.0f}};
+	EXPECT_FALSE(creature_follow_up::ThingToDoAgainTo(true, k_Self, worthless).has_value());
+	// An action that acts on nothing acts on the creature itself
+	EXPECT_EQ(creature_follow_up::ThingToDoAgainTo(false, k_Self, {}), std::optional<uint32_t>(k_Self));
+}

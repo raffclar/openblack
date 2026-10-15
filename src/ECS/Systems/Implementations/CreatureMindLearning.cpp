@@ -2851,7 +2851,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	const glm::vec2 position {transform->position.x, transform->position.z};
 	const auto height = k_HeightOfSizeOne * ShownSize(*body);
 	const auto random = [this](uint32_t range) { return Random(range); };
-	auto activity = creature_mind::Activity::Told;
+	auto activity = plan.activity.value_or(creature_mind::Activity::Told);
 	auto agenda = plan.agenda;
 	if (!agenda.has_value())
 	{
@@ -3518,12 +3518,12 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 				                           tables->attributes.at(static_cast<size_t>(Desire::Hunger)));
 			}
 			creature_mind_model::Think(learnt, "I've learnt to eat what I'm given");
-			if (Replan(creature, creature_mind::Activity::Eat, creature_mind::EatHeld()) && tables != nullptr)
-			{
-				// The feedback for this meal goes to eating a thing alive
-				mind.creditedAction = creature_mind_tables::FindAction(*tables, k_EatHeldAction);
-				mind.creditedSerial = mind.idle.serial;
-			}
+			// It must eat the thing alive. The feedback for this meal goes to eating that thing alive.
+			static_cast<void>(ForcePlan(creature, {.desire = Desire::Hunger,
+			                                       .action = k_EatHeldAction,
+			                                       .object = *held,
+			                                       .agenda = creature_mind::EatHeld(),
+			                                       .activity = creature_mind::Activity::Eat}));
 			// When the meal is done, it does again what it was stroked for. This replaces a thing that waits.
 			mind.followUp = creature_follow_up::FollowUp::DoLessonAgain;
 			return;
@@ -3583,6 +3583,11 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		}
 		TellHelp(creature, creature_help::TooYoungToLearn(feedback));
 		mind.followUp = creature_follow_up::AfterYoungFeedback(mind.followUp, feedback, Random(2));
+		// A young creature that is stroked also does its action again, as an older one does
+		if (feedback > 0.0f)
+		{
+			DoLessonAgain(creature, mind);
+		}
 		return;
 	}
 
@@ -3654,50 +3659,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		}
 		return;
 	}
-	// Stroked for something it did to a thing, it does it again to something like it
-	const auto* executor = creature_plan_actions::For(info->name);
-	if (context->running || !context->belief.has_value() || executor == nullptr || executor->target == Target::None)
-	{
-		return;
-	}
-	// It looks for the thing of the same kind that is most useful to act on, in the lists of what it believes in
-	const auto* known = context->object.has_value() ? mind.beliefs.Find(static_cast<entt::entity>(*context->object)) : nullptr;
-	const auto kind = known != nullptr ? known->kind : context->belief->type;
-	const auto found = BelievedThingsToActOn(creature, mind, desire, [&](entt::entity thing) {
-		const auto* belief = mind.beliefs.Find(thing);
-		return belief != nullptr && belief->kind == kind && Accepts(registry, executor->target, thing, creature);
-	});
-	std::optional<creature_planner::ObjectCandidate> best;
-	for (const auto& thing : found)
-	{
-		if (thing.usefulness > (best.has_value() ? best->usefulness : 0.0f))
-		{
-			best = thing;
-		}
-	}
-	if (!best.has_value())
-	{
-		return;
-	}
-	const auto whole = WholeOfForcedPlan(creature, mind, desire, static_cast<entt::entity>(best->id));
-	const creature_planner::Plan again {
-	    .desire = desire,
-	    .action = context->action,
-	    .object = best->id,
-	    .about = whole.has_value() ? std::optional(entt::to_integral(*whole)) : std::nullopt,
-	    // As pressing as the planner would find it, so that something more pressing can still take over
-	    .priority =
-	        creature_planner::Priority(desires[desire].value, best->activityUsefulness,
-	                                   creature_planner::ActionPriority(learnt.opinions.at(context->action)),
-	                                   best->actedOnUsefulness.value_or(creature_planner::k_DefaultUsefulness), std::nullopt),
-	};
-	creature_plan_actions::Situation situation;
-	if (Locator::camera::has_value())
-	{
-		const auto eye = Locator::camera::value().GetOrigin();
-		situation.camera = glm::vec2(eye.x, eye.z);
-	}
-	Adopt(creature, mind, again, situation);
+	// Stroked for something it did to a thing, it must do it again to something like it
+	DoLessonAgain(creature, mind);
 }
 
 void CreatureMindSystem::LearnTurn()
@@ -4461,17 +4424,14 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	const auto context = learnt.contexts.at(*index);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} looks to do its lesson again: action {} on {}",
 	                    entt::to_integral(creature), context.action, context.object.value_or(0));
-	// It needs a thing that it acted on that is not itself and that still exists. It does nothing while it copies the
-	// player.
-	if (!context.object.has_value() || learnt.mimicry.has_value() || context.action >= tables->actions.size())
+	// It needs a thing that it acted on that is not itself. The thing can be gone, as a thing that it ate is: the kind of
+	// thing stays known. It does nothing while it copies the player.
+	if (!creature_follow_up::MayDoAgain(context.object, entt::to_integral(creature), learnt.mimicry.has_value()) ||
+	    context.action >= tables->actions.size())
 	{
 		return;
 	}
 	const auto actedOn = static_cast<entt::entity>(*context.object);
-	if (actedOn == creature || !registry.Valid(actedOn))
-	{
-		return;
-	}
 	const auto action = creature_follow_up::ActionToDoAgain(tables->actions.at(context.action).name);
 	const auto actionIndex = creature_mind_tables::FindAction(*tables, action);
 	const auto* executor = creature_plan_actions::For(action);
@@ -4490,12 +4450,8 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	const auto desire = context.desire;
 	// It finds the most useful thing of the same kind as the thing it acted on. An action that acts on nothing acts on
 	// the creature itself.
-	std::optional<entt::entity> object;
-	if (executor->target == Target::None)
-	{
-		object = creature;
-	}
-	else
+	std::vector<creature_planner::ObjectCandidate> sameKind;
+	if (executor->target != Target::None)
 	{
 		const auto* known = mind.beliefs.Find(actedOn);
 		if (known == nullptr && !context.belief.has_value())
@@ -4503,43 +4459,38 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 			return;
 		}
 		const auto kind = known != nullptr ? known->kind : context.belief->type;
-		float best = 0.0f;
-		for (const auto& thing : BelievedThingsToActOn(creature, mind, desire, [&](entt::entity candidate) {
-			     const auto* belief = mind.beliefs.Find(candidate);
-			     return belief != nullptr && belief->kind == kind && Accepts(registry, executor->target, candidate, creature);
-		     }))
-		{
-			if (thing.usefulness > best)
-			{
-				best = thing.usefulness;
-				object = static_cast<entt::entity>(thing.id);
-			}
-		}
+		sameKind = BelievedThingsToActOn(creature, mind, desire, [&](entt::entity candidate) {
+			const auto* belief = mind.beliefs.Find(candidate);
+			return belief != nullptr && belief->kind == kind && Accepts(registry, executor->target, candidate, creature);
+		});
 	}
-	if (!object.has_value())
+	const auto chosen =
+	    creature_follow_up::ThingToDoAgainTo(executor->target != Target::None, entt::to_integral(creature), sameKind);
+	if (!chosen.has_value())
 	{
 		return;
 	}
+	const auto object = static_cast<entt::entity>(*chosen);
 	// It must be able to do the action now and know what the action needs
 	if (!creature_plan_actions::Allowed(*executor, situation) ||
 	    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(*actionIndex).needs))
 	{
 		return;
 	}
-	const auto whole = WholeOfForcedPlan(creature, mind, desire, *object);
+	const auto whole = WholeOfForcedPlan(creature, mind, desire, object);
 	std::optional<entt::entity> instrument;
 	if (executor->use != Target::None)
 	{
 		const auto used = UsedFor(creature, executor->use, position,
-		                          tables->rules.at(static_cast<size_t>(desire)).distanceWeight, entt::to_integral(*object));
+		                          tables->rules.at(static_cast<size_t>(desire)).distanceWeight, entt::to_integral(object));
 		if (!used.has_value())
 		{
 			return;
 		}
 		instrument = static_cast<entt::entity>(used->id);
 	}
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} does its lesson again: {} on {}", entt::to_integral(creature), action,
-	                    entt::to_integral(*object));
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} does its action again: {} on {}", entt::to_integral(creature), action,
+	                    entt::to_integral(object));
 	static_cast<void>(ForcePlan(
 	    creature, {.desire = desire, .action = action, .object = object, .instrument = instrument, .activityObject = whole}));
 }
