@@ -1151,3 +1151,8 @@ bool creature_fight::FightMusicHeard(bool directsFight, std::span<const glm::vec
 		       return glm::distance(middle, camera) < k_FightMusicDistance;
 	       });
 }
+
+float creature_fight::HealthAfterLifeLost(float health, float damage)
+{
+	return std::max(health - damage, 0.0f);
+}

@@ -784,3 +784,10 @@ TEST(CreatureFight, FightMusicIsHeardWhileTheHandDirectsTheFightOrNearItsArena)
 	EXPECT_FALSE(FightMusicHeard(false, std::span(several).first(1), camera));
 	EXPECT_TRUE(FightMusicHeard(false, several, glm::vec3 {0.0f}));
 }
+
+TEST(CreatureFight, LifeLostInADuelComesOffTheFightHealth)
+{
+	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.6f, 0.25f), 0.35f);
+	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.5f), 0.0f);
+	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.0f), 0.2f);
+}

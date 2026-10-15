@@ -647,3 +647,27 @@ TEST_F(CreatureFightSystemTest, ThePlayerDirectsTheirOwnCreatureAndTheComputerAn
 	EXPECT_TRUE(fights.IsAutoFighting(first));
 	EXPECT_TRUE(fights.IsAutoFighting(second));
 }
+
+TEST_F(CreatureFightSystemTest, LifeLostInADuelTakesTheFightHealthAndCanKnockTheCreatureOut)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::creatureMindSystem::emplace<ForcedMinds>();
+	registry.Get<CreatureFighting>(first).fighter.health = 0.5f;
+	fights.LoseFightHealth(first, 0.2f);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureFighting>(first).fighter.health, 0.3f);
+	EXPECT_FALSE(fights.IsKnockedOut(first));
+	// With none left it is knocked out, and its opponent wins
+	fights.LoseFightHealth(first, 0.5f);
+	EXPECT_TRUE(fights.IsKnockedOut(first));
+	EXPECT_EQ(registry.Get<const CreatureFightRecord>(second).wins, 1u);
+	Locator::creatureMindSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, LifeLostOutOfADuelLeavesTheFightHealth)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Taunt;
+	const auto before = registry.Get<const CreatureFighting>(first).fighter.health;
+	fights.LoseFightHealth(first, 0.2f);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureFighting>(first).fighter.health, before);
+}

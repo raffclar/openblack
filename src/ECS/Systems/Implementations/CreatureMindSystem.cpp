@@ -1769,6 +1769,17 @@ void CreatureMindSystem::ProcessTurn()
 		    // choose the point that the head looks at.
 		    if (mind.paused || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
 		    {
+			    // Exhausted, starved or out of life while it fights, it passes out: its fight is called off for both,
+			    // and nobody wins
+			    if (!mind.paused && Locator::creatureFightSystem::has_value() && registry.AllOf<CreatureFighting>(entity) &&
+			        needs != nullptr && needs->faint.has_value() && mind.turn > k_TurnsBeforePassingOut)
+			    {
+				    TellFainting(entity);
+				    needs->faint.reset();
+				    Locator::creatureFightSystem::value().CallOff(entity);
+				    passingOut.push_back(entity);
+				    return;
+			    }
 			    if (!mind.paused)
 			    {
 				    animation.lookAt = FightLook(registry, entity, creature, transform, mind);

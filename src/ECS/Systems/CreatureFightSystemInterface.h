@@ -187,6 +187,9 @@ public:
 	/// it)
 	virtual void SetFightExit(bool /*allowed*/) {}
 	[[nodiscard]] virtual bool GetFightExit() const { return true; }
+	/// A creature in a duel loses damage to its life: it also loses as much fight health, and when none is left it is
+	/// knocked out and its opponent wins. A creature not in a duel loses nothing here.
+	virtual void LoseFightHealth(entt::entity /*creature*/, float /*damage*/) {}
 	/// Whether the fight music of the player's creature plays for a camera at a point: the hand directs its fight, or
 	/// the camera is near the arena of a fight that is on with the creature in it
 	[[nodiscard]] virtual bool FightMusicHeard(const glm::vec3& /*camera*/) const { return false; }

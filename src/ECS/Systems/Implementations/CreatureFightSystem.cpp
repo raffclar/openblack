@@ -3446,3 +3446,20 @@ bool CreatureFightSystem::FightMusicHeard(const glm::vec3& camera) const
 	    });
 	return fight::FightMusicHeard(DirectsFight(), arenas, camera);
 }
+
+void CreatureFightSystem::LoseFightHealth(entt::entity creature, float damage)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!IsDuelling(creature) || IsKnockedOut(creature))
+	{
+		return;
+	}
+	auto& fighter = registry.Get<CreatureFighting>(creature).fighter;
+	const auto before = fighter.health;
+	fighter.health = fight::HealthAfterLifeLost(before, damage);
+	fight_transcript::Note(creature, "level", [&] { return LevelChange(creature, "health", before, fighter.health, "life"); });
+	if (fighter.health <= 0.0f)
+	{
+		KnockOut(creature);
+	}
+}

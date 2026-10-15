@@ -511,15 +511,18 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	}
 	if (auto* needs = registry.TryGet<CreatureNeeds>(object))
 	{
-		needs->needs.life = std::max(needs->needs.life - damage, 0.0f);
-		// A fighting creature with no life left loses its fight there and then. Out of a fight it passes out on its next
-		// turn, as its body finds it has no life left
-		if (needs->needs.life <= 0.0f && Locator::creatureFightSystem::has_value() &&
-		    Locator::creatureFightSystem::value().IsFighting(object) &&
-		    !Locator::creatureFightSystem::value().IsKnockedOut(object))
+		// A creature in a duel also loses the damage from its fight health, and is knocked out when none is left. A
+		// creature with no life left passes out on its next turn, as its body finds it has no life left.
+		if (Locator::creatureFightSystem::has_value())
 		{
-			Locator::creatureFightSystem::value().KnockOut(object);
+			Locator::creatureFightSystem::value().LoseFightHealth(object, damage);
 		}
+		needs = registry.TryGet<CreatureNeeds>(object);
+		if (needs == nullptr)
+		{
+			return 0.0f;
+		}
+		needs->needs.life = std::max(needs->needs.life - damage, 0.0f);
 		return needs->needs.life;
 	}
 	// A building not yet built loses what is built of it rather than life, and all its life once nothing is
