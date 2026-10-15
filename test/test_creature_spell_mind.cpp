@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureLearning.h"
 #include "Creature/CreatureSpellMind.h"
 
 using namespace openblack;
@@ -87,9 +88,9 @@ TEST(CreatureSpellMind, WearingOffItIsWantedLeast)
 {
 	auto desires = Some();
 	(void)SetCheatDominant(desires, Desire::Scratch, {.all = true, .floor = k_Floor}, k_TurnsPerSecond);
-	MakeLeastDominant(desires, Desire::Scratch);
-	// The others are all at the floor
-	EXPECT_NEAR(desires[Desire::Scratch].value, k_Floor / k_LeastDominantFactor, 1e-5f);
+	creature_learning::MakeLeastDominant(desires, Desire::Scratch, k_LeastDominantFactor, k_Floor);
+	// The others are all at the floor, and the floor holds it there
+	EXPECT_FLOAT_EQ(desires[Desire::Scratch].value, k_Floor);
 	ClearCheatDominance(desires);
 	for (const auto& state : desires.desires)
 	{

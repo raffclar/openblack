@@ -289,3 +289,21 @@ TEST(CreatureDesireSources, SettingASourceIsNotedForTheMind)
 	EXPECT_EQ(desires.written.front().first, types::k_Loneliness);
 	EXPECT_FLOAT_EQ(desires.written.front().second, 1.0f);
 }
+
+TEST(CreatureDesireSources, SeeingAThingAgainStirsSourcesOnlyAfter200Turns)
+{
+	EXPECT_FALSE(SightingStirsSources(200, 0));
+	EXPECT_TRUE(SightingStirsSources(201, 0));
+	EXPECT_FALSE(SightingStirsSources(500, 300));
+	EXPECT_TRUE(SightingStirsSources(501, 300));
+}
+
+TEST(CreatureDesireSources, ASourceBelongsToTheFirstDesireThatGrowsFromIt)
+{
+	creature_desires::Desires desires;
+	desires[creature_desires::Desire::Compassion].sources = {{.type = 3}};
+	desires[creature_desires::Desire::Anger].sources = {{.type = 7}, {.type = 3}};
+	EXPECT_EQ(creature_desires::DesireOfSource(desires, 3), creature_desires::Desire::Compassion);
+	EXPECT_EQ(creature_desires::DesireOfSource(desires, 7), creature_desires::Desire::Anger);
+	EXPECT_FALSE(creature_desires::DesireOfSource(desires, 60).has_value());
+}

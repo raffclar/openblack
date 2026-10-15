@@ -51,6 +51,10 @@ struct Player
 	};
 
 	PlayerNames name;
+	/// Where the resource in the player's hand came from: the player of most influence where the hand last took a thing
+	/// up, or the owner of the pile or fish farm it last scooped from. None before the hand took anything. A gift to a
+	/// storage pit of what came from another player counts as a theft.
+	std::optional<PlayerNames> handTookFrom;
 	/// The harm each player's miracles did to what is this player's, by player number: their crushing and hitting, and the
 	/// burning they would do. A creature's miracles aren't counted.
 	std::array<float, 8> damageFrom {};

@@ -28,6 +28,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureDeeds.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
@@ -52,6 +53,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -450,6 +452,17 @@ std::optional<PlayerNames> LocalPlayer()
 }
 
 /// Making a disciple moves the player's alignment by what its town wants of the work
+/// The player's creature may see the disciple that the player made as a deed to copy
+void ShowDiscipleToCreature(entt::entity villager, PlayerNames player, VillagerDisciple type)
+{
+	const auto deed = creature_deeds::DiscipleDeed(type);
+	const auto* transform = Entities().TryGet<const Transform>(villager);
+	if (deed.has_value() && transform != nullptr && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().PlayerDid(*deed, transform->position, villager, player);
+	}
+}
+
 void ConsiderAlignment(entt::entity villager, PlayerNames player, VillagerDisciple type)
 {
 	const auto town = TownOfVillager(villager);
@@ -804,11 +817,17 @@ void villager_disciple::TouchDown(LivingAction& action)
 	}
 	const auto type = TypeOf(villager);
 	const auto atPickUp = held->atPickUp;
-	// Its first turn down: the player who put it down is judged for a new disciple
+	// Its first turn down: the player who put it down shows the player's creature the disciple made, and is judged for
+	// a new disciple
 	if (!held->touchedDown)
 	{
 		held->touchedDown = true;
-		if (const auto player = villager_physics::DropperOf(villager); player.has_value() && type != None && type != atPickUp)
+		const auto player = villager_physics::DropperOf(villager);
+		if (player.has_value() && type != None)
+		{
+			ShowDiscipleToCreature(villager, *player, type);
+		}
+		if (player.has_value() && type != None && type != atPickUp)
 		{
 			ConsiderAlignment(villager, *player, type);
 		}

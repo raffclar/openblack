@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <functional>
 #include <optional>
 
@@ -164,5 +165,16 @@ void Write(uint32_t type, float value, const Written& written);
 /// The creature saw a village of another player, or of no player, again: impress from seeing things goes up by a half
 constexpr float k_ImpressPerSighting = 0.5f;
 [[nodiscard]] float ImpressAfterSighting(float impress);
+
+/// Seeing again a whole thing it may act on (a town, a forest, a temple, a flock or another creature) stirs these
+/// sources by a half, each one whose desire the thing is more than a tenth useful for. It does so for each thing at most
+/// once in 200 turns.
+inline constexpr std::array<uint32_t, 3> k_SightingSources {1, 3, 7};
+inline constexpr float k_SightingUsefulness = 0.1f;
+inline constexpr float k_SightingSourceAmount = 0.5f;
+/// Whether enough turns went by since the thing last stirred the sources
+[[nodiscard]] bool SightingStirsSources(uint32_t turn, uint32_t lastTurn);
+/// Seeing a toy again stirs the source of play from watching the player by a half
+inline constexpr float k_ToySightingAmount = 0.5f;
 
 } // namespace openblack::creature_desire_sources

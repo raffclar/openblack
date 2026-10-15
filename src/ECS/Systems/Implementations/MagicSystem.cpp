@@ -42,6 +42,7 @@
 #include "Creature/PerceivedDesires.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/SpellSeedArchetype.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -824,14 +825,13 @@ void GameMagicWorld::PlayerAffected(entt::entity object, MagicType type, PlayerN
 	    });
 	const auto& effect = magic::GetMagicEffectInfo(Locator::infoConstants::value(), type);
 	const bool onFire = Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(object);
-	// Worship sites and buildings going up aren't on the land here yet, so neither is ever what was reached
 	const auto deed = magic::MiracleDeed(type, effect.perceivedPlayerDesire.at(0) == CreatureDesires::Anger,
 	                                     nearest != nullptr && nearest->owner != player,
 	                                     {.field = registry.AllOf<Field>(object),
 	                                      .onFire = onFire,
 	                                      .storagePit = registry.AllOf<StoragePit>(object),
-	                                      .worshipSite = false,
-	                                      .buildingBeingBuilt = false});
+	                                      .worshipSite = registry.AllOf<WorshipSite>(object),
+	                                      .buildingBeingBuilt = ecs::construction::IsBeingBuilt(object)});
 	if (deed != magic::k_NoDeed)
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: miracle {} by player {} shows deed {} on #{}", static_cast<int>(type),

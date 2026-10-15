@@ -39,6 +39,9 @@ namespace openblack::ecs::construction
 [[nodiscard]] components::BuildingSite* SiteOf(entt::entity town, entt::entity building);
 /// The site of a building that wood brought by a hand or a creature goes onto, none if none takes it
 [[nodiscard]] components::BuildingSite* BroughtWoodSite(entt::entity building);
+/// Whether a thing is a building that goes up: anything built that is still short of fully built (a building, a worship
+/// site, the temple), or a building that its town mends while it is below its full life
+[[nodiscard]] bool IsBeingBuilt(entt::entity thing);
 
 /// Whether the town has a site at the building and the building still wants building or mending
 [[nodiscard]] bool IsSiteValid(entt::entity town, entt::entity building);

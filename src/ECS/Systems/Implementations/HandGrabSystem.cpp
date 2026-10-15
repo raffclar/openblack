@@ -512,6 +512,7 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 		return false;
 	}
 	grab.scoopSource = source;
+	_world->NoteTakenFromOwnerOf(source);
 	grab.scoopTurns = 0;
 	grab.scoopAnchor = hand;
 	// What is scooped streams from the source into the hand
@@ -552,6 +553,7 @@ bool HandGrabSystem::StartFieldScoop(HandGrab& grab, entt::entity field, const F
 		return false;
 	}
 	grab.scoopSource = field;
+	_world->NoteTakenAt(_world->PoseOf(field).origin);
 	grab.scoopTurns = 0;
 	grab.scoopAnchor = hand;
 	grab.scoopStreamSeconds = 0.0f;
@@ -620,6 +622,7 @@ bool HandGrabSystem::StartFishFarmScoop(HandGrab& grab, entt::entity farm, const
 		return false;
 	}
 	grab.scoopSource = farm;
+	_world->NoteTakenFromOwnerOf(farm);
 	grab.scoopTurns = 0;
 	grab.scoopAnchor = hand;
 	grab.scoopStreamSeconds = 0.0f;
@@ -936,6 +939,8 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	// A static, a rock or a dead tree taken stops being its town's artefact
 	_world->ArtefactTaken(object, player);
 
+	// The player of most influence where the thing was is where what the hand holds came from
+	_world->NoteTakenAt(_world->PoseOf(object).origin);
 	// It is held at its own size
 	auto pose = _world->PoseOf(object);
 	pose.axes = _world->UnstretchedAxes(object, pose.axes);

@@ -1415,6 +1415,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::PhysicsDrawPose::underSea>("underSea");
 	Reflect<components::Player>(context)
 	    .Field<&components::Player::name>("name")
+	    .Field<&components::Player::handTookFrom>("handTookFrom")
 	    .Field<&components::Player::damageFrom>("damageFrom")
 	    .Field<&components::Player::lastCast>("lastCast")
 	    .Field<&components::Player::windResistance>("windResistance")

@@ -218,21 +218,6 @@ creature_look::Interest LookInterestOf(const ecs::Registry& registry, entt::enti
 	return Interest::Fixed;
 }
 
-/// The way a creature looks, as a game angle: towards what its head is turned to, or else the way its body faces
-uint16_t LookingAngle(const Transform& transform, const std::optional<glm::vec3>& lookAt)
-{
-	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-	const auto direction = lookAt.has_value() && *lookAt != transform.position ? *lookAt - transform.position : ahead;
-	// Turned as the game keeps a creature's turn, a quarter turn on from the map's, and nothing for no direction across
-	// the land
-	constexpr float k_NoDirection = 1e-6f;
-	const float scawen =
-	    direction.x * direction.x + direction.z * direction.z > k_NoDirection
-	        ? static_cast<float>(std::atan2(static_cast<double>(direction.x), -static_cast<double>(direction.z)))
-	        : 0.0f;
-	return static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(scawen));
-}
-
 /// The temple nearest a point, of every player's in turn and then the neutral one's; the first of equals
 entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapCoords& from)
 {
@@ -260,6 +245,20 @@ entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapC
 	return nearest;
 }
 } // namespace
+
+uint16_t mind_detail::LookingAngle(const Transform& transform, const std::optional<glm::vec3>& lookAt)
+{
+	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+	const auto direction = lookAt.has_value() && *lookAt != transform.position ? *lookAt - transform.position : ahead;
+	// Turned as the game keeps a creature's turn, a quarter turn on from the map's, and nothing for no direction across
+	// the land
+	constexpr float k_NoDirection = 1e-6f;
+	const float scawen =
+	    direction.x * direction.x + direction.z * direction.z > k_NoDirection
+	        ? static_cast<float>(std::atan2(static_cast<double>(direction.x), -static_cast<double>(direction.z)))
+	        : 0.0f;
+	return static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(scawen));
+}
 
 std::optional<uint32_t> mind_detail::ObjectSortOf(const ecs::Registry& registry, entt::entity thing)
 {
@@ -405,6 +404,10 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 	{
 		added.belief->firstSight = mind_detail::BeliefOf(registry, thing, creature);
 	}
+	if (!added.isNew && added.belief != nullptr)
+	{
+		StirSourcesOnSighting(creature, mind, *added.belief);
+	}
 	// A new belief leads it on to what the thing belongs to, but for another creature, which is its own
 	if (!added.isNew || *kind == kinds::k_Creature)
 	{
@@ -418,6 +421,39 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 		{
 			mind.beliefs.JoinTo(thing, *owner);
 		}
+	}
+}
+
+void CreatureMindSystem::StirSourcesOnSighting(entt::entity creature, components::CreatureMindState& mind,
+                                               beliefs::Belief& belief)
+{
+	if (!mind.desires.has_value())
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	auto& desires = *mind.desires;
+	// A whole thing it may act on, other than itself, stirs the sources whose desires it is useful for
+	if (beliefs::InListOfWholeThings(belief.kind) && belief.thing != creature &&
+	    creature_desire_sources::SightingStirsSources(mind.turn, belief.sourcesTurn))
+	{
+		belief.sourcesTurn = mind.turn;
+		for (const auto source : creature_desire_sources::k_SightingSources)
+		{
+			const auto desire = creature_desires::DesireOfSource(desires, source);
+			if (desire.has_value() &&
+			    ActivityUsefulness(creature, mind, *desire, belief.thing) > creature_desire_sources::k_SightingUsefulness)
+			{
+				creature_desires::ChangeSource(desires, source, creature_desire_sources::k_SightingSourceAmount);
+			}
+		}
+	}
+	// A toy stirs its wish to play
+	if (Locator::infoConstants::has_value() &&
+	    ecs::physics_classes::IsToy(registry, belief.thing, Locator::infoConstants::value()))
+	{
+		creature_desires::ChangeSource(desires, creature_desires::sources::k_PlayFromWatchingPlayer,
+		                               creature_desire_sources::k_ToySightingAmount);
 	}
 }
 
@@ -468,7 +504,8 @@ void CreatureMindSystem::ForgetGoneThings(entt::entity creature, components::Cre
 		if (mind.planActive && mind.planner.current.has_value() && mind.planner.current->desire == Desire::Fear &&
 		    mind.desires.has_value())
 		{
-			creature_learning::MakeLeastDominant(*mind.desires, Desire::Fear, creature_learning::k_LeastDominantFactor);
+			creature_learning::MakeLeastDominant(*mind.desires, Desire::Fear, creature_learning::k_LeastDominantFactor,
+			                                     mind_detail::DesireFloorOf(creature));
 		}
 		if (Locator::creatureHelpSystem::has_value())
 		{
@@ -532,8 +569,8 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 	const auto& map = Locator::entitiesMap::value();
 	const auto from = map_coords::FromMetres(glm::xz(transform.position));
 	const auto centre = map_coords::Cell(from);
-	const auto looking = LookingAngle(transform, animation.lookAt);
-	const auto facing = LookingAngle(transform, std::nullopt);
+	const auto looking = mind_detail::LookingAngle(transform, animation.lookAt);
+	const auto facing = mind_detail::LookingAngle(transform, std::nullopt);
 	const auto range = creature_look::LookRange(ShownSize(creature));
 	// How much things on the land catch its own eye, which its personality spreads from its species' weight
 	const auto weight = mind.innate.objectsLookWeight;

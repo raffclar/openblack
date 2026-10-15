@@ -260,6 +260,9 @@ void StrokedWhileMimicking(std::optional<Mimicry>& mimicry, std::span<const Mimi
 /// The most pressing reaction that still leaves the creature free to copy, and the stage of growing up it needs
 constexpr float k_MaxReactionPriorityToMimic = 150.0f;
 constexpr uint32_t k_MinMimicPhase = 3;
+/// A creature copies only a deed nearer, in metres, than the count of map cells its eyes sweep. The game compares the
+/// metres with the count of cells as it is.
+[[nodiscard]] bool WithinCopyReach(float distance, uint32_t sweepCells);
 
 /// The kinds of thing a creature tells apart when it copies the player: it can copy a deed on a thing of the same kind
 enum class MimicKind : uint8_t

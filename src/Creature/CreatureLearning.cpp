@@ -204,19 +204,31 @@ void creature_learning::AfterAction(creature_desires::Desires& desires, Desire d
 	}
 }
 
-void creature_learning::MakeLeastDominant(creature_desires::Desires& desires, Desire desire, float factor)
+void creature_learning::MakeLeastDominant(creature_desires::Desires& desires, Desire desire, float factor, float floor)
 {
-	float weakest = std::numeric_limits<float>::max();
+	// The weakest active desire, the desire itself included, of those below 2; the first desire when none is
+	constexpr float k_WeakestBelow = 2.0f;
+	size_t weakest = 0;
+	float weakestValue = k_WeakestBelow;
 	for (size_t i = 0; i < k_DesireCount; ++i)
 	{
 		const auto& other = desires.desires.at(i);
-		if (i != static_cast<size_t>(desire) && other.activated)
+		if (other.activated && other.value < weakestValue)
 		{
-			weakest = std::min(weakest, other.value);
+			weakest = i;
+			weakestValue = other.value;
 		}
 	}
 	auto& state = desires[desire];
-	state.value = weakest == std::numeric_limits<float>::max() ? 0.0f : std::max(weakest / factor, 0.0f);
+	state.value = desires.desires.at(weakest).value / factor;
+	if (state.value < floor)
+	{
+		state.value = floor;
+	}
+	else if (state.value > state.max)
+	{
+		state.value = state.max;
+	}
 }
 
 void creature_learning::MakeFullyDominant(creature_desires::Desires& desires, Desire desire)
@@ -234,6 +246,30 @@ void creature_learning::MakeFullyDominant(creature_desires::Desires& desires, De
 	state.activated = true;
 	state.suppressedTurns = 0;
 	state.value = std::max(state.max, strongest * k_LeastDominantFactor);
+}
+
+void creature_learning::AfterPlanCarriedOut(creature_desires::Desires& desires, Desire desire, float floor,
+                                            float turnsPerSecond)
+{
+	constexpr float k_ShortStopSeconds = 60.0f;
+	constexpr float k_LongStopSeconds = 120.0f;
+	switch (desire)
+	{
+	case Desire::Poo:
+	case Desire::AttractAttention:
+		creature_desires::Suppress(desires, desire, k_ShortStopSeconds, turnsPerSecond);
+		break;
+	case Desire::IdleWithPlayer:
+	case Desire::GetWarmer:
+	case Desire::GetColder:
+		creature_desires::Suppress(desires, desire, k_LongStopSeconds, turnsPerSecond);
+		break;
+	case Desire::Tiredness:
+		MakeLeastDominant(desires, desire, k_LeastDominantFactor, floor);
+		break;
+	default:
+		break;
+	}
 }
 
 std::optional<size_t> creature_learning::DominantSource(const creature_desires::DesireState& desire)

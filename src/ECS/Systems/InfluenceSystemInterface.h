@@ -22,6 +22,32 @@
 namespace openblack::ecs::systems
 {
 
+namespace influence_rules
+{
+/// A player's influence at a place
+struct PlayerInfluenceAt
+{
+	PlayerNames player {PlayerNames::NEUTRAL};
+	float influence {0.0f};
+};
+/// The player of most influence at a place, the players in their order: the neutral player until a player has more
+/// than no influence there, and a later player must have more than an earlier one to take the place
+[[nodiscard]] inline PlayerNames MostInfluentialPlayer(std::span<const PlayerInfluenceAt> players)
+{
+	float best = 0.0f;
+	PlayerNames most = PlayerNames::NEUTRAL;
+	for (const auto& player : players)
+	{
+		if (player.influence > best)
+		{
+			best = player.influence;
+			most = player.player;
+		}
+	}
+	return most;
+}
+} // namespace influence_rules
+
 /// The players' influence: how far their citadels and towns reach, and the border drawn round it
 class InfluenceSystemInterface
 {

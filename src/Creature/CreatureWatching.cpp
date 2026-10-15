@@ -266,6 +266,11 @@ const char* creature_watching::Name(MimicStage stage)
 	return "?";
 }
 
+bool creature_watching::WithinCopyReach(float distance, uint32_t sweepCells)
+{
+	return distance < static_cast<float>(sweepCells);
+}
+
 bool creature_watching::StartMimicry(std::optional<Mimicry>& mimicry, size_t rule, std::span<const MimicRule> rules,
                                      const MimicConditions& conditions, std::optional<uint32_t> object, uint32_t turn,
                                      const std::function<uint32_t(uint32_t)>& random)
