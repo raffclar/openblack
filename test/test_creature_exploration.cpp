@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureDance.h"
 #include "Creature/CreatureExplorationAgendas.h"
 #include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreaturePlanActions.h"
@@ -244,4 +245,36 @@ TEST(CreatureExploration, TheActionsNeedTheirPlaces)
 		EXPECT_NE(plan_actions::For(action), nullptr) << action;
 	}
 	EXPECT_FALSE(plan_actions::Possible(*plan_actions::For("SitDownOnBeach"), {.stage = 2}));
+}
+
+TEST(CreatureExploration, DancingByTheSeaGoesToTheCoastAndDancesForTwentySeconds)
+{
+	const auto agenda = DanceByTheSea({10.0f, 0.0f}, {0.0f, 0.0f}, 5.0f);
+	ASSERT_EQ(agenda.size(), 3);
+	// It walks to within one of its heights of the coast, with a smile
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::ToPoint);
+	EXPECT_EQ(agenda[0].movement.point, glm::vec2(10.0f, 0.0f));
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 5.0f);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Smile);
+	// It turns to the sea
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFace);
+	EXPECT_EQ(agenda[1].movement.point, glm::vec2(0.0f, 0.0f));
+	// It dances alone with a playful face
+	EXPECT_EQ(agenda[2].kind, Step::Kind::PracticeDance);
+	EXPECT_FLOAT_EQ(agenda[2].seconds, creature_dance::k_PracticeSeconds);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::Playfulness);
+	EXPECT_EQ(agenda[2].effect, Effect::None);
+}
+
+TEST(CreatureExploration, DancingByTheSeaNeedsTheCoastAndTheSea)
+{
+	const auto* dance = plan_actions::For("DanceOnYourOwnByTheSea");
+	ASSERT_NE(dance, nullptr);
+	EXPECT_FALSE(dance->leavesHome);
+	plan_actions::Situation situation;
+	EXPECT_FALSE(plan_actions::Agenda(*dance, std::nullopt, {}, situation, First).has_value());
+	situation.explorePlace = glm::vec2 {10.0f, 0.0f};
+	EXPECT_FALSE(plan_actions::Agenda(*dance, std::nullopt, {}, situation, First).has_value());
+	situation.exploreSea = glm::vec2 {0.0f, 0.0f};
+	EXPECT_EQ(plan_actions::Agenda(*dance, std::nullopt, {}, situation, First)->size(), 3);
 }

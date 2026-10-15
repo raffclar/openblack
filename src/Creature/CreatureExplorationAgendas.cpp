@@ -10,6 +10,7 @@
 #include "CreatureExplorationAgendas.h"
 
 #include "Common/GUtilsAngle.h"
+#include "Creature/CreatureDance.h"
 #include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureLayers.h"
 
@@ -137,5 +138,20 @@ std::vector<Step> creature_exploration::ThrowInTheSea(std::optional<uint32_t> pi
 	walk.face = Cue::Playfulness;
 	agenda.push_back(walk);
 	agenda.push_back({.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Throw, .point = sea}});
+	return agenda;
+}
+
+std::vector<Step> creature_exploration::DanceByTheSea(glm::vec2 coast, glm::vec2 sea, float height)
+{
+	// The creature goes to within one of its heights of the coast
+	auto walk = GoTo(coast, height);
+	walk.face = Cue::Smile;
+	std::vector<Step> agenda {walk, TurnTo(sea)};
+	auto dance = creature_dance::PracticeDance();
+	for (auto& step : dance)
+	{
+		step.face = Cue::Playfulness;
+	}
+	agenda.insert(agenda.end(), dance.begin(), dance.end());
 	return agenda;
 }
