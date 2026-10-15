@@ -154,7 +154,7 @@ void TimeSystem::StartGameClock(bool paused)
 	_timer.Stop(now);
 	_timer.Start(now);
 	_paused = paused;
-	if (_paused)
+	if (Stopped())
 	{
 		_timer.Stop(now);
 	}
@@ -175,7 +175,7 @@ void TimeSystem::RestartTurns()
 
 bool TimeSystem::IsTurnDue()
 {
-	if (_paused || _turnsThisFrame >= k_MaxTurnsPerFrame)
+	if (Stopped() || _turnsThisFrame >= k_MaxTurnsPerFrame)
 	{
 		return false;
 	}
@@ -192,7 +192,7 @@ bool TimeSystem::IsTurnDue()
 void TimeSystem::StartTurn()
 {
 	++_turnsThisFrame;
-	if (!_paused)
+	if (!Stopped())
 	{
 		++_turn;
 	}
@@ -214,7 +214,7 @@ void TimeSystem::ResetTimerToTurn()
 void TimeSystem::UpdateFrame()
 {
 	_turnsThisFrame = 0;
-	if (_paused)
+	if (Stopped())
 	{
 		// The fraction stays as it was
 		_frameGameMs = 0;
@@ -248,13 +248,31 @@ void TimeSystem::UpdateFrame()
 
 void TimeSystem::SetPaused(bool paused)
 {
-	if (paused == _paused)
+	const bool wasStopped = Stopped();
+	_paused = paused;
+	FollowStop(wasStopped);
+}
+
+void TimeSystem::SetHeld(bool held)
+{
+	const bool wasStopped = Stopped();
+	_held = held;
+	// The things that the frame steps after the start of the hold are in the stopped world, so they get no game time
+	if (held)
+	{
+		_frameGameMs = 0;
+	}
+	FollowStop(wasStopped);
+}
+
+void TimeSystem::FollowStop(bool wasStopped)
+{
+	if (Stopped() == wasStopped)
 	{
 		return;
 	}
-	_paused = paused;
 	const auto now = Ticks();
-	if (paused)
+	if (Stopped())
 	{
 		_timer.Stop(now);
 	}
