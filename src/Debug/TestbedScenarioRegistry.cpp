@@ -19,6 +19,7 @@
 #include <glm/geometric.hpp>
 
 #include "3D/FlatLand.h"
+#include "3D/TempleInteriorInterface.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -1836,7 +1837,8 @@ void AddAudio(std::vector<Scenario>& all)
 	    .environment = {.playerAlignment = 1.0f},
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
-	    .commands = {{.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 1.0f},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = -1.0f},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 0.0f},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 1.0f}},
@@ -2044,7 +2046,8 @@ void AddAudio(std::vector<Scenario>& all)
 	                  .handHeight = 12.0f,
 	                  .delaySeconds = 3.0f,
 	                  .byHand = true}},
-	    .commands = {{.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 12.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 11.5f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f}},
 	});
 
 	// A tiger throws a rock at a hut of a town with people, again and again
@@ -4832,9 +4835,10 @@ void AddMind(std::vector<Scenario>& all)
 	                   {.kind = AnimalInfo::Dove, .offset = {10.0f, 40.0f}, .count = 5, .reach = 10.0f}},
 	    .temples = {{.offset = {-90.0f, 0.0f}, .angle = 0.0f},
 	                {.offset = {300.0f, 300.0f}, .owner = PlayerNames::PLAYER_TWO, .angle = 0.0f}},
-	    .commands = {{.kind = Kind::OpenCreatureCave,
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 5.5f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave,
 	                  .creature = 0,
-	                  .delaySeconds = 6.0f,
+	                  .delaySeconds = 0.5f,
 	                  .value = static_cast<size_t>(creature_cave::Page::Mind)}},
 	});
 	// A hungry tiger, its mind running, looks north at a villager some way off; a nearer one stands behind it, out of sight
@@ -5583,7 +5587,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 119> k_Names {
+	constexpr std::array<std::string_view, 120> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -5642,6 +5646,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fight miracle",
 	    "show the fight",
 	    "pointer on opponent",
+	    "pointer on the cave creature",
 	    "fight autopilot",
 	    "fight lesson check",
 	    "knock out",
@@ -5710,7 +5715,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 bool testbed_scenarios::IsPointerCommand(Command::Kind kind)
 {
 	return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
-	       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent;
+	       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent ||
+	       kind == Kind::PointerOnCaveCreature;
 }
 
 bool NeedOverrides::Empty() const

@@ -591,6 +591,8 @@ struct Command
 		/// The pointer moves to the middle of the body of the opponent of the creature on the screen, as the mouse moves
 		/// it. A press of a button there goes to the fight only while the camera shows the fight.
 		PointerOnOpponent,
+		/// The pointer moves onto the body of the creature in the Creature Cave on the screen, as the mouse moves it
+		PointerOnCaveCreature,
 		/// The fight autopilot starts to fight for the player with the real mouse, with a policy (value: 0 the lesson, 1
 		/// aggressive, 2 random, 3 a sequence). It needs the inspector.
 		FightAutopilot,

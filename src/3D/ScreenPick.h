@@ -48,6 +48,10 @@ struct View
 /// How far along the view a point is: its clip w
 [[nodiscard]] float Depth(const View& view, glm::vec3 point);
 
+/// The whole pixel of a point on the screen, the fractions cut off. A point off the screen also has a pixel. A point
+/// nearer than the near plane has no pixel.
+[[nodiscard]] std::optional<glm::ivec2> PixelOf(const View& view, glm::vec3 point);
+
 /// Whether the cursor is over an object's bounding sphere: its centre in the world, its radius (the model's half
 /// diagonal times its scale) and the object's origin. An object whose sphere is behind the near plane is not; one the
 /// camera is inside is, wherever the cursor is; otherwise its circle on the screen must reach the screen and hold the

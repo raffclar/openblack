@@ -168,6 +168,18 @@ void posed_model::Place(const ecs::Registry& registry, entt::entity entity, cons
 std::optional<glm::vec3> posed_model::PointOnSkin(const ecs::Registry& registry, entt::entity entity,
                                                   const graphics::L3DMesh& mesh, const glm::mat4& model, const SkinPoint& point)
 {
+	const auto corners = CornersOnSkin(registry, entity, mesh, model, BonesOf(registry, entity, mesh), point);
+	if (!corners.has_value())
+	{
+		return std::nullopt;
+	}
+	return SkinPointPosition(*corners, point.s, point.t);
+}
+
+std::optional<std::array<glm::vec3, 3>> posed_model::CornersOnSkin(const ecs::Registry& registry, entt::entity entity,
+                                                                   const graphics::L3DMesh& mesh, const glm::mat4& model,
+                                                                   std::span<const glm::mat4> bones, const SkinPoint& point)
+{
 	if (point.subMesh >= mesh.GetSubMeshes().size())
 	{
 		return std::nullopt;
@@ -177,7 +189,7 @@ std::optional<glm::vec3> posed_model::PointOnSkin(const ecs::Registry& registry,
 	{
 		return std::nullopt;
 	}
-	const VertexPlacer place(registry, entity, mesh, point.subMesh, model, posed_model::BonesOf(registry, entity, mesh));
+	const VertexPlacer place(registry, entity, mesh, point.subMesh, model, bones);
 	std::array<glm::vec3, 3> corners {};
 	for (size_t c = 0; c < corners.size(); ++c)
 	{
@@ -188,7 +200,7 @@ std::optional<glm::vec3> posed_model::PointOnSkin(const ecs::Registry& registry,
 		}
 		corners.at(c) = place(vertex);
 	}
-	return SkinPointPosition(corners, point.s, point.t);
+	return corners;
 }
 
 glm::vec3 posed_model::SkinPointPosition(const std::array<glm::vec3, 3>& corners, float s, float t)

@@ -238,6 +238,7 @@
 #include "ECS/CreatureAttitudeRules.h"
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
+#include "ECS/PosedModel.h"
 #include "ECS/RewardRules.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/TownAggression.h"
@@ -658,7 +659,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureCopy::size>("size");
 	Reflect<components::CaveCreature>(context)
 	    .Field<&components::CaveCreature::state>("state")
-	    .Field<&components::CaveCreature::light>("light");
+	    .Field<&components::CaveCreature::light>("light")
+	    .Field<&components::CaveCreature::tattooSites>("tattooSites");
 	Reflect<components::CreatureDance>(context)
 	    .Field<&components::CreatureDance::dance>("dance")
 	    .Field<&components::CreatureDance::dancers>("dancers")
@@ -2758,6 +2760,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::high_detail_rules::DrawOrders>(context, ValueOnly {})
 	    .Field<&openblack::ecs::high_detail_rules::DrawOrders::followIntroHand>("followIntroHand")
 	    .Field<&openblack::ecs::high_detail_rules::DrawOrders::turnAtOnce>("turnAtOnce");
+	Reflect<openblack::ecs::posed_model::SkinPoint>(context, ValueOnly {})
+	    .Field<&openblack::ecs::posed_model::SkinPoint::subMesh>("subMesh")
+	    .Field<&openblack::ecs::posed_model::SkinPoint::firstIndex>("firstIndex")
+	    .Field<&openblack::ecs::posed_model::SkinPoint::s>("s")
+	    .Field<&openblack::ecs::posed_model::SkinPoint::t>("t");
 	Reflect<openblack::ecs::reward::DustSprite>(context, ValueOnly {})
 	    .Field<&openblack::ecs::reward::DustSprite::offset>("offset")
 	    .Field<&openblack::ecs::reward::DustSprite::frame>("frame")

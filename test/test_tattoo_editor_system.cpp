@@ -141,3 +141,21 @@ TEST(TattooEditorSystem, TheViewTurnsOnlyWhileOpen)
 	f.editor.Update(16.0f);
 	EXPECT_EQ(f.editor.GetView().eye, stopped);
 }
+
+TEST(TattooEditorSystem, TheCreatureSmilesWhenATattooGoesOnAndIsSadWhenItComesOff)
+{
+	Fixture f;
+	f.editor.Open(k_Creature, {});
+	EXPECT_FALSE(f.editor.TakeFace().has_value());
+	f.AwayFromIt();
+	EXPECT_FALSE(f.editor.Drop(9, k_Green));
+	EXPECT_FALSE(f.editor.TakeFace().has_value());
+	f.OverThePlace();
+	ASSERT_TRUE(f.editor.Drop(9, k_Green));
+	EXPECT_EQ(f.editor.TakeFace(), creature_face::Face::Smile);
+	// The face comes back one time
+	EXPECT_FALSE(f.editor.TakeFace().has_value());
+	ASSERT_TRUE(f.editor.Lift().has_value());
+	EXPECT_EQ(f.editor.TakeFace(), creature_face::Face::Sad);
+	EXPECT_EQ(creature_tattoo_editor::k_FaceMilliseconds, 1800.0f);
+}

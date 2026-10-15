@@ -175,6 +175,9 @@ private:
 	std::string GivePointerCommand(const Command& command);
 	/// Where the middle of the body of the opponent of a creature (by its place in the scenario) is on a screen of a size
 	[[nodiscard]] std::optional<glm::ivec2> OpponentOnScreen(size_t creature, glm::vec2 size) const;
+	/// A pixel over the body of the creature in the Creature Cave, as the cave finds it under the pointer, on a screen
+	/// of a size
+	[[nodiscard]] static std::optional<glm::ivec2> CaveCreatureOnScreen(glm::vec2 size);
 	/// Moves the mouse on along a sweep, and lets go of it once the scenario's commands are done
 	void UpdatePointer(float seconds);
 	/// Where the cursor and the hand are on the screen, for the log
