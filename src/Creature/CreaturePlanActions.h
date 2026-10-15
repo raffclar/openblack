@@ -499,6 +499,8 @@ struct Situation
 	float height {0.0f};
 	float thingHeight {0.0f};
 	float thingRadius {0.0f};
+	/// Whether the thing the action is done to is alive: a villager, an animal, a bird or a creature
+	bool thingLiving {false};
 	/// How far the camera is from it
 	float eyeDistance {0.0f};
 	float chance {0.0f};

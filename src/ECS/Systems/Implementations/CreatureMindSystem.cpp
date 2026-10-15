@@ -124,6 +124,7 @@
 #include "ObjectMeasures.h"
 #include "Physics/Body.h"
 #include "Physics/LivingRules.h"
+#include "VillagerFire.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -870,6 +871,44 @@ std::optional<creature_mind::Senses::FollowedView> FollowedViewOf(const ecs::Reg
 		                                                                                    mind.learnt->knowledge.skillsKnown);
 	}
 	return view;
+}
+
+/// Whether the living object of the step that makes a thing still is in its state of flying
+bool StillObjectFlies(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::RenderImmobile ||
+	    !idle.agenda[idle.step].object.has_value())
+	{
+		return false;
+	}
+	const auto object = static_cast<entt::entity>(*idle.agenda[idle.step].object);
+	if (!registry.Valid(object))
+	{
+		return false;
+	}
+	if (const auto* action = registry.TryGet<const LivingAction>(object); action != nullptr && registry.AllOf<Villager>(object))
+	{
+		return action->states[static_cast<size_t>(LivingAction::Index::Top)] == static_cast<uint8_t>(VillagerStates::Flying);
+	}
+	const auto* animal = registry.TryGet<const Animal>(object);
+	return animal != nullptr && animal->state == AnimalState::Flying;
+}
+
+/// A living thing starts to die at once, without the work of a death: a villager or an animal
+void MakeStill(const ecs::Registry& registry, entt::entity thing)
+{
+	if (!registry.Valid(thing))
+	{
+		return;
+	}
+	if (registry.AllOf<Villager>(thing))
+	{
+		villager_fire::StartDyingWithoutDeath(thing);
+	}
+	else if (registry.AllOf<Animal>(thing) && Locator::animalSystem::has_value())
+	{
+		Locator::animalSystem::value().StartDyingWithoutDeath(thing);
+	}
 }
 
 bool WatchedIsInTheAir(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
@@ -1919,6 +1958,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .held = inHand.has_value() ? std::optional(entt::to_integral(*inHand)) : std::nullopt,
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .objectInTheAir = WatchedIsInTheAir(registry, mind.idle),
+		        .objectFlying = StillObjectFlies(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
 		        .camera = CameraViewOf(registry, entity, mind.idle),
 		        .hand = HandViewOf(registry, entity, mind.idle),
@@ -2020,6 +2060,10 @@ void CreatureMindSystem::ProcessTurn()
 			    Heal(entity, static_cast<entt::entity>(*commands.heal));
 		    }
 		    mind_town_help::Apply(registry, commands);
+		    if (commands.renderImmobile.has_value())
+		    {
+			    MakeStill(registry, static_cast<entt::entity>(*commands.renderImmobile));
+		    }
 		    if (commands.useUp.has_value() && registry.Valid(static_cast<entt::entity>(*commands.useUp)))
 		    {
 			    ecs::world_objects::Remove(static_cast<entt::entity>(*commands.useUp));

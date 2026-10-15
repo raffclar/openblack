@@ -1068,6 +1068,25 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	}
 }
 
+void villager_fire::StartDyingWithoutDeath(entt::entity villager)
+{
+	auto& registry = Entities();
+	auto* action = registry.TryGet<LivingAction>(villager);
+	if (action == nullptr)
+	{
+		return;
+	}
+	// The body lies for the turns that its state still had to count. A body that is dead already keeps its count.
+	if (!registry.AllOf<VillagerDeath>(villager))
+	{
+		registry.Assign<VillagerDeath>(villager, VillagerDeath {
+		                                             .turnsLeft = action->turnsUntilStateChange,
+		                                             .noticed = registry.AllOf<AtHome>(villager),
+		                                         });
+	}
+	SetTopState(*action, VillagerStates::Dying);
+}
+
 uint32_t villager_fire::Dying(LivingAction& action)
 {
 	const auto villager = EntityOf(action);

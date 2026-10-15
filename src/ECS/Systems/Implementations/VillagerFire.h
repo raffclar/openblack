@@ -76,6 +76,9 @@ struct DeathCause
 /// with its cause is remembered: on the body, in its town's deaths by killer and cause, and in the players' counts of
 /// people lost and killed (and sacrificed).
 void DieByEffect(entt::entity villager, std::optional<DeathCause> cause = std::nullopt);
+/// A villager starts to die at once, without the work of a death. Its life, its town, its home and what it carries
+/// stay as they are. It falls, lies dead as a skeleton, and goes after the turns that its state still had to count.
+void StartDyingWithoutDeath(entt::entity villager);
 
 uint32_t ReactToFire(components::LivingAction& action);
 uint32_t PutOutFireByBeating(components::LivingAction& action);

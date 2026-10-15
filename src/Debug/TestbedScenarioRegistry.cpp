@@ -2959,6 +2959,22 @@ void AddObjects(std::vector<Scenario>& all)
 		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
 		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BringHome"}},
 		});
+		all.push_back({
+		    .id = "objects.bring_villager_home",
+		    .name = "Bringing a villager home",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger of the player's, whose temple stands far to the west, with a villager in front of "
+		                   "it. A script tells it to bring the villager home.",
+		    .expected = "It picks the villager up, walks home and puts the villager down near the pen. Then the villager "
+		                "falls dead at once, becomes a skeleton, and goes when the turns that its state still had to count "
+		                "are over. No death is counted, and the villager keeps its life.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -k_Reach}}},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BringHome"}},
+		});
 	}
 
 	all.push_back({
