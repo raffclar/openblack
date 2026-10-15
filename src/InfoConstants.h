@@ -930,7 +930,10 @@ struct GCreatureInfo: GLivingInfo
 	/// above its energy's floor, below which it can't pay
 	float chantsPerEnergy;
 	float spellEnergyFloor;
-	std::array<uint8_t, 0x40> field0x28c;
+	std::array<uint8_t, 0x4> field0x28c;
+	/// The approval that an action the player made the creature do teaches, when the creature forgets the action
+	float orderApproval;
+	std::array<uint8_t, 0x38> field0x294;
 	/// A creature looks another creature over again only once more than this many seconds have gone by since it last did
 	float inspectCreatureSeconds;
 	std::array<uint8_t, 0x8> field0x2d0;

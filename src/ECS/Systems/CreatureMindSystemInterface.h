@@ -230,6 +230,9 @@ public:
 		std::optional<entt::entity> activityObject;
 		/// What the creature does, for a plan that gives its agenda; told when not given
 		std::optional<creature_mind::Activity> activity;
+		/// The player made it do this: by an order on the leash, by a script, or by a stroke that makes it do its
+		/// action again
+		bool ordered {false};
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
 	/// about to already

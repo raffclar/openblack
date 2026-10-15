@@ -5230,6 +5230,32 @@ void AddMind(std::vector<Scenario>& all)
 	                 OnObject(Kind::RemoveObject, 0, 0, 9.0f, false), Act(Kind::TakeOffLeash, 0, 8.0f)},
 	});
 
+	auto curious = Content(CreatureType::Tiger, {0.0f, 20.0f});
+	curious.phase = 13;
+	all.push_back({
+	    .id = "learning.forgotten_order",
+	    .name = "The creature forgets the oldest of its orders",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger on the learning leash is told with the Action button to act on six cows, one "
+	                   "after the other, 90 seconds apart.",
+	    .expected = "The tiger picks up and holds each cow for about 44 seconds. The inspector shows each remembered action "
+	                "marked as ordered, and as done when the hold ends. At the sixth order the log shows that the tiger "
+	                "forgets the first order. The hold serves its curiosity, which learns nothing from orders, so the "
+	                "log shows no approval.",
+	    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+	    .creatures = {curious},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {20.0f, 40.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {-20.0f, 40.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {20.0f, 60.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {-20.0f, 60.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {20.0f, 80.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {-20.0f, 80.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false),
+	                 OnObject(Kind::LeashOrderOn, 0, 1, 90.0f, false), OnObject(Kind::LeashOrderOn, 0, 2, 90.0f, false),
+	                 OnObject(Kind::LeashOrderOn, 0, 3, 90.0f, false), OnObject(Kind::LeashOrderOn, 0, 4, 90.0f, false),
+	                 OnObject(Kind::LeashOrderOn, 0, 5, 90.0f, false), Act(Kind::TakeOffLeash, 0, 90.0f)},
+	});
+
 	{
 		// A ring of huts shuts the tiger in, with a cow outside it
 		auto shutIn = Content(CreatureType::Tiger, {0.0f, 0.0f});

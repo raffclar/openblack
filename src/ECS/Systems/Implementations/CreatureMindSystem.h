@@ -436,6 +436,11 @@ private:
 	                       uint32_t magic);
 	/// The creature chose to copy the player: it copies the deed that it saw last again (CreatureMindLearning.cpp)
 	void CopyObservedDeedAgain(entt::entity creature, components::CreatureMindState& mind);
+	/// The creature remembers an action for feedback. An action that it forgets to make room can teach approval
+	/// (CreatureMindLearning.cpp).
+	void RememberAction(entt::entity creature, components::CreatureMindState& mind, creature_learning::Context context);
+	/// The creature carried out its newest action to its end, which it remembers for feedback
+	static void MarkNewestActionDone(components::CreatureMindState& mind);
 	/// It is made to be high, as after eating a magic mushroom
 	void BecomeHigh(entt::entity creature);
 	/// Going near, getting away from or turning to face an object begins, and each turn it goes on
@@ -447,6 +452,8 @@ private:
 	RandomStreamSource _random {RandomStream::CreatureMind};
 	/// The average of the feedback given to all creatures
 	float _averageFeedback {0.0f};
+	/// The creature whose plan the player orders while the plan is made, if any
+	std::optional<entt::entity> _orderedPlanFor;
 	/// The game's tables for the minds, taken once the game's data is loaded
 	std::optional<creature_mind_tables::Tables> _tables;
 };

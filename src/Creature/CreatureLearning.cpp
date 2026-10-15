@@ -154,18 +154,37 @@ creature_learning::ThingLessons creature_learning::ThingLessonsFor(const Context
 	};
 }
 
-void creature_learning::Remember(std::vector<Context>& contexts, Context context)
+std::optional<creature_learning::Context> creature_learning::Remember(std::vector<Context>& contexts, Context context)
 {
 	// Whatever was running has finished now
 	for (auto& old : contexts)
 	{
 		old.running = false;
 	}
-	contexts.push_back(std::move(context));
-	if (contexts.size() > k_MaxContexts)
+	// The newest action that was not carried out to its end gives its place to the new action
+	if (!contexts.empty() && !contexts.back().done)
 	{
-		contexts.erase(contexts.begin(), contexts.begin() + static_cast<std::ptrdiff_t>(contexts.size() - k_MaxContexts));
+		contexts.back() = std::move(context);
+		return std::nullopt;
 	}
+	std::optional<Context> forgotten;
+	if (contexts.size() >= k_MaxContexts)
+	{
+		forgotten = std::move(contexts.front());
+		contexts.erase(contexts.begin(), contexts.begin() + static_cast<std::ptrdiff_t>(contexts.size() - k_MaxContexts + 1));
+	}
+	contexts.push_back(std::move(context));
+	return forgotten;
+}
+
+std::optional<float> creature_learning::ForgottenOrderApproval(const Context& forgotten, const DesireRules& rules,
+                                                               float approval)
+{
+	if (!forgotten.ordered || !rules.approvesOrders)
+	{
+		return std::nullopt;
+	}
+	return approval;
 }
 
 void creature_learning::Age(std::vector<Context>& contexts, float seconds)
