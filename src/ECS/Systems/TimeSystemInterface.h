@@ -61,6 +61,10 @@ public:
 	/// Pausing stops the game clock; unpausing starts it again from where it stopped
 	virtual void SetPaused(bool paused) = 0;
 	[[nodiscard]] virtual bool IsPaused() const = 0;
+	/// The temple holds the game clock while the player is in it. A hold stops the clock as a pause does, but it
+	/// does not change the player's pause. The frame's game time is none from the moment that the hold starts.
+	virtual void SetHeld(bool held) = 0;
+	[[nodiscard]] virtual bool IsHeld() const = 0;
 	/// The game's speed: 1 is normal and 2 twice as fast. The time already gone keeps the speed it went at
 	virtual void SetSpeed(float speed) = 0;
 	[[nodiscard]] virtual float GetSpeed() const = 0;
