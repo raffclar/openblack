@@ -1952,6 +1952,9 @@ std::string Runner::GiveFightCommand(entt::entity creature, const Command& comma
 	case Kind::BringRound:
 		fights.Resurrect(creature);
 		return {};
+	case Kind::FightAbort:
+		fights.AbortFight(creature);
+		return {};
 	case Kind::TieLeashToCreature:
 		if (const auto other = CreatureAt(command.value); other.has_value() && Locator::leashSystem::has_value())
 		{
@@ -2350,6 +2353,7 @@ void Runner::Give(const Command& command)
 	case Kind::FightLessonCheck:
 	case Kind::KnockOut:
 	case Kind::BringRound:
+	case Kind::FightAbort:
 	case Kind::TieLeashToCreature:
 		result = GiveFightCommand(*entity, command);
 		break;
