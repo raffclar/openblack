@@ -2388,7 +2388,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Gaze::point>("point")
 	    .Field<&openblack::creature_mind::Gaze::camera>("camera")
 	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing")
-	    .Field<&openblack::creature_mind::Gaze::runningAway>("runningAway");
+	    .Field<&openblack::creature_mind::Gaze::runningAway>("runningAway")
+	    .Field<&openblack::creature_mind::Gaze::feet>("feet");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::activity>("activity")
 	    .Field<&openblack::creature_mind::IdleMind::agenda>("agenda")

@@ -286,19 +286,25 @@ std::vector<Step> creature_leash_orders::LookAtReflection(glm::vec2 water, glm::
 	constexpr float k_LongLook = 2.1f;
 	constexpr float k_ShoreLook = 1.2f;
 	constexpr float k_LastLook = 1.1f;
-	const auto look = [turnsPerSecond](float seconds) { return Wait(WholeTurns(seconds, turnsPerSecond)); };
-	const auto dazed = [] { return Step {.kind = Step::Kind::Action, .animation = creature_layers::animations::k_Confused}; };
-	const auto arrival = 2.0f * height;
-	return {Walk(water, arrival, false),
-	        look(k_FirstLook),
-	        dazed(),
-	        look(k_LongLook),
-	        Walk(shore, arrival, false),
-	        look(k_ShoreLook),
-	        dazed(),
-	        Walk(water, arrival, false),
-	        look(k_LastLook),
-	        look(k_LongLook)};
+	using creature_face::Cue;
+	// Each look is at the water in front of its feet, with a puzzled, curious or amazed face
+	const auto look = [turnsPerSecond](float seconds, Cue face) {
+		auto step = Wait(WholeTurns(seconds, turnsPerSecond));
+		step.face = face;
+		step.gaze = creature_mind::Gaze {.feet = true};
+		return step;
+	};
+	const auto dazed = [] {
+		return Step {.kind = Step::Kind::Action, .animation = creature_layers::animations::k_Confused, .face = Cue::Amazed};
+	};
+	const auto walk = [height](glm::vec2 point, Cue face) {
+		auto step = Walk(point, 2.0f * height, false);
+		step.face = face;
+		return step;
+	};
+	return {walk(water, Cue::None),           look(k_FirstLook, Cue::Puzzled),   dazed(), look(k_LongLook, Cue::Puzzled),
+	        walk(shore, Cue::Amazed),         look(k_ShoreLook, Cue::Curiosity), dazed(), walk(water, Cue::Amazed),
+	        look(k_LastLook, Cue::Curiosity), look(k_LongLook, Cue::Amazed)};
 }
 
 float creature_leash_orders::HoldSeconds(float extraSeconds, float turnsPerSecond)

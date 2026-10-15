@@ -89,6 +89,8 @@ constexpr uint32_t k_ThrowAroundExtra = 21;
 constexpr float k_FaceStoreSeconds = 0.1f;
 /// Going up to something to act at it, it stops this close
 constexpr float k_ApproachDistance = 12.0f;
+/// Waving at a friend, it turns to face the friend and holds still this long first
+constexpr float k_ApproachFaceSeconds = 1.4f;
 /// Following a villager to watch it: for up to 30 whole seconds, keeping within 15 of it; then holding for one second
 /// and up to three more
 constexpr float k_FollowWatchingSeconds = 30.0f;
@@ -355,7 +357,11 @@ struct Gaze
 	/// The look of a creature that runs away from the object or the hand: it looks back at it for a time, then looks
 	/// about for a time, and so on
 	bool runningAway {false};
+	/// The ground a few metres ahead of where its body faces (see k_FeetLookMetres)
+	bool feet {false};
 };
+/// Looking at its feet, it looks at the ground this many metres ahead of where its body faces
+constexpr float k_FeetLookMetres = 4.0f;
 /// The look while the creature walks to the place of its walk
 [[nodiscard]] inline Gaze GoingLook()
 {
@@ -962,6 +968,9 @@ void Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda);
                                                              const Random& random);
 /// The world carried out a dance stage that the mind ordered: the step is done, or the rest of the agenda is no use
 void DanceOrderDone(IdleMind& mind, bool done);
+/// What the head looks at while the step lasts. A step that picks a thing up, or goes near a thing, looks at that
+/// thing as the creature walks, unless the step gives a look of its own. Without a look, the head looks about.
+[[nodiscard]] std::optional<Gaze> LookOf(const Step& step);
 /// One game turn of the mind
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random);
 /// Whether a creature goes on watching a flying thing: while the thing is still flying and the whole seconds of the

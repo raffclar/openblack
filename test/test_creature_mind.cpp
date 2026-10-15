@@ -388,7 +388,11 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::Hurl(1, {}, Always(1)).back().face, Cue::Anger);
 	EXPECT_EQ(creature_mind::DestroyThing(1).back().face, Cue::Anger);
 	EXPECT_EQ(creature_mind::RunFrom({}).back().face, Cue::Fear);
-	EXPECT_EQ(creature_mind::ExamineByPickingUp(1, Always(0)).back().face, Cue::Curiosity);
+	const auto examine = creature_mind::ExamineByPickingUp(1, Always(0));
+	ASSERT_EQ(examine.size(), 3u);
+	EXPECT_EQ(examine[0].face, Cue::None);
+	EXPECT_EQ(examine[1].face, Cue::Curiosity);
+	EXPECT_EQ(examine[2].face, Cue::None);
 	EXPECT_EQ(creature_mind::ThrowAbout(1, Always(0)).back().face, Cue::Playfulness);
 	EXPECT_EQ(creature_mind::Poo(Always(1), std::nullopt).back().face, Cue::Smile);
 	EXPECT_EQ(creature_mind::Puke().back().face, Cue::Grimace);
@@ -1156,4 +1160,79 @@ TEST(CreatureNeedsMind, FaintedItLiesFourSecondsASizeAndEightMoreThenComesRound)
 	ASSERT_TRUE(cameRound.has_value());
 	EXPECT_EQ(*cameRound,
 	          static_cast<int>((creature_mind::k_FaintSecondsPerSize + creature_mind::k_FaintExtraSeconds) * k_TurnsPerSecond));
+}
+
+TEST(CreatureIdleMind, PickingUpOrGoingNearLooksAtTheThing)
+{
+	using creature_mind::Step;
+	const Step pickUp {.kind = Step::Kind::Object, .order = {.kind = creature_mind::ObjectOrder::Kind::PickUp, .object = 5u}};
+	const auto pickUpLook = creature_mind::LookOf(pickUp);
+	ASSERT_TRUE(pickUpLook.has_value());
+	EXPECT_EQ(pickUpLook->object, 5u);
+	EXPECT_TRUE(pickUpLook->whileGoing);
+
+	Step goNear {.kind = Step::Kind::Move};
+	goNear.movement = {.kind = creature_mind::Movement::Kind::GoNearObject, .object = 6u};
+	const auto goNearLook = creature_mind::LookOf(goNear);
+	ASSERT_TRUE(goNearLook.has_value());
+	EXPECT_EQ(goNearLook->object, 6u);
+	EXPECT_TRUE(goNearLook->whileGoing);
+
+	// A look of the step's own comes first
+	goNear.gaze = creature_mind::Gaze {.object = 6u};
+	EXPECT_FALSE(creature_mind::LookOf(goNear)->whileGoing);
+
+	// Other steps without a look of their own look about
+	EXPECT_FALSE(creature_mind::LookOf({.kind = Step::Kind::Wait, .seconds = 1.0f}).has_value());
+	Step getAway {.kind = Step::Kind::Move};
+	getAway.movement = {.kind = creature_mind::Movement::Kind::GetAwayFromObject, .object = 6u};
+	EXPECT_FALSE(creature_mind::LookOf(getAway).has_value());
+}
+
+TEST(CreatureIdleMind, EatingLooksAtTheFoodWithCuriosityFirst)
+{
+	using creature_face::Cue;
+	const auto eat = creature_mind::Eat(4, false);
+	ASSERT_EQ(eat.size(), 3u);
+	EXPECT_EQ(eat[0].face, Cue::None);
+	EXPECT_TRUE(eat[0].gaze->whileGoing);
+	EXPECT_EQ(eat[1].face, Cue::Curiosity);
+	EXPECT_EQ(eat[1].gaze->object, 4u);
+	EXPECT_EQ(eat[2].face, Cue::None);
+}
+
+TEST(CreatureIdleMind, WavingAtAFriendGoesUpPlayfullyAndTurnsWithASmile)
+{
+	using creature_face::Cue;
+	const auto wave = creature_mind::ApproachAndEmote(9, animations::k_FriendlyWave);
+	ASSERT_EQ(wave.size(), 3u);
+	EXPECT_EQ(wave[0].face, Cue::Playfulness);
+	EXPECT_EQ(wave[0].gaze->object, 9u);
+	EXPECT_EQ(wave[1].movement.kind, creature_mind::Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(wave[1].seconds, 1.4f);
+	EXPECT_EQ(wave[1].face, Cue::Smile);
+	EXPECT_EQ(wave[2].face, Cue::None);
+	// Waving at the player, the head stays on the camera and no face is pulled
+	for (const auto& step : creature_mind::FaceAndEmote({}, animations::k_FriendlyWave))
+	{
+		EXPECT_TRUE(step.gaze->camera);
+		EXPECT_EQ(step.face, Cue::None);
+	}
+}
+
+TEST(CreatureIdleMind, LookingAtItsReflectionLooksAtTheWaterAtItsFeet)
+{
+	using creature_face::Cue;
+	const auto agenda = creature_leash_orders::LookAtReflection({0.0f, 0.0f}, {10.0f, 0.0f}, 20.0f, 10.0f);
+	ASSERT_EQ(agenda.size(), 10u);
+	const std::array<Cue, 10> faces {Cue::None,      Cue::Puzzled, Cue::Amazed, Cue::Puzzled,   Cue::Amazed,
+	                                 Cue::Curiosity, Cue::Amazed,  Cue::Amazed, Cue::Curiosity, Cue::Amazed};
+	for (size_t i = 0; i < agenda.size(); ++i)
+	{
+		EXPECT_EQ(agenda[i].face, faces.at(i)) << i;
+		if (agenda[i].kind == creature_mind::Step::Kind::Wait)
+		{
+			EXPECT_TRUE(agenda[i].gaze->feet) << i;
+		}
+	}
 }

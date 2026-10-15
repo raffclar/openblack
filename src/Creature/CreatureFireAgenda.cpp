@@ -29,21 +29,27 @@ std::optional<std::vector<Step>> creature_mind::SetFireTo(uint32_t object, std::
 	std::vector<Step> agenda;
 	if (!handFull)
 	{
-		Step pickUp {.kind = Step::Kind::Object};
+		Step pickUp {.kind = Step::Kind::Object, .gaze = Gaze {.object = instrument, .whileGoing = true}};
 		pickUp.order = {.kind = ObjectOrder::Kind::PickUp, .object = *instrument};
 		agenda.push_back(pickUp);
 	}
 	agenda.push_back({.kind = Step::Kind::Move,
-	                  .movement = {.kind = Movement::Kind::GoNearObject, .object = object, .maxDistance = k_SetFireDistance}});
+	                  .movement = {.kind = Movement::Kind::GoNearObject, .object = object, .maxDistance = k_SetFireDistance},
+	                  .gaze = Gaze {.object = object, .whileGoing = true}});
+	// It turns to the thing with an angry face, fluttering its eyelids at it, and smiles as it throws the fire
 	agenda.push_back({.kind = Step::Kind::Move,
 	                  .seconds = k_CastSettleSeconds,
-	                  .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = object}});
-	Step toss {.kind = Step::Kind::Object};
+	                  .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = object},
+	                  .face = creature_face::Cue::Anger,
+	                  .gaze = Gaze {.object = object},
+	                  .flutterEyelids = true});
+	Step toss {.kind = Step::Kind::Object, .face = creature_face::Cue::Smile};
 	toss.order = {.kind = ObjectOrder::Kind::Discard, .animation = k_SetFireToss};
 	agenda.push_back(toss);
-	Step land {.kind = Step::Kind::WaitInMap};
+	// It watches the burning thing until it lands, then waits a moment with an angry face
+	Step land {.kind = Step::Kind::WaitInMap, .gaze = Gaze {.object = instrument}};
 	land.object = *instrument;
 	agenda.push_back(land);
-	agenda.push_back({.kind = Step::Kind::Wait, .seconds = k_SetFireWaitSeconds});
+	agenda.push_back({.kind = Step::Kind::Wait, .seconds = k_SetFireWaitSeconds, .face = creature_face::Cue::Anger});
 	return agenda;
 }

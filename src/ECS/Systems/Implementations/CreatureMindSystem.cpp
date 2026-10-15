@@ -700,6 +700,22 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 		}
 		return Locator::camera::has_value() ? std::optional(Locator::camera::value().GetOrigin()) : std::nullopt;
 	}
+	if (gaze.feet)
+	{
+		// The ground a few metres ahead of where the body faces
+		const auto* self = registry.TryGet<const Transform>(creature);
+		if (self == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto ahead = -(self->rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+		const auto flat = glm::vec2(ahead.x, ahead.z);
+		const auto at = glm::vec2(self->position.x, self->position.z) +
+		                (glm::length(flat) > 0.0f ? glm::normalize(flat) : glm::vec2(0.0f)) * creature_mind::k_FeetLookMetres;
+		const auto ground =
+		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : self->position.y;
+		return glm::vec3 {at.x, ground, at.y};
+	}
 	if (!gaze.object.has_value())
 	{
 		return gaze.point;
@@ -2159,17 +2175,13 @@ void CreatureMindSystem::ProcessTurn()
 			    animation.lookAt =
 			        place.has_value() ? LookWhileGoing(entity, creature, transform, mind, *place).value_or(about) : about;
 		    }
-		    else if (commands.gaze.has_value())
-		    {
-			    animation.lookAt = GazePoint(registry, entity, *commands.gaze, moving);
-		    }
-		    else if (commands.lookAbout)
-		    {
-			    animation.lookAt = LookAbout(creature, transform, mind);
-		    }
 		    else
 		    {
-			    animation.lookAt.reset();
+			    // A step with nothing to look at, or whose thing is gone, looks about. The pose of the body decides if
+			    // the head can turn to the point.
+			    const auto point =
+			        commands.gaze.has_value() ? GazePoint(registry, entity, *commands.gaze, moving) : std::nullopt;
+			    animation.lookAt = point.has_value() ? *point : LookAbout(creature, transform, mind);
 		    }
 		    if (eyes != nullptr)
 		    {

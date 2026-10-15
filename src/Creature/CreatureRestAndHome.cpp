@@ -128,8 +128,9 @@ std::vector<Step> creature_mind::PickUpAndCastRestoreHealth(uint32_t magicType, 
 	std::vector<Step> agenda;
 	if (handEmpty)
 	{
-		agenda.push_back(
-		    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::PickUp, .object = globe}, .gaze = GoingLook()});
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::PickUp, .object = globe},
+		                  .gaze = Gaze {.object = globe, .whileGoing = true}});
 	}
 	agenda.push_back({.kind = Step::Kind::Wait, .seconds = waitSeconds});
 	agenda.push_back({.kind = Step::Kind::UseUpHeld});
