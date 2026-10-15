@@ -1978,6 +1978,18 @@ void AddExperimentUndeadCow(std::vector<Scenario>& all)
 	    .commands = walks,
 	    .repeatFrom = 0,
 	});
+	all.push_back({
+	    .id = "experiment.undead_cow_close",
+	    .name = "EXPERIMENT: undead cow close up from above",
+	    .facet = Facet::Appearance,
+	    .description = "The undead cow stands still. The camera looks down on its skull and ribs from close by, to show "
+	                   "its texture.",
+	    .expected = "The skull, ribs and bones show the texture as the UV layout maps it, with no patches that cross "
+	                "the shapes of the bones.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 24.0f, 30.0f}, .look = {40.0f, 9.0f, 40.0f}},
+	    .creatures = {Posed(CreatureType::UndeadCow, {40.0f, 40.0f}, 180.0f)},
+	});
 }
 
 void AddFootprints(std::vector<Scenario>& all)

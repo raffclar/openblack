@@ -1,7 +1,7 @@
 """EXPERIMENT (not for merge). Unwraps the undead cow glb by body region: each triangle goes to the region of its main bone, each region is
 unrolled round its own axis (the outward faces in one island, the inward faces in another), the islands are packed
 with even texel density, mirror pairs side by side. Writes the glb copy the game reads, the UV layout and the
-placeholder texture. Usage: unwrap_regions.py <in.glb> <out_dir>"""
+plain placeholder texture. Usage: unwrap_regions.py <in.glb> <out_dir>"""
 import json
 import struct
 import sys
@@ -405,11 +405,6 @@ for label, tris, uv in placed:
     draw.text((low[0], low[1] - 3), short, fill=(20, 60, 200, 255), font=font, anchor="ld")
 layout.save(out_dir / "undead_cow_uv_layout.png")
 
-cell = SIZE // 16
-yy, xx = np.mgrid[0:SIZE, 0:SIZE]
-dark = ((yy // cell) + (xx // cell)) % 2 == 0
-checker = np.zeros((SIZE, SIZE, 4), dtype=np.uint8)
-checker[..., :3] = np.where(dark[..., None], 110, 170)
-checker[..., 3] = 255
-Image.fromarray(checker, "RGBA").save(out_dir / "undead_cow_texture.png")
+# The placeholder is one plain bone colour: a checker made two-tone patches that crossed the bones
+Image.new("RGBA", (SIZE, SIZE), (214, 206, 186, 255)).save(out_dir / "undead_cow_texture.png")
 print("wrote", out_dir)
