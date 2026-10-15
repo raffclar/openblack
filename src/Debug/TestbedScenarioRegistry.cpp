@@ -17,6 +17,7 @@
 
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 
 #include "3D/FlatLand.h"
 #include "3D/TempleInteriorInterface.h"
@@ -4310,6 +4311,38 @@ void AddCombat(std::vector<Scenario>& all)
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
 	    .commands = {Leash(0, LeashType::Evil, 1.0f), Fight(Kind::TieLeashToCreature, 0, 1, 2.0f)},
 	});
+
+	{
+		// A ring of villagers of the player's town round the place of the arena, which see the knock-out
+		std::vector<ObjectSetup> crowd;
+		constexpr int k_Villagers = 8;
+		constexpr float k_RingRadius = 48.0f;
+		for (int i = 0; i < k_Villagers; ++i)
+		{
+			const auto angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Villagers);
+			crowd.push_back({.type = i % 2 == 0 ? VillagerInfo::CelticFarmerMale : VillagerInfo::CelticHousewifeFemale,
+			                 .offset = glm::vec2 {0.0f, 40.0f} + (k_RingRadius * glm::vec2 {std::cos(angle), std::sin(angle)}),
+			                 .joinTown = true});
+		}
+		auto strong = red(PlayerNames::PLAYER_ONE, 0.9f, 0.0f);
+		strong.facingDegrees = 270.0f;
+		all.push_back({
+		    .id = "combat.leash_lead_in",
+		    .name = "A fight on the leash, from the face-off to the faint",
+		    .facet = Facet::Combat,
+		    .description = "The player's strong red tiger stands with its back to a weak blue tiger. The aggression leash "
+		                   "on the red tiger is tied to the blue tiger. Eight villagers stand round the place of the arena.",
+		    .expected = "Both tigers stop and turn to face each other, and each one taunts or makes the rude gesture. The "
+		                "arena appears with its sound, the red tiger points at it, and both walk to their places. They "
+		                "turn to face each other again and duel. A fighter near the edge steps back to the middle. The "
+		                "blue tiger faints, and the villagers near it react as to a death.",
+		    .framing = ringside,
+		    .creatures = {strong, blue(PlayerNames::PLAYER_TWO, 0.2f, 0.0f)},
+		    .objects = crowd,
+		    .commands = {Leash(0, LeashType::Evil, 1.0f), Fight(Kind::TieLeashToCreature, 0, 1, 2.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
 
 	auto angry = red(PlayerNames::PLAYER_ONE, 0.6f, -0.3f);
 	angry.desires = OnlyDesire(Desire::Anger);

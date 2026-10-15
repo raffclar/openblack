@@ -776,8 +776,9 @@ void PullApartFighters(ecs::Registry& registry, entt::entity creature, const Cre
 	}
 	const auto at = Flat(self->toPosition);
 	const auto otherAt = Flat(otherBody->toPosition);
-	const auto pulled = fight::PullApartOf(fighting.arena, at, otherAt, creature_locomotion::DirectionOf(self->heading),
-	                                       ForwardExtentOf(registry, creature) + ForwardExtentOf(registry, opponent));
+	const auto extents = ForwardExtentOf(registry, creature) + ForwardExtentOf(registry, opponent);
+	const auto pulled =
+	    fight::PullApartOf(fighting.arena, at, otherAt, creature_locomotion::DirectionOf(self->heading), extents);
 	if (pulled.first.has_value())
 	{
 		Shift(*self, *pulled.first - at);
@@ -791,6 +792,10 @@ void PullApartFighters(ecs::Registry& registry, entt::entity creature, const Cre
 		registry.SetDirty();
 		fight_transcript::Note(creature, "pull_apart", [&] {
 			return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)},
+			                                 {"apart", glm::distance(at, otherAt)},
+			                                 {"self_from_middle", glm::distance(at, fighting.arena.centre)},
+			                                 {"opponent_from_middle", glm::distance(otherAt, fighting.arena.centre)},
+			                                 {"extents", extents},
 			                                 {"moved_self", pulled.first.has_value()},
 			                                 {"moved_opponent", pulled.second.has_value()}};
 		});
