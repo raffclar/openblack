@@ -46,6 +46,8 @@ enum class Subject : uint8_t
 	OwnCreature,
 	/// Another player's creature: the same
 	OthersCreature,
+	/// The altar of a worship site: the prayer power that its site stores
+	Altar,
 };
 
 /// Whether the hand shows its tooltip over a thing only while the hand is within the player's influence. A temple's
@@ -65,6 +67,7 @@ enum class Subject : uint8_t
 	case Subject::Pile:
 	case Subject::DesireFlag:
 	case Subject::OthersCreature:
+	case Subject::Altar:
 		return true;
 	}
 	return true;
@@ -93,6 +96,8 @@ constexpr uint32_t k_BeliefNeeded = 109;
 constexpr uint32_t k_HeldAmount = 119;
 /// "Temple Health: %3.0f%%"
 constexpr uint32_t k_TempleHealth = 117;
+/// "Prayer Energy: %3.0f", over the altar of a worship site with the hand empty
+constexpr uint32_t k_PrayerEnergy = 118;
 /// "Stored - Food: %3.0f Wood: %3.0f", over a village store
 constexpr uint32_t k_Stored = 134;
 /// "Population: %3.0f", written as "Population:  12/34": its people over the room of its homes
@@ -150,6 +155,9 @@ struct Wording
 
 /// A temple's health is its heart's life, 0 to 1, as a percentage
 [[nodiscard]] Numbered TempleHealth(float life);
+
+/// The prayer power that a worship site stores, as its altar shows it
+[[nodiscard]] Numbered PrayerEnergy(float stored);
 
 /// A village centre's people, and the places in the homes of its town
 [[nodiscard]] Numbered Population(uint32_t people, uint32_t places);

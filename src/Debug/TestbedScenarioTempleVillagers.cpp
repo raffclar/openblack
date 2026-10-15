@@ -44,6 +44,12 @@ constexpr size_t k_Man = 4;
 /// A sheep and a birch beside the site, after the town in the scenario's objects
 constexpr size_t k_Sheep = 11;
 constexpr size_t k_Birch = 12;
+/// A dead birch beside the site, after the town in the scenario's objects
+constexpr size_t k_DeadTree = 11;
+/// Where the creature that watches the hand's sacrifice stands: between the town and the site, facing the site
+constexpr glm::vec2 k_Watcher {10.0f, 15.0f};
+/// Where the altar of the town's worship site stands
+constexpr glm::vec2 k_Altar {0.0f, -1.0f};
 /// The Action button is the mouse's right button
 constexpr size_t k_ActionButton = 3;
 
@@ -190,6 +196,71 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .objects = objects,
 	    .temples = {{.offset = k_Temple}},
 	    .commands = commands,
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+
+	// The hand gives a man and then a dead tree to the altar, then rests on the altar empty
+	auto withDeadTree = Town();
+	withDeadTree.push_back({.type = TreeInfo::Birch, .offset = {-14.0f, 8.0f}, .dead = true});
+	auto deadTreeCommands = offer(k_Man, 3.0f);
+	std::ranges::copy(offer(k_DeadTree, 4.0f), std::back_inserter(deadTreeCommands));
+	deadTreeCommands.push_back({.kind = Kind::PointerOnAltar, .delaySeconds = 2.0f});
+	all.push_back({
+	    .id = "hand.sacrifice_dead_tree",
+	    .name = "The hand sacrifices a dead tree and shows the altar's prayer energy",
+	    .facet = Facet::Hand,
+	    .description = "The same town and temple, the town's worship site put up built and nobody sent to worship, with a "
+	                   "dead birch on the land beside the site. The player's hand gives a man of the town to the site's "
+	                   "altar, then takes the dead birch, moves onto the altar and presses the Action button. Then the "
+	                   "empty hand stays on the altar.",
+	    .expected = "The man gives 10000 prayer power to the site. While the hand holds the dead birch over the altar, the "
+	                "tooltip says \"Sacrifice\". The dead birch goes from the hand at once, with no throw: the sacrifice "
+	                "sound plays and the birch leaves a ghost that flickers out. No light and no number come from the "
+	                "altar, and the site's store does not change: the game's table gives a dead tree no sacrifice value. "
+	                "Over the altar the empty hand shows \"Prayer Energy: 10000\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 35.0f}, .look = {10.0f, 0.0f, -2.0f}},
+	    .objects = withDeadTree,
+	    .temples = {{.offset = k_Temple}},
+	    .commands = deadTreeCommands,
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+
+	// A tiger on the learning leash watches the hand give a man to the altar; then the leash comes off
+	// The leash goes on with the hand already on the altar, so that the leash keeps the tiger near the altar. The hand
+	// goes there two times: the first time, the camera has not yet come to its place.
+	const std::vector<Command> copyCommands {
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 3.0f},
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 1.0f},
+	    {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 0.5f, .leash = LeashType::Rope},
+	    {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = k_Man},
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 1.0f},
+	    {.kind = Kind::TurnToFace, .creature = 0, .delaySeconds = 0.2f, .point = k_Altar},
+	    {.kind = Kind::PointerPress, .delaySeconds = 1.3f, .value = k_ActionButton},
+	    {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = k_ActionButton},
+	    {.kind = Kind::TakeOffLeash, .creature = 0, .delaySeconds = 3.0f}};
+	all.push_back({
+	    .id = "mind.copy_sacrifice",
+	    .name = "The creature copies the hand's sacrifice",
+	    .facet = Facet::Mind,
+	    .description = "The same town and temple, the town's worship site put up built and nobody sent to worship. A grown "
+	                   "tiger of the player's stands between the town and the site, on the learning leash, and faces the "
+	                   "site. The player's hand takes a man of the town, moves onto the site's altar, the tiger turns to "
+	                   "face the altar, and the hand presses the Action button. Then the leash comes off.",
+	    .expected = "The tiger sees the deed, if its eyes are on the altar at that time: a tiger that looks at the sky or "
+	                "the sea does not see it (about one run in three). Its thoughts show \"I saw you: Sacrifice\". The "
+	                "man is gone, so the tiger does not show that it saw him. About 9 seconds later it copies the deed: it "
+	                "picks up a villager of the same kind with an "
+	                "angry face, takes it to the altar, faces the altar and puts the villager down alive. The log shows "
+	                "\"I'm copying you: Sacrifice\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 35.0f}, .look = {10.0f, 0.0f, -2.0f}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Watcher}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = copyCommands,
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 0.0f,
 	});

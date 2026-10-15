@@ -19,6 +19,8 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipChants.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/TownHomes.h"
@@ -126,6 +128,16 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 			const auto& stores = Locator::resourceStoreSystem::value();
 			submissions.push_back({.numbers = Stored(stores.GetResource(object, ResourceType::Food),
 			                                         stores.GetResource(object, ResourceType::Wood))});
+		}
+		return submissions;
+	}
+	// The altar of a worship site shows the prayer power that its site stores
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		const auto* chants = registry.Valid(altar->site) ? registry.TryGet<const WorshipChants>(altar->site) : nullptr;
+		if (chants != nullptr && Shows(Subject::Altar, handInInfluence))
+		{
+			submissions.push_back({.numbers = PrayerEnergy(chants->battery)});
 		}
 		return submissions;
 	}

@@ -1575,7 +1575,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		toolTips.SubmitInWords(ecs::town_desire_flags::k_NeedToolTip, flagTip->words, flagTip->percent);
 		return;
 	}
-	// Over a temple, a village centre, a store or a pile, the hand says what it holds or can do
+	// Over a temple, a village centre, a store, an altar or a pile, the hand says what it holds or can do
 	if (const auto submissions = gui::world_tooltip::Over(*pointed, inInfluence); !submissions.empty())
 	{
 		for (const auto& submission : submissions)
