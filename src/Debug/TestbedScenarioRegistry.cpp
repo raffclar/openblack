@@ -1109,6 +1109,72 @@ void AddOgreLair(std::vector<Scenario>& all)
 	});
 }
 
+/// The last lesson of the first land's guide. The game's own script runs at the same map positions as on the first land.
+/// The player's Tiger waits where the script makes it watch the guide. The scenario sets the flag of the Ogre quest, thus
+/// the script does not show the Ogre's place.
+void AddGuideStorm(std::vector<Scenario>& all)
+{
+	// The positions on the first land, from the middle of the map: the place where the guide wakes, the place where the
+	// creature watches it, and the top of the mountain
+	constexpr glm::vec2 k_GuideWakes {-271.88f, 251.481f};
+	constexpr glm::vec2 k_CreatureWatches {-245.011f, 266.323f};
+	constexpr glm::vec2 k_MountainTop {-241.71f, -46.942f};
+	// Near enough to the top for the storm to start, then near enough for the last words of the guide
+	constexpr glm::vec2 k_StormStarts = k_MountainTop + glm::vec2 {0.0f, 60.0f};
+	constexpr glm::vec2 k_LastWords = k_MountainTop + glm::vec2 {0.0f, 25.0f};
+	const Command runStorm {
+	    .kind = Kind::RunScript,
+	    .delaySeconds = 0.5f,
+	    .script = "TheStorm",
+	    .scriptGlobals = {{"CreatureGuardianInitiated", {.number = 1.0f}}},
+	};
+	// The guide sleeps for five minutes of game time, then walks to the framed place. The pointer clicks the middle of
+	// the screen with the Action button three times, a minute apart, because the five minutes take longer in a slow
+	// build. Later the Tiger walks up the mountain, first for the storm and then for the last words. The script moves
+	// the Tiger back during the storm's film, thus it walks up again.
+	const Command click {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3};
+	const Command letGo {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3};
+	const std::vector<Command> commands {
+	    runStorm,
+	    {.kind = Kind::PointerTo, .delaySeconds = 330.0f, .point = {0.5f, 0.5f}},
+	    click,
+	    letGo,
+	    {.kind = Kind::PointerTo, .delaySeconds = 60.0f, .point = {0.5f, 0.5f}},
+	    click,
+	    letGo,
+	    {.kind = Kind::PointerTo, .delaySeconds = 60.0f, .point = {0.5f, 0.5f}},
+	    click,
+	    letGo,
+	    Go(Kind::WalkTo, 0, k_StormStarts, 60.0f, false),
+	    Go(Kind::WalkTo, 0, k_LastWords, 120.0f, false),
+	    Go(Kind::WalkTo, 0, k_LastWords, 60.0f, false),
+	    Go(Kind::WalkTo, 0, k_LastWords, 120.0f, false),
+	};
+	auto tiger = Content(CreatureType::Tiger, k_CreatureWatches, 0.0f, "player's tiger");
+	tiger.hold = false;
+	all.push_back({
+	    .id = "story.guide_storm",
+	    .name = "The guide's last lesson, Nemesis's storm and the death of the guide",
+	    .facet = Facet::Story,
+	    .description = "The first land's TheStorm script runs on the flat testbed. The script makes the guide (a lion for "
+	                   "the Tiger). The guide walks to the fight clearing and stays there for five minutes under a gold "
+	                   "scroll. Then it walks to the framed place. From 330 seconds the pointer clicks the middle of the "
+	                   "screen three times, a minute apart. Later the Tiger walks up to the mountain top. Click the lines "
+	                   "that wait for a click.",
+	    .expected = "The guide's music plays while the guide talks and walks to the mountain top. A rain storm forms and "
+	                "comes to the top with Nemesis's music, Nemesis talks and the guide answers. Six lightning bolts and "
+	                "an explosion from the storm hit the guide, the evil advisor holds on to the screen edge, and the "
+	                "guide falls dead and stays down. Then the storm moves away towards the player's village. On the flat "
+	                "land, the camera places of the script and the mountain top are above the ground.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_GuideWakes.x + 30.0f, 40.0f, k_GuideWakes.y + 50.0f},
+	                .look = {k_GuideWakes.x, 0.0f, k_GuideWakes.y}},
+	    .creatures = {tiger},
+	    .commands = commands,
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -1191,6 +1257,7 @@ void AddStory(std::vector<Scenario>& all)
 	});
 	AddBreederOffers(all);
 	AddOgreLair(all);
+	AddGuideStorm(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)
@@ -1923,6 +1990,39 @@ void AddAudio(std::vector<Scenario>& all)
 	                "nothing. The challenge room's door takes the camera through to it as usual.",
 	    .framing = {.shot = Shot::Overview},
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "temple.library_history",
+	    .name = "The temple's library with tips read and a story history",
+	    .facet = Facet::Story,
+	    .description = "Scripts show seven help texts of different speakers: the big voice, a man, Khazar, a woman and "
+	                   "the two advisors. The player reads four tips on signs: two of village life, one of the creature "
+	                   "and one of did you know. Then the player goes through the temple's main room into the library. "
+	                   "After four seconds the camera looks at the last scroll (Story History), as a press on it does.",
+	    .expected = "The village life scroll lists its two tips in the order read, the creature scroll and the did you "
+	                "know scroll one tip each, the other help scrolls only their titles. Close to the Story History "
+	                "scroll, its text shows the five newest lines, the newest first: who said each line, then the line. "
+	                "Each line after the first starts with how many lines ago it was. The buttons Previous Line (left "
+	                "arrow, bottom left), Latest Line (bottom middle) and Next Line (right arrow, bottom right) fade "
+	                "in. Previous Line shows one older line first, Next Line one newer line, and Latest Line the newest "
+	                "line. The temple keeps the menu's click silent. The buttons fade out as the camera goes back.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 4411},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 1250},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 1717},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 1240},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 6675},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 6676},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 4411},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4119, .amount = 2.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4120, .amount = 2.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4121, .amount = 1.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4122, .amount = 4.0f},
+	                 // The other rooms open after the temple draws the main room. Thus the player enters through it.
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 6}},
 	});
 
 	all.push_back({
@@ -5622,7 +5722,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
-	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || IsPointerCommand(kind);
+	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
+	       kind == Kind::LookAtTempleScroll || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -5649,7 +5750,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 120> k_Names {
+	constexpr std::array<std::string_view, 122> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -5770,6 +5871,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "do action",
 	    "make friends",
 	    "remove object",
+	    "read tip",
+	    "look at temple scroll",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

@@ -18,6 +18,7 @@
 
 #include "Help/DialogueText.h"
 #include "Help/HelpTextDisplay.h"
+#include "Help/StoryHistory.h"
 
 namespace openblack::gui
 {
@@ -116,6 +117,8 @@ public:
 	[[nodiscard]] virtual const help::AdvisorVoices& GetVoices() const = 0;
 	/// The texts shown, nothing before the start
 	[[nodiscard]] virtual const help::DialogueText* GetDialogue() const = 0;
+	/// The help texts that the scripts showed, newest last, which the library's last scroll shows
+	[[nodiscard]] virtual const help::StoryHistory& GetStoryHistory() const = 0;
 };
 
 } // namespace openblack::ecs::systems
