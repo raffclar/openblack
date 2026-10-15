@@ -103,6 +103,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "MagicLiving.h"
 #include "Particles/LightSheet.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -2951,6 +2952,13 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	auto& struck = registry.AllOf<CreatureFightRecord>(opponent) ? registry.Get<CreatureFightRecord>(opponent)
 	                                                             : registry.Assign<CreatureFightRecord>(opponent);
 	struck.struckTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u;
+	// A blow that lands, blocked or not, is a small hit from the attacker: it changes how nice the victim finds the
+	// attacker, no more often than once a minute. It takes nothing from the victim's life.
+	{
+		magic::EffectValues blowEffect {};
+		blowEffect[magic::EffectKind::Hit] = fight::k_BlowHitEffect;
+		magic_living::AfterEffect(opponent, blowEffect, {.player = body.owner, .casterCreature = creature});
+	}
 
 	const bool blocked = fight::IsBlocking(victim.state, victim.timeMs, DurationOf(opponent, fight::animations::k_StartBlock));
 	const auto heightShare = std::clamp((point.y - opponentTransform.position.y) / opponentHeight, 0.0f, 1.0f);

@@ -665,6 +665,8 @@ constexpr float k_FightMusicDistance = 100.0f;
 /// Whether the fight music of the player's creature plays. It plays while the hand directs the fight. It also plays
 /// while the camera is less than the music distance from the middle of an arena where a fight of the creature is on.
 [[nodiscard]] bool FightMusicHeard(bool directsFight, std::span<const glm::vec3> arenasOfItsFights, const glm::vec3& camera);
+/// The hit that a blow that lands gives its victim from the attacker, which changes how nice the victim finds it
+constexpr float k_BlowHitEffect = 0.05f;
 /// The fight health of a creature in a duel after it loses damage to its life: the same amount less, never below none
 [[nodiscard]] float HealthAfterLifeLost(float health, float damage);
 } // namespace openblack::creature_fight
