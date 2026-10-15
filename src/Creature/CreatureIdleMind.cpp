@@ -21,6 +21,7 @@
 #include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureTownHelp.h"
 
 using namespace openblack;
 using namespace openblack::creature_mind;
@@ -799,6 +800,8 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::SwapMind:
 	case Step::Kind::Communicate:
 	case Step::Kind::HealItself:
+	case Step::Kind::RaiseTotem:
+	case Step::Kind::LowerTotem:
 		return HandsNeed::Free;
 	case Step::Kind::Object:
 		switch (step.order.kind)
@@ -830,6 +833,8 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::StopMoving:
 	case Step::Kind::FollowWatching:
 	case Step::Kind::Fight:
+	case Step::Kind::MakeDisciple:
+	case Step::Kind::Kiss:
 	case Step::Kind::Wait:
 	case Step::Kind::Move:
 	case Step::Kind::Gesture:
@@ -1256,6 +1261,18 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::Fight:
 			commands.startFight = step.object;
 			break;
+		case Step::Kind::RaiseTotem:
+		case Step::Kind::LowerTotem:
+			// The totem starts to move on the next turn
+			break;
+		case Step::Kind::MakeDisciple:
+			commands.makeDisciple = step.object;
+			commands.effect = step.effect;
+			FinishStep(mind);
+			break;
+		case Step::Kind::Kiss:
+			commands.playOnce = step.animation;
+			break;
 		case Step::Kind::Communicate:
 			// It shows what it feels now, and it does not want to show its state again for a time
 			commands.communicated = senses.communication;
@@ -1495,6 +1512,32 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Fight:
 		// The fight has ended
 		if (!senses.fighting)
+		{
+			FinishStep(mind);
+		}
+		break;
+	case Step::Kind::RaiseTotem:
+	case Step::Kind::LowerTotem:
+	{
+		if (!senses.totemShare.has_value() || !step.object.has_value())
+		{
+			GiveUpAgenda(mind);
+			break;
+		}
+		const auto turn = creature_town_help::MoveTotemTurn(*senses.totemShare, step.kind == Step::Kind::RaiseTotem);
+		commands.totem = Commands::TotemShare {.totem = *step.object, .share = turn.share};
+		if (turn.done)
+		{
+			commands.effect = step.effect;
+			FinishStep(mind);
+		}
+		break;
+	}
+	case Step::Kind::MakeDisciple:
+		FinishStep(mind);
+		break;
+	case Step::Kind::Kiss:
+		if (!senses.bodyBusy)
 		{
 			FinishStep(mind);
 		}

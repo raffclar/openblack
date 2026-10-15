@@ -68,6 +68,7 @@
 #include "Creature/LeashRules.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
+#include "CreatureMindTownHelp.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -384,6 +385,13 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	}
 	case Target::Strokeable:
 		return !heldByOther && Strokeable(registry, entity, self);
+	case Target::MagicWoodPile:
+	case Target::Cow:
+	case Target::VillagerNotWorshipping:
+	case Target::BreederVillager:
+	case Target::VillagerFarFromHome:
+	case Target::PlayerTotem:
+		return mind_town_help::Accepts(registry, target, entity, self, heldByOther);
 	case Target::Creature:
 		return registry.AllOf<Creature>(entity);
 	case Target::FightableCreature:
@@ -722,6 +730,7 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const Field, const Transform>(
 		    [&](entt::entity entity, const Field&, const Transform& at) { consider(entity, at); });
 	}
+	mind_town_help::Gather(registry, target, consider);
 	// A thing found in two of the lists counts once
 	std::ranges::sort(found, {}, &Found::entity);
 	const auto [first, last] = std::ranges::unique(found, {}, &Found::entity);
@@ -1632,6 +1641,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	{
 		SituateDance(creature, *executor, point, situated);
 	}
+	mind_town_help::Situate(Locator::entitiesRegistry::value(), creature, *executor, object, situated);
 	auto agenda = creature_plan_actions::Agenda(
 	    *executor, object, point, situated, [this](uint32_t range) { return Random(range); }, cast);
 	if (!agenda.has_value())
@@ -2520,7 +2530,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
 		const bool fishing = executor.build == creature_plan_actions::Build::FishAndEat ||
 		                     executor.build == creature_plan_actions::Build::GiveFishToStore ||
-		                     executor.build == creature_plan_actions::Build::TakeFishHome;
+		                     executor.build == creature_plan_actions::Build::TakeFishHome ||
+		                     executor.build == creature_plan_actions::Build::PutFishBySite;
 		if (fishing && !fishingLooked)
 		{
 			fishingLooked = true;
@@ -2963,6 +2974,9 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				SituateDance(creature, *executor, point, situation);
 			}
+			mind_town_help::Situate(registry, creature, *executor,
+			                        plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt,
+			                        situation);
 			const auto actionIndex = creature_mind_tables::FindAction(*tables, plan.action);
 			const auto cast = creature_plan_actions::IsCast(*executor) && actionIndex.has_value()
 			                      ? CastInfoFor(creature, *actionIndex, plan.object)

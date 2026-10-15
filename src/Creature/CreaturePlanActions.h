@@ -119,11 +119,25 @@ enum class Target : uint8_t
 	TreeBigEnough,
 	/// A thing that the creature can pick up and that has lost some of its life, to stroke and heal
 	Strokeable,
+	/// A pile of wood that the wood miracle made
+	MagicWoodPile,
+	/// A farm animal (or a tortoise) that the creature can pick up, to drop in a store
+	Cow,
+	/// A villager that does not dance in worship
+	VillagerNotWorshipping,
+	/// A villager that the creature may make a breeder: grown up, of a town with fewer than three breeders, and no
+	/// disciple yet
+	BreederVillager,
+	/// A villager more than 40 m from its home
+	VillagerFarFromHome,
+	/// The totem of a town of the player who watches: the town centre and the town's worship site built, and the
+	/// player's temple there
+	PlayerTotem,
 };
 /// A creature poos only by a thing taller than this, in metres
 constexpr float k_PooedOnTallerThan = 1.5f;
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::Strokeable) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::PlayerTotem) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -292,6 +306,25 @@ enum class Build : uint8_t
 	StrokeAndHeal,
 	LookAtSun,
 	LookAtMoon,
+	/// The town help actions (see creature_town_help): giving a handful of food from a field, fruit from a tree, magic
+	/// food or magic wood to a store; putting food from a field or fish by a worship site; dropping a cow in a store;
+	/// making a villager a breeder; taking a villager home to sleep; bringing a villager to a worship site; raising and
+	/// lowering a totem; frightening, playing with and kissing a villager in play
+	GiveFieldFoodToStore,
+	GiveFruitToStore,
+	GiveMagicFoodToStore,
+	GiveMagicWoodToStore,
+	PutFieldFoodBySite,
+	PutFishBySite,
+	DropCowInStore,
+	MakeBreeder,
+	TakeVillagerHome,
+	BringVillagerToSite,
+	RaiseTotem,
+	LowerTotem,
+	FrightenVillagers,
+	PlayWithVillager,
+	KissVillager,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -476,6 +509,12 @@ struct Situation
 	bool holdingStrokeable {false};
 	/// Game turns a second
 	float turnsPerSecond {10.0f};
+	/// For the town help actions: whether what its hand holds is a cow or a villager; where the worship site that the
+	/// action is done to keeps its food; and the home of the villager that the action is done to, by its entity's number
+	bool holdingCow {false};
+	bool holdingVillager {false};
+	std::optional<glm::vec2> siteFood;
+	std::optional<uint32_t> villagerHome;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

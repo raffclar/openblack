@@ -24,6 +24,7 @@
 #include "Creature/CreaturePlayerAgendas.h"
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureScriptAgendas.h"
+#include "Creature/CreatureTownHelp.h"
 #include "Enums.h"
 
 using namespace openblack;
@@ -350,6 +351,45 @@ constexpr std::array k_Executors {
     Executor {.action = "EnterCitadel", .build = Build::EnterTemple},
     Executor {.action = "PrayAtCitadel", .build = Build::PrayAtTemple},
     Executor {.action = "LookAtCitadel", .target = Target::TemplePart, .build = Build::LookAtTemple},
+    // Helping a town: food and wood to its store, food and fish by a worship site, a cow in its store, a breeder, a
+    // villager taken home or to a worship site, its totem raised or lowered
+    Executor {.action = "GiveFoodFromFieldToStoragePit",
+              .target = Target::BuiltStoragePit,
+              .use = Target::FieldWithFood,
+              .build = Build::GiveFieldFoodToStore},
+    Executor {.action = "GiveFruitFromTreeToStoragePit",
+              .target = Target::BuiltStoragePit,
+              .use = Target::TreeBigEnough,
+              .build = Build::GiveFruitToStore},
+    Executor {.action = "GiveMagicFoodToStoragePit",
+              .target = Target::BuiltStoragePit,
+              .use = Target::MagicFoodPile,
+              .build = Build::GiveMagicFoodToStore},
+    Executor {.action = "GiveMagicWoodToStoragePit",
+              .target = Target::BuiltStoragePit,
+              .use = Target::MagicWoodPile,
+              .build = Build::GiveMagicWoodToStore},
+    Executor {.action = "PutFoodFromFieldByWorshipSite",
+              .target = Target::WorshipSite,
+              .use = Target::FieldWithFood,
+              .build = Build::PutFieldFoodBySite},
+    Executor {.action = "PutFishByWorshipSite", .target = Target::WorshipSite, .build = Build::PutFishBySite},
+    Executor {.action = "DropCowInStoragePit",
+              .target = Target::BuiltStoragePit,
+              .use = Target::Cow,
+              .build = Build::DropCowInStore},
+    Executor {.action = "MakeBreederDisciple", .target = Target::BreederVillager, .build = Build::MakeBreeder},
+    Executor {.action = "TakeVillagerHomeToSleep", .target = Target::VillagerFarFromHome, .build = Build::TakeVillagerHome},
+    Executor {.action = "BringVillagersToWorshipSite",
+              .target = Target::WorshipSite,
+              .use = Target::VillagerNotWorshipping,
+              .build = Build::BringVillagerToSite},
+    Executor {.action = "RaiseTotemPole", .target = Target::PlayerTotem, .build = Build::RaiseTotem},
+    Executor {.action = "LowerTotemPole", .target = Target::PlayerTotem, .build = Build::LowerTotem},
+    // Playing with villagers
+    Executor {.action = "PlayfullyFrightenVillagers", .target = Target::Villager, .build = Build::FrightenVillagers},
+    Executor {.action = "PlayfullyInteractWithVillager", .target = Target::Villager, .build = Build::PlayWithVillager},
+    Executor {.action = "PlayfullyKissVillager", .target = Target::Villager, .build = Build::KissVillager},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -402,6 +442,98 @@ std::optional<creature_mind::FishingTrip> TripFor(const Situation::Fishing& fish
 		return std::nullopt;
 	}
 	return creature_mind::FishingTrip {.shoal = fishing.shoal, .arriveWithin = fishing.arriveWithin};
+}
+
+/// The agenda of a town help action (see creature_town_help)
+std::optional<std::vector<creature_mind::Step>> TownHelpAgenda(const Executor& executor, std::optional<uint32_t> object,
+                                                               glm::vec2 objectPoint, const Situation& situation,
+                                                               const creature_mind::Random& random)
+{
+	namespace help = creature_town_help;
+	const uint32_t thing = object.value_or(0);
+	switch (executor.build)
+	{
+	case Build::GiveFieldFoodToStore:
+	case Build::GiveFruitToStore:
+	case Build::GiveMagicFoodToStore:
+	case Build::GiveMagicWoodToStore:
+	{
+		// It takes a handful unless its hand holds what it gives: food it can eat, or a tree for wood
+		const bool wood = executor.build == Build::GiveMagicWoodToStore;
+		std::optional<help::HandfulSource> take;
+		if (!(wood ? situation.holdingTree : situation.holdingEatable))
+		{
+			if (!situation.instrument.has_value())
+			{
+				return std::nullopt;
+			}
+			take = help::HandfulSource {.thing = *situation.instrument, .point = situation.instrumentPoint};
+			take->within = help::ThingReach(situation.radius, situation.instrumentRadius);
+			if (executor.build == Build::GiveFieldFoodToStore)
+			{
+				take->within = help::FieldReach(situation.height);
+			}
+			else if (executor.build == Build::GiveFruitToStore)
+			{
+				take->look = creature_mind::ObjectOrder::Handful::Fruit;
+			}
+			else if (wood)
+			{
+				take->look = help::MagicWoodLook(random);
+			}
+		}
+		return help::GiveHandfulToStore(take, thing, situation.height);
+	}
+	case Build::PutFieldFoodBySite:
+	{
+		// It needs a field to take food from, and the place where the site keeps its food
+		if (!situation.instrument.has_value() || !situation.siteFood.has_value())
+		{
+			return std::nullopt;
+		}
+		std::optional<help::HandfulSource> take;
+		if (!situation.holdingEatable)
+		{
+			take = help::HandfulSource {.thing = *situation.instrument, .point = situation.instrumentPoint};
+		}
+		return help::PutFieldFoodBySite(take, *situation.siteFood, situation.height);
+	}
+	case Build::PutFishBySite:
+		return creature_mind::TakeFishTo(TripFor(*situation.fishing), objectPoint, situation.height);
+	case Build::DropCowInStore:
+		// It needs a cow to use, also when it holds one
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return help::DropCowInStore(situation.holdingCow ? std::nullopt : situation.instrument, thing);
+	case Build::MakeBreeder:
+		return help::MakeBreeder(thing);
+	case Build::TakeVillagerHome:
+		if (!situation.villagerHome.has_value())
+		{
+			return std::nullopt;
+		}
+		return help::TakeVillagerHome(situation.holdingVillager ? std::nullopt : object, *situation.villagerHome);
+	case Build::BringVillagerToSite:
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return help::BringVillagerToSite(situation.holdingVillager ? std::nullopt : situation.instrument, thing);
+	case Build::RaiseTotem:
+	case Build::LowerTotem:
+		return help::MoveTotem(thing, executor.build == Build::RaiseTotem);
+	case Build::FrightenVillagers:
+		return help::FrightenVillagers(thing, situation.height);
+	case Build::PlayWithVillager:
+		return help::PlayWithVillager(thing, situation.height, random);
+	case Build::KissVillager:
+		return help::KissVillager(thing, situation.height);
+	default:
+		break;
+	}
+	return std::nullopt;
 }
 } // namespace
 
@@ -477,6 +609,8 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return situation.fishing.has_value();
 	case Build::TakeFishHome:
 		return situation.fishing.has_value() && situation.home.has_value();
+	case Build::PutFishBySite:
+		return situation.fishing.has_value();
 	case Build::SleepAtHome:
 		// Only with a temple, and not too far from home
 		return situation.home.has_value() && situation.homeDistance.has_value() &&
@@ -1029,6 +1163,22 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::PrayAtTemple(*situation.home, situation.height);
 	case Build::LookAtTemple:
 		return creature_mind::LookAtTemple(*object, random(creature_mind::k_PointAtTempleLots) == 0);
+	case Build::GiveFieldFoodToStore:
+	case Build::GiveFruitToStore:
+	case Build::GiveMagicFoodToStore:
+	case Build::GiveMagicWoodToStore:
+	case Build::PutFieldFoodBySite:
+	case Build::PutFishBySite:
+	case Build::DropCowInStore:
+	case Build::MakeBreeder:
+	case Build::TakeVillagerHome:
+	case Build::BringVillagerToSite:
+	case Build::RaiseTotem:
+	case Build::LowerTotem:
+	case Build::FrightenVillagers:
+	case Build::PlayWithVillager:
+	case Build::KissVillager:
+		return TownHelpAgenda(executor, object, objectPoint, situation, random);
 	case Build::Never:
 		return std::nullopt;
 	}
