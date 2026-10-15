@@ -511,10 +511,10 @@ void AddNeeds(std::vector<Scenario>& all)
 	                "into the pit, faces the pit with a look of compassion and throws the wheat in. The handful holds no "
 	                "food, as in the game, so the pit's food stays as it was.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -75.0f}, {55.0f, 10.0f}}},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -80.0f}, {65.0f, 45.0f}}},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -60.0f}, .storedFood = 2000, .storedWood = 0},
-	                {.type = FieldTypeInfo::Wheat, .offset = {40.0f, -20.0f}, .ripeCrop = true}},
+	                {.type = FieldTypeInfo::Wheat, .offset = {50.0f, 35.0f}, .ripeCrop = true}},
 	    .commands =
 	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "GiveFoodFromFieldToStoragePit", .with = 1}},
 	});
