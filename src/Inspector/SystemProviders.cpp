@@ -201,6 +201,8 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "kiss";
 	case Kind::PracticeDance:
 		return "practice_dance";
+	case Kind::RenderImmobile:
+		return "render_immobile";
 	case Kind::Communicate:
 		return "communicate";
 	}

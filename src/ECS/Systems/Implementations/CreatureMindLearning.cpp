@@ -1711,6 +1711,10 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		situated.thingHeight = object_measures::Height(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
 		situated.thingRadius =
 		    object_measures::TwoDRadius(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
+		situated.thingLiving =
+		    Locator::creatureObjectActionSystem::has_value() &&
+		    creature_object_actions::IsLiving(
+		        Locator::creatureObjectActionSystem::value().KindOf(static_cast<entt::entity>(*object)).thing);
 		if (executor->build == creature_plan_actions::Build::EatFromStoragePit)
 		{
 			SituateStoreFood(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object), situated);
@@ -3079,6 +3083,9 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.thingHeight = object_measures::Height(registry, *plan.object);
 				situation.thingRadius = object_measures::TwoDRadius(registry, *plan.object);
+				situation.thingLiving =
+				    Locator::creatureObjectActionSystem::has_value() &&
+				    creature_object_actions::IsLiving(Locator::creatureObjectActionSystem::value().KindOf(*plan.object).thing);
 				if (executor->build == creature_plan_actions::Build::EatFromStoragePit)
 				{
 					SituateStoreFood(registry, *plan.object, situation);

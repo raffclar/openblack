@@ -124,6 +124,7 @@
 #include "ObjectMeasures.h"
 #include "Physics/Body.h"
 #include "Physics/LivingRules.h"
+#include "VillagerFire.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -870,6 +871,44 @@ std::optional<creature_mind::Senses::FollowedView> FollowedViewOf(const ecs::Reg
 		                                                                                    mind.learnt->knowledge.skillsKnown);
 	}
 	return view;
+}
+
+/// Whether the living object of the step that makes a thing still is in its state of flying
+bool StillObjectFlies(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::RenderImmobile ||
+	    !idle.agenda[idle.step].object.has_value())
+	{
+		return false;
+	}
+	const auto object = static_cast<entt::entity>(*idle.agenda[idle.step].object);
+	if (!registry.Valid(object))
+	{
+		return false;
+	}
+	if (const auto* action = registry.TryGet<const LivingAction>(object); action != nullptr && registry.AllOf<Villager>(object))
+	{
+		return action->states[static_cast<size_t>(LivingAction::Index::Top)] == static_cast<uint8_t>(VillagerStates::Flying);
+	}
+	const auto* animal = registry.TryGet<const Animal>(object);
+	return animal != nullptr && animal->state == AnimalState::Flying;
+}
+
+/// A living thing starts to die at once, without the work of a death: a villager or an animal
+void MakeStill(const ecs::Registry& registry, entt::entity thing)
+{
+	if (!registry.Valid(thing))
+	{
+		return;
+	}
+	if (registry.AllOf<Villager>(thing))
+	{
+		villager_fire::StartDyingWithoutDeath(thing);
+	}
+	else if (registry.AllOf<Animal>(thing) && Locator::animalSystem::has_value())
+	{
+		Locator::animalSystem::value().StartDyingWithoutDeath(thing);
+	}
 }
 
 bool WatchedIsInTheAir(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
@@ -1638,6 +1677,24 @@ using namespace openblack::ecs::systems::mind_detail;
 void CreatureMindSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// The feedback of a release reaches each mind before the minds think, when its wait is over
+	std::vector<std::pair<entt::entity, float>> arrived;
+	registry.Each<CreatureMindState>([&arrived](entt::entity entity, CreatureMindState& mind) {
+		if (!mind.releaseFeedback.has_value())
+		{
+			return;
+		}
+		if (mind.releaseFeedbackTurns > 0)
+		{
+			--mind.releaseFeedbackTurns;
+			return;
+		}
+		arrived.emplace_back(entity, *std::exchange(mind.releaseFeedback, std::nullopt));
+	});
+	for (const auto& [entity, feedback] : arrived)
+	{
+		ReceiveFeedback(entity, feedback);
+	}
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
 	};
@@ -1923,6 +1980,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .held = inHand.has_value() ? std::optional(entt::to_integral(*inHand)) : std::nullopt,
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .objectInTheAir = WatchedIsInTheAir(registry, mind.idle),
+		        .objectFlying = StillObjectFlies(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
 		        .camera = CameraViewOf(registry, entity, mind.idle),
 		        .hand = HandViewOf(registry, entity, mind.idle),
@@ -2024,6 +2082,10 @@ void CreatureMindSystem::ProcessTurn()
 			    Heal(entity, static_cast<entt::entity>(*commands.heal));
 		    }
 		    mind_town_help::Apply(registry, commands);
+		    if (commands.renderImmobile.has_value())
+		    {
+			    MakeStill(registry, static_cast<entt::entity>(*commands.renderImmobile));
+		    }
 		    if (commands.useUp.has_value() && registry.Valid(static_cast<entt::entity>(*commands.useUp)))
 		    {
 			    ecs::world_objects::Remove(static_cast<entt::entity>(*commands.useUp));
@@ -2359,12 +2421,16 @@ void CreatureMindSystem::StartPlanAgain(entt::entity creature, CreatureMindState
 	if (!built.has_value())
 	{
 		// With no agenda, the plan stops and the creature decides again
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} has no agenda to start {} again after the hand let go",
+		                    entt::to_integral(creature), plan.action);
 		Abandon(mind);
 		return;
 	}
 	auto& [executor, agenda] = *built;
 	if (!Replan(creature, executor->activity, std::move(agenda)))
 	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cannot start {} again after the hand let go",
+		                    entt::to_integral(creature), plan.action);
 		return;
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} starts {} again after the hand let go", entt::to_integral(creature),
@@ -2447,6 +2513,28 @@ void CreatureMindSystem::ShowDesireOnHold(entt::entity creature, CreatureMindSta
 		    creature,
 		    {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire), .forced = true});
 	}
+}
+
+void CreatureMindSystem::SendReleaseFeedback(entt::entity creature, float feedback)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.TryGet<CreatureMindState>(creature);
+	if (mind == nullptr)
+	{
+		return;
+	}
+	// The feedback of an earlier release arrives first
+	if (const auto earlier = std::exchange(mind->releaseFeedback, std::nullopt); earlier.has_value())
+	{
+		ReceiveFeedback(creature, *earlier);
+		mind = registry.TryGet<CreatureMindState>(creature);
+		if (mind == nullptr)
+		{
+			return;
+		}
+	}
+	mind->releaseFeedback = feedback;
+	mind->releaseFeedbackTurns = creature_feedback::k_ReleaseFeedbackTurns;
 }
 
 void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)

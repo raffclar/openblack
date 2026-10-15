@@ -167,6 +167,12 @@ float creature_feedback::Delivered(float sum)
 	return std::clamp(sum, -1.0f, 1.0f);
 }
 
+bool creature_feedback::ReleaseGivesFeedback(const ReleaseBody& body)
+{
+	const bool bodyStill = !body.bodyBusy || body.lyingDead;
+	return !(body.headStraight && bodyStill && !body.faceShown);
+}
+
 float creature_feedback::AttitudeAfter(float attitude, float feedback)
 {
 	return (0.7f * attitude) + (0.05f * feedback);

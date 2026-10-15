@@ -708,11 +708,12 @@ std::optional<std::vector<creature_mind::Step>> BringHomeAgenda(const Executor& 
 	{
 	case Build::BringHome:
 		// It picks up the thing only when its hand is empty
-		return bring::BringHome(situation.handFull ? std::nullopt : std::optional(object), *situation.home, situation.height);
+		return bring::BringHome(situation.handFull ? std::nullopt : std::optional(object), object, situation.thingLiving,
+		                        *situation.home, situation.height);
 	case Build::BringFoodHome:
 		// It picks up the food unless it holds food already
-		return bring::BringFoodHome(situation.holdingEatable ? std::nullopt : std::optional(object), *situation.home,
-		                            situation.height);
+		return bring::BringFoodHome(situation.holdingEatable ? std::nullopt : std::optional(object), situation.thingLiving,
+		                            *situation.home, situation.height);
 	case Build::TakeFieldFoodHome:
 	{
 		// It takes wheat from the field unless it holds food already

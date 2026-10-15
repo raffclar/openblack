@@ -390,3 +390,27 @@ TEST(CreatureTouch, AStrokeDoesNotHoldBackTheNextSlap)
 	// The time since the hand took hold continues after a stroke or a slap
 	EXPECT_TRUE(creature_feedback::SlapReady(clocks));
 }
+
+TEST(CreatureReleaseFeedback, AStillCreatureGetsNoFeedback)
+{
+	using creature_feedback::ReleaseBody;
+	EXPECT_FALSE(creature_feedback::ReleaseGivesFeedback(ReleaseBody {.headStraight = true}));
+	// A body that lies dead counts as still
+	EXPECT_FALSE(
+	    creature_feedback::ReleaseGivesFeedback(ReleaseBody {.headStraight = true, .bodyBusy = true, .lyingDead = true}));
+}
+
+TEST(CreatureReleaseFeedback, ACreatureThatIsNotStillGetsFeedback)
+{
+	using creature_feedback::ReleaseBody;
+	EXPECT_TRUE(creature_feedback::ReleaseGivesFeedback(ReleaseBody {}));
+	EXPECT_TRUE(creature_feedback::ReleaseGivesFeedback(ReleaseBody {.headStraight = true, .bodyBusy = true}));
+	EXPECT_TRUE(creature_feedback::ReleaseGivesFeedback(ReleaseBody {.headStraight = true, .faceShown = true}));
+	EXPECT_TRUE(creature_feedback::ReleaseGivesFeedback(
+	    ReleaseBody {.headStraight = true, .bodyBusy = true, .lyingDead = true, .faceShown = true}));
+}
+
+TEST(CreatureReleaseFeedback, TheFeedbackWaitsOneTurnAfterTheCreatureIsFree)
+{
+	EXPECT_EQ(creature_feedback::k_ReleaseFeedbackTurns, 1u);
+}

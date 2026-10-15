@@ -99,6 +99,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureDestruction.h"
+#include "ECS/Components/CreatureDrawnFeet.h"
 #include "ECS/Components/CreatureExploration.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFizz.h"
@@ -676,6 +677,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureDestruction::last>("last")
 	    .Field<&components::CreatureDestruction::radius>("radius")
 	    .Field<&components::CreatureDestruction::seen>("seen");
+	Reflect<components::CreatureDrawnFeet>(context)
+	    .Field<&components::CreatureDrawnFeet::right>("right")
+	    .Field<&components::CreatureDrawnFeet::left>("left");
 	Reflect<components::CreatureExploration>(context).Field<&components::CreatureExploration::visited>("visited");
 	Reflect<components::CreatureFighting>(context)
 	    .Field<&components::CreatureFighting::stage>("stage")
@@ -808,6 +812,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::mayAttackOwnPlayer>("mayAttackOwnPlayer")
 	    .Field<&components::CreatureMindState::showDesireOnHold>("showDesireOnHold")
 	    .Field<&components::CreatureMindState::heldSinceRestart>("heldSinceRestart")
+	    .Field<&components::CreatureMindState::releaseFeedback>("releaseFeedback")
+	    .Field<&components::CreatureMindState::releaseFeedbackTurns>("releaseFeedbackTurns")
 	    .Field<&components::CreatureMindState::ownPlanSinceStop>("ownPlanSinceStop")
 	    .Field<&components::CreatureMindState::turnsWithoutOwnPlan>("turnsWithoutOwnPlan")
 	    .Field<&components::CreatureMindState::planForced>("planForced")

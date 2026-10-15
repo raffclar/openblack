@@ -488,6 +488,9 @@ struct Step
 		/// second each. The step lasts for the step's seconds counted in whole turns. The dance stops when the step
 		/// ends, or when the creature does something else.
 		PracticeDance,
+		/// Making the step's object still. While the object flies, the step waits. Then a living object starts to die at
+		/// once, without the work of a death, and the step ends. For an object that is not alive, the step ends at once.
+		RenderImmobile,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -683,6 +686,8 @@ struct Senses
 	std::optional<bool> objectInMap;
 	/// Whether the object a step watches fly is still really in the air
 	bool objectInTheAir {false};
+	/// Whether the living object of a step that makes it still is in its state of flying
+	bool objectFlying {false};
 	/// What picks the faces it pulls
 	creature_face::Feelings feelings {};
 	/// Its player's camera as the creature sees it, none for a creature without a player: how far it is, how far along
@@ -830,6 +835,8 @@ struct Commands
 	/// A building to mend, and a thing to do away with, by their entities' numbers
 	std::optional<uint32_t> repair;
 	std::optional<uint32_t> useUp;
+	/// A living thing that starts to die at once, without the work of a death, by its entity's number
+	std::optional<uint32_t> renderImmobile;
 	/// What its hand holds goes from the world this turn
 	bool useUpHeld {false};
 	/// The plan acts on the creature from this turn

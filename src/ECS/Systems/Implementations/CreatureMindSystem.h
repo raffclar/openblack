@@ -66,6 +66,7 @@ public:
 	bool SitDown(entt::entity creature) override;
 	void StandUp(entt::entity creature) override;
 	void ReceiveFeedback(entt::entity creature, float feedback) override;
+	void SendReleaseFeedback(entt::entity creature, float feedback) override;
 	void HandTookHold(entt::entity creature) override;
 	void UpdateAttitudeFromFeedback(entt::entity creature, float feedback) override;
 	[[nodiscard]] float GetAverageFeedback() const override { return _averageFeedback; }
