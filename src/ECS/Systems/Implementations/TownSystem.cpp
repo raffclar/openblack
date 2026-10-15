@@ -19,17 +19,20 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
+#include "ECS/AbodeNeglectRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
@@ -499,6 +502,37 @@ void TownSystem::SetInStateOfEmergency(entt::entity townEntity)
 	town.emergencyTurn = turn;
 }
 
+namespace
+{
+/// The town examines one of its buildings for neglect. An empty building loses life when its neglect timer is full.
+/// Nobody did this damage, thus no player counts it as a building that the player destroyed.
+void NeglectAbode(entt::entity town, entt::entity abode)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* info = world_objects::AbodeInfoOf(abode);
+	if (info == nullptr)
+	{
+		return;
+	}
+	const auto household = town_homes::HouseholdOf(registry, abode);
+	const abode_neglect::NeglectFacts facts {.adults = household.adults,
+	                                         .children = household.children,
+	                                         .maxAdults = info->maxVillagersInAbode,
+	                                         .maxChildren = info->maxChildrenInAbode,
+	                                         .built = IsBuilt(abode),
+	                                         .inScript = registry.AllOf<InScript>(abode),
+	                                         .townUninhabitable = registry.Get<const Town>(town).uninhabitable};
+	auto& data = registry.Get<Abode>(abode);
+	const auto step = abode_neglect::Examine(data.neglect, facts);
+	data.neglect = step.timer;
+	if (step.losesLife)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town: empty building #{} loses life from neglect", entt::to_integral(abode));
+		world_objects::ReduceLife(abode, info->emptyAbodeLifeReducer);
+	}
+}
+} // namespace
+
 void TownSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -514,9 +548,17 @@ void TownSystem::ProcessTurn()
 		// Every so many turns it passes over its buildings, which age by it; a football pitch never ages
 		if (passOverBuildings)
 		{
-			for (const auto abode : registry.Get<const Town>(townEntity).abodes)
+			const auto abodes = registry.Get<const Town>(townEntity).abodes;
+			for (const auto abode : abodes)
 			{
-				if (auto* data = registry.TryGet<Abode>(abode); data != nullptr && data->type != AbodeNumber::FootballPitch)
+				if (const auto* data = registry.TryGet<const Abode>(abode);
+				    data == nullptr || data->type == AbodeNumber::FootballPitch)
+				{
+					continue;
+				}
+				NeglectAbode(townEntity, abode);
+				// The loss of life can remove the building
+				if (auto* data = registry.Valid(abode) ? registry.TryGet<Abode>(abode) : nullptr)
 				{
 					data->age = statistics::AgedOnePass(data->age);
 				}

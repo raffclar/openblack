@@ -42,6 +42,8 @@ constexpr size_t k_MendingCouples = 4;
 /// The emergency town: one couple in each of its three huts, the first of which is the third object
 constexpr size_t k_EmergencyCouples = 3;
 constexpr size_t k_FirstEmergencyHut = 2;
+/// The front huts start near the end of their neglect time, thus an empty one loses life after a few turns
+constexpr float k_NearlyNeglected = 0.995f;
 /// Two fields east of the town
 constexpr std::array<glm::vec2, 2> k_Fields {{{55.0f, 40.0f}, {55.0f, 15.0f}}};
 } // namespace
@@ -112,6 +114,32 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_PlannedHuts[0]}, .distance = 0.6f},
 	    .objects = std::move(mending),
+	});
+
+	// A town with one hut that a couple lives in and two empty huts
+	std::vector<ObjectSetup> neglect {
+	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = k_PitStock, .storedWood = k_PitStock},
+	    {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[0], .yawDegrees = 180.0f, .neglect = k_NearlyNeglected},
+	    {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[2], .yawDegrees = 180.0f, .neglect = k_NearlyNeglected},
+	    {.type = VillagerInfo::CelticForesterMale, .offset = {20.0f, 20.0f}, .joinTown = true},
+	    {.type = VillagerInfo::CelticHousewifeFemale, .offset = {22.0f, 20.0f}, .joinTown = true},
+	};
+	all.push_back({
+	    .id = "town.empty_hut_neglect",
+	    .name = "Empty huts falling into ruin",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town with a village centre, a full storage pit, three built huts and one couple that "
+	                   "joins it. The two huts in the front row start with their neglect time nearly gone. Best watched "
+	                   "at game speed 4.",
+	    .expected = "The couple takes homes in two of the huts. Within a few turns the hut that stays empty loses the "
+	                "life its row of the buildings' table gives for an empty building, and gets a site for its "
+	                "builders. It then loses that life again each 1001 turns. A hut with a person in it never loses "
+	                "life, and no player counts the loss as a building that it destroyed.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_PlannedHuts[0]}, .distance = 0.6f},
+	    .objects = std::move(neglect),
 	});
 
 	// A town finishing a crèche its people then dance round

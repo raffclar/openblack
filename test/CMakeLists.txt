@@ -1002,3 +1002,6 @@ openblack_setup_and_add_test(
   test_creature_town_help test_creature_town_help.cpp
 )
 openblack_setup_and_add_test(test_creature_deeds test_creature_deeds.cpp)
+openblack_setup_and_add_test(
+  test_abode_neglect_rules test_abode_neglect_rules.cpp
+)

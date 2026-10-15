@@ -1072,6 +1072,7 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				    {
 					    ecs::construction::SetBuilt(abode, *object.built);
 				    }
+				    Locator::entitiesRegistry::value().Get<ecs::components::Abode>(abode).neglect = object.neglect;
 				    return abode;
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)

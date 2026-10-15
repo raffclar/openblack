@@ -41,6 +41,8 @@ struct Abode
 	bool putUpForMending {false};
 	/// How many of its town's passes over its buildings it has stood through, up to the age it counts as settled
 	uint32_t age {0};
+	/// The part of the time to its next loss of life from neglect that went by while it was empty
+	float neglect {0.0f};
 };
 
 } // namespace openblack::ecs::components
