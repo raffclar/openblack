@@ -456,6 +456,9 @@ struct Step
 		WatchPlayer,
 		/// After this step, the plan acts on the creature, not on the thing that it chose. The step ends at once.
 		ActOnItself,
+		/// Fighting another creature (the step's object): as it starts, it asks that creature to fight. If the other
+		/// creature does not agree, the rest of the agenda is given up. Else the step lasts until the fight has ended.
+		Fight,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -708,6 +711,8 @@ struct Senses
 	/// The player's hand while a step follows the hand, and the player while a step watches the player
 	std::optional<creature_player_attention::FollowHandView> followHand;
 	std::optional<creature_player_attention::WatchPlayerView> watchPlayer;
+	/// Whether it is in a fight now
+	bool fighting {false};
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -768,6 +773,8 @@ struct Commands
 	bool healItself {false};
 	/// A rock to break in two, by its entity's number
 	std::optional<uint32_t> shatter;
+	/// A fight to start with another creature, by its entity's number
+	std::optional<uint32_t> startFight;
 	/// Sitting down this turn, it rests a little
 	bool restSitting {false};
 	/// How often its eyes now blink, when that changes

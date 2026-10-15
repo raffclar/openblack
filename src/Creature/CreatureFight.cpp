@@ -445,6 +445,20 @@ float creature_fight::LifeAfterFight(float life, float fightHealth)
 	return std::clamp(life - ((1.0f - std::clamp(fightHealth, 0.0f, 1.0f)) * k_LifeLostShare), 0.0f, 1.0f);
 }
 
+bool creature_fight::LetsChoose(const MindInFight& mind)
+{
+	if (mind.knockedOut)
+	{
+		return false;
+	}
+	return !mind.fighting || (mind.startedIt && mind.planned && mind.waitsForFight && !mind.won);
+}
+
+bool creature_fight::ObeysInFight(const MindInFight& mind)
+{
+	return mind.fighting && !mind.startedIt && !mind.won;
+}
+
 bool creature_fight::HealthyEnoughToFight(float life)
 {
 	return life > k_MinLifeToFight;
@@ -994,12 +1008,6 @@ bool creature_fight::FightWonIsSeen(bool byBlow, bool winnerHasPlayer)
 size_t creature_fight::Response(float life, float otherLife)
 {
 	return life >= otherLife ? animations::k_Happy : animations::k_Sad;
-}
-
-bool creature_fight::WantsToFight(float anger, float life, float distance, float size, float secondsSinceFight)
-{
-	return anger >= k_AngerToFight && HealthyEnoughToFight(life) && distance <= k_PickFightPerSize * size &&
-	       secondsSinceFight >= k_SecondsBetweenFights;
 }
 
 namespace

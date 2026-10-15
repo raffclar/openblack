@@ -4008,6 +4008,21 @@ void AddCombat(std::vector<Scenario>& all)
 		                  Fighter({15.0f, 0.0f}, 270.0f, "blue", PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::KnockOut, 1, 0, k_DuelStartsSeconds)},
 		});
+		auto passer = Fighter({60.0f, -40.0f}, 270.0f, "passer", PlayerNames::PLAYER_TWO, 0.5f, 0.0f);
+		all.push_back({
+		    .id = "combat.after_fight_block",
+		    .name = "After a knock-out, the winner takes no notice until its poo is done",
+		    .facet = Facet::Combat,
+		    .description = "An evil red tiger (alignment -0.8) fights a blue tiger, and the blue tiger is knocked out as "
+		                   "in combat.winner_poos. A third tiger then walks past the red tiger.",
+		    .expected = "The red tiger walks to the blue tiger and has a poo on it. It does not stop to look over the "
+		                "tiger that walks past. Once the poo is done, it takes up reactions again.",
+		    .framing = ringside,
+		    .creatures = {Fighter({-15.0f, 0.0f}, 90.0f, "red", PlayerNames::PLAYER_ONE, 0.5f, k_EvilAlignment),
+		                  Fighter({15.0f, 0.0f}, 270.0f, "blue", PlayerNames::PLAYER_TWO, 0.5f, 0.0f), passer},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::KnockOut, 1, 0, k_DuelStartsSeconds),
+		                 Go(Kind::WalkTo, 2, {-60.0f, -40.0f}, 1.0f, false)},
+		});
 		all.push_back({
 		    .id = "combat.winner_shows_off",
 		    .name = "A winner that is not evil shows off at the loser",
@@ -4056,11 +4071,9 @@ void AddCombat(std::vector<Scenario>& all)
 	    .id = "combat.anger",
 	    .name = "An angry creature picks a fight",
 	    .facet = Facet::Combat,
-	    .description = "A red tiger as angry as it gets, wanting nothing else, stands near a blue tiger, with angry "
-	                   "creatures picking fights.",
-	    .expected = "It picks a fight with the blue tiger by itself, and they duel. Once it is over, it waits two "
-	                "minutes before picking another.",
-	    .environment = {.angerStartsFights = true},
+	    .description = "A red tiger as angry as it gets, wanting nothing else, stands near a blue tiger.",
+	    .expected = "Its anger makes a plan to fight the blue tiger. It asks the blue tiger to fight, and they duel. The "
+	                "blue tiger obeys the red tiger until the fight is over.",
 	    .framing = ringside,
 	    .creatures = {angry, blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
 	});
@@ -4622,11 +4635,29 @@ void AddMind(std::vector<Scenario>& all)
 	                   "friend, as a script makes friends. A fight knocks out the tiger to its right.",
 	    .expected = "The angry tiger makes no plan of anger about its friend, and none about the tiger that lies "
 	                "knocked out. Both tigers have no worth for its anger. The inspector shows the friends of each "
-	                "tiger and the knock-out.",
+	                "tiger and the knock-out. When the knocked out tiger is up again, the angry tiger can plan a fight "
+	                "with it.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {furious, otherTiger({-40.0f, 0.0f}, 90.0f, "friend"), otherTiger({40.0f, 0.0f}, 270.0f, "knocked out")},
-	    .commands = {{.kind = Kind::MakeFriends, .creature = 0, .delaySeconds = 0.5f, .value = 1},
-	                 Fight(Kind::KnockOut, 2, 0, 0.5f)},
+	    // The friends and the knock-out are made before the angry tiger can plan anything
+	    .commands = {{.kind = Kind::MakeFriends, .creature = 0, .delaySeconds = 0.0f, .value = 1},
+	                 Fight(Kind::KnockOut, 2, 0, 0.0f)},
+	});
+	all.push_back({
+	    .id = "combat.anger_picks_foe",
+	    .name = "An angry creature fights neither a friend nor a dead creature",
+	    .facet = Facet::Combat,
+	    .description = "An angry tiger stands between two tigers of another player, as in mind.friends_and_dead: its "
+	                   "friend to its left and a knocked out tiger to its right. A third tiger of that player stands "
+	                   "further away, in front of it.",
+	    .expected = "The angry tiger does not fight its friend or the knocked out tiger. Its anger makes a plan to fight "
+	                "the tiger in front of it, and the two duel. The fight transcript gives the reason anger.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {furious, otherTiger({-40.0f, 0.0f}, 90.0f, "friend"), otherTiger({40.0f, 0.0f}, 270.0f, "knocked out"),
+	                  otherTiger({0.0f, 70.0f}, 180.0f, "foe")},
+	    // The friends and the knock-out are made before the angry tiger can plan anything
+	    .commands = {{.kind = Kind::MakeFriends, .creature = 0, .delaySeconds = 0.0f, .value = 1},
+	                 Fight(Kind::KnockOut, 2, 0, 0.0f)},
 	});
 
 	all.push_back({

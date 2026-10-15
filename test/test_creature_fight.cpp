@@ -486,11 +486,6 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_FALSE(FightWonIsSeen(true, false));
 	EXPECT_EQ(Response(0.8f, 0.5f), animations::k_Happy);
 	EXPECT_EQ(Response(0.4f, 0.5f), animations::k_Sad);
-	EXPECT_TRUE(WantsToFight(0.7f, 1.0f, 50.0f, 1.0f, 200.0f));
-	EXPECT_FALSE(WantsToFight(0.5f, 1.0f, 50.0f, 1.0f, 200.0f));
-	EXPECT_FALSE(WantsToFight(0.7f, 0.05f, 50.0f, 1.0f, 200.0f));
-	EXPECT_FALSE(WantsToFight(0.7f, 1.0f, 70.0f, 1.0f, 200.0f));
-	EXPECT_FALSE(WantsToFight(0.7f, 1.0f, 50.0f, 1.0f, 30.0f));
 }
 
 TEST(CreatureFightHud, AtTheDefaultScreenThePanelIsFlushInTheCorner)
@@ -666,4 +661,25 @@ TEST(CreatureFightHud, PanelOnlyUnderThePlayersCamera)
 	EXPECT_FALSE(creature_fight_hud::PanelAllowed(false, true));
 	EXPECT_FALSE(creature_fight_hud::PanelAllowed(true, false));
 	EXPECT_FALSE(creature_fight_hud::PanelAllowed(true, true));
+}
+
+TEST(CreatureFight, OnlyTheCreatureThatPlannedAFightStillChoosesInIt)
+{
+	using creature_fight::LetsChoose;
+	using creature_fight::ObeysInFight;
+	// Out of a fight it chooses, unless it lies out cold
+	EXPECT_TRUE(LetsChoose({}));
+	EXPECT_FALSE(LetsChoose({.knockedOut = true}));
+	// It started the fight by its own plan, which waits for the fight
+	EXPECT_TRUE(LetsChoose({.fighting = true, .startedIt = true, .planned = true, .waitsForFight = true}));
+	// Made to fight by the leash, a script or the debug tools
+	EXPECT_FALSE(LetsChoose({.fighting = true, .startedIt = true, .planned = false, .waitsForFight = true}));
+	// Made to do something to the loser after a knock-out
+	EXPECT_FALSE(LetsChoose({.fighting = true, .startedIt = true, .planned = true, .waitsForFight = false, .won = true}));
+	// The other creature obeys
+	EXPECT_FALSE(LetsChoose({.fighting = true, .waitsForFight = true}));
+	EXPECT_TRUE(ObeysInFight({.fighting = true}));
+	EXPECT_FALSE(ObeysInFight({.fighting = true, .won = true}));
+	EXPECT_FALSE(ObeysInFight({.fighting = true, .startedIt = true}));
+	EXPECT_FALSE(ObeysInFight({}));
 }

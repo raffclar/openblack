@@ -23,6 +23,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -493,4 +494,19 @@ TEST_F(CreatureFightSystemTest, ACreatureRefusesAFightWithOneTooBigOrTooSmall)
 	registry.Get<Creature>(small).size = 1.0f;
 	registry.Assign<ScriptControlled>(small);
 	EXPECT_EQ(fights.StartFight(big, small), Start::Refused);
+}
+
+TEST_F(CreatureFightSystemTest, AKnockOutKeepsTheWinnerAndTheLoserFromReactions)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<CreatureMindState>(first).idle.serial = 4;
+	registry.Assign<CreatureMindState>(second).idle.serial = 9;
+	Locator::creatureMindSystem::emplace<ForcedMinds>();
+	fights.KnockOut(second);
+	// Each keeps the number of the agenda that it had at the knock-out
+	ASSERT_TRUE(registry.AllOf<CreatureAfterFight>(first));
+	ASSERT_TRUE(registry.AllOf<CreatureAfterFight>(second));
+	EXPECT_EQ(registry.Get<const CreatureAfterFight>(first).agenda, 4u);
+	EXPECT_EQ(registry.Get<const CreatureAfterFight>(second).agenda, 9u);
+	Locator::creatureMindSystem::reset();
 }
