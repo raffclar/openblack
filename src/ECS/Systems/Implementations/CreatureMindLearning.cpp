@@ -2943,11 +2943,14 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 		static_cast<void>(ForcePlan(creature, {.desire = Desire::ManifestState,
 		                                       .action = "CommunicateState",
 		                                       .object = creature,
-		                                       .agenda = creature_follow_up::ShowHappy()}));
+		                                       .agenda = creature_follow_up::ShowHappy(),
+		                                       .ordered = true}));
 		return;
 	case FollowUp::FrightenedOfPlayer:
-		static_cast<void>(ForcePlan(
-		    creature, {.desire = Desire::Fear, .action = creature_follow_up::FrightenedAction(Random(3)), .object = creature}));
+		static_cast<void>(ForcePlan(creature, {.desire = Desire::Fear,
+		                                       .action = creature_follow_up::FrightenedAction(Random(3)),
+		                                       .object = creature,
+		                                       .ordered = true}));
 		return;
 	case FollowUp::DoLessonAgain:
 		DoLessonAgain(creature, mind);
@@ -2961,9 +2964,11 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 		auto agenda = creature_follow_up::ShowSlapFeeling(
 		    feelings, [this](uint32_t range) { return Random(range); }, Chance(),
 		    static_cast<uint32_t>(std::lround(k_TurnsPerSecond)));
-		static_cast<void>(ForcePlan(
-		    creature,
-		    {.desire = Desire::ManifestState, .action = "CommunicateState", .object = creature, .agenda = std::move(agenda)}));
+		static_cast<void>(ForcePlan(creature, {.desire = Desire::ManifestState,
+		                                       .action = "CommunicateState",
+		                                       .object = creature,
+		                                       .agenda = std::move(agenda),
+		                                       .ordered = true}));
 		return;
 	}
 	}
@@ -4184,6 +4189,7 @@ bool CreatureMindSystem::ContinueKeptPlanWith(entt::entity creature, CreatureMin
 	                                   .action = action.name,
 	                                   .actionObject = actsOnGift ? gift : static_cast<entt::entity>(*kept->object),
 	                                   .instrument = actsOnGift ? toEntity(kept->instrument) : std::optional(gift),
+	                                   .ordered = true,
 	                               });
 }
 
@@ -4222,9 +4228,10 @@ void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState
 		if (registry.Valid(object) && rule.noticeAction < tables->actions.size())
 		{
 			ComeAcross(creature, mind, object);
-			ForceActivity(
-			    creature,
-			    {.desire = Desire::Curiosity, .action = tables->actions.at(rule.noticeAction).name, .actionObject = object});
+			ForceActivity(creature, {.desire = Desire::Curiosity,
+			                         .action = tables->actions.at(rule.noticeAction).name,
+			                         .actionObject = object,
+			                         .ordered = true});
 		}
 		break;
 	}

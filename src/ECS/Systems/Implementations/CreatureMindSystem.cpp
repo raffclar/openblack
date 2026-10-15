@@ -1890,7 +1890,8 @@ void CreatureMindSystem::ProcessTurn()
 			    {
 				    ForcePlan(entity, {.desire = creature_desires::Desire::ObeyPlayer,
 				                       .action = creature_mind::k_CutSceneLookAction,
-				                       .object = entity});
+				                       .object = entity,
+				                       .ordered = true});
 			    }
 		    }
 		    // When the creature examines a different creature, it finds the desires of the two creatures each turn.
@@ -2929,14 +2930,16 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .action = k_ExamineGivenAction,
 		                     .object = object,
 		                     .agenda = creature_mind::ExamineGiven(number),
-		                     .activityObject = owner});
+		                     .activityObject = owner,
+		                     .ordered = true});
 		break;
 	case creature_giving::Use::Eat:
 		ForcePlan(creature, {.desire = Desire::Hunger,
 		                     .action = k_EatGivenAction,
 		                     .object = object,
 		                     .agenda = creature_mind::EatGiven(),
-		                     .activityObject = owner});
+		                     .activityObject = owner,
+		                     .ordered = true});
 		break;
 	case creature_giving::Use::Throw:
 	{
@@ -2945,7 +2948,8 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .action = k_ThrowGivenAction,
 		                     .object = object,
 		                     .agenda = creature_mind::ThrowGiven(eye),
-		                     .activityObject = owner});
+		                     .activityObject = owner,
+		                     .ordered = true});
 		break;
 	}
 	case creature_giving::Use::AsLed:
@@ -3044,6 +3048,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 		                   .learnable = info.learnable,
 		                   .windowSeconds = info.learningWindowSeconds,
 		                   .source = *source,
+		                   .ordered = forced.ordered,
 		               });
 	}
 	creature_learning::SuppressOpposed(*mind->desires, forced.desire, tables->dependencies, k_TurnsPerSecond);

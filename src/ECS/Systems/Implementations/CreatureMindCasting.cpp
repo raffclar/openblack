@@ -679,7 +679,9 @@ bool CreatureMindSystem::CastGivenGlobe(entt::entity creature, CreatureMindState
 	CountMiracleSighting(creature, *body, mind, index);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} casts the globe {} that it was given at {}",
 	                    entt::to_integral(creature), entt::to_integral(globe), entt::to_integral(*target));
-	ForceActivity(creature, {.desire = desire, .activityObject = whole, .action = cast->action, .actionObject = *target});
+	ForceActivity(
+	    creature,
+	    {.desire = desire, .activityObject = whole, .action = cast->action, .actionObject = *target, .ordered = true});
 	return true;
 }
 
