@@ -1466,6 +1466,12 @@ void TempleInterior::Activate(TempleRoom room)
 
 	// The temple's camera takes over from the island's, coming into the room along its path
 	_active = true;
+	// The world stops while the player is in the temple. The frame that enters the temple gives no game time to the
+	// temple.
+	if (Locator::time::has_value())
+	{
+		Locator::time::value().SetHeld(true);
+	}
 	_leaveRequested = false;
 	_leavingForMapPoint = false;
 	// Entering the temple covers the way in from 1.2
@@ -1628,6 +1634,11 @@ void TempleInterior::Close()
 	if (Locator::cameraPathSystem::value().IsPathing())
 	{
 		Locator::cameraPathSystem::value().Stop();
+	}
+	// The world starts again from where it stopped
+	if (Locator::time::has_value())
+	{
+		Locator::time::value().SetHeld(false);
 	}
 	_active = false;
 }
