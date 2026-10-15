@@ -144,8 +144,10 @@ std::vector<Step> creature_mind::ThrowDie(std::optional<uint32_t> pickUp, uint32
 	const auto at = from + glm::vec2(k_DieThrowHeights * height);
 	agenda.push_back(
 	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Throw, .point = at}, .gaze = GoingLook(at)});
-	agenda.push_back(
-	    {.kind = Step::Kind::WatchFlying, .object = die, .face = creature_face::Cue::Amazed, .gaze = Gaze {.object = die}});
+	agenda.push_back({.kind = Step::Kind::WatchFlying,
+	                  .object = die,
+	                  .face = creature_face::Cue::Amazed,
+	                  .gaze = Gaze {.object = die, .itself = true}});
 	const bool happy = random(k_DieOutcomeLots) > 0;
 	agenda.push_back({.kind = Step::Kind::Action,
 	                  .animation = happy ? creature_layers::animations::k_Happy : creature_layers::animations::k_Sad});

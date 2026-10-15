@@ -56,6 +56,11 @@ void FinishStep(IdleMind& mind)
 	mind.stepStarted = false;
 	mind.stepSeconds = 0.0f;
 	mind.sitEnding = false;
+	// With its last step done, it stops what it does
+	if (mind.step >= mind.agenda.size())
+	{
+		mind.eyesToClear = true;
+	}
 }
 
 /// One turn of watching the camera, the turn it starts on counting as the first: it turns to the camera when it is more
@@ -652,8 +657,8 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.stoppedByScript = false;
 	mind.stoppedSeen = false;
 	mind.usedUpHeld.reset();
-	// Taking up something else, its eyes look as usual again
-	mind.eyesToClear = mind.eyesHeld;
+	// Taking up something else, it stops what it did, and its eyes look as a rested creature's eyes do again
+	mind.eyesToClear = true;
 }
 
 std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
@@ -897,6 +902,7 @@ void GiveUpAgenda(IdleMind& mind)
 	mind.step = mind.agenda.size();
 	mind.stepStarted = false;
 	mind.gaveUp = true;
+	mind.eyesToClear = true;
 }
 
 /// Waiting for the dancers to stand still: with no dance there is nothing to wait for
@@ -1081,6 +1087,11 @@ std::optional<Gaze> creature_mind::LookOf(const Step& step)
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	Commands commands;
+	if (mind.eyesToClear)
+	{
+		commands.restEyes = true;
+		mind.eyesToClear = false;
+	}
 	if (mind.step >= mind.agenda.size())
 	{
 		return commands;
@@ -1165,20 +1176,11 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		if (step.heldEyes.has_value())
 		{
 			commands.eyes = *step.heldEyes;
-			mind.eyesHeld = true;
-			mind.eyesToClear = false;
-		}
-		else if (mind.eyesToClear)
-		{
-			commands.eyes = Eyes::Normal;
-			mind.eyesHeld = false;
-			mind.eyesToClear = false;
 		}
 		if (step.flutterEyelids)
 		{
-			// Its eyes go back to their usual blinking once it takes up something else
+			// Its eyes go back to their usual blinking once it stops what it does
 			commands.blinkIntervalMs = k_FlutterBlinkIntervalMs;
-			mind.eyesHeld = true;
 		}
 		switch (step.kind)
 		{
@@ -1401,10 +1403,6 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Action:
 		if (!senses.bodyBusy)
 		{
-			if (step.sleepyEyes)
-			{
-				commands.eyes = Eyes::Normal;
-			}
 			if (step.effect != Effect::None)
 			{
 				commands.effect = step.effect;

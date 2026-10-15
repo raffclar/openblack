@@ -76,9 +76,8 @@ struct CreatureMindState
 	/// What it believes about the things it has come across, and how far its eyes have swept the cells about it
 	creature_object_beliefs::Store beliefs;
 	creature_object_beliefs::Sweep sweep {};
-	/// The map cell it stood in when it last looked for the nearest temple, which it does again each time it goes into
-	/// another cell, and the temple that was nearest then
-	std::optional<glm::ivec2> beliefCell;
+	/// The town and the temple that it came across last as it looked far about it
+	entt::entity lastTown {entt::null};
 	entt::entity nearestTemple {entt::null};
 	/// Seconds since the player last stroked or slapped it, and which. A new mind counts from the time it was made, as if
 	/// it had feedback then.

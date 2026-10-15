@@ -375,8 +375,12 @@ private:
 	/// It forgets what it believed about things gone from the world, and its last try that fizzled when the thing of
 	/// that try goes
 	void ForgetGoneThings(entt::entity creature, components::CreatureMindState& mind);
-	/// Gone into another map cell, it comes across the temple nearest it if that is another than the last
-	void NoteNearestTemple(entt::entity creature, components::CreatureMindState& mind, const components::Transform& transform);
+	/// Each turn it comes across the nearest town other than the last it came across, with its storage pit, and the
+	/// nearest temple if that is another than the last
+	void LookFarAbout(entt::entity creature, components::CreatureMindState& mind, const components::Transform& transform);
+	/// As it moves, the nearest mountains and water on its map may take over what it watches
+	void LookAtLand(entt::entity entity, const components::Creature& creature, components::CreatureMindState& mind,
+	                const components::Transform& transform);
 	/// Its eyes sweep this turn's cells about it, and it comes across everything in those it can see
 	void SweepEyes(entt::entity entity, const components::Creature& creature, components::CreatureMindState& mind,
 	               const components::CreatureAnimation& animation, const components::Transform& transform);

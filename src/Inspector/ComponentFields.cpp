@@ -790,7 +790,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::turnsLookedAt>("turnsLookedAt")
 	    .Field<&components::CreatureMindState::beliefs>("beliefs")
 	    .Field<&components::CreatureMindState::sweep>("sweep")
-	    .Field<&components::CreatureMindState::beliefCell>("beliefCell")
+	    .Field<&components::CreatureMindState::lastTown>("lastTown")
 	    .Field<&components::CreatureMindState::nearestTemple>("nearestTemple")
 	    .Field<&components::CreatureMindState::feedbackSeconds>("feedbackSeconds")
 	    .Field<&components::CreatureMindState::feedbackWasStroke>("feedbackWasStroke")
@@ -2365,6 +2365,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_look::NoticedMover::turn>("turn");
 	Reflect<openblack::creature_look::Target>(context, ValueOnly {})
 	    .Field<&openblack::creature_look::Target::id>("id")
+	    .Field<&openblack::creature_look::Target::sight>("sight")
+	    .Field<&openblack::creature_look::Target::place>("place")
 	    .Field<&openblack::creature_look::Target::interest>("interest")
 	    .Field<&openblack::creature_look::Target::point>("point")
 	    .Field<&openblack::creature_look::Target::watchedTurns>("watchedTurns");
@@ -2420,7 +2422,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::stepSeconds>("stepSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::sitEnding>("sitEnding")
 	    .Field<&openblack::creature_mind::IdleMind::faceSeconds>("faceSeconds")
-	    .Field<&openblack::creature_mind::IdleMind::eyesHeld>("eyesHeld")
 	    .Field<&openblack::creature_mind::IdleMind::eyesToClear>("eyesToClear")
 	    .Field<&openblack::creature_mind::IdleMind::faceVariety>("faceVariety")
 	    .Field<&openblack::creature_mind::IdleMind::shown>("shown")

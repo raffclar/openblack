@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <array>
+#include <optional>
 #include <set>
 #include <utility>
 #include <vector>
@@ -324,4 +326,33 @@ TEST(CreatureObjectBeliefs, ItListsItsBeliefsNewestFirst)
 	EXPECT_EQ(newest[0].thing, Thing(3));
 	EXPECT_EQ(newest[1].thing, Thing(2));
 	EXPECT_EQ(newest[2].thing, Thing(1));
+}
+
+TEST(CreatureObjectBeliefs, TownsAreAsFarAsTheLongerSideAndHalfTheShorter)
+{
+	EXPECT_EQ(TownCellDistance({0, 0}, {10, 4}), 12);
+	EXPECT_EQ(TownCellDistance({0, 0}, {-3, 10}), 11);
+	EXPECT_EQ(TownCellDistance({5, 5}, {5, 5}), 0);
+}
+
+TEST(CreatureObjectBeliefs, ItComesAcrossTheTwoNearestTownsInTurn)
+{
+	const std::array<TownCell, 3> towns {
+	    TownCell {.id = 1, .cell = {20, 0}},
+	    TownCell {.id = 2, .cell = {0, 10}},
+	    TownCell {.id = 3, .cell = {0, 40}},
+	};
+	auto last = NearestOtherTown({0, 0}, towns, std::nullopt);
+	EXPECT_EQ(last, 2u);
+	last = NearestOtherTown({0, 0}, towns, last);
+	EXPECT_EQ(last, 1u);
+	last = NearestOtherTown({0, 0}, towns, last);
+	EXPECT_EQ(last, 2u);
+	// With one town, it comes across that town only once
+	const std::array<TownCell, 1> one {TownCell {.id = 7, .cell = {3, 3}}};
+	EXPECT_EQ(NearestOtherTown({0, 0}, one, std::nullopt), 7u);
+	EXPECT_FALSE(NearestOtherTown({0, 0}, one, 7u).has_value());
+	// Of towns equally near, the first counts
+	const std::array<TownCell, 2> tie {TownCell {.id = 4, .cell = {2, 0}}, TownCell {.id = 5, .cell = {0, 2}}};
+	EXPECT_EQ(NearestOtherTown({0, 0}, tie, std::nullopt), 4u);
 }
