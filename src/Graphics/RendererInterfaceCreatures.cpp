@@ -161,6 +161,8 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 	}
 	bgfx::update(toBgfx(*_interfaceCreatureInstances), 0,
 	             bgfx::copy(instances.data(), static_cast<uint32_t>(instances.size() * sizeof(instances.front()))));
+	// Each body with its eyes and with no hair. The hair stays where the creature is in the world, so it is not on the
+	// body in the box.
 	for (size_t i = 0; i < bodies.size(); ++i)
 	{
 		const auto& body = bodies.at(i);

@@ -224,8 +224,9 @@ constexpr float k_HandRestSeconds = 0.3f;
 constexpr float k_HandJumpsShortShare = 0.03f;
 /// When the hand takes hold, it is short of the creature's position by this distance for each unit of size
 constexpr float k_HandStartsShortPerSize = 0.825f;
-/// The hand comes no nearer to the camera than this distance
+/// The hand comes no nearer to the camera than this distance, and goes no farther than its reach
 constexpr float k_HandNearestToCamera = 2.0f;
+constexpr float k_HandReach = 1800.0f;
 /// The distance of the hand from the camera when it takes hold of a creature
 [[nodiscard]] float HandStartDistance(float cameraToCreature, float size);
 /// Keep the hand nearer to the camera than the creature's middle. A hand that is farther jumps there at once.

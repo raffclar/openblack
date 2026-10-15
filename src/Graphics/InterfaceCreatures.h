@@ -74,8 +74,8 @@ constexpr int k_SmallestSize = 10;
 /// takes divides it.
 [[nodiscard]] float Depth(float creatureSize, int boxSize, float interfaceShare);
 
-/// The camera's projection over the interface's space: the projection of the world's camera, which keeps the width of
-/// its view, made as tall as the interface's space is
+/// The camera's projection over the interface's space: the projection the world's camera has on a 4:3 screen, whatever
+/// the shape of the window
 [[nodiscard]] glm::mat4 SpaceProjection(const glm::mat4& worldProjection);
 
 /// The world point under a pixel of the screen, at a depth in front of the camera

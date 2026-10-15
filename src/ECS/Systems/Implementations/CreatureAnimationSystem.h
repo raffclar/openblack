@@ -10,6 +10,7 @@
 #pragma once
 
 #include <random>
+#include <span>
 
 #include "Common/RandomNumberManager.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -29,6 +30,8 @@ public:
 	void PoseCopy(entt::entity copy, float milliseconds) override;
 	[[nodiscard]] std::optional<glm::vec3> BoneInAnimation(entt::entity creature, size_t animation, float timeMs, uint32_t bone,
 	                                                       bool mirrored) override;
+	[[nodiscard]] std::optional<glm::vec3> MiddleOfBonesInAnimation(entt::entity creature, size_t animation, float timeMs,
+	                                                                std::span<const uint32_t> bones) override;
 	[[nodiscard]] std::optional<float> AnimationDuration(entt::entity creature, size_t animation) override;
 	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) override;
 	void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) override;

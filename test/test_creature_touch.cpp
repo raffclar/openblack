@@ -290,10 +290,11 @@ TEST(CreatureTouch, TooDeepTheHandJumpsShortOfItsRestAndEasesBack)
 	EXPECT_NEAR(distance.GetValue(), rest, k_Tolerance);
 }
 
-TEST(CreatureTouch, TheHandComesNoNearerTheCameraThanTwo)
+TEST(CreatureTouch, TheHandStaysBetweenTwoAndItsReachFromTheCamera)
 {
 	EXPECT_NEAR(feedback::HandDistanceFromCamera(Zoomer(0.5f)), 2.0f, k_Tolerance);
 	EXPECT_NEAR(feedback::HandDistanceFromCamera(Zoomer(12.0f)), 12.0f, k_Tolerance);
+	EXPECT_NEAR(feedback::HandDistanceFromCamera(Zoomer(2500.0f)), 1800.0f, k_Tolerance);
 }
 
 TEST(CreatureTouch, TheSecondLineGoesThroughTheMiddleOfTheCursorsLastTwoPlacesRoundedDown)
