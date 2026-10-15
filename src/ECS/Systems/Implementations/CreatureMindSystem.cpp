@@ -1788,6 +1788,7 @@ void CreatureMindSystem::ProcessTurn()
 		    // what it is given, and stands about once that is done
 		    const bool scripted = registry.AllOf<ScriptControlled>(entity);
 		    TurnBeforeDecision(entity, creature, mind, scripted);
+		    StepEmergencies(entity, creature, mind, scripted);
 		    // The other creature in a fight obeys the creature that started it: its desires stand still until the fight
 		    // is over, or until it wins by a knock-out
 		    const auto* fighting = registry.TryGet<const CreatureFighting>(entity);

@@ -113,4 +113,6 @@ void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::s
                                                     float width, bool livingBlocks);
 /// The way a creature looks, as a game angle: towards what its head is turned to, or else the way its body faces
 [[nodiscard]] uint16_t LookingAngle(const components::Transform& transform, const std::optional<glm::vec3>& lookAt);
+/// Whether the body of the creature can pay for a miracle of a type
+[[nodiscard]] bool CanPayForMiracle(entt::entity creature, MagicType type);
 } // namespace openblack::ecs::systems::mind_detail

@@ -1172,3 +1172,8 @@ bool CreatureMindSystem::TellCast(entt::entity creature, MagicType type, entt::e
 	}
 	return false;
 }
+
+bool mind_detail::CanPayForMiracle(entt::entity creature, MagicType type)
+{
+	return CanPayFor(creature, type);
+}

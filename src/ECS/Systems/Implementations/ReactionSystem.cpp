@@ -486,6 +486,11 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	{
 		return false;
 	}
+	// Nor does one in an emergency, until it stops what it does
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity); mind != nullptr && mind->emergencyRunning)
+	{
+		return false;
+	}
 	if (const auto* leash = registry.TryGet<const CreatureLeash>(entity); leash != nullptr && leash->order.has_value())
 	{
 		return false;
