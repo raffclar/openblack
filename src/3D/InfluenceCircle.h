@@ -73,6 +73,9 @@ void AddCircle(std::vector<Circle>& circles, PlayerNames player, const glm::vec3
 
 /// How strongly the border shows, of 255, for the camera's height: none at all up to 100, coming in to 120 at 200
 [[nodiscard]] std::optional<uint8_t> CurtainAlpha(float cameraHeight);
+/// Whether the curtain's texture scrolls in a frame: only when the border is drawn in it. In the temple, that is while
+/// the map shows the influence. Outside, that is when the camera is higher than the height where the border shows.
+[[nodiscard]] bool CurtainScrolls(bool inTemple, bool mapShowsInfluence, float cameraHeight);
 /// How far the curtain's texture has scrolled, from a clock of game milliseconds that wraps every ten seconds
 [[nodiscard]] glm::vec2 ScrollOffset(int32_t milliseconds);
 inline constexpr int32_t k_ScrollWrap = 10000;

@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <chrono>
 #include <span>
 #include <vector>
 
@@ -39,6 +40,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
@@ -47,6 +49,7 @@
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
+#include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
@@ -445,6 +448,8 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 	registry.Assign<CaveCreature>(copy, state, places->fire);
 	registry.Assign<CreatureAnimation>(copy);
 	registry.Assign<CreatureEyes>(copy);
+	// It has hair of its own, which starts straight out from the roots
+	registry.Assign<CreatureHair>(copy);
 	_caveCreature = copy;
 }
 
@@ -548,6 +553,11 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 	if (Locator::creatureAnimationSystem::has_value())
 	{
 		Locator::creatureAnimationSystem::value().PoseCopy(*_caveCreature, frameMs);
+	}
+	// Its hair swings from the new pose, by the whole time of the frame
+	if (Locator::creatureHairSystem::has_value())
+	{
+		Locator::creatureHairSystem::value().StepCopy(*_caveCreature, std::chrono::duration<float, std::milli>(milliseconds));
 	}
 	if (frame.zoomed && mouse.has_value())
 	{
