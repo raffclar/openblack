@@ -152,10 +152,10 @@ constexpr float k_AfterPointingOutSeconds = 2.0f;
 /// The creature throws a rock at a thing and eats the thing. The agenda has these steps:
 /// 1. When its hand holds no rock, it picks up the rock.
 /// 2. It walks to a place to throw from, as far as its height, with an angry face.
-/// 3. It throws the rock at the thing, with an angry face.
+/// 3. It throws the rock, with an angry face. It aims at the rock in its hand, not at the thing, as the game does. The
+///    rock is too near, so the throw fails and the action stops there.
 /// 4. It picks up the thing, and eats what it holds.
-[[nodiscard]] std::vector<Step> StoneAndEat(uint32_t rock, uint32_t thing, glm::vec2 thingPoint, float height,
-                                            bool holdingRock);
+[[nodiscard]] std::vector<Step> StoneAndEat(uint32_t rock, uint32_t thing, float height, bool holdingRock);
 /// The creature shows another creature that it hates it. The agenda has these steps:
 /// 1. It goes near the other creature, to two and a half times the height of the taller of the two, with an angry face.
 /// 2. It turns to face the other creature and holds still for two seconds, with an angry face.

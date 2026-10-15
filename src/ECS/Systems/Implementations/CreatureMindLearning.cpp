@@ -1631,10 +1631,23 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		SituateDance(creature, *executor, point, situated);
 	}
 	mind_town_help::Situate(Locator::entitiesRegistry::value(), creature, *executor, object, situated);
+	if (executor->build == creature_plan_actions::Build::Drink)
+	{
+		situated.drink = DrinkPlaceOf(creature);
+	}
 	auto agenda = creature_plan_actions::Agenda(
 	    *executor, object, point, situated, [this](uint32_t range) { return Random(range); }, cast);
 	if (!agenda.has_value())
 	{
+		// The creature that finds no place to drink does not want to drink for a time
+		if (executor->build == creature_plan_actions::Build::Drink)
+		{
+			if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
+			    mind != nullptr && mind->desires.has_value())
+			{
+				creature_drink::NoPlaceFound(*mind->desires, k_TurnsPerSecond);
+			}
+		}
 		return std::nullopt;
 	}
 	BelieveInTempleToEnter(creature, *executor, situated);
@@ -2520,7 +2533,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	}
 	Situate(creature, situation);
 	const auto random = [this](uint32_t range) { return Random(range); };
-	bool waterLooked = false;
 	bool fishingLooked = false;
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
 		const bool fishing = executor.build == creature_plan_actions::Build::FishAndEat ||
@@ -2535,11 +2547,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			{
 				situation.home = glm::vec2(home->x, home->z);
 			}
-		}
-		if (executor.build == creature_plan_actions::Build::Drink && !waterLooked)
-		{
-			waterLooked = true;
-			situation.water = NearestWater(position);
 		}
 	};
 
@@ -2926,7 +2933,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		else if (const auto* executor = creature_plan_actions::For(plan.action))
 		{
 			creature_plan_actions::Situation situation;
-			situation.water = NearestWater(position);
+			if (executor->build == creature_plan_actions::Build::Drink)
+			{
+				situation.drink = DrinkPlaceOf(creature);
+			}
 			if (Locator::camera::has_value())
 			{
 				const auto eye = Locator::camera::value().GetOrigin();
@@ -2991,6 +3001,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			if (agenda.has_value())
 			{
 				BelieveInTempleToEnter(creature, *executor, situation);
+			}
+			else if (executor->build == creature_plan_actions::Build::Drink && mind->desires.has_value())
+			{
+				creature_drink::NoPlaceFound(*mind->desires, k_TurnsPerSecond);
 			}
 			activity = executor->activity;
 		}

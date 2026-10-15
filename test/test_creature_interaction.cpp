@@ -677,6 +677,7 @@ TEST(CreatureIdleMind, AnObjectStepWaitsForTheHandsAndGivesUpWhenTheyFail)
 	commands = creature_mind::Think(mind, senses, First);
 	EXPECT_EQ(mind.step, 0u);
 	senses.hands = creature_mind::HandsState::Done;
+	senses.held = 4u;
 	commands = creature_mind::Think(mind, senses, First);
 	EXPECT_EQ(mind.step, 1u);
 	// The next step starts, then the hands fail: the rest is given up
@@ -693,7 +694,8 @@ TEST(CreatureIdleMind, ThrowingAboutAimsFromWhereItStands)
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::PlayWithObject, creature_mind::ThrowAbout(4u, First));
 	mind.step = 1;
-	const creature_mind::Senses senses {.seconds = 0.1f, .position = glm::vec2(100.0f, 200.0f)};
+	creature_mind::Senses senses {.seconds = 0.1f, .position = glm::vec2(100.0f, 200.0f)};
+	senses.held = 4u;
 	const auto commands = creature_mind::Think(mind, senses, First);
 	ASSERT_TRUE(commands.object.has_value());
 	EXPECT_EQ(commands.object->kind, creature_mind::ObjectOrder::Kind::Throw);

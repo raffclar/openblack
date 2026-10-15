@@ -31,7 +31,8 @@ namespace
 Step Walk(glm::vec2 point, float arrival, bool run)
 {
 	Step step {.kind = Step::Kind::Move};
-	step.movement = {.kind = Movement::Kind::ToPoint, .point = point, .run = run, .maxDistance = arrival};
+	step.movement = {
+	    .kind = Movement::Kind::ToPoint, .point = point, .run = run, .maxDistance = arrival, .giveUpIfUnreachable = false};
 	step.gaze = creature_mind::Gaze {.point = glm::vec3(point.x, 0.0f, point.y), .whileGoing = true};
 	return step;
 }

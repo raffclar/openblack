@@ -100,8 +100,7 @@ std::vector<Step> creature_mind::StompAndEat(uint32_t thing, bool holdingEatable
 	return agenda;
 }
 
-std::vector<Step> creature_mind::StoneAndEat(uint32_t rock, uint32_t thing, glm::vec2 thingPoint, float height,
-                                             bool holdingRock)
+std::vector<Step> creature_mind::StoneAndEat(uint32_t rock, uint32_t thing, float height, bool holdingRock)
 {
 	std::vector<Step> agenda;
 	if (!holdingRock)
@@ -110,15 +109,16 @@ std::vector<Step> creature_mind::StoneAndEat(uint32_t rock, uint32_t thing, glm:
 		                  .order = {.kind = ObjectOrder::Kind::PickUp, .object = rock},
 		                  .gaze = Gaze {.object = rock, .whileGoing = true}});
 	}
-	const Gaze watch {.object = thing};
 	agenda.push_back({.kind = Step::Kind::Move,
 	                  .movement = {.kind = Movement::Kind::ToThrowPosition, .object = thing, .maxDistance = height},
 	                  .face = creature_face::Cue::Anger,
-	                  .gaze = watch});
+	                  .gaze = Gaze {.object = thing}});
+	// The creature aims the throw at the rock in its own hand, not at the thing to eat. This is a quirk of the game. The
+	// rock is too near to throw at, so the throw fails and the creature stops the action with the rock in its hand.
 	agenda.push_back({.kind = Step::Kind::Object,
-	                  .order = {.kind = ObjectOrder::Kind::Throw, .object = thing, .point = thingPoint},
+	                  .order = {.kind = ObjectOrder::Kind::Throw, .object = rock, .atObject = true},
 	                  .face = creature_face::Cue::Anger,
-	                  .gaze = watch});
+	                  .gaze = Gaze {.object = rock}});
 	agenda.push_back({.kind = Step::Kind::Object,
 	                  .order = {.kind = ObjectOrder::Kind::PickUp, .object = thing},
 	                  .gaze = Gaze {.object = thing, .whileGoing = true}});
