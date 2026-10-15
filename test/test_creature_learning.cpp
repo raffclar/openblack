@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <optional>
@@ -803,10 +804,34 @@ TEST(CreatureLearning, DominanceAndActions)
 	auto desires = TwoDesires();
 	creature_learning::MakeLeastDominant(desires, Desire::Hunger, 1.3f, 0.0f);
 	EXPECT_NEAR(desires[Desire::Hunger].value, 0.2f / 1.3f, 1e-6f);
-	creature_learning::MakeFullyDominant(desires, Desire::Hunger);
+	creature_learning::MakeFullyDominant(desires, Desire::Hunger, 0.05f);
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 2.0f);
+	// Every other desire goes down to the floor, active or not
+	EXPECT_FLOAT_EQ(desires[Desire::Anger].value, 0.05f);
+	EXPECT_FLOAT_EQ(desires[Desire::Fear].value, 0.05f);
 	creature_learning::AfterAction(desires, Desire::Hunger, 0.3f);
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 0.6f);
+}
+
+TEST(CreatureLearning, FullyDominantChangesNothingForAnInactiveDesire)
+{
+	auto desires = TwoDesires();
+	desires[Desire::Hunger].activated = false;
+	desires[Desire::Hunger].suppressedTurns = 40;
+	creature_learning::MakeFullyDominant(desires, Desire::Hunger, 0.05f);
+	EXPECT_FALSE(desires[Desire::Hunger].activated);
+	EXPECT_EQ(desires[Desire::Hunger].suppressedTurns, 40u);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 0.5f);
+	EXPECT_FLOAT_EQ(desires[Desire::Anger].value, 0.2f);
+}
+
+TEST(CreatureLearning, FullyDominantKeepsTheDesireHeldBack)
+{
+	auto desires = TwoDesires();
+	desires[Desire::Hunger].suppressedTurns = 40;
+	creature_learning::MakeFullyDominant(desires, Desire::Hunger, 0.0f);
+	EXPECT_EQ(desires[Desire::Hunger].suppressedTurns, 40u);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 2.0f);
 }
 
 TEST(CreatureLearning, LeastDominantCountsItselfAndHoldsBetweenFloorAndMaximum)
@@ -1300,10 +1325,70 @@ TEST(CreaturePlanActions, TakingFishHomePutsItDownWithinItsHeightOfHome)
 
 // The model of what is learnt
 
+TEST(CreatureMindModel, FreshOpinionsComeFromTheActionTable)
+{
+	creature_desires::Desires desires;
+	const std::array k_Opinions {1.0f, 0.0f, 0.04f, -0.5f};
+	const auto learnt = creature_mind_model::Fresh(desires, k_Opinions, {});
+	EXPECT_TRUE(std::ranges::equal(learnt.opinions, k_Opinions));
+	EXPECT_EQ(learnt.turnsSinceDone.size(), k_Opinions.size());
+}
+
+TEST(CreatureMindModel, StartingLessonIsAnEnemyVillagerGoodToEat)
+{
+	const auto lesson = creature_mind_model::StartingLesson();
+	EXPECT_EQ(lesson.belief.type, creature_tree::belief_types::k_Villager);
+	EXPECT_EQ(lesson.belief.Value(Attribute::Allegiance), creature_tree::allegiance::k_Enemy);
+	EXPECT_EQ(lesson.belief.Value(Attribute::Life), 1u);
+	// A thing that does not burn has the second value of the attribute
+	EXPECT_EQ(lesson.belief.Value(Attribute::OnFire), 1u);
+	EXPECT_EQ(creature_tree::OnFireValue(false), 1u);
+	EXPECT_EQ(creature_tree::OnFireValue(true), 0u);
+	EXPECT_EQ(lesson.belief.Value(Attribute::Sex), 0u);
+	EXPECT_EQ(lesson.belief.Value(Attribute::VillagerJob), 0u);
+	EXPECT_FALSE(lesson.belief.Value(Attribute::Tribe).has_value());
+	EXPECT_FLOAT_EQ(lesson.feedback, 0.8f);
+	EXPECT_EQ(lesson.saved[0], 2);
+}
+
+TEST(CreatureMindModel, StartingLessonMakesEverythingGoodToEat)
+{
+	creature_desires::Desires desires;
+	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
+	creature_mind_model::TeachStartingLesson(learnt, k_HungerAttributes);
+	const auto& episodes = learnt.episodes[0][static_cast<size_t>(Desire::Hunger)];
+	ASSERT_EQ(episodes.size(), 1u);
+	// One example makes the tree one leaf, so each thing scores as the example does. The feedback 0.8 is within a
+	// quarter of the 0.6 step, which comes first.
+	const auto& tree = learnt.trees[0][static_cast<size_t>(Desire::Hunger)];
+	EXPECT_FLOAT_EQ(creature_tree::Evaluate(tree, Thing(k_Food, 0)), 0.6f);
+	EXPECT_FLOAT_EQ(creature_tree::Evaluate(tree, Thing(k_Villager, 1)), 0.6f);
+	// The other trees stay empty
+	EXPECT_TRUE(learnt.episodes[1][static_cast<size_t>(Desire::Hunger)].empty());
+	EXPECT_TRUE(learnt.episodes[0][static_cast<size_t>(Desire::Anger)].empty());
+}
+
+TEST(CreatureMindModel, StartingLessonOnlyWhenNothingIsKnownAboutWhatToEat)
+{
+	creature_desires::Desires desires;
+	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
+	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::ActOn, Desire::Hunger,
+	                           {.belief = Thing(k_Food, 0), .feedback = -1.0f}, k_HungerAttributes);
+	creature_mind_model::TeachStartingLesson(learnt, k_HungerAttributes);
+	const auto& episodes = learnt.episodes[0][static_cast<size_t>(Desire::Hunger)];
+	ASSERT_EQ(episodes.size(), 1u);
+	EXPECT_FLOAT_EQ(episodes[0].feedback, -1.0f);
+	// A second time adds nothing either
+	auto fresh = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
+	creature_mind_model::TeachStartingLesson(fresh, k_HungerAttributes);
+	creature_mind_model::TeachStartingLesson(fresh, k_HungerAttributes);
+	EXPECT_EQ(fresh.episodes[0][static_cast<size_t>(Desire::Hunger)].size(), 1u);
+}
+
 TEST(CreatureMindModel, LearningRebuildsTrees)
 {
 	creature_desires::Desires desires;
-	auto learnt = creature_mind_model::Fresh(desires, 10, {});
+	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(10, 0.0f), {});
 	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::ActOn, Desire::Hunger,
 	                           {.belief = Thing(k_Food, 0), .feedback = -1.0f}, k_HungerAttributes);
 	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::ActOn, Desire::Hunger,

@@ -60,6 +60,8 @@ struct ActionInfo
 	uint32_t shownDesire {0};
 	/// When the action ends well on another creature, how much nicer the creature finds the other creature
 	float creatureNicenessChange {0.0f};
+	/// The opinion of the action that a new creature starts with
+	float startingOpinion {0.0f};
 	/// What the creature must know to choose it
 	creature_watching::ActionNeeds needs;
 };
@@ -92,6 +94,8 @@ struct Tables
 [[nodiscard]] Tables Build(const InfoConstants& info);
 /// An action's row by its name
 [[nodiscard]] std::optional<uint32_t> FindAction(const Tables& tables, std::string_view name);
+/// The opinion of each action that a new creature starts with
+[[nodiscard]] std::vector<float> StartingOpinions(const Tables& tables);
 
 /// How many more times than usual each species must see a miracle to learn it, by its row in the creature tables
 [[nodiscard]] float MiracleMultiplier(size_t speciesRow);

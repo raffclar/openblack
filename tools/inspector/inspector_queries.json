@@ -383,6 +383,18 @@
   "query": "creature.known"
  },
  {
+  "description": "What a creature has learnt: each action's opinion that is not 0, and for each desire's tree of what to act on and what to use that has examples, the examples (kind of thing, attributes, feedback) and the tree as text",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.learnt"
+ },
+ {
   "description": "A creature's beliefs about things: kind, last place, the whole thing, the attributes its decision trees test; and how nice it finds other creatures",
   "kind": "object",
   "parameters": [

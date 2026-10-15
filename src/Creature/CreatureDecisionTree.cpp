@@ -250,6 +250,11 @@ uint32_t creature_tree::LifeValue(float life)
 	return life > k_LowLife ? 1 : 0;
 }
 
+uint32_t creature_tree::OnFireValue(bool onFire)
+{
+	return onFire ? 0 : 1;
+}
+
 uint32_t creature_tree::BeingBuiltValue(bool built)
 {
 	return built ? 1 : 0;
