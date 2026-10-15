@@ -500,6 +500,23 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.fart_by_hut",
+	    .name = "Creature poos or farts by a hut",
+	    .facet = Facet::Needs,
+	    .description = "A tiger that needs a poo, with a hut on the land in front of it. Its opinions choose a poo or "
+	                   "a fart; run it again until it farts.",
+	    .expected = "For a poo or a fart, it walks up to the hut and looks at it, turns its back to the hut, then "
+	                "squats there, not where it stood.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.9f},
+	        .desires = {{.desire = Desire::Poo, .fraction = 1.0f}},
+	    }},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {30.0f, -60.0f}}},
+	});
+
+	all.push_back({
 	    .id = "needs.eats_animals",
 	    .name = "Hungry creature eats an animal",
 	    .facet = Facet::Needs,
@@ -2758,6 +2775,20 @@ void AddObjects(std::vector<Scenario>& all)
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 10.0f})},
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, -25.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Kick"}},
+	});
+
+	all.push_back({
+	    .id = "objects.throw_in_the_sea",
+	    .name = "Throwing a ball into the sea",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger south of the lake with a ball beside it. A script tells it to throw the ball into "
+	                   "the sea.",
+	    .expected = "It picks up the ball, walks to the nearest coast with a playful face, stops two of its heights "
+	                "short of it and throws the ball out into the nearest water.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 120.0f})},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {10.0f, 110.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "ThrowInTheSea"}},
 	});
 
 	all.push_back({

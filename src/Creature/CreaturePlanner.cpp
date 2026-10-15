@@ -95,7 +95,7 @@ Plan MakePlan(const DesirePlanning& planning, const ActionCandidate& action, con
 	const auto wanted = Wanted(action);
 	Plan plan {.desire = planning.desire, .action = action.action, .actionPriority = wanted};
 	// An action under a desire about a whole thing acts on the part found for it, even an action that needs no thing
-	if (object.has_value() && (action.needsObject || planning.order != PlanOrder::ActionFirst))
+	if (object.has_value())
 	{
 		plan.object = object->id;
 		plan.goalUsefulness = object->usefulness;
@@ -107,6 +107,20 @@ Plan MakePlan(const DesirePlanning& planning, const ActionCandidate& action, con
 	plan.priority = Priority(planning.strength, planning.activityUsefulness, wanted, objectUsefulness,
 	                         used.has_value() ? std::optional(used->usefulness) : std::nullopt);
 	return plan;
+}
+
+/// The creature itself as the thing that an action acts on, with the default usefulness; none when the planning does not
+/// give the creature
+std::optional<ObjectCandidate> ItselfAsObject(const DesirePlanning& planning)
+{
+	return planning.itself.transform([](uint32_t id) {
+		return ObjectCandidate {
+		    .id = id,
+		    .usefulness = k_DefaultUsefulness,
+		    .activityUsefulness = std::nullopt,
+		    .actedOnUsefulness = k_DefaultUsefulness,
+		};
+	});
 }
 
 /// The plan when the action comes first, and the thing that it acts on after it
@@ -136,7 +150,8 @@ std::optional<Plan> PlanActionFirst(const DesirePlanning& planning)
 			return std::nullopt;
 		}
 		const auto& action = planning.actions[*chosen];
-		const auto object = action.needsObject ? planning.findObject(action) : std::nullopt;
+		// An action that does not act on a thing acts on the creature itself
+		const auto object = action.needsObject ? planning.findObject(action) : ItselfAsObject(planning);
 		if (action.needsObject && !object.has_value())
 		{
 			MarkTried(planning.actions, action.action, tried);
