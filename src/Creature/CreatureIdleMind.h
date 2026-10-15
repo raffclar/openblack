@@ -79,8 +79,6 @@ constexpr float k_PukeSeconds = 4.0f;
 /// Fainted, it lies out cold four seconds for each unit of its size, and eight more
 constexpr float k_FaintSecondsPerSize = 4.0f;
 constexpr float k_FaintExtraSeconds = 8.0f;
-/// It drinks from anywhere this close to the water's edge
-constexpr float k_DrinkReach = 5.0f;
 /// Looking something over, it puts it down gently most times, out of this many, and tosses it away the rest
 constexpr uint32_t k_PutDownLots = 10;
 constexpr uint32_t k_TossLots = 2;
@@ -187,6 +185,8 @@ struct ObjectOrder
 	std::optional<float> seconds;
 	/// Taking from the player's hand with its left hand
 	bool mirrored {false};
+	/// Throwing: the creature aims at the place of the object as the throw starts, not at the point
+	bool atObject {false};
 };
 
 /// Going somewhere, or turning to face something
@@ -234,8 +234,9 @@ struct Movement
 	/// Arriving anywhere from min to max from the point, or keeping within max of what it follows
 	float minDistance {0.0f};
 	float maxDistance {0.0f};
-	/// Going to a point where it can't stand gives up the rest of the agenda, rather than counting as arrived
-	bool giveUpIfUnreachable {false};
+	/// When the creature cannot stand at the point, the walk to the point stops the rest of the agenda. The walks of a
+	/// leash order, of a script and of a step that walks again in its turns do not stop it. These walks count as done.
+	bool giveUpIfUnreachable {true};
 };
 
 /// A miracle cast at a thing, by its magic type's number
@@ -623,10 +624,15 @@ enum class HandsNeed : uint8_t
 	/// Empty hands, or the thing that the step picks up. When the creature holds that thing already, it does not do the
 	/// step. When it holds a different thing, it puts that thing down first.
 	FreeOrTarget,
+	/// A thing in the hand. When the hand is empty, the creature stops the rest of the agenda.
+	Held,
 };
-/// What a step needs in the hands of the creature. Actions, static actions, casts, the water on a fire, swaps of minds,
-/// messages to the player, catches and the steps that take food or a thing from the hand need empty hands. A pick-up
-/// needs empty hands or the thing that it picks up.
+/// What a step needs in the hands of the creature:
+/// - Actions, static actions, casts, the water on a fire, swaps of minds, messages to the player, fights, catches and
+///   the steps that take food or a thing from the hand need empty hands.
+/// - A pick-up needs empty hands or the thing that it picks up.
+/// - The steps that eat, keep, toss away or throw the held thing need a thing in the hand. So do the step that makes a
+///   breeder and the step that uses up the held thing.
 [[nodiscard]] HandsNeed HandsNeededFor(const Step& step);
 
 /// How the creature lets go of the thing that it holds before a step that needs empty hands
@@ -882,8 +888,6 @@ constexpr float k_WatchFlyingExtraSeconds = 2.0f;
 [[nodiscard]] std::vector<Step> Hurl(uint32_t object, glm::vec2 target, const Random& random);
 /// Putting down what it holds
 [[nodiscard]] std::vector<Step> PutDownHeld();
-/// Walking to the water's edge, turning to the water and drinking
-[[nodiscard]] std::vector<Step> Drink(glm::vec2 shore, glm::vec2 water);
 /// The creature walks to the shoal of a fish farm until it is in a distance of the shoal. Then it brings food out of
 /// the sea and eats the food. The step that brings the food needs empty hands.
 [[nodiscard]] std::vector<Step> FishAndEat(glm::vec2 shoal, float arriveWithin);

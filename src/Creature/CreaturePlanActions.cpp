@@ -692,7 +692,8 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	switch (executor.build)
 	{
 	case Build::Drink:
-		return situation.water.has_value();
+		// The creature can always try to drink. When it finds no place to drink, the action fails as it starts.
+		return true;
 	case Build::FishAndEat:
 		return situation.fishing.has_value() && !situation.fishing->holdingFood && situation.fishing->standAt.has_value();
 	case Build::GiveFishToStore:
@@ -796,13 +797,27 @@ bool creature_plan_actions::DoneTooRecently(const Executor& executor, uint32_t t
 	return false;
 }
 
+bool creature_plan_actions::Buildable(const Executor& executor, const Situation& situation)
+{
+	switch (executor.build)
+	{
+	case Build::SleepAtHome:
+	case Build::PrayAtTemple:
+	case Build::GoHome:
+		// The agendas of these actions need only the home
+		return situation.home.has_value();
+	default:
+		return Possible(executor, situation);
+	}
+}
+
 std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(const Executor& executor,
                                                                               std::optional<uint32_t> object,
                                                                               glm::vec2 objectPoint, const Situation& situation,
                                                                               const creature_mind::Random& random,
                                                                               const std::optional<CastInfo>& cast)
 {
-	if (!Possible(executor, situation) || (executor.target != Target::None && !object.has_value()) ||
+	if (!Buildable(executor, situation) || (executor.target != Target::None && !object.has_value()) ||
 	    (IsCast(executor) && !cast.has_value()))
 	{
 		return std::nullopt;
@@ -918,7 +933,11 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::Puke:
 		return creature_mind::Puke();
 	case Build::Drink:
-		return creature_mind::Drink(situation.water->shore, situation.water->water);
+		if (!situation.drink.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_drink::Drink(*situation.drink, situation.height);
 	case Build::FishAndEat:
 		return creature_mind::FishAndEat(*situation.fishing->standAt, situation.fishing->arriveWithin);
 	case Build::GiveFishToStore:
@@ -995,7 +1014,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		{
 			return std::nullopt;
 		}
-		return creature_mind::StoneAndEat(*situation.instrument, *object, objectPoint, situation.height, situation.holdingRock);
+		return creature_mind::StoneAndEat(*situation.instrument, *object, situation.height, situation.holdingRock);
 	case Build::Kick:
 		return creature_mind::KickThing(*object);
 	case Build::ShowHate:

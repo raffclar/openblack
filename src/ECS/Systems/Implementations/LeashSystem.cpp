@@ -1232,6 +1232,7 @@ void LeashSystem::WalkBack(entt::entity creature)
 	    .point = centre,
 	    .extraSpeed = leash::ReturnExtraSpeed(distance, leashes.confinementRadius),
 	    .maxDistance = leash::ReturnArrival(leashes.confinementRadius, CreatureHeight(body)),
+	    .giveUpIfUnreachable = false,
 	};
 	// On the way, the head looks at the centre, at what the creature watches, or from side to side
 	walk.gaze = creature_mind::Gaze {.point = glm::vec3(centre.x, 0.0f, centre.y), .whileGoing = true};

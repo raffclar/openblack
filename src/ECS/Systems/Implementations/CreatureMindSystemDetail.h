@@ -23,6 +23,7 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureDrink.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Enums.h"
 
@@ -53,6 +54,9 @@ namespace openblack::ecs::systems::mind_detail
 [[nodiscard]] creature_desire_sources::InnateTraits InnateTraitsOf(CreatureType species);
 [[nodiscard]] std::optional<float> FoodValueOf(entt::entity entity);
 [[nodiscard]] std::optional<creature_mind::WaterSpot> NearestWater(glm::vec2 from);
+/// Where a creature drinks from the sea: by the nearest water point that the land marks, else at the nearest coast of
+/// its map of the land. None when it finds no place where it can stand to drink.
+[[nodiscard]] std::optional<creature_drink::Place> DrinkPlaceOf(entt::entity creature);
 /// The sort of a thing, by the object type of its info (an animal's own info, or the info of any other thing); none for a
 /// thing without info. A creature remembers the sorts of things that it was given and that it cannot eat.
 [[nodiscard]] std::optional<uint32_t> ObjectSortOf(const ecs::Registry& registry, entt::entity thing);

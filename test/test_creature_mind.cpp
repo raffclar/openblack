@@ -20,6 +20,8 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLook.h"
+#include "Creature/CreatureScriptAgendas.h"
+#include "Creature/LeashOrders.h"
 
 using namespace openblack;
 using creature_desires::Desire;
@@ -451,10 +453,74 @@ TEST(CreatureIdleMind, StepsThatNeedEmptyHands)
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::FishFromSea)), HandsNeed::Free);
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::TakeFromPile)), HandsNeed::Free);
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::TakeFromHand)), HandsNeed::Free);
-	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Throw)), HandsNeed::Any);
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Destroy)), HandsNeed::Any);
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::PointAt)), HandsNeed::Any);
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Kick)), HandsNeed::Any);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::PutDown)), HandsNeed::Any);
+	// A fight needs empty hands
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Fight}), HandsNeed::Free);
+}
+
+TEST(CreatureIdleMind, StepsThatNeedAThingInTheHand)
+{
+	using creature_mind::HandsNeed;
+	using creature_mind::HandsNeededFor;
+	using creature_mind::ObjectOrder;
+	using creature_mind::Step;
+	const auto object = [](ObjectOrder::Kind kind) { return Step {.kind = Step::Kind::Object, .order = {.kind = kind}}; };
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Discard)), HandsNeed::Held);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Eat)), HandsNeed::Held);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Keep)), HandsNeed::Held);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Throw)), HandsNeed::Held);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::ThrowNearby)), HandsNeed::Held);
+	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::ThrowInStore)), HandsNeed::Held);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::MakeDisciple}), HandsNeed::Held);
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::UseUpHeld}), HandsNeed::Held);
+}
+
+TEST(CreatureIdleMind, AStepThatNeedsAThingInTheHandStopsTheAgendaWhenTheHandIsEmpty)
+{
+	using creature_mind::ObjectOrder;
+	using creature_mind::Step;
+	creature_mind::IdleMind mind;
+	const Step eat {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Eat}};
+	creature_mind::Plan(mind, creature_mind::Activity::Eat, {eat, {.kind = Step::Kind::Wait, .seconds = 1.0f}});
+	const auto senses = FakeBody {}.Senses();
+	const auto commands = creature_mind::Think(mind, senses, Always(0));
+	EXPECT_FALSE(commands.object.has_value());
+	EXPECT_TRUE(mind.gaveUp);
+	EXPECT_GE(mind.step, mind.agenda.size());
+}
+
+TEST(CreatureIdleMind, AStepThatNeedsAThingInTheHandStartsWhenTheHandHoldsAThing)
+{
+	using creature_mind::ObjectOrder;
+	using creature_mind::Step;
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Eat,
+	                    {{.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Eat}}});
+	auto senses = FakeBody {}.Senses();
+	senses.held = 4u;
+	const auto commands = creature_mind::Think(mind, senses, Always(0));
+	ASSERT_TRUE(commands.object.has_value());
+	EXPECT_EQ(commands.object->kind, ObjectOrder::Kind::Eat);
+	EXPECT_FALSE(commands.letGo.has_value());
+	EXPECT_FALSE(mind.gaveUp);
+}
+
+TEST(CreatureIdleMind, AWalkToAPointGivesUpWhereTheCreatureCannotStandUnlessItIsALeashOrScriptWalk)
+{
+	// A walk of an agenda stops the agenda at a point where the creature cannot stand
+	EXPECT_TRUE(creature_mind::Movement {}.giveUpIfUnreachable);
+	// The walk of a leash order to a point does not
+	const auto leash = creature_leash_orders::MoveTo({10.0f, 20.0f}, 5.0f, false, 0.0f);
+	ASSERT_FALSE(leash.empty());
+	EXPECT_FALSE(leash.front().movement.giveUpIfUnreachable);
+	// The walk that a script orders does not
+	for (const auto& leg : creature_mind::MoveForScript({0.0f, 0.0f}, {50.0f, 0.0f, 50.0f}, 10.0f, 0.0f))
+	{
+		EXPECT_FALSE(leg.movement.giveUpIfUnreachable);
+	}
 }
 
 TEST(CreatureIdleMind, AnActionWaitsWhileTheCreatureLetsGoOfWhatItHolds)
@@ -1034,6 +1100,7 @@ TEST(CreatureNeedsMind, ItPicksFoodUpAndEatsIt)
 	EXPECT_EQ(creature_mind::Think(mind, senses, Always(1)).effect, creature_mind::Effect::None);
 	// Having it, it examines it, then eats it; eaten, the desire is satisfied
 	senses.hands = creature_mind::HandsState::Done;
+	senses.held = 7u;
 	static_cast<void>(creature_mind::Think(mind, senses, Always(1)));
 	commands = creature_mind::Think(mind, senses, Always(1));
 	ASSERT_TRUE(commands.object.has_value());
@@ -1062,19 +1129,6 @@ TEST(CreatureNeedsMind, FoodItCantPickUpIsGivenUpUneaten)
 	// The next agenda starts afresh
 	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(8u, false));
 	EXPECT_FALSE(mind.gaveUp);
-}
-
-TEST(CreatureNeedsMind, ItDrinksAtTheWatersEdge)
-{
-	const auto agenda = creature_mind::Drink({100.0f, 200.0f}, {100.0f, 230.0f});
-	ASSERT_EQ(agenda.size(), 3u);
-	EXPECT_EQ(agenda[0].movement.kind, creature_mind::Movement::Kind::ToPoint);
-	EXPECT_EQ(agenda[0].movement.point, glm::vec2(100.0f, 200.0f));
-	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, creature_mind::k_DrinkReach);
-	EXPECT_EQ(agenda[1].movement.kind, creature_mind::Movement::Kind::TurnToFace);
-	EXPECT_EQ(agenda[1].movement.point, glm::vec2(100.0f, 230.0f));
-	EXPECT_EQ(agenda[2].animation, animations::k_Drink);
-	EXPECT_EQ(agenda[2].effect, creature_mind::Effect::Drink);
 }
 
 TEST(CreatureNeedsMind, FaintedItLiesFourSecondsASizeAndEightMoreThenComesRound)

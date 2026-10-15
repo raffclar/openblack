@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureDrink.h"
 #include "Creature/CreatureIdleMind.h"
 
 /// The actions of the game's table that a creature can carry out here, and the agenda of steps each becomes. The planner
@@ -417,9 +418,10 @@ constexpr uint32_t k_LeaveHomeStage = 3;
 /// What the agenda needs to know of where the creature is
 struct Situation
 {
-	/// Where the player looks from, the nearest water's edge and the water
+	/// Where the player looks from
 	std::optional<glm::vec2> camera;
-	std::optional<creature_mind::WaterSpot> water;
+	/// Where the creature drinks, none when it finds no place to drink
+	std::optional<creature_drink::Place> drink;
 	/// Fishing at the nearest fish farm: its shoal (the farm itself without one), where the creature would stand to fish
 	/// for itself (the shoal, or the nearest place it can stand near enough to it; none for none), how near it goes,
 	/// whether it already has food in its hand, and its height. None with no farm near.
@@ -563,6 +565,10 @@ struct CastInfo
 
 /// Whether an action can be carried out now, in this situation, before any thing is chosen
 [[nodiscard]] bool Possible(const Executor& executor, const Situation& situation);
+/// Whether the agenda of an action can be made in this situation. The planner chooses only possible actions. A script
+/// can force an action that is not possible. Then the creature does the action when the situation gives what the agenda
+/// needs. For example, a creature with no temple sleeps at home, at the place where it was made.
+[[nodiscard]] bool Buildable(const Executor& executor, const Situation& situation);
 /// Whether the creature may choose an action for itself in this situation: the conditions that the game's table puts on
 /// some actions (by day or by night, near or far from home, with the player's hand near). A script can make it do the
 /// action without them.

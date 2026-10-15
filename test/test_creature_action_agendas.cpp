@@ -742,3 +742,58 @@ TEST(CreatureActionAgendas, AFightAsksTheOtherCreatureAndWaitsUntilTheFightEnds)
 	EXPECT_EQ(mind.step, 1u);
 	EXPECT_FALSE(mind.gaveUp);
 }
+
+TEST(CreatureActionAgendas, StoningAndEatingThrowsTheRockAtTheRockItself)
+{
+	const auto agenda = StoneAndEat(4, 9, 15.0f, false);
+	ASSERT_EQ(agenda.size(), 5);
+	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[0].order.object, 4u);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::ToThrowPosition);
+	EXPECT_EQ(agenda[1].movement.object, 9u);
+	EXPECT_EQ(agenda[1].gaze->object, 9u);
+	// The throw aims at the place of the rock in the hand, and the creature looks at the rock
+	EXPECT_EQ(agenda[2].order.kind, ObjectOrder::Kind::Throw);
+	EXPECT_EQ(agenda[2].order.object, 4u);
+	EXPECT_TRUE(agenda[2].order.atObject);
+	EXPECT_EQ(agenda[2].gaze->object, 4u);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::Anger);
+	EXPECT_EQ(agenda[3].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(agenda[3].order.object, 9u);
+	EXPECT_EQ(agenda[4].order.kind, ObjectOrder::Kind::Eat);
+	// With the rock in the hand already, it does not pick it up
+	EXPECT_EQ(StoneAndEat(4, 9, 15.0f, true).size(), 4);
+}
+
+TEST(CreatureActionAgendas, AForcedSleepAtHomeNeedsOnlyAHome)
+{
+	const auto* sleep = plan_actions::For("SleepAtHome");
+	ASSERT_NE(sleep, nullptr);
+	// Far from home and with no temple, the planner does not choose it
+	plan_actions::Situation situation;
+	situation.home = glm::vec2(100.0f, 200.0f);
+	situation.homeDistance = 5000.0f;
+	situation.hasTemple = false;
+	EXPECT_FALSE(plan_actions::Possible(*sleep, situation));
+	// A script that forces it gets the agenda all the same
+	EXPECT_TRUE(plan_actions::Buildable(*sleep, situation));
+	const auto agenda = plan_actions::Agenda(*sleep, std::nullopt, {}, situation, AlwaysFirst);
+	ASSERT_TRUE(agenda.has_value());
+	EXPECT_EQ((*agenda)[1].movement.point, glm::vec2(100.0f, 200.0f));
+	// Without a home it cannot
+	EXPECT_FALSE(plan_actions::Buildable(*sleep, {}));
+}
+
+TEST(CreatureActionAgendas, DrinkingIsAlwaysPossibleButNeedsAPlaceToBeMade)
+{
+	const auto* drink = plan_actions::For("DrinkFromTheSea");
+	ASSERT_NE(drink, nullptr);
+	plan_actions::Situation situation;
+	EXPECT_TRUE(plan_actions::Possible(*drink, situation));
+	EXPECT_FALSE(plan_actions::Agenda(*drink, std::nullopt, {}, situation, AlwaysFirst).has_value());
+	situation.drink = creature_drink::Place {.walkTo = glm::vec2(5.0f, 6.0f)};
+	situation.height = 12.0f;
+	const auto agenda = plan_actions::Agenda(*drink, std::nullopt, {}, situation, AlwaysFirst);
+	ASSERT_TRUE(agenda.has_value());
+	EXPECT_EQ(agenda->size(), 2);
+}

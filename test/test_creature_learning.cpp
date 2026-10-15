@@ -1226,7 +1226,9 @@ TEST(CreaturePlanActions, BuildsAgendas)
 	EXPECT_EQ(creature_plan_actions::Agenda(*eat, 3u, {}, {}, random)->size(), 3u);
 	const auto* drink = creature_plan_actions::For("DrinkFromTheSea");
 	ASSERT_NE(drink, nullptr);
-	EXPECT_FALSE(creature_plan_actions::Possible(*drink, {}));
+	// It can always try to drink, but with no place to drink it has no agenda
+	EXPECT_TRUE(creature_plan_actions::Possible(*drink, {}));
+	EXPECT_FALSE(creature_plan_actions::Agenda(*drink, std::nullopt, {}, {}, random).has_value());
 	const auto* wave = creature_plan_actions::For("WaveAtPlayer");
 	ASSERT_NE(wave, nullptr);
 	creature_plan_actions::Situation situation {.camera = glm::vec2(0.0f, -100.0f)};
