@@ -275,6 +275,32 @@ bool creature_watching::StartMimicry(std::optional<Mimicry>& mimicry, size_t rul
                                      const MimicConditions& conditions, std::optional<uint32_t> object, uint32_t turn,
                                      const std::function<uint32_t(uint32_t)>& random)
 {
+	if (!MayStartMimicry(mimicry, rule, rules, conditions))
+	{
+		return false;
+	}
+	BeginMimicry(mimicry, rule, rules, object, turn, random);
+	return true;
+}
+
+void creature_watching::BeginMimicry(std::optional<Mimicry>& mimicry, size_t rule, std::span<const MimicRule> rules,
+                                     std::optional<uint32_t> object, uint32_t turn,
+                                     const std::function<uint32_t(uint32_t)>& random)
+{
+	if (rule >= rules.size())
+	{
+		return;
+	}
+	mimicry = Mimicry {.rule = rule,
+	                   .stage = MimicStage::Notice,
+	                   .limit = StageLength(rules[rule], random),
+	                   .stageStart = turn,
+	                   .object = object};
+}
+
+bool creature_watching::MayStartMimicry(const std::optional<Mimicry>& mimicry, size_t rule, std::span<const MimicRule> rules,
+                                        const MimicConditions& conditions)
+{
 	if (rule >= rules.size())
 	{
 		return false;
@@ -287,19 +313,59 @@ bool creature_watching::StartMimicry(std::optional<Mimicry>& mimicry, size_t rul
 	}
 	if (!mimicry.has_value())
 	{
-		if (wanted.chance <= 0.0f)
-		{
-			return false;
-		}
+		return wanted.chance > 0.0f;
 	}
-	else if (mimicry->stage != MimicStage::CopyDesire && mimicry->rule < rules.size() &&
-	         (mimicry->rule == rule || wanted.chance < rules[mimicry->rule].chance))
+	return mimicry->stage == MimicStage::CopyDesire || mimicry->rule >= rules.size() ||
+	       (mimicry->rule != rule && wanted.chance >= rules[mimicry->rule].chance);
+}
+
+CastDeedStep creature_watching::CastDeedGate(uint32_t sightings, uint32_t timesToSee, float speciesMultiplier)
+{
+	// The times needed are taken at full precision, less the sightings, then cut towards zero
+	const auto needed = static_cast<double>(timesToSee) * static_cast<double>(speciesMultiplier);
+	const auto stillNeeded = static_cast<int64_t>(needed - static_cast<double>(static_cast<float>(sightings)));
+	if (stillNeeded > 1)
 	{
-		return false;
+		return CastDeedStep::CountAndStop;
 	}
-	mimicry = Mimicry {
-	    .rule = rule, .stage = MimicStage::Notice, .limit = StageLength(wanted, random), .stageStart = turn, .object = object};
-	return true;
+	if (stillNeeded == 1)
+	{
+		return CastDeedStep::CountThenRoll;
+	}
+	return CastDeedStep::Copy;
+}
+
+std::vector<uint32_t> creature_watching::CopyActionsOf(const MimicRule& rule, size_t deed, uint32_t magic,
+                                                       std::span<const MiracleRule> miracles)
+{
+	if (deed != k_DamageWithMagicDeed)
+	{
+		return rule.copyActions;
+	}
+	if (magic >= miracles.size() || miracles[magic].action == 0)
+	{
+		return {};
+	}
+	return std::vector<uint32_t>(k_CopySlots, miracles[magic].action);
+}
+
+std::optional<Mimicry> creature_watching::CopyObservedDeedAgain(const ObservedDeed& observed, std::span<const MimicRule> rules,
+                                                                uint32_t turn, const std::function<uint32_t(uint32_t)>& random)
+{
+	if (observed.rule >= rules.size())
+	{
+		return std::nullopt;
+	}
+	const auto limit = StageLength(rules[observed.rule], random);
+	return Mimicry {
+	    .rule = observed.rule,
+	    .stage = MimicStage::CopyAction,
+	    .done = limit / 2,
+	    .limit = limit,
+	    .stageStart = turn,
+	    .object = observed.object,
+	    .magic = observed.magic,
+	};
 }
 
 bool creature_watching::StageContinues(const Mimicry& mimicry, uint32_t turn, float turnsPerSecond)

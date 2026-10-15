@@ -1005,3 +1005,6 @@ openblack_setup_and_add_test(test_creature_deeds test_creature_deeds.cpp)
 openblack_setup_and_add_test(
   test_creature_exploration test_creature_exploration.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_copy_actions test_creature_copy_actions.cpp
+)

@@ -213,6 +213,9 @@ struct CreatureMindState
 	std::optional<creature_follow_up::FollowUp> followUp;
 	/// The trees it planted others by most recently, by entity number, oldest first: it never takes one of them to plant
 	std::vector<uint32_t> plantedBy;
+	/// The last deed of the player that it started to copy. It copies this deed again when it chooses to copy the player
+	/// for its desire to follow the player. None until it starts to copy a deed.
+	std::optional<creature_watching::ObservedDeed> observedDeed;
 };
 
 } // namespace openblack::ecs::components

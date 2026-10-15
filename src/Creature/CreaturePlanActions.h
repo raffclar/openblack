@@ -341,6 +341,8 @@ enum class Build : uint8_t
 	ThrowInTheSea,
 	/// An action whose agenda can never be made
 	Never,
+	/// Copying the player again: the creature makes no steps, but copies again the deed that it saw last
+	MimicPlayer,
 };
 
 /// What tells the planner that the creature did an action too recently to choose it again

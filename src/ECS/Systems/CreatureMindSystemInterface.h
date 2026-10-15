@@ -76,6 +76,13 @@ public:
 	/// may (for the debug tools).
 	virtual void PlayerDid(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
 	                       std::optional<PlayerNames> player) = 0;
+	/// A player did a deed with a miracle (by its magic type). A creature that has not seen the miracle often enough
+	/// counts a sighting of it and can then stop before it copies the deed.
+	virtual void PlayerCastDeed(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
+	                            std::optional<PlayerNames> player, MagicType /*magic*/)
+	{
+		PlayerDid(deed, point, object, player);
+	}
 	/// The game's tables the minds use, once the game's data is loaded
 	[[nodiscard]] virtual const creature_mind_tables::Tables* GetTables() = 0;
 	/// What a creature believes about a thing now, with the attributes that its decision trees test. None for a thing

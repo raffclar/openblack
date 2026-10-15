@@ -835,7 +835,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::copiedAt>("copiedAt")
 	    .Field<&components::CreatureMindState::copiedKind>("copiedKind")
 	    .Field<&components::CreatureMindState::followUp>("followUp")
-	    .Field<&components::CreatureMindState::plantedBy>("plantedBy");
+	    .Field<&components::CreatureMindState::plantedBy>("plantedBy")
+	    .Field<&components::CreatureMindState::observedDeed>("observedDeed");
 	Reflect<components::CreatureNeeds>(context)
 	    .Field<&components::CreatureNeeds::started>("started")
 	    .Field<&components::CreatureNeeds::needs>("needs")
@@ -2602,7 +2603,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_watching::Mimicry::done>("done")
 	    .Field<&openblack::creature_watching::Mimicry::limit>("limit")
 	    .Field<&openblack::creature_watching::Mimicry::stageStart>("stageStart")
-	    .Field<&openblack::creature_watching::Mimicry::object>("object");
+	    .Field<&openblack::creature_watching::Mimicry::object>("object")
+	    .Field<&openblack::creature_watching::Mimicry::magic>("magic");
+	Reflect<openblack::creature_watching::ObservedDeed>(context, ValueOnly {})
+	    .Field<&openblack::creature_watching::ObservedDeed::rule>("rule")
+	    .Field<&openblack::creature_watching::ObservedDeed::object>("object")
+	    .Field<&openblack::creature_watching::ObservedDeed::magic>("magic");
 	Reflect<openblack::creature_watching::Sighting>(context, ValueOnly {})
 	    .Field<&openblack::creature_watching::Sighting::count>("count")
 	    .Field<&openblack::creature_watching::Sighting::turn>("turn");

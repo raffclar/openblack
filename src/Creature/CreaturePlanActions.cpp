@@ -257,6 +257,8 @@ constexpr std::array k_Executors {
     Executor {.action = "PutOutFireWithMagicWater", .target = Target::Burning, .build = Build::CastWater},
     Executor {.action = "SetFireToObject", .target = Target::Unburnt, .build = Build::SetFire},
     Executor {.action = "StartFire", .build = Build::Never},
+    // The desire to follow the player copies the player's last deed again; the action itself makes no steps
+    Executor {.action = "MimicPlayer", .build = Build::MimicPlayer},
     Executor {.action = "SleepAtHome", .build = Build::SleepAtHome, .activity = Activity::Sleep},
     Executor {.action = "WaveAtObject", .target = Target::Anything, .build = Build::WaveAt},
     Executor {.action = "PutDown", .build = Build::PutDown, .activity = Activity::PutDown},
@@ -1272,6 +1274,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::KissVillager:
 		return TownHelpAgenda(executor, object, objectPoint, situation, random);
 	case Build::Never:
+	case Build::MimicPlayer:
 		return std::nullopt;
 	}
 	return std::nullopt;

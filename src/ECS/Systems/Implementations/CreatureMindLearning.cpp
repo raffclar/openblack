@@ -183,6 +183,8 @@ constexpr float k_MimicStrokeBoost = 0.3f;
 /// wish to follow the player
 constexpr float k_NoticedDeedSource = 0.1f;
 constexpr float k_NoticedDeedFollow = 0.3f;
+/// Starting to copy a deed on a thing teaches what the thing and its whole thing are worth with this feedback
+constexpr float k_DeedSeenLesson = 0.5f;
 /// Forgiven for running away, the threshold of its wish to run raises this much
 constexpr float k_RunAwayThresholdStep = 0.1f;
 /// A thing to use is learnt about at most this strongly for poo
@@ -1449,6 +1451,13 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		return false;
 	}
 	const auto& info = tables->actions[plan.action];
+	// Copying the player makes no plan: the creature copies its last deed again and decides again on its next turn
+	if (const auto* executor = creature_plan_actions::For(info.name);
+	    executor != nullptr && executor->build == creature_plan_actions::Build::MimicPlayer)
+	{
+		CopyObservedDeedAgain(creature, mind);
+		return false;
+	}
 	auto situated = situation;
 	Situate(creature, situated);
 	// An action done with something takes up the thing to use too, as the plan found it or, for a plan made otherwise
@@ -2988,23 +2997,25 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	// here yet, and the rest count as the planner's own plans do
 	const auto lessonActivity = plan.activityObject.has_value() ? std::optional(entt::to_integral(*plan.activityObject))
 	                                                            : LessonActivity(*tables, plan.desire, object, std::nullopt);
-	creature_learning::Remember(
-	    learnt.contexts,
-	    {
-	        .action = *action,
-	        .desire = plan.desire,
-	        .object = object,
-	        .belief = plan.object.has_value() ? ActedOnBeliefOf(registry, *plan.object, creature) : std::nullopt,
-	        .activity = lessonActivity,
-	        .activityBelief = lessonActivity.has_value()
-	                              ? BeliefOf(registry, static_cast<entt::entity>(*lessonActivity), creature)
-	                              : std::nullopt,
-	        .learnable = info.learnable,
-	        .windowSeconds = info.learningWindowSeconds,
-	        .source = mind->desires.has_value() ? creature_learning::PlanSource((*mind->desires)[plan.desire])
-	                                                  .value_or(creature_learning::k_NoTellingSource)
-	                                            : creature_learning::k_NoTellingSource,
-	    });
+	// It is remembered for the player's feedback, unless nothing says why it wants what the plan serves
+	if (const auto source = creature_learning::PlanSource((*mind->desires)[plan.desire]); source.has_value())
+	{
+		creature_learning::Remember(
+		    learnt.contexts,
+		    {
+		        .action = *action,
+		        .desire = plan.desire,
+		        .object = object,
+		        .belief = plan.object.has_value() ? ActedOnBeliefOf(registry, *plan.object, creature) : std::nullopt,
+		        .activity = lessonActivity,
+		        .activityBelief = lessonActivity.has_value()
+		                              ? BeliefOf(registry, static_cast<entt::entity>(*lessonActivity), creature)
+		                              : std::nullopt,
+		        .learnable = info.learnable,
+		        .windowSeconds = info.learningWindowSeconds,
+		        .source = *source,
+		    });
+	}
 	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 	return true;
 }
@@ -3568,6 +3579,26 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		}
 		creature_desires::Suppress(desires, Desire::Sadness, k_StrokeSadnessSeconds, k_TurnsPerSecond);
 	}
+	// Slapped, it gives up the newest thing that it did and wants that desire least of all, young or not. This needs a
+	// plan that it could carry out: a desire about a whole thing needs that whole thing.
+	const auto giveUpAfterSlap = [&]() {
+		if (feedback > 0.0f || learnt.contexts.empty() || tables == nullptr)
+		{
+			return;
+		}
+		const auto& newest = learnt.contexts.back();
+		if (tables->rules.at(static_cast<size_t>(newest.desire)).aboutSomething && !newest.activityBelief.has_value())
+		{
+			return;
+		}
+		creature_learning::MakeLeastDominant(desires, newest.desire, creature_learning::k_LeastDominantFactor,
+		                                     mind_detail::DesireFloorOf(creature));
+		for (auto& state : desires.desires)
+		{
+			state.suppressedTurns = 0;
+		}
+		Abandon(mind);
+	};
 
 	if (info == nullptr || mind.developmentPhase < k_MinLessonPhase)
 	{
@@ -3583,6 +3614,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		}
 		TellHelp(creature, creature_help::TooYoungToLearn(feedback));
 		mind.followUp = creature_follow_up::AfterYoungFeedback(mind.followUp, feedback, Random(2));
+		giveUpAfterSlap();
 		// A young creature that is stroked also does its action again, as an older one does
 		if (feedback > 0.0f)
 		{
@@ -3646,17 +3678,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 
 	if (feedback <= 0.0f)
 	{
-		// Slapped for it, it gives it up and wants it least of all
-		if (context->running)
-		{
-			creature_learning::MakeLeastDominant(desires, desire, creature_learning::k_LeastDominantFactor,
-			                                     mind_detail::DesireFloorOf(creature));
-			for (auto& state : desires.desires)
-			{
-				state.suppressedTurns = 0;
-			}
-			Abandon(mind);
-		}
+		giveUpAfterSlap();
 		return;
 	}
 	// Stroked for something it did to a thing, it must do it again to something like it
@@ -3858,9 +3880,11 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 		}
 		return std::nullopt;
 	};
+	const auto copyActions =
+	    creature_watching::CopyActionsOf(rule, learnt.mimicry->rule, learnt.mimicry->magic, tables->miracles);
 	for (const auto pass : {Pass::PlayersThing, Pass::SameKind, Pass::MostUseful})
 	{
-		for (const auto action : rule.copyActions)
+		for (const auto action : copyActions)
 		{
 			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
 			if (executor == nullptr || !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs))
@@ -4320,13 +4344,25 @@ void CreatureMindSystem::CountMiracleSighting(entt::entity entity, const Creatur
 void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
                                    std::optional<PlayerNames> player)
 {
+	NoticeDeed(deed, point, object, player, 0);
+}
+
+void CreatureMindSystem::PlayerCastDeed(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
+                                        std::optional<PlayerNames> player, MagicType magic)
+{
+	NoticeDeed(deed, point, object, player, static_cast<uint32_t>(magic));
+}
+
+void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
+                                    std::optional<PlayerNames> player, uint32_t magic)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* tables = GetTables();
 	if (tables == nullptr || deed >= tables->mimics.size())
 	{
 		return;
 	}
-	std::vector<entt::entity> noticed;
+	std::vector<entt::entity> mayCopy;
 	registry.Each<const Creature, CreatureMindState, const Transform>([&](entt::entity entity, const Creature& creature,
 	                                                                      CreatureMindState& mind, const Transform& at) {
 		if (!mind.learnt.has_value() || (player.has_value() && (creature.owner != *player || !creature.leashable)))
@@ -4351,43 +4387,80 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 		    .reactionPriority = ReactionPriorityOf(registry, entity),
 		    .canSee = inView && nearEnough,
 		};
-		const auto target = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt;
-		if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target, mind.turn,
-		                                    [this](uint32_t range) { return Random(range); }))
+		if (creature_watching::MayStartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions))
 		{
-			// When the player is angry with a thing of the player, the creature that copies the player can be angry
-			// with the things of its player from now on
-			if (object.has_value() && tables->mimics.at(deed).desire == static_cast<uint32_t>(Desire::Anger) &&
-			    PlayerOfThing(registry, *object, BelongsTo(*object)) == creature.owner)
-			{
-				mind.mayAttackOwnPlayer = true;
-			}
-			if (const auto copied = object.has_value() ? PointOf(registry, *object) : std::nullopt)
-			{
-				mind.copiedAt = *copied;
-			}
-			if (object.has_value() && registry.Valid(*object))
-			{
-				mind.copiedKind = MimicKindOf(registry, *object);
-			}
-			// Seeing the deed stirs the first source of the desire behind it, and its wish to follow the player
-			const auto desire = tables->mimics.at(deed).desire;
-			if (mind.desires.has_value() && desire < creature_desires::k_DesireCount)
-			{
-				const auto& sources = (*mind.desires)[static_cast<Desire>(desire)].sources;
-				if (!sources.empty())
-				{
-					creature_desires::ChangeSource(*mind.desires, sources.front().type, k_NoticedDeedSource);
-				}
-				creature_desires::ChangeSource(*mind.desires, k_FollowPlayerSource, k_NoticedDeedFollow);
-			}
-			noticed.push_back(entity);
+			mayCopy.push_back(entity);
 		}
 	});
-	// What it was doing stops as a failure. With no plan, it then notices the deed (see ProcessMimicry).
-	for (const auto entity : noticed)
+	const auto target = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt;
+	const auto random = [this](uint32_t range) { return Random(range); };
+	for (const auto entity : mayCopy)
 	{
-		if (auto* mind = registry.TryGet<CreatureMindState>(entity))
+		auto* mind = registry.TryGet<CreatureMindState>(entity);
+		const auto* creature = registry.TryGet<const Creature>(entity);
+		if (mind == nullptr || creature == nullptr || !mind->learnt.has_value())
+		{
+			continue;
+		}
+		// A deed done with a miracle that the creature has not seen often enough counts as a sighting of the miracle. With
+		// more than one sighting still needed it stops there; with one, it goes on to copy one time in two.
+		if (magic != 0 && magic < tables->miracles.size() && magic < mind->learnt->knowledge.miraclesSeen.size())
+		{
+			const auto step = creature_watching::CastDeedGate(
+			    mind->learnt->knowledge.miraclesSeen.at(magic).count, tables->miracles.at(magic).timesToSee,
+			    creature_mind_tables::MiracleMultiplier(creature::InfoRow(creature->species)));
+			if (step != creature_watching::CastDeedStep::Copy)
+			{
+				CountMiracleSighting(entity, *creature, *mind, magic);
+				if (step == creature_watching::CastDeedStep::CountAndStop || Random(2) == 0)
+				{
+					continue;
+				}
+			}
+		}
+		if (object.has_value() && registry.Valid(*object))
+		{
+			LearnFromDeedSeen(entity, *mind, deed, *object, magic);
+		}
+		creature_watching::BeginMimicry(mind->learnt->mimicry, deed, tables->mimics, target, mind->turn, random);
+		mind->learnt->mimicry->magic = magic;
+		mind->observedDeed = creature_watching::ObservedDeed {.rule = deed, .object = target, .magic = magic};
+		// It forgets the trees that it planted others by
+		mind->plantedBy.clear();
+		// When the player is angry with a thing of the player, the creature that copies the player can be angry with the
+		// things of its player from now on
+		if (object.has_value() && tables->mimics.at(deed).desire == static_cast<uint32_t>(Desire::Anger) &&
+		    PlayerOfThing(registry, *object, BelongsTo(*object)) == creature->owner)
+		{
+			mind->mayAttackOwnPlayer = true;
+		}
+		if (const auto copied = object.has_value() ? PointOf(registry, *object) : std::nullopt)
+		{
+			mind->copiedAt = *copied;
+		}
+		if (object.has_value() && registry.Valid(*object))
+		{
+			mind->copiedKind = MimicKindOf(registry, *object);
+		}
+		// Seeing the deed stirs the first source of the desire behind it, and its wish to follow the player
+		const auto desire = tables->mimics.at(deed).desire;
+		if (mind->desires.has_value() && desire < creature_desires::k_DesireCount)
+		{
+			const auto& sources = (*mind->desires)[static_cast<Desire>(desire)].sources;
+			if (!sources.empty())
+			{
+				creature_desires::ChangeSource(*mind->desires, sources.front().type, k_NoticedDeedSource);
+			}
+			creature_desires::ChangeSource(*mind->desires, k_FollowPlayerSource, k_NoticedDeedFollow);
+		}
+		// It knows of the miracle of the deed from now on, and the advisor tells of it when this is new
+		auto& known = mind->learnt->knowledge.miraclesKnown;
+		if (magic != 0 && magic < known.size() && !known.at(magic))
+		{
+			known.at(magic) = true;
+			TellHelp(entity, {.kind = creature_help::Kind::LessonMagicAction, .parameter = magic});
+		}
+		// What it was doing stops as a failure. With no plan, it then notices the deed (see ProcessMimicry).
 		{
 			creature_mind_model::Think(*mind->learnt, fmt::format("I saw you: {}", tables->mimics.at(deed).name));
 			if (Locator::creatureObjectActionSystem::has_value() &&
@@ -4493,4 +4566,101 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	                    entt::to_integral(object));
 	static_cast<void>(ForcePlan(
 	    creature, {.desire = desire, .action = action, .object = object, .instrument = instrument, .activityObject = whole}));
+}
+
+void CreatureMindSystem::LearnFromDeedSeen(entt::entity creature, CreatureMindState& mind, size_t deed, entt::entity thing,
+                                           uint32_t magic)
+{
+	const auto* tables = GetTables();
+	if (tables == nullptr || !mind.learnt.has_value() || deed >= tables->mimics.size())
+	{
+		return;
+	}
+	const auto& rule = tables->mimics.at(deed);
+	const auto actions = creature_watching::CopyActionsOf(rule, deed, magic, tables->miracles);
+	if (actions.empty() || rule.desire >= creature_desires::k_DesireCount)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto desire = static_cast<Desire>(rule.desire);
+	ComeAcross(creature, mind, thing);
+	// A creature is its own whole thing
+	const auto whole = registry.AllOf<Creature>(thing) ? std::optional(thing) : WholeOfShownThing(creature, mind, thing);
+	const creature_learning::Context context {
+	    .action = actions.front(),
+	    .desire = desire,
+	    .object = entt::to_integral(thing),
+	    .belief = ActedOnBeliefOf(registry, thing, creature),
+	    .activity = whole.transform([](entt::entity entity) { return entt::to_integral(entity); }),
+	    .activityBelief = whole.has_value() ? BeliefOf(registry, *whole, creature) : std::nullopt,
+	};
+	// It learns nothing from a deed that it could not plan to do itself: on a thing it knows nothing of, or for a desire
+	// about a whole thing when the thing is part of none
+	if (!context.belief.has_value() || (tables->rules.at(rule.desire).aboutSomething && !context.activityBelief.has_value()))
+	{
+		return;
+	}
+	auto& learnt = *mind.learnt;
+	const auto lessons = creature_learning::ThingLessonsFor(context, entt::to_integral(creature));
+	const auto teach = [&](creature_mind_model::TreeKind kind, const creature_tree::Belief& belief) {
+		for (const auto& [other, share] : creature_learning::Spread(desire, k_DeedSeenLesson, tables->dependencies))
+		{
+			creature_mind_model::Learn(learnt, kind, other, {.belief = belief, .feedback = std::clamp(share, -1.0f, 1.0f)},
+			                           tables->attributes.at(static_cast<size_t>(other)));
+		}
+	};
+	if (lessons.activity)
+	{
+		teach(creature_mind_model::TreeKind::ActOn, *context.activityBelief);
+	}
+	if (lessons.actedOn)
+	{
+		teach(creature_mind_model::TreeKind::Use, *context.belief);
+	}
+	creature_mind_model::Think(learnt, creature_learning::ObjectLessonText(k_DeedSeenLesson, ObjectName(context.belief),
+	                                                                       tables->texts.at(rule.desire).trying));
+}
+
+void CreatureMindSystem::CopyObservedDeedAgain(entt::entity creature, CreatureMindState& mind)
+{
+	const auto* tables = GetTables();
+	if (tables == nullptr || !mind.learnt.has_value())
+	{
+		return;
+	}
+	// A creature that never started to copy a deed has nothing to copy
+	if (!mind.observedDeed.has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} wants to copy the player but saw no deed to copy",
+		                    entt::to_integral(creature));
+		return;
+	}
+	auto observed = *mind.observedDeed;
+	// The thing that the player did it to can be gone
+	auto& registry = Locator::entitiesRegistry::value();
+	if (observed.object.has_value() && !registry.Valid(static_cast<entt::entity>(*observed.object)))
+	{
+		observed.object.reset();
+		mind.observedDeed->object.reset();
+	}
+	auto copy = creature_watching::CopyObservedDeedAgain(observed, tables->mimics, mind.turn,
+	                                                     [this](uint32_t range) { return Random(range); });
+	if (!copy.has_value())
+	{
+		return;
+	}
+	mind.learnt->mimicry = copy;
+	if (observed.object.has_value())
+	{
+		const auto thing = static_cast<entt::entity>(*observed.object);
+		if (const auto at = PointOf(registry, thing))
+		{
+			mind.copiedAt = *at;
+		}
+		mind.copiedKind = MimicKindOf(registry, thing);
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player's {} again", entt::to_integral(creature),
+	                    tables->mimics.at(observed.rule).name);
+	creature_mind_model::Think(*mind.learnt, fmt::format("I'll copy you again: {}", tables->mimics.at(observed.rule).name));
 }
