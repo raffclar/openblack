@@ -295,10 +295,8 @@ std::vector<Step> creature_mind::ExamineByFollowing(uint32_t villager)
 
 std::vector<Step> creature_mind::InspectCreature(uint32_t other, float height)
 {
-	// TODO(creature-reactions-2): each turn of the watch the game also weighs which of its desires it would act on with
-	// the other creature, and which the other would act on with it, and on finding one drops the watch to act on it then
-	// (anger, and fear unless anger is the stronger, settled first); the planner can't yet weigh a desire for one given
-	// thing, so the watch always runs its time
+	// Each turn of the watch, the mind system weighs the desires of the two creatures about each other. When one of these
+	// desires gives an action, the creature stops the watch and does that action.
 	return {
 	    GoNear(other, height * k_InspectHeights),
 	    FaceThing(other, k_InspectFaceSeconds, creature_face::Cue::Curiosity),

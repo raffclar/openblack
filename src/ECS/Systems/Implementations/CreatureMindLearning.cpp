@@ -453,9 +453,9 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return mind != nullptr && DoingSomethingInteresting(registry, *mind, entity);
 	}
 	case Target::PooedOn:
-		// A thing that is not alive and is taller than 1.5 m, but not a field or a fish farm
-		return !registry.AnyOf<Villager, Animal, Creature, Field, FishFarm>(entity) &&
-		       object_measures::Height(registry, entity) > creature_plan_actions::k_PooedOnTallerThan;
+		return creature_plan_actions::CanPooBy(registry.AnyOf<Villager, Animal, Creature>(entity),
+		                                       registry.AnyOf<Field, FishFarm>(entity),
+		                                       object_measures::Height(registry, entity));
 	case Target::StoragePit:
 		return registry.AllOf<StoragePit>(entity);
 	case Target::WorshipSite:
