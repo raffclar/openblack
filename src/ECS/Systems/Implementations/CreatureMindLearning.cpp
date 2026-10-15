@@ -67,6 +67,7 @@
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureTraining.h"
+#include "Creature/CreatureTurnOrder.h"
 #include "Creature/CreatureWatching.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashRules.h"
@@ -138,6 +139,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
@@ -1179,7 +1181,26 @@ void CreatureMindSystem::Abandon(CreatureMindState& mind)
 		mind.planner.lastAction = mind.planner.current->action;
 	}
 	mind.planner.current.reset();
+	// To stop what it does clears the marks of the plan
+	mind.ownPlanSinceStop = false;
+	mind.planForced = false;
+	mind.forcedPlanCounts = false;
 }
+
+namespace
+{
+/// The temperature of the creature becomes the temperature of the climate where it stands
+void SettleTemperature(entt::entity creature)
+{
+	const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(creature);
+	if (transform == nullptr || !Locator::weatherSystem::has_value() || !Locator::fireSystem::has_value())
+	{
+		return;
+	}
+	const auto temperature = static_cast<float>(Locator::weatherSystem::value().GetWeather(transform->position).temperature);
+	Locator::fireSystem::value().SetTemperature(creature, temperature, entt::null);
+}
+} // namespace
 
 void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& mind)
 {
@@ -1198,6 +1219,12 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		// lessens it or one of its steps saw to the desire.
 		const auto plan = *mind.planner.current;
 		const bool carriedOut = idle.serial == mind.planSerial && !idle.gaveUp;
+		// A forced plan counts for its desire only when the order that forced it said so
+		auto* needs = Locator::entitiesRegistry::value().TryGet<CreatureNeeds>(creature);
+		const auto completion = creature_turn_order::CompletionOf(
+		    plan.desire, mind.planForced, mind.forcedPlanCounts,
+		    tables != nullptr && plan.action < tables->actions.size() && tables->actions[plan.action].fullRecovery,
+		    needs != nullptr ? needs->needs.life : creature_turn_order::k_FullLife);
 		if (carriedOut)
 		{
 			NoteDone(mind, plan.action);
@@ -1211,7 +1238,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			const auto& action = tables->actions[plan.action];
 			BodyPaysFor(creature, action.name);
 			auto& served = (*mind.desires)[plan.desire];
-			if (creature_desires::CountTowardsUrge(served))
+			if (completion.counts && creature_desires::CountTowardsUrge(served))
 			{
 				creature_desires::ClearSourcesAfterSatisfying(served);
 				if (action.alwaysApplies || mind.desireSeenTo)
@@ -1221,10 +1248,20 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			}
 		}
 		// After the urge, the desire the plan served changes as the game's rule for that desire says
-		if (carriedOut)
+		if (carriedOut && completion.counts)
 		{
 			creature_learning::AfterPlanCarriedOut(*mind.desires, plan.desire, mind_detail::DesireFloorOf(creature),
 			                                       k_TurnsPerSecond);
+		}
+		// A plan to restore health heals it, and an action that makes it recover fully gives full life and the
+		// temperature of the climate where it stands
+		if (carriedOut && completion.life.has_value() && needs != nullptr)
+		{
+			ecs::world_objects::SetLife(creature, *completion.life);
+		}
+		if (carriedOut && completion.climateTemperature)
+		{
+			SettleTemperature(creature);
 		}
 		// An action that ends well on a creature makes the creature find that creature nicer or nastier, as the game's
 		// table says for the action. An action on no thing acts on the creature itself, so it also changes how nice the
@@ -2963,6 +3000,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	mind->planner.current = creature_planner::Plan {
 	    .desire = plan.desire, .action = *action, .object = object, .priority = std::numeric_limits<float>::max()};
 	mind->planActive = true;
+	mind->planForced = true;
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
 	mind->satisfiedByEffect = false;
@@ -3634,6 +3672,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 			{
 				state.suppressedTurns = 0;
 			}
+			// This slap also clears the mark that the hand held it
+			mind.heldSinceRestart = false;
 			Abandon(mind);
 		}
 		return;

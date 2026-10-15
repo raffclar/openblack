@@ -60,6 +60,8 @@ struct ActionInfo
 	uint32_t shownDesire {0};
 	/// When the action ends well on another creature, how much nicer the creature finds the other creature
 	float creatureNicenessChange {0.0f};
+	/// Done to its end, the action gives the creature full life and the temperature of the climate where it is
+	bool fullRecovery {false};
 	/// What the creature must know to choose it
 	creature_watching::ActionNeeds needs;
 };

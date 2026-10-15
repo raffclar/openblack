@@ -70,6 +70,7 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .notOnWhatItHolds = row.field0xa8 != 0,
 		    .shownDesire = row.shownDesire,
 		    .creatureNicenessChange = row.creatureNicenessChange,
+		    .fullRecovery = row.field0xf4 != 0,
 		    .needs = {.skills = {SkillNeeded(row.skillsNeeded[0]), SkillNeeded(row.skillsNeeded[1])},
 		              .miracle = row.magicType != k_NoMiracle ? std::optional<size_t>(row.magicType) : std::nullopt},
 		});

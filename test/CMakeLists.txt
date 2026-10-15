@@ -1008,3 +1008,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_odd_agendas test_creature_odd_agendas.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_turn_order test_creature_turn_order.cpp
+)
