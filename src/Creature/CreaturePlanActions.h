@@ -87,6 +87,8 @@ enum class Target : uint8_t
 	CuddlyToy,
 	Die,
 	ToyAwayFromHome,
+	/// A thing that the creature can bring home: more than 50 m from its home, not alive, and a thing that it can pick up
+	BringableHome,
 	/// A thing still going up (a building, a worship site or the temple), or a building that its town repairs and that
 	/// is below its full life; or a house (any of a town's buildings) below its full life
 	BuildingBeingBuilt,
@@ -196,6 +198,10 @@ enum class Build : uint8_t
 	/// down at its home
 	GiveFishToStore,
 	TakeFishHome,
+	/// Bringing a thing home, bringing food home, and taking wheat from a field home, where the creature puts it down
+	BringHome,
+	BringFoodHome,
+	TakeFieldFoodHome,
 	/// Casting the water miracle at a burning thing
 	CastWater,
 	/// Setting a thing alight by tossing a burning thing at it
