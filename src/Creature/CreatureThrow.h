@@ -34,6 +34,12 @@ constexpr size_t k_Eat = 96;
 constexpr size_t k_PutDown = 97;
 constexpr size_t k_GentleLob = 98;
 
+/// The animation that puts a thing down lets go of it at rest, at the moment of the put-down. Other animations toss it.
+[[nodiscard]] constexpr bool PutsDownStill(size_t animation)
+{
+	return animation == k_PutDown;
+}
+
 /// Tossing something away, it leaves with this share of the hand's own speed at that moment
 constexpr float k_DiscardSpeedShare = 0.6f;
 /// The hand's speed is measured over this many milliseconds of the animation before it lets go

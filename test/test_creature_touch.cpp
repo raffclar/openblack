@@ -23,6 +23,7 @@
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureLocomotion.h"
+#include "Creature/CreatureThrow.h"
 
 using namespace openblack;
 namespace feedback = openblack::creature_feedback;
@@ -315,6 +316,12 @@ TEST(CreatureTouch, TheMeshsWayOutComesFromTheOrderOfTheTrianglesCorners)
 	ASSERT_TRUE(back.has_value());
 	EXPECT_EQ(front->windingNormal, winding);
 	EXPECT_EQ(back->windingNormal, winding);
+}
+
+TEST(CreatureTouch, ThePutDownAnimationLetsGoAtRest)
+{
+	EXPECT_TRUE(creature_throw::PutsDownStill(creature_throw::k_PutDown));
+	EXPECT_FALSE(creature_throw::PutsDownStill(creature_throw::k_Discard));
 }
 
 TEST(CreatureTouch, HeldTheCreatureLooksAtTheHandOrAtTheCameraWithTheHandNearItsMiddle)
