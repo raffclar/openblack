@@ -85,6 +85,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
@@ -1694,6 +1695,8 @@ void CreatureMindSystem::ProcessTurn()
 		    // it then
 		    if (!held)
 		    {
+			    // It notes the region of the land where it stands, for its map of the places it went to
+			    ecs::creature_exploration_land::Visit(entity, {transform.position.x, transform.position.z});
 			    const bool lookedAt = creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
 			                          creature_attention::IsLookingAt(view->origin, view->focus, transform.position);
 			    creature_desire_sources::CountTurn(mind.attention, lookedAt);

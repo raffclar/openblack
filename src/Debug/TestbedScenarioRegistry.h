@@ -1038,6 +1038,8 @@ void AddTutorialScenarios(std::vector<Scenario>& all);
 void AddCreatureDanceScenarios(std::vector<Scenario>& all);
 /// A creature learning to build and to dance by watching villagers
 void AddCreatureLearningScenarios(std::vector<Scenario>& all);
+/// Creatures going to the places of their map of the land: a hill and its ridge, and the beach
+void AddCreatureExplorationScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

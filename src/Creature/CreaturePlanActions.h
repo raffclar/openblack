@@ -292,6 +292,18 @@ enum class Build : uint8_t
 	StrokeAndHeal,
 	LookAtSun,
 	LookAtMoon,
+	/// The actions that use the creature's map of the land: going to a hill to look, going to a hill, going to a hill
+	/// and walking along its ridge, exploring a coast or a town, sitting on a beach, looking at the mountains or out to
+	/// sea, and throwing a thing into the sea
+	GoToHillAndLook,
+	GoToHillAndSit,
+	WalkAlongRidge,
+	ExploreCoast,
+	ExploreTowns,
+	SitDownOnBeach,
+	LookAtMountains,
+	LookOutToSea,
+	ThrowInTheSea,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -476,6 +488,10 @@ struct Situation
 	bool holdingStrokeable {false};
 	/// Game turns a second
 	float turnsPerSecond {10.0f};
+	/// For the actions that use the creature's map of the land: the place that the creature goes to or looks at, and
+	/// the sea that it looks at or throws into. None when the map gives no such place.
+	std::optional<glm::vec2> explorePlace;
+	std::optional<glm::vec2> exploreSea;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

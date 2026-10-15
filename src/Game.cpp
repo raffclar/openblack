@@ -118,6 +118,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/CreatureDanceMusic.h"
+#include "ECS/CreatureExplorationLand.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
@@ -4789,6 +4790,8 @@ void Game::KeepAlignmentInProfile()
 
 void Game::StartNewLand(land_change::Kind change)
 {
+	// With the land and its towns ready, the creatures' map of the land gets its regions
+	ecs::creature_exploration_land::MakeMap();
 	_lastGameLoopTime = machine_clock::Ticks();
 	_turnDeltaTime = 0ns;
 	auto& clock = Locator::time::value();

@@ -184,6 +184,9 @@ private:
 	[[nodiscard]] std::optional<glm::vec2> EmoteClearArea(entt::entity creature,
 	                                                      const creature_plan_actions::Executor& executor, glm::vec2 point,
 	                                                      const creature_plan_actions::Situation& situation);
+	/// The places of the creature's map of the land that the action uses: where it goes or looks, and the sea
+	static void SituateExploration(entt::entity creature, const creature_plan_actions::Executor& executor,
+	                               creature_plan_actions::Situation& situation);
 	/// The creature carried out an action to its end on this game turn
 	static void NoteDone(components::CreatureMindState& mind, uint32_t action);
 	/// An agenda that no plan gave ends: its action was done just now, and the other actions of its desire get older

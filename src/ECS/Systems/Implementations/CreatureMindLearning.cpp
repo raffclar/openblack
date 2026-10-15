@@ -42,6 +42,7 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureKindAgendas.h"
@@ -1623,6 +1624,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	{
 		situated.clearArea = *clear;
 	}
+	SituateExploration(creature, *executor, situated);
 	if (executor->build == creature_plan_actions::Build::LookButDontApproach ||
 	    executor->build == creature_plan_actions::Build::SmileAt)
 	{
@@ -2548,6 +2550,13 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			                 return creature_plan_actions::For(tables->actions.at(action).name) != nullptr;
 		                 });
 	}
+	// The desire to explore has a condition of its own: a young creature, or one that is not too exhausted
+	{
+		const auto* body = registry.TryGet<const CreatureNeeds>(creature);
+		const float exhaustion = body != nullptr ? body->needs.exhaustion : 0.0f;
+		auto& wander = eligible.at(static_cast<size_t>(Desire::Wanderlust));
+		wander = wander && creature_exploration::WanderlustAllowed(mind.developmentPhase, exhaustion);
+	}
 
 	// Something shown on the leash is the only goal there is this turn, for every desire
 	std::optional<entt::entity> leashTarget;
@@ -2959,6 +2968,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.clearArea = *clear;
 			}
+			SituateExploration(creature, *executor, situation);
 			if (executor->build == creature_plan_actions::Build::DanceWithVillagers)
 			{
 				SituateDance(creature, *executor, point, situation);

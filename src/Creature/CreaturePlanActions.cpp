@@ -18,6 +18,7 @@
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureEmoteAgendas.h"
+#include "Creature/CreatureExplorationAgendas.h"
 #include "Creature/CreatureFireAgenda.h"
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
@@ -131,12 +132,10 @@ constexpr std::array k_Executors {
               .target = Target::ToyBall,
               .build = Build::KickBallAround,
               .activity = Activity::PlayWithObject},
-    // TODO(creature-kind-actions): the game walks to the nearest coast it hasn't visited and throws the thing into the
-    // nearest sea it hasn't visited, by the creature's map of where it has been, which isn't here yet; until then it
-    // throws the thing somewhere nearby
+    // It walks to the nearest coast and throws the thing into the nearest sea, by its map of the land
     Executor {.action = "ThrowInTheSea",
               .target = Target::SeaThrowable,
-              .build = Build::ThrowAbout,
+              .build = Build::ThrowInTheSea,
               .activity = Activity::PlayWithObject},
     Executor {.action = "ThrowToImpress",
               .target = Target::Anything,
@@ -193,8 +192,8 @@ constexpr std::array k_Executors {
               .target = Target::Creature,
               .build = Build::ApproachEmote,
               .animation = animations::k_FriendlyWave},
-    Executor {.action = "LookAtMountains", .build = Build::LookAbout},
-    Executor {.action = "LookOutToSea", .build = Build::LookAbout, .leavesHome = true},
+    Executor {.action = "LookAtMountains", .build = Build::LookAtMountains},
+    Executor {.action = "LookOutToSea", .build = Build::LookOutToSea, .leavesHome = true},
     Executor {.action = "LookAtSun", .build = Build::LookAtSun},
     Executor {.action = "LookAtMoon", .build = Build::LookAtMoon},
     // The miracles it casts at things: lightning at anything, a heal at a villager hurt enough, a spell at another
@@ -350,6 +349,13 @@ constexpr std::array k_Executors {
     Executor {.action = "EnterCitadel", .build = Build::EnterTemple},
     Executor {.action = "PrayAtCitadel", .build = Build::PrayAtTemple},
     Executor {.action = "LookAtCitadel", .target = Target::TemplePart, .build = Build::LookAtTemple},
+    // The places of its map of the land: hills, coasts, towns and the beach
+    Executor {.action = "GoToHillAndLook", .build = Build::GoToHillAndLook},
+    Executor {.action = "GoToHillAndSit", .build = Build::GoToHillAndSit},
+    Executor {.action = "GoToHillAndWalkAlongRidge", .build = Build::WalkAlongRidge},
+    Executor {.action = "ExploreCoastline", .build = Build::ExploreCoast},
+    Executor {.action = "ExploreTowns", .build = Build::ExploreTowns},
+    Executor {.action = "SitDownOnBeach", .build = Build::SitDownOnBeach, .leavesHome = true},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -402,6 +408,55 @@ std::optional<creature_mind::FishingTrip> TripFor(const Situation::Fishing& fish
 		return std::nullopt;
 	}
 	return creature_mind::FishingTrip {.shoal = fishing.shoal, .arriveWithin = fishing.arriveWithin};
+}
+
+/// The agenda of an action that uses the creature's map of the land. Without the places that the agenda needs, the
+/// action fails.
+std::optional<std::vector<creature_mind::Step>>
+ExplorationAgenda(Build build, std::optional<uint32_t> object, const Situation& situation, const creature_mind::Random& random)
+{
+	if (!situation.explorePlace.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto place = *situation.explorePlace;
+	switch (build)
+	{
+	case Build::GoToHillAndLook:
+		return creature_exploration::GoToHillAndLook(place, situation.height);
+	case Build::GoToHillAndSit:
+		return creature_exploration::GoToHillAndSit(place, situation.height);
+	case Build::WalkAlongRidge:
+		return creature_exploration::GoToHillAndWalkAlongRidge(place, situation.height);
+	case Build::ExploreCoast:
+	case Build::ExploreTowns:
+		return creature_exploration::Explore(place, situation.height);
+	case Build::LookAtMountains:
+		return creature_exploration::LookAtMountains(place, random);
+	default:
+		break;
+	}
+	if (!situation.exploreSea.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto sea = *situation.exploreSea;
+	switch (build)
+	{
+	case Build::SitDownOnBeach:
+		return creature_exploration::SitDownOnBeach(place, sea, situation.height, random);
+	case Build::LookOutToSea:
+		return creature_exploration::LookOutToSea(place, sea, situation.height, random);
+	case Build::ThrowInTheSea:
+		// It picks the thing up first, unless its hand already holds something
+		if (!object.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_exploration::ThrowInTheSea(situation.handFull ? std::nullopt : object, place, sea, situation.height);
+	default:
+		return std::nullopt;
+	}
 }
 } // namespace
 
@@ -832,6 +887,16 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_emote::LookAtSky(situation.moon, situation.evil, random);
 	case Build::LookAbout:
 		return creature_mind::LookAbout(k_GazeSeconds);
+	case Build::GoToHillAndLook:
+	case Build::GoToHillAndSit:
+	case Build::WalkAlongRidge:
+	case Build::ExploreCoast:
+	case Build::ExploreTowns:
+	case Build::SitDownOnBeach:
+	case Build::LookAtMountains:
+	case Build::LookOutToSea:
+	case Build::ThrowInTheSea:
+		return ExplorationAgenda(executor.build, object, situation, random);
 	case Build::CastLightning:
 		return creature_mind::CastAt(creature_mind::CastStyle::Lightning, cast->magicType, cast->gesture, *object, cast->height,
 		                             random);
