@@ -88,6 +88,8 @@ lnd::LNDCell flat_land::CellAt(int x, int z)
 		cell.flags = k_FreshWaterSoundFlags;
 		break;
 	case CellKind::Shore:
+		// A dry cell at the edge of the water is on the coast line, as on the lands of the game
+		cell.properties.coastLine = 1;
 		cell.flags = k_CoastalSoundFlags;
 		break;
 	case CellKind::Land:

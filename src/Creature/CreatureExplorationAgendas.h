@@ -63,5 +63,8 @@ constexpr float k_BeachClearRadii = 4.0f;
 [[nodiscard]] std::vector<Step> LookOutToSea(glm::vec2 coast, glm::vec2 sea, float height, const Random& random);
 /// Picking the thing up when the hand holds nothing, going to the coast and throwing the thing into the sea
 [[nodiscard]] std::vector<Step> ThrowInTheSea(std::optional<uint32_t> pickUp, glm::vec2 coast, glm::vec2 sea, float height);
+/// The creature goes to the coast with a smile, turns to the sea and dances alone with a playful face. The action is
+/// complete when the dance ends.
+[[nodiscard]] std::vector<Step> DanceByTheSea(glm::vec2 coast, glm::vec2 sea, float height);
 
 } // namespace openblack::creature_exploration

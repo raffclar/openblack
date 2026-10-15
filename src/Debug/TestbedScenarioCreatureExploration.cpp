@@ -8,7 +8,7 @@
  *******************************************************************************/
 
 // The testbed's scenarios of a creature that goes to the places of its map of the land: a hill and the walk round its
-// ridge, and a beach by the lake where it sits
+// ridge, a beach by the lake where it sits, and the coast of the lake where it dances
 
 #include <string_view>
 #include <vector>
@@ -76,5 +76,22 @@ void testbed_scenarios::AddCreatureExplorationScenarios(std::vector<Scenario>& a
 	    .creatures = {Explorer(beachStart)},
 	    .objects = {{.type = MobileStaticInfo::Rock, .offset = beachStart + glm::vec2 {6.0f, 0.0f}}},
 	    .commands = {Do("SitDownOnBeach", 1.0f)},
+	});
+	const glm::vec2 danceStart {k_Lake.x - 40.0f, k_Lake.y - flat_land::k_LakeHalfExtent.y - 70.0f};
+	all.push_back({
+	    .id = "creature.dance_by_the_sea",
+	    .name = "Dances alone by the sea",
+	    .facet = Facet::Movement,
+	    .description = "A grown tiger south of the lake is told to dance on its own by the sea. Its map of the land "
+	                   "gives the nearest coast cell and the nearest water cell.",
+	    .expected = "It smiles and walks to within one of its heights of the coast cell. It turns to face the water. "
+	                "Then it dances alone with a playful face: the start of its dance, then dance moves chosen at random, "
+	                "each one second long, for 20 seconds. Then it plays the end of the dance.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {danceStart + glm::vec2 {-60.0f, -20.0f}, danceStart + glm::vec2 {60.0f, 140.0f}}},
+	    .creatures = {Explorer(danceStart)},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = danceStart + glm::vec2 {6.0f, 0.0f}}},
+	    .commands = {Do("DanceOnYourOwnByTheSea", 1.0f)},
 	});
 }

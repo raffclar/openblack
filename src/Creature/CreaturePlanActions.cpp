@@ -219,6 +219,8 @@ constexpr std::array k_Executors {
               .animation = animations::k_FriendlyWave},
     Executor {.action = "LookAtMountains", .build = Build::LookAtMountains},
     Executor {.action = "LookOutToSea", .build = Build::LookOutToSea, .leavesHome = true},
+    // It dances alone on the nearest coast, by its map of the land
+    Executor {.action = "DanceOnYourOwnByTheSea", .build = Build::DanceByTheSea},
     Executor {.action = "LookAtSun", .build = Build::LookAtSun},
     Executor {.action = "LookAtMoon", .build = Build::LookAtMoon},
     // The miracles it casts at things: lightning at anything, a heal at a villager hurt enough, a spell at another
@@ -617,6 +619,8 @@ ExplorationAgenda(Build build, std::optional<uint32_t> object, const Situation& 
 			return std::nullopt;
 		}
 		return creature_exploration::ThrowInTheSea(situation.handFull ? std::nullopt : object, place, sea, situation.height);
+	case Build::DanceByTheSea:
+		return creature_exploration::DanceByTheSea(place, sea, situation.height);
 	default:
 		return std::nullopt;
 	}
@@ -1063,6 +1067,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::LookAtMountains:
 	case Build::LookOutToSea:
 	case Build::ThrowInTheSea:
+	case Build::DanceByTheSea:
 		return ExplorationAgenda(executor.build, object, situation, random);
 	case Build::CastLightning:
 		return creature_mind::CastAt(creature_mind::CastStyle::Lightning, cast->magicType, cast->gesture, *object, cast->height,
