@@ -331,6 +331,19 @@ TEST(CreatureTouch, OnlyTheTossAndThePutDownAnimationsLetGo)
 	EXPECT_EQ(creature_throw::LetGoOf(0), LetGo::Keep);
 }
 
+TEST(CreatureTouch, ALetGoThingStartsWhereItHangsAndAThrownThingAtTheFingerEnds)
+{
+	const creature_throw::HeldPose held {.rotation = glm::mat3(0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f, 0.0f),
+	                                     .position = glm::vec3(1.0f, 6.0f, 3.0f)};
+	const glm::vec3 fingerEnds(1.0f, 10.0f, 3.0f);
+	const auto letGo = creature_throw::ReleaseStart(held, fingerEnds, false);
+	EXPECT_EQ(letGo.position, held.position);
+	EXPECT_EQ(letGo.rotation, held.rotation);
+	const auto thrown = creature_throw::ReleaseStart(held, fingerEnds, true);
+	EXPECT_EQ(thrown.position, fingerEnds);
+	EXPECT_EQ(thrown.rotation, held.rotation);
+}
+
 TEST(CreatureTouch, AHeldThingTurnsWithTheHandAndHangsBelowTheFingerEnds)
 {
 	// A hand bone at twice the size, with its axes along x, y and z

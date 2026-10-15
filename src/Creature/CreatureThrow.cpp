@@ -66,6 +66,11 @@ HeldPose creature_throw::HeldPlacement(const glm::mat3& hand, const glm::vec3& f
 	return {.rotation = glm::mat3(-side, heldUp, heldAhead), .position = fingerEnds - heldUp * hang};
 }
 
+HeldPose creature_throw::ReleaseStart(const HeldPose& held, const glm::vec3& fingerEnds, bool thrown)
+{
+	return {.rotation = held.rotation, .position = thrown ? fingerEnds : held.position};
+}
+
 std::vector<uint32_t> creature_throw::TossPointBones(std::span<const uint32_t> parents, uint32_t hand)
 {
 	if (hand >= parents.size())

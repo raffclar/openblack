@@ -104,6 +104,10 @@ struct HeldPose
 /// above.
 [[nodiscard]] HeldPose HeldPlacement(const glm::mat3& hand, const glm::vec3& fingerEnds, bool mirrored, float hang);
 
+/// Where a released thing starts. It keeps the turn that it had in the hand. A thing let go of (tossed or put down)
+/// starts where it hangs. A thrown thing starts with its origin at the finger ends.
+[[nodiscard]] HeldPose ReleaseStart(const HeldPose& held, const glm::vec3& fingerEnds, bool thrown);
+
 /// The velocity something tossed away leaves with: a share of the hand's own, measured in the creature's space, flipped
 /// to the other side when tossed by the other hand and turned with the creature
 [[nodiscard]] glm::vec3 TossVelocity(const glm::vec3& handVelocity, bool mirrored, const glm::mat3& rotation, float share);
