@@ -1503,13 +1503,17 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		break;
 	case Kind::Throw:
 	case Kind::ThrowNearby:
-		// At the place of the object as the throw starts, when the order says so
-		if (const auto* at = order.atObject && object.has_value() && registry.Valid(*object)
-		                         ? registry.TryGet<const Transform>(*object)
-		                         : nullptr)
+		// At the place of the object as the throw starts, when the order says so. The place of a thing that a creature
+		// holds is the place of that creature.
+		if (order.atObject && object.has_value() && registry.Valid(*object))
 		{
-			hands.Throw(creature, at->position);
-			break;
+			const auto* held = registry.TryGet<const HeldByCreature>(*object);
+			const auto place = held != nullptr && registry.Valid(held->creature) ? held->creature : *object;
+			if (const auto* at = registry.TryGet<const Transform>(place))
+			{
+				hands.Throw(creature, at->position);
+				break;
+			}
 		}
 		// At a point in the air when it has a height, as the player's camera; otherwise at the ground there
 		hands.Throw(creature, {point.x, order.pointHeight.value_or(point.y), point.z});

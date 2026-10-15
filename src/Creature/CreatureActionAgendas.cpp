@@ -113,7 +113,8 @@ std::vector<Step> creature_mind::StoneAndEat(uint32_t rock, uint32_t thing, floa
 	                  .movement = {.kind = Movement::Kind::ToThrowPosition, .object = thing, .maxDistance = height},
 	                  .face = creature_face::Cue::Anger,
 	                  .gaze = Gaze {.object = thing}});
-	// The creature aims the throw at the rock in its own hand, not at the thing to eat. This is a quirk of the game.
+	// The creature aims the throw at the rock in its own hand, not at the thing to eat. This is a quirk of the game. The
+	// rock is too near to throw at, so the throw fails and the creature stops the action with the rock in its hand.
 	agenda.push_back({.kind = Step::Kind::Object,
 	                  .order = {.kind = ObjectOrder::Kind::Throw, .object = rock, .atObject = true},
 	                  .face = creature_face::Cue::Anger,

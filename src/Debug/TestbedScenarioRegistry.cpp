@@ -2410,14 +2410,32 @@ void AddObjects(std::vector<Scenario>& all)
 	    .facet = Facet::Objects,
 	    .description = "A grown tiger with a rock in front of it and a sheep further away. A script tells it to stone the "
 	                   "sheep with the rock and eat it.",
-	    .expected = "It picks up the rock and, with an angry face, throws it at the sheep. Then it walks to the sheep, "
-	                "picks it up and eats it.",
+	    .expected = "It picks up the rock and, with an angry face, walks to a place to throw from. As in the game, it "
+	                "aims at the rock in its own hand, so the throw fails: it stops with the rock still in its hand and does "
+	                "not eat the sheep.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}, {0.0f, -80.0f}}},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .objects = {{.type = AnimalInfo::Sheep, .offset = {0.0f, -60.0f}, .living = true},
 	                {.type = MobileStaticInfo::RockChalk, .offset = {6.0f, -k_Reach}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StoneAndEat", .with = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.sleep_at_home_without_temple",
+	    .name = "A script tells a creature with no temple to sleep at home",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger and no temple. The tiger walks 100 south of the place where it was made. Then a "
+	                   "script tells it to sleep at home, as the guide's scripts on Land 1 do.",
+	    .expected = "It walks back to the place where it was made, faces down the slope and sleeps there until it is "
+	                "rested.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}, {0.0f, -100.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {40.0f, -50.0f}}},
+	    .commands =
+	        {Go(Kind::WalkTo, 0, {0.0f, -100.0f}, 0.5f, true),
+	         {.kind = Kind::DoAction, .delaySeconds = 1.0f, .waitUntilFree = true, .object = 0, .action = "SleepAtHome"}},
 	});
 
 	all.push_back({

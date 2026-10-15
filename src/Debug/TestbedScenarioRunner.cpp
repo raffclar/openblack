@@ -65,6 +65,7 @@
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/Archetypes/DrinkWaypointArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
 #include "ECS/Archetypes/FishFarmArchetype.h"
@@ -614,6 +615,13 @@ void Runner::Start(const Scenario& scenario)
 	_middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
 
 	SetUpEnvironment(scenario.environment);
+	// The testbed's lake has a water point at the middle of its south edge, as a land's script marks its places to
+	// drink. The creature drinks there.
+	{
+		const glm::vec2 drinkAt {flat_land::k_LakeCentre.x,
+		                         flat_land::k_LakeCentre.y - flat_land::k_LakeHalfExtent.y + (flat_land::k_CellSize * 0.5f)};
+		ecs::archetypes::DrinkWaypointArchetype::Create({drinkAt.x, land.GetHeightAt(drinkAt), drinkAt.y});
+	}
 	if (const auto& temple = scenario.environment.temple; temple.has_value())
 	{
 		const auto at = MapPoint(_middle, *temple);
