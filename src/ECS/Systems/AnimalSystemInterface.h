@@ -121,6 +121,9 @@ public:
 	/// An animal with no life left starts dying where it is: it falls dead (a bird out of the sky), then lies dead its
 	/// time. One in the physics starts dying only once it has come down.
 	virtual void SetDying(entt::entity animal) = 0;
+	/// An animal starts to die at once, without the work of a death: its life and the time its body lies stay as they
+	/// are. It falls dying, then lies dead.
+	virtual void StartDyingWithoutDeath([[maybe_unused]] entt::entity animal) {}
 	/// An animal is taken into a hand, the player's or a creature's: it plays its kind's clip for being held, if its
 	/// kind has one
 	virtual void IntoHand([[maybe_unused]] entt::entity animal) {}

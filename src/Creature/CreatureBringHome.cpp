@@ -29,6 +29,12 @@ Step PickUp(uint32_t thing)
 	        .gaze = Gaze {.object = thing, .whileGoing = true}};
 }
 
+/// The step that makes a living thing still, looking at it
+Step MakeStill(uint32_t thing)
+{
+	return {.kind = Step::Kind::RenderImmobile, .object = thing, .gaze = Gaze {.object = thing, .whileGoing = true}};
+}
+
 Step WalkHome(glm::vec2 home, float within)
 {
 	return {.kind = Step::Kind::Move,
@@ -52,7 +58,8 @@ float creature_bring_home::BringHomeWithin(float height)
 	return std::min(k_NearestHome, height);
 }
 
-std::vector<Step> creature_bring_home::BringHome(std::optional<uint32_t> pickUp, glm::vec2 home, float height)
+std::vector<Step> creature_bring_home::BringHome(std::optional<uint32_t> pickUp, uint32_t thing, bool living, glm::vec2 home,
+                                                 float height)
 {
 	std::vector<Step> agenda;
 	if (pickUp.has_value())
@@ -61,15 +68,25 @@ std::vector<Step> creature_bring_home::BringHome(std::optional<uint32_t> pickUp,
 	}
 	agenda.push_back(WalkHome(home, BringHomeWithin(height)));
 	agenda.push_back(PutDown());
+	// A living thing is made still after the creature puts it down
+	if (living)
+	{
+		agenda.push_back(MakeStill(thing));
+	}
 	return agenda;
 }
 
-std::vector<Step> creature_bring_home::BringFoodHome(std::optional<uint32_t> pickUp, glm::vec2 home, float height)
+std::vector<Step> creature_bring_home::BringFoodHome(std::optional<uint32_t> pickUp, bool living, glm::vec2 home, float height)
 {
 	std::vector<Step> agenda;
 	if (pickUp.has_value())
 	{
 		agenda.push_back(PickUp(*pickUp));
+		// Living food is made still as soon as the creature holds it
+		if (living)
+		{
+			agenda.push_back(MakeStill(*pickUp));
+		}
 	}
 	agenda.push_back(WalkHome(home, height));
 	agenda.push_back(PutDown());

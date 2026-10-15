@@ -1559,6 +1559,24 @@ void AnimalSystem::KillByEffect(entt::entity entity, glm::vec3 position)
 	SetDying(entity);
 }
 
+void AnimalSystem::StartDyingWithoutDeath(entt::entity entity)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} starts to die without a death", static_cast<uint32_t>(entity));
+	// Only its state changes. It plays its fall again even when it was dying or dead already.
+	animal->state = AnimalState::Dying;
+	animal->turnsInState = 0;
+	if (const auto clip = animals::DyingClip(animal->type))
+	{
+		animal->animation = *clip;
+		animal->clipPlace = 0;
+	}
+}
+
 void AnimalSystem::SetDying(entt::entity entity)
 {
 	auto& registry = EntityRegistry();

@@ -47,12 +47,14 @@ struct Field
 };
 
 /// Bringing a thing home. When its hand is empty, the creature picks up the thing (pickUp) and looks at it as it goes
-/// to it. Then it walks home to within BringHomeWithin of its height, and puts the thing down there.
-[[nodiscard]] std::vector<Step> BringHome(std::optional<uint32_t> pickUp, glm::vec2 home, float height);
+/// to it. Then it walks home to within BringHomeWithin of its height, and puts the thing down there. A living thing is
+/// then made still: it starts to die (see Step::Kind::RenderImmobile). Only an order brings a living thing home.
+[[nodiscard]] std::vector<Step> BringHome(std::optional<uint32_t> pickUp, uint32_t thing, bool living, glm::vec2 home,
+                                          float height);
 
-/// Bringing food home. When its hand does not hold food, the creature picks up the food (pickUp). Then it walks home to
-/// within its height, and puts the food down there.
-[[nodiscard]] std::vector<Step> BringFoodHome(std::optional<uint32_t> pickUp, glm::vec2 home, float height);
+/// Bringing food home. When its hand does not hold food, the creature picks up the food (pickUp), and living food is
+/// made still at once. Then it walks home to within its height, and puts the food down there.
+[[nodiscard]] std::vector<Step> BringFoodHome(std::optional<uint32_t> pickUp, bool living, glm::vec2 home, float height);
 
 /// Taking wheat from a field to its home. When its hand does not hold food, the creature walks to within its height of
 /// the field and turns to face the field. Then the plan acts on the creature, and the creature takes a handful of wheat

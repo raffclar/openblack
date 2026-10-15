@@ -56,6 +56,7 @@ public:
 	[[nodiscard]] uint16_t SpeedOf(entt::entity animal) const override;
 	void KillByEffect(entt::entity animal, glm::vec3 position) override;
 	void SetDying(entt::entity animal) override;
+	void StartDyingWithoutDeath(entt::entity animal) override;
 	void IntoHand(entt::entity animal) override;
 	[[nodiscard]] entt::entity LeaderOf(entt::entity flock) const override;
 	[[nodiscard]] std::vector<entt::entity> MembersOf(entt::entity flock) const override;
