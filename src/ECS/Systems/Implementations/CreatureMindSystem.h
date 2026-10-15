@@ -145,6 +145,10 @@ private:
 	/// the first stage, the plan that starts again after a hold, and the copy timeout
 	void TurnBeforeDecision(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind,
 	                        bool scripted);
+	/// The emergencies that come after the turn rules and before the creature decides: low life, a fire on its body, and
+	/// a fire in the nearest town
+	void StepEmergencies(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind,
+	                     bool scripted);
 	/// The creature heals a thing at once, as a stroke heals it
 	void Heal(entt::entity creature, entt::entity thing);
 	/// Copying the player, the creature does what the player did: to the player's thing, else to the nearest thing of the

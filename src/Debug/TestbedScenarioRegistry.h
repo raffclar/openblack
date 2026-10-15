@@ -751,6 +751,9 @@ struct Command
 		/// The temple's camera looks at a scroll of the room the player is in (value: its place among the room's
 		/// scrolls), as when the player presses the scroll. Needs no creature
 		LookAtTempleScroll,
+		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
+		/// fire in place of the creature.
+		SetAlight,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

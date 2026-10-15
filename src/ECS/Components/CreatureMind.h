@@ -135,6 +135,8 @@ struct CreatureMindState
 	/// An order forced the plan. A forced plan counts at its end only when the order said so.
 	bool planForced {false};
 	bool forcedPlanCounts {false};
+	/// An emergency started, and the creature did not stop what it does since then. It does not react to things then.
+	bool emergencyRunning {false};
 
 	/// What it has learnt and remembers, set up with the desires (from its mind file when it has one)
 	std::optional<creature_mind_model::Learnt> learnt;

@@ -2420,6 +2420,17 @@ void Runner::Give(const Command& command)
 	case Kind::SetMiracleSightings:
 		result = TeachMind(*entity, command);
 		break;
+	case Kind::SetAlight:
+	{
+		// With a value of 1, the scenario's object catches fire in place of the creature
+		const auto burning = command.value == 1 ? ObjectAt(command.object) : std::optional(*entity);
+		if (Locator::fireSystem::has_value() && burning.has_value())
+		{
+			Locator::fireSystem::value().SetOnFire(*burning, 0.0f);
+		}
+		result = Locator::fireSystem::has_value() && burning.has_value() ? "alight" : "no fire";
+		break;
+	}
 	case Kind::SetFightLean:
 	{
 		auto& registry = Locator::entitiesRegistry::value();
