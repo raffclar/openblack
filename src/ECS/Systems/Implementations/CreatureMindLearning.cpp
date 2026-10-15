@@ -360,6 +360,9 @@ bool Strokeable(const ecs::Registry& registry, entt::entity entity, entt::entity
 	       Locator::creatureObjectActionSystem::value().CanPickUp(self, entity);
 }
 
+creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity thing);
+bool DoingSomethingInteresting(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity object);
+
 bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, entt::entity self)
 {
 	if (entity == self || !registry.Valid(entity))
@@ -436,6 +439,18 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		        Locator::animalSystem::value().IsFrighteningToCreature(entity));
 	case Target::Anything:
 		return true;
+	case Target::Examinable:
+	{
+		using creature_activity::Thing;
+		const auto kind = KindOfThing(registry, entity);
+		return kind != Thing::Creature && kind != Thing::Field && kind != Thing::FishFarm && kind != Thing::Spell &&
+		       kind != Thing::Other;
+	}
+	case Target::InterestingVillager:
+	{
+		const auto* mind = registry.TryGet<const CreatureMindState>(self);
+		return mind != nullptr && DoingSomethingInteresting(registry, *mind, entity);
+	}
 	case Target::PooedOn:
 		// A thing that is not alive and is taller than 1.5 m, but not a field or a fish farm
 		return !registry.AnyOf<Villager, Animal, Creature, Field, FishFarm>(entity) &&
@@ -2729,7 +2744,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			prepare(*executor);
 			candidates.push_back({
 			    .action = action,
-			    .needsObject = executor->target != Target::None,
+			    .needsObject = tables->actions.at(action).actsOnThing,
 			    .usesThing = executor->use != Target::None,
 			    .opinion = learnt.opinions.at(action),
 			    .turnsSinceDone = learnt.turnsSinceDone.at(action),
@@ -2827,6 +2842,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		    .activityUsefulness = activity.has_value() ? std::optional(activity->usefulness) : std::nullopt,
 		    .findObject = findObject,
 		    .findUsed = findUsed,
+		    .itself = entt::to_integral(creature),
 		});
 		if (best.has_value() && activity.has_value())
 		{
