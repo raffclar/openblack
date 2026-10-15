@@ -101,8 +101,6 @@ constexpr float k_SpotPerSize = 15.0f;
 constexpr float k_ArrivalPerSize = 1.5f * 15.0f;
 /// Moves are only made, and creatures only step back or sideways, within this share of the radius
 constexpr float k_RangeShare = 0.8f;
-/// A creature kept within the range goes this far inside its edge, in metres
-constexpr float k_RangeEdgeMargin = 0.001f;
 
 struct Arena
 {
@@ -122,8 +120,9 @@ struct Arena
 [[nodiscard]] glm::vec2 KeepApart(glm::vec2 from, glm::vec2 to, glm::vec2 opponent, float closest);
 /// Fighters only make moves facing their opponents to within this many radians, turning to them first
 constexpr float k_FacingTolerance = 0.35f;
-/// A point pulled back within the range, as a block's recoil never pushes a creature past it
-[[nodiscard]] glm::vec2 ClampToRange(const Arena& arena, glm::vec2 point);
+/// Where a creature that reels back in its block goes in one frame: to the new point only when that point is inside the
+/// range, else it stays. Blows, steps and the reel from a blow move it with no limit.
+[[nodiscard]] glm::vec2 BlockRecoilTo(const Arena& arena, glm::vec2 from, glm::vec2 to);
 /// Whether a point is not inside the range. When either fighter is not inside it, the fighters stop their moves and
 /// step back to the middle.
 [[nodiscard]] bool OutsideRange(const Arena& arena, glm::vec2 point);
@@ -514,6 +513,8 @@ struct Fighter
 	float stateMs {0.0f};
 	float speed {1.0f};
 	bool mirrored {false};
+	/// The last action that it started: a blow, a step, a reel, or the reel in a block. It stays after the action ends.
+	size_t lastAction {0};
 	/// A blow that is the special move, and whether it has landed yet
 	bool special {false};
 	bool landed {false};

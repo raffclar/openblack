@@ -88,18 +88,9 @@ bool creature_fight::WithinRange(const Arena& arena, glm::vec2 point)
 	return glm::distance(point, arena.centre) <= k_RangeShare * arena.radius;
 }
 
-glm::vec2 creature_fight::ClampToRange(const Arena& arena, glm::vec2 point)
+glm::vec2 creature_fight::BlockRecoilTo(const Arena& arena, glm::vec2 from, glm::vec2 to)
 {
-	const auto offset = point - arena.centre;
-	const auto distance = glm::length(offset);
-	const auto range = k_RangeShare * arena.radius;
-	if (distance <= range || distance <= 0.0f)
-	{
-		return point;
-	}
-	// The point goes a little inside the edge. On the edge itself, the rounding of large land coordinates can put it
-	// out of range again, and then the creature can make no move.
-	return arena.centre + (offset * (std::max(range - k_RangeEdgeMargin, 0.0f) / distance));
+	return OutsideRange(arena, to) ? from : to;
 }
 
 bool creature_fight::OutsideRange(const Arena& arena, glm::vec2 point)
@@ -819,6 +810,10 @@ void creature_fight::Enter(Fighter& fighter, State state, std::optional<size_t> 
 	fighter.speed = speed;
 	fighter.landed = false;
 	fighter.special = state == State::Action && IsSpecialAttack(fighter.animation);
+	if (state == State::Action || state == State::BlockRecoil)
+	{
+		fighter.lastAction = fighter.animation;
+	}
 }
 
 bool creature_fight::PlayerMove(Fighter& fighter, const Move& move, bool replace)

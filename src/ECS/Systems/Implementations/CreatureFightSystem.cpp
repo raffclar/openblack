@@ -762,15 +762,14 @@ float ForwardExtentOf(const ecs::Registry& registry, entt::entity creature)
 }
 
 /// When the bodies of two fighters overlap, both move apart by half the overlap, along the direction that the first one
-/// faces. Nothing moves while the opponent makes a blow.
+/// faces. Nothing moves when the last action that the opponent started is a blow.
 void PullApartFighters(ecs::Registry& registry, entt::entity creature, const CreatureFighting& fighting)
 {
 	const auto opponent = fighting.opponent;
 	const auto* other = registry.TryGet<const CreatureFighting>(opponent);
 	auto* self = registry.TryGet<CreatureLocomotion>(creature);
 	auto* otherBody = registry.TryGet<CreatureLocomotion>(opponent);
-	if (other == nullptr || self == nullptr || otherBody == nullptr ||
-	    (other->fighter.state == fight::State::Action && fight::IsAttack(other->fighter.animation)))
+	if (other == nullptr || self == nullptr || otherBody == nullptr || fight::IsAttack(other->fighter.lastAction))
 	{
 		return;
 	}
@@ -2318,6 +2317,18 @@ void CreatureFightSystem::ProcessStages()
 						                                 {"of", fight_transcript::Id(opponent)},
 						                                 {"planned", planned}};
 					});
+					// The fear stops what the other creature does: its response ends, and its mind is free again.
+					// Thus, when both have the same life, only the first of the two to finish its response fears.
+					if (const auto* other =
+					        registry.Valid(opponent) ? registry.TryGet<const CreatureFighting>(opponent) : nullptr;
+					    other != nullptr && other->opponent == entity && other->stage == CreatureFighting::Stage::Respond)
+					{
+						fight_transcript::Note(opponent, "stopped_by_partner", [&] {
+							return fight_transcript::Fields {{"creature", fight_transcript::Id(opponent)},
+							                                 {"by", fight_transcript::Id(entity)}};
+						});
+						Leave(opponent);
+					}
 				}
 			}
 			break;
@@ -2747,7 +2758,7 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		fighter.timeMs += milliseconds * fight::PlaybackSpeed(fighter.animation, fighter.speed);
 		fighter.stateMs += milliseconds;
 
-		// An action carries the creature as far as its animation's root moves, back or sideways only within the range
+		// An action carries the creature as far as its animation's root moves. Only the reel in a block stops at the range.
 		if ((fighter.state == fight::State::Action || fighter.state == fight::State::BlockRecoil) && duration > 0.0f)
 		{
 			const auto share = std::min(fighter.timeMs / duration, 1.0f);
@@ -2756,9 +2767,7 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 			          (share - fighting->movedShare);
 			fighting->movedShare = share;
 			const auto at = Flat(locomotion->toPosition);
-			auto to = fighter.state == fight::State::BlockRecoil || fighter.animation != fight::animations::k_StepForward
-			              ? fight::ClampToRange(fighting->arena, at + by)
-			              : at + by;
+			auto to = fighter.state == fight::State::BlockRecoil ? fight::BlockRecoilTo(fighting->arena, at, at + by) : at + by;
 			// Never through the opponent
 			if (const auto* other = registry.TryGet<const CreatureLocomotion>(fighting->opponent))
 			{

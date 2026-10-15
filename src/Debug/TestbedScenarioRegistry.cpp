@@ -4366,9 +4366,26 @@ void AddCombat(std::vector<Scenario>& all)
 		    .facet = Facet::Combat,
 		    .description = "Two tigers fight by themselves. The scenario keeps the life of both at 0.5, thus they have the "
 		                   "same life after the duel. After 25 seconds the debug tools stop the duel.",
-		    .expected = "Each tiger finishes its move. Both tigers are sad, and then each one fears the other.",
+		    .expected = "Each tiger finishes its move. Both tigers are sad. The first tiger to finish fears the other "
+		                "and runs from it, and the other tiger stops its response and is free again.",
 		    .framing = ringside,
 		    .creatures = {even, other},
+		    .commands = stopped,
+		});
+		auto weaker = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
+		weaker.needs.life = 0.3f;
+		auto healthier = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		healthier.needs.life = 0.9f;
+		all.push_back({
+		    .id = "combat.stopped_starter_weaker",
+		    .name = "A fight stopped with no knock-out, the starter with less life",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger starts the fight but has less life than the blue tiger. Both fight by themselves. "
+		                   "After 25 seconds the debug tools stop the duel.",
+		    .expected = "Each tiger finishes its move. The red tiger is sad and the blue tiger is happy. The red tiger then "
+		                "fears the blue tiger and runs from it. The blue tiger is free again: it does not stay stopped.",
+		    .framing = ringside,
+		    .creatures = {weaker, healthier},
 		    .commands = stopped,
 		});
 		all.push_back({

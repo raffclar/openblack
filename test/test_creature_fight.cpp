@@ -76,12 +76,15 @@ TEST(CreatureFight, StepsBackOrSidewaysOnlyWithinRange)
 	EXPECT_FALSE(CanStep(arena, {45.0f, 0.0f}, Step::Back));
 	EXPECT_FALSE(CanStep(arena, {45.0f, 0.0f}, Step::Left));
 	EXPECT_TRUE(CanStep(arena, {10.0f, 0.0f}, Step::Right));
-	const auto clamped = ClampToRange(arena, {0.0f, 100.0f});
-	EXPECT_NEAR(clamped.y, 40.0f, 2.0f * k_RangeEdgeMargin);
-	EXPECT_TRUE(WithinRange(arena, clamped));
-	// Far from the middle of the land, the rounding of the coordinates must not put a clamped point out of range
-	const Arena far {.centre = {2559.0005f, 2599.0005f}, .radius = 39.000446f};
-	EXPECT_TRUE(WithinRange(far, ClampToRange(far, {2527.6f, 2599.0498f})));
+}
+
+TEST(CreatureFight, AReelInABlockStopsAtTheRange)
+{
+	const Arena arena {.centre = {0.0f, 0.0f}, .radius = 50.0f};
+	// Inside the range it moves; a move to the edge or past it does not occur
+	EXPECT_EQ(BlockRecoilTo(arena, {0.0f, 30.0f}, {0.0f, 39.0f}), glm::vec2(0.0f, 39.0f));
+	EXPECT_EQ(BlockRecoilTo(arena, {0.0f, 39.0f}, {0.0f, 40.0f}), glm::vec2(0.0f, 39.0f));
+	EXPECT_EQ(BlockRecoilTo(arena, {0.0f, 39.0f}, {0.0f, 41.0f}), glm::vec2(0.0f, 39.0f));
 }
 
 TEST(CreatureFight, ClickHeightPicksTheBand)
@@ -747,4 +750,15 @@ TEST(CreatureFight, OverlappingFightersMoveApartInsideTheRange)
 	EXPECT_FALSE(edge.first.has_value());
 	ASSERT_TRUE(edge.second.has_value());
 	EXPECT_FLOAT_EQ(edge.second->y, -5.25f);
+}
+
+TEST(CreatureFight, AFighterKeepsItsLastActionAfterItEnds)
+{
+	Fighter fighter;
+	Enter(fighter, State::Action, animations::k_AttackHigh);
+	EXPECT_EQ(fighter.lastAction, animations::k_AttackHigh);
+	Enter(fighter, State::Stance);
+	EXPECT_EQ(fighter.lastAction, animations::k_AttackHigh);
+	Enter(fighter, State::BlockRecoil);
+	EXPECT_EQ(fighter.lastAction, animations::k_RecoilBlock);
 }
