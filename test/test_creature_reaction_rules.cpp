@@ -364,3 +364,11 @@ TEST(CreatureReactionRules, WorthAndDominance)
 	EXPECT_TRUE(creature_reaction::IsDominant(14, 24, true));
 	EXPECT_FALSE(creature_reaction::IsDominant(24, 14, false));
 }
+
+TEST(CreatureReactionRules, ANiceMiracleOfAnotherGodTeachesNothing)
+{
+	EXPECT_FALSE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(creature_reaction::OfAnotherGod(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
+}
