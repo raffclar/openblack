@@ -200,6 +200,30 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .worshipShare = 0.0f,
 	});
 
+	// The hand gives the man to the altar while a tiger on the learning leash watches it
+	auto copying = offer(k_Man, 4.0f);
+	copying.insert(copying.begin(),
+	               Command {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope});
+	all.push_back({
+	    .id = "learning.copy_sacrifice",
+	    .name = "The creature copies a sacrifice at the altar",
+	    .facet = Facet::Mind,
+	    .description = "The same town and temple, the town's worship site put up built and nobody sent to worship. A grown "
+	                   "tiger of the player's on the learning leash stands north of the altar and looks at it. The "
+	                   "player's hand takes a man of the town and gives him to the altar with the Action button.",
+	    .expected = "The tiger sees the sacrifice and copies it: it picks up a villager or an animal near it, carries it "
+	                "to the altar, stops three of its heights away, faces the altar and puts the living thing down. The "
+	                "log shows that the tiger copies the player with the Sacrifice action.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 35.0f}, .look = {10.0f, 0.0f, -2.0f}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = {10.0f, 30.0f}}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = copying,
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+
 	// The hand gives a man and then a dead tree to the altar, then rests on the altar empty
 	auto withDeadTree = Town();
 	withDeadTree.push_back({.type = TreeInfo::Birch, .offset = {-14.0f, 8.0f}, .dead = true});

@@ -817,9 +817,10 @@ TEST(CreatureLearning, CreditGoesToRecentActions)
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(unlearnable), 0.0f);
 
 	std::vector<creature_learning::Context> contexts;
-	creature_learning::Remember(contexts, {.action = 1, .windowSeconds = 20.0f});
+	static_cast<void>(creature_learning::Remember(contexts, {.action = 1, .windowSeconds = 20.0f}));
 	creature_learning::Age(contexts, 1.0f);
-	creature_learning::Remember(contexts, {.action = 2, .windowSeconds = 10.0f});
+	contexts.back().done = true;
+	static_cast<void>(creature_learning::Remember(contexts, {.action = 2, .windowSeconds = 10.0f}));
 	creature_learning::Age(contexts, 1.0f);
 	EXPECT_FALSE(contexts[0].running);
 	EXPECT_EQ(creature_learning::BestContext(contexts), 1u);
@@ -829,7 +830,8 @@ TEST(CreatureLearning, CreditGoesToRecentActions)
 	EXPECT_EQ(creature_learning::BestContext(contexts), 0u);
 	for (uint32_t i = 0; i < 20; ++i)
 	{
-		creature_learning::Remember(contexts, {.action = i});
+		contexts.back().done = true;
+		static_cast<void>(creature_learning::Remember(contexts, {.action = i}));
 	}
 	EXPECT_EQ(contexts.size(), 5u);
 	EXPECT_EQ(contexts.back().action, 19u);
@@ -1729,4 +1731,53 @@ TEST(CreatureLearning, SeeingTheHandMakesADesireGrowFaster)
 	state.increaseSeconds = 1000.0f;
 	creature_learning::SpeedUpAfterSeeingPlayer(state, 0.5f, 1.0f, 1200.0f);
 	EXPECT_FLOAT_EQ(state.increaseSeconds, 1200.0f);
+}
+
+TEST(CreatureLearning, AnActionNotCarriedOutGivesItsPlaceToTheNext)
+{
+	std::vector<creature_learning::Context> contexts;
+	EXPECT_FALSE(creature_learning::Remember(contexts, {.action = 1}).has_value());
+	// The first action was cut short: the second takes its place
+	EXPECT_FALSE(creature_learning::Remember(contexts, {.action = 2}).has_value());
+	ASSERT_EQ(contexts.size(), 1u);
+	EXPECT_EQ(contexts.back().action, 2u);
+	// Carried out to its end, it stays and the next one comes after it
+	contexts.back().done = true;
+	EXPECT_FALSE(creature_learning::Remember(contexts, {.action = 3}).has_value());
+	ASSERT_EQ(contexts.size(), 2u);
+	EXPECT_EQ(contexts.front().action, 2u);
+	EXPECT_FALSE(contexts.front().running);
+}
+
+TEST(CreatureLearning, TheSixthActionMakesItForgetTheOldest)
+{
+	std::vector<creature_learning::Context> contexts;
+	for (uint32_t i = 0; i < creature_learning::k_MaxContexts; ++i)
+	{
+		EXPECT_FALSE(creature_learning::Remember(contexts, {.action = i, .ordered = i == 0}).has_value());
+		contexts.back().done = true;
+	}
+	const auto forgotten = creature_learning::Remember(contexts, {.action = 9});
+	ASSERT_TRUE(forgotten.has_value());
+	EXPECT_EQ(forgotten->action, 0u);
+	EXPECT_TRUE(forgotten->ordered);
+	EXPECT_EQ(contexts.size(), creature_learning::k_MaxContexts);
+	EXPECT_EQ(contexts.front().action, 1u);
+	EXPECT_EQ(contexts.back().action, 9u);
+}
+
+TEST(CreatureLearning, AForgottenOrderTeachesApprovalWhenItsDesireLearnsFromOrders)
+{
+	constexpr float k_Approval = 0.3f;
+	const creature_learning::DesireRules approves {.approvesOrders = true};
+	const creature_learning::DesireRules ignores {.approvesOrders = false};
+	const creature_learning::Context ordered {.action = 4, .ordered = true, .done = true};
+	const creature_learning::Context ownChoice {.action = 4, .done = true};
+	EXPECT_EQ(creature_learning::ForgottenOrderApproval(ordered, approves, k_Approval), k_Approval);
+	EXPECT_FALSE(creature_learning::ForgottenOrderApproval(ordered, ignores, k_Approval).has_value());
+	EXPECT_FALSE(creature_learning::ForgottenOrderApproval(ownChoice, approves, k_Approval).has_value());
+	// A stroke or a slap for the order does not stop the approval
+	auto slapped = ordered;
+	slapped.credited = -1.0f;
+	EXPECT_EQ(creature_learning::ForgottenOrderApproval(slapped, approves, k_Approval), k_Approval);
 }
