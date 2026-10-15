@@ -338,6 +338,8 @@ bool VillageTotemSystem::Grip(entt::entity totem, PlayerNames player)
 	totemComponent->gripped = true;
 	_gripped = totem;
 	Place(totem);
+	// The player's creature sees the hand take the totem first, then the living near it react to the hand
+	_world->SeeHandTakeTotem(player);
 	// The living near it react to the hand using it
 	_world->ReactToHandUsingTotem(totem, player, StandingAt(totem));
 	return true;

@@ -201,4 +201,8 @@ struct CreatureAttitude
                                 std::span<const float> initialThresholds);
 [[nodiscard]] std::string_view LikesWords(size_t level);
 
+/// The creature sees the hand do something that shows a desire. The desire then takes the speed-up times less time to
+/// grow by 1, but never less than the least time or more than the most time.
+void SpeedUpAfterSeeingPlayer(creature_desires::DesireState& state, float speedUp, float leastSeconds, float mostSeconds);
+
 } // namespace openblack::creature_learning

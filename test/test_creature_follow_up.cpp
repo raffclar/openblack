@@ -108,3 +108,10 @@ TEST(CreatureFollowUp, ASlapRollsFourWaysFirst)
 	static_cast<void>(ShowSlapFeeling({.compassion = 0.0f, .anger = 1.0f}, fake.Function(), 0.0f, 10));
 	EXPECT_EQ(fake.ranges, (std::vector<uint32_t> {4, 2}));
 }
+
+TEST(CreatureFollowUp, AfterTheMealItEatsAliveWhatItAteFromItsHand)
+{
+	EXPECT_EQ(creature_follow_up::ActionToDoAgain("EatObjectInHand"), "EatAlive");
+	EXPECT_EQ(creature_follow_up::ActionToDoAgain("EatAlive"), "EatAlive");
+	EXPECT_EQ(creature_follow_up::ActionToDoAgain("PickUpThing"), "PickUpThing");
+}

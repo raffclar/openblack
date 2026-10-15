@@ -33,6 +33,9 @@ enum class FollowUp : uint8_t
 	FrightenedOfPlayer,
 	/// It was slapped, and shows how the slap made it feel
 	ShowSlapFeeling,
+	/// It learnt to eat what it holds when it was stroked. When the meal is done, it does again what it was stroked for,
+	/// to a different thing of the same kind.
+	DoLessonAgain,
 };
 
 /// The creature eats a magic mushroom: it becomes high only when nothing else waits
@@ -74,5 +77,9 @@ struct Feelings
 [[nodiscard]] std::vector<creature_mind::Step> ShowSlapFeeling(const Feelings& feelings,
                                                                const std::function<uint32_t(uint32_t)>& random, float chance,
                                                                uint32_t turnsPerSecond);
+
+/// The action that the creature does again after the meal: the action that it was stroked for, but it eats a thing alive
+/// in place of a thing that it holds in its hand
+[[nodiscard]] std::string_view ActionToDoAgain(std::string_view stroked);
 
 } // namespace openblack::creature_follow_up

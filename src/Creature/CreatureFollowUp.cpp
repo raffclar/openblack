@@ -70,3 +70,8 @@ std::vector<Step> creature_follow_up::ShowSlapFeeling(const Feelings& feelings, 
 	}
 	}
 }
+
+std::string_view creature_follow_up::ActionToDoAgain(std::string_view stroked)
+{
+	return stroked == "EatObjectInHand" ? std::string_view("EatAlive") : stroked;
+}

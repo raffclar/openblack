@@ -378,3 +378,17 @@ std::string_view creature_learning::LikesWords(size_t level)
 {
 	return k_LikesWords.at(std::min(level, k_LikesLevels - 1));
 }
+
+void creature_learning::SpeedUpAfterSeeingPlayer(creature_desires::DesireState& state, float speedUp, float leastSeconds,
+                                                 float mostSeconds)
+{
+	state.increaseSeconds /= speedUp;
+	if (state.increaseSeconds < leastSeconds)
+	{
+		state.increaseSeconds = leastSeconds;
+	}
+	else if (state.increaseSeconds > mostSeconds)
+	{
+		state.increaseSeconds = mostSeconds;
+	}
+}
