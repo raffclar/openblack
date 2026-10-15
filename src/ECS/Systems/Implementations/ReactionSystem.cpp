@@ -877,6 +877,11 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		const auto kind = ecs::villager_creature::Priority(living, reaction.source.initiator);
 		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
+	// Animals take no notice of fights
+	if (reaction.source.type == Reaction::ReactToFight && registry.AllOf<Animal>(living))
+	{
+		return 0;
+	}
 	// A villager heeds an arena only while a fight is on in it
 	if (reaction.source.type == Reaction::ReactToFight && registry.AllOf<Villager>(living))
 	{
@@ -1612,8 +1617,11 @@ std::optional<float> ReactionSystem::CreatureImpressiveValue(const Active& react
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto watched = reaction.source.initiator;
 	const auto* info = InfoOf(reaction.source.type);
-	if (reaction.source.type != Reaction::ReactToCreature || info == nullptr || !registry.Valid(watched) ||
-	    !registry.AllOf<Creature, Transform>(watched) || !Locator::infoConstants::has_value())
+	// A creature that makes a reaction, as by seeing it or by winning a fight, impresses by its own value
+	const bool byCreature =
+	    reaction.source.type == Reaction::ReactToCreature || reaction.source.type == Reaction::ReactToFightWon;
+	if (!byCreature || info == nullptr || !registry.Valid(watched) || !registry.AllOf<Creature, Transform>(watched) ||
+	    !Locator::infoConstants::has_value())
 	{
 		return std::nullopt;
 	}

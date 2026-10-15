@@ -354,7 +354,7 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 		_landType = MusicType::None;
 		return;
 	}
-	if (ProcessCreatureDance(inputs) || ProcessAttached(inputs))
+	if (ProcessCreatureFight(inputs) || ProcessCreatureDance(inputs) || ProcessAttached(inputs))
 	{
 		_landType = MusicType::None;
 		return;
@@ -367,6 +367,14 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 	Locator::audio::value().MusicStop(true);
 	_playing = MusicType::None;
 	_landType = MusicType::None;
+}
+
+MusicType GameMusic::SelectFightType(int32_t landNumber, bool skirmish)
+{
+	// The land number is compared as an unsigned number, so a negative one counts as a later land
+	constexpr uint32_t k_FirstBigFightLand = 4;
+	return !skirmish && static_cast<uint32_t>(landNumber) < k_FirstBigFightLand ? MusicType::CreatureFight
+	                                                                            : MusicType::CreatureBigFight;
 }
 
 MusicType GameMusic::SelectCitadelType(const TurnInputs& inputs)
@@ -454,6 +462,32 @@ bool GameMusic::ProcessScript()
 // Music attached to an object plays, heard from the object, while the camera is in its range. Of several in range the
 // one attached most recently plays. It joins its music group in time, fades in and loops; out of range, other music
 // takes over.
+// The fight music of the player's creature plays centred on the listener, fading in and carrying on from where its
+// music group got to. It plays once through each time it starts. It is not in time with other music.
+bool GameMusic::ProcessCreatureFight(const TurnInputs& inputs)
+{
+	if (!inputs.creatureFight.has_value())
+	{
+		return false;
+	}
+	const auto type = *inputs.creatureFight;
+	const auto path = std::string(GetMusicBankPath(type));
+	auto& audio = Locator::audio::value();
+	const auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
+	if (!info)
+	{
+		return false;
+	}
+	SaveResumeChunks();
+	audio.MusicPlay(path, MusicPlayOptions {
+	                          .volume = k_FullVolume,
+	                          .startChunk = GetResumeChunk(info->groupId),
+	                          .fadeIn = true,
+	                      });
+	_playing = type;
+	return true;
+}
+
 // The chant of a creature's dance with villagers plays from the creature, in time with its music group, fading in
 bool GameMusic::ProcessCreatureDance(const TurnInputs& inputs)
 {

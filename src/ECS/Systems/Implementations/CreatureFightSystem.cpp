@@ -88,6 +88,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -102,6 +103,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "MagicLiving.h"
 #include "Particles/LightSheet.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -1130,7 +1132,11 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 	});
 	if (tooFar)
 	{
-		// TODO(advisors): for the player's creature, the advisors say one of their lines about its fight instead
+		// For a fight of the player's creature, the advisors can say one of their lines about the fight instead
+		if (involved && Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().RemarkIfNow(guidance::Kind::CreatureFight);
+		}
 		return;
 	}
 	const auto ground = GroundAt(arena.centre);
@@ -2946,6 +2952,13 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	auto& struck = registry.AllOf<CreatureFightRecord>(opponent) ? registry.Get<CreatureFightRecord>(opponent)
 	                                                             : registry.Assign<CreatureFightRecord>(opponent);
 	struck.struckTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u;
+	// A blow that lands, blocked or not, is a small hit from the attacker: it changes how nice the victim finds the
+	// attacker, no more often than once a minute. It takes nothing from the victim's life.
+	{
+		magic::EffectValues blowEffect {};
+		blowEffect[magic::EffectKind::Hit] = fight::k_BlowHitEffect;
+		magic_living::AfterEffect(opponent, blowEffect, {.player = body.owner, .casterCreature = creature});
+	}
 
 	const bool blocked = fight::IsBlocking(victim.state, victim.timeMs, DurationOf(opponent, fight::animations::k_StartBlock));
 	const auto heightShare = std::clamp((point.y - opponentTransform.position.y) / opponentHeight, 0.0f, 1.0f);
@@ -3049,13 +3062,21 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 		};
 		auto& skins = Locator::creatureSkinSystem::value();
 		std::uniform_int_distribution<int> texel(k_WoundEdge, static_cast<int>(creature_marks::k_AtlasSize) - k_WoundEdge - 1);
+		const auto u = static_cast<uint8_t>(texel(_random));
+		const auto v = static_cast<uint8_t>(texel(_random));
+		// The column is drawn first, then the kind by the wound type the attacker's species gives the blow
+		const auto column = static_cast<uint8_t>(random(creature_marks::k_CellsPerRow));
+		const auto* attackerRig = RigOf(body.species);
+		const auto woundType = attackerRig != nullptr && attackerRig->blowWoundTypes.has_value()
+		                           ? fight::BlowWoundType(attacker.animation, *attackerRig->blowWoundTypes)
+		                           : -1;
 		creature_marks::Mark wound {
-		    .u = static_cast<uint8_t>(texel(_random)),
-		    .v = static_cast<uint8_t>(texel(_random)),
+		    .u = u,
+		    .v = v,
 		    .skin = 0,
 		    .age = 0,
-		    .type = fight::WoundKind(fight::BlowWoundType(attacker.animation), random),
-		    .column = static_cast<uint8_t>(random(creature_marks::k_CellsPerRow)),
+		    .type = fight::WoundKind(woundType, random),
+		    .column = column,
 		};
 		skins.AddWound(opponent, wound);
 		if (fight::Bleeds(wound.type))
@@ -3183,8 +3204,8 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 			                                     {"player", static_cast<int32_t>(owner)}};
 		    },
 		    winRecord);
-		// TODO(creature-fights): how impressive the winner is to those watching (the creature's own impressiveness by
-		// what it does and the town's attitude to it) is not modelled, so the fight won gives no belief yet
+		// Those who take it up believe by how impressive the winner is: what it last did, its size, and how their town
+		// feels about it
 		Locator::reactionSystem::value().Create({.initiator = winner,
 		                                         .type = Reaction::ReactToFightWon,
 		                                         .player = owner,
@@ -3412,5 +3433,41 @@ void CreatureFightSystem::ProcessKnockedOut()
 			              : knockedOut.stage == CreatureKnockedOut::Stage::GettingUp ? CreatureNeeds::Rest::Awake
 			                                                                         : CreatureNeeds::Rest::Unconscious;
 		}
+	}
+}
+
+bool CreatureFightSystem::FightMusicHeard(const glm::vec3& camera) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = PrimaryCreatureOf(registry, k_LocalPlayer);
+	if (!creature.has_value())
+	{
+		return false;
+	}
+	std::vector<glm::vec3> arenas;
+	registry.Each<const CreatureArena, const Transform>(
+	    [&arenas, own = *creature](const CreatureArena& arena, const Transform& transform) {
+		    if (arena.fightOn && (arena.first == own || arena.second == own))
+		    {
+			    arenas.push_back(transform.position);
+		    }
+	    });
+	return fight::FightMusicHeard(DirectsFight(), arenas, camera);
+}
+
+void CreatureFightSystem::LoseFightHealth(entt::entity creature, float damage)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!IsDuelling(creature) || IsKnockedOut(creature))
+	{
+		return;
+	}
+	auto& fighter = registry.Get<CreatureFighting>(creature).fighter;
+	const auto before = fighter.health;
+	fighter.health = fight::HealthAfterLifeLost(before, damage);
+	fight_transcript::Note(creature, "level", [&] { return LevelChange(creature, "health", before, fighter.health, "life"); });
+	if (fighter.health <= 0.0f)
+	{
+		KnockOut(creature);
 	}
 }

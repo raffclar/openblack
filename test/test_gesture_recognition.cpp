@@ -494,3 +494,33 @@ TEST(GestureMatcher, TheGamesTemplatesRecogniseTheirOwnShapes)
 	const auto drawn = Record(TraceScribble({500.0f, 400.0f}, 300.0f, 5));
 	EXPECT_TRUE(Recognise(templates, GestureType::Scribble, drawn.KeyPoints(), k_ScreenAspect).has_value());
 }
+
+TEST(GestureRequests, WhileThePlayersCreatureDuelsOnlyItsFightGesturesAreWaitedFor)
+{
+	HandContext context;
+	// A seed in the hand would otherwise wait for its own gestures
+	context.seed = HandContext::Seed {.sizingGesture = GestureType::Circle};
+	context.actionHeld = true;
+	context.creature = HandContext::Creature {
+	    .fighting = true,
+	    .knows = {false, true, false},
+	    .takesFightMoves = true,
+	    .fightMiracles = {{.gesture = GestureType::Heart, .magic = MagicType::Fireball},
+	                      {.gesture = GestureType::None, .magic = MagicType::LightningBolt},
+	                      {.gesture = GestureType::EShape, .magic = MagicType::Heal}},
+	};
+	auto requests = Requests(context);
+	ASSERT_EQ(requests.size(), 3u);
+	// The star calls the special move first, then each miracle it knows that has a gesture, in their order
+	EXPECT_EQ(requests[0], (Request {.gesture = GestureType::Star, .purpose = Purpose::FightSpecialMove}));
+	EXPECT_EQ(requests[1],
+	          (Request {.gesture = GestureType::Heart, .purpose = Purpose::FightMiracle, .magic = MagicType::Fireball}));
+	EXPECT_EQ(requests[2],
+	          (Request {.gesture = GestureType::EShape, .purpose = Purpose::FightMiracle, .magic = MagicType::Heal}));
+	// Its queue full, it takes no more moves, and the fight's gestures are no longer waited for
+	context.creature->takesFightMoves = false;
+	requests = Requests(context);
+	EXPECT_TRUE(std::ranges::none_of(requests, [](const Request& request) {
+		return request.purpose == Purpose::FightSpecialMove || request.purpose == Purpose::FightMiracle;
+	}));
+}

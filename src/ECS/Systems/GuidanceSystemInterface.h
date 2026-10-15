@@ -51,6 +51,8 @@ public:
 	virtual bool PlayNow(guidance::Kind kind) = 0;
 	/// The same for an advisors' remark: the wait of any remark first, then its own kind's
 	virtual bool RemarkNow(guidance::Kind kind) = 0;
+	/// An advisors' remark of a kind, said when RemarkNow lets it: one of the kind's texts, picked at random
+	virtual void RemarkIfNow(guidance::Kind kind) = 0;
 
 	/// Harm done to a town by a player, applied by a creature or by anything else
 	virtual void TownAttacked(entt::entity town, PlayerNames attacker, bool byCreature) = 0;
