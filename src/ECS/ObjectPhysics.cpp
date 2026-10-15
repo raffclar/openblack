@@ -504,6 +504,11 @@ void object_physics::TapRock(systems::DynamicsSystemInterface& dynamics, entt::e
 {
 	auto& registry = Entities();
 	const auto point = registry.Get<const Transform>(rock).position;
+	// The player's creature sees the player break the rock, while the rock is still whole, and may copy the deed
+	if (player.has_value() && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().PlayerDid(objects::k_DeedBreakRocks, point, rock, *player);
+	}
 	SplitRock(dynamics, rock);
 	PlaySound(NextInTurn(k_HandRockTaps, registry.Context().nextHandRockTap), handPoint);
 	// The player's creature sees the player playing with the rock

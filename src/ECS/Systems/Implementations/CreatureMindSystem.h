@@ -51,6 +51,8 @@ public:
 	void SeeMiracle(const glm::vec3& point, size_t miracle) override;
 	void PlayerDid(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
 	               std::optional<PlayerNames> player) override;
+	void PlayerCastDeed(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
+	                    std::optional<PlayerNames> player, MagicType magic) override;
 	[[nodiscard]] const creature_mind_tables::Tables* GetTables() override;
 	[[nodiscard]] std::optional<creature_tree::Belief> BeliefAbout(entt::entity creature, entt::entity thing) const override;
 
@@ -396,6 +398,15 @@ private:
 	/// A stroke, or the end of the meal of the lesson to eat what it holds: the creature must do again the action that
 	/// feedback goes to now, to the most useful thing of the same kind. This can be the same thing again.
 	void DoLessonAgain(entt::entity creature, components::CreatureMindState& mind);
+	/// A player did a deed, maybe with a miracle (0 for none), that creatures can copy (CreatureMindLearning.cpp)
+	void NoticeDeed(size_t deed, const glm::vec3& point, std::optional<entt::entity> object, std::optional<PlayerNames> player,
+	                uint32_t magic);
+	/// When it starts to copy a deed on a thing, the creature learns that the thing and its whole thing are good for the
+	/// desire that the player seemed to have, as half a stroke would teach it (CreatureMindLearning.cpp)
+	void LearnFromDeedSeen(entt::entity creature, components::CreatureMindState& mind, size_t deed, entt::entity thing,
+	                       uint32_t magic);
+	/// The creature chose to copy the player: it copies the deed that it saw last again (CreatureMindLearning.cpp)
+	void CopyObservedDeedAgain(entt::entity creature, components::CreatureMindState& mind);
 	/// It is made to be high, as after eating a magic mushroom
 	void BecomeHigh(entt::entity creature);
 	/// Going near, getting away from or turning to face an object begins, and each turn it goes on

@@ -711,12 +711,12 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 	const auto& info = Locator::infoConstants::value();
 	if (auto* field = registry.TryGet<Field>(object))
 	{
-		// The caster's creature may learn to water the crops from watching. (It would copy the plain water whichever
-		// was cast, but creatures don't cast miracles here yet.)
+		// The caster's creature may learn to water the crops from watching. It sees the plain water miracle, whichever
+		// water was cast.
 		if (drop.source.player != PlayerNames::NEUTRAL && Locator::creatureMindSystem::has_value())
 		{
-			Locator::creatureMindSystem::value().PlayerDid(magic::k_DeedCastWaterOnCrops, drop.position, object,
-			                                               drop.source.player);
+			Locator::creatureMindSystem::value().PlayerCastDeed(magic::k_DeedCastWaterOnCrops, drop.position, object,
+			                                                    drop.source.player, MagicType::Water);
 		}
 		if (Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(object))
 		{
@@ -836,7 +836,7 @@ void GameMagicWorld::PlayerAffected(entt::entity object, MagicType type, PlayerN
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: miracle {} by player {} shows deed {} on #{}", static_cast<int>(type),
 		                    static_cast<int>(player), deed, entt::to_integral(object));
-		Locator::creatureMindSystem::value().PlayerDid(deed, transform->position, object, player);
+		Locator::creatureMindSystem::value().PlayerCastDeed(deed, transform->position, object, player, type);
 	}
 }
 

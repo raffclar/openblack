@@ -356,6 +356,8 @@ enum class Build : uint8_t
 	Never,
 	/// Taking a living thing to the altar of the first worship site of its temple, and putting it down there
 	Sacrifice,
+	/// Copying the player again: the creature makes no steps, but copies again the deed that it saw last
+	MimicPlayer,
 };
 
 /// What tells the planner that the creature did an action too recently to choose it again

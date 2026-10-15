@@ -87,6 +87,8 @@ private:
 
 /// The player planting a tree is something the player's creature may copy
 inline constexpr uint32_t k_DeedPlantTree = 11;
+/// The player breaking a rock with a tap of the hand is something the player's creature may copy
+inline constexpr uint32_t k_DeedBreakRocks = 37;
 /// A replanted tree away from towns shows the forest-made visual this strong, for this many turns
 inline constexpr float k_ReplantVisualMagnitude = 0.3f;
 inline constexpr int k_ReplantVisualTurns = 50;

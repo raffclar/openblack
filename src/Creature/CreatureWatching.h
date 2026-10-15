@@ -224,6 +224,8 @@ struct Mimicry
 	uint32_t stageStart {0};
 	/// What the player did it to, by entity number
 	std::optional<uint32_t> object;
+	/// The miracle that the player did it with, 0 for none
+	uint32_t magic {0};
 };
 
 /// A stage of copying ends after this many seconds at the latest
@@ -315,5 +317,51 @@ struct MimicCandidate
 /// The nearest candidate of the kind that the player's thing was: the first of those with the highest nearness above 0.
 /// None when no candidate of that kind has a nearness above 0.
 [[nodiscard]] std::optional<size_t> NearestOfKind(std::span<const MimicCandidate> candidates, MimicKind kind);
+
+/// The last deed of the player that the creature started to copy: the deed's row, the thing that the player did it to
+/// (by entity number), and the miracle of a deed done with a miracle (0 for none)
+struct ObservedDeed
+{
+	size_t rule {0};
+	std::optional<uint32_t> object;
+	uint32_t magic {0};
+};
+
+/// Starts to copy a deed with no test: the creature notices it first, from the turn given
+void BeginMimicry(std::optional<Mimicry>& mimicry, size_t rule, std::span<const MimicRule> rules,
+                  std::optional<uint32_t> object, uint32_t turn, const std::function<uint32_t(uint32_t)>& random);
+/// Whether the creature may start to copy a deed. This is the same test as StartMimicry, but it changes nothing.
+[[nodiscard]] bool MayStartMimicry(const std::optional<Mimicry>& mimicry, size_t rule, std::span<const MimicRule> rules,
+                                   const MimicConditions& conditions);
+
+/// What a deed done with a miracle does before the creature starts to copy it
+enum class CastDeedStep : uint8_t
+{
+	/// It has seen the miracle often enough: it starts to copy at once
+	Copy,
+	/// It counts a sighting of the miracle and then starts to copy one time in two
+	CountThenRoll,
+	/// It counts a sighting of the miracle and does not copy
+	CountAndStop,
+};
+/// The sightings still needed are the times the species needs to see the miracle less the sightings so far, cut to a
+/// whole number towards zero. More than one still needed: count and stop. Exactly one: count, then copy one time in two.
+/// None: copy.
+[[nodiscard]] CastDeedStep CastDeedGate(uint32_t sightings, uint32_t timesToSee, float speciesMultiplier);
+
+/// The deed of the player that is done with a miracle and that the creature copies with that miracle's action
+constexpr size_t k_DamageWithMagicDeed = 18;
+/// The most actions that the creature tries for a copy, in each pass
+constexpr size_t k_CopySlots = 6;
+/// The actions that the creature tries, in order, to copy a deed. A deed that does damage with a miracle uses the
+/// miracle's action in every slot. Every other deed uses its own list. No action is 0.
+[[nodiscard]] std::vector<uint32_t> CopyActionsOf(const MimicRule& rule, size_t deed, uint32_t magic,
+                                                  std::span<const MiracleRule> miracles);
+
+/// When the creature chooses to copy the player for its desire to follow the player, it copies the deed that it saw
+/// last again: it goes straight to copying the action, with half the stage's actions done. The stage starts on the turn
+/// given. None when the deed has no row.
+[[nodiscard]] std::optional<Mimicry> CopyObservedDeedAgain(const ObservedDeed& observed, std::span<const MimicRule> rules,
+                                                           uint32_t turn, const std::function<uint32_t(uint32_t)>& random);
 
 } // namespace openblack::creature_watching
