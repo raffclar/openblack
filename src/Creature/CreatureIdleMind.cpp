@@ -830,6 +830,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::StopMoving:
 	case Step::Kind::FollowWatching:
 	case Step::Kind::Fight:
+	case Step::Kind::PracticeDance:
 	case Step::Kind::Wait:
 	case Step::Kind::Move:
 	case Step::Kind::Gesture:
@@ -957,6 +958,24 @@ void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Comma
 	{
 		commands.playOverlay = *turn.overlay;
 	}
+	commands.endStaticLoop = turn.endPose;
+	commands.endDance = turn.endDance;
+	if (turn.danceMoveMs.has_value() && !senses.bodyPlaying)
+	{
+		commands.startDance = *turn.danceMoveMs;
+	}
+	if (turn.pose.has_value() && !senses.bodyPlaying)
+	{
+		commands.startSequence = std::array {*turn.pose - 1, *turn.pose, *turn.pose + 1};
+		commands.mirrored = random(2) == 1;
+	}
+	if (turn.face.has_value())
+	{
+		if (const auto face = creature_face::FaceOf(*turn.face))
+		{
+			commands.face = creature_face::Request {.face = *face, .milliseconds = turn.faceMs};
+		}
+	}
 	if (turn.walkTo.has_value())
 	{
 		commands.move =
@@ -1023,7 +1042,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	const auto& step = mind.agenda[mind.step];
 	// A step with something to look at has the head on it for as long as it lasts
 	commands.gaze = step.gaze;
-	const bool sitting = step.kind == Step::Kind::Static && mind.stepStarted;
+	// The creature's moves in a dance with villagers start and stop its poses and its dance themselves
+	const bool villageDance = step.kind == Step::Kind::Dance && step.dance.kind == DanceOrder::Kind::Dance;
+	const bool sitting = (step.kind == Step::Kind::Static && mind.stepStarted) || villageDance;
+	const bool dancing = step.kind == Step::Kind::PracticeDance || villageDance;
 	// A step that goes on pulls its face again every few seconds
 	if (mind.stepStarted && step.face != creature_face::Cue::None)
 	{
@@ -1037,6 +1059,11 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	if (senses.bodyLooping && !sitting)
 	{
 		commands.endSit = true;
+	}
+	// A dance nobody waits on any more stops
+	if (senses.bodyDancing && !dancing)
+	{
+		commands.endDance = true;
 	}
 
 	if (!mind.stepStarted)
@@ -1066,7 +1093,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it.
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
-		    senses.bodyBusy)
+		    step.kind != Step::Kind::PracticeDance && senses.bodyBusy)
+		{
+			return commands;
+		}
+		// A dance alone waits only while the body plays an action
+		if (step.kind == Step::Kind::PracticeDance && senses.bodyPlaying)
 		{
 			return commands;
 		}
@@ -1255,6 +1287,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::Fight:
 			commands.startFight = step.object;
+			break;
+		case Step::Kind::PracticeDance:
+			commands.startDance = creature_dance::k_PracticeMoveMs;
+			mind.danceTurns = static_cast<uint32_t>(step.seconds * static_cast<float>(creature_dance::k_TurnsPerSecond));
 			break;
 		case Step::Kind::Communicate:
 			// It shows what it feels now, and it does not want to show its state again for a time
@@ -1491,6 +1527,18 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::WatchPlayer:
 		WatchPlayer(mind, senses, commands);
+		break;
+	case Step::Kind::PracticeDance:
+		if (mind.danceTurns > 0)
+		{
+			--mind.danceTurns;
+		}
+		// The dance alone ends its action, which stops the dance
+		if (mind.danceTurns == 0)
+		{
+			commands.endDance = true;
+			FinishStep(mind);
+		}
 		break;
 	case Step::Kind::Fight:
 		// The fight has ended

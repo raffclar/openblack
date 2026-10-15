@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <ranges>
 
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
@@ -131,6 +132,7 @@ size_t creature_layers::CurrentAnimation(const BodyAction& body)
 	case BodyAction::Kind::Once:
 		return body.animations[0];
 	case BodyAction::Kind::Sequence:
+	case BodyAction::Kind::Dance:
 		return body.animations.at(static_cast<size_t>(body.phase));
 	case BodyAction::Kind::Stand:
 	default:
@@ -177,6 +179,70 @@ BodyAction creature_layers::EndLoop(BodyAction body)
 	return body;
 }
 
+std::optional<BodyAction> creature_layers::PlayDance(const BodyAction& body, float moveMs)
+{
+	if (IsPlaying(body))
+	{
+		return std::nullopt;
+	}
+	return BodyAction {.kind = BodyAction::Kind::Dance,
+	                   .phase = BodyAction::Phase::Start,
+	                   .animations = {animations::k_DanceStart, animations::k_FirstDanceMove, animations::k_DanceFinish},
+	                   .timeMs = 0.0f,
+	                   .danceMoveMs = moveMs};
+}
+
+BodyAction creature_layers::EndDance(BodyAction body)
+{
+	if (body.kind != BodyAction::Kind::Dance || body.phase == BodyAction::Phase::End)
+	{
+		return body;
+	}
+	// In the moves, the finish starts at once. In the start, the finish follows the start.
+	if (body.phase == BodyAction::Phase::Loop)
+	{
+		body.phase = BodyAction::Phase::End;
+		body.timeMs = 0.0f;
+		body.chooseDanceMove = false;
+	}
+	body.endWanted = true;
+	return body;
+}
+
+bool creature_layers::IsDancing(const BodyAction& body)
+{
+	return body.kind == BodyAction::Kind::Dance && body.phase != BodyAction::Phase::End;
+}
+
+std::optional<size_t> creature_layers::ChooseDanceMove(bool first, const std::function<uint32_t(uint32_t)>& random,
+                                                       const std::function<bool(size_t)>& hasAnimation)
+{
+	const auto count = first ? animations::k_DanceMoveCount : animations::k_LaterDanceMoveCount;
+	const auto any = std::ranges::any_of(std::views::iota(size_t {0}, count),
+	                                     [&](size_t move) { return hasAnimation(animations::k_FirstDanceMove + move); });
+	if (!any)
+	{
+		return std::nullopt;
+	}
+	while (true)
+	{
+		const auto move = animations::k_FirstDanceMove + random(static_cast<uint32_t>(count));
+		if (hasAnimation(move))
+		{
+			return move;
+		}
+	}
+}
+
+float creature_layers::DanceMoveTime(const BodyAction& body, uint32_t duration)
+{
+	if (body.kind != BodyAction::Kind::Dance || body.phase != BodyAction::Phase::Loop || body.danceMoveMs <= 0.0f)
+	{
+		return body.timeMs;
+	}
+	return body.timeMs * static_cast<float>(duration) / body.danceMoveMs;
+}
+
 BodyAction creature_layers::Hurry(BodyAction body)
 {
 	if (IsPlaying(body))
@@ -186,7 +252,8 @@ BodyAction creature_layers::Hurry(BodyAction body)
 	return body;
 }
 
-BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration)
+BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration,
+                                        std::optional<float> realMilliseconds)
 {
 	if (!IsPlaying(body))
 	{
@@ -209,12 +276,33 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 		return body.timeMs >= length ? stand() : body;
 	}
 
+	if (body.kind == BodyAction::Kind::Dance && body.phase == BodyAction::Phase::Loop)
+	{
+		// Each move lasts the same real time. At the end of a move, the next move starts with the time that is left over.
+		if (!body.chooseDanceMove)
+		{
+			body.timeMs += realMilliseconds.value_or(milliseconds);
+			if (body.timeMs >= body.danceMoveMs)
+			{
+				body.timeMs = body.danceMoveMs > 0.0f ? body.timeMs - body.danceMoveMs : 0.0f;
+				body.chooseDanceMove = true;
+				body.firstDanceMove = false;
+			}
+		}
+		return body;
+	}
+
 	switch (body.phase)
 	{
 	case BodyAction::Phase::Start:
 		body.timeMs += milliseconds;
 		if (body.timeMs >= length)
 		{
+			if (body.kind == BodyAction::Kind::Dance && !body.endWanted)
+			{
+				body.chooseDanceMove = true;
+				body.firstDanceMove = true;
+			}
 			// Told to end while still starting, it goes from its start straight into its end
 			body.phase = body.endWanted ? BodyAction::Phase::End : BodyAction::Phase::Loop;
 			body.timeMs = 0.0f;

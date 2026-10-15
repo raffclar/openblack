@@ -324,10 +324,10 @@ private:
 	/// learns the clear place about the villager and what the dance's row of the table asks for
 	static void SituateDance(entt::entity creature, const creature_plan_actions::Executor& executor, glm::vec2 villager,
 	                         creature_plan_actions::Situation& situation);
-	/// The creature starts to make a dance to impress villagers: it notes the turn and the kind of the dance
+	/// The creature starts to make a dance that it notes: it notes the turn and the row of the dance
 	static void NoteImpressiveDance(entt::entity creature, uint32_t type);
-	/// Whether the creature may choose to dance to impress villagers now
-	[[nodiscard]] static bool MayDanceToImpress(entt::entity creature);
+	/// Whether the creature may choose a dance of a row of the dance table now
+	[[nodiscard]] static bool MayDanceAgain(entt::entity creature, uint32_t type);
 
 	// What it believes about the things about it (CreatureMindBeliefs.cpp)
 	/// It comes across a thing: its belief about it is brought up to date, or made, and a new one leads it on to what the

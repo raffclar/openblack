@@ -150,8 +150,11 @@ std::optional<glm::vec2> CreatureMindSystem::DanceAreaFor(entt::entity creature,
 void CreatureMindSystem::SituateDance(entt::entity creature, const creature_plan_actions::Executor& executor,
                                       glm::vec2 villager, creature_plan_actions::Situation& situation)
 {
-	// The creature notes the dance as it starts to plan it, whether or not it finds a place for it
-	NoteImpressiveDance(creature, executor.danceType);
+	// The creature notes some dances as it starts to plan them, whether or not it finds a place for them
+	if (creature_dance::TurnsBetween(executor.danceType).has_value())
+	{
+		NoteImpressiveDance(creature, executor.danceType);
+	}
 	situation.danceArea = DanceAreaFor(creature, villager);
 	if (Locator::infoConstants::has_value() && executor.danceType < Locator::infoConstants::value().dance.size())
 	{
@@ -168,11 +171,11 @@ void CreatureMindSystem::NoteImpressiveDance(entt::entity creature, uint32_t typ
 	record.lastImpressiveType = type;
 }
 
-bool CreatureMindSystem::MayDanceToImpress(entt::entity creature)
+bool CreatureMindSystem::MayDanceAgain(entt::entity creature, uint32_t type)
 {
 	const auto* record = Entities().TryGet<const CreatureDance>(creature);
-	return creature_dance::MayDanceToImpress(record != nullptr ? record->lastImpressiveType : 0,
-	                                         record != nullptr ? record->lastImpressiveTurn : 0, Turn());
+	return creature_dance::MayDanceAgain(type, record != nullptr ? record->lastImpressiveType : 0,
+	                                     record != nullptr ? record->lastImpressiveTurn : 0, Turn());
 }
 
 std::optional<creature_mind::Senses::DanceView> CreatureMindSystem::DanceViewOf(entt::entity creature,
@@ -228,6 +231,7 @@ std::optional<creature_mind::Senses::DanceView> CreatureMindSystem::DanceViewOf(
 	view.first = group.move.first;
 	view.second = std::bit_cast<float>(group.move.second);
 	view.danceAngle = data.angle;
+	view.danceRate = data.rate;
 	view.groupCentre = map_coords::ToMetres(ecs::dance_moves::GroupCentre(data, dancer->group));
 	view.place =
 	    map_coords::ToMetres(ecs::dance_moves::SlotPosition(data, dancer->group, slot, Locator::danceSystem::value().Shapes()));

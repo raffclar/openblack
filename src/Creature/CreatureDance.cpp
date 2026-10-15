@@ -38,8 +38,14 @@ enum class CreatureMove : uint32_t
 	FaceAway = 32,
 	/// Face the way the dance faces, turned by the move's second argument
 	FaceDance = 33,
+	/// Dance, each dance move as long as a thousand milliseconds times the rate of the dance
+	Dance = 34,
 	/// Play an action of the creature's animation set, by the move's first argument
 	Action = 35,
+	/// Pose: a start, a loop and an end, the loop by the move's first argument
+	Pose = 36,
+	/// Pull the face of the move's first argument for two seconds
+	Face = 38,
 	/// Face a point 50 metres away along a game angle, the move's second argument
 	FaceAngle = 40,
 	/// Talk, or play its second action
@@ -54,6 +60,9 @@ constexpr float k_FaceAngleWithin = 0.4712389f;
 /// The animations that the talk move and the second action move play
 constexpr size_t k_TalkAnimation = 205;
 constexpr size_t k_SecondAction = 218;
+/// The milliseconds of a dance move for each unit of the rate of the dance, and how long the face move holds a face
+constexpr float k_DanceMoveMsPerRate = 1000.0f;
+constexpr float k_DanceFaceMs = 2000.0f;
 /// A full turn in radians, as a float
 constexpr float k_FullTurn = 6.2831855f;
 /// The music of each tribe's dance: the chants, one after the other with their voices
@@ -71,9 +80,35 @@ glm::vec2 AlongGameAngle(glm::vec2 from, uint16_t angle)
 }
 } // namespace
 
+std::optional<uint32_t> creature_dance::TurnsBetween(uint32_t type)
+{
+	switch (type)
+	{
+	case k_ImpressDanceType:
+		return k_TurnsBetweenImpressDances;
+	case k_PlayfulDanceType:
+		return k_TurnsBetweenPlayfulDances;
+	case k_StoryDanceType:
+		return k_TurnsBetweenStories;
+	default:
+		return std::nullopt;
+	}
+}
+
+bool creature_dance::MayDanceAgain(uint32_t type, uint32_t lastType, uint32_t lastTurn, uint32_t turn)
+{
+	const auto between = TurnsBetween(type);
+	return !between.has_value() || (lastType != type && turn - lastTurn > *between);
+}
+
 bool creature_dance::MayDanceToImpress(uint32_t lastType, uint32_t lastTurn, uint32_t turn)
 {
-	return lastType != k_ImpressDanceType && turn - lastTurn > k_TurnsBetweenImpressDances;
+	return MayDanceAgain(k_ImpressDanceType, lastType, lastTurn, turn);
+}
+
+std::vector<Step> creature_dance::PracticeDance()
+{
+	return {Step {.kind = Step::Kind::PracticeDance, .seconds = k_PracticeSeconds, .face = creature_face::Cue::Smile}};
 }
 
 float creature_dance::AreaWidth(float radius)
@@ -150,7 +185,12 @@ float creature_dance::WorshipBelief(float unmodifiedPopulation, uint32_t people,
 DanceTurn creature_dance::Turn(const creature_mind::Senses::DanceView& view, glm::vec2 position)
 {
 	DanceTurn turn;
-	switch (static_cast<CreatureMove>(view.action))
+	// Before its move, the creature stops what its body did for the other moves: a pose, unless it poses now, and a
+	// dance, unless it dances or pulls a face now
+	const auto move = static_cast<CreatureMove>(view.action);
+	turn.endPose = move != CreatureMove::Pose;
+	turn.endDance = move != CreatureMove::Dance && move != CreatureMove::Face;
+	switch (move)
 	{
 	case CreatureMove::FaceCentre:
 	case CreatureMove::FaceAway:
@@ -181,8 +221,18 @@ DanceTurn creature_dance::Turn(const creature_mind::Senses::DanceView& view, glm
 		turn.facePoint = AlongGameAngle(position, static_cast<uint16_t>(angle));
 		break;
 	}
+	case CreatureMove::Dance:
+		turn.danceMoveMs = static_cast<float>(map_coords::FtoL(view.danceRate * k_DanceMoveMsPerRate));
+		break;
 	case CreatureMove::Action:
 		turn.playOnce = view.first;
+		break;
+	case CreatureMove::Pose:
+		turn.pose = view.first;
+		break;
+	case CreatureMove::Face:
+		turn.face = view.first;
+		turn.faceMs = k_DanceFaceMs;
 		break;
 	case CreatureMove::FaceAngle:
 		turn.facePoint = AlongGameAngle(position, static_cast<uint16_t>(map_coords::FtoL(view.second)));
@@ -195,8 +245,8 @@ DanceTurn creature_dance::Turn(const creature_mind::Senses::DanceView& view, glm
 		turn.playOnce = k_SecondAction;
 		break;
 	default:
-		// TODO(creature-dance-with-villagers): the other moves of a creature's group (animation speed, look at a
-		// group, a face, a set of actions on a group) are in no dance a creature dances with villagers to impress
+		// TODO(creature-village-dances): the moves that look at a member of a group and that play a set of actions on
+		// a group are in no dance of a creature with villagers
 		break;
 	}
 	if (turn.facePoint.has_value())

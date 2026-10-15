@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <numbers>
 #include <optional>
 #include <string_view>
@@ -84,6 +85,14 @@ constexpr size_t k_GetUp = 107;
 constexpr size_t k_FirstGesture = 200;
 constexpr size_t k_GestureCount = 7;
 constexpr size_t k_Yawn = 202;
+/// The dance: a start, a finish, and the moves that play one after the other between them. The spec file names the last
+/// two move places as spare places.
+constexpr size_t k_DanceStart = 145;
+constexpr size_t k_DanceFinish = 146;
+constexpr size_t k_FirstDanceMove = 147;
+constexpr size_t k_DanceMoveCount = 7;
+/// After the first move, the body chooses the next move from only the first five
+constexpr size_t k_LaterDanceMoveCount = 5;
 constexpr size_t k_Talk = 205;
 
 /// The spec file's name of an animation the minds play, without its type letter, or empty for others
@@ -104,6 +113,9 @@ struct BodyAction
 		Once,
 		/// A start, a loop for as long as wanted, and an end, then back to standing
 		Sequence,
+		/// The dance: its start, then dance moves chosen at random one after the other until the end is wanted, then
+		/// its finish
+		Dance,
 	};
 	enum class Phase : uint8_t
 	{
@@ -127,6 +139,11 @@ struct BodyAction
 	bool timedByPlayer {false};
 	/// The body plays at two times the usual speed until it stands again
 	bool hurried {false};
+	/// Each move of a dance lasts this many milliseconds of real time, whatever the size of the creature
+	float danceMoveMs {0.0f};
+	/// The dance needs its next move: the first move after the start, or the next move after a move ended
+	bool chooseDanceMove {false};
+	bool firstDanceMove {false};
 };
 
 [[nodiscard]] bool IsPlaying(const BodyAction& body);
@@ -144,13 +161,29 @@ struct BodyAction
 /// once is left to play to its end. This is also what a change of plan does to the body: whatever the creature turns to
 /// next waits for the body to finish.
 [[nodiscard]] BodyAction EndLoop(BodyAction body);
+/// A dance with moves that each last some milliseconds, unless the body already plays an action
+[[nodiscard]] std::optional<BodyAction> PlayDance(const BodyAction& body, float moveMs);
+/// A dance stops: the moves end and the finish plays. A dance that still starts plays its start out, then its finish.
+/// A body that does not dance does not change.
+[[nodiscard]] BodyAction EndDance(BodyAction body);
+/// Whether the body dances and does not play the finish yet
+[[nodiscard]] bool IsDancing(const BodyAction& body);
+/// The next move of a dance. The first move is one of all seven moves, and a later move is one of the first five. When
+/// the species does not have the move, the body chooses again. None when the species has none of the moves.
+[[nodiscard]] std::optional<size_t> ChooseDanceMove(bool first, const std::function<uint32_t(uint32_t)>& random,
+                                                    const std::function<bool(size_t)>& hasAnimation);
+/// The time in the animation of a dance move to show, for the time that the move has played. The animation stretches
+/// to fill the length of the move.
+[[nodiscard]] float DanceMoveTime(const BodyAction& body, uint32_t duration);
 /// The action that the body plays continues at two times the usual speed until the body stands again. A catch and a
 /// gift from the hand do this when they start. A body that stands does not change.
 [[nodiscard]] BodyAction Hurry(BodyAction body);
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no
 /// such animation. Each animation starts from its beginning, without blending into the last. A body timed by what plays it
 /// stays where it was put.
-[[nodiscard]] BodyAction AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration);
+/// The moves of a dance count real milliseconds, not the milliseconds of the creature's playback.
+[[nodiscard]] BodyAction AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration,
+                                     std::optional<float> realMilliseconds = std::nullopt);
 
 /// The face's expression, played on top of the body. A face is pulled for some time: it plays through once and holds
 /// its last frame, the full expression, until that time is up. Then it relaxes, running back to its start a quarter as

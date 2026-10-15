@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <optional>
 #include <vector>
 
 #include <DanceShapeFile.h>
@@ -301,4 +302,89 @@ TEST(CreatureDance, AShapeFileHoldsItsPointsInOrder)
 	const auto shape = ecs::dance_shapes::FromPoints(points);
 	EXPECT_EQ(shape[1], glm::ivec2(-100, 200));
 	EXPECT_EQ(shape[2], glm::ivec2(0, 0));
+}
+
+TEST(CreatureDance, ThePlayfulDanceAndTheStoryComeAgainOnlyAfterAnotherKindAndTheirTurns)
+{
+	using creature_dance::MayDanceAgain;
+	EXPECT_FALSE(MayDanceAgain(creature_dance::k_PlayfulDanceType, creature_dance::k_PlayfulDanceType, 0, 10000));
+	EXPECT_FALSE(MayDanceAgain(creature_dance::k_PlayfulDanceType, 0, 0, 300));
+	EXPECT_TRUE(MayDanceAgain(creature_dance::k_PlayfulDanceType, 0, 0, 301));
+	EXPECT_FALSE(MayDanceAgain(creature_dance::k_StoryDanceType, creature_dance::k_ImpressDanceType, 0, 450));
+	EXPECT_TRUE(MayDanceAgain(creature_dance::k_StoryDanceType, creature_dance::k_ImpressDanceType, 0, 451));
+	// The game, the watched dance and the dance of love are always possible, and the creature does not note them
+	EXPECT_TRUE(MayDanceAgain(creature_dance::k_GameDanceType, creature_dance::k_GameDanceType, 0, 1));
+	EXPECT_FALSE(creature_dance::TurnsBetween(creature_dance::k_AmorousDanceType).has_value());
+	EXPECT_FALSE(creature_dance::TurnsBetween(creature_dance::k_WatchedDanceType).has_value());
+}
+
+TEST(CreatureDance, TheDanceMoveDancesAtTheRateOfTheDanceAndKeepsAPose)
+{
+	const auto turn = creature_dance::Turn({.exists = true, .inGroup = true, .action = 34, .danceRate = 0.8f}, {0.0f, 0.0f});
+	ASSERT_TRUE(turn.danceMoveMs.has_value());
+	EXPECT_FLOAT_EQ(*turn.danceMoveMs, 800.0f);
+	EXPECT_TRUE(turn.endPose);
+	EXPECT_FALSE(turn.endDance);
+}
+
+TEST(CreatureDance, ThePoseMoveStartsAPoseAndStopsTheDance)
+{
+	const auto turn = creature_dance::Turn({.exists = true, .inGroup = true, .action = 36, .first = 38}, {0.0f, 0.0f});
+	EXPECT_EQ(turn.pose, std::optional<size_t> {38});
+	EXPECT_FALSE(turn.endPose);
+	EXPECT_TRUE(turn.endDance);
+}
+
+TEST(CreatureDance, TheFaceMoveHoldsAFaceForTwoSecondsAndKeepsTheDance)
+{
+	const auto turn = creature_dance::Turn({.exists = true, .inGroup = true, .action = 38, .first = 24}, {0.0f, 0.0f});
+	EXPECT_EQ(turn.face, std::optional<size_t> {24});
+	EXPECT_FLOAT_EQ(turn.faceMs, 2000.0f);
+	EXPECT_TRUE(turn.endPose);
+	EXPECT_FALSE(turn.endDance);
+}
+
+TEST(CreatureDance, TheTalkMoveTalksAndStopsThePoseAndTheDance)
+{
+	const auto turn = creature_dance::Turn({.exists = true, .inGroup = true, .action = 41}, {0.0f, 0.0f});
+	EXPECT_EQ(turn.overlay, std::optional<size_t> {205});
+	EXPECT_TRUE(turn.endPose);
+	EXPECT_TRUE(turn.endDance);
+}
+
+TEST(CreatureDance, ADanceAloneWaitsForTheBodyThenDancesForTwentySeconds)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Planned, creature_dance::PracticeDance());
+	auto busy = Free();
+	busy.bodyPlaying = true;
+	busy.bodyBusy = true;
+	EXPECT_FALSE(creature_mind::Think(mind, busy, NoRandom()).startDance.has_value());
+	// The creature can still move as it starts to dance
+	auto moving = Free();
+	moving.bodyBusy = true;
+	moving.moving = true;
+	const auto start = creature_mind::Think(mind, moving, NoRandom());
+	ASSERT_TRUE(start.startDance.has_value());
+	EXPECT_FLOAT_EQ(*start.startDance, 1000.0f);
+	auto dancing = Free();
+	dancing.bodyDancing = true;
+	dancing.bodyPlaying = true;
+	dancing.bodyBusy = true;
+	for (int i = 0; i < 199; ++i)
+	{
+		EXPECT_FALSE(creature_mind::Think(mind, dancing, NoRandom()).endDance);
+		EXPECT_EQ(mind.step, 0U);
+	}
+	EXPECT_TRUE(creature_mind::Think(mind, dancing, NoRandom()).endDance);
+	EXPECT_EQ(mind.step, 1U);
+}
+
+TEST(CreatureDance, ADanceThatNoStepWantsStops)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Planned, {{.kind = Step::Kind::Wait, .seconds = 1.0f}});
+	auto senses = Free();
+	senses.bodyDancing = true;
+	EXPECT_TRUE(creature_mind::Think(mind, senses, NoRandom()).endDance);
 }

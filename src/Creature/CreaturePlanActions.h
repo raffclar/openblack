@@ -247,8 +247,10 @@ enum class Build : uint8_t
 	ThrowToPlayer,
 	/// Bringing a tree to a house and mending the house with it
 	HelpRepairHouse,
-	/// Dancing with the villagers of a town, to impress them
+	/// Dancing with the villagers of a town, by the executor's row of the dance table
 	DanceWithVillagers,
+	/// Dancing alone where it stands
+	PracticeDance,
 	/// Casting the one-shot miracle that it holds at the thing
 	CastOneShotInHand,
 	/// Picking up the one-shot miracle that it uses, unless its hand holds something, and casting it at the thing
