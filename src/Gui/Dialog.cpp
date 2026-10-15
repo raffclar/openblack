@@ -21,9 +21,11 @@ namespace
 class TabControl final: public Control
 {
 public:
-	TabControl(DialogRect rect, std::u16string label, bool selected, bool first, bool last, std::function<void()> select)
+	TabControl(DialogRect rect, std::u16string label, bool selected, bool first, bool last, std::function<void()> select,
+	           int textSize = DialogPainter::k_MidTextSize)
 	    : Control(rect)
 	    , _label(std::move(label))
+	    , _textSize(textSize)
 	    , _selected(selected)
 	    , _first(first)
 	    , _last(last)
@@ -34,11 +36,12 @@ public:
 	void Draw(const DialogPainter& painter, bool hovered, bool /*focused*/, bool /*pressed*/) const override
 	{
 		const auto alpha = painter.GetAlpha();
-		painter.DrawTab(rect, _label, _selected, _first, _last, hovered);
+		painter.DrawTab(rect, _label, _selected, _first, _last, hovered, _textSize);
 		painter.SetAlpha(alpha);
 	}
 
 	void SetLabel(std::u16string label) { _label = std::move(label); }
+	void SetSelected(bool selected) { _selected = selected; }
 	[[nodiscard]] std::u16string_view GetName() const override { return _label; }
 	[[nodiscard]] std::string_view GetKind() const override { return "tab"; }
 
@@ -48,6 +51,7 @@ public:
 
 private:
 	std::u16string _label;
+	int _textSize;
 	bool _selected;
 	bool _first;
 	bool _last;
@@ -55,7 +59,8 @@ private:
 } // namespace
 
 Dialog::Dialog(std::vector<Tab> tabs, size_t selectedTab)
-    : _hasBox(true)
+    : _box(k_Box)
+    , _tabCount(k_TabCount)
 {
 	tabs.resize(k_TabCount);
 	for (size_t i = 0; i < k_TabCount; ++i)
@@ -66,9 +71,33 @@ Dialog::Dialog(std::vector<Tab> tabs, size_t selectedTab)
 	}
 }
 
+Dialog::Dialog(std::vector<Tab> tabs, size_t selectedTab, DialogRect box)
+    : _box(box)
+    , _tabCount(tabs.size())
+{
+	// Each tab a share of the box's width, 40 high above it
+	const auto width = static_cast<float>(box.Width()) / static_cast<float>(_tabCount);
+	for (size_t i = 0; i < _tabCount; ++i)
+	{
+		const auto left = static_cast<float>(box.min.x) + (static_cast<float>(i) * width);
+		const DialogRect rect {.min = {static_cast<int>(left), box.min.y - 40},
+		                       .max = {static_cast<int>(left + width), box.min.y}};
+		Add<TabControl>(rect, std::move(tabs[i].label), i == selectedTab, i == 0, i + 1 == _tabCount,
+		                std::move(tabs[i].onSelect), tabs[i].textSize);
+	}
+}
+
+void Dialog::SelectTab(size_t index)
+{
+	for (size_t i = 0; i < _tabCount; ++i)
+	{
+		static_cast<TabControl&>(*_controls.at(i)).SetSelected(i == index);
+	}
+}
+
 void Dialog::SetTabLabel(size_t index, std::u16string label)
 {
-	if (_hasBox && index < k_TabCount)
+	if (index < _tabCount)
 	{
 		static_cast<TabControl&>(*_controls.at(index)).SetLabel(std::move(label));
 	}
@@ -239,10 +268,14 @@ void Dialog::Reset()
 
 void Dialog::Draw(const DialogPainter& painter, bool active) const
 {
-	// A box with tabs opens onto the selected one along its top
-	if (_hasBox)
+	if (drawUnder)
 	{
-		painter.DrawBackground(k_Box, glm::vec3(1.0f), false, DialogPainter::Bottom);
+		drawUnder(painter);
+	}
+	// A box with tabs opens onto the selected one along its top
+	if (_box.has_value())
+	{
+		painter.DrawBackground(*_box, glm::vec3(1.0f), false, DialogPainter::Bottom);
 	}
 	const auto alpha = painter.GetAlpha();
 	for (const auto onTop : {false, true})

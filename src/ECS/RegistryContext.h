@@ -25,6 +25,7 @@
 #include "Components/Stream.h"
 #include "Components/Town.h"
 #include "Components/VillageLight.h"
+#include "ECS/StatisticsRules.h"
 #include "Enums.h"
 
 namespace openblack::ecs
@@ -75,5 +76,7 @@ struct RegistryContext
 	/// The game turn on which any creature last cast each of the miracles that impress, in the order of
 	/// creature_mind::k_ImpressiveMiracles. A new land starts with all at 0.
 	std::array<uint32_t, 4> impressiveMiracleCastTurn {};
+	/// The statistics the game keeps once for everyone, which a new land starts again
+	statistics::GlobalFigures globalStatistics;
 };
 } // namespace openblack::ecs

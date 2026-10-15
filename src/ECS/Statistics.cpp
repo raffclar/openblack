@@ -13,21 +13,31 @@
 #include <utility>
 #include <vector>
 
+#include "Common/GameRandom.h"
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Registry.h"
+#include "ECS/RegistryContext.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "Help/HelpProfile.h"
 #include "InfoConstants.h"
+#include "LHVM.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -256,6 +266,229 @@ void player_statistics::ProcessTurn(uint32_t turn)
 	{
 		SampleSatisfaction();
 	}
+}
+
+void player_statistics::ProcessGlobalTurn(uint32_t turn, int32_t frameRate)
+{
+	auto& registry = Entities();
+	auto& global = registry.Context().globalStatistics;
+	// The towns the land starts with are counted once, as its first turn comes
+	if (!global.townsCounted)
+	{
+		global.townsCounted = true;
+		uint32_t towns = 0;
+		registry.Each<const Town>([&towns](const Town&) { ++towns; });
+		global.townsAtStart = towns;
+	}
+	if (turn % statistics::k_GlobalFiguresEvery != 0 || !Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	statistics::StepGlobalFigures(global, frameRate, [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); });
+}
+
+namespace
+{
+/// What the player's towns have now, for the box
+void TownFigures(PlayerNames name, statistics::PlayerFigures& figures)
+{
+	const auto towns = TownsOf(name);
+	figures.totalBuildings = statistics::TotalBuildings(towns);
+	for (const auto& town : towns)
+	{
+		figures.men += town.men;
+		figures.women += town.women;
+		figures.abodes += town.abodes;
+		figures.civic += town.civic;
+		figures.wonders += town.wonders;
+	}
+	figures.towns = static_cast<uint32_t>(towns.size());
+	Entities().Each<const Town, const TownStats>([name, &figures](const Town& town, const TownStats& stats) {
+		if (town.owner == name)
+		{
+			figures.population += stats.adults + stats.children;
+			// The places for adults and for children in its homes
+			figures.capacity += stats.adultPlaces + stats.childPlaces;
+		}
+	});
+}
+
+/// What the player's creature, the first they got, has done and is now; nothing without one
+void CreatureFigures(PlayerNames name, const PlayerStatistics& statistics, statistics::PlayerFigures& figures)
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	const auto entity = Locator::playerSystem::value().GetPrimaryCreature(name);
+	auto& registry = Entities();
+	if (!entity.has_value() || !registry.Valid(*entity))
+	{
+		return;
+	}
+	if (const auto* creature = registry.TryGet<const Creature>(*entity))
+	{
+		figures.creatureAlignment = creature->alignment;
+		figures.creatureAlignmentChange = creature->alignment - statistics.startCreatureAlignment;
+		if (statistics.startCreatureSize > 0.0f)
+		{
+			figures.creatureGrowth = (creature->size / statistics.startCreatureSize) - 1.0f;
+		}
+	}
+	constexpr float k_Hundred = 100.0f;
+	if (const auto* needs = registry.TryGet<const CreatureNeeds>(*entity))
+	{
+		figures.creatureDamage = (1.0f - needs->needs.life) * k_Hundred;
+		figures.creatureHunger = (1.0f - needs->needs.energy) * k_Hundred;
+		figures.creatureTiredness = needs->needs.exhaustion * k_Hundred;
+		figures.creatureAge = needs->needs.age;
+	}
+	figures.creature = player_statistics::CreatureTalliesOf(name);
+}
+
+statistics::PlayerFigures FiguresOf(PlayerNames name, entt::entity entity, const PlayerStatistics& statistics)
+{
+	auto& registry = Entities();
+	statistics::PlayerFigures figures {.player = name};
+	constexpr float k_BeliefScale = 1000.0f;
+	figures.influence = Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().InfluencePower(name) : 0.0f;
+	figures.godsDefeated = statistics.godsDefeated;
+	if (const auto* alignment = registry.TryGet<const Alignment>(entity))
+	{
+		figures.alignmentChange = alignment->value - statistics.startAlignment;
+	}
+	figures.peopleKilled = statistics.peopleKilled;
+	figures.belief = BeliefIn(name) * k_BeliefScale;
+	figures.maxBelief = statistics.belief.highest * k_BeliefScale;
+	figures.minBelief = statistics.belief.lowest * k_BeliefScale;
+	// The artefacts among any town's that the player made or last took
+	registry.Each<const TownArtefact>([name, &figures](const TownArtefact& artefact) {
+		if (artefact.inTown && artefact.player == name)
+		{
+			++figures.artefacts;
+		}
+	});
+	figures.buildingsDestroyed = statistics.buildingsDestroyed;
+	CreatureFigures(name, statistics, figures);
+
+	figures.births = statistics.births;
+	figures.deaths = statistics.deaths;
+	TownFigures(name, figures);
+	figures.populationExtremes = statistics.population;
+	figures.menExtremes = statistics.men;
+	figures.womenExtremes = statistics.women;
+	figures.converted = statistics.peopleConverted;
+	figures.satisfaction = statistics.satisfaction.Average();
+	figures.built = statistics.built;
+	figures.disciplesMade = statistics.disciplesMade;
+	figures.foodUsed = statistics.foodUsed;
+	figures.woodUsed = statistics.woodUsed;
+
+	figures.castsOfType = statistics.castsOfType;
+	figures.chantsUsed = statistics.chantsUsed;
+	figures.sacrifices = statistics.sacrifices;
+
+	const auto influence = statistics.influenceHistory.Finished();
+	figures.influenceHistory.assign(influence.begin(), influence.end());
+	const auto population = statistics.populationHistory.Finished();
+	figures.populationHistory.assign(population.begin(), population.end());
+	return figures;
+}
+
+/// Counts something of a creature's
+template <typename Count>
+void Tally(ecs::Registry& registry, entt::entity creature, Count&& count)
+{
+	if (!registry.Valid(creature) || !registry.AllOf<Creature>(creature))
+	{
+		return;
+	}
+	auto* tallies = registry.TryGet<CreatureTallies>(creature);
+	count(tallies != nullptr ? *tallies : registry.Assign<CreatureTallies>(creature));
+}
+} // namespace
+
+statistics::BoxFigures player_statistics::Box()
+{
+	auto& registry = Entities();
+	statistics::BoxFigures box;
+	auto& global = registry.Context().globalStatistics;
+	// When the box takes the figures, the lines of code increase one more step
+	if (Locator::gameRandom::has_value())
+	{
+		global.linesOfCode += statistics::LinesOfCodeStep(global.townsAtStart,
+		                                                  [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); });
+	}
+	std::vector<std::pair<PlayerNames, entt::entity>> players;
+	registry.Each<const Player, const PlayerStatistics>(
+	    [&players](entt::entity entity, const Player& player, const PlayerStatistics&) {
+		    if (static_cast<size_t>(player.name) < statistics::k_BoxPlayers)
+		    {
+			    players.emplace_back(player.name, entity);
+		    }
+	    });
+	std::ranges::sort(players, {}, &std::pair<PlayerNames, entt::entity>::first);
+	box.playersInGame = static_cast<uint32_t>(players.size());
+	for (const auto& [name, entity] : players)
+	{
+		box.players.push_back(FiguresOf(name, entity, registry.Get<const PlayerStatistics>(entity)));
+	}
+	box.landNumber = registry.Context().mapScriptGlobals.landNumber;
+
+	auto& tech = box.tech;
+	tech.linesOfCode = global.linesOfCode;
+	tech.maxFrameRate = global.maxFrameRate;
+	tech.minFrameRate = global.minFrameRate;
+	// Every entity made from the land's start, those destroyed since too
+	tech.objectsCreated = registry.GetEntitiesMade();
+	tech.timePlayed = Locator::time::has_value() ? statistics::TimePlayed(Locator::time::value().GetTurn()) : 0;
+	tech.scriptInstructions = Locator::vm::has_value() ? Locator::vm::value().GetExecutedInstructions() : 0;
+	if (Locator::helpProfileSystem::has_value())
+	{
+		const auto& profile = std::as_const(Locator::helpProfileSystem::value()).Get();
+		tech.help = statistics::HelpFiguresFrom(
+		    [&profile](statistics::HelpEvent event) { return profile.Count(static_cast<uint32_t>(event)).Total(); });
+	}
+	return box;
+}
+
+void player_statistics::CountCreatureMushroom(ecs::Registry& registry, entt::entity creature)
+{
+	Tally(registry, creature, [](CreatureTallies& tallies) { ++tallies.mushroomsEaten; });
+}
+
+void player_statistics::CountCreaturePoo(ecs::Registry& registry, entt::entity creature)
+{
+	Tally(registry, creature, [](CreatureTallies& tallies) { ++tallies.poos; });
+}
+
+statistics::CreatureTallies player_statistics::CreatureTalliesOf(PlayerNames player)
+{
+	statistics::CreatureTallies tallies;
+	if (!Locator::playerSystem::has_value())
+	{
+		return tallies;
+	}
+	const auto creature = Locator::playerSystem::value().GetPrimaryCreature(player);
+	auto& registry = Entities();
+	if (!creature.has_value() || !registry.Valid(*creature))
+	{
+		return tallies;
+	}
+	if (const auto* kept = registry.TryGet<const CreatureTallies>(*creature))
+	{
+		tallies.peopleKilled = kept->meals.peopleKilled;
+		tallies.animalsKilled = kept->meals.animalsKilled;
+		tallies.creaturesKilled = kept->meals.creaturesKilled;
+		tallies.poos = kept->poos;
+		tallies.mushroomsEaten = kept->mushroomsEaten;
+	}
+	if (const auto* record = registry.TryGet<const CreatureFightRecord>(*creature))
+	{
+		tallies.battlesFought = record->fights;
+		tallies.battlesWon = record->wins;
+	}
+	return tallies;
 }
 
 statistics::WorldFigures player_statistics::World(PlayerNames player)

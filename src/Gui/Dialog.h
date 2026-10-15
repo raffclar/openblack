@@ -11,6 +11,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -20,6 +21,13 @@
 
 namespace openblack::gui
 {
+
+/// The background of a box with tabs along its top: as wide as the box, from half its height above the middle of the
+/// dialog space to 40 more than half its height below it
+[[nodiscard]] constexpr DialogRect TabbedBox(glm::ivec2 size)
+{
+	return {.min = {400 - (size.x / 2), 300 - (size.y / 2)}, .max = {400 + (size.x / 2), 340 + (size.y / 2)}};
+}
 
 /// A page of the game's menu (a DialogBoxBase and its SetupBox): a see-through box with tabs along its top, of which
 /// one is open, and the controls in it.
@@ -34,14 +42,19 @@ public:
 	{
 		std::u16string label;
 		std::function<void()> onSelect;
+		/// The size of the label's text
+		int textSize {DialogPainter::k_MidTextSize};
 	};
 
 	/// MainMenu and the options' box: 780 by 500 in the middle of the dialog space, 40 deeper for its tabs
-	static constexpr DialogRect k_Box {.min = {10, 50}, .max = {790, 590}};
+	static constexpr DialogRect k_Box = TabbedBox({780, 500});
 	/// AddMainMenuTabs and AddOptionsTabs: five tabs, a fifth of the box's width each
 	static constexpr size_t k_TabCount = 5;
 
 	Dialog(std::vector<Tab> tabs, size_t selectedTab);
+	/// A box of its own size with as many tabs as given along its top, each a share of its width. Every tab keeps
+	/// what it does, the selected one too.
+	Dialog(std::vector<Tab> tabs, size_t selectedTab, DialogRect box);
 	/// Controls on their own, without a box or tabs
 	Dialog() = default;
 
@@ -83,6 +96,8 @@ public:
 	[[nodiscard]] std::vector<NamedControl> GetNamedControls() const;
 
 	[[nodiscard]] static DialogRect GetTabRect(size_t index);
+	/// Opens another of the tabs
+	void SelectTab(size_t index);
 	/// Names one of the tabs again
 	void SetTabLabel(size_t index, std::u16string label);
 	[[nodiscard]] Control* GetFocus() const noexcept { return _focused; }
@@ -92,7 +107,15 @@ public:
 private:
 	[[nodiscard]] Control* HitTest(glm::ivec2 point) const;
 
-	bool _hasBox {false};
+	/// The box behind the controls, none for controls on their own, and its tabs
+	std::optional<DialogRect> _box;
+	size_t _tabCount {0};
+
+public:
+	/// Drawn before the box, under it
+	std::function<void(const DialogPainter&)> drawUnder;
+
+private:
 	std::vector<std::unique_ptr<Control>> _controls;
 	Control* _hovered {nullptr};
 	Control* _pressed {nullptr};

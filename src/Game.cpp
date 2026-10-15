@@ -1719,6 +1719,7 @@ bool Game::GameLogicLoop() noexcept
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The players' statistics take in their towns, influence and creature as the turn goes
 	player_statistics::ProcessTurn(Locator::time::value().GetTurn());
+	player_statistics::ProcessGlobalTurn(Locator::time::value().GetTurn(), _statisticsFrameRate.Rate());
 	// The players' hearts beat on, quicker the more their people are in danger
 	if (Locator::heartbeatSystem::has_value())
 	{
@@ -3761,6 +3762,12 @@ bool Game::Initialize() noexcept
 		}
 		else
 		{
+			// The Game Statistics box takes the players' figures as it opens
+			_interface->GetMenu().SetStatisticsSource([] {
+				const auto local = Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer()
+				                                                      : PlayerNames::PLAYER_ONE;
+				return std::pair(player_statistics::Box(), local);
+			});
 			if (Locator::temple::has_value())
 			{
 				Locator::temple::value().SetInterface(_interface.get());
@@ -4348,6 +4355,10 @@ bool Game::Run() noexcept
 		}
 
 		_frameCount++;
+		_statisticsFrameRate.Frame(static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		                                                     std::chrono::steady_clock::now().time_since_epoch())
+		                                                     .count()),
+		                           _frameCount);
 		// The game is playable from its first frame drawn
 		if (_startupTimer.has_value())
 		{
@@ -5043,7 +5054,6 @@ void Game::HandleInterfaceAction()
 		break;
 	case Action::StartSkirmish:
 	case Action::JoinOnline:
-	case Action::Statistics:
 	case Action::EditTattoo:
 	case Action::RedefineControl:
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");

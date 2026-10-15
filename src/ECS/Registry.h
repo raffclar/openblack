@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <entt/entity/entity.hpp>
 #include <entt/entity/helper.hpp>
 #include <entt/entity/registry.hpp>
@@ -173,6 +175,11 @@ public:
 	{
 		return _registry.on_destroy<Component>();
 	}
+	/// Every entity made since the registry was last emptied, those destroyed since too: the statistics' count of the
+	/// objects made on the land
+	[[nodiscard]] uint32_t GetEntitiesMade() const noexcept { return _entitiesMade; }
+	Registry(const Registry&) = delete;
+	Registry& operator=(const Registry&) = delete;
 	virtual ~Registry() = default;
 
 protected:
@@ -191,6 +198,11 @@ protected:
 	}
 
 	entt::registry _registry;
+
+private:
+	void EntityMade(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesMade; }
+
+	uint32_t _entitiesMade {0};
 };
 
 } // namespace openblack::ecs

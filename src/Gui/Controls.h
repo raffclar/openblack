@@ -256,6 +256,18 @@ public:
 	[[nodiscard]] int GetScrollBarWidth() const noexcept { return _size - 2; }
 	/// Right of the box the items are in, left of the scroll bar
 	[[nodiscard]] int GetBoxRight() const;
+	/// Drawn over each item the list shows, after its text: the item, its top and bottom, the right of the box the
+	/// items are in, and the part of it inside the box
+	struct ItemPlace
+	{
+		size_t index {0};
+		int top {0};
+		int bottom {0};
+		int right {0};
+		int shownTop {0};
+		int shownBottom {0};
+	};
+	std::function<void(const DialogPainter&, const ItemPlace&)> drawOver;
 	/// The item at a height of the dialog space, as the list is scrolled
 	[[nodiscard]] std::optional<size_t> ItemAt(int y) const;
 

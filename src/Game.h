@@ -31,6 +31,7 @@
 #include "Common/Zoomer.h"
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureFight.h"
+#include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/UploadPacer.h"
@@ -407,6 +408,8 @@ private:
 	std::optional<uint32_t> _lastTempleTurnTime;
 	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
+	/// The frame rate the game's statistics take, over a few seconds of frames drawn
+	statistics::FrameRateMeter _statisticsFrameRate;
 	glm::ivec2 _mousePosition {0, 0};
 	/// Whether the hand follows the pointer the window reports yet, or until the mouse first moves the game's own
 	input::HandPointer _handPointer;

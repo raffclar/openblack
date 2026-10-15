@@ -426,6 +426,16 @@ void List::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /
 				}
 			}
 			painter.SetAlpha(alpha);
+			if (drawOver)
+			{
+				drawOver(painter, {.index = i,
+				                   .top = top,
+				                   .bottom = bottom,
+				                   .right = boxRight,
+				                   .shownTop = std::max(top, rect.min.y),
+				                   .shownBottom = std::min(bottom, rect.max.y)});
+				painter.SetAlpha(alpha);
+			}
 		}
 		top = bottom;
 	}
