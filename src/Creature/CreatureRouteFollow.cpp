@@ -57,11 +57,13 @@ void Follower::SetDestination(const Destination& destination)
 		case State::Standing:
 			_destination = destination;
 			_searches.clear();
+			// A search from where it stands notes the things that it meets. Only a first turn that gives up uses them.
 			_searches.push_back({.search = Search(_obstacles, {.point = _routeEnd},
 			                                      {.point = destination.point,
 			                                       .stopShort = destination.stopShort,
 			                                       .arriveWithin = destination.arriveWithin,
-			                                       .mostCost = destination.mostCost}),
+			                                       .mostCost = destination.mostCost},
+			                                      /*recordMet=*/true),
 			                     .fromLeg = std::nullopt});
 			_state = State::Planning;
 			return;

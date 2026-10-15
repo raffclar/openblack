@@ -183,7 +183,7 @@ TEST(CreatureEmoteAgendas, RunningAwayStartsFrightenedOneTimeInTwoAndLooksBack)
 	EXPECT_EQ(both[0].heldEyes, creature_mind::Eyes::Wide);
 	EXPECT_EQ(both[1].movement.kind, Movement::Kind::FleeFrom);
 	EXPECT_EQ(both[1].face, creature_face::Cue::Fear);
-	EXPECT_EQ(both[1].effect, Effect::Completed);
+	EXPECT_EQ(both[1].effect, Effect::RanAway);
 	ASSERT_TRUE(both[1].gaze.has_value());
 	EXPECT_TRUE(both[1].gaze->runningAway);
 	EXPECT_EQ(both[1].gaze->object, 5u);

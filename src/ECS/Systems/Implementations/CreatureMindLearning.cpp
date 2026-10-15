@@ -2942,6 +2942,9 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 	case FollowUp::DoLessonAgain:
 		DoLessonAgain(creature, mind);
 		return;
+	case FollowUp::WalkOn:
+		WalkOn(creature, mind);
+		return;
 	case FollowUp::ShowSlapFeeling:
 	{
 		const creature_follow_up::Feelings feelings {

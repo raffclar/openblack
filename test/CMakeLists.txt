@@ -1040,3 +1040,6 @@ openblack_setup_and_add_test(test_altar_sacrifice test_altar_sacrifice.cpp)
 openblack_setup_and_add_test(
   test_creature_desire_seen_to test_creature_desire_seen_to.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_clear_way test_creature_clear_way.cpp
+)
