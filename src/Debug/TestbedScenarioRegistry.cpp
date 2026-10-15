@@ -5228,6 +5228,37 @@ void AddMind(std::vector<Scenario>& all)
 	                 OnObject(Kind::RemoveObject, 0, 0, 9.0f, false), Act(Kind::TakeOffLeash, 0, 8.0f)},
 	});
 
+	{
+		// A ring of huts shuts the tiger in, with a cow outside it
+		auto shutIn = Content(CreatureType::Tiger, {0.0f, 0.0f});
+		shutIn.phase = 13;
+		std::vector<ObjectSetup> objects {{.type = AnimalInfo::Cow, .offset = {0.0f, 90.0f}}};
+		constexpr int k_Huts = 24;
+		constexpr float k_RingRadius = 24.0f;
+		for (int i = 0; i < k_Huts; ++i)
+		{
+			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
+			objects.push_back({.type = AbodeInfo::CelticHut,
+			                   .offset = {k_RingRadius * std::sin(angle), k_RingRadius * std::cos(angle)},
+			                   .yawDegrees = glm::degrees(angle)});
+		}
+		all.push_back({
+		    .id = "mind.clear_way",
+		    .name = "The creature clears its way out",
+		    .facet = Facet::Mind,
+		    .description = "A grown-up tiger on the learning leash stands in a ring of huts. It is told to act on a cow "
+		                   "outside the ring.",
+		    .expected = "The tiger finds no way out. It kicks one of the huts that the search met, or throws it when it "
+		                "can pick it up. Then it walks on to where it went. A tiger with no way and nothing to clear "
+		                "makes a sound of refusal and gives up.",
+		    .framing = {.shot = Shot::Overview},
+		    .creatures = {shutIn},
+		    .objects = std::move(objects),
+		    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false),
+		                 Act(Kind::TakeOffLeash, 0, 3.0f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "mind.mimic",
 	    .name = "Mimic the player",

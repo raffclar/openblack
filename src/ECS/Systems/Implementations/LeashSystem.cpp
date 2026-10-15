@@ -1214,6 +1214,11 @@ bool LeashSystem::ShouldWalkBack(entt::entity creature) const
 	    .returnToCentre = leashes.returnTo.has_value()
 	                          ? std::optional(glm::distance(glm::vec2(leashes.returnTo->x, leashes.returnTo->z), centre))
 	                          : std::nullopt,
+	    .clearingWay =
+	        [&registry, creature] {
+		        const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+		        return walk != nullptr && walk->clearingWay;
+	        }(),
 	});
 }
 

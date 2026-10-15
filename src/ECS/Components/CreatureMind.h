@@ -226,6 +226,10 @@ struct CreatureMindState
 	/// The last deed of the player that it started to copy. It copies this deed again when it chooses to copy the player
 	/// for its desire to follow the player. None until it starts to copy a deed.
 	std::optional<creature_watching::ObservedDeed> observedDeed;
+	/// While the creature clears a thing out of its way: the serial of the plan that clears it. None at other times.
+	std::optional<uint32_t> clearingWaySerial;
+	/// Where the creature walks on to after it clears a thing out of its way
+	glm::vec2 walkOnTo {0.0f};
 };
 
 } // namespace openblack::ecs::components

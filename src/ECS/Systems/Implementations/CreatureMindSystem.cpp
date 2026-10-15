@@ -1357,6 +1357,7 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	case Effect::Revived:
 		magic_living::SetLife(creature, creature_odd::k_StrangeReviveLife);
 		break;
+	case Effect::RanAway:
 	case Effect::Completed:
 	case Effect::Observed:
 	case Effect::Inspected:
@@ -1901,22 +1902,42 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    WeighWatchedCreature(entity, mind, static_cast<entt::entity>(*mind.idle.agenda[mind.idle.step].object));
 		    }
-		    // It finds no way to the thing that it goes to: it gives up what it does, and it leaves the thing alone for a
-		    // time
+		    // It finds no way to where it goes. Shut in, it clears a thing out of its way and walks on. Else it gives up
+		    // what it does, makes a sound of refusal, and leaves the thing that it went to alone for a time.
+		    StepClearingWay(entity, mind);
 		    if (mind.idle.step < mind.idle.agenda.size())
 		    {
 			    const auto& step = mind.idle.agenda[mind.idle.step];
-			    const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
-			    if (walk != nullptr && walk->failed && mind.idle.stepStarted &&
-			        (step.kind == creature_mind::Step::Kind::Move ||
-			         (step.kind == creature_mind::Step::Kind::FollowWatching && mind.idle.followMoved)) &&
-			        step.movement.object.has_value())
+			    auto* walk = registry.TryGet<CreatureLocomotion>(entity);
+			    const bool walkToPoint = step.kind == creature_mind::Step::Kind::Move && !step.movement.object.has_value() &&
+			                             step.movement.giveUpIfUnreachable &&
+			                             (step.movement.kind == creature_mind::Movement::Kind::ToPoint ||
+			                              step.movement.kind == creature_mind::Movement::Kind::Nearby);
+			    const bool walkToObject = (step.kind == creature_mind::Step::Kind::Move ||
+			                               (step.kind == creature_mind::Step::Kind::FollowWatching && mind.idle.followMoved)) &&
+			                              step.movement.object.has_value();
+			    // Any walk that gives up on its first turn can clear the way, one time for each give-up
+			    const bool anyWalk = step.kind == creature_mind::Step::Kind::Move || walkToObject;
+			    std::optional<CreatureLocomotion::GaveUp> gaveUp;
+			    if (walk != nullptr && mind.idle.stepStarted && anyWalk)
 			    {
-				    mind.beliefs.MarkBlocked(static_cast<entt::entity>(*step.movement.object), mind.turn);
+				    gaveUp = std::exchange(walk->gaveUp, std::nullopt);
+			    }
+			    if (gaveUp.has_value() && ClearWay(entity, mind, gaveUp->destination, gaveUp->met))
+			    {
+				    StepClearingWay(entity, mind);
+			    }
+			    else if (walk != nullptr && walk->failed && mind.idle.stepStarted && (walkToPoint || walkToObject))
+			    {
+				    if (const auto object = step.movement.object)
+				    {
+					    mind.beliefs.MarkBlocked(static_cast<entt::entity>(*object), mind.turn);
+				    }
 				    Abandon(mind);
 				    mind.idle.step = mind.idle.agenda.size();
 				    mind.idle.stepStarted = false;
 				    mind.idle.gaveUp = true;
+				    RefuseNoRoute(entity);
 			    }
 		    }
 		    const bool moving =
@@ -2077,6 +2098,10 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    Locator::reactionSystem::value().Create(
 			        {.initiator = entity, .type = Reaction::ReactToDeath, .position = transform.position});
+		    }
+		    if (commands.effect == creature_mind::Effect::RanAway)
+		    {
+			    EndRunAway(entity, mind, commands.effectObject);
 		    }
 		    if (commands.douse.has_value())
 		    {

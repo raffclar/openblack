@@ -75,6 +75,17 @@ struct CreatureLocomotion
 	bool routeReady {false};
 	/// Whether the last move failed: nowhere to stand there, or no way there
 	bool failed {false};
+	/// The first turn of the search stopped far short of the destination: the destination, and the things that the
+	/// search met in the order that it met them. None after any other end of a move.
+	struct GaveUp
+	{
+		glm::vec2 destination {0.0f};
+		std::vector<uint32_t> met;
+	};
+	std::optional<GaveUp> gaveUp;
+	/// The creature clears a thing out of its way. Its route keeps clear of things by its drawn size, and its first
+	/// search notes nothing that it meets.
+	bool clearingWay {false};
 	/// Turning to face a point without going anywhere
 	bool facingOnly {false};
 	/// Following something, keeping within a distance of it

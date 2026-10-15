@@ -1663,9 +1663,14 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			}
 			break;
 		}
-		// Done once it has arrived or given up, or its time is up
+		// Done once it has arrived or given up, or its time is up. A run away tells what it ran from.
 		if (!senses.moving)
 		{
+			if (step.effect == Effect::RanAway)
+			{
+				commands.effect = Effect::RanAway;
+				commands.effectObject = step.gaze.has_value() ? step.gaze->object : std::nullopt;
+			}
 			FinishStep(mind);
 		}
 		else if (step.seconds > 0.0f && mind.stepSeconds >= step.seconds)

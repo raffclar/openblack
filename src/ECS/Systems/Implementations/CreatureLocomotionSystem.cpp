@@ -270,6 +270,11 @@ void Measure(CreatureLocomotion& self, const Creature& creature, const Transform
 	self.shownRadius = bodyRadius * self.scale;
 	const auto shown = ShownSize(creature);
 	self.radius = shown > 0.0f ? self.shownRadius * creature_morph::ClampScale(creature.size) / shown : self.shownRadius;
+	// While it clears a thing out of its way, it keeps clear of things by its drawn size
+	if (self.clearingWay)
+	{
+		self.radius = self.shownRadius;
+	}
 }
 
 void SetIdle(CreatureLocomotion& self)
@@ -379,6 +384,7 @@ void Arrive(CreatureLocomotion& self)
 {
 	ClearWalk(self);
 	self.failed = false;
+	self.gaveUp.reset();
 }
 
 /// The end of the route: arrived, or (a new destination having come while it walked) waiting there for the search
@@ -869,6 +875,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	}
 	self.fraction = fraction;
 	self.failed = false;
+	self.gaveUp.reset();
 	self.facingOnly = false;
 	if (IsMovingMotion(self.motion) && self.destination.has_value() &&
 	    glm::distance(*self.destination, point) <= k_SameDestination)
@@ -892,7 +899,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 			}
 		}
 		self.follower.Reset(position, self.radius, GathererFor(creature, WalkerOf(registry, creature, *body, self, position)));
-		self.firstSearchTurn = true;
+		// While it clears a thing out of its way, its first turn searches no further and notes nothing that it meets
+		self.firstSearchTurn = !self.clearingWay;
 	}
 	const auto distance = glm::distance(position, point);
 	self.ring = locomotion::MoveRing(distance, minDistance, maxDistance);
@@ -1156,8 +1164,15 @@ void CreatureLocomotionSystem::ProcessTurn()
 					    self.routeReady = true;
 				    }
 				    break;
-			    case route::Follower::Outcome::Failed:
 			    case route::Follower::Outcome::GaveUp:
+				    // It is shut in: the mind can clear one of the things that the search met, then walk on
+				    if (self.destination.has_value())
+				    {
+					    self.gaveUp =
+					        CreatureLocomotion::GaveUp {.destination = *self.destination, .met = self.follower.GetMet()};
+				    }
+				    [[fallthrough]];
+			    case route::Follower::Outcome::Failed:
 				    // No way there: it stands where it is
 				    ClearWalk(self);
 				    self.failed = true;

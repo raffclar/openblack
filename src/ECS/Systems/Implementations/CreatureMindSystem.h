@@ -409,6 +409,20 @@ private:
 	void FrustrateAfterCast(entt::entity creature, MagicType type);
 	/// Does the thing that waited for the creature to complete its work
 	void DoFollowUp(entt::entity creature, components::CreatureMindState& mind, creature_follow_up::FollowUp followUp);
+	/// The first turn of the route search stopped far short of the destination. The creature clears one of the things
+	/// that the search met, then it walks on to the destination. Returns whether it starts to clear the way
+	/// (CreatureMindClearWay.cpp).
+	bool ClearWay(entt::entity creature, components::CreatureMindState& mind, glm::vec2 destination,
+	              std::span<const uint32_t> met);
+	/// The creature cleared its way and walks on to the destination
+	void WalkOn(entt::entity creature, const components::CreatureMindState& mind);
+	/// Each turn: the mark of a creature that clears its way stays while the plan that clears it runs. The movement of
+	/// the creature gets the mark.
+	void StepClearingWay(entt::entity creature, components::CreatureMindState& mind);
+	/// The creature finds no way to where it goes: it makes a sound of refusal
+	void RefuseNoRoute(entt::entity creature);
+	/// A run away from a thing (none for the player's hand) stopped. Far enough from it, the run sees to the desire.
+	void EndRunAway(entt::entity creature, components::CreatureMindState& mind, std::optional<uint32_t> object);
 	/// A stroke, or the end of the meal of the lesson to eat what it holds: the creature must do again the action that
 	/// feedback goes to now, to the most useful thing of the same kind. This can be the same thing again.
 	void DoLessonAgain(entt::entity creature, components::CreatureMindState& mind);

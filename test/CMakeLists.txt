@@ -1037,3 +1037,6 @@ openblack_setup_and_add_test(
   test_creature_copy_actions test_creature_copy_actions.cpp
 )
 openblack_setup_and_add_test(test_altar_sacrifice test_altar_sacrifice.cpp)
+openblack_setup_and_add_test(
+  test_creature_clear_way test_creature_clear_way.cpp
+)

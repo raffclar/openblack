@@ -100,8 +100,11 @@ struct RunFrom
 };
 /// Running away: one time in two a frightened start with wide eyes, then the run with a frightened face, looking back
 /// at what it runs from in turns, then one time in two another frightened start. A run from a thing also opens the
-/// eyes wide. The run completes the action.
+/// eyes wide. When the run stops further from what it ran from than the run-away distance, the run sees to the desire.
 [[nodiscard]] std::vector<Step> RunAway(const RunFrom& from, const Random& random);
+/// Whether a run away stopped far enough from what it ran from to see to the desire: further than the run-away
+/// distance of the species, measured across the land
+[[nodiscard]] bool RanFarEnough(float distance, float runAwayDistance);
 constexpr uint32_t k_FrightenedStartLots = 2;
 
 /// The creature looks back at what it runs from for one time, then looks about for another, and so on. The state stays
