@@ -178,6 +178,8 @@ struct MeshHit
 	uint32_t firstIndex {0};
 	float s {0.0f};
 	float t {0.0f};
+	/// The normal of the triangle from the order of its corners. The line can meet the triangle from either side.
+	glm::vec3 windingNormal {0.0f};
 };
 /// The triangles are three corners each in the world. Faces nearly side-on to the line (normal and line at less than
 /// 0.005 of a right angle's cosine) are passed by; only hits ahead of the start count unless behind is allowed.

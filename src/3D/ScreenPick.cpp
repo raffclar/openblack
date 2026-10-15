@@ -588,7 +588,8 @@ std::optional<MeshHit> NearestIntersection(std::span<const glm::vec3> corners, s
 		                   .distance = distance,
 		                   .firstIndex = static_cast<uint32_t>(t),
 		                   .s = s,
-		                   .t = u};
+		                   .t = u,
+		                   .windingNormal = normal};
 	}
 	return nearest;
 }
@@ -669,7 +670,8 @@ std::optional<MeshHit> NearestSkinIntersection(std::span<const glm::vec3> corner
 		                   .distance = distance,
 		                   .firstIndex = static_cast<uint32_t>(i),
 		                   .s = s,
-		                   .t = t};
+		                   .t = t,
+		                   .windingNormal = normal};
 	}
 	return nearest;
 }

@@ -1319,9 +1319,13 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 			single(creature_throw::k_PutDown, points->putDownMs);
 			break;
 		case Kind::Discard:
-			// Tossing away with an animation asked for, it lets go when it would with its own
-			single(action.animations.front() != 0 ? action.animations.front() : creature_throw::k_Discard, points->discardMs);
+		{
+			// Each animation that lets go has its own moment: the animation that puts the thing down lets go at its own
+			// moment, and any other at the moment of the toss
+			const auto animation = action.animations.front() != 0 ? action.animations.front() : creature_throw::k_Discard;
+			single(animation, creature_throw::PutsDownStill(animation) ? points->putDownMs : points->discardMs);
 			break;
+		}
 		case Kind::Lob:
 		{
 			// The game times the gentle lob by nothing of its own: it lets go as far through as tossing away does
@@ -2592,6 +2596,12 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 		case Kind::Lob:
 		{
 			const auto animationIndex = action.animations.front();
+			// The animation that puts the thing down lets go of it at rest
+			if (action.kind == Kind::Discard && creature_throw::PutsDownStill(animationIndex))
+			{
+				Release(creature, handPosition, glm::vec3(0.0f));
+				break;
+			}
 			const auto now = HandAt(creature, transform, *points, animationIndex, action.eventMs);
 			const auto before =
 			    HandAt(creature, transform, *points, animationIndex, action.eventMs - creature_throw::k_HandSpeedSpanMs);
