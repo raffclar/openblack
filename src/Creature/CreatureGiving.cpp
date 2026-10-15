@@ -55,11 +55,16 @@ std::optional<float> creature_giving::OfferTurn(HoldType hold, bool rightHanded,
 
 Verdict creature_giving::MayGive(const GiveFacts& facts)
 {
-	if (!facts.creatureHasPlayer || !facts.giverHasPlayer || !facts.friendly || facts.spellSeed)
+	if (!facts.creatureHasPlayer || !facts.giverHasPlayer || !facts.friendly || facts.spellSeed || facts.ogre)
 	{
 		return Verdict::No;
 	}
-	return facts.creatureCanPickUp ? Verdict::Give : Verdict::CantPickUp;
+	if (!facts.creatureCanPickUp)
+	{
+		return Verdict::CantPickUp;
+	}
+	// The hand checks these last, after the creature's help has said what it can't pick up
+	return facts.scriptControlled || facts.heldByHand ? Verdict::No : Verdict::Give;
 }
 
 std::optional<glm::vec3> creature_giving::DrawToCreature(glm::vec3 creatureHand, glm::vec3 target, float msFromTake, float hang)

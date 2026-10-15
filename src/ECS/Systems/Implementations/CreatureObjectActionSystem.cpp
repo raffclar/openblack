@@ -117,6 +117,7 @@
 #include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "VillagerFire.h"
 #include "VillagerPhysics.h"
 
 using namespace openblack;
@@ -349,18 +350,22 @@ std::optional<float> WeightOf(const ecs::Registry& registry, entt::entity entity
 }
 
 /// Something eaten is gone: out of its home and its town first
-void Consume(ecs::Registry& registry, entt::entity food)
+void Consume(ecs::Registry& registry, entt::entity creature, entt::entity food)
 {
-	if (const auto* villager = registry.TryGet<const Villager>(food))
+	// A living villager eaten dies of no cause, put down to the creature's player, as any death is heard of and counted.
+	// One already dead was counted when it died.
+	if (registry.AllOf<Villager>(food) && !registry.AllOf<VillagerDeath>(food))
 	{
-		// A living villager eaten dies: its town's graveyard counts it among its burials, though no body is left. One
-		// already dead was counted when it died.
+		const auto& body = registry.Get<const Creature>(creature);
+		ecs::villager_fire::DieByEffect(food, ecs::villager_fire::EatenDeath(body.owner, ecs::world_objects::LifeOf(food)));
+		// A villager that can't die as others do still counts among its town's burials, though no body is left
 		if (!registry.AllOf<VillagerDeath>(food))
 		{
-			// TODO(villager-death-aftermath): the rest of the town and players hearing of the death (no cause), and the
-			// creature's player counting a villager killed
-			graveyards::TownPersonDied(villager->town);
+			graveyards::TownPersonDied(registry.Get<const Villager>(food).town);
 		}
+	}
+	if (const auto* villager = registry.TryGet<const Villager>(food))
+	{
 		if (auto* abode = registry.TryGet<Abode>(villager->abode))
 		{
 			std::erase(abode->inhabitants, food);
@@ -1034,14 +1039,17 @@ void TurnToCatch(entt::entity creature, const CreatureObjectAction& action)
 	}
 	const auto& transform = Locator::entitiesRegistry::value().Get<const Transform>(creature);
 	const auto towards = transform.position - glm::vec3(flight->second.x, 0.0f, flight->second.z);
-	if (BearingTo(transform, towards) > creature_catch::k_TurnAngle)
+	const float bearing = BearingTo(transform, towards);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} starts its catch at ({:.1f}, {:.1f}), {:.2f} rad off the thing",
+	                    entt::to_integral(creature), transform.position.x, transform.position.z, bearing);
+	if (bearing > creature_catch::k_TurnAngle)
 	{
 		Locator::creatureLocomotionSystem::value().TurnToFace(creature, glm::xz(towards));
 	}
 }
 
 /// Whether a side step towards a catch may be taken: not while the creature moves, and not when the step would end inside
-/// a cell it may not stand on, gathered over the block the game checks
+/// a cell it may not stand on or a thing it walks round, gathered over the block the game checks
 bool StepAccepted(entt::entity creature, const Transform& transform, bool mirrored)
 {
 	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::creatureAnimationSystem::has_value())
@@ -1065,12 +1073,11 @@ bool StepAccepted(entt::entity creature, const Transform& transform, bool mirror
 		step.x = -step.x;
 	}
 	const auto end = transform.position + (transform.rotation * (step * transform.scale));
-	// TODO(physics): the game also keeps the step out of the circles of the objects in the block's cells that a creature
-	// walks round, as its route planner lays them out for each kind of object; openblack's routes don't lay them out as
-	// the game does yet
-	// The circles give way to where the creature's route last left it, which is where it stands
-	const auto circles = creature_route::StepBlockCircles(locomotion.GetWalkableLand(), creature_route::StepBlock(end),
-	                                                      glm::xz(transform.position));
+	// The circles of the land it may not stand on and of the things it walks round in the block's cells. They give way to
+	// where the creature's route last left it, which is where it stands.
+	const auto circles = creature_route::StepBlockCircles(
+	    locomotion.GetWalkableLand(), creature_route::StepBlock(end), glm::xz(transform.position),
+	    [&locomotion, creature](glm::ivec2 cell) { return locomotion.ThingCirclesIn(creature, cell); });
 	return !creature_route::InsideAny(glm::xz(end), circles);
 }
 
@@ -1208,7 +1215,13 @@ void UpdateReady(ecs::Registry& registry, entt::entity creature, const Creature&
 		action.timeMs = 0.0f;
 		break;
 	case creature_catch::Readiness::GiveUp:
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} gives up its catch", entt::to_integral(creature));
+	{
+		[[maybe_unused]] const auto local = ToLocal(transform, flight->first);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"),
+		                    "Creature {} gives up its catch: the thing is {:.1f} ahead, {:.1f} across, closing at {:.1f}, "
+		                    "the catch takes {:.2f} s",
+		                    entt::to_integral(creature), -local.z, -local.x, velocity.z, lead);
+	}
 		action.status = Status::Done;
 		animation.slots.clear();
 		break;
@@ -2695,7 +2708,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			const auto meal = MealOf(registry, *held);
 			CountMushroom(registry, creature, meal);
 			registry.Remove<CreatureHeldObject>(creature);
-			Consume(registry, *held);
+			Consume(registry, creature, *held);
 			const auto energy = value.has_value() && Locator::creaturePhysiologySystem::has_value()
 			                        ? Locator::creaturePhysiologySystem::value().Eat(creature, *value)
 			                        : 0.0f;

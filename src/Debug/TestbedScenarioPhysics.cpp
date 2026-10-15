@@ -239,7 +239,10 @@ void AddCreatureCatch(std::vector<Scenario>& all)
 	                "to where the wide one will pass (moving as it steps), and catches each in its hand as it arrives, "
 	                "or gives up when one has gone past it or landed short.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {k_Field - glm::vec2 {20.0f}, k_Field + glm::vec2 {20.0f, 40.0f}}},
+	    // From its side, its face and hands in view with the villagers as they come
+	    .framing = {.shot = Shot::Placed,
+	                .eye = glm::vec3(k_Field.x + 45.0f, 18.0f, k_Field.y + 4.0f),
+	                .look = glm::vec3(k_Field.x, 10.0f, k_Field.y + 12.0f)},
 	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field, .facingDegrees = 180.0f}},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + glm::vec2 {-10.0f, 34.0f}},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + glm::vec2 {10.0f, 34.0f}}},

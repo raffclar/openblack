@@ -3266,6 +3266,23 @@ void AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	auto ogre = hungryThinking;
+	ogre.species = CreatureType::Ogre;
+	all.push_back({
+	    .id = "creature.give_to_ogre",
+	    .name = "Giving food to an ogre",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a pile of food and, held in front of a hungry ogre, tries to give it to it.",
+	    .expected = "An ogre takes nothing from the hand: the hand doesn't offer the food, the ogre doesn't reach for it, "
+	                "and the hand lets the food go as it would anywhere else.",
+	    .environment = {.cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {ogre},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
 	// A hungry grown-up tiger that thinks for itself, with villagers about it
 	auto eater = Content(CreatureType::Tiger, {0.0f, 0.0f});
 	eater.phase = 13;
