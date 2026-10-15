@@ -3086,6 +3086,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	situation.hangAround = HangAroundPlacesOf(creature);
 	situation.turnSeconds = k_TurnSeconds;
 	situation.turnsPerSecond = k_TurnsPerSecond;
+	SituateHome(creature, situation);
 	SituateEmotes(creature, situation);
 }
 
@@ -3165,7 +3166,6 @@ void CreatureMindSystem::EndUnderway(CreatureMindState& mind)
 	const auto list = desire < tables->desireActions.size() ? std::span<const uint32_t>(tables->desireActions.at(desire))
 	                                                        : std::span<const uint32_t> {};
 	creature_action_history::PlanEnded(mind.learnt->turnsSinceDone, mind.underway->action, list, mind.agendaTurns);
-	SituateHome(creature, situation);
 }
 
 void CreatureMindSystem::BelieveInTempleToEnter(entt::entity creature, const creature_plan_actions::Executor& executor,
