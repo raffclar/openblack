@@ -48,6 +48,8 @@ struct Request
 /// When a script asks and the creature has played, the creature stops the remaining steps of its agenda. An idle
 /// creature thus stops its idle steps. The creature does not complete these steps, so they do not count as done. An
 /// agenda that is already at its end does not change.
+// TODO(ogre-quest-leftovers): the game keeps the plan with no steps until it chooses a new plan. openblack ends the plan,
+// so a creature that thinks for itself chooses a new plan at once.
 void ClearAfterPlayed(creature_mind::IdleMind& mind);
 
 } // namespace openblack::creature_script_play
