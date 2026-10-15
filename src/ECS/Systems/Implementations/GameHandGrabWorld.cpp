@@ -42,6 +42,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MapCellResident.h"
@@ -52,6 +53,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
@@ -619,6 +621,9 @@ std::optional<creature_giving::Verdict> GameHandGrabWorld::GiveVerdict(entt::ent
 	// openblack has no alliances between players, so only the creature's own player may give it things. The hand never
 	// holds a miracle's seed as a thing (seeds are held by the miracles), so no seed is ever offered this way.
 	const auto giver = HandPlayer();
+	bool heldByHand = false;
+	registry.Each<const HandOnCreature>(
+	    [&heldByHand, target](const HandOnCreature& hand) { heldByHand = heldByHand || hand.creature == target; });
 	return creature_giving::MayGive({
 	    .creatureHasPlayer = true,
 	    .giverHasPlayer = true,
@@ -626,6 +631,9 @@ std::optional<creature_giving::Verdict> GameHandGrabWorld::GiveVerdict(entt::ent
 	    .spellSeed = false,
 	    .creatureCanPickUp = Locator::creatureObjectActionSystem::has_value() &&
 	                         Locator::creatureObjectActionSystem::value().CanTakeFromHand(target, held),
+	    .ogre = creature->species == CreatureType::Ogre,
+	    .scriptControlled = registry.AllOf<ScriptControlled>(target),
+	    .heldByHand = heldByHand,
 	});
 }
 

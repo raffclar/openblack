@@ -741,6 +741,30 @@ obstacles::Walker WalkerOf(const ecs::Registry& registry, entt::entity entity, c
 	        .mayBeTakenByVortex = vortex::CreatureMayBeTaken(body.mayGoThroughVortex, leashed, scripted)};
 }
 
+/// The circles of a thing that the creature walks round, none for a thing it walks through
+std::vector<route::Circle> CirclesToAvoid(const ecs::Registry& registry, entt::entity entity, const obstacles::Walker& walker)
+{
+	const auto thing = ThingOf(registry, entity);
+	if (!thing.has_value() || !obstacles::MustAvoid(*thing, walker))
+	{
+		return {};
+	}
+	// The Norse gate is a row of small circles across its width, with a way through the middle while it stands open
+	if (registry.AnyOf<AnimatedStatic>(entity) && Locator::animatedStaticSystem::has_value())
+	{
+		if (const auto gate = Locator::animatedStaticSystem::value().RouteCircles(entity))
+		{
+			std::vector<route::Circle> circles;
+			circles.reserve(gate->size());
+			std::ranges::transform(*gate, std::back_inserter(circles), [](const auto& circle) {
+				return route::Circle {.centre = circle.centre, .radius = circle.radius};
+			});
+			return circles;
+		}
+	}
+	return obstacles::CirclesOf(*thing, walker);
+}
+
 /// What stands in a cell, added to what a creature walks round the first time its route search reaches the cell's
 /// block: the land it can't walk on, then each thing it must avoid whose circles aren't filed in the block already
 route::Obstacles::Gatherer GathererFor(entt::entity self, const obstacles::Walker& walker)
@@ -762,25 +786,7 @@ route::Obstacles::Gatherer GathererFor(entt::entity self, const obstacles::Walke
 			{
 				continue;
 			}
-			const auto thing = ThingOf(registry, entity);
-			if (!thing.has_value() || !obstacles::MustAvoid(*thing, walker))
-			{
-				continue;
-			}
-			// The Norse gate is a row of small circles across its width, with a way through the middle while it stands
-			// open
-			if (registry.AnyOf<AnimatedStatic>(entity) && Locator::animatedStaticSystem::has_value())
-			{
-				if (const auto gate = Locator::animatedStaticSystem::value().RouteCircles(entity))
-				{
-					for (const auto& circle : *gate)
-					{
-						into.Add(key, circle.centre, circle.radius);
-					}
-					continue;
-				}
-			}
-			for (const auto& circle : obstacles::CirclesOf(*thing, walker))
+			for (const auto& circle : CirclesToAvoid(registry, entity, walker))
 			{
 				into.Add(key, circle.centre, circle.radius);
 			}
@@ -850,6 +856,27 @@ const route::WalkableLand& CreatureLocomotionSystem::GetWalkableLand()
 		    });
 	}
 	return *_land;
+}
+
+std::vector<route::Circle> CreatureLocomotionSystem::ThingCirclesIn(entt::entity creature, glm::ivec2 cell)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
+	if (body == nullptr || self == nullptr || !Locator::entitiesMap::has_value())
+	{
+		return {};
+	}
+	const auto walker = WalkerOf(registry, creature, *body, *self, PositionOf(*self));
+	std::vector<route::Circle> circles;
+	for (const auto entity : Locator::entitiesMap::value().GetAllInCell(cell))
+	{
+		if (entity != creature)
+		{
+			std::ranges::copy(CirclesToAvoid(registry, entity, walker), std::back_inserter(circles));
+		}
+	}
+	return circles;
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::entity creature, CreatureLocomotion& self,

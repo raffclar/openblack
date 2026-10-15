@@ -11,12 +11,15 @@
 
 #include <cstdint>
 
+#include <vector>
+
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 
 namespace openblack::creature_route
 {
 class WalkableLand;
+struct Circle;
 } // namespace openblack::creature_route
 
 namespace openblack::ecs::systems
@@ -73,6 +76,8 @@ public:
 
 	/// Where the creatures can walk on this land
 	[[nodiscard]] virtual const creature_route::WalkableLand& GetWalkableLand() = 0;
+	/// The circles of the things in a cell that the creature walks round, as its route search finds them there
+	[[nodiscard]] virtual std::vector<creature_route::Circle> ThingCirclesIn(entt::entity creature, glm::ivec2 cell) = 0;
 };
 
 } // namespace openblack::ecs::systems

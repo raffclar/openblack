@@ -580,6 +580,10 @@ TEST(CreatureActionAgendas, EatingFromAPileTakesAHandfulFromIt)
 	EXPECT_EQ((*agenda)[2].effect, Effect::TookFromPile);
 	EXPECT_EQ((*agenda)[3].order.kind, ObjectOrder::Kind::Eat);
 	EXPECT_EQ((*agenda)[3].effect, Effect::Eat);
+	// With something it can eat in its hand, it makes no steps and does not go to the pile
+	plan_actions::Situation holding {.radius = 6.0f, .thingRadius = 4.0f};
+	holding.holdingEatable = true;
+	EXPECT_FALSE(plan_actions::Agenda(*eat, 9, {50.0f, 60.0f}, holding, NeverFirst).has_value());
 }
 
 // Throwing a ball at something throws a toy it can pick up; kicking one about is only done to a ball

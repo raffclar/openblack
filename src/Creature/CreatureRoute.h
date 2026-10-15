@@ -101,6 +101,11 @@ constexpr float k_StepBlockSize = 80.0f;
 /// is waded). A circle about a point within a tenth of a unit of where the creature stands is left out, and one reaching
 /// further than it is shrunk to reach it; one reaching off the land's last 80 units is left out.
 [[nodiscard]] std::vector<Circle> StepBlockCircles(const WalkableLand& land, glm::ivec2 block, glm::vec2 standing);
+/// The circles of the things that stand in a cell and that the creature walks round
+using ThingCircles = std::function<std::vector<Circle>(glm::ivec2 cell)>;
+/// As above, and after the land of each cell, the circles of the things in that cell, which go through the same rules
+[[nodiscard]] std::vector<Circle> StepBlockCircles(const WalkableLand& land, glm::ivec2 block, glm::vec2 standing,
+                                                   const ThingCircles& things);
 /// Whether a point lies strictly inside any of the circles
 [[nodiscard]] bool InsideAny(glm::vec2 point, const std::vector<Circle>& circles);
 

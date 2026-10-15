@@ -68,7 +68,8 @@ struct Offer
 enum class Verdict : uint8_t
 {
 	Give,
-	/// Not to this creature: another god's not allied to it, a spell seed, or a creature without a player
+	/// Not to this creature: another god's not allied to it, a spell seed, a creature without a player, an ogre, or a
+	/// creature that a script controls or that a hand holds
 	No,
 	/// The creature couldn't pick it up; its help says so
 	CantPickUp,
@@ -81,6 +82,12 @@ struct GiveFacts
 	bool friendly {false};
 	bool spellSeed {false};
 	bool creatureCanPickUp {false};
+	/// An ogre takes nothing from the hand
+	bool ogre {false};
+	/// A script controls the creature
+	bool scriptControlled {false};
+	/// A hand holds the creature to stroke or slap it
+	bool heldByHand {false};
 };
 [[nodiscard]] Verdict MayGive(const GiveFacts& facts);
 

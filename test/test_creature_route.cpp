@@ -172,3 +172,27 @@ TEST(CreatureRoute, AStepIgnoresCellsReachingOffTheLand)
 	ASSERT_EQ(land.At(k_CellsPerSide - 1, 20), Ground::Blocked);
 	EXPECT_TRUE(StepBlockCircles(land, {63, 1}, {0.0f, 0.0f}).empty());
 }
+
+TEST(CreatureRoute, AStepKeepsOutOfTheThingsInTheBlock)
+{
+	const auto land = WalkableLand::Build([](int32_t /*x*/, int32_t /*z*/) { return 5.0f; }, Dry);
+	// A thing that the creature walks round stands in one cell of the block, and another stands outside the block
+	const ThingCircles things = [](glm::ivec2 cell) {
+		if (cell == glm::ivec2(2, 3))
+		{
+			return std::vector<Circle> {{.centre = {25.0f, 35.0f}, .radius = 6.0f}};
+		}
+		if (cell == glm::ivec2(9, 3))
+		{
+			return std::vector<Circle> {{.centre = {95.0f, 35.0f}, .radius = 6.0f}};
+		}
+		return std::vector<Circle> {};
+	};
+	const auto circles = StepBlockCircles(land, {0, 0}, {3000.0f, 3000.0f}, things);
+	EXPECT_TRUE(InsideAny({27.0f, 35.0f}, circles));
+	EXPECT_FALSE(InsideAny({95.0f, 35.0f}, circles));
+	// A thing's circle gives way to where the creature stands, as the land's do
+	const auto nearby = StepBlockCircles(land, {0, 0}, {28.0f, 35.0f}, things);
+	EXPECT_FALSE(InsideAny({28.5f, 35.0f}, nearby));
+	EXPECT_TRUE(InsideAny({23.0f, 35.0f}, nearby));
+}

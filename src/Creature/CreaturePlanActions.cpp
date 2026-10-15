@@ -943,8 +943,11 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		}
 		return creature_mind::PlantTreeBy(situation.holdingTree ? std::nullopt : situation.instrument, *object);
 	case Build::EatFromPile:
-		// TODO(creature-actions-3): with something it can eat in its hand already, the game does something else; what
-		// isn't known yet, so it goes to the pile all the same
+		// With something it can eat in its hand already, it makes no steps, and so decides again at once
+		if (situation.holdingEatable)
+		{
+			return std::nullopt;
+		}
 		return creature_mind::EatFromPile(*object, objectPoint, situation.thingRadius, situation.radius);
 	case Build::EatFromStoragePit:
 		// The creature eats from the food pile of the pit. A pit with no food pile gives no agenda.
