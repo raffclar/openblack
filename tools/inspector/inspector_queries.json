@@ -1990,7 +1990,7 @@
   "writes": true
  },
  {
-  "description": "A mouse button where the pointer is: press, release, click (pressed now, let go of the next frame) or double_click (a click, then pressed and let go of again as the second click of a double click, a frame apart). Like all input, it waits behind input asked for earlier that is still to come",
+  "description": "A mouse button where the pointer is: press, release, click (pressed now, let go of the next frame) or double_click (a click, then pressed and let go of again as the second click of a double click, a frame apart). A press comes two frames after the pointer last moved, once the game knows what the pointer is over. Like all input, it waits behind input asked for earlier that is still to come",
   "kind": "object",
   "parameters": [
    {

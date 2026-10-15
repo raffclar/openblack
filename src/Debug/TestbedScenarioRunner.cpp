@@ -180,6 +180,7 @@
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
+#include "Input/PointerSettle.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -3411,6 +3412,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;
+		_framesSincePointerMoved = 0;
 		actions.SetScriptedPointer(pointer);
 		PushMotion(pointer, moved);
 		break;
@@ -3420,6 +3422,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		const auto to = glm::ivec2(glm::round(command.point * size));
 		const auto moved = to - pointer.position;
 		pointer.position = to;
+		_framesSincePointerMoved = 0;
 		actions.SetScriptedPointer(pointer);
 		PushMotion(pointer, moved);
 		break;
@@ -3428,6 +3431,12 @@ std::string Runner::GivePointerCommand(const Command& command)
 	case Kind::PointerRelease:
 	{
 		const bool press = command.kind == Kind::PointerPress;
+		// A press waits for the game to know what the pointer is over, so it acts as a press of a hand at rest
+		if (press && !input::pointer_settle::PressMayStart(_framesSincePointerMoved))
+		{
+			_pressWaiting = command;
+			break;
+		}
 		const auto button = static_cast<uint8_t>(command.value);
 		pointer.buttons = press ? (pointer.buttons | SDL_BUTTON(button)) : (pointer.buttons & ~SDL_BUTTON(button));
 		actions.SetScriptedPointer(pointer);
@@ -3445,6 +3454,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		break;
 	}
 	case Kind::PointerSweep:
+		_framesSincePointerMoved = 0;
 		actions.SetScriptedPointer(pointer);
 		_sweep = PointerSweep {.pixelsPerSecond = command.point * size / command.amount, .secondsLeft = command.amount};
 		break;
@@ -3468,6 +3478,12 @@ std::string Runner::GivePointerCommand(const Command& command)
 
 void Runner::UpdatePointer(float seconds)
 {
+	++_framesSincePointerMoved;
+	if (_pressWaiting.has_value() && input::pointer_settle::PressMayStart(_framesSincePointerMoved))
+	{
+		const auto waiting = std::exchange(_pressWaiting, std::nullopt);
+		static_cast<void>(GivePointerCommand(*waiting));
+	}
 	if (!Locator::gameActionSystem::has_value())
 	{
 		return;
@@ -3488,6 +3504,7 @@ void Runner::UpdatePointer(float seconds)
 	}
 	if (_sweep.has_value())
 	{
+		_framesSincePointerMoved = 0;
 		auto pointer = actions.GetScriptedPointer().value_or(input::GameActionInterface::ScriptedPointer {});
 		const auto step = std::min(seconds, _sweep->secondsLeft);
 		const auto exact = _sweep->pixelsPerSecond * step + _sweep->remainder;

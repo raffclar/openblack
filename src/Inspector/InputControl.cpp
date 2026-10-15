@@ -15,6 +15,7 @@
 #include <array>
 #include <utility>
 
+#include <Input/PointerSettle.h>
 #include <InspectorQuery.h>
 #include <glm/common.hpp>
 
@@ -382,7 +383,8 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	    Write("button",
 	          "A mouse button where the pointer is: press, release, click (pressed now, let go of the next "
 	          "frame) or double_click (a click, then pressed and let go of again as the second click of a double "
-	          "click, a frame apart). Like all input, it waits behind input asked for earlier that is still to come",
+	          "click, a frame apart). A press comes two frames after the pointer last moved, once the game knows what the "
+	          "pointer is over. Like all input, it waits behind input asked for earlier that is still to come",
 	          {button, Optional("action", "string", "press, release, click (the default) or double_click"), timing}),
 	    Write("key",
 	          "A key by its name (\"L\", \"Space\", \"Left Shift\"), or an action by the options screen's name, "
@@ -486,11 +488,13 @@ uint64_t InputProvider::StartFrame() const
 
 std::string InputProvider::At(uint64_t frame, const InputEvent& event)
 {
+	const bool now = frame <= _frame + 1 && _timeline.Pending() == 0;
 	if (event.kind == InputEvent::Kind::PointerTo)
 	{
 		_pointer = event.position;
+		_pointerMovedAt = now ? _frame + 1 : frame;
 	}
-	if (frame <= _frame + 1 && _timeline.Pending() == 0)
+	if (now)
 	{
 		return _timeline.MakeNow(_frame + 1, event, _target);
 	}
@@ -576,7 +580,10 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			return failed(error.empty() ? "action is press, release, click or double_click" : error);
 		}
 		const auto kind = action == "release" ? InputEvent::Kind::ButtonUp : InputEvent::Kind::ButtonDown;
-		const auto start = StartFrame();
+		// A press waits for the game to know what the pointer is over, so that it acts as a press of a hand at rest
+		const auto start = kind == InputEvent::Kind::ButtonDown
+		                       ? input::pointer_settle::EarliestPressFrame(StartFrame(), _pointerMovedAt)
+		                       : StartFrame();
 		if (auto why = At(start, {.kind = kind, .button = *button, .timing = *timing}); !why.empty())
 		{
 			return failed(why);
@@ -691,6 +698,7 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		}
 		_timeline.Schedule(start + 1 + *frames, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
 		_pointer = to;
+		_pointerMovedAt = start + *frames;
 		return QueryResult::Value(
 		    Answer({{"from", Point(*from)}, {"to", Point(*to)}, {"frames", *frames}, {"timing", TimingName(*timing)}}, start));
 	}
@@ -739,6 +747,7 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			_timeline.Schedule(due + 1, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
 		}
 		_pointer = pixels.back();
+		_pointerMovedAt = due;
 		return QueryResult::Value(Answer(
 		    {{"points", pixels.size()}, {"frames", due + (held ? 1 : 0) + 1 - start}, {"timing", TimingName(*timing)}}, start));
 	}
@@ -763,6 +772,7 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		_timeline.Clear();
 		Now({.kind = InputEvent::Kind::Release});
 		_pointer.reset();
+		_pointerMovedAt.reset();
 		return QueryResult::Value(Answer({{"released", true}}, _frame + 1));
 	}
 	if (query == "lock" || query == "unlock")
